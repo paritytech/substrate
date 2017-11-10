@@ -14,12 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+//! A fixed hash type.
 
-#![warn(missing_docs)]
-
-extern crate polkadot_cli;
-
-fn main() {
-	polkadot_cli::main();
-}
+impl_hash!(H160, 20);
+impl_hash!(H256, 32);

@@ -1,0 +1,13 @@
+[package]
+name = "polkadot-primitives"
+version = "0.1.0"
+authors = ["Parity Team <admin@parity.io>"]
+
+[dependencies]
+crunchy = "0.1.5"
+uint = { git = "https://github.com/paritytech/primitives.git" }
+fixed-hash = { git = "https://github.com/paritytech/primitives.git" }
+
+[features]
+default = ["std"]
+std = ["uint/std", "fixed-hash/std"]
