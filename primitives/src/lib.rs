@@ -14,12 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+//! Shareable Polkadot types.
 
 #![warn(missing_docs)]
 
-extern crate polkadot_cli;
+#[cfg(feature="std")]
+extern crate core;
 
-fn main() {
-	polkadot_cli::main();
+#[macro_use]
+extern crate crunchy;
+#[macro_use]
+extern crate fixed_hash;
+#[macro_use]
+extern crate uint as uint_crate;
+
+pub mod uint;
+pub mod hash;
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
 }

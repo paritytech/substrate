@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Polkadot CLI library.
+
+#![warn(missing_docs)]
+
 extern crate env_logger;
 
 #[macro_use]
@@ -21,6 +25,7 @@ extern crate clap;
 #[macro_use]
 extern crate log;
 
+/// Parse command line arguments and start the node.
 pub fn main() {
 	let yaml = load_yaml!("./cli.yml");
 	let matches = clap::App::from_yaml(yaml).get_matches();
