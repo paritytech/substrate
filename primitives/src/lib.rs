@@ -28,8 +28,12 @@ extern crate fixed_hash;
 #[macro_use]
 extern crate uint as uint_crate;
 
-pub mod uint;
+pub mod block;
 pub mod hash;
+pub mod uint;
+
+/// Alias to 160-bit hash when used in the context of an account address.
+pub type Address = hash::H160;
 
 #[cfg(test)]
 mod tests {
