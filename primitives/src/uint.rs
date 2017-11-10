@@ -45,7 +45,7 @@ macro_rules! impl_serde {
 					}
 
 					fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-						if v.len() < 2  || &v[0..2] != "0x" {
+						if v.len() < 3  || &v[0..2] != "0x" {
 							return Err(E::custom("prefix is missing"))
 						}
 
@@ -104,10 +104,28 @@ mod tests {
 					assert_eq!(format!("{:?}", expected), ser::to_string_pretty(&number));
 					assert_eq!(number, ser::from_str(&format!("{:?}", expected)).unwrap());
 				}
+
+				// Invalid examples
+				assert!(ser::from_str::<$name>("\"0x\"").unwrap_err().is_data());
+				assert!(ser::from_str::<$name>("\"0xg\"").unwrap_err().is_data());
+				assert!(ser::from_str::<$name>("\"\"").unwrap_err().is_data());
+				assert!(ser::from_str::<$name>("\"10\"").unwrap_err().is_data());
+				assert!(ser::from_str::<$name>("\"0\"").unwrap_err().is_data());
 			}
 		}
 	}
 
 	test!(U256, test_u256);
 	test!(U512, test_u512);
+
+	#[test]
+	fn test_large_values() {
+		assert_eq!(
+			ser::to_string_pretty(&!U256::zero()),
+			"\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\""
+		);
+		assert!(
+			ser::from_str::<U256>("\"0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"").unwrap_err().is_data()
+		);
+	}
 }
