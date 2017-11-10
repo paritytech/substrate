@@ -24,7 +24,7 @@
 extern crate serde;
 extern crate serde_json;
 
-pub use serde_json::{from_str, from_slice, from_reader, Result};
+pub use serde_json::{from_str, from_slice, from_reader, Result, Error};
 
 const PROOF: &str = "Serializers are infallible; qed";
 

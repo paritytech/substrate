@@ -112,4 +112,14 @@ mod tests {
 			assert_eq!(number, ser::from_str(&format!("{:?}", expected)).unwrap());
 		}
 	}
+
+	#[test]
+	fn test_invalid() {
+		assert!(ser::from_str::<H256>("\"0x000000000000000000000000000000000000000000000000000000000000000\"").unwrap_err().is_data());
+		assert!(ser::from_str::<H256>("\"0x000000000000000000000000000000000000000000000000000000000000000g\"").unwrap_err().is_data());
+		assert!(ser::from_str::<H256>("\"0x00000000000000000000000000000000000000000000000000000000000000000\"").unwrap_err().is_data());
+		assert!(ser::from_str::<H256>("\"\"").unwrap_err().is_data());
+		assert!(ser::from_str::<H256>("\"0\"").unwrap_err().is_data());
+		assert!(ser::from_str::<H256>("\"10\"").unwrap_err().is_data());
+	}
 }
