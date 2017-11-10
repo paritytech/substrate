@@ -1,5 +1,5 @@
 [package]
-name = "polkadot-types"
+name = "polkadot-primitives"
 version = "0.1.0"
 authors = ["Parity Team <admin@parity.io>"]
 

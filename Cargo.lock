@@ -1,5 +1,5 @@
 [root]
-name = "polkadot-types"
+name = "polkadot-primitives"
 version = "0.1.0"
 dependencies = [
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -138,7 +138,7 @@ name = "polkadot"
 version = "0.1.0"
 dependencies = [
  "polkadot-cli 0.1.0",
- "polkadot-types 0.1.0",
+ "polkadot-primitives 0.1.0",
 ]
 
 [[package]]
