@@ -1,0 +1,9 @@
+[package]
+name = "polkadot-cli"
+version = "0.1.0"
+authors = ["Tomasz Drwięga <tomusdrw@gmail.com>"]
+
+[dependencies]
+clap = "2.27"
+env_logger = "0.4"
+log = "0.3"
