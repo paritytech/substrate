@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+extern crate polkadot_cli;
+
 fn main() {
-    println!("Hello, world!");
+	polkadot_cli::main();
 }
