@@ -36,7 +36,7 @@ impl From<u64> for ParachainId {
 }
 
 /// A parachain block proposal.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ParachainProposal {
 	/// The ID of the parachain this is a proposal for.
 	pub parachain: ParachainId,
@@ -47,7 +47,7 @@ pub struct ParachainProposal {
 }
 
 /// A relay chain block header.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Header {
 	/// Block parent's hash.
     pub parent_hash: HeaderHash,
@@ -63,7 +63,8 @@ pub struct Header {
 ///
 /// Included candidates should be sorted by parachain ID, and without duplicate
 /// IDs.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Body {
-    candidates: Vec<IncludedCandidate>,
+	/// Parachain proposal blocks.
+    pub para_blocks: Vec<ParachainProposal>,
 }
