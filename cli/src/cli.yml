@@ -1,0 +1,15 @@
+name: polkadot
+version: "1.0.0"
+author: "Parity Team <admin@polkadot.io>"
+about: Polkadot Node Rust Implementation
+args:
+  - log:
+      short: l
+      value_name: LOG_PATTERN
+      help: Sets a custom logging
+      takes_value: true
+subcommands:
+  - collator:
+      about: Run collator node
+  - validator:
+      about: Run validator node

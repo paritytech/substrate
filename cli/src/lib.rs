@@ -14,35 +14,32 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate clap;
 extern crate env_logger;
+
+#[macro_use]
+extern crate clap;
+#[macro_use]
 extern crate log;
 
-use clap::{Arg, App, SubCommand};
-
 pub fn main() {
-	let matches = App::new("Polkadot")
-		.arg(Arg::with_name("log")
-			.short("l")
-			.value_name("LOG")
-			.help("Sets logging.")
-			.takes_value(true))
-		.subcommand(SubCommand::with_name("collator"))
-		.subcommand(SubCommand::with_name("validator"))
-		.get_matches();
+	let yaml = load_yaml!("./cli.yml");
+	let matches = clap::App::from_yaml(yaml).get_matches();
 
 	let log_pattern = matches.value_of("log").unwrap_or("");
 	init_logger(log_pattern);
 
 	if let Some(_) = matches.subcommand_matches("collator") {
-		println!("Running collator.");
+		info!("Starting collator.");
 		return;
 	}
 
 	if let Some(_) = matches.subcommand_matches("validator") {
-		println!("Running collator.");
+		info!("Starting validator.");
 		return;
 	}
+
+	println!("No command given.\n");
+	let _ = clap::App::from_yaml(yaml).print_long_help();
 }
 
 
