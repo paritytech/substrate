@@ -1,6 +1,9 @@
 [package]
 name = "polkadot"
 version = "0.1.0"
-authors = ["Robert Habermeier <rphmeier@gmail.com>"]
+authors = ["Parity Team <admin@parity.io>"]
 
 [dependencies]
+polkadot-cli = { path = "cli" }
+
+[workspace]
