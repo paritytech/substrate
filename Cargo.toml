@@ -5,6 +5,9 @@ authors = ["Parity Team <admin@parity.io>"]
 
 [dependencies]
 polkadot-cli = { path = "cli" }
-polkadot-primitives = { path = "primitives" }
 
 [workspace]
+members = [
+	"primitives",
+	"serializer"
+]
