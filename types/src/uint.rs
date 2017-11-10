@@ -14,12 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+//! An unsigned fixed-size integer.
 
-#![warn(missing_docs)]
-
-extern crate polkadot_cli;
-
-fn main() {
-	polkadot_cli::main();
-}
+construct_uint!(U256, 4);
+construct_uint!(U512, 8);
