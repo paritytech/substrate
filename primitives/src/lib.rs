@@ -18,15 +18,25 @@
 
 #![warn(missing_docs)]
 
-#[cfg(feature="std")]
-extern crate core;
+extern crate serde;
+extern crate rustc_hex;
 
 #[macro_use]
 extern crate crunchy;
 #[macro_use]
 extern crate fixed_hash;
 #[macro_use]
+extern crate serde_derive;
+#[macro_use]
 extern crate uint as uint_crate;
+
+#[cfg(feature="std")]
+extern crate core;
+#[cfg(test)]
+extern crate polkadot_serializer;
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
 
 pub mod block;
 pub mod hash;
@@ -34,11 +44,3 @@ pub mod uint;
 
 /// Alias to 160-bit hash when used in the context of an account address.
 pub type Address = hash::H160;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
