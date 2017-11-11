@@ -16,52 +16,22 @@
 
 //! A fixed hash type.
 
-use std::fmt;
-use serde::{de, Serialize, Serializer, Deserialize, Deserializer};
+use serde::{Serialize, Serializer, Deserialize, Deserializer};
+
+use bytes;
 
 macro_rules! impl_serde {
 	($name: ident, $len: expr) => {
 		impl Serialize for $name {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-				// TODO [ToDr] Use raw bytes if we switch to RLP / binencoding
-				// (serialize_bytes)
-				serializer.serialize_str(&format!("0x{:?}", self))
-
+				bytes::serialize(&self.0, serializer)
 			}
 		}
 
 		impl<'de> Deserialize<'de> for $name {
 			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-				struct Visitor;
-				impl<'a> de::Visitor<'a> for Visitor {
-					type Value = $name;
-
-					fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-						write!(formatter, "a 0x-prefixed hex string of {} bytes", $len)
-					}
-
-					fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-						if v.len() < 2  || &v[0..2] != "0x" {
-							return Err(E::custom("prefix is missing"))
-						}
-
-						// 0x + len
-						if v.len() != 2 + $len * 2 {
-							return Err(E::invalid_length(v.len() - 2, &self));
-						}
-
-						let bytes = ::rustc_hex::FromHex::from_hex(&v[2..])
-							.map_err(|e| E::custom(&format!("invalid hex value: {:?}", e)))?;
-						Ok((&*bytes).into())
-					}
-
-					fn visit_string<E: de::Error>(self, v: String) -> Result<Self::Value, E> {
-						self.visit_str(&v)
-					}
-				}
-				// TODO [ToDr] Use raw bytes if we switch to RLP / binencoding
-				// (visit_bytes, visit_bytes_buf)
-				deserializer.deserialize_str(Visitor)
+				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Exact($len))
+					.map(|x| (&*x).into())
 			}
 		}
 	}
