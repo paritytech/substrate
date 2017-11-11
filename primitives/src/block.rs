@@ -26,8 +26,10 @@ pub type HeaderHash = H256;
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Header {
 	/// Block parent's hash.
+	#[serde(rename="parentHash")]
     pub parent_hash: HeaderHash,
 	/// State root after this transition.
+	#[serde(rename="stateRoot")]
     pub state_root: H256,
 	/// Unix time at which this header was produced.
     pub timestamp: u64,
@@ -42,6 +44,7 @@ pub struct Header {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Body {
 	/// Parachain proposal blocks.
+	#[serde(rename="paraBlocks")]
     pub para_blocks: Vec<parachain::Proposal>,
 }
 
@@ -59,8 +62,8 @@ mod tests {
 			timestamp: 10,
 			number: 67,
 		}), r#"{
-  "parent_hash": "0x0000000000000000000000000000000000000000000000000000000000000005",
-  "state_root": "0x0000000000000000000000000000000000000000000000000000000000000003",
+  "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000005",
+  "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000003",
   "timestamp": 10,
   "number": 67
 }"#);
@@ -77,16 +80,11 @@ mod tests {
 				}
 			],
 		}), r#"{
-  "para_blocks": [
+  "paraBlocks": [
     {
       "parachain": 5,
-      "header": [
-        1,
-        2,
-        3,
-        4
-      ],
-      "proof_hash": "0x0000000000000000000000000000000000000000000000000000000000000005"
+      "header": "0x01020304",
+      "proofHash": "0x0000000000000000000000000000000000000000000000000000000000000005"
     }
   ]
 }"#);

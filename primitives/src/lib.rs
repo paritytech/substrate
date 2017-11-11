@@ -39,6 +39,7 @@ extern crate polkadot_serializer;
 #[macro_use]
 extern crate pretty_assertions;
 
+mod bytes;
 pub mod block;
 pub mod hash;
 pub mod parachain;

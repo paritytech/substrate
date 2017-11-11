@@ -16,23 +16,28 @@
 
 //! Validator primitives.
 
+use bytes;
+
 /// Parachain validation code.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidationCode(pub Vec<u8>);
+pub struct ValidationCode(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Parachain incoming messages.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IngressPosts(pub Vec<u8>);
+pub struct IngressPosts(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Parachain outgoing messages.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EgressPosts(pub Vec<u8>);
+pub struct EgressPosts(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Validity result of particular proof and ingress queue.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag="type", content="data")]
 pub enum ProofValidity {
 	/// The proof is invalid.
+	#[serde(rename="invalid")]
 	Invalid,
+	#[serde(rename="valid")]
 	/// The proof is processed and new egress queue is created.
 	Valid(EgressPosts),
 }
@@ -70,4 +75,25 @@ pub trait Validator {
 		proof: &::parachain::Proof,
 		code: &ValidationCode,
 	) -> Result<ProofValidity, Self::Error>;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use polkadot_serializer as ser;
+
+	#[test]
+	fn test_proof_validity_serialization() {
+		assert_eq!(
+			ser::to_string_pretty(&ProofValidity::Invalid),
+			r#"{
+  "type": "invalid"
+}"#);
+		assert_eq!(
+			ser::to_string_pretty(&ProofValidity::Valid(EgressPosts(vec![1, 2, 3]))),
+			r#"{
+  "type": "valid",
+  "data": "0x010203"
+}"#);
+	}
 }

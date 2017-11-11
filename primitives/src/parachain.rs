@@ -16,6 +16,8 @@
 
 //! Parachain data types.
 
+use bytes;
+
 /// Unique identifier of a parachain.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct Id(u64);
@@ -36,19 +38,20 @@ pub struct Proposal {
 	/// Parachain block header bytes.
 	pub header: Header,
 	/// Hash of data necessary to prove validity of the header.
+	#[serde(rename="proofHash")]
 	pub proof_hash: ProofHash,
 }
 
 /// Parachain header raw bytes wrapper type.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Header(pub Vec<u8>);
+pub struct Header(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Hash used to refer to proof of block header.
 pub type ProofHash = ::hash::H256;
 
 /// Raw proof data.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RawProof(pub Vec<u8>);
+pub struct RawProof(#[serde(with="bytes")] pub Vec<u8>);
 
 impl RawProof {
 	/// Compute and store the hash of the proof.
@@ -77,4 +80,21 @@ impl Proof {
 
 /// Parachain validation code.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidationCode(pub Vec<u8>);
+pub struct ValidationCode(#[serde(with="bytes")] pub Vec<u8>);
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use polkadot_serializer as ser;
+
+	#[test]
+	fn test_proof_serialization() {
+		assert_eq!(
+			ser::to_string_pretty(&Proof(RawProof(vec![1,2,3]), 5.into())),
+			r#"[
+  "0x010203",
+  "0x0000000000000000000000000000000000000000000000000000000000000005"
+]"#
+		)
+	}
+}
