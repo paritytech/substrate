@@ -58,6 +58,7 @@ impl Executor for RustExecutor {
 			},
 			Self::BALANCES => match method {
 				"balance_of" => ser(&self.balance.balance_of(ext, de(&data.0)?)?),
+				"next_nonce" => ser(&self.balance.next_nonce(ext, de(&data.0)?)?),
 				"transfer_preconditions" => ser(&self.balance.transfer_preconditions(ext, de(&data.0)?)?),
 				m => bail!(ErrorKind::MethodNotFound(m.to_owned())),
 			},

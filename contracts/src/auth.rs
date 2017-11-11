@@ -20,12 +20,19 @@ use state_machine::Externalities;
 use error::Result;
 use executor::RustExecutor;
 
-type AuthData = (Vec<u8>, Vec<u8>);
+/// Data and some sort of Authentication Data
+type DataAndAuth = (Vec<u8>, Vec<u8>);
 
+/// Authentication contract rust implementation.
 #[derive(Debug, Default)]
 pub struct Contract;
 impl Contract {
-	pub fn check_auth<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: AuthData) -> Result<Option<Vec<Address>>> {
+	/// Verify authentication data.
+	///
+	/// Given Message and Authentication Data verifies it and returns:
+	/// 1. None in case it doesn't match (i.e. signature is invalid)
+	/// 2. A list of addresses who signed that Message.
+	pub fn check_auth<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: DataAndAuth) -> Result<Option<Vec<Address>>> {
 		unimplemented!()
 	}
 }

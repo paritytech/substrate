@@ -21,20 +21,43 @@ use state_machine::Externalities;
 use error::Result;
 use executor::RustExecutor;
 
-type BalanceOf = Address;
-type Transfer = (Address, U256, Address);
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Transfer {
+	/// Transfer value
+	value: U256,
+	/// Transfer destination
+	to: Address,
+	/// Replay protection
+	nonce: U256,
+	/// Data authorizing the transfer (we can derive sender from it)
+	authentication_data: Vec<u8>,
+}
 
+/// Balances contract rust implementation.
 #[derive(Debug, Default)]
 pub struct Contract;
 impl Contract {
-	pub fn balance_of<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: BalanceOf) -> Result<U256> {
+	/// Returns a balance of given address.
+	pub fn balance_of<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: Address) -> Result<U256> {
 		unimplemented!()
 	}
 
+	/// Returns the next nonce to authorize the transfer to given address.
+	pub fn next_nonce<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: Address) -> Result<U256> {
+		unimplemented!()
+	}
+
+	/// Checks preconditions for transfer.
+	/// Should verify:
+	/// - signature
+	/// - replay protection
+	/// - enough balance
 	pub fn transfer_preconditions<E: Externalities<RustExecutor>>(&self, _db: &E, _data: Transfer) -> Result<bool> {
 		unimplemented!()
 	}
 
+	/// Perform a transfer.
+	/// This should first make sure that precondtions are satisfied and later perform the transfer.
 	pub fn transfer<E: Externalities<RustExecutor>>(&self, _ext: &mut E, _data: Transfer) -> Result<bool> {
 		unimplemented!()
 	}

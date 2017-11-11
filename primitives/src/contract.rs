@@ -14,10 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Contract execution data.
+
 use bytes;
 
+/// Contract call data.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallData(#[serde(with="bytes")] pub Vec<u8>);
 
+/// Contract output data.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OutData(#[serde(with="bytes")] pub Vec<u8>);
