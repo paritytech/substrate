@@ -14,42 +14,44 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Rust implementation of Polkadot contracts.
 
 use primitives::contract::{CallData, OutData};
 use serializer::{from_slice as de, to_vec as ser};
+use state_machine::{Externalities, Executor};
 
-use rust::error::{Error, ErrorKind, Result};
-use rust::contracts;
+use error::{Error, ErrorKind, Result};
+use auth;
+use balances;
 
-use {Externalities, Executor, ContractCode};
-
+/// Dummy rust executor for contracts.
+///
+/// Instead of actually executing the provided code it just
+/// dispatches the calls to pre-defined hardcoded implementations in rust.
 #[derive(Debug, Default)]
-pub struct RustExecutor<A, B> {
-	auth: A,
-	balance: B,
+pub struct RustExecutor {
+	auth: auth::Contract,
+	balance: balances::Contract,
 }
 
-impl<A, B> RustExecutor<A, B> {
+impl RustExecutor {
 	const AUTH: u8 = 1;
 	const BALANCES: u8 = 2;
 }
 
-impl<A, B> Executor for RustExecutor<A, B> where
-	A: contracts::Authentication<E>,
-	B: contracts::Balances<E>,
-{
+impl Executor for RustExecutor {
 	type Error = Error;
 
-	fn static_call(
+	fn static_call<E: Externalities<Self>>(
 		&self,
 		ext: &E,
-		code: ContractCode,
+		code: &[u8],
 		method: &str,
 		data: &CallData,
 	) -> Result<OutData> {
-		ensure!(code.0.len() == 1, ErrorKind::InvalidCode(code.0.to_vec()));
+		ensure!(code.len() == 1, ErrorKind::InvalidCode(code.to_vec()));
 
-		Ok(OutData(match code.0[0] {
+		Ok(OutData(match code[0] {
 			Self::AUTH => match method {
 				"check_auth" => ser(&self.auth.check_auth(ext, de(&data.0)?)?),
 				m => bail!(ErrorKind::MethodNotFound(m.to_owned())),
@@ -63,16 +65,16 @@ impl<A, B> Executor for RustExecutor<A, B> where
 		}))
 	}
 
-	fn call(
+	fn call<E: Externalities<Self>>(
 		&self,
 		ext: &mut E,
-		code: ContractCode,
+		code: &[u8],
 		method: &str,
 		data: &CallData,
 	) -> Result<OutData> {
-		ensure!(code.0.len() == 1, ErrorKind::InvalidCode(code.0.to_vec()));
+		ensure!(code.len() == 1, ErrorKind::InvalidCode(code.to_vec()));
 
-		Ok(OutData(match code.0[0] {
+		Ok(OutData(match code[0] {
 			Self::BALANCES=> match method {
 				"transfer" => ser(&self.balance.transfer(ext, de(&data.0)?)?),
 				m => bail!(ErrorKind::MethodNotFound(m.to_owned())),

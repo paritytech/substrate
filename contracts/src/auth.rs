@@ -14,27 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::{contract, Address};
-use primitives::uint::U256;
+use primitives::Address;
+use state_machine::Externalities;
 
-use serde::de::DeserializeOwned;
+use error::Result;
+use executor::RustExecutor;
 
-use {Externalities};
+type AuthData = (Vec<u8>, Vec<u8>);
 
-pub trait Authentication<E: Externalities> {
-	type AuthData: DeserializeOwned;
-
-	fn check_auth(&self, ext: &E, data: Self::AuthData) -> contract::Result<Option<Vec<Address>>>;
+#[derive(Debug, Default)]
+pub struct Contract;
+impl Contract {
+	pub fn check_auth<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: AuthData) -> Result<Option<Vec<Address>>> {
+		unimplemented!()
+	}
 }
-
-pub trait Balances<E: Externalities> {
-	type BalanceOf: DeserializeOwned;
-	type Transfer: DeserializeOwned;
-
-	fn balance_of(&self, ext: &E, data: Self::BalanceOf) -> contract::Result<U256>;
-
-	fn transfer_preconditions(&self, db: &E, data: Self::Transfer) -> contract::Result<bool>;
-
-	fn transfer(&self, ext: &mut E, data: Self::Transfer) -> contract::Result<bool>;
-}
-

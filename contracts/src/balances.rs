@@ -14,24 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::contract;
-use serializer;
+use primitives::Address;
+use primitives::uint::U256;
+use state_machine::Externalities;
 
-error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error);
-		ContractFailure(contract::Panic);
+use error::Result;
+use executor::RustExecutor;
+
+type BalanceOf = Address;
+type Transfer = (Address, U256, Address);
+
+#[derive(Debug, Default)]
+pub struct Contract;
+impl Contract {
+	pub fn balance_of<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: BalanceOf) -> Result<U256> {
+		unimplemented!()
 	}
 
-	errors {
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
-		}
+	pub fn transfer_preconditions<E: Externalities<RustExecutor>>(&self, _db: &E, _data: Transfer) -> Result<bool> {
+		unimplemented!()
+	}
 
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
+	pub fn transfer<E: Externalities<RustExecutor>>(&self, _ext: &mut E, _data: Transfer) -> Result<bool> {
+		unimplemented!()
 	}
 }

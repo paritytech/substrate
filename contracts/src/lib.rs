@@ -22,36 +22,19 @@
 
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_serializer as serializer;
+extern crate polkadot_state_machine as state_machine;
 extern crate serde;
 
 #[macro_use]
 extern crate error_chain;
 
-pub mod rust;
+mod auth;
+mod balances;
 
-use primitives::contract::{CallData, OutData};
+pub mod error;
+pub mod executor;
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct ContractCode<'a>(&'a [u8]);
-
-pub trait Externalities {}
-
-pub trait Executor {
-	type Error;
-
-	fn static_call<E: Externalities>(
-		&self,
-		ext: &E,
-		code: ContractCode,
-		method: &str,
-		data: &CallData,
-	) -> Result<OutData, Self::Error>;
-
-	fn call<E: Externalities>(
-		&self,
-		ext: &mut E,
-		code: ContractCode,
-		method: &str,
-		data: &CallData,
-	) -> Result<OutData, Self::Error>;
+/// Creates new RustExecutor for contracts.
+pub fn new() -> executor::RustExecutor {
+	executor::RustExecutor::default()
 }

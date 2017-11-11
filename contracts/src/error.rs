@@ -14,29 +14,37 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::{Address, contract};
-use primitives::uint::U256;
+//! Rust executor possible errors.
 
-use rust::contracts::Balances;
+#![allow(missing_docs)]
 
-use {Externalities};
+use serializer;
+use state_machine;
 
-#[derive(Debug, Default)]
-pub struct Contract;
-
-impl<E: Externalities> Balances<E> for Contract {
-	type BalanceOf = Address;
-	type Transfer = (Address, U256, Address);
-
-	fn balance_of(&self, _ext: &E, _data: Self::BalanceOf) -> contract::Result<U256> {
-		unimplemented!()
+error_chain! {
+	foreign_links {
+		InvalidData(serializer::Error);
 	}
 
-	fn transfer_preconditions(&self, _db: &E, _data: Self::Transfer) -> contract::Result<bool> {
-		unimplemented!()
-	}
+	errors {
+		/// Method is not found
+		MethodNotFound(t: String) {
+			description("method not found"),
+			display("Method not found: '{}'", t),
+		}
 
-	fn transfer(&self, _ext: &mut E, _data: Self::Transfer) -> contract::Result<bool> {
-		unimplemented!()
+		/// Code is invalid (expected single byte)
+		InvalidCode(c: Vec<u8>) {
+			description("invalid code"),
+			display("Invalid Code: {:?}", c),
+		}
+
+		/// Externalities have failed.
+		Externalities(e: Box<state_machine::Error>) {
+			description("externalities failure"),
+			display("Externalities error: {}", e),
+		}
 	}
 }
+
+impl state_machine::Error for Error {}

@@ -11,4 +11,5 @@ members = [
 	"contracts",
 	"primitives",
 	"serializer",
+	"state_machine",
 ]
