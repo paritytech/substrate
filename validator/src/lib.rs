@@ -16,6 +16,8 @@
 
 //! Validator implementation.
 
+#[warn(missing_docs)]
+
 #[macro_use]
 extern crate error_chain;
 
