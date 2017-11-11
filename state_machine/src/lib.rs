@@ -30,7 +30,13 @@ use std::collections::HashMap;
 use primitives::Address;
 use primitives::hash::H256;
 
+use backend::Backend;
+
 pub mod backend;
+
+/// Error variant given when a call panics.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Panic;
 
 /// Updates to be committed to the state.
 pub enum Update {

@@ -40,15 +40,16 @@ pub trait Backend {
 	/// Get keyed storage associated with specific address.
 	fn storage(&self, address: &Address, key: &H256) -> Option<&[u8]>;
 
-	/// Commit updates.
+	/// Commit updates to the backend and get new state.
 	fn commit<I>(&mut self, changes: I) -> Committed
 		where I: IntoIterator<Item=Update>;
 }
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
+#[derive(Default)]
 pub struct InMemory {
-	inner: super::MemoryState, // keeps all the state in memory.
+	inner: MemoryState, // keeps all the state in memory.
 }
 
 impl Backend for InMemory {
@@ -65,7 +66,26 @@ impl Backend for InMemory {
 	{
 		self.inner.update(changes);
 
-		// TODO: recalculate trie roots.
-		unimplemented!()
+		// fully recalculate trie roots.
+
+		let storage_roots = self.inner.storage.iter().map(|(addr, storage)| {
+			let flat_trie = storage.iter().map(|(k, v)| (k.to_vec(), v.clone())).collect();
+			(addr.to_vec(), sec_trie_root(flat_trie).to_vec())
+		}).collect();
+
+		let storage_tree_root = H256(sec_trie_root(storage_roots).0);
+
+		let code_tree_root = sec_trie_root(
+			self.inner.code.iter().map(|(k, v)| (k.to_vec(), v.clone())).collect()
+		);
+
+		let code_tree_root = H256(code_tree_root.0);
+
+		Committed {
+			code_tree_root,
+			storage_tree_root,
+		}
 	}
 }
+
+// TODO: DB-based backend
