@@ -18,7 +18,7 @@ use std::fmt;
 
 use serde::{de, Serializer, Deserializer};
 
-/// Serializes a slice of bytes into a most compact form.
+/// Serializes a slice of bytes.
 pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> where
 	S: Serializer,
 {
@@ -26,47 +26,66 @@ pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> wher
 	serializer.serialize_str(&format!("0x{}", hex))
 }
 
-pub fn serialize_compact<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> where
+/// Serialize a slice of bytes as uint.
+///
+/// The representation will have all leading zeros trimmed.
+pub fn serialize_uint<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> where
 	S: Serializer,
 {
-	let mut non_zero = bytes.len();
-	for (i, b) in bytes.iter().enumerate() {
-		if *b != 0 {
-			non_zero = i;
-			break;
-		}
-	}
-
-	if non_zero == bytes.len() {
+	let non_zero = bytes.iter().take_while(|b| **b == 0).count();
+	let bytes = &bytes[non_zero..];
+	if bytes.is_empty() {
 		return serializer.serialize_str("0x0");
 	}
 
-	let hex = ::rustc_hex::ToHex::to_hex(&bytes[non_zero..]);
+	let hex = ::rustc_hex::ToHex::to_hex(bytes);
 	let has_leading_zero = !hex.is_empty() && &hex[0..1] == "0";
-	return serializer.serialize_str(&format!("0x{}", if has_leading_zero { &hex[1..] } else { &hex }));
+	serializer.serialize_str(
+		&format!("0x{}", if has_leading_zero { &hex[1..] } else { &hex })
+	)
 }
 
+/// Expected length of bytes vector.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExpectedLen {
+	/// Any length in bytes.
+	Any,
+	/// Exact length in bytes.
+	Exact(usize),
+	/// A bytes length between (min; max].
+	Between(usize, usize),
+}
+
+impl fmt::Display for ExpectedLen {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		match *self {
+			ExpectedLen::Any => write!(fmt, "even length"),
+			ExpectedLen::Exact(v) => write!(fmt, "length of {}", v * 2),
+			ExpectedLen::Between(min, max) => write!(fmt, "length between ({}; {}]", min * 2, max * 2),
+		}
+	}
+}
+
+/// Deserialize into vector of bytes.
 pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error> where
 	D: Deserializer<'de>,
 {
-	deserialize_with_check(deserializer, |_| Ok(()))
+	deserialize_check_len(deserializer, ExpectedLen::Any)
 }
 
-pub fn deserialize_with_check<'de, D, F>(deserializer: D, check: F) -> Result<Vec<u8>, D::Error> where
+/// Deserialize into vector of bytes with additional size check.
+pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Result<Vec<u8>, D::Error> where
 	D: Deserializer<'de>,
-	F: Fn(&str) -> Result<(), ErrorKind>,
 {
-	struct Visitor<F> {
-		check: F,
+	struct Visitor {
+		len: ExpectedLen,
 	}
 
-	impl<'a, F> de::Visitor<'a> for Visitor<F> where
-		F: Fn(&str) -> Result<(), ErrorKind>,
-	{
+	impl<'a> de::Visitor<'a> for Visitor {
 		type Value = Vec<u8>;
 
 		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-			write!(formatter, "a 0x-prefixed hex string")
+			write!(formatter, "a 0x-prefixed hex string with {}", self.len)
 		}
 
 		fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
@@ -74,14 +93,25 @@ pub fn deserialize_with_check<'de, D, F>(deserializer: D, check: F) -> Result<Ve
 				return Err(E::custom("prefix is missing"))
 			}
 
-			(self.check)(v).map_err(|err| match err {
-				ErrorKind::InvalidLength(len) => E::invalid_length(len, &self),
-			})?;
+			let is_len_valid = match self.len {
+				// just make sure that we have all nibbles
+				ExpectedLen::Any => v.len() % 2 == 0,
+				ExpectedLen::Exact(len) => v.len() == 2 * len + 2,
+				ExpectedLen::Between(min, max) => v.len() <= 2 * max + 2 && v.len() > 2 * min + 2,
+			};
 
-			let v = if v.len() % 2 == 0 { v[2..].to_owned() } else { format!("0{}", &v[2..]) };
-			let bytes = ::rustc_hex::FromHex::from_hex(v.as_str())
-				.map_err(|e| E::custom(&format!("invalid hex value: {:?}", e)))?;
-			Ok(bytes)
+			if !is_len_valid {
+				return Err(E::invalid_length(v.len() - 2, &self))
+			}
+
+			let bytes = match self.len {
+				ExpectedLen::Between(..) if v.len() % 2 != 0 => {
+					::rustc_hex::FromHex::from_hex(&*format!("0{}", &v[2..]))
+				},
+				_ => ::rustc_hex::FromHex::from_hex(&v[2..])
+			};
+
+			bytes.map_err(|e| E::custom(&format!("invalid hex value: {:?}", e)))
 		}
 
 		fn visit_string<E: de::Error>(self, v: String) -> Result<Self::Value, E> {
@@ -90,10 +120,5 @@ pub fn deserialize_with_check<'de, D, F>(deserializer: D, check: F) -> Result<Ve
 	}
 	// TODO [ToDr] Use raw bytes if we switch to RLP / binencoding
 	// (visit_bytes, visit_bytes_buf)
-	deserializer.deserialize_str(Visitor { check })
+	deserializer.deserialize_str(Visitor { len })
 }
-
-pub enum ErrorKind {
-	InvalidLength(usize),
-}
-

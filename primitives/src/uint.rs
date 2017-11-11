@@ -26,20 +26,14 @@ macro_rules! impl_serde {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 				let mut bytes = [0u8; $len * 8];
 				self.to_big_endian(&mut bytes);
-				bytes::serialize_compact(&bytes, serializer)
+				bytes::serialize_uint(&bytes, serializer)
 			}
 		}
 
 		impl<'de> Deserialize<'de> for $name {
 			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-				bytes::deserialize_with_check(deserializer, |v: &str| {
-					// 0x + len
-					if v.len() > 2 + $len * 16 || v.len() == 2 {
-						Err(bytes::ErrorKind::InvalidLength(v.len() - 2))
-					} else {
-						Ok(())
-					}
-				}).map(|bytes| (&*bytes).into())
+				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Between(0, $len * 8))
+					.map(|x| (&*x).into())
 			}
 		}
 	}
