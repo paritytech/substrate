@@ -16,6 +16,7 @@
 
 //! Block and header type definitions.
 
+use bytes;
 use hash::H256;
 
 /// Hash used to refer to a block hash.
@@ -37,7 +38,7 @@ impl From<u64> for ParachainId {
 
 /// A wrapper type for parachain block header raw bytes.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ParachainBlockHeader(pub Vec<u8>);
+pub struct ParachainBlockHeader(#[serde(with="bytes")] pub Vec<u8>);
 
 /// A parachain block proposal.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,12 +109,7 @@ mod tests {
   "para_blocks": [
     {
       "parachain": 5,
-      "header": [
-        1,
-        2,
-        3,
-        4
-      ],
+      "header": "0x01020304",
       "proof_hash": "0x0000000000000000000000000000000000000000000000000000000000000005"
     }
   ]
