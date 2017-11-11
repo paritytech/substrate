@@ -8,3 +8,4 @@ description = "Polkadot node implementation in Rust."
 clap = { version = "2.27", features = ["yaml"] }
 env_logger = "0.4"
 log = "0.3"
+polkadot-state-machine = { path = "../state_machine" }

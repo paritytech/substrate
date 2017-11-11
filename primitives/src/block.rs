@@ -47,12 +47,15 @@ pub struct ParachainProposal {
 }
 
 /// A relay chain block header.
+// TODO: queue-changes-root?
 #[derive(Debug, PartialEq, Eq)]
 pub struct Header {
 	/// Block parent's hash.
     pub parent_hash: HeaderHash,
-	/// State root after this transition.
-    pub state_root: H256,
+	/// State root after this transition. Storage changes often.
+    pub storage_tree_root: H256,
+	/// Code tree root. Contract code changes rarely.
+	pub code_tree_root: H256,
 	/// Unix time at which this header was produced.
     pub timestamp: u64,
 	/// Block number.
