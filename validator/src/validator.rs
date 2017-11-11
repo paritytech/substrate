@@ -47,11 +47,11 @@ impl validator::Validator for Validator {
 		&self,
 		messages: &validator::IngressPosts,
 		proof: &parachain::Proof,
-		code: &validator::ValidationCode,
+		code: &[u8],
 	) -> Result<validator::ProofValidity> {
-		ensure!(code.0.len() == 1, ErrorKind::InvalidCode(format!("The code should be a single byte.")));
+		ensure!(code.len() == 1, ErrorKind::InvalidCode(format!("The code should be a single byte.")));
 
-		match self.codes.get(code.0[0] as usize) {
+		match self.codes.get(code[0] as usize) {
 			Some(code) => code.check(messages, proof),
 			None => bail!(ErrorKind::InvalidCode(format!("Unknown parachain code."))),
 		}

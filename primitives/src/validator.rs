@@ -18,10 +18,6 @@
 
 use bytes;
 
-/// Parachain validation code.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidationCode(#[serde(with="bytes")] pub Vec<u8>);
-
 /// Parachain incoming messages.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IngressPosts(#[serde(with="bytes")] pub Vec<u8>);
@@ -66,6 +62,7 @@ impl From<Option<(IngressPostsDelta, EgressPosts)>> for ProofValidity {
 	}
 }
 
+// TODO [ToDr] This shouldn't be here!
 /// Validator logic.
 pub trait Validator {
 	/// Validation error.
@@ -78,7 +75,7 @@ pub trait Validator {
 		&self,
 		messages: &IngressPosts,
 		proof: &::parachain::Proof,
-		code: &ValidationCode,
+		code: &[u8],
 	) -> Result<ProofValidity, Self::Error>;
 }
 
