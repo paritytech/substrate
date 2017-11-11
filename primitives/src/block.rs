@@ -17,34 +17,10 @@
 //! Block and header type definitions.
 
 use hash::H256;
+use parachain;
 
 /// Hash used to refer to a block hash.
 pub type HeaderHash = H256;
-/// Hash used to refer to proof of block header.
-pub type ProofHash = H256;
-
-/// Unique identifier of a parachain.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub struct ParachainId(u64);
-
-impl From<ParachainId> for u64 {
-	fn from(x: ParachainId) -> Self { x.0 }
-}
-
-impl From<u64> for ParachainId {
-	fn from(x: u64) -> Self { ParachainId(x) }
-}
-
-/// A parachain block proposal.
-#[derive(Debug, PartialEq, Eq)]
-pub struct ParachainProposal {
-	/// The ID of the parachain this is a proposal for.
-	pub parachain: ParachainId,
-	/// Parachain block header bytes.
-	pub header: Vec<u8>,
-	/// Hash of data necessary to prove validity of the header.
-	pub proof_hash: ProofHash,
-}
 
 /// A relay chain block header.
 #[derive(Debug, PartialEq, Eq)]
@@ -66,5 +42,5 @@ pub struct Header {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Body {
 	/// Parachain proposal blocks.
-    pub para_blocks: Vec<ParachainProposal>,
+    pub para_blocks: Vec<parachain::Proposal>,
 }
