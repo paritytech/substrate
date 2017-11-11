@@ -16,25 +16,19 @@
 
 use std::fmt;
 
-use primitives::{validator, parachain};
-
-use error::Result;
+use primitives::validator;
+use serde::de::DeserializeOwned;
 
 /// Parachain code implementation.
 pub trait ParachainCode: fmt::Debug {
 	/// Deserialized messages type.
-	type Messages;
+	type Messages: DeserializeOwned;
 	/// Deserialized proof type.
-	type Proof;
-
-	/// Decode messages from given raw vector of bytes.
-	fn decode_messages(&self, _messages: &validator::IngressPosts) -> Result<Self::Messages>;
-
-	/// Decode proof from given raw vector of bytes.
-	fn decode_proof(&self, _proof: &parachain::Proof) -> Result<Self::Proof>;
+	type Proof: DeserializeOwned;
 
 	/// Given decoded messages and proof validate it and return egress posts.
-	fn check(&self, messages: Self::Messages, proof: Self::Proof) -> Option<validator::EgressPosts>;
+	fn check(&self, messages: Self::Messages, proof: Self::Proof) ->
+		Option<(validator::IngressPostsDelta, validator::EgressPosts)>;
 }
 
 /// Dummy implementation of the first parachain validation.
@@ -45,15 +39,8 @@ impl ParachainCode for ParaChain1 {
 	type Messages = ();
 	type Proof = ();
 
-	fn decode_messages(&self, _messages: &validator::IngressPosts) -> Result<Self::Messages> {
-		Ok(())
-	}
-
-	fn decode_proof(&self, _proof: &parachain::Proof) -> Result<Self::Proof> {
-		Ok(())
-	}
-
-	fn check(&self, _messages: Self::Messages, _proof: Self::Proof) -> Option<validator::EgressPosts> {
+	fn check(&self, _messages: Self::Messages, _proof: Self::Proof)
+		-> Option<(validator::IngressPostsDelta, validator::EgressPosts)> {
 		None
 	}
 }

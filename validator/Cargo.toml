@@ -6,3 +6,5 @@ authors = ["Parity Team <admin@parity.io>"]
 [dependencies]
 error-chain = "0.11"
 polkadot-primitives = { path = "../primitives", version = "0.1" }
+polkadot-serializer = { path = "../serializer", version = "0.1" }
+serde = "1.0"

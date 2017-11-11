@@ -18,10 +18,12 @@
 
 #[warn(missing_docs)]
 
+extern crate polkadot_primitives as primitives;
+extern crate polkadot_serializer as serializer;
+extern crate serde;
+
 #[macro_use]
 extern crate error_chain;
-
-extern crate polkadot_primitives as primitives;
 
 mod error;
 mod parachains;

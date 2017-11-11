@@ -14,7 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot. If not, see <http://www.gnu.org/licenses/>.
 
+use serializer;
+
 error_chain! {
+	foreign_links {
+		Serialization(serializer::Error);
+	}
 	errors {
 		Timeout {
 			description("Validation task has timed-out."),

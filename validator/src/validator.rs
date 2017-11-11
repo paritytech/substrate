@@ -17,6 +17,8 @@
 use std::fmt;
 
 use primitives::{validator, parachain};
+use serde::de::DeserializeOwned;
+use serializer;
 
 use error::{Error, ErrorKind, Result};
 use parachains::{ParachainCode, ParaChain1};
@@ -50,7 +52,7 @@ impl validator::Validator for Validator {
 		ensure!(code.0.len() == 1, ErrorKind::InvalidCode(format!("The code should be a single byte.")));
 
 		match self.codes.get(code.0[0] as usize) {
-			Some(code) => code.check(messages, proof).map(Into::into),
+			Some(code) => code.check(messages, proof),
 			None => bail!(ErrorKind::InvalidCode(format!("Unknown parachain code."))),
 		}
 	}
@@ -59,15 +61,19 @@ impl validator::Validator for Validator {
 /// Simplified parachain code verification
 trait Code: fmt::Debug {
 	/// Given bytes of messages and proof determine if the proof is valid and return egress posts.
-	fn check(&self, messages: &validator::IngressPosts, proof: &parachain::Proof) -> Result<Option<validator::EgressPosts>>;
+	fn check(&self, messages: &validator::IngressPosts, proof: &parachain::Proof) -> Result<validator::ProofValidity>;
 }
 
-impl<M, P, T> Code for T where T: ParachainCode<Messages=M, Proof=P> {
-	fn check(&self, messages: &validator::IngressPosts, proof: &parachain::Proof) -> Result<Option<validator::EgressPosts>> {
-		let messages = self.decode_messages(messages)?;
-		let proof = self.decode_proof(proof)?;
+impl<M, P, T> Code for T where
+	M: DeserializeOwned,
+	P: DeserializeOwned,
+	T: ParachainCode<Messages=M, Proof=P>,
+{
+	fn check(&self, messages: &validator::IngressPosts, proof: &parachain::Proof) -> Result<validator::ProofValidity> {
+		let messages = serializer::from_slice(&messages.0)?;
+		let proof = serializer::from_slice(&proof.raw().0)?;
 
-		Ok(self.check(messages, proof))
+		Ok(self.check(messages, proof).into())
 	}
 }
 

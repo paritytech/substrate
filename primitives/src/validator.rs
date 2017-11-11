@@ -26,6 +26,10 @@ pub struct ValidationCode(#[serde(with="bytes")] pub Vec<u8>);
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IngressPosts(#[serde(with="bytes")] pub Vec<u8>);
 
+/// Parachain incoming messages delta.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IngressPostsDelta(#[serde(with="bytes")] pub Vec<u8>);
+
 /// Parachain outgoing messages.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EgressPosts(#[serde(with="bytes")] pub Vec<u8>);
@@ -39,7 +43,8 @@ pub enum ProofValidity {
 	Invalid,
 	#[serde(rename="valid")]
 	/// The proof is processed and new egress queue is created.
-	Valid(EgressPosts),
+	/// Also includes current ingress queue delta.
+	Valid(IngressPostsDelta, EgressPosts),
 }
 
 impl ProofValidity {
@@ -47,15 +52,15 @@ impl ProofValidity {
 	pub fn is_valid(&self) -> bool {
 		match *self {
 			ProofValidity::Invalid => false,
-			ProofValidity::Valid(_) => true,
+			ProofValidity::Valid(..) => true,
 		}
 	}
 }
 
-impl From<Option<EgressPosts>> for ProofValidity {
-	fn from(posts: Option<EgressPosts>) -> Self {
+impl From<Option<(IngressPostsDelta, EgressPosts)>> for ProofValidity {
+	fn from(posts: Option<(IngressPostsDelta, EgressPosts)>) -> Self {
 		match posts {
-			Some(posts) => ProofValidity::Valid(posts),
+			Some((delta, posts)) => ProofValidity::Valid(delta, posts),
 			None => ProofValidity::Invalid,
 		}
 	}
@@ -90,10 +95,13 @@ mod tests {
   "type": "invalid"
 }"#);
 		assert_eq!(
-			ser::to_string_pretty(&ProofValidity::Valid(EgressPosts(vec![1, 2, 3]))),
+			ser::to_string_pretty(&ProofValidity::Valid(IngressPostsDelta(vec![1]), EgressPosts(vec![1, 2, 3]))),
 			r#"{
   "type": "valid",
-  "data": "0x010203"
+  "data": [
+    "0x01",
+    "0x010203"
+  ]
 }"#);
 	}
 }
