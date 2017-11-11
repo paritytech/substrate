@@ -30,14 +30,8 @@ macro_rules! impl_serde {
 
 		impl<'de> Deserialize<'de> for $name {
 			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-				bytes::deserialize_with_check(deserializer, |v: &str| {
-					// 0x + len
-					if v.len() != 2 + $len * 2 {
-						Err(bytes::ErrorKind::InvalidLength(v.len() - 2))
-					} else {
-						Ok(())
-					}
-				}).map(|x| (&*x).into())
+				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Exact($len))
+					.map(|x| (&*x).into())
 			}
 		}
 	}
