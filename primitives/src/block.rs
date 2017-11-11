@@ -27,12 +27,12 @@ pub type HeaderHash = H256;
 pub struct Header {
 	/// Block parent's hash.
 	#[serde(rename="parentHash")]
-    pub parent_hash: HeaderHash,
+	pub parent_hash: HeaderHash,
 	/// State root after this transition.
 	#[serde(rename="stateRoot")]
-    pub state_root: H256,
+	pub state_root: H256,
 	/// Unix time at which this header was produced.
-    pub timestamp: u64,
+	pub timestamp: u64,
 	/// Block number.
 	pub number: u64,
 }
@@ -45,7 +45,7 @@ pub struct Header {
 pub struct Body {
 	/// Parachain proposal blocks.
 	#[serde(rename="paraBlocks")]
-    pub para_blocks: Vec<parachain::Proposal>,
+	pub para_blocks: Vec<parachain::Proposal>,
 }
 
 
