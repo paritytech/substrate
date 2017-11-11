@@ -14,35 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Shareable Polkadot types.
+use primitives::contract::CallData;
 
-#![warn(missing_docs)]
+pub mod auth;
+pub mod balances;
+pub mod error;
+pub mod executor;
 
-extern crate serde;
-extern crate rustc_hex;
+mod contracts;
 
-#[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
 
-#[cfg(feature="std")]
-extern crate core;
-#[cfg(test)]
-extern crate polkadot_serializer;
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
-
-mod bytes;
-pub mod block;
-pub mod contract;
-pub mod hash;
-pub mod uint;
-
-/// Alias to 160-bit hash when used in the context of an account address.
-pub type Address = hash::H160;
+fn new() -> executor::RustExecutor<auth::Contract, balances::Contract> {
+	executor::RustExecutor::default()
+}

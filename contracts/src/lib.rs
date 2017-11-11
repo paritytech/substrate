@@ -14,35 +14,44 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Shareable Polkadot types.
+//! Temporary crate for contracts implementations.
+//!
+//! This will be replaced with WASM contracts stored on-chain.
 
 #![warn(missing_docs)]
 
+extern crate polkadot_primitives as primitives;
+extern crate polkadot_serializer as serializer;
 extern crate serde;
-extern crate rustc_hex;
 
 #[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
+extern crate error_chain;
 
-#[cfg(feature="std")]
-extern crate core;
-#[cfg(test)]
-extern crate polkadot_serializer;
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
+pub mod rust;
 
-mod bytes;
-pub mod block;
-pub mod contract;
-pub mod hash;
-pub mod uint;
+use primitives::contract::{CallData, OutData};
 
-/// Alias to 160-bit hash when used in the context of an account address.
-pub type Address = hash::H160;
+#[derive(Debug, PartialEq, Eq)]
+pub struct ContractCode<'a>(&'a [u8]);
+
+pub trait Externalities {}
+
+pub trait Executor {
+	type Error;
+
+	fn static_call<E: Externalities>(
+		&self,
+		ext: &E,
+		code: ContractCode,
+		method: &str,
+		data: &CallData,
+	) -> Result<OutData, Self::Error>;
+
+	fn call<E: Externalities>(
+		&self,
+		ext: &mut E,
+		code: ContractCode,
+		method: &str,
+		data: &CallData,
+	) -> Result<OutData, Self::Error>;
+}

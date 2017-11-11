@@ -14,35 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Shareable Polkadot types.
+use primitives::{Address, contract};
+use primitives::uint::U256;
 
-#![warn(missing_docs)]
+use rust::contracts::Balances;
 
-extern crate serde;
-extern crate rustc_hex;
+use {Externalities};
 
-#[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
+#[derive(Debug, Default)]
+pub struct Contract;
 
-#[cfg(feature="std")]
-extern crate core;
-#[cfg(test)]
-extern crate polkadot_serializer;
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
+impl<E: Externalities> Balances<E> for Contract {
+	type BalanceOf = Address;
+	type Transfer = (Address, U256, Address);
 
-mod bytes;
-pub mod block;
-pub mod contract;
-pub mod hash;
-pub mod uint;
+	fn balance_of(&self, _ext: &E, _data: Self::BalanceOf) -> contract::Result<U256> {
+		unimplemented!()
+	}
 
-/// Alias to 160-bit hash when used in the context of an account address.
-pub type Address = hash::H160;
+	fn transfer_preconditions(&self, _db: &E, _data: Self::Transfer) -> contract::Result<bool> {
+		unimplemented!()
+	}
+
+	fn transfer(&self, _ext: &mut E, _data: Self::Transfer) -> contract::Result<bool> {
+		unimplemented!()
+	}
+}

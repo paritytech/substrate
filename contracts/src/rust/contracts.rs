@@ -14,35 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Shareable Polkadot types.
+use primitives::{contract, Address};
+use primitives::uint::U256;
 
-#![warn(missing_docs)]
+use serde::de::DeserializeOwned;
 
-extern crate serde;
-extern crate rustc_hex;
+use {Externalities};
 
-#[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
+pub trait Authentication<E: Externalities> {
+	type AuthData: DeserializeOwned;
 
-#[cfg(feature="std")]
-extern crate core;
-#[cfg(test)]
-extern crate polkadot_serializer;
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
+	fn check_auth(&self, ext: &E, data: Self::AuthData) -> contract::Result<Option<Vec<Address>>>;
+}
 
-mod bytes;
-pub mod block;
-pub mod contract;
-pub mod hash;
-pub mod uint;
+pub trait Balances<E: Externalities> {
+	type BalanceOf: DeserializeOwned;
+	type Transfer: DeserializeOwned;
 
-/// Alias to 160-bit hash when used in the context of an account address.
-pub type Address = hash::H160;
+	fn balance_of(&self, ext: &E, data: Self::BalanceOf) -> contract::Result<U256>;
+
+	fn transfer_preconditions(&self, db: &E, data: Self::Transfer) -> contract::Result<bool>;
+
+	fn transfer(&self, ext: &mut E, data: Self::Transfer) -> contract::Result<bool>;
+}
+

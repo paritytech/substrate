@@ -14,35 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Shareable Polkadot types.
+use std::{error, fmt, result};
 
-#![warn(missing_docs)]
+use bytes;
 
-extern crate serde;
-extern crate rustc_hex;
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallData(#[serde(with="bytes")] pub Vec<u8>);
 
-#[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OutData(#[serde(with="bytes")] pub Vec<u8>);
 
-#[cfg(feature="std")]
-extern crate core;
-#[cfg(test)]
-extern crate polkadot_serializer;
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
+#[derive(Debug, PartialEq, Eq)]
+pub struct Panic;
 
-mod bytes;
-pub mod block;
-pub mod contract;
-pub mod hash;
-pub mod uint;
+impl fmt::Display for Panic {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		write!(fmt, "Panic!")
+	}
+}
 
-/// Alias to 160-bit hash when used in the context of an account address.
-pub type Address = hash::H160;
+impl error::Error for Panic {
+	fn description(&self) -> &str {
+		"The execution did blow up."
+	}
+}
+
+pub type Result<T> = result::Result<T, Panic>;
