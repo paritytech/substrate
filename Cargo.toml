@@ -9,5 +9,6 @@ polkadot-cli = { path = "cli", version = "0.1" }
 [workspace]
 members = [
 	"primitives",
-	"validator"
+	"serializer",
+	"validator",
 ]

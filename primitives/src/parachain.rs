@@ -17,7 +17,7 @@
 //! Parachain data types.
 
 /// Unique identifier of a parachain.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct Id(u64);
 
 impl From<Id> for u64 {
@@ -29,7 +29,7 @@ impl From<u64> for Id {
 }
 
 /// A parachain block proposal.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Proposal {
 	/// The ID of the parachain this is a proposal for.
 	pub parachain: Id,
@@ -40,14 +40,14 @@ pub struct Proposal {
 }
 
 /// Parachain header raw bytes wrapper type.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Header(pub Vec<u8>);
 
 /// Hash used to refer to proof of block header.
 pub type ProofHash = ::hash::H256;
 
 /// Raw proof data.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawProof(pub Vec<u8>);
 
 impl RawProof {
@@ -59,7 +59,7 @@ impl RawProof {
 }
 
 /// Parachain proof data.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Proof(RawProof, ProofHash);
 
 impl Proof {
@@ -76,5 +76,5 @@ impl Proof {
 }
 
 /// Parachain validation code.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidationCode(pub Vec<u8>);

@@ -5,9 +5,16 @@ authors = ["Parity Team <admin@parity.io>"]
 
 [dependencies]
 crunchy = "0.1"
+fixed-hash = { git = "https://github.com/paritytech/primitives.git" }
+rustc-hex = "1.0"
+serde = "1.0"
+serde_derive = "1.0"
 tiny-keccak = "1.3"
 uint = { git = "https://github.com/paritytech/primitives.git" }
-fixed-hash = { git = "https://github.com/paritytech/primitives.git" }
+
+[dev-dependencies]
+polkadot-serializer = { path = "../serializer", version = "0.1" }
+pretty_assertions = "0.4"
 
 [features]
 default = ["std"]

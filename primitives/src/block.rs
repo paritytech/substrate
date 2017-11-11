@@ -23,7 +23,7 @@ use parachain;
 pub type HeaderHash = H256;
 
 /// A relay chain block header.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Header {
 	/// Block parent's hash.
     pub parent_hash: HeaderHash,
@@ -39,8 +39,56 @@ pub struct Header {
 ///
 /// Included candidates should be sorted by parachain ID, and without duplicate
 /// IDs.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Body {
 	/// Parachain proposal blocks.
     pub para_blocks: Vec<parachain::Proposal>,
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use polkadot_serializer as ser;
+
+	#[test]
+	fn test_header_serialization() {
+		assert_eq!(ser::to_string_pretty(&Header {
+			parent_hash: 5.into(),
+			state_root: 3.into(),
+			timestamp: 10,
+			number: 67,
+		}), r#"{
+  "parent_hash": "0x0000000000000000000000000000000000000000000000000000000000000005",
+  "state_root": "0x0000000000000000000000000000000000000000000000000000000000000003",
+  "timestamp": 10,
+  "number": 67
+}"#);
+	}
+
+	#[test]
+	fn test_body_serialization() {
+		assert_eq!(ser::to_string_pretty(&Body {
+			para_blocks: vec![
+				parachain::Proposal {
+					parachain: 5.into(),
+					header: parachain::Header(vec![1, 2, 3, 4]),
+					proof_hash: 5.into(),
+				}
+			],
+		}), r#"{
+  "para_blocks": [
+    {
+      "parachain": 5,
+      "header": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "proof_hash": "0x0000000000000000000000000000000000000000000000000000000000000005"
+    }
+  ]
+}"#);
+	}
 }

@@ -17,19 +17,19 @@
 //! Validator primitives.
 
 /// Parachain validation code.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidationCode(pub Vec<u8>);
 
 /// Parachain incoming messages.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IngressPosts(pub Vec<u8>);
 
 /// Parachain outgoing messages.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EgressPosts(pub Vec<u8>);
 
 /// Validity result of particular proof and ingress queue.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProofValidity {
 	/// The proof is invalid.
 	Invalid,

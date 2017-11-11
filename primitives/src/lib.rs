@@ -18,6 +18,8 @@
 
 #![warn(missing_docs)]
 
+extern crate rustc_hex;
+extern crate serde;
 extern crate tiny_keccak;
 
 #[macro_use]
@@ -25,10 +27,17 @@ extern crate crunchy;
 #[macro_use]
 extern crate fixed_hash;
 #[macro_use]
+extern crate serde_derive;
+#[macro_use]
 extern crate uint as uint_crate;
 
 #[cfg(feature="std")]
 extern crate core;
+#[cfg(test)]
+extern crate polkadot_serializer;
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
 
 pub mod block;
 pub mod hash;
