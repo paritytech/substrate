@@ -14,42 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Shareable Polkadot types.
+//! Validator implementation.
 
-#![warn(missing_docs)]
+#[warn(missing_docs)]
 
-extern crate rustc_hex;
+extern crate polkadot_primitives as primitives;
+extern crate polkadot_serializer as serializer;
 extern crate serde;
-extern crate tiny_keccak;
 
 #[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
+extern crate error_chain;
 
-#[cfg(feature="std")]
-extern crate core;
-#[cfg(test)]
-extern crate polkadot_serializer;
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
+mod error;
+mod parachains;
+mod validator;
 
-mod bytes;
-pub mod block;
-pub mod hash;
-pub mod parachain;
-pub mod uint;
-pub mod validator;
-
-/// Alias to 160-bit hash when used in the context of an account address.
-pub type Address = hash::H160;
-
-/// A hash function.
-pub fn hash(data: &[u8]) -> hash::H256 {
-	tiny_keccak::keccak256(data).into()
-}
+pub use error::{Error, ErrorKind, Result};
+pub use validator::Validator;
