@@ -63,6 +63,7 @@ impl MemoryState {
 			.map(|v| &v[..])
 	}
 
+	#[allow(unused)]
 	fn set_code(&mut self, address: Address, code: Vec<u8>) {
 		self.code.insert(address, code);
 	}
@@ -126,6 +127,7 @@ impl OverlayedChanges {
 			.and_then(|v| if v.is_empty() { None } else { Some(v) })
 	}
 
+	#[allow(unused)]
 	fn set_code(&mut self, address: Address, code: Vec<u8>) {
 		self.prospective.set_code(address, code);
 	}
