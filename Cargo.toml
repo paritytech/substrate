@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Parity Team <admin@parity.io>"]
 
 [dependencies]
-polkadot-cli = { path = "cli" }
+polkadot-cli = { path = "cli", version = "0.1" }
 
 [workspace]
 members = [
@@ -12,4 +12,5 @@ members = [
 	"primitives",
 	"serializer",
 	"state_machine",
+	"validator",
 ]
