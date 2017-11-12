@@ -14,17 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+use primitives::{Address, U256, H256};
 
-#![warn(missing_docs)]
+use super::{error, StateApi};
 
-extern crate polkadot_cli as cli;
+/// Relay chain state-related method calls.
+#[derive(Debug)]
+pub struct State;
 
-#[macro_use]
-extern crate error_chain;
+impl State {
+	/// Create new state API.
+	pub fn new() -> Self {
+		State
+	}
+}
 
-quick_main!(run);
-
-fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args())
+impl StateApi for State {
+	fn storage(&self, address: Address, idx: U256) -> error::Result<H256> {
+		bail!(error::ErrorKind::Internal)
+	}
 }

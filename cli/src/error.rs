@@ -14,17 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+//! Initialization errors.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
-extern crate polkadot_cli as cli;
-
-#[macro_use]
-extern crate error_chain;
-
-quick_main!(run);
-
-fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args())
+error_chain! {
+	foreign_links {
+		Io(::std::io::Error);
+		Cli(::clap::Error);
+	}
 }

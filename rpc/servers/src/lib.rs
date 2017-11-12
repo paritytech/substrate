@@ -14,17 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+//! Polkadot RPC servers.
 
-#![warn(missing_docs)]
+#[warn(missing_docs)]
 
-extern crate polkadot_cli as cli;
+extern crate polkadot_rpc as apis;
 
-#[macro_use]
-extern crate error_chain;
+extern crate jsonrpc_core as rpc;
+extern crate jsonrpc_http_server as http;
 
-quick_main!(run);
+use std::io;
 
-fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args())
+/// Construct rpc `IoHandler`
+pub fn rpc_handler() -> rpc::IoHandler {
+	let mut io = rpc::IoHandler::new();
+	io.extend_with(apis::state::StateApi::to_delegate(apis::state::State::new()));
+	io
+}
+
+/// Start HTTP server listening on given address.
+pub fn start_http(addr: &std::net::SocketAddr) -> io::Result<http::Server> {
+	let io = rpc_handler();
+	http::ServerBuilder::new(io)
+		.threads(4)
+		.rest_api(http::RestApi::Unsecure)
+		.start_http(addr)
 }

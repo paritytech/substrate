@@ -14,17 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+use super::*;
 
-#![warn(missing_docs)]
+#[test]
+fn should_return_storage() {
+	let state = State::new();
 
-extern crate polkadot_cli as cli;
-
-#[macro_use]
-extern crate error_chain;
-
-quick_main!(run);
-
-fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args())
+	assert_matches!(
+		state.storage(5.into(), 10.into()),
+		Ok(x) if x == 2.into()
+	)
 }

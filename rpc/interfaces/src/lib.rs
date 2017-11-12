@@ -14,17 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+//! Polkadot RPC interfaces.
 
 #![warn(missing_docs)]
 
-extern crate polkadot_cli as cli;
+extern crate jsonrpc_core as rpc;
+extern crate polkadot_primitives as primitives;
 
 #[macro_use]
 extern crate error_chain;
+#[macro_use]
+extern crate jsonrpc_macros;
 
-quick_main!(run);
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
 
-fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args())
-}
+pub mod state;

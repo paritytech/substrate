@@ -14,17 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+#![allow(missing_docs)]
 
-#![warn(missing_docs)]
+use rpc;
 
-extern crate polkadot_cli as cli;
+error_chain! {
+	errors {
+		/// Internal error (TODO [ToDr] Temporary)
+		Internal {
+			description("internal error"),
+			display("Internal Error"),
+		}
+	}
+}
 
-#[macro_use]
-extern crate error_chain;
-
-quick_main!(run);
-
-fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args())
+impl From<Error> for rpc::Error {
+	fn from(e: Error) -> Self {
+		match e {
+			_ => rpc::Error::internal_error(),
+		}
+	}
 }

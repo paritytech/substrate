@@ -14,17 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI
+//! Polkadot state API.
 
-#![warn(missing_docs)]
+use primitives::{Address, U256, H256};
 
-extern crate polkadot_cli as cli;
+mod error;
+mod state;
 
-#[macro_use]
-extern crate error_chain;
+#[cfg(test)]
+mod tests;
 
-quick_main!(run);
+use self::error::Result;
 
-fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args())
+pub use self::state::State;
+
+build_rpc_trait! {
+	/// Polkadot state API
+	pub trait StateApi {
+		/// Returns a storage entry.
+		#[rpc(name = "state_getStorage")]
+		fn storage(&self, Address, U256) -> Result<H256>;
+	}
 }

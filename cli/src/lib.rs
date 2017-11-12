@@ -19,32 +19,47 @@
 #![warn(missing_docs)]
 
 extern crate env_logger;
+extern crate polkadot_rpc_servers as rpc;
 
 #[macro_use]
 extern crate clap;
 #[macro_use]
+extern crate error_chain;
+#[macro_use]
 extern crate log;
 
+pub mod error;
+
 /// Parse command line arguments and start the node.
-pub fn main() {
+pub fn run<I, T>(args: I) -> error::Result<()> where
+	I: IntoIterator<Item = T>,
+	T: Into<std::ffi::OsString> + Clone,
+{
 	let yaml = load_yaml!("./cli.yml");
-	let matches = clap::App::from_yaml(yaml).get_matches();
+	let matches = clap::App::from_yaml(yaml).get_matches_from_safe(args)?;
 
 	let log_pattern = matches.value_of("log").unwrap_or("");
 	init_logger(log_pattern);
 
+	let address = "127.0.0.1:9933".parse().unwrap();
+	let server = rpc::start_http(&address)?;
+
 	if let Some(_) = matches.subcommand_matches("collator") {
 		info!("Starting collator.");
-		return;
+		server.wait();
+		return Ok(());
 	}
 
 	if let Some(_) = matches.subcommand_matches("validator") {
 		info!("Starting validator.");
-		return;
+		server.wait();
+		return Ok(());
 	}
 
 	println!("No command given.\n");
 	let _ = clap::App::from_yaml(yaml).print_long_help();
+
+	Ok(())
 }
 
 
