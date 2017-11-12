@@ -16,7 +16,7 @@
 
 use primitives::Address;
 use primitives::uint::U256;
-use state_machine::Externalities;
+use state_machine::{Externalities, StaticExternalities};
 
 use error::Result;
 use executor::RustExecutor;
@@ -38,12 +38,12 @@ pub struct Transfer {
 pub struct Contract;
 impl Contract {
 	/// Returns a balance of given address.
-	pub fn balance_of<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: Address) -> Result<U256> {
+	pub fn balance_of<E: StaticExternalities<RustExecutor>>(&self, _ext: &E, _data: Address) -> Result<U256> {
 		unimplemented!()
 	}
 
 	/// Returns the next nonce to authorize the transfer from given address.
-	pub fn next_nonce<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: Address) -> Result<U256> {
+	pub fn next_nonce<E: StaticExternalities<RustExecutor>>(&self, _ext: &E, _data: Address) -> Result<U256> {
 		unimplemented!()
 	}
 
@@ -52,7 +52,7 @@ impl Contract {
 	/// - signature
 	/// - replay protection
 	/// - enough balance
-	pub fn transfer_preconditions<E: Externalities<RustExecutor>>(&self, _db: &E, _data: Transfer) -> Result<bool> {
+	pub fn transfer_preconditions<E: StaticExternalities<RustExecutor>>(&self, _db: &E, _data: Transfer) -> Result<bool> {
 		unimplemented!()
 	}
 

@@ -18,7 +18,7 @@
 
 use primitives::contract::{CallData, OutData};
 use serializer::{from_slice as de, to_vec as ser};
-use state_machine::{Externalities, Executor};
+use state_machine::{StaticExternalities, Externalities, Executor};
 
 use error::{Error, ErrorKind, Result};
 use auth;
@@ -45,7 +45,7 @@ impl RustExecutor {
 impl Executor for RustExecutor {
 	type Error = Error;
 
-	fn static_call<E: Externalities<Self>>(
+	fn call_static<E: StaticExternalities<Self>>(
 		&self,
 		ext: &E,
 		code: &[u8],
@@ -95,11 +95,31 @@ impl Executor for RustExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use primitives::Address;
+	use primitives::hash::H256;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities;
 	impl Externalities<RustExecutor> for TestExternalities {
+		fn set_storage(&mut self, _key: H256, _value: Vec<u8>) {
+			unimplemented!()
+		}
+
+		fn call(&mut self, _address: &Address, _method: &str, _data: &CallData) -> Result<OutData> {
+			unimplemented!()
+		}
+	}
+
+	impl StaticExternalities<RustExecutor> for TestExternalities {
 		type Error = Error;
+
+		fn storage(&self, _key: &H256) -> Result<&[u8]> {
+			unimplemented!()
+		}
+
+		fn call_static(&self, _address: &Address, _method: &str, _data: &CallData) -> Result<OutData> {
+			unimplemented!()
+		}
 	}
 
 	#[test]

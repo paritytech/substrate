@@ -15,7 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use primitives::Address;
-use state_machine::Externalities;
+use state_machine::StaticExternalities;
 
 use error::Result;
 use executor::RustExecutor;
@@ -32,7 +32,7 @@ impl Contract {
 	/// Given Message and Authentication Data verifies it and returns:
 	/// 1. None in case it doesn't match (i.e. signature is invalid)
 	/// 2. A address who signed that Message.
-	pub fn check_auth<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: DataAndAuth) -> Result<Option<Address>> {
+	pub fn check_auth<E: StaticExternalities<RustExecutor>>(&self, _ext: &E, _data: DataAndAuth) -> Result<Option<Address>> {
 		unimplemented!()
 	}
 }
