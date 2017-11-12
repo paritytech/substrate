@@ -16,6 +16,8 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
+use std::fmt;
+
 use primitives::Address;
 use primitives::hash::H256;
 
@@ -34,15 +36,29 @@ pub struct Committed {
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 pub trait Backend {
+	/// An error type when fetching data is not possible.
+	type Error: super::Error;
+
 	/// Get code associated with specific address.
-	fn code(&self, address: &Address) -> Option<&[u8]>;
+	fn code(&self, address: &Address) -> Result<&[u8], Self::Error>;
 
 	/// Get keyed storage associated with specific address.
-	fn storage(&self, address: &Address, key: &H256) -> Option<&[u8]>;
+	fn storage(&self, address: &Address, key: &H256) -> Result<&[u8], Self::Error>;
 
 	/// Commit updates to the backend and get new state.
 	fn commit<I>(&mut self, changes: I) -> Committed
 		where I: IntoIterator<Item=Update>;
+}
+
+/// Error impossible.
+// TODO: use `!` type when stabilized.
+#[derive(Debug)]
+pub enum Void {}
+
+impl fmt::Display for Void {
+	fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
+		match *self {}
+	}
 }
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
@@ -53,12 +69,14 @@ pub struct InMemory {
 }
 
 impl Backend for InMemory {
-	fn code(&self, address: &Address) -> Option<&[u8]> {
-		self.inner.code(address)
+	type Error = Void;
+
+	fn code(&self, address: &Address) -> Result<&[u8], Void> {
+		Ok(self.inner.code(address).unwrap_or(&[]))
 	}
 
-	fn storage(&self, address: &Address, key: &H256) -> Option<&[u8]> {
-		self.inner.storage(address, key)
+	fn storage(&self, address: &Address, key: &H256) -> Result<&[u8], Void> {
+		Ok(self.inner.storage(address, key).unwrap_or(&[]))
 	}
 
 	fn commit<I>(&mut self, changes: I) -> Committed

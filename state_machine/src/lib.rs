@@ -35,6 +35,7 @@ use primitives::contract::{CallData, OutData};
 use primitives::hash::H256;
 
 pub mod backend;
+mod ext;
 
 /// Updates to be committed to the state.
 pub enum Update {
@@ -113,16 +114,16 @@ pub struct OverlayedChanges {
 }
 
 impl OverlayedChanges {
-	fn code(&self, address: &Address) -> &[u8] {
+	fn code(&self, address: &Address) -> Option<&[u8]> {
 		self.prospective.code(address)
 			.or_else(|| self.committed.code(address))
-			.unwrap_or(&[])
+			.and_then(|v| if v.is_empty() { None } else { Some(v) })
 	}
 
-	fn storage(&self, address: &Address, key: &H256) -> &[u8] {
+	fn storage(&self, address: &Address, key: &H256) -> Option<&[u8]> {
 		self.prospective.storage(address, key)
 			.or_else(|| self.committed.storage(address, key))
-			.unwrap_or(&[])
+			.and_then(|v| if v.is_empty() { None } else { Some(v) })
 	}
 
 	fn set_code(&mut self, address: Address, code: Vec<u8>) {
@@ -158,10 +159,34 @@ impl OverlayedChanges {
 pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
-/// Externalities
-pub trait Externalities<Executor> {
+/// Externalities: pinned to specific active address.
+pub trait Externalities<Executor>: StaticExternalities<Executor> {
+	/// Read storage of current contract being called.
+	fn storage(&self, key: &H256) -> Result<&[u8], Self::Error> {
+		StaticExternalities::storage(self, key)
+	}
+
+	/// Set storage of current contract being called.
+	fn set_storage(&mut self, key: H256, value: Vec<u8>);
+
+	/// Make a sub-call to another contract.
+	fn call(&mut self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error>;
+	/// Make a static (read-only) call to another contract.
+	fn call_static(&self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error> {
+		StaticExternalities::call_static(self, address, method, data)
+	}
+}
+
+/// Static externalities: used only for read-only requests.
+pub trait StaticExternalities<Executor> {
 	/// Externalities error type.
 	type Error: Error;
+
+	/// Read storage of current contract being called.
+	fn storage(&self, key: &H256) -> Result<&[u8], Self::Error>;
+
+	/// Make a static (read-only) call to another contract.
+	fn call_static(&self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error>;
 }
 
 /// Contract code executor.
@@ -171,7 +196,7 @@ pub trait Executor: Sized {
 
 	/// Execute a contract in read-only mode.
 	/// The execution is not allowed to modify the state.
-	fn static_call<E: Externalities<Self>>(
+	fn call_static<E: StaticExternalities<Self>>(
 		&self,
 		ext: &E,
 		code: &[u8],
@@ -189,6 +214,50 @@ pub trait Executor: Sized {
 	) -> Result<OutData, Self::Error>;
 }
 
+/// Execute a call using the given state backend, overlayed changes, and call executor.
+///
+/// On an error, no prospective changes are written to the overlay.
+pub fn execute<B: backend::Backend, Exec: Executor>(
+	backend: &B,
+	overlay: &mut OverlayedChanges,
+	exec: &Exec,
+	address: &Address,
+	method: &str,
+	call_data: &CallData,
+) -> Result<OutData, Box<Error>> {
+	let code = match overlay.code(address) {
+		Some(x) => x.to_owned(),
+		None => backend.code(address).map_err(|e| Box::new(e) as _)?.to_owned(),
+	};
+
+	let result = {
+		let mut externalities = ext::Ext {
+			backend,
+			exec,
+			overlay: &mut *overlay,
+			local: *address,
+		};
+
+		exec.call(
+			&mut externalities,
+			&code[..],
+			method,
+			call_data,
+		)
+	};
+
+	match result {
+		Ok(out) => {
+			overlay.commit_prospective();
+			Ok(out)
+		}
+		Err(e) => {
+			overlay.discard_prospective();
+			Err(Box::new(e))
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::OverlayedChanges;
@@ -203,23 +272,23 @@ mod tests {
 		let key = H256::random();
 		let addr = Address::random();
 
-		assert!(overlayed.storage(&addr, &key).is_empty());
+		assert!(overlayed.storage(&addr, &key).is_none());
 
 		overlayed.set_storage(addr, key, vec![1, 2, 3]);
-		assert_eq!(overlayed.storage(&addr, &key), &[1, 2, 3]);
+		assert_eq!(overlayed.storage(&addr, &key).unwrap(), &[1, 2, 3]);
 
 		overlayed.commit_prospective();
-		assert_eq!(overlayed.storage(&addr, &key), &[1, 2, 3]);
+		assert_eq!(overlayed.storage(&addr, &key).unwrap(), &[1, 2, 3]);
 
 		overlayed.set_storage(addr, key, vec![]);
-		assert!(overlayed.storage(&addr, &key).is_empty());
+		assert!(overlayed.storage(&addr, &key).is_none());
 
 		overlayed.discard_prospective();
-		assert_eq!(overlayed.storage(&addr, &key), &[1, 2, 3]);
+		assert_eq!(overlayed.storage(&addr, &key).unwrap(), &[1, 2, 3]);
 
 		overlayed.set_storage(addr, key, vec![]);
 		overlayed.commit_prospective();
-		assert!(overlayed.storage(&addr, &key).is_empty());
+		assert!(overlayed.storage(&addr, &key).is_none());
 	}
 
 	#[test]
@@ -228,22 +297,22 @@ mod tests {
 
 		let addr = Address::random();
 
-		assert!(overlayed.code(&addr).is_empty());
+		assert!(overlayed.code(&addr).is_none());
 
 		overlayed.set_code(addr, vec![1, 2, 3]);
-		assert_eq!(overlayed.code(&addr), &[1, 2, 3]);
+		assert_eq!(overlayed.code(&addr).unwrap(), &[1, 2, 3]);
 
 		overlayed.commit_prospective();
-		assert_eq!(overlayed.code(&addr), &[1, 2, 3]);
+		assert_eq!(overlayed.code(&addr).unwrap(), &[1, 2, 3]);
 
 		overlayed.set_code(addr, vec![]);
-		assert!(overlayed.code(&addr).is_empty());
+		assert!(overlayed.code(&addr).is_none());
 
 		overlayed.discard_prospective();
-		assert_eq!(overlayed.code(&addr), &[1, 2, 3]);
+		assert_eq!(overlayed.code(&addr).unwrap(), &[1, 2, 3]);
 
 		overlayed.set_code(addr, vec![]);
 		overlayed.commit_prospective();
-		assert!(overlayed.code(&addr).is_empty());
+		assert!(overlayed.code(&addr).is_none());
 	}
 }
