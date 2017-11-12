@@ -14,43 +14,34 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Shareable Polkadot types.
+//! Temporary crate for contracts implementations.
+//!
+//! This will be replaced with WASM contracts stored on-chain.
 
 #![warn(missing_docs)]
 
-extern crate rustc_hex;
+extern crate polkadot_primitives as primitives;
+extern crate polkadot_serializer as serializer;
+extern crate polkadot_state_machine as state_machine;
 extern crate serde;
-extern crate tiny_keccak;
 
 #[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
+extern crate error_chain;
 #[macro_use]
 extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
 
-#[cfg(feature="std")]
-extern crate core;
-#[cfg(test)]
-extern crate polkadot_serializer;
 #[cfg(test)]
 #[macro_use]
-extern crate pretty_assertions;
+extern crate assert_matches;
 
-mod bytes;
-pub mod block;
-pub mod contract;
-pub mod hash;
-pub mod parachain;
-pub mod uint;
-pub mod validator;
+mod auth;
+mod balances;
+mod validator_set;
 
-/// Alias to 160-bit hash when used in the context of an account address.
-pub type Address = hash::H160;
+pub mod error;
+pub mod executor;
 
-/// A hash function.
-pub fn hash(data: &[u8]) -> hash::H256 {
-	tiny_keccak::keccak256(data).into()
+/// Creates new RustExecutor for contracts.
+pub fn new() -> executor::RustExecutor {
+	executor::RustExecutor::default()
 }
