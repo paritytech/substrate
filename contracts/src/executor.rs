@@ -23,6 +23,7 @@ use state_machine::{Externalities, Executor};
 use error::{Error, ErrorKind, Result};
 use auth;
 use balances;
+use validator_set;
 
 /// Dummy rust executor for contracts.
 ///
@@ -32,11 +33,13 @@ use balances;
 pub struct RustExecutor {
 	auth: auth::Contract,
 	balance: balances::Contract,
+	validator_set: validator_set::Contract,
 }
 
 impl RustExecutor {
 	const AUTH: u8 = 1;
 	const BALANCES: u8 = 2;
+	const VALIDATOR_SET: u8 = 3;
 }
 
 impl Executor for RustExecutor {
@@ -60,6 +63,10 @@ impl Executor for RustExecutor {
 				"balance_of" => ser(&self.balance.balance_of(ext, de(&data.0)?)?),
 				"next_nonce" => ser(&self.balance.next_nonce(ext, de(&data.0)?)?),
 				"transfer_preconditions" => ser(&self.balance.transfer_preconditions(ext, de(&data.0)?)?),
+				m => bail!(ErrorKind::MethodNotFound(m.to_owned())),
+			},
+			Self::VALIDATOR_SET => match method {
+				"validator_set" => ser(&self.validator_set.validator_set(ext, de(&data.0)?)?),
 				m => bail!(ErrorKind::MethodNotFound(m.to_owned())),
 			},
 			c => bail!(ErrorKind::InvalidCode(vec![c])),

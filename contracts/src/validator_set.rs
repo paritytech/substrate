@@ -14,34 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Temporary crate for contracts implementations.
-//!
-//! This will be replaced with WASM contracts stored on-chain.
+use primitives::Address;
+use state_machine::Externalities;
 
-#![warn(missing_docs)]
+use error::Result;
+use executor::RustExecutor;
 
-extern crate polkadot_primitives as primitives;
-extern crate polkadot_serializer as serializer;
-extern crate polkadot_state_machine as state_machine;
-extern crate serde;
-
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
-mod auth;
-mod balances;
-mod validator_set;
-
-pub mod error;
-pub mod executor;
-
-/// Creates new RustExecutor for contracts.
-pub fn new() -> executor::RustExecutor {
-	executor::RustExecutor::default()
+/// Harcoded validator set contract.
+#[derive(Debug, Default)]
+pub struct Contract;
+impl Contract {
+	/// Returns current validator set.
+	pub fn validator_set<E: Externalities<RustExecutor>>(&self, _db: &E, _data: ()) -> Result<Vec<Address>> {
+		unimplemented!()
+	}
 }
