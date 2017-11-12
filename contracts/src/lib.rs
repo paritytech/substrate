@@ -30,6 +30,10 @@ extern crate error_chain;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
+
 mod auth;
 mod balances;
 

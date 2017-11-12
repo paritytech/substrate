@@ -85,3 +85,45 @@ impl Executor for RustExecutor {
 	}
 }
 
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[derive(Debug, Default)]
+	struct TestExternalities;
+	impl Externalities<RustExecutor> for TestExternalities {
+		type Error = Error;
+	}
+
+	#[test]
+	fn should_fail_for_empty_or_unknown_code() {
+		// given
+		let mut ext = TestExternalities::default();
+		let executor = RustExecutor::default();
+
+		assert_matches!(
+			*executor.call(&mut ext, &[], "any", &CallData(vec![])).unwrap_err().kind(),
+			ErrorKind::InvalidCode(ref code) if code.is_empty()
+		);
+		assert_matches!(
+			*executor.call(&mut ext, &[1, 2], "any", &CallData(vec![])).unwrap_err().kind(),
+			ErrorKind::InvalidCode(ref code) if code.len() == 2
+		);
+		assert_matches!(
+			*executor.call(&mut ext, &[255,], "any", &CallData(vec![])).unwrap_err().kind(),
+			ErrorKind::InvalidCode(_)
+		);
+	}
+
+	#[test]
+	fn should_fail_on_invalid_method() {
+		// given
+		let mut ext = TestExternalities::default();
+		let executor = RustExecutor::default();
+
+		assert_matches!(
+			*executor.call(&mut ext, &[2], "any", &CallData(vec![])).unwrap_err().kind(),
+			ErrorKind::MethodNotFound(ref method) if &*method == "any"
+		);
+	}
+}
