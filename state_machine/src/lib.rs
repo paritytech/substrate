@@ -16,6 +16,8 @@
 
 //! Polkadot state machine implementation.
 
+#![warn(missing_docs)]
+
 extern crate polkadot_primitives as primitives;
 
 extern crate hashdb;
@@ -26,8 +28,10 @@ extern crate patricia_trie;
 extern crate triehash;
 
 use std::collections::HashMap;
+use std::fmt;
 
 use primitives::Address;
+use primitives::contract::{CallData, OutData};
 use primitives::hash::H256;
 
 pub mod backend;
@@ -146,6 +150,42 @@ impl OverlayedChanges {
 
 		self.committed.update(code_updates.chain(storage_updates));
 	}
+}
+
+/// State Machine Error bound.
+///
+/// This should reflect WASM error type bound for future compatibility.
+pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
+
+/// Externalities
+pub trait Externalities<Executor> {
+	/// Externalities error type.
+	type Error: Error;
+}
+
+/// Contract code executor.
+pub trait Executor: Sized {
+	/// Error type for contract execution.
+	type Error: Error;
+
+	/// Execute a contract in read-only mode.
+	/// The execution is not allowed to modify the state.
+	fn static_call<E: Externalities<Self>>(
+		&self,
+		ext: &E,
+		code: &[u8],
+		method: &str,
+		data: &CallData,
+	) -> Result<OutData, Self::Error>;
+
+	/// Execute a contract.
+	fn call<E: Externalities<Self>>(
+		&self,
+		ext: &mut E,
+		code: &[u8],
+		method: &str,
+		data: &CallData,
+	) -> Result<OutData, Self::Error>;
 }
 
 #[cfg(test)]

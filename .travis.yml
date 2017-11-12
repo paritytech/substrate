@@ -1,0 +1,16 @@
+sudo: false
+language: rust
+branches:
+  only:
+  - master
+
+cache: cargo
+
+matrix:
+  fast_finish: false
+  include:
+    - rust: stable
+
+script:
+  - cargo check --all
+  - cargo test --all
