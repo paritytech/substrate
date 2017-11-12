@@ -42,7 +42,7 @@ impl Contract {
 		unimplemented!()
 	}
 
-	/// Returns the next nonce to authorize the transfer to given address.
+	/// Returns the next nonce to authorize the transfer from given address.
 	pub fn next_nonce<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: Address) -> Result<U256> {
 		unimplemented!()
 	}

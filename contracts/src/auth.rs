@@ -31,8 +31,8 @@ impl Contract {
 	///
 	/// Given Message and Authentication Data verifies it and returns:
 	/// 1. None in case it doesn't match (i.e. signature is invalid)
-	/// 2. A list of addresses who signed that Message.
-	pub fn check_auth<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: DataAndAuth) -> Result<Option<Vec<Address>>> {
+	/// 2. A address who signed that Message.
+	pub fn check_auth<E: Externalities<RustExecutor>>(&self, _ext: &E, _data: DataAndAuth) -> Result<Option<Address>> {
 		unimplemented!()
 	}
 }
