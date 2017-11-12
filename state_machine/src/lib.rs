@@ -156,6 +156,7 @@ impl OverlayedChanges {
 ///
 /// This should reflect WASM error type bound for future compatibility.
 pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
+impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
 /// Externalities
 pub trait Externalities<Executor> {
