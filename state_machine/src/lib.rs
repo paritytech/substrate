@@ -30,13 +30,7 @@ use std::collections::HashMap;
 use primitives::Address;
 use primitives::hash::H256;
 
-use backend::Backend;
-
 pub mod backend;
-
-/// Error variant given when a call panics.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Panic;
 
 /// Updates to be committed to the state.
 pub enum Update {
@@ -59,17 +53,33 @@ impl MemoryState {
 	}
 
 	fn storage(&self, address: &Address, key: &H256) -> Option<&[u8]> {
-		self.storage.get(address).and_then(|m| m.get(key)).map(|v| &v[..])
+		self.storage.get(address)
+			.and_then(|m| m.get(key))
+			.map(|v| &v[..])
+	}
+
+	fn set_code(&mut self, address: Address, code: Vec<u8>) {
+		self.code.insert(address, code);
+	}
+
+	fn set_storage(&mut self, address: Address, key: H256, val: Vec<u8>) {
+		self.storage.entry(address)
+			.or_insert_with(HashMap::new)
+			.insert(key, val);
 	}
 
 	fn update<I>(&mut self, changes: I) where I: IntoIterator<Item=Update> {
-		for update in changes.into_iter() {
+		for update in changes {
 			match update {
 				Update::Storage(addr, key, val) => {
 					if val.is_empty() {
+						let mut empty = false;
 						if let Some(s) = self.storage.get_mut(&addr) {
 							s.remove(&key);
-						}
+							empty = s.is_empty();
+						};
+
+						if empty { self.storage.remove(&addr); }
 					} else {
 						self.storage.entry(addr)
 							.or_insert_with(HashMap::new)
@@ -99,13 +109,24 @@ pub struct OverlayedChanges {
 }
 
 impl OverlayedChanges {
-	fn code(&self, address: &Address) -> Option<&[u8]> {
-		self.prospective.code(address).or_else(|| self.committed.code(address))
+	fn code(&self, address: &Address) -> &[u8] {
+		self.prospective.code(address)
+			.or_else(|| self.committed.code(address))
+			.unwrap_or(&[])
 	}
 
-	fn storage(&self, address: &Address, key: &H256) -> Option<&[u8]> {
+	fn storage(&self, address: &Address, key: &H256) -> &[u8] {
 		self.prospective.storage(address, key)
 			.or_else(|| self.committed.storage(address, key))
+			.unwrap_or(&[])
+	}
+
+	fn set_code(&mut self, address: Address, code: Vec<u8>) {
+		self.prospective.set_code(address, code);
+	}
+
+	fn set_storage(&mut self, address: Address, key: H256, val: Vec<u8>) {
+		self.prospective.set_storage(address, key, val);
 	}
 
 	/// Discard prospective changes to state.
@@ -124,5 +145,64 @@ impl OverlayedChanges {
 			.map(|(addr, key, value)| Update::Storage(addr, key, value));
 
 		self.committed.update(code_updates.chain(storage_updates));
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::OverlayedChanges;
+
+	use primitives::hash::H256;
+	use primitives::Address;
+
+	#[test]
+	fn overlayed_storage_works() {
+		let mut overlayed = OverlayedChanges::default();
+
+		let key = H256::random();
+		let addr = Address::random();
+
+		assert!(overlayed.storage(&addr, &key).is_empty());
+
+		overlayed.set_storage(addr, key, vec![1, 2, 3]);
+		assert_eq!(overlayed.storage(&addr, &key), &[1, 2, 3]);
+
+		overlayed.commit_prospective();
+		assert_eq!(overlayed.storage(&addr, &key), &[1, 2, 3]);
+
+		overlayed.set_storage(addr, key, vec![]);
+		assert!(overlayed.storage(&addr, &key).is_empty());
+
+		overlayed.discard_prospective();
+		assert_eq!(overlayed.storage(&addr, &key), &[1, 2, 3]);
+
+		overlayed.set_storage(addr, key, vec![]);
+		overlayed.commit_prospective();
+		assert!(overlayed.storage(&addr, &key).is_empty());
+	}
+
+	#[test]
+	fn overlayed_code_works() {
+		let mut overlayed = OverlayedChanges::default();
+
+		let addr = Address::random();
+
+		assert!(overlayed.code(&addr).is_empty());
+
+		overlayed.set_code(addr, vec![1, 2, 3]);
+		assert_eq!(overlayed.code(&addr), &[1, 2, 3]);
+
+		overlayed.commit_prospective();
+		assert_eq!(overlayed.code(&addr), &[1, 2, 3]);
+
+		overlayed.set_code(addr, vec![]);
+		assert!(overlayed.code(&addr).is_empty());
+
+		overlayed.discard_prospective();
+		assert_eq!(overlayed.code(&addr), &[1, 2, 3]);
+
+		overlayed.set_code(addr, vec![]);
+		overlayed.commit_prospective();
+		assert!(overlayed.code(&addr).is_empty());
 	}
 }
