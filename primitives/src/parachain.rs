@@ -32,13 +32,14 @@ impl From<u64> for Id {
 
 /// A parachain block proposal.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct Proposal {
 	/// The ID of the parachain this is a proposal for.
 	pub parachain: Id,
 	/// Parachain block header bytes.
 	pub header: Header,
 	/// Hash of data necessary to prove validity of the header.
-	#[serde(rename="proofHash")]
 	pub proof_hash: ProofHash,
 }
 

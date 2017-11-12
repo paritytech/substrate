@@ -33,11 +33,11 @@ pub struct EgressPosts(#[serde(with="bytes")] pub Vec<u8>);
 /// Validity result of particular proof and ingress queue.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag="type", content="data")]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub enum ProofValidity {
 	/// The proof is invalid.
-	#[serde(rename="invalid")]
 	Invalid,
-	#[serde(rename="valid")]
 	/// The proof is processed and new egress queue is created.
 	/// Also includes current ingress queue delta.
 	Valid(IngressPostsDelta, EgressPosts),
