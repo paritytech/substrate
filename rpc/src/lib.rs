@@ -14,24 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-#![allow(missing_docs)]
+//! Polkadot RPC interfaces.
 
-use rpc;
+#![warn(missing_docs)]
 
-error_chain! {
-	errors {
-		/// Internal error (TODO [ToDr] Temporary)
-		Internal {
-			description("internal error"),
-			display("Internal Error"),
-		}
-	}
-}
+extern crate jsonrpc_core as rpc;
+extern crate polkadot_primitives as primitives;
 
-impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		match e {
-			_ => rpc::Error::internal_error(),
-		}
-	}
-}
+#[macro_use]
+extern crate error_chain;
+#[macro_use]
+extern crate jsonrpc_macros;
+
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
+
+pub mod chain;
+pub mod state;

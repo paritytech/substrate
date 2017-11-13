@@ -14,23 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::{Address, U256, H256};
+use primitives::block;
+use super::*;
 
-use super::{error, StateApi};
+#[test]
+fn should_return_header() {
+	let state = Chain::new();
 
-/// Relay chain state-related method calls.
-#[derive(Debug)]
-pub struct State;
-
-impl State {
-	/// Create new state API.
-	pub fn new() -> Self {
-		State
-	}
-}
-
-impl StateApi for State {
-	fn storage(&self, address: Address, idx: U256) -> error::Result<H256> {
-		bail!(error::ErrorKind::Internal)
-	}
+	assert_matches!(
+		state.header(5u64),
+		Ok(ref x) if x == &block::Header {
+			parent_hash: 5.into(),
+			state_root: 3.into(),
+			timestamp: 10,
+			number: 5,
+		}
+	)
 }

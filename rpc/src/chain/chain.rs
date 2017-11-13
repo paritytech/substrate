@@ -14,20 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot RPC interfaces.
+use primitives::block;
 
-#![warn(missing_docs)]
+use super::{error, ChainApi};
 
-extern crate jsonrpc_core as rpc;
-extern crate polkadot_primitives as primitives;
+/// Relay chain queries.
+#[derive(Debug)]
+pub struct Chain;
 
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate jsonrpc_macros;
+impl Chain {
+	/// Create new blockchain API.
+	pub fn new() -> Self {
+		Chain
+	}
+}
 
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
-pub mod state;
+impl ChainApi for Chain {
+	fn header(&self, _num: u64) -> error::Result<block::Header> {
+		bail!(error::ErrorKind::Unimplemented)
+	}
+}

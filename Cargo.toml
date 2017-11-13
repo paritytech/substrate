@@ -11,8 +11,8 @@ polkadot-cli = { path = "cli", version = "0.1" }
 members = [
 	"contracts",
 	"primitives",
-	"rpc/interfaces",
-	"rpc/servers",
+	"rpc",
+	"rpc-servers",
 	"serializer",
 	"state_machine",
 	"validator",
