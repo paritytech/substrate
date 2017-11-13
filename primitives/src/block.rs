@@ -24,12 +24,12 @@ pub type HeaderHash = H256;
 
 /// A relay chain block header.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct Header {
 	/// Block parent's hash.
-	#[serde(rename="parentHash")]
 	pub parent_hash: HeaderHash,
 	/// State root after this transition.
-	#[serde(rename="stateRoot")]
 	pub state_root: H256,
 	/// Unix time at which this header was produced.
 	pub timestamp: u64,
@@ -42,9 +42,10 @@ pub struct Header {
 /// Included candidates should be sorted by parachain ID, and without duplicate
 /// IDs.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct Body {
 	/// Parachain proposal blocks.
-	#[serde(rename="paraBlocks")]
 	pub para_blocks: Vec<parachain::Proposal>,
 }
 
