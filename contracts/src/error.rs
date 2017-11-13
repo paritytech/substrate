@@ -46,5 +46,3 @@ error_chain! {
 		}
 	}
 }
-
-impl state_machine::Error for Error {}
