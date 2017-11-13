@@ -173,6 +173,7 @@ pub trait Externalities<Executor>: StaticExternalities<Executor> {
 
 	/// Make a sub-call to another contract.
 	fn call(&mut self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error>;
+
 	/// Make a static (read-only) call to another contract.
 	fn call_static(&self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error> {
 		StaticExternalities::call_static(self, address, method, data)

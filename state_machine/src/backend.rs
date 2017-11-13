@@ -20,7 +20,6 @@ use std::fmt;
 
 use primitives::Address;
 use primitives::hash::H256;
-
 use triehash::sec_trie_root;
 
 use super::{Update, MemoryState};

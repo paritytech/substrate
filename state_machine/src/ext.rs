@@ -91,7 +91,6 @@ impl<'a, B: 'a, E: 'a> StaticExternalities<E> for Ext<'a, B, E>
 impl<'a, B: 'a, E: 'a> Externalities<E> for Ext<'a, B, E>
 	where B: Backend, E: Executor
 {
-
 	fn set_storage(&mut self, key: H256, value: Vec<u8>) {
 		self.overlay.set_storage(self.local, key, value);
 	}
