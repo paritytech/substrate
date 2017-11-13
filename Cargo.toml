@@ -12,7 +12,7 @@ members = [
 	"contracts",
 	"primitives",
 	"rpc",
-	"rpc-servers",
+	"rpc_servers",
 	"serializer",
 	"state_machine",
 	"validator",
