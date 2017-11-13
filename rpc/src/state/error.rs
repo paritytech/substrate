@@ -16,9 +16,14 @@
 
 #![allow(missing_docs)]
 
+use client;
 use rpc;
 
 error_chain! {
+	links {
+		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
+	}
+
 	errors {
 		/// Not implemented yet
 		Unimplemented {

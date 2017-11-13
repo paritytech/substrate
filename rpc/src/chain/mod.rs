@@ -17,22 +17,29 @@
 //! Polkadot blockchain API.
 
 use primitives::block;
+use client;
 
 mod error;
-mod chain;
 
 #[cfg(test)]
 mod tests;
 
-use self::error::Result;
-
-pub use self::chain::Chain;
+use self::error::{Result, ResultExt};
 
 build_rpc_trait! {
 	/// Polkadot blockchain API
 	pub trait ChainApi {
 		/// Get header of a relay chain block.
 		#[rpc(name = "chain_getHeader")]
-		fn header(&self, u64) -> Result<block::Header>;
+		fn header(&self, block::HeaderHash) -> Result<Option<block::Header>>;
+	}
+}
+
+impl<B> ChainApi for B where
+	B: client::Blockchain + Send + Sync + 'static,
+	B::Error: ::std::error::Error + Send,
+{
+	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
+		self.header(&hash).chain_err(|| "Blockchain error")
 	}
 }

@@ -26,15 +26,19 @@ extern crate jsonrpc_http_server as http;
 use std::io;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler() -> rpc::IoHandler {
+pub fn rpc_handler<S>(state: S) -> rpc::IoHandler where
+	S: apis::state::StateApi,
+{
 	let mut io = rpc::IoHandler::new();
-	io.extend_with(apis::state::StateApi::to_delegate(apis::state::State::new()));
+	io.extend_with(state.to_delegate());
 	io
 }
 
 /// Start HTTP server listening on given address.
-pub fn start_http(addr: &std::net::SocketAddr) -> io::Result<http::Server> {
-	let io = rpc_handler();
+pub fn start_http(
+	addr: &std::net::SocketAddr,
+	io: rpc::IoHandler,
+) -> io::Result<http::Server> {
 	http::ServerBuilder::new(io)
 		.threads(4)
 		.rest_api(http::RestApi::Unsecure)

@@ -19,7 +19,9 @@
 #![warn(missing_docs)]
 
 extern crate jsonrpc_core as rpc;
+extern crate polkadot_client as client;
 extern crate polkadot_primitives as primitives;
+extern crate polkadot_state_machine as state_machine;
 
 #[macro_use]
 extern crate error_chain;
@@ -27,8 +29,14 @@ extern crate error_chain;
 extern crate jsonrpc_macros;
 
 #[cfg(test)]
+extern crate polkadot_contracts;
+#[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
 
+
 pub mod chain;
 pub mod state;
+
+#[cfg(test)]
+mod test_helpers;

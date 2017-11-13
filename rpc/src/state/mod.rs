@@ -16,23 +16,40 @@
 
 //! Polkadot state API.
 
-use primitives::{Address, U256, H256};
-
 mod error;
-mod state;
 
 #[cfg(test)]
 mod tests;
 
-use self::error::Result;
+use client::{self, Client};
+use primitives::{block, Address, H256};
+use primitives::contract::{CallData, OutData, StorageData};
+use state_machine;
 
-pub use self::state::State;
+use self::error::Result;
 
 build_rpc_trait! {
 	/// Polkadot state API
 	pub trait StateApi {
 		/// Returns a storage entry.
 		#[rpc(name = "state_getStorage")]
-		fn storage(&self, Address, U256) -> Result<H256>;
+		fn storage(&self, Address, H256, block::HeaderHash) -> Result<StorageData>;
+
+		/// Call a contract.
+		#[rpc(name = "state_call")]
+		fn call(&self, Address, String, CallData, block::HeaderHash) -> Result<OutData>;
+	}
+}
+
+impl<B, E> StateApi for Client<B, E> where
+	B: client::Blockchain + Send + Sync + 'static,
+	E: state_machine::CodeExecutor + Send + Sync + 'static,
+{
+	fn storage(&self, address: Address, key: H256, block: block::HeaderHash) -> Result<StorageData> {
+		Ok(self.storage(&block, &address, &key)?)
+	}
+
+	fn call(&self, address: Address, method: String, data: CallData, block: block::HeaderHash) -> Result<OutData> {
+		Ok(self.call(&block, &address, &method, &data)?)
 	}
 }

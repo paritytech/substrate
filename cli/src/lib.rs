@@ -19,6 +19,9 @@
 #![warn(missing_docs)]
 
 extern crate env_logger;
+extern crate polkadot_primitives as primitives;
+extern crate polkadot_client as client;
+extern crate polkadot_contracts as contracts;
 extern crate polkadot_rpc_servers as rpc;
 
 #[macro_use]
@@ -45,11 +48,18 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let yaml = load_yaml!("./cli.yml");
 	let matches = clap::App::from_yaml(yaml).get_matches_from_safe(args)?;
 
+	// TODO [ToDr] Split paremeters parsing from actual execution.
 	let log_pattern = matches.value_of("log").unwrap_or("");
 	init_logger(log_pattern);
 
+	// Create client
+	let blockchain = DummyBlockchain;
+	let executor = contracts::executor();
+	let client = client::Client::new(blockchain, executor);
+
 	let address = "127.0.0.1:9933".parse().unwrap();
-	let server = rpc::start_http(&address)?;
+	let handler = rpc::rpc_handler(client);
+	let server = rpc::start_http(&address, handler)?;
 
 	if let Some(_) = matches.subcommand_matches("collator") {
 		info!("Starting collator.");
@@ -69,7 +79,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	Ok(())
 }
 
-
 fn init_logger(pattern: &str) {
 	let mut builder = env_logger::LogBuilder::new();
 	// Disable info logging by default for some modules:
@@ -85,4 +94,19 @@ fn init_logger(pattern: &str) {
 
 
 	builder.init().expect("Logger initialized only once.");
+}
+
+#[derive(Debug, Default)]
+struct DummyBlockchain;
+
+impl client::Blockchain for DummyBlockchain {
+	type Error = ();
+
+	fn latest_hash(&self) -> Result<primitives::block::HeaderHash, Self::Error> {
+		Ok(0.into())
+	}
+
+	fn header(&self, _hash: &primitives::block::HeaderHash) -> Result<Option<primitives::block::Header>, Self::Error> {
+		Ok(None)
+	}
 }

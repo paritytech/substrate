@@ -14,20 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::block;
 use super::*;
+
+use test_helpers::Blockchain;
 
 #[test]
 fn should_return_header() {
-	let state = Chain::new();
+	let state = Blockchain::default();
 
 	assert_matches!(
-		state.header(5u64),
-		Ok(ref x) if x == &block::Header {
-			parent_hash: 5.into(),
-			state_root: 3.into(),
-			timestamp: 10,
-			number: 5,
+		ChainApi::header(&state, 0.into()),
+		Ok(Some(ref x)) if x == &block::Header {
+			parent_hash: 0.into(),
+			state_root: 0.into(),
+			timestamp: 0,
+			number: 0,
 		}
-	)
+	);
+
+	assert_matches!(
+		ChainApi::header(&state, 5.into()),
+		Ok(None)
+	);
 }

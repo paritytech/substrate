@@ -14,23 +14,31 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+use client;
 use primitives::block;
 
-use super::{error, ChainApi};
+/// Temporary dummy blockchain implementation for tests.
+#[derive(Debug, Default)]
+pub struct Blockchain;
 
-/// Relay chain queries.
-#[derive(Debug)]
-pub struct Chain;
+impl client::Blockchain for Blockchain {
+	type Error = ::std::io::Error;
 
-impl Chain {
-	/// Create new blockchain API.
-	pub fn new() -> Self {
-		Chain
+	fn latest_hash(&self) -> Result<block::HeaderHash, Self::Error> {
+		Ok(0.into())
+	}
+
+	fn header(&self, hash: &block::HeaderHash) -> Result<Option<block::Header>, Self::Error> {
+		Ok(if hash != &0.into() {
+			None
+		} else {
+			Some(block::Header {
+				number: 0,
+				parent_hash: 0.into(),
+				state_root: 0.into(),
+				timestamp: 0,
+			})
+		})
 	}
 }
 
-impl ChainApi for Chain {
-	fn header(&self, _num: u64) -> error::Result<block::Header> {
-		bail!(error::ErrorKind::Unimplemented)
-	}
-}

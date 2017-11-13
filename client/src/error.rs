@@ -14,23 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::{Address, U256, H256};
+//! Polkadot client possible errors.
 
-use super::{error, StateApi};
+use primitives::block;
+use state_machine;
 
-/// Relay chain state-related method calls.
-#[derive(Debug)]
-pub struct State;
+error_chain! {
+	errors {
+		/// Backend error.
+		Backend {
+			description("Unrecoverable backend error"),
+			display("Backend error"),
+		}
 
-impl State {
-	/// Create new state API.
-	pub fn new() -> Self {
-		State
+		/// Unknown block.
+		UnknownBlock(h: block::HeaderHash) {
+			description("unknown block"),
+			display("UnknownBlock: {}", h),
+		}
+
+		/// Execution error.
+		Execution(e: Box<state_machine::Error>) {
+			description("execution error"),
+			display("Execution: {}", e),
+		}
 	}
 }
 
-impl StateApi for State {
-	fn storage(&self, _address: Address, _idx: U256) -> error::Result<H256> {
-		bail!(error::ErrorKind::Unimplemented)
+// TODO [ToDr] Temporary, state_machine::Error should be a regular error not Box.
+impl From<Box<state_machine::Error>> for Error {
+	fn from(e: Box<state_machine::Error>) -> Self {
+		ErrorKind::Execution(e).into()
 	}
 }
