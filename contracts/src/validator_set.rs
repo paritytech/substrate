@@ -15,7 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use primitives::Address;
-use state_machine::Externalities;
+use state_machine::StaticExternalities;
 
 use error::Result;
 use executor::RustExecutor;
@@ -25,7 +25,7 @@ use executor::RustExecutor;
 pub struct Contract;
 impl Contract {
 	/// Returns current validator set.
-	pub fn validator_set<E: Externalities<RustExecutor>>(&self, _db: &E, _data: ()) -> Result<Vec<Address>> {
+	pub fn validator_set<E: StaticExternalities<RustExecutor>>(&self, _db: &E, _data: ()) -> Result<Vec<Address>> {
 		unimplemented!()
 	}
 }
