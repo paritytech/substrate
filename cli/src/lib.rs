@@ -31,6 +31,13 @@ extern crate log;
 pub mod error;
 
 /// Parse command line arguments and start the node.
+///
+/// IANA unassigned port ranges that we could use:
+/// 6717-6766		Unassigned
+/// 8504-8553		Unassigned
+/// 9556-9591		Unassigned
+/// 9803-9874		Unassigned
+/// 9926-9949		Unassigned
 pub fn run<I, T>(args: I) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
