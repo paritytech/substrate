@@ -163,27 +163,24 @@ impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
 /// Externalities: pinned to specific active address.
 pub trait Externalities<Executor>: StaticExternalities<Executor> {
-	/// Read storage of current contract being called.
-	fn storage(&self, key: &H256) -> Result<&[u8], Self::Error> {
-		StaticExternalities::storage(self, key)
-	}
-
 	/// Set storage of current contract being called.
 	fn set_storage(&mut self, key: H256, value: Vec<u8>);
 
 	/// Make a sub-call to another contract.
 	fn call(&mut self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error>;
-
-	/// Make a static (read-only) call to another contract.
-	fn call_static(&self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error> {
-		StaticExternalities::call_static(self, address, method, data)
-	}
 }
 
 /// Static externalities: used only for read-only requests.
 pub trait StaticExternalities<Executor> {
 	/// Externalities error type.
 	type Error: Error;
+
+	/// A sender of the call.
+	///
+	/// This might be set to one of the special addresses in case the contract is executed directly:
+	/// - as a transaction
+	/// - as part of the block processing
+	fn sender(&self) -> &Address;
 
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &H256) -> Result<&[u8], Self::Error>;
@@ -217,6 +214,8 @@ pub trait Executor: Sized {
 	) -> Result<OutData, Self::Error>;
 }
 
+fn transaction_context_address() -> Address { 0.into() }
+
 /// Execute a call using the given state backend, overlayed changes, and call executor.
 ///
 /// On an error, no prospective changes are written to the overlay.
@@ -237,6 +236,7 @@ pub fn execute<B: backend::Backend, Exec: Executor>(
 		let mut externalities = ext::Ext {
 			backend,
 			exec,
+			sender: transaction_context_address(),
 			overlay: &mut *overlay,
 			local: *address,
 		};

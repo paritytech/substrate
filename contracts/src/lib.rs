@@ -41,6 +41,9 @@ mod validator_set;
 pub mod error;
 pub mod executor;
 
+#[cfg(test)]
+mod test_helpers;
+
 /// Creates new RustExecutor for contracts.
 pub fn new() -> executor::RustExecutor {
 	executor::RustExecutor::default()

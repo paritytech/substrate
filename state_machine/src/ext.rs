@@ -50,6 +50,8 @@ pub struct Ext<'a, B: 'a, E: 'a> {
 	pub backend: &'a B,
 	/// Contract code executor.
 	pub exec: &'a E,
+	/// Sender address.
+	pub sender: Address,
 	/// Contract address.
 	pub local: Address,
 }
@@ -58,6 +60,10 @@ impl<'a, B: 'a, E: 'a> StaticExternalities<E> for Ext<'a, B, E>
 	where B: Backend, E: Executor
 {
 	type Error = Error<B::Error, E::Error>;
+
+	fn sender(&self) -> &Address {
+		&self.sender
+	}
 
 	fn storage(&self, key: &H256) -> Result<&[u8], Self::Error> {
 		match self.overlay.storage(&self.local, key) {
@@ -70,6 +76,7 @@ impl<'a, B: 'a, E: 'a> StaticExternalities<E> for Ext<'a, B, E>
 		let inner_ext = StaticExt {
 			backend: self.backend,
 			exec: self.exec,
+			sender: self.local,
 			local: address.clone(),
 			overlay: self.overlay,
 		};
@@ -108,6 +115,7 @@ impl<'a, B: 'a, E: 'a> Externalities<E> for Ext<'a, B, E>
 		let mut inner_ext = Ext {
 			backend: self.backend,
 			exec: self.exec,
+			sender: self.local,
 			local: address.clone(),
 			overlay: &mut *self.overlay,
 		};
@@ -126,6 +134,7 @@ struct StaticExt<'a, B: 'a, E: 'a> {
 	overlay: &'a OverlayedChanges,
 	backend: &'a B,
 	exec: &'a E,
+	sender: Address,
 	local: Address,
 }
 
@@ -133,6 +142,10 @@ impl<'a, B: 'a, E: 'a> StaticExternalities<E> for StaticExt<'a, B, E>
 	where B: Backend, E: Executor
 {
 	type Error = Error<B::Error, E::Error>;
+
+	fn sender(&self) -> &Address {
+		&self.sender
+	}
 
 	fn storage(&self, key: &H256) -> Result<&[u8], Self::Error> {
 		match self.overlay.storage(&self.local, key) {
@@ -145,6 +158,7 @@ impl<'a, B: 'a, E: 'a> StaticExternalities<E> for StaticExt<'a, B, E>
 		let inner_ext = StaticExt {
 			backend: self.backend,
 			exec: self.exec,
+			sender: self.local,
 			local: address.clone(),
 			overlay: self.overlay,
 		};

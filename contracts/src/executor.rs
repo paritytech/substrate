@@ -37,9 +37,14 @@ pub struct RustExecutor {
 }
 
 impl RustExecutor {
-	const AUTH: u8 = 1;
-	const BALANCES: u8 = 2;
-	const VALIDATOR_SET: u8 = 3;
+	/// Call initiated by a transaction.
+	pub const TOP_LEVEL: u8 = 0;
+	/// Authentication contract.
+	pub const AUTH: u8 = 1;
+	/// Balances contract.
+	pub const BALANCES: u8 = 2;
+	/// Validator set contract.
+	pub const VALIDATOR_SET: u8 = 3;
 }
 
 impl Executor for RustExecutor {
@@ -95,32 +100,7 @@ impl Executor for RustExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::Address;
-	use primitives::hash::H256;
-
-	#[derive(Debug, Default)]
-	struct TestExternalities;
-	impl Externalities<RustExecutor> for TestExternalities {
-		fn set_storage(&mut self, _key: H256, _value: Vec<u8>) {
-			unimplemented!()
-		}
-
-		fn call(&mut self, _address: &Address, _method: &str, _data: &CallData) -> Result<OutData> {
-			unimplemented!()
-		}
-	}
-
-	impl StaticExternalities<RustExecutor> for TestExternalities {
-		type Error = Error;
-
-		fn storage(&self, _key: &H256) -> Result<&[u8]> {
-			unimplemented!()
-		}
-
-		fn call_static(&self, _address: &Address, _method: &str, _data: &CallData) -> Result<OutData> {
-			unimplemented!()
-		}
-	}
+	use test_helpers::TestExternalities;
 
 	#[test]
 	fn should_fail_for_empty_or_unknown_code() {
