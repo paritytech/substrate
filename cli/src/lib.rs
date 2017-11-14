@@ -19,9 +19,9 @@
 #![warn(missing_docs)]
 
 extern crate env_logger;
-extern crate polkadot_primitives as primitives;
 extern crate polkadot_client as client;
 extern crate polkadot_contracts as contracts;
+extern crate polkadot_primitives as primitives;
 extern crate polkadot_rpc_servers as rpc;
 
 #[macro_use]

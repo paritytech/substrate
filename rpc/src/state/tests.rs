@@ -20,7 +20,6 @@ use polkadot_contracts as contracts;
 use self::error::{Error, ErrorKind};
 use test_helpers::Blockchain;
 
-
 #[test]
 fn should_return_storage() {
 	let client = Client::new(Blockchain::default(), contracts::executor());

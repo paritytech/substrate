@@ -59,6 +59,7 @@ impl fmt::Display for Void {
 		match *self {}
 	}
 }
+
 impl error::Error for Void {
 	fn description(&self) -> &str { "unreachable error" }
 }

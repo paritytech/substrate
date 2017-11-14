@@ -16,11 +16,9 @@
 
 //! Initialization errors.
 
-#![allow(missing_docs)]
-
 error_chain! {
 	foreign_links {
-		Io(::std::io::Error);
-		Cli(::clap::Error);
+		Io(::std::io::Error) #[doc="IO error"];
+		Cli(::clap::Error) #[doc="CLI error"];
 	}
 }
