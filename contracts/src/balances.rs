@@ -47,6 +47,7 @@ pub struct Transfer {
 fn externalities_error<E: state_machine::Error>(e: E) -> Error {
 	ErrorKind::Externalities(Box::new(e)).into()
 }
+
 fn address(x: u8) -> Address {
 	[x].as_ref().into()
 }
@@ -94,7 +95,7 @@ impl Contract {
 			return Ok(None)
 		}
 
-		// check signature
+		// check the signature
 		let mut bytes = [0u8; 32 + 20 + 32];
 		data.value.to_big_endian(&mut bytes[0..32]);
 		bytes[32..52].clone_from_slice(&*data.to);
