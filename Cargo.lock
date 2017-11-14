@@ -405,6 +405,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "polkadot-collator"
+version = "0.1.0"
+dependencies = [
+ "polkadot-primitives 0.1.0",
+]
+
+[[package]]
 name = "polkadot-contracts"
 version = "0.1.0"
 dependencies = [
