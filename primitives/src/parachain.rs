@@ -39,9 +39,10 @@ pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
 pub struct EgressPosts(pub ::std::collections::BTreeMap<::parachain::Id, Vec<::parachain::Message>>);
 
 /// A collated ingress queue.
+///
 /// This is just an ordered vector of other parachains' egress queues,
 /// obtained according to the routing rules.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone PartialEq, Eq, Serialize, Deserialize)]
 pub struct CollatedIngress(pub Vec<(Id, Vec<Message>)>);
 
 /// A parachain block proposal.
@@ -51,6 +52,13 @@ pub struct CollatedIngress(pub Vec<(Id, Vec<Message>)>);
 pub struct Proposal {
 	/// Parachain block header bytes.
 	pub header: Header,
+
+	/// Collated ingress queues.
+	///
+	/// This will always be the same for each valid proposal building on the
+	/// same relay chain block.
+	pub ingress: CollatedIngress,
+
 	/// Hash of data necessary to prove validity of the header.
 	pub witness_hash: WitnessHash,
 }
