@@ -48,7 +48,7 @@ extern crate polkadot_primitives as primitives;
 
 use std::collections::BTreeSet;
 
-use futures::{stream, Stream, Future};
+use futures::{stream, Stream, Future, IntoFuture};
 use primitives::parachain::{RawWitness, Message, Id as ParaId};
 use primitives::hash::H256;
 
@@ -74,7 +74,7 @@ pub trait ParachainContext {
 /// some of the input.
 pub trait RelayChainContext {
 	type Error;
-	type FutureEgress: Future<Item=Vec<Message>, Error=Self::Error>;
+	type FutureEgress: IntoFuture<Item=Vec<Message>, Error=Self::Error>;
 
 	/// Ancestry hashes of the relay chain, along with a flag indicating
 	/// whether the local parachain had a candidate included.
@@ -125,6 +125,8 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 		for para_id in to_remove {
 			currently_routing.remove(&para_id);
 		}
+
+		if currently_routing.is_empty() { break }
 	}
 
 	let future = stream::futures_ordered(egress_fetch.into_iter().rev())
@@ -135,7 +137,108 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+
+	use std::collections::{HashMap, BTreeSet};
+
+	use futures::Future;
+	use primitives::parachain::{Message, Id as ParaId};
+	use primitives::hash::H256;
+
+	pub struct DummyRelayChainCtx {
+		blocks: Vec<(H256, bool)>,
+		routing_parachains: HashMap<H256, BTreeSet<ParaId>>,
+		egresses: HashMap<(ParaId, H256), Vec<Message>>,
+		currently_routing: BTreeSet<ParaId>,
+	}
+
+	impl RelayChainContext for DummyRelayChainCtx {
+		type Error = ();
+		type FutureEgress = Result<Vec<Message>, ()>;
+		type Ancestry = Box<Iterator<Item=(H256, bool)>>;
+
+		fn routing_parachains(&self, block: Option<H256>) -> BTreeSet<ParaId> {
+			match block {
+				None => self.currently_routing.clone(),
+				Some(block) => self.routing_parachains.get(&block).cloned().unwrap_or_default(),
+			}
+		}
+
+		fn ancestry_iter(&self) -> Self::Ancestry {
+			Box::new(self.blocks.clone().into_iter().rev())
+		}
+
+		fn remote_egress(&self, id: ParaId, block: H256) -> Result<Vec<Message>, ()> {
+			Ok(self.egresses.get(&(id, block)).cloned().unwrap_or_default())
+		}
+	}
+
+	fn fake_hash(x: u8) -> H256 {
+		let mut hash = H256::default();
+		hash[0] = x;
+		hash
+	}
+
     #[test]
-    fn it_works() {
-    }
+	fn collates_ingress() {
+		let route_from = |x: &[ParaId]| {
+			 let mut set = BTreeSet::new();
+			 set.extend(x.iter().cloned());
+			 set
+		};
+
+		let message = |x: Vec<u8>| vec![Message(x)];
+
+		let dummy_ctx = DummyRelayChainCtx {
+			blocks: vec![
+				(fake_hash(1), true),
+				(fake_hash(2), false),
+				(fake_hash(3), true),
+				(fake_hash(4), false),
+				(fake_hash(5), false),
+			],
+			routing_parachains: vec![
+				(fake_hash(0), BTreeSet::new()),
+				(fake_hash(1), route_from(&[2.into()])),
+				(fake_hash(2), BTreeSet::new()),
+				(fake_hash(3), route_from(&[3.into()])),
+				(fake_hash(4), route_from(&[2.into()])),
+				(fake_hash(5), BTreeSet::new()),
+			].into_iter().collect(),
+			currently_routing: route_from(&[2.into(), 3.into()]),
+			egresses: vec![
+				// these two will not be included because they are from before
+				// the last successful times messages were routed from their
+				// chains.
+				((2.into(), fake_hash(0)), message(vec![200])),
+				((3.into(), fake_hash(2)), message(vec![101, 102, 103])),
+
+				// egresses for `2`: last routed successfully at 1.
+				((2.into(), fake_hash(1)), message(vec![1, 2, 3])),
+				((2.into(), fake_hash(2)), message(vec![4, 5, 6])),
+				((2.into(), fake_hash(3)), message(vec![7, 8])),
+				((2.into(), fake_hash(4)), message(vec![10])),
+				((2.into(), fake_hash(5)), message(vec![12])),
+
+				// egresses for `3`: last routed successfully at 3.
+				((3.into(), fake_hash(3)), message(vec![9])),
+				((3.into(), fake_hash(4)), message(vec![11])),
+				((3.into(), fake_hash(5)), message(vec![13])),
+			].into_iter().collect(),
+		};
+
+		assert_eq!(
+			collate_ingress(dummy_ctx).wait().unwrap(),
+			vec![
+				Message(vec![1, 2, 3]),
+				Message(vec![4, 5, 6]),
+				Message(vec![7, 8]),
+				Message(vec![9]),
+				Message(vec![10]),
+				Message(vec![11]),
+				Message(vec![12]),
+				Message(vec![13]),
+			]
+		)
+	}
 }
