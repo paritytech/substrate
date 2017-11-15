@@ -17,7 +17,8 @@
 //! Collation Logic.
 //!
 //! A collator node lives on a distinct parachain and submits a proposal for
-//! a state transition, along with a proof for its validity (what we call a witness).
+//! a state transition, along with a proof for its validity
+//! (what we might call a witness).
 //!
 //! One of collators' other roles is to route messages between chains.
 //! Each parachain produces a list of "egress" posts of messages for each other
@@ -49,26 +50,18 @@ extern crate polkadot_primitives as primitives;
 use std::collections::BTreeSet;
 
 use futures::{stream, Stream, Future, IntoFuture};
-use primitives::parachain::{RawWitness, CollatedIngress, Header, Message, Id as ParaId};
+use primitives::parachain::{self, RawProof, ConsolidatedIngress, HeadData, Message, Id as ParaId};
 use primitives::hash::H256;
-
-/// A collation candidate.
-pub struct Candidate {
-	/// The header data.
-	pub header: Header,
-	/// The witness data.
-	pub witness: RawWitness,
-}
 
 /// Parachain context needed for collation.
 ///
 /// This can be implemented through an externally attached service or a stub.
 pub trait ParachainContext {
 	/// Produce a candidate, given the latest ingress queue information.
-	fn produce_candidate<I: IntoIterator<Item=Message>>(
+	fn produce_candidate<I: IntoIterator<Item=(ParaId, Message)>>(
 		&self,
 		ingress: I,
-	) -> Candidate;
+	) -> parachain::Proof;
 }
 
 /// Relay chain context needed to collate.
@@ -96,8 +89,9 @@ pub trait RelayChainContext {
 }
 
 /// Collate the necessary ingress queue using the given context.
+// TODO: impl trait
 pub fn collate_ingress<'a, R>(relay_context: R)
-	-> Box<Future<Item=CollatedIngress, Error=R::Error> + 'a>
+	-> Box<Future<Item=ConsolidatedIngress, Error=R::Error> + 'a>
 	where R: RelayChainContext,
 		  R::Error: 'a,
 		  R::FutureEgress: 'a
@@ -137,7 +131,7 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 
 	let future = stream::futures_ordered(egress_fetch.into_iter().rev())
 		.fold(Vec::new(), |mut v, x| { v.push(x); Ok(v) } )
-		.map(CollatedIngress);
+		.map(ConsolidatedIngress);
 
 	Box::new(future)
 }
@@ -236,7 +230,7 @@ mod tests {
 
 		assert_eq!(
 			collate_ingress(dummy_ctx).wait().unwrap(),
-			CollatedIngress(vec![
+			ConsolidatedIngress(vec![
 				(2.into(), message(vec![1, 2, 3])),
 				(2.into(), message(vec![4, 5, 6])),
 				(2.into(), message(vec![7, 8])),

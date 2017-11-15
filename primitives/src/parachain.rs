@@ -42,59 +42,62 @@ pub struct EgressPosts(pub ::std::collections::BTreeMap<::parachain::Id, Vec<::p
 ///
 /// This is just an ordered vector of other parachains' egress queues,
 /// obtained according to the routing rules.
-#[derive(Debug, Clone PartialEq, Eq, Serialize, Deserialize)]
-pub struct CollatedIngress(pub Vec<(Id, Vec<Message>)>);
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 
 /// A parachain block proposal.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct Proposal {
-	/// Parachain block header bytes.
-	pub header: Header,
+pub struct Candidate {
+	/// Parachain ID
+	pub id: Id,
 
-	/// Collated ingress queues.
+	/// Consolidated ingress queues.
 	///
 	/// This will always be the same for each valid proposal building on the
 	/// same relay chain block.
-	pub ingress: CollatedIngress,
+	pub ingress: ConsolidatedIngress,
 
-	/// Hash of data necessary to prove validity of the header.
-	pub witness_hash: WitnessHash,
+	/// Hash of data necessary to prove validity of the head data.
+	pub proof_hash: ProofHash,
 }
 
-/// Parachain header raw bytes wrapper type.
+/// Parachain head data raw bytes wrapper type.
+///
+/// The notion of a header is a little too specific for parachains.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Header(#[serde(with="bytes")] pub Vec<u8>);
+pub struct HeadData(#[serde(with="bytes")] pub Vec<u8>);
 
-/// Hash used to refer to witness of block header.
-pub type WitnessHash = ::hash::H256;
+/// Hash used to refer to proof of block head data.
+pub type ProofHash = ::hash::H256;
 
-/// Raw witness data.
+/// Raw proof data.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RawWitness(#[serde(with="bytes")] pub Vec<u8>);
+pub struct RawProof(#[serde(with="bytes")] pub Vec<u8>);
 
-impl RawWitness {
-	/// Compute and store the hash of the witness
-	pub fn into_witness(self) -> Witness {
+impl RawProof {
+	/// Compute and store the hash of the proof
+	pub fn into_proof(self) -> Proof {
 		let hash = ::hash(&self.0);
-		Witness(self, hash)
+		Proof(self, hash)
 	}
 }
 
-/// Parachain witness data.
+/// Parachain proof data. This is passed to the validation function
+/// along with the ingress queue and produces head data.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Witness(RawWitness, WitnessHash);
+pub struct Proof(RawProof, ProofHash);
 
-impl Witness {
-	/// Get raw witness data.
-	pub fn raw(&self) -> &RawWitness { &self.0 }
+impl Proof {
+	/// Get raw proof data.
+	pub fn raw(&self) -> &RawProof { &self.0 }
 
-	/// Get hash of witness data.
-	pub fn hash(&self) -> &WitnessHash { &self.1 }
+	/// Get hash of proof data.
+	pub fn hash(&self) -> &ProofHash { &self.1 }
 
-	/// Decompose the witness back into raw data and hash.
-	pub fn into_inner(self) -> (RawWitness, WitnessHash) {
+	/// Decompose the proof back into raw data and hash.
+	pub fn into_inner(self) -> (RawProof, ProofHash) {
 		(self.0, self.1)
 	}
 }
@@ -109,9 +112,9 @@ mod tests {
 	use polkadot_serializer as ser;
 
 	#[test]
-	fn test_witness_serialization() {
+	fn test_proof_serialization() {
 		assert_eq!(
-			ser::to_string_pretty(&Witness(RawWitness(vec![1,2,3]), 5.into())),
+			ser::to_string_pretty(&Proof(RawProof(vec![1,2,3]), 5.into())),
 			r#"[
   "0x010203",
   "0x0000000000000000000000000000000000000000000000000000000000000005"

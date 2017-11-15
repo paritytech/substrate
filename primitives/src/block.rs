@@ -46,7 +46,7 @@ pub struct Header {
 #[serde(deny_unknown_fields)]
 pub struct Body {
 	/// Parachain proposal blocks.
-	pub para_blocks: Vec<parachain::Proposal>,
+	pub para_blocks: Vec<parachain::Candidate>,
 }
 
 #[cfg(test)]
@@ -73,16 +73,18 @@ mod tests {
 	fn test_body_serialization() {
 		assert_eq!(ser::to_string_pretty(&Body {
 			para_blocks: vec![
-				parachain::Proposal {
-					header: parachain::Header(vec![1, 2, 3, 4]),
-					witness_hash: 5.into(),
+				parachain::Candidate {
+					id: 10.into(),
+					ingress: Default::default(),
+					proof_hash: 5.into(),
 				}
 			],
 		}), r#"{
   "paraBlocks": [
     {
-      "header": "0x01020304",
-      "witnessHash": "0x0000000000000000000000000000000000000000000000000000000000000005"
+      "id": 10,
+      "ingress": [],
+      "proofHash": "0x0000000000000000000000000000000000000000000000000000000000000005"
     }
   ]
 }"#);

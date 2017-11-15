@@ -18,34 +18,34 @@
 
 use parachain::EgressPosts;
 
-/// Validity result of particular witness and ingress queue.
+/// Validity result of particular proof and ingress queue.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag="type", content="data")]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub enum WitnessValidity {
-	/// The witness is invalid.
+pub enum ProofValidity {
+	/// The proof is invalid.
 	Invalid,
-	/// The witness is processed and new egress queue is created.
+	/// The proof is processed and new egress queue is created.
 	/// Also includes current ingress queue delta.
 	Valid(EgressPosts),
 }
 
-impl WitnessValidity {
-	/// The witness is valid.
+impl ProofValidity {
+	/// The proof is valid.
 	pub fn is_valid(&self) -> bool {
 		match *self {
-			WitnessValidity::Invalid => false,
-			WitnessValidity::Valid(..) => true,
+			ProofValidity::Invalid => false,
+			ProofValidity::Valid(..) => true,
 		}
 	}
 }
 
-impl From<Option<EgressPosts>> for WitnessValidity {
+impl From<Option<EgressPosts>> for ProofValidity {
 	fn from(posts: Option<EgressPosts>) -> Self {
 		match posts {
-			Some(posts) => WitnessValidity::Valid(posts),
-			None => WitnessValidity::Invalid,
+			Some(posts) => ProofValidity::Valid(posts),
+			None => ProofValidity::Invalid,
 		}
 	}
 }
@@ -56,14 +56,14 @@ pub trait Validator {
 	/// Validation error.
 	type Error: ::std::error::Error;
 
-	/// Validates if the provided witness holds given a current ingress queue.
+	/// Validates if the provided proof holds given a current ingress queue.
 	///
 	/// In case of success produces egress posts.
 	fn validate(
 		&self,
-		witness: &::parachain::Witness,
+		proof: &::parachain::Proof,
 		code: &[u8],
-	) -> Result<WitnessValidity, Self::Error>;
+	) -> Result<ProofValidity, Self::Error>;
 }
 
 #[cfg(test)]
@@ -73,9 +73,9 @@ mod tests {
 	use polkadot_serializer as ser;
 
 	#[test]
-	fn test_witness_validity_serialization() {
+	fn test_proof_validity_serialization() {
 		assert_eq!(
-			ser::to_string_pretty(&WitnessValidity::Invalid),
+			ser::to_string_pretty(&ProofValidity::Invalid),
 			r#"{
   "type": "invalid"
 }"#);
@@ -84,7 +84,7 @@ mod tests {
 		egress.insert(5.into(), vec![Message(vec![1, 2, 3])]);
 		egress.insert(7.into(), vec![Message(vec![4, 5, 6])]);
 		assert_eq!(
-			ser::to_string_pretty(&WitnessValidity::Valid(EgressPosts(egress))),
+			ser::to_string_pretty(&ProofValidity::Valid(EgressPosts(egress))),
 			r#"{
   "type": "valid",
   "data": {
