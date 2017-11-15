@@ -49,11 +49,13 @@ extern crate polkadot_primitives as primitives;
 use std::collections::BTreeSet;
 
 use futures::{stream, Stream, Future, IntoFuture};
-use primitives::parachain::{RawWitness, Message, Id as ParaId};
+use primitives::parachain::{RawWitness, CollatedIngress, Header, Message, Id as ParaId};
 use primitives::hash::H256;
 
 /// A collation candidate.
 pub struct Candidate {
+	/// The header data.
+	pub header: Header,
 	/// The witness data.
 	pub witness: RawWitness,
 }
@@ -95,7 +97,7 @@ pub trait RelayChainContext {
 
 /// Collate the necessary ingress queue using the given context.
 pub fn collate_ingress<'a, R>(relay_context: R)
-	-> Box<Future<Item=Vec<Message>, Error=R::Error> + 'a>
+	-> Box<Future<Item=CollatedIngress, Error=R::Error> + 'a>
 	where R: RelayChainContext,
 		  R::Error: 'a,
 		  R::FutureEgress: 'a
@@ -115,7 +117,11 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 		// correctly ordered ingress queue.
 		for para_id in currently_routing.iter().rev().cloned() {
 			// fetch queue at the outset of `ancestry_hash` regardless.
-			egress_fetch.push(relay_context.remote_egress(para_id, ancestry_hash));
+			let fetch = relay_context.remote_egress(para_id, ancestry_hash)
+				.into_future()
+				.map(move |q| (para_id, q));
+
+			egress_fetch.push(fetch);
 
 			if had_candidate && routed_at_hash.contains(&para_id) {
 				to_remove.push(para_id);
@@ -130,7 +136,8 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 	}
 
 	let future = stream::futures_ordered(egress_fetch.into_iter().rev())
-		.fold(Vec::new(), |mut v, e| { v.extend(e); Ok(v) } );
+		.fold(Vec::new(), |mut v, x| { v.push(x); Ok(v) } )
+		.map(CollatedIngress);
 
 	Box::new(future)
 }
@@ -229,16 +236,16 @@ mod tests {
 
 		assert_eq!(
 			collate_ingress(dummy_ctx).wait().unwrap(),
-			vec![
-				Message(vec![1, 2, 3]),
-				Message(vec![4, 5, 6]),
-				Message(vec![7, 8]),
-				Message(vec![9]),
-				Message(vec![10]),
-				Message(vec![11]),
-				Message(vec![12]),
-				Message(vec![13]),
+			CollatedIngress(vec![
+				(2.into(), message(vec![1, 2, 3])),
+				(2.into(), message(vec![4, 5, 6])),
+				(2.into(), message(vec![7, 8])),
+				(3.into(), message(vec![9])),
+				(2.into(), message(vec![10])),
+				(3.into(), message(vec![11])),
+				(2.into(), message(vec![12])),
+				(3.into(), message(vec![13])),
 			]
-		)
+		))
 	}
 }

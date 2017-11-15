@@ -38,6 +38,12 @@ pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EgressPosts(pub ::std::collections::BTreeMap<::parachain::Id, Vec<::parachain::Message>>);
 
+/// A collated ingress queue.
+/// This is just an ordered vector of other parachains' egress queues,
+/// obtained according to the routing rules.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CollatedIngress(pub Vec<(Id, Vec<Message>)>);
+
 /// A parachain block proposal.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
