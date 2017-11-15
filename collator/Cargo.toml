@@ -6,3 +6,4 @@ description = "Abstract collation logic"
 
 [dependencies]
 polkadot-primitives = { path = "../primitives", version = "0.1" }
+futures = "0.1.17"
