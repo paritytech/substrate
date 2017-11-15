@@ -75,17 +75,15 @@ mod tests {
 		assert_eq!(ser::to_string_pretty(&Body {
 			para_blocks: vec![
 				parachain::Proposal {
-					parachain: 5.into(),
 					header: parachain::Header(vec![1, 2, 3, 4]),
-					proof_hash: 5.into(),
+					witness_hash: 5.into(),
 				}
 			],
 		}), r#"{
   "paraBlocks": [
     {
-      "parachain": 5,
       "header": "0x01020304",
-      "proofHash": "0x0000000000000000000000000000000000000000000000000000000000000005"
+      "witnessHash": "0x0000000000000000000000000000000000000000000000000000000000000005"
     }
   ]
 }"#);

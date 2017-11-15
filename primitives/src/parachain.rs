@@ -30,51 +30,57 @@ impl From<u64> for Id {
 	fn from(x: u64) -> Self { Id(x) }
 }
 
+/// A cross-parachain message.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
+pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
+
+/// Posts to egress queues.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EgressPosts(pub ::std::collections::BTreeMap<::parachain::Id, Vec<::parachain::Message>>);
+
 /// A parachain block proposal.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Proposal {
-	/// The ID of the parachain this is a proposal for.
-	pub parachain: Id,
 	/// Parachain block header bytes.
 	pub header: Header,
 	/// Hash of data necessary to prove validity of the header.
-	pub proof_hash: ProofHash,
+	pub witness_hash: WitnessHash,
 }
 
 /// Parachain header raw bytes wrapper type.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Header(#[serde(with="bytes")] pub Vec<u8>);
 
-/// Hash used to refer to proof of block header.
-pub type ProofHash = ::hash::H256;
+/// Hash used to refer to witness of block header.
+pub type WitnessHash = ::hash::H256;
 
-/// Raw proof data.
+/// Raw witness data.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RawProof(#[serde(with="bytes")] pub Vec<u8>);
+pub struct RawWitness(#[serde(with="bytes")] pub Vec<u8>);
 
-impl RawProof {
-	/// Compute and store the hash of the proof.
-	pub fn into_proof(self) -> Proof {
+impl RawWitness {
+	/// Compute and store the hash of the witness
+	pub fn into_witness(self) -> Witness {
 		let hash = ::hash(&self.0);
-		Proof(self, hash)
+		Witness(self, hash)
 	}
 }
 
-/// Parachain proof data.
+/// Parachain witness data.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Proof(RawProof, ProofHash);
+pub struct Witness(RawWitness, WitnessHash);
 
-impl Proof {
-	/// Get raw proof data.
-	pub fn raw(&self) -> &RawProof { &self.0 }
+impl Witness {
+	/// Get raw witness data.
+	pub fn raw(&self) -> &RawWitness { &self.0 }
 
-	/// Get hash of proof data.
-	pub fn hash(&self) -> &ProofHash { &self.1 }
+	/// Get hash of witness data.
+	pub fn hash(&self) -> &WitnessHash { &self.1 }
 
-	/// Decompose the proof back into raw data and hash.
-	pub fn into_inner(self) -> (RawProof, ProofHash) {
+	/// Decompose the witness back into raw data and hash.
+	pub fn into_inner(self) -> (RawWitness, WitnessHash) {
 		(self.0, self.1)
 	}
 }
@@ -89,9 +95,9 @@ mod tests {
 	use polkadot_serializer as ser;
 
 	#[test]
-	fn test_proof_serialization() {
+	fn test_witness_serialization() {
 		assert_eq!(
-			ser::to_string_pretty(&Proof(RawProof(vec![1,2,3]), 5.into())),
+			ser::to_string_pretty(&Witness(RawWitness(vec![1,2,3]), 5.into())),
 			r#"[
   "0x010203",
   "0x0000000000000000000000000000000000000000000000000000000000000005"

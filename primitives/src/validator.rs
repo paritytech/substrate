@@ -16,48 +16,36 @@
 
 //! Validator primitives.
 
-use bytes;
+use parachain::EgressPosts;
 
-/// Parachain incoming messages.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IngressPosts(#[serde(with="bytes")] pub Vec<u8>);
-
-/// Parachain incoming messages delta.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IngressPostsDelta(#[serde(with="bytes")] pub Vec<u8>);
-
-/// Parachain outgoing messages.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EgressPosts(#[serde(with="bytes")] pub Vec<u8>);
-
-/// Validity result of particular proof and ingress queue.
+/// Validity result of particular witness and ingress queue.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag="type", content="data")]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub enum ProofValidity {
-	/// The proof is invalid.
+pub enum WitnessValidity {
+	/// The witness is invalid.
 	Invalid,
-	/// The proof is processed and new egress queue is created.
+	/// The witness is processed and new egress queue is created.
 	/// Also includes current ingress queue delta.
-	Valid(IngressPostsDelta, EgressPosts),
+	Valid(EgressPosts),
 }
 
-impl ProofValidity {
-	/// The proof is valid.
+impl WitnessValidity {
+	/// The witness is valid.
 	pub fn is_valid(&self) -> bool {
 		match *self {
-			ProofValidity::Invalid => false,
-			ProofValidity::Valid(..) => true,
+			WitnessValidity::Invalid => false,
+			WitnessValidity::Valid(..) => true,
 		}
 	}
 }
 
-impl From<Option<(IngressPostsDelta, EgressPosts)>> for ProofValidity {
-	fn from(posts: Option<(IngressPostsDelta, EgressPosts)>) -> Self {
+impl From<Option<EgressPosts>> for WitnessValidity {
+	fn from(posts: Option<EgressPosts>) -> Self {
 		match posts {
-			Some((delta, posts)) => ProofValidity::Valid(delta, posts),
-			None => ProofValidity::Invalid,
+			Some(posts) => WitnessValidity::Valid(posts),
+			None => WitnessValidity::Invalid,
 		}
 	}
 }
@@ -68,37 +56,45 @@ pub trait Validator {
 	/// Validation error.
 	type Error: ::std::error::Error;
 
-	/// Validates if the provided proof holds given a current ingress queue.
+	/// Validates if the provided witness holds given a current ingress queue.
 	///
 	/// In case of success produces egress posts.
 	fn validate(
 		&self,
-		messages: &IngressPosts,
-		proof: &::parachain::Proof,
+		witness: &::parachain::Witness,
 		code: &[u8],
-	) -> Result<ProofValidity, Self::Error>;
+	) -> Result<WitnessValidity, Self::Error>;
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use parachain::{EgressPosts, Message};
 	use polkadot_serializer as ser;
 
 	#[test]
-	fn test_proof_validity_serialization() {
+	fn test_witness_validity_serialization() {
 		assert_eq!(
-			ser::to_string_pretty(&ProofValidity::Invalid),
+			ser::to_string_pretty(&WitnessValidity::Invalid),
 			r#"{
   "type": "invalid"
 }"#);
+
+		let mut egress = ::std::collections::BTreeMap::new();
+		egress.insert(5.into(), vec![Message(vec![1, 2, 3])]);
+		egress.insert(7.into(), vec![Message(vec![4, 5, 6])]);
 		assert_eq!(
-			ser::to_string_pretty(&ProofValidity::Valid(IngressPostsDelta(vec![1]), EgressPosts(vec![1, 2, 3]))),
+			ser::to_string_pretty(&WitnessValidity::Valid(EgressPosts(egress))),
 			r#"{
   "type": "valid",
-  "data": [
-    "0x01",
-    "0x010203"
-  ]
+  "data": {
+    "5": [
+      "0x010203"
+    ],
+    "7": [
+      "0x040506"
+    ]
+  }
 }"#);
 	}
 }
