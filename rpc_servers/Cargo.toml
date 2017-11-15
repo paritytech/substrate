@@ -1,0 +1,9 @@
+[package]
+name = "polkadot-rpc-servers"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+polkadot-rpc = { path = "../rpc", version = "0.1" }
+jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
+jsonrpc-http-server = { git="https://github.com/paritytech/jsonrpc.git" }

@@ -1,16 +1,20 @@
 [package]
 name = "polkadot"
 version = "0.1.0"
-authors = ["Parity Team <admin@parity.io>"]
+authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
+error-chain = "0.11"
 polkadot-cli = { path = "cli", version = "0.1" }
 
 [workspace]
 members = [
+	"client",
 	"collator",
 	"contracts",
 	"primitives",
+	"rpc",
+	"rpc_servers",
 	"serializer",
 	"state_machine",
 	"validator",

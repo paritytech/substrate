@@ -14,33 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust executor possible errors.
+use super::*;
 
-use serializer;
-use state_machine;
+use test_helpers::Blockchain;
 
-error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
-	}
+#[test]
+fn should_return_header() {
+	let state = Blockchain::default();
 
-	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
+	assert_matches!(
+		ChainApi::header(&state, 0.into()),
+		Ok(Some(ref x)) if x == &block::Header {
+			parent_hash: 0.into(),
+			state_root: 0.into(),
+			timestamp: 0,
+			number: 0,
 		}
+	);
 
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
-
-		/// Externalities have failed.
-		Externalities(e: Box<state_machine::Error>) {
-			description("externalities failure"),
-			display("Externalities error: {}", e),
-		}
-	}
+	assert_matches!(
+		ChainApi::header(&state, 5.into()),
+		Ok(None)
+	);
 }

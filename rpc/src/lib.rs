@@ -14,33 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust executor possible errors.
+//! Polkadot RPC interfaces.
 
-use serializer;
-use state_machine;
+#![warn(missing_docs)]
 
-error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
-	}
+extern crate jsonrpc_core as rpc;
+extern crate polkadot_client as client;
+extern crate polkadot_primitives as primitives;
+extern crate polkadot_state_machine as state_machine;
 
-	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
-		}
+#[macro_use]
+extern crate error_chain;
+#[macro_use]
+extern crate jsonrpc_macros;
 
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
+#[cfg(test)]
+extern crate polkadot_contracts;
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
 
-		/// Externalities have failed.
-		Externalities(e: Box<state_machine::Error>) {
-			description("externalities failure"),
-			display("Externalities error: {}", e),
-		}
-	}
-}
+pub mod chain;
+pub mod state;
+
+#[cfg(test)]
+mod test_helpers;

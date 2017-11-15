@@ -1,13 +1,15 @@
 [package]
 name = "polkadot-contracts"
 version = "0.1.0"
-authors = ["Parity Team <admin@parity.io>"]
+authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-assert_matches = "1.1"
 error-chain = "0.11"
 polkadot-primitives = { path = "../primitives", version = "0.1" }
 polkadot-serializer = { path = "../serializer", version = "0.1" }
 polkadot-state-machine = { path = "../state_machine" , version = "0.1" }
 serde = "1.0"
 serde_derive = "1.0"
+
+[dev-dependencies]
+assert_matches = "1.1"

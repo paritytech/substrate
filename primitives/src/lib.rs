@@ -49,6 +49,8 @@ pub mod validator;
 
 /// Alias to 160-bit hash when used in the context of an account address.
 pub type Address = hash::H160;
+pub use self::hash::{H160, H256};
+pub use self::uint::{U256, U512};
 
 /// A hash function.
 pub fn hash(data: &[u8]) -> hash::H256 {
