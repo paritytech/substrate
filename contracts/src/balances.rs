@@ -84,7 +84,7 @@ impl Contract {
 	pub fn transfer_preconditions<E: StaticExternalities<RustExecutor>>(&self, ext: &E, data: Transfer) -> Result<Option<Address>> {
 		// Check the caller:
 		let sender = ext.sender();
-		if !&[
+		if ![
 			address(RustExecutor::TOP_LEVEL),
 			address(RustExecutor::BALANCES),
 		].contains(sender) {
