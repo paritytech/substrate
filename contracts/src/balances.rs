@@ -52,32 +52,28 @@ fn address(x: u8) -> Address {
 	[x].as_ref().into()
 }
 
+fn account<E: StaticExternalities<RustExecutor>>(ext: &E, address: Address) -> Result<Account> {
+	ext.storage(&address.into())
+		.map_err(externalities_error)
+		.and_then(|x| if x.is_empty() {
+			Ok(Account::default())
+		} else {
+			serializer::from_slice(x).chain_err(|| "Invalid internal structure.")
+		})
+}
+
 /// Balances contract rust implementation.
 #[derive(Debug, Default)]
 pub struct Contract;
 impl Contract {
-	fn account<E: StaticExternalities<RustExecutor>>(ext: &E, address: Address) -> Result<Account> {
-		ext.storage(&address.into())
-			.map_err(externalities_error)
-			.and_then(|x| if x.is_empty() {
-				Ok(Account::default())
-			} else {
-				serializer::from_slice(x).chain_err(|| "Invalid internal structure.")
-			})
-	}
-
-	fn contains_sender(sender: Address, addresses: &[Address]) -> bool {
-		addresses.iter().find(|address| *address == &sender).is_some()
-	}
-
 	/// Returns a balance of given address.
 	pub fn balance_of<E: StaticExternalities<RustExecutor>>(&self, ext: &E, data: Address) -> Result<U256> {
-		Self::account(ext, data).map(|acc| acc.balance)
+		account(ext, data).map(|acc| acc.balance)
 	}
 
 	/// Returns the next nonce to authorize the transfer from given address.
 	pub fn next_nonce<E: StaticExternalities<RustExecutor>>(&self, ext: &E, data: Address) -> Result<U256> {
-		Self::account(ext, data).map(|acc| acc.nonce)
+		account(ext, data).map(|acc| acc.nonce)
 	}
 
 	/// Checks preconditions for transfer.
@@ -88,10 +84,10 @@ impl Contract {
 	pub fn transfer_preconditions<E: StaticExternalities<RustExecutor>>(&self, ext: &E, data: Transfer) -> Result<Option<Address>> {
 		// Check the caller:
 		let sender = ext.sender();
-		if !Self::contains_sender(*sender, &[
+		if !&[
 			address(RustExecutor::TOP_LEVEL),
 			address(RustExecutor::BALANCES),
-		]) {
+		].contains(sender) {
 			return Ok(None)
 		}
 
@@ -109,7 +105,7 @@ impl Contract {
 		).map_err(externalities_error)?.0)
 			.chain_err(|| "Invalid auth contract response.")?;
 
-		let account = Self::account(ext, sender)?;
+		let account = account(ext, sender)?;
 
 		// check nonce
 		if account.nonce != data.nonce {
@@ -133,8 +129,8 @@ impl Contract {
 			Some(address) => address,
 		};
 
-		let mut sender = Self::account(ext, from)?;
-		let mut recipient = Self::account(ext, data.to)?;
+		let mut sender = account(ext, from)?;
+		let mut recipient = account(ext, data.to)?;
 
 		// update nonce
 		sender.nonce = sender.nonce.checked_add(&1.into())
