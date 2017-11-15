@@ -42,10 +42,27 @@ impl_serde!(H160, 20);
 impl_hash!(H256, 32);
 impl_serde!(H256, 32);
 
+
+impl From<H160> for H256 {
+	fn from(h: H160) -> Self {
+		let mut v = H256::default();
+		v.0[12..32].copy_from_slice(&h.0);
+		v
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use polkadot_serializer as ser;
+
+	#[test]
+	fn test_conversion() {
+		let given = H160::from(5);
+		let expected = H256::from(5);
+
+		assert_eq!(expected, H256::from(given));
+	}
 
 	#[test]
 	fn test_h160() {

@@ -20,7 +20,7 @@ use serde::{Serialize, Serializer, Deserialize, Deserializer};
 
 use bytes;
 
-macro_rules! impl_serde {
+macro_rules! impl_uint {
 	($name: ident, $len: expr) => {
 		impl Serialize for $name {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
@@ -36,13 +36,31 @@ macro_rules! impl_serde {
 					.map(|x| (&*x).into())
 			}
 		}
+
+		impl $name {
+			/// Adds two uints together and returns the result iif it didn't overflow.
+			pub fn checked_add(&self, other: &Self) -> Option<Self> {
+				match self.overflowing_add(*other) {
+					(_, true) => None,
+					(res, _) => Some(res),
+				}
+			}
+
+			/// Subtracts given uint and returns the result iif it didn't overflow.
+			pub fn checked_sub(&self, other: &Self) -> Option<Self> {
+				match self.overflowing_sub(*other) {
+					(_, true) => None,
+					(res, _) => Some(res),
+				}
+			}
+		}
 	}
 }
 
 construct_uint!(U256, 4);
-impl_serde!(U256, 4);
+impl_uint!(U256, 4);
 construct_uint!(U512, 8);
-impl_serde!(U512, 8);
+impl_uint!(U512, 8);
 
 #[cfg(test)]
 mod tests {

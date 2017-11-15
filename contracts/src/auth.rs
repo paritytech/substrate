@@ -15,13 +15,14 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use primitives::Address;
+use primitives::hash::H256;
 use state_machine::StaticExternalities;
 
 use error::Result;
 use executor::RustExecutor;
 
 /// Data and some sort of Authentication Data
-type DataAndAuth = (Vec<u8>, Vec<u8>);
+type DataAndAuth = (H256, Vec<u8>);
 
 /// Authentication contract rust implementation.
 #[derive(Debug, Default)]

@@ -42,5 +42,11 @@ error_chain! {
 			description("externalities failure"),
 			display("Externalities error: {}", e),
 		}
+
+		/// Operation overflow
+		OperationOverflow {
+			description("overflow"),
+			display("Operation overflow"),
+		}
 	}
 }
