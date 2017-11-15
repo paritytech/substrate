@@ -25,3 +25,7 @@ pub struct CallData(#[serde(with="bytes")] pub Vec<u8>);
 /// Contract output data.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OutData(#[serde(with="bytes")] pub Vec<u8>);
+
+/// Contract storage entry data.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageData(#[serde(with="bytes")] pub Vec<u8>);

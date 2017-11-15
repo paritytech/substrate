@@ -49,7 +49,6 @@ pub struct Body {
 	pub para_blocks: Vec<parachain::Proposal>,
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;

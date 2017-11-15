@@ -14,37 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Temporary crate for contracts implementations.
-//!
-//! This will be replaced with WASM contracts stored on-chain.
+//! Polkadot RPC interfaces.
 
 #![warn(missing_docs)]
 
+extern crate jsonrpc_core as rpc;
+extern crate polkadot_client as client;
 extern crate polkadot_primitives as primitives;
-extern crate polkadot_serializer as serializer;
 extern crate polkadot_state_machine as state_machine;
-extern crate serde;
 
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
-extern crate serde_derive;
+extern crate jsonrpc_macros;
 
+#[cfg(test)]
+extern crate polkadot_contracts;
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
 
-mod auth;
-mod balances;
-mod validator_set;
-
-pub mod error;
-pub mod executor;
+pub mod chain;
+pub mod state;
 
 #[cfg(test)]
 mod test_helpers;
-
-/// Creates new RustExecutor for contracts.
-pub fn executor() -> executor::RustExecutor {
-	executor::RustExecutor::default()
-}

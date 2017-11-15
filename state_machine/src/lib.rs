@@ -162,7 +162,7 @@ pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
 /// Externalities: pinned to specific active address.
-pub trait Externalities<Executor>: StaticExternalities<Executor> {
+pub trait Externalities<CodeExecutor>: StaticExternalities<CodeExecutor> {
 	/// Set storage of current contract being called.
 	fn set_storage(&mut self, key: H256, value: Vec<u8>);
 
@@ -171,7 +171,7 @@ pub trait Externalities<Executor>: StaticExternalities<Executor> {
 }
 
 /// Static externalities: used only for read-only requests.
-pub trait StaticExternalities<Executor> {
+pub trait StaticExternalities<CodeExecutor> {
 	/// Externalities error type.
 	type Error: Error;
 
@@ -190,7 +190,7 @@ pub trait StaticExternalities<Executor> {
 }
 
 /// Contract code executor.
-pub trait Executor: Sized {
+pub trait CodeExecutor: Sized {
 	/// Error type for contract execution.
 	type Error: Error;
 
@@ -219,7 +219,7 @@ fn transaction_context_address() -> Address { 0.into() }
 /// Execute a call using the given state backend, overlayed changes, and call executor.
 ///
 /// On an error, no prospective changes are written to the overlay.
-pub fn execute<B: backend::Backend, Exec: Executor>(
+pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	backend: &B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,

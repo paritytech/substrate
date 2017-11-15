@@ -16,14 +16,12 @@
 
 //! Rust executor possible errors.
 
-#![allow(missing_docs)]
-
 use serializer;
 use state_machine;
 
 error_chain! {
 	foreign_links {
-		InvalidData(serializer::Error);
+		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
 	}
 
 	errors {

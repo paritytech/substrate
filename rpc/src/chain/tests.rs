@@ -14,37 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Temporary crate for contracts implementations.
-//!
-//! This will be replaced with WASM contracts stored on-chain.
+use super::*;
 
-#![warn(missing_docs)]
+use test_helpers::Blockchain;
 
-extern crate polkadot_primitives as primitives;
-extern crate polkadot_serializer as serializer;
-extern crate polkadot_state_machine as state_machine;
-extern crate serde;
+#[test]
+fn should_return_header() {
+	let state = Blockchain::default();
 
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate serde_derive;
+	assert_matches!(
+		ChainApi::header(&state, 0.into()),
+		Ok(Some(ref x)) if x == &block::Header {
+			parent_hash: 0.into(),
+			state_root: 0.into(),
+			timestamp: 0,
+			number: 0,
+		}
+	);
 
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
-mod auth;
-mod balances;
-mod validator_set;
-
-pub mod error;
-pub mod executor;
-
-#[cfg(test)]
-mod test_helpers;
-
-/// Creates new RustExecutor for contracts.
-pub fn executor() -> executor::RustExecutor {
-	executor::RustExecutor::default()
+	assert_matches!(
+		ChainApi::header(&state, 5.into()),
+		Ok(None)
+	);
 }

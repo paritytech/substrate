@@ -18,7 +18,7 @@
 
 use primitives::contract::{CallData, OutData};
 use serializer::{from_slice as de, to_vec as ser};
-use state_machine::{StaticExternalities, Externalities, Executor};
+use state_machine::{StaticExternalities, Externalities, CodeExecutor};
 
 use error::{Error, ErrorKind, Result};
 use auth;
@@ -47,7 +47,7 @@ impl RustExecutor {
 	pub const VALIDATOR_SET: u8 = 3;
 }
 
-impl Executor for RustExecutor {
+impl CodeExecutor for RustExecutor {
 	type Error = Error;
 
 	fn call_static<E: StaticExternalities<Self>>(

@@ -14,37 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Temporary crate for contracts implementations.
-//!
-//! This will be replaced with WASM contracts stored on-chain.
+//! Polkadot client possible errors.
 
-#![warn(missing_docs)]
+use primitives::block;
+use state_machine;
 
-extern crate polkadot_primitives as primitives;
-extern crate polkadot_serializer as serializer;
-extern crate polkadot_state_machine as state_machine;
-extern crate serde;
+error_chain! {
+	errors {
+		/// Backend error.
+		Backend {
+			description("Unrecoverable backend error"),
+			display("Backend error"),
+		}
 
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate serde_derive;
+		/// Unknown block.
+		UnknownBlock(h: block::HeaderHash) {
+			description("unknown block"),
+			display("UnknownBlock: {}", h),
+		}
 
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
+		/// Execution error.
+		Execution(e: Box<state_machine::Error>) {
+			description("execution error"),
+			display("Execution: {}", e),
+		}
+	}
+}
 
-mod auth;
-mod balances;
-mod validator_set;
-
-pub mod error;
-pub mod executor;
-
-#[cfg(test)]
-mod test_helpers;
-
-/// Creates new RustExecutor for contracts.
-pub fn executor() -> executor::RustExecutor {
-	executor::RustExecutor::default()
+// TODO [ToDr] Temporary, state_machine::Error should be a regular error not Box.
+impl From<Box<state_machine::Error>> for Error {
+	fn from(e: Box<state_machine::Error>) -> Self {
+		ErrorKind::Execution(e).into()
+	}
 }

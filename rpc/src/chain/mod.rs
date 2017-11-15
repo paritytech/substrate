@@ -14,37 +14,32 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Temporary crate for contracts implementations.
-//!
-//! This will be replaced with WASM contracts stored on-chain.
+//! Polkadot blockchain API.
 
-#![warn(missing_docs)]
+use primitives::block;
+use client;
 
-extern crate polkadot_primitives as primitives;
-extern crate polkadot_serializer as serializer;
-extern crate polkadot_state_machine as state_machine;
-extern crate serde;
-
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate serde_derive;
+mod error;
 
 #[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
+mod tests;
 
-mod auth;
-mod balances;
-mod validator_set;
+use self::error::{Result, ResultExt};
 
-pub mod error;
-pub mod executor;
+build_rpc_trait! {
+	/// Polkadot blockchain API
+	pub trait ChainApi {
+		/// Get header of a relay chain block.
+		#[rpc(name = "chain_getHeader")]
+		fn header(&self, block::HeaderHash) -> Result<Option<block::Header>>;
+	}
+}
 
-#[cfg(test)]
-mod test_helpers;
-
-/// Creates new RustExecutor for contracts.
-pub fn executor() -> executor::RustExecutor {
-	executor::RustExecutor::default()
+impl<B> ChainApi for B where
+	B: client::Blockchain + Send + Sync + 'static,
+	B::Error: ::std::error::Error + Send,
+{
+	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
+		self.header(&hash).chain_err(|| "Blockchain error")
+	}
 }

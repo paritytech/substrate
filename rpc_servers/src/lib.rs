@@ -14,37 +14,33 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Temporary crate for contracts implementations.
-//!
-//! This will be replaced with WASM contracts stored on-chain.
+//! Polkadot RPC servers.
 
-#![warn(missing_docs)]
+#[warn(missing_docs)]
 
-extern crate polkadot_primitives as primitives;
-extern crate polkadot_serializer as serializer;
-extern crate polkadot_state_machine as state_machine;
-extern crate serde;
+extern crate polkadot_rpc as apis;
 
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate serde_derive;
+extern crate jsonrpc_core as rpc;
+extern crate jsonrpc_http_server as http;
 
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
+use std::io;
 
-mod auth;
-mod balances;
-mod validator_set;
+/// Construct rpc `IoHandler`
+pub fn rpc_handler<S>(state: S) -> rpc::IoHandler where
+	S: apis::state::StateApi,
+{
+	let mut io = rpc::IoHandler::new();
+	io.extend_with(state.to_delegate());
+	io
+}
 
-pub mod error;
-pub mod executor;
-
-#[cfg(test)]
-mod test_helpers;
-
-/// Creates new RustExecutor for contracts.
-pub fn executor() -> executor::RustExecutor {
-	executor::RustExecutor::default()
+/// Start HTTP server listening on given address.
+pub fn start_http(
+	addr: &std::net::SocketAddr,
+	io: rpc::IoHandler,
+) -> io::Result<http::Server> {
+	http::ServerBuilder::new(io)
+		.threads(4)
+		.rest_api(http::RestApi::Unsecure)
+		.start_http(addr)
 }
