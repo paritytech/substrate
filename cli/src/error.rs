@@ -14,33 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust executor possible errors.
-
-use serializer;
-use state_machine;
+//! Initialization errors.
 
 error_chain! {
 	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
-	}
-
-	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
-		}
-
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
-
-		/// Externalities have failed.
-		Externalities(e: Box<state_machine::Error>) {
-			description("externalities failure"),
-			display("Externalities error: {}", e),
-		}
+		Io(::std::io::Error) #[doc="IO error"];
+		Cli(::clap::Error) #[doc="CLI error"];
 	}
 }

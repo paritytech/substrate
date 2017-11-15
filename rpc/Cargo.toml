@@ -1,0 +1,16 @@
+[package]
+name = "polkadot-rpc"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+error-chain = "0.11"
+jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
+jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
+polkadot-client = { path = "../client", version = "0.1" }
+polkadot-primitives = { path = "../primitives", version = "0.1" }
+polkadot-state-machine = { path = "../state_machine", version = "0.1" }
+
+[dev-dependencies]
+assert_matches = "1.1"
+polkadot-contracts = { path = "../contracts", version = "0.1" }

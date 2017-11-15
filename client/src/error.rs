@@ -14,33 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust executor possible errors.
+//! Polkadot client possible errors.
 
-use serializer;
+use primitives::block;
 use state_machine;
 
 error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
-	}
-
 	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
+		/// Backend error.
+		Backend {
+			description("Unrecoverable backend error"),
+			display("Backend error"),
 		}
 
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
+		/// Unknown block.
+		UnknownBlock(h: block::HeaderHash) {
+			description("unknown block"),
+			display("UnknownBlock: {}", h),
 		}
 
-		/// Externalities have failed.
-		Externalities(e: Box<state_machine::Error>) {
-			description("externalities failure"),
-			display("Externalities error: {}", e),
+		/// Execution error.
+		Execution(e: Box<state_machine::Error>) {
+			description("execution error"),
+			display("Execution: {}", e),
 		}
+	}
+}
+
+// TODO [ToDr] Temporary, state_machine::Error should be a regular error not Box.
+impl From<Box<state_machine::Error>> for Error {
+	fn from(e: Box<state_machine::Error>) -> Self {
+		ErrorKind::Execution(e).into()
 	}
 }

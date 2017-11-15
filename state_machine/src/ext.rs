@@ -16,13 +16,13 @@
 
 //! Conrete externalities implementation.
 
-use std::fmt;
+use std::{error, fmt};
 
 use backend::Backend;
 use primitives::Address;
 use primitives::contract::{CallData, OutData};
 use primitives::hash::H256;
-use {Externalities, Executor, StaticExternalities, OverlayedChanges};
+use {Externalities, CodeExecutor, StaticExternalities, OverlayedChanges};
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -42,6 +42,15 @@ impl<B: fmt::Display, E: fmt::Display> fmt::Display for Error<B, E> {
 	}
 }
 
+impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
+	fn description(&self) -> &str {
+		match *self {
+			Error::Backend(..) => "backend error",
+			Error::Executor(..) => "executor error",
+		}
+	}
+}
+
 /// Wraps a read-only backend, call executor, and current overlayed changes.
 pub struct Ext<'a, B: 'a, E: 'a> {
 	/// The overlayed changes to write to.
@@ -55,7 +64,7 @@ pub struct Ext<'a, B: 'a, E: 'a> {
 }
 
 impl<'a, B: 'a, E: 'a> StaticExternalities<E> for Ext<'a, B, E>
-	where B: Backend, E: Executor
+	where B: Backend, E: CodeExecutor
 {
 	type Error = Error<B::Error, E::Error>;
 
@@ -89,7 +98,7 @@ impl<'a, B: 'a, E: 'a> StaticExternalities<E> for Ext<'a, B, E>
 }
 
 impl<'a, B: 'a, E: 'a> Externalities<E> for Ext<'a, B, E>
-	where B: Backend, E: Executor
+	where B: Backend, E: CodeExecutor
 {
 	fn set_storage(&mut self, key: H256, value: Vec<u8>) {
 		self.overlay.set_storage(self.local, key, value);
@@ -130,7 +139,7 @@ struct StaticExt<'a, B: 'a, E: 'a> {
 }
 
 impl<'a, B: 'a, E: 'a> StaticExternalities<E> for StaticExt<'a, B, E>
-	where B: Backend, E: Executor
+	where B: Backend, E: CodeExecutor
 {
 	type Error = Error<B::Error, E::Error>;
 

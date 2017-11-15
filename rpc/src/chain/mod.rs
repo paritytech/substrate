@@ -14,33 +14,32 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust executor possible errors.
+//! Polkadot blockchain API.
 
-use serializer;
-use state_machine;
+use primitives::block;
+use client;
 
-error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
+mod error;
+
+#[cfg(test)]
+mod tests;
+
+use self::error::{Result, ResultExt};
+
+build_rpc_trait! {
+	/// Polkadot blockchain API
+	pub trait ChainApi {
+		/// Get header of a relay chain block.
+		#[rpc(name = "chain_getHeader")]
+		fn header(&self, block::HeaderHash) -> Result<Option<block::Header>>;
 	}
+}
 
-	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
-		}
-
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
-
-		/// Externalities have failed.
-		Externalities(e: Box<state_machine::Error>) {
-			description("externalities failure"),
-			display("Externalities error: {}", e),
-		}
+impl<B> ChainApi for B where
+	B: client::Blockchain + Send + Sync + 'static,
+	B::Error: ::std::error::Error + Send,
+{
+	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
+		self.header(&hash).chain_err(|| "Blockchain error")
 	}
 }
