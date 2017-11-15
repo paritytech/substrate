@@ -18,8 +18,13 @@
 
 #![warn(missing_docs)]
 
-extern crate polkadot_cli;
+extern crate polkadot_cli as cli;
 
-fn main() {
-	polkadot_cli::main();
+#[macro_use]
+extern crate error_chain;
+
+quick_main!(run);
+
+fn run() -> cli::error::Result<()> {
+	cli::run(::std::env::args())
 }

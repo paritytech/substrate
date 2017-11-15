@@ -1,10 +1,15 @@
 [package]
 name = "polkadot-cli"
 version = "0.1.0"
-authors = ["Parity Team <admin@parity.io>"]
+authors = ["Parity Technologies <admin@parity.io>"]
 description = "Polkadot node implementation in Rust."
 
 [dependencies]
 clap = { version = "2.27", features = ["yaml"] }
 env_logger = "0.4"
+error-chain = "0.11"
 log = "0.3"
+polkadot-client = { path = "../client", version = "0.1" }
+polkadot-contracts = { path = "../contracts", version = "0.1" }
+polkadot-primitives = { path = "../primitives", version = "0.1" }
+polkadot-rpc-servers = { path = "../rpc_servers", version = "0.1" }

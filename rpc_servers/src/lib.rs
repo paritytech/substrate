@@ -14,33 +14,33 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust executor possible errors.
+//! Polkadot RPC servers.
 
-use serializer;
-use state_machine;
+#[warn(missing_docs)]
 
-error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
-	}
+extern crate polkadot_rpc as apis;
 
-	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
-		}
+extern crate jsonrpc_core as rpc;
+extern crate jsonrpc_http_server as http;
 
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
+use std::io;
 
-		/// Externalities have failed.
-		Externalities(e: Box<state_machine::Error>) {
-			description("externalities failure"),
-			display("Externalities error: {}", e),
-		}
-	}
+/// Construct rpc `IoHandler`
+pub fn rpc_handler<S>(state: S) -> rpc::IoHandler where
+	S: apis::state::StateApi,
+{
+	let mut io = rpc::IoHandler::new();
+	io.extend_with(state.to_delegate());
+	io
+}
+
+/// Start HTTP server listening on given address.
+pub fn start_http(
+	addr: &std::net::SocketAddr,
+	io: rpc::IoHandler,
+) -> io::Result<http::Server> {
+	http::ServerBuilder::new(io)
+		.threads(4)
+		.rest_api(http::RestApi::Unsecure)
+		.start_http(addr)
 }

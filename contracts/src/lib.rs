@@ -42,6 +42,6 @@ pub mod error;
 pub mod executor;
 
 /// Creates new RustExecutor for contracts.
-pub fn new() -> executor::RustExecutor {
+pub fn executor() -> executor::RustExecutor {
 	executor::RustExecutor::default()
 }
