@@ -45,7 +45,8 @@ pub struct EgressPosts(pub ::std::collections::BTreeMap<::parachain::Id, Vec<::p
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 
-/// A parachain block proposal.
+/// A parachain block candidate.
+/// This is passed from
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -55,12 +56,38 @@ pub struct Candidate {
 
 	/// Consolidated ingress queues.
 	///
-	/// This will always be the same for each valid proposal building on the
+	/// This will always be the same for each valid candidate building on the
 	/// same relay chain block.
 	pub ingress: ConsolidatedIngress,
 
+	/// Data necessary to prove validity of the head data.
+	pub proof: RawProof,
+}
+
+/// A parachain block candidate receipt.
+///
+/// This is what is actually included on the relay-chain.
+///
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct CandidateReceipt {
+	/// Parachain ID
+	pub id: Id,
+
+	/// Collator ID
+	pub collator: super::Address,
+
+	/// Head data produced by the validation function.
+	pub head_data: HeadData,
+
+	// TODO: balance uploads and fees
+
+	/// Egress queue roots, sorted by chain ID.
+	pub egress_roots: Vec<(Id, ::hash::H256)>,
+
 	/// Hash of data necessary to prove validity of the head data.
-	pub proof_hash: ProofHash,
+	pub proof: ProofHash,
 }
 
 /// Parachain head data raw bytes wrapper type.

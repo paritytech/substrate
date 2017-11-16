@@ -76,7 +76,7 @@ mod tests {
 				parachain::Candidate {
 					id: 10.into(),
 					ingress: Default::default(),
-					proof_hash: 5.into(),
+					proof: ::parachain::RawProof(vec![1, 3, 5, 8]),
 				}
 			],
 		}), r#"{
@@ -84,7 +84,7 @@ mod tests {
     {
       "id": 10,
       "ingress": [],
-      "proofHash": "0x0000000000000000000000000000000000000000000000000000000000000005"
+      "proof": "0x01030508"
     }
   ]
 }"#);
