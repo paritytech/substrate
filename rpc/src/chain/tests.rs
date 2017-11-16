@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+use primitives::parachain;
 use super::*;
 
 use test_helpers::Blockchain;
@@ -26,9 +27,10 @@ fn should_return_header() {
 		ChainApi::header(&state, 0.into()),
 		Ok(Some(ref x)) if x == &block::Header {
 			parent_hash: 0.into(),
-			state_root: 0.into(),
-			timestamp: 0,
 			number: 0,
+			state_root: 0.into(),
+			parachain_activity: parachain::Activity(vec![0]),
+			logs: vec![],
 		}
 	);
 

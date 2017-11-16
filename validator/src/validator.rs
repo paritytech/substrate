@@ -45,14 +45,13 @@ impl validator::Validator for Validator {
 
 	fn validate(
 		&self,
-		messages: &validator::IngressPosts,
-		proof: &parachain::Proof,
+		candidate: &parachain::Candidate,
 		code: &[u8],
-	) -> Result<validator::ProofValidity> {
+	) -> Result<validator::ValidationResult> {
 		ensure!(code.len() == 1, ErrorKind::InvalidCode(format!("The code should be a single byte.")));
 
 		match self.codes.get(code[0] as usize) {
-			Some(code) => code.check(messages, proof),
+			Some(code) => code.check(candidate),
 			None => bail!(ErrorKind::InvalidCode(format!("Unknown parachain code."))),
 		}
 	}
@@ -60,20 +59,30 @@ impl validator::Validator for Validator {
 
 /// Simplified parachain code verification
 trait Code: fmt::Debug {
-	/// Given bytes of messages and proof determine if the proof is valid and return egress posts.
-	fn check(&self, messages: &validator::IngressPosts, proof: &parachain::Proof) -> Result<validator::ProofValidity>;
+	/// Given parachain candidate block data returns it's validity
+	/// and possible generated egress posts.
+	fn check(&self, candidate: &parachain::Candidate) -> Result<validator::ValidationResult>;
 }
 
-impl<M, P, T> Code for T where
+impl<M, B, T, R> Code for T where
 	M: DeserializeOwned,
-	P: DeserializeOwned,
-	T: ParachainCode<Messages=M, Proof=P>,
+	B: DeserializeOwned,
+	R: Into<validator::ValidationResult>,
+	T: ParachainCode<Message=M, BlockData=B, Result=R>,
 {
-	fn check(&self, messages: &validator::IngressPosts, proof: &parachain::Proof) -> Result<validator::ProofValidity> {
-		let messages = serializer::from_slice(&messages.0)?;
-		let proof = serializer::from_slice(&proof.raw().0)?;
+	fn check(&self, candidate: &parachain::Candidate) -> Result<validator::ValidationResult> {
+		let candidate = candidate.clone();
+		let index = candidate.parachain_index;
+		let signature = candidate.collator_signature;
+		let messages = candidate.unprocessed_ingress.into_iter()
+			.map(|(block, vec)| Ok((block, vec.into_iter()
+				 .map(|msg| serializer::from_slice(&msg.0).map_err(Into::into))
+				 .collect::<Result<Vec<_>>>()?
+			)))
+			.collect::<Result<Vec<_>>>()?;
+		let block_data = serializer::from_slice(&candidate.block.0)?;
 
-		Ok(self.check(messages, proof).into())
+		Ok(self.check(index, signature, messages, block_data)?.into())
 	}
 }
 

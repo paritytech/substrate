@@ -16,19 +16,28 @@
 
 use std::fmt;
 
-use primitives::validator;
+use primitives::{parachain, validator, Signature};
 use serde::de::DeserializeOwned;
+
+use error::Result;
 
 /// Parachain code implementation.
 pub trait ParachainCode: fmt::Debug {
-	/// Deserialized messages type.
-	type Messages: DeserializeOwned;
-	/// Deserialized proof type.
-	type Proof: DeserializeOwned;
+	/// Deserialized message type.
+	type Message: DeserializeOwned;
+	/// Deserialized block data type.
+	type BlockData: DeserializeOwned;
+	/// Result
+	type Result: Into<validator::ValidationResult>;
 
 	/// Given decoded messages and proof validate it and return egress posts.
-	fn check(&self, messages: Self::Messages, proof: Self::Proof) ->
-		Option<(validator::IngressPostsDelta, validator::EgressPosts)>;
+	fn check(
+		&self,
+		id: parachain::Id,
+		signature: Signature,
+		messages: Vec<(u64, Vec<Self::Message>)>,
+		block_data: Self::BlockData,
+	) -> Result<Self::Result>;
 }
 
 /// Dummy implementation of the first parachain validation.
@@ -36,11 +45,18 @@ pub trait ParachainCode: fmt::Debug {
 pub struct ParaChain1;
 
 impl ParachainCode for ParaChain1 {
-	type Messages = ();
-	type Proof = ();
+	type Message = ();
+	type BlockData = ();
+	type Result = validator::ValidationResult;
 
-	fn check(&self, _messages: Self::Messages, _proof: Self::Proof)
-		-> Option<(validator::IngressPostsDelta, validator::EgressPosts)> {
-		None
+	fn check(
+		&self,
+		_id: parachain::Id,
+		_signature: Signature,
+		_messages: Vec<(u64, Vec<Self::Message>)>,
+		_block_data: Self::BlockData,
+	) -> Result<Self::Result>
+	{
+		unimplemented!()
 	}
 }
