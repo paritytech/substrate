@@ -27,6 +27,10 @@ pub struct EgressPost(#[serde(with="bytes")] pub Vec<u8>);
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BalanceUpload(#[serde(with="bytes")] pub Vec<u8>);
 
+/// Balance download.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BalanceDownload(#[serde(with="bytes")] pub Vec<u8>);
+
 /// The result of parachain validation.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,8 +55,12 @@ pub trait Validator {
 	/// In case of success produces egress posts.
 	fn validate(
 		&self,
-		candidate: &parachain::Candidate,
 		code: &[u8],
+		// TODO [ToDr] actually consolidate
+		consolidated_ingress: &[(u64, Vec<parachain::Message>)],
+		balance_downloads: &[BalanceDownload],
+		block_data: &parachain::BlockData,
+		previous_head_data: &parachain::HeadData,
 	) -> Result<ValidationResult, Self::Error>;
 }
 

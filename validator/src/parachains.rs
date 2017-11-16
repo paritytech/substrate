@@ -16,7 +16,7 @@
 
 use std::fmt;
 
-use primitives::{parachain, validator, Signature};
+use primitives::validator;
 use serde::de::DeserializeOwned;
 
 use error::Result;
@@ -25,18 +25,22 @@ use error::Result;
 pub trait ParachainCode: fmt::Debug {
 	/// Deserialized message type.
 	type Message: DeserializeOwned;
+	/// Balance download.
+	type Download: DeserializeOwned;
 	/// Deserialized block data type.
 	type BlockData: DeserializeOwned;
+	/// Parachain head data.
+	type HeadData: DeserializeOwned;
 	/// Result
 	type Result: Into<validator::ValidationResult>;
 
 	/// Given decoded messages and proof validate it and return egress posts.
 	fn check(
 		&self,
-		id: parachain::Id,
-		signature: Signature,
 		messages: Vec<(u64, Vec<Self::Message>)>,
+		downloads: Vec<Self::Download>,
 		block_data: Self::BlockData,
+		head_data: Self::HeadData,
 	) -> Result<Self::Result>;
 }
 
@@ -46,15 +50,17 @@ pub struct ParaChain1;
 
 impl ParachainCode for ParaChain1 {
 	type Message = ();
+	type Download = ();
 	type BlockData = ();
+	type HeadData = ();
 	type Result = validator::ValidationResult;
 
 	fn check(
 		&self,
-		_id: parachain::Id,
-		_signature: Signature,
 		_messages: Vec<(u64, Vec<Self::Message>)>,
+		_downloads: Vec<Self::Download>,
 		_block_data: Self::BlockData,
+		_head_data: Self::HeadData,
 	) -> Result<Self::Result>
 	{
 		unimplemented!()

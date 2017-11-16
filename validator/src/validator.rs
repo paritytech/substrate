@@ -45,13 +45,16 @@ impl validator::Validator for Validator {
 
 	fn validate(
 		&self,
-		candidate: &parachain::Candidate,
 		code: &[u8],
+		consolidated_ingress: &[(u64, Vec<parachain::Message>)],
+		balance_downloads: &[validator::BalanceDownload],
+		block_data: &parachain::BlockData,
+		previous_head_data: &parachain::HeadData,
 	) -> Result<validator::ValidationResult> {
 		ensure!(code.len() == 1, ErrorKind::InvalidCode(format!("The code should be a single byte.")));
 
 		match self.codes.get(code[0] as usize) {
-			Some(code) => code.check(candidate),
+			Some(code) => code.check(consolidated_ingress, balance_downloads, block_data, previous_head_data),
 			None => bail!(ErrorKind::InvalidCode(format!("Unknown parachain code."))),
 		}
 	}
@@ -61,7 +64,13 @@ impl validator::Validator for Validator {
 trait Code: fmt::Debug {
 	/// Given parachain candidate block data returns it's validity
 	/// and possible generated egress posts.
-	fn check(&self, candidate: &parachain::Candidate) -> Result<validator::ValidationResult>;
+	fn check(
+		&self,
+		consolidated_ingress: &[(u64, Vec<parachain::Message>)],
+		balance_downloads: &[validator::BalanceDownload],
+		block_data: &parachain::BlockData,
+		previous_head_data: &parachain::HeadData,
+	) -> Result<validator::ValidationResult>;
 }
 
 impl<M, B, T, R> Code for T where
@@ -70,19 +79,26 @@ impl<M, B, T, R> Code for T where
 	R: Into<validator::ValidationResult>,
 	T: ParachainCode<Message=M, BlockData=B, Result=R>,
 {
-	fn check(&self, candidate: &parachain::Candidate) -> Result<validator::ValidationResult> {
-		let candidate = candidate.clone();
-		let index = candidate.parachain_index;
-		let signature = candidate.collator_signature;
-		let messages = candidate.unprocessed_ingress.into_iter()
-			.map(|(block, vec)| Ok((block, vec.into_iter()
+	fn check(
+		&self,
+		consolidated_ingress: &[(u64, Vec<parachain::Message>)],
+		balance_downloads: &[validator::BalanceDownload],
+		block_data: &parachain::BlockData,
+		previous_head_data: &parachain::HeadData,
+	) -> Result<validator::ValidationResult> {
+		let messages = consolidated_ingress.iter()
+			.map(|&(ref block, ref vec)| Ok((*block, vec.iter()
 				 .map(|msg| serializer::from_slice(&msg.0).map_err(Into::into))
 				 .collect::<Result<Vec<_>>>()?
 			)))
 			.collect::<Result<Vec<_>>>()?;
-		let block_data = serializer::from_slice(&candidate.block.0)?;
+		let downloads = balance_downloads.iter()
+			.map(|download| serializer::from_slice(&download.0).map_err(Into::into))
+			.collect::<Result<Vec<_>>>()?;
+		let block_data = serializer::from_slice(&block_data.0)?;
+		let head_data = serializer::from_slice(&previous_head_data.0)?;
 
-		Ok(self.check(index, signature, messages, block_data)?.into())
+		Ok(self.check(messages, downloads, block_data, head_data)?.into())
 	}
 }
 
