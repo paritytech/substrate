@@ -5,6 +5,7 @@ authors = ["Parity Team <admin@parity.io>"]
 
 [dependencies]
 polkadot-cli = { path = "cli", version = "0.1" }
+polkadot-network = { path = "network" }
 
 [workspace]
 members = [
@@ -13,4 +14,5 @@ members = [
 	"serializer",
 	"state_machine",
 	"validator",
+	"network",
 ]

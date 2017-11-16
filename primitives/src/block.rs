@@ -19,8 +19,14 @@
 use hash::H256;
 use parachain;
 
+/// Used to refer to a block number.
+pub type Number = u64;
+
 /// Hash used to refer to a block hash.
 pub type HeaderHash = H256;
+
+/// Hash used to refer to a transaction hash.
+pub type TransactionHash = H256;
 
 /// A relay chain block header.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,7 +40,7 @@ pub struct Header {
 	/// Unix time at which this header was produced.
 	pub timestamp: u64,
 	/// Block number.
-	pub number: u64,
+	pub number: Number,
 }
 
 /// A relay chain block body.
