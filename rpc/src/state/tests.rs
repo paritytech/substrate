@@ -14,33 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust executor possible errors.
+use super::*;
+use polkadot_contracts as contracts;
 
-use serializer;
-use state_machine;
+use self::error::{Error, ErrorKind};
+use test_helpers::Blockchain;
 
-error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
-	}
+#[test]
+fn should_return_storage() {
+	let client = Client::new(Blockchain::default(), contracts::executor());
 
-	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
-		}
+	assert_matches!(
+		StateApi::storage(&client, 5.into(), 10.into(), 0.into()),
+		Ok(ref x) if x.0.is_empty()
+	)
+}
 
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
+#[test]
+fn should_call_contract() {
+	// TODO [ToDr] Fix test after we are able to mock state.
+	let client = Client::new(Blockchain::default(), contracts::executor());
 
-		/// Externalities have failed.
-		Externalities(e: Box<state_machine::Error>) {
-			description("externalities failure"),
-			display("Externalities error: {}", e),
-		}
-	}
+	assert_matches!(
+		StateApi::call(&client, 1.into(), "balanceOf".into(), CallData(vec![1,2,3]), 0.into()),
+		Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
+	)
 }

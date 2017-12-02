@@ -1,7 +1,7 @@
 [package]
 name = "polkadot-primitives"
 version = "0.1.0"
-authors = ["Parity Team <admin@parity.io>"]
+authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 crunchy = "0.1"

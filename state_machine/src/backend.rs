@@ -16,7 +16,7 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use std::fmt;
+use std::{error, fmt};
 
 use primitives::Address;
 use primitives::hash::H256;
@@ -58,6 +58,10 @@ impl fmt::Display for Void {
 	fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
 		match *self {}
 	}
+}
+
+impl error::Error for Void {
+	fn description(&self) -> &str { "unreachable error" }
 }
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for

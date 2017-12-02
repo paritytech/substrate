@@ -19,34 +19,65 @@
 #![warn(missing_docs)]
 
 extern crate env_logger;
+extern crate polkadot_client as client;
+extern crate polkadot_contracts as contracts;
+extern crate polkadot_primitives as primitives;
+extern crate polkadot_rpc_servers as rpc;
 
 #[macro_use]
 extern crate clap;
 #[macro_use]
+extern crate error_chain;
+#[macro_use]
 extern crate log;
 
-/// Parse command line arguments and start the node.
-pub fn main() {
-	let yaml = load_yaml!("./cli.yml");
-	let matches = clap::App::from_yaml(yaml).get_matches();
+pub mod error;
 
+/// Parse command line arguments and start the node.
+///
+/// IANA unassigned port ranges that we could use:
+/// 6717-6766		Unassigned
+/// 8504-8553		Unassigned
+/// 9556-9591		Unassigned
+/// 9803-9874		Unassigned
+/// 9926-9949		Unassigned
+pub fn run<I, T>(args: I) -> error::Result<()> where
+	I: IntoIterator<Item = T>,
+	T: Into<std::ffi::OsString> + Clone,
+{
+	let yaml = load_yaml!("./cli.yml");
+	let matches = clap::App::from_yaml(yaml).get_matches_from_safe(args)?;
+
+	// TODO [ToDr] Split paremeters parsing from actual execution.
 	let log_pattern = matches.value_of("log").unwrap_or("");
 	init_logger(log_pattern);
 
+	// Create client
+	let blockchain = DummyBlockchain;
+	let executor = contracts::executor();
+	let client = client::Client::new(blockchain, executor);
+
+	let address = "127.0.0.1:9933".parse().unwrap();
+	let handler = rpc::rpc_handler(client);
+	let server = rpc::start_http(&address, handler)?;
+
 	if let Some(_) = matches.subcommand_matches("collator") {
 		info!("Starting collator.");
-		return;
+		server.wait();
+		return Ok(());
 	}
 
 	if let Some(_) = matches.subcommand_matches("validator") {
 		info!("Starting validator.");
-		return;
+		server.wait();
+		return Ok(());
 	}
 
 	println!("No command given.\n");
 	let _ = clap::App::from_yaml(yaml).print_long_help();
-}
 
+	Ok(())
+}
 
 fn init_logger(pattern: &str) {
 	let mut builder = env_logger::LogBuilder::new();
@@ -63,4 +94,19 @@ fn init_logger(pattern: &str) {
 
 
 	builder.init().expect("Logger initialized only once.");
+}
+
+#[derive(Debug, Default)]
+struct DummyBlockchain;
+
+impl client::Blockchain for DummyBlockchain {
+	type Error = ();
+
+	fn latest_hash(&self) -> Result<primitives::block::HeaderHash, Self::Error> {
+		Ok(0.into())
+	}
+
+	fn header(&self, _hash: &primitives::block::HeaderHash) -> Result<Option<primitives::block::Header>, Self::Error> {
+		Ok(None)
+	}
 }

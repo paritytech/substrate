@@ -14,33 +14,32 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust executor possible errors.
-
-use serializer;
-use state_machine;
+use client;
+use rpc;
 
 error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
+	links {
+		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
 	}
 
 	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
+		/// Not implemented yet
+		Unimplemented {
+			description("not implemented yet"),
+			display("Method Not Implemented"),
 		}
+	}
+}
 
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
-
-		/// Externalities have failed.
-		Externalities(e: Box<state_machine::Error>) {
-			description("externalities failure"),
-			display("Externalities error: {}", e),
+impl From<Error> for rpc::Error {
+	fn from(e: Error) -> Self {
+		match e {
+			Error(ErrorKind::Unimplemented, _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(-1),
+				message: "Not implemented yet".into(),
+				data: None,
+			},
+			_ => rpc::Error::internal_error(),
 		}
 	}
 }
