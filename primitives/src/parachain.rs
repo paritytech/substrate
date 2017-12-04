@@ -30,58 +30,50 @@ impl From<u64> for Id {
 	fn from(x: u64) -> Self { Id(x) }
 }
 
-/// A parachain block proposal.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// Candidate parachain block.
+///
+/// https://github.com/w3f/polkadot-spec/blob/master/spec.md#candidate-para-chain-block
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct Proposal {
+pub struct Candidate {
 	/// The ID of the parachain this is a proposal for.
-	pub parachain: Id,
-	/// Parachain block header bytes.
-	pub header: Header,
-	/// Hash of data necessary to prove validity of the header.
-	pub proof_hash: ProofHash,
+	pub parachain_index: Id,
+	/// Collator's signature
+	pub collator_signature: ::Signature,
+	/// Unprocessed ingress queue.
+	///
+	/// Ordered by parachain ID and block number.
+	pub unprocessed_ingress: Vec<(u64, Vec<Message>)>,
+	/// Block data
+	pub block: BlockData,
 }
+
+/// Parachain ingress queue message.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
+
+/// Parachain block data.
+///
+/// contains everything required to validate para-block, may contain block and witness data
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct BlockData(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Parachain header raw bytes wrapper type.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Header(#[serde(with="bytes")] pub Vec<u8>);
 
-/// Hash used to refer to proof of block header.
-pub type ProofHash = ::hash::H256;
-
-/// Raw proof data.
+/// Parachain head data included in the chain.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RawProof(#[serde(with="bytes")] pub Vec<u8>);
-
-impl RawProof {
-	/// Compute and store the hash of the proof.
-	pub fn into_proof(self) -> Proof {
-		let hash = ::hash(&self.0);
-		Proof(self, hash)
-	}
-}
-
-/// Parachain proof data.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Proof(RawProof, ProofHash);
-
-impl Proof {
-	/// Get raw proof data.
-	pub fn raw(&self) -> &RawProof { &self.0 }
-
-	/// Get hash of proof data.
-	pub fn hash(&self) -> &ProofHash { &self.1 }
-
-	/// Decompose the proof back into raw data and hash.
-	pub fn into_inner(self) -> (RawProof, ProofHash) {
-		(self.0, self.1)
-	}
-}
+pub struct HeadData(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Parachain validation code.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidationCode(#[serde(with="bytes")] pub Vec<u8>);
+
+/// Activitiy bit field
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Activity(#[serde(with="bytes")] pub Vec<u8>);
 
 #[cfg(test)]
 mod tests {
@@ -89,13 +81,34 @@ mod tests {
 	use polkadot_serializer as ser;
 
 	#[test]
-	fn test_proof_serialization() {
-		assert_eq!(
-			ser::to_string_pretty(&Proof(RawProof(vec![1,2,3]), 5.into())),
-			r#"[
-  "0x010203",
-  "0x0000000000000000000000000000000000000000000000000000000000000005"
-]"#
-		)
+	fn test_candidate() {
+		assert_eq!(ser::to_string_pretty(&Candidate {
+			parachain_index: 5.into(),
+			collator_signature: 10.into(),
+			unprocessed_ingress: vec![
+				(1, vec![Message(vec![2])]),
+				(2, vec![Message(vec![2]), Message(vec![3])]),
+			],
+			block: BlockData(vec![1, 2, 3]),
+    }), r#"{
+  "parachainIndex": 5,
+  "collatorSignature": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a",
+  "unprocessedIngress": [
+    [
+      1,
+      [
+        "0x02"
+      ]
+    ],
+    [
+      2,
+      [
+        "0x02",
+        "0x03"
+      ]
+    ]
+  ],
+  "block": "0x010203"
+}"#);
 	}
 }
