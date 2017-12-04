@@ -15,7 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use client;
-use primitives::block;
+use primitives::{block, parachain};
 
 /// Temporary dummy blockchain implementation for tests.
 #[derive(Debug, Default)]
@@ -33,10 +33,11 @@ impl client::Blockchain for Blockchain {
 			None
 		} else {
 			Some(block::Header {
-				number: 0,
 				parent_hash: 0.into(),
+				number: 0,
 				state_root: 0.into(),
-				timestamp: 0,
+				parachain_activity: parachain::Activity(vec![0]),
+				logs: vec![],
 			})
 		})
 	}
