@@ -46,7 +46,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	T: Into<std::ffi::OsString> + Clone,
 {
 	let yaml = load_yaml!("./cli.yml");
-	let matches = clap::App::from_yaml(yaml).get_matches_from_safe(args)?;
+	let matches = clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args)?;
 
 	// TODO [ToDr] Split paremeters parsing from actual execution.
 	let log_pattern = matches.value_of("log").unwrap_or("");
