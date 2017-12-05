@@ -18,7 +18,7 @@ use primitives::Address;
 use state_machine::StaticExternalities;
 
 use error::Result;
-use executor::RustExecutor;
+use rust_executor::RustExecutor;
 
 /// Harcoded validator set contract.
 #[derive(Debug, Default)]

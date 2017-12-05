@@ -18,7 +18,7 @@ use primitives::Address;
 use state_machine::StaticExternalities;
 
 use error::Result;
-use executor::RustExecutor;
+use rust_executor::RustExecutor;
 
 /// Data and some sort of Authentication Data
 type DataAndAuth = (Vec<u8>, Vec<u8>);

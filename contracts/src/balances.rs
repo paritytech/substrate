@@ -19,7 +19,7 @@ use primitives::uint::U256;
 use state_machine::{Externalities, StaticExternalities};
 
 use error::Result;
-use executor::RustExecutor;
+use rust_executor::RustExecutor;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Transfer {

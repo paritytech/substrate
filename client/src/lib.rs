@@ -27,7 +27,7 @@ extern crate error_chain;
 pub mod error;
 
 use primitives::{block, Address, H256};
-use primitives::contract::{CallData, OutData, StorageData};
+use primitives::contract::{CallData, OutData, StorageKey, StorageData};
 use state_machine::backend::Backend;
 
 use self::error::ResultExt;
@@ -72,15 +72,15 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
-	pub fn storage(&self, hash: &block::HeaderHash, address: &Address, key: &H256) -> error::Result<StorageData> {
+	pub fn storage(&self, hash: &block::HeaderHash, object: u64, key: &StorageKey) -> error::Result<StorageData> {
 		self.state_at(hash)?
-			.storage(address, key)
+			.storage(object, &key.0)
 			.map(|x| StorageData(x.to_vec()))
 			.chain_err(|| error::ErrorKind::Backend)
 	}
 
 	/// Execute a call to a contract on top of state in a block of given hash.
-	pub fn call(&self, hash: &block::HeaderHash, address: &Address, method: &str, call_data: &CallData) -> error::Result<OutData> {
+	pub fn call(&self, hash: &block::HeaderHash, method: &str, call_data: &CallData) -> error::Result<OutData> {
 		let state = self.state_at(hash)?;
 		let mut changes = state_machine::OverlayedChanges::default();
 
@@ -88,7 +88,6 @@ impl<B, E> Client<B, E> where
 			&state,
 			&mut changes,
 			&self.executor,
-			address,
 			method,
 			call_data,
 		)?)

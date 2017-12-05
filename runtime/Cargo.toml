@@ -1,0 +1,9 @@
+[package]
+name = "runtime"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[lib]
+crate-type = ["cdylib"] 
+
+[dependencies]

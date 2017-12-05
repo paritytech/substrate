@@ -19,10 +19,7 @@
 use std::{error, fmt};
 
 use backend::Backend;
-use primitives::Address;
-use primitives::contract::{CallData, OutData};
-use primitives::hash::H256;
-use {Externalities, CodeExecutor, StaticExternalities, OverlayedChanges};
+use {Externalities, StaticExternalities, OverlayedChanges};
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -52,122 +49,61 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, B: 'a, E: 'a> {
+pub struct Ext<'a, B: 'a> {
 	/// The overlayed changes to write to.
 	pub overlay: &'a mut OverlayedChanges,
 	/// The storage backend to read from.
 	pub backend: &'a B,
-	/// Contract code executor.
-	pub exec: &'a E,
-	/// Contract address.
-	pub local: Address,
 }
 
-impl<'a, B: 'a, E: 'a> StaticExternalities<E> for Ext<'a, B, E>
-	where B: Backend, E: CodeExecutor
+impl<'a, B: 'a> StaticExternalities for Ext<'a, B>
+	where B: Backend
 {
-	type Error = Error<B::Error, E::Error>;
+	type Error = B::Error;
 
-	fn storage(&self, key: &H256) -> Result<&[u8], Self::Error> {
-		match self.overlay.storage(&self.local, key) {
+	fn code(&self) -> Result<&[u8], Self::Error> {
+		Ok(self.overlay.code())
+	}
+
+	fn storage(&self, object: u64, key: &[u8]) -> Result<&[u8], Self::Error> {
+		match self.overlay.storage(object, key) {
 			Some(x) => Ok(x),
-			None => self.backend.storage(&self.local, key).map_err(Error::Backend)
+			None => self.backend.storage(object, key)
 		}
 	}
-
-	fn call_static(&self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error> {
-		let inner_ext = StaticExt {
-			backend: self.backend,
-			exec: self.exec,
-			local: address.clone(),
-			overlay: self.overlay,
-		};
-
-		let code = match self.overlay.code(address) {
-			Some(x) => x,
-			None => self.backend.code(address).map_err(Error::Backend)?,
-		};
-
-		self.exec.call_static(
-			&inner_ext,
-			code,
-			method,
-			data,
-		).map_err(Error::Executor)
-	}
 }
 
-impl<'a, B: 'a, E: 'a> Externalities<E> for Ext<'a, B, E>
-	where B: Backend, E: CodeExecutor
+impl<'a, B: 'a> Externalities for Ext<'a, B>
+	where B: Backend
 {
-	fn set_storage(&mut self, key: H256, value: Vec<u8>) {
-		self.overlay.set_storage(self.local, key, value);
+	fn set_code(&mut self, code: Vec<u8>) {
+		self.overlay.set_code(code);
 	}
 
-	fn call(&mut self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error> {
-		let code = {
-			let code = match self.overlay.code(address) {
-				Some(x) => x,
-				None => self.backend.code(address).map_err(Error::Backend)?,
-			};
-
-			code.to_owned()
-		};
-
-		let mut inner_ext = Ext {
-			backend: self.backend,
-			exec: self.exec,
-			local: address.clone(),
-			overlay: &mut *self.overlay,
-		};
-
-		self.exec.call(
-			&mut inner_ext,
-			&code[..],
-			method,
-			data,
-		).map_err(Error::Executor)
+	fn set_storage(&mut self, object: u64, key: Vec<u8>, value: Vec<u8>) {
+		self.overlay.set_storage(object, key, value);
 	}
 }
 
 // Static externalities
-struct StaticExt<'a, B: 'a, E: 'a> {
+struct StaticExt<'a, B: 'a> {
 	overlay: &'a OverlayedChanges,
 	backend: &'a B,
-	exec: &'a E,
-	local: Address,
 }
 
-impl<'a, B: 'a, E: 'a> StaticExternalities<E> for StaticExt<'a, B, E>
-	where B: Backend, E: CodeExecutor
+impl<'a, B: 'a> StaticExternalities for StaticExt<'a, B>
+	where B: Backend
 {
-	type Error = Error<B::Error, E::Error>;
+	type Error = B::Error;
 
-	fn storage(&self, key: &H256) -> Result<&[u8], Self::Error> {
-		match self.overlay.storage(&self.local, key) {
-			Some(x) => Ok(x),
-			None => self.backend.storage(&self.local, key).map_err(Error::Backend)
-		}
+	fn code(&self) -> Result<&[u8], Self::Error> {
+		Ok(self.overlay.code())
 	}
 
-	fn call_static(&self, address: &Address, method: &str, data: &CallData) -> Result<OutData, Self::Error> {
-		let inner_ext = StaticExt {
-			backend: self.backend,
-			exec: self.exec,
-			local: address.clone(),
-			overlay: self.overlay,
-		};
-
-		let code = match self.overlay.code(address) {
-			Some(x) => x,
-			None => self.backend.code(address).map_err(Error::Backend)?,
-		};
-
-		self.exec.call_static(
-			&inner_ext,
-			code,
-			method,
-			data,
-		).map_err(Error::Executor)
+	fn storage(&self, object: u64, key: &[u8]) -> Result<&[u8], Self::Error> {
+		match self.overlay.storage(object, key) {
+			Some(x) => Ok(x),
+			None => self.backend.storage(object, key)
+		}
 	}
 }

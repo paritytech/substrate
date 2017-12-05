@@ -42,5 +42,11 @@ error_chain! {
 			description("externalities failure"),
 			display("Externalities error: {}", e),
 		}
+
+		/// Runtime failed.
+		Runtime {
+			description("runtime failure"),
+			display("Runtime error"),
+		}
 	}
 }
