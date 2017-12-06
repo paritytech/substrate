@@ -1,5 +1,4 @@
 name: polkadot
-version: "1.0.0"
 author: "Parity Team <admin@polkadot.io>"
 about: Polkadot Node Rust Implementation
 args:

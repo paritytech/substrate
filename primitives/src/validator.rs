@@ -16,38 +16,32 @@
 
 //! Validator primitives.
 
-use parachain::EgressPosts;
+use bytes;
+use parachain;
 
-/// Validity result of particular proof and ingress queue.
+/// Parachain outgoing message.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag="type", content="data")]
+pub struct EgressPost(#[serde(with="bytes")] pub Vec<u8>);
+
+/// Balance upload.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BalanceUpload(#[serde(with="bytes")] pub Vec<u8>);
+
+/// Balance download.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BalanceDownload(#[serde(with="bytes")] pub Vec<u8>);
+
+/// The result of parachain validation.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub enum ProofValidity {
-	/// The proof is invalid.
-	Invalid,
-	/// The proof is processed and new egress queue is created.
-	/// Also includes current ingress queue delta.
-	Valid(EgressPosts),
-}
-
-impl ProofValidity {
-	/// The proof is valid.
-	pub fn is_valid(&self) -> bool {
-		match *self {
-			ProofValidity::Invalid => false,
-			ProofValidity::Valid(..) => true,
-		}
-	}
-}
-
-impl From<Option<EgressPosts>> for ProofValidity {
-	fn from(posts: Option<EgressPosts>) -> Self {
-		match posts {
-			Some(posts) => ProofValidity::Valid(posts),
-			None => ProofValidity::Invalid,
-		}
-	}
+pub struct ValidationResult {
+	/// New head data that should be included in the relay chain state.
+	pub head_data: parachain::HeadData,
+	/// Outgoing messages (a vec for each parachain).
+	pub egress_queues: Vec<Vec<EgressPost>>,
+	/// Balance uploads
+	pub balance_uploads: Vec<BalanceUpload>,
 }
 
 // TODO [ToDr] This shouldn't be here!
@@ -61,40 +55,36 @@ pub trait Validator {
 	/// In case of success produces egress posts.
 	fn validate(
 		&self,
-		proof: &::parachain::Proof,
 		code: &[u8],
-	) -> Result<ProofValidity, Self::Error>;
+		// TODO [ToDr] actually consolidate
+		consolidated_ingress: &[(u64, Vec<parachain::Message>)],
+		balance_downloads: &[BalanceDownload],
+		block_data: &parachain::BlockData,
+		previous_head_data: &parachain::HeadData,
+	) -> Result<ValidationResult, Self::Error>;
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parachain::{EgressPosts, Message};
 	use polkadot_serializer as ser;
 
 	#[test]
-	fn test_proof_validity_serialization() {
-		assert_eq!(
-			ser::to_string_pretty(&ProofValidity::Invalid),
-			r#"{
-  "type": "invalid"
-}"#);
-
-		let mut egress = ::std::collections::BTreeMap::new();
-		egress.insert(5.into(), vec![Message(vec![1, 2, 3])]);
-		egress.insert(7.into(), vec![Message(vec![4, 5, 6])]);
-		assert_eq!(
-			ser::to_string_pretty(&ProofValidity::Valid(EgressPosts(egress))),
-			r#"{
-  "type": "valid",
-  "data": {
-    "5": [
-      "0x010203"
-    ],
-    "7": [
-      "0x040506"
+	fn test_validation_result() {
+		assert_eq!(ser::to_string_pretty(&ValidationResult {
+	head_data: parachain::HeadData(vec![1]),
+	egress_queues: vec![vec![EgressPost(vec![1])]],
+	balance_uploads: vec![BalanceUpload(vec![2])],
+			}), r#"{
+  "headData": "0x01",
+  "egressQueues": [
+    [
+      "0x01"
     ]
-  }
+  ],
+  "balanceUploads": [
+    "0x02"
+  ]
 }"#);
 	}
 }
