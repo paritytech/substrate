@@ -49,6 +49,9 @@ pub mod validator;
 
 /// Alias to 160-bit hash when used in the context of an account address.
 pub type Address = hash::H160;
+/// Alias to 520-bit hash when used in the context of a signature.
+pub type Signature = hash::H520;
+
 pub use self::hash::{H160, H256};
 pub use self::uint::{U256, U512};
 

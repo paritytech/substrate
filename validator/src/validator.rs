@@ -45,14 +45,16 @@ impl validator::Validator for Validator {
 
 	fn validate(
 		&self,
-		messages: &validator::IngressPosts,
-		proof: &parachain::Proof,
 		code: &[u8],
-	) -> Result<validator::ProofValidity> {
+		consolidated_ingress: &[(u64, Vec<parachain::Message>)],
+		balance_downloads: &[validator::BalanceDownload],
+		block_data: &parachain::BlockData,
+		previous_head_data: &parachain::HeadData,
+	) -> Result<validator::ValidationResult> {
 		ensure!(code.len() == 1, ErrorKind::InvalidCode(format!("The code should be a single byte.")));
 
 		match self.codes.get(code[0] as usize) {
-			Some(code) => code.check(messages, proof),
+			Some(code) => code.check(consolidated_ingress, balance_downloads, block_data, previous_head_data),
 			None => bail!(ErrorKind::InvalidCode(format!("Unknown parachain code."))),
 		}
 	}
@@ -60,20 +62,43 @@ impl validator::Validator for Validator {
 
 /// Simplified parachain code verification
 trait Code: fmt::Debug {
-	/// Given bytes of messages and proof determine if the proof is valid and return egress posts.
-	fn check(&self, messages: &validator::IngressPosts, proof: &parachain::Proof) -> Result<validator::ProofValidity>;
+	/// Given parachain candidate block data returns it's validity
+	/// and possible generated egress posts.
+	fn check(
+		&self,
+		consolidated_ingress: &[(u64, Vec<parachain::Message>)],
+		balance_downloads: &[validator::BalanceDownload],
+		block_data: &parachain::BlockData,
+		previous_head_data: &parachain::HeadData,
+	) -> Result<validator::ValidationResult>;
 }
 
-impl<M, P, T> Code for T where
+impl<M, B, T, R> Code for T where
 	M: DeserializeOwned,
-	P: DeserializeOwned,
-	T: ParachainCode<Messages=M, Proof=P>,
+	B: DeserializeOwned,
+	R: Into<validator::ValidationResult>,
+	T: ParachainCode<Message=M, BlockData=B, Result=R>,
 {
-	fn check(&self, messages: &validator::IngressPosts, proof: &parachain::Proof) -> Result<validator::ProofValidity> {
-		let messages = serializer::from_slice(&messages.0)?;
-		let proof = serializer::from_slice(&proof.raw().0)?;
+	fn check(
+		&self,
+		consolidated_ingress: &[(u64, Vec<parachain::Message>)],
+		balance_downloads: &[validator::BalanceDownload],
+		block_data: &parachain::BlockData,
+		previous_head_data: &parachain::HeadData,
+	) -> Result<validator::ValidationResult> {
+		let messages = consolidated_ingress.iter()
+			.map(|&(ref block, ref vec)| Ok((*block, vec.iter()
+				 .map(|msg| serializer::from_slice(&msg.0).map_err(Into::into))
+				 .collect::<Result<Vec<_>>>()?
+			)))
+			.collect::<Result<Vec<_>>>()?;
+		let downloads = balance_downloads.iter()
+			.map(|download| serializer::from_slice(&download.0).map_err(Into::into))
+			.collect::<Result<Vec<_>>>()?;
+		let block_data = serializer::from_slice(&block_data.0)?;
+		let head_data = serializer::from_slice(&previous_head_data.0)?;
 
-		Ok(self.check(messages, proof).into())
+		Ok(self.check(messages, downloads, block_data, head_data)?.into())
 	}
 }
 
