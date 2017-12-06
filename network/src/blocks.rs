@@ -16,6 +16,7 @@
 
 use std::mem;
 use std::cmp;
+use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use network::PeerId;
@@ -93,7 +94,7 @@ impl BlockCollection {
 	}
 
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
-	pub fn needed_blocks(&mut self, peer_id: PeerId, count: usize, peer_best: BlockNumber, common: BlockNumber) -> Option<message::BlockRequest> {
+	pub fn needed_blocks(&mut self, peer_id: PeerId, count: usize, peer_best: BlockNumber, common: BlockNumber) -> Option<Range<BlockNumber>> {
 		// First block number that we need to download
 		let count = count as BlockNumber;
 		let (range, downloading) = {
@@ -119,15 +120,7 @@ impl BlockCollection {
 
 		self.peer_requests.insert(peer_id, range.start);
 		self.blocks.insert(range.start, BlockRangeState::Downloading{ len: range.end - range.start, downloading: downloading + 1 });
-		let request = message::BlockRequest {
-			id: 0,
-			fields: vec![],
-			from: message::FromBlock::Number(range.start),
-			to: None,
-			direction: Some(message::Direction::Ascending),
-			max: Some((range.end - range.start) as u32),
-		};
-		Some(request)
+		Some(range)
 	}
 
 	/// Get a valid chain of blocks ordered in descending order and ready for importing into blockchain.

@@ -39,7 +39,7 @@ struct PeerSync {
 pub enum PeerSyncState {
     AncestorSearch(BlockNumber),
     Available,
-    DownloadingNew,
+    DownloadingNew(BlockNumber),
     DownloadingStale(HeaderHash),
 }
 
@@ -119,10 +119,11 @@ impl ChainSync {
 		let mut imported: usize = 0;
 		let new_blocks = if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			match peer.state {
-				PeerSyncState::DownloadingNew => {
+				PeerSyncState::DownloadingNew(start_block) => {
 					self.blocks.clear_peer_download(peer_id);
 					peer.state = PeerSyncState::Available;
-					self.blocks.insert(0, response.blocks, peer_id);
+
+					self.blocks.insert(start_block, response.blocks, peer_id);
 					self.blocks.drain(self.best_queued_number)
 				},
 				PeerSyncState::DownloadingStale(_) => {
@@ -335,9 +336,16 @@ impl ChainSync {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			match peer.state {
 				PeerSyncState::Available => {
-					if let Some(mut request) = self.blocks.needed_blocks(peer_id, MAX_BLOCK_DOWNLOAD, peer.common_number, peer.best_number) {
-						request.fields = self.required_block_attributes.clone();
-						peer.state = PeerSyncState::DownloadingNew;
+					if let Some(range) = self.blocks.needed_blocks(peer_id, MAX_BLOCK_DOWNLOAD, peer.common_number, peer.best_number) {
+						let request = message::BlockRequest {
+							id: 0,
+							fields: self.required_block_attributes.clone(),
+							from: message::FromBlock::Number(range.start),
+							to: None,
+							direction: Some(message::Direction::Ascending),
+							max: Some((range.end - range.start) as u32),
+						};
+						peer.state = PeerSyncState::DownloadingNew(range.start);
 						protocol.send_message(io, peer_id, Message::BlockRequest(request));
 					}
 				},
