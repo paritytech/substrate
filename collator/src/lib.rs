@@ -84,9 +84,10 @@ pub trait RelayChainContext {
 // TODO: impl trait
 pub fn collate_ingress<'a, R>(relay_context: R)
 	-> Box<Future<Item=ConsolidatedIngress, Error=R::Error> + 'a>
-	where R: RelayChainContext,
-		  R::Error: 'a,
-		  R::FutureEgress: 'a
+	where
+		R: RelayChainContext,
+		R::Error: 'a,
+		R::FutureEgress: 'a,
 {
 	let mut egress_fetch = Vec::new();
 
@@ -122,10 +123,11 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 /// Produce a candidate for the parachain.
 pub fn collate<'a, R, P>(local_id: ParaId, relay_context: R, para_context: P)
 	-> Box<Future<Item=parachain::Candidate, Error=R::Error> + 'a>
-	where R: RelayChainContext,
-	      R::Error: 'a,
-		  R::FutureEgress: 'a,
-		  P: ParachainContext + 'a,
+	where
+		R: RelayChainContext,
+	    R::Error: 'a,
+		R::FutureEgress: 'a,
+		P: ParachainContext + 'a,
 {
 	Box::new(collate_ingress(relay_context).map(move |ingress| {
 		let (block_data, signature) = para_context.produce_candidate(
