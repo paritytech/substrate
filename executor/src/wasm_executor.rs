@@ -63,11 +63,8 @@ impl CodeExecutor for WasmExecutor {
 #[cfg(test)]
 mod tests {
 
-	use super::*;
-	use primitives::Address;
-	use primitives::hash::H256;
-
 	use parity_wasm;
+	use super::*;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities;
@@ -87,6 +84,20 @@ mod tests {
 
 	#[test]
 	fn should_run_wasm() {
+		use parity_wasm::ModuleInstanceInterface;
+		use parity_wasm::RuntimeValue::{I64};
+
+		let program = parity_wasm::ProgramInstance::new();
+		let test_module = include_bytes!("../../target/wasm32-unknown-unknown/release/runtime.compact.wasm");
+		let module = parity_wasm::deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
+		let module = program.add_module("test", module, None).expect("Failed to initialize module");
+		let argument: i64 = 42;
+		assert_eq!(Some(I64(argument * 2)), module.execute_export("test", vec![I64(argument)].into()).unwrap());
+	}
+
+
+	#[test]
+	fn should_provide_externalities() {
 		use parity_wasm::ModuleInstanceInterface;
 		use parity_wasm::RuntimeValue::{I64};
 

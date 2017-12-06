@@ -621,7 +621,7 @@ dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-client 0.1.0",
- "polkadot-contracts 0.1.0",
+ "polkadot-executor 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-rpc-servers 0.1.0",
 ]
@@ -636,7 +636,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "polkadot-contracts"
+name = "polkadot-executor"
 version = "0.1.0"
 dependencies = [
  "assert_matches 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -673,7 +673,7 @@ dependencies = [
  "jsonrpc-core 8.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
  "jsonrpc-macros 8.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
  "polkadot-client 0.1.0",
- "polkadot-contracts 0.1.0",
+ "polkadot-executor 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-state-machine 0.1.0",
 ]

@@ -10,6 +10,6 @@ env_logger = "0.4"
 error-chain = "0.11"
 log = "0.3"
 polkadot-client = { path = "../client", version = "0.1" }
-polkadot-contracts = { path = "../contracts", version = "0.1" }
+polkadot-executor = { path = "../executor", version = "0.1" }
 polkadot-primitives = { path = "../primitives", version = "0.1" }
 polkadot-rpc-servers = { path = "../rpc_servers", version = "0.1" }

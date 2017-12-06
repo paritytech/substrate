@@ -1,5 +1,5 @@
 [package]
-name = "polkadot-contracts"
+name = "polkadot-executor"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
