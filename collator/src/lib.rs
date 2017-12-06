@@ -60,7 +60,7 @@ pub trait ParachainContext {
 	fn produce_candidate<I: IntoIterator<Item=(ParaId, Message)>>(
 		&self,
 		ingress: I,
-	) -> parachain::RawProof;
+	) -> (parachain::BlockData, primitives::Signature);
 }
 
 /// Relay chain context needed to collate.
@@ -128,14 +128,15 @@ pub fn collate<'a, R, P>(local_id: ParaId, relay_context: R, para_context: P)
 		  P: ParachainContext + 'a,
 {
 	Box::new(collate_ingress(relay_context).map(move |ingress| {
-		let block_data = para_context.produce_candidate(
+		let (block_data, signature) = para_context.produce_candidate(
 			ingress.0.iter().flat_map(|&(id, ref msgs)| msgs.iter().cloned().map(move |msg| (id, msg)))
 		);
 
 		parachain::Candidate {
-			id: local_id,
-			ingress: ingress,
-			proof: block_data,
+			parachain_index: local_id,
+			collator_signature: signature,
+			block: block_data,
+			unprocessed_ingress: ingress,
 		}
 	}))
 }
