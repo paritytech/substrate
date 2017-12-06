@@ -29,7 +29,7 @@ extern crate error_chain;
 extern crate jsonrpc_macros;
 
 #[cfg(test)]
-extern crate polkadot_contracts;
+extern crate polkadot_executor;
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;

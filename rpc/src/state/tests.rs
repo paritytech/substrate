@@ -15,14 +15,14 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use polkadot_contracts as contracts;
+use polkadot_executor as executor;
 
 use self::error::{Error, ErrorKind};
 use test_helpers::Blockchain;
 
 #[test]
 fn should_return_storage() {
-	let client = Client::new(Blockchain::default(), contracts::executor());
+	let client = Client::new(Blockchain::default(), executor::executor());
 
 	assert_matches!(
 		StateApi::storage(&client, 5.into(), 10.into(), 0.into()),
