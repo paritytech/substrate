@@ -16,6 +16,7 @@
 
 //! Polkadot client possible errors.
 
+use std;
 use primitives::block;
 use state_machine;
 
@@ -38,6 +39,12 @@ error_chain! {
 			description("execution error"),
 			display("Execution: {}", e),
 		}
+
+		/// Blockchain error.
+		Blockchain(e: Box<std::error::Error + Send>) {
+			description("Blockchain error"),
+			display("Blockchain: {}", e),
+		}
 	}
 }
 
@@ -45,5 +52,12 @@ error_chain! {
 impl From<Box<state_machine::Error>> for Error {
 	fn from(e: Box<state_machine::Error>) -> Self {
 		ErrorKind::Execution(e).into()
+	}
+}
+
+impl Error {
+	/// Chain a blockchain error.
+	pub fn from_blockchain(e: Box<std::error::Error + Send>) -> Self {
+		ErrorKind::Blockchain(e).into()
 	}
 }

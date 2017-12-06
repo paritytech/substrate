@@ -42,7 +42,7 @@ build_rpc_trait! {
 }
 
 impl<B, E> StateApi for Client<B, E> where
-	B: client::Blockchain + Send + Sync + 'static,
+	B: client::blockchain::Blockchain + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 {
 	fn storage(&self, address: Address, key: H256, block: block::HeaderHash) -> Result<StorageData> {

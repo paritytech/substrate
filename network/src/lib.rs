@@ -27,6 +27,9 @@ extern crate parking_lot;
 extern crate smallvec;
 extern crate ipnetwork;
 extern crate polkadot_primitives as primitives;
+extern crate polkadot_client as client;
+extern crate polkadot_state_machine as state_machine;
+extern crate polkadot_serializer as ser;
 extern crate serde;
 extern crate serde_json;
 #[macro_use] extern crate serde_derive;
@@ -34,13 +37,15 @@ extern crate serde_json;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate error_chain;
 
-pub mod service;
+mod service;
 mod sync;
 mod protocol;
 mod io;
 mod message;
 mod error;
 mod config;
+mod chain;
+mod blocks;
 
 #[cfg(test)]
 mod tests;
@@ -48,3 +53,9 @@ mod tests;
 pub use service::Service;
 pub use protocol::{ProtocolStatus};
 pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, NetworkConfiguration};
+
+// TODO: move it elsewhere
+fn header_hash(header: &primitives::block::Header) -> primitives::block::HeaderHash {
+	primitives::hash(&ser::to_vec(header))
+}
+

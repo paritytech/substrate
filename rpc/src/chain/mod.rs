@@ -36,7 +36,7 @@ build_rpc_trait! {
 }
 
 impl<B> ChainApi for B where
-	B: client::Blockchain + Send + Sync + 'static,
+	B: client::blockchain::Blockchain + Send + Sync + 'static,
 	B::Error: ::std::error::Error + Send,
 {
 	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {

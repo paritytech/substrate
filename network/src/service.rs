@@ -19,34 +19,16 @@ use std::collections::{BTreeMap};
 use std::io;
 use network::{NetworkProtocolHandler, NetworkService, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
-use primitives::block::{TransactionHash, HeaderHash, Number as BlockNumber};
+use primitives::block::{TransactionHash, Header};
 use core_io::{TimerToken};
 use io::NetSyncIo;
 use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo, TransactionStats};
 use config::{ProtocolConfig};
 use error::Error;
+use chain::Client;
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
-
-// temp client stub
-pub struct RelayChain;
-
-pub struct ChainInfo {
-	pub best_hash: HeaderHash,
-	pub best_number: BlockNumber,
-	pub genesis_hash: HeaderHash,
-}
-
-impl RelayChain {
-	pub fn chain_info(&self) -> ChainInfo {
-		ChainInfo {
-			best_hash: HeaderHash::zero(),
-			best_number: 0,
-			genesis_hash: HeaderHash::zero(),
-		}
-	}
-}
 
 bitflags! {
 	pub struct Role: u32 {
@@ -94,7 +76,7 @@ pub struct Params {
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 	/// Polkadot relay chain access point.
-	pub chain: Arc<RelayChain>,
+	pub chain: Arc<Client + Send + Sync>,
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
@@ -114,7 +96,7 @@ impl Service {
 		let sync = Arc::new(Service {
 			network: service,
 			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(params.config, params.chain.clone()),
+				protocol: Protocol::new(params.config, params.chain.clone())?,
 			}),
 		});
 
@@ -122,8 +104,8 @@ impl Service {
 	}
 
 	/// Called when a new block is imported by the client.
-	pub fn on_new_block(&self) {
-		self.handler.protocol.on_new_block()
+	pub fn on_block_imported(&self, header: &Header) {
+		self.handler.protocol.on_block_imported(header)
 	}
 
 	/// Called when new transactons are imported by the client.
@@ -133,10 +115,11 @@ impl Service {
 
 	fn start(&self) {
 		match self.network.start().map_err(Into::into) {
-			Err(ErrorKind::Io(ref e)) if  e.kind() == io::ErrorKind::AddrInUse => warn!("Network port {:?} is already in use, make sure that another instance of Polkadot client is not running or change the port using the --port option.", self.network.config().listen_address.expect("Listen address is not set.")),
+			Err(ErrorKind::Io(ref e)) if  e.kind() == io::ErrorKind::AddrInUse =>
+				warn!("Network port {:?} is already in use, make sure that another instance of Polkadot client is not running or change the port using the --port option.", self.network.config().listen_address.expect("Listen address is not set.")),
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
-		}
+		};
 		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, 1, &[0u8])
 			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}

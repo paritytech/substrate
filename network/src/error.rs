@@ -15,10 +15,15 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
 use network::Error as NetworkError;
+use client;
 
 error_chain! {
 	foreign_links {
 		Network(NetworkError) #[doc = "Devp2p error."];
+	}
+
+	links {
+		Client(client::error::Error, client::error::ErrorKind);
 	}
 
 	errors {

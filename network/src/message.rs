@@ -17,7 +17,7 @@
 use std::borrow::Borrow;
 use primitives::parachain::Id as ParachainId;
 use primitives::Address;
-use primitives::block::{Number as BlockNumber, HeaderHash};
+use primitives::block::{Number as BlockNumber, HeaderHash, Header, Body};
 use service::Role as RoleFlags;
 
 pub type RequestId = u64;
@@ -70,7 +70,7 @@ impl From<RoleFlags> for Vec<Role> where {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub enum BlockAttribute {
 	Header,
 	Body,
@@ -81,20 +81,20 @@ pub enum BlockAttribute {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockData {
 	pub hash: HeaderHash,
-	pub header: Option<Bytes>,
-	pub body: Option<Bytes>,
+	pub header: Option<Header>,
+	pub body: Option<Body>,
 	pub receipt: Option<Bytes>,
 	pub message: Option<Bytes>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum FromBlock {
 	Hash(HeaderHash),
 	Number(BlockNumber),
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum Direction {
 	Ascending,
 	Descending,
@@ -105,22 +105,7 @@ pub enum Message {
 	Status(Status),
 	BlockRequest(BlockRequest),
 	BlockResponse(BlockResponse),
-}
-
-impl Message {
-	pub fn is_request(&self) -> bool {
-		match *self {
-			Message::BlockRequest(_) => true,
-			_ => false,
-		}
-	}
-
-	pub fn is_response(&self) -> bool {
-		match *self {
-			Message::BlockResponse(_) => true,
-			_ => false,
-		}
-	}
+	BlockAnnounce(BlockAnnounce),
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,7 +120,7 @@ pub struct Status {
 	pub parachain_id: Option<ParachainId>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct BlockRequest {
 	pub id: RequestId,
 	pub fields: Vec<BlockAttribute>,
@@ -151,5 +136,7 @@ pub struct BlockResponse {
 	pub blocks: Vec<BlockData>,
 }
 
-
-
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockAnnounce {
+	pub header: Header,
+}

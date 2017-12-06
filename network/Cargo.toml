@@ -11,6 +11,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 ethcore-network = { git = "https://github.com/paritytech/parity.git" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 polkadot-primitives = { path = "../primitives" }
+polkadot-client = { path = "../client" }
+polkadot-state-machine = { path = "../state_machine" }
+polkadot-serializer = { path = "../serializer" }
 log = "0.3"
 env_logger = "0.4"
 rand = "0.3"

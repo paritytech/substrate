@@ -193,7 +193,7 @@ pub trait StaticExternalities<CodeExecutor> {
 }
 
 /// Contract code executor.
-pub trait CodeExecutor: Sized {
+pub trait CodeExecutor: Sized + Send + Sync {
 	/// Error type for contract execution.
 	type Error: Error;
 

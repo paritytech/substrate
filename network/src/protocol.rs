@@ -20,14 +20,16 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use serde_json;
 use std::time;
-use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber};
+use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber, Header};
 use network::{PeerId, NodeId};
 
 use message::{self, Message};
 use sync::{ChainSync, Status as SyncStatus};
-use service::{RelayChain, Role};
+use service::Role;
 use config::ProtocolConfig;
+use chain::Client;
 use io::SyncIo;
+use error;
 
 const REQUEST_TIMEOUT_SEC: u64 = 15;
 const PROTOCOL_VERSION: u32 = 0;
@@ -35,7 +37,8 @@ const PROTOCOL_VERSION: u32 = 0;
 // Lock must always be taken in order declared here.
 pub struct Protocol {
 	config: ProtocolConfig,
-	chain: Arc<RelayChain>,
+	chain: Arc<Client + Send + Sync>,
+	genesis_hash: HeaderHash,
 	sync: RwLock<ChainSync>,
 	/// All connected peers
 	peers: RwLock<HashMap<PeerId, Peer>>,
@@ -61,23 +64,29 @@ struct Peer {
 	/// Roles
 	roles: Role,
 	/// Peer best block hash
-	_best_hash: HeaderHash,
+	best_hash: HeaderHash,
 	/// Peer best block number
-	_best_number: BlockNumber,
-	/// Pending request if any
-	request: Option<Message>,
+	best_number: BlockNumber,
+	/// Pending block request if any
+	block_request: Option<message::BlockRequest>,
 	/// Request timestamp
 	request_timestamp: Option<time::Instant>,
 	/// Holds a set of transactions recently sent to this peer to avoid spamming.
 	_last_sent_transactions: HashSet<TransactionHash>,
+	/// Request counter,
+	request_id: message::RequestId,
 }
 
 #[derive(Debug)]
 pub struct PeerInfo {
 	/// Roles
-	roles: Role,
+	pub roles: Role,
 	/// Protocol version
-	protocol_version: u32,
+	pub protocol_version: u32,
+	/// Peer best block hash
+	pub best_hash: HeaderHash,
+	/// Peer best block number
+	pub best_number: BlockNumber,
 }
 
 /// Transaction stats
@@ -91,16 +100,17 @@ pub struct TransactionStats {
 
 impl Protocol {
 	/// Create a new instance.
-	pub fn new(config: ProtocolConfig, chain: Arc<RelayChain>) -> Protocol {
+	pub fn new(config: ProtocolConfig, chain: Arc<Client + Send + Sync>) -> error::Result<Protocol>  {
+		let info = chain.info()?;
 		let protocol = Protocol {
 			config: config,
 			chain: chain,
-			sync: RwLock::new(ChainSync::new()),
+			genesis_hash: info.chain.genesis_hash,
+			sync: RwLock::new(ChainSync::new(&info)),
 			peers: RwLock::new(HashMap::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
 		};
-		protocol.sync.write().start(&protocol);
-		protocol
+		Ok(protocol)
 	}
 
 	/// Returns protocol status
@@ -110,7 +120,7 @@ impl Protocol {
 		ProtocolStatus {
 			sync: sync.status(),
 			num_peers: peers.values().count(),
-			num_active_peers: peers.values().filter(|p| p.request.is_some()).count(),
+			num_active_peers: peers.values().filter(|p| p.block_request.is_some()).count(),
 		}
 	}
 
@@ -124,56 +134,54 @@ impl Protocol {
 			}
 		};
 
-		let request = if message.is_response() {
-			let mut peers = self.peers.write();
-			if let Some(ref mut peer) = peers.get_mut(&peer_id) {
-				// TODO: check id
-				if peer.request.is_none() {
-					debug!("Unexpected response packet from {}", peer_id);
-					io.disable_peer(peer_id);
-					return;
-				}
-				peer.request_timestamp = None;
-				mem::replace(&mut peer.request, None)
-			} else {
-				debug!("Unexpected packet from {}", peer_id);
-				io.disable_peer(peer_id);
-				return;
-			}
-		} else {
-			None
-		};
-
 		match message {
 			Message::Status(s) => self.on_status_message(io, peer_id, s),
 			Message::BlockRequest(r) => self.on_block_request(io, peer_id, r),
 			Message::BlockResponse(r) => {
-				let request = request.expect("BlockResponse is response; responses without requests are filtered out; qed");
-				let block_request = match request {
-					Message::BlockRequest(r) => r,
-					_ => {
-						debug!("Unexpected response packet type from {}", peer_id);
+				let request = {
+					let mut peers = self.peers.write();
+					if let Some(ref mut peer) = peers.get_mut(&peer_id) {
+						peer.request_timestamp = None;
+						match mem::replace(&mut peer.block_request, None) {
+							Some(r) => r,
+							None => {
+								debug!("Unexpected response packet from {}", peer_id);
+								io.disable_peer(peer_id);
+								return;
+							}
+						}
+					} else {
+						debug!("Unexpected packet from {}", peer_id);
 						io.disable_peer(peer_id);
 						return;
 					}
 				};
-				self.on_block_response(io, peer_id, block_request, r);
+				if request.id != r.id {
+					trace!("Ignoring mismatched response packet from {}", peer_id);
+					return;
+				}
+				self.on_block_response(io, peer_id, request, r);
 			},
+			Message::BlockAnnounce(announce) => {
+				self.on_block_announce(io, peer_id, announce);
+			}
 		}
 	}
 
-	pub fn send_message(&self, io: &mut SyncIo, peer_id: PeerId, message: Message) {
-		let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
+	pub fn send_message(&self, io: &mut SyncIo, peer_id: PeerId, mut message: Message) {
 		let mut peers = self.peers.write();
 		if let Some(ref mut peer) = peers.get_mut(&peer_id) {
-			if message.is_request() {
-				peer.request = Some(message);
-				peer.request_timestamp = Some(time::Instant::now());
-			} else {
-				peer.request = None;
-				peer.request_timestamp = None;
+			match &mut message {
+				&mut Message::BlockRequest(ref mut r) => {
+					peer.block_request = Some(r.clone());
+					peer.request_timestamp = Some(time::Instant::now());
+					r.id = peer.request_id;
+					peer.request_id = peer.request_id + 1;
+				},
+				_ => (),
 			}
 		}
+		let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
 		if let Err(e) = io.send(peer_id, data) {
 			debug!(target:"sync", "Error sending message: {:?}", e);
 			io.disconnect_peer(peer_id);
@@ -204,7 +212,9 @@ impl Protocol {
 	pub fn on_block_request(&self, _io: &mut SyncIo, _peer_id: PeerId, _request: message::BlockRequest) {
 	}
 
-	pub fn on_block_response(&self, _io: &mut SyncIo, _peer_id: PeerId, _request: message::BlockRequest, _response: message::BlockResponse) {
+	pub fn on_block_response(&self, io: &mut SyncIo, peer_id: PeerId, request: message::BlockRequest, response: message::BlockResponse) {
+		// TODO: validate response
+		self.sync.write().on_block_data(io, self, peer_id, request, response);
 	}
 
 	pub fn tick(&self, io: &mut SyncIo) {
@@ -237,6 +247,8 @@ impl Protocol {
 			PeerInfo {
 				roles: p.roles,
 				protocol_version: p.protocol_version,
+				best_hash: p.best_hash,
+				best_number: p.best_number,
 			}
 		})
 	}
@@ -256,10 +268,9 @@ impl Protocol {
 				debug!(target: "sync", "Unexpected status packet from {}:{}", peer_id, io.peer_info(peer_id));
 				return;
 			}
-			let chain_info = self.chain.chain_info();
-			if status.genesis_hash != chain_info.genesis_hash {
+			if status.genesis_hash != self.genesis_hash {
 				io.disable_peer(peer_id);
-				trace!(target: "sync", "Peer {} genesis hash mismatch (ours: {}, theirs: {})", peer_id, chain_info.genesis_hash, status.genesis_hash);
+				trace!(target: "sync", "Peer {} genesis hash mismatch (ours: {}, theirs: {})", peer_id, self.genesis_hash, status.genesis_hash);
 				return;
 			}
 			if status.version != PROTOCOL_VERSION {
@@ -271,11 +282,12 @@ impl Protocol {
 			let peer = Peer {
 				protocol_version: status.version,
 				roles: status.roles.into(),
-				_best_hash: status.best_hash,
-				_best_number: status.best_number,
-				request: None,
+				best_hash: status.best_hash,
+				best_number: status.best_number,
+				block_request: None,
 				request_timestamp: None,
 				_last_sent_transactions: HashSet::new(),
+				request_id: 0,
 			};
 			peers.insert(peer_id.clone(), peer);
 			handshaking_peers.remove(&peer_id);
@@ -286,30 +298,37 @@ impl Protocol {
 
 	/// Send Status message
 	fn send_status(&self, io: &mut SyncIo, peer_id: PeerId) {
-		let chain_info = self.chain.chain_info();
-		let status = message::Status {
-			version: PROTOCOL_VERSION,
-			genesis_hash: chain_info.genesis_hash,
-			roles: self.config.roles.into(),
-			best_number: chain_info.best_number,
-			best_hash: chain_info.best_hash,
-			validator_signature: None,
-			validator_id: None,
-			parachain_id: None,
-		};
-		self.send_message(io, peer_id, Message::Status(status))
+		if let Ok(info) = self.chain.info() {
+			let status = message::Status {
+				version: PROTOCOL_VERSION,
+				genesis_hash: info.chain.genesis_hash,
+				roles: self.config.roles.into(),
+				best_number: info.chain.best_number,
+				best_hash: info.chain.best_hash,
+				validator_signature: None,
+				validator_id: None,
+				parachain_id: None,
+			};
+			self.send_message(io, peer_id, Message::Status(status))
+		}
 	}
 
 	pub fn abort(&self) {
 		let mut sync = self.sync.write();
 		let mut peers = self.peers.write();
 		let mut handshaking_peers = self.handshaking_peers.write();
-		sync.abort();
+		sync.clear();
 		peers.clear();
 		handshaking_peers.clear();
 	}
 
-	pub fn on_new_block(&self) {
+	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce) {
+		let header = announce.header;
+		self.sync.write().on_block_announce(io, self, peer_id, &header);
+	}
+
+	pub fn on_block_imported(&self, header: &Header) {
+		self.sync.write().update_chain_info(&header);
 	}
 
 	pub fn on_new_transactions(&self) {
@@ -317,6 +336,10 @@ impl Protocol {
 
 	pub fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats> {
 		BTreeMap::new()
+	}
+
+	pub fn chain(&self) -> &Client {
+		&*self.chain
 	}
 }
 
