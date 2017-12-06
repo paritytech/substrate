@@ -63,21 +63,28 @@ impl CodeExecutor for WasmExecutor {
 #[cfg(test)]
 mod tests {
 
-	use parity_wasm;
 	use super::*;
+	use state_machine::StaticExternalities;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities;
-	impl Externalities<WasmExecutor> for TestExternalities {
-		fn set_storage(&mut self, _object: i64, _key: Vec<u8>, _value: Vec<u8>) {
+	impl Externalities for TestExternalities {
+		fn set_code(&mut self, _code: Vec<u8>) {
+			unimplemented!()
+		}
+		fn set_storage(&mut self, _object: u64, _key: Vec<u8>, _value: Vec<u8>) {
 			unimplemented!()
 		}
 	}
 
-	impl StaticExternalities<WasmExecutor> for TestExternalities {
+	impl StaticExternalities for TestExternalities {
 		type Error = Error;
 
-		fn storage(&self, _object: i64, _key: Vec<u8>) -> Result<&[u8]> {
+		fn code(&self) -> Result<&[u8]> {
+			unimplemented!()
+		}
+
+		fn storage(&self, _object: u64, _key: &[u8]) -> Result<&[u8]> {
 			unimplemented!()
 		}
 	}
@@ -88,7 +95,7 @@ mod tests {
 		use parity_wasm::RuntimeValue::{I64};
 
 		let program = parity_wasm::ProgramInstance::new();
-		let test_module = include_bytes!("../../target/wasm32-unknown-unknown/release/runtime.compact.wasm");
+		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.compact.wasm");
 		let module = parity_wasm::deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
 		let module = program.add_module("test", module, None).expect("Failed to initialize module");
 		let argument: i64 = 42;
@@ -102,7 +109,7 @@ mod tests {
 		use parity_wasm::RuntimeValue::{I64};
 
 		let program = parity_wasm::ProgramInstance::new();
-		let test_module = include_bytes!("../../target/wasm32-unknown-unknown/release/runtime.compact.wasm");
+		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.compact.wasm");
 		let module = parity_wasm::deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
 		let module = program.add_module("test", module, None).expect("Failed to initialize module");
 		let argument: i64 = 42;

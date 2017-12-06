@@ -39,7 +39,7 @@ extern crate error_chain;
 //extern crate serde_derive;
 
 #[cfg(test)]
-#[macro_use]
+//#[macro_use]
 extern crate assert_matches;
 
 mod wasm_executor;
