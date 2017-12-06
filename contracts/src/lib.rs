@@ -41,12 +41,7 @@ extern crate error_chain;
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
-/*
-mod auth;
-mod balances;
-mod validator_set;
-pub mod rust_executor;
-*/
+
 mod wasm_executor;
 
 pub mod error;
