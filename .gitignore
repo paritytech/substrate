@@ -1,4 +1,5 @@
 /target/
 **/*.rs.bk
 *.swp
-runtime/target/
+runtime/**/target/
+**/._*
