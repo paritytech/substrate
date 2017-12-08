@@ -26,11 +26,13 @@ use message;
 const MAX_PARALLEL_DOWNLOADS: u32 = 1;
 
 /// Block data with origin.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockData {
 	pub block: message::BlockData,
 	pub origin: PeerId,
 }
 
+#[derive(Debug)]
 enum BlockRangeState {
 	Downloading {
 		len: BlockNumber,
@@ -96,27 +98,37 @@ impl BlockCollection {
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
 	pub fn needed_blocks(&mut self, peer_id: PeerId, count: usize, peer_best: BlockNumber, common: BlockNumber) -> Option<Range<BlockNumber>> {
 		// First block number that we need to download
+		let first_different = common + 1;
 		let count = count as BlockNumber;
-		let (range, downloading) = {
+		let (mut range, downloading) = {
 			let mut downloading_iter = self.blocks.iter().peekable();
+			let mut prev: Option<(&BlockNumber, &BlockRangeState)> = None;
 			loop {
-				break match (downloading_iter.next(), downloading_iter.peek()) {
-					(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _) if downloading < MAX_PARALLEL_DOWNLOADS  =>
+				let next = downloading_iter.next();
+				break match &(prev, next) {
+					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _) if downloading < MAX_PARALLEL_DOWNLOADS  =>
 						(*start .. *start + *len, downloading),
-					(Some((start, r)), Some(&(next_start, _))) if start + r.len() < *next_start =>
+					&(Some((start, r)), Some((next_start, _))) if start + r.len() < *next_start =>
 						(*start + r.len() .. cmp::min(*next_start, *start + count), 0), // gap
-					(Some((start, r)), None) =>
+					&(Some((start, r)), None) =>
 						(start + r.len() .. start + r.len() + count, 0), // last range
-					(None, _) =>
-						(common .. common + count, 0), // empty
-					_ => continue,
+					&(None, None) =>
+						(first_different .. first_different + count, 0), // empty
+					&(None, Some((start, _))) if *start > first_different =>
+						(first_different .. cmp::min(first_different + count, *start), 0), // gap at the start
+					_ => {
+						prev = next;
+						continue
+					},
 				}
 			}
 		};
 
+		// crop to peers best
 		if range.start >= peer_best {
 			return None;
 		}
+		range.end = cmp::min(peer_best, range.end);
 
 		self.peer_requests.insert(peer_id, range.start);
 		self.blocks.insert(range.start, BlockRangeState::Downloading{ len: range.end - range.start, downloading: downloading + 1 });
@@ -130,9 +142,8 @@ impl BlockCollection {
 		{
 			let mut prev = from;
 			for (start, range_data) in &mut self.blocks {
-				assert!(from <= *start);
 				match range_data {
-					&mut BlockRangeState::Complete(ref mut blocks) if *start == prev => {
+					&mut BlockRangeState::Complete(ref mut blocks) if *start <= prev => {
 							prev = *start + blocks.len() as BlockNumber;
 							let mut blocks = mem::replace(blocks, Vec::new());
 							drained.append(&mut blocks);
@@ -150,6 +161,7 @@ impl BlockCollection {
 	}
 
 	pub fn clear_peer_download(&mut self, peer_id: PeerId) {
+		println!("Clear {}", peer_id);
 		match self.peer_requests.entry(peer_id) {
 			Entry::Occupied(entry) => {
 				let start = entry.remove();
@@ -167,6 +179,7 @@ impl BlockCollection {
 					}
 				};
 				if remove {
+				println!("Deleting {}", start);
 					self.blocks.remove(&start);
 				}
 			},
@@ -177,133 +190,76 @@ impl BlockCollection {
 
 #[cfg(test)]
 mod test {
-	use super::BlockCollection;
-	use ethcore::client::{TestBlockChainClient, EachBlockWith, BlockId, BlockChainClient};
-	use ethcore::views::HeaderView;
-	use ethcore::header::BlockNumber;
-	use rlp::*;
+	use super::{BlockCollection, BlockData};
+	use message;
+	use primitives::block::{HeaderHash};
 
 	fn is_empty(bc: &BlockCollection) -> bool {
-		bc.heads.is_empty() &&
 		bc.blocks.is_empty() &&
-		bc.parents.is_empty() &&
-		bc.header_ids.is_empty() &&
-		bc.head.is_none() &&
-		bc.downloading_headers.is_empty() &&
-		bc.downloading_bodies.is_empty()
+		bc.peer_requests.is_empty()
+	}
+
+	fn generate_blocks(n: usize) -> Vec<message::BlockData> {
+		(0 .. n).map(|_| message::BlockData {
+			hash: HeaderHash::random(),
+			header: None,
+			body: None,
+			message: None,
+			receipt: None,
+		}).collect()
 	}
 
 	#[test]
 	fn create_clear() {
-		let mut bc = BlockCollection::new(false);
+		let mut bc = BlockCollection::new();
 		assert!(is_empty(&bc));
-		let client = TestBlockChainClient::new();
-		client.add_blocks(100, EachBlockWith::Nothing);
-		let hashes = (0 .. 100).map(|i| (&client as &BlockChainClient).block_hash(BlockId::Number(i)).unwrap()).collect();
-		bc.reset_to(hashes);
+		bc.insert(1, generate_blocks(100),  0);
 		assert!(!is_empty(&bc));
 		bc.clear();
 		assert!(is_empty(&bc));
 	}
 
 	#[test]
-	fn insert_headers() {
-		let mut bc = BlockCollection::new(false);
+	fn insert_blocks() {
+		let mut bc = BlockCollection::new();
 		assert!(is_empty(&bc));
-		let client = TestBlockChainClient::new();
-		let nblocks = 200;
-		client.add_blocks(nblocks, EachBlockWith::Nothing);
-		let blocks: Vec<_> = (0..nblocks)
-			.map(|i| (&client as &BlockChainClient).block(BlockId::Number(i as BlockNumber)).unwrap().into_inner())
-			.collect();
-		let headers: Vec<_> = blocks.iter().map(|b| Rlp::new(b).at(0).as_raw().to_vec()).collect();
-		let hashes: Vec<_> = headers.iter().map(|h| HeaderView::new(h).hash()).collect();
-		let heads: Vec<_> = hashes.iter().enumerate().filter_map(|(i, h)| if i % 20 == 0 { Some(h.clone()) } else { None }).collect();
-		bc.reset_to(heads);
-		assert!(!bc.is_empty());
-		assert_eq!(hashes[0], bc.heads[0]);
-		assert!(bc.needed_bodies(1, false).is_empty());
-		assert!(!bc.contains(&hashes[0]));
-		assert!(!bc.is_downloading(&hashes[0]));
+		let peer0 = 0;
+		let peer1 = 1;
+		let peer2 = 2;
 
-		let (h, n) = bc.needed_headers(6, false).unwrap();
-		assert!(bc.is_downloading(&hashes[0]));
-		assert_eq!(hashes[0], h);
-		assert_eq!(n, 6);
-		assert_eq!(bc.downloading_headers.len(), 1);
-		assert!(bc.drain().is_empty());
+		let blocks = generate_blocks(150);
+		assert_eq!(bc.needed_blocks(peer0, 40, 150, 0), Some(1 .. 41));
+		assert_eq!(bc.needed_blocks(peer1, 40, 150, 0), Some(41 .. 81));
+		assert_eq!(bc.needed_blocks(peer2, 40, 150, 0), Some(81 .. 121));
 
-		bc.insert_headers(headers[0..6].to_vec());
-		assert_eq!(hashes[5], bc.heads[0]);
-		for h in &hashes[0..6] {
-			bc.clear_header_download(h)
-		}
-		assert_eq!(bc.downloading_headers.len(), 0);
-		assert!(!bc.is_downloading(&hashes[0]));
-		assert!(bc.contains(&hashes[0]));
+		bc.clear_peer_download(peer1);
+		bc.insert(41, blocks[41..81].to_vec(), peer1);
+		assert_eq!(bc.drain(1), vec![]);
+		assert_eq!(bc.needed_blocks(peer1, 40, 150, 0), Some(121 .. 150));
+		bc.clear_peer_download(peer0);
+		bc.insert(1, blocks[1..11].to_vec(), peer0);
 
-		assert_eq!(&bc.drain().into_iter().map(|b| b.block).collect::<Vec<_>>()[..], &blocks[0..6]);
-		assert!(!bc.contains(&hashes[0]));
-		assert_eq!(hashes[5], bc.head.unwrap());
+		assert_eq!(bc.needed_blocks(peer0, 40, 150, 0), Some(11 .. 41));
+		assert_eq!(bc.drain(1), blocks[1..11].iter().map(|b| BlockData { block: b.clone(), origin: 0 }).collect::<Vec<_>>());
 
-		let (h, _) = bc.needed_headers(6, false).unwrap();
-		assert_eq!(hashes[5], h);
-		let (h, _) = bc.needed_headers(6, false).unwrap();
-		assert_eq!(hashes[20], h);
-		bc.insert_headers(headers[10..16].to_vec());
-		assert!(bc.drain().is_empty());
-		bc.insert_headers(headers[5..10].to_vec());
-		assert_eq!(&bc.drain().into_iter().map(|b| b.block).collect::<Vec<_>>()[..], &blocks[6..16]);
-		assert_eq!(hashes[15], bc.heads[0]);
+		bc.clear_peer_download(peer0);
+		bc.insert(11, blocks[11..41].to_vec(), peer0);
 
-		bc.insert_headers(headers[15..].to_vec());
-		bc.drain();
-		assert!(bc.is_empty());
-	}
+		let drained = bc.drain(12);
+		assert_eq!(drained[..30], blocks[11..41].iter().map(|b| BlockData { block: b.clone(), origin: 0 }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[30..], blocks[41..81].iter().map(|b| BlockData { block: b.clone(), origin: 1 }).collect::<Vec<_>>()[..]);
 
-	#[test]
-	fn insert_headers_with_gap() {
-		let mut bc = BlockCollection::new(false);
-		assert!(is_empty(&bc));
-		let client = TestBlockChainClient::new();
-		let nblocks = 200;
-		client.add_blocks(nblocks, EachBlockWith::Nothing);
-		let blocks: Vec<_> = (0..nblocks)
-			.map(|i| (&client as &BlockChainClient).block(BlockId::Number(i as BlockNumber)).unwrap().into_inner())
-			.collect();
-		let headers: Vec<_> = blocks.iter().map(|b| Rlp::new(b).at(0).as_raw().to_vec()).collect();
-		let hashes: Vec<_> = headers.iter().map(|h| HeaderView::new(h).hash()).collect();
-		let heads: Vec<_> = hashes.iter().enumerate().filter_map(|(i, h)| if i % 20 == 0 { Some(h.clone()) } else { None }).collect();
-		bc.reset_to(heads);
+		bc.clear_peer_download(peer2);
+		assert_eq!(bc.needed_blocks(peer2, 40, 150, 80), Some(81 .. 121));
+		bc.clear_peer_download(peer2);
+		bc.insert(81, blocks[81..121].to_vec(), peer2);
+		bc.clear_peer_download(peer1);
+		bc.insert(121, blocks[121..150].to_vec(), peer1);
 
-		bc.insert_headers(headers[2..22].to_vec());
-		assert_eq!(hashes[0], bc.heads[0]);
-		assert_eq!(hashes[21], bc.heads[1]);
-		assert!(bc.head.is_none());
-		bc.insert_headers(headers[0..2].to_vec());
-		assert!(bc.head.is_some());
-		assert_eq!(hashes[21], bc.heads[0]);
-	}
-
-	#[test]
-	fn insert_headers_no_gap() {
-		let mut bc = BlockCollection::new(false);
-		assert!(is_empty(&bc));
-		let client = TestBlockChainClient::new();
-		let nblocks = 200;
-		client.add_blocks(nblocks, EachBlockWith::Nothing);
-		let blocks: Vec<_> = (0..nblocks)
-			.map(|i| (&client as &BlockChainClient).block(BlockId::Number(i as BlockNumber)).unwrap().into_inner())
-			.collect();
-		let headers: Vec<_> = blocks.iter().map(|b| Rlp::new(b).at(0).as_raw().to_vec()).collect();
-		let hashes: Vec<_> = headers.iter().map(|h| HeaderView::new(h).hash()).collect();
-		let heads: Vec<_> = hashes.iter().enumerate().filter_map(|(i, h)| if i % 20 == 0 { Some(h.clone()) } else { None }).collect();
-		bc.reset_to(heads);
-
-		bc.insert_headers(headers[1..2].to_vec());
-		assert!(bc.drain().is_empty());
-		bc.insert_headers(headers[0..1].to_vec());
-		assert_eq!(bc.drain().len(), 2);
+		assert_eq!(bc.drain(80), vec![]);
+		let drained = bc.drain(81);
+		assert_eq!(drained[..40], blocks[81..121].iter().map(|b| BlockData { block: b.clone(), origin: 2 }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[40..], blocks[121..150].iter().map(|b| BlockData { block: b.clone(), origin: 1 }).collect::<Vec<_>>()[..]);
 	}
 }
 

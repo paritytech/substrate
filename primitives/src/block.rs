@@ -30,13 +30,13 @@ pub type HeaderHash = H256;
 pub type TransactionHash = H256;
 
 /// Execution log (event)
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Log(#[serde(with="bytes")] pub Vec<u8>);
 
 /// A relay chain block header.
 ///
 /// https://github.com/w3f/polkadot-spec/blob/master/spec.md#header
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -56,7 +56,7 @@ pub struct Header {
 ///
 /// Included candidates should be sorted by parachain ID, and without duplicate
 /// IDs.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Body {

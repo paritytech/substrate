@@ -78,7 +78,7 @@ pub enum BlockAttribute {
 	MessageQueue,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct BlockData {
 	pub hash: HeaderHash,
 	pub header: Option<Header>,

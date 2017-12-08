@@ -124,7 +124,7 @@ impl ChainSync {
 					peer.state = PeerSyncState::Available;
 
 					self.blocks.insert(start_block, response.blocks, peer_id);
-					self.blocks.drain(self.best_queued_number)
+					self.blocks.drain(self.best_queued_number + 1)
 				},
 				PeerSyncState::DownloadingStale(_) => {
 					peer.state = PeerSyncState::Available;

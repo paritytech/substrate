@@ -48,7 +48,7 @@ mod chain;
 mod blocks;
 
 #[cfg(test)]
-mod tests;
+mod test;
 
 pub use service::Service;
 pub use protocol::{ProtocolStatus};
