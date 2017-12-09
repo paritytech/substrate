@@ -15,7 +15,7 @@ fn panic_fmt() -> ! {
 }
 
 extern "C" {
-	fn imported(number: u64);
+	fn imported(n: u64, m: u64);
 }
 
 fn do_something(param: u64) -> u64 {
@@ -25,7 +25,8 @@ fn do_something(param: u64) -> u64 {
 /// Test some execution.
 #[no_mangle]
 pub fn test(data_length: u64) -> u64 {
-	unsafe { imported(data_length); }
+	unsafe { imported(1, 2); }
 	let b = Box::new(1);
+	let c = Box::new(2);
 	do_something(data_length)
 }

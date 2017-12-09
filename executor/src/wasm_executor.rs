@@ -24,29 +24,101 @@ use state_machine::{Externalities, CodeExecutor};
 
 use error::{Error, ErrorKind, Result};
 
-pub trait ConvertibleToWasm { const VALUE_TYPE: parity_wasm::elements::ValueType; }
-impl ConvertibleToWasm for i32 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; }
-impl ConvertibleToWasm for u32 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; }
-impl ConvertibleToWasm for i64 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I64; }
-impl ConvertibleToWasm for u64 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I64; }
-impl ConvertibleToWasm for f32 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::F32; }
-impl ConvertibleToWasm for f64 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::F64; }
-impl ConvertibleToWasm for isize { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; }
-impl ConvertibleToWasm for usize { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; }
-impl<T> ConvertibleToWasm for *const T { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; }
-impl<T> ConvertibleToWasm for *mut T { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; }
+pub trait ConvertibleToWasm { const VALUE_TYPE: parity_wasm::elements::ValueType; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue; }
+impl ConvertibleToWasm for i32 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::I32(self) } }
+impl ConvertibleToWasm for u32 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::I32(self as i32) } }
+impl ConvertibleToWasm for i64 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I64; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::I64(self) } }
+impl ConvertibleToWasm for u64 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I64; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::I64(self as i64) } }
+impl ConvertibleToWasm for f32 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::F32; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::F32(self) } }
+impl ConvertibleToWasm for f64 { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::F64; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::F64(self) } }
+impl ConvertibleToWasm for isize { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::I32(self as i32) } }
+impl ConvertibleToWasm for usize { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::I32(self as u32 as i32) } }
+impl<T> ConvertibleToWasm for *const T { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::I32(self as isize as i32) } }
+impl<T> ConvertibleToWasm for *mut T { const VALUE_TYPE: parity_wasm::elements::ValueType = parity_wasm::elements::ValueType::I32; fn to_runtime_value(self) -> parity_wasm::interpreter::RuntimeValue { parity_wasm::interpreter::RuntimeValue::I32(self as isize as i32) } }
 
 #[macro_export]
 macro_rules! convert_args {
-    () => ([]);
-    ( $( $t:ty ),* ) => ( [ $( <$t> :: VALUE_TYPE, )* ] );
+	() => ([]);
+	( $( $t:ty ),* ) => ( [ $( <$t> :: VALUE_TYPE, )* ] );
 }
 
 #[macro_export]
 macro_rules! convert_fn {
-    ( $name:ident ( $($params:tt)* ) ) => ( UserFunctionDescriptor::Static(stringify!($name), &convert_args!($($params)*), None) );
-    ( $name:ident ( $( $params:ty ),* ) -> $returns:ty ) => ( UserFunctionDescriptor::Static(stringify!($name), &convert_args!($($params),*), Some(<$returns>::VALUE_TYPE) ) );
+	( $name:ident ( $( $params:ty ),* ) ) => ( UserFunctionDescriptor::Static(stringify!($name), &convert_args!($($params),*), None) );
+	( $name:ident ( $( $params:ty ),* ) -> $returns:ty ) => ( UserFunctionDescriptor::Static(stringify!($name), &convert_args!($($params),*), Some(<$returns>::VALUE_TYPE) ) );
 }
+
+#[macro_export]
+macro_rules! reverse_params {
+	// Entry point, use brackets to recursively reverse above.
+	($body:tt, $self:ident, $context:ident, $( $names:ident : $params:ty ),*) => (
+		reverse_params!($body $self $context [ $( $names : $params ),* ]);
+	);
+	($body:tt $self:ident $context:ident [] $( $names:ident : $params:ty ),*) => ({
+		$(
+			let $names : $params = match $context.value_stack.pop_as() {
+				Ok(value) => value,
+				Err(error) => return Err(error.into()),
+			};
+		)*
+		$body
+	});
+	($body:tt $self:ident $context:ident [ $name:ident : $param:ty $(, $names:ident : $params:ty )* ] $( $reversed_names:ident : $reversed_params:ty ),*) => (
+		reverse_params!($body $self $context [ $( $names : $params ),* ] $name : $param $( , $reversed_names : $reversed_params )*);
+	);
+}
+
+#[macro_export]
+macro_rules! marshall {
+	( $context:ident, $self:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
+		let r = reverse_params!($body, $self, $context, $( $names : $params ),*);
+		Ok(Some(r.to_runtime_value()))
+	});
+	( $context:ident, $self:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
+		reverse_params!($body, $self, $context, $( $names : $params ),*);
+		Ok(None)
+	})
+}
+
+#[macro_export]
+macro_rules! dispatch {
+	( $objectname:ident, $( $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt ),* ) => (
+		fn execute(&mut self, name: &str, context: CallerContext)
+			-> result::Result<Option<parity_wasm::interpreter::RuntimeValue>, parity_wasm::interpreter::Error> {
+			let $objectname = self;
+			match name {
+				$(
+					stringify!($name) => marshall!(context, $objectname, ( $( $names : $params ),* ) $( -> $returns )* => $body),
+				)*
+				n => Err(parity_wasm::interpreter::Error::Trap(format!("not implemented: {}", n)).into())
+			}
+		}
+	);
+}
+
+#[macro_export]
+macro_rules! signatures {
+	( $( $name:ident ( $( $params:ty ),* ) $( -> $returns:ty )* ),* ) => (
+		const SIGNATURES: &'static [UserFunctionDescriptor] = &[
+			$(
+				convert_fn!( $name ( $( $params ),* ) $( -> $returns )* ),
+			)*
+		];
+	);
+}
+
+#[macro_export]
+macro_rules! function_executor {
+	( $objectname:ident : $structname:ident, $( $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt ),* ) => (
+		impl UserFunctionExecutor for $structname {
+			dispatch!($objectname, $( $name( $( $names : $params ),* ) $( -> $returns )* => $body ),*);
+		}
+		impl $structname {
+			signatures!($( $name( $( $params ),* ) $( -> $returns )* ),*);
+		}
+	);
+}
+
 
 /// Dummy rust executor for contracts.
 ///
@@ -122,35 +194,19 @@ mod tests {
 	use parity_wasm::interpreter::{RuntimeValue};
 
 	// user function executor
-	struct FunctionExecutor;
-
-	fn imported(n: u64) {
-		println!("imported {:?}", n);
+	#[derive(Default)]
+	struct FunctionExecutor {
+		heap_end: u32
 	}
 
-//	marshalled!(imported)
-
-	impl UserFunctionExecutor for FunctionExecutor {
-		fn execute(&mut self, name: &str, context: CallerContext) -> result::Result<Option<RuntimeValue>, parity_wasm::interpreter::Error> {
-			match name {
-				"imported" => {
-					let n = context.value_stack.pop_as()?;
-					imported(n);
-					Ok(None)
-				}
-				_ => Err(parity_wasm::interpreter::Error::Trap(format!("not implemented: {}", name)).into())
-			}
-		}
-	}
-
-	const SIGNATURES: &'static [UserFunctionDescriptor] = &[
-		convert_fn!(imported(u64)),
-		convert_fn!(ext_memcpy(*mut u8, *const u8, usize) -> *mut u8),
-		convert_fn!(ext_memmove(*mut u8, *const u8, usize) -> *mut u8),
-		convert_fn!(ext_memset(*mut u8, i32, usize) -> *mut u8),
-		convert_fn!(ext_malloc(usize) -> *mut u8),
-		convert_fn!(ext_free(*mut u8)),
-	];
+	function_executor!(this: FunctionExecutor,
+		imported(n: u64, m: u64) => { println!("imported {:?}, {:?}", n, m) },
+		ext_memcpy(dest: u32, src: u32, count: u32) -> u32 => { println!("memcpy {} from {}, {} bytes", dest, src, count); dest },
+		ext_memmove(dest: u32, src: u32, count: u32) -> u32 => { println!("memmove {} from {}, {} bytes", dest, src, count); dest },
+		ext_memset(dest: u32, val: i32, count: u32) -> u32 => { println!("memset {} with {}, {} bytes", dest, val, count); dest },
+		ext_malloc(count: u32) -> *mut u8 => { let r = this.heap_end; this.heap_end += count; println!("malloc {} bytes at {}", count, r); r },
+		ext_free(addr: u32) => { println!("free {}", addr) }
+	);
 
 	fn program_with_externals<E: UserFunctionExecutor + 'static>(externals: UserDefinedElements<E>, module_name: &str) -> result::Result<parity_wasm::ProgramInstance, parity_wasm::interpreter::Error> {
 		let program = parity_wasm::ProgramInstance::new();
@@ -171,9 +227,9 @@ mod tests {
 		use parity_wasm::RuntimeValue::{I64};
 
 		let externals = UserDefinedElements {
-			executor: Some(FunctionExecutor{}),
+			executor: Some(FunctionExecutor::default()),
 			globals: HashMap::new(),
-			functions: ::std::borrow::Cow::from(SIGNATURES),
+			functions: ::std::borrow::Cow::from(FunctionExecutor::SIGNATURES),
 		};
 
 		let program = program_with_externals(externals, "env").unwrap();
@@ -181,8 +237,6 @@ mod tests {
 		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.wasm");
 		let module_code = parity_wasm::deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
 		let module = program.add_module("test", module_code, None).expect("Failed to initialize module");
-
-//		module.exports.push_function("add", &[ValueType::I64, ValueType::I64], Some(ValueType::I64), marshall!(|a: u64, b: u64| a + b));
 
 		let argument: u64 = 42;
 		assert_eq!(Some(I64((argument * 2) as i64)), module.execute_export("test", vec![I64(argument as i64)].into()).unwrap());
