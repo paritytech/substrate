@@ -274,8 +274,7 @@ mod tests {
 	use std::result;
 	use std::sync::{Arc, Mutex};
 	use std::mem::transmute;
-	use parity_wasm::interpreter::{MemoryInstance, UserDefinedElements};
-	use parity_wasm::ModuleInstanceInterface;
+	use parity_wasm::{MemoryInstance, ModuleInstanceInterface, UserDefinedElements};
 	use parity_wasm::RuntimeValue::{I32, I64};
 
 	// user function executor
