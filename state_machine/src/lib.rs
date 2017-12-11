@@ -27,6 +27,8 @@ extern crate keccak_hash;
 extern crate patricia_trie;
 extern crate triehash;
 
+extern crate byteorder;
+
 use std::collections::HashMap;
 use std::fmt;
 

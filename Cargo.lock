@@ -699,6 +699,7 @@ dependencies = [
 name = "polkadot-state-machine"
 version = "0.1.0"
 dependencies = [
+ "byteorder 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "keccak-hash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memorydb 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",

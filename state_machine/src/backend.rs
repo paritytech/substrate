@@ -82,10 +82,14 @@ impl Backend for InMemory {
 		self.inner.update(changes);
 
 		// fully recalculate trie roots.
-		use std::mem::transmute;
 		let storage_roots = self.inner.storage.iter().map(|(object, storage)| {
 			let flat_trie = storage.iter().map(|(k, v)| (k.to_vec(), v.clone())).collect();
-			(unsafe { transmute::<u64, [u8; 8]>(object.to_be()) }.to_vec(), sec_trie_root(flat_trie).to_vec())
+			({
+				use byteorder::{BigEndian, ByteOrder};
+				let mut r = [0u8; 8];
+				BigEndian::write_u64(&mut r, *object);
+				r.to_vec()
+			}, sec_trie_root(flat_trie).to_vec())
 		}).collect();
 
 		let storage_tree_root = H256(sec_trie_root(storage_roots).0);
