@@ -18,7 +18,7 @@
 
 use parity_wasm;
 
-use primitives::contract::{CallData, OutData};
+use primitives::contract::CallData;
 //use serializer::{from_slice as de, to_vec as ser};
 use state_machine::{Externalities, CodeExecutor};
 
@@ -202,7 +202,7 @@ impl CodeExecutor for WasmExecutor {
 		ext: &mut E,
 		method: &str,
 		data: &CallData,
-	) -> Result<OutData> {
+	) -> Result<u64> {
 		// TODO: avoid copying code by requiring code to remain immutable through execution,
 		// splitting it off from potentially mutable externalities.
 		let code = match ext.code() {
@@ -212,7 +212,7 @@ impl CodeExecutor for WasmExecutor {
 
 		use parity_wasm::ModuleInstanceInterface;
 		use parity_wasm::interpreter::UserDefinedElements;
-		use parity_wasm::RuntimeValue::I32;
+		use parity_wasm::RuntimeValue::{I32, I64};
 		use std::collections::HashMap;
 
 		let fe_context = Arc::new(Mutex::new(None));
@@ -232,11 +232,8 @@ impl CodeExecutor for WasmExecutor {
 		module.memory(parity_wasm::interpreter::ItemIndex::Internal(0)).unwrap().set(offset, &data.0).unwrap();
 
 		module.execute_export(method, vec![I32(offset as i32), I32(size as i32)].into())
-			.map(|o| {
-				// TODO: populate vec properly
-				OutData(vec![1; if let Some(I32(l)) = o { l as usize } else { 0 }])
-			})
 			.map_err(|_| ErrorKind::Runtime.into())
+			.and_then(|i| if let Some(I64(r)) = i { Ok(r as u64) } else { Err(ErrorKind::InvalidReturn.into()) })
 	}
 }
 
@@ -274,7 +271,8 @@ mod tests {
 	use std::result;
 	use std::sync::{Arc, Mutex};
 	use std::mem::transmute;
-	use parity_wasm::{MemoryInstance, ModuleInstanceInterface, UserDefinedElements};
+	use parity_wasm::{ModuleInstanceInterface};
+	use parity_wasm::interpreter::{MemoryInstance, UserDefinedElements};
 	use parity_wasm::RuntimeValue::{I32, I64};
 
 	// user function executor

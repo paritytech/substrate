@@ -30,7 +30,7 @@ extern crate triehash;
 use std::collections::HashMap;
 use std::fmt;
 
-use primitives::contract::{CallData, OutData};
+use primitives::contract::{CallData};
 
 pub mod backend;
 mod ext;
@@ -199,7 +199,7 @@ pub trait CodeExecutor: Sized {
 		ext: &mut E,
 		method: &str,
 		data: &CallData,
-	) -> Result<OutData, Self::Error>;
+	) -> Result<u64, Self::Error>;
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -211,7 +211,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &CallData,
-) -> Result<OutData, Box<Error>> {
+) -> Result<u64, Box<Error>> {
 
 	let result = {
 		let mut externalities = ext::Ext {

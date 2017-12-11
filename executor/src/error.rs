@@ -43,6 +43,12 @@ error_chain! {
 			display("Externalities error: {}", e),
 		}
 
+		/// Invalid return type.
+		InvalidReturn {
+			description("u64 was not returned"),
+			display("Invalid type returned (should be u64)"),
+		}
+
 		/// Runtime failed.
 		Runtime {
 			description("runtime failure"),

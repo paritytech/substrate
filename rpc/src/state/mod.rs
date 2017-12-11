@@ -23,7 +23,7 @@ mod tests;
 
 use client::{self, Client};
 use primitives::{block};
-use primitives::contract::{CallData, OutData, StorageKey, StorageData};
+use primitives::contract::{CallData, StorageKey, StorageData};
 use state_machine;
 
 use self::error::Result;
@@ -37,7 +37,7 @@ build_rpc_trait! {
 
 		/// Call a contract.
 		#[rpc(name = "state_call")]
-		fn call(&self, String, CallData, block::HeaderHash) -> Result<OutData>;
+		fn call(&self, String, CallData, block::HeaderHash) -> Result<u64>;
 	}
 }
 
@@ -49,7 +49,7 @@ impl<B, E> StateApi for Client<B, E> where
 		Ok(self.storage(&block, object, &key)?)
 	}
 
-	fn call(&self, method: String, data: CallData, block: block::HeaderHash) -> Result<OutData> {
+	fn call(&self, method: String, data: CallData, block: block::HeaderHash) -> Result<u64> {
 		Ok(self.call(&block, &method, &data)?)
 	}
 }

@@ -27,7 +27,7 @@ extern crate error_chain;
 pub mod error;
 
 use primitives::{block, Address, H256};
-use primitives::contract::{CallData, OutData, StorageKey, StorageData};
+use primitives::contract::{CallData, StorageKey, StorageData};
 use state_machine::backend::Backend;
 
 use self::error::ResultExt;
@@ -80,7 +80,7 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Execute a call to a contract on top of state in a block of given hash.
-	pub fn call(&self, hash: &block::HeaderHash, method: &str, call_data: &CallData) -> error::Result<OutData> {
+	pub fn call(&self, hash: &block::HeaderHash, method: &str, call_data: &CallData) -> error::Result<u64> {
 		let state = self.state_at(hash)?;
 		let mut changes = state_machine::OverlayedChanges::default();
 
