@@ -42,6 +42,8 @@ extern crate error_chain;
 //#[macro_use]
 extern crate assert_matches;
 
+#[macro_use]
+mod wasm_utils;
 mod wasm_executor;
 
 pub mod error;
