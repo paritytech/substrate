@@ -26,7 +26,7 @@ extern crate error_chain;
 
 pub mod error;
 
-use primitives::{block, Address, H256};
+use primitives::{block, H256};
 use primitives::contract::{CallData, StorageKey, StorageData};
 use state_machine::backend::Backend;
 

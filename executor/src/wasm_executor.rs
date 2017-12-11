@@ -242,21 +242,10 @@ mod tests {
 
 	use super::*;
 	use std::collections::HashMap;
-	use state_machine::StaticExternalities;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities;
 	impl Externalities for TestExternalities {
-		fn set_code(&mut self, _code: Vec<u8>) {
-			unimplemented!()
-		}
-
-		fn set_storage(&mut self, _object: u64, _key: Vec<u8>, _value: Vec<u8>) {
-			unimplemented!()
-		}
-	}
-
-	impl StaticExternalities for TestExternalities {
 		type Error = Error;
 
 		fn code(&self) -> Result<&[u8]> {
@@ -264,6 +253,14 @@ mod tests {
 		}
 
 		fn storage(&self, _object: u64, _key: &[u8]) -> Result<&[u8]> {
+			unimplemented!()
+		}
+
+		fn set_code(&mut self, _code: Vec<u8>) {
+			unimplemented!()
+		}
+
+		fn set_storage(&mut self, _object: u64, _key: Vec<u8>, _value: Vec<u8>) {
 			unimplemented!()
 		}
 	}

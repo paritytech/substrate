@@ -19,7 +19,7 @@
 use std::{error, fmt};
 
 use backend::Backend;
-use {Externalities, StaticExternalities, OverlayedChanges};
+use {Externalities, OverlayedChanges};
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -56,7 +56,7 @@ pub struct Ext<'a, B: 'a> {
 	pub backend: &'a B,
 }
 
-impl<'a, B: 'a> StaticExternalities for Ext<'a, B>
+impl<'a, B: 'a> Externalities for Ext<'a, B>
 	where B: Backend
 {
 	type Error = B::Error;
@@ -71,39 +71,12 @@ impl<'a, B: 'a> StaticExternalities for Ext<'a, B>
 			None => self.backend.storage(object, key)
 		}
 	}
-}
-
-impl<'a, B: 'a> Externalities for Ext<'a, B>
-	where B: Backend
-{
+	
 	fn set_code(&mut self, code: Vec<u8>) {
 		self.overlay.set_code(code);
 	}
 
 	fn set_storage(&mut self, object: u64, key: Vec<u8>, value: Vec<u8>) {
 		self.overlay.set_storage(object, key, value);
-	}
-}
-
-// Static externalities
-struct StaticExt<'a, B: 'a> {
-	overlay: &'a OverlayedChanges,
-	backend: &'a B,
-}
-
-impl<'a, B: 'a> StaticExternalities for StaticExt<'a, B>
-	where B: Backend
-{
-	type Error = B::Error;
-
-	fn code(&self) -> Result<&[u8], Self::Error> {
-		Ok(self.overlay.code())
-	}
-
-	fn storage(&self, object: u64, key: &[u8]) -> Result<&[u8], Self::Error> {
-		match self.overlay.storage(object, key) {
-			Some(x) => Ok(x),
-			None => self.backend.storage(object, key)
-		}
 	}
 }

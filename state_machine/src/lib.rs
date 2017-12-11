@@ -160,26 +160,7 @@ pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
 /// Externalities: pinned to specific active address.
-pub trait Externalities: StaticExternalities {
-/*	// Get the current runtime.
-	fn code(&self) -> Result<&[u8], Self::Error> {
-		StaticExternalities::code(self)
-	}
-*/
-	/// Set the new runtime.
-	fn set_code(&mut self, code: Vec<u8>);
-
-/*	/// Read storage of current contract being called.
-	fn storage(&self, index: u64, key: &[u8]) -> Result<&[u8], Self::Error> {
-		StaticExternalities::storage(self, index, key)
-	}
-*/
-	/// Set storage of current contract being called.
-	fn set_storage(&mut self, index: u64, key: Vec<u8>, value: Vec<u8>);
-}
-
-/// Static externalities: used only for read-only requests.
-pub trait StaticExternalities {
+pub trait Externalities {
 	/// Externalities error type.
 	type Error: Error;
 
@@ -188,6 +169,12 @@ pub trait StaticExternalities {
 
 	/// Read storage of current contract being called.
 	fn storage(&self, index: u64, key: &[u8]) -> Result<&[u8], Self::Error>;
+
+	/// Set the new runtime.
+	fn set_code(&mut self, code: Vec<u8>);
+
+	/// Set storage of current contract being called.
+	fn set_storage(&mut self, index: u64, key: Vec<u8>, value: Vec<u8>);
 }
 
 /// Code execution engine.
