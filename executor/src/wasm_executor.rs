@@ -126,6 +126,12 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 
+	use std::sync::{Arc, Mutex};
+	use std::mem::transmute;
+	use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
+	use parity_wasm::interpreter::{ItemIndex, UserDefinedElements};
+	use parity_wasm::RuntimeValue::{I32, I64};
+
 	#[derive(Debug, Default)]
 	struct TestExternalities;
 	impl Externalities for TestExternalities {
@@ -147,56 +153,6 @@ mod tests {
 			unimplemented!()
 		}
 	}
-
-	use std::sync::{Arc, Mutex};
-	use std::mem::transmute;
-	use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
-	use parity_wasm::interpreter::{ItemIndex, MemoryInstance, UserDefinedElements};
-	use parity_wasm::RuntimeValue::{I32, I64};
-
-	// user function executor
-	#[derive(Default)]
-	struct FunctionExecutor {
-		context: Arc<Mutex<Option<FEContext>>>,
-	}
-
-	struct FEContext {
-		heap_end: u32,
-		memory: Arc<MemoryInstance>,
-	}
-
-	impl FEContext {
-		fn allocate(&mut self, size: u32) -> u32 {
-			let r = self.heap_end;
-			self.heap_end += size;
-			r
-		}
-		fn deallocate(&mut self, _offset: u32) {
-		}
-	}
-
-	function_executor!(this: FunctionExecutor,
-		imported(n: u64) -> u64 => { println!("imported {:?}", n); n + 1 },
-		ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
-			let mut context = this.context.lock().unwrap();
-			context.as_mut().unwrap().memory.copy_nonoverlapping(src as usize, dest as usize, count as usize).unwrap();
-			println!("memcpy {} from {}, {} bytes", dest, src, count);
-			dest
-		},
-		ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => { println!("memmove {} from {}, {} bytes", dest, src, count); dest },
-		ext_memset(dest: *mut u8, val: i32, count: usize) -> *mut u8 => { println!("memset {} with {}, {} bytes", dest, val, count); dest },
-		ext_malloc(size: usize) -> *mut u8 => {
-			let mut context = this.context.lock().unwrap();
-			let r = context.as_mut().unwrap().allocate(size);
-			println!("malloc {} bytes at {}", size, r);
-			r
-		},
-		ext_free(addr: *mut u8) => {
-			let mut context = this.context.lock().unwrap();
-			context.as_mut().unwrap().deallocate(addr);
-			println!("free {}", addr)
-		}
-	);
 
 	#[test]
 	fn should_pass_freeable_data() {
@@ -249,15 +205,5 @@ mod tests {
 		module.memory(ItemIndex::Internal(0)).unwrap().get_into(1024, unsafe { transmute::<_, &mut [u8; 8]>(&mut x) }).unwrap();
 		println!("heap: {:?}", x);
 		panic!();
-	}
-
-	#[test]
-	fn should_run_wasm() {
-		let program = ProgramInstance::new();
-		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.wasm");
-		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
-		let module = program.add_module("test", module, None).expect("Failed to initialize module");
-		let argument: i64 = 20;
-		assert_eq!(Some(I64((argument + 1) * 2)), module.execute_export("test", vec![I64(argument)].into()).unwrap());
 	}
 }
