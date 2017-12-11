@@ -3,6 +3,7 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 #![feature(alloc)]
+
 extern crate alloc;
 use alloc::boxed::Box;
 
@@ -10,12 +11,13 @@ extern crate pwasm_libc;
 extern crate pwasm_alloc;
 
 #[lang = "panic_fmt"]
-fn panic_fmt() -> ! {
+#[no_mangle]
+pub fn panic_fmt() -> ! {
 	  loop {}
 }
 
 extern "C" {
-	fn imported(n: u64, m: u64);
+	fn imported(n: u64) -> u64;
 }
 
 fn do_something(param: u64) -> u64 {
@@ -24,9 +26,22 @@ fn do_something(param: u64) -> u64 {
 
 /// Test some execution.
 #[no_mangle]
-pub fn test(data_length: u64) -> u64 {
-	unsafe { imported(1, 2); }
-	let b = Box::new(1);
-	let c = Box::new(2);
-	do_something(data_length)
+pub fn test(value: u64) -> u64 {
+	let b = Box::new(unsafe { imported(value) });
+	do_something(*b)
+}
+
+/// Test passing of data.
+#[no_mangle]
+pub fn test_data_in(freeable_data: *mut u8, size: usize) {
+	// Interpret data
+	let slice = unsafe { core::slice::from_raw_parts(freeable_data, size) };
+	let copy = slice.to_vec();
+
+	unsafe { pwasm_libc::free(freeable_data); }
+
+	// Do some stuff.
+	for b in &copy {
+		unsafe { imported(*b as u64); }
+	}
 }
