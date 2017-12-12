@@ -28,6 +28,7 @@
 //! to availability.
 
 use std::collections::{HashSet, HashMap};
+use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
 /// Statements circulated among peers.
@@ -166,14 +167,27 @@ impl<C: Context> Table<C> {
 				candidate,
 				statement.signature
 			),
-			Statement::Valid(digest) => unimplemented!(),
+			Statement::Valid(digest) => self.validity_vote(
+				context,
+				signer.clone(),
+				digest,
+				true,
+				statement.signature,
+			),
+			Statement::Invalid(digest) => self.validity_vote(
+				context,
+				signer.clone(),
+				digest,
+				false,
+				statement.signature,
+			),
 			_ => unimplemented!(),
 		};
 
 		if let Some(misbehavior) = maybe_misbehavior {
 			// all misbehavior in agreement is provable and actively malicious.
 			// punishments are not cumulative.
-			self.detected_misbehavior.insert(validator, misbehavior);
+			self.detected_misbehavior.insert(signer, misbehavior);
 		}
 	}
 
@@ -184,8 +198,6 @@ impl<C: Context> Table<C> {
 		candidate: C::Candidate,
 		signature: C::Signature,
 	) -> Option<Misbehavior<C>> {
-		use std::collections::hash_map::Entry;
-
 		let group = context.candidate_group(&candidate);
 		if !context.is_member_of(&from, &group) {
 			return Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
@@ -226,6 +238,61 @@ impl<C: Context> Table<C> {
 					validity_votes: HashMap::new(),
 					indicated_bad_by: Vec::new(),
 				});
+			}
+		}
+
+		None
+	}
+
+	fn validity_vote(
+		&mut self,
+		context: &C,
+		from: C::ValidatorId,
+		digest: C::Digest,
+		valid: bool,
+		signature: C::Signature,
+	) -> Option<Misbehavior<C>> {
+		let statement = SignedStatement {
+			signature: signature.clone(),
+			statement: if valid {
+				Statement::Valid(digest.clone())
+			} else {
+				Statement::Invalid(digest.clone())
+			}
+		};
+
+		let votes = match self.candidate_votes.get_mut(&digest) {
+			None => return None, // TODO: queue up but don't get DoS'ed
+			Some(votes) => votes,
+		};
+
+		// check that this validator actually can vote in this group.
+		if !context.is_member_of(&from, &votes.group_id) {
+			return Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
+				statement
+			}));
+		}
+
+		// check for double votes.
+		match votes.validity_votes.entry(from.clone()) {
+			Entry::Occupied(occ) => {
+				if occ.get().0 != valid {
+					let (t_signature, f_signature) = if valid {
+						(signature, occ.get().1.clone())
+					} else {
+						(occ.get().1.clone(), signature)
+					};
+
+					return Some(Misbehavior::ValidityDoubleVote(ValidityDoubleVote {
+						digest: digest,
+						t_signature,
+						f_signature,
+					}));
+				}
+			}
+			Entry::Vacant(vacant) => {
+				vacant.insert((valid, signature));
+				votes.indicated_bad_by.push(from);
 			}
 		}
 
