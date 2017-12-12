@@ -49,6 +49,25 @@ pub struct Candidate {
 	pub block: BlockData,
 }
 
+/// Candidate receipt type.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct CandidateReceipt {
+	/// The ID of the parachain this is a candidate for.
+	pub parachain_inex: Id,
+	/// The collator's account ID
+	pub collator: ::Address,
+	/// The head-data
+	pub head_data: HeadData,
+	/// Balance uploads to the relay chain.
+	pub balance_uploads: Vec<(::Address, ::uint::U256)>,
+	/// Egress queue roots.
+	pub egress_queue_roots: Vec<(Id, ::hash::H256)>,
+	/// Fees paid from the chain to the relay chain validators
+	pub fees: ::uint::U256,
+}
+
 /// Parachain ingress queue message.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
@@ -64,7 +83,7 @@ pub struct BlockData(#[serde(with="bytes")] pub Vec<u8>);
 pub struct Header(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Parachain head data included in the chain.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct HeadData(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Parachain validation code.
