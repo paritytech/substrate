@@ -34,7 +34,7 @@ extern crate polkadot_primitives as primitives;
 
 use primitives::parachain;
 
-mod table;
+pub mod table;
 
 #[cfg(test)]
 mod tests {

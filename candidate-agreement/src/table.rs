@@ -20,8 +20,8 @@
 //!
 //! These messages are used to create a proposal submitted to a BFT consensus process.
 //!
-//! Proposals can either be sets of candidates for inclusion or a special value indicating
-//! that some unspecified misbehavior has occurred.
+//! Proposals are formed of sets of candidates which have the requisite number of
+//! validity and availability votes.
 //!
 //! Each parachain is associated with two sets of validators: those which can
 //! propose and attest to validity of candidates, and those who can only attest
@@ -182,7 +182,12 @@ impl<C: Context> Table<C> {
 				false,
 				statement.signature,
 			),
-			_ => unimplemented!(),
+			Statement::Available(digest) => self.availability_vote(
+				context,
+				signer.clone(),
+				digest,
+				statement.signature,
+			)
 		};
 
 		if let Some(misbehavior) = maybe_misbehavior {
