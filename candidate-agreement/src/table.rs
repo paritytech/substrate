@@ -94,12 +94,6 @@ pub trait Context {
 		&self,
 		statement: &SignedStatement<Self>,
 	) -> Option<Self::ValidatorId>;
-
-	// sign a statement with the local key.
-	fn sign_statement(
-		&self,
-		statement: Statement<Self>,
-	) -> SignedStatement<Self>;
 }
 
 /// Misbehavior: voting both ways on candidate validity.
@@ -328,5 +322,71 @@ impl<C: Context> Table<C> {
 
 		votes.availability_votes.insert(from);
 		None
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::collections::HashMap;
+
+	#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+	struct ValidatorId(usize);
+
+	#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+	struct GroupId(usize);
+
+	// group, body
+	#[derive(Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
+	struct Candidate(usize, usize);
+
+	#[derive(Copy, Clone, Hash)]
+	struct Signature(usize);
+
+	#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+	struct Digest(usize);
+
+	struct TestContext {
+		// v -> (validity, availability)
+		validators: HashMap<ValidatorId, (GroupId, GroupId)>
+	}
+
+	impl Context for TestContext {
+		type ValidatorId = ValidatorId;
+		type Digest = Digest;
+		type Candidate = Candidate;
+		type GroupId = GroupId;
+		type Signature = Signature;
+
+		fn candidate_digest(&self, candidate: &Candidate) -> Digest {
+			Digest(candidate.1)
+		}
+
+		fn candidate_group(&self, candidate: &Candidate) -> GroupId {
+			GroupId(candidate.0)
+		}
+
+		fn is_member_of(
+			&self,
+			validator: &ValidatorId,
+			group: &GroupId
+		) -> bool {
+			self.validators.get(validator).map(|v| &v.0 == group).unwrap_or(false)
+		}
+
+		fn is_availability_guarantor_of(
+			&self,
+			validator: &ValidatorId,
+			group: &GroupId
+		) -> bool {
+			self.validators.get(validator).map(|v| &v.1 == group).unwrap_or(false)
+		}
+
+		fn statement_signer(
+			&self,
+			statement: &SignedStatement<Self>,
+		) -> Option<ValidatorId> {
+			Some(ValidatorId(statement.signature.0))
+		}
 	}
 }
