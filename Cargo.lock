@@ -613,6 +613,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "polkadot-candidate-agreement"
+version = "0.1.0"
+dependencies = [
+ "futures 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-primitives 0.1.0",
+]
+
+[[package]]
 name = "polkadot-cli"
 version = "0.1.0"
 dependencies = [

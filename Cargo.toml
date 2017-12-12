@@ -9,6 +9,7 @@ polkadot-cli = { path = "cli", version = "0.1" }
 
 [workspace]
 members = [
+	"candidate-agreement",
 	"client",
 	"contracts",
 	"primitives",

@@ -1,0 +1,8 @@
+[package]
+name = "polkadot-candidate-agreement"
+version = "0.1.0"
+authors = ["Robert Habermeier <rphmeier@gmail.com>"]
+
+[dependencies]
+futures = "0.1"
+polkadot-primitives = { path = "../primitives" }
