@@ -142,6 +142,7 @@ struct CandidateData<C: Context> {
 	group_id: C::GroupId,
 	candidate: C::Candidate,
 	validity_votes: HashMap<C::ValidatorId, (bool, C::Signature)>,
+	availability_votes: HashSet<C::ValidatorId>,
 	indicated_bad_by: Vec<C::ValidatorId>,
 }
 
@@ -236,6 +237,7 @@ impl<C: Context> Table<C> {
 					group_id: group,
 					candidate: candidate,
 					validity_votes: HashMap::new(),
+					availability_votes: HashSet::new(),
 					indicated_bad_by: Vec::new(),
 				});
 			}
@@ -252,15 +254,6 @@ impl<C: Context> Table<C> {
 		valid: bool,
 		signature: C::Signature,
 	) -> Option<Misbehavior<C>> {
-		let statement = SignedStatement {
-			signature: signature.clone(),
-			statement: if valid {
-				Statement::Valid(digest.clone())
-			} else {
-				Statement::Invalid(digest.clone())
-			}
-		};
-
 		let votes = match self.candidate_votes.get_mut(&digest) {
 			None => return None, // TODO: queue up but don't get DoS'ed
 			Some(votes) => votes,
@@ -269,7 +262,14 @@ impl<C: Context> Table<C> {
 		// check that this validator actually can vote in this group.
 		if !context.is_member_of(&from, &votes.group_id) {
 			return Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
-				statement
+				statement: SignedStatement {
+					signature: signature.clone(),
+					statement: if valid {
+						Statement::Valid(digest.clone())
+					} else {
+						Statement::Invalid(digest.clone())
+					}
+				}
 			}));
 		}
 
@@ -296,6 +296,32 @@ impl<C: Context> Table<C> {
 			}
 		}
 
+		None
+	}
+
+	fn availability_vote(
+		&mut self,
+		context: &C,
+		from: C::ValidatorId,
+		digest: C::Digest,
+		signature: C::Signature,
+	) -> Option<Misbehavior<C>> {
+		let votes = match self.candidate_votes.get_mut(&digest) {
+			None => return None, // TODO: queue up but don't get DoS'ed
+			Some(votes) => votes,
+		};
+
+		// check that this validator actually can vote in this group.
+		if !context.is_availability_guarantor_of(&from, &votes.group_id) {
+			return Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
+				statement: SignedStatement {
+					signature: signature.clone(),
+					statement: Statement::Available(digest),
+				}
+			}));
+		}
+
+		votes.availability_votes.insert(from);
 		None
 	}
 }
