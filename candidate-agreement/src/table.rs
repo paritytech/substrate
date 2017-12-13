@@ -30,8 +30,10 @@
 use std::collections::{HashSet, HashMap};
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
+use std::fmt::Debug;
 
 /// Statements circulated among peers.
+#[derive(PartialEq, Eq, Debug)]
 pub enum Statement<C: Context + ?Sized> {
 	/// Broadcast by a validator to indicate that this is his candidate for
 	/// inclusion.
@@ -50,6 +52,7 @@ pub enum Statement<C: Context + ?Sized> {
 }
 
 /// A signed statement.
+#[derive(PartialEq, Eq, Debug)]
 pub struct SignedStatement<C: Context + ?Sized> {
 	/// The statement.
 	pub statement: Statement<C>,
@@ -60,15 +63,15 @@ pub struct SignedStatement<C: Context + ?Sized> {
 /// Context for the statement table.
 pub trait Context {
 	/// A validator ID
-	type ValidatorId: Hash + Eq + Clone;
+	type ValidatorId: Hash + Eq + Clone + Debug;
 	/// The digest (hash or other unique attribute) of a candidate.
-	type Digest: Hash + Eq + Clone;
+	type Digest: Hash + Eq + Clone + Debug;
     /// Candidate type.
-	type Candidate: Ord + Clone;
+	type Candidate: Ord + Clone + Eq + Debug;
 	/// The group ID type
-	type GroupId: Hash + Eq + Clone;
+	type GroupId: Hash + Eq + Clone + Debug;
 	/// A signature type.
-	type Signature: Clone;
+	type Signature: Clone + Eq + Debug;
 
 	/// get the digest of a candidate.
 	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest;
@@ -97,6 +100,7 @@ pub trait Context {
 }
 
 /// Misbehavior: voting both ways on candidate validity.
+#[derive(PartialEq, Eq, Debug)]
 pub struct ValidityDoubleVote<C: Context> {
 	/// The candidate digest
 	pub digest: C::Digest,
@@ -107,6 +111,7 @@ pub struct ValidityDoubleVote<C: Context> {
 }
 
 /// Misbehavior: declaring multiple candidates.
+#[derive(PartialEq, Eq, Debug)]
 pub struct MultipleCandidates<C: Context> {
 	/// The first candidate seen.
 	pub first: (C::Candidate, C::Signature),
@@ -115,6 +120,7 @@ pub struct MultipleCandidates<C: Context> {
 }
 
 /// Misbehavior: submitted statement for wrong group.
+#[derive(PartialEq, Eq, Debug)]
 pub struct UnauthorizedStatement<C: Context> {
 	/// A signed statement which was submitted without proper authority.
 	pub statement: SignedStatement<C>,
@@ -122,6 +128,7 @@ pub struct UnauthorizedStatement<C: Context> {
 
 /// Different kinds of misbehavior. All of these kinds of malicious misbehavior
 /// are easily provable and extremely disincentivized.
+#[derive(PartialEq, Eq, Debug)]
 pub enum Misbehavior<C: Context> {
 	/// Voted invalid and valid on validity.
 	ValidityDoubleVote(ValidityDoubleVote<C>),
@@ -140,7 +147,17 @@ struct CandidateData<C: Context> {
 	indicated_bad_by: Vec<C::ValidatorId>,
 }
 
+/// Create a new, empty statement table.
+pub fn create<C: Context>() -> Table<C> {
+	Table {
+		proposed_candidates: HashMap::default(),
+		detected_misbehavior: HashMap::default(),
+		candidate_votes: HashMap::default(),
+	}
+}
+
 /// Stores votes
+#[derive(Default)]
 pub struct Table<C: Context> {
 	proposed_candidates: HashMap<C::ValidatorId, (C::Digest, C::Signature)>,
 	detected_misbehavior: HashMap<C::ValidatorId, Misbehavior<C>>,
@@ -330,22 +347,23 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 
-	#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+	#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 	struct ValidatorId(usize);
 
-	#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+	#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 	struct GroupId(usize);
 
 	// group, body
-	#[derive(Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
+	#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 	struct Candidate(usize, usize);
 
-	#[derive(Copy, Clone, Hash)]
+	#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 	struct Signature(usize);
 
-	#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+	#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 	struct Digest(usize);
 
+	#[derive(Debug, PartialEq, Eq)]
 	struct TestContext {
 		// v -> (validity, availability)
 		validators: HashMap<ValidatorId, (GroupId, GroupId)>
@@ -388,5 +406,39 @@ mod tests {
 		) -> Option<ValidatorId> {
 			Some(ValidatorId(statement.signature.0))
 		}
+	}
+
+	#[test]
+	fn submitting_two_candidates_is_misbehavior() {
+		let context = TestContext {
+			validators: {
+				let mut map = HashMap::new();
+				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
+				map
+			}
+		};
+
+		let mut table = create();
+		let statement_a = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(1),
+		};
+
+		let statement_b = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 999)),
+			signature: Signature(1),
+		};
+
+		table.import_statement(&context, statement_a);
+		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
+
+		table.import_statement(&context, statement_b);
+		assert_eq!(
+			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
+			&Misbehavior::MultipleCandidates(MultipleCandidates {
+				first: (Candidate(2, 100), Signature(1)),
+				second: (Candidate(2, 999), Signature(1)),
+			})
+		);
 	}
 }
