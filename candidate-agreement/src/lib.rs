@@ -16,18 +16,18 @@
 
 //! Propagation and agreement of candidates.
 //!
-//! This is parameterized by 3 numbers:
-//! N: the number of validators total
-//! P: the number of parachains
-//! F: the number of faulty nodes (s.t. 3F + 1 <= N)
-//! We also define G as the number of validators per parachain (N/P)
-//!
 //! Validators are split into groups by parachain, and each validator might come
 //! up its own candidate for their parachain. Within groups, validators pass around
 //! their candidates and produce statements of validity.
 //!
 //! Any candidate that receives majority approval by the validators in a group
-//! may be subject to inclusion.
+//! may be subject to inclusion, unless any validators flag that candidate as invalid.
+//!
+//! Wrongly flagging as invalid should be strongly disincentivized, so that in the
+//! equilibrium state it is not expected to happen. Likewise with the submission
+//! of invalid blocks.
+//!
+//! Groups themselves may be compromised by malicious validators.
 
 extern crate futures;
 extern crate polkadot_primitives as primitives;
