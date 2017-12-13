@@ -27,6 +27,7 @@
 //! propose and attest to validity of candidates, and those who can only attest
 //! to availability.
 
+use std::collections::HashSet;
 use std::collections::hash_map::{HashMap, Entry};
 use std::hash::Hash;
 use std::fmt::Debug;
@@ -59,6 +60,26 @@ pub struct SignedStatement<C: Context + ?Sized> {
 	pub signature: C::Signature,
 }
 
+// A unique trace for a class of valid statements issued by a validator.
+//
+// We keep track of which statements we have received or sent to other validators
+// in order to prevent relaying the same data multiple times.
+//
+// The signature of the statement is replaced by the validator because the validator
+// is unique while signatures are not (at least under common schemes like
+// Schnorr or ECDSA).
+#[derive(Hash, PartialEq, Eq, Clone)]
+enum StatementTrace<V, D> {
+	/// The candidate proposed by the validator.
+	Candidate(V),
+	/// A validity statement from that validator about the given digest.
+	Valid(V, D),
+	/// An invalidity statement from that validator about the given digest.
+	Invalid(V, D),
+	/// An availability statement from that validator about the given digest.
+	Available(V, D),
+}
+
 /// Context for the statement table.
 pub trait Context {
 	/// A validator ID
@@ -66,11 +87,11 @@ pub trait Context {
 	/// The digest (hash or other unique attribute) of a candidate.
 	type Digest: Hash + Eq + Clone + Debug;
     /// Candidate type.
-	type Candidate: Ord + Clone + Eq + Debug;
+	type Candidate: Ord + Eq + Clone + Debug;
 	/// The group ID type
-	type GroupId: Hash + Eq + Clone + Debug + Ord;
+	type GroupId: Hash + Ord + Eq + Clone + Debug;
 	/// A signature type.
-	type Signature: Clone + Eq + Debug;
+	type Signature: Eq + Clone +  Debug;
 
 	/// get the digest of a candidate.
 	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest;
@@ -91,7 +112,8 @@ pub trait Context {
 		group: &Self::GroupId,
 	) -> bool;
 
-	// recover signer of statement.
+	// recover signer of statement and ensure the signature corresponds to the
+	// statement.
 	fn statement_signer(
 		&self,
 		statement: &SignedStatement<Self>,
@@ -104,7 +126,7 @@ pub trait Context {
 /// Misbehavior: voting more than one way on candidate validity.
 ///
 /// Since there are three possible ways to vote, a double vote is possible in
-/// three possible combinations.
+/// three possible combinations (unordered)
 #[derive(PartialEq, Eq, Debug)]
 pub enum ValidityDoubleVote<C: Context> {
 	/// Implicit vote by issuing and explicity voting validity.
@@ -190,10 +212,16 @@ impl<C: Context> CandidateData<C> {
 	}
 }
 
+// validator metadata
+struct ValidatorData<C: Context> {
+	proposal: Option<(C::Digest, C::Signature)>,
+	known_statements: HashSet<StatementTrace<C::ValidatorId, C::Digest>>,
+}
+
 /// Create a new, empty statement table.
 pub fn create<C: Context>() -> Table<C> {
 	Table {
-		proposed_candidates: HashMap::default(),
+		validator_data: HashMap::default(),
 		detected_misbehavior: HashMap::default(),
 		candidate_votes: HashMap::default(),
 	}
@@ -202,7 +230,7 @@ pub fn create<C: Context>() -> Table<C> {
 /// Stores votes
 #[derive(Default)]
 pub struct Table<C: Context> {
-	proposed_candidates: HashMap<C::ValidatorId, (C::Digest, C::Signature)>,
+	validator_data: HashMap<C::ValidatorId, ValidatorData<C>>,
 	detected_misbehavior: HashMap<C::ValidatorId, Misbehavior<C>>,
 	candidate_votes: HashMap<C::Digest, CandidateData<C>>,
 }
@@ -251,10 +279,20 @@ impl<C: Context> Table<C> {
 	}
 
 	/// Import a signed statement.
-	pub fn import_statement(&mut self, context: &C, statement: SignedStatement<C>) {
+	///
+	/// This can note the origin of the statement to indicate that he has
+	/// seen it already.
+	pub fn import_statement(&mut self, context: &C, statement: SignedStatement<C>, from: Option<C::ValidatorId>) {
 		let signer = match context.statement_signer(&statement) {
 			None => return,
 			Some(signer) => signer,
+		};
+
+		let trace = match statement.statement {
+			Statement::Candidate(_) => StatementTrace::Candidate(signer.clone()),
+			Statement::Valid(ref d) => StatementTrace::Valid(signer.clone(), d.clone()),
+			Statement::Invalid(ref d) => StatementTrace::Invalid(signer.clone(), d.clone()),
+			Statement::Available(ref d) => StatementTrace::Available(signer.clone(), d.clone()),
 		};
 
 		let maybe_misbehavior = match statement.statement {
@@ -288,7 +326,20 @@ impl<C: Context> Table<C> {
 			// all misbehavior in agreement is provable and actively malicious.
 			// punishments are not cumulative.
 			self.detected_misbehavior.insert(signer, misbehavior);
+		} else {
+			if let Some(from) = from {
+				self.note_trace(trace.clone(), from);
+			}
+
+			self.note_trace(trace, signer);
 		}
+	}
+
+	fn note_trace(&mut self, trace: StatementTrace<C::ValidatorId, C::Digest>, known_by: C::ValidatorId) {
+		self.validator_data.entry(known_by).or_insert_with(|| ValidatorData {
+			proposal: None,
+			known_statements: HashSet::default(),
+		}).known_statements.insert(trace);
 	}
 
 	fn import_candidate(
@@ -311,25 +362,33 @@ impl<C: Context> Table<C> {
 		// check that validator hasn't already specified another candidate.
 		let digest = context.candidate_digest(&candidate);
 
-		match self.proposed_candidates.entry(from.clone()) {
-			Entry::Occupied(occ) => {
+		match self.validator_data.entry(from.clone()) {
+			Entry::Occupied(mut occ) => {
 				// if digest is different, fetch candidate and
 				// note misbehavior.
-				let old_digest = &occ.get().0;
-				if old_digest != &digest {
-					let old_candidate = self.candidate_votes.get(old_digest)
-						.expect("proposed digest implies existence of votes entry; qed")
-						.candidate
-						.clone();
+				let existing = occ.get_mut();
 
-					return Some(Misbehavior::MultipleCandidates(MultipleCandidates {
-						first: (old_candidate, occ.get().1.clone()),
-						second: (candidate, signature.clone()),
-					}));
+				if let Some((ref old_digest, ref old_sig)) = existing.proposal {
+					if old_digest != &digest {
+						let old_candidate = self.candidate_votes.get(old_digest)
+							.expect("proposed digest implies existence of votes entry; qed")
+							.candidate
+							.clone();
+
+						return Some(Misbehavior::MultipleCandidates(MultipleCandidates {
+							first: (old_candidate, old_sig.clone()),
+							second: (candidate, signature.clone()),
+						}));
+					}
+				} else {
+					existing.proposal = Some((digest.clone(), signature.clone()));
 				}
 			}
 			Entry::Vacant(vacant) => {
-				vacant.insert((digest.clone(), signature.clone()));
+				vacant.insert(ValidatorData {
+					proposal: Some((digest.clone(), signature.clone())),
+					known_statements: HashSet::new(),
+				});
 
 				// TODO: seed validity votes with issuer here?
 				self.candidate_votes.entry(digest.clone()).or_insert_with(move || CandidateData {
@@ -537,10 +596,10 @@ mod tests {
 			signature: Signature(1),
 		};
 
-		table.import_statement(&context, statement_a);
+		table.import_statement(&context, statement_a, None);
 		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
 
-		table.import_statement(&context, statement_b);
+		table.import_statement(&context, statement_b, None);
 		assert_eq!(
 			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
 			&Misbehavior::MultipleCandidates(MultipleCandidates {
@@ -566,7 +625,7 @@ mod tests {
 			signature: Signature(1),
 		};
 
-		table.import_statement(&context, statement);
+		table.import_statement(&context, statement, None);
 
 		assert_eq!(
 			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
@@ -604,8 +663,8 @@ mod tests {
 		};
 		let candidate_b_digest = Digest(987);
 
-		table.import_statement(&context, candidate_a);
-		table.import_statement(&context, candidate_b);
+		table.import_statement(&context, candidate_a, None);
+		table.import_statement(&context, candidate_b, None);
 		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
 		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(2)));
 
@@ -614,7 +673,7 @@ mod tests {
 			statement: Statement::Available(candidate_b_digest.clone()),
 			signature: Signature(1),
 		};
-		table.import_statement(&context, bad_availability_vote);
+		table.import_statement(&context, bad_availability_vote, None);
 
 		assert_eq!(
 			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
@@ -631,7 +690,7 @@ mod tests {
 			statement: Statement::Valid(candidate_a_digest.clone()),
 			signature: Signature(2),
 		};
-		table.import_statement(&context, bad_validity_vote);
+		table.import_statement(&context, bad_validity_vote, None);
 
 		assert_eq!(
 			table.detected_misbehavior.get(&ValidatorId(2)).unwrap(),
@@ -662,7 +721,7 @@ mod tests {
 		};
 		let candidate_digest = Digest(100);
 
-		table.import_statement(&context, statement);
+		table.import_statement(&context, statement, None);
 		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
 
 		let valid_statement = SignedStatement {
@@ -675,10 +734,10 @@ mod tests {
 			signature: Signature(2),
 		};
 
-		table.import_statement(&context, valid_statement);
+		table.import_statement(&context, valid_statement, None);
 		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(2)));
 
-		table.import_statement(&context, invalid_statement);
+		table.import_statement(&context, invalid_statement, None);
 
 		assert_eq!(
 			table.detected_misbehavior.get(&ValidatorId(2)).unwrap(),
@@ -707,7 +766,7 @@ mod tests {
 		};
 		let candidate_digest = Digest(100);
 
-		table.import_statement(&context, statement);
+		table.import_statement(&context, statement, None);
 		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
 
 		let extra_vote = SignedStatement {
@@ -715,7 +774,7 @@ mod tests {
 			signature: Signature(1),
 		};
 
-		table.import_statement(&context, extra_vote);
+		table.import_statement(&context, extra_vote, None);
 		assert_eq!(
 			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
 			&Misbehavior::ValidityDoubleVote(ValidityDoubleVote::IssuedAndValidity(
