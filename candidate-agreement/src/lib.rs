@@ -32,8 +32,6 @@
 extern crate futures;
 extern crate polkadot_primitives as primitives;
 
-use primitives::parachain;
-
 pub mod table;
 
 #[cfg(test)]
