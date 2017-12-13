@@ -441,4 +441,98 @@ mod tests {
 			})
 		);
 	}
+
+	#[test]
+	fn submitting_candidate_from_wrong_group_is_misbehavior() {
+		let context = TestContext {
+			validators: {
+				let mut map = HashMap::new();
+				map.insert(ValidatorId(1), (GroupId(3), GroupId(455)));
+				map
+			}
+		};
+
+		let mut table = create();
+		let statement = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(1),
+		};
+
+		table.import_statement(&context, statement);
+
+		assert_eq!(
+			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
+			&Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
+				statement: SignedStatement {
+					statement: Statement::Candidate(Candidate(2, 100)),
+					signature: Signature(1),
+				},
+			})
+		);
+	}
+
+	#[test]
+	fn unauthorized_votes() {
+		let context = TestContext {
+			validators: {
+				let mut map = HashMap::new();
+				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
+				map.insert(ValidatorId(2), (GroupId(3), GroupId(222)));
+				map
+			}
+		};
+
+		let mut table = create();
+
+		let candidate_a = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(1),
+		};
+		let candidate_a_digest = Digest(100);
+
+		let candidate_b = SignedStatement {
+			statement: Statement::Candidate(Candidate(3, 987)),
+			signature: Signature(2),
+		};
+		let candidate_b_digest = Digest(987);
+
+		table.import_statement(&context, candidate_a);
+		table.import_statement(&context, candidate_b);
+		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
+		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(2)));
+
+		// validator 1 votes for availability on 2's candidate.
+		let bad_availability_vote = SignedStatement {
+			statement: Statement::Available(candidate_b_digest.clone()),
+			signature: Signature(1),
+		};
+		table.import_statement(&context, bad_availability_vote);
+
+		assert_eq!(
+			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
+			&Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
+				statement: SignedStatement {
+					statement: Statement::Available(candidate_b_digest),
+					signature: Signature(1),
+				},
+			})
+		);
+
+		// validator 2 votes for validity on 1's candidate.
+		let bad_validity_vote = SignedStatement {
+			statement: Statement::Valid(candidate_a_digest.clone()),
+			signature: Signature(2),
+		};
+		table.import_statement(&context, bad_validity_vote);
+
+		assert_eq!(
+			table.detected_misbehavior.get(&ValidatorId(2)).unwrap(),
+			&Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
+				statement: SignedStatement {
+					statement: Statement::Valid(candidate_a_digest),
+					signature: Signature(2),
+				},
+			})
+		);
+	}
 }
