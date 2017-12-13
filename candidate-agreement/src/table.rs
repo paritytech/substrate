@@ -69,7 +69,7 @@ pub trait Context {
     /// Candidate type.
 	type Candidate: Ord + Clone + Eq + Debug;
 	/// The group ID type
-	type GroupId: Hash + Eq + Clone + Debug;
+	type GroupId: Hash + Eq + Clone + Debug + Ord;
 	/// A signature type.
 	type Signature: Clone + Eq + Debug;
 
@@ -97,6 +97,9 @@ pub trait Context {
 		&self,
 		statement: &SignedStatement<Self>,
 	) -> Option<Self::ValidatorId>;
+
+	// requisite number of votes for validity and availability respectively from a group.
+	fn requisite_votes(&self, group: &Self::GroupId) -> (usize, usize);
 }
 
 /// Misbehavior: voting both ways on candidate validity.
@@ -147,6 +150,17 @@ struct CandidateData<C: Context> {
 	indicated_bad_by: Vec<C::ValidatorId>,
 }
 
+impl<C: Context> CandidateData<C> {
+	// Candidate data can be included in a proposal
+	// if it has enough validity and availability votes
+	// and no validators have called it bad.
+	fn can_be_included(&self, validity_threshold: usize, availability_threshold: usize) -> bool {
+		self.indicated_bad_by.is_empty()
+			&& self.validity_votes.len() >= validity_threshold
+			&& self.availability_votes.len() >= availability_threshold
+	}
+}
+
 /// Create a new, empty statement table.
 pub fn create<C: Context>() -> Table<C> {
 	Table {
@@ -165,6 +179,35 @@ pub struct Table<C: Context> {
 }
 
 impl<C: Context> Table<C> {
+	/// Produce a set of proposed candidates.
+	///
+	/// This will be at most one per group, consisting of the
+	/// best candidate for each group with requisite votes for inclusion.
+	pub fn proposed_candidates(&self, context: &C) -> Vec<C::Candidate> {
+		use std::collections::BTreeMap;
+		use std::collections::btree_map::Entry as BTreeEntry;
+
+		let mut best_candidates = BTreeMap::new();
+		for candidate_data in self.candidate_votes.values() {
+			let group_id = &candidate_data.group_id;
+			let (validity_t, availability_t) = context.requisite_votes(group_id);
+
+			if !candidate_data.can_be_included(validity_t, availability_t) { continue }
+			let candidate = &candidate_data.candidate;
+			match best_candidates.entry(group_id.clone()) {
+				BTreeEntry::Occupied(mut occ) => {
+					let mut candidate_ref = occ.get_mut();
+					if *candidate_ref < candidate {
+						*candidate_ref = candidate;
+					}
+				}
+				BTreeEntry::Vacant(vacant) => { vacant.insert(candidate); },
+			}
+		}
+
+		best_candidates.values().map(|v| C::Candidate::clone(v)).collect::<Vec<_>>()
+	}
+
 	/// Import a signed statement
 	pub fn import_statement(&mut self, context: &C, statement: SignedStatement<C>) {
 		let signer = match context.statement_signer(&statement) {
@@ -350,7 +393,7 @@ mod tests {
 	#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 	struct ValidatorId(usize);
 
-	#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+	#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 	struct GroupId(usize);
 
 	// group, body
@@ -405,6 +448,10 @@ mod tests {
 			statement: &SignedStatement<Self>,
 		) -> Option<ValidatorId> {
 			Some(ValidatorId(statement.signature.0))
+		}
+
+		fn requisite_votes(&self, _id: &GroupId) -> (usize, usize) {
+			(6, 34)
 		}
 	}
 
@@ -534,5 +581,83 @@ mod tests {
 				},
 			})
 		);
+	}
+
+	#[test]
+	fn validity_double_vote_is_misbehavior() {
+		let context = TestContext {
+			validators: {
+				let mut map = HashMap::new();
+				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
+				map.insert(ValidatorId(2), (GroupId(2), GroupId(246)));
+				map
+			}
+		};
+
+		let mut table = create();
+		let statement = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(1),
+		};
+		let candidate_digest = Digest(100);
+
+		table.import_statement(&context, statement);
+		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
+
+		let valid_statement = SignedStatement {
+			statement: Statement::Valid(candidate_digest.clone()),
+			signature: Signature(2),
+		};
+
+		let invalid_statement = SignedStatement {
+			statement: Statement::Invalid(candidate_digest.clone()),
+			signature: Signature(2),
+		};
+
+		table.import_statement(&context, valid_statement);
+		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(2)));
+
+		table.import_statement(&context, invalid_statement);
+
+		assert_eq!(
+			table.detected_misbehavior.get(&ValidatorId(2)).unwrap(),
+			&Misbehavior::ValidityDoubleVote(ValidityDoubleVote {
+				digest: candidate_digest,
+				f_signature: Signature(2),
+				t_signature: Signature(2),
+			})
+		);
+	}
+
+	#[test]
+	fn candidate_can_be_included() {
+		let validity_threshold = 6;
+		let availability_threshold = 34;
+
+		let mut candidate = CandidateData::<TestContext> {
+			group_id: GroupId(4),
+			candidate: Candidate(4, 12345),
+			validity_votes: HashMap::new(),
+			availability_votes: HashSet::new(),
+			indicated_bad_by: Vec::new(),
+		};
+
+		assert!(!candidate.can_be_included(validity_threshold, availability_threshold));
+
+		for i in 0..validity_threshold {
+			candidate.validity_votes.insert(ValidatorId(i + 100), (true, Signature(i + 100)));
+		}
+
+		assert!(!candidate.can_be_included(validity_threshold, availability_threshold));
+
+		for i in 0..availability_threshold {
+			candidate.availability_votes.insert(ValidatorId(i + 255));
+		}
+
+		assert!(candidate.can_be_included(validity_threshold, availability_threshold));
+
+		candidate.indicated_bad_by.push(ValidatorId(1024));
+
+		assert!(!candidate.can_be_included(validity_threshold, availability_threshold));
 	}
 }
