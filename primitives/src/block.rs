@@ -81,4 +81,28 @@ mod tests {
   ]
 }"#);
 	}
+
+	#[test]
+	fn test_body_serialization() {
+		assert_eq!(ser::to_string_pretty(&Body {
+			candidates: vec![
+				parachain::Candidate {
+					parachain_index: 10.into(),
+					collator_signature: Default::default(),
+					unprocessed_ingress: Default::default(),
+					block: ::parachain::BlockData(vec![1, 3, 5, 8]),
+				}
+			],
+		}), r#"{
+  "candidates": [
+    {
+      "parachainIndex": 10,
+      "collatorSignature": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "unprocessedIngress": [],
+      "block": "0x01030508"
+    }
+  ]
+}"#);
+	}
+
 }
