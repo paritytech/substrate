@@ -11,6 +11,7 @@ polkadot-cli = { path = "cli", version = "0.1" }
 members = [
 	"candidate-agreement",
 	"client",
+	"collator",
 	"contracts",
 	"primitives",
 	"rpc",

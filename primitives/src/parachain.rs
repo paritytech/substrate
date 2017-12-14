@@ -44,7 +44,7 @@ pub struct Candidate {
 	/// Unprocessed ingress queue.
 	///
 	/// Ordered by parachain ID and block number.
-	pub unprocessed_ingress: Vec<(u64, Vec<Message>)>,
+	pub unprocessed_ingress: ConsolidatedIngress,
 	/// Block data
 	pub block: BlockData,
 }
@@ -71,6 +71,13 @@ pub struct CandidateReceipt {
 /// Parachain ingress queue message.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
+
+/// Consolidated ingress queue data.
+///
+/// This is just an ordered vector of other parachains' egress queues,
+/// obtained according to the routing rules.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 
 /// Parachain block data.
 ///
