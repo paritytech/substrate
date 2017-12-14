@@ -76,7 +76,7 @@ pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
 ///
 /// This is just an ordered vector of other parachains' egress queues,
 /// obtained according to the routing rules.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 
 /// Parachain block data.
@@ -111,10 +111,10 @@ mod tests {
 		assert_eq!(ser::to_string_pretty(&Candidate {
 			parachain_index: 5.into(),
 			collator_signature: 10.into(),
-			unprocessed_ingress: vec![
-				(1, vec![Message(vec![2])]),
-				(2, vec![Message(vec![2]), Message(vec![3])]),
-			],
+			unprocessed_ingress: ConsolidatedIngress(vec![
+				(Id(1), vec![Message(vec![2])]),
+				(Id(2), vec![Message(vec![2]), Message(vec![3])]),
+			]),
 			block: BlockData(vec![1, 2, 3]),
     }), r#"{
   "parachainIndex": 5,
