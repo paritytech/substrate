@@ -29,14 +29,9 @@
 //!
 //! Groups themselves may be compromised by malicious validators.
 
+#[macro_use]
 extern crate futures;
 extern crate polkadot_primitives as primitives;
 
+pub mod bft;
 pub mod table;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-    }
-}
