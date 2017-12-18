@@ -55,7 +55,7 @@ pub struct LocalizedMessage<P, V> {
 ///
 /// This will collect 2f + 1 "prepare" messages. Since this is all within a single
 /// view, the commit phase is not necessary.
-// TODO: consider cross-view committing?
+// TODO: consider cross-view committing
 // TODO: impl future.
 pub fn agree<'a, P, I, O, V>(local_proposal: P, input: I, output: O, max_faulty: usize)
 	-> Box<Future<Item=P, Error=I::Error> + Send + 'a>
@@ -179,6 +179,43 @@ mod tests {
 		let iter = (1..(max_faulty * 2)).map(|i| {
 			LocalizedMessage {
 				message: Message::Prepare(100_000),
+				sender: i,
+			}
+		});
+
+		let (_i_tx, _) = i_tx.send_all(::futures::stream::iter_ok(iter)).wait().unwrap();
+
+		::std::thread::spawn(move || {
+			::std::thread::sleep(::std::time::Duration::from_millis(250));
+			timeout_tx.send(None).unwrap();
+		});
+
+		let agreed_value = agreement.map(Some).select(timeout_rx.map_err(|_| ()))
+			.wait()
+			.map(|(r, _)| r)
+			.map_err(|(e, _)| e)
+			.expect("not to have an error");
+
+		assert!(agreed_value.is_none());
+	}
+
+	#[test]
+	fn never_concludes_on_2f_prepares_for_different_proposal() {
+		let (i_tx, i_rx) = ::futures::sync::mpsc::channel(10);
+		let (o_tx, _o_rx) = ::futures::sync::mpsc::channel(10);
+		let (timeout_tx, timeout_rx) = ::futures::sync::oneshot::channel();
+		let max_faulty = 3;
+
+		let agreement = agree(
+			100_000,
+			i_rx.map_err(|_| ()),
+			o_tx.sink_map_err(|_| ()),
+			max_faulty,
+		);
+
+		let iter = (0..(max_faulty * 2)).map(|i| {
+			LocalizedMessage {
+				message: Message::Prepare(100_001),
 				sender: i,
 			}
 		});
