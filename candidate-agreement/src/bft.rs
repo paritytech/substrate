@@ -20,14 +20,14 @@
 //! known by each node. The proposals they have may differ, so the agreement
 //! may never complete.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 use futures::{Future, Stream, Sink};
 use futures::future::{ok, loop_fn, Loop};
 
 /// Messages over the proposal.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message<P> {
 	/// Prepare to vote for proposal P.
 	Prepare(P),
@@ -51,6 +51,51 @@ pub struct Agreed<P, V, S> {
 	pub proposal: P,
 	/// The justification for the proposal.
 	pub justification: Vec<LocalizedMessage<P, V, S>>,
+}
+
+/// Check validity and compactness justification set for a proposal.
+///
+/// Validity checks whether the set of signed messages is enough to justify
+/// the agreement of the proposal by the validators.
+///
+/// Compactness enforces that no extraneous messages are included.
+///
+/// Provide the proposal, the justification set to check, and a closure for
+/// extracting validator IDs from signatures. Should return true only if the
+/// signature is valid and the signer was a validator at that time.
+pub fn check_justification<P, V, S, C>(
+	proposal: P,
+	justification: &[LocalizedMessage<P, V, S>],
+	max_faulty: usize,
+	check_sig: C,
+) -> bool
+	where
+		P: Eq,
+		V: Hash + Eq,
+		C: Fn(&Message<P>, &S) -> Option<V>
+{
+	let mut prepared = HashSet::new();
+
+	for message in justification {
+		let signer = match check_sig(&message.message, &message.signature) {
+			Some(signer) => signer,
+			None => return false, // compactness.
+		};
+
+		if signer != message.sender { return false }
+
+		match message.message {
+			Message::Prepare(ref p) if p == &proposal => {},
+			_ => return false,
+		};
+
+		// compactness
+		if !prepared.insert(signer) { return false }
+
+		if prepared.len() > max_faulty * 2 { return true }
+	}
+
+	false
 }
 
 /// Reach BFT agreement. Input the local proposal, message input stream, message output stream,
@@ -198,7 +243,7 @@ mod tests {
 		let agreement = agree(
 			100_000,
 			255,
-			|_msg| true,
+			|msg| (msg.clone(), 255),
 			i_rx.map_err(|_| ()),
 			o_tx.sink_map_err(|_| ()),
 			max_faulty,
@@ -208,7 +253,7 @@ mod tests {
 			LocalizedMessage {
 				message: Message::Prepare(100_000),
 				sender: i,
-				signature: true,
+				signature: (Message::Prepare(100_000), i),
 			}
 		});
 
@@ -227,6 +272,12 @@ mod tests {
 			.expect("not to fail to agree");
 
 		assert_eq!(agreed_value.proposal, 100_000);
+		assert!(check_justification(
+			agreed_value.proposal,
+			&agreed_value.justification,
+			max_faulty,
+			|msg, sig| if msg == &sig.0 { Some(sig.1) } else { None }
+		));
 	}
 
 	#[test]
@@ -239,7 +290,7 @@ mod tests {
 		let agreement = agree(
 			100_000,
 			255,
-			|_msg| true,
+			|msg| (msg.clone(), 255),
 			i_rx.map_err(|_| ()),
 			o_tx.sink_map_err(|_| ()),
 			max_faulty,
@@ -249,7 +300,7 @@ mod tests {
 			LocalizedMessage {
 				message: Message::Prepare(100_001),
 				sender: i,
-				signature: true,
+				signature: (Message::Prepare(100_001), i),
 			}
 		});
 
@@ -268,6 +319,12 @@ mod tests {
 			.expect("not to fail to agree");
 
 		assert_eq!(agreed_value.proposal, 100_001);
+		assert!(check_justification(
+			agreed_value.proposal,
+			&agreed_value.justification,
+			max_faulty,
+			|msg, sig| if msg == &sig.0 { Some(sig.1) } else { None }
+		));
 	}
 
 	#[test]
