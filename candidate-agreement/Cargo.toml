@@ -1,7 +1,7 @@
 [package]
 name = "polkadot-candidate-agreement"
 version = "0.1.0"
-authors = ["Robert Habermeier <rphmeier@gmail.com>"]
+authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 futures = "0.1"
