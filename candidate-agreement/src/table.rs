@@ -32,6 +32,49 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::hash::Hash;
 use std::fmt::Debug;
 
+/// Context for the statement table.
+pub trait Context {
+	/// A validator ID
+	type ValidatorId: Hash + Eq + Clone + Debug;
+	/// The digest (hash or other unique attribute) of a candidate.
+	type Digest: Hash + Eq + Clone + Debug;
+    /// Candidate type.
+	type Candidate: Ord + Eq + Clone + Debug;
+	/// The group ID type
+	type GroupId: Hash + Ord + Eq + Clone + Debug;
+	/// A signature type.
+	type Signature: Eq + Clone +  Debug;
+
+	/// get the digest of a candidate.
+	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest;
+
+	/// get the group of a candidate.
+	fn candidate_group(&self, candidate: &Self::Candidate) -> Self::GroupId;
+
+	/// Whether a validator is a member of a group.
+	/// Members are meant to submit candidates and vote on validity.
+	fn is_member_of(&self, validator: &Self::ValidatorId, group: &Self::GroupId) -> bool;
+
+	/// Whether a validator is an availability guarantor of a group.
+	/// Guarantors are meant to vote on availability for candidates submitted
+	/// in a group.
+	fn is_availability_guarantor_of(
+		&self,
+		validator: &Self::ValidatorId,
+		group: &Self::GroupId,
+	) -> bool;
+
+	// recover signer of statement and ensure the signature corresponds to the
+	// statement.
+	fn statement_signer(
+		&self,
+		statement: &SignedStatement<Self>,
+	) -> Option<Self::ValidatorId>;
+
+	// requisite number of votes for validity and availability respectively from a group.
+	fn requisite_votes(&self, group: &Self::GroupId) -> (usize, usize);
+}
+
 /// Statements circulated among peers.
 #[derive(PartialEq, Eq, Debug)]
 pub enum Statement<C: Context + ?Sized> {
@@ -78,49 +121,6 @@ enum StatementTrace<V, D> {
 	Invalid(V, D),
 	/// An availability statement from that validator about the given digest.
 	Available(V, D),
-}
-
-/// Context for the statement table.
-pub trait Context {
-	/// A validator ID
-	type ValidatorId: Hash + Eq + Clone + Debug;
-	/// The digest (hash or other unique attribute) of a candidate.
-	type Digest: Hash + Eq + Clone + Debug;
-    /// Candidate type.
-	type Candidate: Ord + Eq + Clone + Debug;
-	/// The group ID type
-	type GroupId: Hash + Ord + Eq + Clone + Debug;
-	/// A signature type.
-	type Signature: Eq + Clone +  Debug;
-
-	/// get the digest of a candidate.
-	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest;
-
-	/// get the group of a candidate.
-	fn candidate_group(&self, candidate: &Self::Candidate) -> Self::GroupId;
-
-	/// Whether a validator is a member of a group.
-	/// Members are meant to submit candidates and vote on validity.
-	fn is_member_of(&self, validator: &Self::ValidatorId, group: &Self::GroupId) -> bool;
-
-	/// Whether a validator is an availability guarantor of a group.
-	/// Guarantors are meant to vote on availability for candidates submitted
-	/// in a group.
-	fn is_availability_guarantor_of(
-		&self,
-		validator: &Self::ValidatorId,
-		group: &Self::GroupId,
-	) -> bool;
-
-	// recover signer of statement and ensure the signature corresponds to the
-	// statement.
-	fn statement_signer(
-		&self,
-		statement: &SignedStatement<Self>,
-	) -> Option<Self::ValidatorId>;
-
-	// requisite number of votes for validity and availability respectively from a group.
-	fn requisite_votes(&self, group: &Self::GroupId) -> (usize, usize);
 }
 
 /// Misbehavior: voting more than one way on candidate validity.
