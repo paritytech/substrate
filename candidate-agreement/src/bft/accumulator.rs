@@ -158,7 +158,7 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 		let (sender, signature) = (message.sender, message.signature);
 
 		match message.message {
-			Message::Propose(_, p) => self.import_proposal(p, sender, signature),
+			Message::Propose(_, p) => self.import_proposal(p, sender),
 			Message::Prepare(_, d) => self.import_prepare(d, sender, signature),
 			Message::Commit(_, d) => self.import_commit(d, sender, signature),
 			Message::AdvanceRound(_) => self.import_advance_round(sender),
@@ -169,7 +169,6 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 		&mut self,
 		proposal: C,
 		sender: V,
-		signature: S,
 	) {
 		if sender != self.round_proposer || self.proposal.is_some() { return }
 

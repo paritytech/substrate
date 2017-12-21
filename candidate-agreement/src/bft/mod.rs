@@ -16,12 +16,6 @@
 
 //! BFT Agreement based on a rotating proposer in different rounds.
 
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
-
-use futures::{IntoFuture, Future, Stream, Sink};
-use futures::future::{ok, loop_fn, Loop};
-
 mod accumulator;
 
 /// Messages over the proposal.
