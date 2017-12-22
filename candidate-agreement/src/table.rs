@@ -64,13 +64,6 @@ pub trait Context {
 		group: &Self::GroupId,
 	) -> bool;
 
-	// recover signer of statement and ensure the signature corresponds to the
-	// statement.
-	fn statement_signer(
-		&self,
-		statement: &SignedStatement<Self>,
-	) -> Option<Self::ValidatorId>;
-
 	// requisite number of votes for validity and availability respectively from a group.
 	fn requisite_votes(&self, group: &Self::GroupId) -> (usize, usize);
 }
@@ -101,6 +94,8 @@ pub struct SignedStatement<C: Context + ?Sized> {
 	pub statement: Statement<C>,
 	/// The signature.
 	pub signature: C::Signature,
+	/// The sender.
+	pub sender: C::ValidatorId,
 }
 
 // A unique trace for a class of valid statements issued by a validator.
@@ -303,49 +298,47 @@ impl<C: Context> Table<C> {
 		::std::mem::replace(&mut self.detected_misbehavior, HashMap::new())
 	}
 
-	/// Import a signed statement.
+	/// Import a signed statement. Signatures should be checked for validity, and the
+	/// sender should be checked to actually be a validator.
 	///
 	/// This can note the origin of the statement to indicate that he has
 	/// seen it already.
 	pub fn import_statement(&mut self, context: &C, statement: SignedStatement<C>, from: Option<C::ValidatorId>)
 		-> Option<Summary<C::Digest, C::GroupId>>
 	{
-		let signer = match context.statement_signer(&statement) {
-			None => return None,
-			Some(signer) => signer,
-		};
+		let SignedStatement { statement, signature, sender: signer } = statement;
 
-		let trace = match statement.statement {
+		let trace = match statement {
 			Statement::Candidate(_) => StatementTrace::Candidate(signer.clone()),
 			Statement::Valid(ref d) => StatementTrace::Valid(signer.clone(), d.clone()),
 			Statement::Invalid(ref d) => StatementTrace::Invalid(signer.clone(), d.clone()),
 			Statement::Available(ref d) => StatementTrace::Available(signer.clone(), d.clone()),
 		};
 
-		let (maybe_misbehavior, maybe_summary) = match statement.statement {
+		let (maybe_misbehavior, maybe_summary) = match statement {
 			Statement::Candidate(candidate) => self.import_candidate(
 				context,
 				signer.clone(),
 				candidate,
-				statement.signature
+				signature
 			),
 			Statement::Valid(digest) => self.validity_vote(
 				context,
 				signer.clone(),
 				digest,
-				ValidityVote::Valid(statement.signature),
+				ValidityVote::Valid(signature),
 			),
 			Statement::Invalid(digest) => self.validity_vote(
 				context,
 				signer.clone(),
 				digest,
-				ValidityVote::Invalid(statement.signature),
+				ValidityVote::Invalid(signature),
 			),
 			Statement::Available(digest) => self.availability_vote(
 				context,
 				signer.clone(),
 				digest,
-				statement.signature,
+				signature,
 			)
 		};
 
@@ -385,6 +378,7 @@ impl<C: Context> Table<C> {
 					statement: SignedStatement {
 						signature,
 						statement: Statement::Candidate(candidate),
+						sender: from,
 					},
 				})),
 				None,
@@ -469,6 +463,7 @@ impl<C: Context> Table<C> {
 				Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
 					statement: SignedStatement {
 						signature: sig,
+						sender: from,
 						statement: if valid {
 							Statement::Valid(digest)
 						} else {
@@ -540,6 +535,7 @@ impl<C: Context> Table<C> {
 					statement: SignedStatement {
 						signature: signature.clone(),
 						statement: Statement::Available(digest),
+						sender: from,
 					}
 				})),
 				None
@@ -609,13 +605,6 @@ mod tests {
 			self.validators.get(validator).map(|v| &v.1 == group).unwrap_or(false)
 		}
 
-		fn statement_signer(
-			&self,
-			statement: &SignedStatement<Self>,
-		) -> Option<ValidatorId> {
-			Some(ValidatorId(statement.signature.0))
-		}
-
 		fn requisite_votes(&self, _id: &GroupId) -> (usize, usize) {
 			(6, 34)
 		}
@@ -635,11 +624,13 @@ mod tests {
 		let statement_a = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 
 		let statement_b = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 999)),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 
 		table.import_statement(&context, statement_a, None);
@@ -669,6 +660,7 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 
 		table.import_statement(&context, statement, None);
@@ -679,6 +671,7 @@ mod tests {
 				statement: SignedStatement {
 					statement: Statement::Candidate(Candidate(2, 100)),
 					signature: Signature(1),
+					sender: ValidatorId(1),
 				},
 			})
 		);
@@ -700,12 +693,14 @@ mod tests {
 		let candidate_a = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 		let candidate_a_digest = Digest(100);
 
 		let candidate_b = SignedStatement {
 			statement: Statement::Candidate(Candidate(3, 987)),
 			signature: Signature(2),
+			sender: ValidatorId(2),
 		};
 		let candidate_b_digest = Digest(987);
 
@@ -718,6 +713,7 @@ mod tests {
 		let bad_availability_vote = SignedStatement {
 			statement: Statement::Available(candidate_b_digest.clone()),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 		table.import_statement(&context, bad_availability_vote, None);
 
@@ -727,6 +723,7 @@ mod tests {
 				statement: SignedStatement {
 					statement: Statement::Available(candidate_b_digest),
 					signature: Signature(1),
+					sender: ValidatorId(1),
 				},
 			})
 		);
@@ -735,6 +732,7 @@ mod tests {
 		let bad_validity_vote = SignedStatement {
 			statement: Statement::Valid(candidate_a_digest.clone()),
 			signature: Signature(2),
+			sender: ValidatorId(2),
 		};
 		table.import_statement(&context, bad_validity_vote, None);
 
@@ -744,6 +742,7 @@ mod tests {
 				statement: SignedStatement {
 					statement: Statement::Valid(candidate_a_digest),
 					signature: Signature(2),
+					sender: ValidatorId(2),
 				},
 			})
 		);
@@ -764,6 +763,7 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 		let candidate_digest = Digest(100);
 
@@ -773,11 +773,13 @@ mod tests {
 		let valid_statement = SignedStatement {
 			statement: Statement::Valid(candidate_digest.clone()),
 			signature: Signature(2),
+			sender: ValidatorId(2),
 		};
 
 		let invalid_statement = SignedStatement {
 			statement: Statement::Invalid(candidate_digest.clone()),
 			signature: Signature(2),
+			sender: ValidatorId(2),
 		};
 
 		table.import_statement(&context, valid_statement, None);
@@ -809,6 +811,7 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 		let candidate_digest = Digest(100);
 
@@ -818,6 +821,7 @@ mod tests {
 		let extra_vote = SignedStatement {
 			statement: Statement::Valid(candidate_digest.clone()),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 
 		table.import_statement(&context, extra_vote, None);
@@ -876,6 +880,7 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 
 		let summary = table.import_statement(&context, statement, None)
@@ -902,6 +907,7 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 		let candidate_digest = Digest(100);
 
@@ -911,6 +917,7 @@ mod tests {
 		let vote = SignedStatement {
 			statement: Statement::Valid(candidate_digest.clone()),
 			signature: Signature(2),
+			sender: ValidatorId(2),
 		};
 
 		let summary = table.import_statement(&context, vote, None)
@@ -939,6 +946,7 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
+			sender: ValidatorId(1),
 		};
 		let candidate_digest = Digest(100);
 
@@ -948,6 +956,7 @@ mod tests {
 		let vote = SignedStatement {
 			statement: Statement::Available(candidate_digest.clone()),
 			signature: Signature(2),
+			sender: ValidatorId(2),
 		};
 
 		let summary = table.import_statement(&context, vote, None)
