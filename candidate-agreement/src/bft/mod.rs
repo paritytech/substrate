@@ -67,7 +67,6 @@ pub struct Agreed<T, P, V, S> {
 pub struct Params<
 	Validator,
 	SignLocal,
-	Timeout,
 	CanInclude,
 	MessagesIn,
 	MessagesOut,
@@ -78,8 +77,6 @@ pub struct Params<
 	pub local_id: Validator,
 	/// A closure for signing local messages.
 	pub sign_local: SignLocal,
-	/// A timeout that fires when the view change should begin.
-	pub begin_view_change: Timeout,
 	/// A function for checking if a proposal can be voted for.
 	pub can_include: CanInclude,
 	/// The input stream. Should never conclude, and should yield only messages

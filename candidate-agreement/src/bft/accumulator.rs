@@ -524,4 +524,42 @@ mod tests {
 			s => panic!("wrong state: {:?}", s),
 		}
 	}
+
+	#[test]
+	fn begin_to_advance() {
+		let mut accumulator = Accumulator::<Candidate, Digest, _, _>::new(1, 3, ValidatorId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		for i in 0..7 {
+			accumulator.import_message(LocalizedMessage {
+				sender: ValidatorId(i),
+				signature: Signature(1, i),
+				message: Message::AdvanceRound(1),
+			});
+		}
+
+		match accumulator.state() {
+			&State::Advanced(ref j) => assert!(j.is_none()),
+			s => panic!("wrong state: {:?}", s),
+		}
+	}
+
+	#[test]
+	fn conclude_without_prepare() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 3, ValidatorId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		for i in 0..7 {
+			accumulator.import_message(LocalizedMessage {
+				sender: ValidatorId(i),
+				signature: Signature(999, i),
+				message: Message::Commit(1, Digest(999)),
+			});
+		}
+
+		match accumulator.state() {
+			&State::Concluded(ref j) => assert_eq!(j.digest, Digest(999)),
+			s => panic!("wrong state: {:?}", s),
+		}
+	}
 }
