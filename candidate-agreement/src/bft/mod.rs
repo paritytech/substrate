@@ -545,18 +545,6 @@ impl<C: Context> Strategy<C> {
 			attempt_advance = true;
 		}
 
-		// the other situation we attempt to advance is if there is a proposal
-		// that is not equal to the one we are locked to.
-		match (self.local_state, self.current_accumulator.state(), &self.locked) {
-			(LocalState::Start, &State::Proposed(ref candidate), &Some(ref locked)) => {
-				let candidate_digest = context.candidate_digest(candidate);
-				if &candidate_digest != locked.digest() {
-					attempt_advance = true;
-				}
-			}
-			_ => {}
-		}
-
 		if attempt_advance {
 			let message = Message::AdvanceRound(
 				self.current_accumulator.round_number(),
