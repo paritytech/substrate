@@ -35,7 +35,7 @@ pub trait Context {
 }
 
 /// Justification at a given round.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Justification<D, S> {
 	/// The round.
 	pub round_number: usize,
@@ -54,21 +54,21 @@ impl<D, S> Justification<D, S> {
 	/// The closure should return true iff the round number, digest, and signature
 	/// represent a valid prepare message and the signer was authorized to issue
 	/// it.
-	pub fn check<F, V>(&self, max_faulty: usize, check_message: F) -> bool
+	pub fn check<F, V>(&self, threshold: usize, check_message: F) -> bool
 		where
 			F: Fn(usize, &D, &S) -> Option<V>,
 			V: Hash + Eq,
 	{
-		let mut prepared = HashSet::new();
+		let mut voted = HashSet::new();
 
 		let mut good = false;
 		for signature in &self.signatures {
 			match check_message(self.round_number, &self.digest, signature) {
 				None => return false,
 				Some(v) => {
-					if !prepared.insert(v) {
+					if !voted.insert(v) {
 						return false;
-					} else if prepared.len() > max_faulty * 2 {
+					} else if voted.len() >= threshold {
 						// don't return just yet since later signatures may be invalid.
 						good = true;
 					}
@@ -93,15 +93,22 @@ pub enum State<C, D, S> {
 	/// Seen 2f + 1 prepares for this digest.
 	Prepared(PrepareJustification<D, S>),
 	/// Seen 2f + 1 commits for a digest.
-	Concluded(Justification<D, S>),
+	Committed(Justification<D, S>),
 	/// Seen 2f + 1 round-advancement messages.
 	Advanced(Option<PrepareJustification<D, S>>),
 }
 
 /// Accumulates messages for a given round of BFT consensus.
-pub struct Accumulator<C, D, V, S> {
+#[derive(Debug)]
+pub struct Accumulator<C, D, V, S>
+	where
+	C: Eq + Clone,
+	D: Hash + Eq + Clone,
+	V: Hash + Eq,
+	S: Eq + Clone,
+{
 	round_number: usize,
-	max_faulty: usize,
+	threshold: usize,
 	round_proposer: V,
 	proposal: Option<C>,
 	prepares: HashMap<V, (D, S)>,
@@ -114,15 +121,15 @@ pub struct Accumulator<C, D, V, S> {
 impl<C, D, V, S> Accumulator<C, D, V, S>
 	where
 	C: Eq + Clone,
-	D: Hash + Clone + Eq,
+	D: Hash + Eq + Clone,
 	V: Hash + Eq,
 	S: Eq + Clone,
 {
 	/// Create a new state accumulator.
-	pub fn new(round_number: usize, max_faulty: usize, round_proposer: V) -> Self {
+	pub fn new(round_number: usize, threshold: usize, round_proposer: V) -> Self {
 		Accumulator {
 			round_number,
-			max_faulty,
+			threshold,
 			round_proposer,
 			proposal: None,
 			prepares: HashMap::new(),
@@ -136,6 +143,20 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 	/// How advance votes we have seen.
 	pub fn advance_votes(&self) -> usize {
 		self.advance_round.len()
+	}
+
+	/// Get the round number.
+	pub fn round_number(&self) -> usize {
+		self.round_number.clone()
+	}
+
+	/// Get the round proposer.
+	pub fn round_proposer(&self) -> &V {
+		&self.round_proposer
+	}
+
+	pub fn proposal(&self) -> Option<&C> {
+		self.proposal.as_ref()
 	}
 
 	/// Inspect the current consensus state.
@@ -189,7 +210,7 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 			let count = self.vote_counts.entry(candidate.clone()).or_insert((0, 0));
 			count.0 += 1;
 
-			if count.0 == self.max_faulty * 2 + 1 {
+			if count.0 == self.threshold {
 				Some(candidate)
 			} else {
 				None
@@ -232,7 +253,7 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 			let count = self.vote_counts.entry(candidate.clone()).or_insert((0, 0));
 			count.1 += 1;
 
-			if count.1 == self.max_faulty * 2 + 1 {
+			if count.1 == self.threshold {
 				Some(candidate)
 			} else {
 				None
@@ -252,7 +273,7 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 				.map(|&(_, ref s)| s.clone())
 				.collect();
 
-			self.state = State::Concluded(Justification {
+			self.state = State::Committed(Justification {
 				round_number: self.round_number,
 				digest: committed_for,
 				signatures: signatures,
@@ -266,12 +287,12 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 	) {
 		self.advance_round.insert(sender);
 
-		if self.advance_round.len() != self.max_faulty * 2 + 1 { return }
+		if self.advance_round.len() != self.threshold { return }
 
 		// allow transition to new round only if we haven't produced a justification
 		// yet.
 		self.state = match ::std::mem::replace(&mut self.state, State::Begin) {
-			State::Concluded(j) => State::Concluded(j),
+			State::Committed(j) => State::Committed(j),
 			State::Prepared(j) => State::Advanced(Some(j)),
 			State::Advanced(j) => State::Advanced(j),
 			State::Begin | State::Proposed(_) => State::Advanced(None),
@@ -311,24 +332,24 @@ mod tests {
 			}
 		};
 
-		assert!(justification.check(3, &check_message));
-		assert!(!justification.check(5, &check_message));
+		assert!(justification.check(7, &check_message));
+		assert!(!justification.check(11, &check_message));
 
 		{
 			// one bad signature is enough to spoil it.
 			justification.signatures.push(Signature(1001, 255));
-			assert!(!justification.check(3, &check_message));
+			assert!(!justification.check(7, &check_message));
 
 			justification.signatures.pop();
 		}
 		// duplicates not allowed.
 		justification.signatures.extend((0..10).map(|i| Signature(600, i)));
-		assert!(!justification.check(3, &check_message));
+		assert!(!justification.check(11, &check_message));
 	}
 
 	#[test]
 	fn accepts_proposal_from_proposer_only() {
-		let mut accumulator = Accumulator::<_, Digest, _, _>::new(1, 3, ValidatorId(8));
+		let mut accumulator = Accumulator::<_, Digest, _, _>::new(1, 7, ValidatorId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		accumulator.import_message(LocalizedMessage {
@@ -350,7 +371,7 @@ mod tests {
 
 	#[test]
 	fn reaches_prepare_phase() {
-		let mut accumulator = Accumulator::new(1, 3, ValidatorId(8));
+		let mut accumulator = Accumulator::new(1, 7, ValidatorId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		accumulator.import_message(LocalizedMessage {
@@ -385,7 +406,7 @@ mod tests {
 
 	#[test]
 	fn prepare_to_commit() {
-		let mut accumulator = Accumulator::new(1, 3, ValidatorId(8));
+		let mut accumulator = Accumulator::new(1, 7, ValidatorId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		accumulator.import_message(LocalizedMessage {
@@ -437,14 +458,14 @@ mod tests {
 		});
 
 		match accumulator.state() {
-			&State::Concluded(ref j) => assert_eq!(j.digest, Digest(999)),
+			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
 			s => panic!("wrong state: {:?}", s),
 		}
 	}
 
 	#[test]
 	fn prepare_to_advance() {
-		let mut accumulator = Accumulator::new(1, 3, ValidatorId(8));
+		let mut accumulator = Accumulator::new(1, 7, ValidatorId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		accumulator.import_message(LocalizedMessage {
@@ -495,7 +516,7 @@ mod tests {
 
 	#[test]
 	fn conclude_different_than_proposed() {
-		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 3, ValidatorId(8));
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, ValidatorId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		for i in 0..7 {
@@ -520,14 +541,14 @@ mod tests {
 		}
 
 		match accumulator.state() {
-			&State::Concluded(ref j) => assert_eq!(j.digest, Digest(999)),
+			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
 			s => panic!("wrong state: {:?}", s),
 		}
 	}
 
 	#[test]
 	fn begin_to_advance() {
-		let mut accumulator = Accumulator::<Candidate, Digest, _, _>::new(1, 3, ValidatorId(8));
+		let mut accumulator = Accumulator::<Candidate, Digest, _, _>::new(1, 7, ValidatorId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		for i in 0..7 {
@@ -546,7 +567,7 @@ mod tests {
 
 	#[test]
 	fn conclude_without_prepare() {
-		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 3, ValidatorId(8));
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, ValidatorId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		for i in 0..7 {
@@ -558,7 +579,7 @@ mod tests {
 		}
 
 		match accumulator.state() {
-			&State::Concluded(ref j) => assert_eq!(j.digest, Digest(999)),
+			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
 			s => panic!("wrong state: {:?}", s),
 		}
 	}

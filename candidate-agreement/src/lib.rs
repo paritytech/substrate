@@ -29,6 +29,7 @@
 //!
 //! Groups themselves may be compromised by malicious validators.
 
+#[macro_use]
 extern crate futures;
 extern crate polkadot_primitives as primitives;
 
