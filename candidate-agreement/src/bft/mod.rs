@@ -214,7 +214,7 @@ impl<D, S> Locked<D, S> {
 // the state of the local node during the current state of consensus.
 //
 // behavior is different when locked on a proposal.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum LocalState {
 	Start,
 	Proposed,
@@ -323,6 +323,39 @@ impl<C: Context> Strategy<C> {
 	//
 	// only call within the context of a `Task`.
 	fn poll<E>(&mut self, context: &C, sending: &mut Sending<ContextCommunication<C>>)
+		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, E>
+		where
+			C::RoundTimeout: Future<Error=E>,
+			C::Proposal: Future<Error=E>,
+	{
+		let mut last_watermark = (
+			self.current_accumulator.round_number(),
+			self.local_state
+		);
+
+		// poll until either completion or state doesn't change.
+		loop {
+			match self.poll_once(context, sending)? {
+				Async::Ready(x) => return Ok(Async::Ready(x)),
+				Async::NotReady => {
+					let new_watermark = (
+						self.current_accumulator.round_number(),
+						self.local_state
+					);
+
+					if new_watermark == last_watermark {
+						return Ok(Async::NotReady)
+					} else {
+						last_watermark = new_watermark;
+					}
+				}
+			}
+		}
+	}
+
+	// perform one round of polling: attempt to broadcast messages and change the state.
+	// if the round or internal round-state changes, this should be called again.
+	fn poll_once<E>(&mut self, context: &C, sending: &mut Sending<ContextCommunication<C>>)
 		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, E>
 		where
 			C::RoundTimeout: Future<Error=E>,
