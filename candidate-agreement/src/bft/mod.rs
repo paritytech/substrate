@@ -228,11 +228,6 @@ enum LocalState {
 // We maintain two message accumulators: one for the round we are currently in,
 // and one for a future round.
 //
-// We also store notable candidates: any proposed or prepared for, as well as any
-// with witnessed threshold-prepares.
-// This ensures that threshold-prepares witnessed by even one honest participant
-// will still have the candidate available for proposal.
-//
 // We advance the round accumulators when one of two conditions is met:
 //   - we witness consensus of advancement in the current round. in this case we
 //     advance by one.
@@ -485,11 +480,14 @@ impl<C: Context> Strategy<C> {
 			// we are not locked on some other candidate.
 			match self.locked {
 				Some(ref locked) if locked.digest() != &digest => {}
-				Some(_) | None => {
-					if context.candidate_valid(candidate) {
-						prepare_for = Some(digest);
-					}
+				Some(_) => {
+					// don't check validity if we are locked.
+					// this is necessary to preserve the liveness property.
+					prepare_for = Some(digest)
 				}
+				None => if context.candidate_valid(candidate) {
+						prepare_for = Some(digest);
+				},
 			}
 		}
 
