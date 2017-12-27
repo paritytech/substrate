@@ -70,32 +70,32 @@ pub trait Context {
 
 /// Statements circulated among peers.
 #[derive(PartialEq, Eq, Debug)]
-pub enum Statement<C: Context + ?Sized> {
+pub enum Statement<C, D> {
 	/// Broadcast by a validator to indicate that this is his candidate for
 	/// inclusion.
 	///
 	/// Broadcasting two different candidate messages per round is not allowed.
-	Candidate(C::Candidate),
+	Candidate(C),
 	/// Broadcast by a validator to attest that the candidate with given digest
 	/// is valid.
-	Valid(C::Digest),
+	Valid(D),
 	/// Broadcast by a validator to attest that the auxiliary data for a candidate
 	/// with given digest is available.
-	Available(C::Digest),
+	Available(D),
 	/// Broadcast by a validator to attest that the candidate with given digest
 	/// is invalid.
-	Invalid(C::Digest),
+	Invalid(D),
 }
 
 /// A signed statement.
 #[derive(PartialEq, Eq, Debug)]
-pub struct SignedStatement<C: Context + ?Sized> {
+pub struct SignedStatement<C, D, V, S> {
 	/// The statement.
-	pub statement: Statement<C>,
+	pub statement: Statement<C, D>,
 	/// The signature.
-	pub signature: C::Signature,
+	pub signature: S,
 	/// The sender.
-	pub sender: C::ValidatorId,
+	pub sender: V,
 }
 
 // A unique trace for a class of valid statements issued by a validator.
@@ -123,41 +123,52 @@ enum StatementTrace<V, D> {
 /// Since there are three possible ways to vote, a double vote is possible in
 /// three possible combinations (unordered)
 #[derive(PartialEq, Eq, Debug)]
-pub enum ValidityDoubleVote<C: Context> {
+pub enum ValidityDoubleVote<C, D, S> {
 	/// Implicit vote by issuing and explicity voting validity.
-	IssuedAndValidity((C::Candidate, C::Signature), (C::Digest, C::Signature)),
+	IssuedAndValidity((C, S), (D, S)),
 	/// Implicit vote by issuing and explicitly voting invalidity
-	IssuedAndInvalidity((C::Candidate, C::Signature), (C::Digest, C::Signature)),
+	IssuedAndInvalidity((C, S), (D, S)),
 	/// Direct votes for validity and invalidity
-	ValidityAndInvalidity(C::Digest, C::Signature, C::Signature),
+	ValidityAndInvalidity(D, S, S),
 }
 
 /// Misbehavior: declaring multiple candidates.
 #[derive(PartialEq, Eq, Debug)]
-pub struct MultipleCandidates<C: Context> {
+pub struct MultipleCandidates<C, S> {
 	/// The first candidate seen.
-	pub first: (C::Candidate, C::Signature),
+	pub first: (C, S),
 	/// The second candidate seen.
-	pub second: (C::Candidate, C::Signature),
+	pub second: (C, S),
 }
 
 /// Misbehavior: submitted statement for wrong group.
 #[derive(PartialEq, Eq, Debug)]
-pub struct UnauthorizedStatement<C: Context> {
+pub struct UnauthorizedStatement<C, D, V, S> {
 	/// A signed statement which was submitted without proper authority.
-	pub statement: SignedStatement<C>,
+	pub statement: SignedStatement<C, D, V, S>,
 }
 
 /// Different kinds of misbehavior. All of these kinds of malicious misbehavior
 /// are easily provable and extremely disincentivized.
 #[derive(PartialEq, Eq, Debug)]
-pub enum Misbehavior<C: Context> {
+pub enum Misbehavior<C, D, V, S> {
 	/// Voted invalid and valid on validity.
-	ValidityDoubleVote(ValidityDoubleVote<C>),
+	ValidityDoubleVote(ValidityDoubleVote<C, D, S>),
 	/// Submitted multiple candidates.
-	MultipleCandidates(MultipleCandidates<C>),
+	MultipleCandidates(MultipleCandidates<C, S>),
 	/// Submitted a message withou
-	UnauthorizedStatement(UnauthorizedStatement<C>),
+	UnauthorizedStatement(UnauthorizedStatement<C, D, V, S>),
+}
+
+/// Fancy work-around for a type alias of context-based misbehavior
+/// without producing compiler warnings.
+pub trait ResolveMisbehavior {
+	/// The misbehavior type.
+	type Misbehavior;
+}
+
+impl<C: Context + ?Sized> ResolveMisbehavior for C {
+	type Misbehavior = Misbehavior<C::Candidate, C::Digest, C::ValidatorId, C::Signature>;
 }
 
 // kinds of votes for validity
@@ -251,7 +262,7 @@ pub fn create<C: Context>() -> Table<C> {
 #[derive(Default)]
 pub struct Table<C: Context> {
 	validator_data: HashMap<C::ValidatorId, ValidatorData<C>>,
-	detected_misbehavior: HashMap<C::ValidatorId, Misbehavior<C>>,
+	detected_misbehavior: HashMap<C::ValidatorId, <C as ResolveMisbehavior>::Misbehavior>,
 	candidate_votes: HashMap<C::Digest, CandidateData<C>>,
 }
 
@@ -294,7 +305,7 @@ impl<C: Context> Table<C> {
 	}
 
 	/// Drain all misbehavior observed up to this point.
-	pub fn drain_misbehavior(&mut self) -> HashMap<C::ValidatorId, Misbehavior<C>> {
+	pub fn drain_misbehavior(&mut self) -> HashMap<C::ValidatorId, <C as ResolveMisbehavior>::Misbehavior> {
 		::std::mem::replace(&mut self.detected_misbehavior, HashMap::new())
 	}
 
@@ -303,9 +314,12 @@ impl<C: Context> Table<C> {
 	///
 	/// This can note the origin of the statement to indicate that he has
 	/// seen it already.
-	pub fn import_statement(&mut self, context: &C, statement: SignedStatement<C>, from: Option<C::ValidatorId>)
-		-> Option<Summary<C::Digest, C::GroupId>>
-	{
+	pub fn import_statement(
+		&mut self,
+		context: &C,
+		statement: SignedStatement<C::Candidate, C::Digest, C::ValidatorId, C::Signature>,
+		from: Option<C::ValidatorId>
+	) -> Option<Summary<C::Digest, C::GroupId>> {
 		let SignedStatement { statement, signature, sender: signer } = statement;
 
 		let trace = match statement {
@@ -370,7 +384,7 @@ impl<C: Context> Table<C> {
 		from: C::ValidatorId,
 		candidate: C::Candidate,
 		signature: C::Signature,
-	) -> (Option<Misbehavior<C>>, Option<Summary<C::Digest, C::GroupId>>) {
+	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
 		let group = context.candidate_group(&candidate);
 		if !context.is_member_of(&from, &group) {
 			return (
@@ -444,7 +458,7 @@ impl<C: Context> Table<C> {
 		from: C::ValidatorId,
 		digest: C::Digest,
 		vote: ValidityVote<C::Signature>,
-	) -> (Option<Misbehavior<C>>, Option<Summary<C::Digest, C::GroupId>>) {
+	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
 		let votes = match self.candidate_votes.get_mut(&digest) {
 			None => return (None, None), // TODO: queue up but don't get DoS'ed
 			Some(votes) => votes,
@@ -522,7 +536,7 @@ impl<C: Context> Table<C> {
 		from: C::ValidatorId,
 		digest: C::Digest,
 		signature: C::Signature,
-	) -> (Option<Misbehavior<C>>, Option<Summary<C::Digest, C::GroupId>>) {
+	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
 		let votes = match self.candidate_votes.get_mut(&digest) {
 			None => return (None, None), // TODO: queue up but don't get DoS'ed
 			Some(votes) => votes,
