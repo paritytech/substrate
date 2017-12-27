@@ -18,7 +18,11 @@
 
 mod accumulator;
 
+#[cfg(test)]
+mod tests;
+
 use std::collections::{HashMap, VecDeque};
+use std::fmt::Debug;
 use std::hash::Hash;
 
 use futures::{future, Future, Stream, Sink, Poll, Async, AsyncSink};
@@ -66,13 +70,13 @@ pub struct LocalizedMessage<T, P, V, S> {
 /// Context necessary for agreement.
 pub trait Context {
 	/// Candidate proposed.
-	type Candidate: Eq + Clone;
+	type Candidate: Debug + Eq + Clone;
 	/// Candidate digest.
-	type Digest: Hash + Eq + Clone;
+	type Digest: Debug + Hash + Eq + Clone;
 	/// Validator ID.
-	type ValidatorId: Hash + Eq + Clone;
+	type ValidatorId: Debug + Hash + Eq + Clone;
 	/// Signature.
-	type Signature: Eq + Clone;
+	type Signature: Debug + Eq + Clone;
 	/// A future that resolves when a round timeout is concluded.
 	type RoundTimeout: Future<Item=()>;
 	/// A future that resolves when a proposal is ready.
@@ -193,6 +197,7 @@ fn bft_threshold(nodes: usize, max_faulty: usize) -> usize {
 }
 
 /// Committed successfully.
+#[derive(Debug, Clone)]
 pub struct Committed<C, D, S> {
 	/// The candidate committed for. This will be unknown if
 	/// we never witnessed the proposal of the last round.
@@ -214,7 +219,7 @@ impl<D, S> Locked<D, S> {
 // the state of the local node during the current state of consensus.
 //
 // behavior is different when locked on a proposal.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalState {
 	Start,
 	Proposed,
@@ -486,7 +491,7 @@ impl<C: Context> Strategy<C> {
 					prepare_for = Some(digest)
 				}
 				None => if context.candidate_valid(candidate) {
-						prepare_for = Some(digest);
+					prepare_for = Some(digest);
 				},
 			}
 		}
@@ -641,23 +646,34 @@ impl<C, I, O, E> Future for Agreement<C, I, O>
 			})
 		}
 
+		loop {
+			let message = match self.input.poll()? {
+				Async::Ready(msg) => msg.ok_or(InputStreamConcluded)?,
+				Async::NotReady => break,
+			};
+
+			match message.0 {
+				Communication::Message(message) => self.strategy.import_message(message),
+				Communication::Locked(proof) => self.strategy.import_lock_proof(&self.context, proof),
+			}
+		}
+
+		// try to process timeouts.
+		let state_machine_res = self.strategy.poll(&self.context, &mut self.sending)?;
+
 		// make progress on flushing all pending messages.
 		let _ = self.sending.process_all(&mut self.output)?;
 
-		// try to process timeouts.
-		if let Async::Ready(just) = self.strategy.poll(&self.context, &mut self.sending)? {
-			self.concluded = Some(just);
-			return self.poll();
+		match state_machine_res {
+			Async::Ready(just) => {
+				self.concluded = Some(just);
+				self.poll()
+			}
+			Async::NotReady => {
+
+				Ok(Async::NotReady)
+			}
 		}
-
-		let message = try_ready!(self.input.poll()).ok_or(InputStreamConcluded)?;
-
-		match message.0 {
-			Communication::Message(message) => self.strategy.import_message(message),
-			Communication::Locked(proof) => self.strategy.import_lock_proof(&self.context, proof),
-		}
-
-		self.poll()
 	}
 }
 
