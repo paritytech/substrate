@@ -55,7 +55,7 @@ pub struct Candidate {
 #[serde(deny_unknown_fields)]
 pub struct CandidateReceipt {
 	/// The ID of the parachain this is a candidate for.
-	pub parachain_inex: Id,
+	pub parachain_index: Id,
 	/// The collator's account ID
 	pub collator: ::Address,
 	/// The head-data
