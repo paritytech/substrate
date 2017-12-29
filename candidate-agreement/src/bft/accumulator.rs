@@ -91,6 +91,10 @@ struct VoteCounts {
 }
 
 /// Accumulates messages for a given round of BFT consensus.
+///
+/// This isn't tied to the "view" of a single validator. It
+/// keeps accurate track of the state of the BFT consensus based
+/// on all messages imported.
 #[derive(Debug)]
 pub struct Accumulator<Candidate, Digest, ValidatorId, Signature>
 	where
@@ -197,12 +201,12 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 	) {
 		// ignore any subsequent prepares by the same sender.
 		// TODO: if digest is different, that's misbehavior.
-		let prepared_for = if let Entry::Vacant(vacant) = self.prepares.entry(sender) {
+		let threshold_prepared = if let Entry::Vacant(vacant) = self.prepares.entry(sender) {
 			vacant.insert((digest.clone(), signature));
 			let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
 			count.prepared += 1;
 
-			if count.prepared == self.threshold {
+			if count.prepared >= self.threshold {
 				Some(digest)
 			} else {
 				None
@@ -217,16 +221,16 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 			_ => false,
 		};
 
-		if let (true, Some(prepared_for)) = (valid_transition, prepared_for) {
+		if let (true, Some(threshold_prepared)) = (valid_transition, threshold_prepared) {
 			let signatures = self.prepares
 				.values()
-				.filter(|&&(ref d, _)| d == &prepared_for)
+				.filter(|&&(ref d, _)| d == &threshold_prepared)
 				.map(|&(_, ref s)| s.clone())
 				.collect();
 
 			self.state = State::Prepared(PrepareJustification {
 				round_number: self.round_number,
-				digest: prepared_for,
+				digest: threshold_prepared,
 				signatures: signatures,
 			});
 		}
@@ -240,12 +244,12 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 	) {
 		// ignore any subsequent commits by the same sender.
 		// TODO: if digest is different, that's misbehavior.
-		let committed_for = if let Entry::Vacant(vacant) = self.commits.entry(sender) {
+		let threshold_committed = if let Entry::Vacant(vacant) = self.commits.entry(sender) {
 			vacant.insert((digest.clone(), signature));
 			let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
 			count.committed += 1;
 
-			if count.committed == self.threshold {
+			if count.committed >= self.threshold {
 				Some(digest)
 			} else {
 				None
@@ -258,16 +262,16 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 		// only weird case is if the prior state was "advanced",
 		// but technically it's the same behavior as if the order of receiving
 		// the last "advance round" and "commit" messages were reversed.
-		if let Some(committed_for) = committed_for {
+		if let Some(threshold_committed) = threshold_committed {
 			let signatures = self.commits
 				.values()
-				.filter(|&&(ref d, _)| d == &committed_for)
+				.filter(|&&(ref d, _)| d == &threshold_committed)
 				.map(|&(_, ref s)| s.clone())
 				.collect();
 
 			self.state = State::Committed(Justification {
 				round_number: self.round_number,
-				digest: committed_for,
+				digest: threshold_committed,
 				signatures: signatures,
 			});
 		}
@@ -279,7 +283,7 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 	) {
 		self.advance_round.insert(sender);
 
-		if self.advance_round.len() != self.threshold { return }
+		if self.advance_round.len() < self.threshold { return }
 
 		// allow transition to new round only if we haven't produced a justification
 		// yet.
