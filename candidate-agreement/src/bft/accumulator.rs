@@ -22,18 +22,6 @@ use std::hash::Hash;
 
 use super::{Message, LocalizedMessage};
 
-/// Context necessary to execute a round of BFT.
-pub trait Context {
-	/// A full candidate.
-	type Candidate: Clone;
-	/// Unique digest of a proposed candidate (think hash).
-	type Digest: Hash + Eq + Clone;
-	/// Validator ID.
-	type ValidatorId: Hash + Eq;
-	/// A signature.
-	type Signature: Eq + Clone;
-}
-
 /// Justification at a given round.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Justification<D, S> {

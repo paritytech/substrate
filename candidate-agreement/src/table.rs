@@ -284,7 +284,7 @@ impl<C: Context> Table<C> {
 			let candidate = &candidate_data.candidate;
 			match best_candidates.entry(group_id.clone()) {
 				BTreeEntry::Occupied(mut occ) => {
-					let mut candidate_ref = occ.get_mut();
+					let candidate_ref = occ.get_mut();
 					if *candidate_ref < candidate {
 						*candidate_ref = candidate;
 					}
