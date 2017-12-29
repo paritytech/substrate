@@ -308,16 +308,17 @@ impl<C: Context> Strategy<C> {
 	) {
 		// TODO: find a way to avoid processing of the signatures if the sender is
 		// not the primary or the round number is low.
-		let current_round_number = self.current_accumulator.round_number();
-		if justification.round_number < current_round_number {
-			return
-		} else if justification.round_number == current_round_number {
-			self.locked = Some(Locked { justification });
-		} else {
+		if justification.round_number > self.current_accumulator.round_number() {
 			// jump ahead to the prior round as this is an indication of a supermajority
 			// good nodes being at least on that round.
 			self.advance_to_round(context, justification.round_number);
-			self.locked = Some(Locked { justification });
+		}
+
+		let lock_to_new = self.locked.as_ref()
+			.map_or(true, |l| l.justification.round_number < justification.round_number);
+
+		if lock_to_new {
+			self.locked = Some(Locked { justification })
 		}
 	}
 
