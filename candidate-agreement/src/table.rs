@@ -38,7 +38,7 @@ pub trait Context {
 	type ValidatorId: Hash + Eq + Clone + Debug;
 	/// The digest (hash or other unique attribute) of a candidate.
 	type Digest: Hash + Eq + Clone + Debug;
-    /// Candidate type.
+	/// Candidate type.
 	type Candidate: Ord + Eq + Clone + Debug;
 	/// The group ID type
 	type GroupId: Hash + Ord + Eq + Clone + Debug;
