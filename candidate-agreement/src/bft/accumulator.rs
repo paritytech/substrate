@@ -22,7 +22,7 @@ use std::hash::Hash;
 
 use super::{Message, LocalizedMessage};
 
-/// Justification at a given round.
+/// Justification for some state at a given round.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Justification<D, S> {
 	/// The round.
@@ -40,8 +40,10 @@ impl<D, S> Justification<D, S> {
 	/// digest.
 	///
 	/// The closure should return true iff the round number, digest, and signature
-	/// represent a valid prepare message and the signer was authorized to issue
+	/// represent a valid message and the signer was authorized to issue
 	/// it.
+	///
+	/// The `check_message` closure may vary based on context.
 	pub fn check<F, V>(&self, threshold: usize, check_message: F) -> bool
 		where
 			F: Fn(usize, &D, &S) -> Option<V>,
@@ -49,22 +51,18 @@ impl<D, S> Justification<D, S> {
 	{
 		let mut voted = HashSet::new();
 
-		let mut good = false;
 		for signature in &self.signatures {
 			match check_message(self.round_number, &self.digest, signature) {
 				None => return false,
 				Some(v) => {
 					if !voted.insert(v) {
 						return false;
-					} else if voted.len() >= threshold {
-						// don't return just yet since later signatures may be invalid.
-						good = true;
 					}
 				}
 			}
 		}
 
-		good
+		voted.len() >= threshold
 	}
 }
 
@@ -73,48 +71,54 @@ pub type PrepareJustification<D, S> = Justification<D, S>;
 
 /// The round's state, based on imported messages.
 #[derive(PartialEq, Eq, Debug)]
-pub enum State<C, D, S> {
+pub enum State<Candidate, Digest, Signature> {
 	/// No proposal yet.
 	Begin,
 	/// Proposal received.
-	Proposed(C),
-	/// Seen 2f + 1 prepares for this digest.
-	Prepared(PrepareJustification<D, S>),
-	/// Seen 2f + 1 commits for a digest.
-	Committed(Justification<D, S>),
-	/// Seen 2f + 1 round-advancement messages.
-	Advanced(Option<PrepareJustification<D, S>>),
+	Proposed(Candidate),
+	/// Seen n - f prepares for this digest.
+	Prepared(PrepareJustification<Digest, Signature>),
+	/// Seen n - f commits for a digest.
+	Committed(Justification<Digest, Signature>),
+	/// Seen n - f round-advancement messages.
+	Advanced(Option<PrepareJustification<Digest, Signature>>),
+}
+
+#[derive(Debug, Default)]
+struct VoteCounts {
+	prepared: usize,
+	committed: usize,
 }
 
 /// Accumulates messages for a given round of BFT consensus.
 #[derive(Debug)]
-pub struct Accumulator<C, D, V, S>
+pub struct Accumulator<Candidate, Digest, ValidatorId, Signature>
 	where
-	C: Eq + Clone,
-	D: Hash + Eq + Clone,
-	V: Hash + Eq,
-	S: Eq + Clone,
+	Candidate: Eq + Clone,
+	Digest: Hash + Eq + Clone,
+	ValidatorId: Hash + Eq,
+	Signature: Eq + Clone,
 {
 	round_number: usize,
 	threshold: usize,
-	round_proposer: V,
-	proposal: Option<C>,
-	prepares: HashMap<V, (D, S)>,
-	commits: HashMap<V, (D, S)>,
-	vote_counts: HashMap<D, (usize, usize)>,
-	advance_round: HashSet<V>,
-	state: State<C, D, S>,
+	round_proposer: ValidatorId,
+	proposal: Option<Candidate>,
+	prepares: HashMap<ValidatorId, (Digest, Signature)>,
+	commits: HashMap<ValidatorId, (Digest, Signature)>,
+	vote_counts: HashMap<Digest, VoteCounts>,
+	advance_round: HashSet<ValidatorId>,
+	state: State<Candidate, Digest, Signature>,
 }
 
-impl<C, D, V, S> Accumulator<C, D, V, S>
+impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, ValidatorId, Signature>
 	where
-	C: Eq + Clone,
-	D: Hash + Eq + Clone,
-	V: Hash + Eq,
-	S: Eq + Clone,
+	Candidate: Eq + Clone,
+	Digest: Hash + Eq + Clone,
+	ValidatorId: Hash + Eq,
+	Signature: Eq + Clone,
 {
 	/// Create a new state accumulator.
-	pub fn new(round_number: usize, threshold: usize, round_proposer: V) -> Self {
+	pub fn new(round_number: usize, threshold: usize, round_proposer: ValidatorId) -> Self {
 		Accumulator {
 			round_number,
 			threshold,
@@ -139,16 +143,16 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 	}
 
 	/// Get the round proposer.
-	pub fn round_proposer(&self) -> &V {
+	pub fn round_proposer(&self) -> &ValidatorId {
 		&self.round_proposer
 	}
 
-	pub fn proposal(&self) -> Option<&C> {
+	pub fn proposal(&self) -> Option<&Candidate> {
 		self.proposal.as_ref()
 	}
 
 	/// Inspect the current consensus state.
-	pub fn state(&self) -> &State<C, D, S> {
+	pub fn state(&self) -> &State<Candidate, Digest, Signature> {
 		&self.state
 	}
 
@@ -156,10 +160,10 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 	/// and authorization should have already been checked.
 	pub fn import_message(
 		&mut self,
-		message: LocalizedMessage<C, D, V, S>,
+		message: LocalizedMessage<Candidate, Digest, ValidatorId, Signature>,
 	)
 	{
-		// old message.
+		// message from different round.
 		if message.message.round_number() != self.round_number {
 			return;
 		}
@@ -176,8 +180,8 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 
 	fn import_proposal(
 		&mut self,
-		proposal: C,
-		sender: V,
+		proposal: Candidate,
+		sender: ValidatorId,
 	) {
 		if sender != self.round_proposer || self.proposal.is_some() { return }
 
@@ -187,19 +191,19 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 
 	fn import_prepare(
 		&mut self,
-		candidate: D,
-		sender: V,
-		signature: S,
+		digest: Digest,
+		sender: ValidatorId,
+		signature: Signature,
 	) {
 		// ignore any subsequent prepares by the same sender.
 		// TODO: if digest is different, that's misbehavior.
 		let prepared_for = if let Entry::Vacant(vacant) = self.prepares.entry(sender) {
-			vacant.insert((candidate.clone(), signature));
-			let count = self.vote_counts.entry(candidate.clone()).or_insert((0, 0));
-			count.0 += 1;
+			vacant.insert((digest.clone(), signature));
+			let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
+			count.prepared += 1;
 
-			if count.0 == self.threshold {
-				Some(candidate)
+			if count.prepared == self.threshold {
+				Some(digest)
 			} else {
 				None
 			}
@@ -230,19 +234,19 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 
 	fn import_commit(
 		&mut self,
-		candidate: D,
-		sender: V,
-		signature: S,
+		digest: Digest,
+		sender: ValidatorId,
+		signature: Signature,
 	) {
 		// ignore any subsequent commits by the same sender.
 		// TODO: if digest is different, that's misbehavior.
 		let committed_for = if let Entry::Vacant(vacant) = self.commits.entry(sender) {
-			vacant.insert((candidate.clone(), signature));
-			let count = self.vote_counts.entry(candidate.clone()).or_insert((0, 0));
-			count.1 += 1;
+			vacant.insert((digest.clone(), signature));
+			let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
+			count.committed += 1;
 
-			if count.1 == self.threshold {
-				Some(candidate)
+			if count.committed == self.threshold {
+				Some(digest)
 			} else {
 				None
 			}
@@ -271,7 +275,7 @@ impl<C, D, V, S> Accumulator<C, D, V, S>
 
 	fn import_advance_round(
 		&mut self,
-		sender: V,
+		sender: ValidatorId,
 	) {
 		self.advance_round.insert(sender);
 

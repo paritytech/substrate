@@ -92,13 +92,13 @@ impl SharedContext {
 	}
 }
 
-struct Ctx {
+struct TestContext {
 	local_id: ValidatorId,
 	proposal: Mutex<usize>,
 	shared: Arc<Mutex<SharedContext>>,
 }
 
-impl Context for Ctx {
+impl Context for TestContext {
 	type Candidate = Candidate;
 	type Digest = Digest;
 	type ValidatorId = ValidatorId;
@@ -149,7 +149,7 @@ impl Context for Ctx {
 	}
 }
 
-type Comm = ContextCommunication<Ctx>;
+type Comm = ContextCommunication<TestContext>;
 
 struct Network {
 	endpoints: Vec<mpsc::UnboundedSender<Comm>>,
@@ -239,7 +239,7 @@ fn consensus_completes_with_minimum_good() {
 		.take(node_count - max_faulty)
 		.enumerate()
 		.map(|(i, (tx, rx))| {
-			let ctx = Ctx {
+			let ctx = TestContext {
 				local_id: ValidatorId(i),
 				proposal: Mutex::new(i),
 				shared: shared_context.clone(),
@@ -295,7 +295,7 @@ fn consensus_does_not_complete_without_enough_nodes() {
 		.take(node_count - max_faulty - 1)
 		.enumerate()
 		.map(|(i, (tx, rx))| {
-			let ctx = Ctx {
+			let ctx = TestContext {
 				local_id: ValidatorId(i),
 				proposal: Mutex::new(i),
 				shared: shared_context.clone(),

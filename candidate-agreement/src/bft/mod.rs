@@ -34,9 +34,9 @@ pub use self::accumulator::{Accumulator, Justification, PrepareJustification};
 /// Messages over the proposal.
 /// Each message carries an associated round number.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Message<P, D> {
+pub enum Message<C, D> {
 	/// Send a full proposal.
-	Propose(usize, P),
+	Propose(usize, C),
 	/// Prepare to vote for proposal with digest D.
 	Prepare(usize, D),
 	/// Commit to proposal with digest D..
@@ -45,7 +45,7 @@ pub enum Message<P, D> {
 	AdvanceRound(usize),
 }
 
-impl<P, D> Message<P, D> {
+impl<C, D> Message<C, D> {
 	fn round_number(&self) -> usize {
 		match *self {
 			Message::Propose(round, _) => round,
@@ -58,9 +58,9 @@ impl<P, D> Message<P, D> {
 
 /// A localized message, including the sender.
 #[derive(Debug, Clone)]
-pub struct LocalizedMessage<T, P, V, S> {
+pub struct LocalizedMessage<C, D, V, S> {
 	/// The message received.
-	pub message: Message<T, P>,
+	pub message: Message<C, D>,
 	/// The sender of the message
 	pub sender: V,
 	/// The signature of the message.
@@ -68,6 +68,9 @@ pub struct LocalizedMessage<T, P, V, S> {
 }
 
 /// Context necessary for agreement.
+///
+/// Provides necessary types for protocol messages, and functions necessary for a
+/// participant to evaluate and create those messages.
 pub trait Context {
 	/// Candidate proposed.
 	type Candidate: Debug + Eq + Clone;
@@ -162,7 +165,7 @@ impl<T> Sending<T> {
 			}
 		}
 
-		while self.flushing {
+		if self.flushing {
 			match sink.poll_complete() {
 				Err(e) => return Err(e),
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
