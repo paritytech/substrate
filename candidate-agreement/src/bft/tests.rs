@@ -64,7 +64,7 @@ impl SharedContext {
 	fn round_timeout(&mut self, round: usize) -> Box<Future<Item=(),Error=Error>> {
 		let (tx, rx) = oneshot::channel();
 		if round < self.current_round {
-			tx.send(()).unwrap()
+			tx.send(()).unwrap();
 		} else {
 			self.awaiting_round_timeouts
 				.entry(round)
