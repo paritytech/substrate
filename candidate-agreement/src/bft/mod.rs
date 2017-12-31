@@ -492,11 +492,11 @@ impl<C: Context> Strategy<C> {
 				Some(_) => {
 					// don't check validity if we are locked.
 					// this is necessary to preserve the liveness property.
-					prepare_for = Some(digest)
+					prepare_for = Some(digest);
 				}
 				None => if context.candidate_valid(candidate) {
 					prepare_for = Some(digest);
-				},
+				}
 			}
 		}
 
