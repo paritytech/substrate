@@ -154,6 +154,7 @@ mod tests {
 	use parity_wasm::interpreter::{ItemIndex, UserDefinedElements};
 	use parity_wasm::RuntimeValue::{I32, I64};
 	use parity_wasm::interpreter;
+	use parity_wasm::elements;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities;
@@ -177,13 +178,63 @@ mod tests {
 		}
 	}
 
+	use std::result;
+	use parity_wasm::elements::Module;
+	use parity_wasm::interpreter::UserFunctionDescriptor;
+
+	#[derive(Clone)]
+	struct DummyUserFunctionExecutor;
+	impl<E: interpreter::UserError> interpreter::UserFunctionExecutor<E> for DummyUserFunctionExecutor {
+		fn execute(&mut self, name: &str, context: interpreter::CallerContext<E>) ->
+			result::Result<Option<interpreter::RuntimeValue>, interpreter::Error<E>>
+		{
+			unimplemented!()
+		}
+	}
+	trait AddModuleWithoutFullDependentInstance<E: interpreter::UserError> {
+		fn add_module_by_sigs(
+			&self,
+			name: &str,
+			module: Module,
+			sigs: HashMap<&str, &'static [UserFunctionDescriptor]>
+		) -> result::Result<Arc<interpreter::ModuleInstance<E>>, interpreter::Error<E>>;
+	}
+	impl<E: interpreter::UserError> AddModuleWithoutFullDependentInstance<E> for ProgramInstance<E> {
+		fn add_module_by_sigs(
+			&self,
+			name: &str,
+			module: Module,
+			sigs: HashMap<&str, &'static [UserFunctionDescriptor]>
+		) -> result::Result<Arc<interpreter::ModuleInstance<E>>, interpreter::Error<E>> {
+			let mut dufe = vec![DummyUserFunctionExecutor; sigs.len()];
+			let dufe_refs = dufe.iter_mut().collect::<Vec<_>>();
+			let fake_module_map = sigs.into_iter()
+				.zip(dufe_refs.into_iter())
+				.map(|((dep_mod_name, sigs), dufe)| {
+					let fake_module = Arc::new(
+						interpreter::env_native_module(
+							self.module(dep_mod_name).unwrap(), UserDefinedElements {
+								executor: Some(dufe),
+								globals: HashMap::new(),
+								functions: ::std::borrow::Cow::from(sigs),
+							}
+						).unwrap()
+					);
+					let fake_module: Arc<interpreter::ModuleInstanceInterface<_>> = fake_module;
+					(dep_mod_name.into(), fake_module)
+				})
+				.collect::<HashMap<_, _>>();
+			self.add_module(name, module, Some(&fake_module_map))
+		}
+	}
+
 	#[test]
 	fn should_pass_externalities_at_call() {
 		let program = ProgramInstance::new().unwrap();
 
 		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.compact.wasm");
 		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
-		let module = program.add_module("test", module, None).expect("Failed to initialize module");
+		let module = program.add_module_by_sigs("test", module, vec![("env", FEContext::SIGNATURES)].into_iter().collect()).expect("Failed to initialize module");
 
 		let mut fec = FEContext {
 			heap_end: 1024,
@@ -194,17 +245,6 @@ mod tests {
 		let size = data.len() as u32;
 		let offset = fec.allocate(size);
 		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, data).unwrap();
-
-/*		use parity_wasm::builder;
-		use std::sync::{Arc, Weak};
-		use parity_wasm::ModuleInstance;
-		let env_instance = {
-			let module = builder::module().build();
-			let mut instance = ModuleInstance::new(Weak::default(), "env".into(), module).unwrap();
-			instance.instantiate(None).unwrap();
-			Arc::new(instance)
-		};
-*/
 
 		let execute = |fec| module.execute_export(
 			"test_data_in",
