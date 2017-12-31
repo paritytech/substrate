@@ -20,19 +20,27 @@ use std::sync::{Arc, Weak};
 pub use std::result;
 pub use parity_wasm::elements::{ValueType};
 pub use parity_wasm::interpreter::{RuntimeValue, UserFunctionDescriptor, UserFunctionExecutor,
-	CallerContext, UserDefinedElements, Error, native_module};
-pub use parity_wasm::{builder, ProgramInstance, ModuleInstance};
+	UserDefinedElements, env_native_module, DummyUserError};
+pub use parity_wasm::{builder};
+use parity_wasm::interpreter;
 
-pub fn program_with_externals<E: UserFunctionExecutor + 'static>(externals: UserDefinedElements<E>, module_name: &str) -> result::Result<ProgramInstance, Error> {
-	let program = ProgramInstance::new();
+pub type Error = interpreter::Error<DummyUserError>;
+pub type MemoryInstance = interpreter::MemoryInstance<DummyUserError>;
+pub type ProgramInstance = interpreter::ProgramInstance<DummyUserError>;
+pub type ModuleInstance = interpreter::ModuleInstance<DummyUserError>;
+pub type ModuleInstanceInterface = interpreter::ModuleInstanceInterface<DummyUserError>;
+pub type CallerContext<'a> = interpreter::CallerContext<'a, DummyUserError>;
+
+pub fn program_with_externals<E: UserFunctionExecutor<DummyUserError> + 'static>(externals: UserDefinedElements<DummyUserError>, module_name: &str) -> result::Result<ProgramInstance, Error> {
+	let program = ProgramInstance::new().unwrap();
 	let instance = {
 		let module = builder::module().build();
 		let mut instance = ModuleInstance::new(Weak::default(), module_name.into(), module)?;
 		instance.instantiate(None)?;
 		instance
 	};
-	let other_instance = native_module(Arc::new(instance), externals)?;
-	program.insert_loaded_module(module_name, other_instance)?;
+	let other_instance = env_native_module(Arc::new(instance), externals)?;
+//	program.insert_loaded_module(module_name, Arc::new(other_instance));
 	Ok(program)
 }
 
@@ -102,7 +110,7 @@ macro_rules! dispatch {
 				$(
 					stringify!($name) => marshall!(context, $objectname, ( $( $names : $params ),* ) $( -> $returns )* => $body),
 				)*
-				n => Err($crate::wasm_utils::Error::Trap(format!("not implemented: {}", n)).into())
+				_ => panic!()//Err($crate::wasm_utils::Error::Trap(format!("not implemented: {}", n)).into())
 			}
 		}
 	);
@@ -122,7 +130,7 @@ macro_rules! signatures {
 #[macro_export]
 macro_rules! function_executor {
 	( $objectname:ident : $structname:ident, $( $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt ),* ) => (
-		impl $crate::wasm_utils::UserFunctionExecutor for $structname {
+		impl $crate::wasm_utils::UserFunctionExecutor<$crate::wasm_utils::DummyUserError> for $structname {
 			dispatch!($objectname, $( $name( $( $names : $params ),* ) $( -> $returns )* => $body ),*);
 		}
 		impl $structname {

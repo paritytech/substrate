@@ -17,14 +17,14 @@
 //! Rust implementation of Polkadot contracts.
 
 use parity_wasm::{deserialize_buffer, ModuleInstanceInterface};
-use parity_wasm::interpreter::{ItemIndex, ModuleInstance, MemoryInstance, UserDefinedElements};
+use parity_wasm::interpreter::{ItemIndex};
 use parity_wasm::RuntimeValue::{I32, I64};
 use std::collections::HashMap;
 use primitives::contract::CallData;
 use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use std::sync::{Arc, Mutex};
-use wasm_utils::program_with_externals;
+use wasm_utils::{program_with_externals, ModuleInstance, MemoryInstance, UserDefinedElements};
 
 // user function executor
 #[derive(Default)]
@@ -74,6 +74,27 @@ function_executor!(this: FunctionExecutor,
 );
 
 
+function_executor!(this: FEContext,
+	imported(n: u64) -> u64 => { println!("imported {:?}", n); n + 1 },
+	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
+		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize).unwrap();
+		println!("memcpy {} from {}, {} bytes", dest, src, count);
+		dest
+	},
+	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => { println!("memmove {} from {}, {} bytes", dest, src, count); dest },
+	ext_memset(dest: *mut u8, val: i32, count: usize) -> *mut u8 => { println!("memset {} with {}, {} bytes", dest, val, count); dest },
+	ext_malloc(size: usize) -> *mut u8 => {
+		let r = this.allocate(size);
+		println!("malloc {} bytes at {}", size, r);
+		r
+	},
+	ext_free(addr: *mut u8) => {
+		this.deallocate(addr);
+		println!("free {}", addr)
+	}
+);
+
+
 /// Dummy rust executor for contracts.
 ///
 /// Instead of actually executing the provided code it just
@@ -97,15 +118,16 @@ impl CodeExecutor for WasmExecutor {
 			Ok(e) => e.to_owned(),
 			Err(e) => Err(ErrorKind::Externalities(Box::new(e)))?,
 		};
-
 		let fe_context = Arc::new(Mutex::new(None));
+		let mut fe = FunctionExecutor { context: Arc::clone(&fe_context) };
+
 		let externals = UserDefinedElements {
-			executor: Some(FunctionExecutor { context: Arc::clone(&fe_context) }),
+			executor: Some(&mut fe),
 			globals: HashMap::new(),
 			functions: ::std::borrow::Cow::from(FunctionExecutor::SIGNATURES),
 		};
 
-		let program = program_with_externals(externals, "env").unwrap();
+		let program = program_with_externals::<FunctionExecutor>(externals, "env").unwrap();
 		let module = deserialize_buffer(code).expect("Failed to load module");
 		let module = program.add_module("test", module, None).expect("Failed to initialize module");
 		*fe_context.lock().unwrap() = Some(FEContext::new(&module));
@@ -131,6 +153,7 @@ mod tests {
 	use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
 	use parity_wasm::interpreter::{ItemIndex, UserDefinedElements};
 	use parity_wasm::RuntimeValue::{I32, I64};
+	use parity_wasm::interpreter;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities;
@@ -155,15 +178,64 @@ mod tests {
 	}
 
 	#[test]
+	fn should_pass_externalities_at_call() {
+		let program = ProgramInstance::new().unwrap();
+
+		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.compact.wasm");
+		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
+		let module = program.add_module("test", module, None).expect("Failed to initialize module");
+
+		let mut fec = FEContext {
+			heap_end: 1024,
+			memory: Arc::clone(&module.memory(ItemIndex::Internal(0)).unwrap())
+		};
+
+		let data = b"Hello world";
+		let size = data.len() as u32;
+		let offset = fec.allocate(size);
+		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, data).unwrap();
+
+/*		use parity_wasm::builder;
+		use std::sync::{Arc, Weak};
+		use parity_wasm::ModuleInstance;
+		let env_instance = {
+			let module = builder::module().build();
+			let mut instance = ModuleInstance::new(Weak::default(), "env".into(), module).unwrap();
+			instance.instantiate(None).unwrap();
+			Arc::new(instance)
+		};
+*/
+
+		let execute = |fec| module.execute_export(
+			"test_data_in",
+			interpreter::ExecutionParams::with_external(
+				"env".into(),
+				Arc::new(interpreter::env_native_module(program.module("env").unwrap(), UserDefinedElements {
+					executor: Some(fec),
+					globals: HashMap::new(),
+					functions: ::std::borrow::Cow::from(FEContext::SIGNATURES),
+				}).unwrap())
+			)
+			.add_argument(I32(offset as i32))
+			.add_argument(I32(size as i32))
+		).unwrap();
+
+		execute(&mut fec);
+
+		panic!();
+	}
+
+	#[test]
 	fn should_pass_freeable_data() {
 		let fe_context = Arc::new(Mutex::new(None));
+		let mut fex = FunctionExecutor { context: Arc::clone(&fe_context) };
 		let externals = UserDefinedElements {
-			executor: Some(FunctionExecutor { context: Arc::clone(&fe_context) }),
+			executor: Some(&mut fex),
 			globals: HashMap::new(),
 			functions: ::std::borrow::Cow::from(FunctionExecutor::SIGNATURES),
 		};
 
-		let program = program_with_externals(externals, "env").unwrap();
+		let program = program_with_externals::<FunctionExecutor>(externals, "env").unwrap();
 
 		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.compact.wasm");
 		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
@@ -184,13 +256,14 @@ mod tests {
 	#[test]
 	fn should_provide_externalities() {
 		let fe_context = Arc::new(Mutex::new(None));
+		let mut fex = FunctionExecutor { context: Arc::clone(&fe_context) };
 		let externals = UserDefinedElements {
-			executor: Some(FunctionExecutor { context: Arc::clone(&fe_context) }),
+			executor: Some(&mut fex),
 			globals: HashMap::new(),
 			functions: ::std::borrow::Cow::from(FunctionExecutor::SIGNATURES),
 		};
 
-		let program = program_with_externals(externals, "env").unwrap();
+		let program = program_with_externals::<FunctionExecutor>(externals, "env").unwrap();
 
 		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.wasm");
 		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
