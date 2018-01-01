@@ -114,9 +114,9 @@ pub trait Context {
 #[derive(Debug, Clone)]
 pub enum Communication<C, D, V, S> {
 	/// A consensus message (proposal or vote)
-	Message(LocalizedMessage<C, D, V, S>),
-	/// A proof-of-lock.
-	Locked(PrepareJustification<D, S>),
+	Consensus(LocalizedMessage<C, D, V, S>),
+	/// Auxiliary communication (just proof-of-lock for now).
+	Auxiliary(PrepareJustification<D, S>),
 }
 
 /// Type alias for a localized message using only type parameters from `Context`.
@@ -461,7 +461,7 @@ impl<C: Context> Strategy<C> {
 				// broadcast the justification along with the proposal if we are locked.
 				if let Some(ref locked) = self.locked {
 					sending.push(
-						ContextCommunication(Communication::Locked(locked.justification.clone()))
+						ContextCommunication(Communication::Auxiliary(locked.justification.clone()))
 					);
 				}
 
@@ -610,7 +610,7 @@ impl<C: Context> Strategy<C> {
 	) {
 		let signed_message = context.sign_local(message);
 		self.import_message(signed_message.clone());
-		sending.push(ContextCommunication(Communication::Message(signed_message)));
+		sending.push(ContextCommunication(Communication::Consensus(signed_message)));
 	}
 }
 
@@ -657,8 +657,9 @@ impl<C, I, O, E> Future for Agreement<C, I, O>
 			};
 
 			match message.0 {
-				Communication::Message(message) => self.strategy.import_message(message),
-				Communication::Locked(proof) => self.strategy.import_lock_proof(&self.context, proof),
+				Communication::Consensus(message) => self.strategy.import_message(message),
+				Communication::Auxiliary(lock_proof)
+					=> self.strategy.import_lock_proof(&self.context, lock_proof),
 			}
 		}
 
