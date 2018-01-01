@@ -26,28 +26,42 @@ use error::{Error, ErrorKind, Result};
 use std::sync::{Arc};
 use wasm_utils::{ModuleInstance, MemoryInstance, UserDefinedElements, AddModuleWithoutFullDependentInstance};
 
-struct FunctionExecutor {
-	heap_end: u32,
-	memory: Arc<MemoryInstance>,
+struct Heap {
+	end: u32,
 }
 
-impl FunctionExecutor {
-	fn new(m: &Arc<ModuleInstance>) -> Self {
-		FunctionExecutor {
-			heap_end: 1024,
-			memory: Arc::clone(&m.memory(ItemIndex::Internal(0)).unwrap()),
+impl Heap {
+	fn new() -> Self {
+		Heap {
+			end: 1024,
 		}
 	}
 	fn allocate(&mut self, size: u32) -> u32 {
-		let r = self.heap_end;
-		self.heap_end += size;
+		let r = self.end;
+		self.end += size;
 		r
 	}
 	fn deallocate(&mut self, _offset: u32) {
 	}
 }
 
-function_executor!(this: FunctionExecutor,
+struct FunctionExecutor<'e, E: Externalities + 'e> {
+	heap: Heap,
+	memory: Arc<MemoryInstance>,
+	ext: &'e mut E,
+}
+
+impl<'e, E: Externalities> FunctionExecutor<'e, E> {
+	fn new(m: &Arc<ModuleInstance>, e: &'e mut E) -> Self {
+		FunctionExecutor {
+			heap: Heap::new(),
+			memory: Arc::clone(&m.memory(ItemIndex::Internal(0)).unwrap()),
+			ext: e,
+		}
+	}
+}
+
+function_executor!(this: FunctionExecutor<'e, E>,
 	imported(n: u64) -> u64 => { println!("imported {:?}", n); n + 1 },
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize).unwrap();
@@ -57,14 +71,37 @@ function_executor!(this: FunctionExecutor,
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => { println!("memmove {} from {}, {} bytes", dest, src, count); dest },
 	ext_memset(dest: *mut u8, val: i32, count: usize) -> *mut u8 => { println!("memset {} with {}, {} bytes", dest, val, count); dest },
 	ext_malloc(size: usize) -> *mut u8 => {
-		let r = this.allocate(size);
+		let r = this.heap.allocate(size);
 		println!("malloc {} bytes at {}", size, r);
 		r
 	},
 	ext_free(addr: *mut u8) => {
-		this.deallocate(addr);
+		this.heap.deallocate(addr);
 		println!("free {}", addr)
+	},
+	set_storage(key_data: *const u8, key_len: i32, value_data: *const u8, value_len: i32) => {
+		if let (Ok(key), Ok(value)) = (this.memory.get(key_data, key_len as usize), this.memory.get(value_data, value_len as usize)) {
+			this.ext.set_storage(0, key, value);
+		}
+	},
+	get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8 => {
+		let (offset, written) = if let Ok(key) = this.memory.get(key_data, key_len as usize) {
+			if let Ok(value) = this.ext.storage(0, &key) {
+				let offset = this.heap.allocate(value.len() as u32) as u32;
+				let _ = this.memory.set(offset, value);
+				(offset, value.len() as u32)
+			} else { (0, 0) }
+		} else { (0, 0) };
+
+		if written > 0 {
+			use byteorder::{LittleEndian, ByteOrder};
+			let mut r = [0u8; 4];
+			LittleEndian::write_u32(&mut r, written);
+			let _ = this.memory.set(written_out, &r);
+		}
+		offset as u32
 	}
+	=> <'e, E: Externalities + 'e>
 );
 
 /// Dummy rust executor for contracts.
@@ -94,12 +131,12 @@ impl CodeExecutor for WasmExecutor {
 		let program = ProgramInstance::new().unwrap();
 
 		let module = deserialize_buffer(code).expect("Failed to load module");
-		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::SIGNATURES]).expect("Failed to initialize module");
+		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<E>::SIGNATURES]).expect("Failed to initialize module");
 
-		let mut fec = FunctionExecutor::new(&module);
+		let mut fec = FunctionExecutor::new(&module, ext);
 
 		let size = data.0.len() as u32;
-		let offset = fec.allocate(size);
+		let offset = fec.heap.allocate(size);
 		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, &data.0).unwrap();
 
 		let r = module.execute_export(method,
@@ -141,20 +178,19 @@ mod tests {
 
 	#[test]
 	fn should_pass_externalities_at_call() {
+		let mut ext = TestExternalities;
+
 		let program = ProgramInstance::new().unwrap();
 
 		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.compact.wasm");
 		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
-		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::SIGNATURES]).expect("Failed to initialize module");
+		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<TestExternalities>::SIGNATURES]).expect("Failed to initialize module");
 
-		let mut fec = FunctionExecutor {
-			heap_end: 1024,
-			memory: Arc::clone(&module.memory(ItemIndex::Internal(0)).unwrap())
-		};
+		let mut fec = FunctionExecutor::new(&module, &mut ext);
 
 		let data = b"Hello world";
 		let size = data.len() as u32;
-		let offset = fec.allocate(size);
+		let offset = fec.heap.allocate(size);
 		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, data).unwrap();
 
 		module.execute_export("test_data_in",
