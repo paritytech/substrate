@@ -23,8 +23,8 @@ use std::hash::Hash;
 use super::{Message, LocalizedMessage};
 
 /// Justification for some state at a given round.
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct Justification<D, S> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UncheckedJustification<D, S> {
 	/// The round.
 	pub round_number: usize,
 	/// The digest prepared for.
@@ -33,36 +33,61 @@ pub struct Justification<D, S> {
 	pub signatures: Vec<S>,
 }
 
-impl<D, S> Justification<D, S> {
+impl<D, S> UncheckedJustification<D, S> {
 	/// Fails if there are duplicate signatures or invalid.
 	///
 	/// Provide a closure for checking whether the signature is valid on a
 	/// digest.
 	///
-	/// The closure should return true iff the round number, digest, and signature
+	/// The closure should returns a checked justification iff the round number, digest, and signature
 	/// represent a valid message and the signer was authorized to issue
 	/// it.
 	///
 	/// The `check_message` closure may vary based on context.
-	pub fn check<F, V>(&self, threshold: usize, check_message: F) -> bool
+	pub fn check<F, V>(self, threshold: usize, mut check_message: F)
+		-> Result<Justification<D, S>, Self>
 		where
-			F: Fn(usize, &D, &S) -> Option<V>,
+			F: FnMut(usize, &D, &S) -> Option<V>,
 			V: Hash + Eq,
 	{
-		let mut voted = HashSet::new();
+		let checks_out = {
+			let mut checks_out = || {
+				let mut voted = HashSet::new();
 
-		for signature in &self.signatures {
-			match check_message(self.round_number, &self.digest, signature) {
-				None => return false,
-				Some(v) => {
-					if !voted.insert(v) {
-						return false;
+				for signature in &self.signatures {
+					match check_message(self.round_number, &self.digest, signature) {
+						None => return false,
+						Some(v) => {
+							if !voted.insert(v) {
+								return false;
+							}
+						}
 					}
 				}
-			}
-		}
 
-		voted.len() >= threshold
+				voted.len() >= threshold
+			};
+
+			checks_out()
+		};
+
+		if checks_out {
+			Ok(Justification(self))
+		} else {
+			Err(self)
+		}
+	}
+}
+
+/// A checked justification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Justification<D,S>(UncheckedJustification<D,S>);
+
+impl<D, S> ::std::ops::Deref for Justification<D, S> {
+	type Target = UncheckedJustification<D, S>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
 	}
 }
 
@@ -228,11 +253,11 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 				.map(|&(_, ref s)| s.clone())
 				.collect();
 
-			self.state = State::Prepared(PrepareJustification {
+			self.state = State::Prepared(Justification(UncheckedJustification {
 				round_number: self.round_number,
 				digest: threshold_prepared,
 				signatures: signatures,
-			});
+			}));
 		}
 	}
 
@@ -269,11 +294,11 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 				.map(|&(_, ref s)| s.clone())
 				.collect();
 
-			self.state = State::Committed(Justification {
+			self.state = State::Committed(Justification(UncheckedJustification {
 				round_number: self.round_number,
 				digest: threshold_committed,
 				signatures: signatures,
-			});
+			}));
 		}
 	}
 
@@ -314,7 +339,7 @@ mod tests {
 
 	#[test]
 	fn justification_checks_out() {
-		let mut justification = Justification {
+		let mut justification = UncheckedJustification {
 			round_number: 2,
 			digest: Digest(600),
 			signatures: (0..10).map(|i| Signature(600, i)).collect(),
@@ -328,19 +353,19 @@ mod tests {
 			}
 		};
 
-		assert!(justification.check(7, &check_message));
-		assert!(!justification.check(11, &check_message));
+		assert!(justification.clone().check(7, &check_message).is_ok());
+		assert!(justification.clone().check(11, &check_message).is_err());
 
 		{
 			// one bad signature is enough to spoil it.
 			justification.signatures.push(Signature(1001, 255));
-			assert!(!justification.check(7, &check_message));
+			assert!(justification.clone().check(7, &check_message).is_err());
 
 			justification.signatures.pop();
 		}
 		// duplicates not allowed.
 		justification.signatures.extend((0..10).map(|i| Signature(600, i)));
-		assert!(!justification.check(11, &check_message));
+		assert!(justification.clone().check(11, &check_message).is_err());
 	}
 
 	#[test]
