@@ -402,7 +402,7 @@ impl<C: Context> Table<C> {
 		// check that validator hasn't already specified another candidate.
 		let digest = context.candidate_digest(&candidate);
 
-		match self.validator_data.entry(from.clone()) {
+		let new_proposal = match self.validator_data.entry(from.clone()) {
 			Entry::Occupied(mut occ) => {
 				// if digest is different, fetch candidate and
 				// note misbehavior.
@@ -410,8 +410,13 @@ impl<C: Context> Table<C> {
 
 				if let Some((ref old_digest, ref old_sig)) = existing.proposal {
 					if old_digest != &digest {
+						const EXISTENCE_PROOF: &str =
+							"when proposal first received from validator, candidate \
+							votes entry is created. proposal here is `Some`, therefore \
+							candidate votes entry exists; qed";
+
 						let old_candidate = self.candidate_votes.get(old_digest)
-							.expect("proposed digest implies existence of votes entry; qed")
+							.expect(EXISTENCE_PROOF)
 							.candidate
 							.clone();
 
@@ -423,8 +428,11 @@ impl<C: Context> Table<C> {
 							None,
 						);
 					}
+
+					false
 				} else {
 					existing.proposal = Some((digest.clone(), signature.clone()));
+					true
 				}
 			}
 			Entry::Vacant(vacant) => {
@@ -432,16 +440,20 @@ impl<C: Context> Table<C> {
 					proposal: Some((digest.clone(), signature.clone())),
 					known_statements: HashSet::new(),
 				});
-
-				// TODO: seed validity votes with issuer here?
-				self.candidate_votes.entry(digest.clone()).or_insert_with(move || CandidateData {
-					group_id: group,
-					candidate: candidate,
-					validity_votes: HashMap::new(),
-					availability_votes: HashMap::new(),
-					indicated_bad_by: Vec::new(),
-				});
+				true
 			}
+		};
+
+		// NOTE: altering this code may affect the existence proof above. ensure it remains
+		// valid.
+		if new_proposal {
+			self.candidate_votes.entry(digest.clone()).or_insert_with(move || CandidateData {
+				group_id: group,
+				candidate: candidate,
+				validity_votes: HashMap::new(),
+				availability_votes: HashMap::new(),
+				indicated_bad_by: Vec::new(),
+			});
 		}
 
 		self.validity_vote(
@@ -470,7 +482,8 @@ impl<C: Context> Table<C> {
 				ValidityVote::Valid(s) => (s, true),
 				ValidityVote::Invalid(s) => (s, false),
 				ValidityVote::Issued(_) =>
-					panic!("implicit issuance vote only cast if the candidate entry already created successfully; qed"),
+					panic!("implicit issuance vote only cast from `import_candidate` after \
+							checking group membership of issuer; qed"),
 			};
 
 			return (
