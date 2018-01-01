@@ -29,7 +29,7 @@ use futures::{future, Future, Stream, Sink, Poll, Async, AsyncSink};
 
 use self::accumulator::State;
 
-pub use self::accumulator::{Accumulator, Justification, PrepareJustification};
+pub use self::accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification};
 
 /// Messages over the proposal.
 /// Each message carries an associated round number.

@@ -331,13 +331,13 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 	let locked_proposal = Candidate(999_999_999);
 	let locked_digest = Digest(999_999_999);
 	let locked_round = 1;
-	let justification = PrepareJustification {
+	let justification = UncheckedJustification {
 		round_number: locked_round,
 		digest: locked_digest.clone(),
 		signatures: (0..7)
 			.map(|i| Signature(Message::Prepare(locked_round, locked_digest.clone()), ValidatorId(i)))
 			.collect()
-	};
+	}.check(7, |_, _, s| Some(s.1.clone())).unwrap();
 
 	let mut shared_context = SharedContext::new(node_count);
 	shared_context.current_round = locked_round + 1;
