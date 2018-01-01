@@ -16,63 +16,93 @@
 
 //! Rust implementation of Polkadot contracts.
 
-use parity_wasm::{deserialize_buffer, ModuleInstanceInterface};
-use parity_wasm::interpreter::{ItemIndex, ModuleInstance, MemoryInstance, UserDefinedElements};
+use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
+use parity_wasm::interpreter::{ItemIndex};
 use parity_wasm::RuntimeValue::{I32, I64};
 use std::collections::HashMap;
 use primitives::contract::CallData;
 use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
-use std::sync::{Arc, Mutex};
-use wasm_utils::program_with_externals;
+use std::sync::{Arc};
+use wasm_utils::{ModuleInstance, MemoryInstance, UserDefinedElements, AddModuleWithoutFullDependentInstance};
 
-// user function executor
-#[derive(Default)]
-struct FunctionExecutor {
-	context: Arc<Mutex<Option<FEContext>>>,
+struct Heap {
+	end: u32,
 }
 
-struct FEContext {
-	heap_end: u32,
-	memory: Arc<MemoryInstance>,
-}
-
-impl FEContext {
-	fn new(m: &Arc<ModuleInstance>) -> Self {
-		FEContext { heap_end: 1024, memory: Arc::clone(&m.memory(ItemIndex::Internal(0)).unwrap()) }
+impl Heap {
+	fn new() -> Self {
+		Heap {
+			end: 1024,
+		}
 	}
 	fn allocate(&mut self, size: u32) -> u32 {
-		let r = self.heap_end;
-		self.heap_end += size;
+		let r = self.end;
+		self.end += size;
 		r
 	}
 	fn deallocate(&mut self, _offset: u32) {
 	}
 }
 
-function_executor!(this: FunctionExecutor,
+struct FunctionExecutor<'e, E: Externalities + 'e> {
+	heap: Heap,
+	memory: Arc<MemoryInstance>,
+	ext: &'e mut E,
+}
+
+impl<'e, E: Externalities> FunctionExecutor<'e, E> {
+	fn new(m: &Arc<ModuleInstance>, e: &'e mut E) -> Self {
+		FunctionExecutor {
+			heap: Heap::new(),
+			memory: Arc::clone(&m.memory(ItemIndex::Internal(0)).unwrap()),
+			ext: e,
+		}
+	}
+}
+
+function_executor!(this: FunctionExecutor<'e, E>,
 	imported(n: u64) -> u64 => { println!("imported {:?}", n); n + 1 },
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
-		let mut context = this.context.lock().unwrap();
-		context.as_mut().unwrap().memory.copy_nonoverlapping(src as usize, dest as usize, count as usize).unwrap();
+		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize).unwrap();
 		println!("memcpy {} from {}, {} bytes", dest, src, count);
 		dest
 	},
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => { println!("memmove {} from {}, {} bytes", dest, src, count); dest },
 	ext_memset(dest: *mut u8, val: i32, count: usize) -> *mut u8 => { println!("memset {} with {}, {} bytes", dest, val, count); dest },
 	ext_malloc(size: usize) -> *mut u8 => {
-		let mut context = this.context.lock().unwrap();
-		let r = context.as_mut().unwrap().allocate(size);
+		let r = this.heap.allocate(size);
 		println!("malloc {} bytes at {}", size, r);
 		r
 	},
 	ext_free(addr: *mut u8) => {
-		let mut context = this.context.lock().unwrap();
-		context.as_mut().unwrap().deallocate(addr);
+		this.heap.deallocate(addr);
 		println!("free {}", addr)
-	}
-);
+	},
+	set_storage(key_data: *const u8, key_len: i32, value_data: *const u8, value_len: i32) => {
+		if let (Ok(key), Ok(value)) = (this.memory.get(key_data, key_len as usize), this.memory.get(value_data, value_len as usize)) {
+			this.ext.set_storage(0, key, value);
+		}
+	},
+	get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8 => {
+		let (offset, written) = if let Ok(key) = this.memory.get(key_data, key_len as usize) {
+			if let Ok(value) = this.ext.storage(0, &key) {
+				let offset = this.heap.allocate(value.len() as u32) as u32;
+				let _ = this.memory.set(offset, value);
+				(offset, value.len() as u32)
+			} else { (0, 0) }
+		} else { (0, 0) };
 
+		if written > 0 {
+			use byteorder::{LittleEndian, ByteOrder};
+			let mut r = [0u8; 4];
+			LittleEndian::write_u32(&mut r, written);
+			let _ = this.memory.set(written_out, &r);
+		}
+		offset as u32
+	}
+	=> <'e, E: Externalities + 'e>
+);
 
 /// Dummy rust executor for contracts.
 ///
@@ -98,25 +128,24 @@ impl CodeExecutor for WasmExecutor {
 			Err(e) => Err(ErrorKind::Externalities(Box::new(e)))?,
 		};
 
-		let fe_context = Arc::new(Mutex::new(None));
-		let externals = UserDefinedElements {
-			executor: Some(FunctionExecutor { context: Arc::clone(&fe_context) }),
-			globals: HashMap::new(),
-			functions: ::std::borrow::Cow::from(FunctionExecutor::SIGNATURES),
-		};
+		let program = ProgramInstance::new().unwrap();
 
-		let program = program_with_externals(externals, "env").unwrap();
 		let module = deserialize_buffer(code).expect("Failed to load module");
-		let module = program.add_module("test", module, None).expect("Failed to initialize module");
-		*fe_context.lock().unwrap() = Some(FEContext::new(&module));
+		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<E>::SIGNATURES]).expect("Failed to initialize module");
+
+		let mut fec = FunctionExecutor::new(&module, ext);
 
 		let size = data.0.len() as u32;
-		let offset = fe_context.lock().unwrap().as_mut().unwrap().allocate(size);
+		let offset = fec.heap.allocate(size);
 		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, &data.0).unwrap();
 
-		module.execute_export(method, vec![I32(offset as i32), I32(size as i32)].into())
+		let r = module.execute_export(method,
+			program.params_with_external("env", &mut fec)
+				.add_argument(I32(offset as i32))
+				.add_argument(I32(size as i32)))
 			.map_err(|_| ErrorKind::Runtime.into())
-			.and_then(|i| if let Some(I64(r)) = i { Ok(r as u64) } else { Err(ErrorKind::InvalidReturn.into()) })
+			.and_then(|i| if let Some(I64(r)) = i { Ok(r as u64) } else { Err(ErrorKind::InvalidReturn.into()) });
+		r
 	}
 }
 
@@ -124,13 +153,6 @@ impl CodeExecutor for WasmExecutor {
 mod tests {
 
 	use super::*;
-	use std::collections::HashMap;
-
-	use std::sync::{Arc, Mutex};
-	use std::mem::transmute;
-	use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
-	use parity_wasm::interpreter::{ItemIndex, UserDefinedElements};
-	use parity_wasm::RuntimeValue::{I32, I64};
 
 	#[derive(Debug, Default)]
 	struct TestExternalities;
@@ -155,48 +177,50 @@ mod tests {
 	}
 
 	#[test]
-	fn should_pass_freeable_data() {
-		let fe_context = Arc::new(Mutex::new(None));
-		let externals = UserDefinedElements {
-			executor: Some(FunctionExecutor { context: Arc::clone(&fe_context) }),
-			globals: HashMap::new(),
-			functions: ::std::borrow::Cow::from(FunctionExecutor::SIGNATURES),
-		};
+	fn should_pass_externalities_at_call() {
+		let mut ext = TestExternalities;
 
-		let program = program_with_externals(externals, "env").unwrap();
+		let program = ProgramInstance::new().unwrap();
 
 		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.compact.wasm");
 		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
-		let module = program.add_module("test", module, None).expect("Failed to initialize module");
+		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<TestExternalities>::SIGNATURES]).expect("Failed to initialize module");
 
-		*fe_context.lock().unwrap() = Some(FEContext { heap_end: 1024, memory: Arc::clone(&module.memory(ItemIndex::Internal(0)).unwrap()) });
+		let mut fec = FunctionExecutor::new(&module, &mut ext);
 
 		let data = b"Hello world";
 		let size = data.len() as u32;
-		let offset = fe_context.lock().unwrap().as_mut().unwrap().allocate(size);
+		let offset = fec.heap.allocate(size);
 		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, data).unwrap();
 
-		module.execute_export("test_data_in", vec![I32(offset as i32), I32(size as i32)].into()).unwrap();
+		module.execute_export("test_data_in",
+			program.params_with_external("env", &mut fec)
+				.add_argument(I32(offset as i32))
+				.add_argument(I32(size as i32))
+		).unwrap();
+
+		// TODO: program.execute(module, "test_data_in", map!["env" => &mut fec], [I32(offset as i32), I32(size as i32)]);
 
 		panic!();
 	}
-
+/*
 	#[test]
 	fn should_provide_externalities() {
 		let fe_context = Arc::new(Mutex::new(None));
+		let mut fex = FunctionExecutor { context: Arc::clone(&fe_context) };
 		let externals = UserDefinedElements {
-			executor: Some(FunctionExecutor { context: Arc::clone(&fe_context) }),
+			executor: Some(&mut fex),
 			globals: HashMap::new(),
 			functions: ::std::borrow::Cow::from(FunctionExecutor::SIGNATURES),
 		};
 
-		let program = program_with_externals(externals, "env").unwrap();
+		let program = program_with_externals::<FunctionExecutor>(externals, "env").unwrap();
 
 		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.wasm");
 		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
 		let module = program.add_module("test", module, None).expect("Failed to initialize module");
 
-		*fe_context.lock().unwrap() = Some(FEContext { heap_end: 1024, memory: Arc::clone(&module.memory(ItemIndex::Internal(0)).unwrap()) });
+		*fe_context.lock().unwrap() = Some(FunctionExecutor { heap_end: 1024, memory: Arc::clone(&module.memory(ItemIndex::Internal(0)).unwrap()) });
 
 		let argument: u64 = 20;
 		assert_eq!(Some(I64(((argument + 1) * 2) as i64)), module.execute_export("test", vec![I64(argument as i64)].into()).unwrap());
@@ -205,5 +229,5 @@ mod tests {
 		module.memory(ItemIndex::Internal(0)).unwrap().get_into(1024, unsafe { transmute::<_, &mut [u8; 8]>(&mut x) }).unwrap();
 		println!("heap: {:?}", x);
 		panic!();
-	}
+	}*/
 }
