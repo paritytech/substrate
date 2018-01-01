@@ -36,11 +36,8 @@ extern crate byteorder;
 
 #[macro_use]
 extern crate error_chain;
-//#[macro_use]
-//extern crate serde_derive;
 
 #[cfg(test)]
-//#[macro_use]
 extern crate assert_matches;
 
 #[macro_use]

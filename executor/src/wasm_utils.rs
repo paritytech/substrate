@@ -131,7 +131,7 @@ pub trait IntoUserDefinedElements {
 }
 
 #[macro_export]
-macro_rules! function_executor {
+macro_rules! impl_function_executor {
 	( $objectname:ident : $structname:ty, $( $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt ),* => $($pre:tt)+ ) => (
 		impl $( $pre ) + $crate::wasm_utils::UserFunctionExecutor<$crate::wasm_utils::DummyUserError> for $structname {
 			dispatch!($objectname, $( $name( $( $names : $params ),* ) $( -> $returns )* => $body ),*);
@@ -191,7 +191,7 @@ impl AddModuleWithoutFullDependentInstance for interpreter::ProgramInstance<Dumm
 							globals: HashMap::new(),
 							functions: ::std::borrow::Cow::from(functions),
 						}
-					).unwrap()
+					).unwrap()	// TODO: handle
 				);
 				let fake_module: Arc<interpreter::ModuleInstanceInterface<_>> = fake_module;
 				(dep_mod_name.into(), fake_module)
@@ -205,9 +205,9 @@ impl AddModuleWithoutFullDependentInstance for interpreter::ProgramInstance<Dumm
 			externals_name.into(),
 			Arc::new(
 				interpreter::env_native_module(
-					self.module(externals_name).unwrap(),
+					self.module(externals_name).unwrap(),	// TODO: handle
 					externals.into_user_defined_elements()
-				).unwrap()
+				).unwrap()	// TODO: handle
 			)
 		)
 	}

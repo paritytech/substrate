@@ -61,7 +61,7 @@ impl<'e, E: Externalities> FunctionExecutor<'e, E> {
 	}
 }
 
-function_executor!(this: FunctionExecutor<'e, E>,
+impl_function_executor!(this: FunctionExecutor<'e, E>,
 	imported(n: u64) -> u64 => { println!("imported {:?}", n); n + 1 },
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize).unwrap();
@@ -109,8 +109,7 @@ function_executor!(this: FunctionExecutor<'e, E>,
 /// Instead of actually executing the provided code it just
 /// dispatches the calls to pre-defined hardcoded implementations in rust.
 #[derive(Debug, Default)]
-pub struct WasmExecutor {
-}
+pub struct WasmExecutor;
 
 impl CodeExecutor for WasmExecutor {
 	type Error = Error;
@@ -128,7 +127,7 @@ impl CodeExecutor for WasmExecutor {
 			Err(e) => Err(ErrorKind::Externalities(Box::new(e)))?,
 		};
 
-		let program = ProgramInstance::new().unwrap();
+		let program = ProgramInstance::new().unwrap();	// TODO: handle
 
 		let module = deserialize_buffer(code).expect("Failed to load module");
 		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<E>::SIGNATURES]).expect("Failed to initialize module");
@@ -137,7 +136,7 @@ impl CodeExecutor for WasmExecutor {
 
 		let size = data.0.len() as u32;
 		let offset = fec.heap.allocate(size);
-		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, &data.0).unwrap();
+		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, &data.0).unwrap();	// TODO: handle x2
 
 		let r = module.execute_export(method,
 			program.params_with_external("env", &mut fec)
@@ -199,35 +198,6 @@ mod tests {
 				.add_argument(I32(size as i32))
 		).unwrap();
 
-		// TODO: program.execute(module, "test_data_in", map!["env" => &mut fec], [I32(offset as i32), I32(size as i32)]);
-
 		panic!();
 	}
-/*
-	#[test]
-	fn should_provide_externalities() {
-		let fe_context = Arc::new(Mutex::new(None));
-		let mut fex = FunctionExecutor { context: Arc::clone(&fe_context) };
-		let externals = UserDefinedElements {
-			executor: Some(&mut fex),
-			globals: HashMap::new(),
-			functions: ::std::borrow::Cow::from(FunctionExecutor::SIGNATURES),
-		};
-
-		let program = program_with_externals::<FunctionExecutor>(externals, "env").unwrap();
-
-		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime.wasm");
-		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
-		let module = program.add_module("test", module, None).expect("Failed to initialize module");
-
-		*fe_context.lock().unwrap() = Some(FunctionExecutor { heap_end: 1024, memory: Arc::clone(&module.memory(ItemIndex::Internal(0)).unwrap()) });
-
-		let argument: u64 = 20;
-		assert_eq!(Some(I64(((argument + 1) * 2) as i64)), module.execute_export("test", vec![I64(argument as i64)].into()).unwrap());
-
-		let mut x = [0u64; 2];
-		module.memory(ItemIndex::Internal(0)).unwrap().get_into(1024, unsafe { transmute::<_, &mut [u8; 8]>(&mut x) }).unwrap();
-		println!("heap: {:?}", x);
-		panic!();
-	}*/
 }
