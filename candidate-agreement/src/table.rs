@@ -353,7 +353,7 @@ impl<C: Context> Table<C> {
 				signer.clone(),
 				digest,
 				signature,
-			)
+			),
 		};
 
 		if let Some(misbehavior) = maybe_misbehavior {
