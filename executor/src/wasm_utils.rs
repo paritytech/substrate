@@ -16,22 +16,21 @@
 
 //! Rust implementation of Polkadot contracts.
 
-use std::sync::{Arc, Weak};
+use std::sync::{Arc/*, Weak*/};
+use std::collections::HashMap;
 pub use std::result;
-pub use parity_wasm::elements::{ValueType};
+pub use parity_wasm::elements::{ValueType, Module};
 pub use parity_wasm::interpreter::{RuntimeValue, UserFunctionDescriptor, UserFunctionExecutor,
-	UserDefinedElements, env_native_module, DummyUserError};
+	UserDefinedElements, env_native_module, DummyUserError, ExecutionParams, UserError};
 pub use parity_wasm::{builder};
 use parity_wasm::interpreter;
 
 pub type Error = interpreter::Error<DummyUserError>;
 pub type MemoryInstance = interpreter::MemoryInstance<DummyUserError>;
-pub type ProgramInstance = interpreter::ProgramInstance<DummyUserError>;
 pub type ModuleInstance = interpreter::ModuleInstance<DummyUserError>;
-pub type ModuleInstanceInterface = interpreter::ModuleInstanceInterface<DummyUserError>;
 pub type CallerContext<'a> = interpreter::CallerContext<'a, DummyUserError>;
 
-pub fn program_with_externals<E: UserFunctionExecutor<DummyUserError> + 'static>(externals: UserDefinedElements<DummyUserError>, module_name: &str) -> result::Result<ProgramInstance, Error> {
+/*pub fn program_with_externals<E: UserFunctionExecutor<DummyUserError> + 'static>(externals: UserDefinedElements<DummyUserError>, module_name: &str) -> result::Result<ProgramInstance, Error> {
 	let program = ProgramInstance::new().unwrap();
 	let instance = {
 		let module = builder::module().build();
@@ -43,7 +42,7 @@ pub fn program_with_externals<E: UserFunctionExecutor<DummyUserError> + 'static>
 //	program.insert_loaded_module(module_name, Arc::new(other_instance));
 	Ok(program)
 }
-
+*/
 pub trait ConvertibleToWasm { const VALUE_TYPE: ValueType; type NativeType; fn to_runtime_value(self) -> RuntimeValue; }
 impl ConvertibleToWasm for i32 { type NativeType = i32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self) } }
 impl ConvertibleToWasm for u32 { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as i32) } }
@@ -127,6 +126,10 @@ macro_rules! signatures {
 	);
 }
 
+pub trait IntoUserDefinedElements {
+	fn into_user_defined_elements(&mut self) -> UserDefinedElements<DummyUserError>;
+}
+
 #[macro_export]
 macro_rules! function_executor {
 	( $objectname:ident : $structname:ident, $( $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt ),* ) => (
@@ -136,5 +139,83 @@ macro_rules! function_executor {
 		impl $structname {
 			signatures!($( $name( $( $params ),* ) $( -> $returns )* ),*);
 		}
+		impl $crate::wasm_utils::IntoUserDefinedElements for $structname {
+			fn into_user_defined_elements(&mut self) -> UserDefinedElements<$crate::wasm_utils::DummyUserError> {
+				$crate::wasm_utils::UserDefinedElements {
+					executor: Some(self),
+					globals: HashMap::new(),	// TODO: provide
+					functions: ::std::borrow::Cow::from($structname::SIGNATURES),
+				}
+			}
+		}
 	);
+}
+
+#[derive(Clone)]
+struct DummyUserFunctionExecutor;
+impl<E: UserError> interpreter::UserFunctionExecutor<E> for DummyUserFunctionExecutor {
+	fn execute(&mut self, _name: &str, _context: interpreter::CallerContext<E>) ->
+		result::Result<Option<interpreter::RuntimeValue>, interpreter::Error<E>>
+	{
+		unimplemented!()
+	}
+}
+
+pub trait AddModuleWithoutFullDependentInstance {
+	fn add_module_by_sigs(
+		&self,
+		name: &str,
+		module: Module,
+		functions: HashMap<&str, &'static [UserFunctionDescriptor]>,
+	) -> result::Result<Arc<interpreter::ModuleInstance<DummyUserError>>, interpreter::Error<DummyUserError>>;
+
+	fn params_with_external<'a, 'b: 'a>(&'b self, externals_name: &str, externals: &'a mut IntoUserDefinedElements) -> ExecutionParams<'a, DummyUserError>;
+}
+
+impl AddModuleWithoutFullDependentInstance for interpreter::ProgramInstance<DummyUserError> {
+	fn add_module_by_sigs(
+		&self,
+		name: &str,
+		module: Module,
+		functions: HashMap<&str, &'static [UserFunctionDescriptor]>
+	) -> result::Result<Arc<interpreter::ModuleInstance<DummyUserError>>, interpreter::Error<DummyUserError>> {
+		let mut dufe = vec![DummyUserFunctionExecutor; functions.len()];
+		let dufe_refs = dufe.iter_mut().collect::<Vec<_>>();
+		let fake_module_map = functions.into_iter()
+			.zip(dufe_refs.into_iter())
+			.map(|((dep_mod_name, functions), dufe)| {
+				let fake_module = Arc::new(
+					interpreter::env_native_module(
+						self.module(dep_mod_name).unwrap(), UserDefinedElements {
+							executor: Some(dufe),
+							globals: HashMap::new(),
+							functions: ::std::borrow::Cow::from(functions),
+						}
+					).unwrap()
+				);
+				let fake_module: Arc<interpreter::ModuleInstanceInterface<_>> = fake_module;
+				(dep_mod_name.into(), fake_module)
+			})
+			.collect::<HashMap<_, _>>();
+		self.add_module(name, module, Some(&fake_module_map))
+	}
+
+	fn params_with_external<'a, 'b: 'a>(&'b self, externals_name: &str, externals: &'a mut IntoUserDefinedElements) -> ExecutionParams<'a, DummyUserError> {
+		interpreter::ExecutionParams::with_external(
+			externals_name.into(),
+			Arc::new(
+				interpreter::env_native_module(
+					self.module(externals_name).unwrap(),
+					externals.into_user_defined_elements()
+				).unwrap()
+			)
+		)
+	}
+}
+
+#[macro_export]
+macro_rules! map {
+	($( $name:expr => $value:expr ),*) => (
+		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
+	)
 }
