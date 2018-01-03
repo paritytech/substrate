@@ -644,7 +644,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "polkadot-executor"
+name = "polkadot-collator"
 version = "0.1.0"
 dependencies = [
  "futures 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -652,7 +652,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "polkadot-contracts"
+name = "polkadot-executor"
 version = "0.1.0"
 dependencies = [
  "assert_matches 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
