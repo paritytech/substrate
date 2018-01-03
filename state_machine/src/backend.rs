@@ -67,8 +67,6 @@ pub struct InMemory {
 	inner: MemoryState, // keeps all the state in memory.
 }
 
-const EMPTY_BYTES: [u8; 0] = [];
-
 impl Backend for InMemory {
 	type Error = Void;
 
@@ -94,7 +92,7 @@ impl Backend for InMemory {
 
 		let storage_tree_root = H256(sec_trie_root(storage_roots).0);
 
-		let code_hash = hash(&self.inner.code().unwrap_or_else(|| &EMPTY_BYTES));
+		let code_hash = hash(&self.inner.code().unwrap_or_else(|| &[]));
 
 		Committed {
 			code_hash,

@@ -16,15 +16,16 @@
 
 //! Rust implementation of Polkadot contracts.
 
+use std::sync::Arc;
+use std::collections::HashMap;
 use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
 use parity_wasm::interpreter::{ItemIndex};
 use parity_wasm::RuntimeValue::{I32, I64};
-use std::collections::HashMap;
 use primitives::contract::CallData;
 use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
-use std::sync::{Arc};
-use wasm_utils::{ModuleInstance, MemoryInstance, UserDefinedElements, AddModuleWithoutFullDependentInstance};
+use wasm_utils::{MemoryInstance, UserDefinedElements,
+	AddModuleWithoutFullDependentInstance};
 
 struct Heap {
 	end: u32,
@@ -52,10 +53,10 @@ struct FunctionExecutor<'e, E: Externalities + 'e> {
 }
 
 impl<'e, E: Externalities> FunctionExecutor<'e, E> {
-	fn new(m: &Arc<ModuleInstance>, e: &'e mut E) -> Self {
+	fn new(m: &Arc<MemoryInstance>, e: &'e mut E) -> Self {
 		FunctionExecutor {
 			heap: Heap::new(),
-			memory: Arc::clone(&m.memory(ItemIndex::Internal(0)).unwrap()),
+			memory: Arc::clone(m),
 			ext: e,
 		}
 	}
@@ -127,16 +128,19 @@ impl CodeExecutor for WasmExecutor {
 			Err(e) => Err(ErrorKind::Externalities(Box::new(e)))?,
 		};
 
-		let program = ProgramInstance::new().unwrap();	// TODO: handle
+		// TODO: handle all expects as errors to be returned.
 
-		let module = deserialize_buffer(code).expect("Failed to load module");
-		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<E>::SIGNATURES]).expect("Failed to initialize module");
+		let program = ProgramInstance::new().expect("this really shouldn't be able to fail; qed");
 
-		let mut fec = FunctionExecutor::new(&module, ext);
+		let module = deserialize_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
+		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<E>::SIGNATURES]).expect("runtime signatures always provided; qed");
+
+		let memory = module.memory(ItemIndex::Internal(0)).expect("all modules compiled with rustc include memory segments; qed");
+		let mut fec = FunctionExecutor::new(&memory, ext);
 
 		let size = data.0.len() as u32;
 		let offset = fec.heap.allocate(size);
-		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, &data.0).unwrap();	// TODO: handle x2
+		memory.set(offset, &data.0).expect("heap always gives a sensible offset to write");
 
 		let r = module.execute_export(method,
 			program.params_with_external("env", &mut fec)
@@ -188,12 +192,13 @@ mod tests {
 		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<TestExternalities>::SIGNATURES]).expect("Failed to initialize module");
 
 		{
-			let mut fec = FunctionExecutor::new(&module, &mut ext);
+			let memory = module.memory(ItemIndex::Internal(0)).unwrap();
+			let mut fec = FunctionExecutor::new(&memory, &mut ext);
 
 			let data = b"Hello world";
 			let size = data.len() as u32;
 			let offset = fec.heap.allocate(size);
-			module.memory(ItemIndex::Internal(0)).unwrap().set(offset, data).unwrap();
+			memory.set(offset, data).unwrap();
 
 			module.execute_export("test_data_in",
 				program.params_with_external("env", &mut fec)

@@ -110,13 +110,11 @@ pub struct OverlayedChanges {
 	committed: MemoryState,
 }
 
-const EMPTY_BYTES: [u8; 0] = [];
-
 impl OverlayedChanges {
 	fn code(&self) -> &[u8] {
 		self.prospective.code()
 			.or_else(|| self.committed.code())
-			.unwrap_or_else(|| &EMPTY_BYTES)
+			.unwrap_or_else(|| &[])
 	}
 
 	fn storage(&self, object: u64, key: &[u8]) -> Option<&[u8]> {

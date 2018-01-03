@@ -16,33 +16,19 @@
 
 //! Rust implementation of Polkadot contracts.
 
-use std::sync::{Arc/*, Weak*/};
+use std::sync::{Arc};
 use std::collections::HashMap;
 pub use std::result;
+pub use parity_wasm::builder;
 pub use parity_wasm::elements::{ValueType, Module};
 pub use parity_wasm::interpreter::{RuntimeValue, UserFunctionDescriptor, UserFunctionExecutor,
 	UserDefinedElements, env_native_module, DummyUserError, ExecutionParams, UserError};
-pub use parity_wasm::{builder};
 use parity_wasm::interpreter;
 
 pub type Error = interpreter::Error<DummyUserError>;
 pub type MemoryInstance = interpreter::MemoryInstance<DummyUserError>;
-pub type ModuleInstance = interpreter::ModuleInstance<DummyUserError>;
 pub type CallerContext<'a> = interpreter::CallerContext<'a, DummyUserError>;
 
-/*pub fn program_with_externals<E: UserFunctionExecutor<DummyUserError> + 'static>(externals: UserDefinedElements<DummyUserError>, module_name: &str) -> result::Result<ProgramInstance, Error> {
-	let program = ProgramInstance::new().unwrap();
-	let instance = {
-		let module = builder::module().build();
-		let mut instance = ModuleInstance::new(Weak::default(), module_name.into(), module)?;
-		instance.instantiate(None)?;
-		instance
-	};
-	let other_instance = env_native_module(Arc::new(instance), externals)?;
-//	program.insert_loaded_module(module_name, Arc::new(other_instance));
-	Ok(program)
-}
-*/
 pub trait ConvertibleToWasm { const VALUE_TYPE: ValueType; type NativeType; fn to_runtime_value(self) -> RuntimeValue; }
 impl ConvertibleToWasm for i32 { type NativeType = i32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self) } }
 impl ConvertibleToWasm for u32 { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as i32) } }
