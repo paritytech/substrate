@@ -49,6 +49,25 @@ pub struct Candidate {
 	pub block: BlockData,
 }
 
+/// Candidate receipt type.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct CandidateReceipt {
+	/// The ID of the parachain this is a candidate for.
+	pub parachain_index: Id,
+	/// The collator's account ID
+	pub collator: ::Address,
+	/// The head-data
+	pub head_data: HeadData,
+	/// Balance uploads to the relay chain.
+	pub balance_uploads: Vec<(::Address, ::uint::U256)>,
+	/// Egress queue roots.
+	pub egress_queue_roots: Vec<(Id, ::hash::H256)>,
+	/// Fees paid from the chain to the relay chain validators
+	pub fees: ::uint::U256,
+}
+
 /// Parachain ingress queue message.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
@@ -57,7 +76,7 @@ pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
 ///
 /// This is just an ordered vector of other parachains' egress queues,
 /// obtained according to the routing rules.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 
 /// Parachain block data.
@@ -71,7 +90,7 @@ pub struct BlockData(#[serde(with="bytes")] pub Vec<u8>);
 pub struct Header(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Parachain head data included in the chain.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct HeadData(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Parachain validation code.
@@ -92,10 +111,10 @@ mod tests {
 		assert_eq!(ser::to_string_pretty(&Candidate {
 			parachain_index: 5.into(),
 			collator_signature: 10.into(),
-			unprocessed_ingress: vec![
-				(1, vec![Message(vec![2])]),
-				(2, vec![Message(vec![2]), Message(vec![3])]),
-			],
+			unprocessed_ingress: ConsolidatedIngress(vec![
+				(Id(1), vec![Message(vec![2])]),
+				(Id(2), vec![Message(vec![2]), Message(vec![3])]),
+			]),
 			block: BlockData(vec![1, 2, 3]),
     }), r#"{
   "parachainIndex": 5,
