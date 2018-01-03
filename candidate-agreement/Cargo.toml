@@ -5,4 +5,5 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 futures = "0.1"
-polkadot-primitives = { path = "../primitives" }
+parking_lot = "0.3"
+tokio-timer = "0.1.2"

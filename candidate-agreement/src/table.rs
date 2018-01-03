@@ -35,21 +35,21 @@ use std::fmt::Debug;
 /// Context for the statement table.
 pub trait Context {
 	/// A validator ID
-	type ValidatorId: Hash + Eq + Clone + Debug;
+	type ValidatorId: Debug + Hash + Eq + Clone;
 	/// The digest (hash or other unique attribute) of a candidate.
-	type Digest: Hash + Eq + Clone + Debug;
-	/// Candidate type.
-	type Candidate: Ord + Eq + Clone + Debug;
+	type Digest: Debug + Hash + Eq + Clone;
 	/// The group ID type
-	type GroupId: Hash + Ord + Eq + Clone + Debug;
+	type GroupId: Debug + Hash + Ord + Eq + Clone;
 	/// A signature type.
-	type Signature: Eq + Clone +  Debug;
+	type Signature: Debug + Eq + Clone;
+	/// Candidate type. In practice this will be a candidate receipt.
+	type Candidate: Debug + Ord + Eq + Clone;
 
 	/// get the digest of a candidate.
-	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest;
+	fn candidate_digest(candidate: &Self::Candidate) -> Self::Digest;
 
 	/// get the group of a candidate.
-	fn candidate_group(&self, candidate: &Self::Candidate) -> Self::GroupId;
+	fn candidate_group(candidate: &Self::Candidate) -> Self::GroupId;
 
 	/// Whether a validator is a member of a group.
 	/// Members are meant to submit candidates and vote on validity.
@@ -259,11 +259,20 @@ pub fn create<C: Context>() -> Table<C> {
 }
 
 /// Stores votes
-#[derive(Default)]
 pub struct Table<C: Context> {
 	validator_data: HashMap<C::ValidatorId, ValidatorData<C>>,
 	detected_misbehavior: HashMap<C::ValidatorId, <C as ResolveMisbehavior>::Misbehavior>,
 	candidate_votes: HashMap<C::Digest, CandidateData<C>>,
+}
+
+impl<C: Context> Default for Table<C> {
+	fn default() -> Self {
+		Table {
+			validator_data: HashMap::new(),
+			detected_misbehavior: HashMap::new(),
+			candidate_votes: HashMap::new(),
+		}
+	}
 }
 
 impl<C: Context> Table<C> {
@@ -385,7 +394,7 @@ impl<C: Context> Table<C> {
 		candidate: C::Candidate,
 		signature: C::Signature,
 	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
-		let group = context.candidate_group(&candidate);
+		let group = C::candidate_group(&candidate);
 		if !context.is_member_of(&from, &group) {
 			return (
 				Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
@@ -400,7 +409,7 @@ impl<C: Context> Table<C> {
 		}
 
 		// check that validator hasn't already specified another candidate.
-		let digest = context.candidate_digest(&candidate);
+		let digest = C::candidate_digest(&candidate);
 
 		let new_proposal = match self.validator_data.entry(from.clone()) {
 			Entry::Occupied(mut occ) => {
@@ -608,11 +617,11 @@ mod tests {
 		type GroupId = GroupId;
 		type Signature = Signature;
 
-		fn candidate_digest(&self, candidate: &Candidate) -> Digest {
+		fn candidate_digest(candidate: &Candidate) -> Digest {
 			Digest(candidate.1)
 		}
 
-		fn candidate_group(&self, candidate: &Candidate) -> GroupId {
+		fn candidate_group(candidate: &Candidate) -> GroupId {
 			GroupId(candidate.0)
 		}
 

@@ -83,13 +83,13 @@ pub trait Context {
 	/// A future that resolves when a round timeout is concluded.
 	type RoundTimeout: Future<Item=()>;
 	/// A future that resolves when a proposal is ready.
-	type Proposal: Future<Item=Self::Candidate>;
+	type CreateProposal: Future<Item=Self::Candidate>;
 
 	/// Get the local validator ID.
 	fn local_id(&self) -> Self::ValidatorId;
 
 	/// Get the best proposal.
-	fn proposal(&self) -> Self::Proposal;
+	fn proposal(&self) -> Self::CreateProposal;
 
 	/// Get the digest of a candidate.
 	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest;
@@ -247,7 +247,7 @@ enum LocalState {
 struct Strategy<C: Context> {
 	nodes: usize,
 	max_faulty: usize,
-	fetching_proposal: Option<C::Proposal>,
+	fetching_proposal: Option<C::CreateProposal>,
 	round_timeout: future::Fuse<C::RoundTimeout>,
 	local_state: LocalState,
 	locked: Option<Locked<C::Digest, C::Signature>>,
@@ -330,7 +330,7 @@ impl<C: Context> Strategy<C> {
 		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, E>
 		where
 			C::RoundTimeout: Future<Error=E>,
-			C::Proposal: Future<Error=E>,
+			C::CreateProposal: Future<Error=E>,
 	{
 		let mut last_watermark = (
 			self.current_accumulator.round_number(),
@@ -363,7 +363,7 @@ impl<C: Context> Strategy<C> {
 		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, E>
 		where
 			C::RoundTimeout: Future<Error=E>,
-			C::Proposal: Future<Error=E>,
+			C::CreateProposal: Future<Error=E>,
 	{
 		self.propose(context, sending)?;
 		self.prepare(context, sending);
@@ -413,7 +413,7 @@ impl<C: Context> Strategy<C> {
 	}
 
 	fn propose(&mut self, context: &C, sending: &mut Sending<ContextCommunication<C>>)
-		-> Result<(), <C::Proposal as Future>::Error>
+		-> Result<(), <C::CreateProposal as Future>::Error>
 	{
 		if let LocalState::Start = self.local_state {
 			let mut propose = false;
@@ -629,7 +629,7 @@ impl<C, I, O, E> Future for Agreement<C, I, O>
 	where
 		C: Context,
 		C::RoundTimeout: Future<Error=E>,
-		C::Proposal: Future<Error=E>,
+		C::CreateProposal: Future<Error=E>,
 		I: Stream<Item=ContextCommunication<C>,Error=E>,
 		O: Sink<SinkItem=ContextCommunication<C>,SinkError=E>,
 		E: From<InputStreamConcluded>,
