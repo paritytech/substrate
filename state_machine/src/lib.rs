@@ -163,10 +163,10 @@ pub trait Externalities {
 	type Error: Error;
 
 	/// Get the current runtime.
-	fn code(&self) -> Result<Vec<u8>, Self::Error>;
+	fn code(&self) -> Result<&[u8], Self::Error>;
 
 	/// Read storage of current contract being called.
-	fn storage(&self, index: u64, key: &[u8]) -> Result<Vec<u8>, Self::Error>;
+	fn storage(&self, index: u64, key: &[u8]) -> Result<&[u8], Self::Error>;
 
 	/// Set the new runtime.
 	fn set_code(&mut self, code: Vec<u8>);

@@ -61,14 +61,14 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 {
 	type Error = B::Error;
 
-	fn code(&self) -> Result<Vec<u8>, Self::Error> {
-		Ok(self.overlay.code().into())
+	fn code(&self) -> Result<&[u8], Self::Error> {
+		Ok(self.overlay.code())
 	}
 
-	fn storage(&self, object: u64, key: &[u8]) -> Result<Vec<u8>, Self::Error> {
+	fn storage(&self, object: u64, key: &[u8]) -> Result<&[u8], Self::Error> {
 		match self.overlay.storage(object, key) {
-			Some(x) => Ok(x.into()),
-			None => self.backend.storage(object, key).map(Into::into)
+			Some(x) => Ok(x),
+			None => self.backend.storage(object, key)
 		}
 	}
 

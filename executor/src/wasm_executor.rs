@@ -164,12 +164,12 @@ mod tests {
 	impl Externalities for TestExternalities {
 		type Error = Error;
 
-		fn code(&self) -> Result<Vec<u8>> {
+		fn code(&self) -> Result<&[u8]> {
 			unimplemented!()
 		}
 
-		fn storage(&self, _object: u64, _key: &[u8]) -> Result<Vec<u8>> {
-			Ok(self.data.get(_key).map(|v| v.clone()).unwrap_or_else(|| vec![]))
+		fn storage(&self, _object: u64, key: &[u8]) -> Result<&[u8]> {
+			Ok(self.data.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
 		}
 
 		fn set_code(&mut self, _code: Vec<u8>) {
