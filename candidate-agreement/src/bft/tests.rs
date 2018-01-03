@@ -104,13 +104,13 @@ impl Context for TestContext {
 	type ValidatorId = ValidatorId;
 	type Signature = Signature;
 	type RoundTimeout = Box<Future<Item=(), Error=Error>>;
-	type Proposal = FutureResult<Candidate, Error>;
+	type CreateProposal = FutureResult<Candidate, Error>;
 
 	fn local_id(&self) -> ValidatorId {
 		self.local_id.clone()
 	}
 
-	fn proposal(&self) -> Self::Proposal {
+	fn proposal(&self) -> Self::CreateProposal {
 		let proposal = {
 			let mut p = self.proposal.lock().unwrap();
 			let x = *p;
