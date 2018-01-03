@@ -88,7 +88,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let (offset, written) = if let Ok(key) = this.memory.get(key_data, key_len as usize) {
 			if let Ok(value) = this.ext.storage(0, &key) {
 				let offset = this.heap.allocate(value.len() as u32) as u32;
-				let _ = this.memory.set(offset, value);
+				let _ = this.memory.set(offset, &value);
 				(offset, value.len() as u32)
 			} else { (0, 0) }
 		} else { (0, 0) };
@@ -154,16 +154,18 @@ mod tests {
 	use super::*;
 
 	#[derive(Debug, Default)]
-	struct TestExternalities;
+	struct TestExternalities {
+		data: HashMap<Vec<u8>, Vec<u8>>,
+	}
 	impl Externalities for TestExternalities {
 		type Error = Error;
 
-		fn code(&self) -> Result<&[u8]> {
+		fn code(&self) -> Result<Vec<u8>> {
 			unimplemented!()
 		}
 
-		fn storage(&self, _object: u64, _key: &[u8]) -> Result<&[u8]> {
-			unimplemented!()
+		fn storage(&self, _object: u64, _key: &[u8]) -> Result<Vec<u8>> {
+			Ok(self.data.get(_key).map(|v| v.clone()).unwrap_or_else(|| vec![]))
 		}
 
 		fn set_code(&mut self, _code: Vec<u8>) {
@@ -171,13 +173,13 @@ mod tests {
 		}
 
 		fn set_storage(&mut self, _object: u64, _key: Vec<u8>, _value: Vec<u8>) {
-			unimplemented!()
+			self.data.insert(_key, _value);
 		}
 	}
 
 	#[test]
 	fn should_pass_externalities_at_call() {
-		let mut ext = TestExternalities;
+		let mut ext = TestExternalities::default();
 
 		let program = ProgramInstance::new().unwrap();
 
@@ -185,18 +187,22 @@ mod tests {
 		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
 		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<TestExternalities>::SIGNATURES]).expect("Failed to initialize module");
 
-		let mut fec = FunctionExecutor::new(&module, &mut ext);
+		{
+			let mut fec = FunctionExecutor::new(&module, &mut ext);
 
-		let data = b"Hello world";
-		let size = data.len() as u32;
-		let offset = fec.heap.allocate(size);
-		module.memory(ItemIndex::Internal(0)).unwrap().set(offset, data).unwrap();
+			let data = b"Hello world";
+			let size = data.len() as u32;
+			let offset = fec.heap.allocate(size);
+			module.memory(ItemIndex::Internal(0)).unwrap().set(offset, data).unwrap();
 
-		module.execute_export("test_data_in",
-			program.params_with_external("env", &mut fec)
-				.add_argument(I32(offset as i32))
-				.add_argument(I32(size as i32))
-		).unwrap();
+			module.execute_export("test_data_in",
+				program.params_with_external("env", &mut fec)
+					.add_argument(I32(offset as i32))
+					.add_argument(I32(size as i32))
+			).unwrap();
+		}
+
+		println!("storage: {:?}", ext.data);
 
 		panic!();
 	}
