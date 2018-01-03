@@ -1,0 +1,8 @@
+[package]
+name = "polkadot-candidate-agreement"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+futures = "0.1"
+polkadot-primitives = { path = "../primitives" }
