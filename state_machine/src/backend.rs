@@ -38,7 +38,7 @@ pub trait Backend {
 	type Error: super::Error;
 
 	/// Get keyed storage associated with specific address.
-	fn storage(&self, object: u64, key: &[u8]) -> Result<&[u8], Self::Error>;
+	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error>;
 
 	/// Commit updates to the backend and get new state.
 	fn commit<I>(&mut self, changes: I) -> Committed
@@ -70,8 +70,8 @@ pub struct InMemory {
 impl Backend for InMemory {
 	type Error = Void;
 
-	fn storage(&self, object: u64, key: &[u8]) -> Result<&[u8], Void> {
-		Ok(self.inner.storage(object, key).unwrap_or(&[]))
+	fn storage(&self, key: &[u8]) -> Result<&[u8], Void> {
+		Ok(self.inner.storage(key).unwrap_or(&[]))
 	}
 
 	fn commit<I>(&mut self, changes: I) -> Committed
@@ -80,19 +80,13 @@ impl Backend for InMemory {
 		self.inner.update(changes);
 
 		// fully recalculate trie roots.
-		let storage_roots = self.inner.storage.iter().map(|(object, storage)| {
-			let flat_trie = storage.iter().map(|(k, v)| (k.to_vec(), v.clone())).collect();
-			({
-				use byteorder::{BigEndian, ByteOrder};
-				let mut r = [0u8; 8];
-				BigEndian::write_u64(&mut r, *object);
-				r.to_vec()
-			}, sec_trie_root(flat_trie).to_vec())
-		}).collect();
-
-		let storage_tree_root = H256(sec_trie_root(storage_roots).0);
-
+		let storage_tree_root = H256(sec_trie_root(
+			self.inner.storage.iter()
+				.map(|(k, v)| (k.to_vec(), v.clone()))
+				.collect()
+			).0);
 		let code_hash = hash(&self.inner.code().unwrap_or_else(|| &[]));
+		// TODO: include validators list.
 
 		Committed {
 			code_hash,

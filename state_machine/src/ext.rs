@@ -65,10 +65,10 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		Ok(self.overlay.code())
 	}
 
-	fn storage(&self, object: u64, key: &[u8]) -> Result<&[u8], Self::Error> {
-		match self.overlay.storage(object, key) {
+	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error> {
+		match self.overlay.storage(key) {
 			Some(x) => Ok(x),
-			None => self.backend.storage(object, key)
+			None => self.backend.storage(key)
 		}
 	}
 
@@ -76,7 +76,7 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		self.overlay.set_code(code);
 	}
 
-	fn set_storage(&mut self, object: u64, key: Vec<u8>, value: Vec<u8>) {
-		self.overlay.set_storage(object, key, value);
+	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
+		self.overlay.set_storage(key, value);
 	}
 }

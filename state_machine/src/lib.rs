@@ -40,7 +40,7 @@ mod ext;
 /// Updates to be committed to the state.
 pub enum Update {
 	/// Set storage of object at given key -- empty is deletion.
-	Storage(u64, Vec<u8>, Vec<u8>),
+	Storage(Vec<u8>, Vec<u8>),
 	/// Set code -- empty is deletion.
 	Code(Vec<u8>),
 }
@@ -49,7 +49,7 @@ pub enum Update {
 #[derive(Default)]
 struct MemoryState {
 	code: Option<Vec<u8>>,	// None is unchanged.
-	storage: HashMap<u64, HashMap<Vec<u8>, Vec<u8>>>,
+	storage: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl MemoryState {
@@ -57,10 +57,8 @@ impl MemoryState {
 		self.code.as_ref().map(|x| &**x)
 	}
 
-	fn storage(&self, object: u64, key: &[u8]) -> Option<&[u8]> {
-		self.storage.get(&object)
-			.and_then(|m| m.get(key))
-			.map(|v| &v[..])
+	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
+		self.storage.get(key).map(|v| &v[..])
 	}
 
 	#[allow(unused)]
@@ -68,28 +66,18 @@ impl MemoryState {
 		self.code = Some(code);
 	}
 
-	fn set_storage(&mut self, object: u64, key: Vec<u8>, val: Vec<u8>) {
-		self.storage.entry(object)
-			.or_insert_with(HashMap::new)
-			.insert(key, val);
+	fn set_storage(&mut self, key: Vec<u8>, val: Vec<u8>) {
+		self.storage.insert(key, val);
 	}
 
 	fn update<I>(&mut self, changes: I) where I: IntoIterator<Item=Update> {
 		for update in changes {
 			match update {
-				Update::Storage(object, key, val) => {
+				Update::Storage(key, val) => {
 					if val.is_empty() {
-						let mut empty = false;
-						if let Some(s) = self.storage.get_mut(&object) {
-							s.remove(&key);
-							empty = s.is_empty();
-						};
-
-						if empty { self.storage.remove(&object); }
+						self.storage.remove(&key);
 					} else {
-						self.storage.entry(object)
-							.or_insert_with(HashMap::new)
-							.insert(key, val);
+						self.storage.insert(key, val);
 					}
 				}
 				Update::Code(code) => {
@@ -117,9 +105,9 @@ impl OverlayedChanges {
 			.unwrap_or_else(|| &[])
 	}
 
-	fn storage(&self, object: u64, key: &[u8]) -> Option<&[u8]> {
-		self.prospective.storage(object, key)
-			.or_else(|| self.committed.storage(object, key))
+	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
+		self.prospective.storage(key)
+			.or_else(|| self.committed.storage(key))
 			.and_then(|v| if v.is_empty() { None } else { Some(v) })
 	}
 
@@ -128,8 +116,8 @@ impl OverlayedChanges {
 		self.prospective.set_code(code);
 	}
 
-	fn set_storage(&mut self, object: u64, key: Vec<u8>, val: Vec<u8>) {
-		self.prospective.set_storage(object, key, val);
+	fn set_storage(&mut self, key: Vec<u8>, val: Vec<u8>) {
+		self.prospective.set_storage(key, val);
 	}
 
 	/// Discard prospective changes to state.
@@ -144,8 +132,7 @@ impl OverlayedChanges {
 			.map(|code| Update::Code(code));
 
 		let storage_updates = self.prospective.storage.drain()
-			.flat_map(|(object, storages)| storages.into_iter().map(move |(k, v)| (object, k, v)))
-			.map(|(object, key, value)| Update::Storage(object, key, value));
+			.map(|(key, value)| Update::Storage(key, value));
 
 		self.committed.update(code_updates.chain(storage_updates));
 	}
@@ -166,13 +153,13 @@ pub trait Externalities {
 	fn code(&self) -> Result<&[u8], Self::Error>;
 
 	/// Read storage of current contract being called.
-	fn storage(&self, index: u64, key: &[u8]) -> Result<&[u8], Self::Error>;
+	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error>;
 
 	/// Set the new runtime.
 	fn set_code(&mut self, code: Vec<u8>);
 
 	/// Set storage of current contract being called.
-	fn set_storage(&mut self, index: u64, key: Vec<u8>, value: Vec<u8>);
+	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>);
 }
 
 /// Code execution engine.
@@ -234,48 +221,45 @@ mod tests {
 		let mut overlayed = OverlayedChanges::default();
 
 		let key = vec![42, 69, 169, 142];
-		let object = 69;
 
-		assert!(overlayed.storage(object, &key).is_none());
+		assert!(overlayed.storage(&key).is_none());
 
-		overlayed.set_storage(object, key, vec![1, 2, 3]);
-		assert_eq!(overlayed.storage(object, &key).unwrap(), &[1, 2, 3]);
+		overlayed.set_storage(key, vec![1, 2, 3]);
+		assert_eq!(overlayed.storage(&key).unwrap(), &[1, 2, 3]);
 
 		overlayed.commit_prospective();
-		assert_eq!(overlayed.storage(object, &key).unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.storage(&key).unwrap(), &[1, 2, 3]);
 
-		overlayed.set_storage(object, key, vec![]);
-		assert!(overlayed.storage(object, &key).is_none());
+		overlayed.set_storage(key, vec![]);
+		assert!(overlayed.storage(&key).is_none());
 
 		overlayed.discard_prospective();
-		assert_eq!(overlayed.storage(object, &key).unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.storage(&key).unwrap(), &[1, 2, 3]);
 
-		overlayed.set_storage(object, key, vec![]);
+		overlayed.set_storage(key, vec![]);
 		overlayed.commit_prospective();
-		assert!(overlayed.storage(object, &key).is_none());
+		assert!(overlayed.storage(&key).is_none());
 	}
 
 	#[test]
 	fn overlayed_code_works() {
 		let mut overlayed = OverlayedChanges::default();
 
-		let object = 69;
-
 		assert!(overlayed.code(&object).is_none());
 
-		overlayed.set_code(object, vec![1, 2, 3]);
+		overlayed.set_code(vec![1, 2, 3]);
 		assert_eq!(overlayed.code(&object).unwrap(), &[1, 2, 3]);
 
 		overlayed.commit_prospective();
 		assert_eq!(overlayed.code(&object).unwrap(), &[1, 2, 3]);
 
-		overlayed.set_code(object, vec![]);
+		overlayed.set_code(vec![]);
 		assert!(overlayed.code(&object).is_none());
 
 		overlayed.discard_prospective();
 		assert_eq!(overlayed.code(&object).unwrap(), &[1, 2, 3]);
 
-		overlayed.set_code(object, vec![]);
+		overlayed.set_code(vec![]);
 		overlayed.commit_prospective();
 		assert!(overlayed.code(&object).is_none());
 	}

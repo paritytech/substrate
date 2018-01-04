@@ -82,12 +82,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	set_storage(key_data: *const u8, key_len: i32, value_data: *const u8, value_len: i32) => {
 		if let (Ok(key), Ok(value)) = (this.memory.get(key_data, key_len as usize), this.memory.get(value_data, value_len as usize)) {
-			this.ext.set_storage(0, key, value);
+			this.ext.set_storage(key, value);
 		}
 	},
 	get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8 => {
 		let (offset, written) = if let Ok(key) = this.memory.get(key_data, key_len as usize) {
-			if let Ok(value) = this.ext.storage(0, &key) {
+			if let Ok(value) = this.ext.storage(&key) {
 				let offset = this.heap.allocate(value.len() as u32) as u32;
 				let _ = this.memory.set(offset, &value);
 				(offset, value.len() as u32)
@@ -160,23 +160,24 @@ mod tests {
 	#[derive(Debug, Default)]
 	struct TestExternalities {
 		data: HashMap<Vec<u8>, Vec<u8>>,
+		code: Vec<u8>,
 	}
 	impl Externalities for TestExternalities {
 		type Error = Error;
 
 		fn code(&self) -> Result<&[u8]> {
-			unimplemented!()
+			Ok(self.code.as_slice())
 		}
 
-		fn storage(&self, _object: u64, key: &[u8]) -> Result<&[u8]> {
+		fn storage(&self, key: &[u8]) -> Result<&[u8]> {
 			Ok(self.data.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
 		}
 
 		fn set_code(&mut self, _code: Vec<u8>) {
-			unimplemented!()
+			self.code = _code;
 		}
 
-		fn set_storage(&mut self, _object: u64, _key: Vec<u8>, _value: Vec<u8>) {
+		fn set_storage(&mut self, _key: Vec<u8>, _value: Vec<u8>) {
 			self.data.insert(_key, _value);
 		}
 	}
