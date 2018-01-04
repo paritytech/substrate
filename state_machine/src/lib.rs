@@ -245,22 +245,22 @@ mod tests {
 	fn overlayed_code_works() {
 		let mut overlayed = OverlayedChanges::default();
 
-		assert!(overlayed.code(&object).is_none());
+		assert!(overlayed.code().is_none());
 
 		overlayed.set_code(vec![1, 2, 3]);
-		assert_eq!(overlayed.code(&object).unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.code().unwrap(), &[1, 2, 3]);
 
 		overlayed.commit_prospective();
-		assert_eq!(overlayed.code(&object).unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.code().unwrap(), &[1, 2, 3]);
 
 		overlayed.set_code(vec![]);
-		assert!(overlayed.code(&object).is_none());
+		assert!(overlayed.code().is_none());
 
 		overlayed.discard_prospective();
-		assert_eq!(overlayed.code(&object).unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.code().unwrap(), &[1, 2, 3]);
 
 		overlayed.set_code(vec![]);
 		overlayed.commit_prospective();
-		assert!(overlayed.code(&object).is_none());
+		assert!(overlayed.code().is_none());
 	}
 }
