@@ -33,7 +33,7 @@ build_rpc_trait! {
 	pub trait StateApi {
 		/// Returns a storage entry.
 		#[rpc(name = "state_getStorage")]
-		fn storage(&self, u64, StorageKey, block::HeaderHash) -> Result<StorageData>;
+		fn storage(&self, StorageKey, block::HeaderHash) -> Result<StorageData>;
 
 		/// Call a contract.
 		#[rpc(name = "state_call")]
@@ -45,8 +45,8 @@ impl<B, E> StateApi for Client<B, E> where
 	B: client::Blockchain + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 {
-	fn storage(&self, object: u64, key: StorageKey, block: block::HeaderHash) -> Result<StorageData> {
-		Ok(self.storage(&block, object, &key)?)
+	fn storage(&self, key: StorageKey, block: block::HeaderHash) -> Result<StorageData> {
+		Ok(self.storage(&block, &key)?)
 	}
 
 	fn call(&self, method: String, data: CallData, block: block::HeaderHash) -> Result<u64> {

@@ -208,8 +208,7 @@ mod tests {
 			).unwrap();
 		}
 
-		println!("storage: {:?}", ext.data);
-
-		panic!();
+		let expected: HashMap<_, _> = map![vec![116, 104, 101, 107, 101, 121] => vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]];
+		assert_eq!(expected, ext.data);
 	}
 }

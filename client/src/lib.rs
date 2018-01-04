@@ -72,9 +72,9 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
-	pub fn storage(&self, hash: &block::HeaderHash, object: u64, key: &StorageKey) -> error::Result<StorageData> {
+	pub fn storage(&self, hash: &block::HeaderHash, key: &StorageKey) -> error::Result<StorageData> {
 		self.state_at(hash)?
-			.storage(object, &key.0)
+			.storage(&key.0)
 			.map(|x| StorageData(x.to_vec()))
 			.chain_err(|| error::ErrorKind::Backend)
 	}

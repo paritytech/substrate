@@ -224,19 +224,19 @@ mod tests {
 
 		assert!(overlayed.storage(&key).is_none());
 
-		overlayed.set_storage(key, vec![1, 2, 3]);
+		overlayed.set_storage(key.clone(), vec![1, 2, 3]);
 		assert_eq!(overlayed.storage(&key).unwrap(), &[1, 2, 3]);
 
 		overlayed.commit_prospective();
 		assert_eq!(overlayed.storage(&key).unwrap(), &[1, 2, 3]);
 
-		overlayed.set_storage(key, vec![]);
+		overlayed.set_storage(key.clone(), vec![]);
 		assert!(overlayed.storage(&key).is_none());
 
 		overlayed.discard_prospective();
 		assert_eq!(overlayed.storage(&key).unwrap(), &[1, 2, 3]);
 
-		overlayed.set_storage(key, vec![]);
+		overlayed.set_storage(key.clone(), vec![]);
 		overlayed.commit_prospective();
 		assert!(overlayed.storage(&key).is_none());
 	}
@@ -245,22 +245,22 @@ mod tests {
 	fn overlayed_code_works() {
 		let mut overlayed = OverlayedChanges::default();
 
-		assert!(overlayed.code().is_none());
+		assert!(overlayed.code().len() == 0);
 
 		overlayed.set_code(vec![1, 2, 3]);
-		assert_eq!(overlayed.code().unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.code(), &[1, 2, 3]);
 
 		overlayed.commit_prospective();
-		assert_eq!(overlayed.code().unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.code(), &[1, 2, 3]);
 
 		overlayed.set_code(vec![]);
-		assert!(overlayed.code().is_none());
+		assert!(overlayed.code().len() == 0);
 
 		overlayed.discard_prospective();
-		assert_eq!(overlayed.code().unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.code(), &[1, 2, 3]);
 
 		overlayed.set_code(vec![]);
 		overlayed.commit_prospective();
-		assert!(overlayed.code().is_none());
+		assert!(overlayed.code().len() == 0);
 	}
 }
