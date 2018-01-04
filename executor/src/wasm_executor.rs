@@ -65,7 +65,7 @@ impl<'e, E: Externalities> FunctionExecutor<'e, E> {
 impl_function_executor!(this: FunctionExecutor<'e, E>,
 	imported(n: u64) -> u64 => { println!("imported {:?}", n); n + 1 },
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
-		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize).unwrap();
+		let _ = this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize);
 		println!("memcpy {} from {}, {} bytes", dest, src, count);
 		dest
 	},
