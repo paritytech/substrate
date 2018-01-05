@@ -23,6 +23,10 @@ extern "C" {
 	fn get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8;
 	fn set_code(code_data: *const u8, code_len: i32);
 	fn get_allocated_code(written_out: *mut i32) -> *mut u8;
+	fn get_validator_count() -> i32;
+	fn get_allocated_validator(index: i32, written_out: *mut i32) -> *mut u8;
+	fn set_validator_count(validator_count: i32);
+	fn set_validator(index: i32, validator_data: *const u8, validator_len: i32);
 }
 
 mod state {
@@ -39,7 +43,12 @@ mod state {
 	}
 
 	pub fn set_storage(key: &[u8], value: &[u8]) {
-		unsafe { super_set_storage(&key[0] as *const u8, key.len() as i32, &value[0] as *const u8, value.len() as i32); }
+		unsafe {
+			super_set_storage(
+				&key[0] as *const u8, key.len() as i32,
+				&value[0] as *const u8, value.len() as i32
+			);
+		}
 	}
 
 	pub fn code() -> Vec<u8> {
@@ -51,7 +60,9 @@ mod state {
 	}
 
 	pub fn set_code(new: &[u8]) {
-		unsafe { super_set_code(&new[0] as *const u8, new.len() as i32); }
+		unsafe {
+			super_set_code(&new[0] as *const u8, new.len() as i32);
+		}
 	}
 }
 
@@ -69,7 +80,9 @@ pub fn test(value: u64) -> u64 {
 /// Test passing of data.
 #[no_mangle]
 pub fn test_data_in(input_data: *mut u8, input_len: usize) {
-	let input = unsafe { Vec::from_raw_parts(input_data, input_len, input_len) };
+	let input = unsafe {
+		Vec::from_raw_parts(input_data, input_len, input_len)
+	};
 
 	state::set_storage(b"input", &input);
 	state::set_storage(b"code", &state::code());

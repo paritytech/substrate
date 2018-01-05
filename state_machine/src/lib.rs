@@ -155,11 +155,23 @@ pub trait Externalities {
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error>;
 
-	/// Set the new runtime.
+	/// Read the current validator set.
+	fn validator(&self, _index: usize) -> Result<&[u8], Self::Error> { Ok(&[]) }
+
+	/// How many validators are there?
+	fn validator_count(&self) -> usize { 0 }
+
+	/// Set the new runtime (effective from the next block).
 	fn set_code(&mut self, code: Vec<u8>);
 
-	/// Set storage of current contract being called.
+	/// Set storage of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>);
+
+	/// Set a new validator set (effective from the next block).
+	fn set_validator(&mut self, _index: usize, _value: Vec<u8>) {}
+
+	/// Resize the validators array - extra validators will be empty vectors.
+	fn set_validator_count(&mut self, _count: usize) {}
 }
 
 /// Code execution engine.

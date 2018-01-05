@@ -43,6 +43,12 @@ error_chain! {
 			display("Externalities error: {}", e),
 		}
 
+		/// Invalid index.
+		InvalidIndex {
+			description("index given was not in range"),
+			display("Invalid index provided"),
+		}
+
 		/// Invalid return type.
 		InvalidReturn {
 			description("u64 was not returned"),

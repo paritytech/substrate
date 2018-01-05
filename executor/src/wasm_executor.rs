@@ -123,14 +123,33 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		} else { (0, 0) };
 		this.memory.write_primitive(written_out, written);
 		offset as u32
+	},
+	get_validator_count() -> i32 => {
+		this.ext.validator_count() as i32
+	},
+	get_allocated_validator(index: i32, written_out: *mut i32) -> *mut u8 => {
+		let (offset, written) = if let Ok(v) = this.ext.validator(index as usize) {
+			let offset = this.heap.allocate(v.len() as u32) as u32;
+			let _ = this.memory.set(offset, &v);
+			(offset, v.len() as u32)
+		} else { (0, 0) };
+		this.memory.write_primitive(written_out, written);
+		offset as u32
+	},
+	set_validator_count(validator_count: i32) => {
+		this.ext.set_validator_count(validator_count as usize);
+	},
+	set_validator(index: i32, validator_data: *const u8, validator_len: i32) => {
+		if let Ok(validator) = this.memory.get(validator_data, validator_len as usize) {
+			this.ext.set_validator(index as usize, validator);
+		}
 	}
 	=> <'e, E: Externalities + 'e>
 );
 
-/// Dummy rust executor for contracts.
+/// Wasm rust executor for contracts.
 ///
-/// Instead of actually executing the provided code it just
-/// dispatches the calls to pre-defined hardcoded implementations in rust.
+/// Executes the provided code in a sandboxed wasm runtime.
 #[derive(Debug, Default)]
 pub struct WasmExecutor;
 
@@ -183,6 +202,7 @@ mod tests {
 	struct TestExternalities {
 		data: HashMap<Vec<u8>, Vec<u8>>,
 		code: Vec<u8>,
+		validators: Vec<Vec<u8>>,
 	}
 	impl Externalities for TestExternalities {
 		type Error = Error;
@@ -195,12 +215,34 @@ mod tests {
 			Ok(self.data.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
 		}
 
-		fn set_code(&mut self, _code: Vec<u8>) {
-			self.code = _code;
+		fn validator(&self, index: usize) -> Result<&[u8]> {
+			if index < self.validators.len() {
+				Ok(self.validators[index].as_slice())
+			} else {
+				Err(ErrorKind::InvalidIndex.into())
+			}
 		}
 
-		fn set_storage(&mut self, _key: Vec<u8>, _value: Vec<u8>) {
-			self.data.insert(_key, _value);
+		fn validator_count(&self) -> usize {
+			self.validators.len()
+		}
+
+		fn set_code(&mut self, code: Vec<u8>) {
+			self.code = code;
+		}
+
+		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
+			self.data.insert(key, value);
+		}
+
+		fn set_validator(&mut self, index: usize, value: Vec<u8>) {
+			if index < self.validators.len() {
+				self.validators[index] = value;
+			}
+		}
+
+		fn set_validator_count(&mut self, count: usize) {
+			self.validators.resize(count, vec![]);
 		}
 	}
 
