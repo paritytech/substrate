@@ -278,5 +278,8 @@ mod tests {
 			vec![99, 111, 100, 101] => vec![84, 104, 101, 32, 99, 111, 100, 101]
 		];
 		assert_eq!(expected, ext.data);
+
+		let expected = vec![ b"Hello world".to_vec() ];
+		assert_eq!(expected, ext.validators);
 	}
 }

@@ -29,10 +29,11 @@ extern "C" {
 	fn set_validator(index: i32, validator_data: *const u8, validator_len: i32);
 }
 
-mod state {
+pub mod state {
 	use alloc::vec::Vec;
 	use super::{get_allocated_storage, set_storage as super_set_storage, get_allocated_code,
-		set_code as super_set_code};
+		set_code as super_set_code, set_validator as super_set_validator, get_allocated_validator,
+		get_validator_count, set_validator_count as super_set_validator_count};
 
 	pub fn storage(key: &[u8]) -> Vec<u8> {
 		let mut length: i32 = 0;
@@ -64,6 +65,41 @@ mod state {
 			super_set_code(&new[0] as *const u8, new.len() as i32);
 		}
 	}
+
+	pub fn set_validator(index: usize, validator: &[u8]) {
+		unsafe {
+			super_set_validator(index as i32, &validator[0] as *const u8, validator.len() as i32);
+		}
+	}
+
+	pub fn validator(index: usize) -> Vec<u8> {
+		let mut length: i32 = 0;
+		unsafe {
+			let ptr = get_allocated_validator(index as i32, &mut length);
+			Vec::from_raw_parts(ptr, length as usize, length as usize)
+		}
+	}
+
+	pub fn set_validator_count(count: usize) {
+		unsafe {
+			super_set_validator_count(count as i32);
+		}
+	}
+
+	pub fn validator_count() -> usize {
+		unsafe {
+			get_validator_count() as usize
+		}
+	}
+
+	pub fn validators() -> Vec<Vec<u8>> {
+		(0..validator_count()).into_iter().map(validator).collect()
+	}
+
+	pub fn set_validators(validators: &[&[u8]]) {
+		set_validator_count(validators.len());
+		validators.iter().enumerate().for_each(|(v, i)| set_validator(v, i));
+	}
 }
 
 fn do_something(param: u64) -> u64 {
@@ -94,4 +130,8 @@ pub fn test_data_in(input_data: *mut u8, input_len: usize) {
 	for b in &copy {
 		unsafe { imported(*b as u64); }
 	}
+
+	let mut v = state::validators();
+	v.push(copy);
+	state::set_validators(&v.iter().map(Vec::as_slice).collect::<Vec<_>>());
 }
