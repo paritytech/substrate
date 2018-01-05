@@ -62,6 +62,19 @@ impl<'e, E: Externalities> FunctionExecutor<'e, E> {
 	}
 }
 
+trait WritePrimitive<T: Sized> {
+	fn write_primitive(&self, offset: u32, t: T);
+}
+
+impl WritePrimitive<u32> for MemoryInstance {
+	fn write_primitive(&self, offset: u32, t: u32) {
+		use byteorder::{LittleEndian, ByteOrder};
+		let mut r = [0u8; 4];
+		LittleEndian::write_u32(&mut r, t);
+		let _ = self.set(offset, &r);
+	}
+}
+
 impl_function_executor!(this: FunctionExecutor<'e, E>,
 	imported(n: u64) -> u64 => { println!("imported {:?}", n); n + 1 },
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
@@ -94,12 +107,21 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			} else { (0, 0) }
 		} else { (0, 0) };
 
-		if written > 0 {
-			use byteorder::{LittleEndian, ByteOrder};
-			let mut r = [0u8; 4];
-			LittleEndian::write_u32(&mut r, written);
-			let _ = this.memory.set(written_out, &r);
+		this.memory.write_primitive(written_out, written);
+		offset as u32
+	},
+	set_code(code_data: *const u8, code_len: i32) => {
+		if let Ok(code) = this.memory.get(code_data, code_len as usize) {
+			this.ext.set_code(code);
 		}
+	},
+	get_allocated_code(written_out: *mut i32) -> *mut u8 => {
+		let (offset, written) = if let Ok(code) = this.ext.code() {
+			let offset = this.heap.allocate(code.len() as u32) as u32;
+			let _ = this.memory.set(offset, &code);
+			(offset, code.len() as u32)
+		} else { (0, 0) };
+		this.memory.write_primitive(written_out, written);
 		offset as u32
 	}
 	=> <'e, E: Externalities + 'e>
@@ -185,6 +207,7 @@ mod tests {
 	#[test]
 	fn should_pass_externalities_at_call() {
 		let mut ext = TestExternalities::default();
+		ext.code = b"The code".to_vec();
 
 		let program = ProgramInstance::new().unwrap();
 
@@ -208,7 +231,10 @@ mod tests {
 			).unwrap();
 		}
 
-		let expected: HashMap<_, _> = map![vec![116, 104, 101, 107, 101, 121] => vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]];
+		let expected: HashMap<_, _> = map![
+			vec![105, 110, 112, 117, 116] => vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100],
+			vec![99, 111, 100, 101] => vec![84, 104, 101, 32, 99, 111, 100, 101]
+		];
 		assert_eq!(expected, ext.data);
 	}
 }
