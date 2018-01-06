@@ -51,7 +51,7 @@ pub mod state {
 		set_storage(b"\0code", new)
 	}
 
-	pub fn value_vec(mut value: usize, initial: Vec<u8>) -> Vec<u8> {
+	fn value_vec(mut value: usize, initial: Vec<u8>) -> Vec<u8> {
 		let mut acc = initial;
 		while value > 0 {
 			acc.push(value as u8);

@@ -114,6 +114,15 @@ impl OverlayedChanges {
 pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
+fn value_vec(mut value: usize, initial: Vec<u8>) -> Vec<u8> {
+	let mut acc = initial;
+	while value > 0 {
+		acc.push(value as u8);
+		value /= 256;
+	}
+	acc
+}
+
 /// Externalities: pinned to specific active address.
 pub trait Externalities {
 	/// Externalities error type.
@@ -124,6 +133,15 @@ pub trait Externalities {
 
 	/// Set storage of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>);
+
+	/// Get the current set of validators.
+	fn validators(&self) -> Result<Vec<&[u8]>, Self::Error> {
+		(0..self.storage(b"\0validator_count")?.into_iter()
+				.rev()
+				.fold(0, |acc, &i| acc << 8 + (i as usize)))
+			.map(|i| self.storage(&value_vec(i, b"\0validator".to_vec())))
+			.collect()
+	}
 }
 
 /// Code execution engine.
