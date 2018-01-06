@@ -82,8 +82,16 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		println!("memcpy {} from {}, {} bytes", dest, src, count);
 		dest
 	},
-	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => { println!("memmove {} from {}, {} bytes", dest, src, count); dest },
-	ext_memset(dest: *mut u8, val: i32, count: usize) -> *mut u8 => { println!("memset {} with {}, {} bytes", dest, val, count); dest },
+	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
+		let _ = this.memory.copy(src as usize, dest as usize, count as usize);
+		println!("memmove {} from {}, {} bytes", dest, src, count);
+		dest
+	},
+	ext_memset(dest: *mut u8, val: i32, count: usize) -> *mut u8 => {
+//		let _ = this.memory.set(dest as usize, val as u8, count as usize);
+		println!("memset {} with {}, {} bytes", dest, val, count);
+		dest
+	},
 	ext_malloc(size: usize) -> *mut u8 => {
 		let r = this.heap.allocate(size);
 		println!("malloc {} bytes at {}", size, r);
@@ -274,8 +282,8 @@ mod tests {
 		}
 
 		let expected: HashMap<_, _> = map![
-			vec![105, 110, 112, 117, 116] => vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100],
-			vec![99, 111, 100, 101] => vec![84, 104, 101, 32, 99, 111, 100, 101]
+			b"input".to_vec() => b"Hello world".to_vec(),
+			b"code".to_vec() => b"The code".to_vec()
 		];
 		assert_eq!(expected, ext.data);
 
