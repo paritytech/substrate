@@ -138,7 +138,7 @@ pub trait Externalities {
 	fn validators(&self) -> Result<Vec<&[u8]>, Self::Error> {
 		(0..self.storage(b"\0validator_count")?.into_iter()
 				.rev()
-				.fold(0, |acc, &i| acc << 8 + (i as usize)))
+				.fold(0, |acc, &i| (acc << 8) + (i as usize)))
 			.map(|i| self.storage(&value_vec(i, b"\0validator".to_vec())))
 			.collect()
 	}
@@ -203,7 +203,8 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 
 #[cfg(test)]
 mod tests {
-	use super::OverlayedChanges;
+	use std::collections::HashMap;
+	use super::{OverlayedChanges, Externalities};
 
 	#[test]
 	fn overlayed_storage_works() {
@@ -228,5 +229,41 @@ mod tests {
 		overlayed.set_storage(key.clone(), vec![]);
 		overlayed.commit_prospective();
 		assert!(overlayed.storage(&key).is_none());
+	}
+
+	#[derive(Debug, Default)]
+	struct TestExternalities {
+		storage: HashMap<Vec<u8>, Vec<u8>>,
+	}
+	impl Externalities for TestExternalities {
+		type Error = u8;
+
+		fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error> {
+			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
+		}
+
+		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
+			self.storage.insert(key, value);
+		}
+	}
+
+	#[test]
+	fn validators_call_works() {
+		let mut ext = TestExternalities::default();
+
+		assert_eq!(ext.validators(), Ok(vec![]));
+
+		ext.set_storage(b"\0validator_count".to_vec(), vec![]);
+		assert_eq!(ext.validators(), Ok(vec![]));
+
+		ext.set_storage(b"\0validator_count".to_vec(), vec![1]);
+		assert_eq!(ext.validators(), Ok(vec![&[][..]]));
+
+		ext.set_storage(b"\0validator".to_vec(), b"first".to_vec());
+		assert_eq!(ext.validators(), Ok(vec![&b"first"[..]]));
+
+		ext.set_storage(b"\0validator_count".to_vec(), vec![2]);
+		ext.set_storage(b"\0validator\x01".to_vec(), b"second".to_vec());
+		assert_eq!(ext.validators(), Ok(vec![&b"first"[..], &b"second"[..]]));
 	}
 }

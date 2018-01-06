@@ -74,7 +74,7 @@ pub mod state {
 	}
 
 	pub fn validator_count() -> usize {
-		storage(b"\0validator_count").into_iter().rev().fold(0, |acc, i| acc << 8 + (i as usize))
+		storage(b"\0validator_count").into_iter().rev().fold(0, |acc, i| (acc << 8) + (i as usize))
 	}
 
 	pub fn validators() -> Vec<Vec<u8>> {
