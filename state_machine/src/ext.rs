@@ -25,8 +25,10 @@ use {Externalities, OverlayedChanges};
 #[derive(Debug, Copy, Clone)]
 pub enum Error<B, E> {
 	/// Failure to load state data from the backend.
+	#[allow(unused)]
 	Backend(B),
 	/// Failure to execute a function.
+	#[allow(unused)]
 	Executor(E),
 }
 
@@ -61,19 +63,11 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 {
 	type Error = B::Error;
 
-	fn code(&self) -> Result<&[u8], Self::Error> {
-		Ok(self.overlay.code())
-	}
-
 	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error> {
 		match self.overlay.storage(key) {
 			Some(x) => Ok(x),
 			None => self.backend.storage(key)
 		}
-	}
-
-	fn set_code(&mut self, code: Vec<u8>) {
-		self.overlay.set_code(code);
 	}
 
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {

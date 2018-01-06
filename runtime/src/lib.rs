@@ -5,7 +5,6 @@
 #![feature(alloc)]
 
 extern crate alloc;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 extern crate pwasm_libc;
@@ -18,22 +17,14 @@ pub fn panic_fmt() -> ! {
 }
 
 extern "C" {
-	fn imported(n: u64) -> u64;
+	fn ext_print(utf8_data: *const u8, utf8_len: i32);
 	fn set_storage(key_data: *const u8, key_len: i32, value_data: *const u8, value_len: i32);
 	fn get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8;
-	fn set_code(code_data: *const u8, code_len: i32);
-	fn get_allocated_code(written_out: *mut i32) -> *mut u8;
-	fn get_validator_count() -> i32;
-	fn get_allocated_validator(index: i32, written_out: *mut i32) -> *mut u8;
-	fn set_validator_count(validator_count: i32);
-	fn set_validator(index: i32, validator_data: *const u8, validator_len: i32);
 }
 
 pub mod state {
 	use alloc::vec::Vec;
-	use super::{get_allocated_storage, set_storage as super_set_storage, get_allocated_code,
-		set_code as super_set_code, set_validator as super_set_validator, get_allocated_validator,
-		get_validator_count, set_validator_count as super_set_validator_count};
+	use super::{get_allocated_storage, set_storage as super_set_storage};
 
 	pub fn storage(key: &[u8]) -> Vec<u8> {
 		let mut length: i32 = 0;
@@ -53,43 +44,37 @@ pub mod state {
 	}
 
 	pub fn code() -> Vec<u8> {
-		let mut length: i32 = 0;
-		unsafe {
-			let ptr = get_allocated_code(&mut length);
-			Vec::from_raw_parts(ptr, length as usize, length as usize)
-		}
+		storage(b"\0code")
 	}
 
 	pub fn set_code(new: &[u8]) {
-		unsafe {
-			super_set_code(&new[0] as *const u8, new.len() as i32);
+		set_storage(b"\0code", new)
+	}
+
+	pub fn value_vec(mut value: usize, initial: Vec<u8>) -> Vec<u8> {
+		let mut acc = initial;
+		while value > 0 {
+			acc.push(value as u8);
+			value /= 256;
 		}
+		acc
 	}
 
 	pub fn set_validator(index: usize, validator: &[u8]) {
-		unsafe {
-			super_set_validator(index as i32, &validator[0] as *const u8, validator.len() as i32);
-		}
+		set_storage(&value_vec(index, b"\0validator".to_vec()), validator);
 	}
 
 	pub fn validator(index: usize) -> Vec<u8> {
-		let mut length: i32 = 0;
-		unsafe {
-			let ptr = get_allocated_validator(index as i32, &mut length);
-			Vec::from_raw_parts(ptr, length as usize, length as usize)
-		}
+		storage(&value_vec(index, b"\0validator".to_vec()))
 	}
 
 	pub fn set_validator_count(count: usize) {
-		unsafe {
-			super_set_validator_count(count as i32);
-		}
+		(count..validator_count()).for_each(|i| set_validator(i, &[]));
+		set_storage(b"\0validator_count", &value_vec(count, Vec::new()));
 	}
 
 	pub fn validator_count() -> usize {
-		unsafe {
-			get_validator_count() as usize
-		}
+		storage(b"\0validator_count").into_iter().rev().fold(0, |acc, i| acc << 8 + (i as usize))
 	}
 
 	pub fn validators() -> Vec<Vec<u8>> {
@@ -102,15 +87,10 @@ pub mod state {
 	}
 }
 
-fn do_something(param: u64) -> u64 {
-	param * 2
-}
-
-/// Test some execution.
-#[no_mangle]
-pub fn test(value: u64) -> u64 {
-	let b = Box::new(unsafe { imported(value) });
-	do_something(*b)
+pub fn print(utf8: &[u8]) {
+	unsafe {
+		ext_print(&utf8[0] as *const u8, utf8.len() as i32);
+	}
 }
 
 /// Test passing of data.
@@ -120,18 +100,24 @@ pub fn test_data_in(input_data: *mut u8, input_len: usize) {
 		Vec::from_raw_parts(input_data, input_len, input_len)
 	};
 
+	print(b"set_storage");
 	state::set_storage(b"input", &input);
+
+	print(b"code");
 	state::set_storage(b"code", &state::code());
 
+	print(b"set_code");
 	state::set_code(&input);
+
+	print(b"storage");
 	let copy = state::storage(b"input");
 
-	// Do some stuff.
-	for b in &copy {
-		unsafe { imported(*b as u64); }
-	}
-
+	print(b"validators");
 	let mut v = state::validators();
 	v.push(copy);
+
+	print(b"set_validators");
 	state::set_validators(&v.iter().map(Vec::as_slice).collect::<Vec<_>>());
+
+	print(b"finished!");
 }

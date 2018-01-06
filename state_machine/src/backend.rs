@@ -17,7 +17,6 @@
 //! State machine backends. These manage the code and storage of contracts.
 
 use std::{error, fmt};
-use primitives::hash;
 use primitives::hash::H256;
 use triehash::sec_trie_root;
 
@@ -25,8 +24,6 @@ use super::{Update, MemoryState};
 
 /// Output of a commit.
 pub struct Committed {
-	/// Root of the code tree after changes committed.
-	pub code_hash: H256,
 	/// Root of the storage tree after changes committed.
 	pub storage_tree_root: H256,
 }
@@ -85,11 +82,8 @@ impl Backend for InMemory {
 				.map(|(k, v)| (k.to_vec(), v.clone()))
 				.collect()
 			).0);
-		let code_hash = hash(&self.inner.code().unwrap_or_else(|| &[]));
-		// TODO: include validators list.
 
 		Committed {
-			code_hash,
 			storage_tree_root,
 		}
 	}

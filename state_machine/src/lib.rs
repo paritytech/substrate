@@ -41,29 +41,17 @@ mod ext;
 pub enum Update {
 	/// Set storage of object at given key -- empty is deletion.
 	Storage(Vec<u8>, Vec<u8>),
-	/// Set code -- empty is deletion.
-	Code(Vec<u8>),
 }
 
 // in-memory section of the state.
 #[derive(Default)]
 struct MemoryState {
-	code: Option<Vec<u8>>,	// None is unchanged.
 	storage: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl MemoryState {
-	fn code(&self) -> Option<&[u8]> {
-		self.code.as_ref().map(|x| &**x)
-	}
-
 	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
 		self.storage.get(key).map(|v| &v[..])
-	}
-
-	#[allow(unused)]
-	fn set_code(&mut self, code: Vec<u8>) {
-		self.code = Some(code);
 	}
 
 	fn set_storage(&mut self, key: Vec<u8>, val: Vec<u8>) {
@@ -79,9 +67,6 @@ impl MemoryState {
 					} else {
 						self.storage.insert(key, val);
 					}
-				}
-				Update::Code(code) => {
-					self.code = Some(code);
 				}
 			}
 		}
@@ -99,21 +84,10 @@ pub struct OverlayedChanges {
 }
 
 impl OverlayedChanges {
-	fn code(&self) -> &[u8] {
-		self.prospective.code()
-			.or_else(|| self.committed.code())
-			.unwrap_or_else(|| &[])
-	}
-
 	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
 		self.prospective.storage(key)
 			.or_else(|| self.committed.storage(key))
 			.and_then(|v| if v.is_empty() { None } else { Some(v) })
-	}
-
-	#[allow(unused)]
-	fn set_code(&mut self, code: Vec<u8>) {
-		self.prospective.set_code(code);
 	}
 
 	fn set_storage(&mut self, key: Vec<u8>, val: Vec<u8>) {
@@ -122,19 +96,15 @@ impl OverlayedChanges {
 
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
-		self.prospective.code = None;
 		self.prospective.storage.clear();
 	}
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
-		let code_updates = self.prospective.code.take().into_iter()
-			.map(|code| Update::Code(code));
-
 		let storage_updates = self.prospective.storage.drain()
 			.map(|(key, value)| Update::Storage(key, value));
 
-		self.committed.update(code_updates.chain(storage_updates));
+		self.committed.update(storage_updates);
 	}
 }
 
@@ -149,29 +119,11 @@ pub trait Externalities {
 	/// Externalities error type.
 	type Error: Error;
 
-	/// Get the current runtime.
-	fn code(&self) -> Result<&[u8], Self::Error>;
-
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error>;
 
-	/// Read the current validator set.
-	fn validator(&self, _index: usize) -> Result<&[u8], Self::Error> { Ok(&[]) }
-
-	/// How many validators are there?
-	fn validator_count(&self) -> usize { 0 }
-
-	/// Set the new runtime (effective from the next block).
-	fn set_code(&mut self, code: Vec<u8>);
-
 	/// Set storage of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>);
-
-	/// Set a new validator set (effective from the next block).
-	fn set_validator(&mut self, _index: usize, _value: Vec<u8>) {}
-
-	/// Resize the validators array - extra validators will be empty vectors.
-	fn set_validator_count(&mut self, _count: usize) {}
 }
 
 /// Code execution engine.
@@ -183,6 +135,7 @@ pub trait CodeExecutor: Sized {
 	fn call<E: Externalities>(
 		&self,
 		ext: &mut E,
+		code: &[u8],
 		method: &str,
 		data: &CallData,
 	) -> Result<u64, Self::Error>;
@@ -191,6 +144,9 @@ pub trait CodeExecutor: Sized {
 /// Execute a call using the given state backend, overlayed changes, and call executor.
 ///
 /// On an error, no prospective changes are written to the overlay.
+///
+/// Note: changes to code will be in place if this call is made again. For running partial
+/// blocks (e.g. a transaction at a time), ensure a differrent method is used.
 pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	backend: &B,
 	overlay: &mut OverlayedChanges,
@@ -204,9 +160,12 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			backend,
 			overlay: &mut *overlay
 		};
+		// make a copy.
+		let code = externalities.storage(b"\0code").unwrap_or(&[]).to_vec();
 
 		exec.call(
 			&mut externalities,
+			&code,
 			method,
 			call_data,
 		)
@@ -251,28 +210,5 @@ mod tests {
 		overlayed.set_storage(key.clone(), vec![]);
 		overlayed.commit_prospective();
 		assert!(overlayed.storage(&key).is_none());
-	}
-
-	#[test]
-	fn overlayed_code_works() {
-		let mut overlayed = OverlayedChanges::default();
-
-		assert!(overlayed.code().len() == 0);
-
-		overlayed.set_code(vec![1, 2, 3]);
-		assert_eq!(overlayed.code(), &[1, 2, 3]);
-
-		overlayed.commit_prospective();
-		assert_eq!(overlayed.code(), &[1, 2, 3]);
-
-		overlayed.set_code(vec![]);
-		assert!(overlayed.code().len() == 0);
-
-		overlayed.discard_prospective();
-		assert_eq!(overlayed.code(), &[1, 2, 3]);
-
-		overlayed.set_code(vec![]);
-		overlayed.commit_prospective();
-		assert!(overlayed.code().len() == 0);
 	}
 }

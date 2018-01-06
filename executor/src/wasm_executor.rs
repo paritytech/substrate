@@ -76,7 +76,13 @@ impl WritePrimitive<u32> for MemoryInstance {
 }
 
 impl_function_executor!(this: FunctionExecutor<'e, E>,
-	imported(n: u64) -> u64 => { println!("imported {:?}", n); n + 1 },
+	ext_print(utf8_data: *const u8, utf8_len: i32) => {
+		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
+			if let Ok(message) = String::from_utf8(utf8) {
+				println!("Runtime: {}", message);
+			}
+		}
+	},
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		let _ = this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize);
 		println!("memcpy {} from {}, {} bytes", dest, src, count);
@@ -88,7 +94,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		dest
 	},
 	ext_memset(dest: *mut u8, val: i32, count: usize) -> *mut u8 => {
-//		let _ = this.memory.set(dest as usize, val as u8, count as usize);
+		let _ = this.memory.clear(dest as usize, val as u8, count as usize);
 		println!("memset {} with {}, {} bytes", dest, val, count);
 		dest
 	},
@@ -117,40 +123,6 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		this.memory.write_primitive(written_out, written);
 		offset as u32
-	},
-	set_code(code_data: *const u8, code_len: i32) => {
-		if let Ok(code) = this.memory.get(code_data, code_len as usize) {
-			this.ext.set_code(code);
-		}
-	},
-	get_allocated_code(written_out: *mut i32) -> *mut u8 => {
-		let (offset, written) = if let Ok(code) = this.ext.code() {
-			let offset = this.heap.allocate(code.len() as u32) as u32;
-			let _ = this.memory.set(offset, &code);
-			(offset, code.len() as u32)
-		} else { (0, 0) };
-		this.memory.write_primitive(written_out, written);
-		offset as u32
-	},
-	get_validator_count() -> i32 => {
-		this.ext.validator_count() as i32
-	},
-	get_allocated_validator(index: i32, written_out: *mut i32) -> *mut u8 => {
-		let (offset, written) = if let Ok(v) = this.ext.validator(index as usize) {
-			let offset = this.heap.allocate(v.len() as u32) as u32;
-			let _ = this.memory.set(offset, &v);
-			(offset, v.len() as u32)
-		} else { (0, 0) };
-		this.memory.write_primitive(written_out, written);
-		offset as u32
-	},
-	set_validator_count(validator_count: i32) => {
-		this.ext.set_validator_count(validator_count as usize);
-	},
-	set_validator(index: i32, validator_data: *const u8, validator_len: i32) => {
-		if let Ok(validator) = this.memory.get(validator_data, validator_len as usize) {
-			this.ext.set_validator(index as usize, validator);
-		}
 	}
 	=> <'e, E: Externalities + 'e>
 );
@@ -167,21 +139,15 @@ impl CodeExecutor for WasmExecutor {
 	fn call<E: Externalities>(
 		&self,
 		ext: &mut E,
+		code: &[u8],
 		method: &str,
 		data: &CallData,
 	) -> Result<u64> {
-		// TODO: avoid copying code by requiring code to remain immutable through execution,
-		// splitting it off from potentially mutable externalities.
-		let code = match ext.code() {
-			Ok(e) => e.to_owned(),
-			Err(e) => Err(ErrorKind::Externalities(Box::new(e)))?,
-		};
-
 		// TODO: handle all expects as errors to be returned.
 
 		let program = ProgramInstance::new().expect("this really shouldn't be able to fail; qed");
 
-		let module = deserialize_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
+		let module = deserialize_buffer(code.to_vec()).expect("all modules compiled with rustc are valid wasm code; qed");
 		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<E>::SIGNATURES]).expect("runtime signatures always provided; qed");
 
 		let memory = module.memory(ItemIndex::Internal(0)).expect("all modules compiled with rustc include memory segments; qed");
@@ -208,56 +174,24 @@ mod tests {
 
 	#[derive(Debug, Default)]
 	struct TestExternalities {
-		data: HashMap<Vec<u8>, Vec<u8>>,
-		code: Vec<u8>,
-		validators: Vec<Vec<u8>>,
+		storage: HashMap<Vec<u8>, Vec<u8>>,
 	}
 	impl Externalities for TestExternalities {
 		type Error = Error;
 
-		fn code(&self) -> Result<&[u8]> {
-			Ok(self.code.as_slice())
-		}
-
 		fn storage(&self, key: &[u8]) -> Result<&[u8]> {
-			Ok(self.data.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
-		}
-
-		fn validator(&self, index: usize) -> Result<&[u8]> {
-			if index < self.validators.len() {
-				Ok(self.validators[index].as_slice())
-			} else {
-				Err(ErrorKind::InvalidIndex.into())
-			}
-		}
-
-		fn validator_count(&self) -> usize {
-			self.validators.len()
-		}
-
-		fn set_code(&mut self, code: Vec<u8>) {
-			self.code = code;
+			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
 		}
 
 		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
-			self.data.insert(key, value);
-		}
-
-		fn set_validator(&mut self, index: usize, value: Vec<u8>) {
-			if index < self.validators.len() {
-				self.validators[index] = value;
-			}
-		}
-
-		fn set_validator_count(&mut self, count: usize) {
-			self.validators.resize(count, vec![]);
+			self.storage.insert(key, value);
 		}
 	}
 
 	#[test]
 	fn should_pass_externalities_at_call() {
 		let mut ext = TestExternalities::default();
-		ext.code = b"The code".to_vec();
+		ext.set_storage(b"\0code".to_vec(), b"The code".to_vec());
 
 		let program = ProgramInstance::new().unwrap();
 
@@ -274,20 +208,20 @@ mod tests {
 			let offset = fec.heap.allocate(size);
 			memory.set(offset, data).unwrap();
 
-			module.execute_export("test_data_in",
+			assert!(module.execute_export("test_data_in",
 				program.params_with_external("env", &mut fec)
 					.add_argument(I32(offset as i32))
 					.add_argument(I32(size as i32))
-			).unwrap();
+			).is_ok());
 		}
 
 		let expected: HashMap<_, _> = map![
+			b"\0code".to_vec() => b"Hello world".to_vec(),
 			b"input".to_vec() => b"Hello world".to_vec(),
-			b"code".to_vec() => b"The code".to_vec()
+			b"code".to_vec() => b"The code".to_vec(),
+			b"\0validator_count".to_vec() => vec![1],
+			b"\0validator".to_vec() => b"Hello world".to_vec()
 		];
-		assert_eq!(expected, ext.data);
-
-		let expected = vec![ b"Hello world".to_vec() ];
-		assert_eq!(expected, ext.validators);
+		assert_eq!(expected, ext.storage);
 	}
 }
