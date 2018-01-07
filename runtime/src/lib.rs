@@ -102,10 +102,6 @@ pub fn exec_test_data_in(input_data: *mut u8, input_len: usize) -> u64 {
 	};
 
 	let output = test_data_in(input);
-	unsafe {
-		ext_print_num(&output[0] as *const u8 as u64);
-		ext_print_num(output.len() as u64);
-	}
 	&output[0] as *const u8 as u64 + ((output.len() as u64) << 32)
 }
 
