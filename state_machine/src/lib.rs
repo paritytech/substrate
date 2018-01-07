@@ -156,7 +156,7 @@ pub trait CodeExecutor: Sized {
 		code: &[u8],
 		method: &str,
 		data: &CallData,
-	) -> Result<u64, Self::Error>;
+	) -> Result<Vec<u8>, Self::Error>;
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -171,7 +171,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &CallData,
-) -> Result<u64, Box<Error>> {
+) -> Result<Vec<u8>, Box<Error>> {
 
 	let result = {
 		let mut externalities = ext::Ext {

@@ -83,6 +83,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			}
 		}
 	},
+	ext_print_num(number: u64) => {
+		println!("Runtime: {}", number);
+	},
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		let _ = this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize);
 		println!("memcpy {} from {}, {} bytes", dest, src, count);
@@ -142,7 +145,7 @@ impl CodeExecutor for WasmExecutor {
 		code: &[u8],
 		method: &str,
 		data: &CallData,
-	) -> Result<u64> {
+	) -> Result<Vec<u8>> {
 		// TODO: handle all expects as errors to be returned.
 
 		let program = ProgramInstance::new().expect("this really shouldn't be able to fail; qed");
@@ -157,13 +160,30 @@ impl CodeExecutor for WasmExecutor {
 		let offset = fec.heap.allocate(size);
 		memory.set(offset, &data.0).expect("heap always gives a sensible offset to write");
 
-		let r = module.execute_export(method,
+		let returned: Result<_> = module.execute_export(method,
 			program.params_with_external("env", &mut fec)
 				.add_argument(I32(offset as i32))
 				.add_argument(I32(size as i32)))
-			.map_err(|_| ErrorKind::Runtime.into())
-			.and_then(|i| if let Some(I64(r)) = i { Ok(r as u64) } else { Err(ErrorKind::InvalidReturn.into()) });
-		r
+			.map_err(|_| ErrorKind::Runtime.into());
+
+		if let Some(I64(r)) = returned? {
+			memory.get(r as u32, (r >> 32) as u32 as usize)
+				.map_err(|_| ErrorKind::Runtime.into())
+		} else {
+			Err(ErrorKind::InvalidReturn.into())
+		}
+
+/*		let returned: Result<RuntimeValue> = module.execute_export(method,
+			program.params_with_external("env", &mut fec)
+				.add_argument(I32(offset as i32))
+				.add_argument(I32(size as i32)))
+			.map_err(|_| ErrorKind::Runtime.into())?;
+		if let Some(I64(r)) = returned {
+			memory.get(r as u32, (r << 32) as usize)
+				.map_err(|_| ErrorKind::Runtime.into())
+		} else {
+			Err(ErrorKind::InvalidReturn.into())
+		}*/
 	}
 }
 
@@ -199,7 +219,7 @@ mod tests {
 		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
 		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<TestExternalities>::SIGNATURES]).expect("Failed to initialize module");
 
-		{
+		let output = {
 			let memory = module.memory(ItemIndex::Internal(0)).unwrap();
 			let mut fec = FunctionExecutor::new(&memory, &mut ext);
 
@@ -208,12 +228,22 @@ mod tests {
 			let offset = fec.heap.allocate(size);
 			memory.set(offset, data).unwrap();
 
-			assert!(module.execute_export("test_data_in",
+			let returned = module.execute_export("exec_test_data_in",
 				program.params_with_external("env", &mut fec)
 					.add_argument(I32(offset as i32))
 					.add_argument(I32(size as i32))
-			).is_ok());
-		}
+			);
+			assert!(returned.is_ok());
+
+			if let Some(I64(r)) = returned.unwrap() {
+				println!("returned {:?} ({:?}, {:?})", r, r as u32, (r >> 32) as u32 as usize);
+				memory.get(r as u32, (r >> 32) as u32 as usize).expect("memory address should be reasonable.")
+			} else {
+				panic!("bad return value, not u64");
+			}
+		};
+
+		assert_eq!(output, b"all ok!".to_vec());
 
 		let expected: HashMap<_, _> = map![
 			b"\0code".to_vec() => b"Hello world".to_vec(),

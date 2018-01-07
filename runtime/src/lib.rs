@@ -18,6 +18,7 @@ pub fn panic_fmt() -> ! {
 
 extern "C" {
 	fn ext_print(utf8_data: *const u8, utf8_len: i32);
+	fn ext_print_num(value: u64);
 	fn set_storage(key_data: *const u8, key_len: i32, value_data: *const u8, value_len: i32);
 	fn get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8;
 }
@@ -95,11 +96,20 @@ pub fn print(utf8: &[u8]) {
 
 /// Test passing of data.
 #[no_mangle]
-pub fn test_data_in(input_data: *mut u8, input_len: usize) {
+pub fn exec_test_data_in(input_data: *mut u8, input_len: usize) -> u64 {
 	let input = unsafe {
 		Vec::from_raw_parts(input_data, input_len, input_len)
 	};
 
+	let output = test_data_in(input);
+	unsafe {
+		ext_print_num(&output[0] as *const u8 as u64);
+		ext_print_num(output.len() as u64);
+	}
+	&output[0] as *const u8 as u64 + ((output.len() as u64) << 32)
+}
+
+fn test_data_in(input: Vec<u8>) -> Vec<u8> {
 	print(b"set_storage");
 	state::set_storage(b"input", &input);
 
@@ -120,4 +130,5 @@ pub fn test_data_in(input_data: *mut u8, input_len: usize) {
 	state::set_validators(&v.iter().map(Vec::as_slice).collect::<Vec<_>>());
 
 	print(b"finished!");
+	b"all ok!".to_vec()
 }
