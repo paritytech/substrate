@@ -88,10 +88,26 @@ pub mod state {
 	}
 }
 
-pub fn print(utf8: &[u8]) {
-	unsafe {
-		ext_print(&utf8[0] as *const u8, utf8.len() as i32);
+trait Printable {
+	fn print(self);
+}
+
+impl<'a> Printable for &'a [u8] {
+	fn print(self) {
+		unsafe {
+			ext_print(&self[0] as *const u8, self.len() as i32);
+		}
 	}
+}
+
+impl Printable for u64 {
+	fn print(self) {
+		unsafe { ext_print_num(self); }
+	}
+}
+
+fn print<T: Printable + Sized>(value: T) {
+	value.print();
 }
 
 /// Test passing of data.
@@ -106,25 +122,25 @@ pub fn exec_test_data_in(input_data: *mut u8, input_len: usize) -> u64 {
 }
 
 fn test_data_in(input: Vec<u8>) -> Vec<u8> {
-	print(b"set_storage");
+	print(b"set_storage" as &[u8]);
 	state::set_storage(b"input", &input);
 
-	print(b"code");
+	print(b"code" as &[u8]);
 	state::set_storage(b"code", &state::code());
 
-	print(b"set_code");
+	print(b"set_code" as &[u8]);
 	state::set_code(&input);
 
-	print(b"storage");
+	print(b"storage" as &[u8]);
 	let copy = state::storage(b"input");
 
-	print(b"validators");
+	print(b"validators" as &[u8]);
 	let mut v = state::validators();
 	v.push(copy);
 
-	print(b"set_validators");
+	print(b"set_validators" as &[u8]);
 	state::set_validators(&v.iter().map(Vec::as_slice).collect::<Vec<_>>());
 
-	print(b"finished!");
+	print(b"finished!" as &[u8]);
 	b"all ok!".to_vec()
 }
