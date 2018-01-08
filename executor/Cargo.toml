@@ -1,5 +1,5 @@
 [package]
-name = "polkadot-contracts"
+name = "polkadot-executor"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
@@ -10,6 +10,8 @@ polkadot-serializer = { path = "../serializer", version = "0.1" }
 polkadot-state-machine = { path = "../state_machine" , version = "0.1" }
 serde = "1.0"
 serde_derive = "1.0"
+parity-wasm = "0.15.0"
+byteorder = "1.1"
 
 [dev-dependencies]
 assert_matches = "1.1"
