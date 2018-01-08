@@ -280,7 +280,9 @@ impl<C: Context> Table<C> {
 	///
 	/// This will be at most one per group, consisting of the
 	/// best candidate for each group with requisite votes for inclusion.
-	pub fn proposed_candidates(&self, context: &C) -> Vec<C::Candidate> {
+	///
+	/// The vector is sorted in ascending order by group id.
+	pub fn proposed_candidates<'a>(&'a self, context: &C) -> Vec<&'a C::Candidate> {
 		use std::collections::BTreeMap;
 		use std::collections::btree_map::Entry as BTreeEntry;
 
@@ -294,7 +296,7 @@ impl<C: Context> Table<C> {
 			match best_candidates.entry(group_id.clone()) {
 				BTreeEntry::Occupied(mut occ) => {
 					let candidate_ref = occ.get_mut();
-					if *candidate_ref < candidate {
+					if *candidate_ref > candidate {
 						*candidate_ref = candidate;
 					}
 				}
@@ -302,7 +304,7 @@ impl<C: Context> Table<C> {
 			}
 		}
 
-		best_candidates.values().map(|v| C::Candidate::clone(v)).collect::<Vec<_>>()
+		best_candidates.values().cloned().collect::<Vec<_>>()
 	}
 
 	/// Whether a candidate can be included.
