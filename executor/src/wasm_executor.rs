@@ -160,13 +160,15 @@ impl CodeExecutor for WasmExecutor {
 		let offset = fec.heap.allocate(size);
 		memory.set(offset, &data.0).expect("heap always gives a sensible offset to write");
 
-		let returned: Result<_> = module.execute_export(method,
-			program.params_with_external("env", &mut fec)
-				.add_argument(I32(offset as i32))
-				.add_argument(I32(size as i32)))
-			.map_err(|_| ErrorKind::Runtime.into());
+		let returned = program
+				.params_with_external("env", &mut fec)
+				.map(|p| p
+					.add_argument(I32(offset as i32))
+					.add_argument(I32(size as i32)))
+			.and_then(|p| module.execute_export(method, p))
+			.map_err(|_| -> Error { ErrorKind::Runtime.into() })?;
 
-		if let Some(I64(r)) = returned? {
+		if let Some(I64(r)) = returned {
 			memory.get(r as u32, (r >> 32) as u32 as usize)
 				.map_err(|_| ErrorKind::Runtime.into())
 		} else {
@@ -216,14 +218,15 @@ mod tests {
 			let offset = fec.heap.allocate(size);
 			memory.set(offset, data).unwrap();
 
-			let returned = module.execute_export("test_data_in",
-				program.params_with_external("env", &mut fec)
-					.add_argument(I32(offset as i32))
-					.add_argument(I32(size as i32))
-			);
-			assert!(returned.is_ok());
+			let returned = program
+					.params_with_external("env", &mut fec)
+					.map(|p| p
+						.add_argument(I32(offset as i32))
+						.add_argument(I32(size as i32)))
+				.and_then(|p| module.execute_export("test_data_in", p))
+				.map_err(|_| -> Error { ErrorKind::Runtime.into() }).expect("function should be callable");
 
-			if let Some(I64(r)) = returned.unwrap() {
+			if let Some(I64(r)) = returned {
 				println!("returned {:?} ({:?}, {:?})", r, r as u32, (r >> 32) as u32 as usize);
 				memory.get(r as u32, (r >> 32) as u32 as usize).expect("memory address should be reasonable.")
 			} else {

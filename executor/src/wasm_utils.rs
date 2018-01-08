@@ -95,7 +95,7 @@ macro_rules! dispatch {
 				$(
 					stringify!($name) => marshall!(context, $objectname, ( $( $names : $params ),* ) $( -> $returns )* => $body),
 				)*
-				_ => panic!()//Err($crate::wasm_utils::Error::Trap(format!("not implemented: {}", n)).into())
+				_ => panic!()
 			}
 		}
 	);
@@ -155,7 +155,7 @@ pub trait AddModuleWithoutFullDependentInstance {
 		functions: HashMap<&str, &'static [UserFunctionDescriptor]>,
 	) -> result::Result<Arc<interpreter::ModuleInstance<DummyUserError>>, interpreter::Error<DummyUserError>>;
 
-	fn params_with_external<'a, 'b: 'a>(&'b self, externals_name: &str, externals: &'a mut IntoUserDefinedElements) -> ExecutionParams<'a, DummyUserError>;
+	fn params_with_external<'a, 'b: 'a>(&'b self, externals_name: &str, externals: &'a mut IntoUserDefinedElements) -> result::Result<ExecutionParams<'a, DummyUserError>, Error>;
 }
 
 impl AddModuleWithoutFullDependentInstance for interpreter::ProgramInstance<DummyUserError> {
@@ -169,33 +169,33 @@ impl AddModuleWithoutFullDependentInstance for interpreter::ProgramInstance<Dumm
 		let dufe_refs = dufe.iter_mut().collect::<Vec<_>>();
 		let fake_module_map = functions.into_iter()
 			.zip(dufe_refs.into_iter())
-			.map(|((dep_mod_name, functions), dufe)| {
+			.map(|((dep_mod_name, functions), dufe)| -> result::Result<_, interpreter::Error<DummyUserError>> {
 				let fake_module = Arc::new(
 					interpreter::env_native_module(
-						self.module(dep_mod_name).unwrap(), UserDefinedElements {
+						self.module(dep_mod_name).ok_or(DummyUserError)?, UserDefinedElements {
 							executor: Some(dufe),
 							globals: HashMap::new(),
 							functions: ::std::borrow::Cow::from(functions),
 						}
-					).unwrap()	// TODO: handle
+					)?
 				);
 				let fake_module: Arc<interpreter::ModuleInstanceInterface<_>> = fake_module;
-				(dep_mod_name.into(), fake_module)
+				Ok((dep_mod_name.into(), fake_module))
 			})
-			.collect::<HashMap<_, _>>();
+			.collect::<result::Result<HashMap<_, _>, interpreter::Error<DummyUserError>>>()?;
 		self.add_module(name, module, Some(&fake_module_map))
 	}
 
-	fn params_with_external<'a, 'b: 'a>(&'b self, externals_name: &str, externals: &'a mut IntoUserDefinedElements) -> ExecutionParams<'a, DummyUserError> {
-		interpreter::ExecutionParams::with_external(
+	fn params_with_external<'a, 'b: 'a>(&'b self, externals_name: &str, externals: &'a mut IntoUserDefinedElements) -> result::Result<ExecutionParams<'a, DummyUserError>, Error> {
+		Ok(interpreter::ExecutionParams::with_external(
 			externals_name.into(),
 			Arc::new(
 				interpreter::env_native_module(
-					self.module(externals_name).unwrap(),	// TODO: handle
+					self.module(externals_name).ok_or(DummyUserError)?,
 					externals.into_user_defined_elements()
-				).unwrap()	// TODO: handle
+				)?
 			)
-		)
+		))
 	}
 }
 
