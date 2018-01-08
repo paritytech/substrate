@@ -21,10 +21,11 @@ mod error;
 #[cfg(test)]
 mod tests;
 
-use client::{self, Client};
 use primitives::{block};
 use primitives::contract::{CallData, StorageKey, StorageData};
 use state_machine;
+use client;
+use client::Client;
 
 use self::error::Result;
 
