@@ -172,18 +172,6 @@ impl CodeExecutor for WasmExecutor {
 		} else {
 			Err(ErrorKind::InvalidReturn.into())
 		}
-
-/*		let returned: Result<RuntimeValue> = module.execute_export(method,
-			program.params_with_external("env", &mut fec)
-				.add_argument(I32(offset as i32))
-				.add_argument(I32(size as i32)))
-			.map_err(|_| ErrorKind::Runtime.into())?;
-		if let Some(I64(r)) = returned {
-			memory.get(r as u32, (r << 32) as usize)
-				.map_err(|_| ErrorKind::Runtime.into())
-		} else {
-			Err(ErrorKind::InvalidReturn.into())
-		}*/
 	}
 }
 
