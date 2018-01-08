@@ -10,6 +10,37 @@ use alloc::vec::Vec;
 extern crate runtime_support;
 use runtime_support::{set_storage, storage, storage_into, print, Value20};
 
+/*
+use std::sync::{rc, RefCell, Once, ONCE_INIT};
+use std::mem;
+
+#[derive(Clone)]
+struct SingletonReader {
+	inner: Rc<RefCell<Environment>>,
+}
+
+fn singleton() -> SingletonReader {
+	// Initialize it to a null value
+	static mut SINGLETON: *const SingletonReader = 0 as *const SingletonReader;
+	static ONCE: Once = ONCE_INIT;
+
+	unsafe {
+		ONCE.call_once(|| {
+			// Make it
+			let singleton = SingletonReader {
+				inner: Rc::new(RefCell::new(Default::default())),
+			};
+
+			// Put it in the heap so it can outlive this call
+			SINGLETON = mem::transmute(Box::new(singleton));
+		});
+
+		// Now we give out a copy of the data that is safe to use concurrently.
+		(*SINGLETON).clone()
+	}
+}
+*/
+
 /// The hash of an ECDSA pub key which is used to identify an external transactor.
 type AccountID = [u8; 32];
 /// The ECDSA pub key of an authority. This is what the external environment/consensus algorithm
@@ -23,42 +54,69 @@ type BlockNumber = u64;
 struct Proportion { nom: u64, denom: u64, };
 type Timestamp = u64;
 type TxOrder = u64;
-/// Statistics concerning consensus.
-// TODO.
-struct Statistics;
-/// A report of bad behaviour.
-// TODO.
-struct Complaint;
 
-/// The state of a parachain.
-/*struct ParachainState {
-	head_data: Vec<u8>,
-	balance: Balance,
-	user_balances: HashMap<AccountID, Balance>,
-	balance_downloads: HashMap<AccountID, ( Balance, Vec<u8> ),
-	egress_roots: Vec<Hash>
-}*/
-//struct CandidateReceipt;
+struct Digest {
+	logs: Vec<Vec<u8>>,
+}
+
+struct Header {
+	parent_hash: Hash,
+	number: BlockNumber,
+	state_root: Hash,
+	transaction_root: Hash,
+	digest: Digest,
+}
+
+struct Transaction {
+	senders: Vec<AccountID>,
+	function_name: String,
+	input_data: Vec<u8>,
+	nonce: TxOrder,
+}
+
+struct Block {
+	header: Header,
+	transactions: Vec<Transaction>,
+}
+
+impl Header {
+	pub fn from_rlp(_rlp: &[u8]) -> Self {
+		unimplemented!()
+	}
+}
+
+impl Transaction {
+	pub fn from_rlp(_rlp: &[u8]) -> Self {
+		unimplemented!()
+	}
+}
+
+impl Block {
+	pub fn from_rlp(_rlp: &[u8]) -> Self {
+		unimplemented!()
+	}
+}
 
 // TODO: include RLP implementation
 // TODO: add keccak256 (or some better hashing scheme) & ECDSA-recover (or some better sig scheme)
 
 impl_stub!(execute_block);
 fn execute_block(_input: Vec<u8>) -> Vec<u8> {
-	// TODO: decode block and ensure valid
-	// TODO: iterate through transactions amd decode/dispatch them
-	// TODO: progress to next session if it's time
-	// TODO: progress to next era if it's time
-	Vec::new()
+	let block = Block::from_rlp(&_input);
+	environment::execute_block(&block)
 }
 
 impl_stub!(execute_transaction);
-fn execute_transaction(tx: Vec<u8>) -> Vec<u8> {
+fn execute_transaction(_input: Vec<u8>) -> Vec<u8> {
+	let tx = Transaction::from_rlp(&_input);
 	environment::execute_transaction(&tx)
 }
 
 /// The current relay chain identifier.
-fn chain_id() -> ChainID { unimplemented!() }	// TODO: retrieve from external
+fn chain_id() -> ChainID {
+	// TODO: retrieve from external
+	unimplemented!()
+}
 
 mod environment {
 	/// The current block number being processed. Set by `execute_block`.
@@ -67,19 +125,27 @@ mod environment {
 	/// Get the block hash of a given block.
 	pub fn block_hash(_number: BlockNumber) -> Hash { unimplemented!() }
 
-	/// ?
-	fn set_digest(_preserialised_rlp_digest: &[u8]) { unimplemented!() }
-
 	/// Get the current user's ID
 	pub fn current_user() -> AccountID { unimplemented!() }
 
+	pub fn execute_block(_block: &Block) -> Vec<u8> {
+		// TODO: populate environment from header.
+		staking::pre_transactions();
+		// TODO: go through each transaction and use execute_transaction to execute.
+		staking::post_transactions();
+		// TODO: ensure digest in header is what we expect from transactions.
+		Vec::new()
+	}
+
 	/// Execute a given transaction.
-	pub fn execute_transaction(_tx: &[u8]) -> Vec<u8> {
+	pub fn execute_transaction(_tx: &Transaction) -> Vec<u8> {
 		// TODO: decode data and ensure valid
-		// TODO: ensure signature valid and recover id
+		// TODO: ensure signature valid and recover id (use authentication::authenticate)
 		// TODO: ensure target_function valid
 		// TODO: decode parameters
+		// TODO: set `current_user` to the id
 		// TODO: make call
+		// TODO: reset `current_user`
 		// TODO: encode any return
 		Vec::new()
 	}
@@ -89,8 +155,11 @@ mod environment {
 		set_storage(b"\0code", new)
 	}
 
-	/// ?
-	fn set_active_parachains(_data: &[u8]) { unimplemented!() }
+	/// Set the light-client digest for the header.
+	pub fn set_digest(_preserialised_rlp_digest: &[u8]) {
+		// TODO: Mention this to the external environment?
+		unimplemented!()
+	}
 }
 
 mod consensus {
@@ -160,6 +229,14 @@ mod consensus {
 		// TODO: Call set_authorities().
 		unimplemented!()
 	}
+
+	/// Hook to be called prior to transaction processing.
+	pub fn pre_transactions() {}
+
+	/// Hook to be called after to transaction processing.
+	pub fn post_transactions() {
+		// TODO: check block number and call next_session if necessary.
+	}
 }
 
 mod staking {
@@ -174,15 +251,10 @@ mod staking {
 	/// The balance of a given account.
 	fn balance(_who: AccountID) -> Balance { unimplemented!() }
 
-	/// User-level function to move funds onto a parachain. Calls `parachains::credit_parachain`.
-	fn move_to_parachain(chain_id: ChainID, value: Balance) { unimplemented!() }
+	/// Transfer some unlocked staking balance to another staker.
+	fn transfer_stake(_who: AccountID, dest: AccountID, value: Balance) { unimplemented!() }
 
-	/// System-level function to be called only by Parachains object when funds have left that
-	/// object and are to be credited here.
-	fn credit_staker(value: Balance) { unimplemented!() }
-
-	/// Declare the desire to stake under the requirement that under flawless operation, each era
-	/// should return `minimum_era_return` on the amount staked.
+	/// Declare the desire to stake.
 	///
 	/// Effects will be felt at the beginning of the next era.
 	fn stake(minimum_era_return: Proportion) { unimplemented!() }
@@ -192,22 +264,16 @@ mod staking {
 	/// Effects will be felt at the beginning of the next era.
 	fn unstake() { unimplemented!() }
 
-	/// Report invalid behaviour by a staking participant.
-	fn complain(complaint: Complaint) { unimplemented!() }
-}
+	/// Hook to be called prior to transaction processing.
+	pub fn pre_transactions() {
+		conensus::pre_transactions();
+	}
 
-/*
-mod parachains {
-	fn chain_ids(self) -> [ ChainID ];
-	fn validation_function(self, chain_id: ChainID) -> Fn(consolidated_ingress: [ ( ChainID, bytes ) ], balance_downloads: [ ( AccountID, Balance ) ], block_data: bytes, previous_head_data: bytes) -> (head_data: bytes, egress_queues: [ [ bytes ] ], balance_uploads: [ ( AccountID, Balance ) ]);
-	fn validate_and_calculate_fees_function(self, chain_id: ChainID) -> Fn(egress_queues: [ [ bytes ] ], balance_uploads: [ ( AccountID, Balance ) ]) -> Balance;
-	fn balance(self, chain_id: ChainID, id: AccountID) -> Balance;
-	fn verify_and_consolidate_queues(self, unprocessed_ingress: [ [ [ bytes ] ] ]) -> [ (chain_id: ChainID, message: bytes) ];
-	fn chain_state(self, chain_id: ChainID) -> ParachainState;
-	fn move_to_staking(mut self, chain_id: ChainID, value: Balance);
-	fn credit_parachain(mut self, chain_id: ChainID, value: Balance);
-	fn download(mut self, chain_id: ChainID, value: Balance, instruction: bytes);
-	fn update_heads(mut self, candidate_receipts: &[ ( ChainID, CandidateReceipt ) ]);
+	/// Hook to be called after to transaction processing.
+	pub fn post_transactions() {
+		// TODO: check block number and call next_era if necessary.
+		conensus::post_transactions();
+	}
 }
 
 mod authentication {
@@ -215,7 +281,7 @@ mod authentication {
 	fn nonce(self, id: AccountID) -> TxOrder;
 	fn authenticate(mut self, tx: Transaction) -> AccountID;
 }
-*/
+
 mod timestamp {
 	fn timestamp() -> Timestamp { unimplemented!() }
 	fn set_timestamp(Timestamp) { unimplemented!() }
