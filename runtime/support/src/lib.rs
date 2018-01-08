@@ -109,10 +109,12 @@ pub fn print<T: Printable + Sized>(value: T) {
 macro_rules! impl_stub {
 	($name:ident) => {
 		pub mod _internal {
+			extern crate alloc;
+			
 			#[no_mangle]
 			pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
 				let input = unsafe {
-					super::alloc::vec::Vec::from_raw_parts(input_data, input_len, input_len)
+					::alloc::vec::Vec::from_raw_parts(input_data, input_len, input_len)
 				};
 
 				let output = super::$name(input);
