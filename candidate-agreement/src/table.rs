@@ -305,6 +305,14 @@ impl<C: Context> Table<C> {
 		best_candidates.values().map(|v| C::Candidate::clone(v)).collect::<Vec<_>>()
 	}
 
+	/// Whether a candidate can be included.
+	pub fn candidate_includable(&self, digest: &C::Digest, context: &C) -> bool {
+		self.candidate_votes.get(digest).map_or(false, |data| {
+			let (v_threshold, a_threshold) = context.requisite_votes(&data.group_id);
+			data.can_be_included(v_threshold, a_threshold)
+		})
+	}
+
 	/// Get an iterator of all candidates with a given group.
 	// TODO: impl iterator
 	pub fn candidates_in_group<'a>(&'a self, group_id: C::GroupId)
