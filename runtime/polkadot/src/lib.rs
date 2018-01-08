@@ -110,17 +110,23 @@ fn print<T: Printable + Sized>(value: T) {
 	value.print();
 }
 
-/// Test passing of data.
-#[no_mangle]
-pub fn exec_test_data_in(input_data: *mut u8, input_len: usize) -> u64 {
-	let input = unsafe {
-		Vec::from_raw_parts(input_data, input_len, input_len)
-	};
+macro_rules! impl_stub {
+	($name:ident) => {
+		pub mod _internal {
+			#[no_mangle]
+			pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
+				let input = unsafe {
+					super::alloc::vec::Vec::from_raw_parts(input_data, input_len, input_len)
+				};
 
-	let output = test_data_in(input);
-	&output[0] as *const u8 as u64 + ((output.len() as u64) << 32)
+				let output = super::$name(input);
+				&output[0] as *const u8 as u64 + ((output.len() as u64) << 32)
+			}
+		}
+	}
 }
 
+impl_stub!(test_data_in);
 fn test_data_in(input: Vec<u8>) -> Vec<u8> {
 	print(b"set_storage" as &[u8]);
 	state::set_storage(b"input", &input);

@@ -10,7 +10,15 @@ name = "pwasm-libc"
 version = "0.1.0"
 
 [[package]]
-name = "runtime"
+name = "runtime-polkadot"
+version = "0.1.0"
+dependencies = [
+ "pwasm-alloc 0.1.0",
+ "pwasm-libc 0.1.0",
+]
+
+[[package]]
+name = "runtime-test"
 version = "0.1.0"
 dependencies = [
  "pwasm-alloc 0.1.0",

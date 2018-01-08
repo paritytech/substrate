@@ -228,7 +228,7 @@ mod tests {
 			let offset = fec.heap.allocate(size);
 			memory.set(offset, data).unwrap();
 
-			let returned = module.execute_export("exec_test_data_in",
+			let returned = module.execute_export("test_data_in",
 				program.params_with_external("env", &mut fec)
 					.add_argument(I32(offset as i32))
 					.add_argument(I32(size as i32))
