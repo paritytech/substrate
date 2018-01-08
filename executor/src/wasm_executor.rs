@@ -76,7 +76,7 @@ impl WritePrimitive<u32> for MemoryInstance {
 }
 
 impl_function_executor!(this: FunctionExecutor<'e, E>,
-	ext_print(utf8_data: *const u8, utf8_len: i32) => {
+	ext_print(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
 			if let Ok(message) = String::from_utf8(utf8) {
 				println!("Runtime: {}", message);
@@ -96,7 +96,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		println!("memmove {} from {}, {} bytes", dest, src, count);
 		dest
 	},
-	ext_memset(dest: *mut u8, val: i32, count: usize) -> *mut u8 => {
+	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
 		let _ = this.memory.clear(dest as usize, val as u8, count as usize);
 		println!("memset {} with {}, {} bytes", dest, val, count);
 		dest
@@ -110,12 +110,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.heap.deallocate(addr);
 		println!("free {}", addr)
 	},
-	ext_set_storage(key_data: *const u8, key_len: i32, value_data: *const u8, value_len: i32) => {
+	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		if let (Ok(key), Ok(value)) = (this.memory.get(key_data, key_len as usize), this.memory.get(value_data, value_len as usize)) {
 			this.ext.set_storage(key, value);
 		}
 	},
-	ext_get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8 => {
+	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let (offset, written) = if let Ok(key) = this.memory.get(key_data, key_len as usize) {
 			if let Ok(value) = this.ext.storage(&key) {
 				let offset = this.heap.allocate(value.len() as u32) as u32;
@@ -126,6 +126,18 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		this.memory.write_primitive(written_out, written);
 		offset as u32
+	},
+	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32) -> u32 => {
+		if let Ok(key) = this.memory.get(key_data, key_len as usize) {
+			if let Ok(value) = this.ext.storage(&key) {
+				let written = ::std::cmp::min(value_len as usize, value.len());
+				let _ = this.memory.set(value_data, &value[0..written]);
+				written as u32
+			} else { 0 }
+		} else { 0 }
+	},
+	ext_deposit_log(_log_data: *const u8, _log_len: u32) {
+		unimplemented!()
 	}
 	=> <'e, E: Externalities + 'e>
 );
@@ -163,8 +175,8 @@ impl CodeExecutor for WasmExecutor {
 		let returned = program
 				.params_with_external("env", &mut fec)
 				.map(|p| p
-					.add_argument(I32(offset as i32))
-					.add_argument(I32(size as i32)))
+					.add_argument(I32(offset as u32))
+					.add_argument(I32(size as u32)))
 			.and_then(|p| module.execute_export(method, p))
 			.map_err(|_| -> Error { ErrorKind::Runtime.into() })?;
 
@@ -221,8 +233,8 @@ mod tests {
 			let returned = program
 					.params_with_external("env", &mut fec)
 					.map(|p| p
-						.add_argument(I32(offset as i32))
-						.add_argument(I32(size as i32)))
+						.add_argument(I32(offset as u32))
+						.add_argument(I32(size as u32)))
 				.and_then(|p| module.execute_export("test_data_in", p))
 				.map_err(|_| -> Error { ErrorKind::Runtime.into() }).expect("function should be callable");
 
