@@ -26,8 +26,8 @@ extern crate error_chain;
 
 pub mod error;
 
-use primitives::{block, Address, H256};
-use primitives::contract::{CallData, OutData, StorageData};
+use primitives::{block};
+use primitives::contract::{CallData, StorageKey, StorageData};
 use state_machine::backend::Backend;
 
 use self::error::ResultExt;
@@ -42,6 +42,14 @@ pub trait Blockchain {
 
 	/// Given a hash return a header
 	fn header(&self, hash: &block::HeaderHash) -> Result<Option<block::Header>, Self::Error>;
+}
+
+/// Information regarding the result of a call.
+pub struct CallResult {
+	/// The data that was returned from the call.
+	pub return_data: Vec<u8>,
+	/// The changes made to the state by the call.
+	pub changes: state_machine::OverlayedChanges,
 }
 
 /// Polkadot Client
@@ -72,25 +80,27 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
-	pub fn storage(&self, hash: &block::HeaderHash, address: &Address, key: &H256) -> error::Result<StorageData> {
+	pub fn storage(&self, hash: &block::HeaderHash, key: &StorageKey) -> error::Result<StorageData> {
 		self.state_at(hash)?
-			.storage(address, key)
+			.storage(&key.0)
 			.map(|x| StorageData(x.to_vec()))
 			.chain_err(|| error::ErrorKind::Backend)
 	}
 
 	/// Execute a call to a contract on top of state in a block of given hash.
-	pub fn call(&self, hash: &block::HeaderHash, address: &Address, method: &str, call_data: &CallData) -> error::Result<OutData> {
+	///
+	/// No changes are made.
+	pub fn call(&self, hash: &block::HeaderHash, method: &str, call_data: &CallData) -> error::Result<CallResult> {
 		let state = self.state_at(hash)?;
 		let mut changes = state_machine::OverlayedChanges::default();
 
-		Ok(state_machine::execute(
+		let _ = state_machine::execute(
 			&state,
 			&mut changes,
 			&self.executor,
-			address,
 			method,
 			call_data,
-		)?)
+		)?;
+		Ok(CallResult { return_data: vec![], changes })
 	}
 }

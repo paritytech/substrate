@@ -1,0 +1,33 @@
+[[package]]
+name = "pwasm-alloc"
+version = "0.1.0"
+dependencies = [
+ "pwasm-libc 0.1.0",
+]
+
+[[package]]
+name = "pwasm-libc"
+version = "0.1.0"
+
+[[package]]
+name = "runtime-polkadot"
+version = "0.1.0"
+dependencies = [
+ "runtime-support 0.1.0",
+]
+
+[[package]]
+name = "runtime-support"
+version = "0.1.0"
+dependencies = [
+ "pwasm-alloc 0.1.0",
+ "pwasm-libc 0.1.0",
+]
+
+[[package]]
+name = "runtime-test"
+version = "0.1.0"
+dependencies = [
+ "runtime-support 0.1.0",
+]
+

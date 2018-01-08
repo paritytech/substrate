@@ -1,0 +1,8 @@
+[workspace]
+members = [
+	"test",
+	"polkadot",
+]
+
+[profile.release]
+panic = "abort"
