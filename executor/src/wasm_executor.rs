@@ -110,12 +110,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.heap.deallocate(addr);
 		println!("free {}", addr)
 	},
-	set_storage(key_data: *const u8, key_len: i32, value_data: *const u8, value_len: i32) => {
+	ext_set_storage(key_data: *const u8, key_len: i32, value_data: *const u8, value_len: i32) => {
 		if let (Ok(key), Ok(value)) = (this.memory.get(key_data, key_len as usize), this.memory.get(value_data, value_len as usize)) {
 			this.ext.set_storage(key, value);
 		}
 	},
-	get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8 => {
+	ext_get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8 => {
 		let (offset, written) = if let Ok(key) = this.memory.get(key_data, key_len as usize) {
 			if let Ok(value) = this.ext.storage(&key) {
 				let offset = this.heap.allocate(value.len() as u32) as u32;

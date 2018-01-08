@@ -7,5 +7,4 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-pwasm-libc = { path = "../pwasm-libc", version = "0.1" }
-pwasm-alloc = { path = "../pwasm-alloc", version = "0.1" }
+runtime-support = { path = "../support", version = "0.1" }
