@@ -3,9 +3,9 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 #![feature(alloc)]
-
 extern crate alloc;
 use alloc::vec::Vec;
+use core::mem;
 
 extern crate pwasm_libc;
 extern crate pwasm_alloc;
@@ -33,22 +33,18 @@ pub fn storage(key: &[u8]) -> Vec<u8> {
 	}
 }
 
-pub trait IsValue {
-	const value: usize;
-}
-
-pub struct Value20; impl IsValue for Value20 { const value = 20usize; }
-pub struct Value32; impl IsValue for Value32 { const value = 32usize; }
-pub struct Value64; impl IsValue for Value64 { const value = 64usize; }
-pub struct Value65; impl IsValue for Value65 { const value = 65usize; }
-
-pub fn storage_into<T: IsValue>(key: &[u8]) -> Option<[u8; T::value]> {
-	let mut result = [0u8; T::value];
-	let written = unsafe {
-		ext_get_storage_into(&key[0], key.len() as u32, &result[0], result.len())
-	};
+pub fn storage_into<T: Sized>(key: &[u8]) -> Option<T> {
+	let mut result: T;
+	let size = mem::size_of::<T>();
+	let mut written;
+	unsafe {
+		result = mem::uninitialized();
+		let result_as_byte_blob = mem::transmute::<*mut T, *mut u8>(&mut result);
+		written = ext_get_storage_into(&key[0], key.len() as u32, result_as_byte_blob, size as u32) as usize;
+	}
+	// Only return a fully written value.
 	match written {
-		T::value => Some(result),
+		size => Some(result),
 		_ => None,
 	}
 }
@@ -93,18 +89,20 @@ pub fn print<T: Printable + Sized>(value: T) {
 }
 
 #[macro_export]
-macro_rules! impl_stub {
-	($name:ident) => {
+macro_rules! impl_stubs {
+	( $( $name:ident ),* ) => {
 		pub mod _internal {
-			#[no_mangle]
-			pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
-				let input = unsafe {
-					super::alloc::vec::Vec::from_raw_parts(input_data, input_len, input_len)
-				};
+			$(
+				#[no_mangle]
+				pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
+					let input = unsafe {
+						super::alloc::vec::Vec::from_raw_parts(input_data, input_len, input_len)
+					};
 
-				let output = super::$name(input);
-				&output[0] as *const u8 as u64 + ((output.len() as u64) << 32)
-			}
+					let output = super::$name(input);
+					&output[0] as *const u8 as u64 + ((output.len() as u64) << 32)
+				}
+			)*
 		}
 	}
 }

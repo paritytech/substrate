@@ -8,75 +8,54 @@ use alloc::vec::Vec;
 
 #[macro_use]
 extern crate runtime_support;
-use runtime_support::{set_storage, storage, storage_into, print, Value20};
-
-/*
-use std::sync::{rc, RefCell, Once, ONCE_INIT};
-use std::mem;
-
-#[derive(Clone)]
-struct SingletonReader {
-	inner: Rc<RefCell<Environment>>,
-}
-
-fn singleton() -> SingletonReader {
-	// Initialize it to a null value
-	static mut SINGLETON: *const SingletonReader = 0 as *const SingletonReader;
-	static ONCE: Once = ONCE_INIT;
-
-	unsafe {
-		ONCE.call_once(|| {
-			// Make it
-			let singleton = SingletonReader {
-				inner: Rc::new(RefCell::new(Default::default())),
-			};
-
-			// Put it in the heap so it can outlive this call
-			SINGLETON = mem::transmute(Box::new(singleton));
-		});
-
-		// Now we give out a copy of the data that is safe to use concurrently.
-		(*SINGLETON).clone()
-	}
-}
-*/
+use runtime_support::{set_storage, storage, storage_into};
 
 /// The hash of an ECDSA pub key which is used to identify an external transactor.
-type AccountID = [u8; 32];
+pub type AccountID = [u8; 32];
 /// The ECDSA pub key of an authority. This is what the external environment/consensus algorithm
 /// refers to as a "authority".
-type SessionKey = [u8; 65];
-type Balance = u64;
-type ChainID = u64;
-type Hash = [u8; 32];
-type BlockNumber = u64;
-/// A proportion (rational number).
-struct Proportion { nom: u64, denom: u64, };
-type Timestamp = u64;
-type TxOrder = u64;
+pub type SessionKey = AccountID;
+pub type Balance = u64;
+pub type ChainID = u64;
+pub type Hash = [u8; 32];
+pub type BlockNumber = u64;
+pub type Timestamp = u64;
+pub type TxOrder = u64;
 
-struct Digest {
-	logs: Vec<Vec<u8>>,
+/// The functions that a transaction can call (and be dispatched to).
+pub enum Function {
+	StakingStake(),
+	StakingUnstake(),
+	ConsensusSetSessionKey(SessionKey),
 }
 
-struct Header {
-	parent_hash: Hash,
-	number: BlockNumber,
-	state_root: Hash,
-	transaction_root: Hash,
-	digest: Digest,
+impl Function {
+	/// Dispatch the function.
+	pub fn dispatch(self) -> Vec<u8> { unimplemented!() }
 }
 
-struct Transaction {
-	senders: Vec<AccountID>,
-	function_name: String,
-	input_data: Vec<u8>,
-	nonce: TxOrder,
+pub struct Digest {
+	pub logs: Vec<Vec<u8>>,
 }
 
-struct Block {
-	header: Header,
-	transactions: Vec<Transaction>,
+pub struct Header {
+	pub parent_hash: Hash,
+	pub number: BlockNumber,
+	pub state_root: Hash,
+	pub transaction_root: Hash,
+	pub digest: Digest,
+}
+
+pub struct Transaction {
+	pub senders: Vec<AccountID>,
+	pub function: Function,
+	pub input_data: Vec<u8>,
+	pub nonce: TxOrder,
+}
+
+pub struct Block {
+	pub header: Header,
+	pub transactions: Vec<Transaction>,
 }
 
 impl Header {
@@ -97,20 +76,57 @@ impl Block {
 	}
 }
 
+/*
+use std::sync::{rc, RefCell, Once, ONCE_INIT};
+use std::mem;
+
+#[derive(Default)]
+struct Environment {
+	header: Option<Header>,
+	current_user: Option<AccountID>,
+}
+
+#[derive(Clone)]
+struct EnvironmentHolder {
+	inner: Rc<RefCell<Environment>>,
+}
+
+fn get_environment() -> EnvironmentHolder {
+	// Initialize it to a null value
+	static mut SINGLETON: *const EnvironmentHolder = 0 as *const EnvironmentHolder;
+	static ONCE: Once = ONCE_INIT;
+
+	unsafe {
+		ONCE.call_once(|| {
+			// Make it
+			let singleton = EnvironmentHolder {
+				inner: Rc::new(RefCell::new(Default::default())),
+			};
+
+			// Put it in the heap so it can outlive this call
+			SINGLETON = mem::transmute(Box::new(singleton));
+		});
+
+		// Now we give out a copy of the data that is safe to use concurrently.
+		(*SINGLETON).clone()
+	}
+}
+*/
+
 // TODO: include RLP implementation
 // TODO: add keccak256 (or some better hashing scheme) & ECDSA-recover (or some better sig scheme)
 
-impl_stub!(execute_block);
 fn execute_block(_input: Vec<u8>) -> Vec<u8> {
 	let block = Block::from_rlp(&_input);
 	environment::execute_block(&block)
 }
 
-impl_stub!(execute_transaction);
 fn execute_transaction(_input: Vec<u8>) -> Vec<u8> {
 	let tx = Transaction::from_rlp(&_input);
 	environment::execute_transaction(&tx)
 }
+
+impl_stubs!(execute_block, execute_transaction);
 
 /// The current relay chain identifier.
 fn chain_id() -> ChainID {
@@ -119,6 +135,8 @@ fn chain_id() -> ChainID {
 }
 
 mod environment {
+	use super::*;
+
 	/// The current block number being processed. Set by `execute_block`.
 	pub fn block_number() -> BlockNumber { unimplemented!() }
 
@@ -163,6 +181,8 @@ mod environment {
 }
 
 mod consensus {
+	use super::*;
+
 	fn value_vec(mut value: usize, initial: Vec<u8>) -> Vec<u8> {
 		let mut acc = initial;
 		while value > 0 {
@@ -177,11 +197,11 @@ mod consensus {
 	}
 
 	fn authority(index: usize) -> AccountID {
-		storage_into::<Value20>(&value_vec(index, b"\0authority".to_vec()))
+		storage_into(&value_vec(index, b"\0authority".to_vec())).unwrap()
 	}
 
 	fn set_authority_count(count: usize) {
-		(count..authority_count()).for_each(|i| set_authority(i, &[]));
+		(count..authority_count()).for_each(|i| set_authority(i, SessionKey::default()));
 		set_storage(b"\0authority_count", &value_vec(count, Vec::new()));
 	}
 
@@ -191,7 +211,7 @@ mod consensus {
 
 	/// Get the current set of authorities. These are the session keys.
 	pub fn authorities() -> Vec<AccountID> {
-		(0..authority_count()).into_iter().map(authority).map.collect()
+		(0..authority_count()).into_iter().map(authority).collect()
 	}
 
 	/// Set the current set of authorities' session keys.
@@ -199,7 +219,7 @@ mod consensus {
 	/// Called by `next_session` only.
 	fn set_authorities(authorities: &[AccountID]) {
 		set_authority_count(authorities.len());
-		authorities.iter().enumerate().for_each(|(v, i)| set_authority(v, i));
+		authorities.iter().enumerate().for_each(|(v, &i)| set_authority(v, i));
 	}
 
 	/// Get the current set of validators. These are the long-term identifiers for the validators
@@ -214,9 +234,6 @@ mod consensus {
 	pub fn set_validators(_new: &[AccountID]) {
 		unimplemented!()
 	}
-
-	/// Flush out any statistics.
-	pub fn flush_statistics() -> Statistics { unimplemented!() }
 
 	/// Sets the session key of `_validator` to `_session`. This doesn't take effect until the next
 	/// session.
@@ -240,6 +257,8 @@ mod consensus {
 }
 
 mod staking {
+	use super::*;
+
 	/// The length of a staking era in blocks.
 	fn era_length() -> BlockNumber { unimplemented!() }
 
@@ -252,12 +271,12 @@ mod staking {
 	fn balance(_who: AccountID) -> Balance { unimplemented!() }
 
 	/// Transfer some unlocked staking balance to another staker.
-	fn transfer_stake(_who: AccountID, dest: AccountID, value: Balance) { unimplemented!() }
+	fn transfer_stake(_who: AccountID, _dest: AccountID, _value: Balance) { unimplemented!() }
 
 	/// Declare the desire to stake.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn stake(minimum_era_return: Proportion) { unimplemented!() }
+	fn stake() { unimplemented!() }
 
 	/// Retract the desire to stake.
 	///
@@ -266,23 +285,27 @@ mod staking {
 
 	/// Hook to be called prior to transaction processing.
 	pub fn pre_transactions() {
-		conensus::pre_transactions();
+		consensus::pre_transactions();
 	}
 
 	/// Hook to be called after to transaction processing.
 	pub fn post_transactions() {
 		// TODO: check block number and call next_era if necessary.
-		conensus::post_transactions();
+		consensus::post_transactions();
 	}
 }
 
 mod authentication {
-	fn validate_signature(self, tx: Transaction) -> ( AccountID, TxOrder );
-	fn nonce(self, id: AccountID) -> TxOrder;
-	fn authenticate(mut self, tx: Transaction) -> AccountID;
+	use super::*;
+
+	fn validate_signature(_tx: Transaction) -> ( AccountID, TxOrder ) { unimplemented!() }
+	fn nonce(_id: AccountID) -> TxOrder { unimplemented!() }
+	fn authenticate(_tx: Transaction) -> AccountID { unimplemented!() }
 }
 
 mod timestamp {
+	use super::*;
+
 	fn timestamp() -> Timestamp { unimplemented!() }
-	fn set_timestamp(Timestamp) { unimplemented!() }
+	fn set_timestamp(_now: Timestamp) { unimplemented!() }
 }
