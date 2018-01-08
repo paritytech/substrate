@@ -53,7 +53,7 @@ pub fn set_authorities(authorities: &[&[u8]]) {
 	authorities.iter().enumerate().for_each(|(v, i)| set_authority(v, i));
 }
 
-impl_stub!(test_data_in);
+impl_stubs!(test_data_in);
 fn test_data_in(input: Vec<u8>) -> Vec<u8> {
 	print(b"set_storage" as &[u8]);
 	set_storage(b"input", &input);
