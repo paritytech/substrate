@@ -500,6 +500,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "native-runtime"
+version = "0.1.0"
+dependencies = [
+ "runtime-support 0.1.0",
+]
+
+[[package]]
 name = "net2"
 version = "0.2.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -807,6 +814,10 @@ dependencies = [
  "lazy_static 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "runtime-support"
+version = "0.1.0"
 
 [[package]]
 name = "rustc-demangle"

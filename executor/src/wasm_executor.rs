@@ -136,7 +136,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			} else { 0 }
 		} else { 0 }
 	},
-	ext_deposit_log(_log_data: *const u8, _log_len: u32) {
+	ext_deposit_log(_log_data: *const u8, _log_len: u32) => {
 		unimplemented!()
 	}
 	=> <'e, E: Externalities + 'e>
@@ -175,8 +175,8 @@ impl CodeExecutor for WasmExecutor {
 		let returned = program
 				.params_with_external("env", &mut fec)
 				.map(|p| p
-					.add_argument(I32(offset as u32))
-					.add_argument(I32(size as u32)))
+					.add_argument(I32(offset as i32))
+					.add_argument(I32(size as i32)))
 			.and_then(|p| module.execute_export(method, p))
 			.map_err(|_| -> Error { ErrorKind::Runtime.into() })?;
 
@@ -233,8 +233,8 @@ mod tests {
 			let returned = program
 					.params_with_external("env", &mut fec)
 					.map(|p| p
-						.add_argument(I32(offset as u32))
-						.add_argument(I32(size as u32)))
+						.add_argument(I32(offset as i32))
+						.add_argument(I32(size as i32)))
 				.and_then(|p| module.execute_export("test_data_in", p))
 				.map_err(|_| -> Error { ErrorKind::Runtime.into() }).expect("function should be callable");
 
