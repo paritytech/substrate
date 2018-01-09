@@ -7,7 +7,10 @@
 //#[macro_use]
 extern crate alloc;
 pub use alloc::vec::Vec;
-use core::mem;
+pub use alloc::boxed::Box;
+pub use alloc::rc::Rc;
+pub use core::mem::{transmute, size_of, uninitialized};
+pub use core::cell::{RefCell, Ref, RefMut};
 
 extern crate pwasm_libc;
 extern crate pwasm_alloc;
@@ -37,11 +40,11 @@ pub fn storage(key: &[u8]) -> Vec<u8> {
 
 pub fn storage_into<T: Sized>(key: &[u8]) -> Option<T> {
 	let mut result: T;
-	let size = mem::size_of::<T>();
+	let size = size_of::<T>();
 	let written;
 	unsafe {
-		result = mem::uninitialized();
-		let result_as_byte_blob = mem::transmute::<*mut T, *mut u8>(&mut result);
+		result = uninitialized();
+		let result_as_byte_blob = transmute::<*mut T, *mut u8>(&mut result);
 		written = ext_get_storage_into(&key[0], key.len() as u32, result_as_byte_blob, size as u32) as usize;
 	}
 	// Only return a fully written value.

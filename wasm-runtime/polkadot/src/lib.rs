@@ -3,7 +3,8 @@
 
 #[macro_use]
 extern crate runtime_support;
-use runtime_support::{set_storage, storage, storage_into, Vec};
+use runtime_support::{set_storage, storage, storage_into, Vec, size_of};
+use runtime_support::{Rc, RefCell, transmute, Box};
 
 /// The hash of an ECDSA pub key which is used to identify an external transactor.
 pub type AccountID = [u8; 32];
@@ -19,20 +20,36 @@ pub type TxOrder = u64;
 
 /// The functions that a transaction can call (and be dispatched to).
 pub enum Function {
-	StakingStake(),
-	StakingUnstake(),
-	ConsensusSetSessionKey(SessionKey),
+	StakingStake,
+	StakingUnstake,
+	ConsensusSetSessionKey,
 }
 
 impl Function {
 	/// Dispatch the function.
-	pub fn dispatch(self) -> Vec<u8> { unimplemented!() }
+	pub fn dispatch(&self, transactor: &AccountID, params: &[u8]) {
+		match *self {
+			Function::StakingStake => {
+				staking::stake(transactor);
+			}
+			Function::StakingUnstake => {
+				staking::unstake(transactor);
+			}
+			Function::ConsensusSetSessionKey => {
+				let mut session = AccountID::default();
+				session.copy_from_slice(&params[0..size_of::<AccountID>()]);
+				consensus::set_session_key(transactor, session);
+			}
+		}
+	}
 }
 
+#[derive(Clone)]
 pub struct Digest {
 	pub logs: Vec<Vec<u8>>,
 }
 
+#[derive(Clone)]
 pub struct Header {
 	pub parent_hash: Hash,
 	pub number: BlockNumber,
@@ -42,7 +59,7 @@ pub struct Header {
 }
 
 pub struct Transaction {
-	pub senders: Vec<AccountID>,
+	pub signed: AccountID,
 	pub function: Function,
 	pub input_data: Vec<u8>,
 	pub nonce: TxOrder,
@@ -71,42 +88,28 @@ impl Block {
 	}
 }
 
-/*
-use std::sync::{rc, RefCell, Once, ONCE_INIT};
-use std::mem;
-
 #[derive(Default)]
 struct Environment {
-	header: Option<Header>,
-	current_user: Option<AccountID>,
+	block_number: BlockNumber,
 }
 
-#[derive(Clone)]
-struct EnvironmentHolder {
-	inner: Rc<RefCell<Environment>>,
-}
-
-fn get_environment() -> EnvironmentHolder {
+fn env() -> Rc<RefCell<Environment>> {
 	// Initialize it to a null value
-	static mut SINGLETON: *const EnvironmentHolder = 0 as *const EnvironmentHolder;
-	static ONCE: Once = ONCE_INIT;
+	static mut SINGLETON: *const Rc<RefCell<Environment>> = 0 as *const Rc<RefCell<Environment>>;
 
 	unsafe {
-		ONCE.call_once(|| {
+		if SINGLETON == 0 as *const Rc<RefCell<Environment>> {
 			// Make it
-			let singleton = EnvironmentHolder {
-				inner: Rc::new(RefCell::new(Default::default())),
-			};
+			let singleton: Rc<RefCell<Environment>> = Rc::new(RefCell::new(Default::default()));
 
 			// Put it in the heap so it can outlive this call
-			SINGLETON = mem::transmute(Box::new(singleton));
-		});
+			SINGLETON = transmute(Box::new(singleton));
+		}
 
 		// Now we give out a copy of the data that is safe to use concurrently.
 		(*SINGLETON).clone()
 	}
 }
-*/
 
 // TODO: include RLP implementation
 // TODO: add keccak256 (or some better hashing scheme) & ECDSA-recover (or some better sig scheme)
@@ -133,20 +136,26 @@ mod environment {
 	use super::*;
 
 	/// The current block number being processed. Set by `execute_block`.
-	pub fn block_number() -> BlockNumber { unimplemented!() }
+	pub fn block_number() -> BlockNumber { let e = env(); let eb = e.borrow(); eb.block_number }
 
 	/// Get the block hash of a given block.
 	pub fn block_hash(_number: BlockNumber) -> Hash { unimplemented!() }
 
-	/// Get the current user's ID
-	pub fn current_user() -> AccountID { unimplemented!() }
-
 	pub fn execute_block(_block: &Block) -> Vec<u8> {
-		// TODO: populate environment from header.
+		// populate environment from header.
+		{
+			let e = env();
+			e.borrow_mut().block_number = _block.header.number;
+		}
+
 		staking::pre_transactions();
+
 		// TODO: go through each transaction and use execute_transaction to execute.
+
 		staking::post_transactions();
+
 		// TODO: ensure digest in header is what we expect from transactions.
+
 		Vec::new()
 	}
 
@@ -156,9 +165,9 @@ mod environment {
 		// TODO: ensure signature valid and recover id (use authentication::authenticate)
 		// TODO: ensure target_function valid
 		// TODO: decode parameters
-		// TODO: set `current_user` to the id
-		// TODO: make call
-		// TODO: reset `current_user`
+
+		_tx.function.dispatch(&_tx.signed, &_tx.input_data);
+
 		// TODO: encode any return
 		Vec::new()
 	}
@@ -235,9 +244,9 @@ mod consensus {
 		10
 	}
 
-	/// Sets the session key of `_validator` to `_session`. This doesn't take effect until the next
+	/// Sets the session key of `_transactor` to `_session`. This doesn't take effect until the next
 	/// session.
-	pub fn set_session_key(_validator: AccountID, _session: AccountID) {
+	pub fn set_session_key(_transactor: &AccountID, _session: AccountID) {
 		unimplemented!()
 	}
 
@@ -274,17 +283,17 @@ mod staking {
 	fn balance(_who: AccountID) -> Balance { unimplemented!() }
 
 	/// Transfer some unlocked staking balance to another staker.
-	fn transfer_stake(_who: AccountID, _dest: AccountID, _value: Balance) { unimplemented!() }
+	pub fn transfer_stake(_transactor: AccountID, _dest: AccountID, _value: Balance) { unimplemented!() }
 
-	/// Declare the desire to stake.
+	/// Declare the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn stake() { unimplemented!() }
+	pub fn stake(_transactor: &AccountID) { unimplemented!() }
 
-	/// Retract the desire to stake.
+	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake() { unimplemented!() }
+	pub fn unstake(_transactor: &AccountID) { unimplemented!() }
 
 	/// Hook to be called prior to transaction processing.
 	pub fn pre_transactions() {
