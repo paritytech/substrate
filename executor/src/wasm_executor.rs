@@ -252,8 +252,8 @@ mod tests {
 			b"\0code".to_vec() => b"Hello world".to_vec(),
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"code".to_vec() => b"The code".to_vec(),
-			b"\0validator_count".to_vec() => vec![1],
-			b"\0validator".to_vec() => b"Hello world".to_vec()
+			b"\0authority_count".to_vec() => vec![1],
+			b"\0authority".to_vec() => b"Hello world".to_vec()
 		];
 		assert_eq!(expected, ext.storage);
 	}
