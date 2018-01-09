@@ -5,3 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [features]
 strict = []
+
+[dependencies]
+lazy_static = "1.0.0"
+parking_lot = "0.5"
