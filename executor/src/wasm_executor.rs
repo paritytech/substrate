@@ -217,7 +217,7 @@ mod tests {
 
 		let program = ProgramInstance::new().unwrap();
 
-		let test_module = include_bytes!("../../runtime-wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_module = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
 		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<TestExternalities>::SIGNATURES]).expect("Failed to initialize module");
 
