@@ -75,13 +75,13 @@ macro_rules! reverse_params {
 
 #[macro_export]
 macro_rules! marshall {
-	( $context:ident, $self:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
-		let r : <$returns as $crate::wasm_utils::ConvertibleToWasm>::NativeType = reverse_params!($body, $self, $context, $( $names : $params ),*);
-		Ok(Some({ use $crate::wasm_utils::ConvertibleToWasm; r.to_runtime_value() }))
-	});
 	( $context:ident, $self:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
 		reverse_params!($body, $self, $context, $( $names : $params ),*);
 		Ok(None)
+	});
+	( $context:ident, $self:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
+		let r : <$returns as $crate::wasm_utils::ConvertibleToWasm>::NativeType = reverse_params!($body, $self, $context, $( $names : $params ),*);
+		Ok(Some({ use $crate::wasm_utils::ConvertibleToWasm; r.to_runtime_value() }))
 	})
 }
 

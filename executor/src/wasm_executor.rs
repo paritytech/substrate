@@ -137,7 +137,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		} else { 0 }
 	},
 	ext_deposit_log(_log_data: *const u8, _log_len: u32) => {
-		unimplemented!()
+		// TODO
 	}
 	=> <'e, E: Externalities + 'e>
 );
