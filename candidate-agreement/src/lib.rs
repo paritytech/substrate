@@ -45,13 +45,14 @@ use tokio_timer::Timer;
 
 use table::Table;
 
-pub mod bft;
-pub mod table;
+mod bft;
+mod round_robin;
+mod table;
 
 /// Context necessary for agreement.
 pub trait Context: Send + Clone {
 	/// A validator ID
-	type ValidatorId: Debug + Hash + Eq + Clone;
+	type ValidatorId: Debug + Hash + Eq + Clone + Ord;
 	/// The digest (hash or other unique attribute) of a candidate.
 	type Digest: Debug + Hash + Eq + Clone;
 	/// The group ID type
@@ -412,6 +413,7 @@ pub fn agree<C: Context + 'static>(params: AgreementParams<C>)
 		in_out.map_err(|_| Error::IoTerminated),
 		out_in.sink_map_err(|_| Error::IoTerminated),
 	);
+
 	Agreement {
 		bft: Box::new(agreement),
 		input: in_in,
