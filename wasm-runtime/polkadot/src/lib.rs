@@ -1,14 +1,9 @@
-#![no_std]
-#![feature(lang_items)]
+#![cfg_attr(feature = "without-std", no_std)]
 #![cfg_attr(feature = "strict", deny(warnings))]
-
-#![feature(alloc)]
-extern crate alloc;
-use alloc::vec::Vec;
 
 #[macro_use]
 extern crate runtime_support;
-use runtime_support::{set_storage, storage, storage_into};
+use runtime_support::{set_storage, storage, storage_into, Vec};
 
 /// The hash of an ECDSA pub key which is used to identify an external transactor.
 pub type AccountID = [u8; 32];
@@ -116,12 +111,12 @@ fn get_environment() -> EnvironmentHolder {
 // TODO: include RLP implementation
 // TODO: add keccak256 (or some better hashing scheme) & ECDSA-recover (or some better sig scheme)
 
-fn execute_block(_input: Vec<u8>) -> Vec<u8> {
+pub fn execute_block(_input: Vec<u8>) -> Vec<u8> {
 	let block = Block::from_rlp(&_input);
 	environment::execute_block(&block)
 }
 
-fn execute_transaction(_input: Vec<u8>) -> Vec<u8> {
+pub fn execute_transaction(_input: Vec<u8>) -> Vec<u8> {
 	let tx = Transaction::from_rlp(&_input);
 	environment::execute_transaction(&tx)
 }
@@ -235,6 +230,11 @@ mod consensus {
 		unimplemented!()
 	}
 
+	/// The number of blocks in each session.
+	pub fn session_length() -> BlockNumber {
+		10
+	}
+
 	/// Sets the session key of `_validator` to `_session`. This doesn't take effect until the next
 	/// session.
 	pub fn set_session_key(_validator: AccountID, _session: AccountID) {
@@ -260,11 +260,14 @@ mod staking {
 	use super::*;
 
 	/// The length of a staking era in blocks.
-	fn era_length() -> BlockNumber { unimplemented!() }
+	pub fn era_length() -> BlockNumber { sessions_per_era() * consensus::session_length() }
+
+	/// The length of a staking era in sessions.
+	pub fn sessions_per_era() -> BlockNumber { 10 }
 
 	/// The era has changed - enact new staking set.
 	///
-	/// NOTE: This is always a session change.
+	/// NOTE: This always happens on a session change.
 	fn next_era() { unimplemented!() }
 
 	/// The balance of a given account.

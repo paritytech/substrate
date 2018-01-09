@@ -1,10 +1,12 @@
 #![no_std]
 #![feature(lang_items)]
+#![feature(alloc)]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 #![feature(alloc)]
+//#[macro_use]
 extern crate alloc;
-use alloc::vec::Vec;
+pub use alloc::vec::Vec;
 use core::mem;
 
 extern crate pwasm_libc;
@@ -36,16 +38,17 @@ pub fn storage(key: &[u8]) -> Vec<u8> {
 pub fn storage_into<T: Sized>(key: &[u8]) -> Option<T> {
 	let mut result: T;
 	let size = mem::size_of::<T>();
-	let mut written;
+	let written;
 	unsafe {
 		result = mem::uninitialized();
 		let result_as_byte_blob = mem::transmute::<*mut T, *mut u8>(&mut result);
 		written = ext_get_storage_into(&key[0], key.len() as u32, result_as_byte_blob, size as u32) as usize;
 	}
 	// Only return a fully written value.
-	match written {
-		size => Some(result),
-		_ => None,
+	if written == size {
+		Some(result)
+	} else {
+		None
 	}
 }
 
@@ -96,7 +99,7 @@ macro_rules! impl_stubs {
 				#[no_mangle]
 				pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
 					let input = unsafe {
-						super::alloc::vec::Vec::from_raw_parts(input_data, input_len, input_len)
+						$crate::Vec::from_raw_parts(input_data, input_len, input_len)
 					};
 
 					let output = super::$name(input);

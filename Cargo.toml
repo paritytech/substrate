@@ -16,10 +16,11 @@ members = [
 	"primitives",
 	"rpc",
 	"rpc_servers",
+	"native-runtime",
 	"serializer",
 	"state_machine",
 	"validator",
 ]
 exclude = [
-	"runtime"
+	"wasm-runtime"
 ]
