@@ -212,17 +212,6 @@ impl<C: Context> CandidateData<C> {
 		!self.indicated_bad_by.is_empty()
 	}
 
-	/// Get an iterator over those who have indicated this candidate valid.
-	// TODO: impl trait
-	pub fn voted_valid_by<'a>(&'a self) -> Box<Iterator<Item=C::ValidatorId> + 'a> {
-		Box::new(self.validity_votes.iter().filter_map(|(v, vote)| {
-			match *vote {
-				ValidityVote::Issued(_) | ValidityVote::Valid(_) => Some(v.clone()),
-				ValidityVote::Invalid(_) => None,
-			}
-		}))
-	}
-
 	// Candidate data can be included in a proposal
 	// if it has enough validity and availability votes
 	// and no validators have called it bad.
@@ -323,11 +312,6 @@ impl<C: Context> Table<C> {
 		Box::new(self.candidate_votes.values().filter(move |c| c.group_id == group_id))
 	}
 
-	/// Drain all misbehavior observed up to this point.
-	pub fn drain_misbehavior(&mut self) -> HashMap<C::ValidatorId, <C as ResolveMisbehavior>::Misbehavior> {
-		::std::mem::replace(&mut self.detected_misbehavior, HashMap::new())
-	}
-
 	/// Import a signed statement. Signatures should be checked for validity, and the
 	/// sender should be checked to actually be a validator.
 	///
@@ -388,6 +372,11 @@ impl<C: Context> Table<C> {
 		}
 
 		maybe_summary
+	}
+
+	/// Get a candidate by digest.
+	pub fn get_candidate(&self, digest: &C::Digest) -> Option<&C::Candidate> {
+		self.candidate_votes.get(digest).map(|d| &d.candidate)
 	}
 
 	fn note_trace_seen(&mut self, trace: StatementTrace<C::ValidatorId, C::Digest>, known_by: C::ValidatorId) {

@@ -29,6 +29,7 @@
 //!
 //! Groups themselves may be compromised by malicious validators.
 
+#[macro_use]
 extern crate futures;
 extern crate parking_lot;
 extern crate tokio_timer;
@@ -37,6 +38,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::prelude::*;
 use futures::sync::{mpsc, oneshot};
@@ -46,6 +48,7 @@ use tokio_timer::Timer;
 use table::Table;
 
 mod bft;
+mod handle_incoming;
 mod round_robin;
 mod table;
 
@@ -150,6 +153,14 @@ struct TableContext<C: Context> {
 	groups: HashMap<C::GroupId, GroupInfo<C::ValidatorId>>,
 }
 
+impl<C: Context> ::std::ops::Deref for TableContext<C> {
+	type Target = C;
+
+	fn deref(&self) -> &C {
+		&self.context
+	}
+}
+
 impl<C: Context> table::Context for TableContext<C> {
 	type ValidatorId = C::ValidatorId;
 	type Digest = C::Digest;
@@ -182,55 +193,59 @@ impl<C: Context> table::Context for TableContext<C> {
 }
 
 // A shared table object.
-struct SharedTableInner<C: Context + Clone> {
-	context: TableContext<C>,
+struct SharedTableInner<C: Context> {
 	table: Table<TableContext<C>>,
 	awaiting_proposal: Vec<oneshot::Sender<C::Proposal>>,
 }
 
-impl<C: Context + Clone> SharedTableInner<C> {
+impl<C: Context> SharedTableInner<C> {
 	fn import_statement(
 		&mut self,
+		context: &TableContext<C>,
 		statement: <C as TypeResolve>::SignedTableStatement,
 		received_from: Option<C::ValidatorId>
 	) -> Option<table::Summary<C::Digest, C::GroupId>> {
-		self.table.import_statement(&self.context, statement, received_from)
+		self.table.import_statement(context, statement, received_from)
 	}
 
-	fn update_proposal(&mut self) {
+	fn update_proposal(&mut self, context: &TableContext<C>) {
 		if self.awaiting_proposal.is_empty() { return }
-		let proposal_candidates = self.table.proposed_candidates(&self.context);
-		if let Some(proposal) = self.context.context.create_proposal(proposal_candidates) {
+		let proposal_candidates = self.table.proposed_candidates(context);
+		if let Some(proposal) = context.context.create_proposal(proposal_candidates) {
 			for sender in self.awaiting_proposal.drain(..) {
 				let _ = sender.send(proposal.clone());
 			}
 		}
 	}
 
-	fn get_proposal(&mut self) -> oneshot::Receiver<C::Proposal> {
+	fn get_proposal(&mut self, context: &TableContext<C>) -> oneshot::Receiver<C::Proposal> {
 		let (tx, rx) = oneshot::channel();
 		self.awaiting_proposal.push(tx);
-		self.update_proposal();
+		self.update_proposal(context);
 		rx
 	}
 
-	fn proposal_valid(&mut self, proposal: &C::Proposal) -> bool {
-		self.context.context.proposal_valid(proposal, |contained_candidate| {
+	fn proposal_valid(&mut self, context: &TableContext<C>, proposal: &C::Proposal) -> bool {
+		context.context.proposal_valid(proposal, |contained_candidate| {
 			// check that the candidate is valid (has enough votes)
 			let digest = C::candidate_digest(contained_candidate);
-			self.table.candidate_includable(&digest, &self.context)
+			self.table.candidate_includable(&digest, context)
 		})
 	}
 }
 
 /// A shared table object.
 pub struct SharedTable<C: Context> {
+	context: Arc<TableContext<C>>,
 	inner: Arc<Mutex<SharedTableInner<C>>>,
 }
 
 impl<C: Context> Clone for SharedTable<C> {
 	fn clone(&self) -> Self {
-		SharedTable { inner: self.inner.clone() }
+		SharedTable {
+			context: self.context.clone(),
+			inner: self.inner.clone()
+		}
 	}
 }
 
@@ -238,9 +253,9 @@ impl<C: Context> SharedTable<C> {
 	/// Create a new shared table.
 	pub fn new(context: C, groups: HashMap<C::GroupId, GroupInfo<C::ValidatorId>>) -> Self {
 		SharedTable {
+			context: Arc::new(TableContext { context, groups }),
 			inner: Arc::new(Mutex::new(SharedTableInner {
 				table: Table::default(),
-				context: TableContext { context, groups },
 				awaiting_proposal: Vec::new(),
 			}))
 		}
@@ -252,7 +267,7 @@ impl<C: Context> SharedTable<C> {
 		statement: <C as TypeResolve>::SignedTableStatement,
 		received_from: Option<C::ValidatorId>,
 	) -> Option<table::Summary<C::Digest, C::GroupId>> {
-		self.inner.lock().import_statement(statement, received_from)
+		self.inner.lock().import_statement(&*self.context, statement, received_from)
 	}
 
 	/// Import many statements at once.
@@ -266,24 +281,39 @@ impl<C: Context> SharedTable<C> {
 		let mut inner = self.inner.lock();
 
 		iterable.into_iter().filter_map(move |(statement, received_from)| {
-			inner.import_statement(statement, received_from)
+			inner.import_statement(&*self.context, statement, received_from)
 		}).collect()
 	}
 
 	/// Update the proposal sealing.
 	pub fn update_proposal(&self) {
-		self.inner.lock().update_proposal()
+		self.inner.lock().update_proposal(&*self.context)
 	}
 
 	/// Register interest in receiving a proposal when ready.
 	/// If one is ready immediately, it will be provided.
 	pub fn get_proposal(&self) -> oneshot::Receiver<C::Proposal> {
-		self.inner.lock().get_proposal()
+		self.inner.lock().get_proposal(&*self.context)
 	}
 
 	/// Check if a proposal is valid.
 	pub fn proposal_valid(&self, proposal: &C::Proposal) -> bool {
-		self.inner.lock().proposal_valid(proposal)
+		self.inner.lock().proposal_valid(&*self.context, proposal)
+	}
+
+	/// Execute a closure using a specific candidate.
+	///
+	/// Deadlocks if called recursively.
+	pub fn with_candidate<F, U>(&self, digest: &C::Digest, f: F) -> U
+		where F: FnOnce(Option<&C::ParachainCandidate>) -> U
+	{
+		let inner = self.inner.lock();
+		f(inner.table.get_candidate(digest))
+	}
+
+	// Get a handle to the table context.
+	fn context(&self) -> &TableContext<C> {
+		&*self.context
 	}
 }
 
@@ -310,8 +340,7 @@ pub struct BftContext<C: Context> {
 }
 
 impl<C: Context> bft::Context for BftContext<C>
-	where
-		C::Proposal: 'static,
+	where C::Proposal: 'static,
 {
 	type ValidatorId = C::ValidatorId;
 	type Digest = C::Digest;
@@ -358,10 +387,18 @@ impl<C: Context> bft::Context for BftContext<C>
 			.unwrap_or_else(u64::max_value)
 			.saturating_mul(self.round_timeout_multiplier);
 
-		Box::new(self.timer.sleep(::std::time::Duration::from_secs(timeout))
+		Box::new(self.timer.sleep(Duration::from_secs(timeout))
 			.map_err(|_| Error::FaultyTimer))
 	}
 }
+
+/// Unchecked message. These haven't had signature recovery run on them.
+#[derive(Debug, PartialEq, Eq)]
+pub struct UncheckedMessage {
+	/// The data of the message.
+	pub data: Vec<u8>,
+}
+
 
 /// Parameters necessary for agreement.
 pub struct AgreementParams<C: Context> {
@@ -377,31 +414,54 @@ pub struct AgreementParams<C: Context> {
 	pub max_faulty: usize,
 	/// The round timeout multiplier: 2^round_number is multiplied by this.
 	pub round_timeout_multiplier: u64,
+	/// The maximum amount of messages to queue.
+	pub message_buffer_size: usize,
+	/// Interval to attempt forming proposals over.
+	pub form_proposal_interval: Duration,
 }
 
-/// Future and I/O to reach agreement.
-pub struct Agreement<C: bft::Context + 'static> {
-	/// The future holding the actual BFT logic.
-	pub bft: Box<Future<
-		Item=bft::Committed<C::Candidate, C::Digest, C::Signature>,
-		Error=Error,
-	>>,
-	/// The input sink.
-	pub input: mpsc::UnboundedSender<bft::ContextCommunication<C>>,
-	/// The output stream.
-	pub output: mpsc::UnboundedReceiver<bft::ContextCommunication<C>>,
+/// Recovery for messages
+pub trait MessageRecovery<C: Context> {
+	/// Attempt to transform a checked message into an unchecked.
+	fn check_message(&self, UncheckedMessage) -> Option<CheckedMessage<C>>;
+}
+
+/// Recovered and fully checked messages.
+pub enum CheckedMessage<C: Context> {
+	/// Messages meant for the BFT agreement logic.
+	Bft(<C as TypeResolve>::BftCommunication),
+	/// Statements circulating about the table.
+	Table(Vec<<C as TypeResolve>::SignedTableStatement>),
 }
 
 /// Create an agreement future, and I/O streams.
-pub fn agree<C: Context + 'static>(params: AgreementParams<C>)
-	-> Agreement<BftContext<C>>
+pub fn agree<C, I, O, R, E>(params: AgreementParams<C>, net_in: I, net_out: O, recovery: R)
+	-> Box<Future<Item=(),Error=()>>
+	where
+		C: Context + 'static,
+		C::CheckCandidate: IntoFuture<Error=E>,
+		C::CheckAvailability: IntoFuture<Error=E>,
+		I: Stream<Item=(C::ValidatorId, Vec<UncheckedMessage>),Error=E>,
+		O: Sink<SinkItem=CheckedMessage<C>>,
+		R: MessageRecovery<C>,
 {
-	let (in_in, in_out) = mpsc::unbounded();
-	let (out_in, out_out) = mpsc::unbounded();
+	let (bft_in_in, bft_in_out) = mpsc::unbounded();
+	let (bft_out_in, bft_out_out) = mpsc::unbounded::<bft::ContextCommunication<BftContext<C>>>();
+
+	let round_robin = round_robin::RoundRobinBuffer::new(net_in, params.message_buffer_size);
+
+	let round_robin_recovered = round_robin
+		.filter_map(move |(sender, msg)| recovery.check_message(msg).map(move |x| (sender, x)));
+
+	let route_messages_in = handle_incoming::HandleIncoming::new(
+		params.table.clone(),
+		round_robin_recovered,
+		bft_in_in,
+	).map_err(|_| Error::IoTerminated);
 
 	let bft_context = BftContext {
 		context: params.context,
-		table: params.table,
+		table: params.table.clone(),
 		timer: params.timer,
 		round_timeout_multiplier: params.round_timeout_multiplier,
 	};
@@ -410,13 +470,13 @@ pub fn agree<C: Context + 'static>(params: AgreementParams<C>)
 		bft_context,
 		params.nodes,
 		params.max_faulty,
-		in_out.map_err(|_| Error::IoTerminated),
-		out_in.sink_map_err(|_| Error::IoTerminated),
+		bft_in_out.map(bft::ContextCommunication).map_err(|_| Error::IoTerminated),
+		bft_out_in.sink_map_err(|_| Error::IoTerminated),
 	);
 
-	Agreement {
-		bft: Box::new(agreement),
-		input: in_in,
-		output: out_out,
-	}
+	let route_messages_out = futures::future::empty::<(), _>();
+
+	agreement.join(route_messages_in).join(route_messages_out);
+
+	unimplemented!()
 }
