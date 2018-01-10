@@ -699,8 +699,15 @@ impl<C, I, O, E> Future for Agreement<C, I, O>
 /// conclude without having witnessed the conclusion.
 /// In general, this future should be pre-empted by the import of a justification
 /// set for this block height.
-pub fn agree<C: Context, I, O>(context: C, nodes: usize, max_faulty: usize, input: I, output: O)
+pub fn agree<C: Context, I, O, E>(context: C, nodes: usize, max_faulty: usize, input: I, output: O)
 	-> Agreement<C, I, O>
+	where
+		C: Context,
+		C::RoundTimeout: Future<Error=E>,
+		C::CreateProposal: Future<Error=E>,
+		I: Stream<Item=ContextCommunication<C>,Error=E>,
+		O: Sink<SinkItem=ContextCommunication<C>,SinkError=E>,
+		E: From<InputStreamConcluded>,
 {
 	let strategy = Strategy::create(&context, nodes, max_faulty);
 	Agreement {

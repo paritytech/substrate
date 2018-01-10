@@ -24,14 +24,10 @@ use std::collections::{Bound, BTreeMap, VecDeque};
 use futures::prelude::*;
 use futures::stream::Fuse;
 
-/// Unchecked message. These haven't had signature recovery run on them.
-#[derive(Debug, PartialEq, Eq)]
-pub struct UncheckedMessage {
-	/// The data of the message.
-	pub data: Vec<u8>,
-}
+use super::UncheckedMessage;
 
 /// Implementation of the round-robin buffer for incoming messages.
+#[derive(Debug)]
 pub struct RoundRobinBuffer<V: Ord + Eq, S> {
 	buffer: BTreeMap<V, VecDeque<UncheckedMessage>>,
 	last_processed_from: Option<V>,
