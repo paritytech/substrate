@@ -14,7 +14,7 @@ use std::fmt;
 // TODO: use the real error, not NoError.
 
 #[derive(Debug)]
-struct NoError;
+pub struct NoError;
 impl fmt::Display for NoError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "") }
 }
@@ -55,6 +55,13 @@ pub fn set_storage(_key: &[u8], _value: &[u8]) {
 	);
 }
 
+/// Execute the given closure with global function available whose functionality routes into the
+/// externalities `ext`. Forwards the value that the closure returns.
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Error=NoError>, f: F) -> R {
+	let mut h = ExternalitiesHolder { ext };
+	ext::using(&mut h, f)
+}
+
 #[macro_export]
 macro_rules! impl_stubs {
 	($( $name:ident ),*) => {}
@@ -90,28 +97,23 @@ mod tests {
 	#[test]
 	fn storage_works() {
 		let mut t = TestExternalities { storage: map![], };
-
-		{
-			let mut h = ExternalitiesHolder { ext: &mut t, };
-			ext::using(&mut h, || {
-				assert_eq!(storage(b"hello"), b"".to_vec());
-				set_storage(b"hello", b"world");
-				assert_eq!(storage(b"hello"), b"world".to_vec());
-				assert_eq!(storage(b"foo"), b"".to_vec());
-				set_storage(b"foo", &[1, 2, 3][..]);
-				assert_eq!(storage_into::<[u8; 3]>(b"foo"), Some([1, 2, 3]));
-				assert_eq!(storage_into::<[u8; 3]>(b"hello"), None);
-			});
-		}
+		assert!(with_externalities(&mut t, || {
+			assert_eq!(storage(b"hello"), b"".to_vec());
+			set_storage(b"hello", b"world");
+			assert_eq!(storage(b"hello"), b"world".to_vec());
+			assert_eq!(storage(b"foo"), b"".to_vec());
+			set_storage(b"foo", &[1, 2, 3][..]);
+			assert_eq!(storage_into::<[u8; 3]>(b"foo"), Some([1, 2, 3]));
+			assert_eq!(storage_into::<[u8; 3]>(b"hello"), None);
+			true
+		}));
 
 		t.storage = map![b"foo".to_vec() => b"bar".to_vec()];
 
-		{
-			let mut h = ExternalitiesHolder { ext: &mut t, };
-			ext::using(&mut h, || {
-				assert_eq!(storage(b"hello"), b"".to_vec());
-				assert_eq!(storage(b"foo"), b"bar".to_vec());
-			});
-		}
+		assert!(!with_externalities(&mut t, || {
+			assert_eq!(storage(b"hello"), b"".to_vec());
+			assert_eq!(storage(b"foo"), b"bar".to_vec());
+			false
+		}));
 	}
 }

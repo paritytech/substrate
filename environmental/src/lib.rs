@@ -17,21 +17,21 @@
 use std::cell::RefCell;
 use std::thread::LocalKey;
 
-pub fn using_environment<'a, T: 'a, S, F: FnOnce()>(
+pub fn using_environment<'a, T: 'a, R, S, F: FnOnce() -> R>(
 	global: &'static LocalKey<RefCell<*mut S>>,
 	protected: &'a mut T,
 	f: F
-) {
+) -> R {
 	global.with(|r| *r.borrow_mut() = protected as *mut T as *mut S);
-	f();
+	let r = f();
 	global.with(|r| *r.borrow_mut() = 0 as *mut S);
+	r
 }
 
 pub fn with_environment<'r, R, S, T: 'r, F: FnOnce(&'r mut T) -> R>(
 	global: &'static LocalKey<RefCell<*mut S>>,
 	mutator: F,
 ) -> Option<R> {
-
 	global.with(|r| {
 		let br = r.borrow_mut();
 		if *br != 0 as *mut S {
@@ -63,8 +63,11 @@ macro_rules! declare_generic_environment {
 
 			decl_environment!(GLOBAL: $t<'static> );
 
-			pub fn using<'a: 'b, 'b, F: FnOnce(), T: 'a>(protected: &'b mut T, f: F) {
-				$crate::using_environment(&GLOBAL, protected, f);
+			pub fn using<'a: 'b, 'b, R, F: FnOnce() -> R, T: 'a>(
+				protected: &'b mut T,
+				f: F
+			) -> R {
+				$crate::using_environment(&GLOBAL, protected, f)
 			}
 
 			pub fn with<R, F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>) -> R>(
@@ -90,10 +93,13 @@ macro_rules! declare_simple_environment {
 		mod $name {
 			use super::*;
 
-			decl_environment!(GLOBAL: $t );
+			decl_environment!(GLOBAL: $t);
 
-			pub fn using<'a: 'b, 'b, F: FnOnce(), T: 'a>(protected: &'b mut T, f: F) {
-				$crate::using_environment(&GLOBAL, protected, f);
+			pub fn using<'a: 'b, 'b, R, F: FnOnce() -> R, T: 'a>(
+				protected: &'b mut T,
+				f: F
+			) -> R {
+				$crate::using_environment(&GLOBAL, protected, f)
 			}
 
 			pub fn with<R, F: for<'r> FnOnce(&'r mut $t -> R)>(
@@ -112,3 +118,7 @@ macro_rules! declare_simple_environment {
 		}
 	}
 }
+
+// TODO: Docs
+// TODO: Example
+// TODO: Tests
