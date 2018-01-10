@@ -14,8 +14,37 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::cell::RefCell;
+//! Safe global references to stack variables.
+//!
+//! Set up a global reference with declare_simple_environment! macro giving it a name and type.
+//! Use the `using` function scoped under its name to name a reference and call a function that
+//! takes no parameters yet can access said reference through the similarly place `with` function.
+//!
+//! # Examples
+//!
+//! ```
+//! #[macro_use] extern crate environmental;
+//! // create a place for the global reference to exist.
+//! declare_simple_environment!(counter: u32);
+//! fn stuff() {
+//!   // do some stuff, accessing the named reference as desired.
+//!   counter::with(|value| *value += 1);
+//! }
+//! fn main() {
+//!   // declare a stack variable of the same type as our global declaration.
+//!   let mut local = 41u32;
+//!   // call stuff, setting up our `counter` environment as a refrence to our local counter var.
+//!   counter::using(&mut local, stuff);
+//!   println!("The answer is {:?}", local); // will print 42!
+//!   stuff();	// safe! doesn't do anything.
+//! }
+//! ```
+
+
+pub use std::cell::RefCell;
 use std::thread::LocalKey;
+
+pub fn test_me() { panic!("Hello") }
 
 pub fn using_environment<'a, T: 'a, R, S, F: FnOnce() -> R>(
 	global: &'static LocalKey<RefCell<*mut S>>,
@@ -24,7 +53,7 @@ pub fn using_environment<'a, T: 'a, R, S, F: FnOnce() -> R>(
 ) -> R {
 	// store the `protected` reference as a pointer so we can provide it to logic running within
 	// `f`.
-	// while re record this pointer (while it's non-zero) we guarantee:
+	// while we record this pointer (while it's non-zero) we guarantee:
 	// - it will only be used once at any time (no reentrancy);
 	// - that no other thread will use it; and
 	// - that we do not use the original mutating reference while the pointer.
@@ -62,7 +91,7 @@ pub fn with_environment<'r, R, S, T: 'r, F: FnOnce(&'r mut T) -> R>(
 macro_rules! decl_environment {
 	($name:ident : $t:ty) => {
 		thread_local! {
-			static $name: std::cell::RefCell<*mut $t> = std::cell::RefCell::new(0 as *mut $t);
+			static $name: $crate::RefCell<*mut $t> = $crate::RefCell::new(0 as *mut $t);
 		}
 	}
 }
@@ -71,6 +100,7 @@ macro_rules! decl_environment {
 macro_rules! declare_generic_environment {
 	($name:ident : $t:tt) => {
 		mod $name {
+			#[allow(unused_imports)]
 			use super::*;
 
 			decl_environment!(GLOBAL: $t<'static> );
@@ -103,6 +133,7 @@ macro_rules! declare_generic_environment {
 macro_rules! declare_simple_environment {
 	($name:ident : $t:tt) => {
 		mod $name {
+			#[allow(unused_imports)]
 			use super::*;
 
 			decl_environment!(GLOBAL: $t);
@@ -114,14 +145,14 @@ macro_rules! declare_simple_environment {
 				$crate::using_environment(&GLOBAL, protected, f)
 			}
 
-			pub fn with<R, F: for<'r> FnOnce(&'r mut $t -> R)>(
+			pub fn with<R, F: for<'r> FnOnce(&'r mut $t) -> R>(
 				f: F
 			) -> Option<R> {
 				let dummy = ();
 				with_closed(f, &dummy)
 			}
 
-			fn with_closed<'d: 'r, 'r, R, F: FnOnce(&'r mut $t -> R)>(
+			fn with_closed<'d: 'r, 'r, R, F: FnOnce(&'r mut $t) -> R>(
 				f: F,
 				_dummy: &'d (),
 			) -> Option<R> {
@@ -134,3 +165,23 @@ macro_rules! declare_simple_environment {
 // TODO: Docs
 // TODO: Example
 // TODO: Tests
+
+#[cfg(test)]
+mod tests {
+	declare_simple_environment!(counter: u32);
+
+	fn stuff() {
+		// do some stuff, accessing the named reference as desired.
+		counter::with(|value| *value += 1);
+	}
+
+	#[test]
+	fn simple_environment_works() {
+		// declare a stack variable of the same type as our global declaration.
+		let mut local = 41u32;
+		// call stuff, setting up our `counter` environment as a refrence to our local counter var.
+		counter::using(&mut local, stuff);
+		println!("The answer is {:?}", local); // will print 42!
+		stuff();	// safe! doesn't do anything.
+	}
+}
