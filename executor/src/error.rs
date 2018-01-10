@@ -42,5 +42,23 @@ error_chain! {
 			description("externalities failure"),
 			display("Externalities error: {}", e),
 		}
+
+		/// Invalid index.
+		InvalidIndex {
+			description("index given was not in range"),
+			display("Invalid index provided"),
+		}
+
+		/// Invalid return type.
+		InvalidReturn {
+			description("u64 was not returned"),
+			display("Invalid type returned (should be u64)"),
+		}
+
+		/// Runtime failed.
+		Runtime {
+			description("runtime failure"),
+			display("Runtime error"),
+		}
 	}
 }
