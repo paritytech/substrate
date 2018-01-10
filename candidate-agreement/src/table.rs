@@ -69,7 +69,7 @@ pub trait Context {
 }
 
 /// Statements circulated among peers.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Statement<C, D> {
 	/// Broadcast by a validator to indicate that this is his candidate for
 	/// inclusion.
@@ -88,7 +88,7 @@ pub enum Statement<C, D> {
 }
 
 /// A signed statement.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct SignedStatement<C, D, V, S> {
 	/// The statement.
 	pub statement: Statement<C, D>,
@@ -122,7 +122,7 @@ enum StatementTrace<V, D> {
 ///
 /// Since there are three possible ways to vote, a double vote is possible in
 /// three possible combinations (unordered)
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ValidityDoubleVote<C, D, S> {
 	/// Implicit vote by issuing and explicity voting validity.
 	IssuedAndValidity((C, S), (D, S)),
@@ -133,7 +133,7 @@ pub enum ValidityDoubleVote<C, D, S> {
 }
 
 /// Misbehavior: declaring multiple candidates.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct MultipleCandidates<C, S> {
 	/// The first candidate seen.
 	pub first: (C, S),
@@ -142,7 +142,7 @@ pub struct MultipleCandidates<C, S> {
 }
 
 /// Misbehavior: submitted statement for wrong group.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct UnauthorizedStatement<C, D, V, S> {
 	/// A signed statement which was submitted without proper authority.
 	pub statement: SignedStatement<C, D, V, S>,
@@ -150,7 +150,7 @@ pub struct UnauthorizedStatement<C, D, V, S> {
 
 /// Different kinds of misbehavior. All of these kinds of malicious misbehavior
 /// are easily provable and extremely disincentivized.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Misbehavior<C, D, V, S> {
 	/// Voted invalid and valid on validity.
 	ValidityDoubleVote(ValidityDoubleVote<C, D, S>),
@@ -238,15 +238,6 @@ struct ValidatorData<C: Context> {
 	known_statements: HashSet<StatementTrace<C::ValidatorId, C::Digest>>,
 }
 
-/// Create a new, empty statement table.
-pub fn create<C: Context>() -> Table<C> {
-	Table {
-		validator_data: HashMap::default(),
-		detected_misbehavior: HashMap::default(),
-		candidate_votes: HashMap::default(),
-	}
-}
-
 /// Stores votes
 pub struct Table<C: Context> {
 	validator_data: HashMap<C::ValidatorId, ValidatorData<C>>,
@@ -302,14 +293,6 @@ impl<C: Context> Table<C> {
 			let (v_threshold, a_threshold) = context.requisite_votes(&data.group_id);
 			data.can_be_included(v_threshold, a_threshold)
 		})
-	}
-
-	/// Get an iterator of all candidates with a given group.
-	// TODO: impl iterator
-	pub fn candidates_in_group<'a>(&'a self, group_id: C::GroupId)
-		-> Box<Iterator<Item=&'a CandidateData<C>> + 'a>
-	{
-		Box::new(self.candidate_votes.values().filter(move |c| c.group_id == group_id))
 	}
 
 	/// Import a signed statement. Signatures should be checked for validity, and the
@@ -377,6 +360,13 @@ impl<C: Context> Table<C> {
 	/// Get a candidate by digest.
 	pub fn get_candidate(&self, digest: &C::Digest) -> Option<&C::Candidate> {
 		self.candidate_votes.get(digest).map(|d| &d.candidate)
+	}
+
+	/// Access all witnessed misbehavior.
+	pub fn get_misbehavior(&self)
+		-> &HashMap<C::ValidatorId, <C as ResolveMisbehavior>::Misbehavior>
+	{
+		&self.detected_misbehavior
 	}
 
 	fn note_trace_seen(&mut self, trace: StatementTrace<C::ValidatorId, C::Digest>, known_by: C::ValidatorId) {
@@ -586,6 +576,14 @@ impl<C: Context> Table<C> {
 mod tests {
 	use super::*;
 	use std::collections::HashMap;
+
+	fn create<C: Context>() -> Table<C> {
+		Table {
+			validator_data: HashMap::default(),
+			detected_misbehavior: HashMap::default(),
+			candidate_votes: HashMap::default(),
+		}
+	}
 
 	#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 	struct ValidatorId(usize);
