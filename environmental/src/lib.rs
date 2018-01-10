@@ -27,20 +27,23 @@ pub fn using_environment<'a, T: 'a, S, F: FnOnce()>(
 	global.with(|r| *r.borrow_mut() = 0 as *mut S);
 }
 
-pub fn with_environment<'r, S, T: 'r, F: FnOnce(&'r mut T)>(
+pub fn with_environment<'r, R, S, T: 'r, F: FnOnce(&'r mut T) -> R>(
 	global: &'static LocalKey<RefCell<*mut S>>,
 	mutator: F,
-) {
+) -> Option<R> {
+
 	global.with(|r| {
 		let br = r.borrow_mut();
 		if *br != 0 as *mut S {
 			// safe because it's only non-zero when it in with_environment, which
 			// is holding on to the underlying reference safely
 			unsafe {
-				mutator(&mut *(*br as *mut S as *mut T));
+				Some(mutator(&mut *(*br as *mut S as *mut T)))
 			}
+		} else {
+			None
 		}
-	});
+	})
 }
 
 #[macro_export]
@@ -64,16 +67,18 @@ macro_rules! declare_generic_environment {
 				$crate::using_environment(&GLOBAL, protected, f);
 			}
 
-			pub fn with<F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>)>(f: F) {
+			pub fn with<R, F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>) -> R>(
+				f: F
+			) -> Option<R> {
 				let dummy = ();
-				with_closed(f, &dummy);
+				with_closed(f, &dummy)
 			}
 
-			fn with_closed<'d: 't, 't: 'r, 'r, F: FnOnce(&'r mut $t<'t>)>(
+			fn with_closed<'d: 't, 't: 'r, 'r, R, F: FnOnce(&'r mut $t<'t>) -> R>(
 				f: F,
 				_dummy: &'d (),
-			) {
-				$crate::with_environment(&GLOBAL, f);
+			) -> Option<R> {
+				$crate::with_environment(&GLOBAL, f)
 			}
 		}
 	}
@@ -91,16 +96,18 @@ macro_rules! declare_simple_environment {
 				$crate::using_environment(&GLOBAL, protected, f);
 			}
 
-			pub fn with<F: for<'r> FnOnce(&'r mut $t)>(f: F) {
+			pub fn with<R, F: for<'r> FnOnce(&'r mut $t -> R)>(
+				f: F
+			) -> Option<R> {
 				let dummy = ();
-				with_closed(f, &dummy);
+				with_closed(f, &dummy)
 			}
 
-			fn with_closed<'d: 'r, 'r, F: FnOnce(&'r mut $t)>(
+			fn with_closed<'d: 'r, 'r, R, F: FnOnce(&'r mut $t -> R)>(
 				f: F,
 				_dummy: &'d (),
-			) {
-				$crate::with_environment(&GLOBAL, f);
+			) -> Option<R> {
+				$crate::with_environment(&GLOBAL, f)
 			}
 		}
 	}

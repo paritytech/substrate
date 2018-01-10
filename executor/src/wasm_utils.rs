@@ -119,13 +119,13 @@ pub trait IntoUserDefinedElements {
 #[macro_export]
 macro_rules! impl_function_executor {
 	( $objectname:ident : $structname:ty, $( $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt ),* => $($pre:tt)+ ) => (
-		impl $( $pre ) + $crate::wasm_utils::UserFunctionExecutor<$crate::wasm_utils::DummyUserError> for $structname {
+		impl $($pre)+ $crate::wasm_utils::UserFunctionExecutor<$crate::wasm_utils::DummyUserError> for $structname {
 			dispatch!($objectname, $( $name( $( $names : $params ),* ) $( -> $returns )* => $body ),*);
 		}
-		impl $( $pre ) + $structname {
+		impl $($pre)+ $structname {
 			signatures!($( $name( $( $params ),* ) $( -> $returns )* ),*);
 		}
-		impl $( $pre ) + $crate::wasm_utils::IntoUserDefinedElements for $structname {
+		impl $($pre)+ $crate::wasm_utils::IntoUserDefinedElements for $structname {
 			fn into_user_defined_elements(&mut self) -> UserDefinedElements<$crate::wasm_utils::DummyUserError> {
 				$crate::wasm_utils::UserDefinedElements {
 					executor: Some(self),

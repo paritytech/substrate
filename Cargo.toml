@@ -12,6 +12,7 @@ members = [
 	"candidate-agreement",
 	"client",
 	"collator",
+	"environmental",
 	"executor",
 	"primitives",
 	"rpc",
