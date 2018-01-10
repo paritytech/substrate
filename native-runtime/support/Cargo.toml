@@ -9,3 +9,5 @@ strict = []
 [dependencies]
 lazy_static = "1.0.0"
 parking_lot = "0.5"
+polkadot-state-machine = { path = "../../state_machine" , version = "0.1" }
+environmental = { path = "../../environmental", version = "0.1.0" }

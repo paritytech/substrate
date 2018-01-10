@@ -171,6 +171,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "environmental"
+version = "0.1.0"
+
+[[package]]
 name = "error-chain"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -833,8 +837,10 @@ dependencies = [
 name = "runtime-support"
 version = "0.1.0"
 dependencies = [
+ "environmental 0.1.0",
  "lazy_static 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-state-machine 0.1.0",
 ]
 
 [[package]]

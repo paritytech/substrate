@@ -1,6 +1,6 @@
 #[macro_use]
-extern crate lazy_static;
-extern crate parking_lot;
+extern crate environmental;
+extern crate polkadot_state_machine;
 
 pub use std::vec::Vec;
 pub use std::rc::Rc;
@@ -8,38 +8,51 @@ pub use std::cell::RefCell;
 pub use std::boxed::Box;
 pub use std::mem::{size_of, transmute};
 
-use std::collections::HashMap;
-use parking_lot::Mutex;
+use polkadot_state_machine::Externalities;
+use std::fmt;
 
-lazy_static! {
-	static ref HASHMAP: Mutex<HashMap<Vec<u8>, Vec<u8>>> = Mutex::new(HashMap::new());
+// TODO: use the real error, not NoError.
+
+#[derive(Debug)]
+struct NoError;
+impl fmt::Display for NoError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "") }
 }
 
+pub struct ExternalitiesHolder<'a> {
+	ext: &'a mut Externalities<Error=NoError>,
+}
+
+declare_generic_environment!(ext : ExternalitiesHolder);
+
 pub fn storage(_key: &[u8]) -> Vec<u8> {
-	HASHMAP.lock().get(_key).cloned().unwrap_or_else(Vec::new)
+	ext::with(|holder| holder.ext.storage(_key).ok().map(|s| s.to_vec()))
+		.unwrap_or(None)
+		.unwrap_or_else(|| vec![])
 }
 
 pub fn storage_into<T: Sized>(_key: &[u8]) -> Option<T> {
 	let size = size_of::<T>();
-	if let Some(value) = HASHMAP.lock().get(_key) {
-		if value.len() == size {
-			unsafe {
-				let mut result: T = std::mem::uninitialized();
-				std::slice::from_raw_parts_mut(transmute::<*mut T, *mut u8>(&mut result), size)
-					.copy_from_slice(&value);
-				return Some(result);
+
+	ext::with(|holder| {
+		if let Ok(value) = holder.ext.storage(_key) {
+			if value.len() == size {
+				unsafe {
+					let mut result: T = std::mem::uninitialized();
+					std::slice::from_raw_parts_mut(transmute::<*mut T, *mut u8>(&mut result), size)
+						.copy_from_slice(&value);
+					return Some(result);
+				}
 			}
 		}
-	}
-	None
+		None
+	}).unwrap_or(None)
 }
 
 pub fn set_storage(_key: &[u8], _value: &[u8]) {
-	HASHMAP.lock().insert(_key.to_vec(), _value.to_vec());
-}
-
-pub fn init_storage(new: HashMap<Vec<u8>, Vec<u8>>) {
-	*HASHMAP.lock() = new;
+	ext::with(|holder|
+		holder.ext.set_storage(_key.to_vec(), _value.to_vec())
+	);
 }
 
 #[macro_export]
@@ -50,6 +63,23 @@ macro_rules! impl_stubs {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::collections::HashMap;
+
+	#[derive(Debug, Default)]
+	struct TestExternalities {
+		storage: HashMap<Vec<u8>, Vec<u8>>,
+	}
+	impl Externalities for TestExternalities {
+		type Error = NoError;
+
+		fn storage(&self, key: &[u8]) -> Result<&[u8], NoError> {
+			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
+		}
+
+		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
+			self.storage.insert(key, value);
+		}
+	}
 
 	macro_rules! map {
 		($( $name:expr => $value:expr ),*) => (
@@ -59,15 +89,29 @@ mod tests {
 
 	#[test]
 	fn storage_works() {
-		assert_eq!(storage(b"hello"), vec![]);
-		set_storage(b"hello", b"world");
-		assert_eq!(storage(b"hello"), b"world".to_vec());
-		assert_eq!(storage(b"foo"), vec![]);
-		set_storage(b"foo", &[1, 2, 3][..]);
-		assert_eq!(storage_into::<[u8; 3]>(b"foo"), Some([1, 2, 3]));
-		assert_eq!(storage_into::<[u8; 3]>(b"hello"), None);
-		init_storage(map![b"foo".to_vec() => b"bar".to_vec()]);
-		assert_eq!(storage(b"hello"), vec![]);
-		assert_eq!(storage(b"foo"), b"bar".to_vec());
+		let mut t = TestExternalities { storage: map![], };
+
+		{
+			let mut h = ExternalitiesHolder { ext: &mut t, };
+			ext::using(&mut h, || {
+				assert_eq!(storage(b"hello"), b"".to_vec());
+				set_storage(b"hello", b"world");
+				assert_eq!(storage(b"hello"), b"world".to_vec());
+				assert_eq!(storage(b"foo"), b"".to_vec());
+				set_storage(b"foo", &[1, 2, 3][..]);
+				assert_eq!(storage_into::<[u8; 3]>(b"foo"), Some([1, 2, 3]));
+				assert_eq!(storage_into::<[u8; 3]>(b"hello"), None);
+			});
+		}
+
+		t.storage = map![b"foo".to_vec() => b"bar".to_vec()];
+
+		{
+			let mut h = ExternalitiesHolder { ext: &mut t, };
+			ext::using(&mut h, || {
+				assert_eq!(storage(b"hello"), b"".to_vec());
+				assert_eq!(storage(b"foo"), b"bar".to_vec());
+			});
+		}
 	}
 }
