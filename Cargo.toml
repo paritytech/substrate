@@ -12,11 +12,14 @@ members = [
 	"candidate-agreement",
 	"client",
 	"collator",
-	"contracts",
+	"executor",
 	"primitives",
 	"rpc",
 	"rpc_servers",
 	"serializer",
 	"state_machine",
 	"validator",
+]
+exclude = [
+	"runtime"
 ]

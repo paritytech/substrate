@@ -17,6 +17,13 @@
 //! Temporary crate for contracts implementations.
 //!
 //! This will be replaced with WASM contracts stored on-chain.
+//! ** NOTE ***
+//! This is entirely deprecated with the idea of a single-module Wasm module for state transition.
+//! The dispatch table should be replaced with the specific functions needed:
+//! - execute_block(bytes)
+//! - init_block(PrevBlock?) -> InProgressBlock
+//! - add_transaction(InProgressBlock) -> InProgressBlock
+//! I leave it as is for now as it might be removed before this is ever done.
 
 #![warn(missing_docs)]
 
@@ -24,24 +31,22 @@ extern crate polkadot_primitives as primitives;
 extern crate polkadot_serializer as serializer;
 extern crate polkadot_state_machine as state_machine;
 extern crate serde;
+extern crate parity_wasm;
+extern crate byteorder;
 
 #[macro_use]
 extern crate error_chain;
-#[macro_use]
-extern crate serde_derive;
 
 #[cfg(test)]
-#[macro_use]
 extern crate assert_matches;
 
-mod auth;
-mod balances;
-mod validator_set;
+#[macro_use]
+mod wasm_utils;
+mod wasm_executor;
 
 pub mod error;
-pub mod executor;
 
 /// Creates new RustExecutor for contracts.
-pub fn executor() -> executor::RustExecutor {
-	executor::RustExecutor::default()
+pub fn executor() -> wasm_executor::WasmExecutor {
+	wasm_executor::WasmExecutor::default()
 }
