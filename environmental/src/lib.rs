@@ -22,9 +22,21 @@ pub fn using_environment<'a, T: 'a, R, S, F: FnOnce() -> R>(
 	protected: &'a mut T,
 	f: F
 ) -> R {
-	global.with(|r| *r.borrow_mut() = protected as *mut T as *mut S);
+	// store the `protected` reference as a pointer so we can provide it to logic running within
+	// `f`.
+	// while re record this pointer (while it's non-zero) we guarantee:
+	// - it will only be used once at any time (no reentrancy);
+	// - that no other thread will use it; and
+	// - that we do not use the original mutating reference while the pointer.
+	// exists.
+	let original = global.with(|r| {
+		let mut b = r.borrow_mut();
+		let o = *b;
+		*b = protected as *mut T as *mut S;
+		o
+	});
 	let r = f();
-	global.with(|r| *r.borrow_mut() = 0 as *mut S);
+	global.with(|r| *r.borrow_mut() = original);
 	r
 }
 
@@ -35,8 +47,8 @@ pub fn with_environment<'r, R, S, T: 'r, F: FnOnce(&'r mut T) -> R>(
 	global.with(|r| {
 		let br = r.borrow_mut();
 		if *br != 0 as *mut S {
-			// safe because it's only non-zero when it in with_environment, which
-			// is holding on to the underlying reference safely
+			// safe because it's only non-zero when it's being called from using_environment, which
+			// is holding on to the underlying reference (and not using it itself) safely.
 			unsafe {
 				Some(mutator(&mut *(*br as *mut S as *mut T)))
 			}
