@@ -44,8 +44,6 @@
 pub use std::cell::RefCell;
 use std::thread::LocalKey;
 
-pub fn test_me() { panic!("Hello") }
-
 pub fn using_environment<'a, T: 'a, R, S, F: FnOnce() -> R>(
 	global: &'static LocalKey<RefCell<*mut S>>,
 	protected: &'a mut T,
