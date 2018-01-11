@@ -23,7 +23,7 @@ pub struct ExternalitiesHolder<'a> {
 	ext: &'a mut Externalities<Error=NoError>,
 }
 
-declare_generic_environment!(ext : ExternalitiesHolder);
+declare_generic!(ext : ExternalitiesHolder);
 
 pub fn storage(_key: &[u8]) -> Vec<u8> {
 	ext::with(|holder| holder.ext.storage(_key).ok().map(|s| s.to_vec()))
