@@ -228,10 +228,6 @@ macro_rules! declare_generic {
 	}
 }
 
-// TODO: Docs
-// TODO: Example
-// TODO: Tests
-
 #[cfg(test)]
 mod tests {
 	declare_simple!(counter: u32);
