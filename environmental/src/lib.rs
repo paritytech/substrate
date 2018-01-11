@@ -100,13 +100,13 @@ macro_rules! decl {
 /// Declare a new global reference module whose underlying value does not contain references.
 ///
 /// Will create a module of a given name that contains two functions:
-/// - `pub fn using<'a: 'b, 'b, R, F: FnOnce() -> R, T: 'a>(protected: &'b mut T, f: F) -> R`
+/// * `pub fn using<'a: 'b, 'b, R, F: FnOnce() -> R, T: 'a>(protected: &'b mut T, f: F) -> R`
 ///   This executes `f`, returning its value. During the call, the module's reference is set to
 ///   be equal to `protected`.
-/// - `pub fn with<R, F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>) -> R>(f: F) -> Option<R>`
-///   This executes `f`, returning its value if called from code that is being executed as part of
-///   a `using` call. The function takes one argument: the same reference as provided to the most
-///   recent `using` call.
+/// * `pub fn with<R, F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>) -> R>(f: F) -> Option<R>`
+///   This executes `f`, returning `Some` of its value if called from code that is being executed
+///   as part of a `using` call. If not, it returns `None`. `f` is provided with one argument: the
+///   same reference as provided to the most recent `using` call.
 ///
 /// # Examples
 ///
@@ -164,13 +164,14 @@ macro_rules! declare_simple {
 /// Declare a new global reference module whose underlying value is generic over a reference.
 ///
 /// Will create a module of a given name that contains two functions:
-/// - `pub fn using<'a: 'b, 'b, R, F: FnOnce() -> R, T: 'a>(protected: &'b mut T, f: F) -> R`
+///
+/// * `pub fn using<'a: 'b, 'b, R, F: FnOnce() -> R, T: 'a>(protected: &'b mut T, f: F) -> R`
 ///   This executes `f`, returning its value. During the call, the module's reference is set to
 ///   be equal to `protected`.
-/// - `pub fn with<R, F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>) -> R>(f: F) -> Option<R>`
-///   This executes `f`, returning its value if called from code that is being executed as part of
-///   a `using` call. The function takes one argument: the same reference as provided to the most
-///   recent `using` call.
+/// * `pub fn with<R, F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>) -> R>(f: F) -> Option<R>`
+///   This executes `f`, returning `Some` of its value if called from code that is being executed
+///   as part of a `using` call. If not, it returns `None`. `f` is provided with one argument: the
+///   same reference as provided to the most recent `using` call.
 ///
 /// # Examples
 ///
