@@ -32,6 +32,8 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::hash::Hash;
 use std::fmt::Debug;
 
+use super::StatementBatch;
+
 /// Context for the statement table.
 pub trait Context {
 	/// A validator ID
@@ -238,6 +240,15 @@ struct ValidatorData<C: Context> {
 	known_statements: HashSet<StatementTrace<C::ValidatorId, C::Digest>>,
 }
 
+impl<C: Context> Default for ValidatorData<C> {
+	fn default() -> Self {
+		ValidatorData {
+			proposal: None,
+			known_statements: HashSet::default(),
+		}
+	}
+}
+
 /// Stores votes
 pub struct Table<C: Context> {
 	validator_data: HashMap<C::ValidatorId, ValidatorData<C>>,
@@ -367,6 +378,120 @@ impl<C: Context> Table<C> {
 		-> &HashMap<C::ValidatorId, <C as ResolveMisbehavior>::Misbehavior>
 	{
 		&self.detected_misbehavior
+	}
+
+	/// Fill a statement batch and note messages seen by the targets.
+	pub fn fill_batch<B>(&mut self, batch: &mut B)
+		where B: StatementBatch<
+			C::ValidatorId,
+			SignedStatement<C::Candidate, C::Digest, C::ValidatorId, C::Signature>,
+		>
+	{
+		// naively iterate all statements so far, taking any that
+		// at least one of the targets has not seen.
+
+		// workaround for the fact that it's inconvenient to borrow multiple
+		// entries out of a hashmap mutably -- we just move them out and
+		// replace them when we're done.
+		struct SwappedTargetData<'a, C: 'a + Context> {
+			validator_data: &'a mut HashMap<C::ValidatorId, ValidatorData<C>>,
+			target_data: Vec<(C::ValidatorId, ValidatorData<C>)>,
+		}
+
+		impl<'a, C: 'a + Context> Drop for SwappedTargetData<'a, C> {
+			fn drop(&mut self) {
+				for (id, data) in self.target_data.drain(..) {
+					self.validator_data.insert(id, data);
+				}
+			}
+		}
+
+		// pre-fetch authority data for all the targets.
+		let mut target_data = {
+			let validator_data = &mut self.validator_data;
+			let mut target_data = Vec::with_capacity(batch.targets().len());
+			for target in batch.targets() {
+				let active_data = match validator_data.get_mut(target) {
+					None => Default::default(),
+					Some(x) => ::std::mem::replace(x, Default::default()),
+				};
+
+				target_data.push((target.clone(), active_data));
+			}
+
+			SwappedTargetData {
+				validator_data,
+				target_data
+			}
+		};
+
+		let target_data = &mut target_data.target_data;
+
+		macro_rules! attempt_send {
+			($trace:expr, sender=$sender:expr, sig=$sig:expr, statement=$statement:expr) => {{
+				let trace = $trace;
+				let can_send = target_data.iter()
+					.any(|t| t.1.known_statements.contains(&trace));
+
+				if can_send {
+					let statement = SignedStatement {
+						statement: $statement,
+						signature: $sig,
+						sender: $sender,
+					};
+
+					if batch.push(statement) {
+						for target in target_data.iter_mut() {
+							target.1.known_statements.insert(trace.clone());
+						}
+					} else {
+						return;
+					}
+				}
+			}}
+		}
+
+		// reconstruct statements for anything whose trace passes the filter.
+		for (digest, candidate) in self.candidate_votes.iter() {
+			for (sender, vote) in candidate.validity_votes.iter() {
+				match *vote {
+					ValidityVote::Issued(ref sig) => {
+						attempt_send!(
+							StatementTrace::Candidate(sender.clone()),
+							sender = sender.clone(),
+							sig = sig.clone(),
+							statement = Statement::Candidate(candidate.candidate.clone())
+						)
+					}
+					ValidityVote::Valid(ref sig) => {
+						attempt_send!(
+							StatementTrace::Valid(sender.clone(), digest.clone()),
+							sender = sender.clone(),
+							sig = sig.clone(),
+							statement = Statement::Valid(digest.clone())
+						)
+					}
+					ValidityVote::Invalid(ref sig) => {
+						attempt_send!(
+							StatementTrace::Invalid(sender.clone(), digest.clone()),
+							sender = sender.clone(),
+							sig = sig.clone(),
+							statement = Statement::Invalid(digest.clone())
+						)
+					}
+				}
+			};
+
+
+			for (sender, sig) in candidate.availability_votes.iter() {
+				attempt_send!(
+					StatementTrace::Available(sender.clone(), digest.clone()),
+					sender = sender.clone(),
+					sig = sig.clone(),
+					statement = Statement::Available(digest.clone())
+				)
+			}
+		}
 	}
 
 	fn note_trace_seen(&mut self, trace: StatementTrace<C::ValidatorId, C::Digest>, known_by: C::ValidatorId) {

@@ -52,6 +52,9 @@ mod handle_incoming;
 mod round_robin;
 mod table;
 
+#[cfg(test)]
+pub mod tests;
+
 /// Context necessary for agreement.
 pub trait Context: Send + Clone {
 	/// A validator ID
@@ -77,6 +80,12 @@ pub trait Context: Send + Clone {
 	/// A future that resolves when availability of a candidate's external
 	/// data is checked.
 	type CheckAvailability: IntoFuture<Item=bool>;
+
+	/// The statement batch type.
+	type StatementBatch: StatementBatch<
+		Self::ValidatorId,
+		table::SignedStatement<Self::ParachainCandidate, Self::Digest, Self::ValidatorId, Self::Signature>,
+	>;
 
 	/// Get the digest of a candidate.
 	fn candidate_digest(candidate: &Self::ParachainCandidate) -> Self::Digest;
@@ -128,12 +137,14 @@ pub trait Context: Send + Clone {
 pub trait TypeResolve {
 	type SignedTableStatement;
 	type BftCommunication;
+	type BftCommitted;
 	type Misbehavior;
 }
 
 impl<C: Context> TypeResolve for C {
 	type SignedTableStatement = table::SignedStatement<C::ParachainCandidate, C::Digest, C::ValidatorId, C::Signature>;
 	type BftCommunication = bft::Communication<C::Proposal, C::Digest, C::ValidatorId, C::Signature>;
+	type BftCommitted = bft::Committed<C::Proposal,C::Digest,C::Signature>;
 	type Misbehavior = table::Misbehavior<C::ParachainCandidate, C::Digest, C::ValidatorId, C::Signature>;
 }
 
@@ -318,6 +329,11 @@ impl<C: Context> SharedTable<C> {
 		self.inner.lock().table.get_misbehavior().clone()
 	}
 
+	/// Fill a statement batch.
+	pub fn fill_batch(&self, batch: &mut C::StatementBatch) {
+		self.inner.lock().table.fill_batch(batch);
+	}
+
 	// Get a handle to the table context.
 	fn context(&self) -> &TableContext<C> {
 		&*self.context
@@ -425,14 +441,25 @@ pub struct AgreementParams<C: Context> {
 	pub message_buffer_size: usize,
 	/// Interval to attempt forming proposals over.
 	pub form_proposal_interval: Duration,
-	/// Interval to create table statement packets over.
-	pub table_broadcast_interval: Duration,
 }
 
 /// Recovery for messages
 pub trait MessageRecovery<C: Context> {
 	/// Attempt to transform a checked message into an unchecked.
 	fn check_message(&self, UncheckedMessage) -> Option<CheckedMessage<C>>;
+}
+
+/// A batch of statements to send out.
+pub trait StatementBatch<V, T> {
+	/// Get the target authorities of these statements.
+	fn targets(&self) -> &[V];
+
+	/// Push a statement onto the batch. Returns false when the batch is full.
+	///
+	/// This is meant to do work like incrementally serializing the statements
+	/// into a vector of bytes while making sure the length is below a certain
+	/// amount.
+	fn push(&mut self, statement: T) -> bool;
 }
 
 /// Recovered and fully checked messages.
@@ -443,19 +470,42 @@ pub enum CheckedMessage<C: Context> {
 	Table(Vec<<C as TypeResolve>::SignedTableStatement>),
 }
 
+/// Outgoing messages to the network.
+pub enum OutgoingMessage<C: Context> {
+	/// Messages meant for BFT agreement peers.
+	Bft(<C as TypeResolve>::BftCommunication),
+	/// Batches of table statements.
+	Table(C::StatementBatch),
+}
+
 /// Create an agreement future, and I/O streams.
-pub fn agree<C, I, O, R, E>(params: AgreementParams<C>, net_in: I, net_out: O, recovery: R)
-	-> Box<Future<Item=bft::Committed<C::Proposal,C::Digest,C::Signature>,Error=Error>>
+// TODO: kill 'static bounds and use impl Future.
+pub fn agree<
+	Context,
+	NetIn,
+	NetOut,
+	Recovery,
+	PropagateStatements,
+	Err,
+>(
+	params: AgreementParams<Context>,
+	net_in: NetIn,
+	net_out: NetOut,
+	recovery: Recovery,
+	propagate_statements: PropagateStatements,
+)
+	-> Box<Future<Item=<Context as TypeResolve>::BftCommitted,Error=Error>>
 	where
-		C: Context + 'static,
-		C::CheckCandidate: IntoFuture<Error=E>,
-		C::CheckAvailability: IntoFuture<Error=E>,
-		I: Stream<Item=(C::ValidatorId, Vec<UncheckedMessage>),Error=E> + 'static,
-		O: Sink<SinkItem=CheckedMessage<C>> + 'static,
-		R: MessageRecovery<C> + 'static,
+		Context: ::Context + 'static,
+		Context::CheckCandidate: IntoFuture<Error=Err>,
+		Context::CheckAvailability: IntoFuture<Error=Err>,
+		NetIn: Stream<Item=(Context::ValidatorId, Vec<UncheckedMessage>),Error=Err> + 'static,
+		NetOut: Sink<SinkItem=OutgoingMessage<Context>> + 'static,
+		Recovery: MessageRecovery<Context> + 'static,
+		PropagateStatements: Stream<Item=Context::StatementBatch,Error=Err> + 'static,
 {
 	let (bft_in_in, bft_in_out) = mpsc::unbounded();
-	let (bft_out_in, bft_out_out) = mpsc::unbounded::<bft::ContextCommunication<BftContext<C>>>();
+	let (bft_out_in, bft_out_out) = mpsc::unbounded();
 
 	let agreement = {
 		let bft_context = BftContext {
@@ -489,14 +539,16 @@ pub fn agree<C, I, O, R, E>(params: AgreementParams<C>, net_in: I, net_out: O, r
 
 
 	let route_messages_out = {
-		let periodic_table_statements = params.timer.interval(params.table_broadcast_interval)
-			.map_err(|_| Error::FaultyTimer)
-			.map(|()| unimplemented!()); // create table statements to send. but to _who_ and how many?
+		let table = params.table.clone();
+		let periodic_table_statements = propagate_statements
+			.or_else(|_| ::futures::future::empty()) // halt the stream instead of error.
+			.map(move |mut batch| { table.fill_batch(&mut batch); batch })
+			.map(OutgoingMessage::Table);
 
 		let complete_out_stream = bft_out_out
 			.map_err(|_| Error::IoTerminated)
 			.map(|bft::ContextCommunication(x)| x)
-			.map(CheckedMessage::Bft)
+			.map(OutgoingMessage::Bft)
 			.select(periodic_table_statements);
 
 		net_out.sink_map_err(|_| Error::IoTerminated).send_all(complete_out_stream)
