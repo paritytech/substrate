@@ -431,7 +431,7 @@ impl<C: Context> Table<C> {
 			($trace:expr, sender=$sender:expr, sig=$sig:expr, statement=$statement:expr) => {{
 				let trace = $trace;
 				let can_send = target_data.iter()
-					.any(|t| t.1.known_statements.contains(&trace));
+					.any(|t| !t.1.known_statements.contains(&trace));
 
 				if can_send {
 					let statement = SignedStatement {
@@ -492,6 +492,7 @@ impl<C: Context> Table<C> {
 				)
 			}
 		}
+
 	}
 
 	fn note_trace_seen(&mut self, trace: StatementTrace<C::ValidatorId, C::Digest>, known_by: C::ValidatorId) {
@@ -730,6 +731,24 @@ mod tests {
 	struct TestContext {
 		// v -> (validity, availability)
 		validators: HashMap<ValidatorId, (GroupId, GroupId)>
+	}
+
+	struct VecBatch<V, T> {
+		max_len: usize,
+		targets: Vec<V>,
+		items: Vec<T>,
+	}
+
+	impl<V, T> ::StatementBatch<V, T> for VecBatch<V, T> {
+		fn targets(&self) -> &[V] { &self.targets }
+		fn push(&mut self, item: T) -> bool {
+			if self.items.len() == self.max_len {
+				false
+			} else {
+				self.items.push(item);
+				true
+			}
+		}
 	}
 
 	impl Context for TestContext {
@@ -1126,5 +1145,56 @@ mod tests {
 		assert_eq!(summary.group_id, GroupId(2));
 		assert_eq!(summary.validity_votes, 1);
 		assert_eq!(summary.availability_votes, 1);
+	}
+
+	#[test]
+	fn filling_batch_sets_known_flag() {
+		let context = TestContext {
+			validators: {
+				let mut map = HashMap::new();
+				for i in 1..10 {
+					map.insert(ValidatorId(i), (GroupId(2), GroupId(400 + i)));
+				}
+				map
+			}
+		};
+
+		let mut table = create();
+		let statement = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(1),
+			sender: ValidatorId(1),
+		};
+
+		table.import_statement(&context, statement, None);
+
+		for i in 2..10 {
+			let statement = SignedStatement {
+				statement: Statement::Valid(Digest(100)),
+				signature: Signature(i),
+				sender: ValidatorId(i),
+			};
+
+			table.import_statement(&context, statement, None);
+		}
+
+		let mut batch = VecBatch {
+			max_len: 5,
+			targets: (1..10).map(ValidatorId).collect(),
+			items: Vec::new(),
+		};
+
+		// 9 statements in the table, each seen by one.
+		table.fill_batch(&mut batch);
+		assert_eq!(batch.items.len(), 5);
+
+		// 9 statements in the table, 5 of which seen by all targets.
+		batch.items.clear();
+		table.fill_batch(&mut batch);
+		assert_eq!(batch.items.len(), 4);
+
+		batch.items.clear();
+		table.fill_batch(&mut batch);
+		assert!(batch.items.is_empty());
 	}
 }
