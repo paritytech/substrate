@@ -24,7 +24,7 @@ use futures::prelude::*;
 use futures::stream::{Fuse, FuturesUnordered};
 use futures::sync::mpsc;
 
-use table::{self, Statement, SignedStatement, Context as TableContext};
+use table::{self, Statement, Context as TableContext};
 
 use super::{Context, CheckedMessage, SharedTable, TypeResolve};
 
@@ -94,16 +94,8 @@ impl<C: Context, I> HandleIncoming<C, I> {
 			CheckResult::Unavailable => return, // no such statement and not provable.
 		};
 
-		let signature = self.table.context().sign_table_statement(&statement);
-
-		let statement = SignedStatement {
-			statement,
-			signature,
-			sender: self.local_id.clone(),
-		};
-
 		// TODO: trigger broadcast to peers immediately?
-		self.table.import_statement(statement, None);
+		self.table.sign_and_import(statement);
 	}
 
 	fn import_message(&mut self, origin: C::ValidatorId, message: CheckedMessage<C>) {
