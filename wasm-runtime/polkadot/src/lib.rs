@@ -117,15 +117,6 @@ fn env() -> Rc<RefCell<Environment>> {
 	}
 }
 
-fn value_vec(mut value: u32, initial: Vec<u8>) -> Vec<u8> {
-	let mut acc = initial;
-	while value > 0 {
-		acc.push(value as u8);
-		value /= 256;
-	}
-	acc
-}
-
 trait EndianSensitive: Sized {
 	fn to_le(self) -> Self { self }
 	fn to_be(self) -> Self { self }
@@ -176,10 +167,10 @@ fn storage_into<T: Storage>(key: &[u8]) -> T {
 	T::storage_into(key)
 }
 
-
 trait KeyedVec {
 	fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8>;
 }
+
 impl KeyedVec for AccountID {
 	fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8> {
 		let mut r = prepend_key.to_vec();
@@ -187,6 +178,25 @@ impl KeyedVec for AccountID {
 		r
 	}
 }
+
+macro_rules! impl_endians {
+	( $( $t:ty ),* ) => { $(
+		impl KeyedVec for $t {
+			fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8> {
+				let size = size_of::<Self>();
+				let value_bytes = self.to_le();
+				let value_slice = unsafe {
+					std::slice::from_raw_parts(transmute::<*const Self, *const u8>(&value_bytes), size)
+				};
+				let mut r = prepend_key.to_vec();
+				r.extend_from_slice(value_slice);
+				r
+			}
+		}
+	)* }
+}
+
+impl_endians!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
 
 // TODO: include RLP implementation
 // TODO: add keccak256 (or some better hashing scheme) & ECDSA-recover (or some better sig scheme)
@@ -266,20 +276,20 @@ pub mod consensus {
 	use super::*;
 
 	pub fn set_authority(index: u32, authority: AccountID) {
-		runtime_support::set_storage(&value_vec(index, b"\0authority".to_vec()), &authority[..]);
+		authority.store(&index.to_keyed_vec(b"con\0aut\0"));
 	}
 
 	fn authority(index: u32) -> AccountID {
-		runtime_support::storage_into(&value_vec(index, b"\0authority".to_vec())).unwrap()
+		storage_into(&index.to_keyed_vec(b"con\0aut\0"))
 	}
 
 	pub fn set_authority_count(count: u32) {
 		(count..authority_count()).for_each(|i| set_authority(i, SessionKey::default()));
-		runtime_support::set_storage(b"\0authority_count", &value_vec(count, Vec::new()));
+		count.store(b"con\0aut\0len");
 	}
 
 	fn authority_count() -> u32 {
-		runtime_support::storage(b"\0authority_count").into_iter().rev().fold(0, |acc, i| (acc << 8) + (i as u32))
+		storage_into(b"con\0aut\0len")
 	}
 
 	/// Get the current set of authorities. These are the session keys.
