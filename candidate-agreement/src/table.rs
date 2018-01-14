@@ -701,6 +701,7 @@ impl<C: Context> Table<C> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use ::tests::VecBatch;
 	use std::collections::HashMap;
 
 	fn create<C: Context>() -> Table<C> {
@@ -731,24 +732,6 @@ mod tests {
 	struct TestContext {
 		// v -> (validity, availability)
 		validators: HashMap<ValidatorId, (GroupId, GroupId)>
-	}
-
-	struct VecBatch<V, T> {
-		max_len: usize,
-		targets: Vec<V>,
-		items: Vec<T>,
-	}
-
-	impl<V, T> ::StatementBatch<V, T> for VecBatch<V, T> {
-		fn targets(&self) -> &[V] { &self.targets }
-		fn push(&mut self, item: T) -> bool {
-			if self.items.len() == self.max_len {
-				false
-			} else {
-				self.items.push(item);
-				true
-			}
-		}
 	}
 
 	impl Context for TestContext {
