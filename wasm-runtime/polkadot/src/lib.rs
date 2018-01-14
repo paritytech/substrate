@@ -22,6 +22,7 @@ pub type TxOrder = u64;
 pub enum Function {
 	StakingStake,
 	StakingUnstake,
+	StakingTransferStake,
 	ConsensusSetSessionKey,
 }
 
@@ -34,6 +35,11 @@ impl Function {
 			}
 			Function::StakingUnstake => {
 				staking::unstake(transactor);
+			}
+			Function::StakingTransferStake => {
+				let dest = FromSlice::from_slice(&params[0..size_of::<AccountID>()]).unwrap();
+				let value = FromSlice::from_slice(&params[size_of::<AccountID>()..size_of::<AccountID>() + 4]).unwrap();
+				staking::transfer_stake(transactor, &dest, value);
 			}
 			Function::ConsensusSetSessionKey => {
 				let mut session = AccountID::default();
@@ -140,8 +146,8 @@ macro_rules! impl_non_endians {
 	)* }
 }
 
-impl_endians!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
-impl_non_endians!([u8; 20], [u8; 32]);
+impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
+impl_non_endians!(u8, i8, [u8; 20], [u8; 32]);
 
 trait Storage {
 	fn storage_into(key: &[u8]) -> Self;
@@ -150,7 +156,9 @@ trait Storage {
 
 impl<T: Default + EndianSensitive> Storage for T {
 	fn storage_into(key: &[u8]) -> Self {
-		runtime_support::storage_into(key).map(EndianSensitive::from_le).unwrap_or_else(Default::default)
+		runtime_support::storage_into(key)
+			.map(EndianSensitive::from_le)
+			.unwrap_or_else(Default::default)
 	}
 
 	fn store(self, key: &[u8]) {
@@ -165,6 +173,26 @@ impl<T: Default + EndianSensitive> Storage for T {
 
 fn storage_into<T: Storage>(key: &[u8]) -> T {
 	T::storage_into(key)
+}
+
+trait FromSlice: Sized {
+	fn from_slice(value: &[u8]) -> Option<Self>;
+}
+
+impl<T: EndianSensitive> FromSlice for T {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		let size = size_of::<T>();
+		if value.len() == size {
+			unsafe {
+				let mut result: T = std::mem::uninitialized();
+				std::slice::from_raw_parts_mut(transmute::<*mut T, *mut u8>(&mut result), size)
+					.copy_from_slice(&value);
+				Some(result.from_le())
+			}
+		} else {
+			None
+		}
+	}
 }
 
 trait KeyedVec {
@@ -196,7 +224,7 @@ macro_rules! impl_endians {
 	)* }
 }
 
-impl_endians!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
+impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
 
 // TODO: include RLP implementation
 // TODO: add keccak256 (or some better hashing scheme) & ECDSA-recover (or some better sig scheme)
