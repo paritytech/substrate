@@ -19,6 +19,8 @@ pub type Timestamp = u64;
 pub type TxOrder = u64;
 
 /// The functions that a transaction can call (and be dispatched to).
+#[cfg_attr(test, derive(PartialEq, Debug))]
+#[derive(Clone, Copy)]
 pub enum Function {
 	StakingStake,
 	StakingUnstake,
@@ -50,8 +52,8 @@ impl<'a> StreamReader<'a> {
 			offset: 0,
 		}
 	}
-	fn read<T: Slicable + Sized>(&mut self) -> Option<T> {
-		let size = size_of::<T>();
+	fn read<T: Slicable>(&mut self) -> Option<T> {
+		let size = T::size_of(&self.data[self.offset..])?;
 		let new_offset = self.offset + size;
 		let slice = &self.data[self.offset..new_offset];
 		self.offset = new_offset;
@@ -71,7 +73,7 @@ impl<'a> StreamWriter<'a> {
 			offset: 0,
 		}
 	}
-	fn write<T: Slicable + Sized>(&mut self, value: &T) -> bool {
+	fn write<T: Slicable>(&mut self, value: &T) -> bool {
 		value.as_slice_then(|s| {
 			let new_offset = self.offset + s.len();
 			if self.data.len() <= new_offset {
@@ -135,6 +137,7 @@ pub struct Header {
 	pub digest: Digest,
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct Transaction {
 	pub signed: AccountID,
 	pub function: Function,
@@ -261,6 +264,7 @@ trait Slicable: Sized {
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&self.to_vec())
 	}
+	fn size_of(_value: &[u8]) -> Option<usize>;
 }
 
 impl<T: EndianSensitive> Slicable for T {
@@ -284,6 +288,56 @@ impl<T: EndianSensitive> Slicable for T {
 			};
 			f(value_slice)
 		})
+	}
+	fn size_of(_value: &[u8]) -> Option<usize> {
+		Some(size_of::<Self>())
+	}
+}
+
+impl Slicable for Vec<u8> {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		Some(value[4..].to_vec())
+	}
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+		unimplemented!();
+	}
+	fn to_vec(&self) -> Vec<u8> {
+		let mut r = vec![].join(&(self.len() as u32));
+		r.extend_from_slice(&self);
+		r
+	}
+	fn size_of(data: &[u8]) -> Option<usize> {
+		u32::from_slice(&data[0..4]).map(|i| (i + 4) as usize)
+	}
+}
+
+impl Slicable for Transaction {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		let mut reader = StreamReader::new(value);
+		Some(Transaction {
+			signed: reader.read()?,
+			function: Function::from_u8(reader.read()?)?,
+			nonce: reader.read()?,
+			input_data: reader.read()?,
+		})
+	}
+
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+		unimplemented!();
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		vec![]
+			.join(&self.signed)
+			.join(&(self.function as u8))
+			.join(&self.nonce)
+			.join(&self.input_data)
+	}
+
+	fn size_of(data: &[u8]) -> Option<usize> {
+		let first_part = size_of::<AccountID>() + size_of::<u8>() + size_of::<TxOrder>();
+		let second_part = <Vec<u8>>::size_of(&data[first_part..])?;
+		Some(first_part + second_part)
 	}
 }
 
@@ -436,7 +490,7 @@ pub mod consensus {
 
 	/// The number of blocks in each session.
 	pub fn session_length() -> BlockNumber {
-		10
+		storage_into(b"con\0sel")
 	}
 
 	/// Sets the session key of `_transactor` to `_session`. This doesn't take effect until the next
@@ -470,7 +524,7 @@ pub mod staking {
 
 	/// The length of a staking era in sessions.
 	pub fn sessions_per_era() -> BlockNumber {
-		10
+		storage_into(b"sta\0spe")
 	}
 
 	/// The era has changed - enact new staking set.
@@ -633,5 +687,34 @@ mod tests {
 			assert_eq!(staking::balance(&one), 42);
 			assert_eq!(staking::balance(&two), 69);
 		});
+	}
+
+	#[test]
+	fn serialise_transaction_works() {
+		let one: AccountID = [1u8; 32];
+		let two: AccountID = [2u8; 32];
+		let tx = Transaction {
+			signed: one.clone(),
+			function: Function::StakingTransferStake,
+			input_data: vec![].join(&two).join(&69u64),
+			nonce: 0,
+		};
+		let serialised = tx.to_vec();
+		assert_eq!(serialised, vec![1u8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 69, 0, 0, 0, 0, 0, 0, 0]);
+	}
+
+	#[test]
+	fn deserialise_transaction_works() {
+		let one: AccountID = [1u8; 32];
+		let two: AccountID = [2u8; 32];
+		let tx = Transaction {
+			signed: one.clone(),
+			function: Function::StakingTransferStake,
+			input_data: vec![].join(&two).join(&69u64),
+			nonce: 0,
+		};
+		let data = [1u8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 69, 0, 0, 0, 0, 0, 0, 0];
+		let deserialised: Transaction = Slicable::from_slice(&data).unwrap();
+		assert_eq!(deserialised, tx);
 	}
 }
