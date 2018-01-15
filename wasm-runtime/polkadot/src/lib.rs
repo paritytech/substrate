@@ -27,8 +27,80 @@ pub enum Function {
 }
 
 impl Function {
+	fn from_u8(value: u8) -> Option<Function> {
+		match value {
+			x if x == Function::StakingStake as u8 => Some(Function::StakingStake),
+			x if x == Function::StakingUnstake as u8 => Some(Function::StakingUnstake),
+			x if x == Function::StakingTransferStake as u8 => Some(Function::StakingTransferStake),
+			x if x == Function::ConsensusSetSessionKey as u8 => Some(Function::ConsensusSetSessionKey),
+			_ => None,
+		}
+	}
+}
+
+struct StreamReader<'a> {
+	data: &'a[u8],
+	offset: usize,
+}
+
+impl<'a> StreamReader<'a> {
+	fn new(data: &'a[u8]) -> Self {
+		StreamReader {
+			data: data,
+			offset: 0,
+		}
+	}
+	fn read<T: Slicable + Sized>(&mut self) -> Option<T> {
+		let size = size_of::<T>();
+		let new_offset = self.offset + size;
+		let slice = &self.data[self.offset..new_offset];
+		self.offset = new_offset;
+		Slicable::from_slice(slice)
+	}
+}
+
+struct StreamWriter<'a> {
+	data: &'a mut[u8],
+	offset: usize,
+}
+
+impl<'a> StreamWriter<'a> {
+	fn new(data: &'a mut[u8]) -> Self {
+		StreamWriter {
+			data: data,
+			offset: 0,
+		}
+	}
+	fn write<T: Slicable + Sized>(&mut self, value: &T) -> bool {
+		value.as_slice_then(|s| {
+			let new_offset = self.offset + s.len();
+			if self.data.len() <= new_offset {
+				let slice = &self.data[self.offset..new_offset];
+				self.offset = new_offset;
+				slice.copy_from_slice(s);
+				true
+			} else {
+				false
+			}
+		})
+	}
+}
+
+trait Joiner {
+	fn join<T: Slicable + Sized>(self, value: &T) -> Self;
+}
+
+impl Joiner for Vec<u8> {
+	fn join<T: Slicable + Sized>(mut self, value: &T) -> Vec<u8> {
+		value.as_slice_then(|s| self.extend_from_slice(s));
+		self
+	}
+}
+
+impl Function {
 	/// Dispatch the function.
-	pub fn dispatch(&self, transactor: &AccountID, params: &[u8]) {
+	pub fn dispatch(&self, transactor: &AccountID, data: &[u8]) {
+		let mut params = StreamReader::new(data);
 		match *self {
 			Function::StakingStake => {
 				staking::stake(transactor);
@@ -37,14 +109,13 @@ impl Function {
 				staking::unstake(transactor);
 			}
 			Function::StakingTransferStake => {
-				let dest = FromSlice::from_slice(&params[0..size_of::<AccountID>()]).unwrap();
-				let value = FromSlice::from_slice(&params[size_of::<AccountID>()..size_of::<AccountID>() + 4]).unwrap();
+				let dest = params.read().unwrap();
+				let value = params.read().unwrap();
 				staking::transfer_stake(transactor, &dest, value);
 			}
 			Function::ConsensusSetSessionKey => {
-				let mut session = AccountID::default();
-				session.copy_from_slice(&params[0..size_of::<AccountID>()]);
-				consensus::set_session_key(transactor, session);
+				let session = params.read().unwrap();
+				consensus::set_session_key(transactor, &session);
 			}
 		}
 	}
@@ -128,6 +199,8 @@ trait EndianSensitive: Sized {
 	fn to_be(self) -> Self { self }
 	fn from_le(self) -> Self { self }
 	fn from_be(self) -> Self { self }
+	fn as_be_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T { f(&self) }
+	fn as_le_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T { f(&self) }
 }
 
 macro_rules! impl_endians {
@@ -137,6 +210,8 @@ macro_rules! impl_endians {
 			fn to_be(self) -> Self { <$t>::to_be(self) }
 			fn from_le(self) -> Self { <$t>::from_le(self) }
 			fn from_be(self) -> Self { <$t>::from_be(self) }
+			fn as_be_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T { let d = self.to_be(); f(&d) }
+			fn as_le_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T { let d = self.to_le(); f(&d) }
 		}
 	)* }
 }
@@ -151,23 +226,17 @@ impl_non_endians!(u8, i8, [u8; 20], [u8; 32]);
 
 trait Storage {
 	fn storage_into(key: &[u8]) -> Self;
-	fn store(self, key: &[u8]);
+	fn store(&self, key: &[u8]);
 }
 
-impl<T: Default + EndianSensitive> Storage for T {
+impl<T: Default + Sized + EndianSensitive> Storage for T {
 	fn storage_into(key: &[u8]) -> Self {
-		runtime_support::storage_into(key)
-			.map(EndianSensitive::from_le)
+		Slicable::set_as_slice(|out| runtime_support::read_storage(key, out) == out.len())
 			.unwrap_or_else(Default::default)
 	}
 
-	fn store(self, key: &[u8]) {
-		let size = size_of::<Self>();
-		let value_bytes = self.to_le();
-		let value_slice = unsafe {
-			std::slice::from_raw_parts(transmute::<*const Self, *const u8>(&value_bytes), size)
-		};
-		runtime_support::set_storage(key, value_slice);
+	fn store(&self, key: &[u8]) {
+		self.as_slice_then(|slice| runtime_support::set_storage(key, slice));
 	}
 }
 
@@ -175,23 +244,46 @@ fn storage_into<T: Storage>(key: &[u8]) -> T {
 	T::storage_into(key)
 }
 
-trait FromSlice: Sized {
-	fn from_slice(value: &[u8]) -> Option<Self>;
+/// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
+trait Slicable: Sized {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		Self::set_as_slice(|out| if value.len() == out.len() {
+			out.copy_from_slice(&value);
+			true
+		} else {
+			false
+		})
+	}
+	fn to_vec(&self) -> Vec<u8> {
+		self.as_slice_then(|s| s.to_vec())
+	}
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(set_slice: F) -> Option<Self>;
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.to_vec())
+	}
 }
 
-impl<T: EndianSensitive> FromSlice for T {
-	fn from_slice(value: &[u8]) -> Option<Self> {
+impl<T: EndianSensitive> Slicable for T {
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(fill_slice: F) -> Option<Self> {
 		let size = size_of::<T>();
-		if value.len() == size {
-			unsafe {
-				let mut result: T = std::mem::uninitialized();
-				std::slice::from_raw_parts_mut(transmute::<*mut T, *mut u8>(&mut result), size)
-					.copy_from_slice(&value);
-				Some(result.from_le())
-			}
+		let mut result: T = unsafe { std::mem::uninitialized() };
+		let result_slice = unsafe {
+			std::slice::from_raw_parts_mut(transmute::<*mut T, *mut u8>(&mut result), size)
+		};
+		if fill_slice(result_slice) {
+			Some(result.from_le())
 		} else {
 			None
 		}
+	}
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		let size = size_of::<Self>();
+		self.as_le_then(|le| {
+			let value_slice = unsafe {
+				std::slice::from_raw_parts(transmute::<*const Self, *const u8>(le), size)
+			};
+			f(value_slice)
+		})
 	}
 }
 
@@ -211,14 +303,11 @@ macro_rules! impl_endians {
 	( $( $t:ty ),* ) => { $(
 		impl KeyedVec for $t {
 			fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8> {
-				let size = size_of::<Self>();
-				let value_bytes = self.to_le();
-				let value_slice = unsafe {
-					std::slice::from_raw_parts(transmute::<*const Self, *const u8>(&value_bytes), size)
-				};
-				let mut r = prepend_key.to_vec();
-				r.extend_from_slice(value_slice);
-				r
+				self.as_slice_then(|slice| {
+					let mut r = prepend_key.to_vec();
+					r.extend_from_slice(slice);
+					r
+				})
 			}
 		}
 	)* }
@@ -226,7 +315,6 @@ macro_rules! impl_endians {
 
 impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
 
-// TODO: include RLP implementation
 // TODO: add keccak256 (or some better hashing scheme) & ECDSA-recover (or some better sig scheme)
 
 pub fn execute_block(_input: Vec<u8>) -> Vec<u8> {
@@ -353,7 +441,7 @@ pub mod consensus {
 
 	/// Sets the session key of `_transactor` to `_session`. This doesn't take effect until the next
 	/// session.
-	pub fn set_session_key(_transactor: &AccountID, _session: AccountID) {
+	pub fn set_session_key(_transactor: &AccountID, _session: &AccountID) {
 		unimplemented!()
 	}
 
@@ -519,6 +607,29 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			staking::transfer_stake(&one, &two, 69);
+			assert_eq!(staking::balance(&one), 42);
+			assert_eq!(staking::balance(&two), 69);
+		});
+	}
+
+	#[test]
+	fn staking_balance_transfer_dispatch_works() {
+		let one: AccountID = [1u8; 32];
+		let two: AccountID = [2u8; 32];
+
+		let mut t = TestExternalities { storage: map![
+			{ let mut r = b"sta\0bal\0".to_vec(); r.extend_from_slice(&one); r } => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+		], };
+
+		let tx = Transaction {
+			signed: one.clone(),
+			function: Function::StakingTransferStake,
+			input_data: vec![].join(&two).join(&69u64),
+			nonce: 0,
+		};
+
+		with_externalities(&mut t, || {
+			environment::execute_transaction(&tx);
 			assert_eq!(staking::balance(&one), 42);
 			assert_eq!(staking::balance(&two), 69);
 		});
