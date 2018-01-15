@@ -25,10 +25,22 @@ pub struct ExternalitiesHolder<'a> {
 
 declare_generic!(ext : ExternalitiesHolder);
 
-pub fn storage(_key: &[u8]) -> Vec<u8> {
-	ext::with(|holder| holder.ext.storage(_key).ok().map(|s| s.to_vec()))
+pub fn storage(key: &[u8]) -> Vec<u8> {
+	ext::with(|holder| holder.ext.storage(key).ok().map(|s| s.to_vec()))
 		.unwrap_or(None)
 		.unwrap_or_else(|| vec![])
+}
+
+pub fn read_storage(key: &[u8], value_out: &mut [u8]) -> usize {
+	ext::with(|holder| {
+		if let Ok(value) = holder.ext.storage(key) {
+			let written = ::std::cmp::min(value.len(), value_out.len());
+			value_out[0..written].copy_from_slice(&value[0..written]);
+			value.len()
+		} else {
+			0
+		}
+	}).unwrap_or(0)
 }
 
 pub fn storage_into<T: Sized>(_key: &[u8]) -> Option<T> {
