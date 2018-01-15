@@ -124,11 +124,13 @@ impl Function {
 }
 
 #[derive(Clone)]
+#[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct Digest {
 	pub logs: Vec<Vec<u8>>,
 }
 
 #[derive(Clone)]
+#[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct Header {
 	pub parent_hash: Hash,
 	pub number: BlockNumber,
@@ -145,6 +147,7 @@ pub struct Transaction {
 	pub nonce: TxOrder,
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct Block {
 	pub header: Header,
 	pub transactions: Vec<Transaction>,
@@ -267,6 +270,8 @@ trait Slicable: Sized {
 	fn size_of(_value: &[u8]) -> Option<usize>;
 }
 
+trait NonTrivialSlicable: Slicable {}
+
 impl<T: EndianSensitive> Slicable for T {
 	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(fill_slice: F) -> Option<Self> {
 		let size = size_of::<T>();
@@ -337,6 +342,72 @@ impl Slicable for Transaction {
 	fn size_of(data: &[u8]) -> Option<usize> {
 		let first_part = size_of::<AccountID>() + size_of::<u8>() + size_of::<TxOrder>();
 		let second_part = <Vec<u8>>::size_of(&data[first_part..])?;
+		Some(first_part + second_part)
+	}
+}
+
+impl NonTrivialSlicable for Transaction {}
+
+impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
+
+impl<T: NonTrivialSlicable> Slicable for Vec<T> {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		let len = Self::size_of(&value[0..4])?;
+		let mut off = 4;
+		let mut r = vec![];
+		while off < len {
+			let element_len = T::size_of(&value[off..])?;
+			r.push(T::from_slice(&value[off..off + element_len])?);
+			off += element_len;
+		}
+		Some(r)
+	}
+
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+		unimplemented!();
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		let vecs = self.iter().map(Slicable::to_vec).collect::<Vec<_>>();
+		let len = vecs.iter().fold(0, |mut a, v| {a += v.len(); a});
+		let mut r = vec![].join(&(len as u32));
+		vecs.iter().for_each(|v| r.extend_from_slice(v));
+		r
+	}
+
+	fn size_of(data: &[u8]) -> Option<usize> {
+		u32::from_slice(&data[0..4]).map(|i| (i + 4) as usize)
+	}
+}
+
+impl Slicable for Header {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		let mut reader = StreamReader::new(value);
+		Some(Header {
+			parent_hash: reader.read()?,
+			number: reader.read()?,
+			state_root: reader.read()?,
+			transaction_root: reader.read()?,
+			digest: Digest { logs: reader.read()?, },
+		})
+	}
+
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+		unimplemented!();
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		vec![]
+			.join(&self.parent_hash)
+			.join(&self.number)
+			.join(&self.state_root)
+			.join(&self.transaction_root)
+			.join(&self.digest.logs)
+	}
+
+	fn size_of(data: &[u8]) -> Option<usize> {
+		let first_part = size_of::<Hash>() + size_of::<BlockNumber>() + size_of::<Hash>() + size_of::<Hash>();
+		let second_part = <Vec<Vec<u8>>>::size_of(&data[first_part..])?;
 		Some(first_part + second_part)
 	}
 }
@@ -717,4 +788,6 @@ mod tests {
 		let deserialised: Transaction = Slicable::from_slice(&data).unwrap();
 		assert_eq!(deserialised, tx);
 	}
+
+	// TODO: Ser/de Header.
 }
