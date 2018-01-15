@@ -75,7 +75,7 @@ impl<'a> StreamWriter<'a> {
 		value.as_slice_then(|s| {
 			let new_offset = self.offset + s.len();
 			if self.data.len() <= new_offset {
-				let slice = &self.data[self.offset..new_offset];
+				let slice = &mut self.data[self.offset..new_offset];
 				self.offset = new_offset;
 				slice.copy_from_slice(s);
 				true
