@@ -60,7 +60,9 @@ impl<'a> StreamReader<'a> {
 		Slicable::from_slice(slice)
 	}
 }
-
+/*
+// Not in use yet
+// TODO: introduce fn size_will_be(&self) -> usize; to Slicable trait and implement
 struct StreamWriter<'a> {
 	data: &'a mut[u8],
 	offset: usize,
@@ -87,7 +89,7 @@ impl<'a> StreamWriter<'a> {
 		})
 	}
 }
-
+*/
 trait Joiner {
 	fn join<T: Slicable + Sized>(self, value: &T) -> Self;
 }
@@ -768,10 +770,17 @@ mod tests {
 			signed: one.clone(),
 			function: Function::StakingTransferStake,
 			input_data: vec![].join(&two).join(&69u64),
-			nonce: 0,
+			nonce: 69,
 		};
 		let serialised = tx.to_vec();
-		assert_eq!(serialised, vec![1u8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 69, 0, 0, 0, 0, 0, 0, 0]);
+		assert_eq!(serialised, vec![
+			1u8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+			2,
+			69, 0, 0, 0, 0, 0, 0, 0,
+			40, 0, 0, 0,
+				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+				69, 0, 0, 0, 0, 0, 0, 0
+		]);
 	}
 
 	#[test]
@@ -782,12 +791,64 @@ mod tests {
 			signed: one.clone(),
 			function: Function::StakingTransferStake,
 			input_data: vec![].join(&two).join(&69u64),
-			nonce: 0,
+			nonce: 69,
 		};
-		let data = [1u8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 69, 0, 0, 0, 0, 0, 0, 0];
-		let deserialised: Transaction = Slicable::from_slice(&data).unwrap();
+		let data = [
+			1u8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+			2,
+			69, 0, 0, 0, 0, 0, 0, 0,
+			40, 0, 0, 0,
+				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+				69, 0, 0, 0, 0, 0, 0, 0
+		];
+		let deserialised = Transaction::from_slice(&data).unwrap();
 		assert_eq!(deserialised, tx);
 	}
 
-	// TODO: Ser/de Header.
+	#[test]
+	fn serialise_header_works() {
+		let h = Header {
+			parent_hash: [4u8; 32],
+			number: 42,
+			state_root: [5u8; 32],
+			transaction_root: [6u8; 32],
+			digest: Digest { logs: vec![ b"one log".to_vec(), b"another log".to_vec() ], },
+		};
+		let serialised = h.to_vec();
+		assert_eq!(serialised, vec![
+			4u8, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+			42, 0, 0, 0, 0, 0, 0, 0,
+			5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+			6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+			26, 0, 0, 0,
+				7, 0, 0, 0,
+					111, 110, 101, 32, 108, 111, 103,
+				11, 0, 0, 0,
+					97, 110, 111, 116, 104, 101, 114, 32, 108, 111, 103
+		]);
+	}
+
+	#[test]
+	fn deserialise_header_works() {
+		let h = Header {
+			parent_hash: [4u8; 32],
+			number: 42,
+			state_root: [5u8; 32],
+			transaction_root: [6u8; 32],
+			digest: Digest { logs: vec![ b"one log".to_vec(), b"another log".to_vec() ], },
+		};
+		let data = [
+			4u8, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+			42, 0, 0, 0, 0, 0, 0, 0,
+			5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+			6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+			26, 0, 0, 0,
+				7, 0, 0, 0,
+					111, 110, 101, 32, 108, 111, 103,
+				11, 0, 0, 0,
+					97, 110, 111, 116, 104, 101, 114, 32, 108, 111, 103
+		];
+		let deserialised = Header::from_slice(&data).unwrap();
+		assert_eq!(deserialised, h);
+	}
 }
