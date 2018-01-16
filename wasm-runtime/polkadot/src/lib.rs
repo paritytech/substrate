@@ -517,7 +517,7 @@ pub mod environment {
 		});
 
 		// TODO: check transaction trie root represents the transactions.
-		// TODO: store the header in state.
+		// TODO: store the header hash in storage.
 
 		staking::pre_transactions();
 
@@ -542,6 +542,8 @@ pub mod environment {
 	pub fn execute_transaction(_tx: &Transaction) -> Vec<u8> {
 		// TODO: decode data and ensure valid
 		// TODO: ensure signature valid and recover id (use authentication::authenticate)
+		// TODO: check nonce
+		// TODO: increment nonce in storage
 		// TODO: ensure target_function valid
 		// TODO: decode parameters
 
@@ -554,12 +556,6 @@ pub mod environment {
 	/// Set the new code.
 	pub fn set_code(new: &[u8]) {
 		runtime_support::set_storage(b"\0code", new)
-	}
-
-	/// Set the light-client digest for the header.
-	pub fn set_digest(_preserialised_rlp_digest: &[u8]) {
-		// TODO: Mention this to the external environment?
-		unimplemented!()
 	}
 }
 
@@ -611,7 +607,7 @@ pub mod consensus {
 
 	/// The number of blocks in each session.
 	pub fn session_length() -> BlockNumber {
-		storage_into(b"con\0sel")
+		storage_into(b"con\0bps")
 	}
 
 	/// Sets the session key of `_transactor` to `_session`. This doesn't take effect until the next
@@ -695,22 +691,6 @@ pub mod staking {
 	pub fn post_transactions() {
 		// TODO: check block number and call next_era if necessary.
 		consensus::post_transactions();
-	}
-}
-
-pub mod authentication {
-	use super::*;
-
-	pub fn validate_signature(_tx: Transaction) -> ( AccountID, TxOrder ) {
-		unimplemented!()
-	}
-
-	pub fn nonce(_id: AccountID) -> TxOrder {
-		unimplemented!()
-	}
-
-	pub fn authenticate(_tx: Transaction) -> AccountID {
-		unimplemented!()
 	}
 }
 
