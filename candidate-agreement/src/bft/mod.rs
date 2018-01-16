@@ -76,8 +76,8 @@ pub trait Context {
 	type Candidate: Debug + Eq + Clone;
 	/// Candidate digest.
 	type Digest: Debug + Hash + Eq + Clone;
-	/// Validator ID.
-	type ValidatorId: Debug + Hash + Eq + Clone;
+	/// Authority ID.
+	type AuthorityId: Debug + Hash + Eq + Clone;
 	/// Signature.
 	type Signature: Debug + Eq + Clone;
 	/// A future that resolves when a round timeout is concluded.
@@ -85,8 +85,8 @@ pub trait Context {
 	/// A future that resolves when a proposal is ready.
 	type CreateProposal: Future<Item=Self::Candidate>;
 
-	/// Get the local validator ID.
-	fn local_id(&self) -> Self::ValidatorId;
+	/// Get the local authority ID.
+	fn local_id(&self) -> Self::AuthorityId;
 
 	/// Get the best proposal.
 	fn proposal(&self) -> Self::CreateProposal;
@@ -94,12 +94,12 @@ pub trait Context {
 	/// Get the digest of a candidate.
 	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest;
 
-	/// Sign a message using the local validator ID.
+	/// Sign a message using the local authority ID.
 	fn sign_local(&self, message: Message<Self::Candidate, Self::Digest>)
-		-> LocalizedMessage<Self::Candidate, Self::Digest, Self::ValidatorId, Self::Signature>;
+		-> LocalizedMessage<Self::Candidate, Self::Digest, Self::AuthorityId, Self::Signature>;
 
 	/// Get the proposer for a given round of consensus.
-	fn round_proposer(&self, round: usize) -> Self::ValidatorId;
+	fn round_proposer(&self, round: usize) -> Self::AuthorityId;
 
 	/// Whether the candidate is valid.
 	fn candidate_valid(&self, candidate: &Self::Candidate) -> bool;
@@ -121,11 +121,11 @@ pub enum Communication<C, D, V, S> {
 
 /// Type alias for a localized message using only type parameters from `Context`.
 // TODO: actual type alias when it's no longer a warning.
-pub struct ContextCommunication<C: Context + ?Sized>(pub Communication<C::Candidate, C::Digest, C::ValidatorId, C::Signature>);
+pub struct ContextCommunication<C: Context + ?Sized>(pub Communication<C::Candidate, C::Digest, C::AuthorityId, C::Signature>);
 
 impl<C: Context + ?Sized> Clone for ContextCommunication<C>
 	where
-		LocalizedMessage<C::Candidate, C::Digest, C::ValidatorId, C::Signature>: Clone,
+		LocalizedMessage<C::Candidate, C::Digest, C::AuthorityId, C::Signature>: Clone,
 		PrepareJustification<C::Digest, C::Signature>: Clone,
 {
 	fn clone(&self) -> Self {
@@ -242,7 +242,7 @@ enum LocalState {
 //   - a higher threshold-prepare is broadcast to us. in this case we can
 //     advance to the round of the threshold-prepare. this is an indication
 //     that we have experienced severe asynchrony/clock drift with the remainder
-//     of the other validators, and it is unlikely that we can assist in
+//     of the other authorities, and it is unlikely that we can assist in
 //     consensus meaningfully. nevertheless we make an attempt.
 struct Strategy<C: Context> {
 	nodes: usize,
@@ -252,9 +252,9 @@ struct Strategy<C: Context> {
 	local_state: LocalState,
 	locked: Option<Locked<C::Digest, C::Signature>>,
 	notable_candidates: HashMap<C::Digest, C::Candidate>,
-	current_accumulator: Accumulator<C::Candidate, C::Digest, C::ValidatorId, C::Signature>,
-	future_accumulator: Accumulator<C::Candidate, C::Digest, C::ValidatorId, C::Signature>,
-	local_id: C::ValidatorId,
+	current_accumulator: Accumulator<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
+	future_accumulator: Accumulator<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
+	local_id: C::AuthorityId,
 }
 
 impl<C: Context> Strategy<C> {
@@ -290,7 +290,7 @@ impl<C: Context> Strategy<C> {
 
 	fn import_message(
 		&mut self,
-		msg: LocalizedMessage<C::Candidate, C::Digest, C::ValidatorId, C::Signature>
+		msg: LocalizedMessage<C::Candidate, C::Digest, C::AuthorityId, C::Signature>
 	) {
 		let round_number = msg.message.round_number();
 
