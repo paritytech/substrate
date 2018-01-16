@@ -9,7 +9,7 @@ extern crate alloc;
 pub use alloc::vec::Vec;
 pub use alloc::boxed::Box;
 pub use alloc::rc::Rc;
-pub use core::mem::{transmute, size_of, uninitialized};
+pub use core::mem::{transmute, size_of, uninitialized, swap};
 pub use core::cell::{RefCell, Ref, RefMut};
 
 extern crate pwasm_libc;

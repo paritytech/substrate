@@ -6,7 +6,7 @@ pub use std::vec::Vec;
 pub use std::rc::Rc;
 pub use std::cell::RefCell;
 pub use std::boxed::Box;
-pub use std::mem::{size_of, transmute};
+pub use std::mem::{size_of, transmute, swap};
 
 pub use polkadot_state_machine::Externalities;
 use std::fmt;

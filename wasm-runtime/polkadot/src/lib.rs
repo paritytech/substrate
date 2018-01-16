@@ -3,8 +3,7 @@
 
 #[macro_use]
 extern crate runtime_support;
-use runtime_support::{Vec, size_of};
-use runtime_support::{Rc, RefCell, transmute, Box};
+use runtime_support::{Vec, size_of, Rc, RefCell, transmute, swap, Box};
 
 /// The hash of an ECDSA pub key which is used to identify an external transactor.
 pub type AccountID = [u8; 32];
@@ -125,7 +124,7 @@ impl Function {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 #[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct Digest {
 	pub logs: Vec<Vec<u8>>,
@@ -176,6 +175,8 @@ impl Block {
 #[derive(Default)]
 struct Environment {
 	block_number: BlockNumber,
+	digest: Digest,
+	next_log_index: usize,
 }
 
 fn with_env<T, F: FnOnce(&mut Environment) -> T>(f: F) -> T {
@@ -414,6 +415,32 @@ impl Slicable for Header {
 	}
 }
 
+impl Slicable for Block {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		let mut reader = StreamReader::new(value);
+		Some(Block {
+			header: reader.read()?,
+			transactions: reader.read()?,
+		})
+	}
+
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+		unimplemented!();
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		vec![]
+			.join(&self.header)
+			.join(&self.transactions)
+	}
+
+	fn size_of(data: &[u8]) -> Option<usize> {
+		let first_part = Header::size_of(data)?;
+		let second_part = <Vec<Transaction>>::size_of(&data[first_part..])?;
+		Some(first_part + second_part)
+	}
+}
+
 trait KeyedVec {
 	fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8>;
 }
@@ -444,14 +471,12 @@ impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
 
 // TODO: add keccak256 (or some better hashing scheme) & ECDSA-recover (or some better sig scheme)
 
-pub fn execute_block(_input: Vec<u8>) -> Vec<u8> {
-	let block = Block::from_rlp(&_input);
-	environment::execute_block(&block)
+pub fn execute_block(input: Vec<u8>) -> Vec<u8> {
+	environment::execute_block(Block::from_slice(&input).unwrap())
 }
 
-pub fn execute_transaction(_input: Vec<u8>) -> Vec<u8> {
-	let tx = Transaction::from_rlp(&_input);
-	environment::execute_transaction(&tx)
+pub fn execute_transaction(input: Vec<u8>) -> Vec<u8> {
+	environment::execute_transaction(&Transaction::from_slice(&input).unwrap())
 }
 
 impl_stubs!(execute_block, execute_transaction);
@@ -470,24 +495,47 @@ pub mod environment {
 		with_env(|e| e.block_number)
 	}
 
-	/// Get the block hash of a given block.
+	/// Get the block hash of a given block (uses storage).
 	pub fn block_hash(_number: BlockNumber) -> Hash {
 		unimplemented!()
 	}
 
-	pub fn execute_block(_block: &Block) -> Vec<u8> {
+	/// Deposits a log and ensures it matches the blocks log data.
+	pub fn deposit_log(log: &[u8]) {
+		with_env(|e| {
+			assert_eq!(log, &e.digest.logs[e.next_log_index][..]);
+			e.next_log_index += 1;
+		});
+	}
+
+	pub fn execute_block(mut block: Block) -> Vec<u8> {
 		// populate environment from header.
-		with_env(|e| e.block_number = _block.header.number);
+		with_env(|e| {
+			e.block_number = block.header.number;
+			swap(&mut e.digest, &mut block.header.digest);
+			e.next_log_index = 0;
+		});
+
+		// TODO: check transaction trie root represents the transactions.
+		// TODO: store the header in state.
 
 		staking::pre_transactions();
 
-		// TODO: go through each transaction and use execute_transaction to execute.
+		block.transactions.iter().for_each(|tx| { execute_transaction(tx); });
 
 		staking::post_transactions();
 
-		// TODO: ensure digest in header is what we expect from transactions.
+		final_checks(&block);
+
+		// TODO: check state root somehow
 
 		Vec::new()
+	}
+
+	fn final_checks(_block: &Block) {
+		with_env(|e| {
+			assert_eq!(e.next_log_index, e.digest.logs.len());
+		});
 	}
 
 	/// Execute a given transaction.
@@ -850,5 +898,118 @@ mod tests {
 		];
 		let deserialised = Header::from_slice(&data).unwrap();
 		assert_eq!(deserialised, h);
+	}
+
+	#[test]
+	fn serialise_block_works() {
+		let one: AccountID = [1u8; 32];
+		let two: AccountID = [2u8; 32];
+		let tx1 = Transaction {
+			signed: one.clone(),
+			function: Function::StakingTransferStake,
+			input_data: vec![].join(&two).join(&69u64),
+			nonce: 69,
+		};
+		let tx2 = Transaction {
+			signed: two.clone(),
+			function: Function::StakingStake,
+			input_data: vec![],
+			nonce: 42,
+		};
+		let h = Header {
+			parent_hash: [4u8; 32],
+			number: 42,
+			state_root: [5u8; 32],
+			transaction_root: [6u8; 32],
+			digest: Digest { logs: vec![ b"one log".to_vec(), b"another log".to_vec() ], },
+		};
+		let b = Block {
+			header: h,
+			transactions: vec![tx1, tx2],
+		};
+		let serialised = b.to_vec();
+		assert_eq!(serialised, vec![
+			// header
+			4u8, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+			42, 0, 0, 0, 0, 0, 0, 0,
+			5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+			6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+			26, 0, 0, 0,
+				7, 0, 0, 0,
+					111, 110, 101, 32, 108, 111, 103,
+				11, 0, 0, 0,
+					97, 110, 111, 116, 104, 101, 114, 32, 108, 111, 103,
+			// transactions
+			130, 0, 0, 0,
+				// tx1
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+				2,
+				69, 0, 0, 0, 0, 0, 0, 0,
+				40, 0, 0, 0,
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					69, 0, 0, 0, 0, 0, 0, 0,
+				// tx2
+				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+				0,
+				42, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0
+		]);
+	}
+
+	#[test]
+	fn deserialise_block_works() {
+		let one: AccountID = [1u8; 32];
+		let two: AccountID = [2u8; 32];
+		let tx1 = Transaction {
+			signed: one.clone(),
+			function: Function::StakingTransferStake,
+			input_data: vec![].join(&two).join(&69u64),
+			nonce: 69,
+		};
+		let tx2 = Transaction {
+			signed: two.clone(),
+			function: Function::StakingStake,
+			input_data: vec![],
+			nonce: 42,
+		};
+		let h = Header {
+			parent_hash: [4u8; 32],
+			number: 42,
+			state_root: [5u8; 32],
+			transaction_root: [6u8; 32],
+			digest: Digest { logs: vec![ b"one log".to_vec(), b"another log".to_vec() ], },
+		};
+		let b = Block {
+			header: h,
+			transactions: vec![tx1, tx2],
+		};
+		let data = [
+			// header
+			4u8, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+			42, 0, 0, 0, 0, 0, 0, 0,
+			5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+			6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+			26, 0, 0, 0,
+				7, 0, 0, 0,
+					111, 110, 101, 32, 108, 111, 103,
+				11, 0, 0, 0,
+					97, 110, 111, 116, 104, 101, 114, 32, 108, 111, 103,
+			// transactions
+			130, 0, 0, 0,
+				// tx1
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+				2,
+				69, 0, 0, 0, 0, 0, 0, 0,
+				40, 0, 0, 0,
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					69, 0, 0, 0, 0, 0, 0, 0,
+				// tx2
+				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+				0,
+				42, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0
+		];
+		let deserialised = Block::from_slice(&data).unwrap();
+		assert_eq!(deserialised, b);
 	}
 }
