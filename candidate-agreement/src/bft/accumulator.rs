@@ -117,37 +117,37 @@ struct VoteCounts {
 
 /// Accumulates messages for a given round of BFT consensus.
 ///
-/// This isn't tied to the "view" of a single validator. It
+/// This isn't tied to the "view" of a single authority. It
 /// keeps accurate track of the state of the BFT consensus based
 /// on all messages imported.
 #[derive(Debug)]
-pub struct Accumulator<Candidate, Digest, ValidatorId, Signature>
+pub struct Accumulator<Candidate, Digest, AuthorityId, Signature>
 	where
 	Candidate: Eq + Clone,
 	Digest: Hash + Eq + Clone,
-	ValidatorId: Hash + Eq,
+	AuthorityId: Hash + Eq,
 	Signature: Eq + Clone,
 {
 	round_number: usize,
 	threshold: usize,
-	round_proposer: ValidatorId,
+	round_proposer: AuthorityId,
 	proposal: Option<Candidate>,
-	prepares: HashMap<ValidatorId, (Digest, Signature)>,
-	commits: HashMap<ValidatorId, (Digest, Signature)>,
+	prepares: HashMap<AuthorityId, (Digest, Signature)>,
+	commits: HashMap<AuthorityId, (Digest, Signature)>,
 	vote_counts: HashMap<Digest, VoteCounts>,
-	advance_round: HashSet<ValidatorId>,
+	advance_round: HashSet<AuthorityId>,
 	state: State<Candidate, Digest, Signature>,
 }
 
-impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, ValidatorId, Signature>
+impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, AuthorityId, Signature>
 	where
 	Candidate: Eq + Clone,
 	Digest: Hash + Eq + Clone,
-	ValidatorId: Hash + Eq,
+	AuthorityId: Hash + Eq,
 	Signature: Eq + Clone,
 {
 	/// Create a new state accumulator.
-	pub fn new(round_number: usize, threshold: usize, round_proposer: ValidatorId) -> Self {
+	pub fn new(round_number: usize, threshold: usize, round_proposer: AuthorityId) -> Self {
 		Accumulator {
 			round_number,
 			threshold,
@@ -184,7 +184,7 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 	/// and authorization should have already been checked.
 	pub fn import_message(
 		&mut self,
-		message: LocalizedMessage<Candidate, Digest, ValidatorId, Signature>,
+		message: LocalizedMessage<Candidate, Digest, AuthorityId, Signature>,
 	)
 	{
 		// message from different round.
@@ -205,7 +205,7 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 	fn import_proposal(
 		&mut self,
 		proposal: Candidate,
-		sender: ValidatorId,
+		sender: AuthorityId,
 	) {
 		if sender != self.round_proposer || self.proposal.is_some() { return }
 
@@ -216,7 +216,7 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 	fn import_prepare(
 		&mut self,
 		digest: Digest,
-		sender: ValidatorId,
+		sender: AuthorityId,
 		signature: Signature,
 	) {
 		// ignore any subsequent prepares by the same sender.
@@ -259,7 +259,7 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 	fn import_commit(
 		&mut self,
 		digest: Digest,
-		sender: ValidatorId,
+		sender: AuthorityId,
 		signature: Signature,
 	) {
 		// ignore any subsequent commits by the same sender.
@@ -299,7 +299,7 @@ impl<Candidate, Digest, ValidatorId, Signature> Accumulator<Candidate, Digest, V
 
 	fn import_advance_round(
 		&mut self,
-		sender: ValidatorId,
+		sender: AuthorityId,
 	) {
 		self.advance_round.insert(sender);
 
@@ -327,7 +327,7 @@ mod tests {
 	pub struct Digest(usize);
 
 	#[derive(Hash, PartialEq, Eq, Debug)]
-	pub struct ValidatorId(usize);
+	pub struct AuthorityId(usize);
 
 	#[derive(PartialEq, Eq, Clone, Debug)]
 	pub struct Signature(usize, usize);
@@ -342,7 +342,7 @@ mod tests {
 
 		let check_message = |r, d: &Digest, s: &Signature| {
 			if r == 2 && d.0 == 600 && s.0 == 600 {
-				Some(ValidatorId(s.1))
+				Some(AuthorityId(s.1))
 			} else {
 				None
 			}
@@ -365,11 +365,11 @@ mod tests {
 
 	#[test]
 	fn accepts_proposal_from_proposer_only() {
-		let mut accumulator = Accumulator::<_, Digest, _, _>::new(1, 7, ValidatorId(8));
+		let mut accumulator = Accumulator::<_, Digest, _, _>::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		accumulator.import_message(LocalizedMessage {
-			sender: ValidatorId(5),
+			sender: AuthorityId(5),
 			signature: Signature(999, 5),
 			message: Message::Propose(1, Candidate(999)),
 		});
@@ -377,7 +377,7 @@ mod tests {
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		accumulator.import_message(LocalizedMessage {
-			sender: ValidatorId(8),
+			sender: AuthorityId(8),
 			signature: Signature(999, 8),
 			message: Message::Propose(1, Candidate(999)),
 		});
@@ -387,11 +387,11 @@ mod tests {
 
 	#[test]
 	fn reaches_prepare_phase() {
-		let mut accumulator = Accumulator::new(1, 7, ValidatorId(8));
+		let mut accumulator = Accumulator::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		accumulator.import_message(LocalizedMessage {
-			sender: ValidatorId(8),
+			sender: AuthorityId(8),
 			signature: Signature(999, 8),
 			message: Message::Propose(1, Candidate(999)),
 		});
@@ -400,7 +400,7 @@ mod tests {
 
 		for i in 0..6 {
 			accumulator.import_message(LocalizedMessage {
-				sender: ValidatorId(i),
+				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Prepare(1, Digest(999)),
 			});
@@ -409,7 +409,7 @@ mod tests {
 		}
 
 		accumulator.import_message(LocalizedMessage {
-			sender: ValidatorId(7),
+			sender: AuthorityId(7),
 			signature: Signature(999, 7),
 			message: Message::Prepare(1, Digest(999)),
 		});
@@ -422,11 +422,11 @@ mod tests {
 
 	#[test]
 	fn prepare_to_commit() {
-		let mut accumulator = Accumulator::new(1, 7, ValidatorId(8));
+		let mut accumulator = Accumulator::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		accumulator.import_message(LocalizedMessage {
-			sender: ValidatorId(8),
+			sender: AuthorityId(8),
 			signature: Signature(999, 8),
 			message: Message::Propose(1, Candidate(999)),
 		});
@@ -435,7 +435,7 @@ mod tests {
 
 		for i in 0..6 {
 			accumulator.import_message(LocalizedMessage {
-				sender: ValidatorId(i),
+				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Prepare(1, Digest(999)),
 			});
@@ -444,7 +444,7 @@ mod tests {
 		}
 
 		accumulator.import_message(LocalizedMessage {
-			sender: ValidatorId(7),
+			sender: AuthorityId(7),
 			signature: Signature(999, 7),
 			message: Message::Prepare(1, Digest(999)),
 		});
@@ -456,7 +456,7 @@ mod tests {
 
 		for i in 0..6 {
 			accumulator.import_message(LocalizedMessage {
-				sender: ValidatorId(i),
+				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Commit(1, Digest(999)),
 			});
@@ -468,7 +468,7 @@ mod tests {
 		}
 
 		accumulator.import_message(LocalizedMessage {
-			sender: ValidatorId(7),
+			sender: AuthorityId(7),
 			signature: Signature(999, 7),
 			message: Message::Commit(1, Digest(999)),
 		});
@@ -481,11 +481,11 @@ mod tests {
 
 	#[test]
 	fn prepare_to_advance() {
-		let mut accumulator = Accumulator::new(1, 7, ValidatorId(8));
+		let mut accumulator = Accumulator::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		accumulator.import_message(LocalizedMessage {
-			sender: ValidatorId(8),
+			sender: AuthorityId(8),
 			signature: Signature(999, 8),
 			message: Message::Propose(1, Candidate(999)),
 		});
@@ -494,7 +494,7 @@ mod tests {
 
 		for i in 0..7 {
 			accumulator.import_message(LocalizedMessage {
-				sender: ValidatorId(i),
+				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Prepare(1, Digest(999)),
 			});
@@ -507,7 +507,7 @@ mod tests {
 
 		for i in 0..6 {
 			accumulator.import_message(LocalizedMessage {
-				sender: ValidatorId(i),
+				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::AdvanceRound(1),
 			});
@@ -519,7 +519,7 @@ mod tests {
 		}
 
 		accumulator.import_message(LocalizedMessage {
-			sender: ValidatorId(7),
+			sender: AuthorityId(7),
 			signature: Signature(999, 7),
 			message: Message::AdvanceRound(1),
 		});
@@ -532,12 +532,12 @@ mod tests {
 
 	#[test]
 	fn conclude_different_than_proposed() {
-		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, ValidatorId(8));
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		for i in 0..7 {
 			accumulator.import_message(LocalizedMessage {
-				sender: ValidatorId(i),
+				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Prepare(1, Digest(999)),
 			});
@@ -550,7 +550,7 @@ mod tests {
 
 		for i in 0..7 {
 			accumulator.import_message(LocalizedMessage {
-				sender: ValidatorId(i),
+				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Commit(1, Digest(999)),
 			});
@@ -564,12 +564,12 @@ mod tests {
 
 	#[test]
 	fn begin_to_advance() {
-		let mut accumulator = Accumulator::<Candidate, Digest, _, _>::new(1, 7, ValidatorId(8));
+		let mut accumulator = Accumulator::<Candidate, Digest, _, _>::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		for i in 0..7 {
 			accumulator.import_message(LocalizedMessage {
-				sender: ValidatorId(i),
+				sender: AuthorityId(i),
 				signature: Signature(1, i),
 				message: Message::AdvanceRound(1),
 			});
@@ -583,12 +583,12 @@ mod tests {
 
 	#[test]
 	fn conclude_without_prepare() {
-		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, ValidatorId(8));
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		for i in 0..7 {
 			accumulator.import_message(LocalizedMessage {
-				sender: ValidatorId(i),
+				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Commit(1, Digest(999)),
 			});

@@ -34,10 +34,10 @@ struct Candidate(usize);
 struct Digest(usize);
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-struct ValidatorId(usize);
+struct AuthorityId(usize);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-struct Signature(Message<Candidate, Digest>, ValidatorId);
+struct Signature(Message<Candidate, Digest>, AuthorityId);
 
 struct SharedContext {
 	node_count: usize,
@@ -89,13 +89,13 @@ impl SharedContext {
 		self.current_round += 1;
 	}
 
-	fn round_proposer(&self, round: usize) -> ValidatorId {
-		ValidatorId(round % self.node_count)
+	fn round_proposer(&self, round: usize) -> AuthorityId {
+		AuthorityId(round % self.node_count)
 	}
 }
 
 struct TestContext {
-	local_id: ValidatorId,
+	local_id: AuthorityId,
 	proposal: Mutex<usize>,
 	shared: Arc<Mutex<SharedContext>>,
 }
@@ -103,12 +103,12 @@ struct TestContext {
 impl Context for TestContext {
 	type Candidate = Candidate;
 	type Digest = Digest;
-	type ValidatorId = ValidatorId;
+	type AuthorityId = AuthorityId;
 	type Signature = Signature;
 	type RoundTimeout = Box<Future<Item=(), Error=Error>>;
 	type CreateProposal = FutureResult<Candidate, Error>;
 
-	fn local_id(&self) -> ValidatorId {
+	fn local_id(&self) -> AuthorityId {
 		self.local_id.clone()
 	}
 
@@ -128,7 +128,7 @@ impl Context for TestContext {
 	}
 
 	fn sign_local(&self, message: Message<Candidate, Digest>)
-		-> LocalizedMessage<Candidate, Digest, ValidatorId, Signature>
+		-> LocalizedMessage<Candidate, Digest, AuthorityId, Signature>
 	{
 		let signature = Signature(message.clone(), self.local_id.clone());
 		LocalizedMessage {
@@ -138,7 +138,7 @@ impl Context for TestContext {
 		}
 	}
 
-	fn round_proposer(&self, round: usize) -> ValidatorId {
+	fn round_proposer(&self, round: usize) -> AuthorityId {
 		self.shared.lock().unwrap().round_proposer(round)
 	}
 
@@ -178,7 +178,7 @@ fn consensus_completes_with_minimum_good() {
 		.enumerate()
 		.map(|(i, (tx, rx))| {
 			let ctx = TestContext {
-				local_id: ValidatorId(i),
+				local_id: AuthorityId(i),
 				proposal: Mutex::new(i),
 				shared: shared_context.clone(),
 			};
@@ -234,7 +234,7 @@ fn consensus_does_not_complete_without_enough_nodes() {
 		.enumerate()
 		.map(|(i, (tx, rx))| {
 			let ctx = TestContext {
-				local_id: ValidatorId(i),
+				local_id: AuthorityId(i),
 				proposal: Mutex::new(i),
 				shared: shared_context.clone(),
 			};
@@ -273,7 +273,7 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 		round_number: locked_round,
 		digest: locked_digest.clone(),
 		signatures: (0..7)
-			.map(|i| Signature(Message::Prepare(locked_round, locked_digest.clone()), ValidatorId(i)))
+			.map(|i| Signature(Message::Prepare(locked_round, locked_digest.clone()), AuthorityId(i)))
 			.collect()
 	}.check(7, |_, _, s| Some(s.1.clone())).unwrap();
 
@@ -290,7 +290,7 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 		.enumerate()
 		.map(|(i, (tx, rx))| {
 			let ctx = TestContext {
-				local_id: ValidatorId(i),
+				local_id: AuthorityId(i),
 				proposal: Mutex::new(i),
 				shared: shared_context.clone(),
 			};

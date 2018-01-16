@@ -75,7 +75,7 @@ pub struct HandleIncoming<C: Context, I> {
 	table: SharedTable<C>,
 	messages_in: Fuse<I>,
 	bft_out: mpsc::UnboundedSender<<C as TypeResolve>::BftCommunication>,
-	local_id: C::ValidatorId,
+	local_id: C::AuthorityId,
 	requesting_about: FuturesUnordered<Checking<
 		C::Digest,
 		<C::CheckAvailability as IntoFuture>::Future,
@@ -98,7 +98,7 @@ impl<C: Context, I> HandleIncoming<C, I> {
 		self.table.sign_and_import(statement);
 	}
 
-	fn import_message(&mut self, origin: C::ValidatorId, message: CheckedMessage<C>) {
+	fn import_message(&mut self, origin: C::AuthorityId, message: CheckedMessage<C>) {
 		match message {
 			CheckedMessage::Bft(msg) => { let _ = self.bft_out.unbounded_send(msg); }
 			CheckedMessage::Table(table_messages) => {
@@ -161,7 +161,7 @@ impl<C: Context, I> HandleIncoming<C, I> {
 impl<C, I, E> HandleIncoming<C, I>
 	where
 		C: Context,
-		I: Stream<Item=(C::ValidatorId, CheckedMessage<C>),Error=E>,
+		I: Stream<Item=(C::AuthorityId, CheckedMessage<C>),Error=E>,
 		C::CheckAvailability: IntoFuture<Error=E>,
 		C::CheckCandidate: IntoFuture<Error=E>,
 {
@@ -187,7 +187,7 @@ impl<C, I, E> HandleIncoming<C, I>
 impl<C, I, E> Future for HandleIncoming<C, I>
 	where
 		C: Context,
-		I: Stream<Item=(C::ValidatorId, CheckedMessage<C>),Error=E>,
+		I: Stream<Item=(C::AuthorityId, CheckedMessage<C>),Error=E>,
 		C::CheckAvailability: IntoFuture<Error=E>,
 		C::CheckCandidate: IntoFuture<Error=E>,
 {

@@ -31,7 +31,7 @@ use tokio_timer::Timer;
 use super::*;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Clone, Copy)]
-struct ValidatorId(usize);
+struct AuthorityId(usize);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Clone)]
 struct Digest(Vec<usize>);
@@ -52,8 +52,8 @@ struct Proposal {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 enum Signature {
-	Table(ValidatorId, table::Statement<ParachainCandidate, Digest>),
-	Bft(ValidatorId, bft::Message<Proposal, Digest>),
+	Table(AuthorityId, table::Statement<ParachainCandidate, Digest>),
+	Bft(AuthorityId, bft::Message<Proposal, Digest>),
 }
 
 enum Error {
@@ -72,11 +72,11 @@ struct SharedTestContext {
 #[derive(Debug, Clone)]
 struct TestContext {
 	shared: Arc<SharedTestContext>,
-	local_id: ValidatorId,
+	local_id: AuthorityId,
 }
 
 impl Context for TestContext {
-	type ValidatorId = ValidatorId;
+	type AuthorityId = AuthorityId;
 	type Digest = Digest;
 	type GroupId = GroupId;
 	type Signature = Signature;
@@ -87,8 +87,8 @@ impl Context for TestContext {
 	type CheckAvailability = Box<Future<Item=bool,Error=Error>>;
 
 	type StatementBatch = VecBatch<
-		ValidatorId,
-		table::SignedStatement<ParachainCandidate, Digest, ValidatorId, Signature>
+		AuthorityId,
+		table::SignedStatement<ParachainCandidate, Digest, AuthorityId, Signature>
 	>;
 
 	fn candidate_digest(candidate: &ParachainCandidate) -> Digest {
@@ -106,8 +106,8 @@ impl Context for TestContext {
 		candidate.group.clone()
 	}
 
-	fn round_proposer(&self, round: usize) -> ValidatorId {
-		ValidatorId(round % self.shared.n_authorities)
+	fn round_proposer(&self, round: usize) -> AuthorityId {
+		AuthorityId(round % self.shared.n_authorities)
 	}
 
 	fn check_validity(&self, _candidate: &ParachainCandidate) -> Self::CheckCandidate {
@@ -151,7 +151,7 @@ impl Context for TestContext {
 		}
 	}
 
-	fn local_id(&self) -> ValidatorId {
+	fn local_id(&self) -> AuthorityId {
 		self.local_id.clone()
 	}
 
@@ -261,7 +261,7 @@ impl<V, T> ::StatementBatch<V, T> for VecBatch<V, T> {
 }
 
 fn make_group_assignments(n_authorities: usize, n_groups: usize)
-	-> HashMap<GroupId, GroupInfo<ValidatorId>>
+	-> HashMap<GroupId, GroupInfo<AuthorityId>>
 {
 	let mut map = HashMap::new();
 	let threshold = (n_authorities / n_groups) / 2;
@@ -286,23 +286,23 @@ fn make_group_assignments(n_authorities: usize, n_groups: usize)
 		map.entry(GroupId(primary_group))
 			.or_insert_with(&make_blank_group)
 			.validity_guarantors
-			.insert(ValidatorId(a_id));
+			.insert(AuthorityId(a_id));
 
 		for &availability_group in &availability_groups {
 			map.entry(GroupId(availability_group))
 				.or_insert_with(&make_blank_group)
 				.availability_guarantors
-				.insert(ValidatorId(a_id));
+				.insert(AuthorityId(a_id));
 		}
 	}
 
 	map
 }
 
-fn make_blank_batch<T>(n_authorities: usize) -> VecBatch<ValidatorId, T> {
+fn make_blank_batch<T>(n_authorities: usize) -> VecBatch<AuthorityId, T> {
 	VecBatch {
 		max_len: 20,
-		targets: (0..n_authorities).map(ValidatorId).collect(),
+		targets: (0..n_authorities).map(AuthorityId).collect(),
 		items: Vec::new(),
 	}
 }
@@ -318,7 +318,7 @@ fn consensus_completes_with_minimum_good() {
 		.num_slots(1 << 16)
 		.build();
 
-	let (network, inputs, outputs) = Network::<(ValidatorId, OutgoingMessage<TestContext>)>::new(n - f);
+	let (network, inputs, outputs) = Network::<(AuthorityId, OutgoingMessage<TestContext>)>::new(n - f);
 	network.route_on_thread();
 
 	let shared_test_context = Arc::new(SharedTestContext {
@@ -330,7 +330,7 @@ fn consensus_completes_with_minimum_good() {
 	let groups = make_group_assignments(n, n_groups);
 
 	let authorities = inputs.into_iter().zip(outputs).enumerate().map(|(raw_id, (input, output))| {
-		let id = ValidatorId(raw_id);
+		let id = AuthorityId(raw_id);
 		let context = TestContext {
 			shared: shared_test_context.clone(),
 			local_id: id,

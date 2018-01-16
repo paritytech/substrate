@@ -16,18 +16,18 @@
 
 //! Propagation and agreement of candidates.
 //!
-//! Validators are split into groups by parachain, and each validator might come
-//! up its own candidate for their parachain. Within groups, validators pass around
+//! Authorities are split into groups by parachain, and each authority might come
+//! up its own candidate for their parachain. Within groups, authorities pass around
 //! their candidates and produce statements of validity.
 //!
-//! Any candidate that receives majority approval by the validators in a group
-//! may be subject to inclusion, unless any validators flag that candidate as invalid.
+//! Any candidate that receives majority approval by the authorities in a group
+//! may be subject to inclusion, unless any authorities flag that candidate as invalid.
 //!
 //! Wrongly flagging as invalid should be strongly disincentivized, so that in the
 //! equilibrium state it is not expected to happen. Likewise with the submission
 //! of invalid blocks.
 //!
-//! Groups themselves may be compromised by malicious validators.
+//! Groups themselves may be compromised by malicious authorities.
 
 #[macro_use]
 extern crate futures;
@@ -57,8 +57,8 @@ pub mod tests;
 
 /// Context necessary for agreement.
 pub trait Context: Send + Clone {
-	/// A validator ID
-	type ValidatorId: Debug + Hash + Eq + Clone + Ord;
+	/// A authority ID
+	type AuthorityId: Debug + Hash + Eq + Clone + Ord;
 	/// The digest (hash or other unique attribute) of a candidate.
 	type Digest: Debug + Hash + Eq + Clone;
 	/// The group ID type
@@ -83,8 +83,8 @@ pub trait Context: Send + Clone {
 
 	/// The statement batch type.
 	type StatementBatch: StatementBatch<
-		Self::ValidatorId,
-		table::SignedStatement<Self::ParachainCandidate, Self::Digest, Self::ValidatorId, Self::Signature>,
+		Self::AuthorityId,
+		table::SignedStatement<Self::ParachainCandidate, Self::Digest, Self::AuthorityId, Self::Signature>,
 	>;
 
 	/// Get the digest of a candidate.
@@ -97,7 +97,7 @@ pub trait Context: Send + Clone {
 	fn candidate_group(candidate: &Self::ParachainCandidate) -> Self::GroupId;
 
 	/// Get the primary for a given round.
-	fn round_proposer(&self, round: usize) -> Self::ValidatorId;
+	fn round_proposer(&self, round: usize) -> Self::AuthorityId;
 
 	/// Check a candidate for validity.
 	fn check_validity(&self, candidate: &Self::ParachainCandidate) -> Self::CheckCandidate;
@@ -120,8 +120,8 @@ pub trait Context: Send + Clone {
 	fn proposal_valid<F>(&self, proposal: &Self::Proposal, check_candidate: F) -> bool
 		where F: FnMut(&Self::ParachainCandidate) -> bool;
 
-	/// Get the local validator ID.
-	fn local_id(&self) -> Self::ValidatorId;
+	/// Get the local authority ID.
+	fn local_id(&self) -> Self::AuthorityId;
 
 	/// Sign a table validity statement with the local key.
 	fn sign_table_statement(
@@ -142,18 +142,18 @@ pub trait TypeResolve {
 }
 
 impl<C: Context> TypeResolve for C {
-	type SignedTableStatement = table::SignedStatement<C::ParachainCandidate, C::Digest, C::ValidatorId, C::Signature>;
-	type BftCommunication = bft::Communication<C::Proposal, C::Digest, C::ValidatorId, C::Signature>;
+	type SignedTableStatement = table::SignedStatement<C::ParachainCandidate, C::Digest, C::AuthorityId, C::Signature>;
+	type BftCommunication = bft::Communication<C::Proposal, C::Digest, C::AuthorityId, C::Signature>;
 	type BftCommitted = bft::Committed<C::Proposal,C::Digest,C::Signature>;
-	type Misbehavior = table::Misbehavior<C::ParachainCandidate, C::Digest, C::ValidatorId, C::Signature>;
+	type Misbehavior = table::Misbehavior<C::ParachainCandidate, C::Digest, C::AuthorityId, C::Signature>;
 }
 
 /// Information about a specific group.
 #[derive(Debug, Clone)]
 pub struct GroupInfo<V: Hash + Eq> {
-	/// Validators meant to check validity of candidates.
+	/// Authorities meant to check validity of candidates.
 	pub validity_guarantors: HashSet<V>,
-	/// Validators meant to check availability of candidate data.
+	/// Authorities meant to check availability of candidate data.
 	pub availability_guarantors: HashSet<V>,
 	/// Number of votes needed for validity.
 	pub needed_validity: usize,
@@ -163,7 +163,7 @@ pub struct GroupInfo<V: Hash + Eq> {
 
 struct TableContext<C: Context> {
 	context: C,
-	groups: HashMap<C::GroupId, GroupInfo<C::ValidatorId>>,
+	groups: HashMap<C::GroupId, GroupInfo<C::AuthorityId>>,
 }
 
 impl<C: Context> ::std::ops::Deref for TableContext<C> {
@@ -175,7 +175,7 @@ impl<C: Context> ::std::ops::Deref for TableContext<C> {
 }
 
 impl<C: Context> table::Context for TableContext<C> {
-	type ValidatorId = C::ValidatorId;
+	type AuthorityId = C::AuthorityId;
 	type Digest = C::Digest;
 	type GroupId = C::GroupId;
 	type Signature = C::Signature;
@@ -189,12 +189,12 @@ impl<C: Context> table::Context for TableContext<C> {
 		C::candidate_group(candidate)
 	}
 
-	fn is_member_of(&self, validator: &Self::ValidatorId, group: &Self::GroupId) -> bool {
-		self.groups.get(group).map_or(false, |g| g.validity_guarantors.contains(validator))
+	fn is_member_of(&self, authority: &Self::AuthorityId, group: &Self::GroupId) -> bool {
+		self.groups.get(group).map_or(false, |g| g.validity_guarantors.contains(authority))
 	}
 
-	fn is_availability_guarantor_of(&self, validator: &Self::ValidatorId, group: &Self::GroupId) -> bool {
-		self.groups.get(group).map_or(false, |g| g.availability_guarantors.contains(validator))
+	fn is_availability_guarantor_of(&self, authority: &Self::AuthorityId, group: &Self::GroupId) -> bool {
+		self.groups.get(group).map_or(false, |g| g.availability_guarantors.contains(authority))
 	}
 
 	fn requisite_votes(&self, group: &Self::GroupId) -> (usize, usize) {
@@ -217,7 +217,7 @@ impl<C: Context> SharedTableInner<C> {
 		&mut self,
 		context: &TableContext<C>,
 		statement: <C as TypeResolve>::SignedTableStatement,
-		received_from: Option<C::ValidatorId>
+		received_from: Option<C::AuthorityId>
 	) -> Option<table::Summary<C::Digest, C::GroupId>> {
 		self.table.import_statement(context, statement, received_from)
 	}
@@ -265,7 +265,7 @@ impl<C: Context> Clone for SharedTable<C> {
 
 impl<C: Context> SharedTable<C> {
 	/// Create a new shared table.
-	pub fn new(context: C, groups: HashMap<C::GroupId, GroupInfo<C::ValidatorId>>) -> Self {
+	pub fn new(context: C, groups: HashMap<C::GroupId, GroupInfo<C::AuthorityId>>) -> Self {
 		SharedTable {
 			context: Arc::new(TableContext { context, groups }),
 			inner: Arc::new(Mutex::new(SharedTableInner {
@@ -280,7 +280,7 @@ impl<C: Context> SharedTable<C> {
 	pub fn import_statement(
 		&self,
 		statement: <C as TypeResolve>::SignedTableStatement,
-		received_from: Option<C::ValidatorId>,
+		received_from: Option<C::AuthorityId>,
 	) -> Option<table::Summary<C::Digest, C::GroupId>> {
 		self.inner.lock().import_statement(&*self.context, statement, received_from)
 	}
@@ -314,7 +314,7 @@ impl<C: Context> SharedTable<C> {
 	/// Provide an iterator yielding pairs of (statement, received_from).
 	pub fn import_statements<I, U>(&self, iterable: I) -> U
 		where
-			I: IntoIterator<Item=(<C as TypeResolve>::SignedTableStatement, Option<C::ValidatorId>)>,
+			I: IntoIterator<Item=(<C as TypeResolve>::SignedTableStatement, Option<C::AuthorityId>)>,
 			U: ::std::iter::FromIterator<table::Summary<C::Digest, C::GroupId>>,
 	{
 		let mut inner = self.inner.lock();
@@ -351,7 +351,7 @@ impl<C: Context> SharedTable<C> {
 	}
 
 	/// Get all witnessed misbehavior.
-	pub fn get_misbehavior(&self) -> HashMap<C::ValidatorId, <C as TypeResolve>::Misbehavior> {
+	pub fn get_misbehavior(&self) -> HashMap<C::AuthorityId, <C as TypeResolve>::Misbehavior> {
 		self.inner.lock().table.get_misbehavior().clone()
 	}
 
@@ -396,14 +396,14 @@ pub struct BftContext<C: Context> {
 impl<C: Context> bft::Context for BftContext<C>
 	where C::Proposal: 'static,
 {
-	type ValidatorId = C::ValidatorId;
+	type AuthorityId = C::AuthorityId;
 	type Digest = C::Digest;
 	type Signature = C::Signature;
 	type Candidate = C::Proposal;
 	type RoundTimeout = Box<Future<Item=(),Error=Error>>;
 	type CreateProposal = Box<Future<Item=Self::Candidate,Error=Error>>;
 
-	fn local_id(&self) -> Self::ValidatorId {
+	fn local_id(&self) -> Self::AuthorityId {
 		self.context.local_id()
 	}
 
@@ -416,7 +416,7 @@ impl<C: Context> bft::Context for BftContext<C>
 	}
 
 	fn sign_local(&self, message: bft::Message<Self::Candidate, Self::Digest>)
-		-> bft::LocalizedMessage<Self::Candidate, Self::Digest, Self::ValidatorId, Self::Signature>
+		-> bft::LocalizedMessage<Self::Candidate, Self::Digest, Self::AuthorityId, Self::Signature>
 	{
 		let sender = self.local_id();
 		let signature = self.context.sign_bft_message(&message);
@@ -427,7 +427,7 @@ impl<C: Context> bft::Context for BftContext<C>
 		}
 	}
 
-	fn round_proposer(&self, round: usize) -> Self::ValidatorId {
+	fn round_proposer(&self, round: usize) -> Self::AuthorityId {
 		self.context.round_proposer(round)
 	}
 
@@ -533,7 +533,7 @@ pub fn agree<
 		Context: ::Context + 'static,
 		Context::CheckCandidate: IntoFuture<Error=Err>,
 		Context::CheckAvailability: IntoFuture<Error=Err>,
-		NetIn: Stream<Item=(Context::ValidatorId, Vec<Recovery::UncheckedMessage>),Error=Err> + 'static,
+		NetIn: Stream<Item=(Context::AuthorityId, Vec<Recovery::UncheckedMessage>),Error=Err> + 'static,
 		NetOut: Sink<SinkItem=OutgoingMessage<Context>> + 'static,
 		Recovery: MessageRecovery<Context> + 'static,
 		PropagateStatements: Stream<Item=Context::StatementBatch,Error=Err> + 'static,
