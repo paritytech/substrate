@@ -68,6 +68,12 @@ pub fn set_storage(_key: &[u8], _value: &[u8]) {
 	);
 }
 
+/// The current relay chain identifier.
+pub fn chain_id() -> u64 {
+	// TODO: fetch from Externalities.
+	42u64
+}
+
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
 pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Error=NoError>, f: F) -> R {

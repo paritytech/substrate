@@ -1,3 +1,4 @@
+use runtime_support::Vec;
 use slicable::Slicable;
 
 pub trait Joiner {

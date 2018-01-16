@@ -1,3 +1,4 @@
+use runtime_support::Vec;
 use keyedvec::KeyedVec;
 use storage::Storage;
 use primitives::{AccountID, SessionKey, BlockNumber};

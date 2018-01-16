@@ -6,7 +6,9 @@ extern crate runtime_support;
 
 mod support;
 pub use support::{endiansensitive, streamreader, joiner, slicable, primitives, keyedvec, function,
-	environment, storage, testing};
+	environment, storage};
+#[cfg(test)]
+pub use support::testing;
 
 #[allow(unused)]
 mod system;
@@ -19,9 +21,12 @@ mod timestamp;
 
 use runtime_support::Vec;
 use slicable::Slicable;
-use primitives::{ChainID, Block, Transaction};
+use primitives::{Block, Transaction};
 
-// TODO: add keccak256 (or some better hashing scheme) & ECDSA-recover (or some better sig scheme)
+// TODO: add externals for:
+// - keccak256 (or some better hashing scheme)
+// - trie rooting
+// - ECDSA-recover (or some better sig scheme)
 
 pub fn execute_block(input: Vec<u8>) -> Vec<u8> {
 	system::execute_block(Block::from_slice(&input).unwrap())
@@ -32,9 +37,3 @@ pub fn execute_transaction(input: Vec<u8>) -> Vec<u8> {
 }
 
 impl_stubs!(execute_block, execute_transaction);
-
-/// The current relay chain identifier.
-pub fn chain_id() -> ChainID {
-	// TODO: retrieve from external
-	unimplemented!()
-}

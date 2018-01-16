@@ -1,3 +1,4 @@
+use runtime_support::Vec;
 use streamreader::StreamReader;
 use joiner::Joiner;
 use slicable::{Slicable, NonTrivialSlicable};
@@ -62,7 +63,7 @@ impl Slicable for Transaction {
 	}
 
 	fn to_vec(&self) -> Vec<u8> {
-		vec![]
+		Vec::new()
 			.join(&self.signed)
 			.join(&(self.function as u8))
 			.join(&self.nonce)
@@ -84,7 +85,7 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 	fn from_slice(value: &[u8]) -> Option<Self> {
 		let len = Self::size_of(&value[0..4])?;
 		let mut off = 4;
-		let mut r = vec![];
+		let mut r = Vec::new();
 		while off < len {
 			let element_len = T::size_of(&value[off..])?;
 			r.push(T::from_slice(&value[off..off + element_len])?);
@@ -100,7 +101,7 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 	fn to_vec(&self) -> Vec<u8> {
 		let vecs = self.iter().map(Slicable::to_vec).collect::<Vec<_>>();
 		let len = vecs.iter().fold(0, |mut a, v| {a += v.len(); a});
-		let mut r = vec![].join(&(len as u32));
+		let mut r = Vec::new().join(&(len as u32));
 		vecs.iter().for_each(|v| r.extend_from_slice(v));
 		r
 	}
@@ -127,7 +128,7 @@ impl Slicable for Header {
 	}
 
 	fn to_vec(&self) -> Vec<u8> {
-		vec![]
+		Vec::new()
 			.join(&self.parent_hash)
 			.join(&self.number)
 			.join(&self.state_root)
@@ -156,7 +157,7 @@ impl Slicable for Block {
 	}
 
 	fn to_vec(&self) -> Vec<u8> {
-		vec![]
+		Vec::new()
 			.join(&self.header)
 			.join(&self.transactions)
 	}
@@ -181,7 +182,7 @@ mod tests {
 		let tx = Transaction {
 			signed: one.clone(),
 			function: Function::StakingTransferStake,
-			input_data: vec![].join(&two).join(&69u64),
+			input_data: Vec::new().join(&two).join(&69u64),
 			nonce: 69,
 		};
 		let serialised = tx.to_vec();
@@ -202,7 +203,7 @@ mod tests {
 		let tx = Transaction {
 			signed: one.clone(),
 			function: Function::StakingTransferStake,
-			input_data: vec![].join(&two).join(&69u64),
+			input_data: Vec::new().join(&two).join(&69u64),
 			nonce: 69,
 		};
 		let data = [
@@ -271,13 +272,13 @@ mod tests {
 		let tx1 = Transaction {
 			signed: one.clone(),
 			function: Function::StakingTransferStake,
-			input_data: vec![].join(&two).join(&69u64),
+			input_data: Vec::new().join(&two).join(&69u64),
 			nonce: 69,
 		};
 		let tx2 = Transaction {
 			signed: two.clone(),
 			function: Function::StakingStake,
-			input_data: vec![],
+			input_data: Vec::new(),
 			nonce: 42,
 		};
 		let h = Header {
@@ -327,13 +328,13 @@ mod tests {
 		let tx1 = Transaction {
 			signed: one.clone(),
 			function: Function::StakingTransferStake,
-			input_data: vec![].join(&two).join(&69u64),
+			input_data: Vec::new().join(&two).join(&69u64),
 			nonce: 69,
 		};
 		let tx2 = Transaction {
 			signed: two.clone(),
 			function: Function::StakingStake,
-			input_data: vec![],
+			input_data: Vec::new(),
 			nonce: 42,
 		};
 		let h = Header {

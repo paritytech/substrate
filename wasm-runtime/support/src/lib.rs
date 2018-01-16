@@ -10,6 +10,7 @@ pub use alloc::vec::Vec;
 pub use alloc::boxed::Box;
 pub use alloc::rc::Rc;
 pub use core::mem::{transmute, size_of, uninitialized, swap};
+pub use core::slice;
 pub use core::cell::{RefCell, Ref, RefMut};
 
 extern crate pwasm_libc;
@@ -27,7 +28,7 @@ extern "C" {
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32) -> u32;
-	fn ext_deposit_log(log_data: *const u8, log_len: u32);
+	fn ext_chain_id() -> u64;
 }
 
 pub fn storage(key: &[u8]) -> Vec<u8> {
@@ -64,11 +65,16 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 	}
 }
 
-pub fn deposit_log(log: &[u8]) {
+pub fn read_storage(key: &[u8], value_out: &mut [u8]) -> usize {
 	unsafe {
-		ext_deposit_log(
-			&log[0] as *const u8, log.len() as u32,
-		)
+		ext_get_storage_into(&key[0], key.len() as u32, &mut value_out[0], value_out.len() as u32) as usize
+	}
+}
+
+/// The current relay chain identifier.
+pub fn chain_id() -> u64 {
+	unsafe {
+		ext_chain_id()
 	}
 }
 

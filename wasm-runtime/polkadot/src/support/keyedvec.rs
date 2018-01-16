@@ -1,3 +1,4 @@
+use runtime_support::Vec;
 use primitives::AccountID;
 use slicable::Slicable;
 
