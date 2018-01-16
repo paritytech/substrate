@@ -131,7 +131,7 @@ pub trait Externalities {
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>);
 
 	/// Get the identity of the chain.
-	fn chain_id(&self) -> u64 { 42 }	// TODO: remove implementation and fix resulting errors.
+	fn chain_id(&self) -> u64;
 
 	/// Get the current set of authorities from storage.
 	fn authorities(&self) -> Result<Vec<&[u8]>, Self::Error> {
@@ -244,6 +244,8 @@ mod tests {
 		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 			self.storage.insert(key, value);
 		}
+		
+		fn chain_id(&self) -> u64 { 42 }
 	}
 
 	#[test]
