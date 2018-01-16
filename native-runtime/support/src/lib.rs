@@ -70,8 +70,9 @@ pub fn set_storage(_key: &[u8], _value: &[u8]) {
 
 /// The current relay chain identifier.
 pub fn chain_id() -> u64 {
-	// TODO: fetch from Externalities.
-	42u64
+	ext::with(|holder|
+		holder.ext.chain_id()
+	).unwrap_or(0)
 }
 
 /// Execute the given closure with global function available whose functionality routes into the
@@ -105,6 +106,8 @@ mod tests {
 		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 			self.storage.insert(key, value);
 		}
+
+		fn chain_id(&self) -> u64 { 42 }
 	}
 
 	macro_rules! map {

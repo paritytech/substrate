@@ -130,7 +130,10 @@ pub trait Externalities {
 	/// Set storage of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>);
 
-	/// Get the current set of authorities.
+	/// Get the identity of the chain.
+	fn chain_id(&self) -> u64 { 42 }	// TODO: remove implementation and fix resulting errors.
+
+	/// Get the current set of authorities from storage.
 	fn authorities(&self) -> Result<Vec<&[u8]>, Self::Error> {
 		(0..self.storage(b"con\0aut\0len")?.into_iter()
 				.rev()

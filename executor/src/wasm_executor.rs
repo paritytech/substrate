@@ -137,7 +137,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		} else { 0 }
 	},
 	ext_chain_id() -> u64 => {
-		42u64
+		this.ext.chain_id()
 	}
 	=> <'e, E: Externalities + 'e>
 );
