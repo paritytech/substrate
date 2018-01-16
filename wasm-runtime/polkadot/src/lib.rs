@@ -4,16 +4,10 @@
 #[macro_use]
 extern crate runtime_support;
 
-mod endiansensitive;
-mod streamreader;
-mod joiner;
-mod slicable;
-mod primitives;
-mod keyedvec;
-mod function;
-mod environment;
-mod storage;
-mod testing;
+mod support;
+pub use support::{endiansensitive, streamreader, joiner, slicable, primitives, keyedvec, function,
+	environment, storage, testing};
+
 #[allow(unused)]
 mod system;
 #[allow(unused)]
