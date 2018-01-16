@@ -6,6 +6,7 @@ extern crate runtime_support;
 
 mod endiansensitive;
 mod streamreader;
+mod joiner;
 mod slicable;
 mod primitives;
 mod keyedvec;

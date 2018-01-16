@@ -74,7 +74,7 @@ pub fn set_code(new: &[u8]) {
 
 #[cfg(test)]
 mod tests {
-	use streamreader::Joiner;
+	use joiner::Joiner;
 	use function::Function;
 	use std::collections::HashMap;
 	use runtime_support::{NoError, with_externalities, Externalities};

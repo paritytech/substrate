@@ -1,4 +1,5 @@
-use streamreader::{StreamReader, Joiner};
+use streamreader::StreamReader;
+use joiner::Joiner;
 use slicable::{Slicable, NonTrivialSlicable};
 use function::Function;
 use runtime_support::size_of;
@@ -170,7 +171,7 @@ impl Slicable for Block {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use streamreader::Joiner;
+	use joiner::Joiner;
 	use function::Function;
 
 	#[test]
