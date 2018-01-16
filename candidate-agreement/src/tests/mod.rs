@@ -18,9 +18,9 @@
 
 const VALIDITY_CHECK_DELAY_MS: u64 = 100;
 const AVAILABILITY_CHECK_DELAY_MS: u64 = 100;
-const PROPOSAL_FORMATION_TICK_MS: u64 = 25;
-const PROPAGATE_STATEMENTS_TICK_MS: u64 = 25;
-const TIMER_TICK_DURATION_MS: u64 = 5;
+const PROPOSAL_FORMATION_TICK_MS: u64 = 50;
+const PROPAGATE_STATEMENTS_TICK_MS: u64 = 200;
+const TIMER_TICK_DURATION_MS: u64 = 10;
 
 use std::collections::HashMap;
 
@@ -110,8 +110,7 @@ impl Context for TestContext {
 		ValidatorId(round % self.shared.n_authorities)
 	}
 
-	fn check_validity(&self, candidate: &ParachainCandidate) -> Self::CheckCandidate {
-		println!("{:?} checking validity of {:?}", self.local_id, Self::candidate_digest(candidate));
+	fn check_validity(&self, _candidate: &ParachainCandidate) -> Self::CheckCandidate {
 		let future = self.shared.timer
 			.sleep(::std::time::Duration::from_millis(VALIDITY_CHECK_DELAY_MS))
 			.map_err(Error::Timer)
@@ -120,8 +119,7 @@ impl Context for TestContext {
 		Box::new(future)
 	}
 
-	fn check_availability(&self, candidate: &ParachainCandidate) -> Self::CheckAvailability {
-		println!("{:?} checking availability of {:?}", self.local_id, Self::candidate_digest(candidate));
+	fn check_availability(&self, _candidate: &ParachainCandidate) -> Self::CheckAvailability {
 		let future = self.shared.timer
 			.sleep(::std::time::Duration::from_millis(AVAILABILITY_CHECK_DELAY_MS))
 			.map_err(Error::Timer)
@@ -133,15 +131,12 @@ impl Context for TestContext {
 	fn create_proposal(&self, candidates: Vec<&ParachainCandidate>)
 		-> Option<Proposal>
 	{
-		// only if it has at least than 2/3 of all groups.
 		let t = self.shared.n_groups * 2 / 3;
 		if candidates.len() >= t {
 			Some(Proposal {
 				candidates: candidates.iter().map(|x| (&**x).clone()).collect()
 			})
 		} else {
-			println!("cannot make proposal: only has {} of {}",
-				candidates.len(), t);
 			None
 		}
 	}
@@ -149,7 +144,6 @@ impl Context for TestContext {
 	fn proposal_valid<F>(&self, proposal: &Proposal, check_candidate: F) -> bool
 		where F: FnMut(&ParachainCandidate) -> bool
 	{
-		// only if it has more than 2/3 of groups.
 		if proposal.candidates.len() >= self.shared.n_groups * 2 / 3 {
 			proposal.candidates.iter().all(check_candidate)
 		} else {
@@ -284,17 +278,22 @@ fn make_group_assignments(n_authorities: usize, n_groups: usize)
 	// guarantees availability for the group above that.
 	for a_id in 0..n_authorities {
 		let primary_group = a_id % n_groups;
-		let availability_group = a_id + 1 % n_groups;
+		let availability_groups = [
+			(a_id + 1) % n_groups,
+			a_id.wrapping_sub(1) % n_groups,
+		];
 
 		map.entry(GroupId(primary_group))
 			.or_insert_with(&make_blank_group)
 			.validity_guarantors
 			.insert(ValidatorId(a_id));
 
-		map.entry(GroupId(availability_group))
-			.or_insert_with(&make_blank_group)
-			.availability_guarantors
-			.insert(ValidatorId(a_id));
+		for &availability_group in &availability_groups {
+			map.entry(GroupId(availability_group))
+				.or_insert_with(&make_blank_group)
+				.availability_guarantors
+				.insert(ValidatorId(a_id));
+		}
 	}
 
 	map
@@ -310,8 +309,8 @@ fn make_blank_batch<T>(n_authorities: usize) -> VecBatch<ValidatorId, T> {
 
 #[test]
 fn consensus_completes_with_minimum_good() {
-	let n = 100;
-	let f = 33;
+	let n = 50;
+	let f = 16;
 	let n_groups = 10;
 
 	let timer = ::tokio_timer::wheel()
@@ -351,11 +350,11 @@ fn consensus_completes_with_minimum_good() {
 
 		let net_out = input
 			.sink_map_err(|_| Error::NetOut)
-			.with(move |x| { Ok::<_, Error>((id.0, (id, x))) });
+			.with(move |x| Ok::<_, Error>((id.0, (id, x))) );
 
 		let net_in = output
 			.map_err(|_| Error::NetIn)
-			.map(move |(v, msg)| { (v, vec![msg]) });
+			.map(move |(v, msg)| (v, vec![msg]));
 
 		let propagate_statements = timer
 			.interval(Duration::from_millis(PROPAGATE_STATEMENTS_TICK_MS))

@@ -128,7 +128,11 @@ impl<C: Context, I> HandleIncoming<C, I> {
 		let digest = &summary.candidate;
 
 		// TODO: consider a strategy based on the number of candidate votes as well.
-		let checking_validity = is_validity_member && self.checked_validity.insert(digest.clone());
+		let checking_validity =
+			is_validity_member &&
+			self.checked_validity.insert(digest.clone()) &&
+			self.table.proposed_digest() != Some(digest.clone());
+
 		let checking_availability = is_availability_member && self.checked_availability.insert(digest.clone());
 
 		if checking_validity || checking_availability {
