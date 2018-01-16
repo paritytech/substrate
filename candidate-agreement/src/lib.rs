@@ -208,6 +208,7 @@ impl<C: Context> table::Context for TableContext<C> {
 // A shared table object.
 struct SharedTableInner<C: Context> {
 	table: Table<TableContext<C>>,
+	proposed_digest: Option<C::Digest>,
 	awaiting_proposal: Vec<oneshot::Sender<C::Proposal>>,
 }
 
@@ -270,6 +271,7 @@ impl<C: Context> SharedTable<C> {
 			inner: Arc::new(Mutex::new(SharedTableInner {
 				table: Table::default(),
 				awaiting_proposal: Vec::new(),
+				proposed_digest: None,
 			}))
 		}
 	}
@@ -288,13 +290,23 @@ impl<C: Context> SharedTable<C> {
 		&self,
 		statement: table::Statement<C::ParachainCandidate, C::Digest>,
 	) -> Option<table::Summary<C::Digest, C::GroupId>> {
+		let proposed_digest = match statement {
+			table::Statement::Candidate(ref c) => Some(C::candidate_digest(c)),
+			_ => None,
+		};
+
 		let signed_statement = table::SignedStatement {
 			signature: self.context.sign_table_statement(&statement),
 			sender: self.context.local_id(),
 			statement,
 		};
 
-		self.import_statement(signed_statement, None)
+		let mut inner = self.inner.lock();
+		if proposed_digest.is_some() {
+			inner.proposed_digest = proposed_digest;
+		}
+
+		inner.import_statement(&*self.context, signed_statement, None)
 	}
 
 	/// Import many statements at once.
@@ -346,6 +358,11 @@ impl<C: Context> SharedTable<C> {
 	/// Fill a statement batch.
 	pub fn fill_batch(&self, batch: &mut C::StatementBatch) {
 		self.inner.lock().table.fill_batch(batch);
+	}
+
+	/// Get the local proposed candidate digest.
+	pub fn proposed_digest(&self) -> Option<C::Digest> {
+		self.inner.lock().proposed_digest.clone()
 	}
 
 	// Get a handle to the table context.
@@ -579,7 +596,9 @@ pub fn agree<
 			.map(table::Statement::Candidate)
 			.map(Some)
 			.or_else(|_| Ok(None))
-			.map(move |s| if let Some(s) = s { table.sign_and_import(s); })
+			.map(move |s| if let Some(s) = s {
+				table.sign_and_import(s);
+			})
 	};
 
 	let create_proposal_on_interval = {
@@ -589,13 +608,18 @@ pub fn agree<
 			.for_each(move |_| { table.update_proposal(); Ok(()) })
 	};
 
-	// TODO: avoid having errors take down everything.
-	let future = agreement.join5(
-		route_messages_in,
-		route_messages_out,
+	// if these auxiliary futures terminate before the agreement, then
+	// that is an error.
+	let auxiliary_futures = route_messages_in.join4(
 		create_proposal_on_interval,
+		route_messages_out,
 		import_local_candidate,
-	).map(|(agreed, _, _, _, _)| agreed);
+	).and_then(|_| Err(Error::IoTerminated));
+
+	let future = agreement
+		.select(auxiliary_futures)
+		.map(|(committed, _)| committed)
+		.map_err(|(e, _)| e);
 
 	Box::new(future)
 }

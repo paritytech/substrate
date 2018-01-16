@@ -453,7 +453,14 @@ impl<C: Context> Table<C> {
 
 		// reconstruct statements for anything whose trace passes the filter.
 		for (digest, candidate) in self.candidate_votes.iter() {
-			for (sender, vote) in candidate.validity_votes.iter() {
+			let issuance_iter = candidate.validity_votes.iter()
+				.filter(|&(_, x)| if let ValidityVote::Issued(_) = *x { true } else { false });
+
+			let validity_iter = candidate.validity_votes.iter()
+				.filter(|&(_, x)| if let ValidityVote::Issued(_) = *x { false } else { true });
+
+			// send issuance statements before votes.
+			for (sender, vote) in issuance_iter.chain(validity_iter) {
 				match *vote {
 					ValidityVote::Issued(ref sig) => {
 						attempt_send!(
@@ -483,6 +490,7 @@ impl<C: Context> Table<C> {
 			};
 
 
+			// and lastly send availability.
 			for (sender, sig) in candidate.availability_votes.iter() {
 				attempt_send!(
 					StatementTrace::Available(sender.clone(), digest.clone()),
