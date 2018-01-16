@@ -419,7 +419,7 @@ impl<C: Context> bft::Context for BftContext<C>
 	}
 
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
-		let round = ::std::cmp::max(63, round) as u32;
+		let round = ::std::cmp::min(63, round) as u32;
 		let timeout = 1u64.checked_shl(round)
 			.unwrap_or_else(u64::max_value)
 			.saturating_mul(self.round_timeout_multiplier);
@@ -427,13 +427,6 @@ impl<C: Context> bft::Context for BftContext<C>
 		Box::new(self.timer.sleep(Duration::from_secs(timeout))
 			.map_err(|_| Error::FaultyTimer))
 	}
-}
-
-/// Unchecked message. These haven't had signature recovery run on them.
-#[derive(Debug, PartialEq, Eq)]
-pub struct UncheckedMessage {
-	/// The data of the message.
-	pub data: Vec<u8>,
 }
 
 
@@ -459,14 +452,21 @@ pub struct AgreementParams<C: Context> {
 
 /// Recovery for messages
 pub trait MessageRecovery<C: Context> {
+	/// The unchecked message type. This implies that work hasn't been done
+	/// to decode the payload and check and authenticate a signature.
+	type UncheckedMessage;
+
 	/// Attempt to transform a checked message into an unchecked.
-	fn check_message(&self, UncheckedMessage) -> Option<CheckedMessage<C>>;
+	fn check_message(&self, Self::UncheckedMessage) -> Option<CheckedMessage<C>>;
 }
 
 /// A batch of statements to send out.
 pub trait StatementBatch<V, T> {
 	/// Get the target authorities of these statements.
 	fn targets(&self) -> &[V];
+
+	/// If the batch is empty.
+	fn is_empty(&self) -> bool;
 
 	/// Push a statement onto the batch. Returns false when the batch is full.
 	///
@@ -485,6 +485,7 @@ pub enum CheckedMessage<C: Context> {
 }
 
 /// Outgoing messages to the network.
+#[derive(Debug, Clone)]
 pub enum OutgoingMessage<C: Context> {
 	/// Messages meant for BFT agreement peers.
 	Bft(<C as TypeResolve>::BftCommunication),
@@ -515,11 +516,11 @@ pub fn agree<
 		Context: ::Context + 'static,
 		Context::CheckCandidate: IntoFuture<Error=Err>,
 		Context::CheckAvailability: IntoFuture<Error=Err>,
-		NetIn: Stream<Item=(Context::ValidatorId, Vec<UncheckedMessage>),Error=Err> + 'static,
+		NetIn: Stream<Item=(Context::ValidatorId, Vec<Recovery::UncheckedMessage>),Error=Err> + 'static,
 		NetOut: Sink<SinkItem=OutgoingMessage<Context>> + 'static,
 		Recovery: MessageRecovery<Context> + 'static,
 		PropagateStatements: Stream<Item=Context::StatementBatch,Error=Err> + 'static,
-		LocalCandidate: Future<Item=Context::ParachainCandidate> + 'static
+		LocalCandidate: IntoFuture<Item=Context::ParachainCandidate> + 'static
 {
 	let (bft_in_in, bft_in_out) = mpsc::unbounded();
 	let (bft_out_in, bft_out_out) = mpsc::unbounded();
@@ -559,6 +560,7 @@ pub fn agree<
 		let periodic_table_statements = propagate_statements
 			.or_else(|_| ::futures::future::empty()) // halt the stream instead of error.
 			.map(move |mut batch| { table.fill_batch(&mut batch); batch })
+			.filter(|b| !b.is_empty())
 			.map(OutgoingMessage::Table);
 
 		let complete_out_stream = bft_out_out
@@ -573,6 +575,7 @@ pub fn agree<
 	let import_local_candidate = {
 		let table = params.table.clone();
 		local_candidate
+			.into_future()
 			.map(table::Statement::Candidate)
 			.map(Some)
 			.or_else(|_| Ok(None))

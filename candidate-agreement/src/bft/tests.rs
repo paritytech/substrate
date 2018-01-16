@@ -18,11 +18,13 @@
 
 use super::*;
 
+use tests::Network;
+
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures::prelude::*;
-use futures::sync::{oneshot, mpsc};
+use futures::sync::oneshot;
 use futures::future::FutureResult;
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -146,70 +148,6 @@ impl Context for TestContext {
 
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
 		self.shared.lock().unwrap().round_timeout(round)
-	}
-}
-
-type Comm = ContextCommunication<TestContext>;
-
-struct Network {
-	endpoints: Vec<mpsc::UnboundedSender<Comm>>,
-	input: mpsc::UnboundedReceiver<(usize, Comm)>,
-}
-
-impl Network {
-	fn new(nodes: usize)
-		-> (Network, Vec<mpsc::UnboundedSender<(usize, Comm)>>, Vec<mpsc::UnboundedReceiver<Comm>>)
-	{
-		let mut inputs = Vec::with_capacity(nodes);
-		let mut outputs = Vec::with_capacity(nodes);
-		let mut endpoints = Vec::with_capacity(nodes);
-
-		let (in_tx, in_rx) = mpsc::unbounded();
-		for _ in 0..nodes {
-			let (out_tx, out_rx) = mpsc::unbounded();
-			inputs.push(in_tx.clone());
-			outputs.push(out_rx);
-			endpoints.push(out_tx);
-		}
-
-		let network = Network {
-			endpoints,
-			input: in_rx,
-		};
-
-		(network, inputs, outputs)
-	}
-
-	fn route_on_thread(self) {
-		::std::thread::spawn(move || { let _ = self.wait(); });
-	}
-}
-
-impl Future for Network {
-	type Item = ();
-	type Error = Error;
-
-	fn poll(&mut self) -> Poll<(), Error> {
-		match self.input.poll() {
-			Err(_) => Err(Error),
-			Ok(Async::NotReady) => Ok(Async::NotReady),
-			Ok(Async::Ready(None)) => Ok(Async::Ready(())),
-			Ok(Async::Ready(Some((sender, item)))) => {
-				{
-					let receiving_endpoints = self.endpoints
-						.iter()
-						.enumerate()
-						.filter(|&(i, _)| i != sender)
-						.map(|(_, x)| x);
-
-					for endpoint in receiving_endpoints {
-						let _ = endpoint.unbounded_send(item.clone());
-					}
-				}
-
-				self.poll()
-			}
-		}
 	}
 }
 

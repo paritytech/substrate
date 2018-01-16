@@ -24,19 +24,17 @@ use std::collections::{Bound, BTreeMap, VecDeque};
 use futures::prelude::*;
 use futures::stream::Fuse;
 
-use super::UncheckedMessage;
-
 /// Implementation of the round-robin buffer for incoming messages.
 #[derive(Debug)]
-pub struct RoundRobinBuffer<V: Ord + Eq, S> {
-	buffer: BTreeMap<V, VecDeque<UncheckedMessage>>,
+pub struct RoundRobinBuffer<V: Ord + Eq, S, M> {
+	buffer: BTreeMap<V, VecDeque<M>>,
 	last_processed_from: Option<V>,
 	stored_messages: usize,
 	max_messages: usize,
 	inner: Fuse<S>,
 }
 
-impl<V: Ord + Eq + Clone, S: Stream> RoundRobinBuffer<V, S> {
+impl<V: Ord + Eq + Clone, S: Stream, M> RoundRobinBuffer<V, S, M> {
 	/// Create a new round-robin buffer which holds up to a maximum
 	/// amount of messages.
 	pub fn new(stream: S, buffer_size: usize) -> Self {
@@ -50,8 +48,8 @@ impl<V: Ord + Eq + Clone, S: Stream> RoundRobinBuffer<V, S> {
 	}
 }
 
-impl<V: Ord + Eq + Clone, S> RoundRobinBuffer<V, S> {
-	fn next_message(&mut self) -> Option<(V, UncheckedMessage)> {
+impl<V: Ord + Eq + Clone, S, M> RoundRobinBuffer<V, S, M> {
+	fn next_message(&mut self) -> Option<(V, M)> {
 		if self.stored_messages == 0 {
 			return None
 		}
@@ -84,7 +82,7 @@ impl<V: Ord + Eq + Clone, S> RoundRobinBuffer<V, S> {
 	}
 
 	// import messages, discarding when the buffer is full.
-	fn import_messages(&mut self, sender: V, messages: Vec<UncheckedMessage>) {
+	fn import_messages(&mut self, sender: V, messages: Vec<M>) {
 		let space_remaining = self.max_messages - self.stored_messages;
 		self.stored_messages += ::std::cmp::min(space_remaining, messages.len());
 
@@ -93,16 +91,16 @@ impl<V: Ord + Eq + Clone, S> RoundRobinBuffer<V, S> {
 	}
 }
 
-impl<V: Ord + Eq + Clone, S> Stream for RoundRobinBuffer<V, S>
-	where S: Stream<Item=(V, Vec<UncheckedMessage>)>
+impl<V: Ord + Eq + Clone, S, M> Stream for RoundRobinBuffer<V, S, M>
+	where S: Stream<Item=(V, Vec<M>)>
 {
-	type Item = (V, UncheckedMessage);
+	type Item = (V, M);
 	type Error = S::Error;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, S::Error> {
 		loop {
 			match self.inner.poll()? {
-				Async::NotReady | Async::Ready(None)=> break,
+				Async::NotReady | Async::Ready(None) => break,
 				Async::Ready(Some((sender, msgs))) => self.import_messages(sender, msgs),
 			}
 		}
@@ -119,6 +117,9 @@ impl<V: Ord + Eq + Clone, S> Stream for RoundRobinBuffer<V, S>
 mod tests {
 	use super::*;
 	use futures::stream::{self, Stream};
+
+	#[derive(Debug, PartialEq, Eq)]
+	struct UncheckedMessage { data: Vec<u8> }
 
 	#[test]
 	fn is_fair_and_wraps_around() {
