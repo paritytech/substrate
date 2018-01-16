@@ -59,7 +59,7 @@ impl Slicable for Vec<u8> {
 		unimplemented!();
 	}
 	fn to_vec(&self) -> Vec<u8> {
-		let mut r: Vec<u8> = vec![].join(&(self.len() as u32));
+		let mut r: Vec<u8> = Vec::new().join(&(self.len() as u32));
 		r.extend_from_slice(&self);
 		r
 	}
