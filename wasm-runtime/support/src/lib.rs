@@ -30,6 +30,7 @@ extern "C" {
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32) -> u32;
 	fn ext_chain_id() -> u64;
 	fn ext_keccak256(data: *const u8, len: u32, out: *mut u8);
+	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
 }
 
 pub fn storage(key: &[u8]) -> Vec<u8> {
@@ -86,6 +87,16 @@ pub fn keccak256(data: &[u8]) -> [u8; 32] {
 		// guaranteed to write into result.
 		ext_keccak256(&data[0], data.len() as u32, &mut result[0]);
 		result
+	}
+}
+
+/// Verify a ed25519 signature.
+pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {
+	unsafe {
+		match ext_ed25519_verify(&msg[0], msg.len() as u32, &sig[0], &pubkey[0]) {
+			0 => false,
+			_ => true,
+		}
 	}
 }
 

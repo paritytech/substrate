@@ -2,6 +2,10 @@
 extern crate environmental;
 extern crate polkadot_state_machine;
 extern crate tiny_keccak;
+extern crate polkadot_primitives as primitives;
+
+use std::fmt;
+use primitives::ed25519;
 
 pub use std::vec::Vec;
 pub use std::rc::Rc;
@@ -11,7 +15,6 @@ pub use std::slice;
 pub use std::mem::{size_of, transmute, swap, uninitialized};
 
 pub use polkadot_state_machine::Externalities;
-use std::fmt;
 
 // TODO: use the real error, not NoError.
 
@@ -59,9 +62,9 @@ pub fn storage_into<T: Sized>(_key: &[u8]) -> Option<T> {
 	}).unwrap_or(None)
 }
 
-pub fn set_storage(_key: &[u8], _value: &[u8]) {
+pub fn set_storage(key: &[u8], value: &[u8]) {
 	ext::with(|ext|
-		ext.set_storage(_key.to_vec(), _value.to_vec())
+		ext.set_storage(key.to_vec(), value.to_vec())
 	);
 }
 
@@ -74,6 +77,11 @@ pub fn chain_id() -> u64 {
 
 /// Conduct a Keccak-256 hash of the given data.
 pub use tiny_keccak::keccak256;
+
+/// Verify a ed25519 signature.
+pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {
+	ed25519::verify(&sig[..], msg, &pubkey[..])
+}
 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
