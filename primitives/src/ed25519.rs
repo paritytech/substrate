@@ -26,6 +26,28 @@ pub struct Pair(signature::Ed25519KeyPair);
 #[derive(Clone)]
 pub struct Signature ([u8; 64]);
 
+impl Signature {
+	pub fn from(data: [u8; 64]) -> Self {
+		Signature(data)
+	}
+	pub fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 64];
+		r.copy_from_slice(data);
+		Signature(r)
+	}
+}
+
+impl Public {
+	pub fn from(data: [u8; 32]) -> Self {
+		Public(data)
+	}
+	pub fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 32];
+		r.copy_from_slice(data);
+		Public(r)
+	}
+}
+
 impl Pair {
 	/// Generate new secure (random) key pair.
 	pub fn new() -> Pair {
