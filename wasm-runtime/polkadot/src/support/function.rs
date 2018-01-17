@@ -1,5 +1,4 @@
-use staking;
-use consensus;
+use runtime::{staking, consensus};
 use primitives::AccountID;
 use streamreader::StreamReader;
 

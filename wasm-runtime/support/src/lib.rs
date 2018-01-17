@@ -29,6 +29,7 @@ extern "C" {
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32) -> u32;
 	fn ext_chain_id() -> u64;
+	fn ext_keccak256(data: *const u8, len: u32, out: *mut u8);
 }
 
 pub fn storage(key: &[u8]) -> Vec<u8> {
@@ -75,6 +76,16 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8]) -> usize {
 pub fn chain_id() -> u64 {
 	unsafe {
 		ext_chain_id()
+	}
+}
+
+/// Conduct a keccak256 hash.
+pub fn keccak256(data: &[u8]) -> [u8; 32] {
+	unsafe {
+		let mut result: [u8; 32] = uninitialized();
+		// guaranteed to write into result.
+		ext_keccak256(&data[0], data.len() as u32, &mut result[0]);
+		result
 	}
 }
 

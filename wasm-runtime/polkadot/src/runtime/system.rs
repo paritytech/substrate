@@ -1,8 +1,8 @@
 use primitives::{Block, BlockNumber, Hash, Transaction};
 use runtime_support::{Vec, swap};
 use environment::with_env;
-use staking;
 use runtime_support;
+use runtime::staking;
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
@@ -79,8 +79,7 @@ mod tests {
 	use std::collections::HashMap;
 	use runtime_support::{NoError, with_externalities, Externalities};
 	use primitives::{AccountID, Transaction};
-	use system;
-	use staking;
+	use runtime::{system, staking};
 
 	#[derive(Debug, Default)]
 	struct TestExternalities {

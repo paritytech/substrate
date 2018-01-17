@@ -26,6 +26,7 @@ use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
+use tiny_keccak;
 
 struct Heap {
 	end: u32,
@@ -138,6 +139,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_chain_id() -> u64 => {
 		this.ext.chain_id()
+	},
+	ext_keccak256(data: *const u8, len: u32, out: *mut u8) => {
+		let result =
+			if let Ok(value) = this.memory.get(data, len as usize) {
+				tiny_keccak::keccak256(&value)
+			} else {
+				[0; 32]
+			};
+		let _ = this.memory.set(out, &result);
 	}
 	=> <'e, E: Externalities + 'e>
 );
@@ -193,6 +203,7 @@ impl CodeExecutor for WasmExecutor {
 mod tests {
 
 	use super::*;
+	use rustc_hex::FromHex;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities {
@@ -213,50 +224,34 @@ mod tests {
 	}
 
 	#[test]
-	fn should_pass_externalities_at_call() {
+	fn storage_should_work() {
 		let mut ext = TestExternalities::default();
-		ext.set_storage(b"\0code".to_vec(), b"The code".to_vec());
+		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let program = ProgramInstance::new().unwrap();
-
-		let test_module = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
-		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<TestExternalities>::SIGNATURES]).expect("Failed to initialize module");
-
-		let output = {
-			let memory = module.memory(ItemIndex::Internal(0)).unwrap();
-			let mut fec = FunctionExecutor::new(&memory, &mut ext);
-
-			let data = b"Hello world";
-			let size = data.len() as u32;
-			let offset = fec.heap.allocate(size);
-			memory.set(offset, data).unwrap();
-
-			let returned = program
-					.params_with_external("env", &mut fec)
-					.map(|p| p
-						.add_argument(I32(offset as i32))
-						.add_argument(I32(size as i32)))
-				.and_then(|p| module.execute_export("test_data_in", p))
-				.map_err(|_| -> Error { ErrorKind::Runtime.into() }).expect("function should be callable");
-
-			if let Some(I64(r)) = returned {
-				println!("returned {:?} ({:?}, {:?})", r, r as u32, (r >> 32) as u32 as usize);
-				memory.get(r as u32, (r >> 32) as u32 as usize).expect("memory address should be reasonable.")
-			} else {
-				panic!("bad return value, not u64");
-			}
-		};
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_data_in", &CallData(b"Hello world".to_vec())).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
 		let expected: HashMap<_, _> = map![
-			b"\0code".to_vec() => b"Hello world".to_vec(),
 			b"input".to_vec() => b"Hello world".to_vec(),
-			b"code".to_vec() => b"The code".to_vec(),
-			b"\0authority_count".to_vec() => vec![1],
-			b"\0authority".to_vec() => b"Hello world".to_vec()
+			b"foo".to_vec() => b"bar".to_vec(),
+			b"baz".to_vec() => b"bar".to_vec()
 		];
 		assert_eq!(expected, ext.storage);
+	}
+
+	#[test]
+	fn keccak256_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_keccak256", &CallData(b"".to_vec())).unwrap(),
+			FromHex::from_hex("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap()
+		);
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_keccak256", &CallData(b"Hello world!".to_vec())).unwrap(),
+			FromHex::from_hex("ecd0e108a98e192af1d2c25055f4e3bed784b5c877204e73219a5203251feaab").unwrap()
+		);
 	}
 }
