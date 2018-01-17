@@ -2,6 +2,7 @@
 extern crate environmental;
 extern crate polkadot_state_machine;
 extern crate tiny_keccak;
+extern crate polkadot_primitives as primitives;
 
 use std::fmt;
 use primitives::ed25519;
