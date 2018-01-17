@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate environmental;
 extern crate polkadot_state_machine;
+extern crate tiny_keccak;
 
 pub use std::vec::Vec;
 pub use std::rc::Rc;
@@ -74,6 +75,9 @@ pub fn chain_id() -> u64 {
 		holder.ext.chain_id()
 	).unwrap_or(0)
 }
+
+/// Conduct a Keccak-256 hash of the given data.
+pub use tiny_keccak::keccak256;
 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.

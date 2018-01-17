@@ -1,7 +1,7 @@
 use keyedvec::KeyedVec;
 use storage::{Storage, storage_into};
 use primitives::{BlockNumber, Balance, AccountID};
-use consensus;
+use runtime::consensus;
 
 /// The length of a staking era in blocks.
 pub fn era_length() -> BlockNumber {
@@ -68,7 +68,7 @@ mod tests {
 	use runtime_support::with_externalities;
 	use testing::TestExternalities;
 	use primitives::{AccountID};
-	use staking;
+	use runtime::staking;
 
 	macro_rules! map {
 		($( $name:expr => $value:expr ),*) => (
