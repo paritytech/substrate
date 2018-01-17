@@ -16,7 +16,7 @@
 
 //! Safe global references to stack variables.
 //!
-//! Set up a global reference with declare_simple! macro giving it a name and type.
+//! Set up a global reference with environmental! macro giving it a name and type.
 //! Use the `using` function scoped under its name to name a reference and call a function that
 //! takes no parameters yet can access said reference through the similarly placed `with` function.
 //!
@@ -25,7 +25,7 @@
 //! ```
 //! #[macro_use] extern crate environmental;
 //! // create a place for the global reference to exist.
-//! declare_simple!(counter: u32);
+//! environmental!(counter: u32);
 //! fn stuff() {
 //!   // do some stuff, accessing the named reference as desired.
 //!   counter::with(|i| *i += 1);
@@ -40,15 +40,12 @@
 //! }
 //! ```
 
-#[doc(hidden)]
-pub use std::cell::RefCell;
+use std::cell::RefCell;
 use std::thread::LocalKey;
 
-// invoking this function asserts that T and S are both instantiations
-// of the same lifetime-parametric type.
 #[doc(hidden)]
-pub unsafe fn using<T, R, S, F: FnOnce() -> R>(
-	global: &'static LocalKey<RefCell<*mut S>>,
+pub fn using<T: ?Sized, R, F: FnOnce() -> R>(
+	global: &'static LocalKey<RefCell<Option<*mut T>>>,
 	protected: &mut T,
 	f: F
 ) -> R {
@@ -62,60 +59,66 @@ pub unsafe fn using<T, R, S, F: FnOnce() -> R>(
 	global.with(|r| {
 		let original = {
 			let mut global = r.borrow_mut();
-			::std::mem::replace(&mut *global, protected as *mut _ as *mut S)
+			::std::mem::replace(&mut *global, Some(protected as _))
 		};
 
-		let res = f();
-		*r.borrow_mut() = original;
-		res
+		// even if `f` panics the original will be replaced.
+		struct ReplaceOriginal<'a, T: 'a + ?Sized> {
+			original: Option<*mut T>,
+			global: &'a RefCell<Option<*mut T>>,
+		}
+
+		impl<'a, T: 'a + ?Sized> Drop for ReplaceOriginal<'a, T> {
+			fn drop(&mut self) {
+				*self.global.borrow_mut() = self.original.take();
+			}
+		}
+
+		let _guard = ReplaceOriginal {
+			original,
+			global: r,
+		};
+
+		f()
 	})
 }
 
-// invoking this function asserts that T and S are both instantiations
-// of the same lifetime-parametric type.
 #[doc(hidden)]
-pub unsafe fn with<R, S, T, F: FnOnce(&mut T) -> R>(
-	global: &'static LocalKey<RefCell<*mut S>>,
+pub fn with<T: ?Sized, R, F: FnOnce(&mut T) -> R>(
+	global: &'static LocalKey<RefCell<Option<*mut T>>>,
 	mutator: F,
 ) -> Option<R> {
-	global.with(|r| {
-		let br = r.borrow_mut();
-		if *br != 0 as *mut S {
-			// safe because it's only non-zero when it's being called from using, which
-			// is holding on to the underlying reference (and not using it itself) safely.
-			Some(mutator(&mut *(*br as *mut S as *mut T)))
-		} else {
-			None
+	global.with(|r| unsafe {
+		let ptr = r.borrow_mut();
+		match *ptr {
+			Some(ptr) => {
+				// safe because it's only non-zero when it's being called from using, which
+				// is holding on to the underlying reference (and not using it itself) safely.
+				Some(mutator(&mut *ptr))
+			}
+			None => None,
 		}
 	})
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! decl {
-	($name:ident : $t:ty) => {
-		thread_local! {
-			static $name: $crate::RefCell<*mut $t> = $crate::RefCell::new(0 as *mut $t);
-		}
-	}
 }
 
 /// Declare a new global reference module whose underlying value does not contain references.
 ///
 /// Will create a module of a given name that contains two functions:
-/// * `pub fn using<'a: 'b, 'b, R, F: FnOnce() -> R, T: 'a>(protected: &'b mut T, f: F) -> R`
+/// * `pub fn using<R, F: FnOnce() -> R>(protected: &mut $t, f: F) -> R`
 ///   This executes `f`, returning its value. During the call, the module's reference is set to
 ///   be equal to `protected`.
-/// * `pub fn with<R, F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>) -> R>(f: F) -> Option<R>`
+/// * `pub fn with<R, F: FnOnce(&mut $t) -> R>(f: F) -> Option<R>`
 ///   This executes `f`, returning `Some` of its value if called from code that is being executed
 ///   as part of a `using` call. If not, it returns `None`. `f` is provided with one argument: the
 ///   same reference as provided to the most recent `using` call.
 ///
 /// # Examples
 ///
-/// ```
+/// Initializing the global context with a given value.
+///
+/// ```rust
 /// #[macro_use] extern crate environmental;
-/// declare_simple!(counter: u32);
+/// environmental!(counter: u32);
 /// fn main() {
 ///   let mut counter_value = 41u32;
 ///   counter::using(&mut counter_value, || {
@@ -131,96 +134,55 @@ macro_rules! decl {
 ///   println!("The answer is {:?}", counter_value); // 42
 /// }
 /// ```
+///
+/// Roughly the same, but with a trait object:
+///
+/// ```rust
+/// #[macro_use] extern crate environmental;
+///
+/// trait Increment { fn increment(&mut self); }
+///
+/// impl Increment for i32 {
+/// 	fn increment(&mut self) { *self += 1 }
+/// }
+///
+/// environmental!(val: Increment + 'static);
+///
+/// fn main() {
+/// 	let mut local = 0i32;
+/// 	val::using(&mut local, || {
+/// 		val::with(|v| for _ in 0..5 { v.increment() });
+/// 	});
+///
+/// 	assert_eq!(local, 5);
+/// }
+/// ```
 #[macro_export]
-macro_rules! declare_simple {
+macro_rules! environmental {
 	($name:ident : $t:ty) => {
-		mod $name {
-			#[allow(unused_imports)]
-			use super::*;
+		#[allow(non_camel_case_types)]
+		struct $name { __private_field: () }
 
-			decl!(GLOBAL: $t);
+		thread_local!(static GLOBAL: ::std::cell::RefCell<Option<*mut $t>>
+			= ::std::cell::RefCell::new(None));
+
+		impl $name {
+			#[allow(unused_imports)]
 
 			pub fn using<R, F: FnOnce() -> R>(
 				protected: &mut $t,
 				f: F
 			) -> R {
-				unsafe { $crate::using(&GLOBAL, protected, f) }
+				$crate::using(&GLOBAL, protected, f)
 			}
 
 			pub fn with<R, F: FnOnce(&mut $t) -> R>(
 				f: F
 			) -> Option<R> {
-				unsafe { $crate::with(&GLOBAL, f) }
+				$crate::with(&GLOBAL, |x| f(x))
 			}
 		}
-	}
-}
-
-/// Declare a new global reference module whose underlying value is generic over a reference.
-///
-/// Will create a module of a given name that contains two functions:
-///
-/// * `pub fn using<'a: 'b, 'b, R, F: FnOnce() -> R, T: 'a>(protected: &'b mut T, f: F) -> R`
-///   This executes `f`, returning its value. During the call, the module's reference is set to
-///   be equal to `protected`.
-/// * `pub fn with<R, F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>) -> R>(f: F) -> Option<R>`
-///   This executes `f`, returning `Some` of its value if called from code that is being executed
-///   as part of a `using` call. If not, it returns `None`. `f` is provided with one argument: the
-///   same reference as provided to the most recent `using` call.
-///
-/// # Examples
-///
-/// ```
-/// #[macro_use] extern crate environmental;
-/// // a type that we want to reference from a temp global; it has a reference in it.
-/// struct WithReference<'a> { answer_ref: &'a mut u32, }
-/// // create a place for the global reference to exist.
-/// declare_generic!(counter: WithReference);
-/// fn stuff() {
-///   // do some stuff, accessing the named reference as desired.
-///   counter::with(|i| *i.answer_ref += 1);
-/// }
-/// fn main() {
-///   // declare a stack variable of the same type as our global declaration.
-///   let mut answer = 41u32;
-///   {
-///     let mut ref_struct = WithReference { answer_ref: &mut answer, };
-///     counter::using(&mut ref_struct, stuff);
-///   }
-///   println!("The answer is {:?}", answer); // will print 42!
-/// }
-/// ```
-#[macro_export]
-macro_rules! declare_generic {
-	($name:ident : $t:tt) => {
-		mod $name {
-			#[allow(unused_imports)]
-			use super::*;
-
-			decl!(GLOBAL: $t<'static> );
-
-			pub fn using<'a: 'b, 'b, R, F: FnOnce() -> R, T: 'a>(
-				protected: &'b mut T,
-				f: F
-			) -> R {
-				$crate::using(&GLOBAL, protected, f)
-			}
-
-			pub fn with<R, F: for<'r, 't: 'r> FnOnce(&'r mut $t<'t>) -> R>(
-				f: F
-			) -> Option<R> {
-				let dummy = ();
-				with_closed(f, &dummy)
-			}
-
-			fn with_closed<'d: 't, 't: 'r, 'r, R, F: FnOnce(&'r mut $t<'t>) -> R>(
-				f: F,
-				_dummy: &'d (),
-			) -> Option<R> {
-				$crate::with(&GLOBAL, f)
-			}
-		}
-	}
+	};
 }
 
 #[cfg(test)]
@@ -228,9 +190,9 @@ mod tests {
 
 	#[test]
 	fn simple_works() {
-		declare_simple!(counter: u32);
+		environmental!(counter: u32);
 
-		let stuff = || counter::with(|value| *value += 1);
+		fn stuff() { counter::with(|value| *value += 1); };
 
 		// declare a stack variable of the same type as our global declaration.
 		let mut local = 41u32;
@@ -238,13 +200,12 @@ mod tests {
 		// call stuff, setting up our `counter` environment as a refrence to our local counter var.
 		counter::using(&mut local, stuff);
 		assert_eq!(local, 42);
-
 		stuff();	// safe! doesn't do anything.
 	}
 
 	#[test]
 	fn overwrite_with_lesser_lifetime() {
-		declare_simple!(items: Vec<u8>);
+		environmental!(items: Vec<u8>);
 
 		let mut local_items = vec![1, 2, 3];
 		items::using(&mut local_items, || {
@@ -253,5 +214,59 @@ mod tests {
 		});
 
 		assert_eq!(local_items, vec![4, 5, 6]);
+	}
+
+	#[test]
+	fn declare_with_trait_object() {
+		trait Foo {
+			fn get(&self) -> i32;
+			fn set(&mut self, x: i32);
+		}
+
+		impl Foo for i32 {
+			fn get(&self) -> i32 { *self }
+			fn set(&mut self, x: i32) { *self = x }
+		}
+
+		environmental!(foo: Foo + 'static);
+
+		fn stuff() {
+			foo::with(|value| {
+				let new_val = value.get() + 1;
+				value.set(new_val);
+			});
+		}
+
+		let mut local = 41i32;
+		foo::using(&mut local, stuff);
+
+		assert_eq!(local, 42);
+
+		stuff(); // doesn't do anything.
+	}
+
+	#[test]
+	fn unwind_recursive() {
+		use std::panic;
+
+		environmental!(items: Vec<u8>);
+
+		let panicked = panic::catch_unwind(|| {
+			let mut local_outer = vec![1, 2, 3];
+
+			items::using(&mut local_outer, || {
+				let mut local_inner = vec![4, 5, 6];
+				items::using(&mut local_inner, || {
+					panic!("are you unsafe?");
+				})
+			});
+		}).is_err();
+
+		assert!(panicked);
+
+		let mut was_cleared = true;
+		items::with(|_items| was_cleared = false);
+
+		assert!(was_cleared);
 	}
 }
