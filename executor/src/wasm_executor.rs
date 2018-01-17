@@ -27,6 +27,7 @@ use error::{Error, ErrorKind, Result};
 use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
 use tiny_keccak;
+use primitives::ed25519;
 
 struct Heap {
 	end: u32,
@@ -148,6 +149,24 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				[0; 32]
 			};
 		let _ = this.memory.set(out, &result);
+	},
+	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+		(||{
+			let mut sig = [0u8; 64];
+			if let Err(_) = this.memory.get_into(sig_data, &mut sig[..]) {
+				return 0;
+			};
+			let mut pubkey = [0u8; 32];
+			if let Err(_) = this.memory.get_into(pubkey_data, &mut pubkey[..]) {
+				return 0;
+			};
+
+			if let Ok(msg) = this.memory.get(msg_data, msg_len as usize) {
+				if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) { 1 } else { 0 }
+			} else {
+				0
+			}
+		})()
 	}
 	=> <'e, E: Externalities + 'e>
 );
