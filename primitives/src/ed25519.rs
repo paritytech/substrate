@@ -15,6 +15,17 @@ impl<'a> ::std::fmt::Display for HexDisplay<'a> {
 	}
 }
 
+pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {
+	let public_key = untrusted::Input::from(public);
+	let msg = untrusted::Input::from(message);
+	let sig = untrusted::Input::from(sig);
+
+	match signature::verify(&signature::ED25519, public_key, msg, sig) {
+		Ok(_) => true,
+		_ => false,
+	}
+}
+
 /// A public key.
 #[derive(PartialEq, Clone, Debug)]
 pub struct Public ([u8; 32]);
