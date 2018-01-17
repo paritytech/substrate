@@ -21,6 +21,8 @@
 extern crate rustc_hex;
 extern crate serde;
 extern crate tiny_keccak;
+extern crate ring;
+extern crate untrusted;
 
 #[macro_use]
 extern crate crunchy;
@@ -46,6 +48,7 @@ pub mod hash;
 pub mod parachain;
 pub mod uint;
 pub mod validator;
+pub mod ed25519;
 
 /// Alias to 160-bit hash when used in the context of an account address.
 pub type Address = hash::H160;

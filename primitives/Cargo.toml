@@ -11,6 +11,8 @@ serde = "1.0"
 serde_derive = "1.0"
 tiny-keccak = "1.3"
 uint = { git = "https://github.com/paritytech/primitives.git" }
+ring = "0.12"
+untrusted = "0.5"
 
 [dev-dependencies]
 polkadot-serializer = { path = "../serializer", version = "0.1" }
