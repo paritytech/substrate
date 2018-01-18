@@ -4,13 +4,16 @@
 #[macro_use]
 extern crate runtime_support;
 
+#[cfg(test)]
+extern crate rustc_hex;
+
 mod codec;
 mod support;
 mod runtime;
 pub use codec::{endiansensitive, streamreader, joiner, slicable, keyedvec};
 pub use support::{primitives, function, environment, storage};
 #[cfg(test)]
-pub use support::testing;
+pub use support::{testing, statichex};
 
 
 #[allow(unused_imports)]		// TODO: remove in due course

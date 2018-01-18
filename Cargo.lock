@@ -532,6 +532,7 @@ name = "native-runtime"
 version = "0.1.0"
 dependencies = [
  "runtime-support 0.1.0",
+ "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
