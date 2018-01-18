@@ -18,9 +18,7 @@ fn test_ed25519_verify(input: Vec<u8>) -> Vec<u8> {
 	let sig = &input[0..64];
 	let pubkey = &input[64..96];
 	let msg = b"all ok!";
-	let mut r = Vec::new();
-	r.push(ed25519_verify(sig, &msg[..], pubkey) as u8);
-	r
+	[ed25519_verify(sig, &msg[..], pubkey) as u8].to_vec()
 }
 
 fn test_data_in(input: Vec<u8>) -> Vec<u8> {
