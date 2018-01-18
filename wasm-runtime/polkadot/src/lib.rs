@@ -19,16 +19,16 @@ use slicable::Slicable;
 use primitives::{Block, UncheckedTransaction};
 
 // TODO: add externals for:
-// - keccak256 (or some better hashing scheme)
 // - trie rooting
-// - ECDSA-recover (or some better sig scheme)
 
 pub fn execute_block(input: Vec<u8>) -> Vec<u8> {
-	runtime::system::execute_block(Block::from_slice(&input).unwrap())
+	runtime::system::execute_block(Block::from_slice(&input).unwrap());
+	Vec::new()
 }
 
 pub fn execute_transaction(input: Vec<u8>) -> Vec<u8> {
-	runtime::system::execute_transaction(&UncheckedTransaction::from_slice(&input).unwrap())
+	runtime::system::execute_transaction(&UncheckedTransaction::from_slice(&input).unwrap());
+	Vec::new()
 }
 
 impl_stubs!(execute_block, execute_transaction);

@@ -3,7 +3,7 @@ use endiansensitive::EndianSensitive;
 use runtime_support;
 
 pub trait Storage {
-	fn into(key: &[u8]) -> Self;
+	fn into(_key: &[u8]) -> Self where Self: Sized { unimplemented!() }
 	fn store(&self, key: &[u8]);
 }
 
@@ -12,12 +12,13 @@ impl<T: Default + Sized + EndianSensitive> Storage for T {
 		Slicable::set_as_slice(|out| runtime_support::read_storage(key, out) == out.len())
 			.unwrap_or_else(Default::default)
 	}
-
 	fn store(&self, key: &[u8]) {
 		self.as_slice_then(|slice| runtime_support::set_storage(key, slice));
 	}
 }
 
-pub fn storage_into<T: Storage>(key: &[u8]) -> T {
-	T::into(key)
+impl Storage for [u8] {
+	fn store(&self, key: &[u8]) {
+		runtime_support::set_storage(key, self)
+	}
 }
