@@ -90,11 +90,14 @@ pub fn set_code(new: &[u8]) {
 mod tests {
 	use joiner::Joiner;
 	use function::Function;
-	use codec::keyedvec::KeyedVec;
+	use keyedvec::KeyedVec;
+	use slicable::Slicable;
 	use std::collections::HashMap;
 	use runtime_support::{NoError, with_externalities, Externalities};
-	use primitives::{AccountID, UncheckedTransaction, Transaction};
+	use primitives::{AccountID, UncheckedTransaction, Transaction, Hashable};
+	use statichex::StaticHexInto;
 	use runtime::{system, staking};
+	use testing::HexDisplay;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities {
@@ -120,10 +123,13 @@ mod tests {
 		)
 	}
 
+	fn one() -> AccountID { "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".convert() }
+	fn two() -> AccountID { "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a".convert() }
+
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
-		let one: AccountID = [1u8; 32];
-		let two: AccountID = [2u8; 32];
+		let one = one();
+		let two = two();
 
 		let mut t = TestExternalities { storage: map![
 			one.to_keyed_vec(b"sta\0bal\0") => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
@@ -136,8 +142,12 @@ mod tests {
 				function: Function::StakingTransferStake,
 				input_data: vec![].join(&two).join(&69u64),
 			},
-			signature: [1u8; 64],
+			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
 		};
+		// tx: 2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000
+		// sig: 679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a
+
+		println!("tx is {}", HexDisplay::from(&tx.transaction.to_vec()));
 
 		with_externalities(&mut t, || {
 			system::execute_transaction(&tx);

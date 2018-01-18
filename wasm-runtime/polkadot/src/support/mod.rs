@@ -4,4 +4,6 @@ pub mod environment;
 pub mod storage;
 
 #[cfg(test)]
+pub mod statichex;
+#[cfg(test)]
 pub mod testing;

@@ -4,17 +4,6 @@ use untrusted;
 use ring::{rand, signature};
 use rustc_hex::FromHex;
 
-struct HexDisplay<'a>(&'a [u8]);
-
-impl<'a> ::std::fmt::Display for HexDisplay<'a> {
-	fn fmt(&self, fmtr: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
-		for byte in self.0 {
-			try!( fmtr.write_fmt(format_args!("{:02x}", byte)));
-		}
-		Ok(())
-	}
-}
-
 pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {
 	let public_key = untrusted::Input::from(public);
 	let msg = untrusted::Input::from(message);
@@ -181,6 +170,41 @@ impl PartialEq for Signature {
 mod test {
 	use super::*;
 
+pub struct HexDisplay<'a>(&'a [u8]);
+
+impl<'a> HexDisplay<'a> {
+	pub fn from(d: &'a AsBytesRef) -> Self { HexDisplay(d.as_bytes_ref()) }
+}
+
+impl<'a> ::std::fmt::Display for HexDisplay<'a> {
+	fn fmt(&self, fmtr: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+		for byte in self.0 {
+			try!( fmtr.write_fmt(format_args!("{:02x}", byte)));
+		}
+		Ok(())
+	}
+}
+
+pub trait AsBytesRef {
+	fn as_bytes_ref(&self) -> &[u8];
+}
+
+impl AsBytesRef for [u8] {
+	fn as_bytes_ref(&self) -> &[u8] { &self }
+}
+
+macro_rules! impl_non_endians {
+	( $( $t:ty ),* ) => { $(
+		impl AsBytesRef for $t {
+			fn as_bytes_ref(&self) -> &[u8] { &self[..] }
+		}
+	)* }
+}
+
+impl_non_endians!([u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7], [u8; 8],
+	[u8; 10], [u8; 12], [u8; 14], [u8; 16], [u8; 20], [u8; 24], [u8; 28], [u8; 32], [u8; 40],
+	[u8; 48], [u8; 56], [u8; 64], [u8; 80], [u8; 96], [u8; 112], [u8; 128]);
+
 	#[test]
 	fn test_vector_should_work() {
 		let pair: Pair = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into();
@@ -205,8 +229,22 @@ mod test {
 	fn seeded_pair_should_work() {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
+		println!("{}", HexDisplay::from(&public.0));
+		assert_eq!(public, "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".into());
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
+		assert!(signature.verify(&message[..], &public));
+	}
+
+	#[test]
+	fn can_sign_transaction() {
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let public = pair.public();
+		assert_eq!(public, "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".into());
+		let message = FromHex::from_hex("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000").unwrap();
+		let signature = pair.sign(&message[..]);
+		println!("pub: {}", HexDisplay::from(&public.0));
+		println!("sig: {}", HexDisplay::from(&signature.0));
 		assert!(signature.verify(&message[..], &public));
 	}
 }
