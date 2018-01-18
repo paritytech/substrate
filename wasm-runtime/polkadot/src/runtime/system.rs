@@ -1,7 +1,8 @@
-use primitives::{Block, BlockNumber, Hash, UncheckedTransaction};
+use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder, Hashable};
 use runtime_support::{Vec, swap};
+use storage::Storage;
+use keyedvec::KeyedVec;
 use environment::with_env;
-use runtime_support;
 use runtime::staking;
 
 /// The current block number being processed. Set by `execute_block`.
@@ -10,8 +11,8 @@ pub fn block_number() -> BlockNumber {
 }
 
 /// Get the block hash of a given block (uses storage).
-pub fn block_hash(_number: BlockNumber) -> Hash {
-	unimplemented!()
+pub fn block_hash(number: BlockNumber) -> Hash {
+	Storage::into(&number.to_keyed_vec(b"sys\0old\0"))
 }
 
 /// Deposits a log and ensures it matches the blocks log data.
@@ -22,7 +23,7 @@ pub fn deposit_log(log: &[u8]) {
 	});
 }
 
-pub fn execute_block(mut block: Block) -> Vec<u8> {
+pub fn execute_block(mut block: Block) {
 	// populate environment from header.
 	with_env(|e| {
 		e.block_number = block.header.number;
@@ -30,20 +31,29 @@ pub fn execute_block(mut block: Block) -> Vec<u8> {
 		e.next_log_index = 0;
 	});
 
+	let ref header = block.header;
+
+	// check parent_hash is correct.
+	assert!(
+		header.number > 0 && block_hash(header.number - 1) == header.parent_hash,
+		"Parent hash should be valid."
+	);
+
 	// TODO: check transaction trie root represents the transactions.
-	// TODO: store the header hash in storage.
 
+	// store the header hash in storage.
+	let header_hash_key = header.number.to_keyed_vec(b"sys\0old\0");
+	header.keccak256().store(&header_hash_key);
+
+	// execute transactions
 	staking::pre_transactions();
-
-	block.transactions.iter().for_each(|tx| { execute_transaction(tx); });
-
+	block.transactions.iter().for_each(execute_transaction);
 	staking::post_transactions();
 
+	// any final checks
 	final_checks(&block);
 
-	// TODO: check state root somehow
-
-	Vec::new()
+	// TODO: check storage root somehow
 }
 
 fn final_checks(_block: &Block) {
@@ -53,29 +63,34 @@ fn final_checks(_block: &Block) {
 }
 
 /// Execute a given transaction.
-pub fn execute_transaction(_tx: &UncheckedTransaction) -> Vec<u8> {
-	// TODO: decode data and ensure valid
-	// TODO: ensure signature valid and recover id (use authentication::authenticate)
-	// TODO: check nonce
-	// TODO: increment nonce in storage
-	// TODO: ensure target_function valid
-	// TODO: decode parameters
+pub fn execute_transaction(utx: &UncheckedTransaction) {
+	// Verify the signature is good.
+	assert!(utx.ed25519_verify(), "All transactions should be properly signed");
 
-	_tx.transaction.function.dispatch(&_tx.transaction.signed, &_tx.transaction.input_data);
+	let ref tx = utx.transaction;
 
-	// TODO: encode any return
-	Vec::new()
+	// check nonce
+	let nonce_key = tx.signed.to_keyed_vec(b"sys\0non\0");
+	let expected_nonce: TxOrder = Storage::into(&nonce_key);
+	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
+
+	// increment nonce in storage
+	(expected_nonce + 1).store(&nonce_key);
+
+	// decode parameters and dispatch
+	tx.function.dispatch(&tx.signed, &tx.input_data);
 }
 
 /// Set the new code.
 pub fn set_code(new: &[u8]) {
-	runtime_support::set_storage(b"\0code", new)
+	new.store(b"\0code");
 }
 
 #[cfg(test)]
 mod tests {
 	use joiner::Joiner;
 	use function::Function;
+	use codec::keyedvec::KeyedVec;
 	use std::collections::HashMap;
 	use runtime_support::{NoError, with_externalities, Externalities};
 	use primitives::{AccountID, UncheckedTransaction, Transaction};
@@ -111,7 +126,7 @@ mod tests {
 		let two: AccountID = [2u8; 32];
 
 		let mut t = TestExternalities { storage: map![
-			{ let mut r = b"sta\0bal\0".to_vec(); r.extend_from_slice(&one); r } => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			one.to_keyed_vec(b"sta\0bal\0") => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
 		let tx = UncheckedTransaction {

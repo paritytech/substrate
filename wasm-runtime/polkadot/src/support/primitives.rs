@@ -3,7 +3,7 @@ use streamreader::StreamReader;
 use joiner::Joiner;
 use slicable::{Slicable, NonTrivialSlicable};
 use function::Function;
-use runtime_support::size_of;
+use runtime_support::{size_of, keccak256, ed25519_verify};
 
 #[cfg(test)]
 use std::fmt;
@@ -35,6 +35,40 @@ pub struct Header {
 	pub transaction_root: Hash,
 	pub digest: Digest,
 }
+
+impl Slicable for Header {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		let mut reader = StreamReader::new(value);
+		Some(Header {
+			parent_hash: reader.read()?,
+			number: reader.read()?,
+			state_root: reader.read()?,
+			transaction_root: reader.read()?,
+			digest: Digest { logs: reader.read()?, },
+		})
+	}
+
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+		unimplemented!();
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		Vec::new()
+			.join(&self.parent_hash)
+			.join(&self.number)
+			.join(&self.state_root)
+			.join(&self.transaction_root)
+			.join(&self.digest.logs)
+	}
+
+	fn size_of(data: &[u8]) -> Option<usize> {
+		let first_part = size_of::<Hash>() + size_of::<BlockNumber>() + size_of::<Hash>() + size_of::<Hash>();
+		let second_part = <Vec<Vec<u8>>>::size_of(&data[first_part..])?;
+		Some(first_part + second_part)
+	}
+}
+
+impl NonTrivialSlicable for Header {}
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct Transaction {
@@ -74,11 +108,28 @@ impl Slicable for Transaction {
 	}
 }
 
+pub trait Hashable: Sized {
+	fn keccak256(&self) -> [u8; 32];
+}
+
+impl<T: Slicable> Hashable for T {
+	fn keccak256(&self) -> [u8; 32] {
+		keccak256(&self.to_vec())
+	}
+}
+
 impl NonTrivialSlicable for Transaction {}
 
 pub struct UncheckedTransaction {
 	pub transaction: Transaction,
 	pub signature: [u8; 64],
+}
+
+impl UncheckedTransaction {
+	pub fn ed25519_verify(&self) -> bool {
+		let msg = self.transaction.to_vec();
+		ed25519_verify(&self.signature, &msg, &self.transaction.signed)
+	}
 }
 
 #[cfg(test)]
@@ -129,6 +180,34 @@ pub struct Block {
 	pub transactions: Vec<UncheckedTransaction>,
 }
 
+impl Slicable for Block {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		let mut reader = StreamReader::new(value);
+		Some(Block {
+			header: reader.read()?,
+			transactions: reader.read()?,
+		})
+	}
+
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+		unimplemented!();
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		Vec::new()
+			.join(&self.header)
+			.join(&self.transactions)
+	}
+
+	fn size_of(data: &[u8]) -> Option<usize> {
+		let first_part = Header::size_of(data)?;
+		let second_part = <Vec<Transaction>>::size_of(&data[first_part..])?;
+		Some(first_part + second_part)
+	}
+}
+
+impl NonTrivialSlicable for Block {}
+
 impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
 
 impl<T: NonTrivialSlicable> Slicable for Vec<T> {
@@ -158,64 +237,6 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 
 	fn size_of(data: &[u8]) -> Option<usize> {
 		u32::from_slice(&data[0..4]).map(|i| (i + 4) as usize)
-	}
-}
-
-impl Slicable for Header {
-	fn from_slice(value: &[u8]) -> Option<Self> {
-		let mut reader = StreamReader::new(value);
-		Some(Header {
-			parent_hash: reader.read()?,
-			number: reader.read()?,
-			state_root: reader.read()?,
-			transaction_root: reader.read()?,
-			digest: Digest { logs: reader.read()?, },
-		})
-	}
-
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
-		unimplemented!();
-	}
-
-	fn to_vec(&self) -> Vec<u8> {
-		Vec::new()
-			.join(&self.parent_hash)
-			.join(&self.number)
-			.join(&self.state_root)
-			.join(&self.transaction_root)
-			.join(&self.digest.logs)
-	}
-
-	fn size_of(data: &[u8]) -> Option<usize> {
-		let first_part = size_of::<Hash>() + size_of::<BlockNumber>() + size_of::<Hash>() + size_of::<Hash>();
-		let second_part = <Vec<Vec<u8>>>::size_of(&data[first_part..])?;
-		Some(first_part + second_part)
-	}
-}
-
-impl Slicable for Block {
-	fn from_slice(value: &[u8]) -> Option<Self> {
-		let mut reader = StreamReader::new(value);
-		Some(Block {
-			header: reader.read()?,
-			transactions: reader.read()?,
-		})
-	}
-
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
-		unimplemented!();
-	}
-
-	fn to_vec(&self) -> Vec<u8> {
-		Vec::new()
-			.join(&self.header)
-			.join(&self.transactions)
-	}
-
-	fn size_of(data: &[u8]) -> Option<usize> {
-		let first_part = Header::size_of(data)?;
-		let second_part = <Vec<Transaction>>::size_of(&data[first_part..])?;
-		Some(first_part + second_part)
 	}
 }
 
