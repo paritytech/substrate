@@ -7,6 +7,7 @@ use runtime::{system, staking, consensus};
 /// Get the current set of validators. These are the long-term identifiers for the validators
 /// and will be mapped to a session key with the most recent `set_next_session_key`.
 pub fn validators() -> Vec<AccountID> {
+	// TODO: derive from the actual validator set
 	consensus::authorities()
 }
 
@@ -14,6 +15,7 @@ pub fn validators() -> Vec<AccountID> {
 ///
 /// Called by staking::next_era() only.
 pub fn set_validators(new: &[AccountID]) {
+	// TODO: set the actual validators
 	consensus::set_authorities(new);
 }
 
