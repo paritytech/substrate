@@ -8,10 +8,19 @@ use alloc::vec::Vec;
 
 #[macro_use]
 extern crate runtime_support;
-use runtime_support::{set_storage, storage, print, keccak256};
+use runtime_support::{set_storage, storage, print, keccak256, ed25519_verify};
 
 fn test_keccak256(input: Vec<u8>) -> Vec<u8> {
 	keccak256(&input).to_vec()
+}
+
+fn test_ed25519_verify(input: Vec<u8>) -> Vec<u8> {
+	let sig = &input[0..64];
+	let pubkey = &input[64..96];
+	let msg = b"all ok!";
+	let mut r = Vec::new();
+	r.push(ed25519_verify(sig, &msg[..], pubkey) as u8);
+	r
 }
 
 fn test_data_in(input: Vec<u8>) -> Vec<u8> {
@@ -29,4 +38,4 @@ fn test_data_in(input: Vec<u8>) -> Vec<u8> {
 }
 
 
-impl_stubs!(test_data_in, test_keccak256);
+impl_stubs!(test_data_in, test_keccak256, test_ed25519_verify);
