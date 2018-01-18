@@ -1,5 +1,5 @@
 use keyedvec::KeyedVec;
-use storage::{Storage, storage_into};
+use storage::Storage;
 use primitives::{BlockNumber, Balance, AccountID};
 use runtime::consensus;
 
@@ -10,7 +10,7 @@ pub fn era_length() -> BlockNumber {
 
 /// The length of a staking era in sessions.
 pub fn sessions_per_era() -> BlockNumber {
-	storage_into(b"sta\0spe")
+	Storage::into(b"sta\0spe")
 }
 
 /// The era has changed - enact new staking set.
@@ -22,16 +22,16 @@ pub fn next_era() {
 
 /// The balance of a given account.
 pub fn balance(who: &AccountID) -> Balance {
-	storage_into(&who.to_keyed_vec(b"sta\0bal\0"))
+	Storage::into(&who.to_keyed_vec(b"sta\0bal\0"))
 }
 
 /// Transfer some unlocked staking balance to another staker.
 pub fn transfer_stake(transactor: &AccountID, dest: &AccountID, value: Balance) {
 	let from_key = transactor.to_keyed_vec(b"sta\0bal\0");
-	let from_balance: Balance = storage_into(&from_key);
+	let from_balance: Balance = Storage::into(&from_key);
 	assert!(from_balance >= value);
 	let to_key = dest.to_keyed_vec(b"sta\0bal\0");
-	let to_balance: Balance = storage_into(&to_key);
+	let to_balance: Balance = Storage::into(&to_key);
 	assert!(to_balance + value > to_balance);	// no overflow
 	(from_balance - value).store(&from_key);
 	(to_balance + value).store(&to_key);
