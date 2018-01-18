@@ -273,4 +273,19 @@ mod tests {
 			FromHex::from_hex("ecd0e108a98e192af1d2c25055f4e3bed784b5c877204e73219a5203251feaab").unwrap()
 		);
 	}
+
+	#[test]
+	fn ed25519_verify_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let key = ed25519::Pair::from_seed(&tiny_keccak::keccak256(b"test"));
+		let sig = key.sign(b"all ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(sig.as_ref());
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &CallData(calldata)).unwrap(),
+			vec![1]
+		);
+	}
 }
