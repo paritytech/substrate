@@ -2,14 +2,13 @@ use runtime_support::Vec;
 use keyedvec::KeyedVec;
 use storage::Storage;
 use primitives::{AccountID, SessionKey, BlockNumber};
-use storage::storage_into;
 
 pub fn set_authority(index: u32, authority: AccountID) {
 	authority.store(&index.to_keyed_vec(b"con\0aut\0"));
 }
 
 fn authority(index: u32) -> AccountID {
-	storage_into(&index.to_keyed_vec(b"con\0aut\0"))
+	Storage::into(&index.to_keyed_vec(b"con\0aut\0"))
 }
 
 pub fn set_authority_count(count: u32) {
@@ -18,7 +17,7 @@ pub fn set_authority_count(count: u32) {
 }
 
 fn authority_count() -> u32 {
-	storage_into(b"con\0aut\0len")
+	Storage::into(b"con\0aut\0len")
 }
 
 /// Get the current set of authorities. These are the session keys.
@@ -49,7 +48,7 @@ pub fn set_validators(_new: &[AccountID]) {
 
 /// The number of blocks in each session.
 pub fn session_length() -> BlockNumber {
-	storage_into(b"con\0bps")
+	Storage::into(b"con\0bps")
 }
 
 /// Sets the session key of `_transactor` to `_session`. This doesn't take effect until the next

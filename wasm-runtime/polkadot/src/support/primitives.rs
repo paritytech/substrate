@@ -5,10 +5,13 @@ use slicable::{Slicable, NonTrivialSlicable};
 use function::Function;
 use runtime_support::size_of;
 
-/// The hash of an ECDSA pub key which is used to identify an external transactor.
+#[cfg(test)]
+use std::fmt;
+
+/// The Ed25519 pubkey that identifies an account.
 pub type AccountID = [u8; 32];
-/// The ECDSA pub key of an authority. This is what the external environment/consensus algorithm
-/// refers to as a "authority".
+/// The Ed25519 pub key of an session that belongs to an authority. This is used as what the
+/// external environment/consensus algorithm calls an "authority".
 pub type SessionKey = AccountID;
 pub type Balance = u64;
 pub type ChainID = u64;
@@ -36,15 +39,9 @@ pub struct Header {
 #[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct Transaction {
 	pub signed: AccountID,
+	pub nonce: TxOrder,
 	pub function: Function,
 	pub input_data: Vec<u8>,
-	pub nonce: TxOrder,
-}
-
-#[cfg_attr(test, derive(PartialEq, Debug))]
-pub struct Block {
-	pub header: Header,
-	pub transactions: Vec<Transaction>,
 }
 
 impl Slicable for Transaction {
@@ -52,8 +49,8 @@ impl Slicable for Transaction {
 		let mut reader = StreamReader::new(value);
 		Some(Transaction {
 			signed: reader.read()?,
-			function: Function::from_u8(reader.read()?)?,
 			nonce: reader.read()?,
+			function: Function::from_u8(reader.read()?)?,
 			input_data: reader.read()?,
 		})
 	}
@@ -65,19 +62,72 @@ impl Slicable for Transaction {
 	fn to_vec(&self) -> Vec<u8> {
 		Vec::new()
 			.join(&self.signed)
-			.join(&(self.function as u8))
 			.join(&self.nonce)
+			.join(&(self.function as u8))
 			.join(&self.input_data)
 	}
 
 	fn size_of(data: &[u8]) -> Option<usize> {
-		let first_part = size_of::<AccountID>() + size_of::<u8>() + size_of::<TxOrder>();
+		let first_part = size_of::<AccountID>() + size_of::<TxOrder>() + size_of::<u8>();
 		let second_part = <Vec<u8>>::size_of(&data[first_part..])?;
 		Some(first_part + second_part)
 	}
 }
 
 impl NonTrivialSlicable for Transaction {}
+
+pub struct UncheckedTransaction {
+	pub transaction: Transaction,
+	pub signature: [u8; 64],
+}
+
+#[cfg(test)]
+impl PartialEq for UncheckedTransaction {
+	fn eq(&self, other: &Self) -> bool {
+		self.signature.iter().eq(other.signature.iter()) && self.transaction == other.transaction
+	}
+}
+
+#[cfg(test)]
+impl fmt::Debug for UncheckedTransaction {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "UncheckedTransaction({:?})", self.transaction)
+	}
+}
+
+impl Slicable for UncheckedTransaction {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		let mut reader = StreamReader::new(value);
+		Some(UncheckedTransaction {
+			signature: reader.read()?,
+			transaction: reader.read()?,
+		})
+	}
+
+	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+		unimplemented!();
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		Vec::new()
+			.join(&self.signature)
+			.join(&self.transaction)
+	}
+
+	fn size_of(data: &[u8]) -> Option<usize> {
+		let first_part = size_of::<[u8; 64]>();
+		let second_part = <Transaction>::size_of(&data[first_part..])?;
+		Some(first_part + second_part)
+	}
+}
+
+impl NonTrivialSlicable for UncheckedTransaction {}
+
+#[cfg_attr(test, derive(PartialEq, Debug))]
+pub struct Block {
+	pub header: Header,
+	pub transactions: Vec<UncheckedTransaction>,
+}
 
 impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
 
@@ -181,15 +231,15 @@ mod tests {
 		let two: AccountID = [2u8; 32];
 		let tx = Transaction {
 			signed: one.clone(),
+			nonce: 69,
 			function: Function::StakingTransferStake,
 			input_data: Vec::new().join(&two).join(&69u64),
-			nonce: 69,
 		};
 		let serialised = tx.to_vec();
 		assert_eq!(serialised, vec![
 			1u8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-			2,
 			69, 0, 0, 0, 0, 0, 0, 0,
+			2,
 			40, 0, 0, 0,
 				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
 				69, 0, 0, 0, 0, 0, 0, 0
@@ -202,14 +252,14 @@ mod tests {
 		let two: AccountID = [2u8; 32];
 		let tx = Transaction {
 			signed: one.clone(),
+			nonce: 69,
 			function: Function::StakingTransferStake,
 			input_data: Vec::new().join(&two).join(&69u64),
-			nonce: 69,
 		};
 		let data = [
 			1u8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-			2,
 			69, 0, 0, 0, 0, 0, 0, 0,
+			2,
 			40, 0, 0, 0,
 				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
 				69, 0, 0, 0, 0, 0, 0, 0
@@ -269,17 +319,23 @@ mod tests {
 	fn serialise_block_works() {
 		let one: AccountID = [1u8; 32];
 		let two: AccountID = [2u8; 32];
-		let tx1 = Transaction {
-			signed: one.clone(),
-			function: Function::StakingTransferStake,
-			input_data: Vec::new().join(&two).join(&69u64),
-			nonce: 69,
+		let tx1 = UncheckedTransaction {
+			transaction: Transaction {
+				signed: one.clone(),
+				nonce: 69,
+				function: Function::StakingTransferStake,
+				input_data: Vec::new().join(&two).join(&69u64),
+			},
+			signature: [1u8; 64],
 		};
-		let tx2 = Transaction {
-			signed: two.clone(),
-			function: Function::StakingStake,
-			input_data: Vec::new(),
-			nonce: 42,
+		let tx2 = UncheckedTransaction {
+			transaction: Transaction {
+				signed: two.clone(),
+				nonce: 42,
+				function: Function::StakingStake,
+				input_data: Vec::new(),
+			},
+			signature: [2u8; 64],
 		};
 		let h = Header {
 			parent_hash: [4u8; 32],
@@ -305,18 +361,20 @@ mod tests {
 				11, 0, 0, 0,
 					97, 110, 111, 116, 104, 101, 114, 32, 108, 111, 103,
 			// transactions
-			130, 0, 0, 0,
+			2, 1, 0, 0,
 				// tx1
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-				2,
 				69, 0, 0, 0, 0, 0, 0, 0,
+				2,
 				40, 0, 0, 0,
 					2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
 					69, 0, 0, 0, 0, 0, 0, 0,
 				// tx2
+				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
 				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-				0,
 				42, 0, 0, 0, 0, 0, 0, 0,
+				0,
 				0, 0, 0, 0
 		]);
 	}
@@ -325,17 +383,23 @@ mod tests {
 	fn deserialise_block_works() {
 		let one: AccountID = [1u8; 32];
 		let two: AccountID = [2u8; 32];
-		let tx1 = Transaction {
-			signed: one.clone(),
-			function: Function::StakingTransferStake,
-			input_data: Vec::new().join(&two).join(&69u64),
-			nonce: 69,
+		let tx1 = UncheckedTransaction {
+			transaction: Transaction {
+				signed: one.clone(),
+				nonce: 69,
+				function: Function::StakingTransferStake,
+				input_data: Vec::new().join(&two).join(&69u64),
+			},
+			signature: [1u8; 64],
 		};
-		let tx2 = Transaction {
-			signed: two.clone(),
-			function: Function::StakingStake,
-			input_data: Vec::new(),
-			nonce: 42,
+		let tx2 = UncheckedTransaction {
+			transaction: Transaction {
+				signed: two.clone(),
+				nonce: 42,
+				function: Function::StakingStake,
+				input_data: Vec::new(),
+			},
+			signature: [2u8; 64],
 		};
 		let h = Header {
 			parent_hash: [4u8; 32],
@@ -360,18 +424,20 @@ mod tests {
 				11, 0, 0, 0,
 					97, 110, 111, 116, 104, 101, 114, 32, 108, 111, 103,
 			// transactions
-			130, 0, 0, 0,
+			2, 1, 0, 0,
 				// tx1
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-				2,
 				69, 0, 0, 0, 0, 0, 0, 0,
+				2,
 				40, 0, 0, 0,
 					2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
 					69, 0, 0, 0, 0, 0, 0, 0,
 				// tx2
+				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
 				2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-				0,
 				42, 0, 0, 0, 0, 0, 0, 0,
+				0,
 				0, 0, 0, 0
 		];
 		let deserialised = Block::from_slice(&data).unwrap();

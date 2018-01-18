@@ -1,4 +1,4 @@
-use primitives::{Block, BlockNumber, Hash, Transaction};
+use primitives::{Block, BlockNumber, Hash, UncheckedTransaction};
 use runtime_support::{Vec, swap};
 use environment::with_env;
 use runtime_support;
@@ -53,7 +53,7 @@ fn final_checks(_block: &Block) {
 }
 
 /// Execute a given transaction.
-pub fn execute_transaction(_tx: &Transaction) -> Vec<u8> {
+pub fn execute_transaction(_tx: &UncheckedTransaction) -> Vec<u8> {
 	// TODO: decode data and ensure valid
 	// TODO: ensure signature valid and recover id (use authentication::authenticate)
 	// TODO: check nonce
@@ -61,7 +61,7 @@ pub fn execute_transaction(_tx: &Transaction) -> Vec<u8> {
 	// TODO: ensure target_function valid
 	// TODO: decode parameters
 
-	_tx.function.dispatch(&_tx.signed, &_tx.input_data);
+	_tx.transaction.function.dispatch(&_tx.transaction.signed, &_tx.transaction.input_data);
 
 	// TODO: encode any return
 	Vec::new()
@@ -78,7 +78,7 @@ mod tests {
 	use function::Function;
 	use std::collections::HashMap;
 	use runtime_support::{NoError, with_externalities, Externalities};
-	use primitives::{AccountID, Transaction};
+	use primitives::{AccountID, UncheckedTransaction, Transaction};
 	use runtime::{system, staking};
 
 	#[derive(Debug, Default)]
@@ -114,11 +114,14 @@ mod tests {
 			{ let mut r = b"sta\0bal\0".to_vec(); r.extend_from_slice(&one); r } => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let tx = Transaction {
-			signed: one.clone(),
-			function: Function::StakingTransferStake,
-			input_data: vec![].join(&two).join(&69u64),
-			nonce: 0,
+		let tx = UncheckedTransaction {
+			transaction: Transaction {
+				signed: one.clone(),
+				nonce: 0,
+				function: Function::StakingTransferStake,
+				input_data: vec![].join(&two).join(&69u64),
+			},
+			signature: [1u8; 64],
 		};
 
 		with_externalities(&mut t, || {

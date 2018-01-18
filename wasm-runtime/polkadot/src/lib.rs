@@ -11,11 +11,12 @@ pub use codec::{endiansensitive, streamreader, joiner, slicable, keyedvec};
 pub use support::{primitives, function, environment, storage};
 #[cfg(test)]
 pub use support::testing;
-#[allow(unused_imports)]		// TODO: remove in due course
 
+
+#[allow(unused_imports)]		// TODO: remove in due course
 use runtime_support::Vec;
 use slicable::Slicable;
-use primitives::{Block, Transaction};
+use primitives::{Block, UncheckedTransaction};
 
 // TODO: add externals for:
 // - keccak256 (or some better hashing scheme)
@@ -27,7 +28,7 @@ pub fn execute_block(input: Vec<u8>) -> Vec<u8> {
 }
 
 pub fn execute_transaction(input: Vec<u8>) -> Vec<u8> {
-	runtime::system::execute_transaction(&Transaction::from_slice(&input).unwrap())
+	runtime::system::execute_transaction(&UncheckedTransaction::from_slice(&input).unwrap())
 }
 
 impl_stubs!(execute_block, execute_transaction);
