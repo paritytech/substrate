@@ -1,11 +1,11 @@
 use keyedvec::KeyedVec;
 use storage::Storage;
 use primitives::{BlockNumber, Balance, AccountID};
-use runtime::consensus;
+use runtime::{system, session};
 
 /// The length of a staking era in blocks.
 pub fn era_length() -> BlockNumber {
-	sessions_per_era() * consensus::session_length()
+	sessions_per_era() * session::length()
 }
 
 /// The length of a staking era in sessions.
@@ -17,7 +17,8 @@ pub fn sessions_per_era() -> BlockNumber {
 ///
 /// NOTE: This always happens on a session change.
 pub fn next_era() {
-	unimplemented!()
+	// TODO: evaluate desired staking amounts and nominations and optimise to find the best
+	// combination of validators, then use session::set_validators().
 }
 
 /// The balance of a given account.
@@ -53,13 +54,14 @@ pub fn unstake(_transactor: &AccountID) {
 
 /// Hook to be called prior to transaction processing.
 pub fn pre_transactions() {
-	consensus::pre_transactions();
 }
 
 /// Hook to be called after to transaction processing.
 pub fn post_transactions() {
-	// TODO: check block number and call next_era if necessary.
-	consensus::post_transactions();
+	// check block number and call next_era if necessary.
+	if system::block_number() % era_length() == 0 {
+		next_era();
+	}
 }
 
 

@@ -1,4 +1,4 @@
-use runtime::{staking, consensus};
+use runtime::{staking, session};
 use primitives::AccountID;
 use streamreader::StreamReader;
 
@@ -9,7 +9,7 @@ pub enum Function {
 	StakingStake,
 	StakingUnstake,
 	StakingTransferStake,
-	ConsensusSetSessionKey,
+	SessionSetKey,
 }
 
 impl Function {
@@ -18,7 +18,7 @@ impl Function {
 			x if x == Function::StakingStake as u8 => Some(Function::StakingStake),
 			x if x == Function::StakingUnstake as u8 => Some(Function::StakingUnstake),
 			x if x == Function::StakingTransferStake as u8 => Some(Function::StakingTransferStake),
-			x if x == Function::ConsensusSetSessionKey as u8 => Some(Function::ConsensusSetSessionKey),
+			x if x == Function::SessionSetKey as u8 => Some(Function::SessionSetKey),
 			_ => None,
 		}
 	}
@@ -40,9 +40,9 @@ impl Function {
 				let value = params.read().unwrap();
 				staking::transfer_stake(transactor, &dest, value);
 			}
-			Function::ConsensusSetSessionKey => {
+			Function::SessionSetKey => {
 				let session = params.read().unwrap();
-				consensus::set_session_key(transactor, &session);
+				session::set_key(transactor, &session);
 			}
 		}
 	}

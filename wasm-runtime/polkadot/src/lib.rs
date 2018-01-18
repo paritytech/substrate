@@ -15,14 +15,9 @@ pub use support::{primitives, function, environment, storage};
 #[cfg(test)]
 pub use support::{testing, statichex};
 
-
-#[allow(unused_imports)]		// TODO: remove in due course
 use runtime_support::Vec;
 use slicable::Slicable;
 use primitives::{Block, UncheckedTransaction};
-
-// TODO: add externals for:
-// - trie rooting
 
 pub fn execute_block(input: Vec<u8>) -> Vec<u8> {
 	runtime::system::execute_block(Block::from_slice(&input).unwrap());

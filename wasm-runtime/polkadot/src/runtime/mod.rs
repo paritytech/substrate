@@ -6,3 +6,5 @@ pub mod consensus;
 pub mod staking;
 #[allow(unused)]
 pub mod timestamp;
+#[allow(unused)]
+pub mod session;
