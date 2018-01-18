@@ -3,7 +3,7 @@ use runtime_support::{Vec, swap};
 use storage::Storage;
 use keyedvec::KeyedVec;
 use environment::with_env;
-use runtime::staking;
+use runtime::session;
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
@@ -40,20 +40,24 @@ pub fn execute_block(mut block: Block) {
 	);
 
 	// TODO: check transaction trie root represents the transactions.
+	// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
+	// so will wait until a little later.
 
 	// store the header hash in storage.
 	let header_hash_key = header.number.to_keyed_vec(b"sys\0old\0");
 	header.keccak256().store(&header_hash_key);
 
 	// execute transactions
-	staking::pre_transactions();
+	session::pre_transactions();
 	block.transactions.iter().for_each(execute_transaction);
-	staking::post_transactions();
+	session::post_transactions();
 
 	// any final checks
 	final_checks(&block);
 
-	// TODO: check storage root somehow
+	// TODO: check storage root.
+	// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
+	// so will wait until a little later.
 }
 
 fn final_checks(_block: &Block) {
