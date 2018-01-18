@@ -23,7 +23,7 @@ use primitives::block;
 
 pub trait Client : Send + Sync {
 	/// Given a hash return a header
-	fn import(&self, header: block::Header, body: Option<block::Body>) -> ImportResult;
+	fn import(&self, header: block::Header, body: Option<block::Body>) -> Result<ImportResult, Error>;
 
 	/// Get blockchain info.
 	fn info(&self) -> Result<ClientInfo, Error>;
@@ -36,10 +36,10 @@ pub trait Client : Send + Sync {
 }
 
 impl<B, E> Client for PolkadotClient<B, E> where
-	B: client::blockchain::Blockchain,
-	E: state_machine::CodeExecutor,
+	B: client::backend::Backend + Send + Sync + 'static,
+	E: state_machine::CodeExecutor + Send + Sync + 'static,
 {
-	fn import(&self, header: block::Header, body: Option<block::Body>) -> ImportResult {
+	fn import(&self, header: block::Header, body: Option<block::Body>) -> Result<ImportResult, Error> {
 		(self as &Client).import(header, body)
 	}
 

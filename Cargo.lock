@@ -887,7 +887,10 @@ name = "polkadot-client"
 version = "0.1.0"
 dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-primitives 0.1.0",
+ "polkadot-serializer 0.1.0",
  "polkadot-state-machine 0.1.0",
 ]
 

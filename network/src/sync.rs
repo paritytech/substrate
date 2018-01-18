@@ -184,31 +184,31 @@ impl ChainSync {
 				let parent = header.parent_hash;
 				let result = protocol.chain().import(header, block.body);
 				match result {
-					ImportResult::AlreadyInChain => {
+					Ok(ImportResult::AlreadyInChain) => {
 						trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 						self.block_imported(&hash, number);
 					},
-					ImportResult::AlreadyQueued => {
+					Ok(ImportResult::AlreadyQueued) => {
 						trace!(target: "sync", "Block already queued {}: {:?}", number, hash);
 						self.block_imported(&hash, number);
 					},
-					ImportResult::Queued => {
+					Ok(ImportResult::Queued) => {
 						trace!(target: "sync", "Block queued {}: {:?}", number, hash);
 						self.block_imported(&hash, number);
 						imported = imported + 1;
 					},
-					ImportResult::UnknownParent => {
+					Ok(ImportResult::UnknownParent) => {
 						debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
 						self.restart(io, protocol);
 						return;
 					},
-					ImportResult::KnownBad => {
+					Ok(ImportResult::KnownBad) => {
 						debug!(target: "sync", "Bad block {}: {:?}", number, hash);
 						io.disable_peer(origin); //TODO: use persistent ID
 						self.restart(io, protocol);
 						return;
 					}
-					ImportResult::Err(e) => {
+					Err(e) => {
 						debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
 						self.restart(io, protocol);
 						return;

@@ -16,28 +16,40 @@
 
 //! Polkadot blockchain trait
 
-use std;
+use std::fmt::{Display, Formatter, Error as FmtError};
 use primitives::block;
+use error::Result;
 
-/// Blockchain access
-pub trait Blockchain : Send + Sync {
-	/// Error Type
-	type Error: std::error::Error + Send + 'static;
+/// Block indentification.
+#[derive(Debug, Clone, Copy)]
+pub enum BlockId {
+	/// Identify by block header hash.
+	Hash(block::HeaderHash),
+	/// Identify by block number.
+	Number(block::Number),
+}
 
-	/// Returns the hash of latest block.
-	fn latest_hash(&self) -> Result<block::HeaderHash, Self::Error>;
+impl Display for BlockId {
+	fn fmt(&self, f: &mut Formatter) -> ::std::result::Result<(), FmtError> {
+		match *self {
+			BlockId::Hash(h) => h.fmt(f),
+			BlockId::Number(n) => n.fmt(f),
+		}
+	}
+}
 
-	/// Given a hash return a header
-	fn header(&self, hash: &block::HeaderHash) -> Result<Option<block::Header>, Self::Error>;
-
-	/// Given a hash return a header
-	fn import(&self, header: block::Header, body: Option<block::Body>) -> ImportResult<Self::Error>;
-
+/// Blockchain database backend. Does not perform any validation.
+pub trait Backend: Send + Sync {
+	/// Get block header. Returns `None` if block is not found.
+	fn header(&self, id: BlockId) -> Result<Option<block::Header>>;
+	/// Get block body. Returns `None` if block is not found.
+	fn body(&self, id: BlockId) -> Result<Option<block::Body>>;
 	/// Get blockchain info.
-	fn info(&self) -> Result<ChainInfo, Self::Error>;
-
-	/// Get block hash by number.
-	fn hash(&self, block_number: block::Number) -> Result<Option<block::HeaderHash>, Self::Error>;
+	fn info(&self) -> Result<Info>;
+	/// Get block status.
+	fn status(&self, id: BlockId) -> Result<BlockStatus>;
+	/// Get block hash by number. Returns `None` if the header is not in the chain.
+	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>>;
 }
 
 /// Block import outcome
@@ -54,12 +66,21 @@ pub enum ImportResult<E> {
 
 /// Blockchain info
 #[derive(Debug)]
-pub struct ChainInfo {
+pub struct Info {
 	/// Best block hash.
 	pub best_hash: block::HeaderHash,
 	/// Best block number.
 	pub best_number: block::Number,
 	/// Genesis block hash.
 	pub genesis_hash: block::HeaderHash,
+}
+
+/// Block status.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BlockStatus {
+	/// Already in the blockchain.
+	InChain,
+	/// Not in the queue or the blockchain.
+	Unknown,
 }
 

@@ -17,8 +17,8 @@
 //! Polkadot client possible errors.
 
 use std;
-use primitives::block;
 use state_machine;
+use blockchain;
 
 error_chain! {
 	errors {
@@ -29,7 +29,7 @@ error_chain! {
 		}
 
 		/// Unknown block.
-		UnknownBlock(h: block::HeaderHash) {
+		UnknownBlock(h: blockchain::BlockId) {
 			description("unknown block"),
 			display("UnknownBlock: {}", h),
 		}
@@ -52,6 +52,12 @@ error_chain! {
 impl From<Box<state_machine::Error>> for Error {
 	fn from(e: Box<state_machine::Error>) -> Self {
 		ErrorKind::Execution(e).into()
+	}
+}
+
+impl From<state_machine::backend::Void> for Error {
+	fn from(_e: state_machine::backend::Void) -> Self {
+		unreachable!()
 	}
 }
 

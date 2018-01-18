@@ -53,9 +53,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 
 	// Create client
-	let blockchain = DummyBlockchain;
 	let executor = contracts::executor();
-	let client = client::Client::new(blockchain, executor);
+	let client = client::new_in_mem(executor)?;
 
 	let address = "127.0.0.1:9933".parse().unwrap();
 	let handler = rpc::rpc_handler(client);
@@ -96,49 +95,3 @@ fn init_logger(pattern: &str) {
 	builder.init().expect("Logger initialized only once.");
 }
 
-#[derive(Debug, Default)]
-struct DummyBlockchain;
-
-
-#[derive(Debug, Default)]
-struct DummyBlockchainError;
-
-impl ::std::error::Error for DummyBlockchainError {
-	fn description(&self) -> &str {
-		"DummyBlockchain error"
-	}
-}
-
-impl ::std::fmt::Display for DummyBlockchainError {
-    fn fmt(&self, _f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
-		Ok(())
-	}
-}
-
-impl client::blockchain::Blockchain for DummyBlockchain {
-	type Error = DummyBlockchainError;
-
-	fn latest_hash(&self) -> Result<primitives::block::HeaderHash, Self::Error> {
-		Ok(0.into())
-	}
-
-	fn header(&self, _hash: &primitives::block::HeaderHash) -> Result<Option<primitives::block::Header>, Self::Error> {
-		Ok(None)
-	}
-
-	fn import(&self, _header: primitives::block::Header, _body: Option<primitives::block::Body>) -> client::blockchain::ImportResult<Self::Error> {
-		client::blockchain::ImportResult::Imported
-	}
-
-	fn info(&self) -> Result<client::ChainInfo, Self::Error> {
-		Ok(client::ChainInfo {
-			best_hash: 0.into(),
-			best_number: 0,
-			genesis_hash: 0.into(),
-		})
-	}
-
-	fn hash(&self, _block_number: primitives::block::Number) -> Result<Option<primitives::block::HeaderHash>, Self::Error> {
-		Ok(None)
-	}
-}

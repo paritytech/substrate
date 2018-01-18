@@ -46,7 +46,7 @@ pub enum Update {
 }
 
 // in-memory section of the state.
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct MemoryState {
 	code: HashMap<Address, Vec<u8>>,
 	storage: HashMap<Address, HashMap<H256, Vec<u8>>>,
