@@ -9,6 +9,8 @@ pub trait Storable {
 	fn store(&self, key: &[u8]);
 }
 
+// TODO: consider using blake256 to avoid possible eclipse attack.
+
 pub fn kill(key: &[u8]) { runtime_support::set_storage(&twox_128(key)[..], b""); }
 
 impl<T: Default + Sized + EndianSensitive> Storable for T {
