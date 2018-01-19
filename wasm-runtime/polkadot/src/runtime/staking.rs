@@ -12,19 +12,19 @@ impl StorageVec for IntentionStorageVec {
 }
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
-// - n | n <= system::block_number(): inactive: free to be transferred.
+// - n | n <= current_era(): inactive: free to be transferred.
 // - ~0: active: currently representing a validator.
-// - n | n > system::block_number(): deactivating: recently representing a validator and not yet
+// - n | n > current_era(): deactivating: recently representing a validator and not yet
 //   ready for transfer.
 
-/// The length of a staking era in sessions.
-pub fn eras_per_lockup() -> BlockNumber {
-	Storable::lookup_default(b"sta:epl")
+/// The length of the bonding duration in eras.
+pub fn bonding_duration() -> BlockNumber {
+	Storable::lookup_default(b"sta:loc")
 }
 
 /// The length of a staking era in sessions.
 pub fn validator_count() -> usize {
-	Storable::lookup_default(b"sta:vac")
+	u32::lookup_default(b"sta:vac") as usize
 }
 
 /// The length of a staking era in blocks.
@@ -42,19 +42,9 @@ pub fn current_era() -> BlockNumber {
 	Storable::lookup_default(b"sta:era")
 }
 
-/// Set the current era index.
-pub fn set_current_era(new: BlockNumber) {
-	new.store(b"sta:era");
-}
-
 /// The block number at which the era length last changed.
 pub fn last_era_length_change() -> BlockNumber {
 	Storable::lookup_default(b"sta:lec")
-}
-
-/// Set a new era length. Won't kick in until the next era change (at current length).
-pub fn set_sessions_per_era(new: BlockNumber) {
-	new.store(b"sta:nse");
 }
 
 /// The era has changed - enact new staking set.
@@ -62,7 +52,7 @@ pub fn set_sessions_per_era(new: BlockNumber) {
 /// NOTE: This always happens on a session change.
 fn new_era() {
 	// Increment current era.
-	set_current_era(current_era() + 1);
+	(current_era() + 1).store(b"sta:era");
 
 	// Enact era length change.
 	let next_spe: u64 = Storable::lookup_default(b"sta:nse");
@@ -121,6 +111,7 @@ pub fn stake(transactor: &AccountID) {
 	assert!(intentions.iter().find(|t| *t == transactor).is_none());
 	intentions.push(transactor.clone());
 	IntentionStorageVec::set_items(&intentions);
+	u64::max_value().store(&transactor.to_keyed_vec(b"sta:bon:"));
 }
 
 /// Retract the desire to stake for the transactor.
@@ -131,6 +122,7 @@ pub fn unstake(transactor: &AccountID) {
 	// TODO: use swap remove.
 	let intentions = intentions.into_iter().filter(|t| t != transactor).collect::<Vec<_>>();
 	IntentionStorageVec::set_items(&intentions);
+	(current_era() + bonding_duration()).store(&transactor.to_keyed_vec(b"sta:bon:"));
 }
 
 /// Hook to be called after to transaction processing.
@@ -141,6 +133,11 @@ pub fn check_new_era() {
 	}
 }
 
+/// Set a new era length. Won't kick in until the next era change (at current length).
+fn set_sessions_per_era(new: BlockNumber) {
+	new.store(b"sta:nse");
+}
+
 #[cfg(test)]
 mod tests {
 	use runtime_support::{with_externalities, twox_128};
@@ -148,8 +145,82 @@ mod tests {
 	use joiner::Joiner;
 	use testing::{one, two, TestExternalities};
 	use primitives::AccountID;
-	use runtime::staking;
+	use runtime::{staking, session};
 	use environment::with_env;
+
+	#[test]
+	fn staking_should_work() {
+		let one = one();
+		let two = two();
+		let three = [3u8; 32];
+		let four = [4u8; 32];
+
+		let mut t = TestExternalities { storage: map![
+			twox_128(b"ses:len").to_vec() => vec![].join(&1u64),
+			twox_128(b"ses:val:len").to_vec() => vec![].join(&2u32),
+			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![10; 32],
+			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![20; 32],
+			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64),
+			twox_128(b"sta:vac").to_vec() => vec![].join(&2u32),
+			twox_128(b"sta:loc").to_vec() => vec![].join(&3u64),
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&10u64),
+			twox_128(&two.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&20u64),
+			twox_128(&three.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&30u64),
+			twox_128(&four.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&40u64)
+		], };
+
+		with_externalities(&mut t, || {
+			assert_eq!(staking::era_length(), 2u64);
+			assert_eq!(staking::validator_count(), 2usize);
+			assert_eq!(staking::bonding_duration(), 3u64);
+			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
+
+			// Block 1: Add three validators. No obvious change.
+			with_env(|e| e.block_number = 1);
+			staking::stake(&one);
+			staking::stake(&two);
+			staking::stake(&four);
+			staking::check_new_era();
+			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
+
+			// Block 2: New validator set now.
+			with_env(|e| e.block_number = 2);
+			staking::check_new_era();
+			assert_eq!(session::validators(), vec![four.clone(), two.clone()]);
+
+			// Block 3: Unstake highest, introduce another staker. No change yet.
+			with_env(|e| e.block_number = 3);
+			staking::stake(&three);
+			staking::unstake(&four);
+			staking::check_new_era();
+
+			// Block 4: New era - validators change.
+			with_env(|e| e.block_number = 4);
+			staking::check_new_era();
+			assert_eq!(session::validators(), vec![three.clone(), two.clone()]);
+
+			// Block 5: Transfer stake from highest to lowest. No change yet.
+			with_env(|e| e.block_number = 5);
+			staking::transfer(&four, &one, 40);
+			staking::check_new_era();
+
+			// Block 6: Lowest now validator.
+			with_env(|e| e.block_number = 6);
+			staking::check_new_era();
+			assert_eq!(session::validators(), vec![one.clone(), three.clone()]);
+
+			// Block 7: Unstake three. No change yet.
+			with_env(|e| e.block_number = 7);
+			staking::unstake(&three);
+			staking::check_new_era();
+			assert_eq!(session::validators(), vec![one.clone(), three.clone()]);
+
+			// Block 8: Back to one and two.
+			with_env(|e| e.block_number = 8);
+			staking::check_new_era();
+			assert_eq!(session::validators(), vec![one.clone(), two.clone()]);
+		});
+	}
 
 	#[test]
 	fn staking_eras_work() {
@@ -243,6 +314,22 @@ mod tests {
 			staking::transfer(&one, &two, 69);
 			assert_eq!(staking::balance(&one), 42);
 			assert_eq!(staking::balance(&two), 69);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn staking_balance_transfer_when_bonded_doesnt_work() {
+		let one = one();
+		let two = two();
+
+		let mut t = TestExternalities { storage: map![
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&111u64)
+		], };
+
+		with_externalities(&mut t, || {
+			staking::stake(&one);
+			staking::transfer(&one, &two, 69);
 		});
 	}
 }

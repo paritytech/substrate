@@ -7,7 +7,7 @@ use runtime::{system, staking, consensus};
 struct ValidatorStorageVec {}
 impl StorageVec for ValidatorStorageVec {
 	type Item = AccountID;
-	const PREFIX: &'static[u8] = b"ses:key:";
+	const PREFIX: &'static[u8] = b"ses:val:";
 }
 
 // TRANSACTION API (available to all transactors)
@@ -22,7 +22,7 @@ pub fn set_key(validator: &AccountID, key: &SessionKey) {
 // PUBLIC API (available to other runtime modules)
 
 /// Get the current set of authorities. These are the session keys.
-fn validators() -> Vec<AccountID> {
+pub fn validators() -> Vec<AccountID> {
 	ValidatorStorageVec::items()
 }
 
@@ -108,9 +108,9 @@ mod tests {
 		TestExternalities { storage: map![
 			twox_128(b"ses:len").to_vec() => vec![].join(&2u64),
 			// the validators (10, 20, ...)
-			twox_128(b"ses:key:len").to_vec() => vec![].join(&2u32),
-			twox_128(&0u32.to_keyed_vec(b"ses:key:")).to_vec() => vec![10; 32],
-			twox_128(&1u32.to_keyed_vec(b"ses:key:")).to_vec() => vec![20; 32],
+			twox_128(b"ses:val:len").to_vec() => vec![].join(&2u32),
+			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![10; 32],
+			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![20; 32],
 			// initial session keys (11, 21, ...)
 			twox_128(b"con:aut:len").to_vec() => vec![].join(&2u32),
 			twox_128(&0u32.to_keyed_vec(b"con:aut:")).to_vec() => vec![11; 32],
