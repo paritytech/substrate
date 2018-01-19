@@ -1,5 +1,5 @@
 use keyedvec::KeyedVec;
-use storage::Storage;
+use storable::Storable;
 use primitives::{BlockNumber, Balance, AccountID};
 use runtime::{system, session};
 
@@ -10,7 +10,7 @@ use runtime::{system, session};
 
 /// The length of a staking era in sessions.
 pub fn lockup_eras() -> BlockNumber {
-	Storage::into(b"sta\0lpe")
+	Storable::lookup_default(b"sta\0lpe")
 }
 
 /// The length of a staking era in blocks.
@@ -20,12 +20,12 @@ pub fn era_length() -> BlockNumber {
 
 /// The length of a staking era in sessions.
 pub fn sessions_per_era() -> BlockNumber {
-	Storage::into(b"sta\0spe")
+	Storable::lookup_default(b"sta\0spe")
 }
 
 /// The current era index.
 pub fn current_era() -> BlockNumber {
-	Storage::into(b"sta\0era")
+	Storable::lookup_default(b"sta\0era")
 }
 
 /// The current era index.
@@ -35,7 +35,7 @@ pub fn set_current_era(new: BlockNumber) {
 
 /// The block number at which the era length last changed.
 pub fn last_era_length_change() -> BlockNumber {
-	Storage::into(b"sta\0lec")
+	Storable::lookup_default(b"sta\0lec")
 }
 
 /// Set a new era length. Won't kick in until the next era change (at current length).
@@ -51,7 +51,7 @@ fn next_era() {
 	set_current_era(current_era() + 1);
 
 	// Enact era length change.
-	let next_spe: u64 = Storage::into(b"sta\0nse");
+	let next_spe: u64 = Storable::lookup_default(b"sta\0nse");
 	if next_spe > 0 && next_spe != sessions_per_era() {
 		next_spe.store(b"sta\0spe");
 		system::block_number().store(b"sta\0lec");
@@ -63,16 +63,16 @@ fn next_era() {
 
 /// The balance of a given account.
 pub fn balance_inactive(who: &AccountID) -> Balance {
-	Storage::into(&who.to_keyed_vec(b"sta\0bal\0"))
+	Storable::lookup_default(&who.to_keyed_vec(b"sta\0bal\0"))
 }
 
 /// Transfer some unlocked staking balance to another staker.
 pub fn transfer_inactive(transactor: &AccountID, dest: &AccountID, value: Balance) {
 	let from_key = transactor.to_keyed_vec(b"sta\0bal\0");
-	let from_balance: Balance = Storage::into(&from_key);
+	let from_balance: Balance = Storable::lookup_default(&from_key);
 	assert!(from_balance >= value);
 	let to_key = dest.to_keyed_vec(b"sta\0bal\0");
-	let to_balance: Balance = Storage::into(&to_key);
+	let to_balance: Balance = Storable::lookup_default(&to_key);
 	assert!(to_balance + value > to_balance);	// no overflow
 	(from_balance - value).store(&from_key);
 	(to_balance + value).store(&to_key);

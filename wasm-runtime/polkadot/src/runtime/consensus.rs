@@ -1,5 +1,5 @@
 use runtime_support::Vec;
-use storagevec::StorageVec;
+use storable::StorageVec;
 use primitives::SessionKey;
 
 struct AuthorityStorageVec {}

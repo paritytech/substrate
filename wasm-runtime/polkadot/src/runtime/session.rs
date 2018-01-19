@@ -1,7 +1,6 @@
 use runtime_support::Vec;
 use keyedvec::KeyedVec;
-use storage::Storage;
-use storagevec::StorageVec;
+use storable::{kill, Storable, StorageVec};
 use primitives::{AccountID, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
@@ -38,7 +37,7 @@ pub fn set_validators(new: &[AccountID]) {
 
 /// The number of blocks in each session.
 pub fn length() -> BlockNumber {
-	Storage::into(b"ses\0bps")
+	Storable::lookup_default(b"ses\0bps")
 }
 
 /// Hook to be called prior to transaction processing.
@@ -62,11 +61,13 @@ pub fn post_transactions() {
 
 /// Move onto next session: register the new authority set.
 fn next_session() {
-	// TODO: Call set_authorities() with any new authorities.
 	validators().iter().enumerate().for_each(|(i, v)| {
 		let k = v.to_keyed_vec(b"ses\0nxt\0");
-		if let Some(n) = Storage::try_into(&k) {
+		if let Some(n) = Storable::lookup(&k) {
 			consensus::set_authority(i as u32, &n);
+			kill(&k);
 		}
-	})
+	});
 }
+
+// TODO: tests

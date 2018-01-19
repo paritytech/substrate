@@ -244,7 +244,7 @@ mod tests {
 		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 			self.storage.insert(key, value);
 		}
-		
+
 		fn chain_id(&self) -> u64 { 42 }
 	}
 
