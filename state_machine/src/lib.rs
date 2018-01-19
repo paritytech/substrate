@@ -259,11 +259,11 @@ mod tests {
 		ext.set_storage(b"con:aut:len".to_vec(), vec![1u8, 0, 0, 0]);
 		assert_eq!(ext.authorities(), Ok(vec![&[][..]]));
 
-		ext.set_storage(b"con:aut:::::".to_vec(), b"first".to_vec());
+		ext.set_storage(b"con:aut:\0\0\0\0".to_vec(), b"first".to_vec());
 		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..]]));
 
 		ext.set_storage(b"con:aut:len".to_vec(), vec![2u8, 0, 0, 0]);
-		ext.set_storage(b"con:aut:\x01:::".to_vec(), b"second".to_vec());
+		ext.set_storage(b"con:aut:\x01\0\0\0".to_vec(), b"second".to_vec());
 		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..], &b"second"[..]]));
 	}
 }

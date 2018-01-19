@@ -14,6 +14,7 @@ pub fn with_env<T, F: FnOnce(&mut Environment) -> T>(f: F) -> T {
 	f(&mut *eb)
 }
 
+#[cfg(not(test))]
 pub fn env() -> Rc<RefCell<Environment>> {
 	// Initialize it to a null value
 	static mut SINGLETON: *const Rc<RefCell<Environment>> = 0 as *const Rc<RefCell<Environment>>;
@@ -30,4 +31,25 @@ pub fn env() -> Rc<RefCell<Environment>> {
 		// Now we give out a copy of the data that is safe to use concurrently.
 		(*SINGLETON).clone()
 	}
+}
+
+#[cfg(test)]
+pub fn env() -> Rc<RefCell<Environment>> {
+	// Initialize it to a null value
+	thread_local!{
+		static SINGLETON: RefCell<*const Rc<RefCell<Environment>>> = RefCell::new(0 as *const Rc<RefCell<Environment>>);
+	}
+
+	SINGLETON.with(|s| unsafe {
+		if *s.borrow() == 0 as *const Rc<RefCell<Environment>> {
+			// Make it
+			let singleton: Rc<RefCell<Environment>> = Rc::new(RefCell::new(Default::default()));
+
+			// Put it in the heap so it can outlive this call
+			*s.borrow_mut() = transmute(Box::new(singleton));
+		}
+
+		// Now we give out a copy of the data that is safe to use concurrently.
+		(**s.borrow()).clone()
+	})
 }
