@@ -261,7 +261,7 @@ mod tests {
 		let tx = Transaction {
 			signed: one.clone(),
 			nonce: 69,
-			function: Function::StakingTransferInactive,
+			function: Function::StakingTransfer,
 			input_data: Vec::new().join(&two).join(&69u64),
 		};
 		let serialised = tx.to_vec();
@@ -282,7 +282,7 @@ mod tests {
 		let tx = Transaction {
 			signed: one.clone(),
 			nonce: 69,
-			function: Function::StakingTransferInactive,
+			function: Function::StakingTransfer,
 			input_data: Vec::new().join(&two).join(&69u64),
 		};
 		let data = [
@@ -352,7 +352,7 @@ mod tests {
 			transaction: Transaction {
 				signed: one.clone(),
 				nonce: 69,
-				function: Function::StakingTransferInactive,
+				function: Function::StakingTransfer,
 				input_data: Vec::new().join(&two).join(&69u64),
 			},
 			signature: [1u8; 64],
@@ -416,7 +416,7 @@ mod tests {
 			transaction: Transaction {
 				signed: one.clone(),
 				nonce: 69,
-				function: Function::StakingTransferInactive,
+				function: Function::StakingTransfer,
 				input_data: Vec::new().join(&two).join(&69u64),
 			},
 			signature: [1u8; 64],

@@ -8,7 +8,7 @@ use runtime::{staking, session, timestamp};
 pub enum Function {
 	StakingStake,
 	StakingUnstake,
-	StakingTransferInactive,
+	StakingTransfer,
 	SessionSetKey,
 	TimestampSet,
 }
@@ -18,7 +18,7 @@ impl Function {
 		match value {
 			x if x == Function::StakingStake as u8 => Some(Function::StakingStake),
 			x if x == Function::StakingUnstake as u8 => Some(Function::StakingUnstake),
-			x if x == Function::StakingTransferInactive as u8 => Some(Function::StakingTransferInactive),
+			x if x == Function::StakingTransfer as u8 => Some(Function::StakingTransfer),
 			x if x == Function::SessionSetKey as u8 => Some(Function::SessionSetKey),
 			x if x == Function::TimestampSet as u8 => Some(Function::TimestampSet),
 			_ => None,
@@ -37,10 +37,10 @@ impl Function {
 			Function::StakingUnstake => {
 				staking::unstake(transactor);
 			}
-			Function::StakingTransferInactive => {
+			Function::StakingTransfer => {
 				let dest = params.read().unwrap();
 				let value = params.read().unwrap();
-				staking::transfer_inactive(transactor, &dest, value);
+				staking::transfer(transactor, &dest, value);
 			}
 			Function::SessionSetKey => {
 				let session = params.read().unwrap();

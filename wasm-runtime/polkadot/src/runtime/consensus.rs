@@ -5,7 +5,7 @@ use primitives::SessionKey;
 struct AuthorityStorageVec {}
 impl StorageVec for AuthorityStorageVec {
 	type Item = SessionKey;
-	const PREFIX: &'static[u8] = b"con\0aut\0";
+	const PREFIX: &'static[u8] = b"con:aut:";
 }
 
 /// Get the current set of authorities. These are the session keys.
