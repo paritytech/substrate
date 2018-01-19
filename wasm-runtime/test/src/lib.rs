@@ -8,10 +8,18 @@ use alloc::vec::Vec;
 
 #[macro_use]
 extern crate runtime_support;
-use runtime_support::{set_storage, storage, print, keccak256, ed25519_verify};
+use runtime_support::{set_storage, storage, print, blake2_256, twox_128, twox_256, ed25519_verify};
 
-fn test_keccak256(input: Vec<u8>) -> Vec<u8> {
-	keccak256(&input).to_vec()
+fn test_blake2_256(input: Vec<u8>) -> Vec<u8> {
+	blake2_256(&input).to_vec()
+}
+
+fn test_twox_256(input: Vec<u8>) -> Vec<u8> {
+	twox_256(&input).to_vec()
+}
+
+fn test_twox_128(input: Vec<u8>) -> Vec<u8> {
+	twox_128(&input).to_vec()
 }
 
 fn test_ed25519_verify(input: Vec<u8>) -> Vec<u8> {
@@ -35,5 +43,4 @@ fn test_data_in(input: Vec<u8>) -> Vec<u8> {
 	b"all ok!".to_vec()
 }
 
-
-impl_stubs!(test_data_in, test_keccak256, test_ed25519_verify);
+impl_stubs!(test_data_in, test_blake2_256, test_twox_256, test_twox_128, test_ed25519_verify);

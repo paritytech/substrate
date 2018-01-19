@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate environmental;
 extern crate polkadot_state_machine;
-extern crate tiny_keccak;
 extern crate polkadot_primitives as primitives;
 
 use std::fmt;
@@ -76,7 +75,7 @@ pub fn chain_id() -> u64 {
 }
 
 /// Conduct a Keccak-256 hash of the given data.
-pub use tiny_keccak::keccak256;
+pub use primitives::{blake2_256, twox_128, twox_256};
 
 /// Verify a ed25519 signature.
 pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {

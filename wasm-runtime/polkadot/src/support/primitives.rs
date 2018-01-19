@@ -3,7 +3,7 @@ use streamreader::StreamReader;
 use joiner::Joiner;
 use slicable::{Slicable, NonTrivialSlicable};
 use function::Function;
-use runtime_support::{size_of, keccak256, ed25519_verify};
+use runtime_support::{size_of, blake2_256, twox_128, twox_256, ed25519_verify};
 
 #[cfg(test)]
 use std::fmt;
@@ -109,12 +109,20 @@ impl Slicable for Transaction {
 }
 
 pub trait Hashable: Sized {
-	fn keccak256(&self) -> [u8; 32];
+	fn blake2_256(&self) -> [u8; 32];
+	fn twox_128(&self) -> [u8; 16];
+	fn twox_256(&self) -> [u8; 32];
 }
 
 impl<T: Slicable> Hashable for T {
-	fn keccak256(&self) -> [u8; 32] {
-		keccak256(&self.to_vec())
+	fn blake2_256(&self) -> [u8; 32] {
+		blake2_256(&self.to_vec())
+	}
+	fn twox_128(&self) -> [u8; 16] {
+		twox_128(&self.to_vec())
+	}
+	fn twox_256(&self) -> [u8; 32] {
+		twox_256(&self.to_vec())
 	}
 }
 

@@ -26,8 +26,7 @@ use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
-use tiny_keccak;
-use primitives::ed25519;
+use primitives::{ed25519, blake2_256, twox_128, twox_256};
 
 struct Heap {
 	end: u32,
@@ -141,10 +140,28 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_chain_id() -> u64 => {
 		this.ext.chain_id()
 	},
-	ext_keccak256(data: *const u8, len: u32, out: *mut u8) => {
+	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result =
 			if let Ok(value) = this.memory.get(data, len as usize) {
-				tiny_keccak::keccak256(&value)
+				twox_128(&value)
+			} else {
+				[0; 16]
+			};
+		let _ = this.memory.set(out, &result);
+	},
+	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
+		let result =
+			if let Ok(value) = this.memory.get(data, len as usize) {
+				twox_256(&value)
+			} else {
+				[0; 32]
+			};
+		let _ = this.memory.set(out, &result);
+	},
+	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
+		let result =
+			if let Ok(value) = this.memory.get(data, len as usize) {
+				blake2_256(&value)
 			} else {
 				[0; 32]
 			};
@@ -223,6 +240,7 @@ mod tests {
 
 	use super::*;
 	use rustc_hex::FromHex;
+	use primitives::ed25519::hexdisplay::HexDisplay;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities {
@@ -261,16 +279,44 @@ mod tests {
 	}
 
 	#[test]
-	fn keccak256_should_work() {
+	fn blake2_256_should_work() {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_keccak256", &CallData(b"".to_vec())).unwrap(),
-			FromHex::from_hex("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap()
+			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"".to_vec())).unwrap(),
+			FromHex::from_hex("0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8").unwrap()
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_keccak256", &CallData(b"Hello world!".to_vec())).unwrap(),
-			FromHex::from_hex("ecd0e108a98e192af1d2c25055f4e3bed784b5c877204e73219a5203251feaab").unwrap()
+			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"Hello world!".to_vec())).unwrap(),
+			FromHex::from_hex("3fbc092db9350757e2ab4f7ee9792bfcd2f5220ada5a4bc684487f60c6034369").unwrap()
+		);
+	}
+
+	#[test]
+	fn twox_256_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", &CallData(b"".to_vec())).unwrap(),
+			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a").unwrap()
+		);
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", &CallData(b"Hello world!".to_vec())).unwrap(),
+			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74").unwrap()
+		);
+	}
+
+	#[test]
+	fn twox_128_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", &CallData(b"".to_vec())).unwrap(),
+			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd5").unwrap()
+		);
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", &CallData(b"Hello world!".to_vec())).unwrap(),
+			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af").unwrap()
 		);
 	}
 
@@ -278,7 +324,7 @@ mod tests {
 	fn ed25519_verify_should_work() {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = ed25519::Pair::from_seed(&tiny_keccak::keccak256(b"test"));
+		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());
