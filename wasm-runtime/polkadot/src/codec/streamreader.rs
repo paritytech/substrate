@@ -1,17 +1,39 @@
+// Copyright 2017 Parity Technologies (UK) Ltd.
+// This file is part of Polkadot.
+
+// Polkadot is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Polkadot is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Deserialiser.
+
 use slicable::Slicable;
 
+/// Simple deserialiser.
 pub struct StreamReader<'a> {
 	data: &'a[u8],
 	offset: usize,
 }
 
 impl<'a> StreamReader<'a> {
+	/// Create a new deserialiser based on the `data`.
 	pub fn new(data: &'a[u8]) -> Self {
 		StreamReader {
 			data: data,
 			offset: 0,
 		}
 	}
+
+	/// Deserialise a single item from the data stream.
 	pub fn read<T: Slicable>(&mut self) -> Option<T> {
 		let size = T::size_of(&self.data[self.offset..])?;
 		let new_offset = self.offset + size;

@@ -1,3 +1,21 @@
+// Copyright 2017 Parity Technologies (UK) Ltd.
+// This file is part of Polkadot.
+
+// Polkadot is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Polkadot is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Primitive types.
+
 use runtime_support::Vec;
 use streamreader::StreamReader;
 use joiner::Joiner;
@@ -13,26 +31,36 @@ pub type AccountID = [u8; 32];
 /// The Ed25519 pub key of an session that belongs to an authority. This is used as what the
 /// external environment/consensus algorithm calls an "authority".
 pub type SessionKey = AccountID;
-pub type Balance = u64;
+/// Indentifier for a chain.
 pub type ChainID = u64;
-pub type Hash = [u8; 32];
+/// Index of a block in the chain.
 pub type BlockNumber = u64;
-pub type Timestamp = u64;
+/// Index of a transaction.
 pub type TxOrder = u64;
+/// A hash of some data.
+pub type Hash = [u8; 32];
 
 #[derive(Clone, Default)]
 #[cfg_attr(test, derive(PartialEq, Debug))]
+/// The digest of a block, useful for light-clients.
 pub struct Digest {
+	/// All logs that have happened in the block.
 	pub logs: Vec<Vec<u8>>,
 }
 
 #[derive(Clone)]
 #[cfg_attr(test, derive(PartialEq, Debug))]
+/// The header for a block.
 pub struct Header {
+	/// The parent block's "hash" (actually the Blake2-256 hash of its serialised header).
 	pub parent_hash: Hash,
+	/// The block's number (how many ancestors does it have?).
 	pub number: BlockNumber,
+	/// The root of the trie that represents this block's final storage map.
 	pub state_root: Hash,
+	/// The root of the trie that represents this block's transactions, indexed by a 32-bit integer.
 	pub transaction_root: Hash,
+	/// The digest for this block.
 	pub digest: Digest,
 }
 
@@ -71,10 +99,15 @@ impl Slicable for Header {
 impl NonTrivialSlicable for Header {}
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
+/// A vetted and verified transaction from the external world.
 pub struct Transaction {
+	/// Who signed it (note this is not a signature).
 	pub signed: AccountID,
+	/// The number of transactions have come before from the same signer.
 	pub nonce: TxOrder,
+	/// The function that should be called.
 	pub function: Function,
+	/// Serialised input data to the function.
 	pub input_data: Vec<u8>,
 }
 
@@ -128,12 +161,16 @@ impl<T: Slicable> Hashable for T {
 
 impl NonTrivialSlicable for Transaction {}
 
+/// A transactions right from the external world. Unchecked.
 pub struct UncheckedTransaction {
+	/// The actual transaction information.
 	pub transaction: Transaction,
+	/// The signature; should be an Ed25519 signature applied to the serialised `transaction` field.
 	pub signature: [u8; 64],
 }
 
 impl UncheckedTransaction {
+	/// Verify the signature.
 	pub fn ed25519_verify(&self) -> bool {
 		let msg = self.transaction.to_vec();
 		ed25519_verify(&self.signature, &msg, &self.transaction.signed)
@@ -183,8 +220,11 @@ impl Slicable for UncheckedTransaction {
 impl NonTrivialSlicable for UncheckedTransaction {}
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
+/// A Polkadot relay chain block.
 pub struct Block {
+	/// The header of the block.
 	pub header: Header,
+	/// All transactions.
 	pub transactions: Vec<UncheckedTransaction>,
 }
 

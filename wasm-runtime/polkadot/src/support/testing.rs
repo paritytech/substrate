@@ -1,10 +1,30 @@
+// Copyright 2017 Parity Technologies (UK) Ltd.
+// This file is part of Polkadot.
+
+// Polkadot is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Polkadot is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Testing helpers.
+
 use runtime_support::{NoError, Externalities};
 use std::collections::HashMap;
 use primitives::AccountID;
 use statichex::StaticHexInto;
 
 #[derive(Debug, Default)]
+/// Simple externaties implementation.
 pub struct TestExternalities {
+	/// The storage map.
 	pub storage: HashMap<Vec<u8>, Vec<u8>>,
 }
 
@@ -29,16 +49,20 @@ macro_rules! map {
 	)
 }
 
+/// One account (to which we know the secret key).
 pub fn one() -> AccountID {
 	"2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".convert()
 }
+/// Another account (secret key known).
 pub fn two() -> AccountID {
 	"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a".convert()
 }
 
+/// Hex display, this time for no_std. See main codebase for documentation.
 pub struct HexDisplay<'a>(&'a [u8]);
 
 impl<'a> HexDisplay<'a> {
+	/// See main codebase for documentation.
 	pub fn from(d: &'a AsBytesRef) -> Self { HexDisplay(d.as_bytes_ref()) }
 }
 
@@ -51,7 +75,9 @@ impl<'a> ::std::fmt::Display for HexDisplay<'a> {
 	}
 }
 
+/// See main codebase for documentation.
 pub trait AsBytesRef {
+	/// See main codebase for documentation.
 	fn as_bytes_ref(&self) -> &[u8];
 }
 
