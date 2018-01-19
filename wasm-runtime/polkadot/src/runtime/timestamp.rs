@@ -12,14 +12,10 @@ pub fn set(now: Timestamp) {
 #[cfg(test)]
 mod tests {
 	use joiner::Joiner;
-	use function::Function;
 	use keyedvec::KeyedVec;
-	use slicable::Slicable;
 	use runtime_support::with_externalities;
-	use primitives::{UncheckedTransaction, Transaction};
-	use statichex::StaticHexInto;
-	use runtime::{system, timestamp};
-	use testing::{TestExternalities, HexDisplay, one, two};
+	use runtime::timestamp;
+	use testing::TestExternalities;
 
 	#[test]
 	fn timestamp_works() {
