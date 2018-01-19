@@ -74,19 +74,12 @@ pub fn post_transactions() {
 	}
 }
 
-
 #[cfg(test)]
 mod tests {
 	use runtime_support::with_externalities;
 	use testing::TestExternalities;
 	use primitives::{AccountID};
 	use runtime::staking;
-
-	macro_rules! map {
-		($( $name:expr => $value:expr ),*) => (
-			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-		)
-	}
 
 	#[test]
 	fn staking_balance_works() {
