@@ -12,7 +12,7 @@ mod codec;
 mod support;
 mod runtime;
 pub use codec::{endiansensitive, streamreader, joiner, slicable, keyedvec};
-pub use support::{primitives, function, environment, storage};
+pub use support::{primitives, function, environment, storage, storagevec};
 #[cfg(test)]
 pub use support::{testing, statichex};
 
