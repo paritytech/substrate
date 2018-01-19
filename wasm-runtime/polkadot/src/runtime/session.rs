@@ -37,7 +37,27 @@ pub fn set_validators(new: &[AccountID]) {
 
 /// The number of blocks in each session.
 pub fn length() -> BlockNumber {
-	Storable::lookup_default(b"ses\0bps")
+	Storable::lookup_default(b"ses\0len")
+}
+
+/// The current era index.
+pub fn current_index() -> BlockNumber {
+	Storable::lookup_default(b"ses\0ind")
+}
+
+/// Set the current era index.
+pub fn set_current_index(new: BlockNumber) {
+	new.store(b"ses\0ind");
+}
+
+/// The block number at which the era length last changed.
+pub fn last_length_change() -> BlockNumber {
+	Storable::lookup_default(b"ses\0llc")
+}
+
+/// Set a new era length. Won't kick in until the next era change (at current length).
+pub fn set_length(new: BlockNumber) {
+	new.store(b"ses\0nln");
 }
 
 /// Hook to be called after transaction processing.
@@ -45,7 +65,7 @@ pub fn check_rotate_session() {
 	// do this last, after the staking system has had chance to switch out the authorities for the
 	// new set.
 	// check block number and call next_session if necessary.
-	if system::block_number() % length() == 0 {
+	if (system::block_number() - last_length_change()) % length() == 0 {
 		rotate_session();
 	}
 }
@@ -54,6 +74,17 @@ pub fn check_rotate_session() {
 
 /// Move onto next session: register the new authority set.
 fn rotate_session() {
+	// Increment current session index.
+	set_current_index(current_index() + 1);
+
+	// Enact era length change.
+	if let Some(next_len) = u64::lookup(b"ses\0nln") {
+		next_len.store(b"ses\0len");
+		system::block_number().store(b"ses\0llc");
+		kill(b"ses\0nln");
+	}
+
+	// Update any changes in session keys.
 	validators().iter().enumerate().for_each(|(i, v)| {
 		let k = v.to_keyed_vec(b"ses\0nxt\0");
 		if let Some(n) = Storable::lookup(&k) {
@@ -73,10 +104,9 @@ mod tests {
 	use runtime::{consensus, session};
 	use environment::with_env;
 
-	#[test]
-	fn session_change_should_work() {
-		let mut t = TestExternalities { storage: map![
-			twox_128(b"ses\0bps").to_vec() => vec![].join(&2u64),
+	fn simple_setup() -> TestExternalities {
+		TestExternalities { storage: map![
+			twox_128(b"ses\0len").to_vec() => vec![].join(&2u64),
 			// the validators (10, 20, ...)
 			twox_128(b"ses\0key\0len").to_vec() => vec![].join(&2u32),
 			twox_128(&0u32.to_keyed_vec(b"ses\0key\0")).to_vec() => vec![10; 32],
@@ -85,12 +115,74 @@ mod tests {
 			twox_128(b"con\0aut\0len").to_vec() => vec![].join(&2u32),
 			twox_128(&0u32.to_keyed_vec(b"con\0aut\0")).to_vec() => vec![11; 32],
 			twox_128(&1u32.to_keyed_vec(b"con\0aut\0")).to_vec() => vec![21; 32]
-		], };
+		], }
+	}
+
+	#[test]
+	fn simple_setup_should_work() {
+		let mut t = simple_setup();
 		with_externalities(&mut t, || {
 			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
 			assert_eq!(session::length(), 2u64);
 			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
+		});
+	}
 
+	#[test]
+	fn session_length_change_should_work() {
+		let mut t = simple_setup();
+		with_externalities(&mut t, || {
+			// Block 1: Change to length 3; no visible change.
+			with_env(|e| e.block_number = 1);
+			session::set_length(3);
+			session::check_rotate_session();
+			assert_eq!(session::length(), 2);
+			assert_eq!(session::current_index(), 0);
+
+			// Block 2: Length now changed to 3. Index incremented.
+			with_env(|e| e.block_number = 2);
+			session::set_length(3);
+			session::check_rotate_session();
+			assert_eq!(session::length(), 3);
+			assert_eq!(session::current_index(), 1);
+
+			// Block 3: Length now changed to 3. Index incremented.
+			with_env(|e| e.block_number = 3);
+			session::check_rotate_session();
+			assert_eq!(session::length(), 3);
+			assert_eq!(session::current_index(), 1);
+
+			// Block 4: Change to length 2; no visible change.
+			with_env(|e| e.block_number = 4);
+			session::set_length(2);
+			session::check_rotate_session();
+			assert_eq!(session::length(), 3);
+			assert_eq!(session::current_index(), 1);
+
+			// Block 5: Length now changed to 2. Index incremented.
+			with_env(|e| e.block_number = 5);
+			session::check_rotate_session();
+			assert_eq!(session::length(), 2);
+			assert_eq!(session::current_index(), 2);
+
+			// Block 6: No change.
+			with_env(|e| e.block_number = 6);
+			session::check_rotate_session();
+			assert_eq!(session::length(), 2);
+			assert_eq!(session::current_index(), 2);
+
+			// Block 7: Next index.
+			with_env(|e| e.block_number = 7);
+			session::check_rotate_session();
+			assert_eq!(session::length(), 2);
+			assert_eq!(session::current_index(), 3);
+		});
+	}
+
+	#[test]
+	fn session_change_should_work() {
+		let mut t = simple_setup();
+		with_externalities(&mut t, || {
 			// Block 1: No change
 			with_env(|e| e.block_number = 1);
 			session::check_rotate_session();

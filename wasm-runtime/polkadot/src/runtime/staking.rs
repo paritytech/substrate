@@ -28,7 +28,7 @@ pub fn current_era() -> BlockNumber {
 	Storable::lookup_default(b"sta\0era")
 }
 
-/// The current era index.
+/// Set the current era index.
 pub fn set_current_era(new: BlockNumber) {
 	new.store(b"sta\0era");
 }
@@ -113,7 +113,7 @@ mod tests {
 	#[test]
 	fn staking_eras_work() {
 		let mut t = TestExternalities { storage: map![
-			twox_128(b"ses\0bps").to_vec() => vec![].join(&1u64),
+			twox_128(b"ses\0len").to_vec() => vec![].join(&1u64),
 			twox_128(b"sta\0spe").to_vec() => vec![].join(&2u64)
 		], };
 		with_externalities(&mut t, || {
