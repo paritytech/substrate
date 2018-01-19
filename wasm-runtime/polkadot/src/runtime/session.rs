@@ -31,7 +31,7 @@ pub fn set_validators(new: &[AccountID]) {
 
 /// The number of blocks in each session.
 pub fn length() -> BlockNumber {
-	Storage::into(b"con\0bps")
+	Storage::into(b"ses\0bps")
 }
 
 /// Hook to be called prior to transaction processing.

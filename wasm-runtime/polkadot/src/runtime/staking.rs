@@ -4,9 +4,14 @@ use primitives::{BlockNumber, Balance, AccountID};
 use runtime::{system, session};
 
 // Each validator's stake has one amount in each of three states:
-// - inactive: free to be transferred
-// - active: currently representing a validator
-// - deactivating: recently representing a validator and not yet ready for transfer
+// - inactive: free to be transferred.
+// - active: currently representing a validator.
+// - deactivating: recently representing a validator and not yet ready for transfer.
+
+/// The length of a staking era in sessions.
+pub fn lockup_eras() -> BlockNumber {
+	Storage::into(b"sta\0lpe")
+}
 
 /// The length of a staking era in blocks.
 pub fn era_length() -> BlockNumber {
@@ -18,15 +23,40 @@ pub fn sessions_per_era() -> BlockNumber {
 	Storage::into(b"sta\0spe")
 }
 
-/// The length of a staking era in sessions.
-pub fn lockup_eras() -> BlockNumber {
-	Storage::into(b"sta\0lpe")
+/// The current era index.
+pub fn current_era() -> BlockNumber {
+	Storage::into(b"sta\0era")
+}
+
+/// The current era index.
+pub fn set_current_era(new: BlockNumber) {
+	new.store(b"sta\0era");
+}
+
+/// The block number at which the era length last changed.
+pub fn last_era_length_change() -> BlockNumber {
+	Storage::into(b"sta\0lec")
+}
+
+/// Set a new era length. Won't kick in until the next era change (at current length).
+pub fn set_sessions_per_era(new: BlockNumber) {
+	new.store(b"sta\0nse");
 }
 
 /// The era has changed - enact new staking set.
 ///
 /// NOTE: This always happens on a session change.
 fn next_era() {
+	// Increment current era.
+	set_current_era(current_era() + 1);
+
+	// Enact era length change.
+	let next_spe: u64 = Storage::into(b"sta\0nse");
+	if next_spe > 0 && next_spe != sessions_per_era() {
+		next_spe.store(b"sta\0spe");
+		system::block_number().store(b"sta\0lec");
+	}
+
 	// TODO: evaluate desired staking amounts and nominations and optimise to find the best
 	// combination of validators, then use session::set_validators().
 }
@@ -69,7 +99,7 @@ pub fn pre_transactions() {
 /// Hook to be called after to transaction processing.
 pub fn post_transactions() {
 	// check block number and call next_era if necessary.
-	if system::block_number() % era_length() == 0 {
+	if (system::block_number() - last_era_length_change()) % era_length() == 0 {
 		next_era();
 	}
 }
@@ -77,17 +107,84 @@ pub fn post_transactions() {
 #[cfg(test)]
 mod tests {
 	use runtime_support::with_externalities;
-	use testing::TestExternalities;
-	use primitives::{AccountID};
+	use keyedvec::KeyedVec;
+	use joiner::Joiner;
+	use testing::{one, two, TestExternalities};
+	use primitives::AccountID;
 	use runtime::staking;
+	use environment::with_env;
+
+	#[test]
+	fn staking_eras_work() {
+		let mut t = TestExternalities { storage: map![
+			b"ses\0bps".to_vec() => vec![].join(&1u64),
+			b"sta\0spe".to_vec() => vec![].join(&2u64)
+		], };
+		with_externalities(&mut t, || {
+			assert_eq!(staking::era_length(), 2u64);
+			assert_eq!(staking::sessions_per_era(), 2u64);
+			assert_eq!(staking::last_era_length_change(), 0u64);
+			assert_eq!(staking::current_era(), 0u64);
+
+			// Block 1: No change.
+			with_env(|e| e.block_number = 1);
+			staking::post_transactions();
+			assert_eq!(staking::sessions_per_era(), 2u64);
+			assert_eq!(staking::last_era_length_change(), 0u64);
+			assert_eq!(staking::current_era(), 0u64);
+
+			// Block 2: Simple era change.
+			with_env(|e| e.block_number = 2);
+			staking::post_transactions();
+			assert_eq!(staking::sessions_per_era(), 2u64);
+			assert_eq!(staking::last_era_length_change(), 0u64);
+			assert_eq!(staking::current_era(), 1u64);
+
+			// Block 3: Schedule an era length change; no visible changes.
+			with_env(|e| e.block_number = 3);
+			staking::set_sessions_per_era(3);
+			staking::post_transactions();
+			assert_eq!(staking::sessions_per_era(), 2u64);
+			assert_eq!(staking::last_era_length_change(), 0u64);
+			assert_eq!(staking::current_era(), 1u64);
+
+			// Block 4: Era change kicks in.
+			with_env(|e| e.block_number = 4);
+			staking::post_transactions();
+			assert_eq!(staking::sessions_per_era(), 3u64);
+			assert_eq!(staking::last_era_length_change(), 4u64);
+			assert_eq!(staking::current_era(), 2u64);
+
+			// Block 5: No change.
+			with_env(|e| e.block_number = 5);
+			staking::post_transactions();
+			assert_eq!(staking::sessions_per_era(), 3u64);
+			assert_eq!(staking::last_era_length_change(), 4u64);
+			assert_eq!(staking::current_era(), 2u64);
+
+			// Block 6: No change.
+			with_env(|e| e.block_number = 6);
+			staking::post_transactions();
+			assert_eq!(staking::sessions_per_era(), 3u64);
+			assert_eq!(staking::last_era_length_change(), 4u64);
+			assert_eq!(staking::current_era(), 2u64);
+
+			// Block 7: Era increment.
+			with_env(|e| e.block_number = 7);
+			staking::post_transactions();
+			assert_eq!(staking::sessions_per_era(), 3u64);
+			assert_eq!(staking::last_era_length_change(), 4u64);
+			assert_eq!(staking::current_era(), 3u64);
+		});
+	}
 
 	#[test]
 	fn staking_balance_works() {
-		let one: AccountID = [1u8; 32];
-		let two: AccountID = [2u8; 32];
+		let one = one();
+		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			{ let mut r = b"sta\0bal\0".to_vec(); r.extend_from_slice(&one); r } => vec![42u8, 0, 0, 0, 0, 0, 0, 0]
+			one.to_keyed_vec(b"sta\0bal\0") => vec![].join(&42u64)
 		], };
 
 		with_externalities(&mut t, || {
@@ -98,11 +195,11 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_works() {
-		let one: AccountID = [1u8; 32];
-		let two: AccountID = [2u8; 32];
+		let one = one();
+		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			{ let mut r = b"sta\0bal\0".to_vec(); r.extend_from_slice(&one); r } => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			one.to_keyed_vec(b"sta\0bal\0") => vec![].join(&111u64)
 		], };
 
 		with_externalities(&mut t, || {
