@@ -14,28 +14,39 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot RPC interfaces.
+//! Temporary crate for contracts implementations.
+//!
+//! This will be replaced with WASM contracts stored on-chain.
+//! ** NOTE ***
+//! This is entirely deprecated with the idea of a single-module Wasm module for state transition.
+//! The dispatch table should be replaced with the specific functions needed:
+//! - execute_block(bytes)
+//! - init_block(PrevBlock?) -> InProgressBlock
+//! - add_transaction(InProgressBlock) -> InProgressBlock
+//! I leave it as is for now as it might be removed before this is ever done.
 
 #![warn(missing_docs)]
 
-extern crate jsonrpc_core as rpc;
-extern crate polkadot_client as client;
 extern crate polkadot_primitives as primitives;
+extern crate polkadot_serializer as serializer;
 extern crate polkadot_state_machine as state_machine;
+extern crate serde;
+extern crate parity_wasm;
+extern crate byteorder;
 
 #[macro_use]
 extern crate error_chain;
-#[macro_use]
-extern crate jsonrpc_macros;
 
 #[cfg(test)]
-extern crate polkadot_executor;
-#[cfg(test)]
-#[macro_use]
 extern crate assert_matches;
 
-pub mod chain;
-pub mod state;
+#[macro_use]
+mod wasm_utils;
+mod wasm_executor;
 
-#[cfg(test)]
-mod test_helpers;
+pub mod error;
+
+/// Creates new RustExecutor for contracts.
+pub fn executor() -> wasm_executor::WasmExecutor {
+	wasm_executor::WasmExecutor::default()
+}

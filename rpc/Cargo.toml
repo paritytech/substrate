@@ -13,4 +13,4 @@ polkadot-state-machine = { path = "../state_machine", version = "0.1" }
 
 [dev-dependencies]
 assert_matches = "1.1"
-polkadot-contracts = { path = "../contracts", version = "0.1" }
+polkadot-executor = { path = "../executor", version = "0.1" }

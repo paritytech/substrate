@@ -10,8 +10,10 @@ polkadot-network = { path = "network" }
 
 [workspace]
 members = [
+	"candidate-agreement",
 	"client",
-	"contracts",
+	"collator",
+	"executor",
 	"primitives",
 	"rpc",
 	"rpc_servers",
@@ -19,4 +21,7 @@ members = [
 	"state_machine",
 	"validator",
 	"network",
+]
+exclude = [
+	"runtime"
 ]

@@ -20,7 +20,7 @@
 
 extern crate env_logger;
 extern crate polkadot_client as client;
-extern crate polkadot_contracts as contracts;
+extern crate polkadot_executor as executor;
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_rpc_servers as rpc;
 
@@ -53,7 +53,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 
 	// Create client
-	let executor = contracts::executor();
+	let executor = executor::executor();
 	let client = client::new_in_mem(executor)?;
 
 	let address = "127.0.0.1:9933".parse().unwrap();

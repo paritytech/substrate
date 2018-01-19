@@ -14,34 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Temporary crate for contracts implementations.
+//! Propagation and agreement of candidates.
 //!
-//! This will be replaced with WASM contracts stored on-chain.
+//! Validators are split into groups by parachain, and each validator might come
+//! up its own candidate for their parachain. Within groups, validators pass around
+//! their candidates and produce statements of validity.
+//!
+//! Any candidate that receives majority approval by the validators in a group
+//! may be subject to inclusion, unless any validators flag that candidate as invalid.
+//!
+//! Wrongly flagging as invalid should be strongly disincentivized, so that in the
+//! equilibrium state it is not expected to happen. Likewise with the submission
+//! of invalid blocks.
+//!
+//! Groups themselves may be compromised by malicious validators.
 
-#![warn(missing_docs)]
-
+extern crate futures;
 extern crate polkadot_primitives as primitives;
-extern crate polkadot_serializer as serializer;
-extern crate polkadot_state_machine as state_machine;
-extern crate serde;
 
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
-mod auth;
-mod balances;
-mod validator_set;
-
-pub mod error;
-pub mod executor;
-
-/// Creates new RustExecutor for contracts.
-pub fn executor() -> executor::RustExecutor {
-	executor::RustExecutor::default()
-}
+pub mod bft;
+pub mod table;

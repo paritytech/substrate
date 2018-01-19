@@ -1,0 +1,9 @@
+[package]
+name = "polkadot-collator"
+version = "0.1.0"
+authors = ["Parity Technologies <rphmeier@gmail.com>"]
+description = "Abstract collation logic"
+
+[dependencies]
+polkadot-primitives = { path = "../primitives", version = "0.1" }
+futures = "0.1.17"
