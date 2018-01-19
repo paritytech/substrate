@@ -1,6 +1,6 @@
-use runtime::{staking, session};
 use primitives::AccountID;
 use streamreader::StreamReader;
+use runtime::{staking, session, timestamp};
 
 /// The functions that a transaction can call (and be dispatched to).
 #[cfg_attr(test, derive(PartialEq, Debug))]
@@ -8,8 +8,9 @@ use streamreader::StreamReader;
 pub enum Function {
 	StakingStake,
 	StakingUnstake,
-	StakingTransferStake,
+	StakingTransferInactive,
 	SessionSetKey,
+	TimestampSet,
 }
 
 impl Function {
@@ -17,8 +18,9 @@ impl Function {
 		match value {
 			x if x == Function::StakingStake as u8 => Some(Function::StakingStake),
 			x if x == Function::StakingUnstake as u8 => Some(Function::StakingUnstake),
-			x if x == Function::StakingTransferStake as u8 => Some(Function::StakingTransferStake),
+			x if x == Function::StakingTransferInactive as u8 => Some(Function::StakingTransferInactive),
 			x if x == Function::SessionSetKey as u8 => Some(Function::SessionSetKey),
+			x if x == Function::TimestampSet as u8 => Some(Function::TimestampSet),
 			_ => None,
 		}
 	}
@@ -35,14 +37,18 @@ impl Function {
 			Function::StakingUnstake => {
 				staking::unstake(transactor);
 			}
-			Function::StakingTransferStake => {
+			Function::StakingTransferInactive => {
 				let dest = params.read().unwrap();
 				let value = params.read().unwrap();
-				staking::transfer_stake(transactor, &dest, value);
+				staking::transfer_inactive(transactor, &dest, value);
 			}
 			Function::SessionSetKey => {
 				let session = params.read().unwrap();
 				session::set_key(transactor, &session);
+			}
+			Function::TimestampSet => {
+				let t = params.read().unwrap();
+				timestamp::set(t);
 			}
 		}
 	}

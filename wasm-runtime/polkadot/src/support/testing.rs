@@ -1,5 +1,7 @@
 use runtime_support::{NoError, Externalities};
 use std::collections::HashMap;
+use primitives::AccountID;
+use statichex::StaticHexInto;
 
 #[derive(Debug, Default)]
 pub struct TestExternalities {
@@ -18,6 +20,20 @@ impl Externalities for TestExternalities {
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
+}
+
+#[macro_export]
+macro_rules! map {
+	($( $name:expr => $value:expr ),*) => (
+		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
+	)
+}
+
+pub fn one() -> AccountID {
+	"2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".convert()
+}
+pub fn two() -> AccountID {
+	"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a".convert()
 }
 
 pub struct HexDisplay<'a>(&'a [u8]);
