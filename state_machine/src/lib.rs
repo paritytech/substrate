@@ -134,10 +134,10 @@ pub trait Externalities {
 
 	/// Get the current set of authorities from storage.
 	fn authorities(&self) -> Result<Vec<&[u8]>, Self::Error> {
-		(0..self.storage(b"con\0aut\0len")?.into_iter()
+		(0..self.storage(b"con:aut:len")?.into_iter()
 				.rev()
 				.fold(0, |acc, &i| (acc << 8) + (i as u32)))
-			.map(|i| self.storage(&to_keyed_vec(i, b"con\0aut\0".to_vec())))
+			.map(|i| self.storage(&to_keyed_vec(i, b"con:aut:".to_vec())))
 			.collect()
 	}
 }
@@ -177,7 +177,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			overlay: &mut *overlay
 		};
 		// make a copy.
-		let code = externalities.storage(b"\0code").unwrap_or(&[]).to_vec();
+		let code = externalities.storage(b":code").unwrap_or(&[]).to_vec();
 
 		exec.call(
 			&mut externalities,
@@ -253,17 +253,17 @@ mod tests {
 
 		assert_eq!(ext.authorities(), Ok(vec![]));
 
-		ext.set_storage(b"con\0aut\0len".to_vec(), vec![0u8; 4]);
+		ext.set_storage(b"con:aut:len".to_vec(), vec![0u8; 4]);
 		assert_eq!(ext.authorities(), Ok(vec![]));
 
-		ext.set_storage(b"con\0aut\0len".to_vec(), vec![1u8, 0, 0, 0]);
+		ext.set_storage(b"con:aut:len".to_vec(), vec![1u8, 0, 0, 0]);
 		assert_eq!(ext.authorities(), Ok(vec![&[][..]]));
 
-		ext.set_storage(b"con\0aut\0\0\0\0\0".to_vec(), b"first".to_vec());
+		ext.set_storage(b"con:aut:::::".to_vec(), b"first".to_vec());
 		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..]]));
 
-		ext.set_storage(b"con\0aut\0len".to_vec(), vec![2u8, 0, 0, 0]);
-		ext.set_storage(b"con\0aut\0\x01\0\0\0".to_vec(), b"second".to_vec());
+		ext.set_storage(b"con:aut:len".to_vec(), vec![2u8, 0, 0, 0]);
+		ext.set_storage(b"con:aut:\x01:::".to_vec(), b"second".to_vec());
 		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..], &b"second"[..]]));
 	}
 }

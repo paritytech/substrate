@@ -12,7 +12,7 @@ pub fn block_number() -> BlockNumber {
 
 /// Get the block hash of a given block (uses storage).
 pub fn block_hash(number: BlockNumber) -> Hash {
-	Storable::lookup_default(&number.to_keyed_vec(b"sys\0old\0"))
+	Storable::lookup_default(&number.to_keyed_vec(b"sys:old:"))
 }
 
 /// Deposits a log and ensures it matches the blocks log data.
@@ -44,7 +44,7 @@ pub fn execute_block(mut block: Block) {
 	// so will wait until a little later.
 
 	// store the header hash in storage.
-	let header_hash_key = header.number.to_keyed_vec(b"sys\0old\0");
+	let header_hash_key = header.number.to_keyed_vec(b"sys:old:");
 	header.blake2_256().store(&header_hash_key);
 
 	// execute transactions
@@ -69,7 +69,7 @@ pub fn execute_transaction(utx: &UncheckedTransaction) {
 	let ref tx = utx.transaction;
 
 	// check nonce
-	let nonce_key = tx.signed.to_keyed_vec(b"sys\0non\0");
+	let nonce_key = tx.signed.to_keyed_vec(b"sys:non:");
 	let expected_nonce: TxOrder = Storable::lookup_default(&nonce_key);
 	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
@@ -82,7 +82,7 @@ pub fn execute_transaction(utx: &UncheckedTransaction) {
 
 /// Set the new code.
 pub fn set_code(new: &[u8]) {
-	new.store(b"\0code");
+	new.store(b":code");
 }
 
 fn final_checks(_block: &Block) {
@@ -109,14 +109,14 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(&one.to_keyed_vec(b"sta\0bal\0")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
 		let tx = UncheckedTransaction {
 			transaction: Transaction {
 				signed: one.clone(),
 				nonce: 0,
-				function: Function::StakingTransferInactive,
+				function: Function::StakingTransfer,
 				input_data: vec![].join(&two).join(&69u64),
 			},
 			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
@@ -128,8 +128,8 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			system::execute_transaction(&tx);
-			assert_eq!(staking::balance_inactive(&one), 42);
-			assert_eq!(staking::balance_inactive(&two), 69);
+			assert_eq!(staking::balance(&one), 42);
+			assert_eq!(staking::balance(&two), 69);
 		});
 	}
 }

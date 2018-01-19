@@ -1,16 +1,30 @@
 use keyedvec::KeyedVec;
-use storable::Storable;
+use storable::{Storable, StorageVec};
 use primitives::{BlockNumber, Balance, AccountID};
 use runtime::{system, session};
 
-// Each validator's stake has one amount in each of three states:
-// - inactive: free to be transferred.
-// - active: currently representing a validator.
-// - deactivating: recently representing a validator and not yet ready for transfer.
+type Liquidity = u64;
+
+struct IntentionStorageVec {}
+impl StorageVec for IntentionStorageVec {
+	type Item = AccountID;
+	const PREFIX: &'static[u8] = b"ses:wil:";
+}
+
+// Each identity's stake may be in one of three bondage states, given by an integer:
+// - n | n <= system::block_number(): inactive: free to be transferred.
+// - ~0: active: currently representing a validator.
+// - n | n > system::block_number(): deactivating: recently representing a validator and not yet
+//   ready for transfer.
 
 /// The length of a staking era in sessions.
-pub fn lockup_eras() -> BlockNumber {
-	Storable::lookup_default(b"sta\0lpe")
+pub fn eras_per_lockup() -> BlockNumber {
+	Storable::lookup_default(b"sta:epl")
+}
+
+/// The length of a staking era in sessions.
+pub fn validator_count() -> usize {
+	Storable::lookup_default(b"sta:vac")
 }
 
 /// The length of a staking era in blocks.
@@ -20,27 +34,27 @@ pub fn era_length() -> BlockNumber {
 
 /// The length of a staking era in sessions.
 pub fn sessions_per_era() -> BlockNumber {
-	Storable::lookup_default(b"sta\0spe")
+	Storable::lookup_default(b"sta:spe")
 }
 
 /// The current era index.
 pub fn current_era() -> BlockNumber {
-	Storable::lookup_default(b"sta\0era")
+	Storable::lookup_default(b"sta:era")
 }
 
 /// Set the current era index.
 pub fn set_current_era(new: BlockNumber) {
-	new.store(b"sta\0era");
+	new.store(b"sta:era");
 }
 
 /// The block number at which the era length last changed.
 pub fn last_era_length_change() -> BlockNumber {
-	Storable::lookup_default(b"sta\0lec")
+	Storable::lookup_default(b"sta:lec")
 }
 
 /// Set a new era length. Won't kick in until the next era change (at current length).
 pub fn set_sessions_per_era(new: BlockNumber) {
-	new.store(b"sta\0nse");
+	new.store(b"sta:nse");
 }
 
 /// The era has changed - enact new staking set.
@@ -51,28 +65,48 @@ fn new_era() {
 	set_current_era(current_era() + 1);
 
 	// Enact era length change.
-	let next_spe: u64 = Storable::lookup_default(b"sta\0nse");
+	let next_spe: u64 = Storable::lookup_default(b"sta:nse");
 	if next_spe > 0 && next_spe != sessions_per_era() {
-		next_spe.store(b"sta\0spe");
-		system::block_number().store(b"sta\0lec");
+		next_spe.store(b"sta:spe");
+		system::block_number().store(b"sta:lec");
 	}
 
 	// TODO: evaluate desired staking amounts and nominations and optimise to find the best
 	// combination of validators, then use session::set_validators().
+
+	// for now, this just orders would-be stakers by their balances and chooses the top-most
+	// validator_count() of them.
+	let mut intentions = IntentionStorageVec::items()
+		.into_iter()
+		.map(|v| (balance(&v), v))
+		.collect::<Vec<_>>();
+	intentions.sort_unstable_by(|&(b1, _), &(b2, _)| b2.cmp(&b1));
+	session::set_validators(
+		&intentions.into_iter()
+			.map(|(_, v)| v)
+			.take(validator_count())
+			.collect::<Vec<_>>()
+	);
 }
 
 /// The balance of a given account.
-pub fn balance_inactive(who: &AccountID) -> Balance {
-	Storable::lookup_default(&who.to_keyed_vec(b"sta\0bal\0"))
+pub fn balance(who: &AccountID) -> Balance {
+	Storable::lookup_default(&who.to_keyed_vec(b"sta:bal:"))
+}
+
+/// The liquidity-state of a given account.
+pub fn bondage(who: &AccountID) -> Liquidity {
+	Storable::lookup_default(&who.to_keyed_vec(b"sta:bon:"))
 }
 
 /// Transfer some unlocked staking balance to another staker.
-pub fn transfer_inactive(transactor: &AccountID, dest: &AccountID, value: Balance) {
-	let from_key = transactor.to_keyed_vec(b"sta\0bal\0");
-	let from_balance: Balance = Storable::lookup_default(&from_key);
+pub fn transfer(transactor: &AccountID, dest: &AccountID, value: Balance) {
+	let from_key = transactor.to_keyed_vec(b"sta:bal:");
+	let from_balance = Balance::lookup_default(&from_key);
 	assert!(from_balance >= value);
-	let to_key = dest.to_keyed_vec(b"sta\0bal\0");
+	let to_key = dest.to_keyed_vec(b"sta:bal:");
 	let to_balance: Balance = Storable::lookup_default(&to_key);
+	assert!(bondage(transactor) <= bondage(dest));
 	assert!(to_balance + value > to_balance);	// no overflow
 	(from_balance - value).store(&from_key);
 	(to_balance + value).store(&to_key);
@@ -81,15 +115,22 @@ pub fn transfer_inactive(transactor: &AccountID, dest: &AccountID, value: Balanc
 /// Declare the desire to stake for the transactor.
 ///
 /// Effects will be felt at the beginning of the next era.
-pub fn stake(_transactor: &AccountID) {
-	// TODO: record the desire for `_transactor` to activate their stake.
+pub fn stake(transactor: &AccountID) {
+	let mut intentions = IntentionStorageVec::items();
+	// can't be in the list twice.
+	assert!(intentions.iter().find(|t| *t == transactor).is_none());
+	intentions.push(transactor.clone());
+	IntentionStorageVec::set_items(&intentions);
 }
 
 /// Retract the desire to stake for the transactor.
 ///
 /// Effects will be felt at the beginning of the next era.
-pub fn unstake(_transactor: &AccountID) {
-	// TODO: record the desire for `_transactor` to deactivate their stake.
+pub fn unstake(transactor: &AccountID) {
+	let mut intentions = IntentionStorageVec::items();
+	// TODO: use swap remove.
+	let intentions = intentions.into_iter().filter(|t| t != transactor).collect::<Vec<_>>();
+	IntentionStorageVec::set_items(&intentions);
 }
 
 /// Hook to be called after to transaction processing.
@@ -113,8 +154,8 @@ mod tests {
 	#[test]
 	fn staking_eras_work() {
 		let mut t = TestExternalities { storage: map![
-			twox_128(b"ses\0len").to_vec() => vec![].join(&1u64),
-			twox_128(b"sta\0spe").to_vec() => vec![].join(&2u64)
+			twox_128(b"ses:len").to_vec() => vec![].join(&1u64),
+			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64)
 		], };
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 2u64);
@@ -180,12 +221,12 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(&one.to_keyed_vec(b"sta\0bal\0")).to_vec() => vec![].join(&42u64)
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&42u64)
 		], };
 
 		with_externalities(&mut t, || {
-			assert_eq!(staking::balance_inactive(&one), 42);
-			assert_eq!(staking::balance_inactive(&two), 0);
+			assert_eq!(staking::balance(&one), 42);
+			assert_eq!(staking::balance(&two), 0);
 		});
 	}
 
@@ -195,13 +236,13 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(&one.to_keyed_vec(b"sta\0bal\0")).to_vec() => vec![].join(&111u64)
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&111u64)
 		], };
 
 		with_externalities(&mut t, || {
-			staking::transfer_inactive(&one, &two, 69);
-			assert_eq!(staking::balance_inactive(&one), 42);
-			assert_eq!(staking::balance_inactive(&two), 69);
+			staking::transfer(&one, &two, 69);
+			assert_eq!(staking::balance(&one), 42);
+			assert_eq!(staking::balance(&two), 69);
 		});
 	}
 }

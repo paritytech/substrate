@@ -7,7 +7,7 @@ use runtime::{system, staking, consensus};
 struct ValidatorStorageVec {}
 impl StorageVec for ValidatorStorageVec {
 	type Item = AccountID;
-	const PREFIX: &'static[u8] = b"ses\0key\0";
+	const PREFIX: &'static[u8] = b"ses:key:";
 }
 
 // TRANSACTION API (available to all transactors)
@@ -16,7 +16,7 @@ impl StorageVec for ValidatorStorageVec {
 /// session.
 pub fn set_key(validator: &AccountID, key: &SessionKey) {
 	// set new value for next session
-	key.store(&validator.to_keyed_vec(b"ses\0nxt\0"));
+	key.store(&validator.to_keyed_vec(b"ses:nxt:"));
 }
 
 // PUBLIC API (available to other runtime modules)
@@ -37,27 +37,27 @@ pub fn set_validators(new: &[AccountID]) {
 
 /// The number of blocks in each session.
 pub fn length() -> BlockNumber {
-	Storable::lookup_default(b"ses\0len")
+	Storable::lookup_default(b"ses:len")
 }
 
 /// The current era index.
 pub fn current_index() -> BlockNumber {
-	Storable::lookup_default(b"ses\0ind")
+	Storable::lookup_default(b"ses:ind")
 }
 
 /// Set the current era index.
 pub fn set_current_index(new: BlockNumber) {
-	new.store(b"ses\0ind");
+	new.store(b"ses:ind");
 }
 
 /// The block number at which the era length last changed.
 pub fn last_length_change() -> BlockNumber {
-	Storable::lookup_default(b"ses\0llc")
+	Storable::lookup_default(b"ses:llc")
 }
 
 /// Set a new era length. Won't kick in until the next era change (at current length).
 pub fn set_length(new: BlockNumber) {
-	new.store(b"ses\0nln");
+	new.store(b"ses:nln");
 }
 
 /// Hook to be called after transaction processing.
@@ -78,15 +78,15 @@ fn rotate_session() {
 	set_current_index(current_index() + 1);
 
 	// Enact era length change.
-	if let Some(next_len) = u64::lookup(b"ses\0nln") {
-		next_len.store(b"ses\0len");
-		system::block_number().store(b"ses\0llc");
-		kill(b"ses\0nln");
+	if let Some(next_len) = u64::lookup(b"ses:nln") {
+		next_len.store(b"ses:len");
+		system::block_number().store(b"ses:llc");
+		kill(b"ses:nln");
 	}
 
 	// Update any changes in session keys.
 	validators().iter().enumerate().for_each(|(i, v)| {
-		let k = v.to_keyed_vec(b"ses\0nxt\0");
+		let k = v.to_keyed_vec(b"ses:nxt:");
 		if let Some(n) = Storable::lookup(&k) {
 			consensus::set_authority(i as u32, &n);
 			kill(&k);
@@ -106,15 +106,15 @@ mod tests {
 
 	fn simple_setup() -> TestExternalities {
 		TestExternalities { storage: map![
-			twox_128(b"ses\0len").to_vec() => vec![].join(&2u64),
+			twox_128(b"ses:len").to_vec() => vec![].join(&2u64),
 			// the validators (10, 20, ...)
-			twox_128(b"ses\0key\0len").to_vec() => vec![].join(&2u32),
-			twox_128(&0u32.to_keyed_vec(b"ses\0key\0")).to_vec() => vec![10; 32],
-			twox_128(&1u32.to_keyed_vec(b"ses\0key\0")).to_vec() => vec![20; 32],
+			twox_128(b"ses:key:len").to_vec() => vec![].join(&2u32),
+			twox_128(&0u32.to_keyed_vec(b"ses:key:")).to_vec() => vec![10; 32],
+			twox_128(&1u32.to_keyed_vec(b"ses:key:")).to_vec() => vec![20; 32],
 			// initial session keys (11, 21, ...)
-			twox_128(b"con\0aut\0len").to_vec() => vec![].join(&2u32),
-			twox_128(&0u32.to_keyed_vec(b"con\0aut\0")).to_vec() => vec![11; 32],
-			twox_128(&1u32.to_keyed_vec(b"con\0aut\0")).to_vec() => vec![21; 32]
+			twox_128(b"con:aut:len").to_vec() => vec![].join(&2u32),
+			twox_128(&0u32.to_keyed_vec(b"con:aut:")).to_vec() => vec![11; 32],
+			twox_128(&1u32.to_keyed_vec(b"con:aut:")).to_vec() => vec![21; 32]
 		], }
 	}
 
