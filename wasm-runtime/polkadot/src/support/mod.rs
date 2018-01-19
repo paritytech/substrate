@@ -6,4 +6,5 @@ pub mod storage;
 #[cfg(test)]
 pub mod statichex;
 #[cfg(test)]
+#[macro_use]
 pub mod testing;

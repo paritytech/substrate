@@ -8,6 +8,7 @@ extern crate runtime_support;
 extern crate rustc_hex;
 
 mod codec;
+#[macro_use]
 mod support;
 mod runtime;
 pub use codec::{endiansensitive, streamreader, joiner, slicable, keyedvec};

@@ -60,12 +60,6 @@ pub fn execute_block(mut block: Block) {
 	// so will wait until a little later.
 }
 
-fn final_checks(_block: &Block) {
-	with_env(|e| {
-		assert_eq!(e.next_log_index, e.digest.logs.len());
-	});
-}
-
 /// Execute a given transaction.
 pub fn execute_transaction(utx: &UncheckedTransaction) {
 	// Verify the signature is good.
@@ -90,45 +84,23 @@ pub fn set_code(new: &[u8]) {
 	new.store(b"\0code");
 }
 
+fn final_checks(_block: &Block) {
+	with_env(|e| {
+		assert_eq!(e.next_log_index, e.digest.logs.len());
+	});
+}
+
 #[cfg(test)]
 mod tests {
 	use joiner::Joiner;
 	use function::Function;
 	use keyedvec::KeyedVec;
 	use slicable::Slicable;
-	use std::collections::HashMap;
-	use runtime_support::{NoError, with_externalities, Externalities};
-	use primitives::{AccountID, UncheckedTransaction, Transaction, Hashable};
+	use runtime_support::with_externalities;
+	use primitives::{UncheckedTransaction, Transaction};
 	use statichex::StaticHexInto;
 	use runtime::{system, staking};
-	use testing::HexDisplay;
-
-	#[derive(Debug, Default)]
-	struct TestExternalities {
-		storage: HashMap<Vec<u8>, Vec<u8>>,
-	}
-	impl Externalities for TestExternalities {
-		type Error = NoError;
-
-		fn storage(&self, key: &[u8]) -> Result<&[u8], NoError> {
-			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
-		}
-
-		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
-			self.storage.insert(key, value);
-		}
-
-		fn chain_id(&self) -> u64 { 42 }
-	}
-
-	macro_rules! map {
-		($( $name:expr => $value:expr ),*) => (
-			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-		)
-	}
-
-	fn one() -> AccountID { "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".convert() }
-	fn two() -> AccountID { "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a".convert() }
+	use testing::{TestExternalities, HexDisplay, one, two};
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
@@ -143,7 +115,7 @@ mod tests {
 			transaction: Transaction {
 				signed: one.clone(),
 				nonce: 0,
-				function: Function::StakingTransferStake,
+				function: Function::StakingTransferInactive,
 				input_data: vec![].join(&two).join(&69u64),
 			},
 			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
@@ -155,8 +127,8 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			system::execute_transaction(&tx);
-			assert_eq!(staking::balance(&one), 42);
-			assert_eq!(staking::balance(&two), 69);
+			assert_eq!(staking::balance_inactive(&one), 42);
+			assert_eq!(staking::balance_inactive(&two), 69);
 		});
 	}
 }
