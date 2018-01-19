@@ -1,7 +1,7 @@
 use slicable::Slicable;
 use endiansensitive::EndianSensitive;
 use keyedvec::KeyedVec;
-use runtime_support;
+use runtime_support::{self, twox_128, Vec};
 
 pub trait Storable {
 	fn lookup_default(key: &[u8]) -> Self where Self: Sized + Default { Self::lookup(key).unwrap_or_else(Default::default) }
@@ -9,20 +9,20 @@ pub trait Storable {
 	fn store(&self, key: &[u8]);
 }
 
-pub fn kill(key: &[u8]) { runtime_support::set_storage(key, b""); }
+pub fn kill(key: &[u8]) { runtime_support::set_storage(&twox_128(key)[..], b""); }
 
 impl<T: Default + Sized + EndianSensitive> Storable for T {
 	fn lookup(key: &[u8]) -> Option<Self> {
-		Slicable::set_as_slice(|out| runtime_support::read_storage(key, out) == out.len())
+		Slicable::set_as_slice(|out| runtime_support::read_storage(&twox_128(key)[..], out) == out.len())
 	}
 	fn store(&self, key: &[u8]) {
-		self.as_slice_then(|slice| runtime_support::set_storage(key, slice));
+		self.as_slice_then(|slice| runtime_support::set_storage(&twox_128(key)[..], slice));
 	}
 }
 
 impl Storable for [u8] {
 	fn store(&self, key: &[u8]) {
-		runtime_support::set_storage(key, self)
+		runtime_support::set_storage(&twox_128(key)[..], self)
 	}
 }
 

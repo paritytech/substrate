@@ -29,7 +29,9 @@ extern "C" {
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32) -> u32;
 	fn ext_chain_id() -> u64;
-	fn ext_keccak256(data: *const u8, len: u32, out: *mut u8);
+	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
+	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
+	fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
 }
 
@@ -80,12 +82,32 @@ pub fn chain_id() -> u64 {
 	}
 }
 
-/// Conduct a keccak256 hash.
-pub fn keccak256(data: &[u8]) -> [u8; 32] {
+/// Conduct a 256-bit Blake2 hash.
+pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 	unsafe {
 		let mut result: [u8; 32] = uninitialized();
 		// guaranteed to write into result.
-		ext_keccak256(&data[0], data.len() as u32, &mut result[0]);
+		ext_blake2_256(&data[0], data.len() as u32, &mut result[0]);
+		result
+	}
+}
+
+/// Conduct four XX hashes to give a 256-bit result.
+pub fn twox_256(data: &[u8]) -> [u8; 32] {
+	unsafe {
+		let mut result: [u8; 32] = uninitialized();
+		// guaranteed to write into result.
+		ext_twox_256(&data[0], data.len() as u32, &mut result[0]);
+		result
+	}
+}
+
+/// Conduct two XX hashes to give a 256-bit result.
+pub fn twox_128(data: &[u8]) -> [u8; 16] {
+	unsafe {
+		let mut result: [u8; 16] = uninitialized();
+		// guaranteed to write into result.
+		ext_twox_128(&data[0], data.len() as u32, &mut result[0]);
 		result
 	}
 }

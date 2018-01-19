@@ -45,7 +45,7 @@ pub fn execute_block(mut block: Block) {
 
 	// store the header hash in storage.
 	let header_hash_key = header.number.to_keyed_vec(b"sys\0old\0");
-	header.keccak256().store(&header_hash_key);
+	header.blake2_256().store(&header_hash_key);
 
 	// execute transactions
 	block.transactions.iter().for_each(execute_transaction);
@@ -97,7 +97,7 @@ mod tests {
 	use function::Function;
 	use keyedvec::KeyedVec;
 	use slicable::Slicable;
-	use runtime_support::with_externalities;
+	use runtime_support::{with_externalities, twox_128};
 	use primitives::{UncheckedTransaction, Transaction};
 	use statichex::StaticHexInto;
 	use runtime::{system, staking};
@@ -109,7 +109,7 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			one.to_keyed_vec(b"sta\0bal\0") => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&one.to_keyed_vec(b"sta\0bal\0")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
 		let tx = UncheckedTransaction {

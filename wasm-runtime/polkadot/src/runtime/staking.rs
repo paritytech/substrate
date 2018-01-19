@@ -102,7 +102,7 @@ pub fn check_new_era() {
 
 #[cfg(test)]
 mod tests {
-	use runtime_support::with_externalities;
+	use runtime_support::{with_externalities, twox_128};
 	use keyedvec::KeyedVec;
 	use joiner::Joiner;
 	use testing::{one, two, TestExternalities};
@@ -113,8 +113,8 @@ mod tests {
 	#[test]
 	fn staking_eras_work() {
 		let mut t = TestExternalities { storage: map![
-			b"ses\0bps".to_vec() => vec![].join(&1u64),
-			b"sta\0spe".to_vec() => vec![].join(&2u64)
+			twox_128(b"ses\0bps").to_vec() => vec![].join(&1u64),
+			twox_128(b"sta\0spe").to_vec() => vec![].join(&2u64)
 		], };
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 2u64);
@@ -180,7 +180,7 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			one.to_keyed_vec(b"sta\0bal\0") => vec![].join(&42u64)
+			twox_128(&one.to_keyed_vec(b"sta\0bal\0")).to_vec() => vec![].join(&42u64)
 		], };
 
 		with_externalities(&mut t, || {
@@ -195,7 +195,7 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			one.to_keyed_vec(b"sta\0bal\0") => vec![].join(&111u64)
+			twox_128(&one.to_keyed_vec(b"sta\0bal\0")).to_vec() => vec![].join(&111u64)
 		], };
 
 		with_externalities(&mut t, || {

@@ -22,7 +22,6 @@ extern crate polkadot_primitives as primitives;
 
 extern crate hashdb;
 extern crate memorydb;
-extern crate keccak_hash;
 
 extern crate patricia_trie;
 extern crate triehash;

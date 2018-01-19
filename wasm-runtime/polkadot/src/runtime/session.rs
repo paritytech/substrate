@@ -65,7 +65,7 @@ fn rotate_session() {
 
 #[cfg(test)]
 mod tests {
-	use runtime_support::with_externalities;
+	use runtime_support::{with_externalities, twox_128};
 	use keyedvec::KeyedVec;
 	use joiner::Joiner;
 	use testing::{one, two, TestExternalities};
@@ -76,15 +76,15 @@ mod tests {
 	#[test]
 	fn session_change_should_work() {
 		let mut t = TestExternalities { storage: map![
-			b"ses\0bps".to_vec() => vec![].join(&2u64),
+			twox_128(b"ses\0bps").to_vec() => vec![].join(&2u64),
 			// the validators (10, 20, ...)
-			b"ses\0key\0len".to_vec() => vec![].join(&2u32),
-			0u32.to_keyed_vec(b"ses\0key\0") => vec![10; 32],
-			1u32.to_keyed_vec(b"ses\0key\0") => vec![20; 32],
+			twox_128(b"ses\0key\0len").to_vec() => vec![].join(&2u32),
+			twox_128(&0u32.to_keyed_vec(b"ses\0key\0")).to_vec() => vec![10; 32],
+			twox_128(&1u32.to_keyed_vec(b"ses\0key\0")).to_vec() => vec![20; 32],
 			// initial session keys (11, 21, ...)
-			b"con\0aut\0len".to_vec() => vec![].join(&2u32),
-			0u32.to_keyed_vec(b"con\0aut\0") => vec![11; 32],
-			1u32.to_keyed_vec(b"con\0aut\0") => vec![21; 32]
+			twox_128(b"con\0aut\0len").to_vec() => vec![].join(&2u32),
+			twox_128(&0u32.to_keyed_vec(b"con\0aut\0")).to_vec() => vec![11; 32],
+			twox_128(&1u32.to_keyed_vec(b"con\0aut\0")).to_vec() => vec![21; 32]
 		], };
 		with_externalities(&mut t, || {
 			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);

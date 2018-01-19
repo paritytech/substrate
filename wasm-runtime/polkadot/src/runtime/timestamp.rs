@@ -13,14 +13,14 @@ pub fn set(now: Timestamp) {
 mod tests {
 	use joiner::Joiner;
 	use keyedvec::KeyedVec;
-	use runtime_support::with_externalities;
+	use runtime_support::{with_externalities, twox_128};
 	use runtime::timestamp;
 	use testing::TestExternalities;
 
 	#[test]
 	fn timestamp_works() {
 		let mut t = TestExternalities { storage: map![
-			b"tim\0val".to_vec() => vec![].join(&42u64)
+			twox_128(b"tim\0val").to_vec() => vec![].join(&42u64)
 		], };
 
 		with_externalities(&mut t, || {
