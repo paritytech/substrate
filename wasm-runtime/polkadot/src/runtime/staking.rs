@@ -1,3 +1,4 @@
+use runtime_support::Vec;
 use keyedvec::KeyedVec;
 use storable::{Storable, StorageVec};
 use primitives::{BlockNumber, Balance, AccountID};

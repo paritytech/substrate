@@ -240,7 +240,6 @@ mod tests {
 
 	use super::*;
 	use rustc_hex::FromHex;
-	use primitives::ed25519::hexdisplay::HexDisplay;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities {
