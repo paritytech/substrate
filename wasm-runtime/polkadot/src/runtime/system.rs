@@ -3,7 +3,7 @@ use runtime_support::{Vec, swap};
 use storable::Storable;
 use keyedvec::KeyedVec;
 use environment::with_env;
-use runtime::session;
+use runtime::{staking, session};
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
@@ -48,9 +48,10 @@ pub fn execute_block(mut block: Block) {
 	header.keccak256().store(&header_hash_key);
 
 	// execute transactions
-	session::pre_transactions();
 	block.transactions.iter().for_each(execute_transaction);
-	session::post_transactions();
+
+	staking::check_new_era();
+	session::check_rotate_session();
 
 	// any final checks
 	final_checks(&block);
