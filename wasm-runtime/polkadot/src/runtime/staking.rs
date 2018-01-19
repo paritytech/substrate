@@ -46,7 +46,7 @@ pub fn set_sessions_per_era(new: BlockNumber) {
 /// The era has changed - enact new staking set.
 ///
 /// NOTE: This always happens on a session change.
-fn next_era() {
+fn new_era() {
 	// Increment current era.
 	set_current_era(current_era() + 1);
 
@@ -92,15 +92,11 @@ pub fn unstake(_transactor: &AccountID) {
 	// TODO: record the desire for `_transactor` to deactivate their stake.
 }
 
-/// Hook to be called prior to transaction processing.
-pub fn pre_transactions() {
-}
-
 /// Hook to be called after to transaction processing.
-pub fn post_transactions() {
-	// check block number and call next_era if necessary.
+pub fn check_new_era() {
+	// check block number and call new_era if necessary.
 	if (system::block_number() - last_era_length_change()) % era_length() == 0 {
-		next_era();
+		new_era();
 	}
 }
 
@@ -128,14 +124,14 @@ mod tests {
 
 			// Block 1: No change.
 			with_env(|e| e.block_number = 1);
-			staking::post_transactions();
+			staking::check_new_era();
 			assert_eq!(staking::sessions_per_era(), 2u64);
 			assert_eq!(staking::last_era_length_change(), 0u64);
 			assert_eq!(staking::current_era(), 0u64);
 
 			// Block 2: Simple era change.
 			with_env(|e| e.block_number = 2);
-			staking::post_transactions();
+			staking::check_new_era();
 			assert_eq!(staking::sessions_per_era(), 2u64);
 			assert_eq!(staking::last_era_length_change(), 0u64);
 			assert_eq!(staking::current_era(), 1u64);
@@ -143,35 +139,35 @@ mod tests {
 			// Block 3: Schedule an era length change; no visible changes.
 			with_env(|e| e.block_number = 3);
 			staking::set_sessions_per_era(3);
-			staking::post_transactions();
+			staking::check_new_era();
 			assert_eq!(staking::sessions_per_era(), 2u64);
 			assert_eq!(staking::last_era_length_change(), 0u64);
 			assert_eq!(staking::current_era(), 1u64);
 
 			// Block 4: Era change kicks in.
 			with_env(|e| e.block_number = 4);
-			staking::post_transactions();
+			staking::check_new_era();
 			assert_eq!(staking::sessions_per_era(), 3u64);
 			assert_eq!(staking::last_era_length_change(), 4u64);
 			assert_eq!(staking::current_era(), 2u64);
 
 			// Block 5: No change.
 			with_env(|e| e.block_number = 5);
-			staking::post_transactions();
+			staking::check_new_era();
 			assert_eq!(staking::sessions_per_era(), 3u64);
 			assert_eq!(staking::last_era_length_change(), 4u64);
 			assert_eq!(staking::current_era(), 2u64);
 
 			// Block 6: No change.
 			with_env(|e| e.block_number = 6);
-			staking::post_transactions();
+			staking::check_new_era();
 			assert_eq!(staking::sessions_per_era(), 3u64);
 			assert_eq!(staking::last_era_length_change(), 4u64);
 			assert_eq!(staking::current_era(), 2u64);
 
 			// Block 7: Era increment.
 			with_env(|e| e.block_number = 7);
-			staking::post_transactions();
+			staking::check_new_era();
 			assert_eq!(staking::sessions_per_era(), 3u64);
 			assert_eq!(staking::last_era_length_change(), 4u64);
 			assert_eq!(staking::current_era(), 3u64);
