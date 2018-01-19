@@ -43,23 +43,6 @@ pub fn storage(key: &[u8]) -> Vec<u8> {
 	}
 }
 
-pub fn storage_into<T: Sized>(key: &[u8]) -> Option<T> {
-	let mut result: T;
-	let size = size_of::<T>();
-	let written;
-	unsafe {
-		result = uninitialized();
-		let result_as_byte_blob = transmute::<*mut T, *mut u8>(&mut result);
-		written = ext_get_storage_into(&key[0], key.len() as u32, result_as_byte_blob, size as u32) as usize;
-	}
-	// Only return a fully written value.
-	if written == size {
-		Some(result)
-	} else {
-		None
-	}
-}
-
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	unsafe {
 		ext_set_storage(

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Support functions.
+//! The with-std support functions for the runtime.
 
 #[macro_use]
 extern crate environmental;
@@ -36,6 +36,7 @@ pub use polkadot_state_machine::Externalities;
 // TODO: use the real error, not NoError.
 
 #[derive(Debug)]
+/// As it says - an empty type we use for errors.
 pub struct NoError;
 impl fmt::Display for NoError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "") }
@@ -43,12 +44,15 @@ impl fmt::Display for NoError {
 
 environmental!(ext : Externalities<Error=NoError> + 'static);
 
+/// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Vec<u8> {
 	ext::with(|ext| ext.storage(key).ok().map(|s| s.to_vec()))
 		.unwrap_or(None)
 		.unwrap_or_else(|| vec![])
 }
 
+/// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
+/// the number of bytes that the key in storage was.
 pub fn read_storage(key: &[u8], value_out: &mut [u8]) -> usize {
 	ext::with(|ext| {
 		if let Ok(value) = ext.storage(key) {
@@ -59,24 +63,6 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8]) -> usize {
 			0
 		}
 	}).unwrap_or(0)
-}
-
-pub fn storage_into<T: Sized>(_key: &[u8]) -> Option<T> {
-	let size = size_of::<T>();
-
-	ext::with(|ext| {
-		if let Ok(value) = ext.storage(_key) {
-			if value.len() == size {
-				unsafe {
-					let mut result: T = std::mem::uninitialized();
-					std::slice::from_raw_parts_mut(transmute::<*mut T, *mut u8>(&mut result), size)
-						.copy_from_slice(&value);
-					return Some(result);
-				}
-			}
-		}
-		None
-	}).unwrap_or(None)
 }
 
 pub fn set_storage(key: &[u8], value: &[u8]) {
@@ -149,8 +135,6 @@ mod tests {
 			assert_eq!(storage(b"hello"), b"world".to_vec());
 			assert_eq!(storage(b"foo"), b"".to_vec());
 			set_storage(b"foo", &[1, 2, 3][..]);
-			assert_eq!(storage_into::<[u8; 3]>(b"foo"), Some([1, 2, 3]));
-			assert_eq!(storage_into::<[u8; 3]>(b"hello"), None);
 			true
 		}));
 
