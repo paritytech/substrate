@@ -1,31 +1,38 @@
 use runtime_support::Vec;
 use keyedvec::KeyedVec;
 use storage::Storage;
+use storagevec::StorageVec;
 use primitives::{AccountID, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
+struct ValidatorStorageVec {}
+impl StorageVec for ValidatorStorageVec {
+	type Item = AccountID;
+	const PREFIX: &'static[u8] = b"ses\0key\0";
+}
+
 // TRANSACTION API (available to all transactors)
 
-/// Sets the session key of `_transactor` to `_session`. This doesn't take effect until the next
+/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 /// session.
-pub fn set_key(_transactor: &AccountID, _session: &AccountID) {
-	// TODO: record the new session key for `_transactor`, ready for the next session.
+pub fn set_key(validator: &AccountID, key: &SessionKey) {
+	// set new value for next session
+	key.store(&validator.to_keyed_vec(b"ses\0nxt\0"));
 }
 
 // PUBLIC API (available to other runtime modules)
 
-/// Get the current set of validators. These are the long-term identifiers for the validators
-/// and will be mapped to a session key with the most recent `set_next_session_key`.
-pub fn validators() -> Vec<AccountID> {
-	// TODO: derive from the actual validator set
-	consensus::authorities()
+/// Get the current set of authorities. These are the session keys.
+fn validators() -> Vec<AccountID> {
+	ValidatorStorageVec::items()
 }
 
 /// Set the current set of validators.
 ///
-/// Called by staking::next_era() only.
+/// Called by staking::next_era() only. `next_session` should be called after this in order to
+/// update the session keys to the next validator set.
 pub fn set_validators(new: &[AccountID]) {
-	// TODO: set the actual validators
+	ValidatorStorageVec::set_items(new);
 	consensus::set_authorities(new);
 }
 
@@ -56,4 +63,10 @@ pub fn post_transactions() {
 /// Move onto next session: register the new authority set.
 fn next_session() {
 	// TODO: Call set_authorities() with any new authorities.
+	validators().iter().enumerate().for_each(|(i, v)| {
+		let k = v.to_keyed_vec(b"ses\0nxt\0");
+		if let Some(n) = Storage::try_into(&k) {
+			consensus::set_authority(i as u32, &n);
+		}
+	})
 }
