@@ -1,6 +1,6 @@
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder, Hashable};
 use runtime_support::{Vec, swap};
-use storage::Storage;
+use storable::Storable;
 use keyedvec::KeyedVec;
 use environment::with_env;
 use runtime::session;
@@ -12,7 +12,7 @@ pub fn block_number() -> BlockNumber {
 
 /// Get the block hash of a given block (uses storage).
 pub fn block_hash(number: BlockNumber) -> Hash {
-	Storage::into(&number.to_keyed_vec(b"sys\0old\0"))
+	Storable::lookup_default(&number.to_keyed_vec(b"sys\0old\0"))
 }
 
 /// Deposits a log and ensures it matches the blocks log data.
@@ -69,7 +69,7 @@ pub fn execute_transaction(utx: &UncheckedTransaction) {
 
 	// check nonce
 	let nonce_key = tx.signed.to_keyed_vec(b"sys\0non\0");
-	let expected_nonce: TxOrder = Storage::into(&nonce_key);
+	let expected_nonce: TxOrder = Storable::lookup_default(&nonce_key);
 	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
 	// increment nonce in storage

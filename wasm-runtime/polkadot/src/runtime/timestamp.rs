@@ -1,8 +1,8 @@
 use primitives::Timestamp;
-use storage::Storage;
+use storable::Storable;
 
 pub fn get() -> Timestamp {
-	Storage::into(b"tim\0val")
+	Storable::lookup_default(b"tim\0val")
 }
 
 pub fn set(now: Timestamp) {
