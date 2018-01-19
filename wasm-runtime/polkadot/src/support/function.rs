@@ -1,3 +1,21 @@
+// Copyright 2017 Parity Technologies (UK) Ltd.
+// This file is part of Polkadot.
+
+// Polkadot is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Polkadot is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Function data: This describes a function that can be called from an external transaction.
+
 use primitives::AccountID;
 use streamreader::StreamReader;
 use runtime::{staking, session, timestamp};
@@ -14,6 +32,7 @@ pub enum Function {
 }
 
 impl Function {
+	/// Derive `Some` value from a `u8`, or `None` if it's invalid.
 	pub fn from_u8(value: u8) -> Option<Function> {
 		match value {
 			x if x == Function::StakingStake as u8 => Some(Function::StakingStake),

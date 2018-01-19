@@ -1,10 +1,32 @@
+// Copyright 2017 Parity Technologies (UK) Ltd.
+// This file is part of Polkadot.
+
+// Polkadot is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Polkadot is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Staking manager: Handles balances and periodically determines the best set of validators.
+
 use runtime_support::Vec;
 use keyedvec::KeyedVec;
 use storable::{Storable, StorageVec};
-use primitives::{BlockNumber, Balance, AccountID};
+use primitives::{BlockNumber, AccountID};
 use runtime::{system, session};
 
-type Liquidity = u64;
+/// The balance of an account.
+pub type Balance = u64;
+
+/// The amount of bonding period left in an account. Measured in eras.
+pub type Bondage = u64;
 
 struct IntentionStorageVec {}
 impl StorageVec for IntentionStorageVec {
@@ -48,45 +70,13 @@ pub fn last_era_length_change() -> BlockNumber {
 	Storable::lookup_default(b"sta:lec")
 }
 
-/// The era has changed - enact new staking set.
-///
-/// NOTE: This always happens on a session change.
-fn new_era() {
-	// Increment current era.
-	(current_era() + 1).store(b"sta:era");
-
-	// Enact era length change.
-	let next_spe: u64 = Storable::lookup_default(b"sta:nse");
-	if next_spe > 0 && next_spe != sessions_per_era() {
-		next_spe.store(b"sta:spe");
-		system::block_number().store(b"sta:lec");
-	}
-
-	// TODO: evaluate desired staking amounts and nominations and optimise to find the best
-	// combination of validators, then use session::set_validators().
-
-	// for now, this just orders would-be stakers by their balances and chooses the top-most
-	// validator_count() of them.
-	let mut intentions = IntentionStorageVec::items()
-		.into_iter()
-		.map(|v| (balance(&v), v))
-		.collect::<Vec<_>>();
-	intentions.sort_unstable_by(|&(b1, _), &(b2, _)| b2.cmp(&b1));
-	session::set_validators(
-		&intentions.into_iter()
-			.map(|(_, v)| v)
-			.take(validator_count())
-			.collect::<Vec<_>>()
-	);
-}
-
 /// The balance of a given account.
 pub fn balance(who: &AccountID) -> Balance {
 	Storable::lookup_default(&who.to_keyed_vec(b"sta:bal:"))
 }
 
 /// The liquidity-state of a given account.
-pub fn bondage(who: &AccountID) -> Liquidity {
+pub fn bondage(who: &AccountID) -> Bondage {
 	Storable::lookup_default(&who.to_keyed_vec(b"sta:bon:"))
 }
 
@@ -132,6 +122,40 @@ pub fn check_new_era() {
 	if (system::block_number() - last_era_length_change()) % era_length() == 0 {
 		new_era();
 	}
+}
+
+// PRIVATE
+
+/// The era has changed - enact new staking set.
+///
+/// NOTE: This always happens on a session change.
+fn new_era() {
+	// Increment current era.
+	(current_era() + 1).store(b"sta:era");
+
+	// Enact era length change.
+	let next_spe: u64 = Storable::lookup_default(b"sta:nse");
+	if next_spe > 0 && next_spe != sessions_per_era() {
+		next_spe.store(b"sta:spe");
+		system::block_number().store(b"sta:lec");
+	}
+
+	// TODO: evaluate desired staking amounts and nominations and optimise to find the best
+	// combination of validators, then use session::set_validators().
+
+	// for now, this just orders would-be stakers by their balances and chooses the top-most
+	// validator_count() of them.
+	let mut intentions = IntentionStorageVec::items()
+		.into_iter()
+		.map(|v| (balance(&v), v))
+		.collect::<Vec<_>>();
+	intentions.sort_unstable_by(|&(b1, _), &(b2, _)| b2.cmp(&b1));
+	session::set_validators(
+		&intentions.into_iter()
+			.map(|(_, v)| v)
+			.take(validator_count())
+			.collect::<Vec<_>>()
+	);
 }
 
 /// Set a new era length. Won't kick in until the next era change (at current length).
