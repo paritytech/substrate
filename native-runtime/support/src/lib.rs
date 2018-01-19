@@ -24,21 +24,17 @@ impl fmt::Display for NoError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "") }
 }
 
-pub struct ExternalitiesHolder<'a> {
-	ext: &'a mut Externalities<Error=NoError>,
-}
-
-declare_generic!(ext : ExternalitiesHolder);
+environmental!(ext : Externalities<Error=NoError> + 'static);
 
 pub fn storage(key: &[u8]) -> Vec<u8> {
-	ext::with(|holder| holder.ext.storage(key).ok().map(|s| s.to_vec()))
+	ext::with(|ext| ext.storage(key).ok().map(|s| s.to_vec()))
 		.unwrap_or(None)
 		.unwrap_or_else(|| vec![])
 }
 
 pub fn read_storage(key: &[u8], value_out: &mut [u8]) -> usize {
-	ext::with(|holder| {
-		if let Ok(value) = holder.ext.storage(key) {
+	ext::with(|ext| {
+		if let Ok(value) = ext.storage(key) {
 			let written = ::std::cmp::min(value.len(), value_out.len());
 			value_out[0..written].copy_from_slice(&value[0..written]);
 			value.len()
@@ -51,8 +47,8 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8]) -> usize {
 pub fn storage_into<T: Sized>(_key: &[u8]) -> Option<T> {
 	let size = size_of::<T>();
 
-	ext::with(|holder| {
-		if let Ok(value) = holder.ext.storage(_key) {
+	ext::with(|ext| {
+		if let Ok(value) = ext.storage(_key) {
 			if value.len() == size {
 				unsafe {
 					let mut result: T = std::mem::uninitialized();
@@ -67,15 +63,15 @@ pub fn storage_into<T: Sized>(_key: &[u8]) -> Option<T> {
 }
 
 pub fn set_storage(key: &[u8], value: &[u8]) {
-	ext::with(|holder|
-		holder.ext.set_storage(key.to_vec(), value.to_vec())
+	ext::with(|ext|
+		ext.set_storage(key.to_vec(), value.to_vec())
 	);
 }
 
 /// The current relay chain identifier.
 pub fn chain_id() -> u64 {
-	ext::with(|holder|
-		holder.ext.chain_id()
+	ext::with(|ext|
+		ext.chain_id()
 	).unwrap_or(0)
 }
 
@@ -89,9 +85,8 @@ pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {
 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Error=NoError>, f: F) -> R {
-	let mut h = ExternalitiesHolder { ext };
-	ext::using(&mut h, f)
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut (Externalities<Error=NoError> + 'static), f: F) -> R {
+	ext::using(ext, f)
 }
 
 #[macro_export]
