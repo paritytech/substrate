@@ -99,7 +99,7 @@ pub fn transfer(transactor: &AccountID, dest: &AccountID, value: Balance) {
 pub fn stake(transactor: &AccountID) {
 	let mut intentions = IntentionStorageVec::items();
 	// can't be in the list twice.
-	assert!(intentions.iter().find(|t| *t == transactor).is_none());
+	assert!(intentions.iter().find(|t| *t == transactor).is_none(), "Cannot stake if already staked.");
 	intentions.push(transactor.clone());
 	IntentionStorageVec::set_items(&intentions);
 	u64::max_value().store(&transactor.to_keyed_vec(b"sta:bon:"));
@@ -110,8 +110,11 @@ pub fn stake(transactor: &AccountID) {
 /// Effects will be felt at the beginning of the next era.
 pub fn unstake(transactor: &AccountID) {
 	let mut intentions = IntentionStorageVec::items();
-	// TODO: use swap remove.
-	let intentions = intentions.into_iter().filter(|t| t != transactor).collect::<Vec<_>>();
+	if let Some(position) = intentions.iter().position(|t| t == transactor) {
+		intentions.swap_remove(position);
+	} else {
+		panic!("Cannot unstake if not already staked.");
+	}
 	IntentionStorageVec::set_items(&intentions);
 	(current_era() + bonding_duration()).store(&transactor.to_keyed_vec(b"sta:bon:"));
 }
