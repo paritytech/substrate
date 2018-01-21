@@ -21,7 +21,7 @@ use runtime_support::size_of;
 use slicable::Slicable;
 use joiner::Joiner;
 use streamreader::StreamReader;
-use runtime::staking;
+use runtime::{system, governance, staking};
 
 /// Internal functions that can be dispatched to.
 #[cfg_attr(test, derive(PartialEq, Debug))]
@@ -29,6 +29,7 @@ use runtime::staking;
 pub enum InternalFunction {
 	SystemSetCode,
 	StakingSetSessionsPerEra,
+	GovernanceSetApprovalPpmRequired,
 }
 
 impl InternalFunction {
@@ -37,6 +38,7 @@ impl InternalFunction {
 		match value {
 			x if x == InternalFunction::SystemSetCode as u8 => Some(InternalFunction::SystemSetCode),
 			x if x == InternalFunction::StakingSetSessionsPerEra as u8 => Some(InternalFunction::StakingSetSessionsPerEra),
+			x if x == InternalFunction::GovernanceSetApprovalPpmRequired as u8 => Some(InternalFunction::GovernanceSetApprovalPpmRequired),
 			_ => None,
 		}
 	}
@@ -77,12 +79,16 @@ impl Proposal {
 		let mut params = StreamReader::new(&self.input_data);
 		match self.function {
 			InternalFunction::SystemSetCode => {
-				let code = params.read().unwrap();
-				staking::set_sessions_per_era(code);
+				let code: Vec<u8> = params.read().unwrap();
+				system::set_code(&code);
 			}
 			InternalFunction::StakingSetSessionsPerEra => {
 				let value = params.read().unwrap();
 				staking::set_sessions_per_era(value);
+			}
+			InternalFunction::GovernanceSetApprovalPpmRequired => {
+				let value = params.read().unwrap();
+				governance::set_approval_ppm_required(value);
 			}
 		}
 	}

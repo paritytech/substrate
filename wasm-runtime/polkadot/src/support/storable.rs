@@ -32,6 +32,16 @@ pub trait Storable {
 		unimplemented!()
 	}
 
+	/// Retrives and returns the serialised value of a key from storage, removing it immediately.
+	fn take(key: &[u8]) -> Option<Self> where Self: Sized {
+		if let Some(value) = Self::lookup(key) {
+			kill(key);
+			Some(value)
+		} else {
+			None
+		}
+	}
+
 	/// Place the value in storage under `key`.
 	fn store(&self, key: &[u8]);
 }
