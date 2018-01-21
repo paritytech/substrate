@@ -67,8 +67,7 @@ pub fn approvals_required() -> u32 {
 
 /// Current era is ending; we should finish up any proposals.
 pub fn end_of_an_era() {
-	// TODO: tally up votes for the current proposal, if any. enact if there are sufficient
-	// approvals.
+	// tally up votes for the current proposal, if any. enact if there are sufficient approvals.
 	if let Some(proposal) = Proposal::lookup(b"gov:pro") {
 		let enact = approval_count() >= approvals_required();
 
