@@ -19,10 +19,11 @@
 //!
 //! For now this is limited to a simple qualified majority vote (whose parameter is retrieved from
 //! storage) between validators. A single vote may be proposed per era, and at most one approval
-//! vote may be cast by each validator. The tally is maintained
+//! vote may be cast by each validator. The tally is maintained through a simple tag in storage for
+//! each validator that has approved.
 //!
-//!
-//!
+//! At the end of the era, all validators approvals are tallied and if there are sufficient to pass
+//! the proposal then it is enacted. All items in storage concerning the proposal are reset.
 
 use runtime_support::Vec;
 use keyedvec::KeyedVec;
