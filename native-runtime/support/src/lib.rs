@@ -47,24 +47,29 @@ environmental!(ext : Externalities<Error=NoError> + 'static);
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Vec<u8> {
 	ext::with(|ext| ext.storage(key).ok().map(|s| s.to_vec()))
-		.unwrap_or(None)
-		.unwrap_or_else(|| vec![])
+		.expect("read_storage cannot be called outside of an Externalities-provided environment.")
+		.unwrap_or_else(Vec::new)
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
 /// the number of bytes that the key in storage was.
-pub fn read_storage(key: &[u8], value_out: &mut [u8]) -> usize {
+pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
 	ext::with(|ext| {
 		if let Ok(value) = ext.storage(key) {
+			let value = &value[value_offset..];
 			let written = ::std::cmp::min(value.len(), value_out.len());
 			value_out[0..written].copy_from_slice(&value[0..written]);
 			value.len()
 		} else {
+			// no-entry is treated as an empty vector of bytes.
+			// TODO: consider allowing empty-vector to exist separately to no-entry (i.e. return
+			// Option<usize>)
 			0
 		}
-	}).unwrap_or(0)
+	}).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
 
+/// Set the storage to some particular key.
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	ext::with(|ext|
 		ext.set_storage(key.to_vec(), value.to_vec())

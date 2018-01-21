@@ -17,28 +17,37 @@
 //! Stuff to do with the runtime's storage.
 
 use slicable::Slicable;
-use endiansensitive::EndianSensitive;
 use keyedvec::KeyedVec;
 use runtime_support::{self, twox_128, Vec};
 
 /// Trait for a value which may be stored in the storage DB.
 pub trait Storable {
 	/// Lookup the value in storage and deserialise, giving a default value if not found.
-	fn lookup_default(key: &[u8]) -> Self where Self: Sized + Default { Self::lookup(key).unwrap_or_else(Default::default) }
+	fn lookup_default(key: &[u8]) -> Self where Self: Sized + Default {
+		Self::lookup(key).unwrap_or_else(Default::default)
+	}
+
 	/// Lookup `Some` value in storage and deserialise; `None` if it's not there.
-	fn lookup(_key: &[u8]) -> Option<Self> where Self: Sized { unimplemented!() }
+	fn lookup(_key: &[u8]) -> Option<Self> where Self: Sized {
+		unimplemented!()
+	}
+
 	/// Place the value in storage under `key`.
 	fn store(&self, key: &[u8]);
 }
 
-// TODO: consider using blake256 to avoid possible eclipse attack.
+// TODO: consider using blake256 to avoid possible preimage attack.
 
 /// Remove `key` from storage.
-pub fn kill(key: &[u8]) { runtime_support::set_storage(&twox_128(key)[..], b""); }
+pub fn kill(key: &[u8]) {
+	runtime_support::set_storage(&twox_128(key)[..], b"");
+}
 
-impl<T: Default + Sized + EndianSensitive> Storable for T {
+impl<T: Sized + Slicable> Storable for T {
 	fn lookup(key: &[u8]) -> Option<Self> {
-		Slicable::set_as_slice(|out| runtime_support::read_storage(&twox_128(key)[..], out) == out.len())
+		Slicable::set_as_slice(&|out, offset|
+			runtime_support::read_storage(&twox_128(key)[..], out, offset) == out.len()
+		)
 	}
 	fn store(&self, key: &[u8]) {
 		self.as_slice_then(|slice| runtime_support::set_storage(&twox_128(key)[..], slice));
