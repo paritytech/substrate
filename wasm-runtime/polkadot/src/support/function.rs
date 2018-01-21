@@ -18,9 +18,9 @@
 
 use primitives::AccountID;
 use streamreader::StreamReader;
-use runtime::{staking, session, timestamp};
+use runtime::{staking, session, timestamp, governance};
 
-/// The functions that a transaction can call (and be dispatched to).
+/// Public functions that can be dispatched to.
 #[cfg_attr(test, derive(PartialEq, Debug))]
 #[derive(Clone, Copy)]
 pub enum Function {
@@ -29,6 +29,8 @@ pub enum Function {
 	StakingTransfer,
 	SessionSetKey,
 	TimestampSet,
+	GovernancePropose,
+	GovernanceApprove,
 }
 
 impl Function {
@@ -40,6 +42,8 @@ impl Function {
 			x if x == Function::StakingTransfer as u8 => Some(Function::StakingTransfer),
 			x if x == Function::SessionSetKey as u8 => Some(Function::SessionSetKey),
 			x if x == Function::TimestampSet as u8 => Some(Function::TimestampSet),
+			x if x == Function::GovernancePropose as u8 => Some(Function::GovernancePropose),
+			x if x == Function::GovernanceApprove as u8 => Some(Function::GovernanceApprove),
 			_ => None,
 		}
 	}
@@ -68,6 +72,14 @@ impl Function {
 			Function::TimestampSet => {
 				let t = params.read().unwrap();
 				timestamp::set(t);
+			}
+			Function::GovernancePropose => {
+				let proposal = params.read().unwrap();
+				governance::propose(transactor, &proposal);
+			}
+			Function::GovernanceApprove => {
+				let era_index = params.read().unwrap();
+				governance::approve(transactor, era_index);
 			}
 		}
 	}

@@ -27,7 +27,7 @@ extern "C" {
 	fn ext_print_num(value: u64);
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
-	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32) -> u32;
+	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_chain_id() -> u64;
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
@@ -52,9 +52,9 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 	}
 }
 
-pub fn read_storage(key: &[u8], value_out: &mut [u8]) -> usize {
+pub fn read_storage(key: &[u8], value_offset: usize, value_out: &mut [u8]) -> usize {
 	unsafe {
-		ext_get_storage_into(&key[0], key.len() as u32, &mut value_out[0], value_out.len() as u32) as usize
+		ext_get_storage_into(&key[0], key.len() as u32, &mut value_out[0], value_out.len() as u32, value_offset as u32) as usize
 	}
 }
 

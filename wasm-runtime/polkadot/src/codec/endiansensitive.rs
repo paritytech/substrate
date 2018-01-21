@@ -44,6 +44,11 @@ macro_rules! impl_non_endians {
 	)* }
 }
 
+// TODO: this is fine as long as bool is one byte. it'll break if llvm tries to use more. happily,
+// this isn't an issue for the forseeable future. if it ever happens, then it should be implemented
+// as endian sensitive.
+impl EndianSensitive for bool {}
+
 impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
 impl_non_endians!(u8, i8, [u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7], [u8; 8],
 	[u8; 10], [u8; 12], [u8; 14], [u8; 16], [u8; 20], [u8; 24], [u8; 28], [u8; 32], [u8; 40],

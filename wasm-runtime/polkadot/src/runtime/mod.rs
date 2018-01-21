@@ -26,5 +26,7 @@ pub mod staking;
 pub mod timestamp;
 #[allow(unused)]
 pub mod session;
+#[allow(unused)]
+pub mod governance;
 
-// TODO: governance, polkadao
+// TODO: polkadao

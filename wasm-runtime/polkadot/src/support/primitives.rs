@@ -28,15 +28,25 @@ use std::fmt;
 
 /// The Ed25519 pubkey that identifies an account.
 pub type AccountID = [u8; 32];
+
+/// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
+/// (who matters). Essentially this means that a majority of validators have decided it is
+/// "correct".
+pub const EVERYBODY: AccountID = [255u8; 32];
+
 /// The Ed25519 pub key of an session that belongs to an authority. This is used as what the
 /// external environment/consensus algorithm calls an "authority".
 pub type SessionKey = AccountID;
+
 /// Indentifier for a chain.
 pub type ChainID = u64;
+
 /// Index of a block in the chain.
 pub type BlockNumber = u64;
+
 /// Index of a transaction.
 pub type TxOrder = u64;
+
 /// A hash of some data.
 pub type Hash = [u8; 32];
 
@@ -76,7 +86,7 @@ impl Slicable for Header {
 		})
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -122,7 +132,7 @@ impl Slicable for Transaction {
 		})
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -200,7 +210,7 @@ impl Slicable for UncheckedTransaction {
 		})
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -237,7 +247,7 @@ impl Slicable for Block {
 		})
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -271,7 +281,7 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 		Some(r)
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 

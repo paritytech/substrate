@@ -16,11 +16,11 @@
 
 //! Staking manager: Handles balances and periodically determines the best set of validators.
 
-use runtime_support::Vec;
+use runtime_support::{Vec, RefCell};
 use keyedvec::KeyedVec;
 use storable::{Storable, StorageVec};
 use primitives::{BlockNumber, AccountID};
-use runtime::{system, session};
+use runtime::{system, session, governance};
 
 /// The balance of an account.
 pub type Balance = u64;
@@ -31,7 +31,7 @@ pub type Bondage = u64;
 struct IntentionStorageVec {}
 impl StorageVec for IntentionStorageVec {
 	type Item = AccountID;
-	const PREFIX: &'static[u8] = b"ses:wil:";
+	const PREFIX: &'static[u8] = b"sta:wil:";
 }
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
@@ -39,6 +39,55 @@ impl StorageVec for IntentionStorageVec {
 // - ~0: active: currently representing a validator.
 // - n | n > current_era(): deactivating: recently representing a validator and not yet
 //   ready for transfer.
+
+// TRANSACTION API
+
+/// Transfer some unlocked staking balance to another staker.
+pub fn transfer(transactor: &AccountID, dest: &AccountID, value: Balance) {
+	let from_key = transactor.to_keyed_vec(b"sta:bal:");
+	let from_balance = Balance::lookup_default(&from_key);
+	assert!(from_balance >= value);
+	let to_key = dest.to_keyed_vec(b"sta:bal:");
+	let to_balance: Balance = Storable::lookup_default(&to_key);
+	assert!(bondage(transactor) <= bondage(dest));
+	assert!(to_balance + value > to_balance);	// no overflow
+	(from_balance - value).store(&from_key);
+	(to_balance + value).store(&to_key);
+}
+
+/// Declare the desire to stake for the transactor.
+///
+/// Effects will be felt at the beginning of the next era.
+pub fn stake(transactor: &AccountID) {
+	let mut intentions = IntentionStorageVec::items();
+	// can't be in the list twice.
+	assert!(intentions.iter().find(|t| *t == transactor).is_none(), "Cannot stake if already staked.");
+	intentions.push(transactor.clone());
+	IntentionStorageVec::set_items(&intentions);
+	u64::max_value().store(&transactor.to_keyed_vec(b"sta:bon:"));
+}
+
+/// Retract the desire to stake for the transactor.
+///
+/// Effects will be felt at the beginning of the next era.
+pub fn unstake(transactor: &AccountID) {
+	let mut intentions = IntentionStorageVec::items();
+	if let Some(position) = intentions.iter().position(|t| t == transactor) {
+		intentions.swap_remove(position);
+	} else {
+		panic!("Cannot unstake if not already staked.");
+	}
+	IntentionStorageVec::set_items(&intentions);
+	(current_era() + bonding_duration()).store(&transactor.to_keyed_vec(b"sta:bon:"));
+}
+
+// PUBLIC API
+
+pub fn set_sessions_per_era(new: BlockNumber) {
+	new.store(b"sta:nse");
+}
+
+// INSPECTION API
 
 /// The length of the bonding duration in eras.
 pub fn bonding_duration() -> BlockNumber {
@@ -80,45 +129,6 @@ pub fn bondage(who: &AccountID) -> Bondage {
 	Storable::lookup_default(&who.to_keyed_vec(b"sta:bon:"))
 }
 
-/// Transfer some unlocked staking balance to another staker.
-pub fn transfer(transactor: &AccountID, dest: &AccountID, value: Balance) {
-	let from_key = transactor.to_keyed_vec(b"sta:bal:");
-	let from_balance = Balance::lookup_default(&from_key);
-	assert!(from_balance >= value);
-	let to_key = dest.to_keyed_vec(b"sta:bal:");
-	let to_balance: Balance = Storable::lookup_default(&to_key);
-	assert!(bondage(transactor) <= bondage(dest));
-	assert!(to_balance + value > to_balance);	// no overflow
-	(from_balance - value).store(&from_key);
-	(to_balance + value).store(&to_key);
-}
-
-/// Declare the desire to stake for the transactor.
-///
-/// Effects will be felt at the beginning of the next era.
-pub fn stake(transactor: &AccountID) {
-	let mut intentions = IntentionStorageVec::items();
-	// can't be in the list twice.
-	assert!(intentions.iter().find(|t| *t == transactor).is_none(), "Cannot stake if already staked.");
-	intentions.push(transactor.clone());
-	IntentionStorageVec::set_items(&intentions);
-	u64::max_value().store(&transactor.to_keyed_vec(b"sta:bon:"));
-}
-
-/// Retract the desire to stake for the transactor.
-///
-/// Effects will be felt at the beginning of the next era.
-pub fn unstake(transactor: &AccountID) {
-	let mut intentions = IntentionStorageVec::items();
-	if let Some(position) = intentions.iter().position(|t| t == transactor) {
-		intentions.swap_remove(position);
-	} else {
-		panic!("Cannot unstake if not already staked.");
-	}
-	IntentionStorageVec::set_items(&intentions);
-	(current_era() + bonding_duration()).store(&transactor.to_keyed_vec(b"sta:bon:"));
-}
-
 /// Hook to be called after to transaction processing.
 pub fn check_new_era() {
 	// check block number and call new_era if necessary.
@@ -131,8 +141,12 @@ pub fn check_new_era() {
 
 /// The era has changed - enact new staking set.
 ///
-/// NOTE: This always happens on a session change.
+/// NOTE: This always happens immediately before a session change to ensure that new validators
+/// get a chance to set their session keys.
 fn new_era() {
+	// Inform governance module that it's the end of an era
+	governance::end_of_an_era();
+
 	// Increment current era.
 	(current_era() + 1).store(b"sta:era");
 
@@ -143,9 +157,8 @@ fn new_era() {
 		system::block_number().store(b"sta:lec");
 	}
 
-	// TODO: evaluate desired staking amounts and nominations and optimise to find the best
+	// evaluate desired staking amounts and nominations and optimise to find the best
 	// combination of validators, then use session::set_validators().
-
 	// for now, this just orders would-be stakers by their balances and chooses the top-most
 	// validator_count() of them.
 	let mut intentions = IntentionStorageVec::items()
@@ -159,11 +172,6 @@ fn new_era() {
 			.take(validator_count())
 			.collect::<Vec<_>>()
 	);
-}
-
-/// Set a new era length. Won't kick in until the next era change (at current length).
-fn set_sessions_per_era(new: BlockNumber) {
-	new.store(b"sta:nse");
 }
 
 #[cfg(test)]

@@ -36,7 +36,16 @@ macro_rules! impl_sizes {
 	)* }
 }
 
-impl_sizes!(1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128);
+impl StaticHexConversion for Vec<u8> {
+	fn from_static_hex(hex: &'static str) -> Self {
+		FromHex::from_hex(hex).unwrap()
+	}
+}
+
+impl_sizes!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+	17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+	33, 34, 35, 36, 37, 38, 39, 40, 451, 42, 43, 44, 45, 46, 47, 48,
+	56, 64, 80, 96, 112, 128);
 
 /// Trait to allow converting from itself (only implemented for a static str) into some useful
 /// type (which must implement `StaticHexConversion`).
