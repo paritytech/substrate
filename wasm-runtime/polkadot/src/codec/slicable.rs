@@ -96,3 +96,16 @@ impl Slicable for Vec<u8> {
 		u32::from_slice(&data[0..4]).map(|i| (i + 4) as usize)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn vec_is_slicable() {
+		let v = b"Hello world".to_vec();
+		v.as_slice_then(|ref slice|
+			assert_eq!(slice, &b"\x0b\0\0\0Hello world")
+		);
+	}
+}

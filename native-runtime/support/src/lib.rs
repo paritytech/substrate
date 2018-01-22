@@ -151,4 +151,20 @@ mod tests {
 			false
 		}));
 	}
+
+	#[test]
+	fn read_storage_works() {
+		let mut t = TestExternalities { storage: map![
+			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
+		], };
+
+		with_externalities(&mut t, || {
+			let mut v = [0u8; 4];
+			assert!(read_storage(b":test", &mut v[..], 0) >= 4);
+			assert_eq!(v, [11u8, 0, 0, 0]);
+			let mut w = [0u8; 11];
+			assert!(read_storage(b":test", &mut w[..], 4) >= 11);
+			assert_eq!(&w, b"Hello world");
+		});
+	}
 }

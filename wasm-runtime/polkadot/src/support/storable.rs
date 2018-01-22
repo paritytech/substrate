@@ -56,7 +56,7 @@ pub fn kill(key: &[u8]) {
 impl<T: Sized + Slicable> Storable for T {
 	fn lookup(key: &[u8]) -> Option<Self> {
 		Slicable::set_as_slice(&|out, offset|
-			runtime_support::read_storage(&twox_128(key)[..], out, offset) == out.len()
+			runtime_support::read_storage(&twox_128(key)[..], out, offset) >= out.len()
 		)
 	}
 	fn store(&self, key: &[u8]) {
@@ -102,5 +102,91 @@ pub trait StorageVec {
 
 	fn count() -> u32 {
 		Storable::lookup_default(&b"len".to_keyed_vec(Self::PREFIX))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::collections::HashMap;
+	use runtime_support::with_externalities;
+	use testing::{TestExternalities, HexDisplay};
+	use runtime_support::{storage, twox_128};
+
+	#[test]
+	fn integers_can_be_stored() {
+		let mut t = TestExternalities { storage: HashMap::new(), };
+		with_externalities(&mut t, || {
+			let x = 69u32;
+			x.store(b":test");
+			let y = u32::lookup(b":test").unwrap();
+			assert_eq!(x, y);
+		});
+		with_externalities(&mut t, || {
+			let x = 69426942i64;
+			x.store(b":test");
+			let y = i64::lookup(b":test").unwrap();
+			assert_eq!(x, y);
+		});
+	}
+
+	#[test]
+	fn bools_can_be_stored() {
+		let mut t = TestExternalities { storage: HashMap::new(), };
+		with_externalities(&mut t, || {
+			let x = true;
+			x.store(b":test");
+			let y = bool::lookup(b":test").unwrap();
+			assert_eq!(x, y);
+		});
+
+		with_externalities(&mut t, || {
+			let x = false;
+			x.store(b":test");
+			let y = bool::lookup(b":test").unwrap();
+			assert_eq!(x, y);
+		});
+	}
+
+	#[test]
+	fn vecs_can_be_retrieved() {
+		let mut t = TestExternalities { storage: HashMap::new(), };
+		with_externalities(&mut t, || {
+			runtime_support::set_storage(&twox_128(b":test"), b"\x0b\0\0\0Hello world");
+			let x = b"Hello world".to_vec();
+			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test"))));
+			let y = <Vec<u8>>::lookup(b":test").unwrap();
+			assert_eq!(x, y);
+
+		});
+	}
+
+	#[test]
+	fn vecs_can_be_stored() {
+		let mut t = TestExternalities { storage: HashMap::new(), };
+		let x = b"Hello world".to_vec();
+
+		with_externalities(&mut t, || {
+			x.store(b":test");
+		});
+
+		println!("Ext is {:?}", t);
+		with_externalities(&mut t, || {
+			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test"))));
+			let y = <Vec<u8>>::lookup(b":test").unwrap();
+			assert_eq!(x, y);
+		});
+	}
+
+	#[test]
+	fn proposals_can_be_stored() {
+		use proposal::{Proposal, InternalFunction};
+		let mut t = TestExternalities { storage: HashMap::new(), };
+		with_externalities(&mut t, || {
+			let x = Proposal { function: InternalFunction::StakingSetSessionsPerEra, input_data: b"Hello world".to_vec() };
+			x.store(b":test");
+			let y = Proposal::lookup(b":test").unwrap();
+			assert_eq!(x, y);
+		});
 	}
 }
