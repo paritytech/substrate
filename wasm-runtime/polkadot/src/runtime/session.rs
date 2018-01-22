@@ -59,6 +59,11 @@ pub fn length() -> BlockNumber {
 	Storable::lookup_default(b"ses:len")
 }
 
+/// The number of validators currently.
+pub fn validator_count() -> usize {
+	ValidatorStorageVec::count() as usize
+}
+
 /// The current era index.
 pub fn current_index() -> BlockNumber {
 	Storable::lookup_default(b"ses:ind")
