@@ -119,7 +119,7 @@ impl<B, E> Client<B, E> where
 				logs: Default::default(),
 			};
 
-			let mut tx = backend.begin_transaction(BlockId::Number(0))?;
+			let mut tx = backend.begin_transaction(BlockId::Hash(block::HeaderHash::default()))?;
 			tx.import_block(genesis_header, None, true)?;
 			backend.commit_transaction(tx)?;
 		}

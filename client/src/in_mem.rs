@@ -171,14 +171,20 @@ impl backend::Backend for Backend {
 	type State = state_machine::backend::InMemory;
 
 	fn begin_transaction(&self, block: BlockId) -> error::Result<Self::Transaction> {
+		let state = match block {
+			BlockId::Hash(h) if h.is_zero() => Self::State::default(),
+			_ => self.state_at(block)?,
+		};
+
 		Ok(Transaction {
 			pending_block: None,
-			pending_state: self.state_at(block)?,
+			pending_state: state,
 		})
 	}
 
 	fn commit_transaction(&self, transaction: Self::Transaction) -> error::Result<()> {
 		if let Some(pending_block) = transaction.pending_block {
+			println!("writing block");
 			let hash = header_hash(&pending_block.block.header);
 			self.states.write().insert(hash, transaction.pending_state);
 			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.body, pending_block.is_best);
