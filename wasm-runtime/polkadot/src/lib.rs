@@ -29,7 +29,7 @@ mod codec;
 #[macro_use]
 mod support;
 mod runtime;
-pub use codec::{endiansensitive, streamreader, joiner, slicable, keyedvec};
+pub use codec::{streamreader, joiner, slicable, keyedvec};
 pub use support::{primitives, function, environment, storable};
 #[cfg(test)]
 pub use support::{testing, statichex};
