@@ -21,7 +21,7 @@ use runtime_support::{size_of, Vec};
 use slicable::Slicable;
 use joiner::Joiner;
 use streamreader::StreamReader;
-use runtime::{system, governance, staking};
+use runtime::{system, governance, staking, session};
 
 /// Internal functions that can be dispatched to.
 #[cfg_attr(test, derive(PartialEq, Debug))]
@@ -29,7 +29,10 @@ use runtime::{system, governance, staking};
 pub enum InternalFunction {
 	SystemSetCode,
 	StakingSetSessionsPerEra,
+	StakingSetBondingDuration,
+	StakingSetValidatorCount,
 	GovernanceSetApprovalPpmRequired,
+	SessionSetLength,
 }
 
 impl InternalFunction {
@@ -38,7 +41,10 @@ impl InternalFunction {
 		match value {
 			x if x == InternalFunction::SystemSetCode as u8 => Some(InternalFunction::SystemSetCode),
 			x if x == InternalFunction::StakingSetSessionsPerEra as u8 => Some(InternalFunction::StakingSetSessionsPerEra),
+			x if x == InternalFunction::StakingSetBondingDuration as u8 => Some(InternalFunction::StakingSetBondingDuration),
+			x if x == InternalFunction::StakingSetValidatorCount as u8 => Some(InternalFunction::StakingSetValidatorCount),
 			x if x == InternalFunction::GovernanceSetApprovalPpmRequired as u8 => Some(InternalFunction::GovernanceSetApprovalPpmRequired),
+			x if x == InternalFunction::SessionSetLength as u8 => Some(InternalFunction::SessionSetLength),
 			_ => None,
 		}
 	}
@@ -86,9 +92,21 @@ impl Proposal {
 				let value = params.read().unwrap();
 				staking::set_sessions_per_era(value);
 			}
+			InternalFunction::StakingSetBondingDuration => {
+				let value = params.read().unwrap();
+				staking::set_bonding_duration(value);
+			}
+			InternalFunction::StakingSetValidatorCount => {
+				let value = params.read().unwrap();
+				staking::set_validator_count(value);
+			}
 			InternalFunction::GovernanceSetApprovalPpmRequired => {
 				let value = params.read().unwrap();
 				governance::set_approval_ppm_required(value);
+			}
+			InternalFunction::SessionSetLength => {
+				let value = params.read().unwrap();
+				session::set_length(value);
 			}
 		}
 	}

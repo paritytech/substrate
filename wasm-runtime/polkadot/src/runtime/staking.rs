@@ -81,10 +81,31 @@ pub fn unstake(transactor: &AccountID) {
 	(current_era() + bonding_duration()).store(&transactor.to_keyed_vec(b"sta:bon:"));
 }
 
-// PUBLIC API
+// PRIVILEDGED API
 
+/// Set the number of sessions in an era.
 pub fn set_sessions_per_era(new: BlockNumber) {
 	new.store(b"sta:nse");
+}
+
+/// The length of the bonding duration in eras.
+pub fn set_bonding_duration(new: BlockNumber) {
+	new.store(b"sta:loc");
+}
+
+/// The length of a staking era in sessions.
+pub fn set_validator_count(new: usize) {
+	(new as u32).store(b"sta:vac");
+}
+
+// INTERNAL API
+
+/// Hook to be called after to transaction processing.
+pub fn check_new_era() {
+	// check block number and call new_era if necessary.
+	if (system::block_number() - last_era_length_change()) % era_length() == 0 {
+		new_era();
+	}
 }
 
 // INSPECTION API
@@ -127,14 +148,6 @@ pub fn balance(who: &AccountID) -> Balance {
 /// The liquidity-state of a given account.
 pub fn bondage(who: &AccountID) -> Bondage {
 	Storable::lookup_default(&who.to_keyed_vec(b"sta:bon:"))
-}
-
-/// Hook to be called after to transaction processing.
-pub fn check_new_era() {
-	// check block number and call new_era if necessary.
-	if (system::block_number() - last_era_length_change()) % era_length() == 0 {
-		new_era();
-	}
 }
 
 // PRIVATE
