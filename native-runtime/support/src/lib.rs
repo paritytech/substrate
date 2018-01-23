@@ -31,7 +31,7 @@ pub use std::boxed::Box;
 pub use std::slice;
 pub use std::mem::{size_of, transmute, swap, uninitialized};
 
-pub use polkadot_state_machine::Externalities;
+pub use polkadot_state_machine::{Externalities, ExternalitiesError};
 
 // TODO: use the real error, not NoError.
 
@@ -42,7 +42,7 @@ impl fmt::Display for NoError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "") }
 }
 
-environmental!(ext : Externalities<Error=NoError> + 'static);
+environmental!(ext : Externalities + 'static);
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Vec<u8> {
@@ -93,7 +93,7 @@ pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {
 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut (Externalities<Error=NoError> + 'static), f: F) -> R {
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut (Externalities + 'static), f: F) -> R {
 	ext::using(ext, f)
 }
 
@@ -112,9 +112,7 @@ mod tests {
 		storage: HashMap<Vec<u8>, Vec<u8>>,
 	}
 	impl Externalities for TestExternalities {
-		type Error = NoError;
-
-		fn storage(&self, key: &[u8]) -> Result<&[u8], NoError> {
+		fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
 			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
 		}
 

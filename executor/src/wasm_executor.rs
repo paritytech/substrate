@@ -241,15 +241,14 @@ mod tests {
 
 	use super::*;
 	use rustc_hex::FromHex;
+	use state_machine::ExternalitiesError;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities {
 		storage: HashMap<Vec<u8>, Vec<u8>>,
 	}
 	impl Externalities for TestExternalities {
-		type Error = Error;
-
-		fn storage(&self, key: &[u8]) -> Result<&[u8]> {
+		fn storage(&self, key: &[u8]) -> ::std::result::Result<&[u8], ExternalitiesError> {
 			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
 		}
 
