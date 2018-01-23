@@ -16,7 +16,7 @@
 
 //! Conensus module for runtime; manages the authority set ready for the native code.
 
-use runtime_support::Vec;
+use runtime_support::prelude::*;
 use storable::StorageVec;
 use primitives::SessionKey;
 

@@ -16,7 +16,7 @@
 
 //! Vec<u8> serialiser.
 
-use runtime_support::Vec;
+use runtime_support::prelude::*;
 use slicable::Slicable;
 
 /// Trait to allow itself to be serialised into a `Vec<u8>`
