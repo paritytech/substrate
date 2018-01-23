@@ -22,7 +22,6 @@ extern crate polkadot_primitives as primitives;
 
 extern crate hashdb;
 extern crate memorydb;
-extern crate keccak_hash;
 
 extern crate patricia_trie;
 extern crate triehash;
@@ -114,13 +113,9 @@ impl OverlayedChanges {
 pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
-fn value_vec(mut value: usize, initial: Vec<u8>) -> Vec<u8> {
-	let mut acc = initial;
-	while value > 0 {
-		acc.push(value as u8);
-		value /= 256;
-	}
-	acc
+fn to_keyed_vec(value: u32, mut prepend: Vec<u8>) -> Vec<u8> {
+	prepend.extend((0..::std::mem::size_of::<u32>()).into_iter().map(|i| (value >> (i * 8)) as u8));
+	prepend
 }
 
 /// Externalities: pinned to specific active address.
@@ -134,12 +129,15 @@ pub trait Externalities {
 	/// Set storage of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>);
 
-	/// Get the current set of validators.
-	fn validators(&self) -> Result<Vec<&[u8]>, Self::Error> {
-		(0..self.storage(b"\0validator_count")?.into_iter()
+	/// Get the identity of the chain.
+	fn chain_id(&self) -> u64;
+
+	/// Get the current set of authorities from storage.
+	fn authorities(&self) -> Result<Vec<&[u8]>, Self::Error> {
+		(0..self.storage(b"con:aut:len")?.into_iter()
 				.rev()
-				.fold(0, |acc, &i| (acc << 8) + (i as usize)))
-			.map(|i| self.storage(&value_vec(i, b"\0validator".to_vec())))
+				.fold(0, |acc, &i| (acc << 8) + (i as u32)))
+			.map(|i| self.storage(&to_keyed_vec(i, b"con:aut:".to_vec())))
 			.collect()
 	}
 }
@@ -179,7 +177,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			overlay: &mut *overlay
 		};
 		// make a copy.
-		let code = externalities.storage(b"\0code").unwrap_or(&[]).to_vec();
+		let code = externalities.storage(b":code").unwrap_or(&[]).to_vec();
 
 		exec.call(
 			&mut externalities,
@@ -245,25 +243,27 @@ mod tests {
 		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 			self.storage.insert(key, value);
 		}
+
+		fn chain_id(&self) -> u64 { 42 }
 	}
 
 	#[test]
-	fn validators_call_works() {
+	fn authorities_call_works() {
 		let mut ext = TestExternalities::default();
 
-		assert_eq!(ext.validators(), Ok(vec![]));
+		assert_eq!(ext.authorities(), Ok(vec![]));
 
-		ext.set_storage(b"\0validator_count".to_vec(), vec![]);
-		assert_eq!(ext.validators(), Ok(vec![]));
+		ext.set_storage(b"con:aut:len".to_vec(), vec![0u8; 4]);
+		assert_eq!(ext.authorities(), Ok(vec![]));
 
-		ext.set_storage(b"\0validator_count".to_vec(), vec![1]);
-		assert_eq!(ext.validators(), Ok(vec![&[][..]]));
+		ext.set_storage(b"con:aut:len".to_vec(), vec![1u8, 0, 0, 0]);
+		assert_eq!(ext.authorities(), Ok(vec![&[][..]]));
 
-		ext.set_storage(b"\0validator".to_vec(), b"first".to_vec());
-		assert_eq!(ext.validators(), Ok(vec![&b"first"[..]]));
+		ext.set_storage(b"con:aut:\0\0\0\0".to_vec(), b"first".to_vec());
+		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..]]));
 
-		ext.set_storage(b"\0validator_count".to_vec(), vec![2]);
-		ext.set_storage(b"\0validator\x01".to_vec(), b"second".to_vec());
-		assert_eq!(ext.validators(), Ok(vec![&b"first"[..], &b"second"[..]]));
+		ext.set_storage(b"con:aut:len".to_vec(), vec![2u8, 0, 0, 0]);
+		ext.set_storage(b"con:aut:\x01\0\0\0".to_vec(), b"second".to_vec());
+		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..], &b"second"[..]]));
 	}
 }

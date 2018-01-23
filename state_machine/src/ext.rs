@@ -73,4 +73,8 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 		self.overlay.set_storage(key, value);
 	}
+
+	fn chain_id(&self) -> u64 {
+		42
+	}
 }

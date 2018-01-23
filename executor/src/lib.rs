@@ -33,6 +33,7 @@ extern crate polkadot_state_machine as state_machine;
 extern crate serde;
 extern crate parity_wasm;
 extern crate byteorder;
+extern crate rustc_hex;
 
 #[macro_use]
 extern crate error_chain;

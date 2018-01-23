@@ -1,5 +1,5 @@
 /target/
 **/*.rs.bk
 *.swp
-runtime/**/target/
+wasm-runtime/**/target/
 **/._*

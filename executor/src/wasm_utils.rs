@@ -75,13 +75,13 @@ macro_rules! reverse_params {
 
 #[macro_export]
 macro_rules! marshall {
-	( $context:ident, $self:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
-		let r : <$returns as $crate::wasm_utils::ConvertibleToWasm>::NativeType = reverse_params!($body, $self, $context, $( $names : $params ),*);
-		Ok(Some({ use $crate::wasm_utils::ConvertibleToWasm; r.to_runtime_value() }))
-	});
 	( $context:ident, $self:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
 		reverse_params!($body, $self, $context, $( $names : $params ),*);
 		Ok(None)
+	});
+	( $context:ident, $self:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
+		let r : <$returns as $crate::wasm_utils::ConvertibleToWasm>::NativeType = reverse_params!($body, $self, $context, $( $names : $params ),*);
+		Ok(Some({ use $crate::wasm_utils::ConvertibleToWasm; r.to_runtime_value() }))
 	})
 }
 
@@ -119,13 +119,13 @@ pub trait IntoUserDefinedElements {
 #[macro_export]
 macro_rules! impl_function_executor {
 	( $objectname:ident : $structname:ty, $( $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt ),* => $($pre:tt)+ ) => (
-		impl $( $pre ) + $crate::wasm_utils::UserFunctionExecutor<$crate::wasm_utils::DummyUserError> for $structname {
+		impl $($pre)+ $crate::wasm_utils::UserFunctionExecutor<$crate::wasm_utils::DummyUserError> for $structname {
 			dispatch!($objectname, $( $name( $( $names : $params ),* ) $( -> $returns )* => $body ),*);
 		}
-		impl $( $pre ) + $structname {
+		impl $($pre)+ $structname {
 			signatures!($( $name( $( $params ),* ) $( -> $returns )* ),*);
 		}
-		impl $( $pre ) + $crate::wasm_utils::IntoUserDefinedElements for $structname {
+		impl $($pre)+ $crate::wasm_utils::IntoUserDefinedElements for $structname {
 			fn into_user_defined_elements(&mut self) -> UserDefinedElements<$crate::wasm_utils::DummyUserError> {
 				$crate::wasm_utils::UserDefinedElements {
 					executor: Some(self),
