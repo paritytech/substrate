@@ -16,14 +16,14 @@
 
 //! The statement table.
 //!
-//! This stores messages other validators issue about candidates.
+//! This stores messages other authorities issue about candidates.
 //!
 //! These messages are used to create a proposal submitted to a BFT consensus process.
 //!
 //! Proposals are formed of sets of candidates which have the requisite number of
 //! validity and availability votes.
 //!
-//! Each parachain is associated with two sets of validators: those which can
+//! Each parachain is associated with two sets of authorities: those which can
 //! propose and attest to validity of candidates, and those who can only attest
 //! to availability.
 
@@ -32,35 +32,37 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::hash::Hash;
 use std::fmt::Debug;
 
+use super::StatementBatch;
+
 /// Context for the statement table.
 pub trait Context {
-	/// A validator ID
-	type ValidatorId: Hash + Eq + Clone + Debug;
+	/// A authority ID
+	type AuthorityId: Debug + Hash + Eq + Clone;
 	/// The digest (hash or other unique attribute) of a candidate.
-	type Digest: Hash + Eq + Clone + Debug;
-	/// Candidate type.
-	type Candidate: Ord + Eq + Clone + Debug;
+	type Digest: Debug + Hash + Eq + Clone;
 	/// The group ID type
-	type GroupId: Hash + Ord + Eq + Clone + Debug;
+	type GroupId: Debug + Hash + Ord + Eq + Clone;
 	/// A signature type.
-	type Signature: Eq + Clone +  Debug;
+	type Signature: Debug + Eq + Clone;
+	/// Candidate type. In practice this will be a candidate receipt.
+	type Candidate: Debug + Ord + Eq + Clone;
 
 	/// get the digest of a candidate.
-	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest;
+	fn candidate_digest(candidate: &Self::Candidate) -> Self::Digest;
 
 	/// get the group of a candidate.
-	fn candidate_group(&self, candidate: &Self::Candidate) -> Self::GroupId;
+	fn candidate_group(candidate: &Self::Candidate) -> Self::GroupId;
 
-	/// Whether a validator is a member of a group.
+	/// Whether a authority is a member of a group.
 	/// Members are meant to submit candidates and vote on validity.
-	fn is_member_of(&self, validator: &Self::ValidatorId, group: &Self::GroupId) -> bool;
+	fn is_member_of(&self, authority: &Self::AuthorityId, group: &Self::GroupId) -> bool;
 
-	/// Whether a validator is an availability guarantor of a group.
+	/// Whether a authority is an availability guarantor of a group.
 	/// Guarantors are meant to vote on availability for candidates submitted
 	/// in a group.
 	fn is_availability_guarantor_of(
 		&self,
-		validator: &Self::ValidatorId,
+		authority: &Self::AuthorityId,
 		group: &Self::GroupId,
 	) -> bool;
 
@@ -69,26 +71,26 @@ pub trait Context {
 }
 
 /// Statements circulated among peers.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Statement<C, D> {
-	/// Broadcast by a validator to indicate that this is his candidate for
+	/// Broadcast by a authority to indicate that this is his candidate for
 	/// inclusion.
 	///
 	/// Broadcasting two different candidate messages per round is not allowed.
 	Candidate(C),
-	/// Broadcast by a validator to attest that the candidate with given digest
+	/// Broadcast by a authority to attest that the candidate with given digest
 	/// is valid.
 	Valid(D),
-	/// Broadcast by a validator to attest that the auxiliary data for a candidate
+	/// Broadcast by a authority to attest that the auxiliary data for a candidate
 	/// with given digest is available.
 	Available(D),
-	/// Broadcast by a validator to attest that the candidate with given digest
+	/// Broadcast by a authority to attest that the candidate with given digest
 	/// is invalid.
 	Invalid(D),
 }
 
 /// A signed statement.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct SignedStatement<C, D, V, S> {
 	/// The statement.
 	pub statement: Statement<C, D>,
@@ -98,23 +100,23 @@ pub struct SignedStatement<C, D, V, S> {
 	pub sender: V,
 }
 
-// A unique trace for a class of valid statements issued by a validator.
+// A unique trace for a class of valid statements issued by a authority.
 //
-// We keep track of which statements we have received or sent to other validators
+// We keep track of which statements we have received or sent to other authorities
 // in order to prevent relaying the same data multiple times.
 //
-// The signature of the statement is replaced by the validator because the validator
+// The signature of the statement is replaced by the authority because the authority
 // is unique while signatures are not (at least under common schemes like
 // Schnorr or ECDSA).
 #[derive(Hash, PartialEq, Eq, Clone)]
 enum StatementTrace<V, D> {
-	/// The candidate proposed by the validator.
+	/// The candidate proposed by the authority.
 	Candidate(V),
-	/// A validity statement from that validator about the given digest.
+	/// A validity statement from that authority about the given digest.
 	Valid(V, D),
-	/// An invalidity statement from that validator about the given digest.
+	/// An invalidity statement from that authority about the given digest.
 	Invalid(V, D),
-	/// An availability statement from that validator about the given digest.
+	/// An availability statement from that authority about the given digest.
 	Available(V, D),
 }
 
@@ -122,7 +124,7 @@ enum StatementTrace<V, D> {
 ///
 /// Since there are three possible ways to vote, a double vote is possible in
 /// three possible combinations (unordered)
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ValidityDoubleVote<C, D, S> {
 	/// Implicit vote by issuing and explicity voting validity.
 	IssuedAndValidity((C, S), (D, S)),
@@ -133,7 +135,7 @@ pub enum ValidityDoubleVote<C, D, S> {
 }
 
 /// Misbehavior: declaring multiple candidates.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct MultipleCandidates<C, S> {
 	/// The first candidate seen.
 	pub first: (C, S),
@@ -142,7 +144,7 @@ pub struct MultipleCandidates<C, S> {
 }
 
 /// Misbehavior: submitted statement for wrong group.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct UnauthorizedStatement<C, D, V, S> {
 	/// A signed statement which was submitted without proper authority.
 	pub statement: SignedStatement<C, D, V, S>,
@@ -150,7 +152,7 @@ pub struct UnauthorizedStatement<C, D, V, S> {
 
 /// Different kinds of misbehavior. All of these kinds of malicious misbehavior
 /// are easily provable and extremely disincentivized.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Misbehavior<C, D, V, S> {
 	/// Voted invalid and valid on validity.
 	ValidityDoubleVote(ValidityDoubleVote<C, D, S>),
@@ -168,7 +170,7 @@ pub trait ResolveMisbehavior {
 }
 
 impl<C: Context + ?Sized> ResolveMisbehavior for C {
-	type Misbehavior = Misbehavior<C::Candidate, C::Digest, C::ValidatorId, C::Signature>;
+	type Misbehavior = Misbehavior<C::Candidate, C::Digest, C::AuthorityId, C::Signature>;
 }
 
 // kinds of votes for validity
@@ -201,9 +203,9 @@ pub struct Summary<D, G> {
 pub struct CandidateData<C: Context> {
 	group_id: C::GroupId,
 	candidate: C::Candidate,
-	validity_votes: HashMap<C::ValidatorId, ValidityVote<C::Signature>>,
-	availability_votes: HashMap<C::ValidatorId, C::Signature>,
-	indicated_bad_by: Vec<C::ValidatorId>,
+	validity_votes: HashMap<C::AuthorityId, ValidityVote<C::Signature>>,
+	availability_votes: HashMap<C::AuthorityId, C::Signature>,
+	indicated_bad_by: Vec<C::AuthorityId>,
 }
 
 impl<C: Context> CandidateData<C> {
@@ -212,20 +214,9 @@ impl<C: Context> CandidateData<C> {
 		!self.indicated_bad_by.is_empty()
 	}
 
-	/// Get an iterator over those who have indicated this candidate valid.
-	// TODO: impl trait
-	pub fn voted_valid_by<'a>(&'a self) -> Box<Iterator<Item=C::ValidatorId> + 'a> {
-		Box::new(self.validity_votes.iter().filter_map(|(v, vote)| {
-			match *vote {
-				ValidityVote::Issued(_) | ValidityVote::Valid(_) => Some(v.clone()),
-				ValidityVote::Invalid(_) => None,
-			}
-		}))
-	}
-
 	// Candidate data can be included in a proposal
 	// if it has enough validity and availability votes
-	// and no validators have called it bad.
+	// and no authorities have called it bad.
 	fn can_be_included(&self, validity_threshold: usize, availability_threshold: usize) -> bool {
 		self.indicated_bad_by.is_empty()
 			&& self.validity_votes.len() >= validity_threshold
@@ -243,27 +234,36 @@ impl<C: Context> CandidateData<C> {
 	}
 }
 
-// validator metadata
-struct ValidatorData<C: Context> {
+// authority metadata
+struct AuthorityData<C: Context> {
 	proposal: Option<(C::Digest, C::Signature)>,
-	known_statements: HashSet<StatementTrace<C::ValidatorId, C::Digest>>,
+	known_statements: HashSet<StatementTrace<C::AuthorityId, C::Digest>>,
 }
 
-/// Create a new, empty statement table.
-pub fn create<C: Context>() -> Table<C> {
-	Table {
-		validator_data: HashMap::default(),
-		detected_misbehavior: HashMap::default(),
-		candidate_votes: HashMap::default(),
+impl<C: Context> Default for AuthorityData<C> {
+	fn default() -> Self {
+		AuthorityData {
+			proposal: None,
+			known_statements: HashSet::default(),
+		}
 	}
 }
 
 /// Stores votes
-#[derive(Default)]
 pub struct Table<C: Context> {
-	validator_data: HashMap<C::ValidatorId, ValidatorData<C>>,
-	detected_misbehavior: HashMap<C::ValidatorId, <C as ResolveMisbehavior>::Misbehavior>,
+	authority_data: HashMap<C::AuthorityId, AuthorityData<C>>,
+	detected_misbehavior: HashMap<C::AuthorityId, <C as ResolveMisbehavior>::Misbehavior>,
 	candidate_votes: HashMap<C::Digest, CandidateData<C>>,
+}
+
+impl<C: Context> Default for Table<C> {
+	fn default() -> Self {
+		Table {
+			authority_data: HashMap::new(),
+			detected_misbehavior: HashMap::new(),
+			candidate_votes: HashMap::new(),
+		}
+	}
 }
 
 impl<C: Context> Table<C> {
@@ -271,7 +271,9 @@ impl<C: Context> Table<C> {
 	///
 	/// This will be at most one per group, consisting of the
 	/// best candidate for each group with requisite votes for inclusion.
-	pub fn proposed_candidates(&self, context: &C) -> Vec<C::Candidate> {
+	///
+	/// The vector is sorted in ascending order by group id.
+	pub fn proposed_candidates<'a>(&'a self, context: &C) -> Vec<&'a C::Candidate> {
 		use std::collections::BTreeMap;
 		use std::collections::btree_map::Entry as BTreeEntry;
 
@@ -285,7 +287,7 @@ impl<C: Context> Table<C> {
 			match best_candidates.entry(group_id.clone()) {
 				BTreeEntry::Occupied(mut occ) => {
 					let candidate_ref = occ.get_mut();
-					if *candidate_ref < candidate {
+					if *candidate_ref > candidate {
 						*candidate_ref = candidate;
 					}
 				}
@@ -293,32 +295,27 @@ impl<C: Context> Table<C> {
 			}
 		}
 
-		best_candidates.values().map(|v| C::Candidate::clone(v)).collect::<Vec<_>>()
+		best_candidates.values().cloned().collect::<Vec<_>>()
 	}
 
-	/// Get an iterator of all candidates with a given group.
-	// TODO: impl iterator
-	pub fn candidates_in_group<'a>(&'a self, group_id: C::GroupId)
-		-> Box<Iterator<Item=&'a CandidateData<C>> + 'a>
-	{
-		Box::new(self.candidate_votes.values().filter(move |c| c.group_id == group_id))
-	}
-
-	/// Drain all misbehavior observed up to this point.
-	pub fn drain_misbehavior(&mut self) -> HashMap<C::ValidatorId, <C as ResolveMisbehavior>::Misbehavior> {
-		::std::mem::replace(&mut self.detected_misbehavior, HashMap::new())
+	/// Whether a candidate can be included.
+	pub fn candidate_includable(&self, digest: &C::Digest, context: &C) -> bool {
+		self.candidate_votes.get(digest).map_or(false, |data| {
+			let (v_threshold, a_threshold) = context.requisite_votes(&data.group_id);
+			data.can_be_included(v_threshold, a_threshold)
+		})
 	}
 
 	/// Import a signed statement. Signatures should be checked for validity, and the
-	/// sender should be checked to actually be a validator.
+	/// sender should be checked to actually be a authority.
 	///
 	/// This can note the origin of the statement to indicate that he has
 	/// seen it already.
 	pub fn import_statement(
 		&mut self,
 		context: &C,
-		statement: SignedStatement<C::Candidate, C::Digest, C::ValidatorId, C::Signature>,
-		from: Option<C::ValidatorId>
+		statement: SignedStatement<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
+		from: Option<C::AuthorityId>
 	) -> Option<Summary<C::Digest, C::GroupId>> {
 		let SignedStatement { statement, signature, sender: signer } = statement;
 
@@ -371,8 +368,143 @@ impl<C: Context> Table<C> {
 		maybe_summary
 	}
 
-	fn note_trace_seen(&mut self, trace: StatementTrace<C::ValidatorId, C::Digest>, known_by: C::ValidatorId) {
-		self.validator_data.entry(known_by).or_insert_with(|| ValidatorData {
+	/// Get a candidate by digest.
+	pub fn get_candidate(&self, digest: &C::Digest) -> Option<&C::Candidate> {
+		self.candidate_votes.get(digest).map(|d| &d.candidate)
+	}
+
+	/// Access all witnessed misbehavior.
+	pub fn get_misbehavior(&self)
+		-> &HashMap<C::AuthorityId, <C as ResolveMisbehavior>::Misbehavior>
+	{
+		&self.detected_misbehavior
+	}
+
+	/// Fill a statement batch and note messages seen by the targets.
+	pub fn fill_batch<B>(&mut self, batch: &mut B)
+		where B: StatementBatch<
+			C::AuthorityId,
+			SignedStatement<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
+		>
+	{
+		// naively iterate all statements so far, taking any that
+		// at least one of the targets has not seen.
+
+		// workaround for the fact that it's inconvenient to borrow multiple
+		// entries out of a hashmap mutably -- we just move them out and
+		// replace them when we're done.
+		struct SwappedTargetData<'a, C: 'a + Context> {
+			authority_data: &'a mut HashMap<C::AuthorityId, AuthorityData<C>>,
+			target_data: Vec<(C::AuthorityId, AuthorityData<C>)>,
+		}
+
+		impl<'a, C: 'a + Context> Drop for SwappedTargetData<'a, C> {
+			fn drop(&mut self) {
+				for (id, data) in self.target_data.drain(..) {
+					self.authority_data.insert(id, data);
+				}
+			}
+		}
+
+		// pre-fetch authority data for all the targets.
+		let mut target_data = {
+			let authority_data = &mut self.authority_data;
+			let mut target_data = Vec::with_capacity(batch.targets().len());
+			for target in batch.targets() {
+				let active_data = match authority_data.get_mut(target) {
+					None => Default::default(),
+					Some(x) => ::std::mem::replace(x, Default::default()),
+				};
+
+				target_data.push((target.clone(), active_data));
+			}
+
+			SwappedTargetData {
+				authority_data,
+				target_data
+			}
+		};
+
+		let target_data = &mut target_data.target_data;
+
+		macro_rules! attempt_send {
+			($trace:expr, sender=$sender:expr, sig=$sig:expr, statement=$statement:expr) => {{
+				let trace = $trace;
+				let can_send = target_data.iter()
+					.any(|t| !t.1.known_statements.contains(&trace));
+
+				if can_send {
+					let statement = SignedStatement {
+						statement: $statement,
+						signature: $sig,
+						sender: $sender,
+					};
+
+					if batch.push(statement) {
+						for target in target_data.iter_mut() {
+							target.1.known_statements.insert(trace.clone());
+						}
+					} else {
+						return;
+					}
+				}
+			}}
+		}
+
+		// reconstruct statements for anything whose trace passes the filter.
+		for (digest, candidate) in self.candidate_votes.iter() {
+			let issuance_iter = candidate.validity_votes.iter()
+				.filter(|&(_, x)| if let ValidityVote::Issued(_) = *x { true } else { false });
+
+			let validity_iter = candidate.validity_votes.iter()
+				.filter(|&(_, x)| if let ValidityVote::Issued(_) = *x { false } else { true });
+
+			// send issuance statements before votes.
+			for (sender, vote) in issuance_iter.chain(validity_iter) {
+				match *vote {
+					ValidityVote::Issued(ref sig) => {
+						attempt_send!(
+							StatementTrace::Candidate(sender.clone()),
+							sender = sender.clone(),
+							sig = sig.clone(),
+							statement = Statement::Candidate(candidate.candidate.clone())
+						)
+					}
+					ValidityVote::Valid(ref sig) => {
+						attempt_send!(
+							StatementTrace::Valid(sender.clone(), digest.clone()),
+							sender = sender.clone(),
+							sig = sig.clone(),
+							statement = Statement::Valid(digest.clone())
+						)
+					}
+					ValidityVote::Invalid(ref sig) => {
+						attempt_send!(
+							StatementTrace::Invalid(sender.clone(), digest.clone()),
+							sender = sender.clone(),
+							sig = sig.clone(),
+							statement = Statement::Invalid(digest.clone())
+						)
+					}
+				}
+			};
+
+
+			// and lastly send availability.
+			for (sender, sig) in candidate.availability_votes.iter() {
+				attempt_send!(
+					StatementTrace::Available(sender.clone(), digest.clone()),
+					sender = sender.clone(),
+					sig = sig.clone(),
+					statement = Statement::Available(digest.clone())
+				)
+			}
+		}
+
+	}
+
+	fn note_trace_seen(&mut self, trace: StatementTrace<C::AuthorityId, C::Digest>, known_by: C::AuthorityId) {
+		self.authority_data.entry(known_by).or_insert_with(|| AuthorityData {
 			proposal: None,
 			known_statements: HashSet::default(),
 		}).known_statements.insert(trace);
@@ -381,11 +513,11 @@ impl<C: Context> Table<C> {
 	fn import_candidate(
 		&mut self,
 		context: &C,
-		from: C::ValidatorId,
+		from: C::AuthorityId,
 		candidate: C::Candidate,
 		signature: C::Signature,
 	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
-		let group = context.candidate_group(&candidate);
+		let group = C::candidate_group(&candidate);
 		if !context.is_member_of(&from, &group) {
 			return (
 				Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
@@ -399,10 +531,10 @@ impl<C: Context> Table<C> {
 			);
 		}
 
-		// check that validator hasn't already specified another candidate.
-		let digest = context.candidate_digest(&candidate);
+		// check that authority hasn't already specified another candidate.
+		let digest = C::candidate_digest(&candidate);
 
-		let new_proposal = match self.validator_data.entry(from.clone()) {
+		let new_proposal = match self.authority_data.entry(from.clone()) {
 			Entry::Occupied(mut occ) => {
 				// if digest is different, fetch candidate and
 				// note misbehavior.
@@ -411,7 +543,7 @@ impl<C: Context> Table<C> {
 				if let Some((ref old_digest, ref old_sig)) = existing.proposal {
 					if old_digest != &digest {
 						const EXISTENCE_PROOF: &str =
-							"when proposal first received from validator, candidate \
+							"when proposal first received from authority, candidate \
 							votes entry is created. proposal here is `Some`, therefore \
 							candidate votes entry exists; qed";
 
@@ -436,7 +568,7 @@ impl<C: Context> Table<C> {
 				}
 			}
 			Entry::Vacant(vacant) => {
-				vacant.insert(ValidatorData {
+				vacant.insert(AuthorityData {
 					proposal: Some((digest.clone(), signature.clone())),
 					known_statements: HashSet::new(),
 				});
@@ -467,7 +599,7 @@ impl<C: Context> Table<C> {
 	fn validity_vote(
 		&mut self,
 		context: &C,
-		from: C::ValidatorId,
+		from: C::AuthorityId,
 		digest: C::Digest,
 		vote: ValidityVote<C::Signature>,
 	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
@@ -476,7 +608,7 @@ impl<C: Context> Table<C> {
 			Some(votes) => votes,
 		};
 
-		// check that this validator actually can vote in this group.
+		// check that this authority actually can vote in this group.
 		if !context.is_member_of(&from, &votes.group_id) {
 			let (sig, valid) = match vote {
 				ValidityVote::Valid(s) => (s, true),
@@ -546,7 +678,7 @@ impl<C: Context> Table<C> {
 	fn availability_vote(
 		&mut self,
 		context: &C,
-		from: C::ValidatorId,
+		from: C::AuthorityId,
 		digest: C::Digest,
 		signature: C::Signature,
 	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
@@ -555,7 +687,7 @@ impl<C: Context> Table<C> {
 			Some(votes) => votes,
 		};
 
-		// check that this validator actually can vote in this group.
+		// check that this authority actually can vote in this group.
 		if !context.is_availability_guarantor_of(&from, &votes.group_id) {
 			return (
 				Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
@@ -577,10 +709,19 @@ impl<C: Context> Table<C> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use ::tests::VecBatch;
 	use std::collections::HashMap;
 
+	fn create<C: Context>() -> Table<C> {
+		Table {
+			authority_data: HashMap::default(),
+			detected_misbehavior: HashMap::default(),
+			candidate_votes: HashMap::default(),
+		}
+	}
+
 	#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-	struct ValidatorId(usize);
+	struct AuthorityId(usize);
 
 	#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 	struct GroupId(usize);
@@ -598,38 +739,38 @@ mod tests {
 	#[derive(Debug, PartialEq, Eq)]
 	struct TestContext {
 		// v -> (validity, availability)
-		validators: HashMap<ValidatorId, (GroupId, GroupId)>
+		authorities: HashMap<AuthorityId, (GroupId, GroupId)>
 	}
 
 	impl Context for TestContext {
-		type ValidatorId = ValidatorId;
+		type AuthorityId = AuthorityId;
 		type Digest = Digest;
 		type Candidate = Candidate;
 		type GroupId = GroupId;
 		type Signature = Signature;
 
-		fn candidate_digest(&self, candidate: &Candidate) -> Digest {
+		fn candidate_digest(candidate: &Candidate) -> Digest {
 			Digest(candidate.1)
 		}
 
-		fn candidate_group(&self, candidate: &Candidate) -> GroupId {
+		fn candidate_group(candidate: &Candidate) -> GroupId {
 			GroupId(candidate.0)
 		}
 
 		fn is_member_of(
 			&self,
-			validator: &ValidatorId,
+			authority: &AuthorityId,
 			group: &GroupId
 		) -> bool {
-			self.validators.get(validator).map(|v| &v.0 == group).unwrap_or(false)
+			self.authorities.get(authority).map(|v| &v.0 == group).unwrap_or(false)
 		}
 
 		fn is_availability_guarantor_of(
 			&self,
-			validator: &ValidatorId,
+			authority: &AuthorityId,
 			group: &GroupId
 		) -> bool {
-			self.validators.get(validator).map(|v| &v.1 == group).unwrap_or(false)
+			self.authorities.get(authority).map(|v| &v.1 == group).unwrap_or(false)
 		}
 
 		fn requisite_votes(&self, _id: &GroupId) -> (usize, usize) {
@@ -640,9 +781,9 @@ mod tests {
 	#[test]
 	fn submitting_two_candidates_is_misbehavior() {
 		let context = TestContext {
-			validators: {
+			authorities: {
 				let mut map = HashMap::new();
-				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map
 			}
 		};
@@ -651,21 +792,21 @@ mod tests {
 		let statement_a = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 
 		let statement_b = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 999)),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 
 		table.import_statement(&context, statement_a, None);
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(1)));
 
 		table.import_statement(&context, statement_b, None);
 		assert_eq!(
-			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
+			table.detected_misbehavior.get(&AuthorityId(1)).unwrap(),
 			&Misbehavior::MultipleCandidates(MultipleCandidates {
 				first: (Candidate(2, 100), Signature(1)),
 				second: (Candidate(2, 999), Signature(1)),
@@ -676,9 +817,9 @@ mod tests {
 	#[test]
 	fn submitting_candidate_from_wrong_group_is_misbehavior() {
 		let context = TestContext {
-			validators: {
+			authorities: {
 				let mut map = HashMap::new();
-				map.insert(ValidatorId(1), (GroupId(3), GroupId(455)));
+				map.insert(AuthorityId(1), (GroupId(3), GroupId(455)));
 				map
 			}
 		};
@@ -687,18 +828,18 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 
 		table.import_statement(&context, statement, None);
 
 		assert_eq!(
-			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
+			table.detected_misbehavior.get(&AuthorityId(1)).unwrap(),
 			&Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
 				statement: SignedStatement {
 					statement: Statement::Candidate(Candidate(2, 100)),
 					signature: Signature(1),
-					sender: ValidatorId(1),
+					sender: AuthorityId(1),
 				},
 			})
 		);
@@ -707,10 +848,10 @@ mod tests {
 	#[test]
 	fn unauthorized_votes() {
 		let context = TestContext {
-			validators: {
+			authorities: {
 				let mut map = HashMap::new();
-				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
-				map.insert(ValidatorId(2), (GroupId(3), GroupId(222)));
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(2), (GroupId(3), GroupId(222)));
 				map
 			}
 		};
@@ -720,56 +861,56 @@ mod tests {
 		let candidate_a = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 		let candidate_a_digest = Digest(100);
 
 		let candidate_b = SignedStatement {
 			statement: Statement::Candidate(Candidate(3, 987)),
 			signature: Signature(2),
-			sender: ValidatorId(2),
+			sender: AuthorityId(2),
 		};
 		let candidate_b_digest = Digest(987);
 
 		table.import_statement(&context, candidate_a, None);
 		table.import_statement(&context, candidate_b, None);
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(2)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(1)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(2)));
 
-		// validator 1 votes for availability on 2's candidate.
+		// authority 1 votes for availability on 2's candidate.
 		let bad_availability_vote = SignedStatement {
 			statement: Statement::Available(candidate_b_digest.clone()),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 		table.import_statement(&context, bad_availability_vote, None);
 
 		assert_eq!(
-			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
+			table.detected_misbehavior.get(&AuthorityId(1)).unwrap(),
 			&Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
 				statement: SignedStatement {
 					statement: Statement::Available(candidate_b_digest),
 					signature: Signature(1),
-					sender: ValidatorId(1),
+					sender: AuthorityId(1),
 				},
 			})
 		);
 
-		// validator 2 votes for validity on 1's candidate.
+		// authority 2 votes for validity on 1's candidate.
 		let bad_validity_vote = SignedStatement {
 			statement: Statement::Valid(candidate_a_digest.clone()),
 			signature: Signature(2),
-			sender: ValidatorId(2),
+			sender: AuthorityId(2),
 		};
 		table.import_statement(&context, bad_validity_vote, None);
 
 		assert_eq!(
-			table.detected_misbehavior.get(&ValidatorId(2)).unwrap(),
+			table.detected_misbehavior.get(&AuthorityId(2)).unwrap(),
 			&Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
 				statement: SignedStatement {
 					statement: Statement::Valid(candidate_a_digest),
 					signature: Signature(2),
-					sender: ValidatorId(2),
+					sender: AuthorityId(2),
 				},
 			})
 		);
@@ -778,10 +919,10 @@ mod tests {
 	#[test]
 	fn validity_double_vote_is_misbehavior() {
 		let context = TestContext {
-			validators: {
+			authorities: {
 				let mut map = HashMap::new();
-				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
-				map.insert(ValidatorId(2), (GroupId(2), GroupId(246)));
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(2), (GroupId(2), GroupId(246)));
 				map
 			}
 		};
@@ -790,32 +931,32 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 		let candidate_digest = Digest(100);
 
 		table.import_statement(&context, statement, None);
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(1)));
 
 		let valid_statement = SignedStatement {
 			statement: Statement::Valid(candidate_digest.clone()),
 			signature: Signature(2),
-			sender: ValidatorId(2),
+			sender: AuthorityId(2),
 		};
 
 		let invalid_statement = SignedStatement {
 			statement: Statement::Invalid(candidate_digest.clone()),
 			signature: Signature(2),
-			sender: ValidatorId(2),
+			sender: AuthorityId(2),
 		};
 
 		table.import_statement(&context, valid_statement, None);
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(2)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(2)));
 
 		table.import_statement(&context, invalid_statement, None);
 
 		assert_eq!(
-			table.detected_misbehavior.get(&ValidatorId(2)).unwrap(),
+			table.detected_misbehavior.get(&AuthorityId(2)).unwrap(),
 			&Misbehavior::ValidityDoubleVote(ValidityDoubleVote::ValidityAndInvalidity(
 				candidate_digest,
 				Signature(2),
@@ -827,9 +968,9 @@ mod tests {
 	#[test]
 	fn issue_and_vote_is_misbehavior() {
 		let context = TestContext {
-			validators: {
+			authorities: {
 				let mut map = HashMap::new();
-				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map
 			}
 		};
@@ -838,22 +979,22 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 		let candidate_digest = Digest(100);
 
 		table.import_statement(&context, statement, None);
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(1)));
 
 		let extra_vote = SignedStatement {
 			statement: Statement::Valid(candidate_digest.clone()),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 
 		table.import_statement(&context, extra_vote, None);
 		assert_eq!(
-			table.detected_misbehavior.get(&ValidatorId(1)).unwrap(),
+			table.detected_misbehavior.get(&AuthorityId(1)).unwrap(),
 			&Misbehavior::ValidityDoubleVote(ValidityDoubleVote::IssuedAndValidity(
 				(Candidate(2, 100), Signature(1)),
 				(Digest(100), Signature(1)),
@@ -877,18 +1018,18 @@ mod tests {
 		assert!(!candidate.can_be_included(validity_threshold, availability_threshold));
 
 		for i in 0..validity_threshold {
-			candidate.validity_votes.insert(ValidatorId(i + 100), ValidityVote::Valid(Signature(i + 100)));
+			candidate.validity_votes.insert(AuthorityId(i + 100), ValidityVote::Valid(Signature(i + 100)));
 		}
 
 		assert!(!candidate.can_be_included(validity_threshold, availability_threshold));
 
 		for i in 0..availability_threshold {
-			candidate.availability_votes.insert(ValidatorId(i + 255), Signature(i + 255));
+			candidate.availability_votes.insert(AuthorityId(i + 255), Signature(i + 255));
 		}
 
 		assert!(candidate.can_be_included(validity_threshold, availability_threshold));
 
-		candidate.indicated_bad_by.push(ValidatorId(1024));
+		candidate.indicated_bad_by.push(AuthorityId(1024));
 
 		assert!(!candidate.can_be_included(validity_threshold, availability_threshold));
 	}
@@ -896,9 +1037,9 @@ mod tests {
 	#[test]
 	fn candidate_import_gives_summary() {
 		let context = TestContext {
-			validators: {
+			authorities: {
 				let mut map = HashMap::new();
-				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map
 			}
 		};
@@ -907,7 +1048,7 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 
 		let summary = table.import_statement(&context, statement, None)
@@ -922,10 +1063,10 @@ mod tests {
 	#[test]
 	fn candidate_vote_gives_summary() {
 		let context = TestContext {
-			validators: {
+			authorities: {
 				let mut map = HashMap::new();
-				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
-				map.insert(ValidatorId(2), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(2), (GroupId(2), GroupId(455)));
 				map
 			}
 		};
@@ -934,23 +1075,23 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 		let candidate_digest = Digest(100);
 
 		table.import_statement(&context, statement, None);
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(1)));
 
 		let vote = SignedStatement {
 			statement: Statement::Valid(candidate_digest.clone()),
 			signature: Signature(2),
-			sender: ValidatorId(2),
+			sender: AuthorityId(2),
 		};
 
 		let summary = table.import_statement(&context, vote, None)
 			.expect("candidate vote to give summary");
 
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(2)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(2)));
 
 		assert_eq!(summary.candidate, Digest(100));
 		assert_eq!(summary.group_id, GroupId(2));
@@ -961,10 +1102,10 @@ mod tests {
 	#[test]
 	fn availability_vote_gives_summary() {
 		let context = TestContext {
-			validators: {
+			authorities: {
 				let mut map = HashMap::new();
-				map.insert(ValidatorId(1), (GroupId(2), GroupId(455)));
-				map.insert(ValidatorId(2), (GroupId(5), GroupId(2)));
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(2), (GroupId(5), GroupId(2)));
 				map
 			}
 		};
@@ -973,27 +1114,78 @@ mod tests {
 		let statement = SignedStatement {
 			statement: Statement::Candidate(Candidate(2, 100)),
 			signature: Signature(1),
-			sender: ValidatorId(1),
+			sender: AuthorityId(1),
 		};
 		let candidate_digest = Digest(100);
 
 		table.import_statement(&context, statement, None);
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(1)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(1)));
 
 		let vote = SignedStatement {
 			statement: Statement::Available(candidate_digest.clone()),
 			signature: Signature(2),
-			sender: ValidatorId(2),
+			sender: AuthorityId(2),
 		};
 
 		let summary = table.import_statement(&context, vote, None)
 			.expect("candidate vote to give summary");
 
-		assert!(!table.detected_misbehavior.contains_key(&ValidatorId(2)));
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(2)));
 
 		assert_eq!(summary.candidate, Digest(100));
 		assert_eq!(summary.group_id, GroupId(2));
 		assert_eq!(summary.validity_votes, 1);
 		assert_eq!(summary.availability_votes, 1);
+	}
+
+	#[test]
+	fn filling_batch_sets_known_flag() {
+		let context = TestContext {
+			authorities: {
+				let mut map = HashMap::new();
+				for i in 1..10 {
+					map.insert(AuthorityId(i), (GroupId(2), GroupId(400 + i)));
+				}
+				map
+			}
+		};
+
+		let mut table = create();
+		let statement = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(1),
+			sender: AuthorityId(1),
+		};
+
+		table.import_statement(&context, statement, None);
+
+		for i in 2..10 {
+			let statement = SignedStatement {
+				statement: Statement::Valid(Digest(100)),
+				signature: Signature(i),
+				sender: AuthorityId(i),
+			};
+
+			table.import_statement(&context, statement, None);
+		}
+
+		let mut batch = VecBatch {
+			max_len: 5,
+			targets: (1..10).map(AuthorityId).collect(),
+			items: Vec::new(),
+		};
+
+		// 9 statements in the table, each seen by one.
+		table.fill_batch(&mut batch);
+		assert_eq!(batch.items.len(), 5);
+
+		// 9 statements in the table, 5 of which seen by all targets.
+		batch.items.clear();
+		table.fill_batch(&mut batch);
+		assert_eq!(batch.items.len(), 4);
+
+		batch.items.clear();
+		table.fill_batch(&mut batch);
+		assert!(batch.items.is_empty());
 	}
 }
