@@ -45,6 +45,9 @@ macro_rules! impl_non_endians {
 	)* }
 }
 
+// NOTE: See test to ensure correctness.
+impl EndianSensitive for bool {}
+
 impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
 impl_non_endians!(u8, i8, [u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7], [u8; 8],
 	[u8; 10], [u8; 12], [u8; 14], [u8; 16], [u8; 20], [u8; 24], [u8; 28], [u8; 32], [u8; 40],
@@ -64,5 +67,13 @@ mod tests {
 	fn endian_sensitive_outlives_static() {
 		fn _takes_static<T: 'static>() { }
 		fn _takes_endian_sensitive<T: EndianSensitive>() { _takes_static::<T>() }
+	}
+
+	#[test]
+	fn bool_is_not_endian_sensitive() {
+		let b = true;
+		assert_eq!(b.to_be(), b.to_le());
+		let b = false;
+		assert_eq!(b.to_be(), b.to_le());
 	}
 }

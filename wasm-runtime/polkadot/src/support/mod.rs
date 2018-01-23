@@ -18,6 +18,7 @@
 
 pub mod primitives;
 pub mod function;
+pub mod proposal;
 pub mod environment;
 pub mod storable;
 

@@ -128,11 +128,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.write_primitive(written_out, written);
 		offset as u32
 	},
-	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32) -> u32 => {
+	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
 		if let Ok(key) = this.memory.get(key_data, key_len as usize) {
 			if let Ok(value) = this.ext.storage(&key) {
+				let value = &value[value_offset as usize..];
 				let written = ::std::cmp::min(value_len as usize, value.len());
-				let _ = this.memory.set(value_data, &value[0..written]);
+				let _ = this.memory.set(value_data, &value[..written]);
 				written as u32
 			} else { 0 }
 		} else { 0 }
