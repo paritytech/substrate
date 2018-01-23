@@ -12,14 +12,16 @@ members = [
 	"candidate-agreement",
 	"client",
 	"collator",
+	"environmental",
 	"executor",
 	"primitives",
 	"rpc",
 	"rpc_servers",
+	"native-runtime",
 	"serializer",
 	"state_machine",
 	"validator",
 ]
 exclude = [
-	"runtime"
+	"wasm-runtime"
 ]

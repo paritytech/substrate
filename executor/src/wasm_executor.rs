@@ -26,6 +26,7 @@ use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
+use primitives::{ed25519, blake2_256, twox_128, twox_256};
 
 struct Heap {
 	end: u32,
@@ -76,7 +77,7 @@ impl WritePrimitive<u32> for MemoryInstance {
 }
 
 impl_function_executor!(this: FunctionExecutor<'e, E>,
-	ext_print(utf8_data: *const u8, utf8_len: i32) => {
+	ext_print(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
 			if let Ok(message) = String::from_utf8(utf8) {
 				println!("Runtime: {}", message);
@@ -96,7 +97,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		println!("memmove {} from {}, {} bytes", dest, src, count);
 		dest
 	},
-	ext_memset(dest: *mut u8, val: i32, count: usize) -> *mut u8 => {
+	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
 		let _ = this.memory.clear(dest as usize, val as u8, count as usize);
 		println!("memset {} with {}, {} bytes", dest, val, count);
 		dest
@@ -110,12 +111,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.heap.deallocate(addr);
 		println!("free {}", addr)
 	},
-	ext_set_storage(key_data: *const u8, key_len: i32, value_data: *const u8, value_len: i32) => {
+	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		if let (Ok(key), Ok(value)) = (this.memory.get(key_data, key_len as usize), this.memory.get(value_data, value_len as usize)) {
 			this.ext.set_storage(key, value);
 		}
 	},
-	ext_get_allocated_storage(key_data: *const u8, key_len: i32, written_out: *mut i32) -> *mut u8 => {
+	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let (offset, written) = if let Ok(key) = this.memory.get(key_data, key_len as usize) {
 			if let Ok(value) = this.ext.storage(&key) {
 				let offset = this.heap.allocate(value.len() as u32) as u32;
@@ -126,6 +127,63 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		this.memory.write_primitive(written_out, written);
 		offset as u32
+	},
+	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32) -> u32 => {
+		if let Ok(key) = this.memory.get(key_data, key_len as usize) {
+			if let Ok(value) = this.ext.storage(&key) {
+				let written = ::std::cmp::min(value_len as usize, value.len());
+				let _ = this.memory.set(value_data, &value[0..written]);
+				written as u32
+			} else { 0 }
+		} else { 0 }
+	},
+	ext_chain_id() -> u64 => {
+		this.ext.chain_id()
+	},
+	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
+		let result =
+			if let Ok(value) = this.memory.get(data, len as usize) {
+				twox_128(&value)
+			} else {
+				[0; 16]
+			};
+		let _ = this.memory.set(out, &result);
+	},
+	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
+		let result =
+			if let Ok(value) = this.memory.get(data, len as usize) {
+				twox_256(&value)
+			} else {
+				[0; 32]
+			};
+		let _ = this.memory.set(out, &result);
+	},
+	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
+		let result =
+			if let Ok(value) = this.memory.get(data, len as usize) {
+				blake2_256(&value)
+			} else {
+				[0; 32]
+			};
+		let _ = this.memory.set(out, &result);
+	},
+	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+		(||{
+			let mut sig = [0u8; 64];
+			if let Err(_) = this.memory.get_into(sig_data, &mut sig[..]) {
+				return 0;
+			};
+			let mut pubkey = [0u8; 32];
+			if let Err(_) = this.memory.get_into(pubkey_data, &mut pubkey[..]) {
+				return 0;
+			};
+
+			if let Ok(msg) = this.memory.get(msg_data, msg_len as usize) {
+				if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) { 1 } else { 0 }
+			} else {
+				0
+			}
+		})()
 	}
 	=> <'e, E: Externalities + 'e>
 );
@@ -181,6 +239,7 @@ impl CodeExecutor for WasmExecutor {
 mod tests {
 
 	use super::*;
+	use rustc_hex::FromHex;
 
 	#[derive(Debug, Default)]
 	struct TestExternalities {
@@ -196,53 +255,82 @@ mod tests {
 		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 			self.storage.insert(key, value);
 		}
+
+		fn chain_id(&self) -> u64 { 42 }
 	}
 
 	#[test]
-	fn should_pass_externalities_at_call() {
+	fn storage_should_work() {
 		let mut ext = TestExternalities::default();
-		ext.set_storage(b"\0code".to_vec(), b"The code".to_vec());
+		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let program = ProgramInstance::new().unwrap();
-
-		let test_module = include_bytes!("../../runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let module = deserialize_buffer(test_module.to_vec()).expect("Failed to load module");
-		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<TestExternalities>::SIGNATURES]).expect("Failed to initialize module");
-
-		let output = {
-			let memory = module.memory(ItemIndex::Internal(0)).unwrap();
-			let mut fec = FunctionExecutor::new(&memory, &mut ext);
-
-			let data = b"Hello world";
-			let size = data.len() as u32;
-			let offset = fec.heap.allocate(size);
-			memory.set(offset, data).unwrap();
-
-			let returned = program
-					.params_with_external("env", &mut fec)
-					.map(|p| p
-						.add_argument(I32(offset as i32))
-						.add_argument(I32(size as i32)))
-				.and_then(|p| module.execute_export("test_data_in", p))
-				.map_err(|_| -> Error { ErrorKind::Runtime.into() }).expect("function should be callable");
-
-			if let Some(I64(r)) = returned {
-				println!("returned {:?} ({:?}, {:?})", r, r as u32, (r >> 32) as u32 as usize);
-				memory.get(r as u32, (r >> 32) as u32 as usize).expect("memory address should be reasonable.")
-			} else {
-				panic!("bad return value, not u64");
-			}
-		};
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_data_in", &CallData(b"Hello world".to_vec())).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
 		let expected: HashMap<_, _> = map![
-			b"\0code".to_vec() => b"Hello world".to_vec(),
 			b"input".to_vec() => b"Hello world".to_vec(),
-			b"code".to_vec() => b"The code".to_vec(),
-			b"\0validator_count".to_vec() => vec![1],
-			b"\0validator".to_vec() => b"Hello world".to_vec()
+			b"foo".to_vec() => b"bar".to_vec(),
+			b"baz".to_vec() => b"bar".to_vec()
 		];
 		assert_eq!(expected, ext.storage);
+	}
+
+	#[test]
+	fn blake2_256_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"".to_vec())).unwrap(),
+			FromHex::from_hex("0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8").unwrap()
+		);
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"Hello world!".to_vec())).unwrap(),
+			FromHex::from_hex("3fbc092db9350757e2ab4f7ee9792bfcd2f5220ada5a4bc684487f60c6034369").unwrap()
+		);
+	}
+
+	#[test]
+	fn twox_256_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", &CallData(b"".to_vec())).unwrap(),
+			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a").unwrap()
+		);
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", &CallData(b"Hello world!".to_vec())).unwrap(),
+			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74").unwrap()
+		);
+	}
+
+	#[test]
+	fn twox_128_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", &CallData(b"".to_vec())).unwrap(),
+			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd5").unwrap()
+		);
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", &CallData(b"Hello world!".to_vec())).unwrap(),
+			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af").unwrap()
+		);
+	}
+
+	#[test]
+	fn ed25519_verify_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
+		let sig = key.sign(b"all ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(sig.as_ref());
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &CallData(calldata)).unwrap(),
+			vec![1]
+		);
 	}
 }

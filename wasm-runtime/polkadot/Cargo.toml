@@ -8,3 +8,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 runtime-support = { path = "../support", version = "0.1" }
+
+[features]
+default = ["without-std"]
+with-std = []
+without-std = []

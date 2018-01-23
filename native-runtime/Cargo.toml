@@ -1,0 +1,13 @@
+[package]
+name = "native-runtime"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[features]
+default = ["with-std"]
+with-std = []
+without-std = []
+
+[dependencies]
+runtime-support = { path = "./support", version = "0.1" }
+rustc-hex = "1.0"
