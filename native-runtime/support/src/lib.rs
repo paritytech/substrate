@@ -42,7 +42,7 @@ impl fmt::Display for NoError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "") }
 }
 
-environmental!(ext : Externalities + 'static);
+environmental!(ext : trait Externalities);
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Vec<u8> {
@@ -93,7 +93,7 @@ pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {
 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut (Externalities + 'static), f: F) -> R {
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities, f: F) -> R {
 	ext::using(ext, f)
 }
 
