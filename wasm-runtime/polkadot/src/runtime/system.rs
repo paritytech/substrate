@@ -42,6 +42,7 @@ pub fn deposit_log(log: &[u8]) {
 	});
 }
 
+/// Actually execute all transitioning for `block`.
 pub fn execute_block(mut block: Block) {
 	// populate environment from header.
 	with_env(|e| {

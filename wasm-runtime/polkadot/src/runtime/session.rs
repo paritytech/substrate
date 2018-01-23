@@ -37,13 +37,14 @@ pub fn set_key(validator: &AccountID, key: &SessionKey) {
 	// set new value for next session
 	key.store(&validator.to_keyed_vec(b"ses:nxt:"));
 }
+// PRIVILEGED API (available to proposals)
 
-// PUBLIC API (available to other runtime modules)
-
-/// Get the current set of authorities. These are the session keys.
-pub fn validators() -> Vec<AccountID> {
-	ValidatorStorageVec::items()
+/// Set a new era length. Won't kick in until the next era change (at current length).
+pub fn set_length(new: BlockNumber) {
+	new.store(b"ses:nln");
 }
+
+// INTERNAL API (available to other runtime modules)
 
 /// Set the current set of validators.
 ///
@@ -52,6 +53,23 @@ pub fn validators() -> Vec<AccountID> {
 pub fn set_validators(new: &[AccountID]) {
 	ValidatorStorageVec::set_items(new);
 	consensus::set_authorities(new);
+}
+
+/// Hook to be called after transaction processing.
+pub fn check_rotate_session() {
+	// do this last, after the staking system has had chance to switch out the authorities for the
+	// new set.
+	// check block number and call next_session if necessary.
+	if (system::block_number() - last_length_change()) % length() == 0 {
+		rotate_session();
+	}
+}
+
+// Inspection API
+
+/// Get the current set of authorities. These are the session keys.
+pub fn validators() -> Vec<AccountID> {
+	ValidatorStorageVec::items()
 }
 
 /// The number of blocks in each session.
@@ -69,29 +87,9 @@ pub fn current_index() -> BlockNumber {
 	Storable::lookup_default(b"ses:ind")
 }
 
-/// Set the current era index.
-pub fn set_current_index(new: BlockNumber) {
-	new.store(b"ses:ind");
-}
-
 /// The block number at which the era length last changed.
 pub fn last_length_change() -> BlockNumber {
 	Storable::lookup_default(b"ses:llc")
-}
-
-/// Set a new era length. Won't kick in until the next era change (at current length).
-pub fn set_length(new: BlockNumber) {
-	new.store(b"ses:nln");
-}
-
-/// Hook to be called after transaction processing.
-pub fn check_rotate_session() {
-	// do this last, after the staking system has had chance to switch out the authorities for the
-	// new set.
-	// check block number and call next_session if necessary.
-	if (system::block_number() - last_length_change()) % length() == 0 {
-		rotate_session();
-	}
 }
 
 // PRIVATE (not available for use externally)
@@ -99,7 +97,7 @@ pub fn check_rotate_session() {
 /// Move onto next session: register the new authority set.
 fn rotate_session() {
 	// Increment current session index.
-	set_current_index(current_index() + 1);
+	(current_index() + 1).store(b"ses:ind");
 
 	// Enact era length change.
 	if let Some(next_len) = u64::lookup(b"ses:nln") {
