@@ -45,9 +45,7 @@ macro_rules! impl_non_endians {
 	)* }
 }
 
-// TODO: this is fine as long as bool is one byte. it'll break if llvm tries to use more. happily,
-// this isn't an issue for the forseeable future. if it ever happens, then it should be implemented
-// as endian sensitive.
+// NOTE: See test to ensure correctness.
 impl EndianSensitive for bool {}
 
 impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
@@ -69,5 +67,13 @@ mod tests {
 	fn endian_sensitive_outlives_static() {
 		fn _takes_static<T: 'static>() { }
 		fn _takes_endian_sensitive<T: EndianSensitive>() { _takes_static::<T>() }
+	}
+
+	#[test]
+	fn bool_is_not_endian_sensitive() {
+		let b = true;
+		assert_eq!(b.to_be(), b.to_le());
+		let b = false;
+		assert_eq!(b.to_be(), b.to_le());
 	}
 }
