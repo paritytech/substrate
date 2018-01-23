@@ -16,7 +16,7 @@
 
 //! Codec utils.
 
-pub mod endiansensitive;
+mod endiansensitive;
 pub mod streamreader;
 pub mod joiner;
 pub mod slicable;

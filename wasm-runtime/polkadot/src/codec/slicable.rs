@@ -18,7 +18,7 @@
 
 use runtime_support::{Vec, size_of, transmute, uninitialized, slice};
 use joiner::Joiner;
-use endiansensitive::EndianSensitive;
+use super::endiansensitive::EndianSensitive;
 
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
 pub trait Slicable: Sized {
