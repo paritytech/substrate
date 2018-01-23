@@ -16,6 +16,7 @@
 
 //! Environment API: Allows certain information to be accessed throughout the runtime.
 
+use runtime_support::boxed::Box;
 use runtime_support::mem;
 use runtime_support::cell::RefCell;
 use runtime_support::rc::Rc;
