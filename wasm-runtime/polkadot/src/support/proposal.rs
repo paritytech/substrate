@@ -17,7 +17,7 @@
 //! Proposal: This describes a combination of a function ID and data that can be used to call into
 //! an internal function.
 
-use runtime_support::size_of;
+use runtime_support::{size_of, Vec};
 use slicable::Slicable;
 use joiner::Joiner;
 use streamreader::StreamReader;
