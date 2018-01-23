@@ -37,7 +37,7 @@ pub fn with_env<T, F: FnOnce(&mut Environment) -> T>(f: F) -> T {
 	f(&mut *eb)
 }
 
-#[cfg(not(test))]
+#[cfg(target_arch = "wasm32")]
 fn env() -> Rc<RefCell<Environment>> {
 	// Initialize it to a null value
 	static mut SINGLETON: *const Rc<RefCell<Environment>> = 0 as *const Rc<RefCell<Environment>>;
@@ -56,7 +56,7 @@ fn env() -> Rc<RefCell<Environment>> {
 	}
 }
 
-#[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
 fn env() -> Rc<RefCell<Environment>> {
 	// Initialize it to a null value
 	thread_local!{
