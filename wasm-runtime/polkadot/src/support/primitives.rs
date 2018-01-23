@@ -16,7 +16,7 @@
 
 //! Primitive types.
 
-use runtime_support::vec::Vec;
+use runtime_support::prelude::*;
 use streamreader::StreamReader;
 use joiner::Joiner;
 use slicable::{Slicable, NonTrivialSlicable};

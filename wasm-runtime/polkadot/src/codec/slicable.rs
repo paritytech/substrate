@@ -16,7 +16,7 @@
 
 //! Serialisation.
 
-use runtime_support::vec::Vec;
+use runtime_support::prelude::*;
 use runtime_support::{mem, slice};
 use joiner::Joiner;
 use endiansensitive::EndianSensitive;
@@ -44,8 +44,7 @@ pub trait Slicable: Sized {
 /// Trait to mark that a type is not trivially (essentially "in place") serialisable.
 pub trait NonTrivialSlicable: Slicable {}
 
-// note: the copy bound and static lifetimes are necessary for safety of `set_as_slice`.
-impl<T: Copy + EndianSensitive + 'static> Slicable for T {
+impl<T: EndianSensitive> Slicable for T {
 	fn set_as_slice<F: FnOnce(&mut [u8]) -> bool>(fill_slice: F) -> Option<Self> {
 		let size = mem::size_of::<T>();
 		let mut result: T = unsafe { mem::zeroed() };
