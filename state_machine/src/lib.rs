@@ -113,6 +113,18 @@ impl OverlayedChanges {
 pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
+/// Externalities Error.
+///
+/// Externalities are not really allowed to have errors, since it's assumed that dependent code
+/// would not be executed unless externalities were available. This is included for completeness,
+/// and as a transition away from the pre-existing framework.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ExternalitiesError;
+
+impl fmt::Display for ExternalitiesError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "Externalities Error") }
+}
+
 fn to_keyed_vec(value: u32, mut prepend: Vec<u8>) -> Vec<u8> {
 	prepend.extend((0..::std::mem::size_of::<u32>()).into_iter().map(|i| (value >> (i * 8)) as u8));
 	prepend
@@ -120,11 +132,8 @@ fn to_keyed_vec(value: u32, mut prepend: Vec<u8>) -> Vec<u8> {
 
 /// Externalities: pinned to specific active address.
 pub trait Externalities {
-	/// Externalities error type.
-	type Error: Error;
-
 	/// Read storage of current contract being called.
-	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error>;
+	fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError>;
 
 	/// Set storage of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>);
@@ -133,7 +142,7 @@ pub trait Externalities {
 	fn chain_id(&self) -> u64;
 
 	/// Get the current set of authorities from storage.
-	fn authorities(&self) -> Result<Vec<&[u8]>, Self::Error> {
+	fn authorities(&self) -> Result<Vec<&[u8]>, ExternalitiesError> {
 		(0..self.storage(b"con:aut:len")?.into_iter()
 				.rev()
 				.fold(0, |acc, &i| (acc << 8) + (i as u32)))
@@ -202,7 +211,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
-	use super::{OverlayedChanges, Externalities};
+	use super::{OverlayedChanges, Externalities, ExternalitiesError};
 
 	#[test]
 	fn overlayed_storage_works() {
@@ -234,9 +243,7 @@ mod tests {
 		storage: HashMap<Vec<u8>, Vec<u8>>,
 	}
 	impl Externalities for TestExternalities {
-		type Error = u8;
-
-		fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error> {
+		fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
 			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
 		}
 

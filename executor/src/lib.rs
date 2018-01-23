@@ -34,6 +34,8 @@ extern crate serde;
 extern crate parity_wasm;
 extern crate byteorder;
 extern crate rustc_hex;
+extern crate native_runtime;
+extern crate runtime_support;
 
 #[macro_use]
 extern crate error_chain;
@@ -44,10 +46,13 @@ extern crate assert_matches;
 #[macro_use]
 mod wasm_utils;
 mod wasm_executor;
+mod native_executor;
 
 pub mod error;
 
 /// Creates new RustExecutor for contracts.
 pub fn executor() -> wasm_executor::WasmExecutor {
+	// TODO: check what the code to execute is and use NativeExecutor if the wasm is compiled with
+	// matches.
 	wasm_executor::WasmExecutor::default()
 }

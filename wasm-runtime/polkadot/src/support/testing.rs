@@ -16,7 +16,7 @@
 
 //! Testing helpers.
 
-use runtime_support::{NoError, Externalities};
+use runtime_support::{Externalities, ExternalitiesError};
 use std::collections::HashMap;
 use primitives::AccountID;
 use statichex::StaticHexInto;
@@ -29,9 +29,7 @@ pub struct TestExternalities {
 }
 
 impl Externalities for TestExternalities {
-	type Error = NoError;
-
-	fn storage(&self, key: &[u8]) -> Result<&[u8], NoError> {
+	fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
 		Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
 	}
 
