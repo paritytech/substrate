@@ -20,13 +20,13 @@ use slicable::Slicable;
 
 /// Simple deserialiser.
 pub struct StreamReader<'a> {
-	data: &'a[u8],
+	data: &'a [u8],
 	offset: usize,
 }
 
 impl<'a> StreamReader<'a> {
 	/// Create a new deserialiser based on the `data`.
-	pub fn new(data: &'a[u8]) -> Self {
+	pub fn new(data: &'a [u8]) -> Self {
 		StreamReader {
 			data: data,
 			offset: 0,

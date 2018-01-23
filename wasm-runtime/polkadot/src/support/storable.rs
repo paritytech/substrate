@@ -19,7 +19,8 @@
 use slicable::Slicable;
 use endiansensitive::EndianSensitive;
 use keyedvec::KeyedVec;
-use runtime_support::{self, twox_128, Vec};
+use runtime_support::prelude::*;
+use runtime_support::{self, twox_128};
 
 /// Trait for a value which may be stored in the storage DB.
 pub trait Storable {
@@ -36,7 +37,7 @@ pub trait Storable {
 /// Remove `key` from storage.
 pub fn kill(key: &[u8]) { runtime_support::set_storage(&twox_128(key)[..], b""); }
 
-impl<T: Default + Sized + EndianSensitive> Storable for T {
+impl<T: Default + EndianSensitive> Storable for T {
 	fn lookup(key: &[u8]) -> Option<Self> {
 		Slicable::set_as_slice(|out| runtime_support::read_storage(&twox_128(key)[..], out) == out.len())
 	}
