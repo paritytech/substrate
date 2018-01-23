@@ -16,7 +16,8 @@
 
 //! Staking manager: Handles balances and periodically determines the best set of validators.
 
-use runtime_support::{Vec, RefCell};
+use runtime_support::prelude::*;
+use runtime_support::cell::RefCell;
 use keyedvec::KeyedVec;
 use storable::{Storable, StorageVec};
 use primitives::{BlockNumber, AccountID};

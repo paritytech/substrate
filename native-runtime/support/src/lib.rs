@@ -24,12 +24,20 @@ extern crate polkadot_primitives as primitives;
 use std::fmt;
 use primitives::ed25519;
 
-pub use std::vec::Vec;
-pub use std::rc::Rc;
-pub use std::cell::RefCell;
-pub use std::boxed::Box;
+pub use std::vec;
+pub use std::rc;
+pub use std::cell;
+pub use std::boxed;
 pub use std::slice;
-pub use std::mem::{size_of, transmute, swap, uninitialized};
+pub use std::mem;
+
+/// Prelude of common useful imports.
+///
+/// This should include only things which are in the normal std prelude.
+pub mod prelude {
+	pub use std::vec::Vec;
+	pub use std::boxed::Box;
+}
 
 pub use polkadot_state_machine::Externalities;
 
