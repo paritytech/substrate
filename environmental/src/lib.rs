@@ -183,7 +183,7 @@ macro_rules! environmental {
 			}
 		}
 	};
-	(trait $name:ident : $t:ident) => {
+	($name:ident : trait $t:ident) => {
 		#[allow(non_camel_case_types)]
 		struct $name { __private_field: () }
 
@@ -306,7 +306,7 @@ mod tests {
 			}
 		}
 
-		environmental!(trait sum: Sum);
+		environmental!(sum: trait Sum);
 		let numbers = vec![1, 2, 3, 4, 5];
 		let mut numbers = &numbers[..];
 		let got_sum = sum::using(&mut numbers, || {
