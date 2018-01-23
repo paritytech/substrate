@@ -19,7 +19,7 @@
 
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder, Hashable};
 use runtime_support::mem;
-use runtime_support::vec::Vec;
+use runtime_support::prelude::*;
 use storable::Storable;
 use keyedvec::KeyedVec;
 use environment::with_env;

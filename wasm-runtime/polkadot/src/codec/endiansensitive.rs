@@ -17,7 +17,8 @@
 //! Endian manager.
 
 /// Trait to allow conversion to a know endian representation when sensitive.
-pub trait EndianSensitive: Sized {
+// note: the copy bound and static lifetimes are necessary for safety of `Slicable` blanket implementation.
+pub trait EndianSensitive: Copy + 'static {
 	fn to_le(self) -> Self { self }
 	fn to_be(self) -> Self { self }
 	fn from_le(self) -> Self { self }
@@ -48,3 +49,20 @@ impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
 impl_non_endians!(u8, i8, [u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7], [u8; 8],
 	[u8; 10], [u8; 12], [u8; 14], [u8; 16], [u8; 20], [u8; 24], [u8; 28], [u8; 32], [u8; 40],
 	[u8; 48], [u8; 56], [u8; 64], [u8; 80], [u8; 96], [u8; 112], [u8; 128]);
+
+#[cfg(test)]
+mod tests {
+	use super::EndianSensitive;
+
+	#[test]
+	fn endian_sensitive_is_copy() {
+		fn _takes_copy<T: Copy>() { }
+		fn _takes_endian_sensitive<T: EndianSensitive>() { _takes_copy::<T>() }
+	}
+
+	#[test]
+	fn endian_sensitive_outlives_static() {
+		fn _takes_static<T: 'static>() { }
+		fn _takes_endian_sensitive<T: EndianSensitive>() { _takes_static::<T>() }
+	}
+}
