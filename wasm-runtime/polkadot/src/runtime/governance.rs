@@ -25,7 +25,7 @@
 //! At the end of the era, all validators approvals are tallied and if there are sufficient to pass
 //! the proposal then it is enacted. All items in storage concerning the proposal are reset.
 
-use runtime_support::Vec;
+use runtime_support::prelude::*;
 use keyedvec::KeyedVec;
 use storable::{Storable, StorageVec, kill};
 use primitives::{AccountID, Hash, BlockNumber};

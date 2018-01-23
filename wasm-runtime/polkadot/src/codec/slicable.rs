@@ -16,7 +16,8 @@
 
 //! Serialisation.
 
-use runtime_support::{Vec, size_of, transmute, uninitialized, slice};
+use runtime_support::prelude::*;
+use runtime_support::{mem, slice};
 use joiner::Joiner;
 use endiansensitive::EndianSensitive;
 
@@ -35,7 +36,7 @@ pub trait Slicable: Sized {
 	fn to_vec(&self) -> Vec<u8> {
 		self.as_slice_then(|s| s.to_vec())
 	}
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(set_slice: &F) -> Option<Self>;
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(set_slice: &F) -> Option<Self>;
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&self.to_vec())
 	}
@@ -46,11 +47,12 @@ pub trait Slicable: Sized {
 pub trait NonTrivialSlicable: Slicable {}
 
 impl<T: EndianSensitive> Slicable for T {
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(fill_slice: &F) -> Option<Self> {
-		let size = size_of::<T>();
-		let mut result: T = unsafe { uninitialized() };
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: &F) -> Option<Self> {
+		let size = mem::size_of::<T>();
+		let mut result: T = unsafe { mem::zeroed() };
 		let result_slice = unsafe {
-			slice::from_raw_parts_mut(transmute::<*mut T, *mut u8>(&mut result), size)
+			let ptr = &mut result as *mut _ as *mut u8;
+			slice::from_raw_parts_mut(ptr, size)
 		};
 		if fill_slice(result_slice, 0) {
 			Some(result.from_le())
@@ -59,16 +61,17 @@ impl<T: EndianSensitive> Slicable for T {
 		}
 	}
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		let size = size_of::<Self>();
+		let size = mem::size_of::<Self>();
 		self.as_le_then(|le| {
 			let value_slice = unsafe {
-				slice::from_raw_parts(transmute::<*const Self, *const u8>(le), size)
+				let ptr = le as *const _ as *const u8;
+				slice::from_raw_parts(ptr, size)
 			};
 			f(value_slice)
 		})
 	}
 	fn size_of(_value: &[u8]) -> Option<usize> {
-		Some(size_of::<Self>())
+		Some(mem::size_of::<Self>())
 	}
 }
 
@@ -76,7 +79,7 @@ impl Slicable for Vec<u8> {
 	fn from_slice(value: &[u8]) -> Option<Self> {
 		Some(value[4..].to_vec())
 	}
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: &F) -> Option<Self> {
 		u32::set_as_slice(fill_slice).and_then(|len| {
 			let mut v = Vec::with_capacity(len as usize);
 			unsafe { v.set_len(len as usize); }

@@ -16,7 +16,7 @@
 
 //! Serialiser and prepender.
 
-use runtime_support::Vec;
+use runtime_support::prelude::*;
 use slicable::Slicable;
 
 /// Trait to allow itselg to be serialised and prepended by a given slice.

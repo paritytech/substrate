@@ -4,14 +4,22 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 #![feature(alloc)]
-//#[macro_use]
 extern crate alloc;
-pub use alloc::vec::Vec;
-pub use alloc::boxed::Box;
-pub use alloc::rc::Rc;
-pub use core::mem::{transmute, size_of, uninitialized, swap};
+
+pub use alloc::vec;
+pub use alloc::boxed;
+pub use alloc::rc;
+pub use core::mem;
 pub use core::slice;
-pub use core::cell::{RefCell, Ref, RefMut};
+pub use core::cell;
+
+/// Common re-exports that are useful to have in scope.
+pub mod prelude {
+	pub use alloc::vec::Vec;
+	pub use alloc::boxed::Box;
+}
+
+use alloc::vec::Vec;
 
 extern crate pwasm_libc;
 extern crate pwasm_alloc;
@@ -68,7 +76,7 @@ pub fn chain_id() -> u64 {
 /// Conduct a 256-bit Blake2 hash.
 pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 	unsafe {
-		let mut result: [u8; 32] = uninitialized();
+		let mut result: [u8; 32] = Default::default();
 		// guaranteed to write into result.
 		ext_blake2_256(&data[0], data.len() as u32, &mut result[0]);
 		result
@@ -78,7 +86,7 @@ pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 /// Conduct four XX hashes to give a 256-bit result.
 pub fn twox_256(data: &[u8]) -> [u8; 32] {
 	unsafe {
-		let mut result: [u8; 32] = uninitialized();
+		let mut result: [u8; 32] = Default::default();
 		// guaranteed to write into result.
 		ext_twox_256(&data[0], data.len() as u32, &mut result[0]);
 		result
@@ -88,7 +96,7 @@ pub fn twox_256(data: &[u8]) -> [u8; 32] {
 /// Conduct two XX hashes to give a 256-bit result.
 pub fn twox_128(data: &[u8]) -> [u8; 16] {
 	unsafe {
-		let mut result: [u8; 16] = uninitialized();
+		let mut result: [u8; 16] = Default::default();
 		// guaranteed to write into result.
 		ext_twox_128(&data[0], data.len() as u32, &mut result[0]);
 		result
@@ -109,7 +117,7 @@ pub trait Printable {
 impl<'a> Printable for &'a [u8] {
 	fn print(self) {
 		unsafe {
-			ext_print(&self[0] as *const u8, self.len() as u32);
+			ext_print(self.as_ptr(), self.len() as u32);
 		}
 	}
 }
@@ -132,7 +140,7 @@ macro_rules! impl_stubs {
 				#[no_mangle]
 				pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
 					let input = unsafe {
-						$crate::Vec::from_raw_parts(input_data, input_len, input_len)
+						$crate::vec::Vec::from_raw_parts(input_data, input_len, input_len)
 					};
 
 					let output = super::$name(input);
