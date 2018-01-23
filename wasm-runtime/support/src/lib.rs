@@ -135,7 +135,7 @@ macro_rules! impl_stubs {
 						$crate::Vec::from_raw_parts(input_data, input_len, input_len)
 					};
 
-					let output = super::$name(input);
+					let output = super::$name(&input[..]);
 					&output[0] as *const u8 as u64 + ((output.len() as u64) << 32)
 				}
 			)*

@@ -1,6 +1,7 @@
 use primitives::contract::CallData;
 use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
+use wasm_executor::WasmExecutor;
 use native_runtime as runtime;
 use runtime_support;
 
@@ -22,13 +23,13 @@ impl CodeExecutor for NativeExecutor {
 		if code == &native_equivalent[..] {
 			runtime_support::with_externalities(ext, || match method {
 				// TODO: Panic handler that comes back with error.
-				"execute_block" => Ok(runtime::execute_block(data.0)),
-				"execute_transaction" => Ok(runtime::execute_transaction(data.0)),
+				"execute_block" => Ok(runtime::execute_block(&data.0)),
+				"execute_transaction" => Ok(runtime::execute_transaction(&data.0)),
 				_ => Err(ErrorKind::MethodNotFound(method.to_owned()).into()),
 			})
 		} else {
 			// call into wasm.
-			unimplemented!()
+			WasmExecutor.call(ext, code, method, data)
 		}
 	}
 }
