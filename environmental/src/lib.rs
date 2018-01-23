@@ -183,6 +183,33 @@ macro_rules! environmental {
 			}
 		}
 	};
+	($name:ident : trait $t:ident) => {
+		#[allow(non_camel_case_types)]
+		struct $name { __private_field: () }
+
+		thread_local!(static GLOBAL: ::std::cell::RefCell<Option<*mut ($t + 'static)>>
+			= ::std::cell::RefCell::new(None));
+
+		impl $name {
+			#[allow(unused_imports)]
+
+			pub fn using<R, F: FnOnce() -> R>(
+				protected: &mut $t,
+				f: F
+			) -> R {
+				let lifetime_extended = unsafe {
+					::std::mem::transmute::<&mut $t, &mut ($t + 'static)>(protected)
+				};
+				$crate::using(&GLOBAL, lifetime_extended, f)
+			}
+
+			pub fn with<R, F: for<'a> FnOnce(&'a mut ($t + 'a)) -> R>(
+				f: F
+			) -> Option<R> {
+				$crate::with(&GLOBAL, |x| f(x))
+			}
+		}
+	}
 }
 
 #[cfg(test)]
@@ -268,5 +295,24 @@ mod tests {
 		items::with(|_items| was_cleared = false);
 
 		assert!(was_cleared);
+	}
+
+	#[test]
+	fn use_non_static_trait() {
+		trait Sum { fn sum(&self) -> usize; }
+		impl<'a> Sum for &'a [usize] {
+			fn sum(&self) -> usize {
+				self.iter().fold(0, |a, c| a + c)
+			}
+		}
+
+		environmental!(sum: trait Sum);
+		let numbers = vec![1, 2, 3, 4, 5];
+		let mut numbers = &numbers[..];
+		let got_sum = sum::using(&mut numbers, || {
+			sum::with(|x| x.sum())
+		}).unwrap();
+
+		assert_eq!(got_sum, 15);
 	}
 }
