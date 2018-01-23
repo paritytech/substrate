@@ -18,7 +18,8 @@
 
 use slicable::Slicable;
 use keyedvec::KeyedVec;
-use runtime_support::{self, twox_128, Vec};
+use runtime_support::prelude::*;
+use runtime_support::{self, twox_128};
 
 /// Trait for a value which may be stored in the storage DB.
 pub trait Storable {

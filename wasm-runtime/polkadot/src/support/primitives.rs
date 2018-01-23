@@ -16,12 +16,12 @@
 
 //! Primitive types.
 
-use runtime_support::Vec;
+use runtime_support::prelude::*;
 use streamreader::StreamReader;
 use joiner::Joiner;
 use slicable::{Slicable, NonTrivialSlicable};
 use function::Function;
-use runtime_support::{size_of, blake2_256, twox_128, twox_256, ed25519_verify};
+use runtime_support::{mem, blake2_256, twox_128, twox_256, ed25519_verify};
 
 #[cfg(test)]
 use std::fmt;
@@ -86,7 +86,7 @@ impl Slicable for Header {
 		})
 	}
 
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -100,7 +100,7 @@ impl Slicable for Header {
 	}
 
 	fn size_of(data: &[u8]) -> Option<usize> {
-		let first_part = size_of::<Hash>() + size_of::<BlockNumber>() + size_of::<Hash>() + size_of::<Hash>();
+		let first_part = mem::size_of::<Hash>() + mem::size_of::<BlockNumber>() + mem::size_of::<Hash>() + mem::size_of::<Hash>();
 		let second_part = <Vec<Vec<u8>>>::size_of(&data[first_part..])?;
 		Some(first_part + second_part)
 	}
@@ -132,7 +132,7 @@ impl Slicable for Transaction {
 		})
 	}
 
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -145,7 +145,7 @@ impl Slicable for Transaction {
 	}
 
 	fn size_of(data: &[u8]) -> Option<usize> {
-		let first_part = size_of::<AccountID>() + size_of::<TxOrder>() + size_of::<u8>();
+		let first_part = mem::size_of::<AccountID>() + mem::size_of::<TxOrder>() + mem::size_of::<u8>();
 		let second_part = <Vec<u8>>::size_of(&data[first_part..])?;
 		Some(first_part + second_part)
 	}
@@ -210,7 +210,7 @@ impl Slicable for UncheckedTransaction {
 		})
 	}
 
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -221,7 +221,7 @@ impl Slicable for UncheckedTransaction {
 	}
 
 	fn size_of(data: &[u8]) -> Option<usize> {
-		let first_part = size_of::<[u8; 64]>();
+		let first_part = mem::size_of::<[u8; 64]>();
 		let second_part = <Transaction>::size_of(&data[first_part..])?;
 		Some(first_part + second_part)
 	}
@@ -247,7 +247,7 @@ impl Slicable for Block {
 		})
 	}
 
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -281,7 +281,7 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 		Some(r)
 	}
 
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
 		unimplemented!();
 	}
 
