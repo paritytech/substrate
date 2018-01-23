@@ -17,7 +17,7 @@
 //! Session manager: is told the validators and allows them to manage their session keys for the
 //! consensus module.
 
-use runtime_support::Vec;
+use runtime_support::prelude::*;
 use keyedvec::KeyedVec;
 use storable::{kill, Storable, StorageVec};
 use primitives::{AccountID, SessionKey, BlockNumber};

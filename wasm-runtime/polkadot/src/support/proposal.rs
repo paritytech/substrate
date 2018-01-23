@@ -17,7 +17,8 @@
 //! Proposal: This describes a combination of a function ID and data that can be used to call into
 //! an internal function.
 
-use runtime_support::{size_of, Vec};
+use runtime_support::prelude::*;
+use runtime_support::mem;
 use slicable::Slicable;
 use joiner::Joiner;
 use streamreader::StreamReader;
@@ -74,7 +75,7 @@ impl Slicable for Proposal {
 	}
 
 	fn size_of(data: &[u8]) -> Option<usize> {
-		let first_part = size_of::<u8>();
+		let first_part = mem::size_of::<u8>();
 		let second_part = <Vec<u8>>::size_of(&data[first_part..])?;
 		Some(first_part + second_part)
 	}

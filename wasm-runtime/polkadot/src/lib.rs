@@ -34,7 +34,7 @@ pub use support::{primitives, function, proposal, environment, storable};
 #[cfg(test)]
 pub use support::{testing, statichex};
 
-use runtime_support::Vec;
+use runtime_support::prelude::*;
 use slicable::Slicable;
 use primitives::{Block, UncheckedTransaction};
 
