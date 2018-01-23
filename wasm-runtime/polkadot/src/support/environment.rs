@@ -16,7 +16,10 @@
 
 //! Environment API: Allows certain information to be accessed throughout the runtime.
 
-use runtime_support::{Rc, RefCell, transmute, Box};
+use runtime_support::mem;
+use runtime_support::cell::RefCell;
+use runtime_support::rc::Rc;
+
 use primitives::{BlockNumber, Digest};
 
 #[derive(Default)]
@@ -48,7 +51,7 @@ fn env() -> Rc<RefCell<Environment>> {
 			let singleton: Rc<RefCell<Environment>> = Rc::new(RefCell::new(Default::default()));
 
 			// Put it in the heap so it can outlive this call
-			SINGLETON = transmute(Box::new(singleton));
+			SINGLETON = mem::transmute(Box::new(singleton));
 		}
 
 		// Now we give out a copy of the data that is safe to use concurrently.
@@ -69,7 +72,7 @@ fn env() -> Rc<RefCell<Environment>> {
 			let singleton: Rc<RefCell<Environment>> = Rc::new(RefCell::new(Default::default()));
 
 			// Put it in the heap so it can outlive this call
-			*s.borrow_mut() = transmute(Box::new(singleton));
+			*s.borrow_mut() = mem::transmute(Box::new(singleton));
 		}
 
 		// Now we give out a copy of the data that is safe to use concurrently.

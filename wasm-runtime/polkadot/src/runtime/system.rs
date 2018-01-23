@@ -18,7 +18,8 @@
 //! and depositing logs.
 
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder, Hashable};
-use runtime_support::{Vec, swap};
+use runtime_support::mem;
+use runtime_support::vec::Vec;
 use storable::Storable;
 use keyedvec::KeyedVec;
 use environment::with_env;
@@ -46,7 +47,7 @@ pub fn execute_block(mut block: Block) {
 	// populate environment from header.
 	with_env(|e| {
 		e.block_number = block.header.number;
-		swap(&mut e.digest, &mut block.header.digest);
+		mem::swap(&mut e.digest, &mut block.header.digest);
 		e.next_log_index = 0;
 	});
 

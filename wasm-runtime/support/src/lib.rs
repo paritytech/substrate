@@ -4,14 +4,14 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 #![feature(alloc)]
-//#[macro_use]
 extern crate alloc;
-pub use alloc::vec::Vec;
-pub use alloc::boxed::Box;
+
+pub use alloc::vec;
+pub use alloc::boxed;
 pub use alloc::rc::Rc;
-pub use core::mem::{transmute, size_of, uninitialized, swap};
+pub use core::mem;
 pub use core::slice;
-pub use core::cell::{RefCell, Ref, RefMut};
+pub use core::cell;
 
 extern crate pwasm_libc;
 extern crate pwasm_alloc;
@@ -109,7 +109,7 @@ pub trait Printable {
 impl<'a> Printable for &'a [u8] {
 	fn print(self) {
 		unsafe {
-			ext_print(&self[0] as *const u8, self.len() as u32);
+			ext_print(self.as_ptr(), self.len() as u32);
 		}
 	}
 }
