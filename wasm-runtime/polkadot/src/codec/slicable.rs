@@ -34,7 +34,7 @@ pub trait Slicable: Sized {
 	fn to_vec(&self) -> Vec<u8> {
 		self.as_slice_then(|s| s.to_vec())
 	}
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(set_slice: F) -> Option<Self>;
+	fn set_as_slice<F: FnOnce(&mut [u8]) -> bool>(set_slice: F) -> Option<Self>;
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&self.to_vec())
 	}
@@ -44,10 +44,11 @@ pub trait Slicable: Sized {
 /// Trait to mark that a type is not trivially (essentially "in place") serialisable.
 pub trait NonTrivialSlicable: Slicable {}
 
-impl<T: EndianSensitive> Slicable for T {
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(fill_slice: F) -> Option<Self> {
+// note: the copy bound and static lifetimes are necessary for safety of `set_as_slice`.
+impl<T: Copy + EndianSensitive + 'static> Slicable for T {
+	fn set_as_slice<F: FnOnce(&mut [u8]) -> bool>(fill_slice: F) -> Option<Self> {
 		let size = mem::size_of::<T>();
-		let mut result: T = unsafe { mem::uninitialized() };
+		let mut result: T = unsafe { mem::zeroed() };
 		let result_slice = unsafe {
 			let ptr = &mut result as *mut _ as *mut u8;
 			slice::from_raw_parts_mut(ptr, size)
@@ -77,7 +78,7 @@ impl Slicable for Vec<u8> {
 	fn from_slice(value: &[u8]) -> Option<Self> {
 		Some(value[4..].to_vec())
 	}
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: FnOnce(&mut [u8]) -> bool>(_fill_slice: F) -> Option<Self> {
 		unimplemented!();
 	}
 	fn to_vec(&self) -> Vec<u8> {

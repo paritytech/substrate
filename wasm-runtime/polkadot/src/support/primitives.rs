@@ -76,7 +76,7 @@ impl Slicable for Header {
 		})
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: FnOnce(&mut [u8]) -> bool>(_fill_slice: F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -122,7 +122,7 @@ impl Slicable for Transaction {
 		})
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: FnOnce(&mut [u8]) -> bool>(_fill_slice: F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -200,7 +200,7 @@ impl Slicable for UncheckedTransaction {
 		})
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: FnOnce(&mut [u8]) -> bool>(_fill_slice: F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -237,7 +237,7 @@ impl Slicable for Block {
 		})
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: FnOnce(&mut [u8]) -> bool>(_fill_slice: F) -> Option<Self> {
 		unimplemented!();
 	}
 
@@ -271,7 +271,7 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 		Some(r)
 	}
 
-	fn set_as_slice<F: FnOnce(&mut[u8]) -> bool>(_fill_slice: F) -> Option<Self> {
+	fn set_as_slice<F: FnOnce(&mut [u8]) -> bool>(_fill_slice: F) -> Option<Self> {
 		unimplemented!();
 	}
 
