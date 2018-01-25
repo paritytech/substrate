@@ -87,6 +87,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_num(number: u64) => {
 		println!("Runtime: {}", number);
 	},
+	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
+		if let (Ok(sl1), Ok(sl2))
+			= (this.memory.get(s1, n as usize), this.memory.get(s2, n as usize)) {
+			use memcmp::Memcmp;
+			(&sl1).memcmp(&sl2) as i32
+		} else {
+			0
+		}
+	},
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		let _ = this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize);
 		println!("memcpy {} from {}, {} bytes", dest, src, count);
@@ -242,22 +251,7 @@ mod tests {
 	use super::*;
 	use rustc_hex::FromHex;
 	use state_machine::ExternalitiesError;
-
-	#[derive(Debug, Default)]
-	struct TestExternalities {
-		storage: HashMap<Vec<u8>, Vec<u8>>,
-	}
-	impl Externalities for TestExternalities {
-		fn storage(&self, key: &[u8]) -> ::std::result::Result<&[u8], ExternalitiesError> {
-			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
-		}
-
-		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
-			self.storage.insert(key, value);
-		}
-
-		fn chain_id(&self) -> u64 { 42 }
-	}
+	use native_runtime::testing::{TestExternalities, one, two};
 
 	#[test]
 	fn storage_should_work() {

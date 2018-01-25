@@ -34,8 +34,10 @@ extern crate serde;
 extern crate parity_wasm;
 extern crate byteorder;
 extern crate rustc_hex;
+#[macro_use]
 extern crate native_runtime;
 extern crate runtime_support;
+extern crate memcmp;
 
 #[macro_use]
 extern crate error_chain;
