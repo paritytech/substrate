@@ -22,21 +22,27 @@
 #[macro_use]
 extern crate runtime_support;
 
-#[cfg(test)]
+#[cfg(feature = "with-std")]
 extern crate rustc_hex;
 
 mod codec;
 #[macro_use]
 mod support;
-mod runtime;
+pub mod runtime;
 pub use codec::{endiansensitive, streamreader, joiner, slicable, keyedvec};
 pub use support::{primitives, function, proposal, environment, storable};
-#[cfg(test)]
+#[cfg(feature = "with-std")]
 pub use support::{testing, statichex};
 
 use runtime_support::prelude::*;
 use slicable::Slicable;
 use primitives::{Block, UncheckedTransaction};
+
+/// A simple test.
+pub fn simple_test(input: &[u8]) -> Vec<u8> {
+	println!("Executing block");
+	Vec::new()
+}
 
 /// Execute a block, with `input` being the canonical serialisation of the block. Returns the
 /// empty vector.
@@ -47,7 +53,10 @@ pub fn execute_block(input: &[u8]) -> Vec<u8> {
 
 /// Execute a given, serialised, transaction. Returns the empty vector.
 pub fn execute_transaction(input: &[u8]) -> Vec<u8> {
-	runtime::system::execute_transaction(&UncheckedTransaction::from_slice(input).unwrap());
+	println!("Deserialising... {:?}", input);
+	let utx = UncheckedTransaction::from_slice(input).unwrap();
+	println!("Forwarding... {:?}", utx);
+	runtime::system::execute_transaction(&utx);
 	Vec::new()
 }
 

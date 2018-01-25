@@ -21,8 +21,8 @@ use streamreader::StreamReader;
 use runtime::{staking, session, timestamp, governance};
 
 /// Public functions that can be dispatched to.
-#[cfg_attr(test, derive(PartialEq, Debug))]
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
 pub enum Function {
 	StakingStake,
 	StakingUnstake,

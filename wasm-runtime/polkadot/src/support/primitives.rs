@@ -23,7 +23,7 @@ use slicable::{Slicable, NonTrivialSlicable};
 use function::Function;
 use runtime_support::{mem, blake2_256, twox_128, twox_256, ed25519_verify};
 
-#[cfg(test)]
+#[cfg(feature = "with-std")]
 use std::fmt;
 
 /// The Ed25519 pubkey that identifies an account.
@@ -51,7 +51,7 @@ pub type TxOrder = u64;
 pub type Hash = [u8; 32];
 
 #[derive(Clone, Default)]
-#[cfg_attr(test, derive(PartialEq, Debug))]
+#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
 /// The digest of a block, useful for light-clients.
 pub struct Digest {
 	/// All logs that have happened in the block.
@@ -59,7 +59,7 @@ pub struct Digest {
 }
 
 #[derive(Clone)]
-#[cfg_attr(test, derive(PartialEq, Debug))]
+#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
 /// The header for a block.
 pub struct Header {
 	/// The parent block's "hash" (actually the Blake2-256 hash of its serialised header).
@@ -108,8 +108,8 @@ impl Slicable for Header {
 
 impl NonTrivialSlicable for Header {}
 
-#[cfg_attr(test, derive(PartialEq, Debug))]
 /// A vetted and verified transaction from the external world.
+#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
 pub struct Transaction {
 	/// Who signed it (note this is not a signature).
 	pub signed: AccountID,
@@ -187,14 +187,14 @@ impl UncheckedTransaction {
 	}
 }
 
-#[cfg(test)]
+#[cfg(feature = "with-std")]
 impl PartialEq for UncheckedTransaction {
 	fn eq(&self, other: &Self) -> bool {
 		self.signature.iter().eq(other.signature.iter()) && self.transaction == other.transaction
 	}
 }
 
-#[cfg(test)]
+#[cfg(feature = "with-std")]
 impl fmt::Debug for UncheckedTransaction {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "UncheckedTransaction({:?})", self.transaction)
@@ -229,8 +229,8 @@ impl Slicable for UncheckedTransaction {
 
 impl NonTrivialSlicable for UncheckedTransaction {}
 
-#[cfg_attr(test, derive(PartialEq, Debug))]
 /// A Polkadot relay chain block.
+#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
 pub struct Block {
 	/// The header of the block.
 	pub header: Header,

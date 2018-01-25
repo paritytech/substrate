@@ -22,8 +22,8 @@ pub mod proposal;
 pub mod environment;
 pub mod storable;
 
-#[cfg(test)]
+#[cfg(feature = "with-std")]
 pub mod statichex;
-#[cfg(test)]
 #[macro_use]
+#[cfg(feature = "with-std")]
 pub mod testing;
