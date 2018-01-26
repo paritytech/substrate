@@ -54,8 +54,6 @@ fn test_panic(_input: &[u8]) -> Vec<u8> {
 fn test_conditional_panic(input: &[u8]) -> Vec<u8> {
 	if input.len() > 0 {
 		panic!("test panic");
-	} else {
-		assert!(input.len() > 0);
 	}
 	input.to_vec()
 }

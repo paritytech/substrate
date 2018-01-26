@@ -139,8 +139,12 @@ macro_rules! impl_stubs {
 			$(
 				#[no_mangle]
 				pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
-					let input = unsafe {
-						$crate::vec::Vec::from_raw_parts(input_data, input_len, input_len)
+					let input = if input_len == 0 {
+						$crate::vec::Vec::new()
+					} else {
+						unsafe {
+							$crate::vec::Vec::from_raw_parts(input_data, input_len, input_len)
+						}
 					};
 
 					let output = super::$name(&input[..]);
