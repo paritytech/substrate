@@ -6,7 +6,7 @@ use wasm_executor::WasmExecutor;
 use native_runtime as runtime;
 use runtime_support;
 
-struct NativeExecutor;
+pub struct NativeExecutor;
 
 impl CodeExecutor for NativeExecutor {
 	type Error = Error;
@@ -46,7 +46,31 @@ mod tests {
 	fn tx() -> Vec<u8> { "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000".convert() }
 
 	#[test]
-	fn execution_with_native_equivalent_code_runs_native_ok() {
+	fn panic_execution_with_foreign_code_gives_error() {
+		let one = one();
+		let mut t = TestExternalities { storage: map![
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
+		], };
+
+		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
+		let r = NativeExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		assert!(r.is_err());
+	}
+
+	#[test]
+	fn panic_execution_with_native_equivalent_code_gives_error() {
+		let one = one();
+		let mut t = TestExternalities { storage: map![
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
+		], };
+
+		let native_equivalent_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
+		let r = NativeExecutor.call(&mut t, &native_equivalent_code[..], "execute_transaction", &CallData(tx()));
+		assert!(r.is_err());
+	}
+
+	#[test]
+	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let one = one();
 		let two = two();
 
@@ -55,7 +79,8 @@ mod tests {
 		], };
 
 		let native_equivalent_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
-		NativeExecutor.call(&mut t, &native_equivalent_code[..], "execute_transaction", &CallData(tx()));
+		let r = NativeExecutor.call(&mut t, &native_equivalent_code[..], "execute_transaction", &CallData(tx()));
+		assert!(r.is_ok());
 
 		runtime_support::with_externalities(&mut t, || {
 			assert_eq!(balance(&one), 42);
@@ -64,7 +89,7 @@ mod tests {
 	}
 
 	#[test]
-	fn execution_with_foreign_code_runs_wasm_ok() {
+	fn successful_execution_with_foreign_code_gives_ok() {
 		let one = one();
 		let two = two();
 
@@ -72,14 +97,14 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let mut foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
-		NativeExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
+		let r = NativeExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		println!("{:?}", r);
+		assert!(r.is_ok());
 
 		runtime_support::with_externalities(&mut t, || {
 			assert_eq!(balance(&one), 42);
 			assert_eq!(balance(&two), 69);
 		});
 	}
-
-	// TODO: test panics.
 }

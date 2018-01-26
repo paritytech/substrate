@@ -38,12 +38,6 @@ use runtime_support::prelude::*;
 use slicable::Slicable;
 use primitives::{Block, UncheckedTransaction};
 
-/// A simple test.
-pub fn simple_test(input: &[u8]) -> Vec<u8> {
-	println!("Executing block");
-	Vec::new()
-}
-
 /// Execute a block, with `input` being the canonical serialisation of the block. Returns the
 /// empty vector.
 pub fn execute_block(input: &[u8]) -> Vec<u8> {
@@ -53,11 +47,12 @@ pub fn execute_block(input: &[u8]) -> Vec<u8> {
 
 /// Execute a given, serialised, transaction. Returns the empty vector.
 pub fn execute_transaction(input: &[u8]) -> Vec<u8> {
-	println!("Deserialising... {:?}", input);
+	if input.len() == 0 {
+		panic!("no transaction data given!");
+	}
 	let utx = UncheckedTransaction::from_slice(input).unwrap();
-	println!("Forwarding... {:?}", utx);
 	runtime::system::execute_transaction(&utx);
-	Vec::new()
+	input.to_vec()//Vec::new()
 }
 
 impl_stubs!(execute_block, execute_transaction);

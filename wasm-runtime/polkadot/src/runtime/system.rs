@@ -84,7 +84,6 @@ pub fn execute_block(mut block: Block) {
 
 /// Execute a given transaction.
 pub fn execute_transaction(utx: &UncheckedTransaction) {
-	println!("Executing...");
 	// Verify the signature is good.
 	assert!(utx.ed25519_verify(), "All transactions should be properly signed");
 
@@ -97,8 +96,6 @@ pub fn execute_transaction(utx: &UncheckedTransaction) {
 
 	// increment nonce in storage
 	(expected_nonce + 1).store(&nonce_key);
-
-	println!("Dispatching...");
 
 	// decode parameters and dispatch
 	tx.function.dispatch(&tx.signed, &tx.input_data);
