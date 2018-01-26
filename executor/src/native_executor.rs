@@ -1,3 +1,4 @@
+use std::panic::catch_unwind;
 use primitives::contract::CallData;
 use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
@@ -22,9 +23,8 @@ impl CodeExecutor for NativeExecutor {
 		let native_equivalent = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
 		if code == &native_equivalent[..] {
 			runtime_support::with_externalities(ext, || match method {
-				// TODO: Panic handler that comes back with error.
-				"execute_block" => Ok(runtime::execute_block(&data.0)),
-				"execute_transaction" => Ok(runtime::execute_transaction(&data.0)),
+				"execute_block" => catch_unwind(|| runtime::execute_block(&data.0)).map_err(|_| ErrorKind::Runtime.into()),
+				"execute_transaction" => catch_unwind(|| runtime::execute_transaction(&data.0)).map_err(|_| ErrorKind::Runtime.into()),
 				_ => Err(ErrorKind::MethodNotFound(method.to_owned()).into()),
 			})
 		} else {
