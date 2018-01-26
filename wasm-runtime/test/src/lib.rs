@@ -43,4 +43,22 @@ fn test_data_in(input: &[u8]) -> Vec<u8> {
 	b"all ok!".to_vec()
 }
 
-impl_stubs!(test_data_in, test_blake2_256, test_twox_256, test_twox_128, test_ed25519_verify);
+fn test_empty_return(_input: &[u8]) -> Vec<u8> {
+	Vec::new()
+}
+
+fn test_panic(_input: &[u8]) -> Vec<u8> {
+	panic!("test panic");
+}
+
+fn test_conditional_panic(input: &[u8]) -> Vec<u8> {
+	if input.len() > 0 {
+		panic!("test panic");
+	} else {
+		assert!(input.len() > 0);
+	}
+	input.to_vec()
+}
+
+impl_stubs!(test_data_in, test_empty_return, test_panic, test_conditional_panic,
+	test_blake2_256, test_twox_256, test_twox_128, test_ed25519_verify);

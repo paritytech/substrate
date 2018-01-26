@@ -234,7 +234,9 @@ impl CodeExecutor for WasmExecutor {
 					.add_argument(I32(offset as i32))
 					.add_argument(I32(size as i32)))
 			.and_then(|p| module.execute_export(method, p))
-			.map_err(|_| -> Error { ErrorKind::Runtime.into() })?;
+			.map_err(|_| -> Error {
+				ErrorKind::Runtime.into()
+			})?;
 
 		if let Some(I64(r)) = returned {
 			memory.get(r as u32, (r >> 32) as u32 as usize)
@@ -250,8 +252,28 @@ mod tests {
 
 	use super::*;
 	use rustc_hex::FromHex;
-	use state_machine::ExternalitiesError;
-	use native_runtime::testing::{TestExternalities, one, two};
+	use native_runtime::testing::TestExternalities;
+
+	#[test]
+	fn returning_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_empty_return", &CallData(vec![])).unwrap();
+		assert_eq!(output, vec![0u8; 0]);
+	}
+
+	#[test]
+	fn panicking_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_panic", &CallData(vec![]));
+		assert!(output.is_err());
+
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_conditional_panic", &CallData(vec![2]));
+		assert!(output.is_err());
+	}
 
 	#[test]
 	fn storage_should_work() {
