@@ -99,7 +99,7 @@ pub fn twox_256(data: &[u8]) -> [u8; 32] {
 	result
 }
 
-/// Conduct two XX hashes to give a 256-bit result.
+/// Conduct two XX hashes to give a 128-bit result.
 pub fn twox_128(data: &[u8]) -> [u8; 16] {
 	let mut result: [u8; 16] = Default::default();
 	// guaranteed to write into result.

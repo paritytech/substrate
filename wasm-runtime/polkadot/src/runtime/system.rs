@@ -17,10 +17,11 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
-use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder, Hashable};
+use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
 use runtime_support::mem;
 use runtime_support::prelude::*;
 use runtime_support::print;
+use hashable::Hashable;
 use storable::Storable;
 use keyedvec::KeyedVec;
 use environment::with_env;

@@ -28,8 +28,7 @@
 use runtime_support::prelude::*;
 use keyedvec::KeyedVec;
 use storable::{Storable, StorageVec, kill};
-use primitives::{AccountID, Hash, BlockNumber};
-use proposal::Proposal;
+use primitives::{AccountID, Hash, BlockNumber, Proposal};
 use runtime::{staking, system, session};
 
 // TRANSACTION API

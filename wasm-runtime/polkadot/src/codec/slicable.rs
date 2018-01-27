@@ -100,6 +100,38 @@ impl Slicable for Vec<u8> {
 	}
 }
 
+impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
+
+impl<T: NonTrivialSlicable> Slicable for Vec<T> {
+	fn from_slice(value: &[u8]) -> Option<Self> {
+		let len = Self::size_of(&value[0..4])?;
+		let mut off = 4;
+		let mut r = Vec::new();
+		while off < len {
+			let element_len = T::size_of(&value[off..])?;
+			r.push(T::from_slice(&value[off..off + element_len])?);
+			off += element_len;
+		}
+		Some(r)
+	}
+
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
+		unimplemented!();
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		let vecs = self.iter().map(Slicable::to_vec).collect::<Vec<_>>();
+		let len = vecs.iter().fold(0, |mut a, v| {a += v.len(); a});
+		let mut r = Vec::new().join(&(len as u32));
+		vecs.iter().for_each(|v| r.extend_from_slice(v));
+		r
+	}
+
+	fn size_of(data: &[u8]) -> Option<usize> {
+		u32::from_slice(&data[0..4]).map(|i| (i + 4) as usize)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
