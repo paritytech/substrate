@@ -28,7 +28,7 @@ extern crate pwasm_alloc;
 #[no_mangle]
 pub extern fn panic_fmt(_fmt: ::core::fmt::Arguments, _file: &'static str, _line: u32, _col: u32) {
 	unsafe {
-		ext_print(_file.as_ptr() as *const u8, _file.len() as u32);
+		ext_print_utf8(_file.as_ptr() as *const u8, _file.len() as u32);
 		ext_print_num(_line as u64);
 		ext_print_num(_col as u64);
 		::core::intrinsics::abort()
@@ -36,7 +36,8 @@ pub extern fn panic_fmt(_fmt: ::core::fmt::Arguments, _file: &'static str, _line
 }
 
 extern "C" {
-	fn ext_print(utf8_data: *const u8, utf8_len: u32);
+	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
+	fn ext_print_hex(data: *const u8, len: u32);
 	fn ext_print_num(value: u64);
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
@@ -142,7 +143,15 @@ pub trait Printable {
 impl<'a> Printable for &'a [u8] {
 	fn print(self) {
 		unsafe {
-			ext_print(self.as_ptr(), self.len() as u32);
+			ext_print_hex(self.as_ptr(), self.len() as u32);
+		}
+	}
+}
+
+impl<'a> Printable for &'a str {
+	fn print(self) {
+		unsafe {
+			ext_print_utf8(self.as_ptr() as *const u8, self.len() as u32);
 		}
 	}
 }

@@ -30,16 +30,16 @@ fn test_ed25519_verify(input: &[u8]) -> Vec<u8> {
 }
 
 fn test_data_in(input: &[u8]) -> Vec<u8> {
-	print(b"set_storage" as &[u8]);
+	print("set_storage");
 	set_storage(b"input", &input);
 
-	print(b"storage" as &[u8]);
+	print("storage");
 	let foo = storage(b"foo");
 
-	print(b"set_storage" as &[u8]);
+	print("set_storage");
 	set_storage(b"baz", &foo);
 
-	print(b"finished!" as &[u8]);
+	print("finished!");
 	b"all ok!".to_vec()
 }
 
