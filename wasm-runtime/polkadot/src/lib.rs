@@ -47,12 +47,9 @@ pub fn execute_block(input: &[u8]) -> Vec<u8> {
 
 /// Execute a given, serialised, transaction. Returns the empty vector.
 pub fn execute_transaction(input: &[u8]) -> Vec<u8> {
-	if input.len() == 0 {
-		panic!("no transaction data given!");
-	}
 	let utx = UncheckedTransaction::from_slice(input).unwrap();
 	runtime::system::execute_transaction(&utx);
-	input.to_vec()//Vec::new()
+	Vec::new()
 }
 
 impl_stubs!(execute_block, execute_transaction);

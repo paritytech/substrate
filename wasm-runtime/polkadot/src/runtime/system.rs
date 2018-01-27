@@ -20,6 +20,7 @@
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder, Hashable};
 use runtime_support::mem;
 use runtime_support::prelude::*;
+use runtime_support::print;
 use storable::Storable;
 use keyedvec::KeyedVec;
 use environment::with_env;
@@ -84,6 +85,7 @@ pub fn execute_block(mut block: Block) {
 
 /// Execute a given transaction.
 pub fn execute_transaction(utx: &UncheckedTransaction) {
+	print(&b"HERE"[..]);
 	// Verify the signature is good.
 	assert!(utx.ed25519_verify(), "All transactions should be properly signed");
 

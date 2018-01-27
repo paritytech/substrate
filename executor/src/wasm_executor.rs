@@ -27,6 +27,7 @@ use error::{Error, ErrorKind, Result};
 use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
 use primitives::{ed25519, blake2_256, twox_128, twox_256};
+use primitives::hexdisplay::HexDisplay;
 
 struct Heap {
 	end: u32,
@@ -151,47 +152,63 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.chain_id()
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
-		let result =
-			if let Ok(value) = this.memory.get(data, len as usize) {
-				twox_128(&value)
-			} else {
-				[0; 16]
-			};
+		let maybe_value = if len == 0 {
+			Ok(vec![])
+		} else {
+			this.memory.get(data, len as usize)
+		};
+		let result = if let Ok(value) = maybe_value {
+			twox_128(&value)
+		} else {
+			[0; 16]
+		};
 		let _ = this.memory.set(out, &result);
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result =
-			if let Ok(value) = this.memory.get(data, len as usize) {
-				twox_256(&value)
-			} else {
-				[0; 32]
-			};
+		let maybe_value = if len == 0 {
+			Ok(vec![])
+		} else {
+			this.memory.get(data, len as usize)
+		};
+		let result = if let Ok(value) = maybe_value {
+			twox_256(&value)
+		} else {
+			[0; 32]
+		};
 		let _ = this.memory.set(out, &result);
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result =
-			if let Ok(value) = this.memory.get(data, len as usize) {
-				blake2_256(&value)
-			} else {
-				[0; 32]
-			};
+		let maybe_value = if len == 0 {
+			Ok(vec![])
+		} else {
+			this.memory.get(data, len as usize)
+		};
+		let result = if let Ok(value) = maybe_value {
+			blake2_256(&value)
+		} else {
+			[0; 32]
+		};
 		let _ = this.memory.set(out, &result);
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
 		(||{
 			let mut sig = [0u8; 64];
 			if let Err(_) = this.memory.get_into(sig_data, &mut sig[..]) {
-				return 0;
+				return 2;
 			};
 			let mut pubkey = [0u8; 32];
 			if let Err(_) = this.memory.get_into(pubkey_data, &mut pubkey[..]) {
-				return 0;
+				return 3;
 			};
 
 			if let Ok(msg) = this.memory.get(msg_data, msg_len as usize) {
-				if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) { 1 } else { 0 }
+				if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) {
+					0
+				} else {
+					5
+				}
 			} else {
-				0
+				4
 			}
 		})()
 	}
@@ -253,6 +270,7 @@ mod tests {
 	use super::*;
 	use rustc_hex::FromHex;
 	use native_runtime::testing::TestExternalities;
+	use primitives::hashing::blake2_256;
 
 	#[test]
 	fn returning_should_work() {
@@ -299,11 +317,11 @@ mod tests {
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"".to_vec())).unwrap(),
-			FromHex::from_hex("0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8").unwrap()
+			blake2_256(&b""[..]).to_vec()
 		);
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"Hello world!".to_vec())).unwrap(),
-			FromHex::from_hex("3fbc092db9350757e2ab4f7ee9792bfcd2f5220ada5a4bc684487f60c6034369").unwrap()
+			blake2_256(&b"Hello world!"[..]).to_vec()
 		);
 	}
 
@@ -346,7 +364,47 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &CallData(calldata)).unwrap(),
-			vec![1]
+			vec![0]
 		);
+	}
+
+	use primitives::twox_128;
+	use native_runtime::testing::{one, two};
+	use native_runtime::statichex::StaticHexInto;
+	use native_runtime::keyedvec::KeyedVec;
+	use native_runtime::runtime::staking::balance;
+	use runtime_support;
+
+	fn tx() -> Vec<u8> { "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000".convert() }
+
+	#[test]
+	fn panic_execution_gives_error() {
+		let one = one();
+		let mut t = TestExternalities { storage: map![
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
+		], };
+
+		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		assert!(r.is_err());
+	}
+
+	#[test]
+	fn successful_execution_gives_ok() {
+		let one = one();
+		let two = two();
+
+		let mut t = TestExternalities { storage: map![
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+		], };
+
+		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		assert!(r.is_ok());
+
+		runtime_support::with_externalities(&mut t, || {
+			assert_eq!(balance(&one), 42);
+			assert_eq!(balance(&two), 69);
+		});
 	}
 }

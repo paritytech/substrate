@@ -1,9 +1,9 @@
 #![no_std]
 #![feature(lang_items)]
+#![feature(core_intrinsics)]
 #![feature(alloc)]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
-#![feature(alloc)]
 extern crate alloc;
 
 pub use alloc::vec;
@@ -26,8 +26,13 @@ extern crate pwasm_alloc;
 
 #[lang = "panic_fmt"]
 #[no_mangle]
-pub fn panic_fmt() -> ! {
-	  loop {}
+pub extern fn panic_fmt(_fmt: ::core::fmt::Arguments, _file: &'static str, _line: u32, _col: u32) {
+	unsafe {
+		ext_print(_file.as_ptr() as *const u8, _file.len() as u32);
+		ext_print_num(_line as u64);
+		ext_print_num(_col as u64);
+		::core::intrinsics::abort()
+	}
 }
 
 extern "C" {
@@ -46,7 +51,7 @@ extern "C" {
 pub fn storage(key: &[u8]) -> Vec<u8> {
 	let mut length: u32 = 0;
 	unsafe {
-		let ptr = ext_get_allocated_storage(&key[0], key.len() as u32, &mut length);
+		let ptr = ext_get_allocated_storage(key.as_ptr(), key.len() as u32, &mut length);
 		Vec::from_raw_parts(ptr, length as usize, length as usize)
 	}
 }
@@ -54,15 +59,15 @@ pub fn storage(key: &[u8]) -> Vec<u8> {
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	unsafe {
 		ext_set_storage(
-			&key[0] as *const u8, key.len() as u32,
-			&value[0] as *const u8, value.len() as u32
+			key.as_ptr(), key.len() as u32,
+			value.as_ptr(), value.len() as u32
 		);
 	}
 }
 
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
 	unsafe {
-		ext_get_storage_into(&key[0], key.len() as u32, &mut value_out[0], value_out.len() as u32, value_offset as u32) as usize
+		ext_get_storage_into(key.as_ptr(), key.len() as u32, value_out.as_mut_ptr(), value_out.len() as u32, value_offset as u32) as usize
 	}
 }
 
@@ -72,41 +77,61 @@ pub fn chain_id() -> u64 {
 		ext_chain_id()
 	}
 }
+/*
+trait AsPtr {
+	fn ptr(self) -> *const u8;
+}
 
+impl<'a> AsPtr for &'a[u8] {
+	fn ptr(self) -> *const u8 {
+		if self.len() > 0 { &self[0] } else { 0 as *const u8 }
+	}
+}
+
+trait AsPtrMut {
+	fn ptr(self) -> *mut u8;
+}
+
+impl<'a> AsPtrMut for &'a mut [u8] {
+	fn ptr(self) -> *mut u8 {
+		if self.len() > 0 { &mut self[0] } else { 0 as *mut u8 }
+	}
+}
+*/
 /// Conduct a 256-bit Blake2 hash.
 pub fn blake2_256(data: &[u8]) -> [u8; 32] {
+	let mut result: [u8; 32] = Default::default();
+	// guaranteed to write into result.
 	unsafe {
-		let mut result: [u8; 32] = Default::default();
-		// guaranteed to write into result.
-		ext_blake2_256(&data[0], data.len() as u32, &mut result[0]);
-		result
+		ext_blake2_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
+	result
 }
 
 /// Conduct four XX hashes to give a 256-bit result.
 pub fn twox_256(data: &[u8]) -> [u8; 32] {
+	let mut result: [u8; 32] = Default::default();
+	// guaranteed to write into result.
 	unsafe {
-		let mut result: [u8; 32] = Default::default();
-		// guaranteed to write into result.
-		ext_twox_256(&data[0], data.len() as u32, &mut result[0]);
-		result
+		ext_twox_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
+	result
 }
 
 /// Conduct two XX hashes to give a 256-bit result.
 pub fn twox_128(data: &[u8]) -> [u8; 16] {
+	let mut result: [u8; 16] = Default::default();
+	// guaranteed to write into result.
 	unsafe {
-		let mut result: [u8; 16] = Default::default();
-		// guaranteed to write into result.
-		ext_twox_128(&data[0], data.len() as u32, &mut result[0]);
-		result
+		ext_twox_128(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
+	result
 }
 
 /// Verify a ed25519 signature.
 pub fn ed25519_verify(sig: &[u8], msg: &[u8], pubkey: &[u8]) -> bool {
 	sig.len() != 64 || pubkey.len() != 32 || unsafe {
-		ext_ed25519_verify(&msg[0], msg.len() as u32, &sig[0], &pubkey[0])
+		ext_ed25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ptr())
 	} == 0
 }
 
@@ -150,11 +175,7 @@ macro_rules! impl_stubs {
 					let output = super::$name(&input[..]);
 					// things break if we try to take the address of an unallocated vec, so we
 					// shortcircuit the empty output case.
-					if output.len() > 0 {
-						&output[0] as *const u8 as u64 + ((output.len() as u64) << 32)
-					} else {
-						0
-					}
+					output.as_ptr() as u64 + ((output.len() as u64) << 32)
 				}
 			)*
 		}

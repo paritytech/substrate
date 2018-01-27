@@ -105,6 +105,28 @@ pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities, f: F) ->
 	ext::using(ext, f)
 }
 
+pub trait Printable {
+	fn print(self);
+}
+
+impl<'a> Printable for &'a [u8] {
+	fn print(self) {
+		if let Ok(s) = ::std::str::from_utf8(self) {
+			println!("Runtime: {}", s);
+		}
+	}
+}
+
+impl Printable for u64 {
+	fn print(self) {
+		println!("Runtime: {}", self);
+	}
+}
+
+pub fn print<T: Printable + Sized>(value: T) {
+	value.print();
+}
+
 #[macro_export]
 macro_rules! impl_stubs {
 	($( $name:ident ),*) => {}
