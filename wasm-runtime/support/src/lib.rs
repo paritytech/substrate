@@ -78,27 +78,7 @@ pub fn chain_id() -> u64 {
 		ext_chain_id()
 	}
 }
-/*
-trait AsPtr {
-	fn ptr(self) -> *const u8;
-}
 
-impl<'a> AsPtr for &'a[u8] {
-	fn ptr(self) -> *const u8 {
-		if self.len() > 0 { &self[0] } else { 0 as *const u8 }
-	}
-}
-
-trait AsPtrMut {
-	fn ptr(self) -> *mut u8;
-}
-
-impl<'a> AsPtrMut for &'a mut [u8] {
-	fn ptr(self) -> *mut u8 {
-		if self.len() > 0 { &mut self[0] } else { 0 as *mut u8 }
-	}
-}
-*/
 /// Conduct a 256-bit Blake2 hash.
 pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
