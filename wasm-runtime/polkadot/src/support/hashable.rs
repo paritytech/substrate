@@ -14,14 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Support code for the runtime.
+//! Hashable trait.
 
-pub mod environment;
-pub mod storable;
-pub mod hashable;
+use slicable::Slicable;
+use runtime_support::{blake2_256, twox_128, twox_256};
 
-#[cfg(feature = "with-std")]
-pub mod statichex;
-#[macro_use]
-#[cfg(feature = "with-std")]
-pub mod testing;
+pub trait Hashable: Sized {
+	fn blake2_256(&self) -> [u8; 32];
+	fn twox_128(&self) -> [u8; 16];
+	fn twox_256(&self) -> [u8; 32];
+}
+
+impl<T: Slicable> Hashable for T {
+	fn blake2_256(&self) -> [u8; 32] {
+		blake2_256(&self.to_vec())
+	}
+	fn twox_128(&self) -> [u8; 16] {
+		twox_128(&self.to_vec())
+	}
+	fn twox_256(&self) -> [u8; 32] {
+		twox_256(&self.to_vec())
+	}
+}

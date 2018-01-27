@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Support code for the runtime.
+//! Digest type.
 
-pub mod environment;
-pub mod storable;
-pub mod hashable;
+use runtime_support::prelude::*;
 
-#[cfg(feature = "with-std")]
-pub mod statichex;
-#[macro_use]
-#[cfg(feature = "with-std")]
-pub mod testing;
+#[derive(Clone, Default)]
+#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+/// The digest of a block, useful for light-clients.
+pub struct Digest {
+	/// All logs that have happened in the block.
+	pub logs: Vec<Vec<u8>>,
+}

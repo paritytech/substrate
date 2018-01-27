@@ -28,9 +28,10 @@ extern crate rustc_hex;
 mod codec;
 #[macro_use]
 mod support;
+pub mod primitives;
 pub mod runtime;
 pub use codec::{endiansensitive, streamreader, joiner, slicable, keyedvec};
-pub use support::{primitives, function, proposal, environment, storable};
+pub use support::{environment, storable, hashable};
 #[cfg(feature = "with-std")]
 pub use support::{testing, statichex};
 
