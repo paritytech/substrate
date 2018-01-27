@@ -78,11 +78,16 @@ impl WritePrimitive<u32> for MemoryInstance {
 }
 
 impl_function_executor!(this: FunctionExecutor<'e, E>,
-	ext_print(utf8_data: *const u8, utf8_len: u32) => {
+	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
 			if let Ok(message) = String::from_utf8(utf8) {
 				println!("Runtime: {}", message);
 			}
+		}
+	},
+	ext_print_hex(data: *const u8, len: u32) => {
+		if let Ok(hex) = this.memory.get(data, len as usize) {
+			println!("Runtime: {}", HexDisplay::from(&hex));
 		}
 	},
 	ext_print_num(number: u64) => {

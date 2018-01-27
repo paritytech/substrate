@@ -40,6 +40,7 @@ pub mod prelude {
 }
 
 pub use polkadot_state_machine::{Externalities, ExternalitiesError};
+use primitives::hexdisplay::HexDisplay;
 
 // TODO: use the real error, not NoError.
 
@@ -111,9 +112,13 @@ pub trait Printable {
 
 impl<'a> Printable for &'a [u8] {
 	fn print(self) {
-		if let Ok(s) = ::std::str::from_utf8(self) {
-			println!("Runtime: {}", s);
-		}
+		println!("Runtime: {}", HexDisplay::from(&self));
+	}
+}
+
+impl<'a> Printable for &'a str {
+	fn print(self) {
+		println!("Runtime: {}", self);
 	}
 }
 
