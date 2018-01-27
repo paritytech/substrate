@@ -99,7 +99,6 @@ mod tests {
 
 		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
 		let r = NativeExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
-		println!("{:?}", r);
 		assert!(r.is_ok());
 
 		runtime_support::with_externalities(&mut t, || {
