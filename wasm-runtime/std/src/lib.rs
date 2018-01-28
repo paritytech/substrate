@@ -162,8 +162,6 @@ macro_rules! impl_stubs {
 					};
 
 					let output = super::$name(&input[..]);
-					// things break if we try to take the address of an unallocated vec, so we
-					// shortcircuit the empty output case.
 					output.as_ptr() as u64 + ((output.len() as u64) << 32)
 				}
 			)*
