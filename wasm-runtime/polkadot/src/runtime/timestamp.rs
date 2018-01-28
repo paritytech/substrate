@@ -26,18 +26,24 @@ pub fn get() -> Timestamp {
 	Storable::lookup_default(b"tim:val")
 }
 
-/// Set the current time.
-pub fn set(now: Timestamp) {
-	now.store(b"tim:val")
+pub mod public {
+	use super::*;
+
+	/// Set the current time.
+	pub fn set(now: Timestamp) {
+		now.store(b"tim:val")
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use joiner::Joiner;
-	use keyedvec::KeyedVec;
+	use super::*;
+	use super::public::*;
+
 	use runtime_std::{with_externalities, twox_128};
 	use runtime::timestamp;
-	use testing::TestExternalities;
+	use codec::{Joiner, KeyedVec};
+	use support::TestExternalities;
 
 	#[test]
 	fn timestamp_works() {
@@ -46,9 +52,9 @@ mod tests {
 		], };
 
 		with_externalities(&mut t, || {
-			assert_eq!(timestamp::get(), 42);
-			timestamp::set(69);
-			assert_eq!(timestamp::get(), 69);
+			assert_eq!(get(), 42);
+			set(69);
+			assert_eq!(get(), 69);
 		});
 	}
 }

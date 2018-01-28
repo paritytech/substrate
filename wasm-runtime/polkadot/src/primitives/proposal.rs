@@ -25,13 +25,14 @@ use runtime::{system, governance, staking, session};
 /// Internal functions that can be dispatched to.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[repr(u8)]
 pub enum InternalFunction {
-	SystemSetCode,
-	StakingSetSessionsPerEra,
-	StakingSetBondingDuration,
-	StakingSetValidatorCount,
-	GovernanceSetApprovalPpmRequired,
-	SessionSetLength,
+	SystemSetCode = 0,
+	StakingSetSessionsPerEra = 1,
+	StakingSetBondingDuration = 2,
+	StakingSetValidatorCount = 3,
+	GovernanceSetApprovalPpmRequired = 4,
+	SessionSetLength = 5,
 }
 
 impl InternalFunction {
@@ -85,27 +86,27 @@ impl Proposal {
 		match self.function {
 			InternalFunction::SystemSetCode => {
 				let code: Vec<u8> = params.read().unwrap();
-				system::set_code(&code);
+				system::privileged::set_code(&code);
 			}
 			InternalFunction::StakingSetSessionsPerEra => {
 				let value = params.read().unwrap();
-				staking::set_sessions_per_era(value);
+				staking::privileged::set_sessions_per_era(value);
 			}
 			InternalFunction::StakingSetBondingDuration => {
 				let value = params.read().unwrap();
-				staking::set_bonding_duration(value);
+				staking::privileged::set_bonding_duration(value);
 			}
 			InternalFunction::StakingSetValidatorCount => {
 				let value = params.read().unwrap();
-				staking::set_validator_count(value);
+				staking::privileged::set_validator_count(value);
 			}
 			InternalFunction::GovernanceSetApprovalPpmRequired => {
 				let value = params.read().unwrap();
-				governance::set_approval_ppm_required(value);
+				governance::privileged::set_approval_ppm_required(value);
 			}
 			InternalFunction::SessionSetLength => {
 				let value = params.read().unwrap();
-				session::set_length(value);
+				session::privileged::set_length(value);
 			}
 		}
 	}
@@ -114,7 +115,7 @@ impl Proposal {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use statichex::StaticHexInto;
+	use support::StaticHexInto;
 
 	#[test]
 	fn slicing_should_work() {

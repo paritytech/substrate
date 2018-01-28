@@ -38,14 +38,14 @@ use primitives::{Block, UncheckedTransaction};
 /// Execute a block, with `input` being the canonical serialisation of the block. Returns the
 /// empty vector.
 pub fn execute_block(input: &[u8]) -> Vec<u8> {
-	runtime::system::execute_block(Block::from_slice(input).unwrap());
+	runtime::system::internal::execute_block(Block::from_slice(input).unwrap());
 	Vec::new()
 }
 
 /// Execute a given, serialised, transaction. Returns the empty vector.
 pub fn execute_transaction(input: &[u8]) -> Vec<u8> {
 	let utx = UncheckedTransaction::from_slice(input).unwrap();
-	runtime::system::execute_transaction(&utx);
+	runtime::system::internal::execute_transaction(&utx);
 	Vec::new()
 }
 
