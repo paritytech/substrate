@@ -31,7 +31,7 @@ pub fn block_number() -> BlockNumber {
 
 /// Get the block hash of a given block (uses storage).
 pub fn block_hash(number: BlockNumber) -> Hash {
-	storage::get_default(&number.to_keyed_vec(b"sys:old:"))
+	storage::get_default(&number.to_keyed_vec(BLOCK_HASH_AT))
 }
 
 pub mod privileged {
@@ -39,7 +39,7 @@ pub mod privileged {
 
 	/// Set the new code.
 	pub fn set_code(new: &[u8]) {
-		storage::put_raw(b":code", new);
+		storage::put_raw(CODE, new);
 	}
 }
 
@@ -76,7 +76,7 @@ pub mod internal {
 		// so will wait until a little later.
 
 		// store the header hash in storage.
-		let header_hash_key = header.number.to_keyed_vec(b"sys:old:");
+		let header_hash_key = header.number.to_keyed_vec(BLOCK_HASH_AT);
 		storage::put(&header_hash_key, &header.blake2_256());
 
 		// execute transactions
@@ -118,6 +118,9 @@ fn final_checks(_block: &Block) {
 		assert_eq!(e.next_log_index, e.digest.logs.len());
 	});
 }
+
+const BLOCK_HASH_AT: &[u8] = b"sys:old:";
+const CODE: &[u8] = b"sys:cod";
 
 #[cfg(test)]
 mod tests {
