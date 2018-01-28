@@ -31,12 +31,12 @@ pub type Bondage = u64;
 
 /// The length of the bonding duration in eras.
 pub fn bonding_duration() -> BlockNumber {
-	storage::get_default(BONDING_DURATION)
+	storage::get_or_default(BONDING_DURATION)
 }
 
 /// The length of a staking era in sessions.
 pub fn validator_count() -> usize {
-	storage::get_default::<u32>(VALIDATOR_COUNT) as usize
+	storage::get_or_default::<u32>(VALIDATOR_COUNT) as usize
 }
 
 /// The length of a staking era in blocks.
@@ -46,27 +46,27 @@ pub fn era_length() -> BlockNumber {
 
 /// The length of a staking era in sessions.
 pub fn sessions_per_era() -> BlockNumber {
-	storage::get_default(SESSIONS_PER_ERA)
+	storage::get_or_default(SESSIONS_PER_ERA)
 }
 
 /// The current era index.
 pub fn current_era() -> BlockNumber {
-	storage::get_default(CURRENT_ERA)
+	storage::get_or_default(CURRENT_ERA)
 }
 
 /// The block number at which the era length last changed.
 pub fn last_era_length_change() -> BlockNumber {
-	storage::get_default(LAST_ERA_LENGTH_CHANGE)
+	storage::get_or_default(LAST_ERA_LENGTH_CHANGE)
 }
 
 /// The balance of a given account.
 pub fn balance(who: &AccountID) -> Balance {
-	storage::get_default(&who.to_keyed_vec(BALANCE_OF))
+	storage::get_or_default(&who.to_keyed_vec(BALANCE_OF))
 }
 
 /// The liquidity-state of a given account.
 pub fn bondage(who: &AccountID) -> Bondage {
-	storage::get_default(&who.to_keyed_vec(BONDAGE_OF))
+	storage::get_or_default(&who.to_keyed_vec(BONDAGE_OF))
 }
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
@@ -81,10 +81,10 @@ pub mod public {
 	/// Transfer some unlocked staking balance to another staker.
 	pub fn transfer(transactor: &AccountID, dest: &AccountID, value: Balance) {
 		let from_key = transactor.to_keyed_vec(BALANCE_OF);
-		let from_balance = storage::get_default::<Balance>(&from_key);
+		let from_balance = storage::get_or_default::<Balance>(&from_key);
 		assert!(from_balance >= value);
 		let to_key = dest.to_keyed_vec(BALANCE_OF);
-		let to_balance: Balance = storage::get_default(&to_key);
+		let to_balance: Balance = storage::get_or_default(&to_key);
 		assert!(bondage(transactor) <= bondage(dest));
 		assert!(to_balance + value > to_balance);	// no overflow
 		storage::put(&from_key, &(from_balance - value));
@@ -176,7 +176,7 @@ fn new_era() {
 	storage::put(CURRENT_ERA, &(current_era() + 1));
 
 	// Enact era length change.
-	let next_spe: u64 = storage::get_default(NEXT_SESSIONS_PER_ERA);
+	let next_spe: u64 = storage::get_or_default(NEXT_SESSIONS_PER_ERA);
 	if next_spe > 0 && next_spe != sessions_per_era() {
 		storage::put(SESSIONS_PER_ERA, &next_spe);
 		storage::put(LAST_ERA_LENGTH_CHANGE, &system::block_number());

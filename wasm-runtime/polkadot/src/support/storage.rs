@@ -31,7 +31,7 @@ pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
-pub fn get_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
+pub fn get_or_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
 	get(key).unwrap_or_else(Default::default)
 }
 
@@ -129,7 +129,7 @@ pub trait StorageVec {
 	}
 
 	fn item(index: u32) -> Self::Item {
-		get_default(&index.to_keyed_vec(Self::PREFIX))
+		get_or_default(&index.to_keyed_vec(Self::PREFIX))
 	}
 
 	fn set_count(count: u32) {
@@ -138,7 +138,7 @@ pub trait StorageVec {
 	}
 
 	fn count() -> u32 {
-		get_default(&b"len".to_keyed_vec(Self::PREFIX))
+		get_or_default(&b"len".to_keyed_vec(Self::PREFIX))
 	}
 }
 
