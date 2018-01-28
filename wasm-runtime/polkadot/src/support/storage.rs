@@ -87,7 +87,7 @@ pub fn take_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_v
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(key: &[u8]) -> bool {
 	let mut x = [0u8; 1];
-	runtime_std::read_storage(&twox_128(key)[..], &mut x[..], 0) == 1
+	runtime_std::read_storage(&twox_128(key)[..], &mut x[..], 0) >= 1
 }
 
 /// Ensure `key` has no explicit entry in storage.
