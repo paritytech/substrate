@@ -17,11 +17,9 @@
 //! Proposal: This describes a combination of a function ID and data that can be used to call into
 //! an internal function.
 
-use runtime_support::prelude::*;
-use runtime_support::mem;
-use slicable::Slicable;
-use joiner::Joiner;
-use streamreader::StreamReader;
+use runtime_std::prelude::*;
+use runtime_std::mem;
+use codec::{Slicable, Joiner, StreamReader};
 use runtime::{system, governance, staking, session};
 
 /// Internal functions that can be dispatched to.

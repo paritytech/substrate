@@ -16,12 +16,19 @@
 
 //! Support code for the runtime.
 
-pub mod environment;
-pub mod storable;
-pub mod hashable;
-
+mod environment;
+mod storable;
+mod hashable;
 #[cfg(feature = "with-std")]
-pub mod statichex;
+mod statichex;
 #[macro_use]
 #[cfg(feature = "with-std")]
-pub mod testing;
+mod testing;
+
+pub use self::environment::{Environment, with_env};
+pub use self::storable::{StorageVec, Storable, kill};
+pub use self::hashable::Hashable;
+#[cfg(feature = "with-std")]
+pub use self::statichex::{StaticHexConversion, StaticHexInto};
+#[cfg(feature = "with-std")]
+pub use self::testing::{AsBytesRef, HexDisplay, TestExternalities, one, two};

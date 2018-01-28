@@ -16,11 +16,9 @@
 
 //! Block header type.
 
-use runtime_support::prelude::*;
-use streamreader::StreamReader;
-use joiner::Joiner;
-use slicable::{Slicable, NonTrivialSlicable};
-use runtime_support::mem;
+use runtime_std::prelude::*;
+use codec::{StreamReader, Joiner, Slicable, NonTrivialSlicable};
+use runtime_std::mem;
 use primitives::{BlockNumber, Hash, Digest};
 
 #[derive(Clone)]

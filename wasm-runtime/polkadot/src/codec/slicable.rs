@@ -16,10 +16,10 @@
 
 //! Serialisation.
 
-use runtime_support::prelude::*;
-use runtime_support::{mem, slice};
-use joiner::Joiner;
-use endiansensitive::EndianSensitive;
+use runtime_std::prelude::*;
+use runtime_std::{mem, slice};
+use super::joiner::Joiner;
+use super::endiansensitive::EndianSensitive;
 
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
 pub trait Slicable: Sized {

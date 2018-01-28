@@ -17,7 +17,7 @@
 //! Function data: This describes a function that can be called from an external transaction.
 
 use primitives::AccountID;
-use streamreader::StreamReader;
+use codec::StreamReader;
 use runtime::{staking, session, timestamp, governance};
 
 /// Public functions that can be dispatched to.

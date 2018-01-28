@@ -20,23 +20,19 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 #[macro_use]
-extern crate runtime_support;
+extern crate runtime_std;
 
 #[cfg(feature = "with-std")]
 extern crate rustc_hex;
 
-mod codec;
+pub mod codec;
 #[macro_use]
-mod support;
+pub mod support;
 pub mod primitives;
 pub mod runtime;
-pub use codec::{endiansensitive, streamreader, joiner, slicable, keyedvec};
-pub use support::{environment, storable, hashable};
-#[cfg(feature = "with-std")]
-pub use support::{testing, statichex};
 
-use runtime_support::prelude::*;
-use slicable::Slicable;
+use runtime_std::prelude::*;
+use codec::Slicable;
 use primitives::{Block, UncheckedTransaction};
 
 /// Execute a block, with `input` being the canonical serialisation of the block. Returns the

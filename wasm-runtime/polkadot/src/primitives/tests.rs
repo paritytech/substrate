@@ -17,10 +17,9 @@
 //! Tests.
 
 use super::*;
-use runtime_support::prelude::*;
-use joiner::Joiner;
-use slicable::{Slicable, NonTrivialSlicable};
-use function::Function;
+use runtime_std::prelude::*;
+use codec::{Joiner, Slicable};
+use primitives::Function;
 
 #[test]
 fn serialise_transaction_works() {

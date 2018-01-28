@@ -25,9 +25,9 @@
 //! At the end of the era, all validators approvals are tallied and if there are sufficient to pass
 //! the proposal then it is enacted. All items in storage concerning the proposal are reset.
 
-use runtime_support::prelude::*;
-use keyedvec::KeyedVec;
-use storable::{Storable, StorageVec, kill};
+use runtime_std::prelude::*;
+use codec::KeyedVec;
+use support::{Storable, StorageVec, kill};
 use primitives::{AccountID, Hash, BlockNumber, Proposal};
 use runtime::{staking, system, session};
 
@@ -105,7 +105,7 @@ pub fn end_of_an_era() {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_support::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128};
 	use keyedvec::KeyedVec;
 	use joiner::Joiner;
 	use testing::{one, two, TestExternalities};

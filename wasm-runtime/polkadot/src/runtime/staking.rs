@@ -16,10 +16,10 @@
 
 //! Staking manager: Handles balances and periodically determines the best set of validators.
 
-use runtime_support::prelude::*;
-use runtime_support::cell::RefCell;
-use keyedvec::KeyedVec;
-use storable::{Storable, StorageVec};
+use runtime_std::prelude::*;
+use runtime_std::cell::RefCell;
+use codec::KeyedVec;
+use support::{Storable, StorageVec};
 use primitives::{BlockNumber, AccountID};
 use runtime::{system, session, governance};
 
@@ -190,7 +190,7 @@ fn new_era() {
 
 #[cfg(test)]
 mod tests {
-	use runtime_support::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128};
 	use keyedvec::KeyedVec;
 	use joiner::Joiner;
 	use testing::{one, two, TestExternalities};

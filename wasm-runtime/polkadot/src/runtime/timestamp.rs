@@ -16,7 +16,7 @@
 
 //! Timestamp manager: just handles the current timestamp.
 
-use storable::Storable;
+use support::Storable;
 
 /// Representation of a time.
 pub type Timestamp = u64;
@@ -35,7 +35,7 @@ pub fn set(now: Timestamp) {
 mod tests {
 	use joiner::Joiner;
 	use keyedvec::KeyedVec;
-	use runtime_support::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128};
 	use runtime::timestamp;
 	use testing::TestExternalities;
 

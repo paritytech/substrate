@@ -16,12 +16,10 @@
 
 //! Transaction type.
 
-use runtime_support::prelude::*;
-use streamreader::StreamReader;
-use joiner::Joiner;
-use slicable::{Slicable, NonTrivialSlicable};
+use runtime_std::prelude::*;
+use codec::{StreamReader, Joiner, Slicable, NonTrivialSlicable};
 use primitives::{AccountID, TxOrder, Function};
-use runtime_support::mem;
+use runtime_std::mem;
 
 /// A vetted and verified transaction from the external world.
 #[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
