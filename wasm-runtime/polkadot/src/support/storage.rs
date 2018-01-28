@@ -68,7 +68,7 @@ pub fn take<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
-pub fn take_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
+pub fn take_or_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
 	take(key).unwrap_or_else(Default::default)
 }
 
