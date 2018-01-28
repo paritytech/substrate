@@ -110,7 +110,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use runtime_std::with_externalities;
-	use testing::{TestExternalities, HexDisplay};
+	use support::{TestExternalities, HexDisplay};
 	use runtime_std::{storage, twox_128};
 
 	#[test]
@@ -180,7 +180,7 @@ mod tests {
 
 	#[test]
 	fn proposals_can_be_stored() {
-		use proposal::{Proposal, InternalFunction};
+		use primitives::{Proposal, InternalFunction};
 		let mut t = TestExternalities { storage: HashMap::new(), };
 		with_externalities(&mut t, || {
 			let x = Proposal { function: InternalFunction::StakingSetSessionsPerEra, input_data: b"Hello world".to_vec() };

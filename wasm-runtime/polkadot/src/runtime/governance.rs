@@ -31,48 +31,6 @@ use support::{Storable, StorageVec, kill};
 use primitives::{AccountID, Hash, BlockNumber, Proposal};
 use runtime::{staking, system, session};
 
-// TRANSACTION API
-
-/// Propose a sensitive action to be taken. Any action that is enactable by `Proposal` is valid.
-/// Proposal is by the `transactor` and will automatically count as an approval. Transactor must
-/// be a current validator. It is illegal to propose when there is already a proposal in effect.
-pub fn propose(validator: &AccountID, proposal: &Proposal) {
-	if Proposal::lookup(b"gov:pro").is_some() {
-		panic!("there may only be one proposal per era.");
-	}
-	proposal.store(b"gov:pro");
-	approve(validator, staking::current_era());
-}
-
-/// Approve the current era's proposal. Transactor must be a validator. This may not be done more
-/// than once for any validator in an era.
-pub fn approve(validator: &AccountID, era_index: BlockNumber) {
-	if era_index != staking::current_era() {
-		panic!("approval vote applied on non-current era.")
-	}
-	if Proposal::lookup(b"gov:pro").is_none() {
-		panic!("there must be a proposal in order to approve.");
-	}
-	if session::validators().into_iter().position(|v| &v == validator).is_none() {
-		panic!("transactor must be a validator to approve.");
-	}
-	let key = validator.to_keyed_vec(b"gov:app:");
-	if bool::lookup(&key).is_some() {
-		panic!("transactor may not approve a proposal twice in one era.");
-	}
-	true.store(&key);
-}
-
-/// Set the proportion of validators that must approve for a proposal to be enacted at the end of
-/// its era. The value, `ppm`, is measured as a fraction of 1000 rounded down to the nearest whole
-/// validator. `1000` would require the approval of all validators; `667` would require two-thirds
-/// (or there abouts) of validators.
-pub fn set_approval_ppm_required(ppm: u32) {
-	ppm.store(b"gov:apr");
-}
-
-// INSPECTION API
-
 /// The proportion of validators required for a propsal to be approved measured as the number out
 /// of 1000.
 pub fn approval_ppm_required() -> u32 {
@@ -84,20 +42,68 @@ pub fn approvals_required() -> u32 {
 	approval_ppm_required() * session::validator_count() as u32 / 1000
 }
 
-// PUBLIC API
+pub mod public {
+	use super::*;
 
-/// Current era is ending; we should finish up any proposals.
-pub fn end_of_an_era() {
-	// tally up votes for the current proposal, if any. enact if there are sufficient approvals.
-	if let Some(proposal) = Proposal::lookup(b"gov:pro") {
-		kill(b"gov:pro");
-		let approvals_required = approvals_required();
-		let approved = session::validators().into_iter()
-			.filter_map(|v| bool::take(&v.to_keyed_vec(b"gov:app:")))
-			.take(approvals_required as usize)
-			.count() as u32;
-		if approved == approvals_required {
-			proposal.enact();
+	/// Propose a sensitive action to be taken. Any action that is enactable by `Proposal` is valid.
+	/// Proposal is by the `transactor` and will automatically count as an approval. Transactor must
+	/// be a current validator. It is illegal to propose when there is already a proposal in effect.
+	pub fn propose(validator: &AccountID, proposal: &Proposal) {
+		if Proposal::lookup(b"gov:pro").is_some() {
+			panic!("there may only be one proposal per era.");
+		}
+		proposal.store(b"gov:pro");
+		approve(validator, staking::current_era());
+	}
+
+	/// Approve the current era's proposal. Transactor must be a validator. This may not be done more
+	/// than once for any validator in an era.
+	pub fn approve(validator: &AccountID, era_index: BlockNumber) {
+		if era_index != staking::current_era() {
+			panic!("approval vote applied on non-current era.")
+		}
+		if Proposal::lookup(b"gov:pro").is_none() {
+			panic!("there must be a proposal in order to approve.");
+		}
+		if session::validators().into_iter().position(|v| &v == validator).is_none() {
+			panic!("transactor must be a validator to approve.");
+		}
+		let key = validator.to_keyed_vec(b"gov:app:");
+		if bool::lookup(&key).is_some() {
+			panic!("transactor may not approve a proposal twice in one era.");
+		}
+		true.store(&key);
+	}
+}
+
+pub mod privileged {
+	use super::*;
+
+	/// Set the proportion of validators that must approve for a proposal to be enacted at the end of
+	/// its era. The value, `ppm`, is measured as a fraction of 1000 rounded down to the nearest whole
+	/// validator. `1000` would require the approval of all validators; `667` would require two-thirds
+	/// (or there abouts) of validators.
+	pub fn set_approval_ppm_required(ppm: u32) {
+		ppm.store(b"gov:apr");
+	}
+}
+
+pub mod internal {
+	use super::*;
+
+	/// Current era is ending; we should finish up any proposals.
+	pub fn end_of_an_era() {
+		// tally up votes for the current proposal, if any. enact if there are sufficient approvals.
+		if let Some(proposal) = Proposal::lookup(b"gov:pro") {
+			kill(b"gov:pro");
+			let approvals_required = approvals_required();
+			let approved = session::validators().into_iter()
+				.filter_map(|v| bool::take(&v.to_keyed_vec(b"gov:app:")))
+				.take(approvals_required as usize)
+				.count() as u32;
+			if approved == approvals_required {
+				proposal.enact();
+			}
 		}
 	}
 }
@@ -106,13 +112,10 @@ pub fn end_of_an_era() {
 mod tests {
 	use super::*;
 	use runtime_std::{with_externalities, twox_128};
-	use keyedvec::KeyedVec;
-	use joiner::Joiner;
-	use testing::{one, two, TestExternalities};
-	use primitives::AccountID;
-	use proposal::InternalFunction;
+	use codec::{KeyedVec, Joiner};
+	use support::{one, two, TestExternalities, with_env};
+	use primitives::{AccountID, InternalFunction};
 	use runtime::{staking, session};
-	use environment::with_env;
 
 	fn new_test_ext() -> TestExternalities {
 		let one = one();
@@ -152,12 +155,12 @@ mod tests {
 
 			// Block 1: Make proposal. Approve it. Era length changes.
 			with_env(|e| e.block_number = 1);
-			propose(&one, &Proposal {
+			public::propose(&one, &Proposal {
 				function: InternalFunction::StakingSetSessionsPerEra,
 				input_data: vec![].join(&2u64),
 			});
-			approve(&two, 1);
-			staking::check_new_era();
+			public::approve(&two, 1);
+			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 2);
 		});
 	}
@@ -178,21 +181,21 @@ mod tests {
 
 			// Block 1: Make proposal. Fail it.
 			with_env(|e| e.block_number = 1);
-			propose(&one, &Proposal {
+			public::propose(&one, &Proposal {
 				function: InternalFunction::StakingSetSessionsPerEra,
 				input_data: vec![].join(&2u64),
 			});
-			staking::check_new_era();
+			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 
 			// Block 2: Make proposal. Approve it. It should change era length.
 			with_env(|e| e.block_number = 2);
-			propose(&one, &Proposal {
+			public::propose(&one, &Proposal {
 				function: InternalFunction::StakingSetSessionsPerEra,
 				input_data: vec![].join(&2u64),
 			});
-			approve(&two, 2);
-			staking::check_new_era();
+			public::approve(&two, 2);
+			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 2);
 		});
 	}
@@ -213,11 +216,11 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			propose(&one, &Proposal {
+			public::propose(&one, &Proposal {
 				function: InternalFunction::StakingSetSessionsPerEra,
 				input_data: vec![].join(&2u64),
 			});
-			staking::check_new_era();
+			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
 	}
@@ -239,12 +242,12 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			propose(&one, &Proposal {
+			public::propose(&one, &Proposal {
 				function: InternalFunction::StakingSetSessionsPerEra,
 				input_data: vec![].join(&2u64),
 			});
-			approve(&two, 0);
-			staking::check_new_era();
+			public::approve(&two, 0);
+			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
 	}
@@ -266,13 +269,13 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			propose(&one, &Proposal {
+			public::propose(&one, &Proposal {
 				function: InternalFunction::StakingSetSessionsPerEra,
 				input_data: vec![].join(&2u64),
 			});
-			approve(&two, 1);
-			approve(&two, 1);
-			staking::check_new_era();
+			public::approve(&two, 1);
+			public::approve(&two, 1);
+			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
 	}
@@ -294,15 +297,15 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			propose(&one, &Proposal {
+			public::propose(&one, &Proposal {
 				function: InternalFunction::StakingSetSessionsPerEra,
 				input_data: vec![].join(&2u64),
 			});
-			propose(&two, &Proposal {
+			public::propose(&two, &Proposal {
 				function: InternalFunction::StakingSetSessionsPerEra,
 				input_data: vec![].join(&2u64),
 			});
-			staking::check_new_era();
+			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
 	}
@@ -324,8 +327,8 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			approve(&two, 1);
-			staking::check_new_era();
+			public::approve(&two, 1);
+			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
 	}
@@ -348,12 +351,12 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			propose(&one, &Proposal {
+			public::propose(&one, &Proposal {
 				function: InternalFunction::StakingSetSessionsPerEra,
 				input_data: vec![].join(&2u64),
 			});
-			approve(&four, 1);
-			staking::check_new_era();
+			public::approve(&four, 1);
+			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
 	}

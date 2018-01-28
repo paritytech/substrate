@@ -23,14 +23,15 @@ use runtime::{staking, session, timestamp, governance};
 /// Public functions that can be dispatched to.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[repr(u8)]
 pub enum Function {
-	StakingStake,
-	StakingUnstake,
-	StakingTransfer,
-	SessionSetKey,
-	TimestampSet,
-	GovernancePropose,
-	GovernanceApprove,
+	StakingStake = 0,
+	StakingUnstake = 1,
+	StakingTransfer = 2,
+	SessionSetKey = 3,
+	TimestampSet = 4,
+	GovernancePropose = 5,
+	GovernanceApprove = 6,
 }
 
 impl Function {
@@ -55,31 +56,31 @@ impl Function {
 		let mut params = StreamReader::new(data);
 		match *self {
 			Function::StakingStake => {
-				staking::stake(transactor);
+				staking::public::stake(transactor);
 			}
 			Function::StakingUnstake => {
-				staking::unstake(transactor);
+				staking::public::unstake(transactor);
 			}
 			Function::StakingTransfer => {
 				let dest = params.read().unwrap();
 				let value = params.read().unwrap();
-				staking::transfer(transactor, &dest, value);
+				staking::public::transfer(transactor, &dest, value);
 			}
 			Function::SessionSetKey => {
 				let session = params.read().unwrap();
-				session::set_key(transactor, &session);
+				session::public::set_key(transactor, &session);
 			}
 			Function::TimestampSet => {
 				let t = params.read().unwrap();
-				timestamp::set(t);
+				timestamp::public::set(t);
 			}
 			Function::GovernancePropose => {
 				let proposal = params.read().unwrap();
-				governance::propose(transactor, &proposal);
+				governance::public::propose(transactor, &proposal);
 			}
 			Function::GovernanceApprove => {
 				let era_index = params.read().unwrap();
-				governance::approve(transactor, era_index);
+				governance::public::approve(transactor, era_index);
 			}
 		}
 	}
