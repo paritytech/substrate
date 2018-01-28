@@ -23,6 +23,18 @@ use support::{storage, StorageVec};
 use primitives::{AccountID, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
+const SESSION_LENGTH: &[u8] = b"ses:len";
+const CURRENT_INDEX: &[u8] = b"ses:ind";
+const LAST_LENGTH_CHANGE: &[u8] = b"ses:llc";
+const NEXT_KEY_FOR: &[u8] = b"ses:nxt:";
+const NEXT_SESSION_LENGTH: &[u8] = b"ses:nln";
+
+struct ValidatorStorageVec {}
+impl StorageVec for ValidatorStorageVec {
+	type Item = AccountID;
+	const PREFIX: &'static[u8] = b"ses:val:";
+}
+
 /// Get the current set of authorities. These are the session keys.
 pub fn validators() -> Vec<AccountID> {
 	ValidatorStorageVec::items()
@@ -91,18 +103,6 @@ pub mod internal {
 			rotate_session();
 		}
 	}
-}
-
-const SESSION_LENGTH: &[u8] = b"ses:len";
-const CURRENT_INDEX: &[u8] = b"ses:ind";
-const LAST_LENGTH_CHANGE: &[u8] = b"ses:llc";
-const NEXT_KEY_FOR: &[u8] = b"ses:nxt:";
-const NEXT_SESSION_LENGTH: &[u8] = b"ses:nln";
-
-struct ValidatorStorageVec {}
-impl StorageVec for ValidatorStorageVec {
-	type Item = AccountID;
-	const PREFIX: &'static[u8] = b"ses:val:";
 }
 
 /// Move onto next session: register the new authority set.

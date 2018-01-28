@@ -24,6 +24,9 @@ use support::{Hashable, storage, with_env};
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
 use runtime::{staking, session};
 
+const BLOCK_HASH_AT: &[u8] = b"sys:old:";
+const CODE: &[u8] = b"sys:cod";
+
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
 	with_env(|e| e.block_number)
@@ -118,9 +121,6 @@ fn final_checks(_block: &Block) {
 		assert_eq!(e.next_log_index, e.digest.logs.len());
 	});
 }
-
-const BLOCK_HASH_AT: &[u8] = b"sys:old:";
-const CODE: &[u8] = b"sys:cod";
 
 #[cfg(test)]
 mod tests {
