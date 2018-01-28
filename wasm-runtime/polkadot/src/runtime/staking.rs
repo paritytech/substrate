@@ -31,12 +31,12 @@ pub type Bondage = u64;
 
 /// The length of the bonding duration in eras.
 pub fn bonding_duration() -> BlockNumber {
-	storage::get_default(b"sta:loc")
+	storage::get_default(BONDING_DURATION)
 }
 
 /// The length of a staking era in sessions.
 pub fn validator_count() -> usize {
-	storage::get_default::<u32>(b"sta:vac") as usize
+	storage::get_default::<u32>(VALIDATOR_COUNT) as usize
 }
 
 /// The length of a staking era in blocks.
@@ -46,27 +46,27 @@ pub fn era_length() -> BlockNumber {
 
 /// The length of a staking era in sessions.
 pub fn sessions_per_era() -> BlockNumber {
-	storage::get_default(b"sta:spe")
+	storage::get_default(SESSIONS_PER_ERA)
 }
 
 /// The current era index.
 pub fn current_era() -> BlockNumber {
-	storage::get_default(b"sta:era")
+	storage::get_default(CURRENT_ERA)
 }
 
 /// The block number at which the era length last changed.
 pub fn last_era_length_change() -> BlockNumber {
-	storage::get_default(b"sta:lec")
+	storage::get_default(LAST_ERA_LENGTH_CHANGE)
 }
 
 /// The balance of a given account.
 pub fn balance(who: &AccountID) -> Balance {
-	storage::get_default(&who.to_keyed_vec(b"sta:bal:"))
+	storage::get_default(&who.to_keyed_vec(BALANCE_OF))
 }
 
 /// The liquidity-state of a given account.
 pub fn bondage(who: &AccountID) -> Bondage {
-	storage::get_default(&who.to_keyed_vec(b"sta:bon:"))
+	storage::get_default(&who.to_keyed_vec(BONDAGE_OF))
 }
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
@@ -80,10 +80,10 @@ pub mod public {
 
 	/// Transfer some unlocked staking balance to another staker.
 	pub fn transfer(transactor: &AccountID, dest: &AccountID, value: Balance) {
-		let from_key = transactor.to_keyed_vec(b"sta:bal:");
+		let from_key = transactor.to_keyed_vec(BALANCE_OF);
 		let from_balance = storage::get_default::<Balance>(&from_key);
 		assert!(from_balance >= value);
-		let to_key = dest.to_keyed_vec(b"sta:bal:");
+		let to_key = dest.to_keyed_vec(BALANCE_OF);
 		let to_balance: Balance = storage::get_default(&to_key);
 		assert!(bondage(transactor) <= bondage(dest));
 		assert!(to_balance + value > to_balance);	// no overflow
@@ -100,7 +100,7 @@ pub mod public {
 		assert!(intentions.iter().find(|t| *t == transactor).is_none(), "Cannot stake if already staked.");
 		intentions.push(transactor.clone());
 		IntentionStorageVec::set_items(&intentions);
-		storage::put(&transactor.to_keyed_vec(b"sta:bon:"), &u64::max_value());
+		storage::put(&transactor.to_keyed_vec(BONDAGE_OF), &u64::max_value());
 	}
 
 	/// Retract the desire to stake for the transactor.
@@ -114,7 +114,7 @@ pub mod public {
 			panic!("Cannot unstake if not already staked.");
 		}
 		IntentionStorageVec::set_items(&intentions);
-		storage::put(&transactor.to_keyed_vec(b"sta:bon:"), &(current_era() + bonding_duration()));
+		storage::put(&transactor.to_keyed_vec(BONDAGE_OF), &(current_era() + bonding_duration()));
 	}
 }
 
@@ -123,17 +123,17 @@ pub mod privileged {
 
 	/// Set the number of sessions in an era.
 	pub fn set_sessions_per_era(new: BlockNumber) {
-		storage::put(b"sta:nse", &new);
+		storage::put(NEXT_SESSIONS_PER_ERA, &new);
 	}
 
 	/// The length of the bonding duration in eras.
 	pub fn set_bonding_duration(new: BlockNumber) {
-		storage::put(b"sta:loc", &new);
+		storage::put(BONDING_DURATION, &new);
 	}
 
 	/// The length of a staking era in sessions.
 	pub fn set_validator_count(new: usize) {
-		storage::put(b"sta:vac", &(new as u32));
+		storage::put(VALIDATOR_COUNT, &(new as u32));
 	}
 }
 
@@ -155,6 +155,15 @@ impl StorageVec for IntentionStorageVec {
 	const PREFIX: &'static[u8] = b"sta:wil:";
 }
 
+const BONDING_DURATION: &[u8] = b"sta:loc";
+const VALIDATOR_COUNT: &[u8] = b"sta:vac";
+const SESSIONS_PER_ERA: &[u8] = b"sta:spe";
+const NEXT_SESSIONS_PER_ERA: &[u8] = b"sta:nse";
+const CURRENT_ERA: &[u8] = b"sta:era";
+const LAST_ERA_LENGTH_CHANGE: &[u8] = b"sta:lec";
+const BALANCE_OF: &[u8] = b"sta:bal:";
+const BONDAGE_OF: &[u8] = b"sta:bon:";
+
 /// The era has changed - enact new staking set.
 ///
 /// NOTE: This always happens immediately before a session change to ensure that new validators
@@ -164,13 +173,13 @@ fn new_era() {
 	governance::internal::end_of_an_era();
 
 	// Increment current era.
-	storage::put(b"sta:era", &(current_era() + 1));
+	storage::put(CURRENT_ERA, &(current_era() + 1));
 
 	// Enact era length change.
-	let next_spe: u64 = storage::get_default(b"sta:nse");
+	let next_spe: u64 = storage::get_default(NEXT_SESSIONS_PER_ERA);
 	if next_spe > 0 && next_spe != sessions_per_era() {
-		storage::put(b"sta:spe", &next_spe);
-		storage::put(b"sta:lec", &system::block_number());
+		storage::put(SESSIONS_PER_ERA, &next_spe);
+		storage::put(LAST_ERA_LENGTH_CHANGE, &system::block_number());
 	}
 
 	// evaluate desired staking amounts and nominations and optimise to find the best
@@ -215,13 +224,13 @@ mod tests {
 			twox_128(b"ses:val:len").to_vec() => vec![].join(&2u32),
 			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![10; 32],
 			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![20; 32],
-			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64),
-			twox_128(b"sta:vac").to_vec() => vec![].join(&2u32),
-			twox_128(b"sta:loc").to_vec() => vec![].join(&3u64),
-			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&10u64),
-			twox_128(&two.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&20u64),
-			twox_128(&three.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&30u64),
-			twox_128(&four.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&40u64)
+			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].join(&2u64),
+			twox_128(VALIDATOR_COUNT).to_vec() => vec![].join(&2u32),
+			twox_128(BONDING_DURATION).to_vec() => vec![].join(&3u64),
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&10u64),
+			twox_128(&two.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&20u64),
+			twox_128(&three.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&30u64),
+			twox_128(&four.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&40u64)
 		], };
 
 		with_externalities(&mut t, || {
@@ -281,7 +290,7 @@ mod tests {
 	fn staking_eras_work() {
 		let mut t = TestExternalities { storage: map![
 			twox_128(b"ses:len").to_vec() => vec![].join(&1u64),
-			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64)
+			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].join(&2u64)
 		], };
 		with_externalities(&mut t, || {
 			assert_eq!(era_length(), 2u64);
@@ -347,7 +356,7 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&42u64)
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&42u64)
 		], };
 
 		with_externalities(&mut t, || {
@@ -362,7 +371,7 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&111u64)
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&111u64)
 		], };
 
 		with_externalities(&mut t, || {
@@ -379,7 +388,7 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].join(&111u64)
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&111u64)
 		], };
 
 		with_externalities(&mut t, || {

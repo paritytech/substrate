@@ -23,7 +23,7 @@ pub type Timestamp = u64;
 
 /// Get the current time.
 pub fn get() -> Timestamp {
-	storage::get_default(b"tim:val")
+	storage::get_default(CURRENT_TIMESTAMP)
 }
 
 pub mod public {
@@ -31,9 +31,11 @@ pub mod public {
 
 	/// Set the current time.
 	pub fn set(now: Timestamp) {
-		storage::put(b"tim:val", &now);
+		storage::put(CURRENT_TIMESTAMP, &now);
 	}
 }
+
+const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
 
 #[cfg(test)]
 mod tests {
@@ -48,7 +50,7 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let mut t = TestExternalities { storage: map![
-			twox_128(b"tim:val").to_vec() => vec![].join(&42u64)
+			twox_128(CURRENT_TIMESTAMP).to_vec() => vec![].join(&42u64)
 		], };
 
 		with_externalities(&mut t, || {

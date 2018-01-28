@@ -31,10 +31,18 @@ use support::storage;
 use primitives::{AccountID, Hash, BlockNumber, Proposal};
 use runtime::{staking, system, session};
 
+/*macro_rules! db_name {
+	( $( $name:ident )+ ) => concat!("gov:", $( stringify!($name) ),+ )
+}*/
+
+const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
+const CURRENT_PROPOSAL: &[u8] = b"gov:pro";
+const APPROVAL_OF: &[u8] = b"gov:app:";
+
 /// The proportion of validators required for a propsal to be approved measured as the number out
 /// of 1000.
 pub fn approval_ppm_required() -> u32 {
-	storage::get_or(b"gov:apr", 1000)
+	storage::get_or(APPROVALS_REQUIRED, 1000)
 }
 
 /// The number of concrete validator approvals required for a proposal to pass.
@@ -49,10 +57,10 @@ pub mod public {
 	/// Proposal is by the `transactor` and will automatically count as an approval. Transactor must
 	/// be a current validator. It is illegal to propose when there is already a proposal in effect.
 	pub fn propose(validator: &AccountID, proposal: &Proposal) {
-		if storage::exists(b"gov:pro") {
+		if storage::exists(CURRENT_PROPOSAL) {
 			panic!("there may only be one proposal per era.");
 		}
-		storage::put(b"gov:pro", proposal);
+		storage::put(CURRENT_PROPOSAL, proposal);
 		approve(validator, staking::current_era());
 	}
 
@@ -62,13 +70,13 @@ pub mod public {
 		if era_index != staking::current_era() {
 			panic!("approval vote applied on non-current era.")
 		}
-		if !storage::exists(b"gov:pro") {
+		if !storage::exists(CURRENT_PROPOSAL) {
 			panic!("there must be a proposal in order to approve.");
 		}
 		if session::validators().into_iter().position(|v| &v == validator).is_none() {
 			panic!("transactor must be a validator to approve.");
 		}
-		let key = validator.to_keyed_vec(b"gov:app:");
+		let key = validator.to_keyed_vec(APPROVAL_OF);
 		if storage::exists(&key) {
 			panic!("transactor may not approve a proposal twice in one era.");
 		}
@@ -84,7 +92,7 @@ pub mod privileged {
 	/// validator. `1000` would require the approval of all validators; `667` would require two-thirds
 	/// (or there abouts) of validators.
 	pub fn set_approval_ppm_required(ppm: u32) {
-		storage::put(b"gov:apr", &ppm);
+		storage::put(APPROVALS_REQUIRED, &ppm);
 	}
 }
 
@@ -94,10 +102,10 @@ pub mod internal {
 	/// Current era is ending; we should finish up any proposals.
 	pub fn end_of_an_era() {
 		// tally up votes for the current proposal, if any. enact if there are sufficient approvals.
-		if let Some(proposal) = storage::take::<Proposal>(b"gov:pro") {
+		if let Some(proposal) = storage::take::<Proposal>(CURRENT_PROPOSAL) {
 			let approvals_required = approvals_required();
 			let approved = session::validators().into_iter()
-				.filter_map(|v| storage::take::<bool>(&v.to_keyed_vec(b"gov:app:")))
+				.filter_map(|v| storage::take::<bool>(&v.to_keyed_vec(APPROVAL_OF)))
 				.take(approvals_required as usize)
 				.count() as u32;
 			if approved == approvals_required {
@@ -122,7 +130,7 @@ mod tests {
 		let three = [3u8; 32];
 
 		TestExternalities { storage: map![
-			twox_128(b"gov:apr").to_vec() => vec![].join(&667u32),
+			twox_128(APPROVALS_REQUIRED).to_vec() => vec![].join(&667u32),
 			twox_128(b"ses:len").to_vec() => vec![].join(&1u64),
 			twox_128(b"ses:val:len").to_vec() => vec![].join(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
