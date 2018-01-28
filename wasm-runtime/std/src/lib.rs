@@ -111,7 +111,7 @@ pub fn twox_128(data: &[u8]) -> [u8; 16] {
 
 /// Verify a ed25519 signature.
 pub fn ed25519_verify(sig: &[u8], msg: &[u8], pubkey: &[u8]) -> bool {
-	sig.len() != 64 || pubkey.len() != 32 || unsafe {
+	sig.len() == 64 && pubkey.len() == 32 && unsafe {
 		ext_ed25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ptr())
 	} == 0
 }
