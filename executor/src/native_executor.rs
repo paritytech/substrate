@@ -46,6 +46,8 @@ mod tests {
 	use native_runtime::runtime::staking::balance;
 	use primitives::twox_128;
 
+	const bloaty_code: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
+	const compact_code: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
 	fn tx() -> Vec<u8> { "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000".convert() }
 
 	#[test]
@@ -55,8 +57,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
-		let r = NativeExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		let r = NativeExecutor.call(&mut t, bloaty_code, "execute_transaction", &CallData(tx()));
 		assert!(r.is_err());
 	}
 
@@ -67,8 +68,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let native_equivalent_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
-		let r = NativeExecutor.call(&mut t, &native_equivalent_code[..], "execute_transaction", &CallData(tx()));
+		let r = NativeExecutor.call(&mut t, compact_code, "execute_transaction", &CallData(tx()));
 		assert!(r.is_err());
 	}
 
@@ -81,8 +81,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let native_equivalent_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
-		let r = NativeExecutor.call(&mut t, &native_equivalent_code[..], "execute_transaction", &CallData(tx()));
+		let r = NativeExecutor.call(&mut t, compact_code, "execute_transaction", &CallData(tx()));
 		assert!(r.is_ok());
 
 		runtime_std::with_externalities(&mut t, || {
@@ -100,8 +99,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
-		let r = NativeExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		let r = NativeExecutor.call(&mut t, bloaty_code, "execute_transaction", &CallData(tx()));
 		assert!(r.is_ok());
 
 		runtime_std::with_externalities(&mut t, || {
