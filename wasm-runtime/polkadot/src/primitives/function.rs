@@ -37,15 +37,14 @@ pub enum Function {
 impl Function {
 	/// Derive `Some` value from a `u8`, or `None` if it's invalid.
 	pub fn from_u8(value: u8) -> Option<Function> {
-		match value {
-			x if x == Function::StakingStake as u8 => Some(Function::StakingStake),
-			x if x == Function::StakingUnstake as u8 => Some(Function::StakingUnstake),
-			x if x == Function::StakingTransfer as u8 => Some(Function::StakingTransfer),
-			x if x == Function::SessionSetKey as u8 => Some(Function::SessionSetKey),
-			x if x == Function::TimestampSet as u8 => Some(Function::TimestampSet),
-			x if x == Function::GovernancePropose as u8 => Some(Function::GovernancePropose),
-			x if x == Function::GovernanceApprove as u8 => Some(Function::GovernanceApprove),
-			_ => None,
+		use self::*;
+		let functions = [Function::StakingStake, Function::StakingUnstake,
+			Function::StakingTransfer, Function::SessionSetKey, Function::TimestampSet,
+			Function::GovernancePropose, Function::GovernanceApprove];
+		if (value as usize) < functions.len() {
+			Some(functions[value as usize])
+		} else {
+			None
 		}
 	}
 }

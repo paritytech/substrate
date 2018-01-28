@@ -38,14 +38,19 @@ pub enum InternalFunction {
 impl InternalFunction {
 	/// Derive `Some` value from a `u8`, or `None` if it's invalid.
 	pub fn from_u8(value: u8) -> Option<InternalFunction> {
-		match value {
-			x if x == InternalFunction::SystemSetCode as u8 => Some(InternalFunction::SystemSetCode),
-			x if x == InternalFunction::StakingSetSessionsPerEra as u8 => Some(InternalFunction::StakingSetSessionsPerEra),
-			x if x == InternalFunction::StakingSetBondingDuration as u8 => Some(InternalFunction::StakingSetBondingDuration),
-			x if x == InternalFunction::StakingSetValidatorCount as u8 => Some(InternalFunction::StakingSetValidatorCount),
-			x if x == InternalFunction::GovernanceSetApprovalPpmRequired as u8 => Some(InternalFunction::GovernanceSetApprovalPpmRequired),
-			x if x == InternalFunction::SessionSetLength as u8 => Some(InternalFunction::SessionSetLength),
-			_ => None,
+		use self::*;
+		let functions = [
+			InternalFunction::SystemSetCode,
+			InternalFunction::StakingSetSessionsPerEra,
+			InternalFunction::StakingSetBondingDuration,
+			InternalFunction::StakingSetValidatorCount,
+			InternalFunction::GovernanceSetApprovalPpmRequired,
+			InternalFunction::SessionSetLength
+		];
+		if (value as usize) < functions.len() {
+			Some(functions[value as usize])
+		} else {
+			None
 		}
 	}
 }

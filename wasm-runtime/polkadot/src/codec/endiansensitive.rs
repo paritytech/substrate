@@ -17,7 +17,9 @@
 //! Endian manager.
 
 /// Trait to allow conversion to a know endian representation when sensitive.
-// note: the copy bound and static lifetimes are necessary for safety of `Slicable` blanket implementation.
+/// Types implementing this trait must have a size > 0.
+// note: the copy bound and static lifetimes are necessary for safety of `Slicable` blanket
+// implementation.
 pub trait EndianSensitive: Copy + 'static {
 	fn to_le(self) -> Self { self }
 	fn to_be(self) -> Self { self }

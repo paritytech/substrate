@@ -17,7 +17,7 @@
 //! Support code for the runtime.
 
 mod environment;
-mod storable;
+pub mod storage;
 mod hashable;
 #[cfg(feature = "with-std")]
 mod statichex;
@@ -25,8 +25,8 @@ mod statichex;
 #[cfg(feature = "with-std")]
 mod testing;
 
-pub use self::environment::{Environment, with_env};
-pub use self::storable::{StorageVec, Storable, kill};
+pub use self::environment::with_env;
+pub use self::storage::StorageVec;
 pub use self::hashable::Hashable;
 #[cfg(feature = "with-std")]
 pub use self::statichex::{StaticHexConversion, StaticHexInto};
