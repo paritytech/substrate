@@ -123,7 +123,9 @@ pub trait StorageVec {
 	}
 
 	fn set_item(index: u32, item: &Self::Item) {
-		put(&index.to_keyed_vec(Self::PREFIX), item);
+		if index < Self::count() {
+			put(&index.to_keyed_vec(Self::PREFIX), item);
+		}
 	}
 
 	fn item(index: u32) -> Self::Item {
