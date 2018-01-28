@@ -31,7 +31,7 @@ pub fn block_number() -> BlockNumber {
 
 /// Get the block hash of a given block (uses storage).
 pub fn block_hash(number: BlockNumber) -> Hash {
-	storage::get_default(&number.to_keyed_vec(BLOCK_HASH_AT))
+	storage::get_or_default(&number.to_keyed_vec(BLOCK_HASH_AT))
 }
 
 pub mod privileged {
@@ -102,7 +102,7 @@ pub mod internal {
 
 		// check nonce
 		let nonce_key = tx.signed.to_keyed_vec(b"sys:non:");
-		let expected_nonce: TxOrder = storage::get_default(&nonce_key);
+		let expected_nonce: TxOrder = storage::get_or_default(&nonce_key);
 		assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
 		// increment nonce in storage

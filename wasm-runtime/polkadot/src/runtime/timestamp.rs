@@ -23,7 +23,7 @@ pub type Timestamp = u64;
 
 /// Get the current time.
 pub fn get() -> Timestamp {
-	storage::get_default(CURRENT_TIMESTAMP)
+	storage::get_or_default(CURRENT_TIMESTAMP)
 }
 
 pub mod public {
