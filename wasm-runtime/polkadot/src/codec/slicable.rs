@@ -49,6 +49,7 @@ pub trait NonTrivialSlicable: Slicable {}
 impl<T: EndianSensitive> Slicable for T {
 	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: &F) -> Option<Self> {
 		let size = mem::size_of::<T>();
+		assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
 		let mut result: T = unsafe { mem::zeroed() };
 		let result_slice = unsafe {
 			let ptr = &mut result as *mut _ as *mut u8;
@@ -62,6 +63,7 @@ impl<T: EndianSensitive> Slicable for T {
 	}
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		let size = mem::size_of::<Self>();
+		assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
 		self.as_le_then(|le| {
 			let value_slice = unsafe {
 				let ptr = le as *const _ as *const u8;

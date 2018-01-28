@@ -20,7 +20,7 @@
 use runtime_std::prelude::*;
 use runtime_std::{mem, print};
 use codec::KeyedVec;
-use support::{Hashable, Storable, with_env};
+use support::{Hashable, storage, with_env};
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
 use runtime::{staking, session};
 
@@ -31,7 +31,7 @@ pub fn block_number() -> BlockNumber {
 
 /// Get the block hash of a given block (uses storage).
 pub fn block_hash(number: BlockNumber) -> Hash {
-	Storable::lookup_default(&number.to_keyed_vec(b"sys:old:"))
+	storage::get_default(&number.to_keyed_vec(b"sys:old:"))
 }
 
 pub mod privileged {
@@ -39,7 +39,7 @@ pub mod privileged {
 
 	/// Set the new code.
 	pub fn set_code(new: &[u8]) {
-		new.store(b":code");
+		storage::put_raw(b":code", new);
 	}
 }
 
@@ -77,7 +77,7 @@ pub mod internal {
 
 		// store the header hash in storage.
 		let header_hash_key = header.number.to_keyed_vec(b"sys:old:");
-		header.blake2_256().store(&header_hash_key);
+		storage::put(&header_hash_key, &header.blake2_256());
 
 		// execute transactions
 		block.transactions.iter().for_each(execute_transaction);
@@ -102,11 +102,11 @@ pub mod internal {
 
 		// check nonce
 		let nonce_key = tx.signed.to_keyed_vec(b"sys:non:");
-		let expected_nonce: TxOrder = Storable::lookup_default(&nonce_key);
+		let expected_nonce: TxOrder = storage::get_default(&nonce_key);
 		assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
 		// increment nonce in storage
-		(expected_nonce + 1).store(&nonce_key);
+		storage::put(&nonce_key, &(expected_nonce + 1));
 
 		// decode parameters and dispatch
 		tx.function.dispatch(&tx.signed, &tx.input_data);

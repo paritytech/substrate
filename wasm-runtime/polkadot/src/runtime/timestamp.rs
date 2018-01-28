@@ -16,14 +16,14 @@
 
 //! Timestamp manager: just handles the current timestamp.
 
-use support::Storable;
+use support::storage;
 
 /// Representation of a time.
 pub type Timestamp = u64;
 
 /// Get the current time.
 pub fn get() -> Timestamp {
-	Storable::lookup_default(b"tim:val")
+	storage::get_default(b"tim:val")
 }
 
 pub mod public {
@@ -31,7 +31,7 @@ pub mod public {
 
 	/// Set the current time.
 	pub fn set(now: Timestamp) {
-		now.store(b"tim:val")
+		storage::put(b"tim:val", &now);
 	}
 }
 

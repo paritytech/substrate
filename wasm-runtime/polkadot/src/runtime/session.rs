@@ -19,7 +19,7 @@
 
 use runtime_std::prelude::*;
 use codec::KeyedVec;
-use support::{kill, Storable, StorageVec};
+use support::{storage, StorageVec};
 use primitives::{AccountID, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
@@ -30,7 +30,7 @@ pub fn validators() -> Vec<AccountID> {
 
 /// The number of blocks in each session.
 pub fn length() -> BlockNumber {
-	Storable::lookup_default(b"ses:len")
+	storage::get_or(b"ses:len", 0)
 }
 
 /// The number of validators currently.
@@ -40,12 +40,12 @@ pub fn validator_count() -> usize {
 
 /// The current era index.
 pub fn current_index() -> BlockNumber {
-	Storable::lookup_default(b"ses:ind")
+	storage::get_or(b"ses:ind", 0)
 }
 
 /// The block number at which the era length last changed.
 pub fn last_length_change() -> BlockNumber {
-	Storable::lookup_default(b"ses:llc")
+	storage::get_or(b"ses:llc", 0)
 }
 
 pub mod public {
@@ -55,7 +55,7 @@ pub mod public {
 	/// session.
 	pub fn set_key(validator: &AccountID, key: &SessionKey) {
 		// set new value for next session
-		key.store(&validator.to_keyed_vec(b"ses:nxt:"));
+		storage::put(&validator.to_keyed_vec(b"ses:nxt:"), key);
 	}
 }
 
@@ -64,7 +64,7 @@ pub mod privileged {
 
 	/// Set a new era length. Won't kick in until the next era change (at current length).
 	pub fn set_length(new: BlockNumber) {
-		new.store(b"ses:nln");
+		storage::put(b"ses:nln", &new);
 	}
 }
 
@@ -102,21 +102,20 @@ impl StorageVec for ValidatorStorageVec {
 /// Move onto next session: register the new authority set.
 fn rotate_session() {
 	// Increment current session index.
-	(current_index() + 1).store(b"ses:ind");
+	storage::put(b"ses:ind", &(current_index() + 1));
 
 	// Enact era length change.
-	if let Some(next_len) = u64::lookup(b"ses:nln") {
-		next_len.store(b"ses:len");
-		system::block_number().store(b"ses:llc");
-		kill(b"ses:nln");
+	if let Some(next_len) = storage::get::<u64>(b"ses:nln") {
+		storage::put(b"ses:len", &next_len);
+		storage::put(b"ses:llc", &system::block_number());
+		storage::kill(b"ses:nln");
 	}
 
 	// Update any changes in session keys.
 	validators().iter().enumerate().for_each(|(i, v)| {
 		let k = v.to_keyed_vec(b"ses:nxt:");
-		if let Some(n) = Storable::lookup(&k) {
+		if let Some(n) = storage::take(&k) {
 			consensus::internal::set_authority(i as u32, &n);
-			kill(&k);
 		}
 	});
 }

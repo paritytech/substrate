@@ -19,7 +19,7 @@
 use runtime_std::prelude::*;
 use runtime_std::cell::RefCell;
 use codec::KeyedVec;
-use support::{Storable, StorageVec};
+use support::{storage, StorageVec};
 use primitives::{BlockNumber, AccountID};
 use runtime::{system, session, governance};
 
@@ -31,12 +31,12 @@ pub type Bondage = u64;
 
 /// The length of the bonding duration in eras.
 pub fn bonding_duration() -> BlockNumber {
-	Storable::lookup_default(b"sta:loc")
+	storage::get_default(b"sta:loc")
 }
 
 /// The length of a staking era in sessions.
 pub fn validator_count() -> usize {
-	u32::lookup_default(b"sta:vac") as usize
+	storage::get_default::<u32>(b"sta:vac") as usize
 }
 
 /// The length of a staking era in blocks.
@@ -46,27 +46,27 @@ pub fn era_length() -> BlockNumber {
 
 /// The length of a staking era in sessions.
 pub fn sessions_per_era() -> BlockNumber {
-	Storable::lookup_default(b"sta:spe")
+	storage::get_default(b"sta:spe")
 }
 
 /// The current era index.
 pub fn current_era() -> BlockNumber {
-	Storable::lookup_default(b"sta:era")
+	storage::get_default(b"sta:era")
 }
 
 /// The block number at which the era length last changed.
 pub fn last_era_length_change() -> BlockNumber {
-	Storable::lookup_default(b"sta:lec")
+	storage::get_default(b"sta:lec")
 }
 
 /// The balance of a given account.
 pub fn balance(who: &AccountID) -> Balance {
-	Storable::lookup_default(&who.to_keyed_vec(b"sta:bal:"))
+	storage::get_default(&who.to_keyed_vec(b"sta:bal:"))
 }
 
 /// The liquidity-state of a given account.
 pub fn bondage(who: &AccountID) -> Bondage {
-	Storable::lookup_default(&who.to_keyed_vec(b"sta:bon:"))
+	storage::get_default(&who.to_keyed_vec(b"sta:bon:"))
 }
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
@@ -81,14 +81,14 @@ pub mod public {
 	/// Transfer some unlocked staking balance to another staker.
 	pub fn transfer(transactor: &AccountID, dest: &AccountID, value: Balance) {
 		let from_key = transactor.to_keyed_vec(b"sta:bal:");
-		let from_balance = Balance::lookup_default(&from_key);
+		let from_balance = storage::get_default::<Balance>(&from_key);
 		assert!(from_balance >= value);
 		let to_key = dest.to_keyed_vec(b"sta:bal:");
-		let to_balance: Balance = Storable::lookup_default(&to_key);
+		let to_balance: Balance = storage::get_default(&to_key);
 		assert!(bondage(transactor) <= bondage(dest));
 		assert!(to_balance + value > to_balance);	// no overflow
-		(from_balance - value).store(&from_key);
-		(to_balance + value).store(&to_key);
+		storage::put(&from_key, &(from_balance - value));
+		storage::put(&to_key, &(to_balance + value));
 	}
 
 	/// Declare the desire to stake for the transactor.
@@ -100,7 +100,7 @@ pub mod public {
 		assert!(intentions.iter().find(|t| *t == transactor).is_none(), "Cannot stake if already staked.");
 		intentions.push(transactor.clone());
 		IntentionStorageVec::set_items(&intentions);
-		u64::max_value().store(&transactor.to_keyed_vec(b"sta:bon:"));
+		storage::put(&transactor.to_keyed_vec(b"sta:bon:"), &u64::max_value());
 	}
 
 	/// Retract the desire to stake for the transactor.
@@ -114,7 +114,7 @@ pub mod public {
 			panic!("Cannot unstake if not already staked.");
 		}
 		IntentionStorageVec::set_items(&intentions);
-		(current_era() + bonding_duration()).store(&transactor.to_keyed_vec(b"sta:bon:"));
+		storage::put(&transactor.to_keyed_vec(b"sta:bon:"), &(current_era() + bonding_duration()));
 	}
 }
 
@@ -123,17 +123,17 @@ pub mod privileged {
 
 	/// Set the number of sessions in an era.
 	pub fn set_sessions_per_era(new: BlockNumber) {
-		new.store(b"sta:nse");
+		storage::put(b"sta:nse", &new);
 	}
 
 	/// The length of the bonding duration in eras.
 	pub fn set_bonding_duration(new: BlockNumber) {
-		new.store(b"sta:loc");
+		storage::put(b"sta:loc", &new);
 	}
 
 	/// The length of a staking era in sessions.
 	pub fn set_validator_count(new: usize) {
-		(new as u32).store(b"sta:vac");
+		storage::put(b"sta:vac", &(new as u32));
 	}
 }
 
@@ -164,13 +164,13 @@ fn new_era() {
 	governance::internal::end_of_an_era();
 
 	// Increment current era.
-	(current_era() + 1).store(b"sta:era");
+	storage::put(b"sta:era", &(current_era() + 1));
 
 	// Enact era length change.
-	let next_spe: u64 = Storable::lookup_default(b"sta:nse");
+	let next_spe: u64 = storage::get_default(b"sta:nse");
 	if next_spe > 0 && next_spe != sessions_per_era() {
-		next_spe.store(b"sta:spe");
-		system::block_number().store(b"sta:lec");
+		storage::put(b"sta:spe", &next_spe);
+		storage::put(b"sta:lec", &system::block_number());
 	}
 
 	// evaluate desired staking amounts and nominations and optimise to find the best
@@ -196,7 +196,7 @@ mod tests {
 	use super::internal::*;
 	use super::public::*;
 	use super::privileged::*;
-	
+
 	use runtime_std::{with_externalities, twox_128};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, TestExternalities, with_env};
