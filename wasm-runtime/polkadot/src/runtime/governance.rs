@@ -31,14 +31,6 @@ use support::storage;
 use primitives::{AccountID, Hash, BlockNumber, Proposal};
 use runtime::{staking, system, session};
 
-/*macro_rules! db_name {
-	( $( $name:ident )+ ) => concat!("gov:", $( stringify!($name) ),+ )
-}*/
-
-const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
-const CURRENT_PROPOSAL: &[u8] = b"gov:pro";
-const APPROVAL_OF: &[u8] = b"gov:app:";
-
 /// The proportion of validators required for a propsal to be approved measured as the number out
 /// of 1000.
 pub fn approval_ppm_required() -> u32 {
@@ -114,6 +106,10 @@ pub mod internal {
 		}
 	}
 }
+
+const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
+const CURRENT_PROPOSAL: &[u8] = b"gov:pro";
+const APPROVAL_OF: &[u8] = b"gov:app:";
 
 #[cfg(test)]
 mod tests {
