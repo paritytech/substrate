@@ -274,8 +274,11 @@ mod tests {
 
 	use super::*;
 	use rustc_hex::FromHex;
-	use native_runtime::testing::TestExternalities;
-	use primitives::hashing::blake2_256;
+	use primitives::{blake2_256, twox_128};
+	use runtime_std;
+	use native_runtime::support::{one, two, StaticHexInto, TestExternalities};
+	use native_runtime::codec::KeyedVec;
+	use native_runtime::runtime::staking::balance;
 
 	#[test]
 	fn returning_should_work() {
@@ -373,13 +376,6 @@ mod tests {
 		);
 	}
 
-	use primitives::twox_128;
-	use native_runtime::testing::{one, two};
-	use native_runtime::statichex::StaticHexInto;
-	use native_runtime::keyedvec::KeyedVec;
-	use native_runtime::runtime::staking::balance;
-	use runtime_support;
-
 	fn tx() -> Vec<u8> { "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000".convert() }
 
 	#[test]
@@ -407,7 +403,7 @@ mod tests {
 		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
 		assert!(r.is_ok());
 
-		runtime_support::with_externalities(&mut t, || {
+		runtime_std::with_externalities(&mut t, || {
 			assert_eq!(balance(&one), 42);
 			assert_eq!(balance(&two), 69);
 		});

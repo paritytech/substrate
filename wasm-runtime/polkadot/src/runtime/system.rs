@@ -17,14 +17,11 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
+use runtime_std::prelude::*;
+use runtime_std::{mem, print};
+use codec::KeyedVec;
+use support::{Hashable, Storable, with_env};
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
-use runtime_support::mem;
-use runtime_support::prelude::*;
-use runtime_support::print;
-use hashable::Hashable;
-use storable::Storable;
-use keyedvec::KeyedVec;
-use environment::with_env;
 use runtime::{staking, session};
 
 /// The current block number being processed. Set by `execute_block`.
@@ -120,7 +117,7 @@ mod tests {
 	use function::Function;
 	use keyedvec::KeyedVec;
 	use slicable::Slicable;
-	use runtime_support::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128};
 	use primitives::{UncheckedTransaction, Transaction};
 	use statichex::StaticHexInto;
 	use runtime::{system, staking};

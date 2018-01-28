@@ -558,7 +558,7 @@ dependencies = [
 name = "native-runtime"
 version = "0.1.0"
 dependencies = [
- "runtime-support 0.1.0",
+ "runtime-std 0.1.0",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -737,7 +737,7 @@ dependencies = [
  "polkadot-primitives 0.1.0",
  "polkadot-serializer 0.1.0",
  "polkadot-state-machine 0.1.0",
- "runtime-support 0.1.0",
+ "runtime-std 0.1.0",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.19 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -921,7 +921,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "runtime-support"
+name = "runtime-std"
 version = "0.1.0"
 dependencies = [
  "environmental 0.1.0",

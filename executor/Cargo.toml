@@ -14,7 +14,7 @@ parity-wasm = "0.15.0"
 byteorder = "1.1"
 rustc-hex = "1.0.0"
 native-runtime = { path = "../native-runtime", version = "0.1" }
-runtime-support = { path = "../native-runtime/support", version = "0.1" }
+runtime-std = { path = "../native-runtime/std", version = "0.1" }
 memcmp = { version = "0.0.6" }
 
 [dev-dependencies]

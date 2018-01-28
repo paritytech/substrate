@@ -16,7 +16,7 @@
 
 //! Digest type.
 
-use runtime_support::prelude::*;
+use runtime_std::prelude::*;
 
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]

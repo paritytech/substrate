@@ -17,9 +17,9 @@
 //! Session manager: is told the validators and allows them to manage their session keys for the
 //! consensus module.
 
-use runtime_support::prelude::*;
-use keyedvec::KeyedVec;
-use storable::{kill, Storable, StorageVec};
+use runtime_std::prelude::*;
+use codec::KeyedVec;
+use support::{kill, Storable, StorageVec};
 use primitives::{AccountID, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
@@ -118,7 +118,7 @@ fn rotate_session() {
 
 #[cfg(test)]
 mod tests {
-	use runtime_support::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128};
 	use keyedvec::KeyedVec;
 	use joiner::Joiner;
 	use testing::{one, two, TestExternalities};

@@ -9,5 +9,5 @@ with-std = []
 without-std = []
 
 [dependencies]
-runtime-support = { path = "./support", version = "0.1" }
+runtime-std = { path = "./std", version = "0.1" }
 rustc-hex = "1.0"

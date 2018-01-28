@@ -16,10 +16,10 @@
 
 //! Testing helpers.
 
-use runtime_support::{Externalities, ExternalitiesError};
 use std::collections::HashMap;
+use runtime_std::{Externalities, ExternalitiesError};
 use primitives::AccountID;
-use statichex::StaticHexInto;
+use super::statichex::StaticHexInto;
 
 #[derive(Debug, Default)]
 /// Simple externaties implementation.

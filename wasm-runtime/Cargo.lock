@@ -13,11 +13,11 @@ version = "0.1.0"
 name = "runtime-polkadot"
 version = "0.1.0"
 dependencies = [
- "runtime-support 0.1.0",
+ "runtime-std 0.1.0",
 ]
 
 [[package]]
-name = "runtime-support"
+name = "runtime-std"
 version = "0.1.0"
 dependencies = [
  "pwasm-alloc 0.1.0",
@@ -28,6 +28,6 @@ dependencies = [
 name = "runtime-test"
 version = "0.1.0"
 dependencies = [
- "runtime-support 0.1.0",
+ "runtime-std 0.1.0",
 ]
 

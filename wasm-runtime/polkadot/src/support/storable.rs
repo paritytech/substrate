@@ -16,10 +16,9 @@
 
 //! Stuff to do with the runtime's storage.
 
-use slicable::Slicable;
-use keyedvec::KeyedVec;
-use runtime_support::prelude::*;
-use runtime_support::{self, twox_128};
+use runtime_std::prelude::*;
+use runtime_std::{self, twox_128};
+use codec::{Slicable, KeyedVec};
 
 /// Trait for a value which may be stored in the storage DB.
 pub trait Storable {
@@ -51,23 +50,23 @@ pub trait Storable {
 
 /// Remove `key` from storage.
 pub fn kill(key: &[u8]) {
-	runtime_support::set_storage(&twox_128(key)[..], b"");
+	runtime_std::set_storage(&twox_128(key)[..], b"");
 }
 
 impl<T: Sized + Slicable> Storable for T {
 	fn lookup(key: &[u8]) -> Option<Self> {
 		Slicable::set_as_slice(&|out, offset|
-			runtime_support::read_storage(&twox_128(key)[..], out, offset) >= out.len()
+			runtime_std::read_storage(&twox_128(key)[..], out, offset) >= out.len()
 		)
 	}
 	fn store(&self, key: &[u8]) {
-		self.as_slice_then(|slice| runtime_support::set_storage(&twox_128(key)[..], slice));
+		self.as_slice_then(|slice| runtime_std::set_storage(&twox_128(key)[..], slice));
 	}
 }
 
 impl Storable for [u8] {
 	fn store(&self, key: &[u8]) {
-		runtime_support::set_storage(&twox_128(key)[..], self)
+		runtime_std::set_storage(&twox_128(key)[..], self)
 	}
 }
 
@@ -110,9 +109,9 @@ pub trait StorageVec {
 mod tests {
 	use super::*;
 	use std::collections::HashMap;
-	use runtime_support::with_externalities;
+	use runtime_std::with_externalities;
 	use testing::{TestExternalities, HexDisplay};
-	use runtime_support::{storage, twox_128};
+	use runtime_std::{storage, twox_128};
 
 	#[test]
 	fn integers_can_be_stored() {
@@ -153,7 +152,7 @@ mod tests {
 	fn vecs_can_be_retrieved() {
 		let mut t = TestExternalities { storage: HashMap::new(), };
 		with_externalities(&mut t, || {
-			runtime_support::set_storage(&twox_128(b":test"), b"\x0b\0\0\0Hello world");
+			runtime_std::set_storage(&twox_128(b":test"), b"\x0b\0\0\0Hello world");
 			let x = b"Hello world".to_vec();
 			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test"))));
 			let y = <Vec<u8>>::lookup(b":test").unwrap();
