@@ -18,6 +18,8 @@
 
 use support::storage;
 
+const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
+
 /// Representation of a time.
 pub type Timestamp = u64;
 
@@ -34,8 +36,6 @@ pub mod public {
 		storage::put(CURRENT_TIMESTAMP, &now);
 	}
 }
-
-const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
 
 #[cfg(test)]
 mod tests {

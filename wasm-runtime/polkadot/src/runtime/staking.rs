@@ -29,6 +29,21 @@ pub type Balance = u64;
 /// The amount of bonding period left in an account. Measured in eras.
 pub type Bondage = u64;
 
+struct IntentionStorageVec {}
+impl StorageVec for IntentionStorageVec {
+	type Item = AccountID;
+	const PREFIX: &'static[u8] = b"sta:wil:";
+}
+
+const BONDING_DURATION: &[u8] = b"sta:loc";
+const VALIDATOR_COUNT: &[u8] = b"sta:vac";
+const SESSIONS_PER_ERA: &[u8] = b"sta:spe";
+const NEXT_SESSIONS_PER_ERA: &[u8] = b"sta:nse";
+const CURRENT_ERA: &[u8] = b"sta:era";
+const LAST_ERA_LENGTH_CHANGE: &[u8] = b"sta:lec";
+const BALANCE_OF: &[u8] = b"sta:bal:";
+const BONDAGE_OF: &[u8] = b"sta:bon:";
+
 /// The length of the bonding duration in eras.
 pub fn bonding_duration() -> BlockNumber {
 	storage::get_or_default(BONDING_DURATION)
@@ -148,21 +163,6 @@ pub mod internal {
 		}
 	}
 }
-
-struct IntentionStorageVec {}
-impl StorageVec for IntentionStorageVec {
-	type Item = AccountID;
-	const PREFIX: &'static[u8] = b"sta:wil:";
-}
-
-const BONDING_DURATION: &[u8] = b"sta:loc";
-const VALIDATOR_COUNT: &[u8] = b"sta:vac";
-const SESSIONS_PER_ERA: &[u8] = b"sta:spe";
-const NEXT_SESSIONS_PER_ERA: &[u8] = b"sta:nse";
-const CURRENT_ERA: &[u8] = b"sta:era";
-const LAST_ERA_LENGTH_CHANGE: &[u8] = b"sta:lec";
-const BALANCE_OF: &[u8] = b"sta:bal:";
-const BONDAGE_OF: &[u8] = b"sta:bon:";
 
 /// The era has changed - enact new staking set.
 ///
