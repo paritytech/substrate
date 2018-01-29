@@ -22,7 +22,7 @@ pub unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut
 	ext_memcpy(dest, src, n)
 }
 
-/// memcpy extern
+/// memcmp extern
 #[no_mangle]
 pub unsafe extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
 	ext_memcmp(s1, s2, n)
