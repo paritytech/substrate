@@ -36,7 +36,7 @@ extern crate byteorder;
 extern crate rustc_hex;
 extern crate native_runtime;
 extern crate runtime_std;
-extern crate memcmp;
+extern crate libc;
 
 #[macro_use]
 extern crate error_chain;

@@ -16,10 +16,11 @@
 
 //! Rust implementation of Polkadot contracts.
 
+use libc::{memcmp, c_void};
 use std::sync::Arc;
 use std::collections::HashMap;
 use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
-use parity_wasm::interpreter::{ItemIndex};
+use parity_wasm::interpreter::{ItemIndex, DummyUserError};
 use parity_wasm::RuntimeValue::{I32, I64};
 use primitives::contract::CallData;
 use state_machine::{Externalities, CodeExecutor};
@@ -96,10 +97,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
 		if let (Ok(sl1), Ok(sl2))
 			= (this.memory.get(s1, n as usize), this.memory.get(s2, n as usize)) {
-			use memcmp::Memcmp;
-			(&sl1).memcmp(&sl2) as i32
+			unsafe {
+				memcmp(sl1.as_ptr() as *const u8 as *const c_void,
+					sl2.as_ptr() as *const u8 as *const c_void,
+					n as usize) as i32
+			}	
 		} else {
-			0
+			return Err(DummyUserError.into());
 		}
 	},
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {

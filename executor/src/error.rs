@@ -59,5 +59,11 @@ error_chain! {
 			description("runtime failure"),
 			display("Runtime error"),
 		}
+
+		/// Runtime failed.
+		InvalidMemoryReference {
+			description("invalid memory reference"),
+			display("Invalid memory reference"),
+		}
 	}
 }
