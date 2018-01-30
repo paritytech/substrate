@@ -20,24 +20,30 @@ use bytes;
 use hash::H256;
 use parachain;
 
+/// Used to refer to a block number.
+pub type Number = u64;
+
 /// Hash used to refer to a block hash.
 pub type HeaderHash = H256;
 
+/// Hash used to refer to a transaction hash.
+pub type TransactionHash = H256;
+
 /// Execution log (event)
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Log(#[serde(with="bytes")] pub Vec<u8>);
 
 /// A relay chain block header.
 ///
 /// https://github.com/w3f/polkadot-spec/blob/master/spec.md#header
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
 	/// Block parent's hash.
 	pub parent_hash: HeaderHash,
 	/// Block number.
-	pub number: u64,
+	pub number: Number,
 	/// State root after this transition.
 	pub state_root: H256,
 	/// Parachain activity bitfield
@@ -50,7 +56,7 @@ pub struct Header {
 ///
 /// Included candidates should be sorted by parachain ID, and without duplicate
 /// IDs.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Body {

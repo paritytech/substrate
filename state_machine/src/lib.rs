@@ -43,7 +43,7 @@ pub enum Update {
 }
 
 // in-memory section of the state.
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct MemoryState {
 	storage: HashMap<Vec<u8>, Vec<u8>>,
 }
@@ -152,7 +152,7 @@ pub trait Externalities {
 }
 
 /// Code execution engine.
-pub trait CodeExecutor: Sized {
+pub trait CodeExecutor: Sized + Send + Sync {
 	/// Externalities error type.
 	type Error: Error;
 

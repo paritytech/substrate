@@ -12,18 +12,19 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-//! Initialization errors.
+use service::Role;
 
-use client;
+/// Protocol configuration
+pub struct ProtocolConfig {
+	pub roles: Role,
+}
 
-error_chain! {
-	foreign_links {
-		Io(::std::io::Error) #[doc="IO error"];
-		Cli(::clap::Error) #[doc="CLI error"];
+impl Default for ProtocolConfig {
+	fn default() -> ProtocolConfig {
+		ProtocolConfig {
+			roles: Role::FULL,
+		}
 	}
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
-    }
 }
