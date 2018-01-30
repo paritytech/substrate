@@ -6,6 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 error-chain = "0.11"
 polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1" }
+polkadot-runtime-std = { path = "../runtime-std", version = "0.1" }
 polkadot-primitives = { path = "../primitives", version = "0.1" }
 polkadot-serializer = { path = "../serializer", version = "0.1" }
 polkadot-state-machine = { path = "../state-machine" , version = "0.1" }
@@ -15,7 +16,7 @@ parity-wasm = "0.15.0"
 byteorder = "1.1"
 rustc-hex = "1.0.0"
 native-runtime = { path = "../native-runtime", version = "0.1" }
-runtime-std = { path = "../native-runtime/std", version = "0.1" }
+
 libc = { version = "0.2.33" }
 
 [dev-dependencies]
