@@ -147,7 +147,7 @@ pub trait Externalities {
 	fn chain_id(&self) -> u64;
 
 	/// Get the trie root of the current storage map.
-	fn commit(&self) -> [u8; 32];
+	fn storage_root(&self) -> [u8; 32];
 
 	/// Get the current set of authorities from storage.
 	fn authorities(&self) -> Result<Vec<&[u8]>, ExternalitiesError> {

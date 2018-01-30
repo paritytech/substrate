@@ -23,11 +23,13 @@ use triehash::trie_root;
 /// Simple HashMap based Externalities impl.
 #[derive(Debug, Default)]
 pub struct TestExternalities {
+	/// The storage.
 	pub storage: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl TestExternalities {
-	fn new() -> Self {
+	/// Create a new instance with empty storage.
+	pub fn new() -> Self {
 		TestExternalities {
 			storage: HashMap::new(),
 		}
@@ -45,7 +47,7 @@ impl Externalities for TestExternalities {
 
 	fn chain_id(&self) -> u64 { 42 }
 
-	fn commit(&self) -> [u8; 32] {
+	fn storage_root(&self) -> [u8; 32] {
 		trie_root(self.storage.clone()).0
 	}
 }
@@ -61,6 +63,6 @@ mod tests {
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
-		assert_eq!(ext.commit(), ROOT);
+		assert_eq!(ext.storage_root(), ROOT);
 	}
 }
