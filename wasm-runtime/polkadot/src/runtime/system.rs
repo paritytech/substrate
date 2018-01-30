@@ -20,7 +20,7 @@
 use runtime_std::prelude::*;
 use runtime_std::{mem, print, storage_root};
 use codec::KeyedVec;
-use support::{self, Hashable, storage, with_env};
+use support::{Hashable, storage, with_env};
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
 use runtime::{staking, session};
 
@@ -87,7 +87,7 @@ pub mod internal {
 		// any final checks
 		final_checks(&block);
 
-		println!("SR: {}", super::support::HexDisplay::from(&storage_root()));
+//		println!("SR: {}", ::support::HexDisplay::from(&storage_root()));
 
 		// check storage root.
 		assert!(header.state_root == storage_root(), "Storage root must match that calculated.");
@@ -205,8 +205,6 @@ mod tests {
 			},
 			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
 		};
-		// tx: 2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000
-		// sig: 679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a
 
 		let h = Header {
 			parent_hash: [69u8; 32],
