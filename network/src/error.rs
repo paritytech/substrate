@@ -12,18 +12,20 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-//! Initialization errors.
-
+use network::Error as NetworkError;
 use client;
 
 error_chain! {
 	foreign_links {
-		Io(::std::io::Error) #[doc="IO error"];
-		Cli(::clap::Error) #[doc="CLI error"];
+		Network(NetworkError) #[doc = "Devp2p error."];
 	}
+
 	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
-    }
+		Client(client::error::Error, client::error::ErrorKind);
+	}
+
+	errors {
+	}
 }

@@ -36,6 +36,3 @@ extern crate assert_matches;
 
 pub mod chain;
 pub mod state;
-
-#[cfg(test)]
-mod test_helpers;
