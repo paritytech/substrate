@@ -127,9 +127,9 @@ mod tests {
 	use super::*;
 	use super::internal::*;
 
-	use runtime_std::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
-	use support::{StaticHexInto, TestExternalities, HexDisplay, one, two};
+	use support::{StaticHexInto, HexDisplay, one, two};
 	use primitives::{UncheckedTransaction, Transaction, Function};
 	use runtime::staking;
 

@@ -35,6 +35,9 @@ use primitives::contract::{CallData};
 
 pub mod backend;
 mod ext;
+mod testing;
+
+pub use testing::TestExternalities;
 
 /// Updates to be committed to the state.
 pub enum Update {
@@ -141,6 +144,9 @@ pub trait Externalities {
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 
+	/// Get the trie root of the current storage map.
+	fn commit(&self) -> [u8; 32];
+
 	/// Get the current set of authorities from storage.
 	fn authorities(&self) -> Result<Vec<&[u8]>, ExternalitiesError> {
 		(0..self.storage(b"con:aut:len")?.into_iter()
@@ -210,8 +216,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
-	use super::{OverlayedChanges, Externalities, ExternalitiesError};
+	use super::{OverlayedChanges, Externalities, TestExternalities};
 
 	#[test]
 	fn overlayed_storage_works() {
@@ -236,22 +241,6 @@ mod tests {
 		overlayed.set_storage(key.clone(), vec![]);
 		overlayed.commit_prospective();
 		assert!(overlayed.storage(&key).is_none());
-	}
-
-	#[derive(Debug, Default)]
-	struct TestExternalities {
-		storage: HashMap<Vec<u8>, Vec<u8>>,
-	}
-	impl Externalities for TestExternalities {
-		fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
-			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
-		}
-
-		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
-			self.storage.insert(key, value);
-		}
-
-		fn chain_id(&self) -> u64 { 42 }
 	}
 
 	#[test]

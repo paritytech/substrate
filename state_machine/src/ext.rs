@@ -75,4 +75,8 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 	fn chain_id(&self) -> u64 {
 		42
 	}
+
+	fn commit(&self) -> [u8; 32] {
+		unimplemented!();
+	}
 }

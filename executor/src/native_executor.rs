@@ -41,8 +41,9 @@ impl CodeExecutor for NativeExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use runtime_std::TestExternalities;
 	use native_runtime::codec::KeyedVec;
-	use native_runtime::support::{TestExternalities, one, two, StaticHexInto};
+	use native_runtime::support::{one, two, StaticHexInto};
 	use native_runtime::runtime::staking::balance;
 	use primitives::twox_128;
 

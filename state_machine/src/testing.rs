@@ -14,21 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Support code for the runtime.
+//! Test implementation for Externalities.
 
-mod environment;
-pub mod storage;
-mod hashable;
-#[cfg(feature = "with-std")]
-mod statichex;
-#[macro_use]
-#[cfg(feature = "with-std")]
-mod testing;
+use std::collections::HashMap;
+use super::{Externalities, ExternalitiesError};
 
-pub use self::environment::with_env;
-pub use self::storage::StorageVec;
-pub use self::hashable::Hashable;
-#[cfg(feature = "with-std")]
-pub use self::statichex::{StaticHexConversion, StaticHexInto};
-#[cfg(feature = "with-std")]
-pub use self::testing::{AsBytesRef, HexDisplay, one, two};
+/// Simple HashMap based Externalities impl.
+#[derive(Debug, Default)]
+pub struct TestExternalities {
+	pub storage: HashMap<Vec<u8>, Vec<u8>>,
+}
+
+impl Externalities for TestExternalities {
+	fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
+		Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
+	}
+
+	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
+		self.storage.insert(key, value);
+	}
+
+	fn chain_id(&self) -> u64 { 42 }
+
+	fn commit(&self) -> [u8; 32] {
+		unimplemented!();
+	}
+}
