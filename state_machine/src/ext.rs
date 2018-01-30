@@ -19,7 +19,7 @@
 use std::{error, fmt};
 
 use backend::Backend;
-use {Externalities, OverlayedChanges};
+use {Externalities, ExternalitiesError, OverlayedChanges};
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -61,16 +61,18 @@ pub struct Ext<'a, B: 'a> {
 impl<'a, B: 'a> Externalities for Ext<'a, B>
 	where B: Backend
 {
-	type Error = B::Error;
-
-	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error> {
+	fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
 		match self.overlay.storage(key) {
 			Some(x) => Ok(x),
-			None => self.backend.storage(key)
+			None => self.backend.storage(key).map_err(|_| ExternalitiesError),
 		}
 	}
 
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 		self.overlay.set_storage(key, value);
+	}
+
+	fn chain_id(&self) -> u64 {
+		42
 	}
 }

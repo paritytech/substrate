@@ -18,11 +18,13 @@
 
 use super::*;
 
+use tests::Network;
+
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures::prelude::*;
-use futures::sync::{oneshot, mpsc};
+use futures::sync::oneshot;
 use futures::future::FutureResult;
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -32,10 +34,10 @@ struct Candidate(usize);
 struct Digest(usize);
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-struct ValidatorId(usize);
+struct AuthorityId(usize);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-struct Signature(Message<Candidate, Digest>, ValidatorId);
+struct Signature(Message<Candidate, Digest>, AuthorityId);
 
 struct SharedContext {
 	node_count: usize,
@@ -87,13 +89,13 @@ impl SharedContext {
 		self.current_round += 1;
 	}
 
-	fn round_proposer(&self, round: usize) -> ValidatorId {
-		ValidatorId(round % self.node_count)
+	fn round_proposer(&self, round: usize) -> AuthorityId {
+		AuthorityId(round % self.node_count)
 	}
 }
 
 struct TestContext {
-	local_id: ValidatorId,
+	local_id: AuthorityId,
 	proposal: Mutex<usize>,
 	shared: Arc<Mutex<SharedContext>>,
 }
@@ -101,16 +103,16 @@ struct TestContext {
 impl Context for TestContext {
 	type Candidate = Candidate;
 	type Digest = Digest;
-	type ValidatorId = ValidatorId;
+	type AuthorityId = AuthorityId;
 	type Signature = Signature;
 	type RoundTimeout = Box<Future<Item=(), Error=Error>>;
-	type Proposal = FutureResult<Candidate, Error>;
+	type CreateProposal = FutureResult<Candidate, Error>;
 
-	fn local_id(&self) -> ValidatorId {
+	fn local_id(&self) -> AuthorityId {
 		self.local_id.clone()
 	}
 
-	fn proposal(&self) -> Self::Proposal {
+	fn proposal(&self) -> Self::CreateProposal {
 		let proposal = {
 			let mut p = self.proposal.lock().unwrap();
 			let x = *p;
@@ -126,7 +128,7 @@ impl Context for TestContext {
 	}
 
 	fn sign_local(&self, message: Message<Candidate, Digest>)
-		-> LocalizedMessage<Candidate, Digest, ValidatorId, Signature>
+		-> LocalizedMessage<Candidate, Digest, AuthorityId, Signature>
 	{
 		let signature = Signature(message.clone(), self.local_id.clone());
 		LocalizedMessage {
@@ -136,7 +138,7 @@ impl Context for TestContext {
 		}
 	}
 
-	fn round_proposer(&self, round: usize) -> ValidatorId {
+	fn round_proposer(&self, round: usize) -> AuthorityId {
 		self.shared.lock().unwrap().round_proposer(round)
 	}
 
@@ -146,70 +148,6 @@ impl Context for TestContext {
 
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
 		self.shared.lock().unwrap().round_timeout(round)
-	}
-}
-
-type Comm = ContextCommunication<TestContext>;
-
-struct Network {
-	endpoints: Vec<mpsc::UnboundedSender<Comm>>,
-	input: mpsc::UnboundedReceiver<(usize, Comm)>,
-}
-
-impl Network {
-	fn new(nodes: usize)
-		-> (Network, Vec<mpsc::UnboundedSender<(usize, Comm)>>, Vec<mpsc::UnboundedReceiver<Comm>>)
-	{
-		let mut inputs = Vec::with_capacity(nodes);
-		let mut outputs = Vec::with_capacity(nodes);
-		let mut endpoints = Vec::with_capacity(nodes);
-
-		let (in_tx, in_rx) = mpsc::unbounded();
-		for _ in 0..nodes {
-			let (out_tx, out_rx) = mpsc::unbounded();
-			inputs.push(in_tx.clone());
-			outputs.push(out_rx);
-			endpoints.push(out_tx);
-		}
-
-		let network = Network {
-			endpoints,
-			input: in_rx,
-		};
-
-		(network, inputs, outputs)
-	}
-
-	fn route_on_thread(self) {
-		::std::thread::spawn(move || { let _ = self.wait(); });
-	}
-}
-
-impl Future for Network {
-	type Item = ();
-	type Error = Error;
-
-	fn poll(&mut self) -> Poll<(), Error> {
-		match self.input.poll() {
-			Err(_) => Err(Error),
-			Ok(Async::NotReady) => Ok(Async::NotReady),
-			Ok(Async::Ready(None)) => Ok(Async::Ready(())),
-			Ok(Async::Ready(Some((sender, item)))) => {
-				{
-					let receiving_endpoints = self.endpoints
-						.iter()
-						.enumerate()
-						.filter(|&(i, _)| i != sender)
-						.map(|(_, x)| x);
-
-					for endpoint in receiving_endpoints {
-						let _ = endpoint.unbounded_send(item.clone());
-					}
-				}
-
-				self.poll()
-			}
-		}
 	}
 }
 
@@ -240,7 +178,7 @@ fn consensus_completes_with_minimum_good() {
 		.enumerate()
 		.map(|(i, (tx, rx))| {
 			let ctx = TestContext {
-				local_id: ValidatorId(i),
+				local_id: AuthorityId(i),
 				proposal: Mutex::new(i),
 				shared: shared_context.clone(),
 			};
@@ -296,7 +234,7 @@ fn consensus_does_not_complete_without_enough_nodes() {
 		.enumerate()
 		.map(|(i, (tx, rx))| {
 			let ctx = TestContext {
-				local_id: ValidatorId(i),
+				local_id: AuthorityId(i),
 				proposal: Mutex::new(i),
 				shared: shared_context.clone(),
 			};
@@ -335,7 +273,7 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 		round_number: locked_round,
 		digest: locked_digest.clone(),
 		signatures: (0..7)
-			.map(|i| Signature(Message::Prepare(locked_round, locked_digest.clone()), ValidatorId(i)))
+			.map(|i| Signature(Message::Prepare(locked_round, locked_digest.clone()), AuthorityId(i)))
 			.collect()
 	}.check(7, |_, _, s| Some(s.1.clone())).unwrap();
 
@@ -352,7 +290,7 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 		.enumerate()
 		.map(|(i, (tx, rx))| {
 			let ctx = TestContext {
-				local_id: ValidatorId(i),
+				local_id: AuthorityId(i),
 				proposal: Mutex::new(i),
 				shared: shared_context.clone(),
 			};

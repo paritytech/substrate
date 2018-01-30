@@ -184,6 +184,7 @@ impl backend::Backend for Backend {
 	fn commit_transaction(&self, transaction: Self::BlockImportOperation) -> error::Result<()> {
 		if let Some(pending_block) = transaction.pending_block {
 			let hash = header_hash(&pending_block.block.header);
+			println!("writing block {:?}", hash);
 			self.states.write().insert(hash, transaction.pending_state);
 			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.body, pending_block.is_best);
 		}

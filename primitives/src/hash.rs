@@ -41,8 +41,8 @@ impl_hash!(H160, 20);
 impl_serde!(H160, 20);
 impl_hash!(H256, 32);
 impl_serde!(H256, 32);
-impl_hash!(H520, 65);
-impl_serde!(H520, 65);
+impl_hash!(H512, 64);
+impl_serde!(H512, 64);
 
 #[cfg(test)]
 mod tests {

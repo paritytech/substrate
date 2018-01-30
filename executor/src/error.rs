@@ -17,7 +17,6 @@
 //! Rust executor possible errors.
 
 use serializer;
-use state_machine;
 
 error_chain! {
 	foreign_links {
@@ -38,9 +37,9 @@ error_chain! {
 		}
 
 		/// Externalities have failed.
-		Externalities(e: Box<state_machine::Error>) {
+		Externalities {
 			description("externalities failure"),
-			display("Externalities error: {}", e),
+			display("Externalities error"),
 		}
 
 		/// Invalid index.
@@ -59,6 +58,12 @@ error_chain! {
 		Runtime {
 			description("runtime failure"),
 			display("Runtime error"),
+		}
+
+		/// Runtime failed.
+		InvalidMemoryReference {
+			description("invalid memory reference"),
+			display("Invalid memory reference"),
 		}
 	}
 }

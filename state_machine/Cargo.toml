@@ -7,7 +7,6 @@ description = "Polkadot State Machine"
 [dependencies]
 polkadot-primitives = { path = "../primitives", version = "0.1.0" }
 hashdb = "0.1.1"
-keccak-hash = "0.1.0"
 patricia-trie = "0.1.0"
 memorydb = "0.1.1"
 triehash = "0.1"

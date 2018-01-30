@@ -20,7 +20,11 @@
 
 extern crate rustc_hex;
 extern crate serde;
-extern crate tiny_keccak;
+extern crate ring;
+extern crate untrusted;
+extern crate twox_hash;
+extern crate byteorder;
+extern crate blake2_rfc;
 
 #[macro_use]
 extern crate crunchy;
@@ -46,16 +50,20 @@ pub mod hash;
 pub mod parachain;
 pub mod uint;
 pub mod validator;
+pub mod ed25519;
+pub mod hexdisplay;
+pub mod hashing;
 
 /// Alias to 160-bit hash when used in the context of an account address.
 pub type Address = hash::H160;
 /// Alias to 520-bit hash when used in the context of a signature.
-pub type Signature = hash::H520;
+pub type Signature = hash::H512;
 
 pub use self::hash::{H160, H256};
 pub use self::uint::{U256, U512};
+pub use hashing::{blake2_256, twox_128, twox_256};
 
 /// A hash function.
 pub fn hash(data: &[u8]) -> hash::H256 {
-	tiny_keccak::keccak256(data).into()
+	blake2_256(data).into()
 }
