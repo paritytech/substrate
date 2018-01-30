@@ -40,6 +40,9 @@ pub trait Backend {
 	/// Commit updates to the backend and get new state.
 	fn commit<I>(&mut self, changes: I) -> Committed
 		where I: IntoIterator<Item=Update>;
+
+	/// Get all key/value pairs into a Vec.
+	fn pairs(&self) -> Vec<(&[u8], &[u8])>;
 }
 
 /// Error impossible.
@@ -86,6 +89,10 @@ impl Backend for InMemory {
 		Committed {
 			storage_tree_root,
 		}
+	}
+
+	fn pairs(&self) -> Vec<(&[u8], &[u8])> {
+		self.inner.storage.iter().map(|(k, v)| (&k[..], &v[..])).collect()
 	}
 }
 

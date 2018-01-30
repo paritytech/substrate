@@ -93,9 +93,9 @@ pub fn chain_id() -> u64 {
 }
 
 /// "Commit" all existing operations and get the resultant storage root.
-pub fn commit() -> [u8; 32] {
+pub fn storage_root() -> [u8; 32] {
 	ext::with(|ext|
-		ext.commit()
+		ext.storage_root()
 	).unwrap_or([0u8; 32])
 }
 
