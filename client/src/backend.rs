@@ -22,7 +22,7 @@ use primitives::block;
 use blockchain::{self, BlockId};
 
 /// Block insertion transction. Keeps hold if the inseted block state and data.
-pub trait Transaction {
+pub trait BlockImportOperation {
 	/// Associated state backend type.
 	type State: state_machine::backend::Backend;
 
@@ -34,17 +34,17 @@ pub trait Transaction {
 
 /// Client backend. Manages the data layer.
 pub trait Backend {
-	/// Associated block insetion transaction type.
-	type Transaction: Transaction;
+	/// Associated block insertion transaction type.
+	type BlockImportOperation: BlockImportOperation;
 	/// Associated blockchain backend type.
 	type Blockchain: blockchain::Backend;
 	/// Associated state backend type.
 	type State: state_machine::backend::Backend;
 
 	/// Begin a new block insertion transaction with given parent block id.
-	fn begin_transaction(&self, block: BlockId) -> error::Result<Self::Transaction>;
+	fn begin_transaction(&self, block: BlockId) -> error::Result<Self::BlockImportOperation>;
 	/// Commit block insertion.
-	fn commit_transaction(&self, transaction: Self::Transaction) -> error::Result<()>;
+	fn commit_transaction(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns state backend for specified block.

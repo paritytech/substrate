@@ -38,7 +38,7 @@ use primitives::{block};
 use primitives::contract::{CallData, StorageKey, StorageData};
 
 use blockchain::Backend as BlockchainBackend;
-use backend::Transaction;
+use backend::BlockImportOperation;
 use state_machine::backend::Backend as StateBackend;
 
 /// Polkadot Client

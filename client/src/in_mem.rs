@@ -41,11 +41,10 @@ struct Block {
 }
 
 /// In-memory transaction.
-pub struct Transaction {
+pub struct BlockImportOperation {
 	pending_block: Option<PendingBlock>,
 	pending_state: state_machine::backend::InMemory,
 }
-
 
 struct BlockchainStorage {
 	blocks: HashMap<HeaderHash, Block>,
@@ -129,7 +128,7 @@ impl blockchain::Backend for Blockchain {
 	}
 }
 
-impl backend::Transaction for Transaction {
+impl backend::BlockImportOperation for BlockImportOperation {
 	type State = state_machine::backend::InMemory;
 
 	fn state(&self) -> error::Result<Self::State> {
@@ -166,31 +165,29 @@ impl Backend {
 }
 
 impl backend::Backend for Backend {
-	type Transaction = Transaction;
+	type BlockImportOperation = BlockImportOperation;
 	type Blockchain = Blockchain;
 	type State = state_machine::backend::InMemory;
 
-	fn begin_transaction(&self, block: BlockId) -> error::Result<Self::Transaction> {
+	fn begin_transaction(&self, block: BlockId) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
 			BlockId::Hash(h) if h.is_zero() => Self::State::default(),
 			_ => self.state_at(block)?,
 		};
 
-		Ok(Transaction {
+		Ok(BlockImportOperation {
 			pending_block: None,
 			pending_state: state,
 		})
 	}
 
-	fn commit_transaction(&self, transaction: Self::Transaction) -> error::Result<()> {
+	fn commit_transaction(&self, transaction: Self::BlockImportOperation) -> error::Result<()> {
 		if let Some(pending_block) = transaction.pending_block {
-			println!("writing block");
 			let hash = header_hash(&pending_block.block.header);
 			self.states.write().insert(hash, transaction.pending_state);
 			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.body, pending_block.is_best);
 		}
 		Ok(())
-
 	}
 
 	fn blockchain(&self) -> &Blockchain {
@@ -202,7 +199,6 @@ impl backend::Backend for Backend {
 			Some(state) => Ok(state),
 			None => Err(error::ErrorKind::UnknownBlock(block).into()),
 		}
-
 	}
 }
 
