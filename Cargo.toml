@@ -14,13 +14,13 @@ members = [
 	"collator",
 	"environmental",
 	"executor",
-	"primitives",
-	"rpc",
-	"rpc_servers",
 	"native-runtime",
+	"primitives",
+	"rpc-servers",
+	"rpc",
 	"runtime-codec",
 	"serializer",
-	"state_machine",
+	"state-machine",
 	"validator",
 ]
 exclude = [

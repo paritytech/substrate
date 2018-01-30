@@ -9,7 +9,7 @@ jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
 polkadot-client = { path = "../client", version = "0.1" }
 polkadot-primitives = { path = "../primitives", version = "0.1" }
-polkadot-state-machine = { path = "../state_machine", version = "0.1" }
+polkadot-state-machine = { path = "../state-machine", version = "0.1" }
 
 [dev-dependencies]
 assert_matches = "1.1"
