@@ -320,7 +320,7 @@ impl ChainSync {
 						fields: self.required_block_attributes.clone(),
 						from: message::FromBlock::Hash(*hash),
 						to: None,
-						direction: None,
+						direction: message::Direction::Ascending,
 						max: Some(1),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
@@ -342,7 +342,7 @@ impl ChainSync {
 							fields: self.required_block_attributes.clone(),
 							from: message::FromBlock::Number(range.start),
 							to: None,
-							direction: Some(message::Direction::Ascending),
+							direction: message::Direction::Ascending,
 							max: Some((range.end - range.start) as u32),
 						};
 						peer.state = PeerSyncState::DownloadingNew(range.start);
@@ -360,7 +360,7 @@ impl ChainSync {
 			fields: vec![message::BlockAttribute::Header],
 			from: message::FromBlock::Number(block),
 			to: None,
-			direction: None,
+			direction: message::Direction::Ascending,
 			max: Some(1),
 		};
 		protocol.send_message(io, peer_id, Message::BlockRequest(request));

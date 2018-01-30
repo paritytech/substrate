@@ -17,6 +17,7 @@
 #![warn(missing_docs)]
 
 //! Implements polkadot protocol version as specified here:
+//! https://github.com/paritytech/polkadot/wiki/Network-protocol
 
 extern crate ethcore_network as network;
 extern crate ethcore_io as core_io;

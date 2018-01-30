@@ -76,7 +76,7 @@ pub struct Params {
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 	/// Polkadot relay chain access point.
-	pub chain: Arc<Client + Send + Sync>,
+	pub chain: Arc<Client>,
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.

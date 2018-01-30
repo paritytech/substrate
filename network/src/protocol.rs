@@ -37,7 +37,7 @@ const PROTOCOL_VERSION: u32 = 0;
 // Lock must always be taken in order declared here.
 pub struct Protocol {
 	config: ProtocolConfig,
-	chain: Arc<Client + Send + Sync>,
+	chain: Arc<Client>,
 	genesis_hash: HeaderHash,
 	sync: RwLock<ChainSync>,
 	/// All connected peers
@@ -100,7 +100,7 @@ pub struct TransactionStats {
 
 impl Protocol {
 	/// Create a new instance.
-	pub fn new(config: ProtocolConfig, chain: Arc<Client + Send + Sync>) -> error::Result<Protocol>  {
+	pub fn new(config: ProtocolConfig, chain: Arc<Client>) -> error::Result<Protocol>  {
 		let info = chain.info()?;
 		let protocol = Protocol {
 			config: config,

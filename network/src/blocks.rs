@@ -161,7 +161,6 @@ impl BlockCollection {
 	}
 
 	pub fn clear_peer_download(&mut self, peer_id: PeerId) {
-		println!("Clear {}", peer_id);
 		match self.peer_requests.entry(peer_id) {
 			Entry::Occupied(entry) => {
 				let start = entry.remove();
@@ -179,7 +178,6 @@ impl BlockCollection {
 					}
 				};
 				if remove {
-				println!("Deleting {}", start);
 					self.blocks.remove(&start);
 				}
 			},
@@ -204,7 +202,7 @@ mod test {
 			hash: HeaderHash::random(),
 			header: None,
 			body: None,
-			message: None,
+			message_queue: None,
 			receipt: None,
 		}).collect()
 	}
