@@ -218,7 +218,9 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 
 #[cfg(test)]
 mod tests {
-	use super::{OverlayedChanges, Externalities, TestExternalities};
+	use super::*;
+	use super::backend::InMemory;
+	use super::ext::Ext;
 
 	#[test]
 	fn overlayed_storage_works() {
@@ -263,5 +265,35 @@ mod tests {
 		ext.set_storage(b"con:aut:len".to_vec(), vec![2u8, 0, 0, 0]);
 		ext.set_storage(b"con:aut:\x01\0\0\0".to_vec(), b"second".to_vec());
 		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..], &b"second"[..]]));
+	}
+
+	macro_rules! map {
+		($( $name:expr => $value:expr ),*) => (
+			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
+		)
+	}
+
+	#[test]
+	fn overlayed_storage_root_works() {
+		let mut backend = InMemory::from(map![
+			b"doe".to_vec() => b"reindeer".to_vec(),
+			b"dog".to_vec() => b"puppyXXX".to_vec(),
+			b"dogglesworth".to_vec() => b"catXXX".to_vec()
+		]);
+		let mut overlay = OverlayedChanges {
+			committed: MemoryState { storage: map![
+				b"dog".to_vec() => b"puppy".to_vec(),
+				b"dogglesworth".to_vec() => b"catYYY".to_vec()
+			], },
+			prospective: MemoryState { storage: map![
+				b"dogglesworth".to_vec() => b"cat".to_vec()
+			], },
+		};
+		let ext = Ext {
+			backend: &mut backend,
+			overlay: &mut overlay,
+		};
+		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+		assert_eq!(ext.storage_root(), ROOT);
 	}
 }
