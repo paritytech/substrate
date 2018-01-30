@@ -11,3 +11,4 @@ without-std = []
 [dependencies]
 runtime-std = { path = "./std", version = "0.1" }
 rustc-hex = "1.0"
+hex-literal = "0.1.0"
