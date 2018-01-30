@@ -279,8 +279,8 @@ mod tests {
 	use super::*;
 	use rustc_hex::FromHex;
 	use primitives::{blake2_256, twox_128};
-	use runtime_std;
-	use native_runtime::support::{one, two, StaticHexInto, TestExternalities};
+	use runtime_std::{self, TestExternalities};
+	use native_runtime::support::{one, two, StaticHexInto};
 	use native_runtime::codec::KeyedVec;
 	use native_runtime::runtime::staking::balance;
 

@@ -39,7 +39,7 @@ pub mod prelude {
 	pub use std::boxed::Box;
 }
 
-pub use polkadot_state_machine::{Externalities, ExternalitiesError};
+pub use polkadot_state_machine::{Externalities, ExternalitiesError, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 
 // TODO: use the real error, not NoError.
@@ -92,6 +92,13 @@ pub fn chain_id() -> u64 {
 	).unwrap_or(0)
 }
 
+/// "Commit" all existing operations and get the resultant storage root.
+pub fn commit() -> [u8; 32] {
+	ext::with(|ext|
+		ext.commit()
+	).unwrap_or([0u8; 32])
+}
+
 /// Conduct a Keccak-256 hash of the given data.
 pub use primitives::{blake2_256, twox_128, twox_256};
 
@@ -140,23 +147,6 @@ macro_rules! impl_stubs {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::collections::HashMap;
-
-	#[derive(Debug, Default)]
-	struct TestExternalities {
-		storage: HashMap<Vec<u8>, Vec<u8>>,
-	}
-	impl Externalities for TestExternalities {
-		fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
-			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
-		}
-
-		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
-			self.storage.insert(key, value);
-		}
-
-		fn chain_id(&self) -> u64 { 42 }
-	}
 
 	macro_rules! map {
 		($( $name:expr => $value:expr ),*) => (

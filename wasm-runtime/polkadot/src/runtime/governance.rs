@@ -114,9 +114,9 @@ pub mod internal {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_std::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use support::{one, two, TestExternalities, with_env};
+	use support::{one, two, with_env};
 	use primitives::{AccountID, InternalFunction};
 	use runtime::{staking, session};
 
