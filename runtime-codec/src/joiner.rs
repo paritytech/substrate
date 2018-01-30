@@ -14,19 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Vec<u8> serialiser.
+//! Trait
 
-use runtime_std::prelude::*;
+use std::iter::Extend;
 use super::slicable::Slicable;
 
-/// Trait to allow itself to be serialised into a `Vec<u8>`
+/// Trait to allow itself to be serialised into a value which can be extended
+/// by bytes.
 pub trait Joiner {
-	fn join<T: Slicable + Sized>(self, value: &T) -> Self;
+	fn join<V: Slicable + Sized>(self, value: &V) -> Self;
 }
 
-impl Joiner for Vec<u8> {
-	fn join<T: Slicable + Sized>(mut self, value: &T) -> Vec<u8> {
-		value.as_slice_then(|s| self.extend_from_slice(s));
+impl<T> Joiner for T where T: for<'a> Extend<&'a u8> {
+	fn join<V: Slicable + Sized>(mut self, value: &V) -> Self {
+		value.as_slice_then(|s| self.extend(s));
 		self
 	}
 }

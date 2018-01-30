@@ -280,8 +280,8 @@ mod tests {
 	use rustc_hex::FromHex;
 	use primitives::{blake2_256, twox_128};
 	use runtime_std;
+	use codec::KeyedVec;
 	use native_runtime::support::{one, two, StaticHexInto, TestExternalities};
-	use native_runtime::codec::KeyedVec;
 	use native_runtime::runtime::staking::balance;
 
 	#[test]

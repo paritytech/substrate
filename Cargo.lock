@@ -553,6 +553,7 @@ dependencies = [
 name = "native-runtime"
 version = "0.1.0"
 dependencies = [
+ "polkadot-runtime-codec 0.1.0",
  "runtime-std 0.1.0",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -730,6 +731,7 @@ dependencies = [
  "native-runtime 0.1.0",
  "parity-wasm 0.15.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-primitives 0.1.0",
+ "polkadot-runtime-codec 0.1.0",
  "polkadot-serializer 0.1.0",
  "polkadot-state-machine 0.1.0",
  "runtime-std 0.1.0",
@@ -779,6 +781,10 @@ dependencies = [
  "jsonrpc-http-server 8.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
  "polkadot-rpc 0.1.0",
 ]
+
+[[package]]
+name = "polkadot-runtime-codec"
+version = "0.1.0"
 
 [[package]]
 name = "polkadot-serializer"

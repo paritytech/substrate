@@ -16,7 +16,7 @@
 
 //! Deserialiser.
 
-use super::slicable::Slicable;
+use slicable::Slicable;
 
 /// Simple deserialiser.
 pub struct StreamReader<'a> {

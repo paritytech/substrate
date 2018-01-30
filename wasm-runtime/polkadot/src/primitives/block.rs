@@ -38,7 +38,7 @@ impl Slicable for Block {
 		})
 	}
 
-	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: F) -> Option<Self> {
 		unimplemented!();
 	}
 

@@ -1,4 +1,8 @@
 [[package]]
+name = "polkadot-runtime-codec"
+version = "0.1.0"
+
+[[package]]
 name = "pwasm-alloc"
 version = "0.1.0"
 dependencies = [
@@ -13,6 +17,7 @@ version = "0.1.0"
 name = "runtime-polkadot"
 version = "0.1.0"
 dependencies = [
+ "polkadot-runtime-codec 0.1.0",
  "runtime-std 0.1.0",
 ]
 

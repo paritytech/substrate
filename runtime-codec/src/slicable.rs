@@ -16,15 +16,16 @@
 
 //! Serialisation.
 
-use runtime_std::prelude::*;
-use runtime_std::{mem, slice};
+use std::{mem, slice};
+use std::vec::Vec;
 use super::joiner::Joiner;
 use super::endiansensitive::EndianSensitive;
 
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
 pub trait Slicable: Sized {
+	/// Attempt to deserialise the value from a slice.
 	fn from_slice(value: &[u8]) -> Option<Self> {
-		Self::set_as_slice(&|out, offset| if value.len() >= out.len() + offset {
+		Self::set_as_slice(|out, offset| if value.len() >= out.len() + offset {
 			let value = &value[offset..];
 			let len = out.len();
 			out.copy_from_slice(&value[0..len]);
@@ -36,7 +37,7 @@ pub trait Slicable: Sized {
 	fn to_vec(&self) -> Vec<u8> {
 		self.as_slice_then(|s| s.to_vec())
 	}
-	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(set_slice: &F) -> Option<Self>;
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: F) -> Option<Self>;
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&self.to_vec())
 	}
@@ -47,7 +48,7 @@ pub trait Slicable: Sized {
 pub trait NonTrivialSlicable: Slicable {}
 
 impl<T: EndianSensitive> Slicable for T {
-	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: F) -> Option<Self> {
 		let size = mem::size_of::<T>();
 		assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
 		let mut result: T = unsafe { mem::zeroed() };
@@ -81,8 +82,8 @@ impl Slicable for Vec<u8> {
 	fn from_slice(value: &[u8]) -> Option<Self> {
 		Some(value[4..].to_vec())
 	}
-	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: &F) -> Option<Self> {
-		u32::set_as_slice(fill_slice).and_then(|len| {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: F) -> Option<Self> {
+		u32::set_as_slice(&fill_slice).and_then(|len| {
 			let mut v = Vec::with_capacity(len as usize);
 			unsafe { v.set_len(len as usize); }
 			if fill_slice(&mut v, 4) {
@@ -117,7 +118,7 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 		Some(r)
 	}
 
-	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: F) -> Option<Self> {
 		unimplemented!();
 	}
 

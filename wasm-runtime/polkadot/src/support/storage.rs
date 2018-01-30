@@ -24,7 +24,7 @@ use codec::{Slicable, KeyedVec};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-	Slicable::set_as_slice(&|out, offset|
+	Slicable::set_as_slice(|out, offset|
 		runtime_std::read_storage(&twox_128(key)[..], out, offset) >= out.len()
 	)
 }
