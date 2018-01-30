@@ -16,8 +16,8 @@
 
 //! Serialiser and prepender.
 
-use runtime_support::prelude::*;
-use slicable::Slicable;
+use runtime_std::prelude::*;
+use super::slicable::Slicable;
 
 /// Trait to allow itselg to be serialised and prepended by a given slice.
 pub trait KeyedVec {

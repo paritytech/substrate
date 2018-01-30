@@ -17,30 +17,34 @@
 //! Function data: This describes a function that can be called from an external transaction.
 
 use primitives::AccountID;
-use streamreader::StreamReader;
-use runtime::{staking, session, timestamp};
+use codec::StreamReader;
+use runtime::{staking, session, timestamp, governance};
 
-/// The functions that a transaction can call (and be dispatched to).
-#[cfg_attr(test, derive(PartialEq, Debug))]
+/// Public functions that can be dispatched to.
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[repr(u8)]
 pub enum Function {
-	StakingStake,
-	StakingUnstake,
-	StakingTransfer,
-	SessionSetKey,
-	TimestampSet,
+	StakingStake = 0,
+	StakingUnstake = 1,
+	StakingTransfer = 2,
+	SessionSetKey = 3,
+	TimestampSet = 4,
+	GovernancePropose = 5,
+	GovernanceApprove = 6,
 }
 
 impl Function {
 	/// Derive `Some` value from a `u8`, or `None` if it's invalid.
 	pub fn from_u8(value: u8) -> Option<Function> {
-		match value {
-			x if x == Function::StakingStake as u8 => Some(Function::StakingStake),
-			x if x == Function::StakingUnstake as u8 => Some(Function::StakingUnstake),
-			x if x == Function::StakingTransfer as u8 => Some(Function::StakingTransfer),
-			x if x == Function::SessionSetKey as u8 => Some(Function::SessionSetKey),
-			x if x == Function::TimestampSet as u8 => Some(Function::TimestampSet),
-			_ => None,
+		use self::*;
+		let functions = [Function::StakingStake, Function::StakingUnstake,
+			Function::StakingTransfer, Function::SessionSetKey, Function::TimestampSet,
+			Function::GovernancePropose, Function::GovernanceApprove];
+		if (value as usize) < functions.len() {
+			Some(functions[value as usize])
+		} else {
+			None
 		}
 	}
 }
@@ -51,23 +55,31 @@ impl Function {
 		let mut params = StreamReader::new(data);
 		match *self {
 			Function::StakingStake => {
-				staking::stake(transactor);
+				staking::public::stake(transactor);
 			}
 			Function::StakingUnstake => {
-				staking::unstake(transactor);
+				staking::public::unstake(transactor);
 			}
 			Function::StakingTransfer => {
 				let dest = params.read().unwrap();
 				let value = params.read().unwrap();
-				staking::transfer(transactor, &dest, value);
+				staking::public::transfer(transactor, &dest, value);
 			}
 			Function::SessionSetKey => {
 				let session = params.read().unwrap();
-				session::set_key(transactor, &session);
+				session::public::set_key(transactor, &session);
 			}
 			Function::TimestampSet => {
 				let t = params.read().unwrap();
-				timestamp::set(t);
+				timestamp::public::set(t);
+			}
+			Function::GovernancePropose => {
+				let proposal = params.read().unwrap();
+				governance::public::propose(transactor, &proposal);
+			}
+			Function::GovernanceApprove => {
+				let era_index = params.read().unwrap();
+				governance::public::approve(transactor, era_index);
 			}
 		}
 	}

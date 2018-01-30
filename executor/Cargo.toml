@@ -13,6 +13,9 @@ serde_derive = "1.0"
 parity-wasm = "0.15.0"
 byteorder = "1.1"
 rustc-hex = "1.0.0"
+native-runtime = { path = "../native-runtime", version = "0.1" }
+runtime-std = { path = "../native-runtime/std", version = "0.1" }
+libc = { version = "0.2.33" }
 
 [dev-dependencies]
 assert_matches = "1.1"

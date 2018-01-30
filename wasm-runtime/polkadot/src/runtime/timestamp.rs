@@ -16,39 +16,47 @@
 
 //! Timestamp manager: just handles the current timestamp.
 
-use storable::Storable;
+use support::storage;
+
+const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
 
 /// Representation of a time.
 pub type Timestamp = u64;
 
 /// Get the current time.
 pub fn get() -> Timestamp {
-	Storable::lookup_default(b"tim:val")
+	storage::get_or_default(CURRENT_TIMESTAMP)
 }
 
-/// Set the current time.
-pub fn set(now: Timestamp) {
-	now.store(b"tim:val")
+pub mod public {
+	use super::*;
+
+	/// Set the current time.
+	pub fn set(now: Timestamp) {
+		storage::put(CURRENT_TIMESTAMP, &now);
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use joiner::Joiner;
-	use keyedvec::KeyedVec;
-	use runtime_support::{with_externalities, twox_128};
+	use super::*;
+	use super::public::*;
+
+	use runtime_std::{with_externalities, twox_128};
 	use runtime::timestamp;
-	use testing::TestExternalities;
+	use codec::{Joiner, KeyedVec};
+	use support::TestExternalities;
 
 	#[test]
 	fn timestamp_works() {
 		let mut t = TestExternalities { storage: map![
-			twox_128(b"tim:val").to_vec() => vec![].join(&42u64)
+			twox_128(CURRENT_TIMESTAMP).to_vec() => vec![].join(&42u64)
 		], };
 
 		with_externalities(&mut t, || {
-			assert_eq!(timestamp::get(), 42);
-			timestamp::set(69);
-			assert_eq!(timestamp::get(), 69);
+			assert_eq!(get(), 42);
+			set(69);
+			assert_eq!(get(), 69);
 		});
 	}
 }

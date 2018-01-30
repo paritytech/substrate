@@ -16,10 +16,10 @@
 
 //! Environment API: Allows certain information to be accessed throughout the runtime.
 
-use runtime_support::boxed::Box;
-use runtime_support::mem;
-use runtime_support::cell::RefCell;
-use runtime_support::rc::Rc;
+use runtime_std::boxed::Box;
+use runtime_std::mem;
+use runtime_std::cell::RefCell;
+use runtime_std::rc::Rc;
 
 use primitives::{BlockNumber, Digest};
 

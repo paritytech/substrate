@@ -39,6 +39,10 @@ pub trait AsBytesRef {
 	fn as_bytes_ref(&self) -> &[u8];
 }
 
+impl<'a> AsBytesRef for &'a [u8] {
+	fn as_bytes_ref(&self) -> &[u8] { self }
+}
+
 impl AsBytesRef for [u8] {
 	fn as_bytes_ref(&self) -> &[u8] { &self }
 }

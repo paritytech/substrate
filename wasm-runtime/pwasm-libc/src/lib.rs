@@ -8,6 +8,7 @@ extern "C" {
 	fn ext_memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8;
 	fn ext_memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8;
 	fn ext_memset(dest: *mut u8, c: i32, n: usize) -> *mut u8;
+	fn ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32;
 	fn ext_malloc(size: usize) -> *mut u8;
 	fn ext_free(ptr: *mut u8);
 }
@@ -19,6 +20,12 @@ extern "C" {
 #[no_mangle]
 pub unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
 	ext_memcpy(dest, src, n)
+}
+
+/// memcmp extern
+#[no_mangle]
+pub unsafe extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
+	ext_memcmp(s1, s2, n)
 }
 
 /// memmove extern

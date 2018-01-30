@@ -17,13 +17,15 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
-use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder, Hashable};
-use runtime_support::mem;
-use runtime_support::prelude::*;
-use storable::Storable;
-use keyedvec::KeyedVec;
-use environment::with_env;
+use runtime_std::prelude::*;
+use runtime_std::{mem, print};
+use codec::KeyedVec;
+use support::{Hashable, storage, with_env};
+use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
 use runtime::{staking, session};
+
+const BLOCK_HASH_AT: &[u8] = b"sys:old:";
+const CODE: &[u8] = b"sys:cod";
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
@@ -32,77 +34,86 @@ pub fn block_number() -> BlockNumber {
 
 /// Get the block hash of a given block (uses storage).
 pub fn block_hash(number: BlockNumber) -> Hash {
-	Storable::lookup_default(&number.to_keyed_vec(b"sys:old:"))
+	storage::get_or_default(&number.to_keyed_vec(BLOCK_HASH_AT))
 }
 
-/// Deposits a log and ensures it matches the blocks log data.
-pub fn deposit_log(log: &[u8]) {
-	with_env(|e| {
-		assert_eq!(log, &e.digest.logs[e.next_log_index][..]);
-		e.next_log_index += 1;
-	});
+pub mod privileged {
+	use super::*;
+
+	/// Set the new code.
+	pub fn set_code(new: &[u8]) {
+		storage::put_raw(CODE, new);
+	}
 }
 
-pub fn execute_block(mut block: Block) {
-	// populate environment from header.
-	with_env(|e| {
-		e.block_number = block.header.number;
-		mem::swap(&mut e.digest, &mut block.header.digest);
-		e.next_log_index = 0;
-	});
+pub mod internal {
+	use super::*;
 
-	let ref header = block.header;
+	/// Deposits a log and ensures it matches the blocks log data.
+	pub fn deposit_log(log: &[u8]) {
+		with_env(|e| {
+			assert_eq!(log, &e.digest.logs[e.next_log_index][..]);
+			e.next_log_index += 1;
+		});
+	}
 
-	// check parent_hash is correct.
-	assert!(
-		header.number > 0 && block_hash(header.number - 1) == header.parent_hash,
-		"Parent hash should be valid."
-	);
+	/// Actually execute all transitioning for `block`.
+	pub fn execute_block(mut block: Block) {
+		// populate environment from header.
+		with_env(|e| {
+			e.block_number = block.header.number;
+			mem::swap(&mut e.digest, &mut block.header.digest);
+			e.next_log_index = 0;
+		});
 
-	// TODO: check transaction trie root represents the transactions.
-	// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
-	// so will wait until a little later.
+		let ref header = block.header;
 
-	// store the header hash in storage.
-	let header_hash_key = header.number.to_keyed_vec(b"sys:old:");
-	header.blake2_256().store(&header_hash_key);
+		// check parent_hash is correct.
+		assert!(
+			header.number > 0 && block_hash(header.number - 1) == header.parent_hash,
+			"Parent hash should be valid."
+		);
 
-	// execute transactions
-	block.transactions.iter().for_each(execute_transaction);
+		// TODO: check transaction trie root represents the transactions.
+		// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
+		// so will wait until a little later.
 
-	staking::check_new_era();
-	session::check_rotate_session();
+		// store the header hash in storage.
+		let header_hash_key = header.number.to_keyed_vec(BLOCK_HASH_AT);
+		storage::put(&header_hash_key, &header.blake2_256());
 
-	// any final checks
-	final_checks(&block);
+		// execute transactions
+		block.transactions.iter().for_each(execute_transaction);
 
-	// TODO: check storage root.
-	// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
-	// so will wait until a little later.
-}
+		staking::internal::check_new_era();
+		session::internal::check_rotate_session();
 
-/// Execute a given transaction.
-pub fn execute_transaction(utx: &UncheckedTransaction) {
-	// Verify the signature is good.
-	assert!(utx.ed25519_verify(), "All transactions should be properly signed");
+		// any final checks
+		final_checks(&block);
 
-	let ref tx = utx.transaction;
+		// TODO: check storage root.
+		// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
+		// so will wait until a little later.
+	}
 
-	// check nonce
-	let nonce_key = tx.signed.to_keyed_vec(b"sys:non:");
-	let expected_nonce: TxOrder = Storable::lookup_default(&nonce_key);
-	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
+	/// Execute a given transaction.
+	pub fn execute_transaction(utx: &UncheckedTransaction) {
+		// Verify the signature is good.
+		assert!(utx.ed25519_verify(), "All transactions should be properly signed");
 
-	// increment nonce in storage
-	(expected_nonce + 1).store(&nonce_key);
+		let ref tx = utx.transaction;
 
-	// decode parameters and dispatch
-	tx.function.dispatch(&tx.signed, &tx.input_data);
-}
+		// check nonce
+		let nonce_key = tx.signed.to_keyed_vec(b"sys:non:");
+		let expected_nonce: TxOrder = storage::get_or_default(&nonce_key);
+		assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
-/// Set the new code.
-pub fn set_code(new: &[u8]) {
-	new.store(b":code");
+		// increment nonce in storage
+		storage::put(&nonce_key, &(expected_nonce + 1));
+
+		// decode parameters and dispatch
+		tx.function.dispatch(&tx.signed, &tx.input_data);
+	}
 }
 
 fn final_checks(_block: &Block) {
@@ -113,15 +124,14 @@ fn final_checks(_block: &Block) {
 
 #[cfg(test)]
 mod tests {
-	use joiner::Joiner;
-	use function::Function;
-	use keyedvec::KeyedVec;
-	use slicable::Slicable;
-	use runtime_support::{with_externalities, twox_128};
-	use primitives::{UncheckedTransaction, Transaction};
-	use statichex::StaticHexInto;
-	use runtime::{system, staking};
-	use testing::{TestExternalities, HexDisplay, one, two};
+	use super::*;
+	use super::internal::*;
+
+	use runtime_std::{with_externalities, twox_128};
+	use codec::{Joiner, KeyedVec, Slicable};
+	use support::{StaticHexInto, TestExternalities, HexDisplay, one, two};
+	use primitives::{UncheckedTransaction, Transaction, Function};
+	use runtime::staking;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
@@ -147,7 +157,7 @@ mod tests {
 		println!("tx is {}", HexDisplay::from(&tx.transaction.to_vec()));
 
 		with_externalities(&mut t, || {
-			system::execute_transaction(&tx);
+			execute_transaction(&tx);
 			assert_eq!(staking::balance(&one), 42);
 			assert_eq!(staking::balance(&two), 69);
 		});
