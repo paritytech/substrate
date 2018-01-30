@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The with-std support functions for the runtime.
+//! The std support functions for the runtime.
 
 #[macro_use]
 extern crate environmental;

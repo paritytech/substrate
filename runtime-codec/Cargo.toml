@@ -7,5 +7,5 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 
 [features]
-no-std = []
-default = []
+std = []
+default = ["std"]

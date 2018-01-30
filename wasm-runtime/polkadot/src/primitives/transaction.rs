@@ -22,7 +22,7 @@ use primitives::{AccountID, TxOrder, Function};
 use runtime_std::mem;
 
 /// A vetted and verified transaction from the external world.
-#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
 pub struct Transaction {
 	/// Who signed it (note this is not a signature).
 	pub signed: AccountID,

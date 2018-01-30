@@ -17,8 +17,8 @@
 //! Implements the serialization and deserialization codec for polkadot runtime
 //! values.
 
-#![cfg_attr(feature = "no-std", no_std)]
-#![cfg_attr(feature = "no-std", feature(alloc))]
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 mod endiansensitive;
 mod slicable;
@@ -32,7 +32,7 @@ pub use self::streamreader::StreamReader;
 pub use self::joiner::Joiner;
 pub use self::keyedvec::KeyedVec;
 
-#[cfg(feature = "no-std")]
+#[cfg(not(feature = "std"))]
 mod std {
 	extern crate alloc;
 

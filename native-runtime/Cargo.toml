@@ -9,6 +9,5 @@ runtime-std = { path = "./std", version = "0.1" }
 rustc-hex = "1.0"
 
 [features]
-default = ["with-std"]
-with-std = []
-without-std = ["polkadot-runtime-codec/no-std"]
+default = ["std"]
+std = ["polkadot-runtime-codec/std"]

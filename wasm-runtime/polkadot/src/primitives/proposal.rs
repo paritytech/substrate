@@ -24,7 +24,7 @@ use runtime::{system, governance, staking, session};
 
 /// Internal functions that can be dispatched to.
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
 #[repr(u8)]
 pub enum InternalFunction {
 	SystemSetCode = 0,
@@ -56,7 +56,7 @@ impl InternalFunction {
 }
 
 /// An internal function.
-#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
 pub struct Proposal {
 	/// The priviledged function to call.
 	pub function: InternalFunction,

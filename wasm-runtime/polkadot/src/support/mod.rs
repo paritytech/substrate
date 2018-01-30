@@ -19,16 +19,16 @@
 mod environment;
 pub mod storage;
 mod hashable;
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 mod statichex;
 #[macro_use]
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 mod testing;
 
 pub use self::environment::with_env;
 pub use self::storage::StorageVec;
 pub use self::hashable::Hashable;
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 pub use self::statichex::{StaticHexConversion, StaticHexInto};
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 pub use self::testing::{AsBytesRef, HexDisplay, TestExternalities, one, two};
