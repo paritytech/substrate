@@ -18,11 +18,20 @@
 
 use std::collections::HashMap;
 use super::{Externalities, ExternalitiesError};
+use triehash::trie_root;
 
 /// Simple HashMap based Externalities impl.
 #[derive(Debug, Default)]
 pub struct TestExternalities {
 	pub storage: HashMap<Vec<u8>, Vec<u8>>,
+}
+
+impl TestExternalities {
+	fn new() -> Self {
+		TestExternalities {
+			storage: HashMap::new(),
+		}
+	}
 }
 
 impl Externalities for TestExternalities {
@@ -37,6 +46,21 @@ impl Externalities for TestExternalities {
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn commit(&self) -> [u8; 32] {
-		unimplemented!();
+		trie_root(self.storage.clone()).0
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn commit_should_work() {
+		let mut ext = TestExternalities::new();
+		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
+		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
+		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
+		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+		assert_eq!(ext.commit(), ROOT);
 	}
 }

@@ -19,6 +19,8 @@
 #![warn(missing_docs)]
 
 extern crate polkadot_primitives as primitives;
+#[macro_use]
+extern crate hex_literal;
 
 extern crate hashdb;
 extern crate memorydb;
