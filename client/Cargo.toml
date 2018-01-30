@@ -6,4 +6,4 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 error-chain = "0.11"
 polkadot-primitives = { path = "../primitives", version = "0.1" }
-polkadot-state-machine = { path = "../state_machine", version = "0.1" }
+polkadot-state-machine = { path = "../state-machine", version = "0.1" }
