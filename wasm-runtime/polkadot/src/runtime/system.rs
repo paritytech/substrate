@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use runtime_std::prelude::*;
-use runtime_std::{mem, print};
+use runtime_std::{mem, print, storage_root};
 use codec::KeyedVec;
 use support::{Hashable, storage, with_env};
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
@@ -91,9 +91,8 @@ pub mod internal {
 		// any final checks
 		final_checks(&block);
 
-		// TODO: check storage root.
-		// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
-		// so will wait until a little later.
+		// check storage root.
+		assert!(header.state_root == storage_root(), "Storage root must match that calculated.");
 	}
 
 	/// Execute a given transaction.
