@@ -16,8 +16,14 @@
 
 //! Codec utils.
 
-pub mod endiansensitive;
-pub mod streamreader;
-pub mod joiner;
-pub mod slicable;
-pub mod keyedvec;
+mod endiansensitive;
+mod slicable;
+mod streamreader;
+mod joiner;
+mod keyedvec;
+
+pub use self::endiansensitive::EndianSensitive;
+pub use self::slicable::{Slicable, NonTrivialSlicable};
+pub use self::streamreader::StreamReader;
+pub use self::joiner::Joiner;
+pub use self::keyedvec::KeyedVec;

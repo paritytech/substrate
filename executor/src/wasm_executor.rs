@@ -17,9 +17,10 @@
 //! Rust implementation of Polkadot contracts.
 
 use std::sync::Arc;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
-use parity_wasm::interpreter::{ItemIndex};
+use parity_wasm::interpreter::{ItemIndex, DummyUserError};
 use parity_wasm::RuntimeValue::{I32, I64};
 use primitives::contract::CallData;
 use state_machine::{Externalities, CodeExecutor};
@@ -27,6 +28,7 @@ use error::{Error, ErrorKind, Result};
 use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
 use primitives::{ed25519, blake2_256, twox_128, twox_256};
+use primitives::hexdisplay::HexDisplay;
 
 struct Heap {
 	end: u32,
@@ -77,15 +79,32 @@ impl WritePrimitive<u32> for MemoryInstance {
 }
 
 impl_function_executor!(this: FunctionExecutor<'e, E>,
-	ext_print(utf8_data: *const u8, utf8_len: u32) => {
+	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
 			if let Ok(message) = String::from_utf8(utf8) {
 				println!("Runtime: {}", message);
 			}
 		}
 	},
+	ext_print_hex(data: *const u8, len: u32) => {
+		if let Ok(hex) = this.memory.get(data, len as usize) {
+			println!("Runtime: {}", HexDisplay::from(&hex));
+		}
+	},
 	ext_print_num(number: u64) => {
 		println!("Runtime: {}", number);
+	},
+	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
+		if let (Ok(sl1), Ok(sl2))
+			= (this.memory.get(s1, n as usize), this.memory.get(s2, n as usize)) {
+			match sl1.cmp(&sl2) {
+				Ordering::Greater => 1,
+				Ordering::Less => -1,
+				Ordering::Equal => 0,
+			}
+		} else {
+			return Err(DummyUserError.into());
+		}
 	},
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		let _ = this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize);
@@ -128,11 +147,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.write_primitive(written_out, written);
 		offset as u32
 	},
-	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32) -> u32 => {
+	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
 		if let Ok(key) = this.memory.get(key_data, key_len as usize) {
 			if let Ok(value) = this.ext.storage(&key) {
+				let value = &value[value_offset as usize..];
 				let written = ::std::cmp::min(value_len as usize, value.len());
-				let _ = this.memory.set(value_data, &value[0..written]);
+				let _ = this.memory.set(value_data, &value[..written]);
 				written as u32
 			} else { 0 }
 		} else { 0 }
@@ -141,47 +161,63 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.chain_id()
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
-		let result =
-			if let Ok(value) = this.memory.get(data, len as usize) {
-				twox_128(&value)
-			} else {
-				[0; 16]
-			};
+		let maybe_value = if len == 0 {
+			Ok(vec![])
+		} else {
+			this.memory.get(data, len as usize)
+		};
+		let result = if let Ok(value) = maybe_value {
+			twox_128(&value)
+		} else {
+			[0; 16]
+		};
 		let _ = this.memory.set(out, &result);
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result =
-			if let Ok(value) = this.memory.get(data, len as usize) {
-				twox_256(&value)
-			} else {
-				[0; 32]
-			};
+		let maybe_value = if len == 0 {
+			Ok(vec![])
+		} else {
+			this.memory.get(data, len as usize)
+		};
+		let result = if let Ok(value) = maybe_value {
+			twox_256(&value)
+		} else {
+			[0; 32]
+		};
 		let _ = this.memory.set(out, &result);
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result =
-			if let Ok(value) = this.memory.get(data, len as usize) {
-				blake2_256(&value)
-			} else {
-				[0; 32]
-			};
+		let maybe_value = if len == 0 {
+			Ok(vec![])
+		} else {
+			this.memory.get(data, len as usize)
+		};
+		let result = if let Ok(value) = maybe_value {
+			blake2_256(&value)
+		} else {
+			[0; 32]
+		};
 		let _ = this.memory.set(out, &result);
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
 		(||{
 			let mut sig = [0u8; 64];
 			if let Err(_) = this.memory.get_into(sig_data, &mut sig[..]) {
-				return 0;
+				return 2;
 			};
 			let mut pubkey = [0u8; 32];
 			if let Err(_) = this.memory.get_into(pubkey_data, &mut pubkey[..]) {
-				return 0;
+				return 3;
 			};
 
 			if let Ok(msg) = this.memory.get(msg_data, msg_len as usize) {
-				if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) { 1 } else { 0 }
+				if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) {
+					0
+				} else {
+					5
+				}
 			} else {
-				0
+				4
 			}
 		})()
 	}
@@ -224,7 +260,9 @@ impl CodeExecutor for WasmExecutor {
 					.add_argument(I32(offset as i32))
 					.add_argument(I32(size as i32)))
 			.and_then(|p| module.execute_export(method, p))
-			.map_err(|_| -> Error { ErrorKind::Runtime.into() })?;
+			.map_err(|_| -> Error {
+				ErrorKind::Runtime.into()
+			})?;
 
 		if let Some(I64(r)) = returned {
 			memory.get(r as u32, (r >> 32) as u32 as usize)
@@ -240,23 +278,31 @@ mod tests {
 
 	use super::*;
 	use rustc_hex::FromHex;
+	use primitives::{blake2_256, twox_128};
+	use runtime_std;
+	use native_runtime::support::{one, two, StaticHexInto, TestExternalities};
+	use native_runtime::codec::KeyedVec;
+	use native_runtime::runtime::staking::balance;
 
-	#[derive(Debug, Default)]
-	struct TestExternalities {
-		storage: HashMap<Vec<u8>, Vec<u8>>,
+	#[test]
+	fn returning_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_empty_return", &CallData(vec![])).unwrap();
+		assert_eq!(output, vec![0u8; 0]);
 	}
-	impl Externalities for TestExternalities {
-		type Error = Error;
 
-		fn storage(&self, key: &[u8]) -> Result<&[u8]> {
-			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
-		}
+	#[test]
+	fn panicking_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
-			self.storage.insert(key, value);
-		}
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_panic", &CallData(vec![]));
+		assert!(output.is_err());
 
-		fn chain_id(&self) -> u64 { 42 }
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_conditional_panic", &CallData(vec![2]));
+		assert!(output.is_err());
 	}
 
 	#[test]
@@ -283,11 +329,11 @@ mod tests {
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"".to_vec())).unwrap(),
-			FromHex::from_hex("0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8").unwrap()
+			blake2_256(&b""[..]).to_vec()
 		);
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"Hello world!".to_vec())).unwrap(),
-			FromHex::from_hex("3fbc092db9350757e2ab4f7ee9792bfcd2f5220ada5a4bc684487f60c6034369").unwrap()
+			blake2_256(&b"Hello world!"[..]).to_vec()
 		);
 	}
 
@@ -330,7 +376,40 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &CallData(calldata)).unwrap(),
-			vec![1]
+			vec![0]
 		);
+	}
+
+	fn tx() -> Vec<u8> { "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000".convert() }
+
+	#[test]
+	fn panic_execution_gives_error() {
+		let one = one();
+		let mut t = TestExternalities { storage: map![
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
+		], };
+
+		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		assert!(r.is_err());
+	}
+
+	#[test]
+	fn successful_execution_gives_ok() {
+		let one = one();
+		let two = two();
+
+		let mut t = TestExternalities { storage: map![
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+		], };
+
+		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		assert!(r.is_ok());
+
+		runtime_std::with_externalities(&mut t, || {
+			assert_eq!(balance(&one), 42);
+			assert_eq!(balance(&two), 69);
+		});
 	}
 }

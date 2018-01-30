@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-runtime-support = { path = "../support", version = "0.1" }
+runtime-std = { path = "../std", version = "0.1" }
 
 [features]
 default = ["without-std"]

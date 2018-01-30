@@ -14,21 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Support code for the runtime.
+//! Digest type.
 
-mod environment;
-pub mod storage;
-mod hashable;
-#[cfg(feature = "with-std")]
-mod statichex;
-#[macro_use]
-#[cfg(feature = "with-std")]
-mod testing;
+use runtime_std::prelude::*;
 
-pub use self::environment::with_env;
-pub use self::storage::StorageVec;
-pub use self::hashable::Hashable;
-#[cfg(feature = "with-std")]
-pub use self::statichex::{StaticHexConversion, StaticHexInto};
-#[cfg(feature = "with-std")]
-pub use self::testing::{AsBytesRef, HexDisplay, TestExternalities, one, two};
+#[derive(Clone, Default)]
+#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+/// The digest of a block, useful for light-clients.
+pub struct Digest {
+	/// All logs that have happened in the block.
+	pub logs: Vec<Vec<u8>>,
+}

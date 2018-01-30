@@ -14,21 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Support code for the runtime.
+//! Primitive types for the runtime.
 
-mod environment;
-pub mod storage;
-mod hashable;
-#[cfg(feature = "with-std")]
-mod statichex;
-#[macro_use]
-#[cfg(feature = "with-std")]
-mod testing;
+mod misc;
+mod proposal;
+mod function;
+mod digest;
+mod header;
+mod transaction;
+mod uncheckedtransaction;
+mod block;
 
-pub use self::environment::with_env;
-pub use self::storage::StorageVec;
-pub use self::hashable::Hashable;
-#[cfg(feature = "with-std")]
-pub use self::statichex::{StaticHexConversion, StaticHexInto};
-#[cfg(feature = "with-std")]
-pub use self::testing::{AsBytesRef, HexDisplay, TestExternalities, one, two};
+#[cfg(test)]
+mod tests;
+
+pub use self::misc::{AccountID, EVERYBODY, SessionKey, ChainID, BlockNumber, TxOrder, Hash};
+pub use self::proposal::{Proposal, InternalFunction};
+pub use self::function::Function;
+pub use self::digest::Digest;
+pub use self::header::Header;
+pub use self::transaction::Transaction;
+pub use self::uncheckedtransaction::UncheckedTransaction;
+pub use self::block::Block;
