@@ -25,6 +25,9 @@ extern crate runtime_std;
 #[cfg(feature = "with-std")]
 extern crate rustc_hex;
 
+#[macro_use]
+extern crate hex_literal;
+
 pub mod codec;
 #[macro_use]
 pub mod support;

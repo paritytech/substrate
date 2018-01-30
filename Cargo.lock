@@ -570,6 +570,7 @@ dependencies = [
 name = "native-runtime"
 version = "0.1.0"
 dependencies = [
+ "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "runtime-std 0.1.0",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
