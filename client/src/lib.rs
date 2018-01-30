@@ -20,28 +20,43 @@
 
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_state_machine as state_machine;
+extern crate polkadot_serializer as ser;
 
-#[macro_use]
-extern crate error_chain;
+extern crate parking_lot;
+#[macro_use] extern crate error_chain;
+#[macro_use] extern crate log;
 
 pub mod error;
+pub mod blockchain;
+pub mod backend;
+pub mod in_mem;
+
+pub use blockchain::Info as ChainInfo;
+pub use blockchain::BlockId;
 
 use primitives::{block};
 use primitives::contract::{CallData, StorageKey, StorageData};
-use state_machine::backend::Backend;
 
-use self::error::ResultExt;
+use blockchain::Backend as BlockchainBackend;
+use backend::BlockImportOperation;
+use state_machine::backend::Backend as StateBackend;
 
-/// Blockchain access
-pub trait Blockchain {
-	/// Error Type
-	type Error;
+/// Polkadot Client
+#[derive(Debug)]
+pub struct Client<B, E> where B: backend::Backend {
+	backend: B,
+	executor: E,
+}
 
-	/// Returns the hash of latest block.
-	fn latest_hash(&self) -> Result<block::HeaderHash, Self::Error>;
-
-	/// Given a hash return a header
-	fn header(&self, hash: &block::HeaderHash) -> Result<Option<block::Header>, Self::Error>;
+/// Client info
+#[derive(Debug)]
+pub struct ClientInfo {
+	/// Best block hash.
+	pub chain: ChainInfo,
+	/// Best block number in the queue.
+	pub best_queued_number: Option<block::Number>,
+	/// Best queued block hash.
+	pub best_queued_hash: Option<block::HeaderHash>,
 }
 
 /// Information regarding the result of a call.
@@ -52,39 +67,77 @@ pub struct CallResult {
 	pub changes: state_machine::OverlayedChanges,
 }
 
-/// Polkadot Client
+/// Block import result.
 #[derive(Debug)]
-pub struct Client<B,  E> {
-	blockchain: B,
-	executor: E,
+pub enum ImportResult {
+	/// Added to the import queue.
+	Queued,
+	/// Already in the import queue.
+	AlreadyQueued,
+	/// Already in the blockchain.
+	AlreadyInChain,
+	/// Block or parent is known to be bad.
+	KnownBad,
+	/// Block parent is not in the chain.
+	UnknownParent,
 }
 
-impl<B, E> Client<B, E> {
-	/// Creates new Polkadot Client with given blockchain and code executor.
-	pub fn new(blockchain: B, executor: E) -> Self {
-		Client {
-			blockchain,
-			executor,
-		}
-	}
+/// Block status.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BlockStatus {
+	/// Added to the import queue.
+	Queued,
+	/// Already in the blockchain.
+	InChain,
+	/// Block or parent is known to be bad.
+	KnownBad,
+	/// Not in the queue or the blockchain.
+	Unknown,
+}
+
+
+/// Create an instance of in-memory client.
+pub fn new_in_mem<E>(executor: E) -> error::Result<Client<in_mem::Backend, E>> where E: state_machine::CodeExecutor {
+	Client::new(in_mem::Backend::new(), executor)
 }
 
 impl<B, E> Client<B, E> where
-	B: Blockchain,
+	B: backend::Backend,
 	E: state_machine::CodeExecutor,
+	error::Error: From<<<B as backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
+	/// Creates new Polkadot Client with given blockchain and code executor.
+	pub fn new(backend: B, executor: E) -> error::Result<Self> {
+		if backend.blockchain().header(BlockId::Number(0))?.is_none() {
+			trace!("Empty database, writing genesis block");
+			// TODO: spec
+			let genesis_header = block::Header {
+				parent_hash: Default::default(),
+				number: 0,
+				state_root: Default::default(),
+				parachain_activity: Default::default(),
+				logs: Default::default(),
+			};
 
-	fn state_at(&self, _hash: &block::HeaderHash) -> error::Result<state_machine::backend::InMemory> {
-		// TODO [ToDr] Actually retrieve the state.
-		Ok(state_machine::backend::InMemory::default())
+			let mut tx = backend.begin_transaction(BlockId::Hash(block::HeaderHash::default()))?;
+			tx.import_block(genesis_header, None, true)?;
+			backend.commit_transaction(tx)?;
+		}
+		Ok(Client {
+			backend,
+			executor,
+		})
+	}
+
+	fn state_at(&self, hash: &block::HeaderHash) -> error::Result<B::State> {
+		self.backend.state_at(BlockId::Hash(*hash))
 	}
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
 	pub fn storage(&self, hash: &block::HeaderHash, key: &StorageKey) -> error::Result<StorageData> {
-		self.state_at(hash)?
+		Ok(self.state_at(hash)?
 			.storage(&key.0)
-			.map(|x| StorageData(x.to_vec()))
-			.chain_err(|| error::ErrorKind::Backend)
+			.map(|x| StorageData(x.to_vec()))?)
 	}
 
 	/// Execute a call to a contract on top of state in a block of given hash.
@@ -102,5 +155,53 @@ impl<B, E> Client<B, E> where
 			call_data,
 		)?;
 		Ok(CallResult { return_data: vec![], changes })
+	}
+
+	/// Queue a block for import.
+	pub fn import_block(&self, header: block::Header, body: Option<block::Body>) -> error::Result<ImportResult> {
+		// TODO: import lock
+		// TODO: validate block
+		match self.backend.blockchain().status(BlockId::Hash(header.parent_hash))? {
+			blockchain::BlockStatus::InChain => (),
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+
+		let mut transaction = self.backend.begin_transaction(BlockId::Number(header.number))?;
+		let mut _state = transaction.state()?;
+		// TODO: execute block on _state
+
+		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
+		transaction.import_block(header, body, is_new_best)?;
+		self.backend.commit_transaction(transaction)?;
+		Ok(ImportResult::Queued)
+	}
+
+	/// Get blockchain info.
+	pub fn info(&self) -> error::Result<ClientInfo> {
+		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
+		Ok(ClientInfo {
+			chain: info,
+			best_queued_hash: None,
+			best_queued_number: None,
+		})
+	}
+
+	/// Get block status.
+	pub fn block_status(&self, hash: &block::HeaderHash) -> error::Result<BlockStatus> {
+		// TODO: more efficient implementation
+		match self.backend.blockchain().header(BlockId::Hash(*hash)).map_err(|e| error::Error::from_blockchain(Box::new(e)))?.is_some() {
+			true => Ok(BlockStatus::InChain),
+			false => Ok(BlockStatus::Unknown),
+		}
+	}
+
+	/// Get block hash by number.
+	pub fn block_hash(&self, block_number: block::Number) -> error::Result<Option<block::HeaderHash>> {
+		self.backend.blockchain().hash(block_number)
+	}
+
+	/// Get block header by hash.
+	pub fn header(&self, hash: &block::HeaderHash) -> error::Result<Option<block::Header>> {
+		self.backend.blockchain().header(BlockId::Hash(*hash))
 	}
 }

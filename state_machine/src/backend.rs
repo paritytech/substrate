@@ -62,7 +62,7 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct InMemory {
 	inner: MemoryState, // keeps all the state in memory.
 }
@@ -82,7 +82,7 @@ impl InMemory {
 impl Backend for InMemory {
 	type Error = Void;
 
-	fn storage(&self, key: &[u8]) -> Result<&[u8], Void> {
+	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error> {
 		Ok(self.inner.storage(key).unwrap_or(&[]))
 	}
 

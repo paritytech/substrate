@@ -1,0 +1,29 @@
+[package]
+description = "Polkadot network protocol"
+name = "polkadot-network"
+version = "0.1.0"
+license = "GPL-3.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[lib]
+
+[dependencies]
+ethcore-network = { git = "https://github.com/paritytech/parity.git" }
+ethcore-io = { git = "https://github.com/paritytech/parity.git" }
+polkadot-primitives = { path = "../primitives" }
+polkadot-client = { path = "../client" }
+polkadot-state-machine = { path = "../state_machine" }
+polkadot-serializer = { path = "../serializer" }
+log = "0.3"
+env_logger = "0.4"
+rand = "0.3"
+heapsize = "0.4"
+semver = "0.6"
+smallvec = { version = "0.4", features = ["heapsizeof"] }
+parking_lot = "0.4"
+ipnetwork = "0.12"
+error-chain = "0.11"
+bitflags = "1.0"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"

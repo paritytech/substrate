@@ -18,6 +18,7 @@
 
 use primitives::block;
 use client;
+use state_machine;
 
 mod error;
 
@@ -35,11 +36,12 @@ build_rpc_trait! {
 	}
 }
 
-impl<B> ChainApi for B where
-	B: client::Blockchain + Send + Sync + 'static,
-	B::Error: ::std::error::Error + Send,
+impl<B, E> ChainApi for client::Client<B, E> where
+	B: client::backend::Backend + Send + Sync + 'static,
+	E: state_machine::CodeExecutor + Send + Sync + 'static,
+	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
-		self.header(&hash).chain_err(|| "Blockchain error")
+		client::Client::header(self, &hash).chain_err(|| "Blockchain error")
 	}
 }
