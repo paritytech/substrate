@@ -48,14 +48,13 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let yaml = load_yaml!("./cli.yml");
 	let matches = clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args)?;
 
-	// TODO [ToDr] Split paremeters parsing from actual execution.
+	// TODO [ToDr] Split parameters parsing from actual execution.
 	let log_pattern = matches.value_of("log").unwrap_or("");
 	init_logger(log_pattern);
 
 	// Create client
-	let blockchain = DummyBlockchain;
 	let executor = executor::executor();
-	let client = client::Client::new(blockchain, executor);
+	let client = client::new_in_mem(executor)?;
 
 	let address = "127.0.0.1:9933".parse().unwrap();
 	let handler = rpc::rpc_handler(client);
@@ -96,17 +95,3 @@ fn init_logger(pattern: &str) {
 	builder.init().expect("Logger initialized only once.");
 }
 
-#[derive(Debug, Default)]
-struct DummyBlockchain;
-
-impl client::Blockchain for DummyBlockchain {
-	type Error = ();
-
-	fn latest_hash(&self) -> Result<primitives::block::HeaderHash, Self::Error> {
-		Ok(0.into())
-	}
-
-	fn header(&self, _hash: &primitives::block::HeaderHash) -> Result<Option<primitives::block::Header>, Self::Error> {
-		Ok(None)
-	}
-}

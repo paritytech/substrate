@@ -14,28 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::parachain;
+use polkadot_executor as executor;
+use client;
 use super::*;
-
-use test_helpers::Blockchain;
 
 #[test]
 fn should_return_header() {
-	let state = Blockchain::default();
+	let client = client::new_in_mem(executor::executor()).unwrap();
 
 	assert_matches!(
-		ChainApi::header(&state, 0.into()),
+		ChainApi::header(&client, "11265ce45dd2baaaf071f6df8c5a44f0ed1d85a50e71451ff2d4345e57d12e3a".into()),
 		Ok(Some(ref x)) if x == &block::Header {
 			parent_hash: 0.into(),
 			number: 0,
 			state_root: 0.into(),
-			parachain_activity: parachain::Activity(vec![0]),
+			parachain_activity: Default::default(),
 			logs: vec![],
 		}
 	);
 
 	assert_matches!(
-		ChainApi::header(&state, 5.into()),
+		ChainApi::header(&client, 5.into()),
 		Ok(None)
 	);
 }

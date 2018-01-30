@@ -42,8 +42,9 @@ build_rpc_trait! {
 }
 
 impl<B, E> StateApi for Client<B, E> where
-	B: client::Blockchain + Send + Sync + 'static,
+	B: client::backend::Backend + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
+	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	fn storage(&self, key: StorageKey, block: block::HeaderHash) -> Result<StorageData> {
 		Ok(self.storage(&block, &key)?)
