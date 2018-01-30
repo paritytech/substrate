@@ -29,6 +29,7 @@ use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
 use primitives::{ed25519, blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
+use triehash::ordered_trie_root;
 
 struct Heap {
 	end: u32,
@@ -75,6 +76,17 @@ impl WritePrimitive<u32> for MemoryInstance {
 		let mut r = [0u8; 4];
 		LittleEndian::write_u32(&mut r, t);
 		self.set(offset, &r).map_err(|_| DummyUserError)
+	}
+}
+
+trait ReadPrimitive<T: Sized> {
+	fn read_primitive(&self, offset: u32) -> ::std::result::Result<T, DummyUserError>;
+}
+
+impl ReadPrimitive<u32> for MemoryInstance {
+	fn read_primitive(&self, offset: u32) -> ::std::result::Result<u32, DummyUserError> {
+		use byteorder::{LittleEndian, ByteOrder};
+		Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(|_| DummyUserError)?))
 	}
 }
 
@@ -155,6 +167,20 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_storage_root(result: *mut u8) => {
 		let r = this.ext.storage_root();
+		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
+	},
+	ext_enumerated_trie_root(values_data: *const u8, values_len: u32, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
+		let offsets = (0..lens_len)
+			.map(|i| this.memory.read_primitive(lens_data + i * 4))
+			.collect::<::std::result::Result<Vec<u32>, DummyUserError>>()?;
+		let values = offsets.into_iter()
+			.scan(0u32, |acc, v| { let o = *acc; *acc += v; Some((o, v)) })
+			.map(|(offset, len)|
+				this.memory.get(values_data + offset, len as usize)
+					.map_err(|_| DummyUserError)
+			)
+			.collect::<::std::result::Result<Vec<_>, DummyUserError>>()?;
+		let r = ordered_trie_root(values.into_iter());
 		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
 	},
 	ext_chain_id() -> u64 => {
@@ -352,6 +378,16 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &CallData(calldata)).unwrap(),
+			vec![0]
+		);
+	}
+
+	#[test]
+	fn enumerated_trie_root_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &CallData(vec![])).unwrap(),
 			vec![0]
 		);
 	}

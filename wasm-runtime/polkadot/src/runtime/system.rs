@@ -18,8 +18,8 @@
 //! and depositing logs.
 
 use runtime_std::prelude::*;
-use runtime_std::{mem, print, storage_root};
-use codec::KeyedVec;
+use runtime_std::{mem, print, storage_root, enumerated_trie_root};
+use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
 use runtime::{staking, session};
@@ -74,9 +74,11 @@ pub mod internal {
 			"Parent hash should be valid."
 		);
 
-		// TODO: check transaction trie root represents the transactions.
-		// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
-		// so will wait until a little later.
+		// check transaction trie root represents the transactions.
+		let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
+		let txs_root = enumerated_trie_root(&txs.iter().map(Vec::as_slice).collect::<Vec<_>>());
+//		println!("TR: {}", ::support::HexDisplay::from(&txs_root));
+		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
 
 		// execute transactions
 		block.transactions.iter().for_each(execute_transaction);
@@ -87,7 +89,6 @@ pub mod internal {
 		// any final checks
 		final_checks(&block);
 
-//		println!("SR: {}", ::support::HexDisplay::from(&storage_root()));
 
 		// check storage root.
 		assert!(header.state_root == storage_root(), "Storage root must match that calculated.");
@@ -210,7 +211,7 @@ mod tests {
 			parent_hash: [69u8; 32],
 			number: 1,
 			state_root: hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db"),
-			transaction_root: [0u8; 32],		// Unchecked currently.
+			transaction_root: hex!("91fab88ad8c30a6d05ad8e0cf9ab139bf1b8cdddc69abd51cdfa6d2699038af1"),
 			digest: Digest { logs: vec![], },
 		};
 

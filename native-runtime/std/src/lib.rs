@@ -20,6 +20,7 @@
 extern crate environmental;
 extern crate polkadot_state_machine;
 extern crate polkadot_primitives as primitives;
+extern crate triehash;
 
 use std::fmt;
 use primitives::ed25519;
@@ -96,6 +97,13 @@ pub fn chain_id() -> u64 {
 pub fn storage_root() -> [u8; 32] {
 	ext::with(|ext|
 		ext.storage_root()
+	).unwrap_or([0u8; 32])
+}
+
+/// "Commit" all existing operations and get the resultant storage root.
+pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
+	ext::with(|ext|
+		triehash::ordered_trie_root(serialised_values.iter().map(|s| s.to_vec())).0
 	).unwrap_or([0u8; 32])
 }
 
