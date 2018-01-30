@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The std support functions for the runtime.
 
 #[macro_use]
 extern crate environmental;
+
 extern crate polkadot_state_machine;
 extern crate polkadot_primitives as primitives;
 
@@ -30,14 +30,6 @@ pub use std::cell;
 pub use std::boxed;
 pub use std::slice;
 pub use std::mem;
-
-/// Prelude of common useful imports.
-///
-/// This should include only things which are in the normal std prelude.
-pub mod prelude {
-	pub use std::vec::Vec;
-	pub use std::boxed::Box;
-}
 
 pub use polkadot_state_machine::{Externalities, ExternalitiesError};
 use primitives::hexdisplay::HexDisplay;
@@ -106,6 +98,7 @@ pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities, f: F) ->
 	ext::using(ext, f)
 }
 
+/// Trait for things which can be printed.
 pub trait Printable {
 	fn print(self);
 }
@@ -128,6 +121,7 @@ impl Printable for u64 {
 	}
 }
 
+/// Print a printable value.
 pub fn print<T: Printable + Sized>(value: T) {
 	value.print();
 }

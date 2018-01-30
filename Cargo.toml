@@ -19,6 +19,7 @@ members = [
 	"rpc-servers",
 	"rpc",
 	"runtime-codec",
+	"runtime-std",
 	"serializer",
 	"state-machine",
 	"validator",
