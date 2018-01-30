@@ -1,0 +1,11 @@
+[package]
+name = "polkadot-runtime-codec"
+description = "Serialization and deserialization codec for runtime values"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+
+[features]
+no-std = []
+default = []

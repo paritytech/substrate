@@ -27,6 +27,7 @@
 
 #![warn(missing_docs)]
 
+extern crate polkadot_runtime_codec as codec;
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_serializer as serializer;
 extern crate polkadot_state_machine as state_machine;

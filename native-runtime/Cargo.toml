@@ -3,11 +3,12 @@ name = "native-runtime"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
+[dependencies]
+polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1" }
+runtime-std = { path = "./std", version = "0.1" }
+rustc-hex = "1.0"
+
 [features]
 default = ["with-std"]
 with-std = []
-without-std = []
-
-[dependencies]
-runtime-std = { path = "./std", version = "0.1" }
-rustc-hex = "1.0"
+without-std = ["polkadot-runtime-codec/no-std"]

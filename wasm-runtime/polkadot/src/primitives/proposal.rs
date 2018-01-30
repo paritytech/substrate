@@ -65,10 +65,10 @@ pub struct Proposal {
 }
 
 impl Slicable for Proposal {
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(fill_slice: &F) -> Option<Self> {
+	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(fill_slice: F) -> Option<Self> {
 		Some(Proposal {
-			function: InternalFunction::from_u8(Slicable::set_as_slice(fill_slice)?)?,
-			input_data: Slicable::set_as_slice(&|s, o| fill_slice(s, o + 1))?,
+			function: InternalFunction::from_u8(Slicable::set_as_slice(&fill_slice)?)?,
+			input_data: Slicable::set_as_slice(|s, o| fill_slice(s, o + 1))?,
 		})
 	}
 

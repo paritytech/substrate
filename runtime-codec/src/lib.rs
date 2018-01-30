@@ -14,7 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Codec utils.
+//! Implements the serialization and deserialization codec for polkadot runtime
+//! values.
+
+#![cfg_attr(feature = "no-std", no_std)]
+#![cfg_attr(feature = "no-std", feature(alloc))]
 
 mod endiansensitive;
 mod slicable;
@@ -27,3 +31,11 @@ pub use self::slicable::{Slicable, NonTrivialSlicable};
 pub use self::streamreader::StreamReader;
 pub use self::joiner::Joiner;
 pub use self::keyedvec::KeyedVec;
+
+#[cfg(feature = "no-std")]
+mod std {
+	extern crate alloc;
+
+	pub use core::*;
+	pub use self::alloc::vec;
+}

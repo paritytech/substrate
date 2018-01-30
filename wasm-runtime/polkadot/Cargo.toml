@@ -7,9 +7,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
+polkadot-runtime-codec = { path = "../../runtime-codec", version = "0.1" }
 runtime-std = { path = "../std", version = "0.1" }
 
 [features]
 default = ["without-std"]
 with-std = []
-without-std = []
+without-std = ["polkadot-runtime-codec/no-std"]
