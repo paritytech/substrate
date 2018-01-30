@@ -22,7 +22,7 @@ use runtime_std::mem;
 use primitives::{BlockNumber, Hash, Digest};
 
 #[derive(Clone)]
-#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
 /// The header for a block.
 pub struct Header {
 	/// The parent block's "hash" (actually the Blake2-256 hash of its serialised header).

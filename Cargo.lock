@@ -748,6 +748,7 @@ dependencies = [
  "byteorder 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "fixed-hash 0.1.0 (git+https://github.com/paritytech/primitives.git)",
+ "polkadot-runtime-codec 0.1.0",
  "polkadot-serializer 0.1.0",
  "pretty_assertions 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",

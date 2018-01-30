@@ -22,7 +22,7 @@ use runtime::{staking, session, timestamp, governance};
 
 /// Public functions that can be dispatched to.
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
 #[repr(u8)]
 pub enum Function {
 	StakingStake = 0,

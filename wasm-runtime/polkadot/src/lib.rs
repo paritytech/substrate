@@ -16,12 +16,12 @@
 
 //! The Polkadot runtime. This can be compiled with #[no_std], ready for Wasm.
 
-#![cfg_attr(feature = "without-std", no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
 extern crate runtime_std;
 
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 extern crate rustc_hex;
 
 extern crate polkadot_runtime_codec as codec;

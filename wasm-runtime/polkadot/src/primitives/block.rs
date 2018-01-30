@@ -21,7 +21,7 @@ use codec::{StreamReader, Joiner, Slicable, NonTrivialSlicable};
 use primitives::{Header, UncheckedTransaction};
 
 /// A Polkadot relay chain block.
-#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
 pub struct Block {
 	/// The header of the block.
 	pub header: Header,

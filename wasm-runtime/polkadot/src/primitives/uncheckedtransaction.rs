@@ -21,7 +21,7 @@ use runtime_std::prelude::*;
 use codec::{Slicable, NonTrivialSlicable, StreamReader, Joiner};
 use primitives::Transaction;
 
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 use std::fmt;
 
 /// A transactions right from the external world. Unchecked.
@@ -40,14 +40,14 @@ impl UncheckedTransaction {
 	}
 }
 
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 impl PartialEq for UncheckedTransaction {
 	fn eq(&self, other: &Self) -> bool {
 		self.signature.iter().eq(other.signature.iter()) && self.transaction == other.transaction
 	}
 }
 
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 impl fmt::Debug for UncheckedTransaction {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "UncheckedTransaction({:?})", self.transaction)
