@@ -18,6 +18,7 @@
 
 use runtime_std::prelude::*;
 use runtime_std::cell::RefCell;
+use runtime_std::print;
 use codec::KeyedVec;
 use support::{storage, StorageVec};
 use primitives::{BlockNumber, AccountID};

@@ -145,8 +145,6 @@ mod tests {
 
 	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transaction>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
-		let one = one();
-		let two = two();
 
 		let transactions = txs.into_iter().map(|transaction| {
 			let signature = secret_for(&transaction.signed).unwrap()
@@ -169,24 +167,66 @@ mod tests {
 		(Block { header, transactions }.to_vec(), hash)
 	}
 
-	fn block1() -> Vec<u8> {
-		construct_block(1, [69u8; 32], hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db"), vec![Transaction {
-			signed: one(),
-			nonce: 0,
-			function: Function::StakingTransfer,
-			input_data: vec![].join(&two()).join(&69u64),
-		}]).0
+	fn block1() -> (Vec<u8>, Hash) {
+		construct_block(
+			1,
+			[69u8; 32],
+			hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db"),
+			vec![Transaction {
+				signed: one(),
+				nonce: 0,
+				function: Function::StakingTransfer,
+				input_data: vec![].join(&two()).join(&69u64),
+			}]
+		)
+	}
+
+	fn block2() -> (Vec<u8>, Hash) {
+		construct_block(
+			2,
+			block1().1,
+			hex!("244289aaa48ad6aa39db860d8ec09295ee7f06d1addac3dc02aa993db8644008"),
+			vec![
+				Transaction {
+					signed: two(),
+					nonce: 0,
+					function: Function::StakingTransfer,
+					input_data: vec![].join(&one()).join(&5u64),
+				},
+				Transaction {
+					signed: one(),
+					nonce: 1,
+					function: Function::StakingTransfer,
+					input_data: vec![].join(&two()).join(&15u64),
+				}
+			]
+		)
+	}
+
+	#[test]
+	fn test_execution_works() {
+		let mut t = new_test_ext();
+		println!("Testing Wasm...");
+		let r = WasmExecutor.call(&mut t, COMPACT_CODE, "run_tests", &CallData(block2().0));
+		assert!(r.is_ok());
 	}
 
 	#[test]
 	fn full_native_block_import_works() {
 		let mut t = new_test_ext();
 
-		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block1())).unwrap();
+		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block1().0)).unwrap();
 
 		runtime_std::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 42);
 			assert_eq!(balance(&two()), 69);
+		});
+
+		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block2().0)).unwrap();
+
+		runtime_std::with_externalities(&mut t, || {
+			assert_eq!(balance(&one()), 32);
+			assert_eq!(balance(&two()), 79);
 		});
 	}
 
@@ -194,11 +234,18 @@ mod tests {
 	fn full_wasm_block_import_works() {
 		let mut t = new_test_ext();
 
-		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block1())).unwrap();
+		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block1().0)).unwrap();
 
 		runtime_std::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 42);
 			assert_eq!(balance(&two()), 69);
+		});
+
+		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block2().0)).unwrap();
+
+		runtime_std::with_externalities(&mut t, || {
+			assert_eq!(balance(&one()), 32);
+			assert_eq!(balance(&two()), 79);
 		});
 	}
 }
