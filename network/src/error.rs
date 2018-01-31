@@ -12,25 +12,20 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-//! Support code for the runtime.
+use network::Error as NetworkError;
+use client;
 
-mod environment;
-pub mod storage;
-mod hashable;
-#[cfg(feature = "std")]
-mod statichex;
-#[macro_use]
-#[cfg(feature = "std")]
-mod testing;
+error_chain! {
+	foreign_links {
+		Network(NetworkError) #[doc = "Devp2p error."];
+	}
 
-pub use self::environment::with_env;
-pub use self::storage::StorageVec;
-pub use self::hashable::Hashable;
+	links {
+		Client(client::error::Error, client::error::ErrorKind);
+	}
 
-#[cfg(feature = "std")]
-pub use self::statichex::{StaticHexConversion, StaticHexInto};
-
-#[cfg(feature = "std")]
-pub use self::testing::{AsBytesRef, HexDisplay, one, two};
+	errors {
+	}
+}

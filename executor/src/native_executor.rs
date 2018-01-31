@@ -42,8 +42,9 @@ impl CodeExecutor for NativeExecutor {
 mod tests {
 	use super::*;
 	use codec::KeyedVec;
-	use native_runtime::support::{one, two, TestExternalities, StaticHexInto};
+	use native_runtime::support::{one, two, StaticHexInto};
 	use native_runtime::runtime::staking::balance;
+	use state_machine::TestExternalities;
 	use primitives::twox_128;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");

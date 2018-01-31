@@ -18,8 +18,8 @@
 //! and depositing logs.
 
 use runtime_std::prelude::*;
-use runtime_std::{mem, print};
-use codec::KeyedVec;
+use runtime_std::{mem, print, storage_root, enumerated_trie_root};
+use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
 use runtime::{staking, session};
@@ -74,13 +74,11 @@ pub mod internal {
 			"Parent hash should be valid."
 		);
 
-		// TODO: check transaction trie root represents the transactions.
-		// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
-		// so will wait until a little later.
-
-		// store the header hash in storage.
-		let header_hash_key = header.number.to_keyed_vec(BLOCK_HASH_AT);
-		storage::put(&header_hash_key, &header.blake2_256());
+		// check transaction trie root represents the transactions.
+		let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
+		let txs_root = enumerated_trie_root(&txs.iter().map(Vec::as_slice).collect::<Vec<_>>());
+//		println!("TR: {}", ::support::HexDisplay::from(&txs_root));
+		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
 
 		// execute transactions
 		block.transactions.iter().for_each(execute_transaction);
@@ -91,9 +89,14 @@ pub mod internal {
 		// any final checks
 		final_checks(&block);
 
-		// TODO: check storage root.
-		// this requires non-trivial changes to the externals API or compiling trie rooting into wasm
-		// so will wait until a little later.
+
+		// check storage root.
+		assert!(header.state_root == storage_root(), "Storage root must match that calculated.");
+
+		// store the header hash in storage; we can't do it before otherwise there would be a
+		// cyclic dependency.
+		let header_hash_key = header.number.to_keyed_vec(BLOCK_HASH_AT);
+		storage::put(&header_hash_key, &header.blake2_256());
 	}
 
 	/// Execute a given transaction.
@@ -127,10 +130,10 @@ mod tests {
 	use super::*;
 	use super::internal::*;
 
-	use runtime_std::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
-	use support::{StaticHexInto, TestExternalities, HexDisplay, one, two};
-	use primitives::{UncheckedTransaction, Transaction, Function};
+	use support::{StaticHexInto, HexDisplay, one, two};
+	use primitives::{UncheckedTransaction, Transaction, Function, Header, Digest};
 	use runtime::staking;
 
 	#[test]
@@ -158,6 +161,107 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			execute_transaction(&tx);
+			assert_eq!(staking::balance(&one), 42);
+			assert_eq!(staking::balance(&two), 69);
+		});
+	}
+
+	fn new_test_ext() -> TestExternalities {
+		let one = one();
+		let two = two();
+		let three = [3u8; 32];
+
+		TestExternalities { storage: map![
+			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].to_vec(),
+			twox_128(b"gov:apr").to_vec() => vec![].join(&667u32),
+			twox_128(b"ses:len").to_vec() => vec![].join(&2u64),
+			twox_128(b"ses:val:len").to_vec() => vec![].join(&3u32),
+			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
+			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => two.to_vec(),
+			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => three.to_vec(),
+			twox_128(b"sta:wil:len").to_vec() => vec![].join(&3u32),
+			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => one.to_vec(),
+			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => two.to_vec(),
+			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => three.to_vec(),
+			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64),
+			twox_128(b"sta:vac").to_vec() => vec![].join(&3u64),
+			twox_128(b"sta:era").to_vec() => vec![].join(&0u64),
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+		], }
+	}
+
+	#[test]
+	fn block_import_works() {
+		let one = one();
+		let two = two();
+
+		let mut t = new_test_ext();
+
+		let tx = UncheckedTransaction {
+			transaction: Transaction {
+				signed: one.clone(),
+				nonce: 0,
+				function: Function::StakingTransfer,
+				input_data: vec![].join(&two).join(&69u64),
+			},
+			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
+		};
+
+		let h = Header {
+			parent_hash: [69u8; 32],
+			number: 1,
+			state_root: hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db"),
+			transaction_root: hex!("91fab88ad8c30a6d05ad8e0cf9ab139bf1b8cdddc69abd51cdfa6d2699038af1"),
+			digest: Digest { logs: vec![], },
+		};
+
+		let b = Block {
+			header: h,
+			transactions: vec![tx],
+		};
+
+		with_externalities(&mut t, || {
+			execute_block(b);
+			assert_eq!(staking::balance(&one), 42);
+			assert_eq!(staking::balance(&two), 69);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn block_import_of_bad_state_root_fails() {
+		let one = one();
+		let two = two();
+
+		let mut t = new_test_ext();
+
+		let tx = UncheckedTransaction {
+			transaction: Transaction {
+				signed: one.clone(),
+				nonce: 0,
+				function: Function::StakingTransfer,
+				input_data: vec![].join(&two).join(&69u64),
+			},
+			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
+		};
+		// tx: 2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000
+		// sig: 679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a
+
+		let h = Header {
+			parent_hash: [69u8; 32],
+			number: 1,
+			state_root: [0u8; 32],
+			transaction_root: [0u8; 32],		// Unchecked currently.
+			digest: Digest { logs: vec![], },
+		};
+
+		let b = Block {
+			header: h,
+			transactions: vec![tx],
+		};
+
+		with_externalities(&mut t, || {
+			execute_block(b);
 			assert_eq!(staking::balance(&one), 42);
 			assert_eq!(staking::balance(&two), 69);
 		});

@@ -42,10 +42,9 @@ mod tests {
 	use super::*;
 	use super::public::*;
 
-	use runtime_std::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use runtime::timestamp;
 	use codec::{Joiner, KeyedVec};
-	use support::TestExternalities;
 
 	#[test]
 	fn timestamp_works() {

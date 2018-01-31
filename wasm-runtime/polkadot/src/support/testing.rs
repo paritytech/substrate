@@ -16,29 +16,8 @@
 
 //! Testing helpers.
 
-use std::collections::HashMap;
-use runtime_std::{Externalities, ExternalitiesError};
 use primitives::AccountID;
 use super::statichex::StaticHexInto;
-
-#[derive(Debug, Default)]
-/// Simple externaties implementation.
-pub struct TestExternalities {
-	/// The storage map.
-	pub storage: HashMap<Vec<u8>, Vec<u8>>,
-}
-
-impl Externalities for TestExternalities {
-	fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
-		Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
-	}
-
-	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
-		self.storage.insert(key, value);
-	}
-
-	fn chain_id(&self) -> u64 { 42 }
-}
 
 #[macro_export]
 macro_rules! map {

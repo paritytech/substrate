@@ -6,6 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 error-chain = "0.11"
 polkadot-cli = { path = "cli", version = "0.1" }
+polkadot-network = { path = "network" }
 
 [workspace]
 members = [
@@ -15,6 +16,7 @@ members = [
 	"environmental",
 	"executor",
 	"native-runtime",
+	"network",
 	"primitives",
 	"rpc-servers",
 	"rpc",

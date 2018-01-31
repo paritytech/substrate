@@ -26,6 +26,10 @@ extern crate rustc_hex;
 
 extern crate polkadot_runtime_codec as codec;
 
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
+
 #[macro_use]
 pub mod support;
 pub mod primitives;

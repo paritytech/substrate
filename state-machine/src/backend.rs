@@ -40,6 +40,9 @@ pub trait Backend {
 	/// Commit updates to the backend and get new state.
 	fn commit<I>(&mut self, changes: I) -> Committed
 		where I: IntoIterator<Item=Update>;
+
+	/// Get all key/value pairs into a Vec.
+	fn pairs(&self) -> Vec<(&[u8], &[u8])>;
 }
 
 /// Error impossible.
@@ -59,15 +62,27 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct InMemory {
 	inner: MemoryState, // keeps all the state in memory.
+}
+
+#[cfg(test)]
+impl InMemory {
+	/// Create a new instance from a given storage map.
+	pub fn from(storage: ::std::collections::HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		InMemory {
+			inner: MemoryState {
+				storage
+			}
+		}
+	}
 }
 
 impl Backend for InMemory {
 	type Error = Void;
 
-	fn storage(&self, key: &[u8]) -> Result<&[u8], Void> {
+	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error> {
 		Ok(self.inner.storage(key).unwrap_or(&[]))
 	}
 
@@ -86,6 +101,10 @@ impl Backend for InMemory {
 		Committed {
 			storage_tree_root,
 		}
+	}
+
+	fn pairs(&self) -> Vec<(&[u8], &[u8])> {
+		self.inner.storage.iter().map(|(k, v)| (&k[..], &v[..])).collect()
 	}
 }
 

@@ -132,9 +132,9 @@ mod tests {
 	use super::public::*;
 	use super::privileged::*;
 	use super::internal::*;
-	use runtime_std::{with_externalities, twox_128};
+	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use support::{one, two, TestExternalities, with_env};
+	use support::{one, two, with_env};
 	use primitives::AccountID;
 	use runtime::{consensus, session};
 
