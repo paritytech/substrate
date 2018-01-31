@@ -4,6 +4,8 @@
 #![feature(alloc)]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
+#[macro_use]
+#[macro_export]
 extern crate alloc;
 
 pub use alloc::vec;

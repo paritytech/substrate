@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use runtime_std::prelude::*;
-use runtime_std::{mem, print, storage_root, enumerated_trie_root};
+use runtime_std::{mem, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
 use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
@@ -76,12 +76,14 @@ pub mod internal {
 
 		// check transaction trie root represents the transactions.
 		let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
-		let txs_root = enumerated_trie_root(&txs.iter().map(Vec::as_slice).collect::<Vec<_>>());
-//		println!("TR: {}", ::support::HexDisplay::from(&txs_root));
+		let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
+		let txs_root = enumerated_trie_root(&txs);
 		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
 
 		// execute transactions
-		block.transactions.iter().for_each(execute_transaction);
+		for tx in &block.transactions {
+			execute_transaction(tx);
+		}
 
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
@@ -89,9 +91,10 @@ pub mod internal {
 		// any final checks
 		final_checks(&block);
 
-
 		// check storage root.
-		assert!(header.state_root == storage_root(), "Storage root must match that calculated.");
+		let storage_root = storage_root();
+		debug_assert_hash(&header.state_root, &storage_root);
+		assert!(header.state_root == storage_root, "Storage root must match that calculated.");
 
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
@@ -117,6 +120,17 @@ pub mod internal {
 		// decode parameters and dispatch
 		tx.function.dispatch(&tx.signed, &tx.input_data);
 	}
+
+	#[cfg(feature = "with-std")]
+	fn debug_assert_hash(given: &Hash, expected: &Hash) {
+		use support::HexDisplay;
+		if given != expected {
+			println!("Hash: given={}, expected={}", HexDisplay::from(given), HexDisplay::from(expected));
+		}
+	}
+
+	#[cfg(not(feature = "with-std"))]
+	fn debug_assert_hash(_given: &Hash, _expected: &Hash) {}
 }
 
 fn final_checks(_block: &Block) {
