@@ -36,7 +36,7 @@ extern crate byteorder;
 extern crate rustc_hex;
 extern crate native_runtime;
 extern crate runtime_std;
-extern crate libc;
+extern crate triehash;
 
 #[macro_use]
 extern crate error_chain;
