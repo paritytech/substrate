@@ -102,9 +102,7 @@ pub fn storage_root() -> [u8; 32] {
 
 /// "Commit" all existing operations and get the resultant storage root.
 pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
-	ext::with(|ext|
-		triehash::ordered_trie_root(serialised_values.iter().map(|s| s.to_vec())).0
-	).unwrap_or([0u8; 32])
+	triehash::ordered_trie_root(serialised_values.iter().map(|s| s.to_vec())).0
 }
 
 /// Conduct a Keccak-256 hash of the given data.
