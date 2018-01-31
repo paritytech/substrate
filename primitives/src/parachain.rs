@@ -16,7 +16,7 @@
 
 //! Parachain data types.
 
-use bytes;
+use bytes::{self, Vec};
 
 /// Unique identifier of a parachain.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Serialize, Deserialize)]
