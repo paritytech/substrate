@@ -19,7 +19,8 @@
 #![warn(missing_docs)]
 
 extern crate polkadot_primitives as primitives;
-#[macro_use]
+
+#[cfg_attr(test, macro_use)]
 extern crate hex_literal;
 
 extern crate hashdb;
