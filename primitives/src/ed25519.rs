@@ -55,6 +55,11 @@ impl Signature {
 		r.copy_from_slice(data);
 		Signature(r)
 	}
+
+	/// Get the inner part.
+	pub fn inner(self) -> [u8; 64] {
+		self.0
+	}
 }
 
 impl AsRef<[u8; 64]> for Signature {
