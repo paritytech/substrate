@@ -42,8 +42,9 @@ impl CodeExecutor for NativeExecutor {
 mod tests {
 	use super::*;
 	use runtime_std::TestExternalities;
-	use native_runtime::codec::KeyedVec;
-	use native_runtime::support::{one, two, StaticHexInto};
+	use native_runtime::codec::{KeyedVec, Joiner, Slicable};
+	use native_runtime::support::{one, two, StaticHexInto, Hashable};
+	use native_runtime::primitives::*;
 	use native_runtime::runtime::staking::balance;
 	use primitives::twox_128;
 
@@ -106,6 +107,98 @@ mod tests {
 		runtime_std::with_externalities(&mut t, || {
 			assert_eq!(balance(&one), 42);
 			assert_eq!(balance(&two), 69);
+		});
+	}
+
+	fn new_test_ext() -> TestExternalities {
+		let one = one();
+		let two = two();
+		let three = [3u8; 32];
+
+		TestExternalities { storage: map![
+			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].to_vec(),
+			twox_128(b"gov:apr").to_vec() => vec![].join(&667u32),
+			twox_128(b"ses:len").to_vec() => vec![].join(&2u64),
+			twox_128(b"ses:val:len").to_vec() => vec![].join(&3u32),
+			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
+			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => two.to_vec(),
+			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => three.to_vec(),
+			twox_128(b"sta:wil:len").to_vec() => vec![].join(&3u32),
+			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => one.to_vec(),
+			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => two.to_vec(),
+			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => three.to_vec(),
+			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64),
+			twox_128(b"sta:vac").to_vec() => vec![].join(&3u64),
+			twox_128(b"sta:era").to_vec() => vec![].join(&0u64),
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+		], }
+	}
+
+	use primitives::ed25519::Pair;
+	fn secret_for(who: &AccountID) -> Option<Pair> {
+		match who {
+			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
+			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
+			_ => None,
+		}
+	}
+
+	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transaction>) -> (Vec<u8>, Hash) {
+		use triehash::ordered_trie_root;
+		let one = one();
+		let two = two();
+
+		let transactions = txs.into_iter().map(|transaction| {
+			let signature = secret_for(&transaction.signed).unwrap()
+				.sign(&transaction.to_vec())
+				.inner();
+			UncheckedTransaction { transaction, signature }
+		}).collect::<Vec<_>>();
+
+		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0;
+
+		let header = Header {
+			parent_hash,
+			number,
+			state_root,
+			transaction_root,
+			digest: Digest { logs: vec![], },
+		};
+		let hash = header.blake2_256();
+
+		(Block { header, transactions }.to_vec(), hash)
+	}
+
+	fn block1() -> Vec<u8> {
+		construct_block(1, [69u8; 32], hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db"), vec![Transaction {
+			signed: one(),
+			nonce: 0,
+			function: Function::StakingTransfer,
+			input_data: vec![].join(&two()).join(&69u64),
+		}]).0
+	}
+
+	#[test]
+	fn full_native_block_import_works() {
+		let mut t = new_test_ext();
+
+		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block1())).unwrap();
+
+		runtime_std::with_externalities(&mut t, || {
+			assert_eq!(balance(&one()), 42);
+			assert_eq!(balance(&two()), 69);
+		});
+	}
+
+	#[test]
+	fn full_wasm_block_import_works() {
+		let mut t = new_test_ext();
+
+		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block1())).unwrap();
+
+		runtime_std::with_externalities(&mut t, || {
+			assert_eq!(balance(&one()), 42);
+			assert_eq!(balance(&two()), 69);
 		});
 	}
 }
