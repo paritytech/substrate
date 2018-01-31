@@ -471,6 +471,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-literal"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "hex-literal-impl 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proc-macro-hack 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "hex-literal-impl"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "proc-macro-hack 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "httparse"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -768,6 +785,7 @@ dependencies = [
 name = "native-runtime"
 version = "0.1.0"
 dependencies = [
+ "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "runtime-std 0.1.0",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -968,7 +986,6 @@ dependencies = [
  "assert_matches 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "native-runtime 0.1.0",
  "parity-wasm 0.15.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-primitives 0.1.0",
@@ -978,6 +995,7 @@ dependencies = [
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1061,6 +1079,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memorydb 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-primitives 0.1.0",
@@ -1085,6 +1104,19 @@ dependencies = [
  "ansi_term 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "difference 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "proc-macro-hack"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "proc-macro-hack-impl 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "proc-macro-hack-impl"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "quote"
@@ -1203,6 +1235,7 @@ dependencies = [
  "parking_lot 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-primitives 0.1.0",
  "polkadot-state-machine 0.1.0",
+ "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1705,6 +1738,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum globset 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "90d069fe6beb9be359ef505650b3f73228c5591a3c4b1f32be2f4f44459ffa3a"
 "checksum hashdb 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d97be07c358c5b461268b4ce60304024c5fa5acfd4bd8cd743639f0252003cf5"
 "checksum heapsize 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "54fab2624374e5137ae4df13bf32b0b269cb804df42d13a51221bbd431d1a237"
+"checksum hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bd546ef520ab3745f1aae5f2cdc6de9e6498e94d1ab138b9eb3ddfbf335847fb"
+"checksum hex-literal-impl 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2ea76da4c7f1a54d01d54985566d3fdd960b2bbd7b970da024821c883c2d9631"
 "checksum httparse 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "af2f2dd97457e8fb1ae7c5a420db346af389926e36f43768b96f101546b04a07"
 "checksum hyper 0.10.13 (registry+https://github.com/rust-lang/crates.io-index)" = "368cb56b2740ebf4230520e2b90ebb0461e69034d85d1945febd9b3971426db2"
 "checksum hyper 0.11.7 (registry+https://github.com/rust-lang/crates.io-index)" = "4959ca95f55df4265bff2ad63066147255e6fa733682cf6d1cb5eaff6e53324b"
@@ -1753,6 +1788,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum plain_hasher 0.1.0 (git+https://github.com/paritytech/parity.git)" = "<none>"
 "checksum plain_hasher 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "83ae80873992f511142c07d0ec6c44de5636628fdb7e204abd655932ea79d995"
 "checksum pretty_assertions 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "94b6bbc8a323d89a019c4cdde21850522fb8405e97add70827177fc2f86c1495"
+"checksum proc-macro-hack 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3ba8d4f9257b85eb6cdf13f055cea3190520aab1409ca2ab43493ea4820c25f0"
+"checksum proc-macro-hack-impl 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d5cb6f960ad471404618e9817c0e5d10b1ae74cfdf01fab89ea0641fe7fb2892"
 "checksum quote 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)" = "7a6e920b65c65f10b2ae65c831a81a073a89edd28c7cce89475bff467ab4167a"
 "checksum rand 0.3.18 (registry+https://github.com/rust-lang/crates.io-index)" = "6475140dfd8655aeb72e1fd4b7a1cc1c202be65d71669476e392fe62532b9edd"
 "checksum rayon 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)" = "b614fe08b6665cb9a231d07ac1364b0ef3cb3698f1239ee0c4c3a88a524f54c8"

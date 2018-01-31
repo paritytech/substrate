@@ -146,9 +146,8 @@ pub trait StorageVec {
 mod tests {
 	use super::*;
 	use std::collections::HashMap;
-	use runtime_std::with_externalities;
-	use support::{TestExternalities, HexDisplay};
-	use runtime_std::{storage, twox_128};
+	use support::HexDisplay;
+	use runtime_std::{storage, twox_128, TestExternalities, with_externalities};
 
 	#[test]
 	fn integers_can_be_stored() {

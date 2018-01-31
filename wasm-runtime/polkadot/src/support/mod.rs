@@ -31,4 +31,4 @@ pub use self::hashable::Hashable;
 #[cfg(feature = "with-std")]
 pub use self::statichex::{StaticHexConversion, StaticHexInto};
 #[cfg(feature = "with-std")]
-pub use self::testing::{AsBytesRef, HexDisplay, TestExternalities, one, two};
+pub use self::testing::{AsBytesRef, HexDisplay, one, two};

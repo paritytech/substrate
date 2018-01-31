@@ -17,7 +17,7 @@
 //! Conrete externalities implementation.
 
 use std::{error, fmt};
-
+use triehash::trie_root;
 use backend::Backend;
 use {Externalities, ExternalitiesError, OverlayedChanges};
 
@@ -74,5 +74,16 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 
 	fn chain_id(&self) -> u64 {
 		42
+	}
+
+	fn storage_root(&self) -> [u8; 32] {
+		let mut all_pairs = self.backend.pairs();
+		all_pairs.extend(
+			self.overlay.committed.storage.iter()
+				.chain(self.overlay.prospective.storage.iter())
+				.map(|(k, v)| (&k[..], &v[..]))
+		);
+
+		trie_root(all_pairs.into_iter().map(|(k, v)| (k.to_vec(), v.to_vec()))).0
 	}
 }
