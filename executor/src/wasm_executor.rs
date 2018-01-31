@@ -170,10 +170,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
 	},
 	ext_enumerated_trie_root(values_data: *const u8, values_len: u32, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
-		let offsets = (0..lens_len)
+		let values = (0..lens_len)
 			.map(|i| this.memory.read_primitive(lens_data + i * 4))
-			.collect::<::std::result::Result<Vec<u32>, DummyUserError>>()?;
-		let values = offsets.into_iter()
+			.collect::<::std::result::Result<Vec<u32>, DummyUserError>>()?
+			.into_iter()
 			.scan(0u32, |acc, v| { let o = *acc; *acc += v; Some((o, v)) })
 			.map(|(offset, len)|
 				this.memory.get(values_data + offset, len as usize)
