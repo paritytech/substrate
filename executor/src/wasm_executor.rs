@@ -29,6 +29,7 @@ use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
 use primitives::{ed25519, blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
+use triehash::ordered_trie_root;
 
 struct Heap {
 	end: u32,
@@ -66,15 +67,26 @@ impl<'e, E: Externalities> FunctionExecutor<'e, E> {
 }
 
 trait WritePrimitive<T: Sized> {
-	fn write_primitive(&self, offset: u32, t: T);
+	fn write_primitive(&self, offset: u32, t: T) -> ::std::result::Result<(), DummyUserError>;
 }
 
 impl WritePrimitive<u32> for MemoryInstance {
-	fn write_primitive(&self, offset: u32, t: u32) {
+	fn write_primitive(&self, offset: u32, t: u32) -> ::std::result::Result<(), DummyUserError> {
 		use byteorder::{LittleEndian, ByteOrder};
 		let mut r = [0u8; 4];
 		LittleEndian::write_u32(&mut r, t);
-		let _ = self.set(offset, &r);
+		self.set(offset, &r).map_err(|_| DummyUserError)
+	}
+}
+
+trait ReadPrimitive<T: Sized> {
+	fn read_primitive(&self, offset: u32) -> ::std::result::Result<T, DummyUserError>;
+}
+
+impl ReadPrimitive<u32> for MemoryInstance {
+	fn read_primitive(&self, offset: u32) -> ::std::result::Result<u32, DummyUserError> {
+		use byteorder::{LittleEndian, ByteOrder};
+		Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(|_| DummyUserError)?))
 	}
 }
 
@@ -95,29 +107,29 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		println!("Runtime: {}", number);
 	},
 	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
-		if let (Ok(sl1), Ok(sl2))
-			= (this.memory.get(s1, n as usize), this.memory.get(s2, n as usize)) {
-			match sl1.cmp(&sl2) {
-				Ordering::Greater => 1,
-				Ordering::Less => -1,
-				Ordering::Equal => 0,
-			}
-		} else {
-			return Err(DummyUserError.into());
+		let sl1 = this.memory.get(s1, n as usize).map_err(|_| DummyUserError)?;
+		let sl2 = this.memory.get(s2, n as usize).map_err(|_| DummyUserError)?;
+		match sl1.cmp(&sl2) {
+			Ordering::Greater => 1,
+			Ordering::Less => -1,
+			Ordering::Equal => 0,
 		}
 	},
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
-		let _ = this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize);
+		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize)
+			.map_err(|_| DummyUserError)?;
 		println!("memcpy {} from {}, {} bytes", dest, src, count);
 		dest
 	},
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
-		let _ = this.memory.copy(src as usize, dest as usize, count as usize);
+		this.memory.copy(src as usize, dest as usize, count as usize)
+			.map_err(|_| DummyUserError)?;
 		println!("memmove {} from {}, {} bytes", dest, src, count);
 		dest
 	},
 	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
-		let _ = this.memory.clear(dest as usize, val as u8, count as usize);
+		this.memory.clear(dest as usize, val as u8, count as usize)
+			.map_err(|_| DummyUserError)?;
 		println!("memset {} with {}, {} bytes", dest, val, count);
 		dest
 	},
@@ -136,90 +148,80 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 	},
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
-		let (offset, written) = if let Ok(key) = this.memory.get(key_data, key_len as usize) {
-			if let Ok(value) = this.ext.storage(&key) {
-				let offset = this.heap.allocate(value.len() as u32) as u32;
-				let _ = this.memory.set(offset, &value);
-				(offset, value.len() as u32)
-			} else { (0, 0) }
-		} else { (0, 0) };
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
+		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
 
-		this.memory.write_primitive(written_out, written);
-		offset as u32
+		let offset = this.heap.allocate(value.len() as u32) as u32;
+		this.memory.set(offset, &value).map_err(|_| DummyUserError)?;
+
+		this.memory.write_primitive(written_out, value.len() as u32)?;
+		offset
 	},
 	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
-		if let Ok(key) = this.memory.get(key_data, key_len as usize) {
-			if let Ok(value) = this.ext.storage(&key) {
-				let value = &value[value_offset as usize..];
-				let written = ::std::cmp::min(value_len as usize, value.len());
-				let _ = this.memory.set(value_data, &value[..written]);
-				written as u32
-			} else { 0 }
-		} else { 0 }
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
+		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
+		let value = &value[value_offset as usize..];
+		let written = ::std::cmp::min(value_len as usize, value.len());
+		this.memory.set(value_data, &value[..written]).map_err(|_| DummyUserError)?;
+		written as u32
+	},
+	ext_storage_root(result: *mut u8) => {
+		let r = this.ext.storage_root();
+		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
+	},
+	ext_enumerated_trie_root(values_data: *const u8, _values_len: u32, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
+		let values = (0..lens_len)
+			.map(|i| this.memory.read_primitive(lens_data + i * 4))
+			.collect::<::std::result::Result<Vec<u32>, DummyUserError>>()?
+			.into_iter()
+			.scan(0u32, |acc, v| { let o = *acc; *acc += v; Some((o, v)) })
+			.map(|(offset, len)|
+				this.memory.get(values_data + offset, len as usize)
+					.map_err(|_| DummyUserError)
+			)
+			.collect::<::std::result::Result<Vec<_>, DummyUserError>>()?;
+		let r = ordered_trie_root(values.into_iter());
+		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
 	},
 	ext_chain_id() -> u64 => {
 		this.ext.chain_id()
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
-		let maybe_value = if len == 0 {
-			Ok(vec![])
+		let result = if len == 0 {
+			twox_128(&[0u8; 0])
 		} else {
-			this.memory.get(data, len as usize)
+			twox_128(&this.memory.get(data, len as usize).map_err(|_| DummyUserError)?)
 		};
-		let result = if let Ok(value) = maybe_value {
-			twox_128(&value)
-		} else {
-			[0; 16]
-		};
-		let _ = this.memory.set(out, &result);
+		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
-		let maybe_value = if len == 0 {
-			Ok(vec![])
+		let result = if len == 0 {
+			twox_256(&[0u8; 0])
 		} else {
-			this.memory.get(data, len as usize)
+			twox_256(&this.memory.get(data, len as usize).map_err(|_| DummyUserError)?)
 		};
-		let result = if let Ok(value) = maybe_value {
-			twox_256(&value)
-		} else {
-			[0; 32]
-		};
-		let _ = this.memory.set(out, &result);
+		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
-		let maybe_value = if len == 0 {
-			Ok(vec![])
+		let result = if len == 0 {
+			blake2_256(&[0u8; 0])
 		} else {
-			this.memory.get(data, len as usize)
+			blake2_256(&this.memory.get(data, len as usize).map_err(|_| DummyUserError)?)
 		};
-		let result = if let Ok(value) = maybe_value {
-			blake2_256(&value)
-		} else {
-			[0; 32]
-		};
-		let _ = this.memory.set(out, &result);
+		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
-		(||{
-			let mut sig = [0u8; 64];
-			if let Err(_) = this.memory.get_into(sig_data, &mut sig[..]) {
-				return 2;
-			};
-			let mut pubkey = [0u8; 32];
-			if let Err(_) = this.memory.get_into(pubkey_data, &mut pubkey[..]) {
-				return 3;
-			};
+		let mut sig = [0u8; 64];
+		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| DummyUserError)?;
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| DummyUserError)?;
+		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| DummyUserError)?;
 
-			if let Ok(msg) = this.memory.get(msg_data, msg_len as usize) {
-				if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) {
-					0
-				} else {
-					5
-				}
-			} else {
-				4
-			}
-		})()
+		if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) {
+			0
+		} else {
+			5
+		}
 	}
 	=> <'e, E: Externalities + 'e>
 );
@@ -281,7 +283,8 @@ mod tests {
 	use primitives::{blake2_256, twox_128};
 	use runtime_std;
 	use codec::KeyedVec;
-	use native_runtime::support::{one, two, StaticHexInto, TestExternalities};
+	use state_machine::TestExternalities;
+	use native_runtime::support::{one, two, StaticHexInto};
 	use native_runtime::runtime::staking::balance;
 
 	#[test]
@@ -377,6 +380,16 @@ mod tests {
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &CallData(calldata)).unwrap(),
 			vec![0]
+		);
+	}
+
+	#[test]
+	fn enumerated_trie_root_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &CallData(vec![])).unwrap(),
+			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.to_vec()
 		);
 	}
 

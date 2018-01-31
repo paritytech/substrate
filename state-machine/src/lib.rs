@@ -19,6 +19,8 @@
 #![warn(missing_docs)]
 
 extern crate polkadot_primitives as primitives;
+#[macro_use]
+extern crate hex_literal;
 
 extern crate hashdb;
 extern crate memorydb;
@@ -35,6 +37,9 @@ use primitives::contract::{CallData};
 
 pub mod backend;
 mod ext;
+mod testing;
+
+pub use testing::TestExternalities;
 
 /// Updates to be committed to the state.
 pub enum Update {
@@ -43,7 +48,7 @@ pub enum Update {
 }
 
 // in-memory section of the state.
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct MemoryState {
 	storage: HashMap<Vec<u8>, Vec<u8>>,
 }
@@ -141,6 +146,9 @@ pub trait Externalities {
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 
+	/// Get the trie root of the current storage map.
+	fn storage_root(&self) -> [u8; 32];
+
 	/// Get the current set of authorities from storage.
 	fn authorities(&self) -> Result<Vec<&[u8]>, ExternalitiesError> {
 		(0..self.storage(b"con:aut:len")?.into_iter()
@@ -152,7 +160,7 @@ pub trait Externalities {
 }
 
 /// Code execution engine.
-pub trait CodeExecutor: Sized {
+pub trait CodeExecutor: Sized + Send + Sync {
 	/// Externalities error type.
 	type Error: Error;
 
@@ -210,8 +218,9 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
-	use super::{OverlayedChanges, Externalities, ExternalitiesError};
+	use super::*;
+	use super::backend::InMemory;
+	use super::ext::Ext;
 
 	#[test]
 	fn overlayed_storage_works() {
@@ -238,22 +247,6 @@ mod tests {
 		assert!(overlayed.storage(&key).is_none());
 	}
 
-	#[derive(Debug, Default)]
-	struct TestExternalities {
-		storage: HashMap<Vec<u8>, Vec<u8>>,
-	}
-	impl Externalities for TestExternalities {
-		fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
-			Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
-		}
-
-		fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
-			self.storage.insert(key, value);
-		}
-
-		fn chain_id(&self) -> u64 { 42 }
-	}
-
 	#[test]
 	fn authorities_call_works() {
 		let mut ext = TestExternalities::default();
@@ -272,5 +265,35 @@ mod tests {
 		ext.set_storage(b"con:aut:len".to_vec(), vec![2u8, 0, 0, 0]);
 		ext.set_storage(b"con:aut:\x01\0\0\0".to_vec(), b"second".to_vec());
 		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..], &b"second"[..]]));
+	}
+
+	macro_rules! map {
+		($( $name:expr => $value:expr ),*) => (
+			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
+		)
+	}
+
+	#[test]
+	fn overlayed_storage_root_works() {
+		let mut backend = InMemory::from(map![
+			b"doe".to_vec() => b"reindeer".to_vec(),
+			b"dog".to_vec() => b"puppyXXX".to_vec(),
+			b"dogglesworth".to_vec() => b"catXXX".to_vec()
+		]);
+		let mut overlay = OverlayedChanges {
+			committed: MemoryState { storage: map![
+				b"dog".to_vec() => b"puppy".to_vec(),
+				b"dogglesworth".to_vec() => b"catYYY".to_vec()
+			], },
+			prospective: MemoryState { storage: map![
+				b"dogglesworth".to_vec() => b"cat".to_vec()
+			], },
+		};
+		let ext = Ext {
+			backend: &mut backend,
+			overlay: &mut overlay,
+		};
+		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+		assert_eq!(ext.storage_root(), ROOT);
 	}
 }

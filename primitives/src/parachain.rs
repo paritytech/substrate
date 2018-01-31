@@ -98,7 +98,7 @@ pub struct HeadData(#[serde(with="bytes")] pub Vec<u8>);
 pub struct ValidationCode(#[serde(with="bytes")] pub Vec<u8>);
 
 /// Activitiy bit field
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Default, Serialize, Deserialize)]
 pub struct Activity(#[serde(with="bytes")] pub Vec<u8>);
 
 #[cfg(test)]

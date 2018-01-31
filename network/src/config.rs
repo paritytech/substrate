@@ -12,25 +12,19 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-//! Support code for the runtime.
+use service::Role;
 
-mod environment;
-pub mod storage;
-mod hashable;
-#[cfg(feature = "std")]
-mod statichex;
-#[macro_use]
-#[cfg(feature = "std")]
-mod testing;
+/// Protocol configuration
+pub struct ProtocolConfig {
+	pub roles: Role,
+}
 
-pub use self::environment::with_env;
-pub use self::storage::StorageVec;
-pub use self::hashable::Hashable;
-
-#[cfg(feature = "std")]
-pub use self::statichex::{StaticHexConversion, StaticHexInto};
-
-#[cfg(feature = "std")]
-pub use self::testing::{AsBytesRef, HexDisplay, one, two};
+impl Default for ProtocolConfig {
+	fn default() -> ProtocolConfig {
+		ProtocolConfig {
+			roles: Role::FULL,
+		}
+	}
+}
