@@ -16,6 +16,7 @@
 
 //! Simple Ed25519 API.
 
+use bytes::Vec;
 use untrusted;
 use ring::{rand, signature};
 use rustc_hex::FromHex;
@@ -108,14 +109,14 @@ impl Pair {
 	}
 	/// Make a new key pair from the raw secret.
 	pub fn from_secret(secret: &[u8; 32]) -> Pair {
-		let mut pkcs8_bytes = FromHex::from_hex("302e020100300506032b657004220420").unwrap();
+		let mut pkcs8_bytes: Vec<u8> = FromHex::from_hex("302e020100300506032b657004220420").unwrap();
 		pkcs8_bytes.extend_from_slice(&secret[..]);
 		Pair(signature::Ed25519KeyPair::from_pkcs8_maybe_unchecked(untrusted::Input::from(&pkcs8_bytes)).unwrap())
 	}
 	/// Make a new key pair from the raw secret and public key (it will check to make sure
 	/// they correspond to each other).
 	pub fn from_both(secret_public: &[u8; 64]) -> Option<Pair> {
-		let mut pkcs8_bytes = FromHex::from_hex("3053020101300506032b657004220420").unwrap();
+		let mut pkcs8_bytes: Vec<u8> = FromHex::from_hex("3053020101300506032b657004220420").unwrap();
 		pkcs8_bytes.extend_from_slice(&secret_public[0..32]);
 		pkcs8_bytes.extend_from_slice(&[0xa1u8, 0x23, 0x03, 0x21, 0x00]);
 		pkcs8_bytes.extend_from_slice(&secret_public[32..64]);
@@ -151,13 +152,13 @@ impl Signature {
 impl From<&'static str> for Public {
 	fn from(hex: &'static str) -> Self {
 		let mut r = [0u8; 32];
-		r.copy_from_slice(&FromHex::from_hex(hex).unwrap()[0..32]);
+		r.copy_from_slice(&FromHex::from_hex::<Vec<_>>(hex).unwrap()[0..32]);
 		Public(r)
 	}
 }
 impl From<&'static str> for Pair {
 	fn from(hex: &'static str) -> Self {
-		let data = FromHex::from_hex(hex).expect("Key pair given is static so hex should be good.");
+		let data = FromHex::from_hex::<Vec<_>>(hex).expect("Key pair given is static so hex should be good.");
 		match data.len() {
 			32 => {
 				let mut r = [0u8; 32];
@@ -178,7 +179,7 @@ impl From<&'static str> for Pair {
 impl From<&'static str> for Signature {
 	fn from(hex: &'static str) -> Self {
 		let mut r = [0u8; 64];
-		r.copy_from_slice(&FromHex::from_hex(hex).unwrap()[0..64]);
+		r.copy_from_slice(&FromHex::from_hex::<Vec<_>>(hex).unwrap()[0..64]);
 		Signature(r)
 	}
 }
@@ -228,7 +229,7 @@ mod test {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".into());
-		let message = FromHex::from_hex("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000").unwrap();
+		let message: Vec<u8> = FromHex::from_hex("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000").unwrap();
 		let signature = pair.sign(&message[..]);
 		assert!(signature.verify(&message[..], &public));
 	}

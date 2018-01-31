@@ -16,7 +16,7 @@
 
 //! Validator primitives.
 
-use bytes;
+use bytes::{self, Vec};
 use parachain;
 
 /// Parachain outgoing message.

@@ -18,6 +18,9 @@
 
 #![warn(missing_docs)]
 
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
 extern crate rustc_hex;
 extern crate serde;
 extern crate ring;
@@ -35,13 +38,17 @@ extern crate serde_derive;
 #[macro_use]
 extern crate uint as uint_crate;
 
-#[cfg(feature="std")]
+#[cfg(feature = "std")]
 extern crate core;
 #[cfg(test)]
 extern crate polkadot_serializer;
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
 
 mod bytes;
 pub mod block;

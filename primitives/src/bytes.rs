@@ -14,15 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt;
+use core::fmt;
 
 use serde::{de, Serializer, Deserializer};
+
+#[cfg(not(feature = "std"))]
+mod alloc_types {
+	pub use ::alloc::string::String;
+	pub use ::alloc::vec::Vec;
+}
+
+#[cfg(feature = "std")]
+mod alloc_types {
+	pub use ::std::vec::Vec;
+	pub use ::std::string::String;
+}
+
+pub use self::alloc_types::*;
 
 /// Serializes a slice of bytes.
 pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> where
 	S: Serializer,
 {
-	let hex = ::rustc_hex::ToHex::to_hex(bytes);
+	let hex: String = ::rustc_hex::ToHex::to_hex(bytes);
 	serializer.serialize_str(&format!("0x{}", hex))
 }
 
@@ -38,7 +52,7 @@ pub fn serialize_uint<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 		return serializer.serialize_str("0x0");
 	}
 
-	let hex = ::rustc_hex::ToHex::to_hex(bytes);
+	let hex: String = ::rustc_hex::ToHex::to_hex(bytes);
 	let has_leading_zero = !hex.is_empty() && &hex[0..1] == "0";
 	serializer.serialize_str(
 		&format!("0x{}", if has_leading_zero { &hex[1..] } else { &hex })

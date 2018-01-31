@@ -16,7 +16,7 @@
 
 //! Contract execution data.
 
-use bytes;
+use bytes::{self, Vec};
 
 /// Contract call data.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]

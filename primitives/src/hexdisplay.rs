@@ -24,7 +24,7 @@ impl<'a> HexDisplay<'a> {
 	pub fn from(d: &'a AsBytesRef) -> Self { HexDisplay(d.as_bytes_ref()) }
 }
 
-impl<'a> ::std::fmt::Display for HexDisplay<'a> {
+impl<'a> ::core::fmt::Display for HexDisplay<'a> {
 	fn fmt(&self, fmtr: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
 		for byte in self.0 {
 			try!( fmtr.write_fmt(format_args!("{:02x}", byte)));
@@ -47,7 +47,7 @@ impl AsBytesRef for [u8] {
 	fn as_bytes_ref(&self) -> &[u8] { &self }
 }
 
-impl AsBytesRef for Vec<u8> {
+impl AsBytesRef for ::bytes::Vec<u8> {
 	fn as_bytes_ref(&self) -> &[u8] { &self }
 }
 
