@@ -28,8 +28,6 @@ include!("../with_std.rs");
 #[cfg(not(feature = "std"))]
 include!("../without_std.rs");
 
-
-
 /// Prelude of common useful imports.
 ///
 /// This should include only things which are in the normal std prelude.
@@ -37,3 +35,49 @@ pub mod prelude {
 	pub use ::vec::Vec;
 	pub use ::boxed::Box;
 }
+
+/// Type definitions and helpers for transactions.
+pub mod transaction {
+	pub use primitives::transaction::{Transaction, UncheckedTransaction};
+
+	#[cfg(feature = "std")]
+	use std::ops;
+
+	#[cfg(not(feature = "std"))]
+	use core::ops;
+
+	/// A type-safe indicator that a transaction has been checked.
+	#[derive(Debug, PartialEq, Eq, Clone)]
+	pub struct CheckedTransaction(UncheckedTransaction);
+
+	impl CheckedTransaction {
+		/// Get a reference to the checked signature.
+		pub fn signature(&self) -> &[u8; 64] {
+			&self.0.signature
+		}
+	}
+
+	impl ops::Deref for CheckedTransaction {
+		type Target = Transaction;
+
+		fn deref(&self) -> &Transaction {
+			&self.0.transaction
+		}
+	}
+
+	/// Check the signature on a transaction.
+	///
+	/// On failure, return the transaction back.
+	pub fn check(tx: UncheckedTransaction) -> Result<CheckedTransaction, UncheckedTransaction> {
+		// TODO: requires canonical serialization of transaction.
+		let msg = unimplemented!();
+		if ed25519_verify(&tx.signature, &msg, &tx.transaction.signed) {
+			Ok(CheckedTransaction(tx))
+		} else {
+			Err(tx)
+		}
+	}
+}
+/// Check a transaction
+pub struct CheckedTransaction(primitives::UncheckedTransaction);
+

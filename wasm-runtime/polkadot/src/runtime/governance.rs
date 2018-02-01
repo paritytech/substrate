@@ -109,6 +109,36 @@ pub mod internal {
 			}
 		}
 	}
+
+	fn enact_proposal(proposal: Proposal) {
+		let mut params = StreamReader::new(&self.input_data);
+		match self.function {
+			InternalFunction::SystemSetCode => {
+				let code: Vec<u8> = params.read().unwrap();
+				system::privileged::set_code(&code);
+			}
+			InternalFunction::StakingSetSessionsPerEra => {
+				let value = params.read().unwrap();
+				staking::privileged::set_sessions_per_era(value);
+			}
+			InternalFunction::StakingSetBondingDuration => {
+				let value = params.read().unwrap();
+				staking::privileged::set_bonding_duration(value);
+			}
+			InternalFunction::StakingSetValidatorCount => {
+				let value = params.read().unwrap();
+				staking::privileged::set_validator_count(value);
+			}
+			InternalFunction::GovernanceSetApprovalPpmRequired => {
+				let value = params.read().unwrap();
+				governance::privileged::set_approval_ppm_required(value);
+			}
+			InternalFunction::SessionSetLength => {
+				let value = params.read().unwrap();
+				session::privileged::set_length(value);
+			}
+		}
+	}
 }
 
 #[cfg(test)]

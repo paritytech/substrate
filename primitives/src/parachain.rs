@@ -57,11 +57,11 @@ pub struct CandidateReceipt {
 	/// The ID of the parachain this is a candidate for.
 	pub parachain_index: Id,
 	/// The collator's account ID
-	pub collator: ::Address,
+	pub collator: ::AccountId,
 	/// The head-data
 	pub head_data: HeadData,
 	/// Balance uploads to the relay chain.
-	pub balance_uploads: Vec<(::Address, ::uint::U256)>,
+	pub balance_uploads: Vec<(::AccountId, ::uint::U256)>,
 	/// Egress queue roots.
 	pub egress_queue_roots: Vec<(Id, ::hash::H256)>,
 	/// Fees paid from the chain to the relay chain validators

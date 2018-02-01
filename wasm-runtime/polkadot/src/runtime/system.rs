@@ -49,6 +49,8 @@ pub mod privileged {
 pub mod internal {
 	use super::*;
 
+	struct CheckedTransaction(UncheckedTransaction);
+
 	/// Deposits a log and ensures it matches the blocks log data.
 	pub fn deposit_log(log: &[u8]) {
 		with_env(|e| {
@@ -115,7 +117,40 @@ pub mod internal {
 		storage::put(&nonce_key, &(expected_nonce + 1));
 
 		// decode parameters and dispatch
-		tx.function.dispatch(&tx.signed, &tx.input_data);
+		dispatch_function(&tx.function, &tx.signed, &tx.input_data);
+	}
+
+	fn dispatch_function(function: &Function, transactor: &AccountId, data: &[u8]) {
+		let mut params = ::runtime_codec::StreamReader::new(data);
+		match *self {
+			Function::StakingStake => {
+				staking::public::stake(transactor);
+			}
+			Function::StakingUnstake => {
+				staking::public::unstake(transactor);
+			}
+			Function::StakingTransfer => {
+				let dest = params.read().unwrap();
+				let value = params.read().unwrap();
+				staking::public::transfer(transactor, &dest, value);
+			}
+			Function::SessionSetKey => {
+				let session = params.read().unwrap();
+				session::public::set_key(transactor, &session);
+			}
+			Function::TimestampSet => {
+				let t = params.read().unwrap();
+				timestamp::public::set(t);
+			}
+			Function::GovernancePropose => {
+				let proposal = params.read().unwrap();
+				governance::public::propose(transactor, &proposal);
+			}
+			Function::GovernanceApprove => {
+				let era_index = params.read().unwrap();
+				governance::public::approve(transactor, era_index);
+			}
+		}
 	}
 }
 

@@ -25,7 +25,7 @@ impl<'a> HexDisplay<'a> {
 }
 
 impl<'a> ::core::fmt::Display for HexDisplay<'a> {
-	fn fmt(&self, fmtr: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+	fn fmt(&self, fmtr: &mut ::core::fmt::Formatter) -> Result<(), ::core::fmt::Error> {
 		for byte in self.0 {
 			try!( fmtr.write_fmt(format_args!("{:02x}", byte)));
 		}
