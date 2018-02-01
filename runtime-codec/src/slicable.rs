@@ -23,115 +23,108 @@ use super::endiansensitive::EndianSensitive;
 
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
 pub trait Slicable: Sized {
-	/// Attempt to deserialise the value from a slice.
-	fn from_slice(value: &[u8]) -> Option<Self> {
-		Self::set_as_slice(|out, offset| if value.len() >= out.len() + offset {
-			let value = &value[offset..];
-			let len = out.len();
-			out.copy_from_slice(&value[0..len]);
-			true
-		} else {
-			false
-		})
-	}
+	/// Attempt to deserialise the value from a slice. Ignore trailing bytes and
+	/// set the slice's start to just after the last byte consumed.
+	///
+	/// If `None` is returned, then the slice should be unmodified.
+	fn from_slice(value: &mut &[u8]) -> Option<Self>;
+	/// Convert self to an owned vector.
 	fn to_vec(&self) -> Vec<u8> {
 		self.as_slice_then(|s| s.to_vec())
 	}
-	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: F) -> Option<Self>;
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.to_vec())
-	}
-	fn size_of(_value: &[u8]) -> Option<usize>;
+	/// Convert self to a slice and then invoke the given closure with it.
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R;
 }
 
 /// Trait to mark that a type is not trivially (essentially "in place") serialisable.
 pub trait NonTrivialSlicable: Slicable {}
 
 impl<T: EndianSensitive> Slicable for T {
-	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: F) -> Option<Self> {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
 		let size = mem::size_of::<T>();
 		assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
-		let mut result: T = unsafe { mem::zeroed() };
-		let result_slice = unsafe {
-			let ptr = &mut result as *mut _ as *mut u8;
-			slice::from_raw_parts_mut(ptr, size)
-		};
-		if fill_slice(result_slice, 0) {
-			Some(result.from_le())
+		if value.len() >= size {
+			let x: T = unsafe { ::std::ptr::read(value.as_ptr() as *const T) };
+			*value = &value[size..];
+			Some(x.from_le())
 		} else {
 			None
 		}
 	}
+
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		let size = mem::size_of::<Self>();
-		assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
 		self.as_le_then(|le| {
+			let size = mem::size_of::<T>();
 			let value_slice = unsafe {
 				let ptr = le as *const _ as *const u8;
-				slice::from_raw_parts(ptr, size)
+				if size != 0 {
+					slice::from_raw_parts(ptr, size)
+				} else {
+					&[]
+				}
 			};
+
 			f(value_slice)
 		})
-	}
-	fn size_of(_value: &[u8]) -> Option<usize> {
-		Some(mem::size_of::<Self>())
 	}
 }
 
 impl Slicable for Vec<u8> {
-	fn from_slice(value: &[u8]) -> Option<Self> {
-		Some(value[4..].to_vec())
-	}
-	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: F) -> Option<Self> {
-		u32::set_as_slice(&fill_slice).and_then(|len| {
-			let mut v = Vec::with_capacity(len as usize);
-			unsafe { v.set_len(len as usize); }
-			if fill_slice(&mut v, 4) {
-				Some(v)
-			} else {
-				None
-			}
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		u32::from_slice(value).map(move |len| {
+			let len = len as usize;
+			let res = value[..len].to_vec();
+			*value = &value[len..];
+			res
 		})
 	}
-	fn to_vec(&self) -> Vec<u8> {
-		let mut r: Vec<u8> = Vec::new().join(&(self.len() as u32));
-		r.extend_from_slice(&self);
-		r
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.to_vec())
 	}
-	fn size_of(data: &[u8]) -> Option<usize> {
-		u32::from_slice(&data[0..4]).map(|i| (i + 4) as usize)
+
+	fn to_vec(&self) -> Vec<u8> {
+		let len = self.len();
+		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
+
+		let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+		r.extend_from_slice(self);
+		r
 	}
 }
 
 impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
 
 impl<T: NonTrivialSlicable> Slicable for Vec<T> {
-	fn from_slice(value: &[u8]) -> Option<Self> {
-		let len = Self::size_of(&value[0..4])?;
-		let mut off = 4;
-		let mut r = Vec::new();
-		while off < len {
-			let element_len = T::size_of(&value[off..])?;
-			r.push(T::from_slice(&value[off..off + element_len])?);
-			off += element_len;
-		}
-		Some(r)
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		u32::from_slice(value).and_then(move |len| {
+			let len = len as usize;
+			let mut r = Vec::with_capacity(len);
+			for _ in 0..len {
+				match T::from_slice(value) {
+					None => return None,
+					Some(v) => r.push(v),
+				}
+			}
+
+			Some(r)
+		})
 	}
 
-	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(_fill_slice: F) -> Option<Self> {
-		unimplemented!();
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.to_vec())
 	}
 
 	fn to_vec(&self) -> Vec<u8> {
-		let vecs = self.iter().map(Slicable::to_vec).collect::<Vec<_>>();
-		let len = vecs.iter().fold(0, |mut a, v| {a += v.len(); a});
-		let mut r = Vec::new().join(&(len as u32));
-		vecs.iter().for_each(|v| r.extend_from_slice(v));
-		r
-	}
+		use std::iter::Extend;
 
-	fn size_of(data: &[u8]) -> Option<usize> {
-		u32::from_slice(&data[0..4]).map(|i| (i + 4) as usize)
+		let len = self.len();
+		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
+
+		let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+		for item in self {
+			r.extend(item.to_vec());
+		}
+		r
 	}
 }
 
