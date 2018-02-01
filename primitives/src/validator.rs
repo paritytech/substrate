@@ -44,26 +44,6 @@ pub struct ValidationResult {
 	pub balance_uploads: Vec<BalanceUpload>,
 }
 
-// TODO [ToDr] This shouldn't be here!
-/// Validator logic.
-pub trait Validator {
-	/// Validation error.
-	type Error: ::std::error::Error;
-
-	/// Validates if the provided proof holds given a current ingress queue.
-	///
-	/// In case of success produces egress posts.
-	fn validate(
-		&self,
-		code: &[u8],
-		// TODO [ToDr] actually consolidate
-		consolidated_ingress: &[(u64, Vec<parachain::Message>)],
-		balance_downloads: &[BalanceDownload],
-		block_data: &parachain::BlockData,
-		previous_head_data: &parachain::HeadData,
-	) -> Result<ValidationResult, Self::Error>;
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;

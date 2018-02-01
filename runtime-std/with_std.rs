@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-
 #[macro_use]
 extern crate environmental;
 
@@ -32,17 +31,13 @@ pub use std::boxed;
 pub use std::slice;
 pub use std::mem;
 
+// re-export hashing functions.
+pub use primitives::{blake2_256, twox_128, twox_256};
+
 pub use polkadot_state_machine::{Externalities, ExternalitiesError, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 
 // TODO: use the real error, not NoError.
-
-#[derive(Debug)]
-/// As it says - an empty type we use for errors.
-pub struct NoError;
-impl fmt::Display for NoError {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "") }
-}
 
 environmental!(ext : trait Externalities);
 
@@ -96,9 +91,6 @@ pub fn storage_root() -> [u8; 32] {
 pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
 	triehash::ordered_trie_root(serialised_values.iter().map(|s| s.to_vec())).0
 }
-
-/// Conduct a Keccak-256 hash of the given data.
-pub use primitives::{blake2_256, twox_128, twox_256};
 
 /// Verify a ed25519 signature.
 pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {

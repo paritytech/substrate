@@ -18,9 +18,9 @@
 
 use runtime_std::prelude::*;
 
+/// The digest of a block, useful for light-clients.
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Debug))]
-/// The digest of a block, useful for light-clients.
 pub struct Digest {
 	/// All logs that have happened in the block.
 	pub logs: Vec<Vec<u8>>,

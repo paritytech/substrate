@@ -14,24 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Proposal: This describes a combination of a function ID and data that can be used to call into
+//! Proposals for relay-chain governance.
+//!
+//! This describes a combination of a function ID and data that can be used to call into
 //! an internal function.
 
-use runtime_std::prelude::*;
-use runtime_std::mem;
-use codec::{Slicable, Joiner, StreamReader};
-use runtime::{system, governance, staking, session};
+use bytes;
 
 /// Internal functions that can be dispatched to.
-#[derive(Clone, Copy)]
-#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum InternalFunction {
+	/// Set the system's code.
 	SystemSetCode = 0,
+	/// Set the number of sessions per era.
 	StakingSetSessionsPerEra = 1,
+	/// Set the minimum bonding duration for staking.
 	StakingSetBondingDuration = 2,
+	/// Set the validator count for staking.
 	StakingSetValidatorCount = 3,
+	/// Set the per-mille of validator approval required for governance changes.
 	GovernanceSetApprovalPpmRequired = 4,
+	/// Set the session length.
 	SessionSetLength = 5,
 }
 
@@ -56,33 +60,13 @@ impl InternalFunction {
 }
 
 /// An internal function.
-#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Proposal {
-	/// The priviledged function to call.
+	/// The privileged function to call.
 	pub function: InternalFunction,
 	/// The serialised data to call it with.
+	#[serde(with = "bytes")]
 	pub input_data: Vec<u8>,
-}
-
-impl Slicable for Proposal {
-	fn set_as_slice<F: Fn(&mut[u8], usize) -> bool>(fill_slice: F) -> Option<Self> {
-		Some(Proposal {
-			function: InternalFunction::from_u8(Slicable::set_as_slice(&fill_slice)?)?,
-			input_data: Slicable::set_as_slice(|s, o| fill_slice(s, o + 1))?,
-		})
-	}
-
-	fn to_vec(&self) -> Vec<u8> {
-		Vec::new()
-			.join(&(self.function as u8))
-			.join(&self.input_data)
-	}
-
-	fn size_of(data: &[u8]) -> Option<usize> {
-		let first_part = mem::size_of::<u8>();
-		let second_part = <Vec<u8>>::size_of(&data[first_part..])?;
-		Some(first_part + second_part)
-	}
 }
 
 #[cfg(test)]

@@ -6,6 +6,8 @@ extern crate pwasm_libc;
 #[cfg(feature = "nightly")]
 extern crate pwasm_alloc;
 
+extern crate polkadot_primitives as primitives;;
+
 pub use alloc::vec;
 pub use alloc::boxed;
 pub use alloc::rc;

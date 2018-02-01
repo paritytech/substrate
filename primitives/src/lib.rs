@@ -53,22 +53,47 @@ extern crate alloc;
 mod bytes;
 pub mod block;
 pub mod contract;
+pub mod ed25519;
 pub mod hash;
+pub mod hashing;
+pub mod hexdisplay;
 pub mod parachain;
+pub mod proposal;
+pub mod runtime_function;
+pub mod transaction;
 pub mod uint;
 pub mod validator;
-pub mod ed25519;
-pub mod hexdisplay;
-pub mod hashing;
-
-/// Alias to 160-bit hash when used in the context of an account address.
-pub type Address = hash::H160;
-/// Alias to 520-bit hash when used in the context of a signature.
-pub type Signature = hash::H512;
 
 pub use self::hash::{H160, H256};
 pub use self::uint::{U256, U512};
 pub use hashing::{blake2_256, twox_128, twox_256};
+
+/// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
+/// (who matters). Essentially this means that a majority of validators have decided it is
+/// "correct".
+pub const EVERYBODY: AccountId = [255u8; 32];
+
+/// Alias to Ed25519 pubkey that identifies an account.
+pub type AccountId = [u8; 32];
+
+/// The Ed25519 pub key of an session that belongs to an authority. This is used as what the
+/// external environment/consensus algorithm calls an "authority".
+pub type SessionKey = AccountId;
+
+/// Indentifier for a chain.
+pub type ChainID = u64;
+
+/// Index of a block in the chain.
+pub type BlockNumber = u64;
+
+/// Index of a transaction.
+pub type TxOrder = u64;
+
+/// A hash of some data.
+pub type Hash = [u8; 32];
+
+/// Alias to 520-bit hash when used in the context of a signature.
+pub type Signature = hash::H512;
 
 /// A hash function.
 pub fn hash(data: &[u8]) -> hash::H256 {

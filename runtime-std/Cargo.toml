@@ -12,11 +12,11 @@ pwasm-alloc = { path = "../wasm-runtime/pwasm-alloc", version = "0.1" }
 pwasm-libc = { path = "../wasm-runtime/pwasm-libc", version = "0.1" }
 environmental = { path = "../environmental", version = "0.1", optional = true }
 polkadot-state-machine = { path = "../state-machine", version = "0.1", optional = true }
-polkadot-primitives = { path = "../primitives", version = "0.1", optional = true }
+polkadot-primitives = { path = "../primitives", version = "0.1", default_features = false }
 triehash = { version = "0.1", optional = true }
 
 [features]
 default = ["std"]
-std = ["environmental", "polkadot-state-machine", "polkadot-primitives", "triehash"]
+std = ["environmental", "polkadot-state-machine", "triehash", "polkadot-primitives/std"]
 nightly = []
 strict = []
