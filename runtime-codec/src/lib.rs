@@ -28,7 +28,6 @@ mod keyedvec;
 
 pub use self::endiansensitive::EndianSensitive;
 pub use self::slicable::{Slicable, NonTrivialSlicable};
-pub use self::streamreader::StreamReader;
 pub use self::joiner::Joiner;
 pub use self::keyedvec::KeyedVec;
 
