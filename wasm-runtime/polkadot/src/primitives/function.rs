@@ -25,13 +25,13 @@ use runtime::{staking, session, timestamp, governance};
 #[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
 #[repr(u8)]
 pub enum Function {
-	StakingStake = 0,
-	StakingUnstake = 1,
-	StakingTransfer = 2,
-	SessionSetKey = 3,
-	TimestampSet = 4,
-	GovernancePropose = 5,
-	GovernanceApprove = 6,
+	TimestampSet = 0x00,
+	SessionSetKey = 0x10,
+	StakingStake = 0x20,
+	StakingUnstake = 0x21,
+	StakingTransfer = 0x22,
+	GovernancePropose = 0x30,
+	GovernanceApprove = 0x31,
 }
 
 impl Function {
@@ -41,11 +41,7 @@ impl Function {
 		let functions = [Function::StakingStake, Function::StakingUnstake,
 			Function::StakingTransfer, Function::SessionSetKey, Function::TimestampSet,
 			Function::GovernancePropose, Function::GovernanceApprove];
-		if (value as usize) < functions.len() {
-			Some(functions[value as usize])
-		} else {
-			None
-		}
+		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
 }
 

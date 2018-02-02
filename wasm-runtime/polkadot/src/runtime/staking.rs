@@ -151,6 +151,12 @@ pub mod privileged {
 	pub fn set_validator_count(new: usize) {
 		storage::put(VALIDATOR_COUNT, &(new as u32));
 	}
+
+	/// Force there to be a new era. This also forces a new session immediately after.
+	pub fn force_new_era() {
+		new_era();
+		session::privileged::force_new_session();
+	}
 }
 
 pub mod internal {

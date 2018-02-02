@@ -79,6 +79,7 @@ pub mod internal {
 		let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
 		let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 		let txs_root = enumerated_trie_root(&txs);
+		debug_assert_hash(&header.transaction_root, &txs_root);
 		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
 
 		// execute transactions
@@ -167,10 +168,8 @@ mod tests {
 				function: Function::StakingTransfer,
 				input_data: vec![].join(&two).join(&69u64),
 			},
-			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
+			signature: "13590ae48241e29780407687b86c331a9f40f3ab7f2cc2441787628bcafab6645dc81863b138a358e2a1ed1ffa940a4584ba94837f022f0cd162791530320904".convert(),
 		};
-		// tx: 2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000
-		// sig: 679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a
 
 		println!("tx is {}", HexDisplay::from(&tx.transaction.to_vec()));
 
@@ -212,33 +211,21 @@ mod tests {
 
 		let mut t = new_test_ext();
 
-		let tx = UncheckedTransaction {
-			transaction: Transaction {
-				signed: one.clone(),
-				nonce: 0,
-				function: Function::StakingTransfer,
-				input_data: vec![].join(&two).join(&69u64),
-			},
-			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
-		};
-
 		let h = Header {
 			parent_hash: [69u8; 32],
 			number: 1,
-			state_root: hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db"),
-			transaction_root: hex!("91fab88ad8c30a6d05ad8e0cf9ab139bf1b8cdddc69abd51cdfa6d2699038af1"),
+			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0"),
+			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 			digest: Digest { logs: vec![], },
 		};
 
 		let b = Block {
 			header: h,
-			transactions: vec![tx],
+			transactions: vec![],
 		};
 
 		with_externalities(&mut t, || {
 			execute_block(b);
-			assert_eq!(staking::balance(&one), 42);
-			assert_eq!(staking::balance(&two), 69);
 		});
 	}
 
@@ -250,35 +237,21 @@ mod tests {
 
 		let mut t = new_test_ext();
 
-		let tx = UncheckedTransaction {
-			transaction: Transaction {
-				signed: one.clone(),
-				nonce: 0,
-				function: Function::StakingTransfer,
-				input_data: vec![].join(&two).join(&69u64),
-			},
-			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
-		};
-		// tx: 2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000
-		// sig: 679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a
-
 		let h = Header {
 			parent_hash: [69u8; 32],
 			number: 1,
 			state_root: [0u8; 32],
-			transaction_root: hex!("91fab88ad8c30a6d05ad8e0cf9ab139bf1b8cdddc69abd51cdfa6d2699038af1"),
+			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 			digest: Digest { logs: vec![], },
 		};
 
 		let b = Block {
 			header: h,
-			transactions: vec![tx],
+			transactions: vec![],
 		};
 
 		with_externalities(&mut t, || {
 			execute_block(b);
-			assert_eq!(staking::balance(&one), 42);
-			assert_eq!(staking::balance(&two), 69);
 		});
 	}
 
@@ -290,35 +263,21 @@ mod tests {
 
 		let mut t = new_test_ext();
 
-		let tx = UncheckedTransaction {
-			transaction: Transaction {
-				signed: one.clone(),
-				nonce: 0,
-				function: Function::StakingTransfer,
-				input_data: vec![].join(&two).join(&69u64),
-			},
-			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
-		};
-		// tx: 2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000
-		// sig: 679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a
-
 		let h = Header {
 			parent_hash: [69u8; 32],
 			number: 1,
-			state_root: hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db"),
+			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0"),
 			transaction_root: [0u8; 32],
 			digest: Digest { logs: vec![], },
 		};
 
 		let b = Block {
 			header: h,
-			transactions: vec![tx],
+			transactions: vec![],
 		};
 
 		with_externalities(&mut t, || {
 			execute_block(b);
-			assert_eq!(staking::balance(&one), 42);
-			assert_eq!(staking::balance(&two), 69);
 		});
 	}
 }

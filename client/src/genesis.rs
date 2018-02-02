@@ -14,24 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Polkadot runtime.
+//! Tool for creating the genesis block.
 
-#[allow(unused)]
-pub mod system;
-#[allow(unused)]
-pub mod consensus;
-#[allow(unused)]
-pub mod staking;
-#[allow(unused)]
-pub mod timestamp;
-#[allow(unused)]
-pub mod session;
-#[allow(unused)]
-pub mod governance;
+use std::collections::HashMap;
+use native_runtime::primitives::{Block, Header};
+use triehash::trie_root;
 
-// TODO: polkadao
-// TODO: parachains
-
-
-#[cfg(feature = "with-std")]
-pub mod genesismap;
+/// Create a genesis block, given the initial storage.
+pub fn construct_genesis_block(storage: &HashMap<Vec<u8>, Vec<u8>>) -> Block {
+	let state_root = trie_root(storage.clone().into_iter()).0;
+	let header = Header {
+		parent_hash: Default::default(),
+		number: 0,
+		state_root,
+		transaction_root: trie_root(vec![].into_iter()).0,
+		digest: Default::default(),
+	};
+	Block {
+		header,
+		transactions: vec![],
+	}
+}
