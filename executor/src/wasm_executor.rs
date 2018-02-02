@@ -293,6 +293,7 @@ mod tests {
 	use primitives::{blake2_256, twox_128};
 	use runtime_std::{self, TestExternalities};
 	use native_runtime::support::{one, two, StaticHexInto};
+	use native_runtime::primitives::AccountID;
 	use native_runtime::codec::KeyedVec;
 	use native_runtime::runtime::staking::balance;
 
@@ -402,7 +403,30 @@ mod tests {
 		);
 	}
 
-	fn tx() -> Vec<u8> { "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000".convert() }
+	use primitives::ed25519::Pair;
+	fn secret_for(who: &AccountID) -> Option<Pair> {
+		match who {
+			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
+			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
+			_ => None,
+		}
+	}
+
+	fn tx() -> Vec<u8> {
+		use native_runtime::codec::{Joiner, Slicable};
+		use native_runtime::support::{one, two};
+		use native_runtime::primitives::*;
+		let transaction = Transaction {
+			signed: one(),
+			nonce: 0,
+			function: Function::StakingTransfer,
+			input_data: two().to_vec().join(&69u64),
+		};
+		let signature = secret_for(&transaction.signed).unwrap()
+			.sign(&transaction.to_vec())
+			.inner();
+		UncheckedTransaction { transaction, signature }.to_vec()
+	}
 
 	#[test]
 	fn panic_execution_gives_error() {
