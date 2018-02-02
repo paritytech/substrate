@@ -7,7 +7,7 @@ REPO="github.com/paritytech/polkadot-wasm-bin.git"
 REPO_AUTH="${GH_TOKEN}:@${REPO}"
 SRC="wasm-runtime"
 DST="wasm-binaries"
-TARGET="target/wasm32-unknown-unknown/release"
+TARGET="wasm32-unknown-unknown"
 UTCDATE=`date -u "+%Y%m%d.%H%M%S"`
 
 if [ "$TRAVIS_PULL_REQUEST" != "false" -o "$TRAVIS_BRANCH" != "master" ]; then
@@ -38,9 +38,9 @@ git config user.name "CI Build"
 git remote set-url origin https://$REPO_AUTH > /dev/null 2>&1
 
 echo "*** Copying wasm binaries"
-rm -rf target
+rm -rf $TARGET
 mkdir -p $TARGET
-cp -rf ../$SRC/$TARGET/*.wasm $TARGET
+cp -rf ../$SRC/target/$TARGET/release/*.wasm $TARGET
 
 if [ -f "package.json" ]; then
   echo "*** Updating package.json"
