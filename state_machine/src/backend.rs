@@ -23,10 +23,7 @@ use triehash::sec_trie_root;
 use super::{Update, MemoryState};
 
 /// Output of a commit.
-pub struct Committed {
-	/// Root of the storage tree after changes committed.
-	pub storage_tree_root: H256,
-}
+pub struct Committed {}
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -90,17 +87,7 @@ impl Backend for InMemory {
 		where I: IntoIterator<Item=Update>
 	{
 		self.inner.update(changes);
-
-		// fully recalculate trie roots.
-		let storage_tree_root = H256(sec_trie_root(
-			self.inner.storage.iter()
-				.map(|(k, v)| (k.to_vec(), v.clone()))
-				.collect()
-			).0);
-
-		Committed {
-			storage_tree_root,
-		}
+		Committed {}
 	}
 
 	fn pairs(&self) -> Vec<(&[u8], &[u8])> {

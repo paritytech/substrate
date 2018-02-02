@@ -78,6 +78,11 @@ pub mod privileged {
 	pub fn set_length(new: BlockNumber) {
 		storage::put(NEXT_SESSION_LENGTH, &new);
 	}
+
+	/// Forces a new session.
+	pub fn force_new_session() {
+		rotate_session();
+	}
 }
 
 // INTERNAL API (available to other runtime modules)
