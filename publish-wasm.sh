@@ -2,6 +2,7 @@
 
 set -e
 
+# REPO="github.com/jacogr/test-bin" # testing
 REPO="github.com/paritytech/polkadot-wasm-bin.git"
 REPO_AUTH="${GH_TOKEN}:@${REPO}"
 SRC="wasm-runtime"
@@ -40,6 +41,12 @@ echo "*** Copying wasm binaries"
 rm -rf target
 mkdir -p $TARGET
 cp -rf ../$SRC/$TARGET/*.wasm $TARGET
+
+if [ -f "package.json" ]; then
+  echo "*** Updating package.json"
+  sed -i '.bak' "s/\"version\": \"[0-9.]*\"/\"version\": \"$UTCDATE\"/g" package.json
+  rm -rf package.json.bak
+fi
 
 echo "*** Adding to git"
 echo "$UTCDATE" >README.md
