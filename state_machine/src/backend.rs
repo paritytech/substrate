@@ -64,7 +64,6 @@ pub struct InMemory {
 	inner: MemoryState, // keeps all the state in memory.
 }
 
-#[cfg(test)]
 impl InMemory {
 	/// Create a new instance from a given storage map.
 	pub fn from(storage: ::std::collections::HashMap<Vec<u8>, Vec<u8>>) -> Self {

@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use runtime_std::twox_128;
-use codec::{KeyedVec, Slicable};
+use codec::{KeyedVec, Joiner};
 use support::Hashable;
 use primitives::{AccountID, BlockNumber, Block};
 use runtime::staking::Balance;
@@ -31,7 +31,7 @@ pub struct GenesisConfig {
 	pub block_time: u64,
 	pub session_length: BlockNumber,
 	pub sessions_per_era: BlockNumber,
-	pub bonding_duration: u64,
+	pub bonding_duration: BlockNumber,
 	pub approval_ratio: u32,
 }
 
@@ -50,36 +50,42 @@ impl GenesisConfig {
 	}
 
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
-		let wasm_runtime = include_bytes!("../../../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
+		let wasm_runtime = include_bytes!("../../../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm").to_vec();
 		vec![
-			(&b":code"[..], wasm_runtime.to_vec()),
-			(&b"gov:apr"[..], self.approval_ratio.to_vec()),
-			(&b"ses:len"[..], self.session_length.to_vec()),
-			(&b"ses:val:len"[..], (self.validators.len() as u32).to_vec()),
-			(&b"con:aut:len"[..], (self.authorities.len() as u32).to_vec()),
-			(&b"sta:wil:len"[..], 0u32.to_vec()),
-			(&b"sta:spe"[..], self.sessions_per_era.to_vec()),
-			(&b"sta:vac"[..], (self.validators.len() as u32).to_vec()),
-			(&b"sta:era"[..], 0u64.to_vec()),
+			(&b"gov:apr"[..], vec![].join(&self.approval_ratio)),
+			(&b"ses:len"[..], vec![].join(&self.session_length)),
+			(&b"ses:val:len"[..], vec![].join(&(self.validators.len() as u32))),
+			(&b"sta:wil:len"[..], vec![].join(&0u32)),
+			(&b"sta:spe"[..], vec![].join(&self.sessions_per_era)),
+			(&b"sta:vac"[..], vec![].join(&(self.validators.len() as u32))),
+			(&b"sta:era"[..], vec![].join(&0u64)),
 		].into_iter()
-			.map(|(k, v)| (k.to_vec(), v))
+			.map(|(k, v)| (k.into(), v))
 			.chain(self.validators.iter()
 				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b"ses:val:"), account.to_vec()))
+				.map(|(i, account)| ((i as u32).to_keyed_vec(b"ses:val:"), vec![].join(account)))
 			).chain(self.authorities.iter()
 				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b"con:aut:"), account.to_vec()))
+				.map(|(i, account)| ((i as u32).to_keyed_vec(b"con:aut:"), vec![].join(account)))
 			).chain(self.balances.iter()
-				.map(|&(account, balance)| (account.to_keyed_vec(b"sta:bal:"), balance.to_vec()))
+				.map(|&(account, balance)| (account.to_keyed_vec(b"sta:bal:"), vec![].join(&balance)))
 			)
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
+			.chain(vec![
+				(b":code"[..].into(), wasm_runtime),
+				(b"con:aut:len"[..].into(), vec![].join(&(self.authorities.len() as u32))),
+			].into_iter())
+			.chain(self.authorities.iter()
+				.enumerate()
+				.map(|(i, account)| ((i as u32).to_keyed_vec(b"con:aut:"), vec![].join(account)))
+			)
 			.collect()
 	}
 }
 
-pub fn additional_storage_with_genesis(genesis_block: &[u8]) -> Result<HashMap<Vec<u8>, Vec<u8>>, ()> {
-	let h = Block::from_slice(genesis_block).ok_or(())?.header.blake2_256();
-	Ok(map![
-		twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => h.to_vec()
-	])
+pub fn additional_storage_with_genesis(genesis_block: &Block) -> HashMap<Vec<u8>, Vec<u8>> {
+	use codec::Slicable;
+	map![
+		twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => genesis_block.header.blake2_256().to_vec()
+	]
 }

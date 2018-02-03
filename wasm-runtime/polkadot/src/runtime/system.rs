@@ -43,7 +43,7 @@ pub mod privileged {
 
 	/// Set the new code.
 	pub fn set_code(new: &[u8]) {
-		storage::put_raw(CODE, new);
+		storage::unhashed::put_raw(b":code", new);
 	}
 }
 

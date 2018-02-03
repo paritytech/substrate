@@ -33,13 +33,14 @@ extern crate byteorder;
 use std::collections::HashMap;
 use std::fmt;
 
-use primitives::contract::{CallData};
+use primitives::contract::CallData;
 
 pub mod backend;
 mod ext;
 mod testing;
 
 pub use testing::TestExternalities;
+pub use ext::Ext;
 
 /// Updates to be committed to the state.
 pub enum Update {
@@ -151,11 +152,16 @@ pub trait Externalities {
 
 	/// Get the current set of authorities from storage.
 	fn authorities(&self) -> Result<Vec<&[u8]>, ExternalitiesError> {
-		(0..self.storage(b"con:aut:len")?.into_iter()
+		(0..self.storage(b":aut:len")?.into_iter()
 				.rev()
 				.fold(0, |acc, &i| (acc << 8) + (i as u32)))
-			.map(|i| self.storage(&to_keyed_vec(i, b"con:aut:".to_vec())))
+			.map(|i| self.storage(&to_keyed_vec(i, b":aut:".to_vec())))
 			.collect()
+	}
+
+	/// Get the runtime code.
+	fn code(&self) -> Result<&[u8], ExternalitiesError> {
+		self.storage(b":code")
 	}
 }
 
@@ -195,6 +201,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 		};
 		// make a copy.
 		let code = externalities.storage(b":code").unwrap_or(&[]).to_vec();
+		use primitives::hexdisplay::HexDisplay;
 
 		exec.call(
 			&mut externalities,
