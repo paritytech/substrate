@@ -44,7 +44,7 @@ mod tests {
 	use super::*;
 	use runtime_std::TestExternalities;
 	use native_runtime::codec::{KeyedVec, Joiner, Slicable};
-	use native_runtime::support::{one, two, StaticHexInto, Hashable};
+	use native_runtime::support::{one, two, Hashable};
 	use native_runtime::primitives::*;
 	use native_runtime::runtime::staking::balance;
 	use primitives::twox_128;
@@ -71,7 +71,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
+		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
 		assert!(r.is_err());
 	}
 
@@ -82,7 +82,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
+		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
 		assert!(r.is_err());
 	}
 
@@ -95,7 +95,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
+		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
 		assert!(r.is_ok());
 
 		runtime_std::with_externalities(&mut t, || {
@@ -113,7 +113,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
+		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
 		assert!(r.is_ok());
 
 		runtime_std::with_externalities(&mut t, || {

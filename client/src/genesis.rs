@@ -71,7 +71,7 @@ mod tests {
 
 		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0;
 
-		let header = Header {
+		let mut header = Header {
 			parent_hash,
 			number,
 			state_root,
@@ -83,16 +83,16 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 
 		for tx in transactions.iter() {
-			let _ = execute(
+			header = Header::from_slice(&execute(
 				backend,
 				&mut overlay,
 				&executor(),
 				"execute_transaction",
-				&CallData(vec![].join(&number).join(tx))
-			).unwrap();
+				&CallData(vec![].join(&header).join(tx))
+			).unwrap()).unwrap();
 		}
 
-		let header = Header::from_slice(&execute(
+		header = Header::from_slice(&execute(
 			backend,
 			&mut overlay,
 			&executor(),
