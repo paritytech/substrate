@@ -94,17 +94,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
 			if let Ok(message) = String::from_utf8(utf8) {
-				println!("Runtime: {}", message);
+				info!(target: "runtime", "{}", message);
 			}
 		}
 	},
 	ext_print_hex(data: *const u8, len: u32) => {
 		if let Ok(hex) = this.memory.get(data, len as usize) {
-			println!("Runtime: {}", HexDisplay::from(&hex));
+			info!(target: "runtime", "{}", HexDisplay::from(&hex));
 		}
 	},
 	ext_print_num(number: u64) => {
-		println!("Runtime: {}", number);
+		info!(target: "runtime", "{}", number);
 	},
 	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
 		let sl1 = this.memory.get(s1, n as usize).map_err(|_| DummyUserError)?;
@@ -145,7 +145,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| DummyUserError)?;
-		println!("Runtime: Setting storage: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&value));
+		info!(target: "runtime", "Setting storage: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&value));
 		this.ext.set_storage(key, value);
 	},
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
@@ -161,7 +161,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
 		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
-		println!("Runtime: Getting storage: {} ( -> {})", HexDisplay::from(&key), HexDisplay::from(&value));
+		info!(target: "runtime", "Getting storage: {} ( -> {})", HexDisplay::from(&key), HexDisplay::from(&value));
 		let value = &value[value_offset as usize..];
 		let written = ::std::cmp::min(value_len as usize, value.len());
 		this.memory.set(value_data, &value[..written]).map_err(|_| DummyUserError)?;
@@ -190,15 +190,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
-			println!("Runtime: XXhash: ''");
+			info!(target: "runtime", "XXhash: ''");
 			twox_128(&[0u8; 0])
 		} else {
 			let key = this.memory.get(data, len as usize).map_err(|_| DummyUserError)?;
 			let hashed_key = twox_128(&key);
 			if let Ok(skey) = ::std::str::from_utf8(&key) {
-				println!("Runtime: XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
+				info!(target: "runtime", "XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
 			} else {
-				println!("Runtime: XXhash: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&hashed_key));
+				info!(target: "runtime", "XXhash: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&hashed_key));
 			}
 			hashed_key
 		};
