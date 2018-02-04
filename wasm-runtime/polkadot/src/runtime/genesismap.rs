@@ -66,18 +66,18 @@ impl GenesisConfig {
 				.map(|(i, account)| ((i as u32).to_keyed_vec(b"ses:val:"), vec![].join(account)))
 			).chain(self.authorities.iter()
 				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b"con:aut:"), vec![].join(account)))
+				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].join(account)))
 			).chain(self.balances.iter()
 				.map(|&(account, balance)| (account.to_keyed_vec(b"sta:bal:"), vec![].join(&balance)))
 			)
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
 				(b":code"[..].into(), wasm_runtime),
-				(b"con:aut:len"[..].into(), vec![].join(&(self.authorities.len() as u32))),
+				(b":auth:len"[..].into(), vec![].join(&(self.authorities.len() as u32))),
 			].into_iter())
 			.chain(self.authorities.iter()
 				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b"con:aut:"), vec![].join(account)))
+				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].join(account)))
 			)
 			.collect()
 	}

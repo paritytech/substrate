@@ -151,9 +151,9 @@ mod tests {
 			twox_128(&0u32.to_keyed_vec(ValidatorStorageVec::PREFIX)).to_vec() => vec![10; 32],
 			twox_128(&1u32.to_keyed_vec(ValidatorStorageVec::PREFIX)).to_vec() => vec![20; 32],
 			// initial session keys (11, 21, ...)
-			b"con:aut:len".to_vec() => vec![].join(&2u32),
-			0u32.to_keyed_vec(b"con:aut:") => vec![11; 32],
-			1u32.to_keyed_vec(b"con:aut:") => vec![21; 32]
+			b":auth:len".to_vec() => vec![].join(&2u32),
+			0u32.to_keyed_vec(b":auth:") => vec![11; 32],
+			1u32.to_keyed_vec(b":auth:") => vec![21; 32]
 		], }
 	}
 
