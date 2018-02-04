@@ -36,7 +36,7 @@ pub mod primitives;
 pub mod runtime;
 
 use runtime_std::prelude::*;
-use codec::Slicable;
+use codec::{Slicable, Joiner};
 use runtime_std::print;
 use primitives::{Block, Header, BlockNumber, UncheckedTransaction};
 
@@ -55,6 +55,13 @@ pub fn execute_transaction(input: &[u8]) -> Vec<u8> {
 	Vec::new()
 }
 
+/// Execute a given, serialised, transaction. Returns the empty vector.
+pub fn finalise_block(input: &[u8]) -> Vec<u8> {
+	let header = Header::from_slice(input).unwrap();
+	let header = runtime::system::internal::finalise_block(header);
+	Vec::new().join(&header)
+}
+
 /// Run whatever tests we have.
 pub fn run_tests(input: &[u8]) -> Vec<u8> {
 	print("run_tests...");
@@ -65,4 +72,4 @@ pub fn run_tests(input: &[u8]) -> Vec<u8> {
 	[stxs.len() as u8].to_vec()
 }
 
-impl_stubs!(execute_block, execute_transaction, run_tests);
+impl_stubs!(execute_block, execute_transaction, finalise_block, run_tests);
