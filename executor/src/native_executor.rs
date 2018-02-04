@@ -50,7 +50,7 @@ mod tests {
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
-	fn tx() -> Vec<u8> {
+	fn tx() -> UncheckedTransaction {
 		let transaction = Transaction {
 			signed: one(),
 			nonce: 0,
@@ -60,7 +60,7 @@ mod tests {
 		let signature = secret_for(&transaction.signed).unwrap()
 			.sign(&transaction.to_vec())
 			.inner();
-		UncheckedTransaction { transaction, signature }.to_vec()
+		UncheckedTransaction { transaction, signature }
 	}
 
 	#[test]
@@ -70,7 +70,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(tx()));
+		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
 		assert!(r.is_err());
 	}
 
@@ -81,7 +81,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(tx()));
+		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
 		assert!(r.is_err());
 	}
 
@@ -94,7 +94,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(tx()));
+		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
 		assert!(r.is_ok());
 
 		runtime_std::with_externalities(&mut t, || {
@@ -112,7 +112,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(tx()));
+		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
 		assert!(r.is_ok());
 
 		runtime_std::with_externalities(&mut t, || {
