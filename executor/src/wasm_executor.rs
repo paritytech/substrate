@@ -293,7 +293,7 @@ mod tests {
 	use primitives::{blake2_256, twox_128};
 	use runtime_std::{self, TestExternalities};
 	use native_runtime::support::{one, two};
-	use native_runtime::primitives::{UncheckedTransaction, AccountID};
+	use native_runtime::primitives::{UncheckedTransaction, AccountID, Header};
 	use native_runtime::codec::{Joiner, KeyedVec};
 	use native_runtime::runtime::staking::balance;
 
@@ -436,7 +436,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
 		assert!(r.is_err());
 	}
 
@@ -450,7 +450,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(vec![].join(&1u64).join(&tx())));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
 		assert!(r.is_ok());
 
 		runtime_std::with_externalities(&mut t, || {

@@ -51,11 +51,8 @@ pub mod internal {
 	use super::*;
 
 	/// Deposits a log and ensures it matches the blocks log data.
-	pub fn deposit_log(log: &[u8]) {
-		with_env(|e| {
-			assert_eq!(log, &e.digest.logs[e.next_log_index][..]);
-			e.next_log_index += 1;
-		});
+	pub fn deposit_log(log: Vec<u8>) {
+		with_env(|e| e.digest.logs.push(log));
 	}
 
 	/// Actually execute all transitioning for `block`.
@@ -63,8 +60,6 @@ pub mod internal {
 		// populate environment from header.
 		with_env(|e| {
 			e.block_number = block.header.number;
-			mem::swap(&mut e.digest, &mut block.header.digest);
-			e.next_log_index = 0;
 		});
 
 		let ref header = block.header;
@@ -104,15 +99,19 @@ pub mod internal {
 
 	/// Execute a transaction outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
-	pub fn execute_transaction(utx: &UncheckedTransaction, mut header: Header) {
+	pub fn execute_transaction(utx: &UncheckedTransaction, mut header: Header) -> Header {
 		// populate environment from header.
 		with_env(|e| {
 			e.block_number = header.number;
-			mem::swap(&mut e.digest, &mut header.digest);
-			e.next_log_index = 0;
+			mem::swap(&mut header.digest, &mut e.digest);
 		});
 
 		super::execute_transaction(utx);
+
+		with_env(|e| {
+			mem::swap(&mut header.digest, &mut e.digest);
+		});
+		header
 	}
 
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
@@ -122,6 +121,9 @@ pub mod internal {
 		session::internal::check_rotate_session();
 
 		header.state_root = storage_root();
+		with_env(|e| {
+			mem::swap(&mut header.digest, &mut e.digest);
+		});
 
 		post_finalise(&header);
 
@@ -160,7 +162,7 @@ fn execute_transaction(utx: &UncheckedTransaction) {
 
 fn final_checks(_block: &Block) {
 	with_env(|e| {
-		assert_eq!(e.next_log_index, e.digest.logs.len());
+		assert!(_block.header.digest == e.digest);
 	});
 }
 
