@@ -118,29 +118,29 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize)
 			.map_err(|_| DummyUserError)?;
-//		println!("memcpy {} from {}, {} bytes", dest, src, count);
+		trace!(target: "runtime-std", "memcpy {} from {}, {} bytes", dest, src, count);
 		dest
 	},
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy(src as usize, dest as usize, count as usize)
 			.map_err(|_| DummyUserError)?;
-//		println!("memmove {} from {}, {} bytes", dest, src, count);
+		trace!(target: "runtime-std", "memmove {} from {}, {} bytes", dest, src, count);
 		dest
 	},
 	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
 		this.memory.clear(dest as usize, val as u8, count as usize)
 			.map_err(|_| DummyUserError)?;
-//		println!("memset {} with {}, {} bytes", dest, val, count);
+		trace!(target: "runtime-std", "memset {} with {}, {} bytes", dest, val, count);
 		dest
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
 		let r = this.heap.allocate(size);
-//		println!("malloc {} bytes at {}", size, r);
+		trace!(target: "runtime-std", "malloc {} bytes at {}", size, r);
 		r
 	},
 	ext_free(addr: *mut u8) => {
 		this.heap.deallocate(addr);
-//		println!("free {}", addr)
+		trace!(target: "runtime-std", "free {}", addr)
 	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
