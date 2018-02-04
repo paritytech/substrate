@@ -29,6 +29,7 @@ impl CodeExecutor for NativeExecutor {
 			runtime_std::with_externalities(ext, || match method {
 				"execute_block" => safe_call(|| runtime::execute_block(&data.0)),
 				"execute_transaction" => safe_call(|| runtime::execute_transaction(&data.0)),
+				"finalise_block" => safe_call(|| runtime::finalise_block(&data.0)),
 				_ => Err(ErrorKind::MethodNotFound(method.to_owned()).into()),
 			})
 		} else {

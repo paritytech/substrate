@@ -59,7 +59,7 @@ mod tests {
 		}
 	}
 
-	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transaction>) -> (Vec<u8>, Hash) {
+	fn construct_block(backend: &InMemory, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transaction>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|transaction| {
@@ -80,11 +80,32 @@ mod tests {
 		};
 		let hash = header.blake2_256();
 
-		(Block { header, transactions }.to_vec(), hash)
+		let mut overlay = OverlayedChanges::default();
+
+		for tx in transactions.iter() {
+			let _ = execute(
+				backend,
+				&mut overlay,
+				&executor(),
+				"execute_transaction",
+				&CallData(vec![].join(&number).join(tx))
+			).unwrap();
+		}
+
+		let header = Header::from_slice(&execute(
+			backend,
+			&mut overlay,
+			&executor(),
+			"finalise_block",
+			&CallData(vec![].join(&header))
+		).unwrap()).unwrap();
+
+		(vec![].join(&Block { header, transactions }), hash)
 	}
 
-	fn block1(genesis_hash: Hash) -> (Vec<u8>, Hash) {
+	fn block1(genesis_hash: Hash, backend: &InMemory) -> (Vec<u8>, Hash) {
 		construct_block(
+			backend,
 			1,
 			genesis_hash,
 			hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c"),
@@ -108,7 +129,7 @@ mod tests {
 
 		let mut overlay = OverlayedChanges::default();
 		let backend = InMemory::from(storage);
-		let (b1data, _b1hash) = block1(genesis_hash);
+		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let _ = execute(
 			&backend,
