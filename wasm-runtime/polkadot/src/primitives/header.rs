@@ -38,6 +38,7 @@ pub struct Header {
 }
 
 impl Header {
+	/// Create a new instance with default fields except `number`, which is given as an argument.
 	pub fn from_block_number(number: BlockNumber) -> Self {
 		Header {
 			parent_hash: Default::default(),
