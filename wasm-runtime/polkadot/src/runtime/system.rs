@@ -21,7 +21,7 @@ use runtime_std::prelude::*;
 use runtime_std::{mem, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
-use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
+use primitives::{Block, BlockNumber, Header, Hash, UncheckedTransaction, TxOrder};
 use runtime::{staking, session};
 
 const NONCE_OF: &[u8] = b"sys:non:";
@@ -84,7 +84,7 @@ pub mod internal {
 
 		// execute transactions
 		for tx in &block.transactions {
-			execute_transaction(tx);
+			super::execute_transaction(tx);
 		}
 
 		staking::internal::check_new_era();
@@ -98,29 +98,34 @@ pub mod internal {
 		debug_assert_hash(&header.state_root, &storage_root);
 		assert!(header.state_root == storage_root, "Storage root must match that calculated.");
 
-		// store the header hash in storage; we can't do it before otherwise there would be a
-		// cyclic dependency.
-		let header_hash_key = header.number.to_keyed_vec(BLOCK_HASH_AT);
-		storage::put(&header_hash_key, &header.blake2_256());
+		// any stuff that we do after taking the storage root.
+		post_finalise(header);
 	}
 
-	/// Execute a given transaction.
-	pub fn execute_transaction(utx: &UncheckedTransaction) {
-		// Verify the signature is good.
-		assert!(utx.ed25519_verify(), "All transactions should be properly signed");
+	/// Execute a transaction outside of the block execution function.
+	/// This doesn't attempt to validate anything regarding the block.
+	pub fn execute_transaction(utx: &UncheckedTransaction, mut header: Header) {
+		// populate environment from header.
+		with_env(|e| {
+			e.block_number = header.number;
+			mem::swap(&mut e.digest, &mut header.digest);
+			e.next_log_index = 0;
+		});
 
-		let ref tx = utx.transaction;
+		super::execute_transaction(utx);
+	}
 
-		// check nonce
-		let nonce_key = tx.signed.to_keyed_vec(NONCE_OF);
-		let expected_nonce: TxOrder = storage::get_or(&nonce_key, 0);
-		assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
+	/// Finalise the block - it is up the caller to ensure that all header fields are valid
+	/// except state-root.
+	pub fn finalise_block(mut header: Header) -> Header {
+		staking::internal::check_new_era();
+		session::internal::check_rotate_session();
 
-		// increment nonce in storage
-		storage::put(&nonce_key, &(expected_nonce + 1));
+		header.state_root = storage_root();
 
-		// decode parameters and dispatch
-		tx.function.dispatch(&tx.signed, &tx.input_data);
+		post_finalise(&header);
+
+		header
 	}
 
 	#[cfg(feature = "with-std")]
@@ -135,10 +140,34 @@ pub mod internal {
 	fn debug_assert_hash(_given: &Hash, _expected: &Hash) {}
 }
 
+fn execute_transaction(utx: &UncheckedTransaction) {
+	// Verify the signature is good.
+	assert!(utx.ed25519_verify(), "All transactions should be properly signed");
+
+	let ref tx = utx.transaction;
+
+	// check nonce
+	let nonce_key = tx.signed.to_keyed_vec(NONCE_OF);
+	let expected_nonce: TxOrder = storage::get_or(&nonce_key, 0);
+	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
+
+	// increment nonce in storage
+	storage::put(&nonce_key, &(expected_nonce + 1));
+
+	// decode parameters and dispatch
+	tx.function.dispatch(&tx.signed, &tx.input_data);
+}
+
 fn final_checks(_block: &Block) {
 	with_env(|e| {
 		assert_eq!(e.next_log_index, e.digest.logs.len());
 	});
+}
+
+fn post_finalise(header: &Header) {
+	// store the header hash in storage; we can't do it before otherwise there would be a
+	// cyclic dependency.
+	storage::put(&header.number.to_keyed_vec(BLOCK_HASH_AT), &header.blake2_256());
 }
 
 #[cfg(test)]
@@ -174,7 +203,7 @@ mod tests {
 		println!("tx is {}", HexDisplay::from(&tx.transaction.to_vec()));
 
 		with_externalities(&mut t, || {
-			execute_transaction(&tx);
+			internal::execute_transaction(&tx, Header::from_block_number(1));
 			assert_eq!(staking::balance(&one), 42);
 			assert_eq!(staking::balance(&two), 69);
 		});

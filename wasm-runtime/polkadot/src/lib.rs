@@ -38,7 +38,7 @@ pub mod runtime;
 use runtime_std::prelude::*;
 use codec::Slicable;
 use runtime_std::print;
-use primitives::{Block, UncheckedTransaction};
+use primitives::{Block, Header, BlockNumber, UncheckedTransaction};
 
 /// Execute a block, with `input` being the canonical serialisation of the block. Returns the
 /// empty vector.
@@ -49,8 +49,9 @@ pub fn execute_block(input: &[u8]) -> Vec<u8> {
 
 /// Execute a given, serialised, transaction. Returns the empty vector.
 pub fn execute_transaction(input: &[u8]) -> Vec<u8> {
-	let utx = UncheckedTransaction::from_slice(input).unwrap();
-	runtime::system::internal::execute_transaction(&utx);
+	let number = BlockNumber::from_slice(&input[0..8]).unwrap();
+	let utx = UncheckedTransaction::from_slice(&input[8..]).unwrap();
+	runtime::system::internal::execute_transaction(&utx, Header::from_block_number(number));
 	Vec::new()
 }
 

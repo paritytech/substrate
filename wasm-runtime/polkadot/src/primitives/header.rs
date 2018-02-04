@@ -37,6 +37,18 @@ pub struct Header {
 	pub digest: Digest,
 }
 
+impl Header {
+	pub fn from_block_number(number: BlockNumber) -> Self {
+		Header {
+			parent_hash: Default::default(),
+			number,
+			state_root: Default::default(),
+			transaction_root: Default::default(),
+			digest: Default::default(),
+		}
+	}
+}
+
 impl Slicable for Header {
 	fn from_slice(value: &[u8]) -> Option<Self> {
 		let mut reader = StreamReader::new(value);
