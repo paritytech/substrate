@@ -24,9 +24,8 @@ use codec::{Slicable, KeyedVec};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-	Slicable::set_as_slice(|out, offset|
-		runtime_std::read_storage(&twox_128(key)[..], out, offset) >= out.len()
-	)
+	let raw = runtime_std::storage(&twox_128(key)[..]);
+	Slicable::from_slice(&mut &raw[..])
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -216,10 +215,12 @@ mod tests {
 
 	#[test]
 	fn proposals_can_be_stored() {
-		use primitives::{Proposal, InternalFunction};
+		use primitives::proposal::{Proposal, InternalFunction};
 		let mut t = TestExternalities { storage: HashMap::new(), };
 		with_externalities(&mut t, || {
-			let x = Proposal { function: InternalFunction::StakingSetSessionsPerEra, input_data: b"Hello world".to_vec() };
+			let x = Proposal {
+				function: InternalFunction::StakingSetSessionsPerEra(25519),
+			};
 			put(b":test", &x);
 			let y: Proposal = get(b":test").unwrap();
 			assert_eq!(x, y);

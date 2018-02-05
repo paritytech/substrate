@@ -28,8 +28,8 @@ fn should_return_header() {
 			parent_hash: 0.into(),
 			number: 0,
 			state_root: 0.into(),
-			parachain_activity: Default::default(),
-			logs: vec![],
+			transaction_root: Default::default(),
+			digest: Default::default(),
 		}
 	);
 

@@ -115,8 +115,8 @@ impl<B, E> Client<B, E> where
 				parent_hash: Default::default(),
 				number: 0,
 				state_root: Default::default(),
-				parachain_activity: Default::default(),
-				logs: Default::default(),
+				transaction_root: Default::default(),
+				digest: Default::default(),
 			};
 
 			let mut tx = backend.begin_transaction(BlockId::Hash(block::HeaderHash::default()))?;

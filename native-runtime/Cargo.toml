@@ -6,9 +6,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1" }
 polkadot-runtime-std = { path = "../runtime-std", version = "0.1" }
+polkadot-primitives = { path = "../primitives", version = "0.1" }
 rustc-hex = "1.0"
 hex-literal = "0.1.0"
 
 [features]
 default = ["std"]
-std = ["polkadot-runtime-codec/std", "polkadot-runtime-std/std"]
+std = ["polkadot-runtime-codec/std", "polkadot-runtime-std/std", "polkadot-primitives/std"]

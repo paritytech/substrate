@@ -21,7 +21,6 @@ extern crate polkadot_state_machine;
 extern crate polkadot_primitives as primitives;
 extern crate triehash;
 
-use std::fmt;
 use primitives::ed25519;
 
 pub use std::vec;

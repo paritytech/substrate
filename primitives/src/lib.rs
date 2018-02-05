@@ -101,7 +101,7 @@ pub type BlockNumber = u64;
 pub type TxOrder = u64;
 
 /// A hash of some data.
-pub type Hash = [u8; 32];
+pub type Hash = hash::H256;
 
 /// Alias to 520-bit hash when used in the context of a signature.
 pub type Signature = hash::H512;

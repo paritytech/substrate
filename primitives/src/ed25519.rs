@@ -229,7 +229,7 @@ mod test {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".into());
-		let message: Vec<u8> = FromHex::from_hex("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000").unwrap();
+		let message: Vec<u8> = FromHex::from_hex("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee000000000000000002d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000").unwrap();
 		let signature = pair.sign(&message[..]);
 		assert!(signature.verify(&message[..], &public));
 	}

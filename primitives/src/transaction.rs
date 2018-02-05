@@ -16,7 +16,7 @@
 
 //! Transaction type.
 
-use bytes::{self, Vec};
+use bytes::Vec;
 use codec::Slicable;
 use runtime_function::Function;
 
@@ -35,9 +35,30 @@ pub struct Transaction {
 	pub nonce: ::TxOrder,
 	/// The function that should be called.
 	pub function: Function,
-	/// Serialised input data to the function.
-	#[serde(with = "bytes")]
-	pub input_data: Vec<u8>,
+}
+
+impl Slicable for Transaction {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		Some(Transaction {
+			signed: try_opt!(Slicable::from_slice(value)),
+			nonce: try_opt!(Slicable::from_slice(value)),
+			function: try_opt!(Slicable::from_slice(value)),
+		})
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		self.signed.as_slice_then(|s| v.extend(s));
+		self.nonce.as_slice_then(|s| v.extend(s));
+		self.function.as_slice_then(|s| v.extend(s));
+
+		v
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(self.to_vec().as_slice())
+	}
 }
 
 /// A transactions right from the external world. Unchecked.
@@ -52,12 +73,7 @@ pub struct UncheckedTransaction {
 impl Slicable for UncheckedTransaction {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
 		Some(UncheckedTransaction {
-			transaction: Transaction {
-				signed: try_opt!(Slicable::from_slice(value)),
-				nonce: try_opt!(Slicable::from_slice(value)),
-				function: try_opt!(Slicable::from_slice(value)),
-				input_data: try_opt!(Slicable::from_slice(value)),
-			},
+			transaction: try_opt!(Transaction::from_slice(value)),
 			signature: try_opt!(Slicable::from_slice(value)),
 		})
 	}
@@ -68,7 +84,6 @@ impl Slicable for UncheckedTransaction {
 		self.transaction.signed.as_slice_then(|s| v.extend(s));
 		self.transaction.nonce.as_slice_then(|s| v.extend(s));
 		self.transaction.function.as_slice_then(|s| v.extend(s));
-		self.transaction.input_data.as_slice_then(|s| v.extend(s));
 		self.signature.as_slice_then(|s| v.extend(s));
 
 		v
@@ -90,5 +105,27 @@ impl PartialEq for UncheckedTransaction {
 impl fmt::Debug for UncheckedTransaction {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "UncheckedTransaction({:?})", self.transaction)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use ::codec::Slicable;
+	use runtime_function::Function;
+	use super::*;
+
+	#[test]
+	fn serialize_unchecked() {
+		let tx = UncheckedTransaction {
+			transaction: Transaction {
+				signed: [1; 32],
+				nonce: 999u64,
+				function: Function::TimestampSet(135135),
+			},
+			signature: ::hash::H512([0; 64]),
+		};
+
+		let v = Slicable::to_vec(&tx);
+		assert_eq!(UncheckedTransaction::from_slice(&mut &v[..]).unwrap(), tx);
 	}
 }

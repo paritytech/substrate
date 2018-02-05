@@ -22,6 +22,8 @@
 #![cfg_attr(feature = "std", doc = "Polkadot runtime standard library as compiled when linked with Rust's standard library.")]
 #![cfg_attr(not(feature = "std"), doc = "Polkadot's runtime standard library as compiled without Rust's standard library.")]
 
+extern crate polkadot_runtime_codec as codec;
+
 #[cfg(feature = "std")]
 include!("../with_std.rs");
 
@@ -39,6 +41,7 @@ pub mod prelude {
 /// Type definitions and helpers for transactions.
 pub mod transaction {
 	pub use primitives::transaction::{Transaction, UncheckedTransaction};
+	use primitives::Signature;
 
 	#[cfg(feature = "std")]
 	use std::ops;
@@ -52,7 +55,7 @@ pub mod transaction {
 
 	impl CheckedTransaction {
 		/// Get a reference to the checked signature.
-		pub fn signature(&self) -> &[u8; 64] {
+		pub fn signature(&self) -> &Signature {
 			&self.0.signature
 		}
 	}
@@ -69,15 +72,12 @@ pub mod transaction {
 	///
 	/// On failure, return the transaction back.
 	pub fn check(tx: UncheckedTransaction) -> Result<CheckedTransaction, UncheckedTransaction> {
-		// TODO: requires canonical serialization of transaction.
-		let msg = unimplemented!();
-		if ed25519_verify(&tx.signature, &msg, &tx.transaction.signed) {
+		let msg = ::codec::Slicable::to_vec(&tx.transaction);
+		if ::ed25519_verify(&tx.signature.0, &msg, &tx.transaction.signed) {
 			Ok(CheckedTransaction(tx))
 		} else {
 			Err(tx)
 		}
 	}
 }
-/// Check a transaction
-pub struct CheckedTransaction(primitives::UncheckedTransaction);
 

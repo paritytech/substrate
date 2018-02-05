@@ -20,7 +20,7 @@ use runtime_std::prelude::*;
 use runtime_std::cell::RefCell;
 use codec::KeyedVec;
 use support::{storage, StorageVec};
-use primitives::{BlockNumber, AccountID};
+use primitives::{BlockNumber, AccountId};
 use runtime::{system, session, governance};
 
 /// The balance of an account.
@@ -31,7 +31,7 @@ pub type Bondage = u64;
 
 struct IntentionStorageVec {}
 impl StorageVec for IntentionStorageVec {
-	type Item = AccountID;
+	type Item = AccountId;
 	const PREFIX: &'static[u8] = b"sta:wil:";
 }
 
@@ -75,12 +75,12 @@ pub fn last_era_length_change() -> BlockNumber {
 }
 
 /// The balance of a given account.
-pub fn balance(who: &AccountID) -> Balance {
+pub fn balance(who: &AccountId) -> Balance {
 	storage::get_or_default(&who.to_keyed_vec(BALANCE_OF))
 }
 
 /// The liquidity-state of a given account.
-pub fn bondage(who: &AccountID) -> Bondage {
+pub fn bondage(who: &AccountId) -> Bondage {
 	storage::get_or_default(&who.to_keyed_vec(BONDAGE_OF))
 }
 
@@ -94,7 +94,7 @@ pub mod public {
 	use super::*;
 
 	/// Transfer some unlocked staking balance to another staker.
-	pub fn transfer(transactor: &AccountID, dest: &AccountID, value: Balance) {
+	pub fn transfer(transactor: &AccountId, dest: &AccountId, value: Balance) {
 		let from_key = transactor.to_keyed_vec(BALANCE_OF);
 		let from_balance = storage::get_or_default::<Balance>(&from_key);
 		assert!(from_balance >= value);
@@ -109,7 +109,7 @@ pub mod public {
 	/// Declare the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	pub fn stake(transactor: &AccountID) {
+	pub fn stake(transactor: &AccountId) {
 		let mut intentions = IntentionStorageVec::items();
 		// can't be in the list twice.
 		assert!(intentions.iter().find(|t| *t == transactor).is_none(), "Cannot stake if already staked.");
@@ -121,7 +121,7 @@ pub mod public {
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	pub fn unstake(transactor: &AccountID) {
+	pub fn unstake(transactor: &AccountId) {
 		let mut intentions = IntentionStorageVec::items();
 		if let Some(position) = intentions.iter().position(|t| t == transactor) {
 			intentions.swap_remove(position);
@@ -147,8 +147,8 @@ pub mod privileged {
 	}
 
 	/// The length of a staking era in sessions.
-	pub fn set_validator_count(new: usize) {
-		storage::put(VALIDATOR_COUNT, &(new as u32));
+	pub fn set_validator_count(new: u32) {
+		storage::put(VALIDATOR_COUNT, &new);
 	}
 }
 
@@ -209,7 +209,7 @@ mod tests {
 	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::AccountID;
+	use primitives::AccountId;
 	use runtime::{staking, session};
 
 	#[test]
