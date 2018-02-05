@@ -2,7 +2,6 @@
 
 set -e
 
-# REPO="github.com/jacogr/test-bin" # testing
 REPO="github.com/paritytech/polkadot-wasm-bin.git"
 REPO_AUTH="${GH_TOKEN}:@${REPO}"
 SRC="wasm-runtime"
