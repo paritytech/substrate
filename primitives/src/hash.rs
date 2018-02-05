@@ -34,6 +34,16 @@ macro_rules! impl_serde {
 					.map(|x| (&*x).into())
 			}
 		}
+
+		impl ::codec::Slicable for $name {
+			fn from_slice(value: &mut &[u8]) -> Option<Self> {
+				<[u8; $len] as ::codec::Slicable>::from_slice(value).map($name)
+			}
+
+			fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				self.0.as_slice_then(f)
+			}
+		}
 	}
 }
 

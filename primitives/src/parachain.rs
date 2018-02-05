@@ -30,6 +30,16 @@ impl From<u64> for Id {
 	fn from(x: u64) -> Self { Id(x) }
 }
 
+impl ::codec::Slicable for Id {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		u64::from_slice(value).map(Id)
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.as_slice_then(f)
+	}
+}
+
 /// Candidate parachain block.
 ///
 /// https://github.com/w3f/polkadot-spec/blob/master/spec.md#candidate-para-chain-block
@@ -100,6 +110,16 @@ pub struct ValidationCode(#[serde(with="bytes")] pub Vec<u8>);
 /// Activitiy bit field
 #[derive(Debug, PartialEq, Eq, Clone, Default, Serialize, Deserialize)]
 pub struct Activity(#[serde(with="bytes")] pub Vec<u8>);
+
+impl ::codec::Slicable for Activity {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		Vec::<u8>::from_slice(value).map(Activity)
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.as_slice_then(f)
+	}
+}
 
 #[cfg(test)]
 mod tests {

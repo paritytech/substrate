@@ -40,6 +40,7 @@ extern crate uint as uint_crate;
 
 #[cfg(feature = "std")]
 extern crate core;
+extern crate polkadot_runtime_codec as codec;
 #[cfg(test)]
 extern crate polkadot_serializer;
 #[cfg(test)]
@@ -49,6 +50,16 @@ extern crate pretty_assertions;
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
+
+// TODO: factor out to separate crate.
+macro_rules! try_opt {
+	($e: expr) => {
+		match $e {
+			Some(x) => x,
+			None => return None,
+		}
+	}
+}
 
 mod bytes;
 pub mod block;
@@ -94,6 +105,12 @@ pub type Hash = [u8; 32];
 
 /// Alias to 520-bit hash when used in the context of a signature.
 pub type Signature = hash::H512;
+
+/// A balance in the staking subsystem.
+pub type Balance = u64;
+
+/// A timestamp.
+pub type Timestamp = u64;
 
 /// A hash function.
 pub fn hash(data: &[u8]) -> hash::H256 {

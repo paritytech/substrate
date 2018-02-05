@@ -19,12 +19,12 @@
 //! This describes a combination of a function ID and data that can be used to call into
 //! an internal function.
 
-use bytes;
+use block::Number as BlockNumber;
+use codec::Slicable;
 
-/// Internal functions that can be dispatched to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum InternalFunction {
+enum InternalFunctionId {
 	/// Set the system's code.
 	SystemSetCode = 0,
 	/// Set the number of sessions per era.
@@ -39,17 +39,17 @@ pub enum InternalFunction {
 	SessionSetLength = 5,
 }
 
-impl InternalFunction {
+impl InternalFunctionId {
 	/// Derive `Some` value from a `u8`, or `None` if it's invalid.
-	pub fn from_u8(value: u8) -> Option<InternalFunction> {
+	fn from_u8(value: u8) -> Option<InternalFunctionId> {
 		use self::*;
 		let functions = [
-			InternalFunction::SystemSetCode,
-			InternalFunction::StakingSetSessionsPerEra,
-			InternalFunction::StakingSetBondingDuration,
-			InternalFunction::StakingSetValidatorCount,
-			InternalFunction::GovernanceSetApprovalPpmRequired,
-			InternalFunction::SessionSetLength
+			InternalFunctionId::SystemSetCode,
+			InternalFunctionId::StakingSetSessionsPerEra,
+			InternalFunctionId::StakingSetBondingDuration,
+			InternalFunctionId::StakingSetValidatorCount,
+			InternalFunctionId::GovernanceSetApprovalPpmRequired,
+			InternalFunctionId::SessionSetLength
 		];
 		if (value as usize) < functions.len() {
 			Some(functions[value as usize])
@@ -59,31 +59,85 @@ impl InternalFunction {
 	}
 }
 
+/// Internal functions that can be dispatched to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum InternalFunction {
+	/// Set the system's code.
+	SystemSetCode(Vec<u8>),
+	/// Set the number of sessions per era.
+	StakingSetSessionsPerEra(BlockNumber),
+	/// Set the minimum bonding duration for staking.
+	StakingSetBondingDuration(BlockNumber),
+	/// Set the validator count for staking.
+	StakingSetValidatorCount(u32),
+	/// Set the per-mille of validator approval required for governance changes.
+	GovernanceSetApprovalPpmRequired(u32),
+	/// Set the session length.
+	SessionSetLength(BlockNumber),
+}
+
 /// An internal function.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Proposal {
 	/// The privileged function to call.
 	pub function: InternalFunction,
-	/// The serialised data to call it with.
-	#[serde(with = "bytes")]
-	pub input_data: Vec<u8>,
 }
 
-#[cfg(test)]
-mod test {
-	use super::*;
-	use support::StaticHexInto;
-
-	#[test]
-	fn slicing_should_work() {
-		let p = Proposal {
-			function: InternalFunction::SystemSetCode,
-			input_data: b"Hello world".to_vec(),
+impl Slicable for Proposal {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		let id = try_opt!(u8::from_slice(value).and_then(InternalFunctionId::from_u8));
+		let function = match id {
+			InternalFunctionId::SystemSetCode =>
+				InternalFunction::SystemSetCode(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::StakingSetSessionsPerEra =>
+				InternalFunction::StakingSetSessionsPerEra(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::StakingSetBondingDuration =>
+				InternalFunction::StakingSetBondingDuration(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::StakingSetValidatorCount =>
+				InternalFunction::StakingSetValidatorCount(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::GovernanceSetApprovalPpmRequired =>
+				InternalFunction::GovernanceSetApprovalPpmRequired(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::SessionSetLength =>
+				InternalFunction::SessionSetLength(try_opt!(Slicable::from_slice(value))),
 		};
-		let v = p.to_vec();
-		assert_eq!(v, "000b00000048656c6c6f20776f726c64".convert::<Vec<u8>>());
 
-		let o = Proposal::from_slice(&v).unwrap();
-		assert_eq!(p, o);
+		Some(Proposal { function })
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		match self.function {
+			InternalFunction::SystemSetCode(ref data) => {
+				(InternalFunctionId::SystemSetCode as u8).as_slice_then(|s| v.extend(s));
+				data.as_slice_then(|s| v.extend(s));
+			}
+			InternalFunction::StakingSetSessionsPerEra(ref data) => {
+				(InternalFunctionId::StakingSetSessionsPerEra as u8).as_slice_then(|s| v.extend(s));
+				data.as_slice_then(|s| v.extend(s));
+			}
+			InternalFunction::StakingSetBondingDuration(ref data) => {
+				(InternalFunctionId::StakingSetBondingDuration as u8).as_slice_then(|s| v.extend(s));
+				data.as_slice_then(|s| v.extend(s));
+			}
+			InternalFunction::StakingSetValidatorCount(ref data) => {
+				(InternalFunctionId::StakingSetValidatorCount as u8).as_slice_then(|s| v.extend(s));
+				data.as_slice_then(|s| v.extend(s));
+			}
+			InternalFunction::GovernanceSetApprovalPpmRequired(ref data) => {
+				(InternalFunctionId::GovernanceSetApprovalPpmRequired as u8).as_slice_then(|s| v.extend(s));
+				data.as_slice_then(|s| v.extend(s));
+			}
+			InternalFunction::SessionSetLength(ref data) => {
+				(InternalFunctionId::SessionSetLength as u8).as_slice_then(|s| v.extend(s));
+				data.as_slice_then(|s| v.extend(s));
+			}
+		}
+
+		v
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(self.to_vec().as_slice())
 	}
 }
