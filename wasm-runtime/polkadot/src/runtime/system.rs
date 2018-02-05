@@ -146,7 +146,7 @@ fn initial_checks(block: &Block) {
 	let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs);
-	debug_assert_hash(&header.transaction_root, &txs_root);
+	info_expect_equal_hash(&header.transaction_root, &txs_root);
 	assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
 }
 
@@ -160,7 +160,7 @@ fn final_checks(block: &Block) {
 
 	// check storage root.
 	let storage_root = storage_root();
-	debug_assert_hash(&header.state_root, &storage_root);
+	info_expect_equal_hash(&header.state_root, &storage_root);
 	assert!(header.state_root == storage_root, "Storage root must match that calculated.");
 }
 
@@ -171,15 +171,15 @@ fn post_finalise(header: &Header) {
 }
 
 #[cfg(feature = "with-std")]
-fn debug_assert_hash(given: &Hash, expected: &Hash) {
+fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	use support::HexDisplay;
 	if given != expected {
-		println!("Hash: given={}, expected={}", HexDisplay::from(given), HexDisplay::from(expected));
+		info!("Hash: given={}, expected={}", HexDisplay::from(given), HexDisplay::from(expected));
 	}
 }
 
 #[cfg(not(feature = "with-std"))]
-fn debug_assert_hash(_given: &Hash, _expected: &Hash) {}
+fn info_expect_equal_hash(_given: &Hash, _expected: &Hash) {}
 
 #[cfg(test)]
 mod tests {
