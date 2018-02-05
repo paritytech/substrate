@@ -21,15 +21,23 @@
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_state_machine as state_machine;
 extern crate polkadot_serializer as ser;
+extern crate polkadot_executor;
+extern crate native_runtime;
 
+extern crate triehash;
 extern crate parking_lot;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
+#[macro_use] extern crate hex_literal;
 
 pub mod error;
 pub mod blockchain;
 pub mod backend;
 pub mod in_mem;
+
+mod genesis;
+
+pub use genesis::construct_genesis_block;
 
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;

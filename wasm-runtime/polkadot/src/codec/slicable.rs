@@ -84,7 +84,8 @@ impl Slicable for Vec<u8> {
 	fn set_as_slice<F: Fn(&mut [u8], usize) -> bool>(fill_slice: &F) -> Option<Self> {
 		u32::set_as_slice(fill_slice).and_then(|len| {
 			let mut v = Vec::with_capacity(len as usize);
-			unsafe { v.set_len(len as usize); }
+			v.resize(len as usize, 0);
+//			unsafe { v.set_len(len as usize); }
 			if fill_slice(&mut v, 4) {
 				Some(v)
 			} else {
@@ -106,7 +107,7 @@ impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
 
 impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 	fn from_slice(value: &[u8]) -> Option<Self> {
-		let len = Self::size_of(&value[0..4])?;
+		let len = Self::size_of(value)?;
 		let mut off = 4;
 		let mut r = Vec::new();
 		while off < len {

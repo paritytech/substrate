@@ -27,12 +27,17 @@ use runtime::{system, governance, staking, session};
 #[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
 #[repr(u8)]
 pub enum InternalFunction {
-	SystemSetCode = 0,
-	StakingSetSessionsPerEra = 1,
-	StakingSetBondingDuration = 2,
-	StakingSetValidatorCount = 3,
-	GovernanceSetApprovalPpmRequired = 4,
-	SessionSetLength = 5,
+	SystemSetCode = 0x00,
+
+	SessionSetLength = 0x10,
+	SessionForceNewSession = 0x11,
+
+	StakingSetSessionsPerEra = 0x20,
+	StakingSetBondingDuration = 0x21,
+	StakingSetValidatorCount = 0x22,
+	StakingForceNewEra = 0x23,
+
+	GovernanceSetApprovalPpmRequired = 0x30,
 }
 
 impl InternalFunction {
@@ -41,17 +46,15 @@ impl InternalFunction {
 		use self::*;
 		let functions = [
 			InternalFunction::SystemSetCode,
+			InternalFunction::SessionSetLength,
+			InternalFunction::SessionForceNewSession,
 			InternalFunction::StakingSetSessionsPerEra,
 			InternalFunction::StakingSetBondingDuration,
 			InternalFunction::StakingSetValidatorCount,
+			InternalFunction::StakingForceNewEra,
 			InternalFunction::GovernanceSetApprovalPpmRequired,
-			InternalFunction::SessionSetLength
 		];
-		if (value as usize) < functions.len() {
-			Some(functions[value as usize])
-		} else {
-			None
-		}
+		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
 }
 
@@ -93,6 +96,13 @@ impl Proposal {
 				let code: Vec<u8> = params.read().unwrap();
 				system::privileged::set_code(&code);
 			}
+			InternalFunction::SessionSetLength => {
+				let value = params.read().unwrap();
+				session::privileged::set_length(value);
+			}
+			InternalFunction::SessionForceNewSession => {
+				session::privileged::force_new_session();
+			}
 			InternalFunction::StakingSetSessionsPerEra => {
 				let value = params.read().unwrap();
 				staking::privileged::set_sessions_per_era(value);
@@ -105,13 +115,12 @@ impl Proposal {
 				let value = params.read().unwrap();
 				staking::privileged::set_validator_count(value);
 			}
+			InternalFunction::StakingForceNewEra => {
+				staking::privileged::force_new_era();
+			}
 			InternalFunction::GovernanceSetApprovalPpmRequired => {
 				let value = params.read().unwrap();
 				governance::privileged::set_approval_ppm_required(value);
-			}
-			InternalFunction::SessionSetLength => {
-				let value = params.read().unwrap();
-				session::privileged::set_length(value);
 			}
 		}
 	}

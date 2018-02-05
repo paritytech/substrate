@@ -55,6 +55,11 @@ impl Signature {
 		r.copy_from_slice(data);
 		Signature(r)
 	}
+
+	/// Get the inner part.
+	pub fn inner(self) -> [u8; 64] {
+		self.0
+	}
 }
 
 impl AsRef<[u8; 64]> for Signature {
@@ -219,17 +224,12 @@ mod test {
 		let public = pair.public();
 		assert_eq!(public, "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".into());
 		let message = b"Something important";
-		let signature = pair.sign(&message[..]);
-		assert!(signature.verify(&message[..], &public));
-	}
-
-	#[test]
-	fn can_sign_transaction() {
-		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".into());
-		let message = FromHex::from_hex("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000").unwrap();
+		let message = FromHex::from_hex("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000002228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000").unwrap();
 		let signature = pair.sign(&message[..]);
+		use hexdisplay::HexDisplay;
+		println!("Correct signature: {}", HexDisplay::from(&signature.0));
 		assert!(signature.verify(&message[..], &public));
 	}
 }
