@@ -56,8 +56,8 @@ pub fn calculate_duty_roster() -> DutyRoster {
 	let validators_per_parachain = (validator_count - 1) / parachain_count;
 	let validators_on_relay = validator_count - validators_per_parachain * parachain_count;
 
-	let mut roles_val = (0..validator_count).map(|i| match i / validators_per_parachain {
-		i if i < parachain_count => Chain::Parachain(i as u32),
+	let mut roles_val = (0..validator_count).map(|i| match i {
+		i if i < parachain_count * validators_per_parachain => Chain::Parachain(i / validators_per_parachain as u32),
 		_ => Chain::Relay,
 	}).collect::<Vec<_>>();
 	let mut roles_gua = roles_val.clone();
@@ -113,53 +113,31 @@ mod tests {
 	fn should_work() {
 		let mut t = simple_setup();
 		with_externalities(&mut t, || {
-			with_env(|e| e.parent_hash = [0u8; 32]);
-			let duty_roster = calculate_duty_roster();
+			let check_roster = |duty_roster: &DutyRoster| {
+				assert_eq!(duty_roster.validator_duty.len(), 8);
+				assert_eq!(duty_roster.guarantor_duty.len(), 8);
+				for i in 0..2 {
+					assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
+					assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
+				}
+				assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
+				assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
+			};
 
-			assert_eq!(duty_roster.validator_duty.len(), 8);
-			assert_eq!(duty_roster.guarantor_duty.len(), 8);
-			for i in 0..2 {
-				assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
-				assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
-			}
-			assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
-			assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
-			assert_eq!(duty_roster, DutyRoster {
-				validator_duty: vec![Chain::Parachain(0), Chain::Relay, Chain::Parachain(1), Chain::Relay, Chain::Parachain(1), Chain::Parachain(0), Chain::Parachain(1), Chain::Parachain(0)],
-				guarantor_duty: vec![Chain::Parachain(0), Chain::Parachain(0), Chain::Parachain(1), Chain::Parachain(0), Chain::Relay, Chain::Parachain(1), Chain::Parachain(1), Chain::Relay],
-			});
+			with_env(|e| e.parent_hash = [0u8; 32]);
+			let duty_roster_0 = calculate_duty_roster();
+			check_roster(&duty_roster_0);
 
 			with_env(|e| e.parent_hash = [1u8; 32]);
-			let duty_roster = calculate_duty_roster();
-
-			assert_eq!(duty_roster.validator_duty.len(), 8);
-			assert_eq!(duty_roster.guarantor_duty.len(), 8);
-			for i in 0..2 {
-				assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
-				assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
-			}
-			assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
-			assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
-			assert_eq!(duty_roster, DutyRoster {
-				validator_duty: vec![Chain::Parachain(1), Chain::Parachain(0), Chain::Parachain(0), Chain::Parachain(1), Chain::Parachain(1), Chain::Relay, Chain::Parachain(0), Chain::Relay],
-				guarantor_duty: vec![Chain::Parachain(1), Chain::Parachain(0), Chain::Parachain(0), Chain::Parachain(1), Chain::Parachain(0), Chain::Relay, Chain::Parachain(1), Chain::Relay],
-			});
+			let duty_roster_1 = calculate_duty_roster();
+			check_roster(&duty_roster_1);
+			assert!(duty_roster_0 != duty_roster_1);
 
 			with_env(|e| e.parent_hash = [2u8; 32]);
-			let duty_roster = calculate_duty_roster();
-
-			assert_eq!(duty_roster.validator_duty.len(), 8);
-			assert_eq!(duty_roster.guarantor_duty.len(), 8);
-			for i in 0..2 {
-				assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
-				assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
-			}
-			assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
-			assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
-			assert_eq!(duty_roster, DutyRoster {
-				validator_duty: vec![Chain::Parachain(1), Chain::Parachain(0), Chain::Relay, Chain::Parachain(0), Chain::Parachain(0), Chain::Relay, Chain::Parachain(1), Chain::Parachain(1)],
-				guarantor_duty: vec![Chain::Parachain(0), Chain::Parachain(1), Chain::Parachain(1), Chain::Parachain(1), Chain::Relay, Chain::Parachain(0), Chain::Parachain(0), Chain::Relay],
-			});
+			let duty_roster_2 = calculate_duty_roster();
+			check_roster(&duty_roster_2);
+			assert!(duty_roster_0 != duty_roster_2);
+			assert!(duty_roster_1 != duty_roster_2);
 		});
 	}
 }
