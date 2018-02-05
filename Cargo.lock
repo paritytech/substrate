@@ -817,6 +817,7 @@ name = "native-runtime"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-primitives 0.1.0",
  "polkadot-runtime-codec 0.1.0",
  "polkadot-runtime-std 0.1.0",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1100,6 +1101,7 @@ version = "0.1.0"
 dependencies = [
  "environmental 0.1.0",
  "polkadot-primitives 0.1.0",
+ "polkadot-runtime-codec 0.1.0",
  "polkadot-state-machine 0.1.0",
  "pwasm-alloc 0.1.0",
  "pwasm-libc 0.1.0",

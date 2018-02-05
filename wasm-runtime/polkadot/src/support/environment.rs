@@ -21,7 +21,7 @@ use runtime_std::mem;
 use runtime_std::cell::RefCell;
 use runtime_std::rc::Rc;
 
-use primitives::{BlockNumber, Digest};
+use primitives::block::{Number as BlockNumber, Digest};
 
 #[derive(Default)]
 /// The information that can be accessed globally.

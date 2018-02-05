@@ -25,6 +25,7 @@ extern crate polkadot_runtime_std as runtime_std;
 extern crate rustc_hex;
 
 extern crate polkadot_runtime_codec as codec;
+extern crate polkadot_primitives as primitives;
 
 #[cfg(test)]
 #[macro_use]
@@ -32,24 +33,24 @@ extern crate hex_literal;
 
 #[macro_use]
 pub mod support;
-pub mod primitives;
 pub mod runtime;
 
 use runtime_std::prelude::*;
 use codec::Slicable;
-use primitives::{Block, UncheckedTransaction};
+use primitives::transaction::UncheckedTransaction;
+use primitives::block::Block;
 
 /// Execute a block, with `input` being the canonical serialisation of the block. Returns the
 /// empty vector.
-pub fn execute_block(input: &[u8]) -> Vec<u8> {
-	runtime::system::internal::execute_block(Block::from_slice(input).unwrap());
+pub fn execute_block(mut input: &[u8]) -> Vec<u8> {
+	runtime::system::internal::execute_block(Block::from_slice(&mut input).unwrap());
 	Vec::new()
 }
 
 /// Execute a given, serialised, transaction. Returns the empty vector.
-pub fn execute_transaction(input: &[u8]) -> Vec<u8> {
-	let utx = UncheckedTransaction::from_slice(input).unwrap();
-	runtime::system::internal::execute_transaction(&utx);
+pub fn execute_transaction(mut input: &[u8]) -> Vec<u8> {
+	let utx = UncheckedTransaction::from_slice(&mut input).unwrap();
+	runtime::system::internal::execute_transaction(utx);
 	Vec::new()
 }
 
