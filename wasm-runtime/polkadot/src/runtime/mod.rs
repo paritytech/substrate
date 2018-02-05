@@ -28,10 +28,10 @@ pub mod timestamp;
 pub mod session;
 #[allow(unused)]
 pub mod governance;
+#[allow(unused)]
+pub mod parachains;
 
 // TODO: polkadao
-// TODO: parachains
-
 
 #[cfg(feature = "with-std")]
 pub mod genesismap;
