@@ -54,7 +54,6 @@ pub fn calculate_duty_roster() -> DutyRoster {
 	let parachain_count = parachain_count();
 	let validator_count = session::validator_count() as u32;
 	let validators_per_parachain = (validator_count - 1) / parachain_count;
-	let validators_on_relay = validator_count - validators_per_parachain * parachain_count;
 
 	let mut roles_val = (0..validator_count).map(|i| match i {
 		i if i < parachain_count * validators_per_parachain => Chain::Parachain(i / validators_per_parachain as u32),
