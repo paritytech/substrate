@@ -60,41 +60,24 @@ pub mod internal {
 		// populate environment from header.
 		with_env(|e| {
 			e.block_number = block.header.number;
+			e.parent_hash = block.header.parent_hash;
 		});
 
-		let ref header = block.header;
-
-		// check parent_hash is correct.
-		assert!(
-			header.number > 0 && block_hash(header.number - 1) == header.parent_hash,
-			"Parent hash should be valid."
-		);
-
-		// check transaction trie root represents the transactions.
-		let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
-		let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-		let txs_root = enumerated_trie_root(&txs);
-		debug_assert_hash(&header.transaction_root, &txs_root);
-		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
+		// any initial checks
+		initial_checks(&block);
 
 		// execute transactions
-		for tx in &block.transactions {
-			super::execute_transaction(tx);
-		}
+		block.transactions.iter().for_each(super::execute_transaction);
 
+		// post-transactional book-keeping.
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
 
 		// any final checks
 		final_checks(&block);
 
-		// check storage root.
-		let storage_root = storage_root();
-		debug_assert_hash(&header.state_root, &storage_root);
-		assert!(header.state_root == storage_root, "Storage root must match that calculated.");
-
 		// any stuff that we do after taking the storage root.
-		post_finalise(header);
+		post_finalise(&block.header);
 	}
 
 	/// Execute a transaction outside of the block execution function.
@@ -103,6 +86,7 @@ pub mod internal {
 		// populate environment from header.
 		with_env(|e| {
 			e.block_number = header.number;
+			e.parent_hash = header.parent_hash;
 			mem::swap(&mut header.digest, &mut e.digest);
 		});
 
@@ -129,17 +113,6 @@ pub mod internal {
 
 		header
 	}
-
-	#[cfg(feature = "with-std")]
-	fn debug_assert_hash(given: &Hash, expected: &Hash) {
-		use support::HexDisplay;
-		if given != expected {
-			println!("Hash: given={}, expected={}", HexDisplay::from(given), HexDisplay::from(expected));
-		}
-	}
-
-	#[cfg(not(feature = "with-std"))]
-	fn debug_assert_hash(_given: &Hash, _expected: &Hash) {}
 }
 
 fn execute_transaction(utx: &UncheckedTransaction) {
@@ -160,10 +133,35 @@ fn execute_transaction(utx: &UncheckedTransaction) {
 	tx.function.dispatch(&tx.signed, &tx.input_data);
 }
 
-fn final_checks(_block: &Block) {
+fn initial_checks(block: &Block) {
+	let ref header = block.header;
+
+	// check parent_hash is correct.
+	assert!(
+		header.number > 0 && block_hash(header.number - 1) == header.parent_hash,
+		"Parent hash should be valid."
+	);
+
+	// check transaction trie root represents the transactions.
+	let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
+	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
+	let txs_root = enumerated_trie_root(&txs);
+	debug_assert_hash(&header.transaction_root, &txs_root);
+	assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
+}
+
+fn final_checks(block: &Block) {
+	let ref header = block.header;
+
+	// check digest
 	with_env(|e| {
-		assert!(_block.header.digest == e.digest);
+		assert!(header.digest == e.digest);
 	});
+
+	// check storage root.
+	let storage_root = storage_root();
+	debug_assert_hash(&header.state_root, &storage_root);
+	assert!(header.state_root == storage_root, "Storage root must match that calculated.");
 }
 
 fn post_finalise(header: &Header) {
@@ -171,6 +169,17 @@ fn post_finalise(header: &Header) {
 	// cyclic dependency.
 	storage::put(&header.number.to_keyed_vec(BLOCK_HASH_AT), &header.blake2_256());
 }
+
+#[cfg(feature = "with-std")]
+fn debug_assert_hash(given: &Hash, expected: &Hash) {
+	use support::HexDisplay;
+	if given != expected {
+		println!("Hash: given={}, expected={}", HexDisplay::from(given), HexDisplay::from(expected));
+	}
+}
+
+#[cfg(not(feature = "with-std"))]
+fn debug_assert_hash(_given: &Hash, _expected: &Hash) {}
 
 #[cfg(test)]
 mod tests {
