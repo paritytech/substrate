@@ -38,7 +38,7 @@ struct Heap {
 impl Heap {
 	fn new() -> Self {
 		Heap {
-			end: 1024,
+			end: 32768,
 		}
 	}
 	fn allocate(&mut self, size: u32) -> u32 {
@@ -94,17 +94,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
 			if let Ok(message) = String::from_utf8(utf8) {
-				println!("Runtime: {}", message);
+				info!(target: "runtime", "{}", message);
 			}
 		}
 	},
 	ext_print_hex(data: *const u8, len: u32) => {
 		if let Ok(hex) = this.memory.get(data, len as usize) {
-			println!("Runtime: {}", HexDisplay::from(&hex));
+			info!(target: "runtime", "{}", HexDisplay::from(&hex));
 		}
 	},
 	ext_print_num(number: u64) => {
-		println!("Runtime: {}", number);
+		info!(target: "runtime", "{}", number);
 	},
 	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
 		let sl1 = this.memory.get(s1, n as usize).map_err(|_| DummyUserError)?;
@@ -118,34 +118,35 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize)
 			.map_err(|_| DummyUserError)?;
-		println!("memcpy {} from {}, {} bytes", dest, src, count);
+		trace!(target: "runtime-std", "memcpy {} from {}, {} bytes", dest, src, count);
 		dest
 	},
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy(src as usize, dest as usize, count as usize)
 			.map_err(|_| DummyUserError)?;
-		println!("memmove {} from {}, {} bytes", dest, src, count);
+		trace!(target: "runtime-std", "memmove {} from {}, {} bytes", dest, src, count);
 		dest
 	},
 	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
 		this.memory.clear(dest as usize, val as u8, count as usize)
 			.map_err(|_| DummyUserError)?;
-		println!("memset {} with {}, {} bytes", dest, val, count);
+		trace!(target: "runtime-std", "memset {} with {}, {} bytes", dest, val, count);
 		dest
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
 		let r = this.heap.allocate(size);
-		println!("malloc {} bytes at {}", size, r);
+		trace!(target: "runtime-std", "malloc {} bytes at {}", size, r);
 		r
 	},
 	ext_free(addr: *mut u8) => {
 		this.heap.deallocate(addr);
-		println!("free {}", addr)
+		trace!(target: "runtime-std", "free {}", addr)
 	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
-		if let (Ok(key), Ok(value)) = (this.memory.get(key_data, key_len as usize), this.memory.get(value_data, value_len as usize)) {
-			this.ext.set_storage(key, value);
-		}
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
+		let value = this.memory.get(value_data, value_len as usize).map_err(|_| DummyUserError)?;
+		info!(target: "runtime", "Setting storage: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&value));
+		this.ext.set_storage(key, value);
 	},
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
@@ -160,6 +161,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
 		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
+		info!(target: "runtime", "Getting storage: {} ( -> {})", HexDisplay::from(&key), HexDisplay::from(&value));
 		let value = &value[value_offset as usize..];
 		let written = ::std::cmp::min(value_len as usize, value.len());
 		this.memory.set(value_data, &value[..written]).map_err(|_| DummyUserError)?;
@@ -169,7 +171,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let r = this.ext.storage_root();
 		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
 	},
-	ext_enumerated_trie_root(values_data: *const u8, values_len: u32, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
+	ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
 		let values = (0..lens_len)
 			.map(|i| this.memory.read_primitive(lens_data + i * 4))
 			.collect::<::std::result::Result<Vec<u32>, DummyUserError>>()?
@@ -188,9 +190,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
+			info!(target: "runtime", "XXhash: ''");
 			twox_128(&[0u8; 0])
 		} else {
-			twox_128(&this.memory.get(data, len as usize).map_err(|_| DummyUserError)?)
+			let key = this.memory.get(data, len as usize).map_err(|_| DummyUserError)?;
+			let hashed_key = twox_128(&key);
+			if let Ok(skey) = ::std::str::from_utf8(&key) {
+				info!(target: "runtime", "XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
+			} else {
+				info!(target: "runtime", "XXhash: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&hashed_key));
+			}
+			hashed_key
 		};
 		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
 	},
@@ -282,8 +292,9 @@ mod tests {
 	use rustc_hex::FromHex;
 	use primitives::{blake2_256, twox_128};
 	use runtime_std::{self, TestExternalities};
-	use native_runtime::support::{one, two, StaticHexInto};
-	use native_runtime::codec::KeyedVec;
+	use native_runtime::support::{one, two};
+	use native_runtime::primitives::{UncheckedTransaction, AccountID, Header};
+	use native_runtime::codec::{Joiner, KeyedVec};
 	use native_runtime::runtime::staking::balance;
 
 	#[test]
@@ -392,7 +403,30 @@ mod tests {
 		);
 	}
 
-	fn tx() -> Vec<u8> { "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000".convert() }
+	use primitives::ed25519::Pair;
+	fn secret_for(who: &AccountID) -> Option<Pair> {
+		match who {
+			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
+			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
+			_ => None,
+		}
+	}
+
+	fn tx() -> UncheckedTransaction {
+		use native_runtime::codec::{Joiner, Slicable};
+		use native_runtime::support::{one, two};
+		use native_runtime::primitives::*;
+		let transaction = Transaction {
+			signed: one(),
+			nonce: 0,
+			function: Function::StakingTransfer,
+			input_data: two().to_vec().join(&69u64),
+		};
+		let signature = secret_for(&transaction.signed).unwrap()
+			.sign(&transaction.to_vec())
+			.inner();
+		UncheckedTransaction { transaction, signature }
+	}
 
 	#[test]
 	fn panic_execution_gives_error() {
@@ -402,7 +436,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
 		assert!(r.is_err());
 	}
 
@@ -416,7 +450,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(tx()));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
 		assert!(r.is_ok());
 
 		runtime_std::with_externalities(&mut t, || {

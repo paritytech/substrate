@@ -31,3 +31,7 @@ pub mod governance;
 
 // TODO: polkadao
 // TODO: parachains
+
+
+#[cfg(feature = "with-std")]
+pub mod genesismap;

@@ -18,12 +18,13 @@
 //! and depositing logs.
 
 use runtime_std::prelude::*;
-use runtime_std::{mem, print, storage_root, enumerated_trie_root};
+use runtime_std::{mem, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
-use primitives::{Block, BlockNumber, Hash, UncheckedTransaction, TxOrder};
+use primitives::{Block, BlockNumber, Header, Hash, UncheckedTransaction, TxOrder};
 use runtime::{staking, session};
 
+const NONCE_OF: &[u8] = b"sys:non:";
 const BLOCK_HASH_AT: &[u8] = b"sys:old:";
 const CODE: &[u8] = b"sys:cod";
 
@@ -42,7 +43,7 @@ pub mod privileged {
 
 	/// Set the new code.
 	pub fn set_code(new: &[u8]) {
-		storage::put_raw(CODE, new);
+		storage::unhashed::put_raw(b":code", new);
 	}
 }
 
@@ -50,11 +51,8 @@ pub mod internal {
 	use super::*;
 
 	/// Deposits a log and ensures it matches the blocks log data.
-	pub fn deposit_log(log: &[u8]) {
-		with_env(|e| {
-			assert_eq!(log, &e.digest.logs[e.next_log_index][..]);
-			e.next_log_index += 1;
-		});
+	pub fn deposit_log(log: Vec<u8>) {
+		with_env(|e| e.digest.logs.push(log));
 	}
 
 	/// Actually execute all transitioning for `block`.
@@ -62,8 +60,6 @@ pub mod internal {
 		// populate environment from header.
 		with_env(|e| {
 			e.block_number = block.header.number;
-			mem::swap(&mut e.digest, &mut block.header.digest);
-			e.next_log_index = 0;
 		});
 
 		let ref header = block.header;
@@ -76,12 +72,15 @@ pub mod internal {
 
 		// check transaction trie root represents the transactions.
 		let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
-		let txs_root = enumerated_trie_root(&txs.iter().map(Vec::as_slice).collect::<Vec<_>>());
-//		println!("TR: {}", ::support::HexDisplay::from(&txs_root));
+		let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
+		let txs_root = enumerated_trie_root(&txs);
+		debug_assert_hash(&header.transaction_root, &txs_root);
 		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
 
 		// execute transactions
-		block.transactions.iter().for_each(execute_transaction);
+		for tx in &block.transactions {
+			super::execute_transaction(tx);
+		}
 
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
@@ -89,40 +88,88 @@ pub mod internal {
 		// any final checks
 		final_checks(&block);
 
-
 		// check storage root.
-		assert!(header.state_root == storage_root(), "Storage root must match that calculated.");
+		let storage_root = storage_root();
+		debug_assert_hash(&header.state_root, &storage_root);
+		assert!(header.state_root == storage_root, "Storage root must match that calculated.");
 
-		// store the header hash in storage; we can't do it before otherwise there would be a
-		// cyclic dependency.
-		let header_hash_key = header.number.to_keyed_vec(BLOCK_HASH_AT);
-		storage::put(&header_hash_key, &header.blake2_256());
+		// any stuff that we do after taking the storage root.
+		post_finalise(header);
 	}
 
-	/// Execute a given transaction.
-	pub fn execute_transaction(utx: &UncheckedTransaction) {
-		// Verify the signature is good.
-		assert!(utx.ed25519_verify(), "All transactions should be properly signed");
+	/// Execute a transaction outside of the block execution function.
+	/// This doesn't attempt to validate anything regarding the block.
+	pub fn execute_transaction(utx: &UncheckedTransaction, mut header: Header) -> Header {
+		// populate environment from header.
+		with_env(|e| {
+			e.block_number = header.number;
+			mem::swap(&mut header.digest, &mut e.digest);
+		});
 
-		let ref tx = utx.transaction;
+		super::execute_transaction(utx);
 
-		// check nonce
-		let nonce_key = tx.signed.to_keyed_vec(b"sys:non:");
-		let expected_nonce: TxOrder = storage::get_or_default(&nonce_key);
-		assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
-
-		// increment nonce in storage
-		storage::put(&nonce_key, &(expected_nonce + 1));
-
-		// decode parameters and dispatch
-		tx.function.dispatch(&tx.signed, &tx.input_data);
+		with_env(|e| {
+			mem::swap(&mut header.digest, &mut e.digest);
+		});
+		header
 	}
+
+	/// Finalise the block - it is up the caller to ensure that all header fields are valid
+	/// except state-root.
+	pub fn finalise_block(mut header: Header) -> Header {
+		staking::internal::check_new_era();
+		session::internal::check_rotate_session();
+
+		header.state_root = storage_root();
+		with_env(|e| {
+			mem::swap(&mut header.digest, &mut e.digest);
+		});
+
+		post_finalise(&header);
+
+		header
+	}
+
+	#[cfg(feature = "with-std")]
+	fn debug_assert_hash(given: &Hash, expected: &Hash) {
+		use support::HexDisplay;
+		if given != expected {
+			println!("Hash: given={}, expected={}", HexDisplay::from(given), HexDisplay::from(expected));
+		}
+	}
+
+	#[cfg(not(feature = "with-std"))]
+	fn debug_assert_hash(_given: &Hash, _expected: &Hash) {}
+}
+
+fn execute_transaction(utx: &UncheckedTransaction) {
+	// Verify the signature is good.
+	assert!(utx.ed25519_verify(), "All transactions should be properly signed");
+
+	let ref tx = utx.transaction;
+
+	// check nonce
+	let nonce_key = tx.signed.to_keyed_vec(NONCE_OF);
+	let expected_nonce: TxOrder = storage::get_or(&nonce_key, 0);
+	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
+
+	// increment nonce in storage
+	storage::put(&nonce_key, &(expected_nonce + 1));
+
+	// decode parameters and dispatch
+	tx.function.dispatch(&tx.signed, &tx.input_data);
 }
 
 fn final_checks(_block: &Block) {
 	with_env(|e| {
-		assert_eq!(e.next_log_index, e.digest.logs.len());
+		assert!(_block.header.digest == e.digest);
 	});
+}
+
+fn post_finalise(header: &Header) {
+	// store the header hash in storage; we can't do it before otherwise there would be a
+	// cyclic dependency.
+	storage::put(&header.number.to_keyed_vec(BLOCK_HASH_AT), &header.blake2_256());
 }
 
 #[cfg(test)]
@@ -152,15 +199,13 @@ mod tests {
 				function: Function::StakingTransfer,
 				input_data: vec![].join(&two).join(&69u64),
 			},
-			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
+			signature: "13590ae48241e29780407687b86c331a9f40f3ab7f2cc2441787628bcafab6645dc81863b138a358e2a1ed1ffa940a4584ba94837f022f0cd162791530320904".convert(),
 		};
-		// tx: 2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000
-		// sig: 679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a
 
 		println!("tx is {}", HexDisplay::from(&tx.transaction.to_vec()));
 
 		with_externalities(&mut t, || {
-			execute_transaction(&tx);
+			internal::execute_transaction(&tx, Header::from_block_number(1));
 			assert_eq!(staking::balance(&one), 42);
 			assert_eq!(staking::balance(&two), 69);
 		});
@@ -197,33 +242,21 @@ mod tests {
 
 		let mut t = new_test_ext();
 
-		let tx = UncheckedTransaction {
-			transaction: Transaction {
-				signed: one.clone(),
-				nonce: 0,
-				function: Function::StakingTransfer,
-				input_data: vec![].join(&two).join(&69u64),
-			},
-			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
-		};
-
 		let h = Header {
 			parent_hash: [69u8; 32],
 			number: 1,
-			state_root: hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db"),
-			transaction_root: hex!("91fab88ad8c30a6d05ad8e0cf9ab139bf1b8cdddc69abd51cdfa6d2699038af1"),
+			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0"),
+			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 			digest: Digest { logs: vec![], },
 		};
 
 		let b = Block {
 			header: h,
-			transactions: vec![tx],
+			transactions: vec![],
 		};
 
 		with_externalities(&mut t, || {
 			execute_block(b);
-			assert_eq!(staking::balance(&one), 42);
-			assert_eq!(staking::balance(&two), 69);
 		});
 	}
 
@@ -235,35 +268,47 @@ mod tests {
 
 		let mut t = new_test_ext();
 
-		let tx = UncheckedTransaction {
-			transaction: Transaction {
-				signed: one.clone(),
-				nonce: 0,
-				function: Function::StakingTransfer,
-				input_data: vec![].join(&two).join(&69u64),
-			},
-			signature: "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a".convert(),
-		};
-		// tx: 2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000
-		// sig: 679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a
-
 		let h = Header {
 			parent_hash: [69u8; 32],
 			number: 1,
 			state_root: [0u8; 32],
-			transaction_root: [0u8; 32],		// Unchecked currently.
+			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 			digest: Digest { logs: vec![], },
 		};
 
 		let b = Block {
 			header: h,
-			transactions: vec![tx],
+			transactions: vec![],
 		};
 
 		with_externalities(&mut t, || {
 			execute_block(b);
-			assert_eq!(staking::balance(&one), 42);
-			assert_eq!(staking::balance(&two), 69);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn block_import_of_bad_transaction_root_fails() {
+		let one = one();
+		let two = two();
+
+		let mut t = new_test_ext();
+
+		let h = Header {
+			parent_hash: [69u8; 32],
+			number: 1,
+			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0"),
+			transaction_root: [0u8; 32],
+			digest: Digest { logs: vec![], },
+		};
+
+		let b = Block {
+			header: h,
+			transactions: vec![],
+		};
+
+		with_externalities(&mut t, || {
+			execute_block(b);
 		});
 	}
 }

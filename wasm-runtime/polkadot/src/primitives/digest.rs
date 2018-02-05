@@ -18,8 +18,8 @@
 
 use runtime_std::prelude::*;
 
-#[derive(Clone, Default)]
-#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
+#[derive(Clone, Default, PartialEq)]
+#[cfg_attr(feature = "with-std", derive(Debug))]
 /// The digest of a block, useful for light-clients.
 pub struct Digest {
 	/// All logs that have happened in the block.

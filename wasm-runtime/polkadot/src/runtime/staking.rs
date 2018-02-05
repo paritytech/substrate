@@ -18,6 +18,7 @@
 
 use runtime_std::prelude::*;
 use runtime_std::cell::RefCell;
+use runtime_std::print;
 use codec::KeyedVec;
 use support::{storage, StorageVec};
 use primitives::{BlockNumber, AccountID};
@@ -149,6 +150,12 @@ pub mod privileged {
 	/// The length of a staking era in sessions.
 	pub fn set_validator_count(new: usize) {
 		storage::put(VALIDATOR_COUNT, &(new as u32));
+	}
+
+	/// Force there to be a new era. This also forces a new session immediately after.
+	pub fn force_new_era() {
+		new_era();
+		session::privileged::force_new_session();
 	}
 }
 
