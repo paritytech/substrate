@@ -17,6 +17,7 @@
 //! Block and header type definitions.
 
 use bytes::{self, Vec};
+use codec::Slicable;
 use hash::H256;
 use parachain;
 use transaction::UncheckedTransaction;
@@ -34,6 +35,35 @@ pub type TransactionHash = H256;
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Log(#[serde(with="bytes")] pub Vec<u8>);
 
+impl Slicable for Log {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		Vec::<u8>::from_slice(value).map(Log)
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.as_slice_then(f)
+	}
+}
+
+impl ::codec::NonTrivialSlicable for Log { }
+
+/// The digest of a block, useful for light-clients.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Digest {
+	/// All logs that have happened in the block.
+	pub logs: Vec<Log>,
+}
+
+impl Slicable for Digest {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		Vec::<Log>::from_slice(value).map(|logs| Digest { logs })
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.logs.as_slice_then(f)
+	}
+}
+
 /// A Polkadot relay chain block.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Block {
@@ -43,11 +73,26 @@ pub struct Block {
 	pub transactions: Vec<UncheckedTransaction>,
 }
 
-/// The digest of a block, useful for light-clients.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Digest {
-	/// All logs that have happened in the block.
-	pub logs: Vec<Log>,
+impl Slicable for Block {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		Some(Block {
+			header: try_opt!(Slicable::from_slice(value)),
+			transactions: try_opt!(Slicable::from_slice(value)),
+		})
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		v.extend(self.header.to_vec());
+		v.extend(self.transactions.to_vec());
+
+		v
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(self.to_vec().as_slice())
+	}
 }
 
 /// A relay chain block header.
@@ -65,10 +110,36 @@ pub struct Header {
 	pub state_root: H256,
 	/// The root of the trie that represents this block's transactions, indexed by a 32-byte integer.
 	pub transaction_root: H256,
-	/// Parachain activity bitfield
-	pub parachain_activity: parachain::Activity,
 	/// The digest of activity on the block.
 	pub digest: Digest,
+}
+
+impl Slicable for Header {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		Some(Header {
+			parent_hash: try_opt!(Slicable::from_slice(value)),
+			number: try_opt!(Slicable::from_slice(value)),
+			state_root: try_opt!(Slicable::from_slice(value)),
+			transaction_root: try_opt!(Slicable::from_slice(value)),
+			digest: try_opt!(Slicable::from_slice(value)),
+		})
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		self.parent_hash.as_slice_then(|s| v.extend(s));
+		self.number.as_slice_then(|s| v.extend(s));
+		self.state_root.as_slice_then(|s| v.extend(s));
+		self.transaction_root.as_slice_then(|s| v.extend(s));
+		self.digest.as_slice_then(|s| v.extend(s));
+
+		v
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(self.to_vec().as_slice())
+	}
 }
 
 /// A relay chain block body.
@@ -86,25 +157,33 @@ pub struct Body {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use codec::Slicable;
 	use polkadot_serializer as ser;
 
 	#[test]
 	fn test_header_serialization() {
-		assert_eq!(ser::to_string_pretty(&Header {
+		let header = Header {
 			parent_hash: 5.into(),
 			number: 67,
 			state_root: 3.into(),
-			parachain_activity: parachain::Activity(vec![0]),
-			logs: vec![Log(vec![1])],
-		}), r#"{
+			transaction_root: 6.into(),
+			digest: Digest { logs: vec![Log(vec![1])] },
+		};
+
+		assert_eq!(ser::to_string_pretty(&header), r#"{
   "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000005",
   "number": 67,
   "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000003",
-  "parachainActivity": "0x00",
-  "logs": [
-    "0x01"
-  ]
+  "transactionRoot": "0x0000000000000000000000000000000000000000000000000000000000000006",
+  "digest": {
+    "logs": [
+      "0x01"
+    ]
+  }
 }"#);
+
+		let v = header.to_vec();
+		assert_eq!(Header::from_slice(&mut &v[..]).unwrap(), header);
 	}
 
 	#[test]

@@ -15,7 +15,7 @@ untrusted = "0.5"
 twox-hash = "1.1.0"
 byteorder = "1.1"
 blake2-rfc = "0.2.18"
-polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1" }
+polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1", default_features = false }
 
 [dev-dependencies]
 polkadot-serializer = { path = "../serializer", version = "0.1" }

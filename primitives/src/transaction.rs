@@ -17,6 +17,7 @@
 //! Transaction type.
 
 use bytes::{self, Vec};
+use codec::Slicable;
 use runtime_function::Function;
 
 #[cfg(feature = "std")]
@@ -47,6 +48,38 @@ pub struct UncheckedTransaction {
 	/// The signature; should be an Ed25519 signature applied to the serialised `transaction` field.
 	pub signature: ::Signature,
 }
+
+impl Slicable for UncheckedTransaction {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		Some(UncheckedTransaction {
+			transaction: Transaction {
+				signed: try_opt!(Slicable::from_slice(value)),
+				nonce: try_opt!(Slicable::from_slice(value)),
+				function: try_opt!(Slicable::from_slice(value)),
+				input_data: try_opt!(Slicable::from_slice(value)),
+			},
+			signature: try_opt!(Slicable::from_slice(value)),
+		})
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		self.transaction.signed.as_slice_then(|s| v.extend(s));
+		self.transaction.nonce.as_slice_then(|s| v.extend(s));
+		self.transaction.function.as_slice_then(|s| v.extend(s));
+		self.transaction.input_data.as_slice_then(|s| v.extend(s));
+		self.signature.as_slice_then(|s| v.extend(s));
+
+		v
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(self.to_vec().as_slice())
+	}
+}
+
+impl ::codec::NonTrivialSlicable for UncheckedTransaction {}
 
 impl PartialEq for UncheckedTransaction {
 	fn eq(&self, other: &Self) -> bool {

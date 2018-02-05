@@ -22,7 +22,6 @@
 
 mod endiansensitive;
 mod slicable;
-mod streamreader;
 mod joiner;
 mod keyedvec;
 
