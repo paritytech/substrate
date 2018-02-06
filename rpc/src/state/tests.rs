@@ -23,7 +23,7 @@ use client;
 #[test]
 fn should_return_storage() {
 	let client = client::new_in_mem(executor::executor()).unwrap();
-	let genesis_hash = "11265ce45dd2baaaf071f6df8c5a44f0ed1d85a50e71451ff2d4345e57d12e3a".into();
+	let genesis_hash = "af65e54217fb213853703d57b80fc5b2bb834bf923046294d7a49bff62f0a8b2".into();
 
 	assert_matches!(
 		StateApi::storage(&client, StorageKey(vec![10]), genesis_hash),
@@ -36,7 +36,7 @@ fn should_return_storage() {
 fn should_call_contract() {
 	// TODO [ToDr] Fix test after we are able to mock state.
 	let client = client::new_in_mem(executor::executor()).unwrap();
-	let genesis_hash = "11265ce45dd2baaaf071f6df8c5a44f0ed1d85a50e71451ff2d4345e57d12e3a".into();
+	let genesis_hash = "af65e54217fb213853703d57b80fc5b2bb834bf923046294d7a49bff62f0a8b2".into();
 
 	assert_matches!(
 		StateApi::call(&client, "balanceOf".into(), CallData(vec![1,2,3]), genesis_hash),

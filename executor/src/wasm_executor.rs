@@ -287,6 +287,8 @@ mod tests {
 	use native_runtime::support::{one, two, StaticHexInto};
 	use native_runtime::runtime::staking::balance;
 
+	fn tx() -> Vec<u8> { "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee000000000000000002d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000b543b41e4b7a0270eddf57ed6c435df04bb63f71c79f6ae2530ab26c734bb4e8cd57b1c190c41d5791bcdea66a16c7339b1e883e5d0538ea2d9acea800d60a00".convert() }
+
 	#[test]
 	fn returning_should_work() {
 		let mut ext = TestExternalities::default();
@@ -392,8 +394,6 @@ mod tests {
 			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.to_vec()
 		);
 	}
-
-	fn tx() -> Vec<u8> { "679fcf0a846b4224c84ecad7d91a26241c46d00cb53d6480a363274e8965ee34b0b80b4b2e3836d3d8f8f12c0c1aef7350af587d9aee3883561d11726068ac0a2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000".convert() }
 
 	#[test]
 	fn panic_execution_gives_error() {
