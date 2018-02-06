@@ -63,6 +63,7 @@ pub fn serialize_uint<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExpectedLen {
 	/// Any length in bytes.
+	#[cfg_attr(not(feature = "std"), allow(unused))]
 	Any,
 	/// Exact length in bytes.
 	Exact(usize),
@@ -81,6 +82,7 @@ impl fmt::Display for ExpectedLen {
 }
 
 /// Deserialize into vector of bytes.
+#[cfg(feature = "std")]
 pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error> where
 	D: Deserializer<'de>,
 {
@@ -125,9 +127,24 @@ pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Resul
 				_ => ::rustc_hex::FromHex::from_hex(&v[2..])
 			};
 
-			bytes.map_err(|e| E::custom(&format!("invalid hex value: {:?}", e)))
+			#[cfg(feature = "std")]
+			fn format_err(e: ::rustc_hex::FromHexError) -> String {
+				format!("invalid hex value: {:?}", e);
+			}
+
+			#[cfg(not(feature = "std"))]
+			fn format_err(e: ::rustc_hex::FromHexError) -> String {
+				match e {
+					::rustc_hex::InvalidHexLength => format!("invalid hex value: invalid length"),
+					::rustc_hex::InvalidHexCharacter(c, p) =>
+						format!("invalid hex value: invalid character {} at position {}", c, p),
+				}
+			}
+
+			bytes.map_err(|e| E::custom(format_err(e)))
 		}
 
+		#[cfg(feature = "std")]
 		fn visit_string<E: de::Error>(self, v: String) -> Result<Self::Value, E> {
 			self.visit_str(&v)
 		}

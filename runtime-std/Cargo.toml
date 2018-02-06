@@ -15,9 +15,19 @@ polkadot-state-machine = { path = "../state-machine", version = "0.1", optional 
 polkadot-primitives = { path = "../primitives", version = "0.1", default_features = false }
 polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1", default_features = false }
 triehash = { version = "0.1", optional = true }
+ring = { version = "0.12", optional = true }
+untrusted = { version = "0.5", optional = true }
 
 [features]
 default = ["std"]
-std = ["environmental", "polkadot-state-machine", "triehash", "polkadot-primitives/std", "polkadot-runtime-codec/std"]
+std = [
+	"environmental",
+	"polkadot-state-machine",
+	"triehash",
+	"polkadot-primitives/std",
+	"polkadot-runtime-codec/std",
+	"ring",
+	"untrusted"
+]
 nightly = []
 strict = []

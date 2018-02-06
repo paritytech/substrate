@@ -16,20 +16,26 @@
 
 //! Contract execution data.
 
-use bytes::{self, Vec};
+#[cfg(feature = "std")]
+use bytes;
+use bytes::Vec;
 
 /// Contract call data.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CallData(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct CallData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Contract output data.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OutData(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct OutData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Contract storage key.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StorageKey(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct StorageKey(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Contract storage entry data.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StorageData(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct StorageData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);

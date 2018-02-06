@@ -19,10 +19,12 @@
 //! This describes a combination of a function ID and data that can be used to call into
 //! an internal function.
 
+use bytes::Vec;
 use block::Number as BlockNumber;
 use codec::Slicable;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[repr(u8)]
 enum InternalFunctionId {
 	/// Set the system's code.
@@ -60,8 +62,8 @@ impl InternalFunctionId {
 }
 
 /// Internal functions that can be dispatched to.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[repr(u8)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum InternalFunction {
 	/// Set the system's code.
 	SystemSetCode(Vec<u8>),
@@ -78,7 +80,8 @@ pub enum InternalFunction {
 }
 
 /// An internal function.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Proposal {
 	/// The privileged function to call.
 	pub function: InternalFunction,
