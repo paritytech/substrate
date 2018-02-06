@@ -18,8 +18,8 @@
 
 use std::borrow::Borrow;
 use primitives::parachain::Id as ParachainId;
-use primitives::Address;
-use primitives::block::{Number as BlockNumber, HeaderHash, Header, Body};
+use primitives::AccountId;
+use primitives::relay::{BlockNumber, HeaderHash, Header, Body};
 use service::Role as RoleFlags;
 
 pub type RequestId = u64;
@@ -150,7 +150,7 @@ pub struct Status {
 	/// Signatue of `best_hash` made with validator address. Required for the validator role.
 	pub validator_signature: Option<Signature>,
 	/// Validator address. Required for the validator role.
-	pub validator_id: Option<Address>,
+	pub validator_id: Option<AccountId>,
 	/// Parachain id. Required for the collator role.
 	pub parachain_id: Option<ParachainId>,
 }

@@ -17,8 +17,6 @@
 //! State machine backends. These manage the code and storage of contracts.
 
 use std::{error, fmt};
-use primitives::hash::H256;
-use triehash::sec_trie_root;
 
 use super::{Update, MemoryState};
 

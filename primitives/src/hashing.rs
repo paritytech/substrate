@@ -57,7 +57,7 @@ pub fn blake2_128(data: &[u8]) -> [u8; 16] {
 
 /// Do a XX 128-bit hash and place result in `dest`.
 pub fn twox_128_into(data: &[u8], dest: &mut [u8; 16]) {
-	use ::std::hash::Hasher;
+	use ::core::hash::Hasher;
 	let mut h0 = twox_hash::XxHash::with_seed(0);
 	let mut h1 = twox_hash::XxHash::with_seed(1);
 	h0.write(data);
@@ -71,14 +71,14 @@ pub fn twox_128_into(data: &[u8], dest: &mut [u8; 16]) {
 
 /// Do a XX 128-bit hash and return result.
 pub fn twox_128(data: &[u8]) -> [u8; 16] {
-	let mut r: [u8; 16] = unsafe { ::std::mem::uninitialized() };
+	let mut r: [u8; 16] = [0; 16];
 	twox_128_into(data, &mut r);
 	r
 }
 
 /// Do a XX 256-bit hash and place result in `dest`.
 pub fn twox_256_into(data: &[u8], dest: &mut [u8; 32]) {
-	use ::std::hash::Hasher;
+	use ::core::hash::Hasher;
 	use byteorder::{ByteOrder, LittleEndian};
 	let mut h0 = twox_hash::XxHash::with_seed(0);
 	let mut h1 = twox_hash::XxHash::with_seed(1);
@@ -100,7 +100,7 @@ pub fn twox_256_into(data: &[u8], dest: &mut [u8; 32]) {
 
 /// Do a XX 256-bit hash and return result.
 pub fn twox_256(data: &[u8]) -> [u8; 32] {
-	let mut r: [u8; 32] = unsafe { ::std::mem::uninitialized() };
+	let mut r: [u8; 32] = [0; 32];
 	twox_256_into(data, &mut r);
 	r
 }

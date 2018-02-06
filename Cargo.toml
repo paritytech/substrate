@@ -15,14 +15,16 @@ members = [
 	"collator",
 	"environmental",
 	"executor",
-	"primitives",
-	"rpc",
-	"rpc_servers",
 	"native-runtime",
-	"serializer",
-	"state_machine",
-	"validator",
 	"network",
+	"primitives",
+	"rpc-servers",
+	"rpc",
+	"runtime-codec",
+	"runtime-std",
+	"serializer",
+	"state-machine",
+	"validator",
 ]
 exclude = [
 	"wasm-runtime"

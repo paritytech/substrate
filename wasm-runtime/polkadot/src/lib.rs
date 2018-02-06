@@ -16,59 +16,60 @@
 
 //! The Polkadot runtime. This can be compiled with #[no_std], ready for Wasm.
 
-#![cfg_attr(feature = "without-std", no_std)]
-#![cfg_attr(feature = "strict", deny(warnings))]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
-extern crate runtime_std;
+extern crate polkadot_runtime_std as runtime_std;
 
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 extern crate rustc_hex;
 #[cfg(feature = "with-std")]
 #[macro_use]
 extern crate log;
 
+extern crate polkadot_runtime_codec as codec;
+extern crate polkadot_primitives as primitives;
+
 #[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
 
-pub mod codec;
 #[macro_use]
 pub mod support;
-pub mod primitives;
 pub mod runtime;
 
 use runtime_std::prelude::*;
-use codec::{Slicable, Joiner};
-use runtime_std::print;
-use primitives::{Block, Header, UncheckedTransaction};
+use codec::Slicable;
+use primitives::relay::{Header, Block, UncheckedTransaction};
 
 /// Execute a block, with `input` being the canonical serialisation of the block. Returns the
 /// empty vector.
-pub fn execute_block(input: &[u8]) -> Vec<u8> {
-	runtime::system::internal::execute_block(Block::from_slice(input).unwrap());
+pub fn execute_block(mut input: &[u8]) -> Vec<u8> {
+	runtime::system::internal::execute_block(Block::from_slice(&mut input).unwrap());
 	Vec::new()
 }
 
 /// Execute a given, serialised, transaction. Returns the empty vector.
-pub fn execute_transaction(input: &[u8]) -> Vec<u8> {
-	let header = Header::from_slice(input).unwrap();
-	let utx = UncheckedTransaction::from_slice(&input[Header::size_of(input).unwrap()..]).unwrap();
-	let header = runtime::system::internal::execute_transaction(&utx, header);
-	Vec::new().join(&header)
+pub fn execute_transaction(mut input: &[u8]) -> Vec<u8> {
+	let header = Header::from_slice(&mut input).unwrap();
+	let utx = UncheckedTransaction::from_slice(&mut input).unwrap();
+	let header = runtime::system::internal::execute_transaction(utx, header);
+	header.to_vec()
 }
 
 /// Execute a given, serialised, transaction. Returns the empty vector.
-pub fn finalise_block(input: &[u8]) -> Vec<u8> {
-	let header = Header::from_slice(input).unwrap();
+pub fn finalise_block(mut input: &[u8]) -> Vec<u8> {
+	let header = Header::from_slice(&mut input).unwrap();
 	let header = runtime::system::internal::finalise_block(header);
-	Vec::new().join(&header)
+	header.to_vec()
 }
 
 /// Run whatever tests we have.
-pub fn run_tests(input: &[u8]) -> Vec<u8> {
+pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
+	use runtime_std::print;
+
 	print("run_tests...");
-	let block = Block::from_slice(input).unwrap();
+	let block = Block::from_slice(&mut input).unwrap();
 	print("deserialised block.");
 	let stxs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
 	print("reserialised transactions.");

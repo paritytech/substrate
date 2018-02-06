@@ -20,14 +20,15 @@ use std::collections::HashMap;
 use runtime_std::twox_128;
 use codec::{KeyedVec, Joiner};
 use support::Hashable;
-use primitives::{AccountID, BlockNumber, Block};
+use primitives::relay::{Number as BlockNumber, Block};
+use primitives::AccountId;
 use runtime::staking::Balance;
 
 /// Configuration of a general Polkadot genesis block.
 pub struct GenesisConfig {
-	pub validators: Vec<AccountID>,
-	pub authorities: Vec<AccountID>,
-	pub balances: Vec<(AccountID, Balance)>,
+	pub validators: Vec<AccountId>,
+	pub authorities: Vec<AccountId>,
+	pub balances: Vec<(AccountId, Balance)>,
 	pub block_time: u64,
 	pub session_length: BlockNumber,
 	pub sessions_per_era: BlockNumber,
@@ -36,7 +37,7 @@ pub struct GenesisConfig {
 }
 
 impl GenesisConfig {
-	pub fn new_simple(authorities_validators: Vec<AccountID>, balance: Balance) -> Self {
+	pub fn new_simple(authorities_validators: Vec<AccountId>, balance: Balance) -> Self {
 		GenesisConfig {
 			validators: authorities_validators.clone(),
 			authorities: authorities_validators.clone(),

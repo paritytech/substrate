@@ -5,16 +5,15 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 crunchy = "0.1"
-fixed-hash = { git = "https://github.com/paritytech/primitives.git" }
-rustc-hex = "1.0"
-serde = "1.0"
-serde_derive = "1.0"
-uint = { git = "https://github.com/paritytech/primitives.git" }
-ring = "0.12"
-untrusted = "0.5"
-twox-hash = "1.1.0"
-byteorder = "1.1"
-blake2-rfc = "0.2.18"
+fixed-hash = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-for-wasm", default_features = false }
+rustc-hex = { git = "https://github.com/rphmeier/rustc-hex.git", version = "2.0", default_features = false }
+serde = { version = "1.0", default_features = false }
+serde_derive = { version = "1.0", optional = true }
+uint = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-for-wasm" }
+twox-hash = { version = "1.1.0", optional = true }
+byteorder = { version = "1.1", default_features = false }
+blake2-rfc = { version = "0.2.18", optional = true }
+polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1", default_features = false }
 
 [dev-dependencies]
 polkadot-serializer = { path = "../serializer", version = "0.1" }
@@ -22,4 +21,14 @@ pretty_assertions = "0.4"
 
 [features]
 default = ["std"]
-std = ["uint/std", "fixed-hash/std"]
+std = [
+	"uint/std",
+	"fixed-hash/std",
+	"polkadot-runtime-codec/std",
+	"serde/std",
+	"rustc-hex/std",
+	"twox-hash",
+	"blake2-rfc",
+	"serde_derive",
+	"byteorder/std"
+]

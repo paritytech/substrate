@@ -3,13 +3,14 @@ name = "native-runtime"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
-[features]
-default = ["with-std"]
-with-std = []
-without-std = []
-
 [dependencies]
-runtime-std = { path = "./std", version = "0.1" }
+polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1" }
+polkadot-runtime-std = { path = "../runtime-std", version = "0.1" }
+polkadot-primitives = { path = "../primitives", version = "0.1" }
 rustc-hex = "1.0"
 hex-literal = "0.1.0"
-log = "0.3"
+log = { version = "0.3", optional = true }
+
+[features]
+default = ["std"]
+std = ["polkadot-runtime-codec/std", "polkadot-runtime-std/std", "polkadot-primitives/std", "log"]

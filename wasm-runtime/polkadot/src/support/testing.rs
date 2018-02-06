@@ -16,7 +16,7 @@
 
 //! Testing helpers.
 
-use primitives::AccountID;
+use primitives::AccountId;
 use super::statichex::StaticHexInto;
 
 #[macro_export]
@@ -27,11 +27,11 @@ macro_rules! map {
 }
 
 /// One account (to which we know the secret key).
-pub fn one() -> AccountID {
+pub fn one() -> AccountId {
 	"2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".convert()
 }
 /// Another account (secret key known).
-pub fn two() -> AccountID {
+pub fn two() -> AccountId {
 	"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a".convert()
 }
 

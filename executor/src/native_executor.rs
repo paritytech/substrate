@@ -1,10 +1,27 @@
-use std::panic::catch_unwind;
-use primitives::contract::CallData;
-use state_machine::{Externalities, CodeExecutor};
+// Copyright 2017 Parity Technologies (UK) Ltd.
+// This file is part of Polkadot.
+
+// Polkadot is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Polkadot is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+
 use error::{Error, ErrorKind, Result};
-use wasm_executor::WasmExecutor;
 use native_runtime as runtime;
+use primitives::contract::CallData;
 use runtime_std;
+use state_machine::{Externalities, CodeExecutor};
+use wasm_executor::WasmExecutor;
+
+use std::panic::catch_unwind;
 
 pub struct NativeExecutor;
 
@@ -42,25 +59,26 @@ impl CodeExecutor for NativeExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_std::TestExternalities;
-	use native_runtime::codec::{KeyedVec, Joiner, Slicable};
+	use codec::{KeyedVec, Slicable, Joiner};
 	use native_runtime::support::{one, two, Hashable};
-	use native_runtime::primitives::*;
 	use native_runtime::runtime::staking::balance;
-	use primitives::twox_128;
+	use state_machine::TestExternalities;
+	use primitives::{twox_128, Hash};
+	use primitives::relay::{Header, BlockNumber, Block, Digest, Transaction, UncheckedTransaction, Function};
+	use ed25519::Pair;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
+
 	fn tx() -> UncheckedTransaction {
 		let transaction = Transaction {
 			signed: one(),
 			nonce: 0,
-			function: Function::StakingTransfer,
-			input_data: two().to_vec().join(&69u64),
+			function: Function::StakingTransfer(two(), 69),
 		};
 		let signature = secret_for(&transaction.signed).unwrap()
-			.sign(&transaction.to_vec())
-			.inner();
+			.sign(&transaction.to_vec());
+
 		UncheckedTransaction { transaction, signature }
 	}
 
@@ -146,8 +164,7 @@ mod tests {
 		], }
 	}
 
-	use primitives::ed25519::Pair;
-	fn secret_for(who: &AccountID) -> Option<Pair> {
+	fn secret_for(who: &::primitives::AccountId) -> Option<Pair> {
 		match who {
 			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
 			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
@@ -160,12 +177,12 @@ mod tests {
 
 		let transactions = txs.into_iter().map(|transaction| {
 			let signature = secret_for(&transaction.signed).unwrap()
-				.sign(&transaction.to_vec())
-				.inner();
+				.sign(&transaction.to_vec());
+
 			UncheckedTransaction { transaction, signature }
 		}).collect::<Vec<_>>();
 
-		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0;
+		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0.into();
 
 		let header = Header {
 			parent_hash,
@@ -176,19 +193,18 @@ mod tests {
 		};
 		let hash = header.blake2_256();
 
-		(Block { header, transactions }.to_vec(), hash)
+		(Block { header, transactions }.to_vec(), hash.into())
 	}
 
 	fn block1() -> (Vec<u8>, Hash) {
 		construct_block(
 			1,
-			[69u8; 32],
-			hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db"),
+			[69u8; 32].into(),
+			hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db").into(),
 			vec![Transaction {
 				signed: one(),
 				nonce: 0,
-				function: Function::StakingTransfer,
-				input_data: vec![].join(&two()).join(&69u64),
+				function: Function::StakingTransfer(two(), 69),
 			}]
 		)
 	}
@@ -197,19 +213,17 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("2e69e4405a13981224078ad5355c68401bf56d0fe3f14a3536734666e6a8a047"),
+			hex!("e2ba57cfb94b870ea6670b012b49dc33cbb70e3aa8d36cf54dfa5e4e69cd0778").into(),
 			vec![
 				Transaction {
 					signed: two(),
 					nonce: 0,
-					function: Function::StakingTransfer,
-					input_data: vec![].join(&one()).join(&5u64),
+					function: Function::StakingTransfer(one(), 5),
 				},
 				Transaction {
 					signed: one(),
 					nonce: 1,
-					function: Function::StakingTransfer,
-					input_data: vec![].join(&two()).join(&15u64),
+					function: Function::StakingTransfer(two(), 15),
 				}
 			]
 		)
