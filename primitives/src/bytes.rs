@@ -129,7 +129,7 @@ pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Resul
 
 			#[cfg(feature = "std")]
 			fn format_err(e: ::rustc_hex::FromHexError) -> String {
-				format!("invalid hex value: {:?}", e);
+				format!("invalid hex value: {:?}", e)
 			}
 
 			#[cfg(not(feature = "std"))]

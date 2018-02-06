@@ -19,7 +19,7 @@
 #![warn(missing_docs)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc, lang_items))]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate rustc_hex;
 extern crate serde;
@@ -60,17 +60,6 @@ macro_rules! try_opt {
 			Some(x) => x,
 			None => return None,
 		}
-	}
-}
-
-#[lang = "panic_fmt"]
-#[no_mangle]
-pub extern fn panic_fmt(_fmt: ::core::fmt::Arguments, _file: &'static str, _line: u32, _col: u32) {
-	unsafe {
-		ext_print_utf8(_file.as_ptr() as *const u8, _file.len() as u32);
-		ext_print_num(_line as u64);
-		ext_print_num(_col as u64);
-		::core::intrinsics::abort()
 	}
 }
 

@@ -27,7 +27,7 @@ use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
-use primitives::{ed25519, blake2_256, twox_128, twox_256};
+use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
 use triehash::ordered_trie_root;
 
@@ -217,7 +217,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| DummyUserError)?;
 		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| DummyUserError)?;
 
-		if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) {
+		if ::ed25519::verify(&sig, &msg, &pubkey) {
 			0
 		} else {
 			5
@@ -372,7 +372,7 @@ mod tests {
 	fn ed25519_verify_should_work() {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
+		let key = ::ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());

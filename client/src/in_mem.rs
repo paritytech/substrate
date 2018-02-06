@@ -27,7 +27,7 @@ use primitives::block::{self, HeaderHash};
 use blockchain::{self, BlockId, BlockStatus};
 
 fn header_hash(header: &primitives::block::Header) -> primitives::block::HeaderHash {
-	primitives::hash(&ser::to_vec(header))
+	primitives::hashing::blake2_256(&ser::to_vec(header)).into()
 }
 
 struct PendingBlock {

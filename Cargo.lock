@@ -192,6 +192,16 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "ed25519"
+version = "0.1.0"
+dependencies = [
+ "polkadot-primitives 0.1.0",
+ "ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-hex 2.0.0 (git+https://github.com/rphmeier/rustc-hex.git)",
+ "untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "edit-distance"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1008,6 +1018,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ed25519 0.1.0",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "native-runtime 0.1.0",
  "parity-wasm 0.15.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1096,16 +1107,15 @@ version = "0.1.0"
 name = "polkadot-runtime-std"
 version = "0.1.0"
 dependencies = [
+ "ed25519 0.1.0",
  "environmental 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime-codec 0.1.0",
  "polkadot-state-machine 0.1.0",
  "pwasm-alloc 0.1.0",
  "pwasm-libc 0.1.0",
- "ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
