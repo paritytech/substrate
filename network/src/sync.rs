@@ -19,7 +19,7 @@ use io::SyncIo;
 use protocol::Protocol;
 use network::PeerId;
 use client::{ImportResult, BlockStatus, ClientInfo};
-use primitives::block::{HeaderHash, Number as BlockNumber, Header};
+use primitives::relay::{HeaderHash, BlockNumber, Header};
 use blocks::{self, BlockCollection};
 use message::{self, Message};
 use super::header_hash;

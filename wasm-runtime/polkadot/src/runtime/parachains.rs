@@ -62,7 +62,7 @@ pub fn calculate_duty_roster() -> DutyRoster {
 	let mut roles_gua = roles_val.clone();
 
 	let h = with_env(|e| e.parent_hash.clone());
-	let mut seed = vec![].join(&h).join(b"validator_role_pairs").blake2_256();
+	let mut seed = Vec::<u8>::new().join(&h).join(b"validator_role_pairs").blake2_256();
 
 	// shuffle
 	for i in 0..(validator_count - 1) {
@@ -73,8 +73,8 @@ pub fn calculate_duty_roster() -> DutyRoster {
 		let remaining = (validator_count - i) as usize;
 
 		// 4 * 2 32-bit ints per 256-bit seed.
-		let val_index = u32::from_slice(&seed[offset..offset + 4]).expect("using 4 bytes for a 32-byte quantity") as usize % remaining;
-		let gua_index = u32::from_slice(&seed[offset + 4..offset + 8]).expect("using 4 bytes for a 32-byte quantity") as usize % remaining;
+		let val_index = u32::from_slice(&mut &seed[offset..offset + 4]).expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
+		let gua_index = u32::from_slice(&mut &seed[offset + 4..offset + 8]).expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
 
 		if offset == 24 {
 			// into the last 8 bytes - rehash to gather new entropy
@@ -98,7 +98,6 @@ mod tests {
 	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::AccountID;
 	use runtime::{consensus, session};
 
 	fn simple_setup() -> TestExternalities {
@@ -123,16 +122,16 @@ mod tests {
 				assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
 			};
 
-			with_env(|e| e.parent_hash = [0u8; 32]);
+			with_env(|e| e.parent_hash = [0u8; 32].into());
 			let duty_roster_0 = calculate_duty_roster();
 			check_roster(&duty_roster_0);
 
-			with_env(|e| e.parent_hash = [1u8; 32]);
+			with_env(|e| e.parent_hash = [1u8; 32].into());
 			let duty_roster_1 = calculate_duty_roster();
 			check_roster(&duty_roster_1);
 			assert!(duty_roster_0 != duty_roster_1);
 
-			with_env(|e| e.parent_hash = [2u8; 32]);
+			with_env(|e| e.parent_hash = [2u8; 32].into());
 			let duty_roster_2 = calculate_duty_roster();
 			check_roster(&duty_roster_2);
 			assert!(duty_roster_0 != duty_roster_2);

@@ -19,7 +19,8 @@
 #![warn(missing_docs)]
 
 extern crate polkadot_primitives as primitives;
-#[macro_use]
+
+#[cfg_attr(test, macro_use)]
 extern crate hex_literal;
 
 extern crate hashdb;
@@ -201,7 +202,6 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 		};
 		// make a copy.
 		let code = externalities.storage(b":code").unwrap_or(&[]).to_vec();
-		use primitives::hexdisplay::HexDisplay;
 
 		exec.call(
 			&mut externalities,

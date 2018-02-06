@@ -16,8 +16,9 @@
 
 //! Serialiser and prepender.
 
-use runtime_std::prelude::*;
-use super::slicable::Slicable;
+use slicable::Slicable;
+use std::iter::Extend;
+use std::vec::Vec;
 
 /// Trait to allow itselg to be serialised and prepended by a given slice.
 pub trait KeyedVec {
@@ -29,7 +30,7 @@ macro_rules! impl_non_endians {
 		impl KeyedVec for $t {
 			fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8> {
 				let mut r = prepend_key.to_vec();
-				r.extend_from_slice(&self[..]);
+				r.extend(&self[..]);
 				r
 			}
 		}
@@ -42,7 +43,7 @@ macro_rules! impl_endians {
 			fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8> {
 				self.as_slice_then(|slice| {
 					let mut r = prepend_key.to_vec();
-					r.extend_from_slice(slice);
+					r.extend(slice);
 					r
 				})
 			}

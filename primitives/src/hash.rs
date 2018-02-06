@@ -34,14 +34,24 @@ macro_rules! impl_serde {
 					.map(|x| (&*x).into())
 			}
 		}
+
+		impl ::codec::Slicable for $name {
+			fn from_slice(value: &mut &[u8]) -> Option<Self> {
+				<[u8; $len] as ::codec::Slicable>::from_slice(value).map($name)
+			}
+
+			fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				self.0.as_slice_then(f)
+			}
+		}
 	}
 }
 
-impl_hash!(H160, 20);
+construct_hash!(H160, 20);
 impl_serde!(H160, 20);
-impl_hash!(H256, 32);
+construct_hash!(H256, 32);
 impl_serde!(H256, 32);
-impl_hash!(H512, 64);
+construct_hash!(H512, 64);
 impl_serde!(H512, 64);
 
 #[cfg(test)]

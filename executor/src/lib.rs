@@ -27,15 +27,18 @@
 
 #![warn(missing_docs)]
 
+extern crate polkadot_runtime_codec as codec;
+extern crate polkadot_runtime_std as runtime_std;
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_serializer as serializer;
 extern crate polkadot_state_machine as state_machine;
+extern crate ed25519;
+
 extern crate serde;
 extern crate parity_wasm;
 extern crate byteorder;
 extern crate rustc_hex;
 extern crate native_runtime;
-extern crate runtime_std;
 extern crate triehash;
 #[macro_use] extern crate log;
 

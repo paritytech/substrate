@@ -20,7 +20,7 @@ use primitives::{validator, parachain};
 use serde::de::DeserializeOwned;
 use serializer;
 
-use error::{Error, ErrorKind, Result};
+use error::{ErrorKind, Result};
 use parachains::{ParachainCode, ParaChain1};
 
 /// A dummy validator implementation.
@@ -40,10 +40,8 @@ impl Validator {
 	}
 }
 
-impl validator::Validator for Validator {
-	type Error = Error;
-
-	fn validate(
+impl Validator {
+	pub fn validate(
 		&self,
 		code: &[u8],
 		consolidated_ingress: &[(u64, Vec<parachain::Message>)],

@@ -17,7 +17,7 @@
 //! Polkadot blockchain trait
 
 use std::fmt::{Display, Formatter, Error as FmtError};
-use primitives::block;
+use primitives::relay::block;
 use error::Result;
 
 /// Block indentification.

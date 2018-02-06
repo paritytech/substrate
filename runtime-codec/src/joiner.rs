@@ -14,25 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Primitive types for the runtime.
+//! Trait
 
-mod misc;
-mod proposal;
-mod function;
-mod digest;
-mod header;
-mod transaction;
-mod uncheckedtransaction;
-mod block;
+use std::iter::Extend;
+use super::slicable::Slicable;
 
-#[cfg(test)]
-mod tests;
+/// Trait to allow itself to be serialised into a value which can be extended
+/// by bytes.
+pub trait Joiner {
+	fn join<V: Slicable + Sized>(self, value: &V) -> Self;
+}
 
-pub use self::misc::{AccountID, EVERYBODY, SessionKey, ChainID, BlockNumber, TxOrder, Hash};
-pub use self::proposal::{Proposal, InternalFunction};
-pub use self::function::Function;
-pub use self::digest::Digest;
-pub use self::header::Header;
-pub use self::transaction::Transaction;
-pub use self::uncheckedtransaction::UncheckedTransaction;
-pub use self::block::Block;
+impl<T> Joiner for T where T: for<'a> Extend<&'a u8> {
+	fn join<V: Slicable + Sized>(mut self, value: &V) -> Self {
+		value.as_slice_then(|s| self.extend(s));
+		self
+	}
+}

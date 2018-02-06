@@ -8,9 +8,11 @@ error-chain = "0.11"
 log = "0.3"
 parking_lot = "0.4"
 polkadot-primitives = { path = "../primitives", version = "0.1" }
-polkadot-state-machine = { path = "../state_machine", version = "0.1" }
+polkadot-state-machine = { path = "../state-machine", version = "0.1" }
 polkadot-serializer = { path = "../serializer" }
 polkadot-executor = { path = "../executor" }
+polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1" }
 native-runtime = { path = "../native-runtime" }
 triehash = "0.1"
 hex-literal = "0.1"
+ed25519 = { path = "../ed25519", version = "0.1" }

@@ -7,4 +7,4 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-runtime-std = { path = "../std", version = "0.1" }
+polkadot-runtime-std = { path = "../../runtime-std", version = "0.1", default_features = false }

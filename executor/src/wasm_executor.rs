@@ -27,7 +27,7 @@ use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use wasm_utils::{MemoryInstance, UserDefinedElements,
 	AddModuleWithoutFullDependentInstance};
-use primitives::{ed25519, blake2_256, twox_128, twox_256};
+use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
 use triehash::ordered_trie_root;
 
@@ -227,7 +227,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| DummyUserError)?;
 		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| DummyUserError)?;
 
-		if ed25519::Signature::from(sig).verify(&msg, &ed25519::Public::from(pubkey)) {
+		if ::ed25519::verify(&sig, &msg, &pubkey) {
 			0
 		} else {
 			5
@@ -287,15 +287,36 @@ impl CodeExecutor for WasmExecutor {
 
 #[cfg(test)]
 mod tests {
-
 	use super::*;
 	use rustc_hex::FromHex;
-	use primitives::{blake2_256, twox_128};
-	use runtime_std::{self, TestExternalities};
+	use codec::{KeyedVec, Slicable, Joiner};
 	use native_runtime::support::{one, two};
-	use native_runtime::primitives::{UncheckedTransaction, AccountID, Header};
-	use native_runtime::codec::{Joiner, KeyedVec};
 	use native_runtime::runtime::staking::balance;
+	use state_machine::TestExternalities;
+	use primitives::{twox_128, AccountId};
+	use primitives::relay::{Header, Transaction, UncheckedTransaction, Function};
+	use runtime_std;
+	use ed25519::Pair;
+
+	fn secret_for(who: &AccountId) -> Option<Pair> {
+		match who {
+			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
+			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
+			_ => None,
+		}
+	}
+
+	fn tx() -> UncheckedTransaction {
+		let transaction = Transaction {
+			signed: one(),
+			nonce: 0,
+			function: Function::StakingTransfer(two(), 69),
+		};
+		let signature = secret_for(&transaction.signed).unwrap()
+			.sign(&transaction.to_vec());
+
+		UncheckedTransaction { transaction, signature }
+	}
 
 	#[test]
 	fn returning_should_work() {
@@ -382,7 +403,7 @@ mod tests {
 	fn ed25519_verify_should_work() {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
+		let key = ::ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());
@@ -401,31 +422,6 @@ mod tests {
 			WasmExecutor.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &CallData(vec![])).unwrap(),
 			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.to_vec()
 		);
-	}
-
-	use primitives::ed25519::Pair;
-	fn secret_for(who: &AccountID) -> Option<Pair> {
-		match who {
-			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
-			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
-			_ => None,
-		}
-	}
-
-	fn tx() -> UncheckedTransaction {
-		use native_runtime::codec::{Joiner, Slicable};
-		use native_runtime::support::{one, two};
-		use native_runtime::primitives::*;
-		let transaction = Transaction {
-			signed: one(),
-			nonce: 0,
-			function: Function::StakingTransfer,
-			input_data: two().to_vec().join(&69u64),
-		};
-		let signature = secret_for(&transaction.signed).unwrap()
-			.sign(&transaction.to_vec())
-			.inner();
-		UncheckedTransaction { transaction, signature }
 	}
 
 	#[test]

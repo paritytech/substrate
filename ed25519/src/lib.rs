@@ -16,8 +16,13 @@
 
 //! Simple Ed25519 API.
 
-use untrusted;
+extern crate ring;
+extern crate polkadot_primitives as primitives;
+extern crate untrusted;
+extern crate rustc_hex;
+
 use ring::{rand, signature};
+use primitives::Signature;
 use rustc_hex::FromHex;
 
 /// Verify a message without type checking the parameters' types for the right size.
@@ -38,41 +43,6 @@ pub struct Public ([u8; 32]);
 
 /// A key pair.
 pub struct Pair(signature::Ed25519KeyPair);
-
-/// A signature.
-#[derive(Clone)]
-pub struct Signature ([u8; 64]);
-
-impl Signature {
-	/// A new signature from the given 64-byte `data`.
-	pub fn from(data: [u8; 64]) -> Self {
-		Signature(data)
-	}
-
-	/// A new signature from the given slice that should be 64 bytes long.
-	pub fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 64];
-		r.copy_from_slice(data);
-		Signature(r)
-	}
-
-	/// Get the inner part.
-	pub fn inner(self) -> [u8; 64] {
-		self.0
-	}
-}
-
-impl AsRef<[u8; 64]> for Signature {
-	fn as_ref(&self) -> &[u8; 64] {
-		&self.0
-	}
-}
-
-impl AsRef<[u8]> for Signature {
-	fn as_ref(&self) -> &[u8] {
-		&self.0[..]
-	}
-}
 
 impl Public {
 	/// A new instance from the given 32-byte `data`.
@@ -113,14 +83,14 @@ impl Pair {
 	}
 	/// Make a new key pair from the raw secret.
 	pub fn from_secret(secret: &[u8; 32]) -> Pair {
-		let mut pkcs8_bytes = FromHex::from_hex("302e020100300506032b657004220420").unwrap();
+		let mut pkcs8_bytes: Vec<_> = FromHex::from_hex("302e020100300506032b657004220420").unwrap();
 		pkcs8_bytes.extend_from_slice(&secret[..]);
 		Pair(signature::Ed25519KeyPair::from_pkcs8_maybe_unchecked(untrusted::Input::from(&pkcs8_bytes)).unwrap())
 	}
 	/// Make a new key pair from the raw secret and public key (it will check to make sure
 	/// they correspond to each other).
 	pub fn from_both(secret_public: &[u8; 64]) -> Option<Pair> {
-		let mut pkcs8_bytes = FromHex::from_hex("3053020101300506032b657004220420").unwrap();
+		let mut pkcs8_bytes: Vec<_> = FromHex::from_hex("3053020101300506032b657004220420").unwrap();
 		pkcs8_bytes.extend_from_slice(&secret_public[0..32]);
 		pkcs8_bytes.extend_from_slice(&[0xa1u8, 0x23, 0x03, 0x21, 0x00]);
 		pkcs8_bytes.extend_from_slice(&secret_public[32..64]);
@@ -130,7 +100,7 @@ impl Pair {
 	pub fn sign(&self, message: &[u8]) -> Signature {
 		let mut r = [0u8; 64];
 		r.copy_from_slice(self.0.sign(message).as_ref());
-		Signature(r)
+		Signature::from(r)
 	}
 	/// Get the public key.
 	pub fn public(&self) -> Public {
@@ -140,29 +110,30 @@ impl Pair {
 		Public(r)
 	}
 }
-impl Signature {
-	/// Verify a message.
-	pub fn verify(&self, message: &[u8], public: &Public) -> bool {
-		let peer_public_key = untrusted::Input::from(&public.0[..]);
-		let msg = untrusted::Input::from(message);
-		let sig = untrusted::Input::from(&self.0[..]);
 
-		match signature::verify(&signature::ED25519, peer_public_key, msg, sig) {
-			Ok(_) => true,
-			_ => false,
-		}
+/// Verify a signature on a message.
+pub fn verify_strong(sig: &Signature, message: &[u8], pubkey: &Public) -> bool {
+	let public_key = untrusted::Input::from(&pubkey.0[..]);
+	let msg = untrusted::Input::from(message);
+	let sig = untrusted::Input::from(&sig.0[..]);
+
+	match signature::verify(&signature::ED25519, public_key, msg, sig) {
+		Ok(_) => true,
+		_ => false,
 	}
 }
+
 impl From<&'static str> for Public {
 	fn from(hex: &'static str) -> Self {
 		let mut r = [0u8; 32];
-		r.copy_from_slice(&FromHex::from_hex(hex).unwrap()[0..32]);
+		let v: Vec<_> = FromHex::from_hex(hex).unwrap();
+		r.copy_from_slice(&v[0..32]);
 		Public(r)
 	}
 }
 impl From<&'static str> for Pair {
 	fn from(hex: &'static str) -> Self {
-		let data = FromHex::from_hex(hex).expect("Key pair given is static so hex should be good.");
+		let data: Vec<_> = FromHex::from_hex(hex).expect("Key pair given is static so hex should be good.");
 		match data.len() {
 			32 => {
 				let mut r = [0u8; 32];
@@ -180,19 +151,6 @@ impl From<&'static str> for Pair {
 		}
 	}
 }
-impl From<&'static str> for Signature {
-	fn from(hex: &'static str) -> Self {
-		let mut r = [0u8; 64];
-		r.copy_from_slice(&FromHex::from_hex(hex).unwrap()[0..64]);
-		Signature(r)
-	}
-}
-
-impl PartialEq for Signature {
-	fn eq(&self, other: &Signature) -> bool {
-		self.0.iter().eq(other.0.iter())
-	}
-}
 
 #[cfg(test)]
 mod test {
@@ -206,7 +164,7 @@ mod test {
 		let message = b"";
 		let signature: Signature = "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b".into();
 		assert!(&pair.sign(&message[..]) == &signature);
-		assert!(signature.verify(&message[..], &public));
+		assert!(verify_strong(&signature, &message[..], &public));
 	}
 
 	#[test]
@@ -215,21 +173,19 @@ mod test {
 		let public = pair.public();
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
-		assert!(signature.verify(&message[..], &public));
+		assert!(verify_strong(&signature, &message[..], &public));
 	}
 
 	#[test]
 	fn seeded_pair_should_work() {
+		use primitives::hexdisplay::HexDisplay;
+
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".into());
-		let message = b"Something important";
-		let public = pair.public();
-		assert_eq!(public, "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee".into());
-		let message = FromHex::from_hex("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000002228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000").unwrap();
+		let message: Vec<_> = FromHex::from_hex("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000002228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000").unwrap();
 		let signature = pair.sign(&message[..]);
-		use hexdisplay::HexDisplay;
 		println!("Correct signature: {}", HexDisplay::from(&signature.0));
-		assert!(signature.verify(&message[..], &public));
+		assert!(verify_strong(&signature, &message[..], &public));
 	}
 }

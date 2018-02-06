@@ -33,5 +33,5 @@ pub mod parachains;
 
 // TODO: polkadao
 
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 pub mod genesismap;

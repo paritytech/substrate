@@ -20,7 +20,7 @@
 use runtime_std::prelude::*;
 use codec::KeyedVec;
 use support::{storage, StorageVec};
-use primitives::{AccountID, SessionKey, BlockNumber};
+use primitives::{AccountId, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
 const SESSION_LENGTH: &[u8] = b"ses:len";
@@ -31,12 +31,12 @@ const NEXT_SESSION_LENGTH: &[u8] = b"ses:nln";
 
 struct ValidatorStorageVec {}
 impl StorageVec for ValidatorStorageVec {
-	type Item = AccountID;
+	type Item = AccountId;
 	const PREFIX: &'static[u8] = b"ses:val:";
 }
 
 /// Get the current set of authorities. These are the session keys.
-pub fn validators() -> Vec<AccountID> {
+pub fn validators() -> Vec<AccountId> {
 	ValidatorStorageVec::items()
 }
 
@@ -65,7 +65,7 @@ pub mod public {
 
 	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 	/// session.
-	pub fn set_key(validator: &AccountID, key: &SessionKey) {
+	pub fn set_key(validator: &AccountId, key: &SessionKey) {
 		// set new value for next session
 		storage::put(&validator.to_keyed_vec(NEXT_KEY_FOR), key);
 	}
@@ -94,7 +94,7 @@ pub mod internal {
 	///
 	/// Called by staking::next_era() only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
-	pub fn set_validators(new: &[AccountID]) {
+	pub fn set_validators(new: &[AccountId]) {
 		ValidatorStorageVec::set_items(new);
 		consensus::internal::set_authorities(new);
 	}
@@ -140,7 +140,7 @@ mod tests {
 	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::AccountID;
+	use primitives::AccountId;
 	use runtime::{consensus, session};
 
 	fn simple_setup() -> TestExternalities {

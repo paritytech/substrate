@@ -17,11 +17,9 @@
 //! Timestamp manager: just handles the current timestamp.
 
 use support::storage;
+use primitives::Timestamp;
 
 const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
-
-/// Representation of a time.
-pub type Timestamp = u64;
 
 /// Get the current time.
 pub fn get() -> Timestamp {
