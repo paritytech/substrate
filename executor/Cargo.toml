@@ -17,6 +17,7 @@ byteorder = "1.1"
 rustc-hex = "1.0.0"
 native-runtime = { path = "../native-runtime", version = "0.1" }
 triehash = "0.1.0"
+ed25519 = { path = "../ed25519", version = "0.1" }
 
 [dev-dependencies]
 assert_matches = "1.1"
