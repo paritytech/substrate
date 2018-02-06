@@ -120,6 +120,19 @@ pub struct Header {
 	pub digest: Digest,
 }
 
+impl Header {
+	/// Create a new instance with default fields except `number`, which is given as an argument.
+	pub fn from_block_number(number: Number) -> Self {
+		Header {
+			parent_hash: Default::default(),
+			number,
+			state_root: Default::default(),
+			transaction_root: Default::default(),
+			digest: Default::default(),
+		}
+	}
+}
+
 impl Slicable for Header {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
 		Some(Header {

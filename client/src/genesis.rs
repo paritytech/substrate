@@ -40,19 +40,21 @@ pub fn construct_genesis_block(storage: &HashMap<Vec<u8>, Vec<u8>>) -> Block {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use native_runtime::codec::{Slicable, Joiner};
+	use codec::{Slicable, Joiner};
 	use native_runtime::support::{one, two, Hashable};
 	use native_runtime::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-	use native_runtime::primitives::{AccountID, Hash, BlockNumber, Transaction,
-			UncheckedTransaction, Digest, Function};
 	use state_machine::execute;
 	use state_machine::OverlayedChanges;
 	use state_machine::backend::InMemory;
 	use polkadot_executor::executor;
+	use primitives::{AccountId, Hash, H256};
+	use primitives::block::{Number as BlockNumber, Header, Digest};
+	use primitives::runtime_function::Function;
+	use primitives::transaction::{UncheckedTransaction, Transaction};
 	use primitives::contract::CallData;
-	use primitives::ed25519::Pair;
+	use ed25519::Pair;
 
-	fn secret_for(who: &AccountID) -> Option<Pair> {
+	fn secret_for(who: &AccountId) -> Option<Pair> {
 		match who {
 			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
 			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
@@ -65,12 +67,12 @@ mod tests {
 
 		let transactions = txs.into_iter().map(|transaction| {
 			let signature = secret_for(&transaction.signed).unwrap()
-				.sign(&transaction.to_vec())
-				.inner();
+				.sign(&transaction.to_vec());
+
 			UncheckedTransaction { transaction, signature }
 		}).collect::<Vec<_>>();
 
-		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0;
+		let transaction_root = H256(ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0);
 
 		let mut header = Header {
 			parent_hash,
@@ -84,24 +86,26 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 
 		for tx in transactions.iter() {
-			header = Header::from_slice(&execute(
+			let ret_data = execute(
 				backend,
 				&mut overlay,
 				&executor(),
 				"execute_transaction",
 				&CallData(vec![].join(&header).join(tx))
-			).unwrap()).unwrap();
+			).unwrap();
+			header = Header::from_slice(&mut &ret_data[..]).unwrap();
 		}
 
-		header = Header::from_slice(&execute(
+		let ret_data = execute(
 			backend,
 			&mut overlay,
 			&executor(),
 			"finalise_block",
 			&CallData(vec![].join(&header))
-		).unwrap()).unwrap();
+		).unwrap();
+		header = Header::from_slice(&mut &ret_data[..]).unwrap();
 
-		(vec![].join(&Block { header, transactions }), hash)
+		(vec![].join(&Block { header, transactions }), H256(hash))
 	}
 
 	fn block1(genesis_hash: Hash, backend: &InMemory) -> (Vec<u8>, Hash) {
@@ -109,12 +113,11 @@ mod tests {
 			backend,
 			1,
 			genesis_hash,
-			hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c"),
+			H256(hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c")),
 			vec![Transaction {
 				signed: one(),
 				nonce: 0,
-				function: Function::StakingTransfer,
-				input_data: vec![].join(&two()).join(&69u64),
+				function: Function::StakingTransfer(two(), 69),
 			}]
 		)
 	}
@@ -125,7 +128,7 @@ mod tests {
 			vec![one(), two()], 1000
 		).genesis_map();
 		let block = construct_genesis_block(&storage);
-		let genesis_hash = block.header.blake2_256();
+		let genesis_hash = H256(block.header.blake2_256());
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 
 		let mut overlay = OverlayedChanges::default();

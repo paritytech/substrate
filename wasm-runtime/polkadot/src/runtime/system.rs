@@ -282,8 +282,8 @@ mod tests {
 		let h = Header {
 			parent_hash: H256([69u8; 32]),
 			number: 1,
-			state_root: H256(hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db")),
-			transaction_root: H256(hex!("c4b361b976b3aa90f9f0cdd32f4afc80dd96f200145a687196388a00363c2235")),
+			state_root: H256(hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0")),
+			transaction_root: H256(hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")),
 			digest: Digest { logs: vec![], },
 		};
 
@@ -306,10 +306,10 @@ mod tests {
 		let mut t = new_test_ext();
 
 		let h = Header {
-			parent_hash: [69u8; 32],
+			parent_hash: H256([69u8; 32]),
 			number: 1,
-			state_root: [0u8; 32],
-			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
+			state_root: H256([0u8; 32]),
+			transaction_root: H256(hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")),
 			digest: Digest { logs: vec![], },
 		};
 

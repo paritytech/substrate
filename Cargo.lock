@@ -996,6 +996,7 @@ dependencies = [
 name = "polkadot-client"
 version = "0.1.0"
 dependencies = [
+ "ed25519 0.1.0",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1003,6 +1004,7 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-executor 0.1.0",
  "polkadot-primitives 0.1.0",
+ "polkadot-runtime-codec 0.1.0",
  "polkadot-serializer 0.1.0",
  "polkadot-state-machine 0.1.0",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
