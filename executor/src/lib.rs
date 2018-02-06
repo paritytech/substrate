@@ -40,6 +40,11 @@ extern crate byteorder;
 extern crate rustc_hex;
 extern crate native_runtime;
 extern crate triehash;
+#[macro_use] extern crate log;
+
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
 
 #[macro_use]
 extern crate error_chain;
