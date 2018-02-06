@@ -23,7 +23,7 @@ fn should_return_header() {
 	let client = client::new_in_mem(executor::executor()).unwrap();
 
 	assert_matches!(
-		ChainApi::header(&client, "11265ce45dd2baaaf071f6df8c5a44f0ed1d85a50e71451ff2d4345e57d12e3a".into()),
+		ChainApi::header(&client, "af65e54217fb213853703d57b80fc5b2bb834bf923046294d7a49bff62f0a8b2".into()),
 		Ok(Some(ref x)) if x == &block::Header {
 			parent_hash: 0.into(),
 			number: 0,
