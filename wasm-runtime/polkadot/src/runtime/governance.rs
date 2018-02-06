@@ -117,6 +117,12 @@ pub mod internal {
 			InternalFunction::SystemSetCode(code) => {
 				system::privileged::set_code(&code);
 			}
+			InternalFunction::SessionSetLength(value) => {
+				session::privileged::set_length(value);
+			}
+			InternalFunction::SessionForceNewSession => {
+				session::privileged::force_new_session();
+			}
 			InternalFunction::StakingSetSessionsPerEra(value) => {
 				staking::privileged::set_sessions_per_era(value);
 			}
@@ -126,12 +132,13 @@ pub mod internal {
 			InternalFunction::StakingSetValidatorCount(value) => {
 				staking::privileged::set_validator_count(value);
 			}
+			InternalFunction::StakingForceNewEra => {
+				staking::privileged::force_new_era()
+			}
 			InternalFunction::GovernanceSetApprovalPpmRequired(value) => {
 				self::privileged::set_approval_ppm_required(value);
 			}
-			InternalFunction::SessionSetLength(value) => {
-				session::privileged::set_length(value);
-			}
+
 		}
 	}
 }

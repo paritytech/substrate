@@ -7,4 +7,4 @@ authors = ["Parity Technologies <admin@parity.io>"]
 ring = "0.12"
 untrusted = "0.5"
 polkadot-primitives = { version = "0.1", path = "../primitives" }
-rustc-hex = { git = "https://github.com/rphmeier/rustc-hex.git", version = "2.0", default_features = false }
+rustc-hex = "1.0"

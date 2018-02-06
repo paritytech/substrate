@@ -21,7 +21,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
+#[cfg(feature = "std")]
 extern crate rustc_hex;
+
 extern crate serde;
 extern crate byteorder;
 
