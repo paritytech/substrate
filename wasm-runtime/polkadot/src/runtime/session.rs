@@ -46,8 +46,8 @@ pub fn length() -> BlockNumber {
 }
 
 /// The number of validators currently.
-pub fn validator_count() -> usize {
-	ValidatorStorageVec::count() as usize
+pub fn validator_count() -> u32 {
+	ValidatorStorageVec::count() as u32
 }
 
 /// The current era index.

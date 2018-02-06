@@ -23,6 +23,9 @@ extern crate polkadot_runtime_std as runtime_std;
 
 #[cfg(feature = "std")]
 extern crate rustc_hex;
+#[cfg(feature = "with-std")]
+#[macro_use]
+extern crate log;
 
 extern crate polkadot_runtime_codec as codec;
 extern crate polkadot_primitives as primitives;
