@@ -56,7 +56,7 @@ pub use protocol::{ProtocolStatus};
 pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, NetworkConfiguration};
 
 // TODO: move it elsewhere
-fn header_hash(header: &primitives::block::Header) -> primitives::block::HeaderHash {
+fn header_hash(header: &primitives::relay::Header) -> primitives::relay::HeaderHash {
 	primitives::hashing::blake2_256(&ser::to_vec(header)).into()
 }
 

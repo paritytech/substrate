@@ -22,7 +22,7 @@ use bytes::Vec;
 use codec::Slicable;
 use hash::H256;
 use parachain;
-use transaction::UncheckedTransaction;
+use relay::transaction::UncheckedTransaction;
 
 /// Used to refer to a block number.
 pub type Number = u64;

@@ -65,12 +65,11 @@ macro_rules! try_opt {
 }
 
 mod bytes;
-pub mod block;
 pub mod contract;
 pub mod hash;
 pub mod hexdisplay;
 pub mod parachain;
-pub mod transaction;
+pub mod relay;
 pub mod uint;
 pub mod validator;
 
@@ -81,6 +80,7 @@ mod tests;
 pub mod hashing;
 
 pub use self::hash::{H160, H256};
+pub use self::relay::BlockNumber;
 pub use self::uint::{U256, U512};
 
 #[cfg(feature = "std")]
@@ -100,9 +100,6 @@ pub type SessionKey = AccountId;
 
 /// Indentifier for a chain.
 pub type ChainID = u64;
-
-/// Index of a block in the chain.
-pub type BlockNumber = u64;
 
 /// Index of a transaction.
 pub type TxOrder = u64;

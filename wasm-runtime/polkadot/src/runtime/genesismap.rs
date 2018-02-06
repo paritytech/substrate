@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use runtime_std::twox_128;
 use codec::{KeyedVec, Joiner};
 use support::Hashable;
-use primitives::block::{Number as BlockNumber, Block};
+use primitives::relay::{Number as BlockNumber, Block};
 use primitives::AccountId;
 use runtime::staking::Balance;
 

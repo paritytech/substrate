@@ -29,7 +29,7 @@ use runtime_std::prelude::*;
 use codec::KeyedVec;
 use support::storage;
 use primitives::{AccountId, Hash, BlockNumber};
-use primitives::transaction::Proposal;
+use primitives::relay::Proposal;
 use runtime::{staking, system, session};
 
 const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
@@ -95,7 +95,7 @@ pub mod privileged {
 
 pub mod internal {
 	use super::*;
-	use primitives::transaction::{Proposal, InternalFunction};
+	use primitives::relay::{Proposal, InternalFunction};
 
 	/// Current era is ending; we should finish up any proposals.
 	pub fn end_of_an_era() {
@@ -150,7 +150,7 @@ mod tests {
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
 	use primitives::AccountId;
-	use primitives::transaction::InternalFunction;
+	use primitives::relay::InternalFunction;
 	use runtime::{staking, session};
 
 	fn new_test_ext() -> TestExternalities {

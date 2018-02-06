@@ -64,8 +64,7 @@ mod tests {
 	use native_runtime::runtime::staking::balance;
 	use state_machine::TestExternalities;
 	use primitives::{twox_128, Hash};
-	use primitives::block::{Header, Number as BlockNumber, Block, Digest};
-	use primitives::transaction::{Transaction, UncheckedTransaction, Function};
+	use primitives::relay::{Header, BlockNumber, Block, Digest, Transaction, UncheckedTransaction, Function};
 	use ed25519::Pair;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");

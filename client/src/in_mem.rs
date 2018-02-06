@@ -23,10 +23,10 @@ use error;
 use backend;
 use primitives;
 use ser;
-use primitives::block::{self, HeaderHash};
+use primitives::relay::block::{self, HeaderHash};
 use blockchain::{self, BlockId, BlockStatus};
 
-fn header_hash(header: &primitives::block::Header) -> primitives::block::HeaderHash {
+fn header_hash(header: &block::Header) -> block::HeaderHash {
 	primitives::hashing::blake2_256(&ser::to_vec(header)).into()
 }
 

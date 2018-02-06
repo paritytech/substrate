@@ -47,7 +47,7 @@ pub use genesis::construct_genesis_block;
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
 
-use primitives::{block};
+use primitives::relay::block;
 use primitives::contract::{CallData, StorageKey, StorageData};
 
 use blockchain::Backend as BlockchainBackend;

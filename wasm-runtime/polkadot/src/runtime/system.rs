@@ -21,9 +21,8 @@ use runtime_std::prelude::*;
 use runtime_std::{mem, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
-use primitives::{AccountId, Hash, TxOrder};
-use primitives::block::{Block, Header, Number as BlockNumber};
-use primitives::transaction::{UncheckedTransaction, Function};
+use primitives::{AccountId, Hash, TxOrder, BlockNumber};
+use primitives::relay::{Block, Header, UncheckedTransaction, Function, Log};
 use runtime::{staking, session};
 
 const NONCE_OF: &[u8] = b"sys:non:";
@@ -55,7 +54,7 @@ pub mod internal {
 	struct CheckedTransaction(UncheckedTransaction);
 
 	/// Deposits a log and ensures it matches the blocks log data.
-	pub fn deposit_log(log: ::primitives::block::Log) {
+	pub fn deposit_log(log: Log) {
 		with_env(|e| e.digest.logs.push(log));
 	}
 
@@ -222,8 +221,7 @@ mod tests {
 	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
 	use support::{StaticHexInto, HexDisplay, one, two};
-	use primitives::transaction::{UncheckedTransaction, Transaction, Function};
-	use primitives::block::{Header, Digest};
+	use primitives::relay::{Header, Digest, UncheckedTransaction, Transaction, Function};
 	use runtime::staking;
 
 	#[test]

@@ -25,7 +25,7 @@ use std::fmt;
 #[cfg(not(feature = "std"))]
 use alloc::fmt;
 
-use block::Number as BlockNumber;
+use relay::block::Number as BlockNumber;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -217,7 +217,7 @@ pub enum Function {
 	/// Make a proposal for the governance system.
 	GovernancePropose(Proposal),
 	/// Approve a proposal for the governance system.
-	GovernanceApprove(::block::Number),
+	GovernanceApprove(BlockNumber),
 }
 
 impl Slicable for Function {
