@@ -19,20 +19,22 @@
 #![warn(missing_docs)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
+#![cfg_attr(not(feature = "std"), feature(alloc, lang_items))]
 
 extern crate rustc_hex;
 extern crate serde;
-extern crate ring;
-extern crate untrusted;
-extern crate twox_hash;
 extern crate byteorder;
+
+#[cfg(feature = "std")]
+extern crate twox_hash;
+#[cfg(feature = "std")]
 extern crate blake2_rfc;
 
 #[macro_use]
 extern crate crunchy;
 #[macro_use]
 extern crate fixed_hash;
+#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
@@ -61,12 +63,21 @@ macro_rules! try_opt {
 	}
 }
 
+#[lang = "panic_fmt"]
+#[no_mangle]
+pub extern fn panic_fmt(_fmt: ::core::fmt::Arguments, _file: &'static str, _line: u32, _col: u32) {
+	unsafe {
+		ext_print_utf8(_file.as_ptr() as *const u8, _file.len() as u32);
+		ext_print_num(_line as u64);
+		ext_print_num(_col as u64);
+		::core::intrinsics::abort()
+	}
+}
+
 mod bytes;
 pub mod block;
 pub mod contract;
-pub mod ed25519;
 pub mod hash;
-pub mod hashing;
 pub mod hexdisplay;
 pub mod parachain;
 pub mod proposal;
@@ -75,8 +86,13 @@ pub mod transaction;
 pub mod uint;
 pub mod validator;
 
+#[cfg(feature = "std")]
+pub mod hashing;
+
 pub use self::hash::{H160, H256};
 pub use self::uint::{U256, U512};
+
+#[cfg(feature = "std")]
 pub use hashing::{blake2_256, twox_128, twox_256};
 
 /// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
@@ -111,8 +127,3 @@ pub type Balance = u64;
 
 /// A timestamp.
 pub type Timestamp = u64;
-
-/// A hash function.
-pub fn hash(data: &[u8]) -> hash::H256 {
-	blake2_256(data).into()
-}

@@ -20,8 +20,8 @@ extern crate environmental;
 extern crate polkadot_state_machine;
 extern crate polkadot_primitives as primitives;
 extern crate triehash;
-
-use primitives::ed25519;
+extern crate ring;
+extern crate untrusted;
 
 pub use std::vec;
 pub use std::rc;
@@ -93,7 +93,16 @@ pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
 
 /// Verify a ed25519 signature.
 pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {
-	ed25519::verify(&sig[..], msg, &pubkey[..])
+	use ring::signature;
+
+	let public_key = untrusted::Input::from(pubkey);
+	let msg = untrusted::Input::from(msg);
+	let sig = untrusted::Input::from(sig);
+
+	match signature::verify(&signature::ED25519, public_key, msg, sig) {
+		Ok(_) => true,
+		_ => false,
+	}
 }
 
 /// Execute the given closure with global function available whose functionality routes into the
@@ -136,7 +145,7 @@ macro_rules! impl_stubs {
 }
 
 #[cfg(test)]
-mod tests {
+mod std_tests {
 	use super::*;
 
 	macro_rules! map {

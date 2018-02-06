@@ -400,8 +400,9 @@ dependencies = [
 [[package]]
 name = "fixed-hash"
 version = "0.1.2"
-source = "git+https://github.com/rphmeier/primitives.git?branch=uint-asm-with-feature#18e2f90688b0d90b5f79761865e394595ce55079"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
+ "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -409,11 +410,9 @@ dependencies = [
 
 [[package]]
 name = "fixed-hash"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "0.1.3"
+source = "git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm#853bb53158497914f1837f5186e31e5b29f77cee"
 dependencies = [
- "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1055,17 +1054,15 @@ dependencies = [
  "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "fixed-hash 0.1.2 (git+https://github.com/rphmeier/primitives.git?branch=uint-asm-with-feature)",
+ "fixed-hash 0.1.3 (git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm)",
  "polkadot-runtime-codec 0.1.0",
  "polkadot-serializer 0.1.0",
  "pretty_assertions 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.0 (git+https://github.com/rphmeier/rustc-hex.git)",
  "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "uint 0.1.1 (git+https://github.com/rphmeier/primitives.git?branch=uint-asm-with-feature)",
- "untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uint 0.1.2 (git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm)",
 ]
 
 [[package]]
@@ -1105,8 +1102,10 @@ dependencies = [
  "polkadot-state-machine 0.1.0",
  "pwasm-alloc 0.1.0",
  "pwasm-libc 0.1.0",
+ "ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1629,8 +1628,8 @@ dependencies = [
 
 [[package]]
 name = "uint"
-version = "0.1.1"
-source = "git+https://github.com/rphmeier/primitives.git?branch=uint-asm-with-feature#18e2f90688b0d90b5f79761865e394595ce55079"
+version = "0.1.2"
+source = "git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm#853bb53158497914f1837f5186e31e5b29f77cee"
 dependencies = [
  "byteorder 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1822,8 +1821,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum ethcrypto 0.1.0 (git+https://github.com/paritytech/parity.git)" = "<none>"
 "checksum ethereum-types 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "2adaa5b8ceafcce0bc3a68ef116ca5702958cc97d70a6eb008aeddb569b092b3"
 "checksum ethkey 0.3.0 (git+https://github.com/paritytech/parity.git)" = "<none>"
-"checksum fixed-hash 0.1.2 (git+https://github.com/rphmeier/primitives.git?branch=uint-asm-with-feature)" = "<none>"
 "checksum fixed-hash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4b54d107faeb66084eca7c506aa50b6b7cb9eb9a1f1f633ae2ca3af55620c191"
+"checksum fixed-hash 0.1.3 (git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm)" = "<none>"
 "checksum fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "2fad85553e09a6f881f739c29f0b00b0f01357c743266d478b68951ce23285f3"
 "checksum fuchsia-zircon 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "2e9763c69ebaae630ba35f74888db465e49e259ba1bc0eda7d06f4a067615d82"
 "checksum fuchsia-zircon-sys 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"
@@ -1942,7 +1941,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "475352206e7a290c5fccc27624a163e8d0d115f7bb60ca18a64fc9ce056d7435"
 "checksum typeable 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1410f6f91f21d1612654e7cc69193b0334f909dcf2c790c4826254fbb86f8887"
 "checksum uint 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "91ed1e25ded4e37e0967b1f12d5f910b32f979768d4f48e2f6ca7b6e7130b44e"
-"checksum uint 0.1.1 (git+https://github.com/rphmeier/primitives.git?branch=uint-asm-with-feature)" = "<none>"
+"checksum uint 0.1.2 (git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm)" = "<none>"
 "checksum unicase 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7f4765f83163b74f957c797ad9253caf97f103fb064d3999aea9568d09fc8a33"
 "checksum unicase 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "284b6d3db520d67fbe88fd778c21510d1b0ba4a551e5d0fbb023d33405f6de8a"
 "checksum unicode-bidi 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)" = "49f2bd0c6468a8230e1db229cff8029217cf623c767ea5d60bfbd42729ea54d5"

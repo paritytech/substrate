@@ -16,7 +16,9 @@
 
 //! Block and header type definitions.
 
-use bytes::{self, Vec};
+#[cfg(feature = "std")]
+use bytes;
+use bytes::Vec;
 use codec::Slicable;
 use hash::H256;
 use parachain;
@@ -32,8 +34,9 @@ pub type HeaderHash = H256;
 pub type TransactionHash = H256;
 
 /// Execution log (event)
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Log(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl Slicable for Log {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
@@ -48,7 +51,8 @@ impl Slicable for Log {
 impl ::codec::NonTrivialSlicable for Log { }
 
 /// The digest of a block, useful for light-clients.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Digest {
 	/// All logs that have happened in the block.
 	pub logs: Vec<Log>,
@@ -65,7 +69,8 @@ impl Slicable for Digest {
 }
 
 /// A Polkadot relay chain block.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Block {
 	/// The block header.
 	pub header: Header,
@@ -98,9 +103,10 @@ impl Slicable for Block {
 /// A relay chain block header.
 ///
 /// https://github.com/w3f/polkadot-spec/blob/master/spec.md#header
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Header {
 	/// Block parent's hash.
 	pub parent_hash: HeaderHash,
@@ -146,9 +152,10 @@ impl Slicable for Header {
 ///
 /// Included candidates should be sorted by parachain ID, and without duplicate
 /// IDs.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Body {
 	/// Parachain proposal blocks.
 	pub candidates: Vec<parachain::Candidate>,

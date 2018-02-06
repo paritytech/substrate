@@ -16,10 +16,13 @@
 
 //! Parachain data types.
 
-use bytes::{self, Vec};
+#[cfg(feature = "std")]
+use bytes;
+use bytes::Vec;
 
 /// Unique identifier of a parachain.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Id(u64);
 
 impl From<Id> for u64 {
@@ -43,9 +46,10 @@ impl ::codec::Slicable for Id {
 /// Candidate parachain block.
 ///
 /// https://github.com/w3f/polkadot-spec/blob/master/spec.md#candidate-para-chain-block
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Candidate {
 	/// The ID of the parachain this is a proposal for.
 	pub parachain_index: Id,
@@ -60,9 +64,10 @@ pub struct Candidate {
 }
 
 /// Candidate receipt type.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct CandidateReceipt {
 	/// The ID of the parachain this is a candidate for.
 	pub parachain_index: Id,
@@ -79,37 +84,44 @@ pub struct CandidateReceipt {
 }
 
 /// Parachain ingress queue message.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Message(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct Message(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Consolidated ingress queue data.
 ///
 /// This is just an ordered vector of other parachains' egress queues,
 /// obtained according to the routing rules.
-#[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 
 /// Parachain block data.
 ///
 /// contains everything required to validate para-block, may contain block and witness data
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct BlockData(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct BlockData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Parachain header raw bytes wrapper type.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Header(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct Header(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Parachain head data included in the chain.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct HeadData(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct HeadData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Parachain validation code.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidationCode(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Activitiy bit field
-#[derive(Debug, PartialEq, Eq, Clone, Default, Serialize, Deserialize)]
-pub struct Activity(#[serde(with="bytes")] pub Vec<u8>);
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct Activity(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl ::codec::Slicable for Activity {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {

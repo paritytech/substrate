@@ -17,10 +17,12 @@
 //! Polkadot runtime functions.
 //! This describes a function that can be called from an external transaction.
 
+use bytes::Vec;
 use codec::Slicable;
 
 /// Public functions that can be dispatched to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[repr(u8)]
 enum FunctionId {
 	/// Staking subsystem: begin staking.
@@ -56,8 +58,8 @@ impl FunctionId {
 }
 
 /// Functions on the runtime.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[repr(u8)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum Function {
 	/// Staking subsystem: begin staking.
 	StakingStake,

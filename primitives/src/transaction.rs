@@ -27,7 +27,8 @@ use std::fmt;
 use alloc::fmt;
 
 /// A vetted and verified transaction from the external world.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Transaction {
 	/// Who signed it (note this is not a signature).
 	pub signed: ::AccountId,
@@ -62,7 +63,8 @@ impl Slicable for Transaction {
 }
 
 /// A transactions right from the external world. Unchecked.
-#[derive(Eq, Clone, Serialize, Deserialize)]
+#[derive(Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UncheckedTransaction {
 	/// The actual transaction information.
 	pub transaction: Transaction,
