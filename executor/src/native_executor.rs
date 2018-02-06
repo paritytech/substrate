@@ -46,7 +46,7 @@ mod tests {
 	use native_runtime::support::{one, two, Hashable};
 	use native_runtime::runtime::staking::balance;
 	use state_machine::TestExternalities;
-	use primitives::{twox_128, Hash, H256};
+	use primitives::{twox_128, Hash};
 	use primitives::runtime_function::Function;
 	use primitives::block::{Header, Number as BlockNumber, Block, Digest};
 	use primitives::transaction::{Transaction, UncheckedTransaction};
@@ -167,7 +167,7 @@ mod tests {
 			UncheckedTransaction { transaction, signature }
 		}).collect::<Vec<_>>();
 
-		let transaction_root = H256(ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0);
+		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0.into();
 
 		let header = Header {
 			parent_hash,
@@ -178,14 +178,14 @@ mod tests {
 		};
 		let hash = header.blake2_256();
 
-		(Block { header, transactions }.to_vec(), H256(hash))
+		(Block { header, transactions }.to_vec(), hash.into())
 	}
 
 	fn block1() -> (Vec<u8>, Hash) {
 		construct_block(
 			1,
-			H256([69u8; 32]),
-			H256(hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db")),
+			[69u8; 32].into(),
+			hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db").into(),
 			vec![Transaction {
 				signed: one(),
 				nonce: 0,
@@ -198,7 +198,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			H256(hex!("2cdbbf9bd766c2286a5f4091c131fe161addd060ba6fc041b3419089f4601bda")),
+			hex!("e2ba57cfb94b870ea6670b012b49dc33cbb70e3aa8d36cf54dfa5e4e69cd0778").into(),
 			vec![
 				Transaction {
 					signed: two(),

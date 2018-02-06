@@ -21,7 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg(feature = "std")]
 extern crate rustc_hex;
 
 extern crate serde;
@@ -76,6 +75,9 @@ pub mod runtime_function;
 pub mod transaction;
 pub mod uint;
 pub mod validator;
+
+#[cfg(test)]
+mod tests;
 
 #[cfg(feature = "std")]
 pub mod hashing;

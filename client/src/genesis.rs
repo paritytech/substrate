@@ -18,17 +18,16 @@
 
 use std::collections::HashMap;
 use primitives::block::{Block, Header};
-use primitives::H256;
 use triehash::trie_root;
 
 /// Create a genesis block, given the initial storage.
 pub fn construct_genesis_block(storage: &HashMap<Vec<u8>, Vec<u8>>) -> Block {
-	let state_root = H256(trie_root(storage.clone().into_iter()).0);
+	let state_root = trie_root(storage.clone().into_iter()).0.into();
 	let header = Header {
 		parent_hash: Default::default(),
 		number: 0,
 		state_root,
-		transaction_root: H256(trie_root(vec![].into_iter()).0),
+		transaction_root: trie_root(vec![].into_iter()).0.into(),
 		digest: Default::default(),
 	};
 	Block {
@@ -47,7 +46,7 @@ mod tests {
 	use state_machine::OverlayedChanges;
 	use state_machine::backend::InMemory;
 	use polkadot_executor::executor;
-	use primitives::{AccountId, Hash, H256};
+	use primitives::{AccountId, Hash};
 	use primitives::block::{Number as BlockNumber, Header, Digest};
 	use primitives::runtime_function::Function;
 	use primitives::transaction::{UncheckedTransaction, Transaction};
@@ -72,7 +71,7 @@ mod tests {
 			UncheckedTransaction { transaction, signature }
 		}).collect::<Vec<_>>();
 
-		let transaction_root = H256(ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0);
+		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0.into();
 
 		let mut header = Header {
 			parent_hash,
@@ -105,7 +104,7 @@ mod tests {
 		).unwrap();
 		header = Header::from_slice(&mut &ret_data[..]).unwrap();
 
-		(vec![].join(&Block { header, transactions }), H256(hash))
+		(vec![].join(&Block { header, transactions }), hash.into())
 	}
 
 	fn block1(genesis_hash: Hash, backend: &InMemory) -> (Vec<u8>, Hash) {
@@ -113,7 +112,7 @@ mod tests {
 			backend,
 			1,
 			genesis_hash,
-			H256(hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c")),
+			hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c").into(),
 			vec![Transaction {
 				signed: one(),
 				nonce: 0,
@@ -128,7 +127,7 @@ mod tests {
 			vec![one(), two()], 1000
 		).genesis_map();
 		let block = construct_genesis_block(&storage);
-		let genesis_hash = H256(block.header.blake2_256());
+		let genesis_hash = block.header.blake2_256().into();
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 
 		let mut overlay = OverlayedChanges::default();
