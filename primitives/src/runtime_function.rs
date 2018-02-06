@@ -25,35 +25,30 @@ use codec::Slicable;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[repr(u8)]
 enum FunctionId {
-	/// Staking subsystem: begin staking.
-	StakingStake = 0,
-	/// Staking subsystem: stop staking.
-	StakingUnstake = 1,
-	/// Staking subsystem: transfer stake.
-	StakingTransfer = 2,
-	/// Set temporary session key as a validator.
-	SessionSetKey = 3,
 	/// Set the timestamp.
-	TimestampSet = 4,
+	TimestampSet = 0x00,
+	/// Set temporary session key as a validator.
+	SessionSetKey = 0x10,
+	/// Staking subsystem: begin staking.
+	StakingStake = 0x20,
+	/// Staking subsystem: stop staking.
+	StakingUnstake = 0x21,
+	/// Staking subsystem: transfer stake.
+	StakingTransfer = 0x22,
 	/// Make a proposal for the governance system.
-	GovernancePropose = 5,
+	GovernancePropose = 0x30,
 	/// Approve a proposal for the governance system.
-	GovernanceApprove = 6,
+	GovernanceApprove = 0x31,
 }
 
 impl FunctionId {
 	/// Derive `Some` value from a `u8`, or `None` if it's invalid.
 	fn from_u8(value: u8) -> Option<FunctionId> {
-		match value {
-			0 => Some(FunctionId::StakingStake),
-			1 => Some(FunctionId::StakingUnstake),
-			2 => Some(FunctionId::StakingTransfer),
-			3 => Some(FunctionId::SessionSetKey),
-			4 => Some(FunctionId::TimestampSet),
-			5 => Some(FunctionId::GovernancePropose),
-			6 => Some(FunctionId::GovernanceApprove),
-			_ => None,
-		}
+		use self::*;
+		let functions = [FunctionId::StakingStake, FunctionId::StakingUnstake,
+			FunctionId::StakingTransfer, FunctionId::SessionSetKey, FunctionId::TimestampSet,
+			FunctionId::GovernancePropose, FunctionId::GovernanceApprove];
+		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
 }
 
@@ -61,16 +56,16 @@ impl FunctionId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum Function {
+	/// Set the timestamp.
+	TimestampSet(::Timestamp),
+	/// Set temporary session key as a validator.
+	SessionSetKey(::SessionKey),
 	/// Staking subsystem: begin staking.
 	StakingStake,
 	/// Staking subsystem: stop staking.
 	StakingUnstake,
 	/// Staking subsystem: transfer stake.
 	StakingTransfer(::AccountId, ::Balance),
-	/// Set temporary session key as a validator.
-	SessionSetKey(::SessionKey),
-	/// Set the timestamp.
-	TimestampSet(::Timestamp),
 	/// Make a proposal for the governance system.
 	GovernancePropose(::proposal::Proposal),
 	/// Approve a proposal for the governance system.
@@ -81,16 +76,16 @@ impl Slicable for Function {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
 		let id = try_opt!(u8::from_slice(value).and_then(FunctionId::from_u8));
 		Some(match id {
+			FunctionId::TimestampSet =>
+				Function::TimestampSet(try_opt!(Slicable::from_slice(value))),
+			FunctionId::SessionSetKey =>
+				Function::SessionSetKey(try_opt!(Slicable::from_slice(value))),
 			FunctionId::StakingStake => Function::StakingStake,
 			FunctionId::StakingUnstake => Function::StakingUnstake,
 			FunctionId::StakingTransfer => Function::StakingTransfer(
 				try_opt!(Slicable::from_slice(value)),
 				try_opt!(Slicable::from_slice(value)),
 			),
-			FunctionId::SessionSetKey =>
-				Function::SessionSetKey(try_opt!(Slicable::from_slice(value))),
-			FunctionId::TimestampSet =>
-				Function::TimestampSet(try_opt!(Slicable::from_slice(value))),
 			FunctionId::GovernancePropose =>
 				Function::GovernancePropose(try_opt!(Slicable::from_slice(value))),
 			FunctionId::GovernanceApprove =>
@@ -101,6 +96,14 @@ impl Slicable for Function {
 	fn to_vec(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		match *self {
+			Function::TimestampSet(ref data) => {
+				(FunctionId::TimestampSet as u8).as_slice_then(|s| v.extend(s));
+				data.as_slice_then(|s| v.extend(s));
+			}
+			Function::SessionSetKey(ref data) => {
+				(FunctionId::SessionSetKey as u8).as_slice_then(|s| v.extend(s));
+				data.as_slice_then(|s| v.extend(s));
+			}
 			Function::StakingStake => {
 				(FunctionId::StakingStake as u8).as_slice_then(|s| v.extend(s));
 			}
@@ -111,14 +114,6 @@ impl Slicable for Function {
 				(FunctionId::StakingTransfer as u8).as_slice_then(|s| v.extend(s));
 				to.as_slice_then(|s| v.extend(s));
 				amount.as_slice_then(|s| v.extend(s));
-			}
-			Function::SessionSetKey(ref data) => {
-				(FunctionId::SessionSetKey as u8).as_slice_then(|s| v.extend(s));
-				data.as_slice_then(|s| v.extend(s));
-			}
-			Function::TimestampSet(ref data) => {
-				(FunctionId::TimestampSet as u8).as_slice_then(|s| v.extend(s));
-				data.as_slice_then(|s| v.extend(s));
 			}
 			Function::GovernancePropose(ref data) => {
 				(FunctionId::GovernancePropose as u8).as_slice_then(|s| v.extend(s));

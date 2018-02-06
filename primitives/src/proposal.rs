@@ -28,36 +28,41 @@ use codec::Slicable;
 #[repr(u8)]
 enum InternalFunctionId {
 	/// Set the system's code.
-	SystemSetCode = 0,
-	/// Set the number of sessions per era.
-	StakingSetSessionsPerEra = 1,
-	/// Set the minimum bonding duration for staking.
-	StakingSetBondingDuration = 2,
-	/// Set the validator count for staking.
-	StakingSetValidatorCount = 3,
-	/// Set the per-mille of validator approval required for governance changes.
-	GovernanceSetApprovalPpmRequired = 4,
+	SystemSetCode = 0x00,
+
 	/// Set the session length.
-	SessionSetLength = 5,
+	SessionSetLength = 0x10,
+	/// Force a new session.
+	SessionForceNewSession = 0x11,
+
+	/// Set the number of sessions per era.
+	StakingSetSessionsPerEra = 0x20,
+	/// Set the minimum bonding duration for staking.
+	StakingSetBondingDuration = 0x21,
+	/// Set the validator count for staking.
+	StakingSetValidatorCount = 0x22,
+	/// Force a new staking era.
+	StakingForceNewEra = 0x23,
+
+	/// Set the per-mille of validator approval required for governance changes.
+	GovernanceSetApprovalPpmRequired = 0x30,
+
 }
 
 impl InternalFunctionId {
 	/// Derive `Some` value from a `u8`, or `None` if it's invalid.
 	fn from_u8(value: u8) -> Option<InternalFunctionId> {
-		use self::*;
 		let functions = [
 			InternalFunctionId::SystemSetCode,
+			InternalFunctionId::SessionSetLength,
+			InternalFunctionId::SessionForceNewSession,
 			InternalFunctionId::StakingSetSessionsPerEra,
 			InternalFunctionId::StakingSetBondingDuration,
 			InternalFunctionId::StakingSetValidatorCount,
+			InternalFunctionId::StakingForceNewEra,
 			InternalFunctionId::GovernanceSetApprovalPpmRequired,
-			InternalFunctionId::SessionSetLength
 		];
-		if (value as usize) < functions.len() {
-			Some(functions[value as usize])
-		} else {
-			None
-		}
+		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
 }
 
@@ -67,16 +72,21 @@ impl InternalFunctionId {
 pub enum InternalFunction {
 	/// Set the system's code.
 	SystemSetCode(Vec<u8>),
+	/// Set the session length.
+	SessionSetLength(BlockNumber),
+	/// Force a new session.
+	SessionForceNewSession,
 	/// Set the number of sessions per era.
 	StakingSetSessionsPerEra(BlockNumber),
 	/// Set the minimum bonding duration for staking.
 	StakingSetBondingDuration(BlockNumber),
 	/// Set the validator count for staking.
 	StakingSetValidatorCount(u32),
+	/// Force a new staking era.
+	StakingForceNewEra,
 	/// Set the per-mille of validator approval required for governance changes.
 	GovernanceSetApprovalPpmRequired(u32),
-	/// Set the session length.
-	SessionSetLength(BlockNumber),
+
 }
 
 /// An internal function.
@@ -93,16 +103,18 @@ impl Slicable for Proposal {
 		let function = match id {
 			InternalFunctionId::SystemSetCode =>
 				InternalFunction::SystemSetCode(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::SessionSetLength =>
+				InternalFunction::SessionSetLength(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::SessionForceNewSession => InternalFunction::SessionForceNewSession,
 			InternalFunctionId::StakingSetSessionsPerEra =>
 				InternalFunction::StakingSetSessionsPerEra(try_opt!(Slicable::from_slice(value))),
 			InternalFunctionId::StakingSetBondingDuration =>
 				InternalFunction::StakingSetBondingDuration(try_opt!(Slicable::from_slice(value))),
 			InternalFunctionId::StakingSetValidatorCount =>
 				InternalFunction::StakingSetValidatorCount(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::StakingForceNewEra => InternalFunction::StakingForceNewEra,
 			InternalFunctionId::GovernanceSetApprovalPpmRequired =>
 				InternalFunction::GovernanceSetApprovalPpmRequired(try_opt!(Slicable::from_slice(value))),
-			InternalFunctionId::SessionSetLength =>
-				InternalFunction::SessionSetLength(try_opt!(Slicable::from_slice(value))),
 		};
 
 		Some(Proposal { function })
@@ -114,6 +126,13 @@ impl Slicable for Proposal {
 			InternalFunction::SystemSetCode(ref data) => {
 				(InternalFunctionId::SystemSetCode as u8).as_slice_then(|s| v.extend(s));
 				data.as_slice_then(|s| v.extend(s));
+			}
+			InternalFunction::SessionSetLength(ref data) => {
+				(InternalFunctionId::SessionSetLength as u8).as_slice_then(|s| v.extend(s));
+				data.as_slice_then(|s| v.extend(s));
+			}
+			InternalFunction::SessionForceNewSession => {
+				(InternalFunctionId::SessionForceNewSession as u8).as_slice_then(|s| v.extend(s));
 			}
 			InternalFunction::StakingSetSessionsPerEra(ref data) => {
 				(InternalFunctionId::StakingSetSessionsPerEra as u8).as_slice_then(|s| v.extend(s));
@@ -127,12 +146,11 @@ impl Slicable for Proposal {
 				(InternalFunctionId::StakingSetValidatorCount as u8).as_slice_then(|s| v.extend(s));
 				data.as_slice_then(|s| v.extend(s));
 			}
+			InternalFunction::StakingForceNewEra => {
+				(InternalFunctionId::StakingForceNewEra as u8).as_slice_then(|s| v.extend(s));
+			}
 			InternalFunction::GovernanceSetApprovalPpmRequired(ref data) => {
 				(InternalFunctionId::GovernanceSetApprovalPpmRequired as u8).as_slice_then(|s| v.extend(s));
-				data.as_slice_then(|s| v.extend(s));
-			}
-			InternalFunction::SessionSetLength(ref data) => {
-				(InternalFunctionId::SessionSetLength as u8).as_slice_then(|s| v.extend(s));
 				data.as_slice_then(|s| v.extend(s));
 			}
 		}

@@ -6,7 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 crunchy = "0.1"
 fixed-hash = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-for-wasm", default_features = false }
-rustc-hex = { git = "https://github.com/rphmeier/rustc-hex.git", version = "2.0", default_features = false }
+rustc-hex = { version = "1.0", optional = true }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 uint = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-for-wasm" }
@@ -26,7 +26,7 @@ std = [
 	"fixed-hash/std",
 	"polkadot-runtime-codec/std",
 	"serde/std",
-	"rustc-hex/std",
+	"rustc-hex",
 	"twox-hash",
 	"blake2-rfc",
 	"serde_derive",
