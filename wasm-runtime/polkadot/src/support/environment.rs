@@ -21,7 +21,7 @@ use runtime_std::mem;
 use runtime_std::cell::RefCell;
 use runtime_std::rc::Rc;
 
-use primitives::block::{Number as BlockNumber, Digest};
+use primitives::relay::{BlockNumber, Digest};
 use primitives::Hash;
 
 #[derive(Default)]

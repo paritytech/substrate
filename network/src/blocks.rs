@@ -20,7 +20,7 @@ use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use network::PeerId;
-use primitives::block::{Number as BlockNumber};
+use primitives::relay::BlockNumber;
 use message;
 
 const MAX_PARALLEL_DOWNLOADS: u32 = 1;
@@ -190,7 +190,7 @@ impl BlockCollection {
 mod test {
 	use super::{BlockCollection, BlockData};
 	use message;
-	use primitives::block::{HeaderHash};
+	use primitives::relay::{HeaderHash};
 
 	fn is_empty(bc: &BlockCollection) -> bool {
 		bc.blocks.is_empty() &&

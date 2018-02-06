@@ -18,7 +18,7 @@
 
 use state_machine;
 use error;
-use primitives::block;
+use primitives::relay::block;
 use blockchain::{self, BlockId};
 
 /// Block insertion transction. Keeps hold if the inseted block state and data.

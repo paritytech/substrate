@@ -17,7 +17,7 @@
 //! Tool for creating the genesis block.
 
 use std::collections::HashMap;
-use primitives::block::{Block, Header};
+use primitives::relay::{Block, Header};
 use triehash::trie_root;
 
 /// Create a genesis block, given the initial storage.
@@ -47,8 +47,7 @@ mod tests {
 	use state_machine::backend::InMemory;
 	use polkadot_executor::executor;
 	use primitives::{AccountId, Hash};
-	use primitives::block::{Number as BlockNumber, Header, Digest};
-	use primitives::transaction::{UncheckedTransaction, Transaction, Function};
+	use primitives::relay::{BlockNumber, Header, Digest, UncheckedTransaction, Transaction, Function};
 	use primitives::contract::CallData;
 	use ed25519::Pair;
 

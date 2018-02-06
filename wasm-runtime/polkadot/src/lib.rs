@@ -40,8 +40,7 @@ pub mod runtime;
 
 use runtime_std::prelude::*;
 use codec::Slicable;
-use primitives::transaction::UncheckedTransaction;
-use primitives::block::{Header, Block};
+use primitives::relay::{Header, Block, UncheckedTransaction};
 
 /// Execute a block, with `input` being the canonical serialisation of the block. Returns the
 /// empty vector.

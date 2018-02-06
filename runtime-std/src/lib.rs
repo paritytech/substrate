@@ -40,7 +40,7 @@ pub mod prelude {
 
 /// Type definitions and helpers for transactions.
 pub mod transaction {
-	pub use primitives::transaction::{Transaction, UncheckedTransaction};
+	pub use primitives::relay::{Transaction, UncheckedTransaction};
 	use primitives::Signature;
 
 	#[cfg(feature = "std")]

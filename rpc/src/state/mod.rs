@@ -22,7 +22,7 @@ mod error;
 mod tests;
 
 use client::{self, Client};
-use primitives::{block};
+use primitives::relay::block;
 use primitives::contract::{CallData, StorageKey, StorageData};
 use state_machine;
 
