@@ -22,12 +22,15 @@ use runtime_std::cell::RefCell;
 use runtime_std::rc::Rc;
 
 use primitives::block::{Number as BlockNumber, Digest};
+use primitives::Hash;
 
 #[derive(Default)]
 /// The information that can be accessed globally.
 pub struct Environment {
 	/// The current block number.
 	pub block_number: BlockNumber,
+	/// The current block's parent hash.
+	pub parent_hash: Hash,
 	/// The current block digest.
 	pub digest: Digest,
 }
