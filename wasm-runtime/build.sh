@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-xargo +nightly build --target=wasm32-unknown-unknown --release
+cargo +nightly build --target=wasm32-unknown-unknown --release
 dirs=`find * -maxdepth 0 -type d | grep -v pwasm- | grep -v std`
 for i in $dirs
 do
