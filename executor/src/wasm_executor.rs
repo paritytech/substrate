@@ -287,17 +287,17 @@ impl CodeExecutor for WasmExecutor {
 
 #[cfg(test)]
 mod tests {
-
 	use super::*;
 	use rustc_hex::FromHex;
-	use primitives::{AccountId, blake2_256, twox_128};
-	use primitives::block::Header;
-	use primitives::transaction::{Transaction, UncheckedTransaction};
-	use codec::KeyedVec;
-	use state_machine::TestExternalities;
-	use runtime_std;
+	use codec::{KeyedVec, Slicable, Joiner};
 	use native_runtime::support::{one, two};
 	use native_runtime::runtime::staking::balance;
+	use state_machine::TestExternalities;
+	use primitives::{twox_128, AccountId};
+	use primitives::runtime_function::Function;
+	use primitives::block::Header;
+	use primitives::transaction::{Transaction, UncheckedTransaction};
+	use runtime_std;
 	use ed25519::Pair;
 
 	fn secret_for(who: &AccountId) -> Option<Pair> {
@@ -309,16 +309,13 @@ mod tests {
 	}
 
 	fn tx() -> UncheckedTransaction {
-		use native_runtime::codec::Slicable;
-
 		let transaction = Transaction {
 			signed: one(),
 			nonce: 0,
 			function: Function::StakingTransfer(two(), 69),
 		};
 		let signature = secret_for(&transaction.signed).unwrap()
-			.sign(&transaction.to_vec())
-			.inner();
+			.sign(&transaction.to_vec());
 
 		UncheckedTransaction { transaction, signature }
 	}
