@@ -17,13 +17,13 @@
 //! Conensus module for runtime; manages the authority set ready for the native code.
 
 use runtime_std::prelude::*;
-use support::StorageVec;
+use support::storage::unhashed::StorageVec;
 use primitives::SessionKey;
 
 struct AuthorityStorageVec {}
 impl StorageVec for AuthorityStorageVec {
 	type Item = SessionKey;
-	const PREFIX: &'static[u8] = b"con:aut:";
+	const PREFIX: &'static[u8] = b":auth:";
 }
 
 /// Get the current set of authorities. These are the session keys.

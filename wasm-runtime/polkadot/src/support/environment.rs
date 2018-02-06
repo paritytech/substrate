@@ -30,8 +30,6 @@ pub struct Environment {
 	pub block_number: BlockNumber,
 	/// The current block digest.
 	pub digest: Digest,
-	/// The number of log items in this block that have been accounted for so far.
-	pub next_log_index: usize,
 }
 
 /// Do something with the environment and return its value. Keep the function short.

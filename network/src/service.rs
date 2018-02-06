@@ -148,7 +148,7 @@ impl SyncProvider for Service {
 				};
 
 				Some(PeerInfo {
-					id: session_info.id.map(|id| id.hex()),
+					id: session_info.id.map(|id| format!("{:x}", id)),
 					client_version: session_info.client_version,
 					capabilities: session_info.peer_capabilities.into_iter().map(|c| c.to_string()).collect(),
 					remote_address: session_info.remote_address,
