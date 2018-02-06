@@ -43,7 +43,7 @@ pub fn approval_ppm_required() -> u32 {
 
 /// The number of concrete validator approvals required for a proposal to pass.
 pub fn approvals_required() -> u32 {
-	approval_ppm_required() * session::validator_count() as u32 / 1000
+	approval_ppm_required() * session::validator_count() / 1000
 }
 
 pub mod public {
@@ -152,7 +152,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
@@ -178,7 +178,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
@@ -213,7 +213,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
@@ -239,7 +239,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
@@ -266,7 +266,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
@@ -294,7 +294,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
@@ -324,7 +324,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
@@ -348,7 +348,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
