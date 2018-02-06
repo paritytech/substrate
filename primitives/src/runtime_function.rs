@@ -82,10 +82,12 @@ impl Slicable for Function {
 				Function::SessionSetKey(try_opt!(Slicable::from_slice(value))),
 			FunctionId::StakingStake => Function::StakingStake,
 			FunctionId::StakingUnstake => Function::StakingUnstake,
-			FunctionId::StakingTransfer => Function::StakingTransfer(
-				try_opt!(Slicable::from_slice(value)),
-				try_opt!(Slicable::from_slice(value)),
-			),
+			FunctionId::StakingTransfer => {
+				let to  = try_opt!(Slicable::from_slice(value));
+				let amount = try_opt!(Slicable::from_slice(value));
+
+				Function::StakingTransfer(to, amount)
+			}
 			FunctionId::GovernancePropose =>
 				Function::GovernancePropose(try_opt!(Slicable::from_slice(value))),
 			FunctionId::GovernanceApprove =>

@@ -21,7 +21,7 @@ use runtime_std::prelude::*;
 use runtime_std::{mem, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
-use primitives::{AccountId, Hash, H256, TxOrder};
+use primitives::{AccountId, Hash, TxOrder};
 use primitives::block::{Block, Header, Number as BlockNumber};
 use primitives::transaction::UncheckedTransaction;
 use primitives::runtime_function::Function;
@@ -78,7 +78,7 @@ pub mod internal {
 		// check transaction trie root represents the transactions.
 		let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
 		let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-		let txs_root = H256(enumerated_trie_root(&txs));
+		let txs_root = enumerated_trie_root(&txs).into();
 		debug_assert_hash(&header.transaction_root, &txs_root);
 		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
 
@@ -94,7 +94,7 @@ pub mod internal {
 		final_checks(&block);
 
 		// check storage root.
-		let storage_root = H256(storage_root());
+		let storage_root = storage_root().into();
 		debug_assert_hash(&header.state_root, &storage_root);
 		assert!(header.state_root == storage_root, "Storage root must match that calculated.");
 
@@ -125,7 +125,7 @@ pub mod internal {
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
 
-		header.state_root = H256(storage_root());
+		header.state_root = storage_root().into();
 		with_env(|e| {
 			mem::swap(&mut header.digest, &mut e.digest);
 		});
@@ -218,7 +218,6 @@ mod tests {
 	use primitives::transaction::{UncheckedTransaction, Transaction};
 	use primitives::runtime_function::Function;
 	use primitives::block::{Header, Digest};
-	use primitives::hash::{H256, H512};
 	use runtime::staking;
 
 	#[test]
@@ -236,10 +235,8 @@ mod tests {
 				nonce: 0,
 				function: Function::StakingTransfer(two, 69),
 			},
-			signature: "b543b41e4b7a0270eddf57ed6c435df04bb63f71c79f6ae2530ab26c734bb4e8cd57b1c190c41d5791bcdea66a16c7339b1e883e5d0538ea2d9acea800d60a00".parse().unwrap(),
+			signature: "5f9832c5a4a39e2dd4a3a0c5b400e9836beb362cb8f7d845a8291a2ae6fe366612e080e4acd0b5a75c3d0b6ee69614a68fb63698c1e76bf1f2dcd8fa617ddf05".parse().unwrap(),
 		};
-		// tx: 2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000228000000d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000
-		// sig: b543b41e4b7a0270eddf57ed6c435df04bb63f71c79f6ae2530ab26c734bb4e8cd57b1c190c41d5791bcdea66a16c7339b1e883e5d0538ea2d9acea800d60a00
 
 		with_externalities(&mut t, || {
 			internal::execute_transaction(tx, Header::from_block_number(1));
@@ -280,10 +277,10 @@ mod tests {
 		let mut t = new_test_ext();
 
 		let h = Header {
-			parent_hash: H256([69u8; 32]),
+			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: H256(hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0")),
-			transaction_root: H256(hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")),
+			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0").into(),
+			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
 
@@ -306,10 +303,10 @@ mod tests {
 		let mut t = new_test_ext();
 
 		let h = Header {
-			parent_hash: H256([69u8; 32]),
+			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: H256([0u8; 32]),
-			transaction_root: H256(hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")),
+			state_root: [0u8; 32].into(),
+			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
 
@@ -332,10 +329,10 @@ mod tests {
 		let mut t = new_test_ext();
 
 		let h = Header {
-			parent_hash: H256([69u8; 32]),
+			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: H256(hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0")),
-			transaction_root: H256([0u8; 32]),
+			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0").into(),
+			transaction_root: [0u8; 32].into(),
 			digest: Digest { logs: vec![], },
 		};
 
