@@ -24,6 +24,9 @@ extern crate runtime_std;
 
 #[cfg(feature = "with-std")]
 extern crate rustc_hex;
+#[cfg(feature = "with-std")]
+#[macro_use]
+extern crate log;
 
 #[cfg(test)]
 #[macro_use]
