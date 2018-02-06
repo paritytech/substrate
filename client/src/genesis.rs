@@ -48,8 +48,7 @@ mod tests {
 	use polkadot_executor::executor;
 	use primitives::{AccountId, Hash};
 	use primitives::block::{Number as BlockNumber, Header, Digest};
-	use primitives::runtime_function::Function;
-	use primitives::transaction::{UncheckedTransaction, Transaction};
+	use primitives::transaction::{UncheckedTransaction, Transaction, Function};
 	use primitives::contract::CallData;
 	use ed25519::Pair;
 

@@ -70,8 +70,6 @@ pub mod contract;
 pub mod hash;
 pub mod hexdisplay;
 pub mod parachain;
-pub mod proposal;
-pub mod runtime_function;
 pub mod transaction;
 pub mod uint;
 pub mod validator;

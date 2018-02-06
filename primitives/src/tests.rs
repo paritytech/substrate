@@ -20,8 +20,7 @@ use codec::Slicable;
 
 use ::AccountId;
 use block::{Block, Header, Digest, Log};
-use runtime_function::Function;
-use transaction::{UncheckedTransaction, Transaction};
+use transaction::{UncheckedTransaction, Transaction, Function};
 
 #[test]
 fn serialise_transaction_works() {

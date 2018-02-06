@@ -338,7 +338,7 @@ mod tests {
 
 	#[test]
 	fn proposals_can_be_stored() {
-		use primitives::proposal::{Proposal, InternalFunction};
+		use primitives::transaction::{Proposal, InternalFunction};
 		let mut t = TestExternalities { storage: HashMap::new(), };
 		with_externalities(&mut t, || {
 			let x = Proposal {
