@@ -50,7 +50,8 @@ pub mod transaction {
 	use core::ops;
 
 	/// A type-safe indicator that a transaction has been checked.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(PartialEq, Eq, Clone)]
+	#[cfg_attr(feature = "std", derive(Debug))]
 	pub struct CheckedTransaction(UncheckedTransaction);
 
 	impl CheckedTransaction {
