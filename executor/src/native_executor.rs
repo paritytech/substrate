@@ -1,10 +1,27 @@
-use std::panic::catch_unwind;
-use primitives::contract::CallData;
-use state_machine::{Externalities, CodeExecutor};
+// Copyright 2017 Parity Technologies (UK) Ltd.
+// This file is part of Polkadot.
+
+// Polkadot is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Polkadot is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+
 use error::{Error, ErrorKind, Result};
-use wasm_executor::WasmExecutor;
 use native_runtime as runtime;
+use primitives::contract::CallData;
 use runtime_std;
+use state_machine::{Externalities, CodeExecutor};
+use wasm_executor::WasmExecutor;
+
+use std::panic::catch_unwind;
 
 pub struct NativeExecutor;
 
@@ -47,9 +64,8 @@ mod tests {
 	use native_runtime::runtime::staking::balance;
 	use state_machine::TestExternalities;
 	use primitives::{twox_128, Hash};
-	use primitives::runtime_function::Function;
 	use primitives::block::{Header, Number as BlockNumber, Block, Digest};
-	use primitives::transaction::{Transaction, UncheckedTransaction};
+	use primitives::transaction::{Transaction, UncheckedTransaction, Function};
 	use ed25519::Pair;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");

@@ -23,8 +23,7 @@ use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
 use primitives::{AccountId, Hash, TxOrder};
 use primitives::block::{Block, Header, Number as BlockNumber};
-use primitives::transaction::UncheckedTransaction;
-use primitives::runtime_function::Function;
+use primitives::transaction::{UncheckedTransaction, Function};
 use runtime::{staking, session};
 
 const NONCE_OF: &[u8] = b"sys:non:";
@@ -215,8 +214,7 @@ mod tests {
 	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
 	use support::{StaticHexInto, HexDisplay, one, two};
-	use primitives::transaction::{UncheckedTransaction, Transaction};
-	use primitives::runtime_function::Function;
+	use primitives::transaction::{UncheckedTransaction, Transaction, Function};
 	use primitives::block::{Header, Digest};
 	use runtime::staking;
 
