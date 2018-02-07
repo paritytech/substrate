@@ -14,4 +14,4 @@ substrate-state-machine = { path = "../state-machine" }
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
 polkadot-primitives = { path = "../polkadot-primitives", version = "0.1" }
-native-runtime = { path = "../native-runtime" }
+polkadot-runtime = { path = "../polkadot-runtime" }
