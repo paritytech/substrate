@@ -21,7 +21,7 @@
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_state_machine as state_machine;
 extern crate polkadot_serializer as ser;
-extern crate polkadot_runtime_codec as codec;
+extern crate polkadot_codec as codec;
 extern crate polkadot_executor;
 extern crate native_runtime;
 extern crate ed25519;

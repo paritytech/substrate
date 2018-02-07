@@ -18,7 +18,7 @@
 
 use runtime_std::prelude::*;
 use support::storage::unhashed::StorageVec;
-use primitives::SessionKey;
+use primitives::relay::SessionKey;
 
 struct AuthorityStorageVec {}
 impl StorageVec for AuthorityStorageVec {

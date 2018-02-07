@@ -54,7 +54,7 @@ pub struct Candidate {
 	/// The ID of the parachain this is a proposal for.
 	pub parachain_index: Id,
 	/// Collator's signature
-	pub collator_signature: ::Signature,
+	pub collator_signature: ::relay::Signature,
 	/// Unprocessed ingress queue.
 	///
 	/// Ordered by parachain ID and block number.
@@ -71,12 +71,12 @@ pub struct Candidate {
 pub struct CandidateReceipt {
 	/// The ID of the parachain this is a candidate for.
 	pub parachain_index: Id,
-	/// The collator's account ID
-	pub collator: ::AccountId,
+	/// The collator's relay-chain account ID
+	pub collator: ::relay::AccountId,
 	/// The head-data
 	pub head_data: HeadData,
 	/// Balance uploads to the relay chain.
-	pub balance_uploads: Vec<(::AccountId, ::uint::U256)>,
+	pub balance_uploads: Vec<(::relay::AccountId, ::uint::U256)>,
 	/// Egress queue roots.
 	pub egress_queue_roots: Vec<(Id, ::hash::H256)>,
 	/// Fees paid from the chain to the relay chain validators

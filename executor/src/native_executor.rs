@@ -63,8 +63,9 @@ mod tests {
 	use native_runtime::support::{one, two, Hashable};
 	use native_runtime::runtime::staking::balance;
 	use state_machine::TestExternalities;
-	use primitives::{twox_128, Hash};
-	use primitives::relay::{Header, BlockNumber, Block, Digest, Transaction, UncheckedTransaction, Function};
+	use primitives::twox_128;
+	use primitives::relay::{Hash, Header, BlockNumber, Block, Digest, Transaction,
+		UncheckedTransaction, Function, AccountId};
 	use ed25519::Pair;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
@@ -164,7 +165,7 @@ mod tests {
 		], }
 	}
 
-	fn secret_for(who: &::primitives::AccountId) -> Option<Pair> {
+	fn secret_for(who: &AccountId) -> Option<Pair> {
 		match who {
 			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
 			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),

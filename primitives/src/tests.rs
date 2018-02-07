@@ -17,10 +17,7 @@
 //! Tests.
 
 use codec::Slicable;
-
-use ::AccountId;
-use relay::block::{Block, Header, Digest, Log};
-use relay::transaction::{UncheckedTransaction, Transaction, Function};
+use relay::{AccountId, Block, Header, Digest, Log, UncheckedTransaction, Transaction, Function};
 
 #[test]
 fn serialise_transaction_works() {

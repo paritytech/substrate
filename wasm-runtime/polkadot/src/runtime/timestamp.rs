@@ -17,7 +17,8 @@
 //! Timestamp manager: just handles the current timestamp.
 
 use support::storage;
-use primitives::Timestamp;
+
+pub type Timestamp = u64;
 
 const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
 

@@ -205,15 +205,15 @@ impl FunctionId {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum Function {
 	/// Set the timestamp.
-	TimestampSet(::Timestamp),
+	TimestampSet(u64),
 	/// Set temporary session key as a validator.
-	SessionSetKey(::SessionKey),
+	SessionSetKey(::relay::SessionKey),
 	/// Staking subsystem: begin staking.
 	StakingStake,
 	/// Staking subsystem: stop staking.
 	StakingUnstake,
 	/// Staking subsystem: transfer stake.
-	StakingTransfer(::AccountId, ::Balance),
+	StakingTransfer(::relay::AccountId, u64),
 	/// Make a proposal for the governance system.
 	GovernancePropose(Proposal),
 	/// Approve a proposal for the governance system.
@@ -288,9 +288,9 @@ impl Slicable for Function {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Transaction {
 	/// Who signed it (note this is not a signature).
-	pub signed: ::AccountId,
+	pub signed: super::AccountId,
 	/// The number of transactions have come before from the same signer.
-	pub nonce: ::TxOrder,
+	pub nonce: super::TxOrder,
 	/// The function that should be called.
 	pub function: Function,
 }
@@ -326,7 +326,7 @@ pub struct UncheckedTransaction {
 	/// The actual transaction information.
 	pub transaction: Transaction,
 	/// The signature; should be an Ed25519 signature applied to the serialised `transaction` field.
-	pub signature: ::Signature,
+	pub signature: super::Signature,
 }
 
 impl Slicable for UncheckedTransaction {

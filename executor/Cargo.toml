@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 error-chain = "0.11"
-polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1" }
+polkadot-codec = { path = "../codec", version = "0.1" }
 polkadot-runtime-std = { path = "../runtime-std", version = "0.1" }
 polkadot-primitives = { path = "../primitives", version = "0.1" }
 polkadot-serializer = { path = "../serializer", version = "0.1" }

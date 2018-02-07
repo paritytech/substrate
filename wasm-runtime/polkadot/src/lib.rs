@@ -27,7 +27,7 @@ extern crate rustc_hex;
 #[macro_use]
 extern crate log;
 
-extern crate polkadot_runtime_codec as codec;
+extern crate polkadot_codec as codec;
 extern crate polkadot_primitives as primitives;
 
 #[cfg(test)]

@@ -376,6 +376,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "polkadot-codec"
+version = "0.1.0"
+
+[[package]]
 name = "polkadot-primitives"
 version = "0.1.0"
 dependencies = [
@@ -383,7 +387,7 @@ dependencies = [
  "byteorder 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "fixed-hash 0.1.3 (git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm)",
- "polkadot-runtime-codec 0.1.0",
+ "polkadot-codec 0.1.0",
  "rustc-hex 2.0.0 (git+https://github.com/rphmeier/rustc-hex.git)",
  "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -392,17 +396,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "polkadot-runtime-codec"
-version = "0.1.0"
-
-[[package]]
 name = "polkadot-runtime-std"
 version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
  "environmental 0.1.0",
+ "polkadot-codec 0.1.0",
  "polkadot-primitives 0.1.0",
- "polkadot-runtime-codec 0.1.0",
  "polkadot-state-machine 0.1.0",
  "pwasm-alloc 0.1.0",
  "pwasm-libc 0.1.0",
@@ -551,8 +551,8 @@ dependencies = [
 name = "runtime-polkadot"
 version = "0.1.0"
 dependencies = [
+ "polkadot-codec 0.1.0",
  "polkadot-primitives 0.1.0",
- "polkadot-runtime-codec 0.1.0",
  "polkadot-runtime-std 0.1.0",
 ]
 

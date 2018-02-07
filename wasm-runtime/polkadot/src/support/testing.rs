@@ -16,7 +16,7 @@
 
 //! Testing helpers.
 
-use primitives::AccountId;
+use primitives::relay::AccountId;
 use super::statichex::StaticHexInto;
 
 #[macro_export]

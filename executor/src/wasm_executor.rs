@@ -293,8 +293,8 @@ mod tests {
 	use native_runtime::support::{one, two};
 	use native_runtime::runtime::staking::balance;
 	use state_machine::TestExternalities;
-	use primitives::{twox_128, AccountId};
-	use primitives::relay::{Header, Transaction, UncheckedTransaction, Function};
+	use primitives::twox_128;
+	use primitives::relay::{Header, Transaction, UncheckedTransaction, Function, AccountId};
 	use runtime_std;
 	use ed25519::Pair;
 
