@@ -209,8 +209,8 @@ impl Backend {
 				parent_hash: best_hash,
 				number: best_num,
 				state_root: state_root,
-				parachain_activity: Default::default(),
-				logs: Default::default(),
+				transaction_root: Default::default(),
+				digest: Default::default(),
 			};
 			edit_header(&mut header);
 

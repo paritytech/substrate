@@ -18,7 +18,6 @@
 
 use primitives::block;
 use client;
-use client::{self, BlockId};
 use state_machine;
 
 mod error;
@@ -43,6 +42,6 @@ impl<B, E> ChainApi for client::Client<B, E> where
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
-		client::Client::header(self, &BlockId::Hash(hash)).chain_err(|| "Blockchain error")
+		client::Client::header(self, &client::BlockId::Hash(hash)).chain_err(|| "Blockchain error")
 	}
 }
