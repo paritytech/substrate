@@ -16,6 +16,7 @@
 
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
+use runtime_std::prelude::*;
 use runtime_std::mem;
 use codec::{Slicable, Joiner};
 use support::{Hashable, with_env, storage};

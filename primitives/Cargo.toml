@@ -13,7 +13,7 @@ uint = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-f
 twox-hash = { version = "1.1.0", optional = true }
 byteorder = { version = "1.1", default_features = false }
 blake2-rfc = { version = "0.2.18", optional = true }
-polkadot-codec = { path = "../codec", version = "0.1", default_features = false }
+substrate-codec = { path = "../codec", version = "0.1", default_features = false }
 
 [dev-dependencies]
 polkadot-serializer = { path = "../serializer", version = "0.1" }
@@ -24,7 +24,7 @@ default = ["std"]
 std = [
 	"uint/std",
 	"fixed-hash/std",
-	"polkadot-codec/std",
+	"substrate-codec/std",
 	"serde/std",
 	"rustc-hex/std",
 	"twox-hash",

@@ -7,10 +7,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-polkadot-codec = { path = "../../codec", version = "0.1", default-features = false }
+substrate-codec = { path = "../../codec", version = "0.1", default-features = false }
 polkadot-runtime-std = { path = "../../runtime-std", version = "0.1", default-features = false }
 polkadot-primitives = { path = "../../primitives", version = "0.1", default-features = false }
 
 [features]
 default = []
-std = ["polkadot-codec/std", "polkadot-runtime-std/std", "polkadot-primitives/std"]
+std = ["substrate-codec/std", "polkadot-runtime-std/std", "polkadot-primitives/std"]

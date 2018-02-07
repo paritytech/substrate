@@ -9,7 +9,7 @@ clap = { version = "2.27", features = ["yaml"] }
 env_logger = "0.4"
 error-chain = "0.11"
 log = "0.3"
-polkadot-client = { path = "../client", version = "0.1" }
-polkadot-executor = { path = "../executor", version = "0.1" }
-polkadot-primitives = { path = "../primitives", version = "0.1" }
-polkadot-rpc-servers = { path = "../rpc-servers", version = "0.1" }
+polkadot-client = { path = "../client" }
+substrate-executor = { path = "../executor" }
+polkadot-primitives = { path = "../primitives" }
+polkadot-rpc-servers = { path = "../rpc-servers" }
