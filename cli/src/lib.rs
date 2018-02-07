@@ -20,8 +20,8 @@
 
 extern crate env_logger;
 extern crate polkadot_client as client;
-extern crate polkadot_executor as executor;
-extern crate polkadot_primitives as primitives;
+extern crate substrate_executor as executor;
+extern crate substrate_primitives as primitives;
 extern crate polkadot_rpc_servers as rpc;
 
 #[macro_use]

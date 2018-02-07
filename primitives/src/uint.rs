@@ -16,12 +16,15 @@
 
 //! An unsigned fixed-size integer.
 
+#[cfg(feature = "std")]
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
 
+#[cfg(feature = "std")]
 use bytes;
 
 macro_rules! impl_serde {
 	($name: ident, $len: expr) => {
+		#[cfg(feature = "std")]
 		impl Serialize for $name {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 				let mut bytes = [0u8; $len * 8];
@@ -30,6 +33,7 @@ macro_rules! impl_serde {
 			}
 		}
 
+		#[cfg(feature = "std")]
 		impl<'de> Deserialize<'de> for $name {
 			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Between(0, $len * 8))
@@ -40,14 +44,14 @@ macro_rules! impl_serde {
 }
 
 construct_uint!(U256, 4);
-impl_serde!(U256, 4);
 construct_uint!(U512, 8);
+impl_serde!(U256, 4);
 impl_serde!(U512, 8);
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use polkadot_serializer as ser;
+	use substrate_serializer as ser;
 
 	macro_rules! test {
 		($name: ident, $test_name: ident) => {

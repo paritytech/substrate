@@ -17,10 +17,10 @@
 //! Session manager: is told the validators and allows them to manage their session keys for the
 //! consensus module.
 
-use runtime_std::prelude::*;
+use rstd::prelude::*;
 use codec::KeyedVec;
 use support::{storage, StorageVec};
-use primitives::{AccountId, SessionKey, BlockNumber};
+use polkadot_primitives::{AccountId, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
 const SESSION_LENGTH: &[u8] = b"ses:len";
@@ -137,10 +137,10 @@ mod tests {
 	use super::public::*;
 	use super::privileged::*;
 	use super::internal::*;
-	use runtime_std::{with_externalities, twox_128, TestExternalities};
+	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::AccountId;
+	use polkadot_primitives::AccountId;
 	use runtime::{consensus, session};
 
 	fn simple_setup() -> TestExternalities {

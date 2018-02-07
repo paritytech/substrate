@@ -17,7 +17,8 @@
 //! Timestamp manager: just handles the current timestamp.
 
 use support::storage;
-use primitives::Timestamp;
+
+pub type Timestamp = u64;
 
 const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
 
@@ -40,7 +41,7 @@ mod tests {
 	use super::*;
 	use super::public::*;
 
-	use runtime_std::{with_externalities, twox_128, TestExternalities};
+	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use runtime::timestamp;
 	use codec::{Joiner, KeyedVec};
 

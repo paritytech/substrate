@@ -14,20 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Trait
+//! Contract execution data.
 
-use std::iter::Extend;
-use super::slicable::Slicable;
+#[cfg(feature = "std")]
+use bytes;
+use rstd::vec::Vec;
 
-/// Trait to allow itself to be serialised into a value which can be extended
-/// by bytes.
-pub trait Joiner {
-	fn join<V: Slicable + Sized>(self, value: &V) -> Self;
-}
+/// Contract storage key.
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct StorageKey(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-impl<T> Joiner for T where T: for<'a> Extend<&'a u8> {
-	fn join<V: Slicable + Sized>(mut self, value: &V) -> Self {
-		value.as_slice_then(|s| self.extend(s));
-		self
-	}
-}
+/// Contract storage entry data.
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct StorageData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);

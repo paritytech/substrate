@@ -22,37 +22,36 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate rustc_hex;
-
-extern crate serde;
 extern crate byteorder;
-
-#[cfg(feature = "std")]
-extern crate twox_hash;
-#[cfg(feature = "std")]
-extern crate blake2_rfc;
-
 #[macro_use]
 extern crate crunchy;
 #[macro_use]
 extern crate fixed_hash;
+#[macro_use]
+extern crate uint as uint_crate;
+extern crate substrate_codec as codec;
+
+#[cfg(feature = "std")]
+extern crate serde;
+#[cfg(feature = "std")]
+extern crate twox_hash;
+#[cfg(feature = "std")]
+extern crate blake2_rfc;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
-
 #[cfg(feature = "std")]
 extern crate core;
-extern crate polkadot_runtime_codec as codec;
+
+#[macro_use]
+extern crate substrate_runtime_std as rstd;
+
 #[cfg(test)]
-extern crate polkadot_serializer;
+extern crate substrate_serializer;
+
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
-
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc;
 
 // TODO: factor out to separate crate.
 macro_rules! try_opt {
@@ -64,54 +63,27 @@ macro_rules! try_opt {
 	}
 }
 
-mod bytes;
-pub mod contract;
-pub mod hash;
+#[cfg(feature = "std")]
+pub mod bytes;
+#[cfg(feature = "std")]
+pub mod hashing;
+#[cfg(feature = "std")]
+pub use hashing::{blake2_256, twox_128, twox_256};
+#[cfg(feature = "std")]
 pub mod hexdisplay;
-pub mod parachain;
-pub mod relay;
+
+pub mod storage;
+pub mod hash;
 pub mod uint;
-pub mod validator;
+pub mod block;
 
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "std")]
-pub mod hashing;
-
 pub use self::hash::{H160, H256};
-pub use self::relay::BlockNumber;
 pub use self::uint::{U256, U512};
 
-#[cfg(feature = "std")]
-pub use hashing::{blake2_256, twox_128, twox_256};
+pub use block::{Block, Header};
 
-/// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
-/// (who matters). Essentially this means that a majority of validators have decided it is
-/// "correct".
-pub const EVERYBODY: AccountId = [255u8; 32];
-
-/// Alias to Ed25519 pubkey that identifies an account.
-pub type AccountId = [u8; 32];
-
-/// The Ed25519 pub key of an session that belongs to an authority. This is used as what the
-/// external environment/consensus algorithm calls an "authority".
-pub type SessionKey = AccountId;
-
-/// Indentifier for a chain.
-pub type ChainID = u64;
-
-/// Index of a transaction.
-pub type TxOrder = u64;
-
-/// A hash of some data.
-pub type Hash = hash::H256;
-
-/// Alias to 520-bit hash when used in the context of a signature.
-pub type Signature = hash::H512;
-
-/// A balance in the staking subsystem.
-pub type Balance = u64;
-
-/// A timestamp.
-pub type Timestamp = u64;
+/// An identifier for an authority in the consensus algorithm. The same as ed25519::Public.
+pub type AuthorityId = [u8; 32];

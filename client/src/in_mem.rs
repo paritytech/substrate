@@ -23,7 +23,7 @@ use error;
 use backend;
 use primitives;
 use ser;
-use primitives::relay::block::{self, HeaderHash};
+use primitives::block::{self, HeaderHash};
 use blockchain::{self, BlockId, BlockStatus};
 
 fn header_hash(header: &block::Header) -> block::HeaderHash {
@@ -201,4 +201,3 @@ impl backend::Backend for Backend {
 		}
 	}
 }
-

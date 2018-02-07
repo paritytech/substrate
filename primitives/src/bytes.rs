@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Simply type for representing Vec<u8> with regards to serde.
+
 use core::fmt;
 
 use serde::{de, Serializer, Deserializer};
@@ -60,7 +62,8 @@ pub fn serialize_uint<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 }
 
 /// Expected length of bytes vector.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum ExpectedLen {
 	/// Any length in bytes.
 	#[cfg_attr(not(feature = "std"), allow(unused))]

@@ -7,10 +7,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 error-chain = "0.11"
 jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
-polkadot-client = { path = "../client", version = "0.1" }
-polkadot-primitives = { path = "../primitives", version = "0.1" }
-polkadot-state-machine = { path = "../state-machine", version = "0.1" }
+polkadot-client = { path = "../client" }
+substrate-primitives = { path = "../primitives" }
+substrate-state-machine = { path = "../state-machine" }
 
 [dev-dependencies]
 assert_matches = "1.1"
-polkadot-executor = { path = "../executor", version = "0.1" }
+substrate-executor = { path = "../executor" }

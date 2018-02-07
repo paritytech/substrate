@@ -1,24 +1,24 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot state machine implementation.
+//! Substrate state machine implementation.
 
 #![warn(missing_docs)]
 
-extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as primitives;
 
 #[cfg_attr(test, macro_use)]
 extern crate hex_literal;
@@ -33,8 +33,6 @@ extern crate byteorder;
 
 use std::collections::HashMap;
 use std::fmt;
-
-use primitives::contract::CallData;
 
 pub mod backend;
 mod ext;
@@ -177,7 +175,7 @@ pub trait CodeExecutor: Sized + Send + Sync {
 		ext: &mut E,
 		code: &[u8],
 		method: &str,
-		data: &CallData,
+		data: &[u8],
 	) -> Result<Vec<u8>, Self::Error>;
 }
 
@@ -192,7 +190,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	method: &str,
-	call_data: &CallData,
+	call_data: &[u8],
 ) -> Result<Vec<u8>, Box<Error>> {
 
 	let result = {

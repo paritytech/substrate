@@ -6,5 +6,5 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 ring = "0.12"
 untrusted = "0.5"
-polkadot-primitives = { version = "0.1", path = "../primitives" }
+substrate-primitives = { version = "0.1", path = "../primitives" }
 rustc-hex = "1.0"

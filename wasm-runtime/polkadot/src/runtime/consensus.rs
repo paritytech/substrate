@@ -16,9 +16,9 @@
 
 //! Conensus module for runtime; manages the authority set ready for the native code.
 
-use runtime_std::prelude::*;
+use rstd::prelude::*;
 use support::storage::unhashed::StorageVec;
-use primitives::SessionKey;
+use polkadot_primitives::SessionKey;
 
 struct AuthorityStorageVec {}
 impl StorageVec for AuthorityStorageVec {

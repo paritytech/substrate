@@ -17,7 +17,7 @@
 //! Tool for creating the genesis block.
 
 use std::collections::HashMap;
-use primitives::relay::{Block, Header};
+use polkadot_primitives::{Block, Header};
 use triehash::trie_root;
 
 /// Create a genesis block, given the initial storage.
@@ -45,10 +45,9 @@ mod tests {
 	use state_machine::execute;
 	use state_machine::OverlayedChanges;
 	use state_machine::backend::InMemory;
-	use polkadot_executor::executor;
-	use primitives::{AccountId, Hash};
-	use primitives::relay::{BlockNumber, Header, Digest, UncheckedTransaction, Transaction, Function};
-	use primitives::contract::CallData;
+	use substrate_executor::executor;
+	use polkadot_primitives::{AccountId, Hash, BlockNumber, Header, Digest, UncheckedTransaction,
+		Transaction, Function};
 	use ed25519::Pair;
 
 	fn secret_for(who: &AccountId) -> Option<Pair> {
@@ -88,7 +87,7 @@ mod tests {
 				&mut overlay,
 				&executor(),
 				"execute_transaction",
-				&CallData(vec![].join(&header).join(tx))
+				&vec![].join(&header).join(tx)
 			).unwrap();
 			header = Header::from_slice(&mut &ret_data[..]).unwrap();
 		}
@@ -98,7 +97,7 @@ mod tests {
 			&mut overlay,
 			&executor(),
 			"finalise_block",
-			&CallData(vec![].join(&header))
+			&vec![].join(&header)
 		).unwrap();
 		header = Header::from_slice(&mut &ret_data[..]).unwrap();
 
@@ -137,7 +136,7 @@ mod tests {
 			&mut overlay,
 			&executor(),
 			"execute_block",
-			&CallData(b1data)
+			&b1data
 		).unwrap();
 	}
 }

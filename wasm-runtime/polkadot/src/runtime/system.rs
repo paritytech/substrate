@@ -17,12 +17,12 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
-use runtime_std::prelude::*;
-use runtime_std::{mem, storage_root, enumerated_trie_root};
+use rstd::prelude::*;
+use runtime_io::{mem, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
-use primitives::{AccountId, Hash, TxOrder, BlockNumber};
-use primitives::relay::{Block, Header, UncheckedTransaction, Function, Log};
+use polkadot_primitives::{AccountId, Hash, TxOrder, BlockNumber, Block, Header,
+	UncheckedTransaction, Function, Log};
 use runtime::{staking, session};
 
 const NONCE_OF: &[u8] = b"sys:non:";
@@ -145,7 +145,7 @@ pub mod internal {
 }
 
 fn execute_transaction(utx: UncheckedTransaction) {
-	use runtime_std::transaction;
+	use ::transaction;
 
 	// Verify the signature is good.
 	let tx = match transaction::check(utx) {
@@ -202,15 +202,15 @@ fn post_finalise(header: &Header) {
 	storage::put(&header.number.to_keyed_vec(BLOCK_HASH_AT), &header.blake2_256());
 }
 
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	use support::HexDisplay;
 	if given != expected {
-		info!("Hash: given={}, expected={}", HexDisplay::from(given), HexDisplay::from(expected));
+		println!("Hash: given={}, expected={}", HexDisplay::from(&given.0), HexDisplay::from(&expected.0));
 	}
 }
 
-#[cfg(not(feature = "with-std"))]
+#[cfg(not(feature = "std"))]
 fn info_expect_equal_hash(_given: &Hash, _expected: &Hash) {}
 
 #[cfg(test)]
@@ -218,10 +218,10 @@ mod tests {
 	use super::*;
 	use super::internal::*;
 
-	use runtime_std::{with_externalities, twox_128, TestExternalities};
+	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
 	use support::{StaticHexInto, HexDisplay, one, two};
-	use primitives::relay::{Header, Digest, UncheckedTransaction, Transaction, Function};
+	use polkadot_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
 	use runtime::staking;
 
 	#[test]
