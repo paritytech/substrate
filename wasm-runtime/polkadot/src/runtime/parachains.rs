@@ -17,33 +17,13 @@
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
 use rstd::prelude::*;
-use runtime_io::mem;
 use codec::{Slicable, Joiner};
-use support::{Hashable, with_env, storage};
+use runtime_io::mem;
 use runtime::session;
+use support::{Hashable, with_env, storage};
+use polkadot_primitives::parachain::{Id, Chain, DutyRoster};
 
 const PARACHAIN_COUNT: &[u8] = b"par:cou";
-
-/// Identifier for a chain, either one of a number of parachains or the relay chain.
-#[derive(Copy, Clone, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
-pub enum Chain {
-	/// The relay chain.
-	Relay,
-	/// A parachain of the given index.
-	Parachain(u32),
-}
-
-/// The duty roster specifying what jobs each validator must do.
-#[derive(Clone, PartialEq)]
-#[cfg_attr(test, derive(Default, Debug))]
-pub struct DutyRoster {
-	/// Lookup from validator index to chain on which that validator has a duty to validate.
-	pub validator_duty: Vec<Chain>,
-	/// Lookup from validator index to chain on which that validator has a duty to guarantee
-	/// availability.
-	pub guarantor_duty: Vec<Chain>,
-}
 
 /// Get the number of parachains registered at present.
 pub fn parachain_count() -> u32 {
@@ -57,7 +37,8 @@ pub fn calculate_duty_roster() -> DutyRoster {
 	let validators_per_parachain = (validator_count - 1) / parachain_count;
 
 	let mut roles_val = (0..validator_count).map(|i| match i {
-		i if i < parachain_count * validators_per_parachain => Chain::Parachain(i / validators_per_parachain as u32),
+		i if i < parachain_count * validators_per_parachain =>
+			Chain::Parachain(Id::from(i / validators_per_parachain as u32)),
 		_ => Chain::Relay,
 	}).collect::<Vec<_>>();
 	let mut roles_gua = roles_val.clone();
@@ -115,7 +96,7 @@ mod tests {
 			let check_roster = |duty_roster: &DutyRoster| {
 				assert_eq!(duty_roster.validator_duty.len(), 8);
 				assert_eq!(duty_roster.guarantor_duty.len(), 8);
-				for i in 0..2 {
+				for i in (0..2).map(Id::from) {
 					assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
 					assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
 				}

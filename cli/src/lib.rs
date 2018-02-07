@@ -19,7 +19,7 @@
 #![warn(missing_docs)]
 
 extern crate env_logger;
-extern crate polkadot_client as client;
+extern crate substrate_client as client;
 extern crate substrate_executor as executor;
 extern crate substrate_primitives as primitives;
 extern crate polkadot_rpc_servers as rpc;

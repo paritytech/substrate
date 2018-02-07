@@ -1,0 +1,8 @@
+[package]
+name = "polkadot-client-api"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+substrate-client = { path = "../client" }
+substrate-state-machine = { path = "../state-machine" }

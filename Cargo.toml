@@ -12,6 +12,7 @@ polkadot-network = { path = "network" }
 members = [
 	"candidate-agreement",
 	"client",
+	"client-api",
 	"collator",
 	"environmental",
 	"executor",

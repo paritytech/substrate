@@ -1,0 +1,10 @@
+[package]
+name = "polkadot-consensus"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+polkadot-candidate-agreement = { version = "0.1", path = "../candidate-agreement" }
+substrate-client = { version = "0.1", path = "../client" }
+polkadot-network = { version = "0.1", path = "../network" }
+substrate-state-machine = { version = "0.1", path = "../state-machine" }

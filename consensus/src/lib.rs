@@ -14,25 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot RPC interfaces.
+//! Consensus and block generation.
 
-#![warn(missing_docs)]
-
-extern crate jsonrpc_core as rpc;
+extern crate polkadot_candidate_agreement as agreement;
 extern crate substrate_client as client;
-extern crate substrate_primitives as primitives;
+extern crate polkadot_network as network;
 extern crate substrate_state_machine as state_machine;
 
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate jsonrpc_macros;
-
-#[cfg(test)]
-extern crate substrate_executor;
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
-pub mod chain;
-pub mod state;
+use state_machine::{Backend, Error};
