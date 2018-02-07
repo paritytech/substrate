@@ -19,9 +19,6 @@ rustc-hex = "1.0.0"
 triehash = "0.1.0"
 hex-literal = "0.1.0"
 log = "0.3"
-# TODO: Remove these and split out tests and a concrete executor.
-native-runtime = { path = "../native-runtime" }
-polkadot-primitives = { path = "../polkadot-primitives" }
 
 [dev-dependencies]
 assert_matches = "1.1"

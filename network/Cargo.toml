@@ -11,8 +11,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 ethcore-network = { git = "https://github.com/paritytech/parity.git" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 substrate-primitives = { path = "../primitives" }
-polkadot-primitives = { path = "../polkadot-primitives" }
-polkadot-client = { path = "../client" }
+substrate-client = { path = "../client" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-serializer = { path = "../serializer" }
 log = "0.3"
@@ -28,3 +27,4 @@ bitflags = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
+polkadot-primitives = { path = "../polkadot-primitives" }

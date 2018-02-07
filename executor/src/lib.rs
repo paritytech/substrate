@@ -41,10 +41,6 @@ extern crate rustc_hex;
 extern crate triehash;
 #[macro_use] extern crate log;
 
-// TODO: Remove and split out into polkadot-specific crate.
-extern crate native_runtime;
-extern crate polkadot_primitives;
-
 #[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
@@ -55,14 +51,18 @@ extern crate error_chain;
 #[cfg(test)]
 extern crate assert_matches;
 
+// TODO: move into own crate
+macro_rules! map {
+	($( $name:expr => $value:expr ),*) => (
+		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
+	)
+}
+
 #[macro_use]
 mod wasm_utils;
 mod wasm_executor;
 mod native_executor;
 
 pub mod error;
-
-/// Creates new RustExecutor for contracts.
-pub fn executor() -> native_executor::NativeExecutor {
-	native_executor::NativeExecutor
-}
+pub use wasm_executor::WasmExecutor;
+pub use native_executor::{NativeExecutionDispatch, NativeExecutor};
