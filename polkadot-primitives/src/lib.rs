@@ -21,36 +21,58 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate rustc_hex;
 
-extern crate serde;
-extern crate byteorder;
-
-#[cfg(feature = "std")]
-extern crate twox_hash;
-#[cfg(feature = "std")]
-extern crate blake2_rfc;
-
-#[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
-
 #[cfg(feature = "std")]
-extern crate core;
+extern crate serde;
+
+extern crate substrate_runtime_std as rstd;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 #[cfg(test)]
 extern crate substrate_serializer;
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc;
+macro_rules! try_opt {
+	($e: expr) => {
+		match $e {
+			Some(x) => x,
+			None => return None,
+		}
+	}
+}
+
+pub mod parachain;
+pub mod validator;
+pub mod block;
+pub mod transaction;
+
+pub use self::block::{Header, Block, Log, Digest};
+pub use self::block::Number as BlockNumber;
+pub use self::transaction::{Transaction, UncheckedTransaction, Function, Proposal};
+
+/// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
+/// (who matters). Essentially this means that a majority of validators have decided it is
+/// "correct".
+pub const EVERYBODY: AccountId = [255u8; 32];
+
+/// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
+/// certainly continue to be the same as the substrate's `AuthorityId`.
+pub type AccountId = primitives::AuthorityId;
+
+/// The Ed25519 pub key of an session that belongs to an authority of the relay chain. This is
+/// exactly equivalent to what the substrate calls an "authority".
+pub type SessionKey = primitives::AuthorityId;
+
+/// Indentifier for a chain.
+pub type ChainID = u64;
+
+/// Index of a transaction in the relay chain.
+pub type TxOrder = u64;
+
+/// A hash of some data used by the relay chain.
+pub type Hash = primitives::H256;
+
+/// Alias to 520-bit hash when used in the context of a signature on the relay chain.
+pub type Signature = primitives::hash::H512;

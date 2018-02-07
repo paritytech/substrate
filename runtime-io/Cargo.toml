@@ -1,0 +1,33 @@
+[package]
+name = "substrate-runtime-io"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+build = "build.rs"
+
+[build-dependencies]
+rustc_version = "0.2"
+
+[dependencies]
+pwasm-alloc = { path = "../wasm-runtime/pwasm-alloc" }
+pwasm-libc = { path = "../wasm-runtime/pwasm-libc" }
+substrate-runtime-std = { path = "../runtime-std" }
+environmental = { path = "../environmental", optional = true }
+substrate-state-machine = { path = "../state-machine", optional = true }
+substrate-primitives = { path = "../primitives", default_features = false }
+substrate-codec = { path = "../codec", default_features = false }
+triehash = { version = "0.1", optional = true }
+ed25519 = { path = "../ed25519", optional = true }
+
+[features]
+default = ["std"]
+std = [
+	"environmental",
+	"substrate-state-machine",
+	"triehash",
+	"substrate-primitives/std",
+	"substrate-codec/std",
+	"substrate-runtime-std/std",
+	"ed25519",
+]
+nightly = []
+strict = []

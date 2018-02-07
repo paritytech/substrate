@@ -16,12 +16,12 @@
 
 //! Environment API: Allows certain information to be accessed throughout the runtime.
 
-use runtime_std::boxed::Box;
-use runtime_std::mem;
-use runtime_std::cell::RefCell;
-use runtime_std::rc::Rc;
+use runtime_io::boxed::Box;
+use runtime_io::mem;
+use runtime_io::cell::RefCell;
+use runtime_io::rc::Rc;
 
-use primitives::relay::{BlockNumber, Digest, Hash};
+use polkadot_primitives::{BlockNumber, Digest, Hash};
 
 #[derive(Default)]
 /// The information that can be accessed globally.

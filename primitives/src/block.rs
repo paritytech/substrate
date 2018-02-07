@@ -18,11 +18,9 @@
 
 #[cfg(feature = "std")]
 use bytes;
-use bytes::Vec;
+use rstd::vec::Vec;
 use codec::Slicable;
 use hash::H256;
-use parachain;
-use relay::transaction::UncheckedTransaction;
 
 /// Used to refer to a block number.
 pub type Number = u64;
@@ -33,9 +31,26 @@ pub type HeaderHash = H256;
 /// Hash used to refer to a transaction hash.
 pub type TransactionHash = H256;
 
+/// Simple generic transaction type.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct Transaction(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+impl Slicable for Transaction {
+	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		Vec::<u8>::from_slice(value).map(Transaction)
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.as_slice_then(f)
+	}
+}
+
+impl ::codec::NonTrivialSlicable for Transaction { }
+
 /// Execution log (event)
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl Slicable for Log {
@@ -51,8 +66,8 @@ impl Slicable for Log {
 impl ::codec::NonTrivialSlicable for Log { }
 
 /// The digest of a block, useful for light-clients.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Digest {
 	/// All logs that have happened in the block.
 	pub logs: Vec<Log>,
@@ -68,14 +83,14 @@ impl Slicable for Digest {
 	}
 }
 
-/// A Polkadot relay chain block.
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+/// A Substrate relay chain block.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Block {
 	/// The block header.
 	pub header: Header,
 	/// All relay-chain transactions.
-	pub transactions: Vec<UncheckedTransaction>,
+	pub transactions: Vec<Transaction>,
 }
 
 impl Slicable for Block {
@@ -103,8 +118,8 @@ impl Slicable for Block {
 /// A relay chain block header.
 ///
 /// https://github.com/w3f/polkadot-spec/blob/master/spec.md#header
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Header {
@@ -161,19 +176,6 @@ impl Slicable for Header {
 	}
 }
 
-/// A relay chain block body.
-///
-/// Included candidates should be sorted by parachain ID, and without duplicate
-/// IDs.
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Body {
-	/// Parachain proposal blocks.
-	pub candidates: Vec<parachain::Candidate>,
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -205,28 +207,4 @@ mod tests {
 		let v = header.to_vec();
 		assert_eq!(Header::from_slice(&mut &v[..]).unwrap(), header);
 	}
-
-	#[test]
-	fn test_body_serialization() {
-		assert_eq!(ser::to_string_pretty(&Body {
-			candidates: vec![
-				parachain::Candidate {
-					parachain_index: 10.into(),
-					collator_signature: Default::default(),
-					unprocessed_ingress: Default::default(),
-					block: ::parachain::BlockData(vec![1, 3, 5, 8]),
-				}
-			],
-		}), r#"{
-  "candidates": [
-    {
-      "parachainIndex": 10,
-      "collatorSignature": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-      "unprocessedIngress": [],
-      "block": "0x01030508"
-    }
-  ]
-}"#);
-	}
-
 }

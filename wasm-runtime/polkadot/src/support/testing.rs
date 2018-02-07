@@ -16,7 +16,7 @@
 
 //! Testing helpers.
 
-use primitives::relay::AccountId;
+use polkadot_primitives::AccountId;
 use super::statichex::StaticHexInto;
 
 #[macro_export]

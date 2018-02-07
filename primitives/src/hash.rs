@@ -16,18 +16,22 @@
 
 //! A fixed hash type.
 
+#[cfg(feature = "std")]
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
 
+#[cfg(feature = "std")]
 use bytes;
 
-macro_rules! impl_serde {
+macro_rules! impl_rest {
 	($name: ident, $len: expr) => {
+		#[cfg(feature = "std")]
 		impl Serialize for $name {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 				bytes::serialize(&self.0, serializer)
 			}
 		}
 
+		#[cfg(feature = "std")]
 		impl<'de> Deserialize<'de> for $name {
 			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Exact($len))
@@ -48,11 +52,11 @@ macro_rules! impl_serde {
 }
 
 construct_hash!(H160, 20);
-impl_serde!(H160, 20);
 construct_hash!(H256, 32);
-impl_serde!(H256, 32);
 construct_hash!(H512, 64);
-impl_serde!(H512, 64);
+impl_rest!(H160, 20);
+impl_rest!(H256, 32);
+impl_rest!(H512, 64);
 
 #[cfg(test)]
 mod tests {

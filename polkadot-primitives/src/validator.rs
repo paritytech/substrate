@@ -17,28 +17,28 @@
 //! Validator primitives.
 
 #[cfg(feature = "std")]
-use bytes;
-use bytes::Vec;
+use primitives::bytes;
+use rstd::vec::Vec;
 use parachain;
 
 /// Parachain outgoing message.
-#[derive(Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct EgressPost(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Balance upload.
-#[derive(Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct BalanceUpload(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Balance download.
-#[derive(Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct BalanceDownload(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// The result of parachain validation.
-#[derive(Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct ValidationResult {

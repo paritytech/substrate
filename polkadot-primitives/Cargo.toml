@@ -4,17 +4,11 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-crunchy = "0.1"
-fixed-hash = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-for-wasm", default_features = false }
-rustc-hex = { git = "https://github.com/rphmeier/rustc-hex.git", version = "2.0", default_features = false }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-uint = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-for-wasm" }
-twox-hash = { version = "1.1.0", optional = true }
-byteorder = { version = "1.1", default_features = false }
-blake2-rfc = { version = "0.2.18", optional = true }
 substrate-codec = { path = "../codec", default_features = false }
 substrate-primitives = { path = "../primitives", default_features = false }
+substrate-runtime-std = { path = "../runtime-std", default_features = false }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
@@ -23,13 +17,9 @@ pretty_assertions = "0.4"
 [features]
 default = ["std"]
 std = [
-	"uint/std",
-	"fixed-hash/std",
 	"substrate-codec/std",
-	"serde/std",
-	"rustc-hex/std",
-	"twox-hash",
-	"blake2-rfc",
+	"substrate-primitives/std",
+	"substrate-runtime-std/std",
 	"serde_derive",
-	"byteorder/std"
+	"serde/std",
 ]

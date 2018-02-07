@@ -41,7 +41,7 @@ mod tests {
 	use super::*;
 	use super::public::*;
 
-	use runtime_std::{with_externalities, twox_128, TestExternalities};
+	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use runtime::timestamp;
 	use codec::{Joiner, KeyedVec};
 

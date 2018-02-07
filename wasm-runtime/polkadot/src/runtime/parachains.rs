@@ -16,8 +16,8 @@
 
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
-use runtime_std::prelude::*;
-use runtime_std::mem;
+use rstd::prelude::*;
+use runtime_io::mem;
 use codec::{Slicable, Joiner};
 use support::{Hashable, with_env, storage};
 use runtime::session;
@@ -96,7 +96,7 @@ pub fn calculate_duty_roster() -> DutyRoster {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_std::{with_externalities, twox_128, TestExternalities};
+	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
 	use runtime::{consensus, session};
