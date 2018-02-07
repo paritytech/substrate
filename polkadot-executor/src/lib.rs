@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! A `CodeExecutor` specialisation which uses natively compiled runtime when the wasm to be
+//! executed is equivalent to the natively compiled code.
+
 extern crate polkadot_runtime;
 extern crate substrate_executor;
 extern crate substrate_codec as codec;
@@ -29,6 +32,7 @@ extern crate hex_literal;
 use polkadot_runtime as runtime;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 
+/// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
 pub struct LocalNativeExecutionDispatch;
 
 impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
