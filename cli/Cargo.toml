@@ -18,7 +18,7 @@ substrate-runtime-io = { path = "../runtime-io" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
-polkadot-rpc-servers = { path = "../rpc-servers" }
+substrate-rpc-servers = { path = "../rpc-servers" }
 polkadot-primitives = { path = "../polkadot-primitives" }
 polkadot-executor = { path = "../polkadot-executor" }
 native-runtime = { path = "../native-runtime" }
