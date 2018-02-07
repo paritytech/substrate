@@ -11,7 +11,7 @@ rustc_version = "0.2"
 pwasm-alloc = { path = "../wasm-runtime/pwasm-alloc", version = "0.1" }
 pwasm-libc = { path = "../wasm-runtime/pwasm-libc", version = "0.1" }
 environmental = { path = "../environmental", version = "0.1", optional = true }
-polkadot-state-machine = { path = "../state-machine", version = "0.1", optional = true }
+substrate-state-machine = { path = "../state-machine", version = "0.1", optional = true }
 substrate-primitives = { path = "../primitives", version = "0.1", default_features = false }
 substrate-codec = { path = "../codec", version = "0.1", default_features = false }
 triehash = { version = "0.1", optional = true }
@@ -21,7 +21,7 @@ ed25519 = { path = "../ed25519", version = "0.1", optional = true }
 default = ["std"]
 std = [
 	"environmental",
-	"polkadot-state-machine",
+	"substrate-state-machine",
 	"triehash",
 	"substrate-primitives/std",
 	"substrate-codec/std",

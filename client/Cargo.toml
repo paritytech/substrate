@@ -8,7 +8,7 @@ error-chain = "0.11"
 log = "0.3"
 parking_lot = "0.4"
 substrate-primitives = { path = "../primitives", version = "0.1" }
-polkadot-state-machine = { path = "../state-machine", version = "0.1" }
+substrate-state-machine = { path = "../state-machine", version = "0.1" }
 polkadot-serializer = { path = "../serializer" }
 substrate-executor = { path = "../executor" }
 substrate-codec = { path = "../codec", version = "0.1" }
