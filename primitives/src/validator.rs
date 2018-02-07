@@ -53,7 +53,7 @@ pub struct ValidationResult {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use polkadot_serializer as ser;
+	use substrate_serializer as ser;
 
 	#[test]
 	fn test_validation_result() {

@@ -178,7 +178,7 @@ pub struct Body {
 mod tests {
 	use super::*;
 	use codec::Slicable;
-	use polkadot_serializer as ser;
+	use substrate_serializer as ser;
 
 	#[test]
 	fn test_header_serialization() {

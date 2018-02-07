@@ -20,7 +20,7 @@
 
 extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
-extern crate polkadot_serializer as ser;
+extern crate substrate_serializer as ser;
 extern crate substrate_codec as codec;
 extern crate substrate_executor;
 extern crate native_runtime;

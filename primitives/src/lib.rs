@@ -45,7 +45,7 @@ extern crate uint as uint_crate;
 extern crate core;
 extern crate substrate_codec as codec;
 #[cfg(test)]
-extern crate polkadot_serializer;
+extern crate substrate_serializer;
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;

@@ -57,7 +57,7 @@ impl_serde!(H512, 64);
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use polkadot_serializer as ser;
+	use substrate_serializer as ser;
 
 	#[test]
 	fn test_h160() {
