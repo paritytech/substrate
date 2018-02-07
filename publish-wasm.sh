@@ -9,11 +9,6 @@ DST="wasm-binaries"
 TARGET="wasm32-unknown-unknown"
 UTCDATE=`date -u "+%Y%m%d.%H%M%S"`
 
-if [ "$TRAVIS_PULL_REQUEST" != "false" -o "$TRAVIS_BRANCH" != "master" ]; then
-  echo "*** Skipping wasm binary creation"
-  exit 0
-fi
-
 # NOTE: If script not in root, replace pushd line as below
 # pushd $BASEDIR/..
 pushd .
@@ -23,6 +18,12 @@ cd $SRC
 ./init.sh || true
 ./build.sh
 cd ..
+
+if [ "$TRAVIS_PULL_REQUEST" != "false" -o "$TRAVIS_BRANCH" != "master" ]; then
+  popd
+  echo "*** Skipping wasm binary publish"
+  exit 0
+fi
 
 echo "*** Cloning repo"
 rm -rf $DST
