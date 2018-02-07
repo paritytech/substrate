@@ -43,7 +43,7 @@ extern crate uint as uint_crate;
 
 #[cfg(feature = "std")]
 extern crate core;
-extern crate polkadot_codec as codec;
+extern crate substrate_codec as codec;
 #[cfg(test)]
 extern crate polkadot_serializer;
 #[cfg(test)]

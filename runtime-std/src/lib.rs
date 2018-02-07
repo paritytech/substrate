@@ -24,7 +24,7 @@
 #![cfg_attr(feature = "std", doc = "Polkadot runtime standard library as compiled when linked with Rust's standard library.")]
 #![cfg_attr(not(feature = "std"), doc = "Polkadot's runtime standard library as compiled without Rust's standard library.")]
 
-extern crate polkadot_codec as codec;
+extern crate substrate_codec as codec;
 
 #[cfg(feature = "std")]
 include!("../with_std.rs");
