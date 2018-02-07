@@ -1076,7 +1076,6 @@ dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 8.0.1 (git+https://github.com/paritytech/jsonrpc.git)",
  "jsonrpc-macros 8.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
- "polkadot-executor 0.1.0",
  "substrate-client 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-primitives 0.1.0",

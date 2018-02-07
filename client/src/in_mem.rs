@@ -146,6 +146,11 @@ impl backend::BlockImportOperation for BlockImportOperation {
 		});
 		Ok(())
 	}
+
+	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()> {
+		self.pending_state = state_machine::backend::InMemory::from(iter.collect());
+		Ok(())
+	}
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.

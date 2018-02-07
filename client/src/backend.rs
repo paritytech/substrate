@@ -30,6 +30,8 @@ pub trait BlockImportOperation {
 	fn state(&self) -> error::Result<Self::State>;
 	/// Append block data to the transaction.
 	fn import_block(&mut self, header: block::Header, body: Option<block::Body>, is_new_best: bool) -> error::Result<()>;
+	/// Inject storage data into the database.
+	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 }
 
 /// Client backend. Manages the data layer.

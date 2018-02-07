@@ -30,10 +30,6 @@ extern crate parking_lot;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
 
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
 pub mod error;
 pub mod blockchain;
 pub mod backend;
@@ -104,8 +100,15 @@ pub enum BlockStatus {
 }
 
 /// Create an instance of in-memory client.
-pub fn new_in_mem<E>(executor: E) -> error::Result<Client<in_mem::Backend, E>> where E: state_machine::CodeExecutor {
-	Client::new(in_mem::Backend::new(), executor)
+pub fn new_in_mem<E, F>(
+	executor: E,
+	build_genesis: F
+) -> error::Result<Client<in_mem::Backend, E>>
+	where
+		E: state_machine::CodeExecutor,
+		F: FnOnce() -> (block::Header, Vec<(Vec<u8>, Vec<u8>)>)
+{
+	Client::new(in_mem::Backend::new(), executor, build_genesis)
 }
 
 impl<B, E> Client<B, E> where
@@ -114,19 +117,19 @@ impl<B, E> Client<B, E> where
 	error::Error: From<<<B as backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	/// Creates new Polkadot Client with given blockchain and code executor.
-	pub fn new(backend: B, executor: E) -> error::Result<Self> {
+	pub fn new<F>(
+		backend: B,
+		executor: E,
+		build_genesis: F
+	) -> error::Result<Self>
+		where
+			F: FnOnce() -> (block::Header, Vec<(Vec<u8>, Vec<u8>)>)
+	{
 		if backend.blockchain().header(BlockId::Number(0))?.is_none() {
 			trace!("Empty database, writing genesis block");
-			// TODO: spec, coming in from new_in_mem's params.
-			let genesis_header = block::Header {
-				parent_hash: Default::default(),
-				number: 0,
-				state_root: Default::default(),
-				transaction_root: Default::default(),
-				digest: Default::default(),
-			};
-
+			let (genesis_header, genesis_store) = build_genesis();
 			let mut tx = backend.begin_transaction(BlockId::Hash(block::HeaderHash::default()))?;
+			tx.reset_storage(genesis_store.into_iter())?;
 			tx.import_block(genesis_header, None, true)?;
 			backend.commit_transaction(tx)?;
 		}
