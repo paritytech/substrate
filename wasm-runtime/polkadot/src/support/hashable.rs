@@ -17,7 +17,7 @@
 //! Hashable trait.
 
 use codec::Slicable;
-use runtime_std::{blake2_256, twox_128, twox_256};
+use runtime_io::{blake2_256, twox_128, twox_256};
 
 pub trait Hashable: Sized {
 	fn blake2_256(&self) -> [u8; 32];

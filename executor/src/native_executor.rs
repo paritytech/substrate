@@ -1,23 +1,22 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use error::{Error, ErrorKind, Result};
 use native_runtime as runtime;
-use primitives::contract::CallData;
-use runtime_std;
+use runtime_io;
 use state_machine::{Externalities, CodeExecutor};
 use wasm_executor::WasmExecutor;
 
@@ -37,16 +36,16 @@ impl CodeExecutor for NativeExecutor {
 		ext: &mut E,
 		code: &[u8],
 		method: &str,
-		data: &CallData,
+		data: &[u8],
 	) -> Result<Vec<u8>> {
 		// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
 		// get a proper build script, this must be strictly adhered to or things will go wrong.
 		let native_equivalent = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
 		if code == &native_equivalent[..] {
-			runtime_std::with_externalities(ext, || match method {
-				"execute_block" => safe_call(|| runtime::execute_block(&data.0)),
-				"execute_transaction" => safe_call(|| runtime::execute_transaction(&data.0)),
-				"finalise_block" => safe_call(|| runtime::finalise_block(&data.0)),
+			runtime_io::with_externalities(ext, || match method {
+				"execute_block" => safe_call(|| runtime::execute_block(data)),
+				"execute_transaction" => safe_call(|| runtime::execute_transaction(data)),
+				"finalise_block" => safe_call(|| runtime::finalise_block(data)),
 				_ => Err(ErrorKind::MethodNotFound(method.to_owned()).into()),
 			})
 		} else {
@@ -63,8 +62,9 @@ mod tests {
 	use native_runtime::support::{one, two, Hashable};
 	use native_runtime::runtime::staking::balance;
 	use state_machine::TestExternalities;
-	use primitives::{twox_128, Hash};
-	use primitives::relay::{Header, BlockNumber, Block, Digest, Transaction, UncheckedTransaction, Function};
+	use primitives::twox_128;
+	use polkadot_primitives::{Hash, Header, BlockNumber, Block, Digest, Transaction,
+		UncheckedTransaction, Function, AccountId};
 	use ed25519::Pair;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
@@ -89,7 +89,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
+		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -100,7 +100,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
+		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -113,10 +113,10 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
+		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_ok());
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one), 42);
 			assert_eq!(balance(&two), 69);
 		});
@@ -131,10 +131,10 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
+		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_ok());
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one), 42);
 			assert_eq!(balance(&two), 69);
 		});
@@ -164,7 +164,7 @@ mod tests {
 		], }
 	}
 
-	fn secret_for(who: &::primitives::AccountId) -> Option<Pair> {
+	fn secret_for(who: &AccountId) -> Option<Pair> {
 		match who {
 			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
 			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
@@ -213,7 +213,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("e2ba57cfb94b870ea6670b012b49dc33cbb70e3aa8d36cf54dfa5e4e69cd0778").into(),
+			hex!("1feb4d3a2e587079e6ce1685fa79994efd995e33cb289d39cded67aac1bb46a9").into(),
 			vec![
 				Transaction {
 					signed: two(),
@@ -233,7 +233,7 @@ mod tests {
 	fn test_execution_works() {
 		let mut t = new_test_ext();
 		println!("Testing Wasm...");
-		let r = WasmExecutor.call(&mut t, COMPACT_CODE, "run_tests", &CallData(block2().0));
+		let r = WasmExecutor.call(&mut t, COMPACT_CODE, "run_tests", &block2().0);
 		assert!(r.is_ok());
 	}
 
@@ -241,16 +241,16 @@ mod tests {
 	fn full_native_block_import_works() {
 		let mut t = new_test_ext();
 
-		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block1().0)).unwrap();
+		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 42);
 			assert_eq!(balance(&two()), 69);
 		});
 
-		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block2().0)).unwrap();
+		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 32);
 			assert_eq!(balance(&two()), 79);
 		});
@@ -260,16 +260,16 @@ mod tests {
 	fn full_wasm_block_import_works() {
 		let mut t = new_test_ext();
 
-		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block1().0)).unwrap();
+		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 42);
 			assert_eq!(balance(&two()), 69);
 		});
 
-		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &CallData(block2().0)).unwrap();
+		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 32);
 			assert_eq!(balance(&two()), 79);
 		});

@@ -1,23 +1,23 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Serialisation.
 
-use std::{mem, slice};
-use std::vec::Vec;
+use rstd::{mem, slice};
+use rstd::vec::Vec;
 use super::joiner::Joiner;
 use super::endiansensitive::EndianSensitive;
 
@@ -44,7 +44,7 @@ impl<T: EndianSensitive> Slicable for T {
 		let size = mem::size_of::<T>();
 		assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
 		if value.len() >= size {
-			let x: T = unsafe { ::std::ptr::read(value.as_ptr() as *const T) };
+			let x: T = unsafe { ::rstd::ptr::read(value.as_ptr() as *const T) };
 			*value = &value[size..];
 			Some(x.from_le())
 		} else {
@@ -115,7 +115,7 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 	}
 
 	fn to_vec(&self) -> Vec<u8> {
-		use std::iter::Extend;
+		use rstd::iter::Extend;
 
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");

@@ -25,11 +25,10 @@
 //! At the end of the era, all validators approvals are tallied and if there are sufficient to pass
 //! the proposal then it is enacted. All items in storage concerning the proposal are reset.
 
-use runtime_std::prelude::*;
+use rstd::prelude::*;
 use codec::KeyedVec;
 use support::storage;
-use primitives::{AccountId, Hash, BlockNumber};
-use primitives::relay::Proposal;
+use polkadot_primitives::{Proposal, AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
 
 const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
@@ -95,7 +94,7 @@ pub mod privileged {
 
 pub mod internal {
 	use super::*;
-	use primitives::relay::{Proposal, InternalFunction};
+	use polkadot_primitives::Proposal;
 
 	/// Current era is ending; we should finish up any proposals.
 	pub fn end_of_an_era() {
@@ -113,29 +112,29 @@ pub mod internal {
 	}
 
 	fn enact_proposal(proposal: Proposal) {
-		match proposal.function {
-			InternalFunction::SystemSetCode(code) => {
+		match proposal {
+			Proposal::SystemSetCode(code) => {
 				system::privileged::set_code(&code);
 			}
-			InternalFunction::SessionSetLength(value) => {
+			Proposal::SessionSetLength(value) => {
 				session::privileged::set_length(value);
 			}
-			InternalFunction::SessionForceNewSession => {
+			Proposal::SessionForceNewSession => {
 				session::privileged::force_new_session();
 			}
-			InternalFunction::StakingSetSessionsPerEra(value) => {
+			Proposal::StakingSetSessionsPerEra(value) => {
 				staking::privileged::set_sessions_per_era(value);
 			}
-			InternalFunction::StakingSetBondingDuration(value) => {
+			Proposal::StakingSetBondingDuration(value) => {
 				staking::privileged::set_bonding_duration(value);
 			}
-			InternalFunction::StakingSetValidatorCount(value) => {
+			Proposal::StakingSetValidatorCount(value) => {
 				staking::privileged::set_validator_count(value);
 			}
-			InternalFunction::StakingForceNewEra => {
+			Proposal::StakingForceNewEra => {
 				staking::privileged::force_new_era()
 			}
-			InternalFunction::GovernanceSetApprovalPpmRequired(value) => {
+			Proposal::GovernanceSetApprovalPpmRequired(value) => {
 				self::privileged::set_approval_ppm_required(value);
 			}
 
@@ -146,11 +145,10 @@ pub mod internal {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_std::{with_externalities, twox_128, TestExternalities};
+	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::AccountId;
-	use primitives::relay::InternalFunction;
+	use polkadot_primitives::{AccountId, Proposal};
 	use runtime::{staking, session};
 
 	fn new_test_ext() -> TestExternalities {
@@ -191,9 +189,7 @@ mod tests {
 
 			// Block 1: Make proposal. Approve it. Era length changes.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&two, 1);
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 2);
@@ -216,17 +212,13 @@ mod tests {
 
 			// Block 1: Make proposal. Fail it.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 
 			// Block 2: Make proposal. Approve it. It should change era length.
 			with_env(|e| e.block_number = 2);
-			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&two, 2);
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 2);
@@ -249,9 +241,7 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
@@ -274,9 +264,7 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&two, 0);
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
@@ -300,9 +288,7 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&two, 1);
 			public::approve(&two, 1);
 			staking::internal::check_new_era();
@@ -327,12 +313,8 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(2),
-			});
-			public::propose(&two, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
+			public::propose(&two, &Proposal::StakingSetSessionsPerEra(2));
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
@@ -379,9 +361,7 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&four, 1);
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);

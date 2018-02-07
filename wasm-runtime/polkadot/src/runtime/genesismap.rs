@@ -17,11 +17,10 @@
 //! Tool for creating the genesis block.
 
 use std::collections::HashMap;
-use runtime_std::twox_128;
+use runtime_io::twox_128;
 use codec::{KeyedVec, Joiner};
 use support::Hashable;
-use primitives::relay::{Number as BlockNumber, Block};
-use primitives::AccountId;
+use polkadot_primitives::{BlockNumber, Block, AccountId};
 use runtime::staking::Balance;
 
 /// Configuration of a general Polkadot genesis block.

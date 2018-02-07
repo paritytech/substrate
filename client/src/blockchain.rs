@@ -17,7 +17,7 @@
 //! Polkadot blockchain trait
 
 use std::fmt::{Display, Formatter, Error as FmtError};
-use primitives::relay::block;
+use primitives::block;
 use error::Result;
 
 /// Block indentification.
@@ -83,4 +83,3 @@ pub enum BlockStatus {
 	/// Not in the queue or the blockchain.
 	Unknown,
 }
-

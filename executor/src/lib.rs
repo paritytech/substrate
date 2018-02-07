@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Temporary crate for contracts implementations.
 //!
@@ -27,20 +27,23 @@
 
 #![warn(missing_docs)]
 
-extern crate polkadot_runtime_codec as codec;
-extern crate polkadot_runtime_std as runtime_std;
-extern crate polkadot_primitives as primitives;
-extern crate polkadot_serializer as serializer;
-extern crate polkadot_state_machine as state_machine;
+extern crate substrate_codec as codec;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_primitives as primitives;
+extern crate substrate_serializer as serializer;
+extern crate substrate_state_machine as state_machine;
 extern crate ed25519;
 
 extern crate serde;
 extern crate parity_wasm;
 extern crate byteorder;
 extern crate rustc_hex;
-extern crate native_runtime;
 extern crate triehash;
 #[macro_use] extern crate log;
+
+// TODO: Remove and split out into polkadot-specific crate.
+extern crate native_runtime;
+extern crate polkadot_primitives;
 
 #[cfg(test)]
 #[macro_use]
