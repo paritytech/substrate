@@ -19,17 +19,36 @@
 #![warn(missing_docs)]
 
 extern crate env_logger;
-extern crate polkadot_client as client;
-extern crate substrate_executor as executor;
+extern crate ed25519;
+extern crate triehash;
+extern crate substrate_codec as codec;
+extern crate substrate_state_machine as state_machine;
+extern crate substrate_client as client;
+extern crate substrate_executor;
 extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_io as runtime_io;
 extern crate polkadot_rpc_servers as rpc;
+extern crate polkadot_primitives;
+extern crate polkadot_executor as executor;
+extern crate native_runtime;
 
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
 #[macro_use]
 extern crate clap;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
 extern crate log;
+
+// TODO: move into own crate.
+#[cfg(test)]
+macro_rules! map {
+	($( $name:expr => $value:expr ),*) => (
+		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
+	)
+}
 
 pub mod error;
 
@@ -54,7 +73,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	// Create client
 	let executor = executor::executor();
-	let client = client::new_in_mem(executor)?;
+	let client = client::new_in_mem(executor)?;	// TODO: pass in genesis builder.
 
 	let address = "127.0.0.1:9933".parse().unwrap();
 	let handler = rpc::rpc_handler(client);
@@ -94,4 +113,3 @@ fn init_logger(pattern: &str) {
 
 	builder.init().expect("Logger initialized only once.");
 }
-

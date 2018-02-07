@@ -7,9 +7,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 error-chain = "0.11"
 jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
-polkadot-client = { path = "../client" }
+substrate-client = { path = "../client" }
 substrate-primitives = { path = "../primitives" }
 substrate-state-machine = { path = "../state-machine" }
+# TODO: Remove this and split out tests.
+polkadot-executor = { path = "../polkadot-executor" }
 
 [dev-dependencies]
 assert_matches = "1.1"

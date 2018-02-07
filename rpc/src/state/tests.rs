@@ -15,7 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use substrate_executor as executor;
+use polkadot_executor as executor;
 
 use self::error::{Error, ErrorKind};
 use client;

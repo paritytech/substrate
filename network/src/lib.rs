@@ -35,7 +35,7 @@ extern crate serde_json;
 // TODO: remove these two; split off dependent logic into polkadot-network and rename this crate
 // to substrate-network.
 extern crate polkadot_primitives as polkadot_primitives;
-extern crate polkadot_client as client;
+extern crate substrate_client as client;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;

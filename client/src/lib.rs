@@ -18,13 +18,11 @@
 
 #![warn(missing_docs)]
 
-extern crate polkadot_primitives;
 extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_codec as codec;
 extern crate substrate_executor;
-extern crate native_runtime;
 extern crate ed25519;
 
 extern crate triehash;
@@ -40,10 +38,6 @@ pub mod error;
 pub mod blockchain;
 pub mod backend;
 pub mod in_mem;
-
-mod genesis;
-
-pub use genesis::construct_genesis_block;
 
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
@@ -109,7 +103,6 @@ pub enum BlockStatus {
 	Unknown,
 }
 
-
 /// Create an instance of in-memory client.
 pub fn new_in_mem<E>(executor: E) -> error::Result<Client<in_mem::Backend, E>> where E: state_machine::CodeExecutor {
 	Client::new(in_mem::Backend::new(), executor)
@@ -124,7 +117,7 @@ impl<B, E> Client<B, E> where
 	pub fn new(backend: B, executor: E) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(0))?.is_none() {
 			trace!("Empty database, writing genesis block");
-			// TODO: spec
+			// TODO: spec, coming in from new_in_mem's params.
 			let genesis_header = block::Header {
 				parent_hash: Default::default(),
 				number: 0,
