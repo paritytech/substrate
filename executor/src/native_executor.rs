@@ -21,11 +21,18 @@ use wasm_executor::WasmExecutor;
 
 use std::panic::catch_unwind;
 
+/// Delegate for dispatching a CodeExecutor call to native code.
 pub trait NativeExecutionDispatch {
+	/// Get the wasm code that the native dispatch will be equivalent to.
 	fn native_equivalent() -> &'static [u8];
+	
+	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
+	/// if the `method` is unknown. Panics if there's an unrecoverable error.
 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>>;
 }
 
+/// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
+/// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
 pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
 	pub _dummy: ::std::marker::PhantomData<D>,
 }
