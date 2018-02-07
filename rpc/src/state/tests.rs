@@ -39,7 +39,7 @@ fn should_call_contract() {
 	let genesis_hash = "af65e54217fb213853703d57b80fc5b2bb834bf923046294d7a49bff62f0a8b2".into();
 
 	assert_matches!(
-		StateApi::call(&client, "balanceOf".into(), CallData(vec![1,2,3]), genesis_hash),
+		StateApi::call(&client, "balanceOf".into(), vec![1,2,3], genesis_hash),
 		Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
 	)
 }

@@ -48,7 +48,7 @@ pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
 
 use primitives::relay::block;
-use primitives::contract::{CallData, StorageKey, StorageData};
+use primitives::contract::{StorageKey, StorageData};
 
 use blockchain::Backend as BlockchainBackend;
 use backend::BlockImportOperation;
@@ -156,7 +156,7 @@ impl<B, E> Client<B, E> where
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	pub fn call(&self, hash: &block::HeaderHash, method: &str, call_data: &CallData) -> error::Result<CallResult> {
+	pub fn call(&self, hash: &block::HeaderHash, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let state = self.state_at(hash)?;
 		let mut changes = state_machine::OverlayedChanges::default();
 
