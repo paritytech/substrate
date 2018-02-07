@@ -67,6 +67,9 @@ impl Slicable for Digest {
 	}
 }
 
+/// The block "body": A bunch of transactions.
+pub type Body = Vec<UncheckedTransaction>;
+
 /// A Polkadot relay chain block.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -74,7 +77,7 @@ pub struct Block {
 	/// The block header.
 	pub header: Header,
 	/// All relay-chain transactions.
-	pub transactions: Vec<UncheckedTransaction>,
+	pub transactions: Body,
 }
 
 impl Slicable for Block {
@@ -165,7 +168,7 @@ mod tests {
 	use super::*;
 	use codec::Slicable;
 	use substrate_serializer as ser;
-	use parachain;
+	use primitives::hexdisplay::HexDisplay;
 
 	#[test]
 	fn test_header_serialization() {
@@ -192,28 +195,4 @@ mod tests {
 		let v = header.to_vec();
 		assert_eq!(Header::from_slice(&mut &v[..]).unwrap(), header);
 	}
-
-	#[test]
-	fn test_body_serialization() {
-		assert_eq!(ser::to_string_pretty(&Body {
-			candidates: vec![
-				parachain::Candidate {
-					parachain_index: 10.into(),
-					collator_signature: Default::default(),
-					unprocessed_ingress: Default::default(),
-					block: ::parachain::BlockData(vec![1, 3, 5, 8]),
-				}
-			],
-		}), r#"{
-  "candidates": [
-    {
-      "parachainIndex": 10,
-      "collatorSignature": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-      "unprocessedIngress": [],
-      "block": "0x01030508"
-    }
-  ]
-}"#);
-	}
-
 }

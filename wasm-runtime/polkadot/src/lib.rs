@@ -18,7 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
 extern crate substrate_runtime_std as rstd;
 
 #[macro_use]

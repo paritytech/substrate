@@ -338,12 +338,10 @@ mod tests {
 
 	#[test]
 	fn proposals_can_be_stored() {
-		use polkadot_primitives::{Proposal, InternalFunction};
+		use polkadot_primitives::Proposal;
 		let mut t = TestExternalities { storage: HashMap::new(), };
 		with_externalities(&mut t, || {
-			let x = Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra(25519),
-			};
+			let x = Proposal::StakingSetSessionsPerEra(25519);
 			put(b":test", &x);
 			let y: Proposal = get(b":test").unwrap();
 			assert_eq!(x, y);
