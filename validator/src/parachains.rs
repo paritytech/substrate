@@ -16,7 +16,7 @@
 
 use std::fmt;
 
-use primitives::validator;
+use polkadot_primitives::validator;
 use serde::de::DeserializeOwned;
 
 use error::Result;

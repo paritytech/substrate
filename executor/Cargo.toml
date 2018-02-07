@@ -10,7 +10,6 @@ substrate-runtime-io = { path = "../runtime-io" }
 substrate-primitives = { path = "../primitives" }
 substrate-serializer = { path = "../serializer" }
 substrate-state-machine = { path = "../state-machine"  }
-native-runtime = { path = "../native-runtime" }
 ed25519 = { path = "../ed25519" }
 serde = "1.0"
 serde_derive = "1.0"
@@ -20,6 +19,9 @@ rustc-hex = "1.0.0"
 triehash = "0.1.0"
 hex-literal = "0.1.0"
 log = "0.3"
+# TODO: Remove these and split out tests and a concrete executor.
+native-runtime = { path = "../native-runtime" }
+polkadot-primitives = { path = "../polkadot-primitives" }
 
 [dev-dependencies]
 assert_matches = "1.1"

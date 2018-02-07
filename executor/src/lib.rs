@@ -38,9 +38,12 @@ extern crate serde;
 extern crate parity_wasm;
 extern crate byteorder;
 extern crate rustc_hex;
-extern crate native_runtime;
 extern crate triehash;
 #[macro_use] extern crate log;
+
+// TODO: Remove and split out into polkadot-specific crate.
+extern crate native_runtime;
+extern crate polkadot_primitives;
 
 #[cfg(test)]
 #[macro_use]
