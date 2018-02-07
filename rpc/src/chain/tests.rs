@@ -14,13 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use polkadot_executor as executor;
+use substrate_executor as executor;
 use client;
 use super::*;
 
 #[test]
 fn should_return_header() {
-	let client = client::new_in_mem(executor::executor()).unwrap();
+	let test_genesis_block = block::Header {
+		parent_hash: 0.into(),
+		number: 0,
+		state_root: 0.into(),
+		transaction_root: Default::default(),
+		digest: Default::default(),
+	};
+
+	let client = client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap();
 
 	assert_matches!(
 		ChainApi::header(&client, "af65e54217fb213853703d57b80fc5b2bb834bf923046294d7a49bff62f0a8b2".into()),

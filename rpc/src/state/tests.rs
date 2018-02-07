@@ -14,15 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+use substrate_executor as executor;
 use super::*;
-use polkadot_executor as executor;
-
 use self::error::{Error, ErrorKind};
 use client;
 
 #[test]
 fn should_return_storage() {
-	let client = client::new_in_mem(executor::executor()).unwrap();
+	let test_genesis_block = block::Header {
+		parent_hash: 0.into(),
+		number: 0,
+		state_root: 0.into(),
+		transaction_root: Default::default(),
+		digest: Default::default(),
+	};
+
+	let client = client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap();
 	let genesis_hash = "af65e54217fb213853703d57b80fc5b2bb834bf923046294d7a49bff62f0a8b2".into();
 
 	assert_matches!(
@@ -35,7 +42,15 @@ fn should_return_storage() {
 #[ignore]	// TODO: [ToDr] reenable once we can properly mock the wasm executor env
 fn should_call_contract() {
 	// TODO [ToDr] Fix test after we are able to mock state.
-	let client = client::new_in_mem(executor::executor()).unwrap();
+	let test_genesis_block = block::Header {
+		parent_hash: 0.into(),
+		number: 0,
+		state_root: 0.into(),
+		transaction_root: Default::default(),
+		digest: Default::default(),
+	};
+
+	let client = client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap();
 	let genesis_hash = "af65e54217fb213853703d57b80fc5b2bb834bf923046294d7a49bff62f0a8b2".into();
 
 	assert_matches!(

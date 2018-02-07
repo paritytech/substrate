@@ -45,7 +45,7 @@ mod tests {
 	use state_machine::execute;
 	use state_machine::OverlayedChanges;
 	use state_machine::backend::InMemory;
-	use substrate_executor::executor;
+	use polkadot_executor::executor;
 	use polkadot_primitives::{AccountId, Hash, BlockNumber, Header, Digest, UncheckedTransaction,
 		Transaction, Function};
 	use ed25519::Pair;
