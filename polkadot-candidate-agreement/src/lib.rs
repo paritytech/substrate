@@ -314,7 +314,7 @@ impl<C: Context> SharedTable<C> {
 	/// Provide an iterator yielding pairs of (statement, received_from).
 	pub fn import_statements<I, U>(&self, iterable: I) -> U
 		where
-			I: Iterator<Item=(<C as TypeResolve>::SignedTableStatement, Option<C::AuthorityId>)>,
+			I: IntoIterator<Item=(<C as TypeResolve>::SignedTableStatement, Option<C::AuthorityId>)>,
 			U: ::std::iter::FromIterator<table::Summary<C::Digest, C::GroupId>>,
 	{
 		let mut inner = self.inner.lock();
