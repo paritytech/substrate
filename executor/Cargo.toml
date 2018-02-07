@@ -7,17 +7,17 @@ authors = ["Parity Technologies <admin@parity.io>"]
 error-chain = "0.11"
 substrate-codec = { path = "../codec", version = "0.1" }
 polkadot-runtime-std = { path = "../runtime-std", version = "0.1" }
-polkadot-primitives = { path = "../primitives", version = "0.1" }
+substrate-primitives = { path = "../primitives", version = "0.1" }
 polkadot-serializer = { path = "../serializer", version = "0.1" }
 polkadot-state-machine = { path = "../state-machine" , version = "0.1" }
+native-runtime = { path = "../native-runtime", version = "0.1" }
+ed25519 = { path = "../ed25519", version = "0.1" }
 serde = "1.0"
 serde_derive = "1.0"
 parity-wasm = "0.15.0"
 byteorder = "1.1"
 rustc-hex = "1.0.0"
-native-runtime = { path = "../native-runtime", version = "0.1" }
 triehash = "0.1.0"
-ed25519 = { path = "../ed25519", version = "0.1" }
 hex-literal = "0.1.0"
 log = "0.3"
 
