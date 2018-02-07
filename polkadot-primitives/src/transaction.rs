@@ -290,8 +290,6 @@ impl Slicable for Transaction {
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
 		// will be a prefix of u32, which has the total number of bytes following (we don't need
 		// to use this).
-		let _length_do_not_remove_me_see_above: u32 = try_opt!(Slicable::from_slice(value));
-
 		Some(Transaction {
 			signed: try_opt!(Slicable::from_slice(value)),
 			nonce: try_opt!(Slicable::from_slice(value)),
@@ -380,9 +378,10 @@ impl fmt::Debug for UncheckedTransaction {
 
 #[cfg(test)]
 mod tests {
-	use ::codec::Slicable;
-	use primitives;
 	use super::*;
+	use primitives;
+	use ::codec::Slicable;
+	use primitives::hexdisplay::HexDisplay;
 
 	#[test]
 	fn serialize_unchecked() {
@@ -394,8 +393,15 @@ mod tests {
 			},
 			signature: primitives::hash::H512([0; 64]),
 		};
+		// 71000000
+		// 0101010101010101010101010101010101010101010101010101010101010101
+		// e703000000000000
+		// 00
+		// df0f0200
+		// 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
 		let v = Slicable::to_vec(&tx);
+		println!("{}", HexDisplay::from(&v));
 		assert_eq!(UncheckedTransaction::from_slice(&mut &v[..]).unwrap(), tx);
 	}
 }

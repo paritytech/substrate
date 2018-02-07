@@ -189,9 +189,7 @@ mod tests {
 
 			// Block 1: Make proposal. Approve it. Era length changes.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: Proposal::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&two, 1);
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 2);
@@ -214,17 +212,13 @@ mod tests {
 
 			// Block 1: Make proposal. Fail it.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: Proposal::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 
 			// Block 2: Make proposal. Approve it. It should change era length.
 			with_env(|e| e.block_number = 2);
-			public::propose(&one, &Proposal {
-				function: Proposal::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&two, 2);
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 2);
@@ -247,9 +241,7 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: Proposal::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
@@ -272,9 +264,7 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: Proposal::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&two, 0);
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
@@ -298,9 +288,7 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: Proposal::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&two, 1);
 			public::approve(&two, 1);
 			staking::internal::check_new_era();
@@ -325,12 +313,8 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: Proposal::StakingSetSessionsPerEra(2),
-			});
-			public::propose(&two, &Proposal {
-				function: Proposal::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
+			public::propose(&two, &Proposal::StakingSetSessionsPerEra(2));
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
 		});
@@ -377,9 +361,7 @@ mod tests {
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
-			public::propose(&one, &Proposal {
-				function: Proposal::StakingSetSessionsPerEra(2),
-			});
+			public::propose(&one, &Proposal::StakingSetSessionsPerEra(2));
 			public::approve(&four, 1);
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
