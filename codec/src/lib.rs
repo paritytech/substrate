@@ -20,6 +20,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
+extern crate substrate_runtime_std as rstd;
+
 mod endiansensitive;
 mod slicable;
 mod joiner;
@@ -29,12 +31,3 @@ pub use self::endiansensitive::EndianSensitive;
 pub use self::slicable::{Slicable, NonTrivialSlicable};
 pub use self::joiner::Joiner;
 pub use self::keyedvec::KeyedVec;
-
-// TODO: move these into runtime-std and `extern crate runtime_std as std;`
-#[cfg(not(feature = "std"))]
-mod std {
-	extern crate alloc;
-
-	pub use core::*;
-	pub use self::alloc::vec;
-}

@@ -21,7 +21,6 @@ use primitives::bytes;
 use primitives::H256;
 use rstd::vec::Vec;
 use codec::Slicable;
-use parachain;
 use transaction::UncheckedTransaction;
 
 /// Used to refer to a block number.
@@ -161,24 +160,12 @@ impl Slicable for Header {
 	}
 }
 
-/// A relay chain block body.
-///
-/// Included candidates should be sorted by parachain ID, and without duplicate
-/// IDs.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Body {
-	/// Parachain proposal blocks.
-	pub candidates: Vec<parachain::Candidate>,
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use codec::Slicable;
 	use substrate_serializer as ser;
+	use parachain;
 
 	#[test]
 	fn test_header_serialization() {

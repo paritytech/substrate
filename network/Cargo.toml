@@ -11,6 +11,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 ethcore-network = { git = "https://github.com/paritytech/parity.git" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 substrate-primitives = { path = "../primitives" }
+polkadot-primitives = { path = "../polkadot-primitives" }
 polkadot-client = { path = "../client" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-serializer = { path = "../serializer" }

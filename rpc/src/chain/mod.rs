@@ -16,7 +16,7 @@
 
 //! Polkadot blockchain API.
 
-use primitives::relay::block;
+use primitives::block;
 use client;
 use state_machine;
 

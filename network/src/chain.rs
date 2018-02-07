@@ -19,7 +19,7 @@
 use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus};
 use client::error::Error;
 use state_machine;
-use primitives::relay::block;
+use primitives::block;
 
 pub trait Client : Send + Sync {
 	/// Given a hash return a header
@@ -55,5 +55,3 @@ impl<B, E> Client for PolkadotClient<B, E> where
 		(self as &Client).block_hash(block_number)
 	}
 }
-
-

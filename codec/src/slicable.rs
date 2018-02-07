@@ -16,8 +16,8 @@
 
 //! Serialisation.
 
-use std::{mem, slice};
-use std::vec::Vec;
+use rstd::{mem, slice};
+use rstd::vec::Vec;
 use super::joiner::Joiner;
 use super::endiansensitive::EndianSensitive;
 
@@ -44,7 +44,7 @@ impl<T: EndianSensitive> Slicable for T {
 		let size = mem::size_of::<T>();
 		assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
 		if value.len() >= size {
-			let x: T = unsafe { ::std::ptr::read(value.as_ptr() as *const T) };
+			let x: T = unsafe { ::rstd::ptr::read(value.as_ptr() as *const T) };
 			*value = &value[size..];
 			Some(x.from_le())
 		} else {
@@ -115,7 +115,7 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 	}
 
 	fn to_vec(&self) -> Vec<u8> {
-		use std::iter::Extend;
+		use rstd::iter::Extend;
 
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");

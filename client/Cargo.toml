@@ -7,6 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 error-chain = "0.11"
 log = "0.3"
 parking_lot = "0.4"
+polkadot-primitives = { path = "../polkadot-primitives", version = "0.1" }
 substrate-primitives = { path = "../primitives", version = "0.1" }
 substrate-state-machine = { path = "../state-machine", version = "0.1" }
 substrate-serializer = { path = "../serializer" }

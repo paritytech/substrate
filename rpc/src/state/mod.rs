@@ -22,8 +22,8 @@ mod error;
 mod tests;
 
 use client::{self, Client};
-use primitives::relay::block;
-use primitives::contract::{StorageKey, StorageData};
+use primitives::block;
+use primitives::storage::{StorageKey, StorageData};
 use state_machine;
 
 use self::error::Result;

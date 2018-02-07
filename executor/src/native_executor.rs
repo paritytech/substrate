@@ -63,7 +63,7 @@ mod tests {
 	use native_runtime::runtime::staking::balance;
 	use state_machine::TestExternalities;
 	use primitives::twox_128;
-	use primitives::relay::{Hash, Header, BlockNumber, Block, Digest, Transaction,
+	use polkadot_primitives::{Hash, Header, BlockNumber, Block, Digest, Transaction,
 		UncheckedTransaction, Function, AccountId};
 	use ed25519::Pair;
 

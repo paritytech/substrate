@@ -18,6 +18,7 @@
 
 #![warn(missing_docs)]
 
+extern crate polkadot_primitives;
 extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
@@ -47,8 +48,8 @@ pub use genesis::construct_genesis_block;
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
 
-use primitives::relay::block;
-use primitives::contract::{StorageKey, StorageData};
+use primitives::block;
+use primitives::storage::{StorageKey, StorageData};
 
 use blockchain::Backend as BlockchainBackend;
 use backend::BlockImportOperation;
