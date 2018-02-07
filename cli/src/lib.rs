@@ -26,7 +26,7 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_io as runtime_io;
-extern crate polkadot_rpc_servers as rpc;
+extern crate substrate_rpc_servers as rpc;
 extern crate polkadot_primitives;
 extern crate polkadot_executor;
 extern crate native_runtime;
