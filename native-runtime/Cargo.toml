@@ -6,11 +6,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 substrate-codec = { path = "../codec", version = "0.1" }
 polkadot-runtime-std = { path = "../runtime-std", version = "0.1" }
-polkadot-primitives = { path = "../primitives", version = "0.1" }
+substrate-primitives = { path = "../primitives", version = "0.1" }
 rustc-hex = "1.0"
 hex-literal = "0.1.0"
 log = { version = "0.3", optional = true }
 
 [features]
 default = ["std"]
-std = ["substrate-codec/std", "polkadot-runtime-std/std", "polkadot-primitives/std", "log"]
+std = ["substrate-codec/std", "polkadot-runtime-std/std", "substrate-primitives/std", "log"]

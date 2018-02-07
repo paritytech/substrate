@@ -20,7 +20,7 @@
 
 extern crate jsonrpc_core as rpc;
 extern crate polkadot_client as client;
-extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as primitives;
 extern crate polkadot_state_machine as state_machine;
 
 #[macro_use]

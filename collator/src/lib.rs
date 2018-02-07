@@ -45,7 +45,7 @@
 //! to be performed, as the collation logic itself.
 
 extern crate futures;
-extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as primitives;
 
 use std::collections::{BTreeSet, BTreeMap};
 

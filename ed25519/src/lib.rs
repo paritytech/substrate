@@ -17,7 +17,7 @@
 //! Simple Ed25519 API.
 
 extern crate ring;
-extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as primitives;
 extern crate untrusted;
 extern crate rustc_hex;
 
