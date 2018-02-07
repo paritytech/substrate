@@ -22,8 +22,11 @@ extern crate untrusted;
 extern crate rustc_hex;
 
 use ring::{rand, signature};
-use primitives::Signature;
+use primitives::hash::H512;
 use rustc_hex::FromHex;
+
+/// Alias to 520-bit hash when used in the context of a signature on the relay chain.
+pub type Signature = H512;
 
 /// Verify a message without type checking the parameters' types for the right size.
 pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {

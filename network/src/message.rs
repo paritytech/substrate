@@ -18,8 +18,7 @@
 
 use std::borrow::Borrow;
 use primitives::parachain::Id as ParachainId;
-use primitives::AccountId;
-use primitives::relay::{BlockNumber, HeaderHash, Header, Body};
+use primitives::relay::{AccountId, BlockNumber, HeaderHash, Header, Body};
 use service::Role as RoleFlags;
 
 pub type RequestId = u64;

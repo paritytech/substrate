@@ -28,8 +28,7 @@
 use runtime_std::prelude::*;
 use codec::KeyedVec;
 use support::storage;
-use primitives::{AccountId, Hash, BlockNumber};
-use primitives::relay::Proposal;
+use primitives::relay::{Proposal, AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
 
 const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
@@ -149,8 +148,7 @@ mod tests {
 	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::AccountId;
-	use primitives::relay::InternalFunction;
+	use primitives::relay::{AccountId, InternalFunction};
 	use runtime::{staking, session};
 
 	fn new_test_ext() -> TestExternalities {

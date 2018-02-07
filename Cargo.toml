@@ -20,7 +20,7 @@ members = [
 	"primitives",
 	"rpc-servers",
 	"rpc",
-	"runtime-codec",
+	"codec",
 	"runtime-std",
 	"serializer",
 	"state-machine",

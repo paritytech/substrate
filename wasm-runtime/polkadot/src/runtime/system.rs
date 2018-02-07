@@ -21,8 +21,8 @@ use runtime_std::prelude::*;
 use runtime_std::{mem, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
-use primitives::{AccountId, Hash, TxOrder, BlockNumber};
-use primitives::relay::{Block, Header, UncheckedTransaction, Function, Log};
+use primitives::relay::{AccountId, Hash, TxOrder, BlockNumber, Block, Header, UncheckedTransaction,
+	Function, Log};
 use runtime::{staking, session};
 
 const NONCE_OF: &[u8] = b"sys:non:";

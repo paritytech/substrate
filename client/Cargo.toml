@@ -11,7 +11,7 @@ polkadot-primitives = { path = "../primitives", version = "0.1" }
 polkadot-state-machine = { path = "../state-machine", version = "0.1" }
 polkadot-serializer = { path = "../serializer" }
 polkadot-executor = { path = "../executor" }
-polkadot-runtime-codec = { path = "../runtime-codec", version = "0.1" }
+polkadot-codec = { path = "../codec", version = "0.1" }
 native-runtime = { path = "../native-runtime" }
 triehash = "0.1"
 hex-literal = "0.1"

@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! This is part of the Polkadot runtime.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(lang_items))]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
@@ -22,7 +24,7 @@
 #![cfg_attr(feature = "std", doc = "Polkadot runtime standard library as compiled when linked with Rust's standard library.")]
 #![cfg_attr(not(feature = "std"), doc = "Polkadot's runtime standard library as compiled without Rust's standard library.")]
 
-extern crate polkadot_runtime_codec as codec;
+extern crate polkadot_codec as codec;
 
 #[cfg(feature = "std")]
 include!("../with_std.rs");
@@ -41,7 +43,7 @@ pub mod prelude {
 /// Type definitions and helpers for transactions.
 pub mod transaction {
 	pub use primitives::relay::{Transaction, UncheckedTransaction};
-	use primitives::Signature;
+	use primitives::relay::Signature;
 
 	#[cfg(feature = "std")]
 	use std::ops;
@@ -81,4 +83,3 @@ pub mod transaction {
 		}
 	}
 }
-

@@ -20,7 +20,7 @@
 use runtime_std::prelude::*;
 use codec::KeyedVec;
 use support::{storage, StorageVec};
-use primitives::{AccountId, SessionKey, BlockNumber};
+use primitives::relay::{AccountId, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
 const SESSION_LENGTH: &[u8] = b"ses:len";
@@ -140,7 +140,7 @@ mod tests {
 	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::AccountId;
+	use primitives::relay::AccountId;
 	use runtime::{consensus, session};
 
 	fn simple_setup() -> TestExternalities {

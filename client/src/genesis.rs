@@ -46,8 +46,8 @@ mod tests {
 	use state_machine::OverlayedChanges;
 	use state_machine::backend::InMemory;
 	use polkadot_executor::executor;
-	use primitives::{AccountId, Hash};
-	use primitives::relay::{BlockNumber, Header, Digest, UncheckedTransaction, Transaction, Function};
+	use primitives::relay::{AccountId, Hash, BlockNumber, Header, Digest, UncheckedTransaction,
+		Transaction, Function};
 	use primitives::contract::CallData;
 	use ed25519::Pair;
 
