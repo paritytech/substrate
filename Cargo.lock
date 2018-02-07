@@ -1045,6 +1045,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "polkadot-primitives"
+version = "0.1.0"
+dependencies = [
+ "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "byteorder 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fixed-hash 0.1.3 (git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm)",
+ "pretty_assertions 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-hex 2.0.0 (git+https://github.com/rphmeier/rustc-hex.git)",
+ "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-serializer 0.1.0",
+ "twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uint 0.1.2 (git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm)",
+]
+
+[[package]]
 name = "polkadot-rpc"
 version = "0.1.0"
 dependencies = [

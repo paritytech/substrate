@@ -34,8 +34,6 @@ extern crate byteorder;
 use std::collections::HashMap;
 use std::fmt;
 
-use primitives::contract::CallData;
-
 pub mod backend;
 mod ext;
 mod testing;
@@ -177,7 +175,7 @@ pub trait CodeExecutor: Sized + Send + Sync {
 		ext: &mut E,
 		code: &[u8],
 		method: &str,
-		data: &CallData,
+		data: &[u8],
 	) -> Result<Vec<u8>, Self::Error>;
 }
 
@@ -192,7 +190,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	method: &str,
-	call_data: &CallData,
+	call_data: &[u8],
 ) -> Result<Vec<u8>, Box<Error>> {
 
 	let result = {

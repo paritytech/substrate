@@ -14,26 +14,43 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! This is part of the Polkadot runtime.
+//! Shareable Polkadot types.
+
+#![warn(missing_docs)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(lang_items))]
-#![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#![cfg_attr(feature = "std", doc = "Polkadot runtime standard library as compiled when linked with Rust's standard library.")]
-#![cfg_attr(not(feature = "std"), doc = "Polkadot's runtime standard library as compiled without Rust's standard library.")]
+extern crate rustc_hex;
+
+extern crate serde;
+extern crate byteorder;
 
 #[cfg(feature = "std")]
-include!("../with_std.rs");
+extern crate twox_hash;
+#[cfg(feature = "std")]
+extern crate blake2_rfc;
+
+#[macro_use]
+extern crate crunchy;
+#[macro_use]
+extern crate fixed_hash;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate uint as uint_crate;
+
+#[cfg(feature = "std")]
+extern crate core;
+extern crate substrate_codec as codec;
+extern crate substrate_primitives as primitives;
+#[cfg(test)]
+extern crate substrate_serializer;
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
 
 #[cfg(not(feature = "std"))]
-include!("../without_std.rs");
-
-/// Prelude of common useful imports.
-///
-/// This should include only things which are in the normal std prelude.
-pub mod prelude {
-	pub use ::vec::Vec;
-	pub use ::boxed::Box;
-}
+#[macro_use]
+extern crate alloc;

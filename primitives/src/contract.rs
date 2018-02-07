@@ -20,16 +20,6 @@
 use bytes;
 use bytes::Vec;
 
-/// Contract call data.
-#[derive(Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct CallData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
-
-/// Contract output data.
-#[derive(Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct OutData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
-
 /// Contract storage key.
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]

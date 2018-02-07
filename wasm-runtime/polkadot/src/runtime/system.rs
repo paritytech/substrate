@@ -145,7 +145,7 @@ pub mod internal {
 }
 
 fn execute_transaction(utx: UncheckedTransaction) {
-	use runtime_std::transaction;
+	use ::transaction;
 
 	// Verify the signature is good.
 	let tx = match transaction::check(utx) {

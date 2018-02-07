@@ -22,7 +22,6 @@ use std::collections::HashMap;
 use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
 use parity_wasm::interpreter::{ItemIndex, DummyUserError};
 use parity_wasm::RuntimeValue::{I32, I64};
-use primitives::contract::CallData;
 use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use wasm_utils::{MemoryInstance, UserDefinedElements,
@@ -250,7 +249,7 @@ impl CodeExecutor for WasmExecutor {
 		ext: &mut E,
 		code: &[u8],
 		method: &str,
-		data: &CallData,
+		data: &[u8],
 	) -> Result<Vec<u8>> {
 		// TODO: handle all expects as errors to be returned.
 
@@ -262,9 +261,9 @@ impl CodeExecutor for WasmExecutor {
 		let memory = module.memory(ItemIndex::Internal(0)).expect("all modules compiled with rustc include memory segments; qed");
 		let mut fec = FunctionExecutor::new(&memory, ext);
 
-		let size = data.0.len() as u32;
+		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
-		memory.set(offset, &data.0).expect("heap always gives a sensible offset to write");
+		memory.set(offset, &data).expect("heap always gives a sensible offset to write");
 
 		let returned = program
 				.params_with_external("env", &mut fec)
@@ -323,7 +322,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_empty_return", &CallData(vec![])).unwrap();
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_empty_return", &[]).unwrap();
 		assert_eq!(output, vec![0u8; 0]);
 	}
 
@@ -332,10 +331,10 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_panic", &CallData(vec![]));
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_panic", &[]);
 		assert!(output.is_err());
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_conditional_panic", &CallData(vec![2]));
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_conditional_panic", &[2]);
 		assert!(output.is_err());
 	}
 
@@ -345,7 +344,7 @@ mod tests {
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_data_in", &CallData(b"Hello world".to_vec())).unwrap();
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_data_in", b"Hello world").unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -362,11 +361,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"".to_vec())).unwrap(),
+			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &[]).unwrap(),
 			blake2_256(&b""[..]).to_vec()
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &CallData(b"Hello world!".to_vec())).unwrap(),
+			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
 			blake2_256(&b"Hello world!"[..]).to_vec()
 		);
 	}
@@ -376,11 +375,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", &CallData(b"".to_vec())).unwrap(),
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", &[]).unwrap(),
 			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a").unwrap()
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", &CallData(b"Hello world!".to_vec())).unwrap(),
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
 			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74").unwrap()
 		);
 	}
@@ -390,11 +389,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", &CallData(b"".to_vec())).unwrap(),
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", &[]).unwrap(),
 			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd5").unwrap()
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", &CallData(b"Hello world!".to_vec())).unwrap(),
+			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
 			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af").unwrap()
 		);
 	}
@@ -409,7 +408,7 @@ mod tests {
 		calldata.extend_from_slice(key.public().as_ref());
 		calldata.extend_from_slice(sig.as_ref());
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &CallData(calldata)).unwrap(),
+			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![0]
 		);
 	}
@@ -419,7 +418,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &CallData(vec![])).unwrap(),
+			WasmExecutor.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
 			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.to_vec()
 		);
 	}
@@ -432,7 +431,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -446,7 +445,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &CallData(vec![].join(&Header::from_block_number(1u64)).join(&tx())));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_ok());
 
 		runtime_std::with_externalities(&mut t, || {
