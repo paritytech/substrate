@@ -5,13 +5,13 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 error-chain = "0.11"
-substrate-codec = { path = "../codec", version = "0.1" }
-polkadot-runtime-std = { path = "../runtime-std", version = "0.1" }
-substrate-primitives = { path = "../primitives", version = "0.1" }
-polkadot-serializer = { path = "../serializer", version = "0.1" }
-substrate-state-machine = { path = "../state-machine" , version = "0.1" }
-native-runtime = { path = "../native-runtime", version = "0.1" }
-ed25519 = { path = "../ed25519", version = "0.1" }
+substrate-codec = { path = "../codec" }
+polkadot-runtime-std = { path = "../runtime-std" }
+substrate-primitives = { path = "../primitives" }
+substrate-serializer = { path = "../serializer" }
+substrate-state-machine = { path = "../state-machine"  }
+native-runtime = { path = "../native-runtime" }
+ed25519 = { path = "../ed25519" }
 serde = "1.0"
 serde_derive = "1.0"
 parity-wasm = "0.15.0"

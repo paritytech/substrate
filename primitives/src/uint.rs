@@ -47,7 +47,7 @@ impl_serde!(U512, 8);
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use polkadot_serializer as ser;
+	use substrate_serializer as ser;
 
 	macro_rules! test {
 		($name: ident, $test_name: ident) => {

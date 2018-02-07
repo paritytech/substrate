@@ -13,7 +13,7 @@ ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 substrate-primitives = { path = "../primitives" }
 polkadot-client = { path = "../client" }
 substrate-state-machine = { path = "../state-machine" }
-polkadot-serializer = { path = "../serializer" }
+substrate-serializer = { path = "../serializer" }
 log = "0.3"
 env_logger = "0.4"
 rand = "0.3"

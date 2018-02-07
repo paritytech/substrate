@@ -30,7 +30,7 @@ extern crate ipnetwork;
 extern crate substrate_primitives as primitives;
 extern crate polkadot_client as client;
 extern crate substrate_state_machine as state_machine;
-extern crate polkadot_serializer as ser;
+extern crate substrate_serializer as ser;
 extern crate serde;
 extern crate serde_json;
 #[macro_use] extern crate serde_derive;

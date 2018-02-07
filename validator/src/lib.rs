@@ -19,7 +19,7 @@
 #[warn(missing_docs)]
 
 extern crate substrate_primitives as primitives;
-extern crate polkadot_serializer as serializer;
+extern crate substrate_serializer as serializer;
 extern crate serde;
 
 #[macro_use]

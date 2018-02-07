@@ -30,7 +30,7 @@
 extern crate substrate_codec as codec;
 extern crate polkadot_runtime_std as runtime_std;
 extern crate substrate_primitives as primitives;
-extern crate polkadot_serializer as serializer;
+extern crate substrate_serializer as serializer;
 extern crate substrate_state_machine as state_machine;
 extern crate ed25519;
 
