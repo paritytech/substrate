@@ -51,6 +51,6 @@ impl<B, E> StateApi for Client<B, E> where
 	}
 
 	fn call(&self, method: String, data: Vec<u8>, block: block::HeaderHash) -> Result<Vec<u8>> {
-		Ok(self.call(&BlockId::hash(block), &method, &data)?.return_data)
+		Ok(self.call(&BlockId::Hash(block), &method, &data)?.return_data)
 	}
 }

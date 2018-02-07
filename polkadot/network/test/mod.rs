@@ -20,7 +20,7 @@ use std::collections::{VecDeque, HashSet, HashMap};
 use std::sync::Arc;
 use parking_lot::RwLock;
 use client::{self, BlockId};
-use polkadot_executor as executor;
+use substrate_executor as executor;
 use io::SyncIo;
 use protocol::Protocol;
 use config::ProtocolConfig;

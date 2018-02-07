@@ -55,7 +55,7 @@ mod blocks;
 mod test;
 
 #[cfg(test)]
-extern crate polkadot_executor;
+extern crate substrate_executor;
 
 pub use service::Service;
 pub use protocol::{ProtocolStatus};
