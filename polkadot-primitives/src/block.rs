@@ -168,7 +168,6 @@ mod tests {
 	use super::*;
 	use codec::Slicable;
 	use substrate_serializer as ser;
-	use primitives::hexdisplay::HexDisplay;
 
 	#[test]
 	fn test_header_serialization() {

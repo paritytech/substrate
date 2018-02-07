@@ -1019,6 +1019,7 @@ name = "polkadot-collator"
 version = "0.1.0"
 dependencies = [
  "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-primitives 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
