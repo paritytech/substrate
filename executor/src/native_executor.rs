@@ -16,7 +16,7 @@
 
 use error::{Error, ErrorKind, Result};
 use native_runtime as runtime;
-use runtime_std;
+use runtime_io;
 use state_machine::{Externalities, CodeExecutor};
 use wasm_executor::WasmExecutor;
 
@@ -42,7 +42,7 @@ impl CodeExecutor for NativeExecutor {
 		// get a proper build script, this must be strictly adhered to or things will go wrong.
 		let native_equivalent = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
 		if code == &native_equivalent[..] {
-			runtime_std::with_externalities(ext, || match method {
+			runtime_io::with_externalities(ext, || match method {
 				"execute_block" => safe_call(|| runtime::execute_block(data)),
 				"execute_transaction" => safe_call(|| runtime::execute_transaction(data)),
 				"finalise_block" => safe_call(|| runtime::finalise_block(data)),
@@ -116,7 +116,7 @@ mod tests {
 		let r = NativeExecutor.call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_ok());
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one), 42);
 			assert_eq!(balance(&two), 69);
 		});
@@ -134,7 +134,7 @@ mod tests {
 		let r = NativeExecutor.call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_ok());
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one), 42);
 			assert_eq!(balance(&two), 69);
 		});
@@ -243,14 +243,14 @@ mod tests {
 
 		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 42);
 			assert_eq!(balance(&two()), 69);
 		});
 
 		NativeExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 32);
 			assert_eq!(balance(&two()), 79);
 		});
@@ -262,14 +262,14 @@ mod tests {
 
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 42);
 			assert_eq!(balance(&two()), 69);
 		});
 
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
-		runtime_std::with_externalities(&mut t, || {
+		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&one()), 32);
 			assert_eq!(balance(&two()), 79);
 		});

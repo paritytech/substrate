@@ -22,6 +22,7 @@ members = [
 	"rpc",
 	"codec",
 	"polkadot-primitives",
+	"runtime-io",
 	"runtime-std",
 	"serializer",
 	"state-machine",

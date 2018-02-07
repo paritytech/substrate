@@ -30,6 +30,7 @@ pub use self::slicable::{Slicable, NonTrivialSlicable};
 pub use self::joiner::Joiner;
 pub use self::keyedvec::KeyedVec;
 
+// TODO: move these into runtime-std and `extern crate runtime_std as std;`
 #[cfg(not(feature = "std"))]
 mod std {
 	extern crate alloc;

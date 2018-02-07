@@ -16,19 +16,16 @@
 
 //! Transaction type.
 
-use bytes::Vec;
+use rstd::vec::Vec;
 use codec::Slicable;
 
 #[cfg(feature = "std")]
 use std::fmt;
 
-#[cfg(not(feature = "std"))]
-use alloc::fmt;
+use block::Number as BlockNumber;
 
-use relay::block::Number as BlockNumber;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[repr(u8)]
 enum InternalFunctionId {
 	/// Set the system's code.
@@ -71,9 +68,9 @@ impl InternalFunctionId {
 }
 
 /// Internal functions that can be dispatched to.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum InternalFunction {
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub enum Proposal {
 	/// Set the system's code.
 	SystemSetCode(Vec<u8>),
 	/// Set the session length.
@@ -93,67 +90,59 @@ pub enum InternalFunction {
 
 }
 
-/// An internal function.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct Proposal {
-	/// The privileged function to call.
-	pub function: InternalFunction,
-}
-
 impl Slicable for Proposal {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
 		let id = try_opt!(u8::from_slice(value).and_then(InternalFunctionId::from_u8));
 		let function = match id {
 			InternalFunctionId::SystemSetCode =>
-				InternalFunction::SystemSetCode(try_opt!(Slicable::from_slice(value))),
+				Proposal::SystemSetCode(try_opt!(Slicable::from_slice(value))),
 			InternalFunctionId::SessionSetLength =>
-				InternalFunction::SessionSetLength(try_opt!(Slicable::from_slice(value))),
-			InternalFunctionId::SessionForceNewSession => InternalFunction::SessionForceNewSession,
+				Proposal::SessionSetLength(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::SessionForceNewSession => Proposal::SessionForceNewSession,
 			InternalFunctionId::StakingSetSessionsPerEra =>
-				InternalFunction::StakingSetSessionsPerEra(try_opt!(Slicable::from_slice(value))),
+				Proposal::StakingSetSessionsPerEra(try_opt!(Slicable::from_slice(value))),
 			InternalFunctionId::StakingSetBondingDuration =>
-				InternalFunction::StakingSetBondingDuration(try_opt!(Slicable::from_slice(value))),
+				Proposal::StakingSetBondingDuration(try_opt!(Slicable::from_slice(value))),
 			InternalFunctionId::StakingSetValidatorCount =>
-				InternalFunction::StakingSetValidatorCount(try_opt!(Slicable::from_slice(value))),
-			InternalFunctionId::StakingForceNewEra => InternalFunction::StakingForceNewEra,
+				Proposal::StakingSetValidatorCount(try_opt!(Slicable::from_slice(value))),
+			InternalFunctionId::StakingForceNewEra => Proposal::StakingForceNewEra,
 			InternalFunctionId::GovernanceSetApprovalPpmRequired =>
-				InternalFunction::GovernanceSetApprovalPpmRequired(try_opt!(Slicable::from_slice(value))),
+				Proposal::GovernanceSetApprovalPpmRequired(try_opt!(Slicable::from_slice(value))),
 		};
 
-		Some(Proposal { function })
+		Some(function)
 	}
 
 	fn to_vec(&self) -> Vec<u8> {
 		let mut v = Vec::new();
-		match self.function {
-			InternalFunction::SystemSetCode(ref data) => {
+		match *self {
+			Proposal::SystemSetCode(ref data) => {
 				(InternalFunctionId::SystemSetCode as u8).as_slice_then(|s| v.extend(s));
 				data.as_slice_then(|s| v.extend(s));
 			}
-			InternalFunction::SessionSetLength(ref data) => {
+			Proposal::SessionSetLength(ref data) => {
 				(InternalFunctionId::SessionSetLength as u8).as_slice_then(|s| v.extend(s));
 				data.as_slice_then(|s| v.extend(s));
 			}
-			InternalFunction::SessionForceNewSession => {
+			Proposal::SessionForceNewSession => {
 				(InternalFunctionId::SessionForceNewSession as u8).as_slice_then(|s| v.extend(s));
 			}
-			InternalFunction::StakingSetSessionsPerEra(ref data) => {
+			Proposal::StakingSetSessionsPerEra(ref data) => {
 				(InternalFunctionId::StakingSetSessionsPerEra as u8).as_slice_then(|s| v.extend(s));
 				data.as_slice_then(|s| v.extend(s));
 			}
-			InternalFunction::StakingSetBondingDuration(ref data) => {
+			Proposal::StakingSetBondingDuration(ref data) => {
 				(InternalFunctionId::StakingSetBondingDuration as u8).as_slice_then(|s| v.extend(s));
 				data.as_slice_then(|s| v.extend(s));
 			}
-			InternalFunction::StakingSetValidatorCount(ref data) => {
+			Proposal::StakingSetValidatorCount(ref data) => {
 				(InternalFunctionId::StakingSetValidatorCount as u8).as_slice_then(|s| v.extend(s));
 				data.as_slice_then(|s| v.extend(s));
 			}
-			InternalFunction::StakingForceNewEra => {
+			Proposal::StakingForceNewEra => {
 				(InternalFunctionId::StakingForceNewEra as u8).as_slice_then(|s| v.extend(s));
 			}
-			InternalFunction::GovernanceSetApprovalPpmRequired(ref data) => {
+			Proposal::GovernanceSetApprovalPpmRequired(ref data) => {
 				(InternalFunctionId::GovernanceSetApprovalPpmRequired as u8).as_slice_then(|s| v.extend(s));
 				data.as_slice_then(|s| v.extend(s));
 			}
@@ -169,8 +158,8 @@ impl Slicable for Proposal {
 
 
 /// Public functions that can be dispatched to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[repr(u8)]
 enum FunctionId {
 	/// Set the timestamp.
@@ -201,19 +190,19 @@ impl FunctionId {
 }
 
 /// Functions on the runtime.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum Function {
 	/// Set the timestamp.
 	TimestampSet(u64),
 	/// Set temporary session key as a validator.
-	SessionSetKey(::relay::SessionKey),
+	SessionSetKey(::SessionKey),
 	/// Staking subsystem: begin staking.
 	StakingStake,
 	/// Staking subsystem: stop staking.
 	StakingUnstake,
 	/// Staking subsystem: transfer stake.
-	StakingTransfer(::relay::AccountId, u64),
+	StakingTransfer(::AccountId, u64),
 	/// Make a proposal for the governance system.
 	GovernancePropose(Proposal),
 	/// Approve a proposal for the governance system.
@@ -284,8 +273,8 @@ impl Slicable for Function {
 }
 
 /// A vetted and verified transaction from the external world.
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Transaction {
 	/// Who signed it (note this is not a signature).
 	pub signed: super::AccountId,
@@ -297,6 +286,12 @@ pub struct Transaction {
 
 impl Slicable for Transaction {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		// This is a little more complicated than usua since the binary format must be compatible
+		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
+		// will be a prefix of u32, which has the total number of bytes following (we don't need
+		// to use this).
+		let _length_do_not_remove_me_see_above: u32 = try_opt!(Slicable::from_slice(value));
+
 		Some(Transaction {
 			signed: try_opt!(Slicable::from_slice(value)),
 			nonce: try_opt!(Slicable::from_slice(value)),
@@ -319,6 +314,8 @@ impl Slicable for Transaction {
 	}
 }
 
+impl ::codec::NonTrivialSlicable for Transaction {}
+
 /// A transactions right from the external world. Unchecked.
 #[derive(Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -331,8 +328,14 @@ pub struct UncheckedTransaction {
 
 impl Slicable for UncheckedTransaction {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		// This is a little more complicated than usua since the binary format must be compatible
+		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
+		// will be a prefix of u32, which has the total number of bytes following (we don't need
+		// to use this).
+		let _length_do_not_remove_me_see_above: u32 = try_opt!(Slicable::from_slice(value));
+
 		Some(UncheckedTransaction {
-			transaction: try_opt!(Transaction::from_slice(value)),
+			transaction: try_opt!(Slicable::from_slice(value)),
 			signature: try_opt!(Slicable::from_slice(value)),
 		})
 	}
@@ -340,10 +343,17 @@ impl Slicable for UncheckedTransaction {
 	fn to_vec(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
+		// need to prefix with the total length as u32 to ensure it's binary comptible with
+		// Vec<u8>. we'll make room for it here, then overwrite once we know the length.
+		v.extend(&[0u8; 4]);
+
 		self.transaction.signed.as_slice_then(|s| v.extend(s));
 		self.transaction.nonce.as_slice_then(|s| v.extend(s));
 		self.transaction.function.as_slice_then(|s| v.extend(s));
 		self.signature.as_slice_then(|s| v.extend(s));
+
+		let length = (v.len() - 4) as u32;
+		length.as_slice_then(|s| v[0..4].copy_from_slice(s));
 
 		v
 	}
@@ -361,6 +371,7 @@ impl PartialEq for UncheckedTransaction {
 	}
 }
 
+#[cfg(feature = "std")]
 impl fmt::Debug for UncheckedTransaction {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "UncheckedTransaction({:?})", self.transaction)
@@ -370,6 +381,7 @@ impl fmt::Debug for UncheckedTransaction {
 #[cfg(test)]
 mod tests {
 	use ::codec::Slicable;
+	use primitives;
 	use super::*;
 
 	#[test]
@@ -380,7 +392,7 @@ mod tests {
 				nonce: 999u64,
 				function: Function::TimestampSet(135135),
 			},
-			signature: ::hash::H512([0; 64]),
+			signature: primitives::hash::H512([0; 64]),
 		};
 
 		let v = Slicable::to_vec(&tx);

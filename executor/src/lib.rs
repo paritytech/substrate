@@ -28,7 +28,7 @@
 #![warn(missing_docs)]
 
 extern crate substrate_codec as codec;
-extern crate polkadot_runtime_std as runtime_std;
+extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_serializer as serializer;
 extern crate substrate_state_machine as state_machine;

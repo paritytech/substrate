@@ -5,7 +5,8 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
+substrate-runtime-std = { path = "../runtime-std", default_features = false }
 
 [features]
-std = []
 default = ["std"]
+std = ["substrate-runtime-std/std"]

@@ -19,7 +19,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
-extern crate polkadot_runtime_std as runtime_std;
+extern crate substrate_runtime_std as rstd;
+
+#[macro_use]
+extern crate substrate_runtime_io as runtime_io;
 
 #[cfg(feature = "std")]
 extern crate rustc_hex;
@@ -28,7 +31,8 @@ extern crate rustc_hex;
 extern crate log;
 
 extern crate substrate_codec as codec;
-extern crate substrate_primitives as primitives;
+extern crate substrate_primitives;
+extern crate polkadot_primitives;
 
 #[cfg(test)]
 #[macro_use]
@@ -38,20 +42,15 @@ extern crate hex_literal;
 pub mod support;
 pub mod runtime;
 
-use runtime_std::prelude::*;
+use rstd::prelude::*;
 use codec::Slicable;
-use primitives::relay::{Header, Block, UncheckedTransaction};
+use polkadot_primitives::{Header, Block, UncheckedTransaction};
 
 /// Type definitions and helpers for transactions.
 pub mod transaction {
-	pub use primitives::relay::{Transaction, UncheckedTransaction};
-	use primitives::relay::Signature;
-
-	#[cfg(feature = "std")]
-	use std::ops;
-
-	#[cfg(not(feature = "std"))]
-	use core::ops;
+	use rstd::ops;
+	use polkadot_primitives::Signature;
+	pub use polkadot_primitives::{Transaction, UncheckedTransaction};
 
 	/// A type-safe indicator that a transaction has been checked.
 	#[derive(PartialEq, Eq, Clone)]
@@ -78,7 +77,7 @@ pub mod transaction {
 	/// On failure, return the transaction back.
 	pub fn check(tx: UncheckedTransaction) -> Result<CheckedTransaction, UncheckedTransaction> {
 		let msg = ::codec::Slicable::to_vec(&tx.transaction);
-		if ::runtime_std::ed25519_verify(&tx.signature.0, &msg, &tx.transaction.signed) {
+		if ::runtime_io::ed25519_verify(&tx.signature.0, &msg, &tx.transaction.signed) {
 			Ok(CheckedTransaction(tx))
 		} else {
 			Err(tx)
@@ -110,7 +109,7 @@ pub fn finalise_block(mut input: &[u8]) -> Vec<u8> {
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
-	use runtime_std::print;
+	use runtime_io::print;
 
 	print("run_tests...");
 	let block = Block::from_slice(&mut input).unwrap();

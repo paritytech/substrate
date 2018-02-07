@@ -22,37 +22,36 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate rustc_hex;
-
-extern crate serde;
 extern crate byteorder;
-
-#[cfg(feature = "std")]
-extern crate twox_hash;
-#[cfg(feature = "std")]
-extern crate blake2_rfc;
-
 #[macro_use]
 extern crate crunchy;
 #[macro_use]
 extern crate fixed_hash;
+#[macro_use]
+extern crate uint as uint_crate;
+extern crate substrate_codec as codec;
+
+#[cfg(feature = "std")]
+extern crate serde;
+#[cfg(feature = "std")]
+extern crate twox_hash;
+#[cfg(feature = "std")]
+extern crate blake2_rfc;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
-#[macro_use]
-extern crate uint as uint_crate;
-
 #[cfg(feature = "std")]
 extern crate core;
-extern crate substrate_codec as codec;
+
+#[macro_use]
+extern crate substrate_runtime_std as rstd;
+
 #[cfg(test)]
 extern crate substrate_serializer;
+
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
-
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc;
 
 // TODO: factor out to separate crate.
 macro_rules! try_opt {
@@ -64,23 +63,27 @@ macro_rules! try_opt {
 	}
 }
 
-mod bytes;
-pub mod contract;
-pub mod hash;
+#[cfg(feature = "std")]
+pub mod bytes;
+#[cfg(feature = "std")]
+pub mod hashing;
+#[cfg(feature = "std")]
+pub use hashing::{blake2_256, twox_128, twox_256};
+#[cfg(feature = "std")]
 pub mod hexdisplay;
-pub mod parachain;
-pub mod relay;
+
+pub mod storage;
+pub mod hash;
 pub mod uint;
-pub mod validator;
+pub mod block;
 
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "std")]
-pub mod hashing;
-
 pub use self::hash::{H160, H256};
 pub use self::uint::{U256, U512};
 
-#[cfg(feature = "std")]
-pub use hashing::{blake2_256, twox_128, twox_256};
+pub use block::{Block, Header};
+
+/// An identifier for an authority in the consensus algorithm. The same as ed25519::Public.
+pub type AuthorityId = [u8; 32];

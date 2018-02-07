@@ -16,15 +16,15 @@
 
 //! Stuff to do with the runtime's storage.
 
-use runtime_std::prelude::*;
-use runtime_std::{self, twox_128};
+use rstd::prelude::*;
+use runtime_io::{self, twox_128};
 use codec::{Slicable, KeyedVec};
 
 // TODO: consider using blake256 to avoid possible preimage attack.
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-	let raw = runtime_std::storage(&twox_128(key)[..]);
+	let raw = runtime_io::storage(&twox_128(key)[..]);
 	Slicable::from_slice(&mut &raw[..])
 }
 
@@ -48,12 +48,12 @@ pub fn get_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_va
 
 /// Please `value` in storage under `key`.
 pub fn put<T: Slicable>(key: &[u8], value: &T) {
-	value.as_slice_then(|slice| runtime_std::set_storage(&twox_128(key)[..], slice));
+	value.as_slice_then(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
 }
 
 /// Please `value` in storage under `key`.
 pub fn place<T: Slicable>(key: &[u8], value: T) {
-	value.as_slice_then(|slice| runtime_std::set_storage(&twox_128(key)[..], slice));
+	value.as_slice_then(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -86,22 +86,22 @@ pub fn take_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_v
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(key: &[u8]) -> bool {
 	let mut x = [0u8; 1];
-	runtime_std::read_storage(&twox_128(key)[..], &mut x[..], 0) >= 1
+	runtime_io::read_storage(&twox_128(key)[..], &mut x[..], 0) >= 1
 }
 
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(key: &[u8]) {
-	runtime_std::set_storage(&twox_128(key)[..], b"");
+	runtime_io::set_storage(&twox_128(key)[..], b"");
 }
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(key: &[u8]) -> Vec<u8> {
-	runtime_std::storage(&twox_128(key)[..])
+	runtime_io::storage(&twox_128(key)[..])
 }
 
 /// Put a raw byte slice into storage.
 pub fn put_raw(key: &[u8], value: &[u8]) {
-	runtime_std::set_storage(&twox_128(key)[..], value)
+	runtime_io::set_storage(&twox_128(key)[..], value)
 }
 
 /// A trait to conveniently store a vector of storable data.
@@ -142,11 +142,11 @@ pub trait StorageVec {
 }
 
 pub mod unhashed {
-	use super::{runtime_std, Slicable, KeyedVec, Vec};
+	use super::{runtime_io, Slicable, KeyedVec, Vec};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-		let raw = runtime_std::storage(key);
+		let raw = runtime_io::storage(key);
 		T::from_slice(&mut &raw[..])
 	}
 
@@ -170,12 +170,12 @@ pub mod unhashed {
 
 	/// Please `value` in storage under `key`.
 	pub fn put<T: Slicable>(key: &[u8], value: &T) {
-		value.as_slice_then(|slice| runtime_std::set_storage(key, slice));
+		value.as_slice_then(|slice| runtime_io::set_storage(key, slice));
 	}
 
 	/// Please `value` in storage under `key`.
 	pub fn place<T: Slicable>(key: &[u8], value: T) {
-		value.as_slice_then(|slice| runtime_std::set_storage(key, slice));
+		value.as_slice_then(|slice| runtime_io::set_storage(key, slice));
 	}
 
 	/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -208,22 +208,22 @@ pub mod unhashed {
 	/// Check to see if `key` has an explicit entry in storage.
 	pub fn exists(key: &[u8]) -> bool {
 		let mut x = [0u8; 1];
-		runtime_std::read_storage(key, &mut x[..], 0) >= 1
+		runtime_io::read_storage(key, &mut x[..], 0) >= 1
 	}
 
 	/// Ensure `key` has no explicit entry in storage.
 	pub fn kill(key: &[u8]) {
-		runtime_std::set_storage(key, b"");
+		runtime_io::set_storage(key, b"");
 	}
 
 	/// Get a Vec of bytes from storage.
 	pub fn get_raw(key: &[u8]) -> Vec<u8> {
-		runtime_std::storage(key)
+		runtime_io::storage(key)
 	}
 
 	/// Put a raw byte slice into storage.
 	pub fn put_raw(key: &[u8], value: &[u8]) {
-		runtime_std::set_storage(key, value)
+		runtime_io::set_storage(key, value)
 	}
 
 	/// A trait to conveniently store a vector of storable data.
@@ -269,7 +269,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use support::HexDisplay;
-	use runtime_std::{storage, twox_128, TestExternalities, with_externalities};
+	use runtime_io::{storage, twox_128, TestExternalities, with_externalities};
 
 	#[test]
 	fn integers_can_be_stored() {
@@ -310,7 +310,7 @@ mod tests {
 	fn vecs_can_be_retrieved() {
 		let mut t = TestExternalities { storage: HashMap::new(), };
 		with_externalities(&mut t, || {
-			runtime_std::set_storage(&twox_128(b":test"), b"\x0b\0\0\0Hello world");
+			runtime_io::set_storage(&twox_128(b":test"), b"\x0b\0\0\0Hello world");
 			let x = b"Hello world".to_vec();
 			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test"))));
 			let y = get::<Vec<u8>>(b":test").unwrap();
