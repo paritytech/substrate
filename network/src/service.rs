@@ -19,7 +19,7 @@ use std::collections::{BTreeMap};
 use std::io;
 use network::{NetworkProtocolHandler, NetworkService, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
-use primitives::relay::{TransactionHash, Header};
+use primitives::block::{TransactionHash, Header};
 use core_io::{TimerToken};
 use io::NetSyncIo;
 use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo, TransactionStats};

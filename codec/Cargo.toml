@@ -1,11 +1,12 @@
 [package]
-name = "polkadot-runtime-codec"
+name = "substrate-codec"
 description = "Serialization and deserialization codec for runtime values"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
+substrate-runtime-std = { path = "../runtime-std", default_features = false }
 
 [features]
-std = []
 default = ["std"]
+std = ["substrate-runtime-std/std"]

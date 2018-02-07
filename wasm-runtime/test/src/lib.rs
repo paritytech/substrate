@@ -7,8 +7,8 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 #[macro_use]
-extern crate polkadot_runtime_std as runtime_std;
-use runtime_std::{
+extern crate substrate_runtime_io as runtime_io;
+use runtime_io::{
 	set_storage, storage, print, blake2_256,
 	twox_128, twox_256, ed25519_verify, enumerated_trie_root
 };

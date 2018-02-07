@@ -16,7 +16,7 @@
 
 use std::fmt;
 
-use primitives::{validator, parachain};
+use polkadot_primitives::{validator, parachain};
 use serde::de::DeserializeOwned;
 use serializer;
 
@@ -99,4 +99,3 @@ impl<M, B, T, R> Code for T where
 		Ok(self.check(messages, downloads, block_data, head_data)?.into())
 	}
 }
-

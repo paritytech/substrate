@@ -20,8 +20,8 @@
 
 extern crate jsonrpc_core as rpc;
 extern crate polkadot_client as client;
-extern crate polkadot_primitives as primitives;
-extern crate polkadot_state_machine as state_machine;
+extern crate substrate_primitives as primitives;
+extern crate substrate_state_machine as state_machine;
 
 #[macro_use]
 extern crate error_chain;
@@ -29,7 +29,7 @@ extern crate error_chain;
 extern crate jsonrpc_macros;
 
 #[cfg(test)]
-extern crate polkadot_executor;
+extern crate substrate_executor;
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;

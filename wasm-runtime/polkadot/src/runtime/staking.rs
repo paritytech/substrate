@@ -16,12 +16,12 @@
 
 //! Staking manager: Handles balances and periodically determines the best set of validators.
 
-use runtime_std::prelude::*;
-use runtime_std::cell::RefCell;
-use runtime_std::print;
+use rstd::prelude::*;
+use runtime_io::cell::RefCell;
+use runtime_io::print;
 use codec::KeyedVec;
 use support::{storage, StorageVec};
-use primitives::{BlockNumber, AccountId};
+use polkadot_primitives::{BlockNumber, AccountId};
 use runtime::{system, session, governance};
 
 /// The balance of an account.
@@ -213,10 +213,10 @@ mod tests {
 	use super::public::*;
 	use super::privileged::*;
 
-	use runtime_std::{with_externalities, twox_128, TestExternalities};
+	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::AccountId;
+	use polkadot_primitives::AccountId;
 	use runtime::{staking, session};
 
 	#[test]

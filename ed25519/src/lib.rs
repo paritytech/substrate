@@ -1,29 +1,32 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Simple Ed25519 API.
 
 extern crate ring;
-extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as primitives;
 extern crate untrusted;
 extern crate rustc_hex;
 
 use ring::{rand, signature};
-use primitives::Signature;
+use primitives::hash::H512;
 use rustc_hex::FromHex;
+
+/// Alias to 520-bit hash when used in the context of a signature on the relay chain.
+pub type Signature = H512;
 
 /// Verify a message without type checking the parameters' types for the right size.
 pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {
