@@ -82,7 +82,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let prepare_genesis = || {
 		storage = genesis_config.genesis_map();
 		let block = genesis::construct_genesis_block(&storage);
-		storage.extend(additional_storage_with_genesis(&block).into_iter());
+		storage.extend(additional_storage_with_genesis(&block));
 		(primitives::block::Header::from_slice(&mut block.header.to_vec().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 	};
 	let client = client::new_in_mem(executor, prepare_genesis)?;
