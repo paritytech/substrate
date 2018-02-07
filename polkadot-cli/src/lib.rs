@@ -25,7 +25,6 @@ extern crate substrate_codec as codec;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
-extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_rpc_servers as rpc;
 extern crate polkadot_primitives;
 extern crate polkadot_executor;
@@ -42,6 +41,9 @@ extern crate log;
 
 mod genesis;
 pub mod error;
+
+use codec::Slicable;
+use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
 
 /// Parse command line arguments and start the node.
 ///
@@ -67,7 +69,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let mut storage = Default::default();
 	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
 
-	use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
 	let genesis_config = GenesisConfig {
 		validators: vec![god_key.clone()],
 		authorities: vec![god_key.clone()],
@@ -82,7 +83,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		storage = genesis_config.genesis_map();
 		let block = genesis::construct_genesis_block(&storage);
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
-		use codec::Slicable;
 		(primitives::block::Header::from_slice(&mut block.header.to_vec().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 	};
 	let client = client::new_in_mem(executor, prepare_genesis)?;
