@@ -24,3 +24,5 @@ pub use core::mem;
 pub use core::slice;
 pub use core::cell;
 pub use core::ops;
+pub use core::iter;
+pub use core::ptr;

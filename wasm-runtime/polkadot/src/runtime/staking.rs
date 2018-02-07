@@ -216,7 +216,7 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::relay::AccountId;
+	use polkadot_primitives::AccountId;
 	use runtime::{staking, session};
 
 	#[test]

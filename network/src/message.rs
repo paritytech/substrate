@@ -17,9 +17,10 @@
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
 use std::borrow::Borrow;
-use primitives::parachain::Id as ParachainId;
-use primitives::relay::{AccountId, BlockNumber, HeaderHash, Header, Body};
+use primitives::AuthorityId;
+use primitives::block::{Number as BlockNumber, HeaderHash, Header, Body};
 use service::Role as RoleFlags;
+use polkadot_primitives::parachain::Id as ParachainId;
 
 pub type RequestId = u64;
 type Bytes = Vec<u8>;
@@ -149,7 +150,7 @@ pub struct Status {
 	/// Signatue of `best_hash` made with validator address. Required for the validator role.
 	pub validator_signature: Option<Signature>,
 	/// Validator address. Required for the validator role.
-	pub validator_id: Option<AccountId>,
+	pub validator_id: Option<AuthorityId>,
 	/// Parachain id. Required for the collator role.
 	pub parachain_id: Option<ParachainId>,
 }

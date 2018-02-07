@@ -83,6 +83,9 @@ impl Slicable for Digest {
 	}
 }
 
+/// The body of a block is just a bunch of transactions.
+pub type Body = Vec<Transaction>;
+
 /// A Substrate relay chain block.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -90,7 +93,7 @@ pub struct Block {
 	/// The block header.
 	pub header: Header,
 	/// All relay-chain transactions.
-	pub transactions: Vec<Transaction>,
+	pub transactions: Body,
 }
 
 impl Slicable for Block {

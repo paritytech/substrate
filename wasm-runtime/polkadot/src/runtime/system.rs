@@ -221,7 +221,7 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
 	use support::{StaticHexInto, HexDisplay, one, two};
-	use primitives::relay::{Header, Digest, UncheckedTransaction, Transaction, Function};
+	use polkadot_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
 	use runtime::staking;
 
 	#[test]

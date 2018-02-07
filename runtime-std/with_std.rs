@@ -21,3 +21,5 @@ pub use std::boxed;
 pub use std::slice;
 pub use std::mem;
 pub use std::ops;
+pub use std::iter;
+pub use std::ptr;

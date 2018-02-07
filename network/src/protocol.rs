@@ -20,7 +20,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use serde_json;
 use std::time;
-use primitives::relay::{HeaderHash, TransactionHash, BlockNumber, Header};
+use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber, Header};
 use network::{PeerId, NodeId};
 
 use message::{self, Message};
@@ -342,6 +342,3 @@ impl Protocol {
 		&*self.chain
 	}
 }
-
-
-

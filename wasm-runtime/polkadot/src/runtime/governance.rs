@@ -148,7 +148,7 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::relay::{AccountId, InternalFunction};
+	use polkadot_primitives::{AccountId, Proposal};
 	use runtime::{staking, session};
 
 	fn new_test_ext() -> TestExternalities {

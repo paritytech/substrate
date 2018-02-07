@@ -18,7 +18,7 @@
 
 use state_machine;
 use error;
-use primitives::relay::block;
+use primitives::block;
 use blockchain::{self, BlockId};
 
 /// Block insertion transction. Keeps hold if the inseted block state and data.
@@ -50,4 +50,3 @@ pub trait Backend {
 	/// Returns state backend for specified block.
 	fn state_at(&self, block: BlockId) -> error::Result<Self::State>;
 }
-
