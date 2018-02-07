@@ -18,7 +18,7 @@
 extern crate environmental;
 
 extern crate polkadot_state_machine;
-extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as primitives;
 extern crate triehash;
 extern crate ed25519;
 

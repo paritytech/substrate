@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Polkadot State Machine"
 
 [dependencies]
-polkadot-primitives = { path = "../primitives", version = "0.1.0" }
+substrate-primitives = { path = "../primitives", version = "0.1.0" }
 hashdb = "0.1.1"
 patricia-trie = "0.1.0"
 memorydb = "0.1.1"

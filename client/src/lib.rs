@@ -18,7 +18,7 @@
 
 #![warn(missing_docs)]
 
-extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as primitives;
 extern crate polkadot_state_machine as state_machine;
 extern crate polkadot_serializer as ser;
 extern crate substrate_codec as codec;

@@ -11,5 +11,5 @@ error-chain = "0.11"
 log = "0.3"
 polkadot-client = { path = "../client" }
 substrate-executor = { path = "../executor" }
-polkadot-primitives = { path = "../primitives" }
+substrate-primitives = { path = "../primitives" }
 polkadot-rpc-servers = { path = "../rpc-servers" }

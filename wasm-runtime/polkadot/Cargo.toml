@@ -9,8 +9,8 @@ crate-type = ["cdylib"]
 [dependencies]
 substrate-codec = { path = "../../codec", version = "0.1", default-features = false }
 polkadot-runtime-std = { path = "../../runtime-std", version = "0.1", default-features = false }
-polkadot-primitives = { path = "../../primitives", version = "0.1", default-features = false }
+substrate-primitives = { path = "../../primitives", version = "0.1", default-features = false }
 
 [features]
 default = []
-std = ["substrate-codec/std", "polkadot-runtime-std/std", "polkadot-primitives/std"]
+std = ["substrate-codec/std", "polkadot-runtime-std/std", "substrate-primitives/std"]

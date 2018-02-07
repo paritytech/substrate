@@ -18,7 +18,7 @@
 
 #[warn(missing_docs)]
 
-extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as primitives;
 extern crate polkadot_serializer as serializer;
 extern crate serde;
 

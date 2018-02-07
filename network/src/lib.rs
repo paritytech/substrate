@@ -27,7 +27,7 @@ extern crate semver;
 extern crate parking_lot;
 extern crate smallvec;
 extern crate ipnetwork;
-extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as primitives;
 extern crate polkadot_client as client;
 extern crate polkadot_state_machine as state_machine;
 extern crate polkadot_serializer as ser;
