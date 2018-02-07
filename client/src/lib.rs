@@ -21,20 +21,33 @@
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_state_machine as state_machine;
 extern crate polkadot_serializer as ser;
+extern crate polkadot_runtime_codec as codec;
+extern crate polkadot_executor;
+extern crate native_runtime;
+extern crate ed25519;
 
+extern crate triehash;
 extern crate parking_lot;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
+
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
 
 pub mod error;
 pub mod blockchain;
 pub mod backend;
 pub mod in_mem;
 
+mod genesis;
+
+pub use genesis::construct_genesis_block;
+
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
 
-use primitives::{block};
+use primitives::relay::block;
 use primitives::contract::{CallData, StorageKey, StorageData};
 
 use blockchain::Backend as BlockchainBackend;
@@ -115,8 +128,8 @@ impl<B, E> Client<B, E> where
 				parent_hash: Default::default(),
 				number: 0,
 				state_root: Default::default(),
-				parachain_activity: Default::default(),
-				logs: Default::default(),
+				transaction_root: Default::default(),
+				digest: Default::default(),
 			};
 
 			let mut tx = backend.begin_transaction(BlockId::Hash(block::HeaderHash::default()))?;

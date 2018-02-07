@@ -10,9 +10,14 @@ documentation = "https://paritytech.github.io/pwasm-std/pwasm_std/"
 description = "Parity WebAssembly standard library internal allocator"
 keywords = ["wasm", "parity", "webassembly", "blockchain"]
 categories = ["no-std", "embedded"]
+build = "build.rs"
 
 [dependencies]
 pwasm-libc = { path = "../pwasm-libc", version = "0.1" }
 
+[build-dependencies]
+rustc_version = "0.2"
+
 [features]
 strict = []
+nightly = []

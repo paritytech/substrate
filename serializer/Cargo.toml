@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-serde = "1.0"
+serde = { version = "1.0", default_features = false }
 serde_json = "1.0"

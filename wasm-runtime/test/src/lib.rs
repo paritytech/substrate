@@ -7,9 +7,11 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 #[macro_use]
-extern crate runtime_std;
-use runtime_std::{set_storage, storage, print, blake2_256, twox_128, twox_256, ed25519_verify,
-	enumerated_trie_root};
+extern crate polkadot_runtime_std as runtime_std;
+use runtime_std::{
+	set_storage, storage, print, blake2_256,
+	twox_128, twox_256, ed25519_verify, enumerated_trie_root
+};
 
 fn test_blake2_256(input: &[u8]) -> Vec<u8> {
 	blake2_256(&input).to_vec()

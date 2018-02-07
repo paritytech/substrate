@@ -14,25 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Primitive types for the runtime.
+//! Implements the serialization and deserialization codec for polkadot runtime
+//! values.
 
-mod misc;
-mod proposal;
-mod function;
-mod digest;
-mod header;
-mod transaction;
-mod uncheckedtransaction;
-mod block;
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg(test)]
-mod tests;
+mod endiansensitive;
+mod slicable;
+mod joiner;
+mod keyedvec;
 
-pub use self::misc::{AccountID, EVERYBODY, SessionKey, ChainID, BlockNumber, TxOrder, Hash};
-pub use self::proposal::{Proposal, InternalFunction};
-pub use self::function::Function;
-pub use self::digest::Digest;
-pub use self::header::Header;
-pub use self::transaction::Transaction;
-pub use self::uncheckedtransaction::UncheckedTransaction;
-pub use self::block::Block;
+pub use self::endiansensitive::EndianSensitive;
+pub use self::slicable::{Slicable, NonTrivialSlicable};
+pub use self::joiner::Joiner;
+pub use self::keyedvec::KeyedVec;
+
+#[cfg(not(feature = "std"))]
+mod std {
+	extern crate alloc;
+
+	pub use core::*;
+	pub use self::alloc::vec;
+}

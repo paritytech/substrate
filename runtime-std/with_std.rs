@@ -14,16 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The with-std support functions for the runtime.
-
 #[macro_use]
 extern crate environmental;
+
 extern crate polkadot_state_machine;
 extern crate polkadot_primitives as primitives;
 extern crate triehash;
-
-use std::fmt;
-use primitives::ed25519;
+extern crate ed25519;
 
 pub use std::vec;
 pub use std::rc;
@@ -32,25 +29,13 @@ pub use std::boxed;
 pub use std::slice;
 pub use std::mem;
 
-/// Prelude of common useful imports.
-///
-/// This should include only things which are in the normal std prelude.
-pub mod prelude {
-	pub use std::vec::Vec;
-	pub use std::boxed::Box;
-}
+// re-export hashing functions.
+pub use primitives::{blake2_256, twox_128, twox_256};
 
 pub use polkadot_state_machine::{Externalities, ExternalitiesError, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 
 // TODO: use the real error, not NoError.
-
-#[derive(Debug)]
-/// As it says - an empty type we use for errors.
-pub struct NoError;
-impl fmt::Display for NoError {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "") }
-}
 
 environmental!(ext : trait Externalities);
 
@@ -105,12 +90,9 @@ pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
 	triehash::ordered_trie_root(serialised_values.iter().map(|s| s.to_vec())).0
 }
 
-/// Conduct a Keccak-256 hash of the given data.
-pub use primitives::{blake2_256, twox_128, twox_256};
-
 /// Verify a ed25519 signature.
 pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {
-	ed25519::verify(&sig[..], msg, &pubkey[..])
+	ed25519::verify(sig, msg, pubkey)
 }
 
 /// Execute the given closure with global function available whose functionality routes into the
@@ -119,6 +101,7 @@ pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities, f: F) ->
 	ext::using(ext, f)
 }
 
+/// Trait for things which can be printed.
 pub trait Printable {
 	fn print(self);
 }
@@ -141,6 +124,7 @@ impl Printable for u64 {
 	}
 }
 
+/// Print a printable value.
 pub fn print<T: Printable + Sized>(value: T) {
 	value.print();
 }
@@ -151,7 +135,7 @@ macro_rules! impl_stubs {
 }
 
 #[cfg(test)]
-mod tests {
+mod std_tests {
 	use super::*;
 
 	macro_rules! map {

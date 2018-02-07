@@ -28,7 +28,8 @@
 use runtime_std::prelude::*;
 use codec::KeyedVec;
 use support::storage;
-use primitives::{AccountID, Hash, BlockNumber, Proposal};
+use primitives::{AccountId, Hash, BlockNumber};
+use primitives::relay::Proposal;
 use runtime::{staking, system, session};
 
 const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
@@ -43,7 +44,7 @@ pub fn approval_ppm_required() -> u32 {
 
 /// The number of concrete validator approvals required for a proposal to pass.
 pub fn approvals_required() -> u32 {
-	approval_ppm_required() * session::validator_count() as u32 / 1000
+	approval_ppm_required() * session::validator_count() / 1000
 }
 
 pub mod public {
@@ -52,7 +53,7 @@ pub mod public {
 	/// Propose a sensitive action to be taken. Any action that is enactable by `Proposal` is valid.
 	/// Proposal is by the `transactor` and will automatically count as an approval. Transactor must
 	/// be a current validator. It is illegal to propose when there is already a proposal in effect.
-	pub fn propose(validator: &AccountID, proposal: &Proposal) {
+	pub fn propose(validator: &AccountId, proposal: &Proposal) {
 		if storage::exists(CURRENT_PROPOSAL) {
 			panic!("there may only be one proposal per era.");
 		}
@@ -62,7 +63,7 @@ pub mod public {
 
 	/// Approve the current era's proposal. Transactor must be a validator. This may not be done more
 	/// than once for any validator in an era.
-	pub fn approve(validator: &AccountID, era_index: BlockNumber) {
+	pub fn approve(validator: &AccountId, era_index: BlockNumber) {
 		if era_index != staking::current_era() {
 			panic!("approval vote applied on non-current era.")
 		}
@@ -94,6 +95,7 @@ pub mod privileged {
 
 pub mod internal {
 	use super::*;
+	use primitives::relay::{Proposal, InternalFunction};
 
 	/// Current era is ending; we should finish up any proposals.
 	pub fn end_of_an_era() {
@@ -105,8 +107,38 @@ pub mod internal {
 				.take(approvals_required as usize)
 				.count() as u32;
 			if approved == approvals_required {
-				proposal.enact();
+				enact_proposal(proposal);
 			}
+		}
+	}
+
+	fn enact_proposal(proposal: Proposal) {
+		match proposal.function {
+			InternalFunction::SystemSetCode(code) => {
+				system::privileged::set_code(&code);
+			}
+			InternalFunction::SessionSetLength(value) => {
+				session::privileged::set_length(value);
+			}
+			InternalFunction::SessionForceNewSession => {
+				session::privileged::force_new_session();
+			}
+			InternalFunction::StakingSetSessionsPerEra(value) => {
+				staking::privileged::set_sessions_per_era(value);
+			}
+			InternalFunction::StakingSetBondingDuration(value) => {
+				staking::privileged::set_bonding_duration(value);
+			}
+			InternalFunction::StakingSetValidatorCount(value) => {
+				staking::privileged::set_validator_count(value);
+			}
+			InternalFunction::StakingForceNewEra => {
+				staking::privileged::force_new_era()
+			}
+			InternalFunction::GovernanceSetApprovalPpmRequired(value) => {
+				self::privileged::set_approval_ppm_required(value);
+			}
+
 		}
 	}
 }
@@ -117,7 +149,8 @@ mod tests {
 	use runtime_std::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use support::{one, two, with_env};
-	use primitives::{AccountID, InternalFunction};
+	use primitives::AccountId;
+	use primitives::relay::InternalFunction;
 	use runtime::{staking, session};
 
 	fn new_test_ext() -> TestExternalities {
@@ -152,15 +185,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
 			// Block 1: Make proposal. Approve it. Era length changes.
 			with_env(|e| e.block_number = 1);
 			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra,
-				input_data: vec![].join(&2u64),
+				function: InternalFunction::StakingSetSessionsPerEra(2),
 			});
 			public::approve(&two, 1);
 			staking::internal::check_new_era();
@@ -178,15 +210,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
 			// Block 1: Make proposal. Fail it.
 			with_env(|e| e.block_number = 1);
 			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra,
-				input_data: vec![].join(&2u64),
+				function: InternalFunction::StakingSetSessionsPerEra(2),
 			});
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
@@ -194,8 +225,7 @@ mod tests {
 			// Block 2: Make proposal. Approve it. It should change era length.
 			with_env(|e| e.block_number = 2);
 			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra,
-				input_data: vec![].join(&2u64),
+				function: InternalFunction::StakingSetSessionsPerEra(2),
 			});
 			public::approve(&two, 2);
 			staking::internal::check_new_era();
@@ -213,15 +243,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
 			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra,
-				input_data: vec![].join(&2u64),
+				function: InternalFunction::StakingSetSessionsPerEra(2),
 			});
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
@@ -239,15 +268,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
 			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra,
-				input_data: vec![].join(&2u64),
+				function: InternalFunction::StakingSetSessionsPerEra(2),
 			});
 			public::approve(&two, 0);
 			staking::internal::check_new_era();
@@ -266,15 +294,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
 			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra,
-				input_data: vec![].join(&2u64),
+				function: InternalFunction::StakingSetSessionsPerEra(2),
 			});
 			public::approve(&two, 1);
 			public::approve(&two, 1);
@@ -294,19 +321,17 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
 			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra,
-				input_data: vec![].join(&2u64),
+				function: InternalFunction::StakingSetSessionsPerEra(2),
 			});
 			public::propose(&two, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra,
-				input_data: vec![].join(&2u64),
+				function: InternalFunction::StakingSetSessionsPerEra(2),
 			});
 			staking::internal::check_new_era();
 			assert_eq!(staking::era_length(), 1);
@@ -324,7 +349,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
@@ -348,15 +373,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::current_era(), 1u64);
-			assert_eq!(session::validator_count(), 3usize);
+			assert_eq!(session::validator_count(), 3u32);
 			assert_eq!(session::validators(), vec![one.clone(), two.clone(), three.clone()]);
 			assert!(!session::validators().into_iter().position(|v| &v == &one).is_none());
 
 			// Block 1: Make proposal. Will have only 1 vote. No change.
 			with_env(|e| e.block_number = 1);
 			public::propose(&one, &Proposal {
-				function: InternalFunction::StakingSetSessionsPerEra,
-				input_data: vec![].join(&2u64),
+				function: InternalFunction::StakingSetSessionsPerEra(2),
 			});
 			public::approve(&four, 1);
 			staking::internal::check_new_era();

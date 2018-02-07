@@ -14,14 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Digest type.
+//! Trait
 
-use runtime_std::prelude::*;
+use std::iter::Extend;
+use super::slicable::Slicable;
 
-#[derive(Clone, Default)]
-#[cfg_attr(feature = "with-std", derive(PartialEq, Debug))]
-/// The digest of a block, useful for light-clients.
-pub struct Digest {
-	/// All logs that have happened in the block.
-	pub logs: Vec<Vec<u8>>,
+/// Trait to allow itself to be serialised into a value which can be extended
+/// by bytes.
+pub trait Joiner {
+	fn join<V: Slicable + Sized>(self, value: &V) -> Self;
+}
+
+impl<T> Joiner for T where T: for<'a> Extend<&'a u8> {
+	fn join<V: Slicable + Sized>(mut self, value: &V) -> Self {
+		value.as_slice_then(|s| self.extend(s));
+		self
+	}
 }

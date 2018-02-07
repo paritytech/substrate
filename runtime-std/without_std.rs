@@ -1,10 +1,12 @@
-#![no_std]
-#![feature(lang_items)]
-#![feature(core_intrinsics)]
-#![feature(alloc)]
-#![cfg_attr(feature = "strict", deny(warnings))]
-
+#[cfg(feature = "nightly")]
 extern crate alloc;
+
+#[cfg(feature = "nightly")]
+extern crate pwasm_libc;
+#[cfg(feature = "nightly")]
+extern crate pwasm_alloc;
+
+extern crate polkadot_primitives as primitives;
 
 pub use alloc::vec;
 pub use alloc::boxed;
@@ -13,16 +15,7 @@ pub use core::mem;
 pub use core::slice;
 pub use core::cell;
 
-/// Common re-exports that are useful to have in scope.
-pub mod prelude {
-	pub use alloc::vec::Vec;
-	pub use alloc::boxed::Box;
-}
-
 use alloc::vec::Vec;
-
-extern crate pwasm_libc;
-extern crate pwasm_alloc;
 
 #[lang = "panic_fmt"]
 #[no_mangle]
@@ -43,7 +36,7 @@ extern "C" {
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
-	fn ext_enumerated_trie_root(values_data: *const u8, values_len: u32, lens_data: *const u32, lens_len: u32, result: *mut u8);
+	fn ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
 	fn ext_chain_id() -> u64;
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
@@ -51,6 +44,7 @@ extern "C" {
 	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
 }
 
+/// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Vec<u8> {
 	let mut length: u32 = 0;
 	unsafe {
@@ -59,6 +53,7 @@ pub fn storage(key: &[u8]) -> Vec<u8> {
 	}
 }
 
+/// Set the storage to some particular key.
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	unsafe {
 		ext_set_storage(
@@ -68,6 +63,8 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 	}
 }
 
+/// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
+/// the number of bytes that the key in storage was.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
 	unsafe {
 		ext_get_storage_into(key.as_ptr(), key.len() as u32, value_out.as_mut_ptr(), value_out.len() as u32, value_offset as u32) as usize
@@ -90,7 +87,7 @@ pub fn enumerated_trie_root(values: &[&[u8]]) -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
 	unsafe {
 		ext_enumerated_trie_root(
-			values.as_ptr(), values.len() as u32,
+			values.as_ptr(),
 			lens.as_ptr(), lens.len() as u32,
 			result.as_mut_ptr()
 		);
@@ -139,6 +136,7 @@ pub fn ed25519_verify(sig: &[u8], msg: &[u8], pubkey: &[u8]) -> bool {
 	} == 0
 }
 
+/// Trait for things which can be printed.
 pub trait Printable {
 	fn print(self);
 }
@@ -165,6 +163,7 @@ impl Printable for u64 {
 	}
 }
 
+/// Print a printable value.
 pub fn print<T: Printable + Sized>(value: T) {
 	value.print();
 }

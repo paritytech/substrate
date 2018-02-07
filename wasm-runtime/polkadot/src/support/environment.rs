@@ -21,17 +21,18 @@ use runtime_std::mem;
 use runtime_std::cell::RefCell;
 use runtime_std::rc::Rc;
 
-use primitives::{BlockNumber, Digest};
+use primitives::relay::{BlockNumber, Digest};
+use primitives::Hash;
 
 #[derive(Default)]
 /// The information that can be accessed globally.
 pub struct Environment {
 	/// The current block number.
 	pub block_number: BlockNumber,
+	/// The current block's parent hash.
+	pub parent_hash: Hash,
 	/// The current block digest.
 	pub digest: Digest,
-	/// The number of log items in this block that have been accounted for so far.
-	pub next_log_index: usize,
 }
 
 /// Do something with the environment and return its value. Keep the function short.
