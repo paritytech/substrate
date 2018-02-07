@@ -9,7 +9,7 @@ substrate-codec = { path = "../codec", version = "0.1" }
 polkadot-runtime-std = { path = "../runtime-std", version = "0.1" }
 substrate-primitives = { path = "../primitives", version = "0.1" }
 polkadot-serializer = { path = "../serializer", version = "0.1" }
-polkadot-state-machine = { path = "../state-machine" , version = "0.1" }
+substrate-state-machine = { path = "../state-machine" , version = "0.1" }
 native-runtime = { path = "../native-runtime", version = "0.1" }
 ed25519 = { path = "../ed25519", version = "0.1" }
 serde = "1.0"

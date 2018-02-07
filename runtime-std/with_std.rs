@@ -17,7 +17,7 @@
 #[macro_use]
 extern crate environmental;
 
-extern crate polkadot_state_machine;
+extern crate substrate_state_machine;
 extern crate substrate_primitives as primitives;
 extern crate triehash;
 extern crate ed25519;
@@ -32,7 +32,7 @@ pub use std::mem;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256};
 
-pub use polkadot_state_machine::{Externalities, ExternalitiesError, TestExternalities};
+pub use substrate_state_machine::{Externalities, ExternalitiesError, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 
 // TODO: use the real error, not NoError.

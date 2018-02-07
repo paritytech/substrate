@@ -1,8 +1,8 @@
 [package]
-name = "polkadot-state-machine"
+name = "substrate-state-machine"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Polkadot State Machine"
+description = "Substrate State Machine"
 
 [dependencies]
 substrate-primitives = { path = "../primitives", version = "0.1.0" }
