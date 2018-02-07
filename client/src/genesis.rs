@@ -17,7 +17,7 @@
 //! Tool for creating the genesis block.
 
 use std::collections::HashMap;
-use primitives::{Block, Header};
+use polkadot_primitives::{Block, Header};
 use triehash::trie_root;
 
 /// Create a genesis block, given the initial storage.

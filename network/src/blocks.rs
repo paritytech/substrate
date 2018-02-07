@@ -190,7 +190,7 @@ impl BlockCollection {
 mod test {
 	use super::{BlockCollection, BlockData};
 	use message;
-	use primitives::HeaderHash;
+	use primitives::block::HeaderHash;
 
 	fn is_empty(bc: &BlockCollection) -> bool {
 		bc.blocks.is_empty() &&
