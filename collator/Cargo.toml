@@ -6,4 +6,5 @@ description = "Abstract collation logic"
 
 [dependencies]
 substrate-primitives = { path = "../primitives", version = "0.1" }
+polkadot-primitives = { path = "../polkadot-primitives", version = "0.1" }
 futures = "0.1.17"
