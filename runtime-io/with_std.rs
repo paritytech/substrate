@@ -131,7 +131,16 @@ pub fn print<T: Printable + Sized>(value: T) {
 
 #[macro_export]
 macro_rules! impl_stubs {
-	($( $name:ident ),*) => {}
+	($( $name:ident ),*) => {
+		pub fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+			match method {
+				$(
+					stringify!($name) => Some($name(data)),
+				)*
+				_ => None,
+			}
+		}
+	}
 }
 
 #[cfg(test)]
