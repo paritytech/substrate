@@ -1,0 +1,16 @@
+[package]
+name = "runtime-test"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+substrate-runtime-io = { path = "../../runtime-io", version = "0.1", default_features = false }
+
+[profile.release]
+panic = "abort"
+
+[workspace]
+members = []
