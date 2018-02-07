@@ -54,8 +54,12 @@ mod blocks;
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+extern crate polkadot_executor;
+
 pub use service::Service;
 pub use protocol::{ProtocolStatus};
+pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, NetworkConfiguration};
 
 // TODO: move it elsewhere

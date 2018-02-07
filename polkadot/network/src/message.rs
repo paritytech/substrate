@@ -168,7 +168,7 @@ pub struct BlockRequest {
 	pub to: Option<HeaderHash>,
 	/// Sequence direction.
 	pub direction: Direction,
-	/// Maximum number of block to return. An implementation defined maximum is used when unspecified.
+	/// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
 	pub max: Option<u32>,
 }
 

@@ -15,7 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
 use std::collections::{HashMap, HashSet, BTreeMap};
-use std::mem;
+use std::{mem, cmp};
 use std::sync::Arc;
 use parking_lot::RwLock;
 use serde_json;
@@ -30,9 +30,14 @@ use config::ProtocolConfig;
 use chain::Client;
 use io::SyncIo;
 use error;
+use client::BlockId;
+use super::header_hash;
 
 const REQUEST_TIMEOUT_SEC: u64 = 15;
 const PROTOCOL_VERSION: u32 = 0;
+
+// Maximum allowed entries in `BlockResponse`
+const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 
 // Lock must always be taken in order declared here.
 pub struct Protocol {
@@ -47,7 +52,7 @@ pub struct Protocol {
 }
 
 /// Syncing status and statistics
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct ProtocolStatus {
 	/// Sync status.
 	pub sync: SyncStatus,
@@ -74,7 +79,7 @@ struct Peer {
 	/// Holds a set of transactions recently sent to this peer to avoid spamming.
 	_last_sent_transactions: HashSet<TransactionHash>,
 	/// Request counter,
-	request_id: message::RequestId,
+	next_request_id: message::RequestId,
 }
 
 #[derive(Debug)]
@@ -157,7 +162,7 @@ impl Protocol {
 					}
 				};
 				if request.id != r.id {
-					trace!("Ignoring mismatched response packet from {}", peer_id);
+					trace!(target: "sync", "Ignoring mismatched response packet from {} (expected {} got {})", peer_id, request.id, r.id);
 					return;
 				}
 				self.on_block_response(io, peer_id, request, r);
@@ -173,10 +178,10 @@ impl Protocol {
 		if let Some(ref mut peer) = peers.get_mut(&peer_id) {
 			match &mut message {
 				&mut Message::BlockRequest(ref mut r) => {
+					r.id = peer.next_request_id;
+					peer.next_request_id = peer.next_request_id + 1;
 					peer.block_request = Some(r.clone());
 					peer.request_timestamp = Some(time::Instant::now());
-					r.id = peer.request_id;
-					peer.request_id = peer.request_id + 1;
 				},
 				_ => (),
 			}
@@ -209,12 +214,59 @@ impl Protocol {
 		}
 	}
 
-	pub fn on_block_request(&self, _io: &mut SyncIo, _peer_id: PeerId, _request: message::BlockRequest) {
+	pub fn on_block_request(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest) {
+		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}", request.id, peer, request.from, request.to, request.max);
+		let mut blocks = Vec::new();
+		let mut id = match request.from {
+			message::FromBlock::Hash(h) => BlockId::Hash(h),
+			message::FromBlock::Number(n) => BlockId::Number(n),
+		};
+		let max = cmp::min(request.max.unwrap_or(u32::max_value()), MAX_BLOCK_DATA_RESPONSE) as usize;
+		// TODO: receipts, etc.
+		let (mut get_header, mut get_body) = (false, false);
+		for a in request.fields {
+			match a {
+				message::BlockAttribute::Header => get_header = true,
+				message::BlockAttribute::Body => get_body = true,
+				message::BlockAttribute::Receipt => unimplemented!(),
+				message::BlockAttribute::MessageQueue => unimplemented!(),
+			}
+		}
+		while let Some(header) = self.chain.header(&id).unwrap_or(None) {
+			if blocks.len() >= max{
+				break;
+			}
+			let number = header.number;
+			let hash = header_hash(&header);
+			let block_data = message::BlockData {
+				hash: hash,
+				header: if get_header { Some(header) } else { None },
+				body: if get_body { self.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
+				receipt: None,
+				message_queue: None,
+			};
+			blocks.push(block_data);
+			match request.direction {
+				message::Direction::Ascending => id = BlockId::Number(number + 1),
+				message::Direction::Descending => {
+					if number == 0 {
+						break;
+					}
+					id = BlockId::Number(number - 1)
+				}
+			}
+		}
+		let response = message::BlockResponse {
+			id: request.id,
+			blocks: blocks,
+		};
+		self.send_message(io, peer, Message::BlockResponse(response))
 	}
 
-	pub fn on_block_response(&self, io: &mut SyncIo, peer_id: PeerId, request: message::BlockRequest, response: message::BlockResponse) {
+	pub fn on_block_response(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest, response: message::BlockResponse) {
 		// TODO: validate response
-		self.sync.write().on_block_data(io, self, peer_id, request, response);
+		trace!(target: "sync", "BlockResponse {} from {} with {} blocks", response.id, peer, response.blocks.len());
+		self.sync.write().on_block_data(io, self, peer, request, response);
 	}
 
 	pub fn tick(&self, io: &mut SyncIo) {
@@ -231,7 +283,7 @@ impl Protocol {
 				.filter_map(|(id, peer)| peer.request_timestamp.as_ref().map(|r| (id, r)))
 				.chain(handshaking_peers.iter()) {
 				if (tick - *timestamp).as_secs() > REQUEST_TIMEOUT_SEC {
-					trace!(target:"sync", "Timeout {}", peer_id);
+					trace!(target: "sync", "Timeout {}", peer_id);
 					io.disconnect_peer(*peer_id);
 					aborting.push(*peer_id);
 				}
@@ -287,7 +339,7 @@ impl Protocol {
 				block_request: None,
 				request_timestamp: None,
 				_last_sent_transactions: HashSet::new(),
-				request_id: 0,
+				next_request_id: 0,
 			};
 			peers.insert(peer_id.clone(), peer);
 			handshaking_peers.remove(&peer_id);
