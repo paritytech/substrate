@@ -32,23 +32,12 @@ extern crate polkadot_primitives;
 extern crate polkadot_executor as executor;
 extern crate native_runtime;
 
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
 #[macro_use]
 extern crate clap;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
 extern crate log;
-
-// TODO: move into own crate.
-#[cfg(test)]
-macro_rules! map {
-	($( $name:expr => $value:expr ),*) => (
-		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-	)
-}
 
 pub mod error;
 

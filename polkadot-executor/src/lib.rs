@@ -39,12 +39,7 @@ impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
 	}
 
 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-		match method {
-			"execute_block" => Some(runtime::execute_block(data)),
-			"execute_transaction" => Some(runtime::execute_transaction(data)),
-			"finalise_block" => Some(runtime::finalise_block(data)),
-			_ => None,
-		}
+		runtime::dispatch(method, data)
 	}
 }
 
