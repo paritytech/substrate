@@ -213,7 +213,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("e2ba57cfb94b870ea6670b012b49dc33cbb70e3aa8d36cf54dfa5e4e69cd0778").into(),
+			hex!("1feb4d3a2e587079e6ce1685fa79994efd995e33cb289d39cded67aac1bb46a9").into(),
 			vec![
 				Transaction {
 					signed: two(),

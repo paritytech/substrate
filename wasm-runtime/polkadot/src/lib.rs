@@ -25,9 +25,6 @@ extern crate substrate_runtime_io as runtime_io;
 
 #[cfg(feature = "std")]
 extern crate rustc_hex;
-#[cfg(feature = "with-std")]
-#[macro_use]
-extern crate log;
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;

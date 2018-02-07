@@ -202,15 +202,15 @@ fn post_finalise(header: &Header) {
 	storage::put(&header.number.to_keyed_vec(BLOCK_HASH_AT), &header.blake2_256());
 }
 
-#[cfg(feature = "with-std")]
+#[cfg(feature = "std")]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	use support::HexDisplay;
 	if given != expected {
-		info!("Hash: given={}, expected={}", HexDisplay::from(given), HexDisplay::from(expected));
+		println!("Hash: given={}, expected={}", HexDisplay::from(&given.0), HexDisplay::from(&expected.0));
 	}
 }
 
-#[cfg(not(feature = "with-std"))]
+#[cfg(not(feature = "std"))]
 fn info_expect_equal_hash(_given: &Hash, _expected: &Hash) {}
 
 #[cfg(test)]
