@@ -165,9 +165,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| DummyUserError)?;
 		if let Some(preimage) = this.hash_lookup.get(&key) {
-			println!("*** Setting storage: %{} -> {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "*** Setting storage: %{} -> {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
 		} else {
-			println!("*** Setting storage:  {} -> {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "*** Setting storage:  {} -> {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
 		}
 		this.ext.set_storage(key, value);
 	},
@@ -176,9 +176,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
 
 		if let Some(preimage) = this.hash_lookup.get(&key) {
-			println!("    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
 		} else {
-			println!("    Getting storage:  {} == {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
 		}
 
 		let offset = this.heap.allocate(value.len() as u32) as u32;
@@ -191,9 +191,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
 		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
 		if let Some(preimage) = this.hash_lookup.get(&key) {
-			println!("    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
 		} else {
-			println!("    Getting storage:  {} == {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
 		}
 		let value = &value[value_offset as usize..];
 		let written = ::std::cmp::min(value_len as usize, value.len());
