@@ -17,7 +17,6 @@ members = [
 	"substrate/codec",
 	"substrate/environmental",
 	"substrate/executor",
-	"polkadot/network",
 	"polkadot/candidate-agreement",
 	"polkadot/cli",
 	"polkadot/collator",
