@@ -150,10 +150,6 @@ impl Slicable for Proposal {
 
 		v
 	}
-
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(self.to_vec().as_slice())
-	}
 }
 
 
@@ -302,10 +298,6 @@ impl Slicable for Transaction {
 
 		v
 	}
-
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(self.to_vec().as_slice())
-	}
 }
 
 impl ::codec::NonTrivialSlicable for Transaction {}
@@ -350,10 +342,6 @@ impl Slicable for UncheckedTransaction {
 		length.as_slice_then(|s| v[0..4].copy_from_slice(s));
 
 		v
-	}
-
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(self.to_vec().as_slice())
 	}
 }
 

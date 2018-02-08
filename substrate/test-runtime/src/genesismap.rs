@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Tool for creating the genesis block.
 
@@ -23,7 +23,7 @@ use codec::{KeyedVec, Joiner};
 use primitives::AuthorityId;
 use primitives::block::Block;
 
-/// Configuration of a general Polkadot genesis block.
+/// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
 	pub authorities: Vec<AuthorityId>,
 	pub balances: Vec<(AuthorityId, u64)>,
@@ -40,15 +40,15 @@ impl GenesisConfig {
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
 		let wasm_runtime = include_bytes!("../wasm/genesis.wasm").to_vec();
 		self.balances.iter()
-			.map(|&(account, balance)| (account.to_keyed_vec(b"balance:"), vec![].join(&balance)))
+			.map(|&(account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
 				(b":code"[..].into(), wasm_runtime),
-				(b":auth:len"[..].into(), vec![].join(&(self.authorities.len() as u32))),
+				(b":auth:len"[..].into(), vec![].and(&(self.authorities.len() as u32))),
 			].into_iter())
 			.chain(self.authorities.iter()
 				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].join(account)))
+				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].and(account)))
 			)
 			.collect()
 	}

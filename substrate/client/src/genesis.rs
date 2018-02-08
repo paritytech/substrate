@@ -106,7 +106,7 @@ mod tests {
 				&mut overlay,
 				&executor(),
 				"execute_transaction",
-				&vec![].join(&header).join(tx)
+				&vec![].and(&header).and(tx)
 			).unwrap();
 			header = Header::from_slice(&mut &ret_data[..]).unwrap();
 		}
@@ -116,11 +116,11 @@ mod tests {
 			&mut overlay,
 			&executor(),
 			"finalise_block",
-			&vec![].join(&header)
+			&vec![].and(&header)
 		).unwrap();
 		header = Header::from_slice(&mut &ret_data[..]).unwrap();
 
-		(vec![].join(&Block { header, transactions }), hash.into())
+		(vec![].and(&Block { header, transactions }), hash.into())
 	}
 
 	fn block1(genesis_hash: Hash, backend: &InMemory) -> (Vec<u8>, Hash) {

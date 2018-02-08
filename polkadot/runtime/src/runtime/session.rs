@@ -145,13 +145,13 @@ mod tests {
 
 	fn simple_setup() -> TestExternalities {
 		TestExternalities { storage: map![
-			twox_128(SESSION_LENGTH).to_vec() => vec![].join(&2u64),
+			twox_128(SESSION_LENGTH).to_vec() => vec![].and(&2u64),
 			// the validators (10, 20, ...)
-			twox_128(b"ses:val:len").to_vec() => vec![].join(&2u32),
+			twox_128(b"ses:val:len").to_vec() => vec![].and(&2u32),
 			twox_128(&0u32.to_keyed_vec(ValidatorStorageVec::PREFIX)).to_vec() => vec![10; 32],
 			twox_128(&1u32.to_keyed_vec(ValidatorStorageVec::PREFIX)).to_vec() => vec![20; 32],
 			// initial session keys (11, 21, ...)
-			b":auth:len".to_vec() => vec![].join(&2u32),
+			b":auth:len".to_vec() => vec![].and(&2u32),
 			0u32.to_keyed_vec(b":auth:") => vec![11; 32],
 			1u32.to_keyed_vec(b":auth:") => vec![21; 32]
 		], }

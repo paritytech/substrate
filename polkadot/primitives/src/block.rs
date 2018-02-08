@@ -96,10 +96,6 @@ impl Slicable for Block {
 
 		v
 	}
-
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(self.to_vec().as_slice())
-	}
 }
 
 /// A relay chain block header.
@@ -156,10 +152,6 @@ impl Slicable for Header {
 		self.digest.as_slice_then(|s| v.extend(s));
 
 		v
-	}
-
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(self.to_vec().as_slice())
 	}
 }
 

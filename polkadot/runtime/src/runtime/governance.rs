@@ -157,19 +157,19 @@ mod tests {
 		let three = [3u8; 32];
 
 		TestExternalities { storage: map![
-			twox_128(APPROVALS_REQUIRED).to_vec() => vec![].join(&667u32),
-			twox_128(b"ses:len").to_vec() => vec![].join(&1u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].join(&3u32),
+			twox_128(APPROVALS_REQUIRED).to_vec() => vec![].and(&667u32),
+			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
+			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:wil:len").to_vec() => vec![].join(&3u32),
+			twox_128(b"sta:wil:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:spe").to_vec() => vec![].join(&1u64),
-			twox_128(b"sta:vac").to_vec() => vec![].join(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].join(&1u64)
+			twox_128(b"sta:spe").to_vec() => vec![].and(&1u64),
+			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
+			twox_128(b"sta:era").to_vec() => vec![].and(&1u64)
 		], }
 	}
 

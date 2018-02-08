@@ -96,7 +96,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -107,7 +107,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -120,7 +120,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -138,7 +138,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -154,19 +154,19 @@ mod tests {
 
 		TestExternalities { storage: map![
 			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].to_vec(),
-			twox_128(b"gov:apr").to_vec() => vec![].join(&667u32),
-			twox_128(b"ses:len").to_vec() => vec![].join(&2u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].join(&3u32),
+			twox_128(b"gov:apr").to_vec() => vec![].and(&667u32),
+			twox_128(b"ses:len").to_vec() => vec![].and(&2u64),
+			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:wil:len").to_vec() => vec![].join(&3u32),
+			twox_128(b"sta:wil:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64),
-			twox_128(b"sta:vac").to_vec() => vec![].join(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].join(&0u64),
+			twox_128(b"sta:spe").to_vec() => vec![].and(&2u64),
+			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
+			twox_128(b"sta:era").to_vec() => vec![].and(&0u64),
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], }
 	}
@@ -290,7 +290,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -304,7 +304,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {

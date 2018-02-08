@@ -28,12 +28,16 @@ pub trait Slicable: Sized {
 	///
 	/// If `None` is returned, then the slice should be unmodified.
 	fn from_slice(value: &mut &[u8]) -> Option<Self>;
+
 	/// Convert self to an owned vector.
 	fn to_vec(&self) -> Vec<u8> {
 		self.as_slice_then(|s| s.to_vec())
 	}
+
 	/// Convert self to a slice and then invoke the given closure with it.
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R;
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.to_vec())
+	}
 }
 
 /// Trait to mark that a type is not trivially (essentially "in place") serialisable.
@@ -78,15 +82,12 @@ impl Slicable for Vec<u8> {
 			res
 		})
 	}
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.to_vec())
-	}
 
 	fn to_vec(&self) -> Vec<u8> {
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
 
-		let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 		r.extend_from_slice(self);
 		r
 	}
@@ -110,17 +111,13 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 		})
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.to_vec())
-	}
-
 	fn to_vec(&self) -> Vec<u8> {
 		use rstd::iter::Extend;
 
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
 
-		let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 		for item in self {
 			r.extend(item.to_vec());
 		}

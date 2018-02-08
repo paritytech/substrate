@@ -271,19 +271,19 @@ mod tests {
 
 		TestExternalities { storage: map![
 			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].to_vec(),
-			twox_128(b"gov:apr").to_vec() => vec![].join(&667u32),
-			twox_128(b"ses:len").to_vec() => vec![].join(&2u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].join(&3u32),
+			twox_128(b"gov:apr").to_vec() => vec![].and(&667u32),
+			twox_128(b"ses:len").to_vec() => vec![].and(&2u64),
+			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:wil:len").to_vec() => vec![].join(&3u32),
+			twox_128(b"sta:wil:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64),
-			twox_128(b"sta:vac").to_vec() => vec![].join(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].join(&0u64),
+			twox_128(b"sta:spe").to_vec() => vec![].and(&2u64),
+			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
+			twox_128(b"sta:era").to_vec() => vec![].and(&0u64),
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], }
 	}

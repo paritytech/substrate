@@ -63,7 +63,7 @@ pub fn calculate_duty_roster() -> DutyRoster {
 	let mut roles_gua = roles_val.clone();
 
 	let h = with_env(|e| e.parent_hash.clone());
-	let mut seed = Vec::<u8>::new().join(&h).join(b"validator_role_pairs").blake2_256();
+	let mut seed = Vec::<u8>::new().and(&h).and(b"validator_role_pairs").blake2_256();
 
 	// shuffle
 	for i in 0..(validator_count - 1) {
@@ -103,8 +103,8 @@ mod tests {
 
 	fn simple_setup() -> TestExternalities {
 		TestExternalities { storage: map![
-			twox_128(b"ses:val:len").to_vec() => vec![].join(&8u32),
-			twox_128(b"par:cou").to_vec() => vec![].join(&2u32)
+			twox_128(b"ses:val:len").to_vec() => vec![].and(&8u32),
+			twox_128(b"par:cou").to_vec() => vec![].and(&2u32)
 		], }
 	}
 
