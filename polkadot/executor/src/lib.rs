@@ -31,10 +31,24 @@ extern crate triehash;
 extern crate hex_literal;
 
 use polkadot_runtime as runtime;
+use substrate_executor::error::{Error, ErrorKind};
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
+use state_machine::Externalities;
+
+use std::panic::catch_unwind;
+
 
 /// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
 pub struct LocalNativeExecutionDispatch;
+
+impl LocalNativeExecutionDispatch {
+	/// Set up the externalities and safe calling environment to execute calls to the runtime.
+	pub fn execute_runtime<F, U>(ext: &mut Externalities, f: F) -> Result<U, Error>
+		where F: ::std::panic::UnwindSafe + FnOnce() -> U
+	{
+		runtime_io::with_externalities(ext, move || safe_call(f))
+	}
+}
 
 impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
 	fn native_equivalent() -> &'static [u8] {
@@ -43,9 +57,16 @@ impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
 		include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm")
 	}
 
-	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-		runtime::api::dispatch(method, data)
+	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
+		LocalNativeExecutionDispatch::execute_runtime(ext, move || runtime::api::dispatch(method, data))?
+			.ok_or(ErrorKind::MethodNotFound(method.to_owned()).into())
 	}
+}
+
+fn safe_call<F, U>(f: F) -> Result<U, Error>
+	where F: ::std::panic::UnwindSafe + FnOnce() -> U
+{
+	catch_unwind(f).map_err(|_| ErrorKind::Runtime.into())
 }
 
 /// Creates new RustExecutor for contracts.

@@ -61,4 +61,4 @@ mod native_executor;
 
 pub mod error;
 pub use wasm_executor::WasmExecutor;
-pub use native_executor::{NativeExecutionDispatch, NativeExecutor};
+pub use native_executor::{NativeExecutor, NativeExecutionDispatch};
