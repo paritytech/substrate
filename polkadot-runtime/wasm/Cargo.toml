@@ -7,11 +7,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-substrate-codec = { path = "../../codec", version = "0.1", default-features = false }
-substrate-runtime-std = { path = "../../runtime-std", version = "0.1", default-features = false }
-substrate-runtime-io = { path = "../../runtime-io", version = "0.1", default-features = false }
-substrate-primitives = { path = "../../primitives", version = "0.1", default-features = false }
-polkadot-primitives = { path = "../../polkadot-primitives", version = "0.1", default-features = false }
+substrate-codec = { path = "../../codec", default-features = false }
+substrate-runtime-std = { path = "../../runtime-std", default-features = false }
+substrate-runtime-io = { path = "../../runtime-io", default-features = false }
+substrate-primitives = { path = "../../primitives", default-features = false }
+polkadot-primitives = { path = "../../polkadot-primitives", default-features = false }
 
 [features]
 default = []
