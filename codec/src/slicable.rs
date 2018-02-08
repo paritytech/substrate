@@ -128,6 +128,73 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 	}
 }
 
+macro_rules! try_decode {
+	($t:ty, $initial: expr, $current: expr) => {
+		match Slicable::from_slice($current) {
+			Some(x) => x,
+			None => {
+				*$current = $initial;
+				return None;
+			}
+		}
+	}
+}
+
+macro_rules! tuple_impl {
+	($one:ident,) => {
+		impl<$one: Slicable> Slicable for ($one,) {
+			fn from_slice(value: &mut &[u8]) -> Option<Self> {
+				match $one::from_slice(value) {
+					None => None,
+					Some($one) => Some(($one,)),
+				}
+			}
+
+			fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				self.0.as_slice_then(f)
+			}
+		}
+	};
+	($first:ident, $($rest:ident,)+) => {
+		impl<$first: Slicable, $($rest: Slicable),+>
+		Slicable for
+		($first, $($rest),+) {
+			fn from_slice(value: &mut &[u8]) -> Option<Self> {
+				let initial = *value;
+				Some((
+					try_decode!($first, initial, value),
+					$(try_decode!($rest, initial, value),)+
+				))
+			}
+
+			fn as_slice_then<RETURN, PROCESS>(&self, f: PROCESS) -> RETURN
+				where PROCESS: FnOnce(&[u8]) -> RETURN
+			{
+				let mut v = Vec::new();
+
+				let (
+					ref $first,
+					$(ref $rest),+
+				) = *self;
+
+				$first.as_slice_then(|s| v.extend(s));
+				$($rest.as_slice_then(|s| v.extend(s));)+
+
+				f(v.as_slice())
+			}
+		}
+
+		tuple_impl!($($rest,)+);
+	}
+}
+
+#[allow(non_snake_case)]
+mod inner_tuple_impl {
+	use super::Slicable;
+	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -138,5 +205,21 @@ mod tests {
 		v.as_slice_then(|ref slice|
 			assert_eq!(slice, &b"\x0b\0\0\0Hello world")
 		);
+	}
+
+	#[test]
+	fn failed_tuple_decode_does_not_munch() {
+		let encoded = (vec![1u8, 3, 5, 9], 6u64).to_vec();
+		let mut data = &encoded[..];
+		assert!(<(Vec<u8>, u64, Vec<u8>)>::from_slice(&mut data).is_none());
+
+		// failure to decode shouldn't munch anything.
+		assert_eq!(data.len(), encoded.len());
+
+		// full decoding should have munched everything.
+		let decoded = <(Vec<u8>, u64)>::from_slice(&mut data).unwrap();
+		assert!(data.is_empty());
+
+		assert_eq!(decoded, (vec![1, 3, 5,9], 6));
 	}
 }

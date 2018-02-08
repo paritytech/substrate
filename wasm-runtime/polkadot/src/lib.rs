@@ -37,6 +37,7 @@ extern crate hex_literal;
 #[macro_use]
 pub mod support;
 pub mod runtime;
+pub mod api;
 
 use rstd::prelude::*;
 use codec::Slicable;
@@ -88,7 +89,8 @@ pub fn execute_block(mut input: &[u8]) -> Vec<u8> {
 	Vec::new()
 }
 
-/// Execute a given, serialised, transaction. Returns the empty vector.
+/// Execute a transaction. Input data is the concatenation of a serialized header and
+/// transaction. Returns the new header.
 pub fn execute_transaction(mut input: &[u8]) -> Vec<u8> {
 	let header = Header::from_slice(&mut input).unwrap();
 	let utx = UncheckedTransaction::from_slice(&mut input).unwrap();
@@ -96,14 +98,14 @@ pub fn execute_transaction(mut input: &[u8]) -> Vec<u8> {
 	header.to_vec()
 }
 
-/// Execute a given, serialised, transaction. Returns the empty vector.
+/// Finalize a block, given its header.
 pub fn finalise_block(mut input: &[u8]) -> Vec<u8> {
 	let header = Header::from_slice(&mut input).unwrap();
 	let header = runtime::system::internal::finalise_block(header);
 	header.to_vec()
 }
 
-/// Run whatever tests we have.
+/// Run whatever tests we have on a full block.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	use runtime_io::print;
 
