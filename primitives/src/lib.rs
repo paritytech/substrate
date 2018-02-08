@@ -43,7 +43,6 @@ extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate core;
 
-#[macro_use]
 extern crate substrate_runtime_std as rstd;
 
 #[cfg(test)]
