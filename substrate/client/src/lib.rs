@@ -139,22 +139,27 @@ impl<B, E> Client<B, E> where
 		})
 	}
 
-	fn state_at(&self, hash: &block::HeaderHash) -> error::Result<B::State> {
-		self.backend.state_at(BlockId::Hash(*hash))
+	fn state_at(&self, id: BlockId) -> error::Result<B::State> {
+		self.backend.state_at(id)
 	}
 
-	/// Return single storage entry of contract under given address in state in a block of given hash.
-	pub fn storage(&self, hash: &block::HeaderHash, key: &StorageKey) -> error::Result<StorageData> {
-		Ok(self.state_at(hash)?
+	/// Expose backend reference. To be used in tests only
+	pub fn backend(&self) -> &B {
+		&self.backend
+	}
+
+	/// Return single storage entry of contract under given address in state in a block of given id.
+	pub fn storage(&self, id: &BlockId, key: &StorageKey) -> error::Result<StorageData> {
+		Ok(self.state_at(*id)?
 			.storage(&key.0)
 			.map(|x| StorageData(x.to_vec()))?)
 	}
 
-	/// Execute a call to a contract on top of state in a block of given hash.
+	/// Execute a call to a contract on top of state in a block of given id.
 	///
 	/// No changes are made.
-	pub fn call(&self, hash: &block::HeaderHash, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
-		let state = self.state_at(hash)?;
+	pub fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
+		let state = self.state_at(*id)?;
 		let mut changes = state_machine::OverlayedChanges::default();
 
 		let _ = state_machine::execute(
@@ -176,7 +181,7 @@ impl<B, E> Client<B, E> where
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
 
-		let mut transaction = self.backend.begin_transaction(BlockId::Number(header.number))?;
+		let mut transaction = self.backend.begin_transaction(BlockId::Hash(header.parent_hash))?;
 		let mut _state = transaction.state()?;
 		// TODO: execute block on _state
 
@@ -197,9 +202,9 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Get block status.
-	pub fn block_status(&self, hash: &block::HeaderHash) -> error::Result<BlockStatus> {
+	pub fn block_status(&self, id: &BlockId) -> error::Result<BlockStatus> {
 		// TODO: more efficient implementation
-		match self.backend.blockchain().header(BlockId::Hash(*hash)).map_err(|e| error::Error::from_blockchain(Box::new(e)))?.is_some() {
+		match self.backend.blockchain().header(*id).map_err(|e| error::Error::from_blockchain(Box::new(e)))?.is_some() {
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),
 		}
@@ -210,8 +215,13 @@ impl<B, E> Client<B, E> where
 		self.backend.blockchain().hash(block_number)
 	}
 
-	/// Get block header by hash.
-	pub fn header(&self, hash: &block::HeaderHash) -> error::Result<Option<block::Header>> {
-		self.backend.blockchain().header(BlockId::Hash(*hash))
+	/// Get block header by id.
+	pub fn header(&self, id: &BlockId) -> error::Result<Option<block::Header>> {
+		self.backend.blockchain().header(*id)
+	}
+
+	/// Get block body by id.
+	pub fn body(&self, id: &BlockId) -> error::Result<Option<block::Body>> {
+		self.backend.blockchain().body(*id)
 	}
 }

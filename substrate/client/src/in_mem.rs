@@ -35,6 +35,7 @@ struct PendingBlock {
 	is_best: bool,
 }
 
+#[derive(PartialEq, Eq, Clone)]
 struct Block {
 	header: block::Header,
 	body: Option<block::Body>,
@@ -46,6 +47,7 @@ pub struct BlockImportOperation {
 	pending_state: state_machine::backend::InMemory,
 }
 
+#[derive(Clone)]
 struct BlockchainStorage {
 	blocks: HashMap<HeaderHash, Block>,
 	hashes: HashMap<block::Number, HeaderHash>,
@@ -57,6 +59,14 @@ struct BlockchainStorage {
 /// In-memory blockchain. Supports concurrent reads.
 pub struct Blockchain {
 	storage: RwLock<BlockchainStorage>,
+}
+
+impl Clone for Blockchain {
+	fn clone(&self) -> Blockchain {
+		Blockchain {
+			storage: RwLock::new(self.storage.read().clone()),
+		}
+	}
 }
 
 impl Blockchain {
@@ -95,6 +105,21 @@ impl Blockchain {
 		if number == 0 {
 			storage.genesis_hash = hash;
 		}
+	}
+
+	/// Compare this blockchain with another in-mem blockchain
+	pub fn equals_to(&self, other: &Blockchain) -> bool {
+		self.canon_equals_to(other) && self.storage.read().blocks == other.storage.read().blocks
+	}
+
+	/// Compare canonical chain to other canonical chain.
+	pub fn canon_equals_to(&self, other: &Blockchain) -> bool {
+		let this = self.storage.read();
+		let other = other.storage.read();
+			this.hashes == other.hashes
+		    && this.best_hash == other.best_hash
+			&& this.best_number == other.best_number
+			&& this.genesis_hash == other.genesis_hash
 	}
 }
 
@@ -166,6 +191,39 @@ impl Backend {
 			states: RwLock::new(HashMap::new()),
 			blockchain: Blockchain::new(),
 		}
+	}
+
+	/// Generate and import a sequence of blocks. A user supplied function is allowed to modify each block header. Useful for testing.
+	pub fn generate_blocks<F>(&self, count: usize, edit_header: F) where F: Fn(&mut block::Header) {
+		use backend::{Backend, BlockImportOperation};
+		let info = blockchain::Backend::info(&self.blockchain).expect("In-memory backend never fails");
+		let mut best_num = info.best_number;
+		let mut best_hash = info.best_hash;
+		let state_root = blockchain::Backend::header(&self.blockchain, BlockId::Hash(best_hash))
+			.expect("In-memory backend never fails")
+			.expect("Best header always exists in the blockchain")
+			.state_root;
+		for _ in 0 .. count {
+			best_num = best_num + 1;
+			let mut header = block::Header {
+				parent_hash: best_hash,
+				number: best_num,
+				state_root: state_root,
+				transaction_root: Default::default(),
+				digest: Default::default(),
+			};
+			edit_header(&mut header);
+
+			let mut tx = self.begin_transaction(BlockId::Hash(best_hash)).expect("In-memory backend does not fail");
+			best_hash = header_hash(&header);
+			tx.import_block(header, None, true).expect("In-memory backend does not fail");
+			self.commit_transaction(tx).expect("In-memory backend does not fail");
+		}
+	}
+
+	/// Generate and import a sequence of blocks. Useful for testing.
+	pub fn push_blocks(&self, count: usize) {
+		self.generate_blocks(count, |_| {})
 	}
 }
 

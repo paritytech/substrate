@@ -17,6 +17,7 @@
 use service::Role;
 
 /// Protocol configuration
+#[derive(Clone)]
 pub struct ProtocolConfig {
 	pub roles: Role,
 }

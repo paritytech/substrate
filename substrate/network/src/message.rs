@@ -20,7 +20,6 @@ use std::borrow::Borrow;
 use primitives::AuthorityId;
 use primitives::block::{Number as BlockNumber, HeaderHash, Header, Body};
 use service::Role as RoleFlags;
-use polkadot_primitives::parachain::Id as ParachainId;
 
 pub type RequestId = u64;
 type Bytes = Vec<u8>;
@@ -152,7 +151,7 @@ pub struct Status {
 	/// Validator address. Required for the validator role.
 	pub validator_id: Option<AuthorityId>,
 	/// Parachain id. Required for the collator role.
-	pub parachain_id: Option<ParachainId>,
+	pub parachain_id: Option<u64>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -168,7 +167,7 @@ pub struct BlockRequest {
 	pub to: Option<HeaderHash>,
 	/// Sequence direction.
 	pub direction: Direction,
-	/// Maximum number of block to return. An implementation defined maximum is used when unspecified.
+	/// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
 	pub max: Option<u32>,
 }
 
