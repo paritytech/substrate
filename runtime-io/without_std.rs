@@ -188,7 +188,7 @@ pub fn print<T: Printable + Sized>(value: T) {
 
 #[macro_export]
 macro_rules! impl_stubs {
-	( $( $name:ident => $new_name:ident ),* ) => {
+	( $( $new_name:ident => $invoke:expr ),* ) => {
 		pub mod _internal {
 			$(
 				#[no_mangle]
@@ -206,7 +206,7 @@ macro_rules! impl_stubs {
 						None => panic!("Bad input data provided to {}", stringify!($name)),
 					};
 
-					let output = super::$name(input);
+					let output = ($invoke)(input);
 					let output = $crate::codec::Slicable::to_vec(&output);
 					let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
 

@@ -15,35 +15,13 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use rstd::prelude::*;
-use codec::Slicable;
-use polkadot_primitives::{Header, Block, UncheckedTransaction};
-
-/// Execute a block.
-pub fn execute_block(block: Block) {
-	::runtime::system::internal::execute_block(block);
-}
-
-/// Execute a transaction. Input data is the concatenation of a serialized header and
-/// transaction. Returns the new header.
-pub fn execute_transaction((header, utx): (Header, UncheckedTransaction)) -> Header {
-	::runtime::system::internal::execute_transaction(utx, header)
-}
-
-/// Finalize a block, given its header.
-pub fn finalise_block(header: Header) -> Vec<u8> {
-	let header = ::runtime::system::internal::finalise_block(header);
-	header.to_vec()
-}
-
-/// Run whatever tests we have on a full block.
-pub fn run_tests(block: Block) -> u32 {
-	let stxs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
-	stxs.len() as u32
-}
+use runtime::{system, parachains, consensus, session};
 
 impl_stubs!(
-	execute_block => execute_encoded_block,
-	execute_transaction => execute_encoded_transaction,
-	finalise_block => finalise_encoded_block,
-	run_tests => run_encoded_block_tests
+	execute_block => |block| system::internal::execute_block(block),
+	execute_transaction => |(header, utx)| system::internal::execute_transaction(utx, header),
+	finalise_block => |header| system::internal::finalise_block(header),
+	validator_count => |()| session::validator_count(),
+	authorities => |()| consensus::authorities(),
+	duty_roster => |()| parachains::calculate_duty_roster()
 );

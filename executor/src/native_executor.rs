@@ -43,9 +43,9 @@ impl CodeExecutor for NativeExecutor {
 		let native_equivalent = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
 		if code == &native_equivalent[..] {
 			runtime_io::with_externalities(ext, || match method {
-				"execute_block" => safe_call(|| api::execute_encoded_block(data)),
-				"execute_transaction" => safe_call(|| api::execute_encoded_transaction(data)),
-				"finalise_block" => safe_call(|| api::finalise_encoded_block(data)),
+				"execute_block" => safe_call(|| api::execute_block(data)),
+				"execute_transaction" => safe_call(|| api::execute_transaction(data)),
+				"finalise_block" => safe_call(|| api::finalise_block(data)),
 				_ => Err(ErrorKind::MethodNotFound(method.to_owned()).into()),
 			})
 		} else {
@@ -227,14 +227,6 @@ mod tests {
 				}
 			]
 		)
-	}
-
-	#[test]
-	fn test_execution_works() {
-		let mut t = new_test_ext();
-		println!("Testing Wasm...");
-		let r = WasmExecutor.call(&mut t, COMPACT_CODE, "run_tests", &block2().0);
-		assert!(r.is_ok());
 	}
 
 	#[test]

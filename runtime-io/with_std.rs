@@ -134,7 +134,7 @@ pub fn print<T: Printable + Sized>(value: T) {
 
 #[macro_export]
 macro_rules! impl_stubs {
-	( $( $name:ident => $new_name:ident ),* ) => {
+	( $( $new_name:ident => $invoke:expr ),* ) => {
 		$(
 			/// Stub version of $name
 			pub fn $new_name(mut input: &[u8]) -> Vec<u8> {
@@ -143,7 +143,7 @@ macro_rules! impl_stubs {
 					None => panic!("Bad input data provided to {}", stringify!($name)),
 				};
 
-				let output = $name(input);
+				let output = $invoke(input);
 				$crate::codec::Slicable::to_vec(&output)
 			}
 		)*

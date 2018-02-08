@@ -86,11 +86,18 @@ impl<T: EndianSensitive> Slicable for T {
 
 impl Slicable for Vec<u8> {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		u32::from_slice(value).map(move |len| {
+		let initial = *value;
+		u32::from_slice(value).and_then(move |len| {
 			let len = len as usize;
+
+			if value.len() < len {
+				*value = initial;
+				return None;
+			}
+
 			let res = value[..len].to_vec();
 			*value = &value[len..];
-			res
+			Some(res)
 		})
 	}
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -106,6 +113,48 @@ impl Slicable for Vec<u8> {
 		r
 	}
 }
+
+macro_rules! impl_vec_simple_array {
+	($($size:expr)*) => {
+		$(
+			impl<T> Slicable for Vec<[T; $size]>
+				where [T; $size]: EndianSensitive
+			{
+				fn from_slice(value: &mut &[u8]) -> Option<Self> {
+					let initial = *value;
+					u32::from_slice(value).and_then(move |len| {
+						let len = len as usize;
+						let mut r = Vec::with_capacity(len);
+						for _ in 0..len {
+							r.push(try_decode!(initial, value));
+						}
+
+						Some(r)
+					})
+				}
+
+				fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+					f(&self.to_vec())
+				}
+
+				fn to_vec(&self) -> Vec<u8> {
+					use rstd::iter::Extend;
+
+					let len = self.len();
+					assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
+
+					let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+					for item in self {
+						r.extend(item.to_vec());
+					}
+					r
+				}
+			}
+		)*
+	}
+}
+
+impl_vec_simple_array!(1 2 4 8 16 32 64);
 
 impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
 
