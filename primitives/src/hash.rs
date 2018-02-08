@@ -40,8 +40,8 @@ macro_rules! impl_rest {
 		}
 
 		impl ::codec::Slicable for $name {
-			fn from_slice(value: &mut &[u8]) -> Option<Self> {
-				<[u8; $len] as ::codec::Slicable>::from_slice(value).map($name)
+			fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+				<[u8; $len] as ::codec::Slicable>::decode(input).map($name)
 			}
 
 			fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {

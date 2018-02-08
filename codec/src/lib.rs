@@ -28,6 +28,6 @@ mod joiner;
 mod keyedvec;
 
 pub use self::endiansensitive::EndianSensitive;
-pub use self::slicable::{Slicable, NonTrivialSlicable};
+pub use self::slicable::{Input, Slicable, NonTrivialSlicable};
 pub use self::joiner::Joiner;
 pub use self::keyedvec::KeyedVec;

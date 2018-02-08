@@ -50,7 +50,7 @@ pub fn storage(key: &[u8]) -> Vec<u8> {
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
-/// the number of bytes that the key in storage was.
+/// the number of bytes that the key in storage was beyond the offset.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
 	ext::with(|ext| {
 		if let Ok(value) = ext.storage(key) {
@@ -138,7 +138,7 @@ macro_rules! impl_stubs {
 		$(
 			/// Stub version of $name
 			pub fn $new_name(mut input: &[u8]) -> Vec<u8> {
-				let input = match $crate::codec::Slicable::from_slice(&mut input) {
+				let input = match $crate::codec::Slicable::decode(&mut input) {
 					Some(input) => input,
 					None => panic!("Bad input data provided to {}", stringify!($name)),
 				};

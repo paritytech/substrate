@@ -20,7 +20,7 @@
 use primitives::bytes;
 use primitives::H256;
 use rstd::vec::Vec;
-use codec::Slicable;
+use codec::{Input, Slicable};
 use transaction::UncheckedTransaction;
 
 /// Used to refer to a block number.
@@ -38,8 +38,8 @@ pub type TransactionHash = H256;
 pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl Slicable for Log {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		Vec::<u8>::from_slice(value).map(Log)
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<u8>::decode(input).map(Log)
 	}
 
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -58,8 +58,8 @@ pub struct Digest {
 }
 
 impl Slicable for Digest {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		Vec::<Log>::from_slice(value).map(|logs| Digest { logs })
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<Log>::decode(input).map(|logs| Digest { logs })
 	}
 
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -81,8 +81,8 @@ pub struct Block {
 }
 
 impl Slicable for Block {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		let (header, transactions) = try_opt!(Slicable::from_slice(value));
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		let (header, transactions) = try_opt!(Slicable::decode(input));
 		Some(Block { header, transactions })
 	}
 
@@ -134,14 +134,13 @@ impl Header {
 }
 
 impl Slicable for Header {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		let initial = *value;
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
-			parent_hash: try_decode!(initial, value),
-			number: try_decode!(initial, value),
-			state_root: try_decode!(initial, value),
-			transaction_root: try_decode!(initial, value),
-			digest: try_decode!(initial, value),
+			parent_hash: try_opt!(Slicable::decode(input)),
+			number: try_opt!(Slicable::decode(input)),
+			state_root: try_opt!(Slicable::decode(input)),
+			transaction_root: try_opt!(Slicable::decode(input)),
+			digest: try_opt!(Slicable::decode(input)),
 		})
 	}
 
@@ -191,6 +190,6 @@ mod tests {
 }"#);
 
 		let v = header.to_vec();
-		assert_eq!(Header::from_slice(&mut &v[..]).unwrap(), header);
+		assert_eq!(Header::decode(&mut &v[..]).unwrap(), header);
 	}
 }

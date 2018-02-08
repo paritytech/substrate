@@ -17,12 +17,13 @@
 #[cfg(feature = "nightly")]
 extern crate alloc;
 
-pub use alloc::vec;
 pub use alloc::boxed;
 pub use alloc::rc;
-pub use core::mem;
-pub use core::slice;
+pub use alloc::vec;
 pub use core::cell;
-pub use core::ops;
+pub use core::cmp;
 pub use core::iter;
+pub use core::mem;
+pub use core::ops;
 pub use core::ptr;
+pub use core::slice;

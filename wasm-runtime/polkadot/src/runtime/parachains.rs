@@ -55,8 +55,8 @@ pub fn calculate_duty_roster() -> DutyRoster {
 		let remaining = (validator_count - i) as usize;
 
 		// 4 * 2 32-bit ints per 256-bit seed.
-		let val_index = u32::from_slice(&mut &seed[offset..offset + 4]).expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
-		let gua_index = u32::from_slice(&mut &seed[offset + 4..offset + 8]).expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
+		let val_index = u32::decode(&mut &seed[offset..offset + 4]).expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
+		let gua_index = u32::decode(&mut &seed[offset + 4..offset + 8]).expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
 
 		if offset == 24 {
 			// into the last 8 bytes - rehash to gather new entropy

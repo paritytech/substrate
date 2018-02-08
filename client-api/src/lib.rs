@@ -18,25 +18,47 @@
 //! wrappers for state-fetching functions.
 
 extern crate substrate_client as s_client;
+extern crate substrate_codec as codec;
 extern crate substrate_state_machine as s_state_machine;
+extern crate polkadot_primitives;
 
 use s_client::Client;
 use s_client::backend::Backend as ClientBackend;
 use s_state_machine::backend::Backend as StateBackend;
+use polkadot_primitives::block::HeaderHash;
+use polkadot_primitives::parachain::DutyRoster;
+use polkadot_primitives::{AccountId, SessionKey};
 
 /// An implementation of the polkadot client API.
 pub trait PolkadotClient {
 	type Error;
+
+	/// Get the validators at the given block.
+	fn validators(&self, block: &HeaderHash) -> Result<Vec<AccountId>, Self::Error>;
+
+	/// Get the authorities at the given block. These have a 1-to-1 correspondence
+	/// with the validators, but using temporary session keys.
+	fn authorities(&self, block: &HeaderHash) -> Result<Vec<SessionKey>, Self::Error>;
+	/// Get the duty roster at a given block.
+	fn duty_roster(&self, block: &HeaderHash) -> Result<DutyRoster, Self::Error>;
 }
 
-impl<B, E> PolkadotClient for Client<B, E> where
+impl<B> PolkadotClient for Client<B, NativeExecutor> where
 	B: ClientBackend,
-	E: s_state_machine::CodeExecutor,
 	s_client::error::Error: From<<<B as ClientBackend>::State as StateBackend>::Error>
 {
 	type Error = s_client::error::Error;
 
+	fn validators(&self, block: &HeaderHash) -> Result<Vec<AccountId>, Self::Error> {
+		self.call(
+			block,
+			"validators",
+			&[]
+		)
+	}
 }
+
+// TODO: specialize implementation for native executor to avoid the serialization round-trip.
 
 #[cfg(test)]
 mod tests {

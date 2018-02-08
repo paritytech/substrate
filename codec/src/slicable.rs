@@ -21,13 +21,25 @@ use rstd::vec::Vec;
 use super::joiner::Joiner;
 use super::endiansensitive::EndianSensitive;
 
+/// Trait that allows reading of data into a slice.
+pub trait Input {
+	/// Read into the provided input slice. Returns the number of bytes read.
+	fn read(&mut self, into: &mut [u8]) -> usize;
+}
+
+impl<'a> Input for &'a [u8] {
+	fn read(&mut self, into: &mut [u8]) -> usize {
+		let len = ::rstd::cmp::min(into.len(), self.len());
+		into[..len].copy_from_slice(&self[..len]);
+		*self = &self[len..];
+		len
+	}
+}
+
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
 pub trait Slicable: Sized {
-	/// Attempt to deserialise the value from a slice. Ignore trailing bytes and
-	/// set the slice's start to just after the last byte consumed.
-	///
-	/// If `None` is returned, then the slice should be unmodified.
-	fn from_slice(value: &mut &[u8]) -> Option<Self>;
+	/// Attempt to deserialise the value from input.
+	fn decode<I: Input>(value: &mut I) -> Option<Self>;
 	/// Convert self to an owned vector.
 	fn to_vec(&self) -> Vec<u8> {
 		self.as_slice_then(|s| s.to_vec())
@@ -39,32 +51,20 @@ pub trait Slicable: Sized {
 /// Trait to mark that a type is not trivially (essentially "in place") serialisable.
 pub trait NonTrivialSlicable: Slicable {}
 
-/// Attempt to decode a value from the slice, providing an initial value
-/// to replace it with should it fail.
-#[macro_export]
-macro_rules! try_decode {
-	($initial: expr, $current: expr) => {
-		match $crate::Slicable::from_slice($current) {
-			Some(x) => x,
-			None => {
-				*$current = $initial;
-				return None;
-			}
-		}
-	}
-}
-
 impl<T: EndianSensitive> Slicable for T {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let size = mem::size_of::<T>();
 		assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
-		if value.len() >= size {
-			let x: T = unsafe { ::rstd::ptr::read(value.as_ptr() as *const T) };
-			*value = &value[size..];
-			Some(x.from_le())
-		} else {
-			None
+		let mut val: T = unsafe { mem::zeroed() };
+
+		unsafe {
+			let raw: &mut [u8] = slice::from_raw_parts_mut(
+				&mut val as *mut T as *mut u8,
+				size
+			);
+			if input.read(raw) != size { return None }
 		}
+		Some(val.from_le())
 	}
 
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -85,19 +85,15 @@ impl<T: EndianSensitive> Slicable for T {
 }
 
 impl Slicable for Vec<u8> {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		let initial = *value;
-		u32::from_slice(value).and_then(move |len| {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u32::decode(input).and_then(move |len| {
 			let len = len as usize;
-
-			if value.len() < len {
-				*value = initial;
-				return None;
+			let mut vec = vec![0; len];
+			if input.read(&mut vec[..len]) != len {
+				None
+			} else {
+				Some(vec)
 			}
-
-			let res = value[..len].to_vec();
-			*value = &value[len..];
-			Some(res)
 		})
 	}
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -120,13 +116,14 @@ macro_rules! impl_vec_simple_array {
 			impl<T> Slicable for Vec<[T; $size]>
 				where [T; $size]: EndianSensitive
 			{
-				fn from_slice(value: &mut &[u8]) -> Option<Self> {
-					let initial = *value;
-					u32::from_slice(value).and_then(move |len| {
-						let len = len as usize;
-						let mut r = Vec::with_capacity(len);
+				fn decode<I: Input>(input: &mut I) -> Option<Self> {
+					u32::decode(input).and_then(move |len| {
+						let mut r = Vec::with_capacity(len as usize);
 						for _ in 0..len {
-							r.push(try_decode!(initial, value));
+							r.push(match Slicable::decode(input) {
+								Some(x) => x,
+								None => return None,
+							});
 						}
 
 						Some(r)
@@ -159,13 +156,14 @@ impl_vec_simple_array!(1 2 4 8 16 32 64);
 impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
 
 impl<T: NonTrivialSlicable> Slicable for Vec<T> {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		let initial = *value;
-		u32::from_slice(value).and_then(move |len| {
-			let len = len as usize;
-			let mut r = Vec::with_capacity(len);
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u32::decode(input).and_then(move |len| {
+			let mut r = Vec::with_capacity(len as usize);
 			for _ in 0..len {
-				r.push(try_decode!(initial, value))
+				r.push(match T::decode(input) {
+					Some(x) => x,
+					None => return None,
+				});
 			}
 
 			Some(r)
@@ -191,7 +189,7 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 }
 
 impl Slicable for () {
-	fn from_slice(_value: &mut &[u8]) -> Option<()> {
+	fn decode<I: Input>(_: &mut I) -> Option<()> {
 		Some(())
 	}
 
@@ -207,8 +205,8 @@ impl Slicable for () {
 macro_rules! tuple_impl {
 	($one:ident,) => {
 		impl<$one: Slicable> Slicable for ($one,) {
-			fn from_slice(value: &mut &[u8]) -> Option<Self> {
-				match $one::from_slice(value) {
+			fn decode<I: Input>(input: &mut I) -> Option<Self> {
+				match $one::decode(input) {
 					None => None,
 					Some($one) => Some(($one,)),
 				}
@@ -223,13 +221,15 @@ macro_rules! tuple_impl {
 		impl<$first: Slicable, $($rest: Slicable),+>
 		Slicable for
 		($first, $($rest),+) {
-			fn from_slice(value: &mut &[u8]) -> Option<Self> {
-				let initial = *value;
+			fn decode<INPUT: Input>(input: &mut INPUT) -> Option<Self> {
 				Some((
-					try_decode!(initial, value),
-					$({
-						let x: $rest = try_decode!(initial, value);
-						x
+					match $first::decode(input) {
+						Some(x) => x,
+						None => return None,
+					},
+					$(match $rest::decode(input) {
+						Some(x) => x,
+						None => return None,
 					},)+
 				))
 			}
@@ -257,7 +257,7 @@ macro_rules! tuple_impl {
 
 #[allow(non_snake_case)]
 mod inner_tuple_impl {
-	use super::Slicable;
+	use super::{Input, Slicable};
 	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 }
 
@@ -272,21 +272,5 @@ mod tests {
 		v.as_slice_then(|ref slice|
 			assert_eq!(slice, &b"\x0b\0\0\0Hello world")
 		);
-	}
-
-	#[test]
-	fn failed_tuple_decode_does_not_munch() {
-		let encoded = (vec![1u8, 3, 5, 9], 6u64).to_vec();
-		let mut data = &encoded[..];
-		assert!(<(Vec<u8>, u64, Vec<u8>)>::from_slice(&mut data).is_none());
-
-		// failure to decode shouldn't munch anything.
-		assert_eq!(data.len(), encoded.len());
-
-		// full decoding should have munched everything.
-		let decoded = <(Vec<u8>, u64)>::from_slice(&mut data).unwrap();
-		assert!(data.is_empty());
-
-		assert_eq!(decoded, (vec![1, 3, 5,9], 6));
 	}
 }

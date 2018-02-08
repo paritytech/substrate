@@ -18,14 +18,33 @@
 
 use rstd::prelude::*;
 use runtime_io::{self, twox_128};
-use codec::{Slicable, KeyedVec};
+use codec::{Input, Slicable, KeyedVec};
 
 // TODO: consider using blake256 to avoid possible preimage attack.
 
+struct IncrementalInput<'a> {
+	key: &'a [u8],
+	pos: usize,
+}
+
+impl<'a> Input for IncrementalInput<'a> {
+	fn read(&mut self, into: &mut [u8]) -> usize {
+		let len = runtime_io::read_storage(self.key, into, self.pos);
+		let read = ::rstd::cmp::min(len, into.len());
+		self.pos += read;
+		read
+	}
+}
+
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-	let raw = runtime_io::storage(&twox_128(key)[..]);
-	Slicable::from_slice(&mut &raw[..])
+	let key = twox_128(key);
+	let mut input = IncrementalInput {
+		key: &key[..],
+		pos: 0,
+	};
+
+	Slicable::decode(&mut input)
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -142,12 +161,16 @@ pub trait StorageVec {
 }
 
 pub mod unhashed {
-	use super::{runtime_io, Slicable, KeyedVec, Vec};
+	use super::{runtime_io, Slicable, KeyedVec, Vec, IncrementalInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-		let raw = runtime_io::storage(key);
-		T::from_slice(&mut &raw[..])
+		let mut input = IncrementalInput {
+			key,
+			pos: 0,
+		};
+
+		T::decode(&mut input)
 	}
 
 	/// Return the value of the item in storage under `key`, or the type's default if there is no

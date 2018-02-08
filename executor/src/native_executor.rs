@@ -46,6 +46,10 @@ impl CodeExecutor for NativeExecutor {
 				"execute_block" => safe_call(|| api::execute_block(data)),
 				"execute_transaction" => safe_call(|| api::execute_transaction(data)),
 				"finalise_block" => safe_call(|| api::finalise_block(data)),
+				"validator_count" => safe_call(|| api::validator_count(data)),
+				"validators" => safe_call(|| api::validators(data)),
+				"authorities" => safe_call(|| api::authorities(data)),
+				"duty_roster" => safe_call(|| api::duty_roster(data)),
 				_ => Err(ErrorKind::MethodNotFound(method.to_owned()).into()),
 			})
 		} else {

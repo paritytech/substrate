@@ -19,7 +19,7 @@
 #[cfg(feature = "std")]
 use primitives::bytes;
 use primitives;
-use codec::{Slicable, NonTrivialSlicable};
+use codec::{Input, Slicable, NonTrivialSlicable};
 use rstd::vec::Vec;
 
 /// Unique identifier of a parachain.
@@ -35,9 +35,9 @@ impl From<u32> for Id {
 	fn from(x: u32) -> Self { Id(x) }
 }
 
-impl ::codec::Slicable for Id {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		u32::from_slice(value).map(Id)
+impl Slicable for Id {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u32::decode(input).map(Id)
 	}
 
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -56,13 +56,12 @@ pub enum Chain {
 }
 
 impl Slicable for Chain {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		let initial = *value;
-		let disc = try_opt!(u8::from_slice(value));
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		let disc = try_opt!(u8::decode(input));
 
 		match disc {
 			0 => Some(Chain::Relay),
-			1 => Some(Chain::Parachain(try_decode!(initial, value))),
+			1 => Some(Chain::Parachain(try_opt!(Slicable::decode(input)))),
 			_ => None,
 		}
 	}
@@ -99,12 +98,10 @@ pub struct DutyRoster {
 }
 
 impl Slicable for DutyRoster {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		let initial = *value;
-
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(DutyRoster {
-			validator_duty: try_decode!(initial, value),
-			guarantor_duty: try_decode!(initial, value),
+			validator_duty: try_opt!(Slicable::decode(input)),
+			guarantor_duty: try_opt!(Slicable::decode(input)),
 		})
 	}
 
@@ -202,9 +199,9 @@ pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with="bytes"))] pub 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Activity(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-impl ::codec::Slicable for Activity {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		Vec::<u8>::from_slice(value).map(Activity)
+impl Slicable for Activity {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<u8>::decode(input).map(Activity)
 	}
 
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {

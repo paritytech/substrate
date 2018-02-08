@@ -161,14 +161,14 @@ impl<B, E> Client<B, E> where
 		let state = self.state_at(hash)?;
 		let mut changes = state_machine::OverlayedChanges::default();
 
-		let _ = state_machine::execute(
+		let return_data = state_machine::execute(
 			&state,
 			&mut changes,
 			&self.executor,
 			method,
 			call_data,
 		)?;
-		Ok(CallResult { return_data: vec![], changes })
+		Ok(CallResult { return_data, changes })
 	}
 
 	/// Queue a block for import.

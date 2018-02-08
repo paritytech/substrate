@@ -999,7 +999,9 @@ dependencies = [
 name = "polkadot-client-api"
 version = "0.1.0"
 dependencies = [
+ "polkadot-primitives 0.1.0",
  "substrate-client 0.1.0",
+ "substrate-codec 0.1.0",
  "substrate-state-machine 0.1.0",
 ]
 

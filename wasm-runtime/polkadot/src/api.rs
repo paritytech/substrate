@@ -22,6 +22,7 @@ impl_stubs!(
 	execute_transaction => |(header, utx)| system::internal::execute_transaction(utx, header),
 	finalise_block => |header| system::internal::finalise_block(header),
 	validator_count => |()| session::validator_count(),
+	validators => |()| session::validators(),
 	authorities => |()| consensus::authorities(),
 	duty_roster => |()| parachains::calculate_duty_roster()
 );

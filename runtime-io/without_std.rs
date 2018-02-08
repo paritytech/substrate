@@ -82,7 +82,7 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
-/// the number of bytes that the key in storage was.
+/// the number of bytes that the key in storage was beyond the offset.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
 	unsafe {
 		ext_get_storage_into(key.as_ptr(), key.len() as u32, value_out.as_mut_ptr(), value_out.len() as u32, value_offset as u32) as usize

@@ -33,7 +33,6 @@ extern crate substrate_primitives as primitives;
 #[cfg(test)]
 extern crate substrate_serializer;
 
-#[macro_use]
 extern crate substrate_codec as codec;
 
 macro_rules! try_opt {
