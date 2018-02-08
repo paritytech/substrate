@@ -19,27 +19,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate substrate_runtime_std as rstd;
+#[macro_use] extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_support as runtime_support;
 
-#[macro_use]
-extern crate substrate_runtime_io as runtime_io;
-
-#[cfg(feature = "std")]
-extern crate rustc_hex;
+#[cfg(feature = "std")] extern crate rustc_hex;
 
 extern crate substrate_codec as codec;
-extern crate substrate_primitives as primitives;
+#[cfg(feature = "std")] #[macro_use] extern crate substrate_primitives as primitives;
 extern crate polkadot_primitives;
 
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
+#[cfg(test)] #[macro_use] extern crate hex_literal;
 
-#[macro_use]
-pub mod support;
+pub mod environment;
 pub mod runtime;
 
-#[cfg(feature = "std")]
-pub mod genesismap;
+#[cfg(feature = "std")] pub mod genesismap;
 
 use rstd::prelude::*;
 use codec::Slicable;

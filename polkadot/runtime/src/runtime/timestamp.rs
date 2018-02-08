@@ -16,7 +16,7 @@
 
 //! Timestamp manager: just handles the current timestamp.
 
-use support::storage;
+use runtime_support::storage;
 
 pub type Timestamp = u64;
 

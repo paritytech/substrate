@@ -19,7 +19,8 @@
 use rstd::prelude::*;
 use rstd::mem;
 use codec::{Slicable, Joiner};
-use support::{Hashable, with_env, storage};
+use runtime_support::{Hashable, storage};
+use environment::with_env;
 use runtime::session;
 
 const PARACHAIN_COUNT: &[u8] = b"par:cou";
@@ -98,7 +99,7 @@ mod tests {
 	use super::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use support::{one, two, with_env};
+	use runtime_support::{one, two};
 	use runtime::{consensus, session};
 
 	fn simple_setup() -> TestExternalities {

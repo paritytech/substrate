@@ -20,7 +20,7 @@ use rstd::prelude::*;
 use rstd::cell::RefCell;
 use runtime_io::print;
 use codec::KeyedVec;
-use support::{storage, StorageVec};
+use runtime_support::{storage, StorageVec};
 use polkadot_primitives::{BlockNumber, AccountId};
 use runtime::{system, session, governance};
 
@@ -215,7 +215,8 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use support::{one, two, with_env};
+	use runtime_support::{one, two};
+	use environment::with_env;
 	use polkadot_primitives::AccountId;
 	use runtime::{staking, session};
 

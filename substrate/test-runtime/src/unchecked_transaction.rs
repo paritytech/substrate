@@ -16,7 +16,8 @@
 
 //! A toy unchecked transaction complete with signature.
 
-use codec::{Slicable, Joiner};
+use rstd::prelude::*;
+use codec::Slicable;
 use super::{Signature, Transaction};
 
 /// A transactions right from the external world. Unchecked.

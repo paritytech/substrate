@@ -53,6 +53,7 @@ extern crate substrate_serializer;
 extern crate pretty_assertions;
 
 // TODO: factor out to separate crate.
+#[macro_export]
 macro_rules! try_opt {
 	($e: expr) => {
 		match $e {
@@ -61,6 +62,14 @@ macro_rules! try_opt {
 		}
 	}
 }
+
+#[macro_export]
+macro_rules! map {
+	($( $name:expr => $value:expr ),*) => (
+		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
+	)
+}
+
 
 #[cfg(feature = "std")]
 pub mod bytes;

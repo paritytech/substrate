@@ -39,12 +39,9 @@ impl Slicable for Block {
 	}
 
 	fn to_vec(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.header.as_slice_then(|s| v.extend(s));
-		self.transactions.as_slice_then(|s| v.extend(s));
-
-		v
+		Vec::new()
+			.and(&self.header)
+			.and(&self.transactions)
 	}
 }
 

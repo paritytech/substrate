@@ -16,6 +16,7 @@
 
 //! A toy transaction.
 
+use rstd::prelude::*;
 use codec::{Slicable, Joiner};
 use super::AccountId;
 

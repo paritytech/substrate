@@ -19,7 +19,7 @@
 
 use rstd::prelude::*;
 use codec::KeyedVec;
-use support::{storage, StorageVec};
+use runtime_support::{storage, StorageVec};
 use polkadot_primitives::{AccountId, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
@@ -139,7 +139,8 @@ mod tests {
 	use super::internal::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use support::{one, two, with_env};
+	use runtime_support::{one, two};
+	use environment::with_env;
 	use polkadot_primitives::AccountId;
 	use runtime::{consensus, session};
 

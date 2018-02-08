@@ -21,7 +21,8 @@ use rstd::prelude::*;
 use rstd::mem;
 use runtime_io::{print, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
-use support::{Hashable, storage, with_env};
+use runtime_support::{Hashable, storage};
+use environment::with_env;
 use polkadot_primitives::{AccountId, Hash, TxOrder, BlockNumber, Block, Header,
 	UncheckedTransaction, Function, Log};
 use runtime::{staking, session};
@@ -213,7 +214,7 @@ fn post_finalise(header: &Header) {
 
 #[cfg(feature = "std")]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
-	use support::HexDisplay;
+	use primitives::hexdisplay::HexDisplay;
 	if given != expected {
 		println!("Hash: given={}, expected={}", HexDisplay::from(&given.0), HexDisplay::from(&expected.0));
 	}
@@ -235,7 +236,9 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
-	use support::{StaticHexInto, HexDisplay, one, two};
+	use runtime_support::{one, two};
+	use environment::with_env;
+	use primitives::hexdisplay::HexDisplay;
 	use polkadot_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
 	use runtime::staking;
 
@@ -254,7 +257,7 @@ mod tests {
 				nonce: 0,
 				function: Function::StakingTransfer(two, 69),
 			},
-			signature: "5f9832c5a4a39e2dd4a3a0c5b400e9836beb362cb8f7d845a8291a2ae6fe366612e080e4acd0b5a75c3d0b6ee69614a68fb63698c1e76bf1f2dcd8fa617ddf05".parse().unwrap(),
+			signature: hex!("5f9832c5a4a39e2dd4a3a0c5b400e9836beb362cb8f7d845a8291a2ae6fe366612e080e4acd0b5a75c3d0b6ee69614a68fb63698c1e76bf1f2dcd8fa617ddf05").into(),
 		};
 
 		with_externalities(&mut t, || {

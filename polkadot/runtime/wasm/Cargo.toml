@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 substrate-codec = { path = "../../../substrate/codec", default-features = false }
 substrate-runtime-std = { path = "../../../substrate/runtime-std", default-features = false }
 substrate-runtime-io = { path = "../../../substrate/runtime-io", default-features = false }
+substrate-runtime-support = { path = "../../../substrate/runtime-support", default-features = false }
 substrate-primitives = { path = "../../../substrate/primitives", default-features = false }
 polkadot-primitives = { path = "../../primitives", default-features = false }
 
@@ -19,8 +20,9 @@ std = [
 	"substrate-codec/std",
 	"substrate-runtime-io/std",
 	"substrate-runtime-std/std",
+	"substrate-runtime-support/std",
 	"substrate-primitives/std",
-	"polkadot-primitives/std"
+	"polkadot-primitives/std",
 ]
 
 [profile.release]

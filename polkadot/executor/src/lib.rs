@@ -26,9 +26,9 @@ extern crate substrate_primitives as primitives;
 extern crate polkadot_primitives as polkadot_primitives;
 extern crate ed25519;
 extern crate triehash;
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
+
+#[cfg(test)] extern crate substrate_runtime_support as runtime_support;
+#[cfg(test)] #[macro_use] extern crate hex_literal;
 
 use polkadot_runtime as runtime;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
@@ -59,7 +59,7 @@ mod tests {
 	use super::*;
 	use substrate_executor::WasmExecutor;
 	use codec::{KeyedVec, Slicable, Joiner};
-	use polkadot_runtime::support::{one, two, Hashable};
+	use runtime_support::{one, two, Hashable};
 	use polkadot_runtime::runtime::staking::balance;
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;

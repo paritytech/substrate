@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use runtime_io::twox_128;
 use codec::{KeyedVec, Joiner};
-use support::Hashable;
+use runtime_support::Hashable;
 use primitives::Block;
 use polkadot_primitives::{BlockNumber, AccountId};
 use runtime::staking::Balance;
