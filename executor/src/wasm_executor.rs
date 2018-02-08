@@ -37,7 +37,7 @@ struct Heap {
 impl Heap {
 	fn new() -> Self {
 		Heap {
-			end: 32768,
+			end: 262144,
 		}
 	}
 	fn allocate(&mut self, size: u32) -> u32 {
@@ -53,6 +53,7 @@ struct FunctionExecutor<'e, E: Externalities + 'e> {
 	heap: Heap,
 	memory: Arc<MemoryInstance>,
 	ext: &'e mut E,
+	hash_lookup: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl<'e, E: Externalities> FunctionExecutor<'e, E> {
@@ -61,6 +62,7 @@ impl<'e, E: Externalities> FunctionExecutor<'e, E> {
 			heap: Heap::new(),
 			memory: Arc::clone(m),
 			ext: e,
+			hash_lookup: HashMap::new(),
 		}
 	}
 }
@@ -89,21 +91,39 @@ impl ReadPrimitive<u32> for MemoryInstance {
 	}
 }
 
+fn ascii_format(asciish: &[u8]) -> String {
+	let mut r = String::new();
+	let mut latch = false;
+	for c in asciish {
+		match (latch, *c) {
+			(false, 32...127) => r.push(*c as char),
+			_ => {
+				if !latch {
+					r.push('#');
+					latch = true;
+				}
+				r.push_str(&format!("{:02x}", *c));
+			}
+		}
+	}
+	r
+}
+
 impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
 			if let Ok(message) = String::from_utf8(utf8) {
-				info!(target: "runtime", "{}", message);
+				println!("{}", message);
 			}
 		}
 	},
 	ext_print_hex(data: *const u8, len: u32) => {
 		if let Ok(hex) = this.memory.get(data, len as usize) {
-			info!(target: "runtime", "{}", HexDisplay::from(&hex));
+			println!("{}", HexDisplay::from(&hex));
 		}
 	},
 	ext_print_num(number: u64) => {
-		info!(target: "runtime", "{}", number);
+		println!("{}", number);
 	},
 	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
 		let sl1 = this.memory.get(s1, n as usize).map_err(|_| DummyUserError)?;
@@ -144,12 +164,22 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| DummyUserError)?;
-		info!(target: "runtime", "Setting storage: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&value));
+		if let Some(preimage) = this.hash_lookup.get(&key) {
+			println!("*** Setting storage: %{} -> {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+		} else {
+			println!("*** Setting storage:  {} -> {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+		}
 		this.ext.set_storage(key, value);
 	},
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
 		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
+
+		if let Some(preimage) = this.hash_lookup.get(&key) {
+			println!("    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+		} else {
+			println!("    Getting storage:  {} == {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+		}
 
 		let offset = this.heap.allocate(value.len() as u32) as u32;
 		this.memory.set(offset, &value).map_err(|_| DummyUserError)?;
@@ -160,7 +190,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
 		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
-		info!(target: "runtime", "Getting storage: {} ( -> {})", HexDisplay::from(&key), HexDisplay::from(&value));
+		if let Some(preimage) = this.hash_lookup.get(&key) {
+			println!("    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+		} else {
+			println!("    Getting storage:  {} == {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+		}
 		let value = &value[value_offset as usize..];
 		let written = ::std::cmp::min(value_len as usize, value.len());
 		this.memory.set(value_data, &value[..written]).map_err(|_| DummyUserError)?;
@@ -189,18 +223,22 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
-			info!(target: "runtime", "XXhash: ''");
-			twox_128(&[0u8; 0])
+			let hashed = twox_128(&[0u8; 0]);
+			//println!("XXhash: '' -> {}", HexDisplay::from(&hashed));
+			this.hash_lookup.insert(hashed.to_vec(), vec![]);
+			hashed
 		} else {
 			let key = this.memory.get(data, len as usize).map_err(|_| DummyUserError)?;
 			let hashed_key = twox_128(&key);
 			if let Ok(skey) = ::std::str::from_utf8(&key) {
-				info!(target: "runtime", "XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
+				//println!("XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
 			} else {
-				info!(target: "runtime", "XXhash: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&hashed_key));
+				//println!("XXhash: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&hashed_key));
 			}
+			this.hash_lookup.insert(hashed_key.to_vec(), key);
 			hashed_key
 		};
+
 		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
@@ -252,6 +290,7 @@ impl CodeExecutor for WasmExecutor {
 		data: &[u8],
 	) -> Result<Vec<u8>> {
 		// TODO: handle all expects as errors to be returned.
+		println!(/*target: "wasm-executor",*/ "Wasm-Calling {}({})", method, HexDisplay::from(&data));
 
 		let program = ProgramInstance::new().expect("this really shouldn't be able to fail; qed");
 
@@ -276,8 +315,11 @@ impl CodeExecutor for WasmExecutor {
 			})?;
 
 		if let Some(I64(r)) = returned {
-			memory.get(r as u32, (r >> 32) as u32 as usize)
+			let offset = r as u32;
+			let length = (r >> 32) as u32 as usize;
+			memory.get(offset, length)
 				.map_err(|_| ErrorKind::Runtime.into())
+				.map(|v| { println!(/*target: "wasm-executor",*/ "Returned {}", HexDisplay::from(&v)); v })
 		} else {
 			Err(ErrorKind::InvalidReturn.into())
 		}

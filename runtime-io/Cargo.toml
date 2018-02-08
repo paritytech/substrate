@@ -8,8 +8,6 @@ build = "build.rs"
 rustc_version = "0.2"
 
 [dependencies]
-pwasm-alloc = { path = "../pwasm-alloc" }
-pwasm-libc = { path = "../pwasm-libc" }
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 environmental = { path = "../environmental", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }

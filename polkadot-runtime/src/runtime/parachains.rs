@@ -17,7 +17,7 @@
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
 use rstd::prelude::*;
-use runtime_io::mem;
+use rstd::mem;
 use codec::{Slicable, Joiner};
 use support::{Hashable, with_env, storage};
 use runtime::session;

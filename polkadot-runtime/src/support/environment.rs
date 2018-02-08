@@ -16,10 +16,10 @@
 
 //! Environment API: Allows certain information to be accessed throughout the runtime.
 
-use runtime_io::boxed::Box;
-use runtime_io::mem;
-use runtime_io::cell::RefCell;
-use runtime_io::rc::Rc;
+use rstd::boxed::Box;
+use rstd::mem;
+use rstd::cell::RefCell;
+use rstd::rc::Rc;
 
 use polkadot_primitives::{BlockNumber, Digest, Hash};
 

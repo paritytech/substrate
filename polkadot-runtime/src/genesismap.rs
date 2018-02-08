@@ -50,7 +50,7 @@ impl GenesisConfig {
 	}
 
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
-		let wasm_runtime = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm").to_vec();
+		let wasm_runtime = include_bytes!("../wasm/genesis.wasm").to_vec();
 		vec![
 			(&b"gov:apr"[..], vec![].join(&self.approval_ratio)),
 			(&b"ses:len"[..], vec![].join(&self.session_length)),

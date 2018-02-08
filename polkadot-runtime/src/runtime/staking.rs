@@ -17,7 +17,7 @@
 //! Staking manager: Handles balances and periodically determines the best set of validators.
 
 use rstd::prelude::*;
-use runtime_io::cell::RefCell;
+use rstd::cell::RefCell;
 use runtime_io::print;
 use codec::KeyedVec;
 use support::{storage, StorageVec};

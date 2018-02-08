@@ -2,7 +2,7 @@
 set -e
 
 cargo +nightly build --target=wasm32-unknown-unknown --release
-for i in polkadot
+for i in polkadot_runtime
 do
-	wasm-gc target/wasm32-unknown-unknown/release/runtime_$i.wasm target/wasm32-unknown-unknown/release/runtime_$i.compact.wasm
+	wasm-gc target/wasm32-unknown-unknown/release/$i.wasm target/wasm32-unknown-unknown/release/$i.compact.wasm
 done

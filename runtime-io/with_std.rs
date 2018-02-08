@@ -22,13 +22,6 @@ extern crate substrate_primitives as primitives;
 extern crate triehash;
 extern crate ed25519;
 
-pub use std::vec;
-pub use std::rc;
-pub use std::cell;
-pub use std::boxed;
-pub use std::slice;
-pub use std::mem;
-
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256};
 
