@@ -5,6 +5,6 @@ authors = ["Parity Technologies <rphmeier@gmail.com>"]
 description = "Abstract collation logic"
 
 [dependencies]
-substrate-primitives = { path = "../primitives", version = "0.1" }
-polkadot-primitives = { path = "../polkadot-primitives", version = "0.1" }
 futures = "0.1.17"
+substrate-primitives = { path = "../../substrate/primitives", version = "0.1" }
+polkadot-primitives = { path = "../primitives", version = "0.1" }

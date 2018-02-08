@@ -1,0 +1,25 @@
+[package]
+name = "polkadot-runtime"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+rustc-hex = "1.0"
+hex-literal = "0.1.0"
+log = { version = "0.3", optional = true }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-runtime-std = { path = "../../substrate/runtime-std" }
+substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-primitives = { path = "../../substrate/primitives" }
+polkadot-primitives = { path = "../primitives" }
+
+[features]
+default = ["std"]
+std = [
+	"substrate-codec/std",
+	"substrate-runtime-std/std",
+	"substrate-runtime-io/std",
+	"substrate-primitives/std",
+	"polkadot-primitives/std",
+	"log"
+]

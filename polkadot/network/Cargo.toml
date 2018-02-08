@@ -8,12 +8,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [lib]
 
 [dependencies]
-ethcore-network = { git = "https://github.com/paritytech/parity.git" }
-ethcore-io = { git = "https://github.com/paritytech/parity.git" }
-substrate-primitives = { path = "../primitives" }
-substrate-client = { path = "../client" }
-substrate-state-machine = { path = "../state-machine" }
-substrate-serializer = { path = "../serializer" }
 log = "0.3"
 env_logger = "0.4"
 rand = "0.3"
@@ -27,4 +21,10 @@ bitflags = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
-polkadot-primitives = { path = "../polkadot-primitives" }
+ethcore-network = { git = "https://github.com/paritytech/parity.git" }
+ethcore-io = { git = "https://github.com/paritytech/parity.git" }
+substrate-primitives = { path = "../../substrate/primitives" }
+substrate-client = { path = "../../substrate/client" }
+substrate-state-machine = { path = "../../substrate/state-machine" }
+substrate-serializer = { path = "../../substrate/serializer" }
+polkadot-primitives = { path = "../primitives" }

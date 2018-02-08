@@ -34,6 +34,7 @@ pub trait NativeExecutionDispatch {
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
 pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
+	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	pub _dummy: ::std::marker::PhantomData<D>,
 }
 

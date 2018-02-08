@@ -330,11 +330,9 @@ impl CodeExecutor for WasmExecutor {
 mod tests {
 	use super::*;
 	use rustc_hex::FromHex;
-	use codec::{KeyedVec, Slicable, Joiner};
+	use codec::{Slicable, Joiner};
 	use state_machine::TestExternalities;
-	use primitives::{twox_128, Header};
-	use runtime_io;
-	use ed25519::Pair;
+	use primitives::Header;
 
 	#[test]
 	fn returning_should_work() {

@@ -6,12 +6,12 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-substrate-codec = { path = "../codec", default_features = false }
-substrate-primitives = { path = "../primitives", default_features = false }
-substrate-runtime-std = { path = "../runtime-std", default_features = false }
+substrate-codec = { path = "../../substrate/codec", default_features = false }
+substrate-primitives = { path = "../../substrate/primitives", default_features = false }
+substrate-runtime-std = { path = "../../substrate/runtime-std", default_features = false }
 
 [dev-dependencies]
-substrate-serializer = { path = "../serializer" }
+substrate-serializer = { path = "../../substrate/serializer" }
 pretty_assertions = "0.4"
 
 [features]
