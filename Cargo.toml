@@ -1,3 +1,7 @@
+[[bin]]
+name = "polkadot"
+path = "polkadot/src/main.rs"
+
 [package]
 name = "polkadot"
 version = "0.1.0"
@@ -5,30 +9,34 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 error-chain = "0.11"
-polkadot-cli = { path = "cli", version = "0.1" }
-polkadot-network = { path = "network" }
+polkadot-cli = { path = "polkadot/cli" }
+polkadot-network = { path = "polkadot/network" }
 
 [workspace]
 members = [
-	"candidate-agreement",
-	"client",
-	"client-api",
-	"collator",
-	"environmental",
-	"executor",
-	"native-runtime",
-	"network",
-	"primitives",
-	"rpc-servers",
-	"rpc",
-	"codec",
-	"polkadot-primitives",
-	"runtime-io",
-	"runtime-std",
-	"serializer",
-	"state-machine",
-	"validator",
+	"substrate/client",
+	"substrate/codec",
+	"substrate/environmental",
+	"substrate/executor",
+	"polkadot/network",
+	"polkadot/candidate-agreement",
+	"polkadot/cli",
+	"polkadot/collator",
+	"polkadot/executor",
+	"polkadot/runtime",
+	"polkadot/primitives",
+	"polkadot/validator",
+	"substrate/primitives",
+	"substrate/rpc",
+	"substrate/rpc-servers",
+	"substrate/runtime-io",
+	"substrate/runtime-std",
+	"substrate/serializer",
+	"substrate/state-machine",
 ]
 exclude = [
-	"wasm-runtime"
+	"substrate/executor/wasm",
+	"polkadot/runtime/wasm",
+	"substrate/pwasm-alloc",
+	"substrate/pwasm-libc",
 ]
