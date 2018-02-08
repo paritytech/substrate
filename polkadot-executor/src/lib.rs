@@ -49,7 +49,7 @@ impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
 
 /// Creates new RustExecutor for contracts.
 pub fn executor() -> NativeExecutor<LocalNativeExecutionDispatch> {
-	NativeExecutor{ _dummy: ::std::marker::PhantomData }
+	NativeExecutor { _dummy: ::std::marker::PhantomData }
 }
 
 #[cfg(test)]
