@@ -182,34 +182,32 @@ pub fn print<T: Printable + Sized>(value: T) {
 #[macro_export]
 macro_rules! impl_stubs {
 	( $( $new_name:ident => $invoke:expr ),* ) => {
-		pub mod _internal {
-			$(
-				#[no_mangle]
-				pub fn $new_name(input_data: *mut u8, input_len: usize) -> u64 {
-					let mut input = if input_len == 0 {
-						&[0u8; 0]
-					} else {
-						unsafe {
-							$crate::slice::from_raw_parts(input_data, input_len)
-						}
-					};
+		$(
+			#[no_mangle]
+			pub fn $new_name(input_data: *mut u8, input_len: usize) -> u64 {
+				let mut input = if input_len == 0 {
+					&[0u8; 0]
+				} else {
+					unsafe {
+						$crate::slice::from_raw_parts(input_data, input_len)
+					}
+				};
 
-					let input = match $crate::codec::Slicable::from_slice(&mut input) {
-						Some(input) => input,
-						None => panic!("Bad input data provided to {}", stringify!($name)),
-					};
+				let input = match $crate::codec::Slicable::decode(&mut input) {
+					Some(input) => input,
+					None => panic!("Bad input data provided to {}", stringify!($name)),
+				};
 
-					let output = ($invoke)(input);
-					let output = $crate::codec::Slicable::to_vec(&output);
-					let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
+				let output = ($invoke)(input);
+				let output = $crate::codec::Slicable::to_vec(&output);
+				let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
 
-					// Leak the output vector to avoid it being freed.
-					// This is fine in a WASM context since the heap
-					// will be discarded after the call.
-					::core::mem::forget(output);
-					res
-				}
-			)*
-		}
+				// Leak the output vector to avoid it being freed.
+				// This is fine in a WASM context since the heap
+				// will be discarded after the call.
+				::core::mem::forget(output);
+				res
+			}
+		)*
 	}
 }

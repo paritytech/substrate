@@ -257,6 +257,8 @@ macro_rules! tuple_impl {
 
 #[allow(non_snake_case)]
 mod inner_tuple_impl {
+	use rstd::vec::Vec;
+
 	use super::{Input, Slicable};
 	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 }

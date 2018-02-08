@@ -16,12 +16,12 @@
 
 //! Tool for creating the genesis block.
 
+use codec::{KeyedVec, Joiner};
+use polkadot_primitives::{BlockNumber, Block, AccountId};
 use std::collections::HashMap;
 use runtime_io::twox_128;
-use codec::{KeyedVec, Joiner};
-use support::Hashable;
-use polkadot_primitives::{BlockNumber, Block, AccountId};
 use runtime::staking::Balance;
+use support::Hashable;
 
 /// Configuration of a general Polkadot genesis block.
 pub struct GenesisConfig {

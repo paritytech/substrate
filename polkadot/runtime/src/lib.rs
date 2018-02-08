@@ -37,8 +37,10 @@ extern crate hex_literal;
 #[macro_use]
 pub mod support;
 pub mod runtime;
-pub mod genesismap;
 pub mod api;
+
+#[cfg(feature = "std")]
+pub mod genesismap;
 
 /// Type definitions and helpers for transactions.
 pub mod transaction {
