@@ -111,7 +111,7 @@ impl Slicable for Vec<u8> {
 }
 
 macro_rules! impl_vec_simple_array {
-	($($size:expr)*) => {
+	($($size:expr),*) => {
 		$(
 			impl<T> Slicable for Vec<[T; $size]>
 				where [T; $size]: EndianSensitive
@@ -151,7 +151,7 @@ macro_rules! impl_vec_simple_array {
 	}
 }
 
-impl_vec_simple_array!(1 2 4 8 16 32 64);
+impl_vec_simple_array!(1, 2, 4, 8, 16, 32, 64);
 
 impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
 

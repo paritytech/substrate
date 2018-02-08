@@ -18,7 +18,6 @@
 
 use primitives::block;
 use client;
-use client::blockchain::BlockId;
 use state_machine;
 
 mod error;
