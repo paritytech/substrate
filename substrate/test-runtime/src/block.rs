@@ -38,7 +38,7 @@ impl Slicable for Block {
 		})
 	}
 
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		Vec::new()
 			.and(&self.header)
 			.and(&self.transactions)

@@ -63,6 +63,6 @@ macro_rules! map {
 pub fn additional_storage_with_genesis(genesis_block: &Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	use codec::Slicable;
 	map![
-		twox_128(&b"latest"[..]).to_vec() => genesis_block.header.blake2_256().to_vec()
+		twox_128(&b"latest"[..]).encode() => genesis_block.header.blake2_256().encode()
 	]
 }

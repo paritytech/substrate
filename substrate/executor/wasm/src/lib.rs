@@ -14,26 +14,26 @@ use runtime_io::{
 };
 
 fn test_blake2_256(input: &[u8]) -> Vec<u8> {
-	blake2_256(&input).to_vec()
+	blake2_256(&input).encode()
 }
 
 fn test_twox_256(input: &[u8]) -> Vec<u8> {
-	twox_256(&input).to_vec()
+	twox_256(&input).encode()
 }
 
 fn test_twox_128(input: &[u8]) -> Vec<u8> {
-	twox_128(&input).to_vec()
+	twox_128(&input).encode()
 }
 
 fn test_ed25519_verify(input: &[u8]) -> Vec<u8> {
 	let sig = &input[0..64];
 	let pubkey = &input[64..96];
 	let msg = b"all ok!";
-	[ed25519_verify(sig, &msg[..], pubkey) as u8].to_vec()
+	[ed25519_verify(sig, &msg[..], pubkey) as u8].encode()
 }
 
 fn test_enumerated_trie_root(_input: &[u8]) -> Vec<u8> {
-	enumerated_trie_root(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).to_vec()
+	enumerated_trie_root(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).encode()
 }
 
 fn test_data_in(input: &[u8]) -> Vec<u8> {
@@ -62,7 +62,7 @@ fn test_conditional_panic(input: &[u8]) -> Vec<u8> {
 	if input.len() > 0 {
 		panic!("test panic");
 	}
-	input.to_vec()
+	input.encode()
 }
 
 impl_stubs!(test_data_in, test_empty_return, test_panic, test_conditional_panic,

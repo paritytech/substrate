@@ -50,7 +50,7 @@ pub fn execute_block(block: Block) {
 	);
 
 	// check transaction trie root represents the transactions.
-	let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
+	let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
 	info_expect_equal_hash(&header.transaction_root, &txs_root);
@@ -85,7 +85,7 @@ pub fn finalise_block(mut header: Header) -> Header {
 fn execute_transaction_backend(utx: &UncheckedTransaction) {
 	// check signature
 	let ref tx = utx.tx;
-	let msg = ::codec::Slicable::to_vec(tx);
+	let msg = ::codec::Slicable::encode(tx);
 	assert!(ed25519_verify(&utx.signature.0, &msg, &tx.from),
 		"All transactions should be properly signed");
 

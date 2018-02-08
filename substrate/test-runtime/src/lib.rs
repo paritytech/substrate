@@ -57,9 +57,9 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
 	print("deserialised block.");
-	let stxs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
+	let stxs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
 	print("reserialised transactions.");
-	[stxs.len() as u8].to_vec()
+	[stxs.len() as u8].encode()
 }
 
 pub mod apis {

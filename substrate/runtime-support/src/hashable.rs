@@ -27,12 +27,12 @@ pub trait Hashable: Sized {
 
 impl<T: Slicable> Hashable for T {
 	fn blake2_256(&self) -> [u8; 32] {
-		blake2_256(&self.to_vec())
+		blake2_256(&self.encode())
 	}
 	fn twox_128(&self) -> [u8; 16] {
-		twox_128(&self.to_vec())
+		twox_128(&self.encode())
 	}
 	fn twox_256(&self) -> [u8; 32] {
-		twox_256(&self.to_vec())
+		twox_256(&self.encode())
 	}
 }

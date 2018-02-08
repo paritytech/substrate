@@ -27,7 +27,7 @@ pub trait Joiner {
 
 impl<T> Joiner for T where T: for<'a> Extend<&'a u8> {
 	fn and<V: Slicable + Sized>(mut self, value: &V) -> Self {
-		value.as_slice_then(|s| self.extend(s));
+		value.using_encoded(|s| self.extend(s));
 		self
 	}
 }

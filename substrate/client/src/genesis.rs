@@ -83,12 +83,12 @@ mod tests {
 
 		let transactions = txs.into_iter().map(|tx| {
 			let signature = secret_for(&tx.from).unwrap()
-				.sign(&tx.to_vec());
+				.sign(&tx.encode());
 
 			UncheckedTransaction { tx, signature }
 		}).collect::<Vec<_>>();
 
-		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0.into();
+		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::encode)).0.into();
 
 		let mut header = Header {
 			parent_hash,

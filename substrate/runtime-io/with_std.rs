@@ -138,7 +138,7 @@ macro_rules! impl_stubs {
 						};
 
 						let output = $invoke(input);
-						Some($crate::codec::Slicable::to_vec(&output))
+						Some($crate::codec::Slicable::encode(&output))
 					}
 				)*
 				_ => None,

@@ -66,7 +66,7 @@ pub mod transaction {
 	///
 	/// On failure, return the transaction back.
 	pub fn check(tx: UncheckedTransaction) -> Result<CheckedTransaction, UncheckedTransaction> {
-		let msg = ::codec::Slicable::to_vec(&tx.transaction);
+		let msg = ::codec::Slicable::encode(&tx.transaction);
 		if ::runtime_io::ed25519_verify(&tx.signature.0, &msg, &tx.transaction.signed) {
 			Ok(CheckedTransaction(tx))
 		} else {

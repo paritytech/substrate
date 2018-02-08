@@ -185,7 +185,7 @@ fn initial_checks(block: &Block) {
 	);
 
 	// check transaction trie root represents the transactions.
-	let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
+	let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
 	info_expect_equal_hash(&header.transaction_root, &txs_root);
@@ -273,7 +273,7 @@ mod tests {
 		let three = [3u8; 32];
 
 		TestExternalities { storage: map![
-			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].to_vec(),
+			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].encode(),
 			twox_128(b"gov:apr").to_vec() => vec![].and(&667u32),
 			twox_128(b"ses:len").to_vec() => vec![].and(&2u64),
 			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),

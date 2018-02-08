@@ -43,18 +43,18 @@ impl Slicable for UncheckedTransaction {
 		})
 	}
 
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
 		// need to prefix with the total length as u32 to ensure it's binary comptible with
 		// Vec<u8>. we'll make room for it here, then overwrite once we know the length.
 		v.extend(&[0u8; 4]);
 
-		self.tx.as_slice_then(|s| v.extend(s));
-		self.signature.as_slice_then(|s| v.extend(s));
+		self.tx.using_encoded(|s| v.extend(s));
+		self.signature.using_encoded(|s| v.extend(s));
 
 		let length = (v.len() - 4) as u32;
-		length.as_slice_then(|s| v[0..4].copy_from_slice(s));
+		length.using_encoded(|s| v[0..4].copy_from_slice(s));
 
 		v
 	}

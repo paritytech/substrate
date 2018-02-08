@@ -44,7 +44,7 @@ impl Slicable for Transaction {
 		})
 	}
 
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		Vec::new()
 			.and(&self.from)
 			.and(&self.to)
