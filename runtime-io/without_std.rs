@@ -22,6 +22,8 @@ extern crate pwasm_libc;
 #[cfg(feature = "nightly")]
 extern crate pwasm_alloc;
 
+#[doc(hidden)]
+pub extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 
 pub use alloc::vec;
@@ -186,12 +188,12 @@ pub fn print<T: Printable + Sized>(value: T) {
 
 #[macro_export]
 macro_rules! impl_stubs {
-	( $( $name:ident ),* ) => {
+	( $( $name:ident => $new_name:ident ),* ) => {
 		pub mod _internal {
 			$(
 				#[no_mangle]
-				pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
-					let input = if input_len == 0 {
+				pub fn $new_name(input_data: *mut u8, input_len: usize) -> u64 {
+					let mut input = if input_len == 0 {
 						&[0u8; 0]
 					} else {
 						unsafe {
@@ -199,8 +201,20 @@ macro_rules! impl_stubs {
 						}
 					};
 
+					let input = match $crate::codec::Slicable::from_slice(&mut input) {
+						Some(input) => input,
+						None => panic!("Bad input data provided to {}", stringify!($name)),
+					};
+
 					let output = super::$name(input);
-					output.as_ptr() as u64 + ((output.len() as u64) << 32)
+					let output = $crate::codec::Slicable::to_vec(&output);
+					let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
+
+					// Leak the output vector to avoid it being freed.
+					// This is fine in a WASM context since the heap
+					// will be discarded after the call.
+					::core::mem::forget(output);
+					res
 				}
 			)*
 		}

@@ -22,6 +22,9 @@ extern crate substrate_primitives as primitives;
 extern crate triehash;
 extern crate ed25519;
 
+#[doc(hidden)]
+pub extern crate substrate_codec as codec;
+
 pub use std::vec;
 pub use std::rc;
 pub use std::cell;
@@ -131,7 +134,20 @@ pub fn print<T: Printable + Sized>(value: T) {
 
 #[macro_export]
 macro_rules! impl_stubs {
-	($( $name:ident ),*) => {}
+	( $( $name:ident => $new_name:ident ),* ) => {
+		$(
+			/// Stub version of $name
+			pub fn $new_name(mut input: &[u8]) -> Vec<u8> {
+				let input = match $crate::codec::Slicable::from_slice(&mut input) {
+					Some(input) => input,
+					None => panic!("Bad input data provided to {}", stringify!($name)),
+				};
+
+				let output = $name(input);
+				$crate::codec::Slicable::to_vec(&output)
+			}
+		)*
+	}
 }
 
 #[cfg(test)]

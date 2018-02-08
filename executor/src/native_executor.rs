@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use error::{Error, ErrorKind, Result};
-use native_runtime as runtime;
+use native_runtime::api;
 use runtime_io;
 use state_machine::{Externalities, CodeExecutor};
 use wasm_executor::WasmExecutor;
@@ -43,9 +43,9 @@ impl CodeExecutor for NativeExecutor {
 		let native_equivalent = include_bytes!("../../wasm-runtime/target/wasm32-unknown-unknown/release/runtime_polkadot.compact.wasm");
 		if code == &native_equivalent[..] {
 			runtime_io::with_externalities(ext, || match method {
-				"execute_block" => safe_call(|| runtime::execute_block(data)),
-				"execute_transaction" => safe_call(|| runtime::execute_transaction(data)),
-				"finalise_block" => safe_call(|| runtime::finalise_block(data)),
+				"execute_block" => safe_call(|| api::execute_encoded_block(data)),
+				"execute_transaction" => safe_call(|| api::execute_encoded_transaction(data)),
+				"finalise_block" => safe_call(|| api::finalise_encoded_block(data)),
 				_ => Err(ErrorKind::MethodNotFound(method.to_owned()).into()),
 			})
 		} else {

@@ -141,6 +141,20 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 	}
 }
 
+impl Slicable for () {
+	fn from_slice(_value: &mut &[u8]) -> Option<()> {
+		Some(())
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&[])
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		Vec::new()
+	}
+}
+
 macro_rules! tuple_impl {
 	($one:ident,) => {
 		impl<$one: Slicable> Slicable for ($one,) {
