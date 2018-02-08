@@ -1,6 +1,6 @@
 /target/
 **/*.rs.bk
 *.swp
-polkadot-runtime/wasm/target/
-executor/wasm/target/
+polkadot/runtime/wasm/target/
+substrate/executor/wasm/target/
 **/._*
