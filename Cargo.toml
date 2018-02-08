@@ -5,29 +5,34 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 error-chain = "0.11"
-polkadot-cli = { path = "cli", version = "0.1" }
+polkadot-cli = { path = "polkadot-cli", version = "0.1" }
 polkadot-network = { path = "network" }
 
 [workspace]
 members = [
-	"candidate-agreement",
 	"client",
-	"collator",
+	"codec",
 	"environmental",
 	"executor",
-	"native-runtime",
 	"network",
-	"primitives",
-	"rpc-servers",
-	"rpc",
-	"codec",
+	"polkadot-candidate-agreement",
+	"polkadot-cli",
+	"polkadot-collator",
+	"polkadot-executor",
+	"polkadot-runtime",
 	"polkadot-primitives",
+	"polkadot-validator",
+	"primitives",
+	"rpc",
+	"rpc-servers",
 	"runtime-io",
 	"runtime-std",
 	"serializer",
 	"state-machine",
-	"validator",
 ]
 exclude = [
-	"wasm-runtime"
+	"executor/wasm",
+	"polkadot-runtime/wasm",
+	"pwasm-alloc",
+	"pwasm-libc",
 ]

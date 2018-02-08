@@ -22,13 +22,6 @@ extern crate substrate_primitives as primitives;
 extern crate triehash;
 extern crate ed25519;
 
-pub use std::vec;
-pub use std::rc;
-pub use std::cell;
-pub use std::boxed;
-pub use std::slice;
-pub use std::mem;
-
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256};
 
@@ -131,7 +124,16 @@ pub fn print<T: Printable + Sized>(value: T) {
 
 #[macro_export]
 macro_rules! impl_stubs {
-	($( $name:ident ),*) => {}
+	($( $name:ident ),*) => {
+		pub fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+			match method {
+				$(
+					stringify!($name) => Some($name(data)),
+				)*
+				_ => None,
+			}
+		}
+	}
 }
 
 #[cfg(test)]

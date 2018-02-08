@@ -16,6 +16,10 @@
 
 #[cfg(feature = "nightly")]
 extern crate alloc;
+#[cfg(feature = "nightly")]
+extern crate pwasm_libc;
+#[cfg(feature = "nightly")]
+extern crate pwasm_alloc;
 
 pub use alloc::vec;
 pub use alloc::boxed;
@@ -26,3 +30,4 @@ pub use core::cell;
 pub use core::ops;
 pub use core::iter;
 pub use core::ptr;
+pub use core::intrinsics;
