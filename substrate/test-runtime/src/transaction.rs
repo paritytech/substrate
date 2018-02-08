@@ -30,7 +30,7 @@ pub struct Transaction {
 	pub to: AccountId,
 	/// How much to send.
 	pub amount: u64,
-	/// How much to send.
+	/// How many transactions `self.from` already sent.
 	pub nonce: u64,
 }
 
