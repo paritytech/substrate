@@ -162,6 +162,29 @@ mod tests {
 	}
 
 	#[test]
+	#[should_panic]
+	fn construct_genesis_with_bad_transaction_should_panic() {
+		let mut storage = GenesisConfig::new_simple(
+			vec![one(), two()], 68
+		).genesis_map();
+		let block = construct_genesis_block(&storage);
+		let genesis_hash = block.header.blake2_256().into();
+		storage.extend(additional_storage_with_genesis(&block).into_iter());
+
+		let mut overlay = OverlayedChanges::default();
+		let backend = InMemory::from(storage);
+		let (b1data, _b1hash) = block1(genesis_hash, &backend);
+
+		let _ = execute(
+			&backend,
+			&mut overlay,
+			&executor(),
+			"execute_block",
+			&b1data
+		).unwrap();
+	}
+
+	#[test]
 	fn construct_genesis_should_work_under_wasm() {
 		let mut storage = GenesisConfig::new_simple(
 			vec![one(), two()], 1000

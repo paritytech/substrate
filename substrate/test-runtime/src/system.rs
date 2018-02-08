@@ -125,3 +125,54 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 		::runtime_io::print(&expected.0[..]);
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use runtime_io::{with_externalities, twox_128, TestExternalities};
+	use codec::{Joiner, KeyedVec, Slicable};
+	use runtime_support::{one, two};
+	use primitives::hexdisplay::HexDisplay;
+	use ::{Header, Digest, UncheckedTransaction, Transaction};
+
+	fn new_test_ext() -> TestExternalities {
+		let one = one();
+		let two = two();
+		let three = [3u8; 32];
+
+		TestExternalities { storage: map![
+			twox_128(b"latest").to_vec() => vec![69u8; 32],
+			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),
+			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => one.to_vec(),
+			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => two.to_vec(),
+			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => three.to_vec(),
+			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+		], }
+	}
+
+	#[test]
+	fn block_import_works() {
+		let one = one();
+		let two = two();
+
+		let mut t = new_test_ext();
+
+		let h = Header {
+			parent_hash: [69u8; 32].into(),
+			number: 1,
+			state_root: hex!("89b5f5775a45310806a77f421d66bffeff190a519c55f2dcb21f251c2b714524").into(),
+			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
+			digest: Digest { logs: vec![], },
+		};
+
+		let b = Block {
+			header: h,
+			transactions: vec![],
+		};
+
+		with_externalities(&mut t, || {
+			execute_block(b);
+		});
+	}
+}
