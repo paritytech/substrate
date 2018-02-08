@@ -14,24 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[cfg(feature = "nightly")]
-extern crate alloc;
-
-#[cfg(feature = "nightly")]
-extern crate pwasm_libc;
-#[cfg(feature = "nightly")]
-extern crate pwasm_alloc;
-
+extern crate substrate_runtime_std as rstd;
 extern crate substrate_primitives as primitives;
 
-pub use alloc::vec;
-pub use alloc::boxed;
-pub use alloc::rc;
-pub use core::mem;
-pub use core::slice;
-pub use core::cell;
-
-use alloc::vec::Vec;
+use rstd::intrinsics;
+use rstd::vec::Vec;
+pub use rstd::{mem, slice};
 
 #[lang = "panic_fmt"]
 #[no_mangle]
@@ -40,7 +28,7 @@ pub extern fn panic_fmt(_fmt: ::core::fmt::Arguments, _file: &'static str, _line
 		ext_print_utf8(_file.as_ptr() as *const u8, _file.len() as u32);
 		ext_print_num(_line as u64);
 		ext_print_num(_col as u64);
-		::core::intrinsics::abort()
+		intrinsics::abort()
 	}
 }
 
@@ -83,7 +71,11 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 /// the number of bytes that the key in storage was.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
 	unsafe {
-		ext_get_storage_into(key.as_ptr(), key.len() as u32, value_out.as_mut_ptr(), value_out.len() as u32, value_offset as u32) as usize
+		ext_get_storage_into(
+			key.as_ptr(), key.len() as u32,
+			value_out.as_mut_ptr(), value_out.len() as u32,
+			value_offset as u32
+		) as usize
 	}
 }
 
@@ -200,7 +192,9 @@ macro_rules! impl_stubs {
 					};
 
 					let output = super::$name(input);
-					output.as_ptr() as u64 + ((output.len() as u64) << 32)
+					let r = output.as_ptr() as u64 + ((output.len() as u64) << 32);
+					$crate::mem::forget(output);
+					r
 				}
 			)*
 		}

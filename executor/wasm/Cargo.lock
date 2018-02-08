@@ -88,8 +88,6 @@ dependencies = [
 name = "substrate-runtime-io"
 version = "0.1.0"
 dependencies = [
- "pwasm-alloc 0.1.0",
- "pwasm-libc 0.1.0",
  "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
@@ -100,6 +98,8 @@ dependencies = [
 name = "substrate-runtime-std"
 version = "0.1.0"
 dependencies = [
+ "pwasm-alloc 0.1.0",
+ "pwasm-libc 0.1.0",
  "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

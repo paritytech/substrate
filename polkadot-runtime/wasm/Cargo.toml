@@ -1,5 +1,5 @@
 [package]
-name = "runtime-polkadot"
+name = "polkadot-runtime"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 

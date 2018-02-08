@@ -18,7 +18,8 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{mem, storage_root, enumerated_trie_root};
+use rstd::mem;
+use runtime_io::{print, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use support::{Hashable, storage, with_env};
 use polkadot_primitives::{AccountId, Hash, TxOrder, BlockNumber, Block, Header,
@@ -71,6 +72,7 @@ pub mod internal {
 
 		// execute transactions
 		block.transactions.iter().cloned().for_each(super::execute_transaction);
+
 		// post-transactional book-keeping.
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
@@ -103,6 +105,13 @@ pub mod internal {
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalise_block(mut header: Header) -> Header {
+		// populate environment from header.
+		with_env(|e| {
+			e.block_number = header.number;
+			e.parent_hash = header.parent_hash;
+			mem::swap(&mut header.digest, &mut e.digest);
+		});
+
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
 
@@ -211,7 +220,13 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 }
 
 #[cfg(not(feature = "std"))]
-fn info_expect_equal_hash(_given: &Hash, _expected: &Hash) {}
+fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
+	if given != expected {
+		print("Hash not equal");
+		print(&given.0[..]);
+		print(&expected.0[..]);
+	}
+}
 
 #[cfg(test)]
 mod tests {
