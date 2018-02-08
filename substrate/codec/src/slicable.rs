@@ -21,13 +21,25 @@ use rstd::vec::Vec;
 use super::joiner::Joiner;
 use super::endiansensitive::EndianSensitive;
 
+/// Trait that allows reading of data into a slice.
+pub trait Input {
+	/// Read into the provided input slice. Returns the number of bytes read.
+	fn read(&mut self, into: &mut [u8]) -> usize;
+}
+
+impl<'a> Input for &'a [u8] {
+	fn read(&mut self, into: &mut [u8]) -> usize {
+		let len = ::rstd::cmp::min(into.len(), self.len());
+		into[..len].copy_from_slice(&self[..len]);
+		*self = &self[len..];
+		len
+	}
+}
+
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
 pub trait Slicable: Sized {
-	/// Attempt to deserialise the value from a slice. Ignore trailing bytes and
-	/// set the slice's start to just after the last byte consumed.
-	///
-	/// If `None` is returned, then the slice should be unmodified.
-	fn from_slice(value: &mut &[u8]) -> Option<Self>;
+	/// Attempt to deserialise the value from input.
+	fn decode<I: Input>(value: &mut I) -> Option<Self>;
 	/// Convert self to an owned vector.
 	fn to_vec(&self) -> Vec<u8> {
 		self.as_slice_then(|s| s.to_vec())
@@ -40,16 +52,19 @@ pub trait Slicable: Sized {
 pub trait NonTrivialSlicable: Slicable {}
 
 impl<T: EndianSensitive> Slicable for T {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let size = mem::size_of::<T>();
 		assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
-		if value.len() >= size {
-			let x: T = unsafe { ::rstd::ptr::read(value.as_ptr() as *const T) };
-			*value = &value[size..];
-			Some(x.from_le())
-		} else {
-			None
+		let mut val: T = unsafe { mem::zeroed() };
+
+		unsafe {
+			let raw: &mut [u8] = slice::from_raw_parts_mut(
+				&mut val as *mut T as *mut u8,
+				size
+			);
+			if input.read(raw) != size { return None }
 		}
+		Some(val.from_le())
 	}
 
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -70,12 +85,15 @@ impl<T: EndianSensitive> Slicable for T {
 }
 
 impl Slicable for Vec<u8> {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		u32::from_slice(value).map(move |len| {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u32::decode(input).and_then(move |len| {
 			let len = len as usize;
-			let res = value[..len].to_vec();
-			*value = &value[len..];
-			res
+			let mut vec = vec![0; len];
+			if input.read(&mut vec[..len]) != len {
+				None
+			} else {
+				Some(vec)
+			}
 		})
 	}
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -92,18 +110,60 @@ impl Slicable for Vec<u8> {
 	}
 }
 
+macro_rules! impl_vec_simple_array {
+	($($size:expr),*) => {
+		$(
+			impl<T> Slicable for Vec<[T; $size]>
+				where [T; $size]: EndianSensitive
+			{
+				fn decode<I: Input>(input: &mut I) -> Option<Self> {
+					u32::decode(input).and_then(move |len| {
+						let mut r = Vec::with_capacity(len as usize);
+						for _ in 0..len {
+							r.push(match Slicable::decode(input) {
+								Some(x) => x,
+								None => return None,
+							});
+						}
+
+						Some(r)
+					})
+				}
+
+				fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+					f(&self.to_vec())
+				}
+
+				fn to_vec(&self) -> Vec<u8> {
+					use rstd::iter::Extend;
+
+					let len = self.len();
+					assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
+
+					let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+					for item in self {
+						r.extend(item.to_vec());
+					}
+					r
+				}
+			}
+		)*
+	}
+}
+
+impl_vec_simple_array!(1, 2, 4, 8, 16, 32, 64);
+
 impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
 
 impl<T: NonTrivialSlicable> Slicable for Vec<T> {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		u32::from_slice(value).and_then(move |len| {
-			let len = len as usize;
-			let mut r = Vec::with_capacity(len);
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u32::decode(input).and_then(move |len| {
+			let mut r = Vec::with_capacity(len as usize);
 			for _ in 0..len {
-				match T::from_slice(value) {
+				r.push(match T::decode(input) {
+					Some(x) => x,
 					None => return None,
-					Some(v) => r.push(v),
-				}
+				});
 			}
 
 			Some(r)
@@ -127,6 +187,82 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 		r
 	}
 }
+
+impl Slicable for () {
+	fn decode<I: Input>(_: &mut I) -> Option<()> {
+		Some(())
+	}
+
+	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&[])
+	}
+
+	fn to_vec(&self) -> Vec<u8> {
+		Vec::new()
+	}
+}
+
+macro_rules! tuple_impl {
+	($one:ident,) => {
+		impl<$one: Slicable> Slicable for ($one,) {
+			fn decode<I: Input>(input: &mut I) -> Option<Self> {
+				match $one::decode(input) {
+					None => None,
+					Some($one) => Some(($one,)),
+				}
+			}
+
+			fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				self.0.as_slice_then(f)
+			}
+		}
+	};
+	($first:ident, $($rest:ident,)+) => {
+		impl<$first: Slicable, $($rest: Slicable),+>
+		Slicable for
+		($first, $($rest),+) {
+			fn decode<INPUT: Input>(input: &mut INPUT) -> Option<Self> {
+				Some((
+					match $first::decode(input) {
+						Some(x) => x,
+						None => return None,
+					},
+					$(match $rest::decode(input) {
+						Some(x) => x,
+						None => return None,
+					},)+
+				))
+			}
+
+			fn as_slice_then<RETURN, PROCESS>(&self, f: PROCESS) -> RETURN
+				where PROCESS: FnOnce(&[u8]) -> RETURN
+			{
+				let mut v = Vec::new();
+
+				let (
+					ref $first,
+					$(ref $rest),+
+				) = *self;
+
+				$first.as_slice_then(|s| v.extend(s));
+				$($rest.as_slice_then(|s| v.extend(s));)+
+
+				f(v.as_slice())
+			}
+		}
+
+		tuple_impl!($($rest,)+);
+	}
+}
+
+#[allow(non_snake_case)]
+mod inner_tuple_impl {
+	use rstd::vec::Vec;
+
+	use super::{Input, Slicable};
+	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
+}
+
 
 #[cfg(test)]
 mod tests {

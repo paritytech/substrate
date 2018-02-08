@@ -1,20 +1,20 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot Client
+//! Substrate Client
 
 #![warn(missing_docs)]
 
@@ -139,8 +139,9 @@ impl<B, E> Client<B, E> where
 		})
 	}
 
-	fn state_at(&self, id: BlockId) -> error::Result<B::State> {
-		self.backend.state_at(id)
+	/// Get a reference to the state at a given block.
+	pub fn state_at(&self, block: &BlockId) -> error::Result<B::State> {
+		self.backend.state_at(*block)
 	}
 
 	/// Expose backend reference. To be used in tests only
@@ -148,28 +149,33 @@ impl<B, E> Client<B, E> where
 		&self.backend
 	}
 
-	/// Return single storage entry of contract under given address in state in a block of given id.
+	/// Return single storage entry of contract under given address in state in a block of given hash.
 	pub fn storage(&self, id: &BlockId, key: &StorageKey) -> error::Result<StorageData> {
-		Ok(self.state_at(*id)?
+		Ok(self.state_at(id)?
 			.storage(&key.0)
 			.map(|x| StorageData(x.to_vec()))?)
 	}
 
-	/// Execute a call to a contract on top of state in a block of given id.
+	/// Get the code at a given block.
+	pub fn code_at(&self, id: &BlockId) -> error::Result<Vec<u8>> {
+		self.storage(id, &StorageKey(b":code:".to_vec())).map(|data| data.0)
+	}
+
+	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
 	pub fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
-		let state = self.state_at(*id)?;
 		let mut changes = state_machine::OverlayedChanges::default();
+		let state = self.state_at(id)?;
 
-		let _ = state_machine::execute(
+		let return_data = state_machine::execute(
 			&state,
 			&mut changes,
 			&self.executor,
 			method,
 			call_data,
 		)?;
-		Ok(CallResult { return_data: vec![], changes })
+		Ok(CallResult { return_data, changes })
 	}
 
 	/// Queue a block for import.

@@ -17,6 +17,9 @@
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_primitives as primitives;
 
+#[doc(hidden)]
+pub extern crate substrate_codec as codec;
+
 use rstd::intrinsics;
 use rstd::vec::Vec;
 pub use rstd::{mem, slice};
@@ -68,7 +71,7 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
-/// the number of bytes that the key in storage was.
+/// the number of bytes that the key in storage was beyond the offset.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
 	unsafe {
 		ext_get_storage_into(
@@ -178,25 +181,33 @@ pub fn print<T: Printable + Sized>(value: T) {
 
 #[macro_export]
 macro_rules! impl_stubs {
-	( $( $name:ident ),* ) => {
-		pub mod _internal {
-			$(
-				#[no_mangle]
-				pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
-					let input = if input_len == 0 {
-						&[0u8; 0]
-					} else {
-						unsafe {
-							$crate::slice::from_raw_parts(input_data, input_len)
-						}
-					};
+	( $( $new_name:ident => $invoke:expr ),* ) => {
+		$(
+			#[no_mangle]
+			pub fn $new_name(input_data: *mut u8, input_len: usize) -> u64 {
+				let mut input = if input_len == 0 {
+					&[0u8; 0]
+				} else {
+					unsafe {
+						$crate::slice::from_raw_parts(input_data, input_len)
+					}
+				};
 
-					let output = super::$name(input);
-					let r = output.as_ptr() as u64 + ((output.len() as u64) << 32);
-					$crate::mem::forget(output);
-					r
-				}
-			)*
-		}
+				let input = match $crate::codec::Slicable::decode(&mut input) {
+					Some(input) => input,
+					None => panic!("Bad input data provided to {}", stringify!($name)),
+				};
+
+				let output = ($invoke)(input);
+				let output = $crate::codec::Slicable::to_vec(&output);
+				let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
+
+				// Leak the output vector to avoid it being freed.
+				// This is fine in a WASM context since the heap
+				// will be discarded after the call.
+				::core::mem::forget(output);
+				res
+			}
+		)*
 	}
 }

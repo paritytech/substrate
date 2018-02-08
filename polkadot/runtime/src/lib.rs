@@ -37,13 +37,10 @@ extern crate hex_literal;
 #[macro_use]
 pub mod support;
 pub mod runtime;
+pub mod api;
 
 #[cfg(feature = "std")]
 pub mod genesismap;
-
-use rstd::prelude::*;
-use codec::Slicable;
-use polkadot_primitives::{Header, Block, UncheckedTransaction};
 
 /// Type definitions and helpers for transactions.
 pub mod transaction {
@@ -83,39 +80,3 @@ pub mod transaction {
 		}
 	}
 }
-
-/// Execute a block, with `input` being the canonical serialisation of the block. Returns the
-/// empty vector.
-pub fn execute_block(mut input: &[u8]) -> Vec<u8> {
-	runtime::system::internal::execute_block(Block::from_slice(&mut input).unwrap());
-	Vec::new()
-}
-
-/// Execute a given, serialised, transaction. Returns the empty vector.
-pub fn execute_transaction(mut input: &[u8]) -> Vec<u8> {
-	let header = Header::from_slice(&mut input).unwrap();
-	let utx = UncheckedTransaction::from_slice(&mut input).unwrap();
-	let header = runtime::system::internal::execute_transaction(utx, header);
-	header.to_vec()
-}
-
-/// Execute a given, serialised, transaction. Returns the empty vector.
-pub fn finalise_block(mut input: &[u8]) -> Vec<u8> {
-	let header = Header::from_slice(&mut input).unwrap();
-	let header = runtime::system::internal::finalise_block(header);
-	header.to_vec()
-}
-
-/// Run whatever tests we have.
-pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
-	use runtime_io::print;
-
-	print("run_tests...");
-	let block = Block::from_slice(&mut input).unwrap();
-	print("deserialised block.");
-	let stxs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
-	print("reserialised transactions.");
-	[stxs.len() as u8].to_vec()
-}
-
-impl_stubs!(execute_block, execute_transaction, finalise_block, run_tests);
