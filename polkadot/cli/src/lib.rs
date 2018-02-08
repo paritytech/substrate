@@ -44,6 +44,7 @@ pub mod error;
 
 use codec::Slicable;
 use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
+use client::genesis;
 
 /// Parse command line arguments and start the node.
 ///

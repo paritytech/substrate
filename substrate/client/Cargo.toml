@@ -7,11 +7,13 @@ authors = ["Parity Technologies <admin@parity.io>"]
 error-chain = "0.11"
 log = "0.3"
 parking_lot = "0.4"
-substrate-primitives = { path = "../primitives", version = "0.1" }
-substrate-state-machine = { path = "../state-machine", version = "0.1" }
-substrate-serializer = { path = "../serializer" }
-substrate-executor = { path = "../executor" }
-substrate-codec = { path = "../codec", version = "0.1" }
 triehash = "0.1"
 hex-literal = "0.1"
-ed25519 = { path = "../ed25519", version = "0.1" }
+ed25519 = { path = "../ed25519" }
+substrate-codec = { path = "../codec" }
+substrate-executor = { path = "../executor" }
+substrate-primitives = { path = "../primitives" }
+substrate-runtime-support = { path = "../runtime-support" }
+substrate-serializer = { path = "../serializer" }
+substrate-state-machine = { path = "../state-machine" }
+substrate-test-runtime = { path = "../test-runtime" }

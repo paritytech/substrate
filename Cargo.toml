@@ -14,10 +14,6 @@ polkadot-network = { path = "polkadot/network" }
 
 [workspace]
 members = [
-	"substrate/client",
-	"substrate/codec",
-	"substrate/environmental",
-	"substrate/executor",
 	"polkadot/network",
 	"polkadot/candidate-agreement",
 	"polkadot/cli",
@@ -26,17 +22,24 @@ members = [
 	"polkadot/runtime",
 	"polkadot/primitives",
 	"polkadot/validator",
+	"substrate/client",
+	"substrate/codec",
+	"substrate/environmental",
+	"substrate/executor",
 	"substrate/primitives",
 	"substrate/rpc",
 	"substrate/rpc-servers",
 	"substrate/runtime-io",
 	"substrate/runtime-std",
+	"substrate/runtime-support",
 	"substrate/serializer",
 	"substrate/state-machine",
+	"substrate/test-runtime",
 ]
 exclude = [
-	"substrate/executor/wasm",
 	"polkadot/runtime/wasm",
+	"substrate/executor/wasm",
 	"substrate/pwasm-alloc",
 	"substrate/pwasm-libc",
+	"substrate/test-runtime/wasm",
 ]
