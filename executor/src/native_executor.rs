@@ -25,7 +25,7 @@ use std::panic::catch_unwind;
 pub trait NativeExecutionDispatch {
 	/// Get the wasm code that the native dispatch will be equivalent to.
 	fn native_equivalent() -> &'static [u8];
-	
+
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>>;
