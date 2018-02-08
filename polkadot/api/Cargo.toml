@@ -1,0 +1,13 @@
+[package]
+name = "polkadot-api"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+error-chain = "0.11"
+polkadot-executor = { path = "../executor" }
+polkadot-runtime = { path = "../runtime" }
+polkadot-primitives = { path = "../primitives" }
+substrate-client = { path = "../../substrate/client" }
+substrate-executor = { path = "../../substrate/executor" }
+substrate-state-machine = { path = "../../substrate/state-machine" }

@@ -22,6 +22,8 @@ extern crate substrate_primitives as primitives;
 extern crate triehash;
 extern crate ed25519;
 
+#[doc(hidden)]
+pub extern crate substrate_codec as codec;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256};
 
@@ -40,7 +42,7 @@ pub fn storage(key: &[u8]) -> Vec<u8> {
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
-/// the number of bytes that the key in storage was.
+/// the number of bytes that the key in storage was beyond the offset.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
 	ext::with(|ext| {
 		if let Ok(value) = ext.storage(key) {
@@ -124,11 +126,20 @@ pub fn print<T: Printable + Sized>(value: T) {
 
 #[macro_export]
 macro_rules! impl_stubs {
-	($( $name:ident ),*) => {
-		pub fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+	( $( $name:ident => $invoke:expr ),* ) => {
+		/// Dispatch logic for the native runtime.
+		pub fn dispatch(method: &str, mut data: &[u8]) -> Option<Vec<u8>> {
 			match method {
 				$(
-					stringify!($name) => Some($name(data)),
+					stringify!($name) => {
+						let input = match $crate::codec::Slicable::decode(&mut data) {
+							Some(input) => input,
+							None => panic!("Bad input data provided to {}", stringify!($name)),
+						};
+
+						let output = $invoke(input);
+						Some($crate::codec::Slicable::to_vec(&output))
+					}
 				)*
 				_ => None,
 			}

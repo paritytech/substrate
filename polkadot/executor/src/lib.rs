@@ -31,7 +31,9 @@ extern crate triehash;
 extern crate hex_literal;
 
 use polkadot_runtime as runtime;
+use substrate_executor::error::{Error, ErrorKind};
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
+use state_machine::Externalities;
 
 /// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
 pub struct LocalNativeExecutionDispatch;
@@ -43,8 +45,9 @@ impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
 		include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm")
 	}
 
-	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-		runtime::dispatch(method, data)
+	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
+		::substrate_executor::with_native_environment(ext, move || runtime::api::dispatch(method, data))?
+			.ok_or_else(|| ErrorKind::MethodNotFound(method.to_owned()).into())
 	}
 }
 
@@ -234,14 +237,6 @@ mod tests {
 				}
 			]
 		)
-	}
-
-	#[test]
-	fn test_execution_works() {
-		let mut t = new_test_ext();
-		println!("Testing Wasm...");
-		let r = WasmExecutor.call(&mut t, COMPACT_CODE, "run_tests", &block2().0);
-		assert!(r.is_ok());
 	}
 
 	#[test]

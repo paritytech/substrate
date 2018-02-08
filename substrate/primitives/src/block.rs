@@ -19,7 +19,7 @@
 #[cfg(feature = "std")]
 use bytes;
 use rstd::vec::Vec;
-use codec::Slicable;
+use codec::{Input, Slicable};
 use hash::H256;
 
 /// Used to refer to a block number.
@@ -37,8 +37,8 @@ pub type TransactionHash = H256;
 pub struct Transaction(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl Slicable for Transaction {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		Vec::<u8>::from_slice(value).map(Transaction)
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<u8>::decode(input).map(Transaction)
 	}
 
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -54,8 +54,8 @@ impl ::codec::NonTrivialSlicable for Transaction { }
 pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl Slicable for Log {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		Vec::<u8>::from_slice(value).map(Log)
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<u8>::decode(input).map(Log)
 	}
 
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -74,8 +74,8 @@ pub struct Digest {
 }
 
 impl Slicable for Digest {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		Vec::<Log>::from_slice(value).map(|logs| Digest { logs })
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<Log>::decode(input).map(|logs| Digest { logs })
 	}
 
 	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -97,10 +97,10 @@ pub struct Block {
 }
 
 impl Slicable for Block {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
-			header: try_opt!(Slicable::from_slice(value)),
-			transactions: try_opt!(Slicable::from_slice(value)),
+			header: try_opt!(Slicable::decode(input)),
+			transactions: try_opt!(Slicable::decode(input)),
 		})
 	}
 
@@ -152,13 +152,13 @@ impl Header {
 }
 
 impl Slicable for Header {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
-			parent_hash: try_opt!(Slicable::from_slice(value)),
-			number: try_opt!(Slicable::from_slice(value)),
-			state_root: try_opt!(Slicable::from_slice(value)),
-			transaction_root: try_opt!(Slicable::from_slice(value)),
-			digest: try_opt!(Slicable::from_slice(value)),
+			parent_hash: try_opt!(Slicable::decode(input)),
+			number: try_opt!(Slicable::decode(input)),
+			state_root: try_opt!(Slicable::decode(input)),
+			transaction_root: try_opt!(Slicable::decode(input)),
+			digest: try_opt!(Slicable::decode(input)),
 		})
 	}
 
@@ -208,6 +208,6 @@ mod tests {
 }"#);
 
 		let v = header.to_vec();
-		assert_eq!(Header::from_slice(&mut &v[..]).unwrap(), header);
+		assert_eq!(Header::decode(&mut &v[..]).unwrap(), header);
 	}
 }

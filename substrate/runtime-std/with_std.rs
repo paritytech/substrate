@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use std::vec;
-pub use std::rc;
-pub use std::cell;
 pub use std::boxed;
-pub use std::slice;
+pub use std::cell;
+pub use std::cmp;
+pub use std::iter;
 pub use std::mem;
 pub use std::ops;
-pub use std::iter;
 pub use std::ptr;
+pub use std::rc;
+pub use std::slice;
+pub use std::vec;
