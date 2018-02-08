@@ -181,7 +181,7 @@ impl<B, E> Client<B, E> where
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
 
-		let mut transaction = self.backend.begin_transaction(BlockId::Number(header.number - 1))?;
+		let mut transaction = self.backend.begin_transaction(BlockId::Hash(header.parent_hash))?;
 		let mut _state = transaction.state()?;
 		// TODO: execute block on _state
 
