@@ -35,7 +35,7 @@ impl StorageVec for ValidatorStorageVec {
 	const PREFIX: &'static[u8] = b"ses:val:";
 }
 
-/// Get the current set of authorities. These are the session keys.
+/// Get the current set of validators.
 pub fn validators() -> Vec<AccountId> {
 	ValidatorStorageVec::items()
 }

@@ -16,9 +16,9 @@
 
 //! Tool for creating the genesis block.
 
+use codec::{KeyedVec, Joiner};
 use std::collections::HashMap;
 use runtime_io::twox_128;
-use codec::{KeyedVec, Joiner};
 use runtime_support::Hashable;
 use primitives::Block;
 use polkadot_primitives::{BlockNumber, AccountId};

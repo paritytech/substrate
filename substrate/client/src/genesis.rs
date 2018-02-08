@@ -108,7 +108,7 @@ mod tests {
 				"execute_transaction",
 				&vec![].and(&header).and(tx)
 			).unwrap();
-			header = Header::from_slice(&mut &ret_data[..]).unwrap();
+			header = Header::decode(&mut &ret_data[..]).unwrap();
 		}
 
 		let ret_data = execute(
@@ -118,7 +118,7 @@ mod tests {
 			"finalise_block",
 			&vec![].and(&header)
 		).unwrap();
-		header = Header::from_slice(&mut &ret_data[..]).unwrap();
+		header = Header::decode(&mut &ret_data[..]).unwrap();
 
 		(vec![].and(&Block { header, transactions }), hash.into())
 	}

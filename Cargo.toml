@@ -13,12 +13,13 @@ polkadot-cli = { path = "polkadot/cli" }
 
 [workspace]
 members = [
+	"polkadot/api",
 	"polkadot/candidate-agreement",
 	"polkadot/cli",
 	"polkadot/collator",
 	"polkadot/executor",
-	"polkadot/runtime",
 	"polkadot/primitives",
+	"polkadot/runtime",
 	"polkadot/validator",
 	"substrate/client",
 	"substrate/codec",
@@ -26,8 +27,8 @@ members = [
 	"substrate/executor",
 	"substrate/network",
 	"substrate/primitives",
-	"substrate/rpc",
 	"substrate/rpc-servers",
+	"substrate/rpc",
 	"substrate/runtime-io",
 	"substrate/runtime-std",
 	"substrate/runtime-support",

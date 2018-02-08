@@ -15,11 +15,23 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use error::{Error, ErrorKind, Result};
-use runtime_io;
 use state_machine::{Externalities, CodeExecutor};
 use wasm_executor::WasmExecutor;
 
-use std::panic::catch_unwind;
+fn safe_call<F, U>(f: F) -> Result<U>
+	where F: ::std::panic::UnwindSafe + FnOnce() -> U
+{
+	::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into())
+}
+
+/// Set up the externalities and safe calling environment to execute calls to a native runtime.
+///
+/// If the inner closure panics, it will be caught and return an error.
+pub fn with_native_environment<F, U>(ext: &mut Externalities, f: F) -> Result<U>
+	where F: ::std::panic::UnwindSafe + FnOnce() -> U
+{
+	::runtime_io::with_externalities(ext, move || safe_call(f))
+}
 
 /// Delegate for dispatching a CodeExecutor call to native code.
 pub trait NativeExecutionDispatch {
@@ -28,7 +40,7 @@ pub trait NativeExecutionDispatch {
 
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
-	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>>;
+	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
@@ -36,10 +48,6 @@ pub trait NativeExecutionDispatch {
 pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	pub _dummy: ::std::marker::PhantomData<D>,
-}
-
-fn safe_call<F: ::std::panic::UnwindSafe + FnOnce() -> Option<Vec<u8>>>(f: F) -> Result<Option<Vec<u8>>> {
-	catch_unwind(f).map_err(|_| ErrorKind::Runtime.into())
 }
 
 impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D> {
@@ -53,8 +61,8 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 		data: &[u8],
 	) -> Result<Vec<u8>> {
 		if code == D::native_equivalent() {
-			runtime_io::with_externalities(ext, || safe_call(|| D::dispatch(method, data)))?
-				.ok_or(ErrorKind::MethodNotFound(method.to_owned()).into())
+			// call native
+			D::dispatch(ext, method, data)
 		} else {
 			// call into wasm.
 			WasmExecutor.call(ext, code, method, data)

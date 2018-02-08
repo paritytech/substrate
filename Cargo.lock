@@ -958,6 +958,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "polkadot-api"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-executor 0.1.0",
+ "polkadot-primitives 0.1.0",
+ "polkadot-runtime 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-executor 0.1.0",
+ "substrate-state-machine 0.1.0",
+]
+
+[[package]]
 name = "polkadot-candidate-agreement"
 version = "0.1.0"
 dependencies = [
