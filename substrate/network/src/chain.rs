@@ -16,7 +16,7 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus};
+use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus, BlockId};
 use client::error::Error;
 use state_machine;
 use primitives::block;
@@ -29,29 +29,44 @@ pub trait Client : Send + Sync {
 	fn info(&self) -> Result<ClientInfo, Error>;
 
 	/// Get block status.
-	fn block_status(&self, hash: &block::HeaderHash) -> Result<BlockStatus, Error>;
+	fn block_status(&self, id: &BlockId) -> Result<BlockStatus, Error>;
 
 	/// Get block hash by number.
 	fn block_hash(&self, block_number: block::Number) -> Result<Option<block::HeaderHash>, Error>;
+
+	/// Get block header.
+	fn header(&self, id: &BlockId) -> Result<Option<block::Header>, Error>;
+
+	/// Get block body.
+	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error>;
 }
 
 impl<B, E> Client for PolkadotClient<B, E> where
 	B: client::backend::Backend + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
-{
+	Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>, {
+
 	fn import(&self, header: block::Header, body: Option<block::Body>) -> Result<ImportResult, Error> {
-		(self as &Client).import(header, body)
+		(self as &PolkadotClient<B, E>).import_block(header, body)
 	}
 
 	fn info(&self) -> Result<ClientInfo, Error> {
-		(self as &Client).info()
+		(self as &PolkadotClient<B, E>).info()
 	}
 
-	fn block_status(&self, hash: &block::HeaderHash) -> Result<BlockStatus, Error> {
-		(self as &Client).block_status(hash)
+	fn block_status(&self, id: &BlockId) -> Result<BlockStatus, Error> {
+		(self as &PolkadotClient<B, E>).block_status(id)
 	}
 
 	fn block_hash(&self, block_number: block::Number) -> Result<Option<block::HeaderHash>, Error> {
-		(self as &Client).block_hash(block_number)
+		(self as &PolkadotClient<B, E>).block_hash(block_number)
+	}
+
+	fn header(&self, id: &BlockId) -> Result<Option<block::Header>, Error> {
+		(self as &PolkadotClient<B, E>).header(id)
+	}
+
+	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error> {
+		(self as &PolkadotClient<B, E>).body(id)
 	}
 }
