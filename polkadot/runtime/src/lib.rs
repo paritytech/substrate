@@ -27,7 +27,7 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate rustc_hex;
 
 extern crate substrate_codec as codec;
-extern crate substrate_primitives;
+extern crate substrate_primitives as primitives;
 extern crate polkadot_primitives;
 
 #[cfg(test)]

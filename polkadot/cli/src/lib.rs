@@ -39,7 +39,6 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
-mod genesis;
 pub mod error;
 
 use codec::Slicable;

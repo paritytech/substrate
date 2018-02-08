@@ -20,7 +20,8 @@ use std::collections::HashMap;
 use runtime_io::twox_128;
 use codec::{KeyedVec, Joiner};
 use support::Hashable;
-use polkadot_primitives::{BlockNumber, Block, AccountId};
+use primitives::Block;
+use polkadot_primitives::{BlockNumber, AccountId};
 use runtime::staking::Balance;
 
 /// Configuration of a general Polkadot genesis block.

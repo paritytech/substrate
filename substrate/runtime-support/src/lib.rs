@@ -19,12 +19,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate substrate_runtime_std as rstd;
-#[macro_use]
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 #[macro_use]
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 extern crate hex_literal;
 
 pub mod storage;
