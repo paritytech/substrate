@@ -65,13 +65,13 @@ error_chain! {
 /// All calls should fail when the exact runtime is unknown.
 pub trait PolkadotApi {
 	/// Get authorities at a given block.
-	fn authorities(&self, at: BlockId) -> Result<Vec<SessionKey>>;
+	fn authorities(&self, at: &BlockId) -> Result<Vec<SessionKey>>;
 
 	/// Get validators at a given block.
-	fn validators(&self, at: BlockId) -> Result<Vec<AccountId>>;
+	fn validators(&self, at: &BlockId) -> Result<Vec<AccountId>>;
 
 	/// Get the authority duty roster at a block.
-	fn duty_roster(&self, at: BlockId) -> Result<DutyRoster>;
+	fn duty_roster(&self, at: &BlockId) -> Result<DutyRoster>;
 }
 
 fn convert_client_error(e: client::error::Error) -> Error {
@@ -104,15 +104,15 @@ macro_rules! with_runtime {
 impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
 {
-	fn authorities(&self, at: BlockId) -> Result<Vec<SessionKey>> {
+	fn authorities(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
 		with_runtime!(self, at, ::runtime::consensus::authorities)
 	}
 
-	fn validators(&self, at: BlockId) -> Result<Vec<AccountId>> {
+	fn validators(&self, at: &BlockId) -> Result<Vec<AccountId>> {
 		with_runtime!(self, at, ::runtime::session::validators)
 	}
 
-	fn duty_roster(&self, at: BlockId) -> Result<DutyRoster> {
+	fn duty_roster(&self, at: &BlockId) -> Result<DutyRoster> {
 		with_runtime!(self, at, ::runtime::parachains::calculate_duty_roster)
 	}
 }

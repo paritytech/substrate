@@ -59,7 +59,7 @@ impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
 
 	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
 		LocalNativeExecutionDispatch::execute_runtime(ext, move || runtime::api::dispatch(method, data))?
-			.ok_or(ErrorKind::MethodNotFound(method.to_owned()).into())
+			.ok_or_else(|| ErrorKind::MethodNotFound(method.to_owned()).into())
 	}
 }
 
