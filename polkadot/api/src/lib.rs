@@ -17,11 +17,11 @@
 //! Strongly typed API for Polkadot based around the locally-compiled native
 //! runtime.
 
-extern crate polkadot_executor as p_executor;
+extern crate polkadot_executor as polkadot_executor;
 extern crate polkadot_runtime ;
 extern crate polkadot_primitives as primitives;
 extern crate substrate_client as client;
-extern crate substrate_executor as s_executor;
+extern crate substrate_executor as substrate_executor;
 extern crate substrate_state_machine as state_machine;
 
 #[macro_use]
@@ -31,8 +31,8 @@ use client::backend::Backend;
 use client::blockchain::BlockId;
 use client::Client;
 use polkadot_runtime::runtime;
-use p_executor::LocalNativeExecutionDispatch as LocalDispatch;
-use s_executor::{NativeExecutionDispatch, NativeExecutor};
+use polkadot_executor::LocalNativeExecutionDispatch as LocalDispatch;
+use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use primitives::{AccountId, SessionKey};
 use primitives::parachain::DutyRoster;
 
@@ -56,7 +56,7 @@ error_chain! {
 	}
 
 	links {
-		Executor(s_executor::error::Error, s_executor::error::ErrorKind);
+		Executor(substrate_executor::error::Error, substrate_executor::error::ErrorKind);
 	}
 }
 
@@ -96,7 +96,7 @@ macro_rules! with_runtime {
 				backend: &state,
 			};
 
-			LocalDispatch::execute_runtime(&mut ext, $exec).map_err(Into::into)
+			::substrate_executor::with_native_environment(&mut ext, $exec).map_err(Into::into)
 		})
 	}}
 }
