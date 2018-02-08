@@ -1,0 +1,11 @@
+[package]
+name = "polkadot-validator"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+error-chain = "0.11"
+serde = "1.0"
+substrate-primitives = { path = "../../substrate/primitives" }
+substrate-serializer = { path = "../../substrate/serializer" }
+polkadot-primitives = { path = "../primitives" }

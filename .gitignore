@@ -1,6 +1,7 @@
 /target/
 **/*.rs.bk
 *.swp
-wasm-binaries/
-wasm-runtime/**/target/
+polkadot/runtime/wasm/target/
+polkadot/runtime/wasm-bin/
+substrate/executor/wasm/target/
 **/._*
