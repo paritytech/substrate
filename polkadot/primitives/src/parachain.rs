@@ -19,6 +19,7 @@
 #[cfg(feature = "std")]
 use primitives::bytes;
 use primitives;
+use rstd::cmp::{PartialOrd, Ord, Ordering};
 use rstd::vec::Vec;
 
 /// Unique identifier of a parachain.
@@ -84,6 +85,20 @@ pub struct CandidateReceipt {
 	pub fees: u64,
 }
 
+impl PartialOrd for CandidateReceipt {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for CandidateReceipt {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// TODO: compare signatures or something more sane
+		self.parachain_index.cmp(&other.parachain_index)
+			.then_with(|| self.head_data.cmp(&other.head_data))
+	}
+}
+
 /// Parachain ingress queue message.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -110,7 +125,7 @@ pub struct BlockData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u
 pub struct Header(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Parachain head data included in the chain.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct HeadData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 

@@ -20,6 +20,7 @@ pub use std::cell;
 pub use std::boxed;
 pub use std::slice;
 pub use std::mem;
+pub use std::cmp;
 pub use std::ops;
 pub use std::iter;
 pub use std::ptr;

@@ -24,6 +24,7 @@ extern crate pwasm_alloc;
 pub use alloc::vec;
 pub use alloc::boxed;
 pub use alloc::rc;
+pub use core::cmp;
 pub use core::mem;
 pub use core::slice;
 pub use core::cell;

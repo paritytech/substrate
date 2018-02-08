@@ -1071,6 +1071,10 @@ dependencies = [
 [[package]]
 name = "polkadot-statement-table"
 version = "0.1.0"
+dependencies = [
+ "polkadot-primitives 0.1.0",
+ "substrate-primitives 0.1.0",
+]
 
 [[package]]
 name = "polkadot-validator"
