@@ -423,6 +423,17 @@ mod tests {
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());
 		calldata.extend_from_slice(sig.as_ref());
+
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			vec![1]
+		);
+
+		let other_sig = key.sign(b"all is not ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(other_sig.as_ref());
+
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![0]
