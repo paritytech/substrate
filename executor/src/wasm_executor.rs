@@ -224,16 +224,16 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
 			let hashed = twox_128(&[0u8; 0]);
-			//println!("XXhash: '' -> {}", HexDisplay::from(&hashed));
+			trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
 			hashed
 		} else {
 			let key = this.memory.get(data, len as usize).map_err(|_| DummyUserError)?;
 			let hashed_key = twox_128(&key);
 			if let Ok(skey) = ::std::str::from_utf8(&key) {
-				//println!("XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
+				trace!(target: "xxhash", "XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
 			} else {
-				//println!("XXhash: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&hashed_key));
+				trace!(target: "xxhash", "XXhash: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&hashed_key));
 			}
 			this.hash_lookup.insert(hashed_key.to_vec(), key);
 			hashed_key
@@ -290,7 +290,7 @@ impl CodeExecutor for WasmExecutor {
 		data: &[u8],
 	) -> Result<Vec<u8>> {
 		// TODO: handle all expects as errors to be returned.
-		println!(/*target: "wasm-executor",*/ "Wasm-Calling {}({})", method, HexDisplay::from(&data));
+		println!("Wasm-Calling {}({})", method, HexDisplay::from(&data));
 
 		let program = ProgramInstance::new().expect("this really shouldn't be able to fail; qed");
 
@@ -319,7 +319,7 @@ impl CodeExecutor for WasmExecutor {
 			let length = (r >> 32) as u32 as usize;
 			memory.get(offset, length)
 				.map_err(|_| ErrorKind::Runtime.into())
-				.map(|v| { println!(/*target: "wasm-executor",*/ "Returned {}", HexDisplay::from(&v)); v })
+				.map(|v| { println!("Returned {}", HexDisplay::from(&v)); v })
 		} else {
 			Err(ErrorKind::InvalidReturn.into())
 		}
