@@ -1,7 +1,7 @@
 /target/
 **/*.rs.bk
 *.swp
+.wasm-binaries
 polkadot/runtime/wasm/target/
-polkadot/runtime/wasm-bin/
 substrate/executor/wasm/target/
 **/._*

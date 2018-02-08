@@ -4,8 +4,8 @@ set -e
 
 REPO="github.com/paritytech/polkadot-wasm-bin.git"
 REPO_AUTH="${GH_TOKEN}:@${REPO}"
-SRC="wasm-runtime"
-DST="wasm-binaries"
+SRC="polkadot/runtime/wasm"
+DST=".wasm-binaries"
 TARGET="wasm32-unknown-unknown"
 UTCDATE=`date -u "+%Y%m%d.%H%M%S"`
 
@@ -17,7 +17,7 @@ echo "*** Building wasm binaries"
 cd $SRC
 ./init.sh || true
 ./build.sh
-cd ..
+cd ../../..
 
 if [ "$TRAVIS_PULL_REQUEST" != "false" -o "$TRAVIS_BRANCH" != "master" ]; then
   popd
