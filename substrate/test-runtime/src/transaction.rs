@@ -17,7 +17,7 @@
 //! A toy transaction.
 
 use rstd::prelude::*;
-use codec::{Slicable, Joiner};
+use codec::{Input, Slicable, Joiner};
 use super::AccountId;
 
 /// An instruction to do something.
@@ -35,12 +35,12 @@ pub struct Transaction {
 }
 
 impl Slicable for Transaction {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Transaction {
-			from: Slicable::from_slice(value)?,
-			to: Slicable::from_slice(value)?,
-			amount: Slicable::from_slice(value)?,
-			nonce: Slicable::from_slice(value)?,
+			from: Slicable::decode(input)?,
+			to: Slicable::decode(input)?,
+			amount: Slicable::decode(input)?,
+			nonce: Slicable::decode(input)?,
 		})
 	}
 

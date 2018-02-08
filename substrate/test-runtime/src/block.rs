@@ -17,7 +17,7 @@
 //! A toy unchecked transaction complete with signature.
 
 use rstd::prelude::*;
-use codec::{Slicable, Joiner};
+use codec::{Input, Slicable, Joiner};
 use super::{Header, UncheckedTransaction};
 
 #[derive(PartialEq, Eq, Clone)]
@@ -31,10 +31,10 @@ pub struct Block {
 }
 
 impl Slicable for Block {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
-			header: Slicable::from_slice(value)?,
-			transactions: Slicable::from_slice(value)?,
+			header: Slicable::decode(input)?,
+			transactions: Slicable::decode(input)?,
 		})
 	}
 

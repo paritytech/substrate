@@ -42,9 +42,9 @@ mod tests {
 	use codec::{Slicable, Joiner};
 	use runtime_support::{one, two, Hashable};
 	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-	use executor::{NativeExecutionDispatch, NativeExecutor, WasmExecutor};
-	use state_machine::execute;
-	use state_machine::OverlayedChanges;
+	use executor::{NativeExecutionDispatch, NativeExecutor, WasmExecutor, with_native_environment,
+		error};
+	use state_machine::{execute, Externalities, OverlayedChanges};
 	use state_machine::backend::InMemory;
 	use test_runtime::{self, AccountId, Hash, Block, BlockNumber, Header, Digest, Transaction,
 		UncheckedTransaction};
@@ -60,8 +60,9 @@ mod tests {
 			include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm")
 		}
 
-		fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-			test_runtime::dispatch(method, data)
+		fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> error::Result<Vec<u8>> {
+			with_native_environment(ext, move || test_runtime::apis::dispatch(method, data))?
+				.ok_or_else(|| error::ErrorKind::MethodNotFound(method.to_owned()).into())
 		}
 	}
 

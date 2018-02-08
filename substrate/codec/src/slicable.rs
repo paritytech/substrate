@@ -40,7 +40,7 @@ impl<'a> Input for &'a [u8] {
 pub trait Slicable: Sized {
 	/// Attempt to deserialise the value from input.
 	fn decode<I: Input>(value: &mut I) -> Option<Self>;
-	
+
 	/// Convert self to an owned vector.
 	fn to_vec(&self) -> Vec<u8> {
 		self.as_slice_then(|s| s.to_vec())
@@ -141,7 +141,7 @@ macro_rules! impl_vec_simple_array {
 					let len = self.len();
 					assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
 
-					let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+					let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 					for item in self {
 						r.extend(item.to_vec());
 					}
