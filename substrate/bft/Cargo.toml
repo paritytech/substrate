@@ -1,9 +1,9 @@
 [package]
-name = "polkadot-candidate-agreement"
+name = "substrate-bft"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 futures = "0.1.17"
-parking_lot = "0.4"
-tokio-timer = "0.1.2"
+substrate-primitives = { path = "../primitives" }
+ed25519 = { path = "../ed25519" }
