@@ -10,11 +10,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 error-chain = "0.11"
 polkadot-cli = { path = "polkadot/cli" }
-polkadot-network = { path = "polkadot/network" }
 
 [workspace]
 members = [
-	"polkadot/network",
 	"polkadot/candidate-agreement",
 	"polkadot/cli",
 	"polkadot/collator",
@@ -26,6 +24,7 @@ members = [
 	"substrate/codec",
 	"substrate/environmental",
 	"substrate/executor",
+	"substrate/network",
 	"substrate/primitives",
 	"substrate/rpc",
 	"substrate/rpc-servers",

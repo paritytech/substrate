@@ -126,9 +126,10 @@ impl BlockCollection {
 
 		// crop to peers best
 		if range.start >= peer_best {
+			trace!(target: "sync", "Out of range for peer {} ({} vs {})", peer_id, range.start, peer_best);
 			return None;
 		}
-		range.end = cmp::min(peer_best, range.end);
+		range.end = cmp::min(peer_best + 1, range.end);
 
 		self.peer_requests.insert(peer_id, range.start);
 		self.blocks.insert(range.start, BlockRangeState::Downloading{ len: range.end - range.start, downloading: downloading + 1 });
@@ -233,7 +234,7 @@ mod test {
 		bc.clear_peer_download(peer1);
 		bc.insert(41, blocks[41..81].to_vec(), peer1);
 		assert_eq!(bc.drain(1), vec![]);
-		assert_eq!(bc.needed_blocks(peer1, 40, 150, 0), Some(121 .. 150));
+		assert_eq!(bc.needed_blocks(peer1, 40, 150, 0), Some(121 .. 151));
 		bc.clear_peer_download(peer0);
 		bc.insert(1, blocks[1..11].to_vec(), peer0);
 
