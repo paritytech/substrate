@@ -39,6 +39,21 @@ pub trait Slicable: Sized {
 /// Trait to mark that a type is not trivially (essentially "in place") serialisable.
 pub trait NonTrivialSlicable: Slicable {}
 
+/// Attempt to decode a value from the slice, providing an initial value
+/// to replace it with should it fail.
+#[macro_export]
+macro_rules! try_decode {
+	($initial: expr, $current: expr) => {
+		match $crate::Slicable::from_slice($current) {
+			Some(x) => x,
+			None => {
+				*$current = $initial;
+				return None;
+			}
+		}
+	}
+}
+
 impl<T: EndianSensitive> Slicable for T {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
 		let size = mem::size_of::<T>();
@@ -96,14 +111,12 @@ impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
 
 impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		let initial = *value;
 		u32::from_slice(value).and_then(move |len| {
 			let len = len as usize;
 			let mut r = Vec::with_capacity(len);
 			for _ in 0..len {
-				match T::from_slice(value) {
-					None => return None,
-					Some(v) => r.push(v),
-				}
+				r.push(try_decode!(initial, value))
 			}
 
 			Some(r)
@@ -125,18 +138,6 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 			r.extend(item.to_vec());
 		}
 		r
-	}
-}
-
-macro_rules! try_decode {
-	($t:ty, $initial: expr, $current: expr) => {
-		match Slicable::from_slice($current) {
-			Some(x) => x,
-			None => {
-				*$current = $initial;
-				return None;
-			}
-		}
 	}
 }
 
@@ -162,8 +163,11 @@ macro_rules! tuple_impl {
 			fn from_slice(value: &mut &[u8]) -> Option<Self> {
 				let initial = *value;
 				Some((
-					try_decode!($first, initial, value),
-					$(try_decode!($rest, initial, value),)+
+					try_decode!(initial, value),
+					$({
+						let x: $rest = try_decode!(initial, value);
+						x
+					},)+
 				))
 			}
 

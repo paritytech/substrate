@@ -57,11 +57,12 @@ pub enum Chain {
 
 impl Slicable for Chain {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		let initial = *value;
 		let disc = try_opt!(u8::from_slice(value));
 
 		match disc {
 			0 => Some(Chain::Relay),
-			1 => Some(Chain::Parachain(try_opt!(Id::from_slice(value)))),
+			1 => Some(Chain::Parachain(try_decode!(initial, value))),
 			_ => None,
 		}
 	}
@@ -99,9 +100,11 @@ pub struct DutyRoster {
 
 impl Slicable for DutyRoster {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		let initial = *value;
+
 		Some(DutyRoster {
-			validator_duty: try_opt!(Slicable::from_slice(value)),
-			guarantor_duty: try_opt!(Slicable::from_slice(value)),
+			validator_duty: try_decode!(initial, value),
+			guarantor_duty: try_decode!(initial, value),
 		})
 	}
 

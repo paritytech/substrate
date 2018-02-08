@@ -82,10 +82,8 @@ pub struct Block {
 
 impl Slicable for Block {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		Some(Block {
-			header: try_opt!(Slicable::from_slice(value)),
-			transactions: try_opt!(Slicable::from_slice(value)),
-		})
+		let (header, transactions) = try_opt!(Slicable::from_slice(value));
+		Some(Block { header, transactions })
 	}
 
 	fn to_vec(&self) -> Vec<u8> {
@@ -137,12 +135,13 @@ impl Header {
 
 impl Slicable for Header {
 	fn from_slice(value: &mut &[u8]) -> Option<Self> {
+		let initial = *value;
 		Some(Header {
-			parent_hash: try_opt!(Slicable::from_slice(value)),
-			number: try_opt!(Slicable::from_slice(value)),
-			state_root: try_opt!(Slicable::from_slice(value)),
-			transaction_root: try_opt!(Slicable::from_slice(value)),
-			digest: try_opt!(Slicable::from_slice(value)),
+			parent_hash: try_decode!(initial, value),
+			number: try_decode!(initial, value),
+			state_root: try_decode!(initial, value),
+			transaction_root: try_decode!(initial, value),
+			digest: try_decode!(initial, value),
 		})
 	}
 
