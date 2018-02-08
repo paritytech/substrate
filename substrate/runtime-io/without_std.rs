@@ -14,8 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate substrate_runtime_std as rstd;
+
 extern crate substrate_primitives as primitives;
+
+#[doc(hidden)]
+pub extern crate substrate_runtime_std as rstd;
 
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
@@ -141,10 +144,10 @@ pub fn twox_128(data: &[u8]) -> [u8; 16] {
 }
 
 /// Verify a ed25519 signature.
-pub fn ed25519_verify(sig: &[u8], msg: &[u8], pubkey: &[u8]) -> bool {
-	sig.len() == 64 && pubkey.len() == 32 && unsafe {
-		ext_ed25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ptr())
-	} == 0
+pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {
+	unsafe {
+		ext_ed25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ptr()) == 0
+	}
 }
 
 /// Trait for things which can be printed.
@@ -181,33 +184,57 @@ pub fn print<T: Printable + Sized>(value: T) {
 
 #[macro_export]
 macro_rules! impl_stubs {
-	( $( $new_name:ident => $invoke:expr ),* ) => {
+	( $( $new_name:ident $($nodecode:ident)* => $invoke:expr ),* ) => {
 		$(
-			#[no_mangle]
-			pub fn $new_name(input_data: *mut u8, input_len: usize) -> u64 {
-				let mut input = if input_len == 0 {
-					&[0u8; 0]
-				} else {
-					unsafe {
-						$crate::slice::from_raw_parts(input_data, input_len)
-					}
-				};
-
-				let input = match $crate::codec::Slicable::decode(&mut input) {
-					Some(input) => input,
-					None => panic!("Bad input data provided to {}", stringify!($name)),
-				};
-
-				let output = ($invoke)(input);
-				let output = $crate::codec::Slicable::encode(&output);
-				let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
-
-				// Leak the output vector to avoid it being freed.
-				// This is fine in a WASM context since the heap
-				// will be discarded after the call.
-				::core::mem::forget(output);
-				res
-			}
+			impl_stubs!(@METHOD $new_name $($nodecode)* => $invoke);
 		)*
+	};
+	( @METHOD $new_name:ident NO_DECODE => $invoke:expr ) => {
+		#[no_mangle]
+		pub fn $new_name(input_data: *mut u8, input_len: usize) -> u64 {
+			let input: &[u8] = if input_len == 0 {
+				&[0u8; 0]
+			} else {
+				unsafe {
+					$crate::slice::from_raw_parts(input_data, input_len)
+				}
+			};
+
+			let output: $crate::rstd::vec::Vec<u8> = $invoke(input);
+			let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
+
+			// Leak the output vector to avoid it being freed.
+			// This is fine in a WASM context since the heap
+			// will be discarded after the call.
+			::core::mem::forget(output);
+			res
+		}
+	};
+	( @METHOD $new_name:ident => $invoke:expr ) => {
+		#[no_mangle]
+		pub fn $new_name(input_data: *mut u8, input_len: usize) -> u64 {
+			let mut input = if input_len == 0 {
+				&[0u8; 0]
+			} else {
+				unsafe {
+					$crate::slice::from_raw_parts(input_data, input_len)
+				}
+			};
+
+			let input = match $crate::codec::Slicable::decode(&mut input) {
+				Some(input) => input,
+				None => panic!("Bad input data provided to {}", stringify!($name)),
+			};
+
+			let output = ($invoke)(input);
+			let output = $crate::codec::Slicable::to_vec(&output);
+			let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
+
+			// Leak the output vector to avoid it being freed.
+			// This is fine in a WASM context since the heap
+			// will be discarded after the call.
+			::core::mem::forget(output);
+			res
+		}
 	}
 }
