@@ -40,7 +40,7 @@ impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
 	fn native_equivalent() -> &'static [u8] {
 		// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
 		// get a proper build script, this must be strictly adhered to or things will go wrong.
-		include_bytes!("../../polkadot-runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm")
+		include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm")
 	}
 
 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
@@ -67,8 +67,8 @@ mod tests {
 		UncheckedTransaction, Function, AccountId};
 	use ed25519::Pair;
 
-	const BLOATY_CODE: &[u8] = include_bytes!("../../polkadot-runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm");
-	const COMPACT_CODE: &[u8] = include_bytes!("../../polkadot-runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm");
+	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm");
+	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm");
 
 	// TODO: move into own crate.
 	macro_rules! map {
@@ -289,7 +289,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let foreign_code = include_bytes!("../../polkadot-runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm");
+		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm");
 		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_err());
 	}
@@ -303,7 +303,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let foreign_code = include_bytes!("../../polkadot-runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm");
+		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm");
 		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
 		assert!(r.is_ok());
 
