@@ -49,7 +49,7 @@ if [ -f "package.json" ]; then
 fi
 
 echo "*** Adding to git"
-echo "$UTCDATE" >README.md
+echo "$UTCDATE" > README.md
 git add --all .
 git commit -m "$UTCDATE"
 
