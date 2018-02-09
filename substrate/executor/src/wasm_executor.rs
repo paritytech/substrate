@@ -378,11 +378,11 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &[]).unwrap(),
-			blake2_256(&b""[..]).to_vec()
+			blake2_256(&b""[..]).encode()
 		);
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
-			blake2_256(&b"Hello world!"[..]).to_vec()
+			blake2_256(&b"Hello world!"[..]).encode()
 		);
 	}
 
@@ -435,7 +435,9 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
-			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.to_vec()
+			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
 		);
 	}
+
+
 }

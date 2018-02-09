@@ -40,12 +40,16 @@ impl<'a> Input for &'a [u8] {
 pub trait Slicable: Sized {
 	/// Attempt to deserialise the value from input.
 	fn decode<I: Input>(value: &mut I) -> Option<Self>;
+
 	/// Convert self to an owned vector.
-	fn to_vec(&self) -> Vec<u8> {
-		self.as_slice_then(|s| s.to_vec())
+	fn encode(&self) -> Vec<u8> {
+		self.using_encoded(|s| s.to_vec())
 	}
+
 	/// Convert self to a slice and then invoke the given closure with it.
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R;
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.encode())
+	}
 }
 
 /// Trait to mark that a type is not trivially (essentially "in place") serialisable.
@@ -67,7 +71,7 @@ impl<T: EndianSensitive> Slicable for T {
 		Some(val.from_le())
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.as_le_then(|le| {
 			let size = mem::size_of::<T>();
 			let value_slice = unsafe {
@@ -96,15 +100,12 @@ impl Slicable for Vec<u8> {
 			}
 		})
 	}
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.to_vec())
-	}
 
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
 
-		let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 		r.extend_from_slice(self);
 		r
 	}
@@ -130,19 +131,19 @@ macro_rules! impl_vec_simple_array {
 					})
 				}
 
-				fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-					f(&self.to_vec())
+				fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+					f(&self.encode())
 				}
 
-				fn to_vec(&self) -> Vec<u8> {
+				fn encode(&self) -> Vec<u8> {
 					use rstd::iter::Extend;
 
 					let len = self.len();
 					assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
 
-					let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+					let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 					for item in self {
-						r.extend(item.to_vec());
+						r.extend(item.encode());
 					}
 					r
 				}
@@ -170,19 +171,15 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 		})
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.to_vec())
-	}
-
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		use rstd::iter::Extend;
 
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
 
-		let mut r: Vec<u8> = Vec::new().join(&(len as u32));
+		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 		for item in self {
-			r.extend(item.to_vec());
+			r.extend(item.encode());
 		}
 		r
 	}
@@ -193,11 +190,11 @@ impl Slicable for () {
 		Some(())
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[])
 	}
 
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		Vec::new()
 	}
 }
@@ -212,8 +209,8 @@ macro_rules! tuple_impl {
 				}
 			}
 
-			fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-				self.0.as_slice_then(f)
+			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				self.0.using_encoded(f)
 			}
 		}
 	};
@@ -234,7 +231,7 @@ macro_rules! tuple_impl {
 				))
 			}
 
-			fn as_slice_then<RETURN, PROCESS>(&self, f: PROCESS) -> RETURN
+			fn using_encoded<RETURN, PROCESS>(&self, f: PROCESS) -> RETURN
 				where PROCESS: FnOnce(&[u8]) -> RETURN
 			{
 				let mut v = Vec::new();
@@ -244,8 +241,8 @@ macro_rules! tuple_impl {
 					$(ref $rest),+
 				) = *self;
 
-				$first.as_slice_then(|s| v.extend(s));
-				$($rest.as_slice_then(|s| v.extend(s));)+
+				$first.using_encoded(|s| v.extend(s));
+				$($rest.using_encoded(|s| v.extend(s));)+
 
 				f(v.as_slice())
 			}
@@ -271,7 +268,7 @@ mod tests {
 	#[test]
 	fn vec_is_slicable() {
 		let v = b"Hello world".to_vec();
-		v.as_slice_then(|ref slice|
+		v.using_encoded(|ref slice|
 			assert_eq!(slice, &b"\x0b\0\0\0Hello world")
 		);
 	}

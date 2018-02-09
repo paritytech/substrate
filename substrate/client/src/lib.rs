@@ -22,11 +22,14 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_codec as codec;
-extern crate substrate_executor;
+extern crate substrate_executor as executor;
 extern crate ed25519;
+#[cfg(test)] extern crate substrate_runtime_support as runtime_support;
+#[cfg(test)] extern crate substrate_test_runtime as test_runtime;
 
 extern crate triehash;
 extern crate parking_lot;
+#[cfg(test)] #[macro_use] extern crate hex_literal;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
 
@@ -34,6 +37,7 @@ pub mod error;
 pub mod blockchain;
 pub mod backend;
 pub mod in_mem;
+pub mod genesis;
 
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;

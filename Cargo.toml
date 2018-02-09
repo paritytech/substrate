@@ -31,12 +31,15 @@ members = [
 	"substrate/rpc",
 	"substrate/runtime-io",
 	"substrate/runtime-std",
+	"substrate/runtime-support",
 	"substrate/serializer",
 	"substrate/state-machine",
+	"substrate/test-runtime",
 ]
 exclude = [
-	"substrate/executor/wasm",
 	"polkadot/runtime/wasm",
+	"substrate/executor/wasm",
 	"substrate/pwasm-alloc",
 	"substrate/pwasm-libc",
+	"substrate/test-runtime/wasm",
 ]

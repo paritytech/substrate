@@ -40,8 +40,8 @@ impl Slicable for Id {
 		u32::decode(input).map(Id)
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.as_slice_then(f)
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
 	}
 }
 
@@ -66,21 +66,21 @@ impl Slicable for Chain {
 		}
 	}
 
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		match *self {
-			Chain::Relay => { 0u8.as_slice_then(|s| v.extend(s)); }
+			Chain::Relay => { 0u8.using_encoded(|s| v.extend(s)); }
 			Chain::Parachain(id) => {
-				1u8.as_slice_then(|s| v.extend(s));
-				id.as_slice_then(|s| v.extend(s));
+				1u8.using_encoded(|s| v.extend(s));
+				id.using_encoded(|s| v.extend(s));
 			}
 		}
 
 		v
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.to_vec().as_slice())
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.encode().as_slice())
 	}
 }
 
@@ -105,17 +105,17 @@ impl Slicable for DutyRoster {
 		})
 	}
 
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
-		v.extend(self.validator_duty.to_vec());
-		v.extend(self.guarantor_duty.to_vec());
+		v.extend(self.validator_duty.encode());
+		v.extend(self.guarantor_duty.encode());
 
 		v
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.to_vec().as_slice())
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.encode().as_slice())
 	}
 }
 
@@ -204,8 +204,8 @@ impl Slicable for Activity {
 		Vec::<u8>::decode(input).map(Activity)
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.as_slice_then(f)
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
 	}
 }
 
