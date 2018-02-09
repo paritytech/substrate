@@ -131,10 +131,9 @@ mod tests {
 	use super::*;
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
-	use codec::{Joiner, KeyedVec, Slicable};
+	use codec::{Joiner, KeyedVec};
 	use runtime_support::{one, two};
-	use primitives::hexdisplay::HexDisplay;
-	use ::{Header, Digest, UncheckedTransaction, Transaction};
+	use ::{Header, Digest};
 
 	fn new_test_ext() -> TestExternalities {
 		let one = one();
@@ -153,9 +152,6 @@ mod tests {
 
 	#[test]
 	fn block_import_works() {
-		let one = one();
-		let two = two();
-
 		let mut t = new_test_ext();
 
 		let h = Header {
