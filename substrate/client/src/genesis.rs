@@ -40,15 +40,15 @@ pub fn construct_genesis_block(storage: &HashMap<Vec<u8>, Vec<u8>>) -> Block {
 mod tests {
 	use super::*;
 	use codec::{Slicable, Joiner};
-	use runtime_support::{one, two, Hashable};
+	use runtime_support::{Keyring, Hashable};
 	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use executor::{NativeExecutionDispatch, NativeExecutor, WasmExecutor, with_native_environment,
 		error};
 	use state_machine::{execute, Externalities, OverlayedChanges};
 	use state_machine::backend::InMemory;
-	use test_runtime::{self, AccountId, Hash, Block, BlockNumber, Header, Digest, Transaction,
+	use test_runtime::{self, Hash, Block, BlockNumber, Header, Digest, Transaction,
 		UncheckedTransaction};
-	use ed25519::Pair;
+	use ed25519::{Public, Pair};
 
 	/// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
 	pub struct LocalNativeExecutionDispatch;
@@ -70,19 +70,11 @@ mod tests {
 		NativeExecutor { _dummy: Default::default() }
 	}
 
-	fn secret_for(who: &AccountId) -> Option<Pair> {
-		match who {
-			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
-			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
-			_ => None,
-		}
-	}
-
 	fn construct_block(backend: &InMemory, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transaction>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
-			let signature = secret_for(&tx.from).unwrap()
+			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from)).unwrap())
 				.sign(&tx.encode());
 
 			UncheckedTransaction { tx, signature }
@@ -131,8 +123,8 @@ mod tests {
 			genesis_hash,
 			hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c").into(),
 			vec![Transaction {
-				from: one(),
-				to: two(),
+				from: Keyring::One.to_raw_public(),
+				to: Keyring::Two.to_raw_public(),
 				amount: 69,
 				nonce: 0,
 			}]
@@ -142,7 +134,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![one(), two()], 1000
+			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 1000
 		).genesis_map();
 		let block = construct_genesis_block(&storage);
 		let genesis_hash = block.header.blake2_256().into();
@@ -165,7 +157,7 @@ mod tests {
 	#[should_panic]
 	fn construct_genesis_with_bad_transaction_should_panic() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![one(), two()], 68
+			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 68
 		).genesis_map();
 		let block = construct_genesis_block(&storage);
 		let genesis_hash = block.header.blake2_256().into();
@@ -187,7 +179,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_under_wasm() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![one(), two()], 1000
+			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 1000
 		).genesis_map();
 		let block = construct_genesis_block(&storage);
 		let genesis_hash = block.header.blake2_256().into();

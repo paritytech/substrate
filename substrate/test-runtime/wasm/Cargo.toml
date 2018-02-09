@@ -14,10 +14,11 @@ substrate-runtime-support = { path = "../../runtime-support", default-features =
 substrate-primitives = { path = "../../primitives", default-features = false }
 
 [features]
-default = ["std"]
+default = []
 std = [
 	"log",
 	"hex-literal",
+	"ed25519",
 	"substrate-codec/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",

@@ -47,6 +47,10 @@ impl Keyring {
 			.map(|i| *i)
 			.find(|&k| Public::from(k) == who)
 	}
+
+	pub fn to_raw_public(self) -> [u8; 32] {
+		*Public::from(self).as_array_ref()
+	}
 }
 
 impl From<Keyring> for &'static str {
