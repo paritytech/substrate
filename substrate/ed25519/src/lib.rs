@@ -58,6 +58,23 @@ impl Public {
 		r.copy_from_slice(data);
 		Public(r)
 	}
+
+	/// Return a `Vec<u8>` filled with raw data.
+	pub fn to_raw_vec(&self) -> Vec<u8> {
+		let r: &[u8; 32] = self.as_ref();
+		r.to_vec()
+	}
+
+	/// Return a slice filled with raw data.
+	pub fn as_slice(&self) -> &[u8] {
+		let r: &[u8; 32] = self.as_ref();
+		&r[..]
+	}
+
+	/// Return a slice filled with raw data.
+	pub fn as_array_ref(&self) -> &[u8; 32] {
+		self.as_ref()
+	}
 }
 
 impl AsRef<[u8; 32]> for Public {
