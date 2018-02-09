@@ -227,7 +227,7 @@ macro_rules! impl_stubs {
 			};
 
 			let output = ($invoke)(input);
-			let output = $crate::codec::Slicable::to_vec(&output);
+			let output = $crate::codec::Slicable::encode(&output);
 			let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
 
 			// Leak the output vector to avoid it being freed.
