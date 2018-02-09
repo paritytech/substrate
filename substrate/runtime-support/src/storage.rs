@@ -25,7 +25,7 @@ use codec::{Slicable, KeyedVec};
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 	let raw = runtime_io::storage(&twox_128(key)[..]);
-	Slicable::from_slice(&mut &raw[..])
+	Slicable::decode(&mut &raw[..])
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -48,12 +48,12 @@ pub fn get_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_va
 
 /// Please `value` in storage under `key`.
 pub fn put<T: Slicable>(key: &[u8], value: &T) {
-	value.as_slice_then(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
+	value.using_encoded(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
 }
 
 /// Please `value` in storage under `key`.
 pub fn place<T: Slicable>(key: &[u8], value: T) {
-	value.as_slice_then(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
+	value.using_encoded(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -147,7 +147,7 @@ pub mod unhashed {
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 		let raw = runtime_io::storage(key);
-		T::from_slice(&mut &raw[..])
+		T::decode(&mut &raw[..])
 	}
 
 	/// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -170,12 +170,12 @@ pub mod unhashed {
 
 	/// Please `value` in storage under `key`.
 	pub fn put<T: Slicable>(key: &[u8], value: &T) {
-		value.as_slice_then(|slice| runtime_io::set_storage(key, slice));
+		value.using_encoded(|slice| runtime_io::set_storage(key, slice));
 	}
 
 	/// Please `value` in storage under `key`.
 	pub fn place<T: Slicable>(key: &[u8], value: T) {
-		value.as_slice_then(|slice| runtime_io::set_storage(key, slice));
+		value.using_encoded(|slice| runtime_io::set_storage(key, slice));
 	}
 
 	/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -268,7 +268,7 @@ pub mod unhashed {
 mod tests {
 	use super::*;
 	use std::collections::HashMap;
-	use support::HexDisplay;
+	use primitives::hexdisplay::HexDisplay;
 	use runtime_io::{storage, twox_128, TestExternalities, with_externalities};
 
 	#[test]
@@ -332,18 +332,6 @@ mod tests {
 		with_externalities(&mut t, || {
 			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test"))));
 			let y: Vec<u8> = get(b":test").unwrap();
-			assert_eq!(x, y);
-		});
-	}
-
-	#[test]
-	fn proposals_can_be_stored() {
-		use polkadot_primitives::Proposal;
-		let mut t = TestExternalities { storage: HashMap::new(), };
-		with_externalities(&mut t, || {
-			let x = Proposal::StakingSetSessionsPerEra(25519);
-			put(b":test", &x);
-			let y: Proposal = get(b":test").unwrap();
 			assert_eq!(x, y);
 		});
 	}

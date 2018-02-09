@@ -15,19 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(feature = "nightly")]
+#[macro_reexport(vec)]
 extern crate alloc;
 #[cfg(feature = "nightly")]
 extern crate pwasm_libc;
 #[cfg(feature = "nightly")]
 extern crate pwasm_alloc;
 
-pub use alloc::vec;
 pub use alloc::boxed;
 pub use alloc::rc;
-pub use core::mem;
-pub use core::slice;
+pub use alloc::vec;
 pub use core::cell;
-pub use core::ops;
-pub use core::iter;
-pub use core::ptr;
+pub use core::cmp;
 pub use core::intrinsics;
+pub use core::iter;
+pub use core::mem;
+pub use core::ops;
+pub use core::ptr;
+pub use core::slice;

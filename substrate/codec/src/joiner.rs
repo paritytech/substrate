@@ -22,12 +22,12 @@ use super::slicable::Slicable;
 /// Trait to allow itself to be serialised into a value which can be extended
 /// by bytes.
 pub trait Joiner {
-	fn join<V: Slicable + Sized>(self, value: &V) -> Self;
+	fn and<V: Slicable + Sized>(self, value: &V) -> Self;
 }
 
 impl<T> Joiner for T where T: for<'a> Extend<&'a u8> {
-	fn join<V: Slicable + Sized>(mut self, value: &V) -> Self {
-		value.as_slice_then(|s| self.extend(s));
+	fn and<V: Slicable + Sized>(mut self, value: &V) -> Self {
+		value.using_encoded(|s| self.extend(s));
 		self
 	}
 }

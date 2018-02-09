@@ -20,7 +20,7 @@ use rstd::prelude::*;
 use rstd::cell::RefCell;
 use runtime_io::print;
 use codec::KeyedVec;
-use support::{storage, StorageVec};
+use runtime_support::{storage, StorageVec};
 use polkadot_primitives::{BlockNumber, AccountId};
 use runtime::{system, session, governance};
 
@@ -215,7 +215,8 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use support::{one, two, with_env};
+	use runtime_support::{one, two};
+	use environment::with_env;
 	use polkadot_primitives::AccountId;
 	use runtime::{staking, session};
 
@@ -227,17 +228,17 @@ mod tests {
 		let four = [4u8; 32];
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(b"ses:len").to_vec() => vec![].join(&1u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].join(&2u32),
+			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
+			twox_128(b"ses:val:len").to_vec() => vec![].and(&2u32),
 			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![10; 32],
 			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![20; 32],
-			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].join(&2u64),
-			twox_128(VALIDATOR_COUNT).to_vec() => vec![].join(&2u32),
-			twox_128(BONDING_DURATION).to_vec() => vec![].join(&3u64),
-			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&10u64),
-			twox_128(&two.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&20u64),
-			twox_128(&three.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&30u64),
-			twox_128(&four.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&40u64)
+			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&2u64),
+			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
+			twox_128(BONDING_DURATION).to_vec() => vec![].and(&3u64),
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&10u64),
+			twox_128(&two.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&20u64),
+			twox_128(&three.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&30u64),
+			twox_128(&four.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&40u64)
 		], };
 
 		with_externalities(&mut t, || {
@@ -296,8 +297,8 @@ mod tests {
 	#[test]
 	fn staking_eras_work() {
 		let mut t = TestExternalities { storage: map![
-			twox_128(b"ses:len").to_vec() => vec![].join(&1u64),
-			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].join(&2u64)
+			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
+			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&2u64)
 		], };
 		with_externalities(&mut t, || {
 			assert_eq!(era_length(), 2u64);
@@ -363,7 +364,7 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&42u64)
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&42u64)
 		], };
 
 		with_externalities(&mut t, || {
@@ -378,7 +379,7 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&111u64)
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64)
 		], };
 
 		with_externalities(&mut t, || {
@@ -395,7 +396,7 @@ mod tests {
 		let two = two();
 
 		let mut t = TestExternalities { storage: map![
-			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].join(&111u64)
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64)
 		], };
 
 		with_externalities(&mut t, || {

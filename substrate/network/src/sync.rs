@@ -18,14 +18,14 @@ use std::collections::HashMap;
 use io::SyncIo;
 use protocol::Protocol;
 use network::PeerId;
-use client::{ImportResult, BlockStatus, ClientInfo};
+use client::{ImportResult, BlockStatus, ClientInfo, BlockId};
 use primitives::block::{HeaderHash, Number as BlockNumber, Header};
 use blocks::{self, BlockCollection};
 use message::{self, Message};
 use super::header_hash;
 
-// Maximum parallel requests for a block.
-const MAX_BLOCK_DOWNLOAD: usize = 1;
+// Maximum blocks to request in a single packet.
+const MAX_BLOCKS_TO_REQUEST: usize = 128;
 
 struct PeerSync {
 	pub common_hash: HeaderHash,
@@ -36,7 +36,7 @@ struct PeerSync {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum PeerSyncState {
+enum PeerSyncState {
     AncestorSearch(BlockNumber),
     Available,
     DownloadingNew(BlockNumber),
@@ -53,11 +53,26 @@ pub struct ChainSync {
 	required_block_attributes: Vec<message::BlockAttribute>,
 }
 
+/// Reported sync state.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum SyncState {
+	/// Initial sync is complete, keep-up sync is active.
+	Idle,
+	/// Actively catching up with the chain.
+	Downloading
+}
+
 /// Syncing status and statistics
-#[derive(Clone, Copy)]
-pub struct Status;
+#[derive(Clone)]
+pub struct Status {
+	/// Current global sync state.
+	pub state: SyncState,
+	/// Target sync block number.
+	pub best_seen_block: Option<BlockNumber>,
+}
 
 impl ChainSync {
+	/// Create a new instance.
 	pub fn new(info: &ClientInfo) -> ChainSync {
 		ChainSync {
 			genesis_hash: info.chain.genesis_hash,
@@ -71,12 +86,20 @@ impl ChainSync {
 
 	/// Returns sync status
 	pub fn status(&self) -> Status {
-		Status
+		let best_seen = self.peers.values().max_by_key(|p| p.best_number).map(|p| p.best_number);
+		let state = match &best_seen {
+			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > 5 => SyncState::Downloading,
+			_ => SyncState::Idle,
+		};
+		Status {
+			state: state,
+			best_seen_block: best_seen,
+		}
 	}
 
 	pub fn new_peer(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId) {
 		if let Some(info) = protocol.peer_info(peer_id) {
-			match (protocol.chain().block_status(&info.best_hash), info.best_number) {
+			match (protocol.chain().block_status(&BlockId::Hash(info.best_hash)), info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
 					io.disconnect_peer(peer_id);
@@ -90,15 +113,29 @@ impl ChainSync {
 					io.disable_peer(peer_id);
 				},
 				(Ok(BlockStatus::Unknown), _) => {
-					debug!(target:"sync", "New peer with unkown best hash {} ({}), searching for common ancestor.", info.best_hash, info.best_number);
-					self.peers.insert(peer_id, PeerSync {
-						common_hash: self.genesis_hash,
-						common_number: 0,
-						best_hash: info.best_hash,
-						best_number: info.best_number,
-						state: PeerSyncState::AncestorSearch(info.best_number - 1),
-					});
-					Self::request_ancestry(io, protocol, peer_id, info.best_number - 1)
+					let our_best = self.best_queued_number;
+					if our_best > 0 {
+						debug!(target:"sync", "New peer with unkown best hash {} ({}), searching for common ancestor.", info.best_hash, info.best_number);
+						self.peers.insert(peer_id, PeerSync {
+							common_hash: self.genesis_hash,
+							common_number: 0,
+							best_hash: info.best_hash,
+							best_number: info.best_number,
+							state: PeerSyncState::AncestorSearch(our_best),
+						});
+						Self::request_ancestry(io, protocol, peer_id, our_best)
+					} else {
+						// We are at genesis, just start downloading
+						debug!(target:"sync", "New peer with best hash {} ({}).", info.best_hash, info.best_number);
+						self.peers.insert(peer_id, PeerSync {
+							common_hash: self.genesis_hash,
+							common_number: 0,
+							best_hash: info.best_hash,
+							best_number: info.best_number,
+							state: PeerSyncState::Available,
+						});
+						self.download_new(io, protocol, peer_id)
+					}
 				},
 				(Ok(BlockStatus::Queued), _) | (Ok(BlockStatus::InChain), _) => {
 					debug!(target:"sync", "New peer with known best hash {} ({}).", info.best_hash, info.best_number);
@@ -277,7 +314,7 @@ impl ChainSync {
 
 	fn is_known_or_already_downloading(&self, protocol: &Protocol, hash: &HeaderHash) -> bool {
 		self.peers.iter().any(|(_, p)| p.state == PeerSyncState::DownloadingStale(*hash))
-			|| protocol.chain().block_status(hash).ok().map_or(false, |s| s != BlockStatus::Unknown)
+			|| protocol.chain().block_status(&BlockId::Hash(*hash)).ok().map_or(false, |s| s != BlockStatus::Unknown)
 	}
 
 	pub fn peer_disconnected(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId) {
@@ -334,9 +371,11 @@ impl ChainSync {
 	// Issue a request for a peer to download new blocks, if any are available
 	fn download_new(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId) {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
+			trace!(target: "sync", "Considering new block download from {}, common block is {}, best is {:?}", peer_id, peer.common_number, peer.best_number);
 			match peer.state {
 				PeerSyncState::Available => {
-					if let Some(range) = self.blocks.needed_blocks(peer_id, MAX_BLOCK_DOWNLOAD, peer.common_number, peer.best_number) {
+					if let Some(range) = self.blocks.needed_blocks(peer_id, MAX_BLOCKS_TO_REQUEST, peer.best_number, peer.common_number) {
+						trace!(target: "sync", "Requesting blocks from {}, ({} to {})", peer_id, range.start, range.end);
 						let request = message::BlockRequest {
 							id: 0,
 							fields: self.required_block_attributes.clone(),
@@ -347,6 +386,8 @@ impl ChainSync {
 						};
 						peer.state = PeerSyncState::DownloadingNew(range.start);
 						protocol.send_message(io, peer_id, Message::BlockRequest(request));
+					} else {
+						trace!(target: "sync", "Nothing to request");
 					}
 				},
 				_ => (),

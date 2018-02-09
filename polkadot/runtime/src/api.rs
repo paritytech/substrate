@@ -14,23 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Support code for the runtime.
+use runtime::{system, parachains, consensus, session};
 
-mod environment;
-pub mod storage;
-mod hashable;
-#[cfg(feature = "std")]
-mod statichex;
-#[macro_use]
-#[cfg(feature = "std")]
-mod testing;
-
-pub use self::environment::with_env;
-pub use self::storage::StorageVec;
-pub use self::hashable::Hashable;
-
-#[cfg(feature = "std")]
-pub use self::statichex::{StaticHexConversion, StaticHexInto};
-
-#[cfg(feature = "std")]
-pub use self::testing::{AsBytesRef, HexDisplay, one, two};
+impl_stubs!(
+	execute_block => |block| system::internal::execute_block(block),
+	execute_transaction => |(header, utx)| system::internal::execute_transaction(utx, header),
+	finalise_block => |header| system::internal::finalise_block(header),
+	validator_count => |()| session::validator_count(),
+	validators => |()| session::validators(),
+	authorities => |()| consensus::authorities(),
+	duty_roster => |()| parachains::calculate_duty_roster()
+);
