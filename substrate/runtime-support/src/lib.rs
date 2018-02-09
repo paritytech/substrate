@@ -22,9 +22,8 @@ extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
-#[macro_use]
-#[cfg(any(feature = "std", test))]
-extern crate hex_literal;
+#[macro_use] #[cfg(any(feature = "std", test))] extern crate hex_literal;
+#[cfg(feature = "std")] extern crate ed25519;
 
 pub mod storage;
 mod hashable;
@@ -36,4 +35,4 @@ pub use self::storage::StorageVec;
 pub use self::hashable::Hashable;
 
 #[cfg(feature = "std")]
-pub use self::testing::{one, two};
+pub use self::testing::{one, two, Keyring};

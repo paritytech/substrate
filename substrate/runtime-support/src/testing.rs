@@ -17,6 +17,74 @@
 //! Testing helpers.
 
 use primitives::AuthorityId;
+use ed25519::{Pair, Public};
+
+/// Set of test accounts.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Keyring {
+	Alice,
+	Bob,
+	Charlie,
+	Dave,
+	Eve,
+	Ferdie,
+	One,
+	Two,
+}
+
+impl Keyring {
+	pub fn from_public(who: Public) -> Option<Keyring> {
+		[
+			Keyring::Alice,
+			Keyring::Bob,
+			Keyring::Charlie,
+			Keyring::Dave,
+			Keyring::Eve,
+			Keyring::Ferdie,
+			Keyring::One,
+			Keyring::Two,
+		].iter()
+			.map(|i| *i)
+			.find(|&k| Public::from(k) == who)
+	}
+}
+
+impl From<Keyring> for &'static str {
+	fn from(k: Keyring) -> Self {
+		match k {
+			Keyring::Alice => "Alice",
+			Keyring::Bob => "Bob",
+			Keyring::Charlie => "Charlie",
+			Keyring::Dave => "Dave",
+			Keyring::Eve => "Eve",
+			Keyring::Ferdie => "Ferdie",
+			Keyring::One => "one",
+			Keyring::Two => "two",
+		}
+	}
+}
+
+impl From<Keyring> for Pair {
+	fn from(k: Keyring) -> Self {
+		match k {
+			Keyring::Alice => 		Pair::from_seed(b"Alice                           "),
+			Keyring::Bob => 		Pair::from_seed(b"Bob                             "),
+			Keyring::Charlie => 	Pair::from_seed(b"Charlie                         "),
+			Keyring::Dave => 		Pair::from_seed(b"Dave                            "),
+			Keyring::Eve => 		Pair::from_seed(b"Eve                             "),
+			Keyring::Ferdie => 		Pair::from_seed(b"Ferdie                          "),
+			Keyring::One => 		Pair::from_seed(b"12345678901234567890123456789012"),
+			Keyring::Two => 		Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")),
+		}
+	}
+}
+
+impl From<Keyring> for Public {
+	fn from(k: Keyring) -> Self {
+		let pair: Pair = k.into();
+		pair.public()
+	}
+}
 
 /// One account (to which we know the secret key).
 pub fn one() -> AuthorityId {
