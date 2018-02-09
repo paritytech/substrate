@@ -23,7 +23,7 @@ extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
-#[cfg_attr(test, macro_use)] extern crate hex_literal;
+#[cfg(test)] #[macro_use] extern crate hex_literal;
 #[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
 
 #[cfg(feature = "std")]
