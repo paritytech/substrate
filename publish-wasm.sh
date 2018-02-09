@@ -4,20 +4,25 @@ set -e
 
 REPO="github.com/paritytech/polkadot-wasm-bin.git"
 REPO_AUTH="${GH_TOKEN}:@${REPO}"
-SRC="polkadot/runtime/wasm"
+SRCS=( "polkadot/runtime/wasm" "substrate/executor/wasm" "substrate/test-runtime/wasm" )
 DST=".wasm-binaries"
 TARGET="wasm32-unknown-unknown"
 UTCDATE=`date -u "+%Y%m%d.%H%M%S"`
 
-# NOTE: If script not in root, replace pushd line as below
-# pushd $BASEDIR/..
 pushd .
 
-echo "*** Building wasm binaries"
-cd $SRC
+echo "*** Initilising WASM build environment"
+cd polkadot/runtime/wasm
 ./init.sh || true
-./build.sh
 cd ../../..
+
+for SRC in "${SRCS[@]}"
+do
+  echo "*** Building wasm binaries in $SRC"
+  cd $SRC
+  ./build.sh
+  cd ../../..
+done
 
 if [ "$TRAVIS_PULL_REQUEST" != "false" -o "$TRAVIS_BRANCH" != "master" ]; then
   popd
@@ -29,6 +34,8 @@ echo "*** Cloning repo"
 rm -rf $DST
 git clone https://$REPO $DST
 cd $DST
+rm -rf $TARGET
+mkdir -p $TARGET
 
 echo "*** Setting up GH config"
 git config push.default simple
@@ -37,10 +44,11 @@ git config user.email "admin@parity.io"
 git config user.name "CI Build"
 git remote set-url origin https://$REPO_AUTH > /dev/null 2>&1
 
-echo "*** Copying wasm binaries"
-rm -rf $TARGET
-mkdir -p $TARGET
-cp -rf ../$SRC/target/$TARGET/release/*.wasm $TARGET
+for SRC in "${SRCS[@]}"
+do
+  echo "*** Copying wasm binaries from $SRC"
+  cp ../$SRC/target/$TARGET/release/*.wasm $TARGET
+done
 
 if [ -f "package.json" ]; then
   echo "*** Updating package.json"
