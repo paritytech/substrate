@@ -18,33 +18,14 @@
 
 use rstd::prelude::*;
 use runtime_io::{self, twox_128};
-use codec::{Input, Slicable, KeyedVec};
+use codec::{Slicable, KeyedVec};
 
 // TODO: consider using blake256 to avoid possible preimage attack.
 
-struct IncrementalInput<'a> {
-	key: &'a [u8],
-	pos: usize,
-}
-
-impl<'a> Input for IncrementalInput<'a> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = runtime_io::read_storage(self.key, into, self.pos);
-		let read = ::rstd::cmp::min(len, into.len());
-		self.pos += read;
-		read
-	}
-}
-
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-	let key = twox_128(key);
-	let mut input = IncrementalInput {
-		key: &key[..],
-		pos: 0,
-	};
-
-	Slicable::decode(&mut input)
+	let raw = runtime_io::storage(&twox_128(key)[..]);
+	Slicable::decode(&mut &raw[..])
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -67,12 +48,12 @@ pub fn get_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_va
 
 /// Please `value` in storage under `key`.
 pub fn put<T: Slicable>(key: &[u8], value: &T) {
-	value.as_slice_then(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
+	value.using_encoded(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
 }
 
 /// Please `value` in storage under `key`.
 pub fn place<T: Slicable>(key: &[u8], value: T) {
-	value.as_slice_then(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
+	value.using_encoded(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -161,16 +142,12 @@ pub trait StorageVec {
 }
 
 pub mod unhashed {
-	use super::{runtime_io, Slicable, KeyedVec, Vec, IncrementalInput};
+	use super::{runtime_io, Slicable, KeyedVec, Vec};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-		let mut input = IncrementalInput {
-			key,
-			pos: 0,
-		};
-
-		T::decode(&mut input)
+		let raw = runtime_io::storage(key);
+		T::decode(&mut &raw[..])
 	}
 
 	/// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -193,12 +170,12 @@ pub mod unhashed {
 
 	/// Please `value` in storage under `key`.
 	pub fn put<T: Slicable>(key: &[u8], value: &T) {
-		value.as_slice_then(|slice| runtime_io::set_storage(key, slice));
+		value.using_encoded(|slice| runtime_io::set_storage(key, slice));
 	}
 
 	/// Please `value` in storage under `key`.
 	pub fn place<T: Slicable>(key: &[u8], value: T) {
-		value.as_slice_then(|slice| runtime_io::set_storage(key, slice));
+		value.using_encoded(|slice| runtime_io::set_storage(key, slice));
 	}
 
 	/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -291,7 +268,7 @@ pub mod unhashed {
 mod tests {
 	use super::*;
 	use std::collections::HashMap;
-	use support::HexDisplay;
+	use primitives::hexdisplay::HexDisplay;
 	use runtime_io::{storage, twox_128, TestExternalities, with_externalities};
 
 	#[test]
@@ -355,18 +332,6 @@ mod tests {
 		with_externalities(&mut t, || {
 			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test"))));
 			let y: Vec<u8> = get(b":test").unwrap();
-			assert_eq!(x, y);
-		});
-	}
-
-	#[test]
-	fn proposals_can_be_stored() {
-		use polkadot_primitives::Proposal;
-		let mut t = TestExternalities { storage: HashMap::new(), };
-		with_externalities(&mut t, || {
-			let x = Proposal::StakingSetSessionsPerEra(25519);
-			put(b":test", &x);
-			let y: Proposal = get(b":test").unwrap();
 			assert_eq!(x, y);
 		});
 	}

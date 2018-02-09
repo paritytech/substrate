@@ -17,11 +17,12 @@
 //! Tool for creating the genesis block.
 
 use codec::{KeyedVec, Joiner};
-use polkadot_primitives::{BlockNumber, Block, AccountId};
 use std::collections::HashMap;
 use runtime_io::twox_128;
+use runtime_support::Hashable;
+use primitives::Block;
+use polkadot_primitives::{BlockNumber, AccountId};
 use runtime::staking::Balance;
-use support::Hashable;
 
 /// Configuration of a general Polkadot genesis block.
 pub struct GenesisConfig {
@@ -52,32 +53,32 @@ impl GenesisConfig {
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
 		let wasm_runtime = include_bytes!("../wasm/genesis.wasm").to_vec();
 		vec![
-			(&b"gov:apr"[..], vec![].join(&self.approval_ratio)),
-			(&b"ses:len"[..], vec![].join(&self.session_length)),
-			(&b"ses:val:len"[..], vec![].join(&(self.validators.len() as u32))),
-			(&b"sta:wil:len"[..], vec![].join(&0u32)),
-			(&b"sta:spe"[..], vec![].join(&self.sessions_per_era)),
-			(&b"sta:vac"[..], vec![].join(&(self.validators.len() as u32))),
-			(&b"sta:era"[..], vec![].join(&0u64)),
+			(&b"gov:apr"[..], vec![].and(&self.approval_ratio)),
+			(&b"ses:len"[..], vec![].and(&self.session_length)),
+			(&b"ses:val:len"[..], vec![].and(&(self.validators.len() as u32))),
+			(&b"sta:wil:len"[..], vec![].and(&0u32)),
+			(&b"sta:spe"[..], vec![].and(&self.sessions_per_era)),
+			(&b"sta:vac"[..], vec![].and(&(self.validators.len() as u32))),
+			(&b"sta:era"[..], vec![].and(&0u64)),
 		].into_iter()
 			.map(|(k, v)| (k.into(), v))
 			.chain(self.validators.iter()
 				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b"ses:val:"), vec![].join(account)))
+				.map(|(i, account)| ((i as u32).to_keyed_vec(b"ses:val:"), vec![].and(account)))
 			).chain(self.authorities.iter()
 				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].join(account)))
+				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].and(account)))
 			).chain(self.balances.iter()
-				.map(|&(account, balance)| (account.to_keyed_vec(b"sta:bal:"), vec![].join(&balance)))
+				.map(|&(account, balance)| (account.to_keyed_vec(b"sta:bal:"), vec![].and(&balance)))
 			)
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
 				(b":code"[..].into(), wasm_runtime),
-				(b":auth:len"[..].into(), vec![].join(&(self.authorities.len() as u32))),
+				(b":auth:len"[..].into(), vec![].and(&(self.authorities.len() as u32))),
 			].into_iter())
 			.chain(self.authorities.iter()
 				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].join(account)))
+				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].and(account)))
 			)
 			.collect()
 	}
@@ -86,6 +87,6 @@ impl GenesisConfig {
 pub fn additional_storage_with_genesis(genesis_block: &Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	use codec::Slicable;
 	map![
-		twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => genesis_block.header.blake2_256().to_vec()
+		twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => genesis_block.header.blake2_256().encode()
 	]
 }

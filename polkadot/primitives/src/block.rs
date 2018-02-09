@@ -42,8 +42,8 @@ impl Slicable for Log {
 		Vec::<u8>::decode(input).map(Log)
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.as_slice_then(f)
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
 	}
 }
 
@@ -62,8 +62,8 @@ impl Slicable for Digest {
 		Vec::<Log>::decode(input).map(|logs| Digest { logs })
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.logs.as_slice_then(f)
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.logs.using_encoded(f)
 	}
 }
 
@@ -86,17 +86,13 @@ impl Slicable for Block {
 		Some(Block { header, transactions })
 	}
 
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
-		v.extend(self.header.to_vec());
-		v.extend(self.transactions.to_vec());
+		v.extend(self.header.encode());
+		v.extend(self.transactions.encode());
 
 		v
-	}
-
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(self.to_vec().as_slice())
 	}
 }
 
@@ -144,20 +140,16 @@ impl Slicable for Header {
 		})
 	}
 
-	fn to_vec(&self) -> Vec<u8> {
+	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
-		self.parent_hash.as_slice_then(|s| v.extend(s));
-		self.number.as_slice_then(|s| v.extend(s));
-		self.state_root.as_slice_then(|s| v.extend(s));
-		self.transaction_root.as_slice_then(|s| v.extend(s));
-		self.digest.as_slice_then(|s| v.extend(s));
+		self.parent_hash.using_encoded(|s| v.extend(s));
+		self.number.using_encoded(|s| v.extend(s));
+		self.state_root.using_encoded(|s| v.extend(s));
+		self.transaction_root.using_encoded(|s| v.extend(s));
+		self.digest.using_encoded(|s| v.extend(s));
 
 		v
-	}
-
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(self.to_vec().as_slice())
 	}
 }
 
@@ -189,7 +181,7 @@ mod tests {
   }
 }"#);
 
-		let v = header.to_vec();
+		let v = header.encode();
 		assert_eq!(Header::decode(&mut &v[..]).unwrap(), header);
 	}
 }

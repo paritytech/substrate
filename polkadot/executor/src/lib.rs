@@ -26,9 +26,9 @@ extern crate substrate_primitives as primitives;
 extern crate polkadot_primitives as polkadot_primitives;
 extern crate ed25519;
 extern crate triehash;
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
+
+#[cfg(test)] extern crate substrate_runtime_support as runtime_support;
+#[cfg(test)] #[macro_use] extern crate hex_literal;
 
 use polkadot_runtime as runtime;
 use substrate_executor::error::{Error, ErrorKind};
@@ -62,7 +62,7 @@ mod tests {
 	use super::*;
 	use substrate_executor::WasmExecutor;
 	use codec::{KeyedVec, Slicable, Joiner};
-	use polkadot_runtime::support::{one, two, Hashable};
+	use runtime_support::{one, two, Hashable};
 	use polkadot_runtime::runtime::staking::balance;
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
@@ -87,7 +87,7 @@ mod tests {
 			function: Function::StakingTransfer(two(), 69),
 		};
 		let signature = secret_for(&transaction.signed).unwrap()
-			.sign(&transaction.to_vec());
+			.sign(&transaction.encode());
 
 		UncheckedTransaction { transaction, signature }
 	}
@@ -99,7 +99,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -110,7 +110,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -123,7 +123,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -141,7 +141,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -156,20 +156,20 @@ mod tests {
 		let three = [3u8; 32];
 
 		TestExternalities { storage: map![
-			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].to_vec(),
-			twox_128(b"gov:apr").to_vec() => vec![].join(&667u32),
-			twox_128(b"ses:len").to_vec() => vec![].join(&2u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].join(&3u32),
+			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].encode(),
+			twox_128(b"gov:apr").to_vec() => vec![].and(&667u32),
+			twox_128(b"ses:len").to_vec() => vec![].and(&2u64),
+			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:wil:len").to_vec() => vec![].join(&3u32),
+			twox_128(b"sta:wil:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64),
-			twox_128(b"sta:vac").to_vec() => vec![].join(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].join(&0u64),
+			twox_128(b"sta:spe").to_vec() => vec![].and(&2u64),
+			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
+			twox_128(b"sta:era").to_vec() => vec![].and(&0u64),
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], }
 	}
@@ -187,12 +187,12 @@ mod tests {
 
 		let transactions = txs.into_iter().map(|transaction| {
 			let signature = secret_for(&transaction.signed).unwrap()
-				.sign(&transaction.to_vec());
+				.sign(&transaction.encode());
 
 			UncheckedTransaction { transaction, signature }
 		}).collect::<Vec<_>>();
 
-		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::to_vec)).0.into();
+		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::encode)).0.into();
 
 		let header = Header {
 			parent_hash,
@@ -203,7 +203,7 @@ mod tests {
 		};
 		let hash = header.blake2_256();
 
-		(Block { header, transactions }.to_vec(), hash.into())
+		(Block { header, transactions }.encode(), hash.into())
 	}
 
 	fn block1() -> (Vec<u8>, Hash) {
@@ -285,7 +285,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -299,7 +299,7 @@ mod tests {
 		], };
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].join(&Header::from_block_number(1u64)).join(&tx()));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {

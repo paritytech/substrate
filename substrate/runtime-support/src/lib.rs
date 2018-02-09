@@ -16,21 +16,24 @@
 
 //! Support code for the runtime.
 
-mod environment;
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate substrate_runtime_std as rstd;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_codec as codec;
+extern crate substrate_primitives as primitives;
+#[macro_use]
+#[cfg(any(feature = "std", test))]
+extern crate hex_literal;
+
 pub mod storage;
 mod hashable;
-#[cfg(feature = "std")]
-mod statichex;
 #[macro_use]
 #[cfg(feature = "std")]
 mod testing;
 
-pub use self::environment::with_env;
 pub use self::storage::StorageVec;
 pub use self::hashable::Hashable;
 
 #[cfg(feature = "std")]
-pub use self::statichex::{StaticHexConversion, StaticHexInto};
-
-#[cfg(feature = "std")]
-pub use self::testing::{AsBytesRef, HexDisplay, one, two};
+pub use self::testing::{one, two};

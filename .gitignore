@@ -3,4 +3,5 @@
 *.swp
 polkadot/runtime/wasm/target/
 substrate/executor/wasm/target/
+substrate/test-runtime/wasm/target/
 **/._*

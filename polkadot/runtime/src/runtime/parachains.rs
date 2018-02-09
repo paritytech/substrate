@@ -18,8 +18,9 @@
 
 use rstd::prelude::*;
 use codec::{Slicable, Joiner};
+use runtime_support::{Hashable, storage};
+use environment::with_env;
 use runtime::session;
-use support::{Hashable, with_env, storage};
 use polkadot_primitives::parachain::{Id, Chain, DutyRoster};
 
 const PARACHAIN_COUNT: &[u8] = b"par:cou";
@@ -43,7 +44,7 @@ pub fn calculate_duty_roster() -> DutyRoster {
 	let mut roles_gua = roles_val.clone();
 
 	let h = with_env(|e| e.parent_hash.clone());
-	let mut seed = Vec::<u8>::new().join(&h).join(b"validator_role_pairs").blake2_256();
+	let mut seed = Vec::<u8>::new().and(&h).and(b"validator_role_pairs").blake2_256();
 
 	// shuffle
 	for i in 0..(validator_count - 1) {
@@ -78,13 +79,13 @@ mod tests {
 	use super::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use support::{one, two, with_env};
+	use runtime_support::{one, two};
 	use runtime::{consensus, session};
 
 	fn simple_setup() -> TestExternalities {
 		TestExternalities { storage: map![
-			twox_128(b"ses:val:len").to_vec() => vec![].join(&8u32),
-			twox_128(b"par:cou").to_vec() => vec![].join(&2u32)
+			twox_128(b"ses:val:len").to_vec() => vec![].and(&8u32),
+			twox_128(b"par:cou").to_vec() => vec![].and(&2u32)
 		], }
 	}
 

@@ -1023,6 +1023,7 @@ dependencies = [
  "substrate-executor 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
+ "substrate-runtime-support 0.1.0",
  "substrate-state-machine 0.1.0",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1052,6 +1053,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-std 0.1.0",
+ "substrate-runtime-support 0.1.0",
 ]
 
 [[package]]
@@ -1386,8 +1388,10 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-support 0.1.0",
  "substrate-serializer 0.1.0",
  "substrate-state-machine 0.1.0",
+ "substrate-test-runtime 0.1.0",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1508,6 +1512,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-runtime-support"
+version = "0.1.0"
+dependencies = [
+ "environmental 0.1.0",
+ "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-runtime-io 0.1.0",
+ "substrate-runtime-std 0.1.0",
+ "substrate-state-machine 0.1.0",
+]
+
+[[package]]
 name = "substrate-serializer"
 version = "0.1.0"
 dependencies = [
@@ -1526,6 +1543,19 @@ dependencies = [
  "patricia-trie 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 0.1.0",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-test-runtime"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-runtime-io 0.1.0",
+ "substrate-runtime-std 0.1.0",
+ "substrate-runtime-support 0.1.0",
 ]
 
 [[package]]

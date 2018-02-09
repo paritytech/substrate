@@ -59,5 +59,5 @@ pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, Ne
 
 // TODO: move it elsewhere
 fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {
-	primitives::hashing::blake2_256(&ser::to_vec(header)).into()
+	primitives::hashing::blake2_256(&ser::encode(header)).into()
 }

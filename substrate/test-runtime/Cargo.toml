@@ -1,0 +1,24 @@
+[package]
+name = "substrate-test-runtime"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+hex-literal = "0.1.0"
+log = { version = "0.3", optional = true }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-runtime-std = { path = "../../substrate/runtime-std" }
+substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-runtime-support = { path = "../../substrate/runtime-support" }
+substrate-primitives = { path = "../../substrate/primitives" }
+
+[features]
+default = ["std"]
+std = [
+	"substrate-codec/std",
+	"substrate-runtime-std/std",
+	"substrate-runtime-io/std",
+	"substrate-runtime-support/std",
+	"substrate-primitives/std",
+	"log"
+]

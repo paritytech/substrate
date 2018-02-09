@@ -39,11 +39,11 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
-mod genesis;
 pub mod error;
 
 use codec::Slicable;
 use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
+use client::genesis;
 
 /// Parse command line arguments and start the node.
 ///
@@ -83,7 +83,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		storage = genesis_config.genesis_map();
 		let block = genesis::construct_genesis_block(&storage);
 		storage.extend(additional_storage_with_genesis(&block));
-		(primitives::block::Header::decode(&mut block.header.to_vec().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 	};
 	let client = client::new_in_mem(executor, prepare_genesis)?;
 
