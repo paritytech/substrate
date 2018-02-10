@@ -140,9 +140,9 @@ mod tests {
 		TestExternalities { storage: map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => Public::from(Keyring::Alice).to_raw_vec(),
-			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => Public::from(Keyring::Bob).to_raw_vec(),
-			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => Public::from(Keyring::Charlie).to_raw_vec(),
+			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
+			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
+			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
 			twox_128(&Public::from(Keyring::Alice).as_array_ref().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], }
 	}
@@ -179,8 +179,8 @@ mod tests {
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
-			assert_eq!(balance_of(*Public::from(Keyring::Alice).as_ref()), 111);
-			assert_eq!(balance_of(*Public::from(Keyring::Bob).as_ref()), 0);
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 111);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 0);
 		});
 
 		let b = Block {
@@ -193,8 +193,8 @@ mod tests {
 			},
 			transactions: vec![
 				construct_signed_tx(Transaction {
-					from: *Public::from(Keyring::Alice).as_ref(),
-					to: *Public::from(Keyring::Bob).as_ref(),
+					from: Keyring::Alice.to_raw_public(),
+					to: Keyring::Bob.to_raw_public(),
 					amount: 69,
 					nonce: 0,
 				})
@@ -204,8 +204,8 @@ mod tests {
 		with_externalities(&mut t, || {
 			execute_block(b.clone());
 
-			assert_eq!(balance_of(*Public::from(Keyring::Alice).as_ref()), 42);
-			assert_eq!(balance_of(*Public::from(Keyring::Bob).as_ref()), 69);
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 42);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 69);
 		});
 
 		let b = Block {
@@ -218,14 +218,14 @@ mod tests {
 			},
 			transactions: vec![
 				construct_signed_tx(Transaction {
-					from: *Public::from(Keyring::Bob).as_ref(),
-					to: *Public::from(Keyring::Alice).as_ref(),
+					from: Keyring::Bob.to_raw_public(),
+					to: Keyring::Alice.to_raw_public(),
 					amount: 27,
 					nonce: 0,
 				}),
 				construct_signed_tx(Transaction {
-					from: *Public::from(Keyring::Alice).as_ref(),
-					to: *Public::from(Keyring::Charlie).as_ref(),
+					from: Keyring::Alice.to_raw_public(),
+					to: Keyring::Charlie.to_raw_public(),
 					amount: 69,
 					nonce: 1,
 				})
@@ -235,9 +235,9 @@ mod tests {
 		with_externalities(&mut t, || {
 			execute_block(b);
 
-			assert_eq!(balance_of(*Public::from(Keyring::Alice).as_ref()), 0);
-			assert_eq!(balance_of(*Public::from(Keyring::Bob).as_ref()), 42);
-			assert_eq!(balance_of(*Public::from(Keyring::Charlie).as_ref()), 69);
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 0);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 42);
+			assert_eq!(balance_of(Keyring::Charlie.to_raw_public()), 69);
 		});
 	}
 }

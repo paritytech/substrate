@@ -56,6 +56,10 @@ impl Keyring {
 		*Public::from(self).as_array_ref()
 	}
 
+	pub fn to_raw_public_vec(self) -> Vec<u8> {
+		Public::from(self).to_raw_vec()
+	}
+
 	pub fn sign(self, msg: &[u8]) -> Signature {
 		Pair::from(self).sign(msg)
 	}
