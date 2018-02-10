@@ -149,6 +149,11 @@ impl Header {
 			digest: Default::default(),
 		}
 	}
+
+	/// Get the blake2-256 hash of this header.
+	pub fn hash(&self) -> HeaderHash {
+		hashing::blake2_256(Slicable::to_vec(self).as_slice())
+	}
 }
 
 impl Slicable for Header {

@@ -371,81 +371,6 @@ impl<C: Context> SharedTable<C> {
 	}
 }
 
-/// Errors that can occur during agreement.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Error {
-	IoTerminated,
-	FaultyTimer,
-	CannotPropose,
-}
-
-impl From<bft::InputStreamConcluded> for Error {
-	fn from(_: bft::InputStreamConcluded) -> Error {
-		Error::IoTerminated
-	}
-}
-
-/// Context owned by the BFT future necessary to execute the logic.
-pub struct BftContext<C: Context> {
-	context: C,
-	table: SharedTable<C>,
-	timer: Timer,
-	round_timeout_multiplier: u64,
-}
-
-impl<C: Context> bft::Context for BftContext<C>
-	where C::Proposal: 'static,
-{
-	type AuthorityId = C::AuthorityId;
-	type Digest = C::Digest;
-	type Signature = C::Signature;
-	type Candidate = C::Proposal;
-	type RoundTimeout = Box<Future<Item=(),Error=Error>>;
-	type CreateProposal = Box<Future<Item=Self::Candidate,Error=Error>>;
-
-	fn local_id(&self) -> Self::AuthorityId {
-		self.context.local_id()
-	}
-
-	fn proposal(&self) -> Self::CreateProposal {
-		Box::new(self.table.get_proposal().map_err(|_| Error::CannotPropose))
-	}
-
-	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest {
-		C::proposal_digest(candidate)
-	}
-
-	fn sign_local(&self, message: bft::Message<Self::Candidate, Self::Digest>)
-		-> bft::LocalizedMessage<Self::Candidate, Self::Digest, Self::AuthorityId, Self::Signature>
-	{
-		let sender = self.local_id();
-		let signature = self.context.sign_bft_message(&message);
-		bft::LocalizedMessage {
-			message,
-			sender,
-			signature,
-		}
-	}
-
-	fn round_proposer(&self, round: usize) -> Self::AuthorityId {
-		self.context.round_proposer(round)
-	}
-
-	fn candidate_valid(&self, proposal: &Self::Candidate) -> bool {
-		self.table.proposal_valid(proposal)
-	}
-
-	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
-		let round = ::std::cmp::min(63, round) as u32;
-		let timeout = 1u64.checked_shl(round)
-			.unwrap_or_else(u64::max_value)
-			.saturating_mul(self.round_timeout_multiplier);
-
-		Box::new(self.timer.sleep(Duration::from_secs(timeout))
-			.map_err(|_| Error::FaultyTimer))
-	}
-}
-
 
 /// Parameters necessary for agreement.
 pub struct AgreementParams<C: Context> {
@@ -475,22 +400,6 @@ pub trait MessageRecovery<C: Context> {
 
 	/// Attempt to transform a checked message into an unchecked.
 	fn check_message(&self, Self::UncheckedMessage) -> Option<CheckedMessage<C>>;
-}
-
-/// A batch of statements to send out.
-pub trait StatementBatch<V, T> {
-	/// Get the target authorities of these statements.
-	fn targets(&self) -> &[V];
-
-	/// If the batch is empty.
-	fn is_empty(&self) -> bool;
-
-	/// Push a statement onto the batch. Returns false when the batch is full.
-	///
-	/// This is meant to do work like incrementally serializing the statements
-	/// into a vector of bytes while making sure the length is below a certain
-	/// amount.
-	fn push(&mut self, statement: T) -> bool;
 }
 
 /// Recovered and fully checked messages.

@@ -1410,7 +1410,9 @@ version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
  "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-client 0.1.0",
  "substrate-primitives 0.1.0",
+ "tokio-timer 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
