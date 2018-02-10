@@ -41,7 +41,7 @@ macro_rules! impl_endians {
 	( $( $t:ty ),* ) => { $(
 		impl KeyedVec for $t {
 			fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8> {
-				self.as_slice_then(|slice| {
+				self.using_encoded(|slice| {
 					let mut r = prepend_key.to_vec();
 					r.extend(slice);
 					r

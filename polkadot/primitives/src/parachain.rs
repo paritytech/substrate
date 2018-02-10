@@ -19,29 +19,104 @@
 #[cfg(feature = "std")]
 use primitives::bytes;
 use primitives;
+use codec::{Input, Slicable, NonTrivialSlicable};
 use rstd::cmp::{PartialOrd, Ord, Ordering};
 use rstd::vec::Vec;
 
 /// Unique identifier of a parachain.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Id(u64);
+pub struct Id(u32);
 
-impl From<Id> for u64 {
+impl From<Id> for u32 {
 	fn from(x: Id) -> Self { x.0 }
 }
 
-impl From<u64> for Id {
-	fn from(x: u64) -> Self { Id(x) }
+impl From<u32> for Id {
+	fn from(x: u32) -> Self { Id(x) }
 }
 
-impl ::codec::Slicable for Id {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		u64::from_slice(value).map(Id)
+impl Slicable for Id {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u32::decode(input).map(Id)
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.as_slice_then(f)
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
+	}
+}
+
+/// Identifier for a chain, either one of a number of parachains or the relay chain.
+#[derive(Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Chain {
+	/// The relay chain.
+	Relay,
+	/// A parachain of the given index.
+	Parachain(Id),
+}
+
+impl Slicable for Chain {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		let disc = try_opt!(u8::decode(input));
+
+		match disc {
+			0 => Some(Chain::Relay),
+			1 => Some(Chain::Parachain(try_opt!(Slicable::decode(input)))),
+			_ => None,
+		}
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		match *self {
+			Chain::Relay => { 0u8.using_encoded(|s| v.extend(s)); }
+			Chain::Parachain(id) => {
+				1u8.using_encoded(|s| v.extend(s));
+				id.using_encoded(|s| v.extend(s));
+			}
+		}
+
+		v
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.encode().as_slice())
+	}
+}
+
+impl NonTrivialSlicable for Chain { }
+
+/// The duty roster specifying what jobs each validator must do.
+#[derive(Clone, PartialEq)]
+#[cfg_attr(feature = "std", derive(Default, Debug))]
+pub struct DutyRoster {
+	/// Lookup from validator index to chain on which that validator has a duty to validate.
+	pub validator_duty: Vec<Chain>,
+	/// Lookup from validator index to chain on which that validator has a duty to guarantee
+	/// availability.
+	pub guarantor_duty: Vec<Chain>,
+}
+
+impl Slicable for DutyRoster {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(DutyRoster {
+			validator_duty: try_opt!(Slicable::decode(input)),
+			guarantor_duty: try_opt!(Slicable::decode(input)),
+		})
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		v.extend(self.validator_duty.encode());
+		v.extend(self.guarantor_duty.encode());
+
+		v
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.encode().as_slice())
 	}
 }
 
@@ -139,13 +214,13 @@ pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with="bytes"))] pub 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Activity(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-impl ::codec::Slicable for Activity {
-	fn from_slice(value: &mut &[u8]) -> Option<Self> {
-		Vec::<u8>::from_slice(value).map(Activity)
+impl Slicable for Activity {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<u8>::decode(input).map(Activity)
 	}
 
-	fn as_slice_then<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.as_slice_then(f)
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
 	}
 }
 

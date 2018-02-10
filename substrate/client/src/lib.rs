@@ -1,20 +1,20 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot Client
+//! Substrate Client
 
 #![warn(missing_docs)]
 
@@ -22,11 +22,14 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_codec as codec;
-extern crate substrate_executor;
+extern crate substrate_executor as executor;
 extern crate ed25519;
+#[cfg(test)] extern crate substrate_runtime_support as runtime_support;
+#[cfg(test)] extern crate substrate_test_runtime as test_runtime;
 
 extern crate triehash;
 extern crate parking_lot;
+#[cfg(test)] #[macro_use] extern crate hex_literal;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
 
@@ -34,6 +37,7 @@ pub mod error;
 pub mod blockchain;
 pub mod backend;
 pub mod in_mem;
+pub mod genesis;
 
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
@@ -139,32 +143,43 @@ impl<B, E> Client<B, E> where
 		})
 	}
 
-	fn state_at(&self, hash: &block::HeaderHash) -> error::Result<B::State> {
-		self.backend.state_at(BlockId::Hash(*hash))
+	/// Get a reference to the state at a given block.
+	pub fn state_at(&self, block: &BlockId) -> error::Result<B::State> {
+		self.backend.state_at(*block)
+	}
+
+	/// Expose backend reference. To be used in tests only
+	pub fn backend(&self) -> &B {
+		&self.backend
 	}
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
-	pub fn storage(&self, hash: &block::HeaderHash, key: &StorageKey) -> error::Result<StorageData> {
-		Ok(self.state_at(hash)?
+	pub fn storage(&self, id: &BlockId, key: &StorageKey) -> error::Result<StorageData> {
+		Ok(self.state_at(id)?
 			.storage(&key.0)
 			.map(|x| StorageData(x.to_vec()))?)
+	}
+
+	/// Get the code at a given block.
+	pub fn code_at(&self, id: &BlockId) -> error::Result<Vec<u8>> {
+		self.storage(id, &StorageKey(b":code:".to_vec())).map(|data| data.0)
 	}
 
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	pub fn call(&self, hash: &block::HeaderHash, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
-		let state = self.state_at(hash)?;
+	pub fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let mut changes = state_machine::OverlayedChanges::default();
+		let state = self.state_at(id)?;
 
-		let _ = state_machine::execute(
+		let return_data = state_machine::execute(
 			&state,
 			&mut changes,
 			&self.executor,
 			method,
 			call_data,
 		)?;
-		Ok(CallResult { return_data: vec![], changes })
+		Ok(CallResult { return_data, changes })
 	}
 
 	/// Queue a block for import.
@@ -176,7 +191,7 @@ impl<B, E> Client<B, E> where
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
 
-		let mut transaction = self.backend.begin_transaction(BlockId::Number(header.number))?;
+		let mut transaction = self.backend.begin_transaction(BlockId::Hash(header.parent_hash))?;
 		let mut _state = transaction.state()?;
 		// TODO: execute block on _state
 
@@ -197,9 +212,9 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Get block status.
-	pub fn block_status(&self, hash: &block::HeaderHash) -> error::Result<BlockStatus> {
+	pub fn block_status(&self, id: &BlockId) -> error::Result<BlockStatus> {
 		// TODO: more efficient implementation
-		match self.backend.blockchain().header(BlockId::Hash(*hash)).map_err(|e| error::Error::from_blockchain(Box::new(e)))?.is_some() {
+		match self.backend.blockchain().header(*id).map_err(|e| error::Error::from_blockchain(Box::new(e)))?.is_some() {
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),
 		}
@@ -210,8 +225,13 @@ impl<B, E> Client<B, E> where
 		self.backend.blockchain().hash(block_number)
 	}
 
-	/// Get block header by hash.
-	pub fn header(&self, hash: &block::HeaderHash) -> error::Result<Option<block::Header>> {
-		self.backend.blockchain().header(BlockId::Hash(*hash))
+	/// Get block header by id.
+	pub fn header(&self, id: &BlockId) -> error::Result<Option<block::Header>> {
+		self.backend.blockchain().header(*id)
+	}
+
+	/// Get block body by id.
+	pub fn body(&self, id: &BlockId) -> error::Result<Option<block::Body>> {
+		self.backend.blockchain().body(*id)
 	}
 }

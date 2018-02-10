@@ -29,10 +29,11 @@ extern crate serde_derive;
 extern crate serde;
 
 extern crate substrate_runtime_std as rstd;
-extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 #[cfg(test)]
 extern crate substrate_serializer;
+
+extern crate substrate_codec as codec;
 
 macro_rules! try_opt {
 	($e: expr) => {

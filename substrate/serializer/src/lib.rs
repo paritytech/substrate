@@ -34,7 +34,7 @@ pub fn to_string_pretty<T: serde::Serialize + ?Sized>(value: &T) -> String {
 }
 
 /// Serialize the given data structure as a JSON byte vector.
-pub fn to_vec<T: serde::Serialize + ?Sized>(value: &T) -> Vec<u8> {
+pub fn encode<T: serde::Serialize + ?Sized>(value: &T) -> Vec<u8> {
 	serde_json::to_vec(value).expect(PROOF)
 }
 

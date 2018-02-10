@@ -330,9 +330,8 @@ impl CodeExecutor for WasmExecutor {
 mod tests {
 	use super::*;
 	use rustc_hex::FromHex;
-	use codec::{Slicable, Joiner};
+	use codec::Slicable;
 	use state_machine::TestExternalities;
-	use primitives::Header;
 
 	#[test]
 	fn returning_should_work() {
@@ -379,11 +378,11 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &[]).unwrap(),
-			blake2_256(&b""[..]).to_vec()
+			blake2_256(&b""[..]).encode()
 		);
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
-			blake2_256(&b"Hello world!"[..]).to_vec()
+			blake2_256(&b"Hello world!"[..]).encode()
 		);
 	}
 
@@ -424,6 +423,17 @@ mod tests {
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());
 		calldata.extend_from_slice(sig.as_ref());
+
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			vec![1]
+		);
+
+		let other_sig = key.sign(b"all is not ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(other_sig.as_ref());
+
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![0]
@@ -436,7 +446,9 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
-			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.to_vec()
+			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
 		);
 	}
+
+
 }

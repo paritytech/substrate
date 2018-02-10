@@ -20,6 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate substrate_runtime_std as rstd;
 
 mod endiansensitive;
@@ -28,6 +29,6 @@ mod joiner;
 mod keyedvec;
 
 pub use self::endiansensitive::EndianSensitive;
-pub use self::slicable::{Slicable, NonTrivialSlicable};
+pub use self::slicable::{Input, Slicable, NonTrivialSlicable};
 pub use self::joiner::Joiner;
 pub use self::keyedvec::KeyedVec;

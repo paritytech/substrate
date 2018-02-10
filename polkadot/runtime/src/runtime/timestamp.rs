@@ -16,7 +16,7 @@
 
 //! Timestamp manager: just handles the current timestamp.
 
-use support::storage;
+use runtime_support::storage;
 
 pub type Timestamp = u64;
 
@@ -48,7 +48,7 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let mut t = TestExternalities { storage: map![
-			twox_128(CURRENT_TIMESTAMP).to_vec() => vec![].join(&42u64)
+			twox_128(CURRENT_TIMESTAMP).to_vec() => vec![].and(&42u64)
 		], };
 
 		with_externalities(&mut t, || {

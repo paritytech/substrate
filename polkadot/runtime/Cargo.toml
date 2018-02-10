@@ -10,6 +10,7 @@ log = { version = "0.3", optional = true }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-runtime-std = { path = "../../substrate/runtime-std" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-primitives = { path = "../../substrate/primitives" }
 polkadot-primitives = { path = "../primitives" }
 
@@ -19,6 +20,7 @@ std = [
 	"substrate-codec/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",
+	"substrate-runtime-support/std",
 	"substrate-primitives/std",
 	"polkadot-primitives/std",
 	"log"

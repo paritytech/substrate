@@ -21,7 +21,8 @@ use rstd::prelude::*;
 use rstd::mem;
 use runtime_io::{print, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
-use support::{Hashable, storage, with_env};
+use runtime_support::{Hashable, storage};
+use environment::with_env;
 use polkadot_primitives::{AccountId, Hash, TxOrder, BlockNumber, Block, Header,
 	UncheckedTransaction, Function, Log};
 use runtime::{staking, session};
@@ -184,7 +185,7 @@ fn initial_checks(block: &Block) {
 	);
 
 	// check transaction trie root represents the transactions.
-	let txs = block.transactions.iter().map(Slicable::to_vec).collect::<Vec<_>>();
+	let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
 	info_expect_equal_hash(&header.transaction_root, &txs_root);
@@ -213,7 +214,7 @@ fn post_finalise(header: &Header) {
 
 #[cfg(feature = "std")]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
-	use support::HexDisplay;
+	use primitives::hexdisplay::HexDisplay;
 	if given != expected {
 		println!("Hash: given={}, expected={}", HexDisplay::from(&given.0), HexDisplay::from(&expected.0));
 	}
@@ -235,7 +236,9 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
-	use support::{StaticHexInto, HexDisplay, one, two};
+	use runtime_support::{one, two};
+	use environment::with_env;
+	use primitives::hexdisplay::HexDisplay;
 	use polkadot_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
 	use runtime::staking;
 
@@ -254,7 +257,7 @@ mod tests {
 				nonce: 0,
 				function: Function::StakingTransfer(two, 69),
 			},
-			signature: "5f9832c5a4a39e2dd4a3a0c5b400e9836beb362cb8f7d845a8291a2ae6fe366612e080e4acd0b5a75c3d0b6ee69614a68fb63698c1e76bf1f2dcd8fa617ddf05".parse().unwrap(),
+			signature: hex!("5f9832c5a4a39e2dd4a3a0c5b400e9836beb362cb8f7d845a8291a2ae6fe366612e080e4acd0b5a75c3d0b6ee69614a68fb63698c1e76bf1f2dcd8fa617ddf05").into(),
 		};
 
 		with_externalities(&mut t, || {
@@ -270,20 +273,20 @@ mod tests {
 		let three = [3u8; 32];
 
 		TestExternalities { storage: map![
-			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].to_vec(),
-			twox_128(b"gov:apr").to_vec() => vec![].join(&667u32),
-			twox_128(b"ses:len").to_vec() => vec![].join(&2u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].join(&3u32),
+			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].encode(),
+			twox_128(b"gov:apr").to_vec() => vec![].and(&667u32),
+			twox_128(b"ses:len").to_vec() => vec![].and(&2u64),
+			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:wil:len").to_vec() => vec![].join(&3u32),
+			twox_128(b"sta:wil:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => one.to_vec(),
 			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => two.to_vec(),
 			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:spe").to_vec() => vec![].join(&2u64),
-			twox_128(b"sta:vac").to_vec() => vec![].join(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].join(&0u64),
+			twox_128(b"sta:spe").to_vec() => vec![].and(&2u64),
+			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
+			twox_128(b"sta:era").to_vec() => vec![].and(&0u64),
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], }
 	}
