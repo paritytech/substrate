@@ -29,10 +29,10 @@ pub mod storage;
 mod hashable;
 #[macro_use]
 #[cfg(feature = "std")]
-mod testing;
+mod keyring;
 
 pub use self::storage::StorageVec;
 pub use self::hashable::Hashable;
 
 #[cfg(feature = "std")]
-pub use self::testing::{one, two, Keyring};
+pub use self::keyring::Keyring;

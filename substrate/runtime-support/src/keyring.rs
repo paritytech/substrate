@@ -16,7 +16,6 @@
 
 //! Testing helpers.
 
-use primitives::AuthorityId;
 use ed25519::{Pair, Public, Signature};
 
 /// Set of test accounts.
@@ -107,13 +106,4 @@ impl From<Keyring> for [u8; 32] {
 		let pair: Pair = k.into();
 		*pair.public().as_array_ref()
 	}
-}
-
-/// One account (to which we know the secret key).
-pub fn one() -> AuthorityId {
-	hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")
-}
-/// Another account (secret key known).
-pub fn two() -> AuthorityId {
-	hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
 }
