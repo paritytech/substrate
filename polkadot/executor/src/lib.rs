@@ -86,8 +86,8 @@ mod tests {
 			nonce: 0,
 			function: Function::StakingTransfer(Keyring::Two.to_raw_public(), 69),
 		};
-		let signature = Keyring::from_raw_public(transaction.signed)
-			.unwrap().sign(&transaction.encode());
+		let signature = Keyring::from_raw_public(transaction.signed).unwrap()
+			.sign(&transaction.encode());
 
 		UncheckedTransaction { transaction, signature }
 	}
