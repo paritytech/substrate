@@ -42,33 +42,14 @@ mod tests {
 	use codec::{Slicable, Joiner};
 	use runtime_support::{Keyring, Hashable};
 	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-	use executor::{NativeExecutionDispatch, NativeExecutor, WasmExecutor, with_native_environment,
-		error};
-	use state_machine::{execute, Externalities, OverlayedChanges};
+	use executor::WasmExecutor;
+	use state_machine::{execute, OverlayedChanges};
 	use state_machine::backend::InMemory;
 	use test_runtime::{self, Hash, Block, BlockNumber, Header, Digest, Transaction,
 		UncheckedTransaction};
 	use ed25519::{Public, Pair};
 
-	/// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
-	pub struct LocalNativeExecutionDispatch;
-
-	impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
-		fn native_equivalent() -> &'static [u8] {
-			// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
-			// get a proper build script, this must be strictly adhered to or things will go wrong.
-			include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm")
-		}
-
-		fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> error::Result<Vec<u8>> {
-			with_native_environment(ext, move || test_runtime::apis::dispatch(method, data))?
-				.ok_or_else(|| error::ErrorKind::MethodNotFound(method.to_owned()).into())
-		}
-	}
-
-	fn executor() -> NativeExecutor<LocalNativeExecutionDispatch> {
-		NativeExecutor { _dummy: Default::default() }
-	}
+	native_executor_instance!(Executor, test_runtime, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
 	fn construct_block(backend: &InMemory, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transaction>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
@@ -97,7 +78,7 @@ mod tests {
 			let ret_data = execute(
 				backend,
 				&mut overlay,
-				&executor(),
+				&Executor::new(),
 				"execute_transaction",
 				&vec![].and(&header).and(tx)
 			).unwrap();
@@ -107,7 +88,7 @@ mod tests {
 		let ret_data = execute(
 			backend,
 			&mut overlay,
-			&executor(),
+			&Executor::new(),
 			"finalise_block",
 			&vec![].and(&header)
 		).unwrap();
@@ -140,14 +121,23 @@ mod tests {
 		let genesis_hash = block.header.blake2_256().into();
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 
-		let mut overlay = OverlayedChanges::default();
 		let backend = InMemory::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
+		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
 			&mut overlay,
-			&executor(),
+			&Executor::new(),
+			"execute_block",
+			&b1data
+		).unwrap();
+
+		let mut overlay = OverlayedChanges::default();
+		let _ = execute(
+			&backend,
+			&mut overlay,
+			&WasmExecutor,
 			"execute_block",
 			&b1data
 		).unwrap();
@@ -163,36 +153,14 @@ mod tests {
 		let genesis_hash = block.header.blake2_256().into();
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 
-		let mut overlay = OverlayedChanges::default();
 		let backend = InMemory::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
-		let _ = execute(
-			&backend,
-			&mut overlay,
-			&executor(),
-			"execute_block",
-			&b1data
-		).unwrap();
-	}
-
-	#[test]
-	fn construct_genesis_should_work_under_wasm() {
-		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 1000
-		).genesis_map();
-		let block = construct_genesis_block(&storage);
-		let genesis_hash = block.header.blake2_256().into();
-		storage.extend(additional_storage_with_genesis(&block).into_iter());
-
 		let mut overlay = OverlayedChanges::default();
-		let backend = InMemory::from(storage);
-		let (b1data, _b1hash) = block1(genesis_hash, &backend);
-
 		let _ = execute(
 			&backend,
 			&mut overlay,
-			&WasmExecutor,
+			&Executor::new(),
 			"execute_block",
 			&b1data
 		).unwrap();

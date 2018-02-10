@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use error::{Error, ErrorKind, Result};
-use state_machine::{Externalities, CodeExecutor};
+use state_machine::{CodeExecutor, Externalities};
 use wasm_executor::WasmExecutor;
 
 fn safe_call<F, U>(f: F) -> Result<U>
@@ -68,4 +68,33 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 			WasmExecutor.call(ext, code, method, data)
 		}
 	}
+}
+
+#[macro_export]
+macro_rules! native_executor_instance {
+	($name:ident, $native_module:ident, $code:expr) => {
+		/// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
+		pub struct $name;
+
+		impl $crate::NativeExecutionDispatch for $name {
+			fn native_equivalent() -> &'static [u8] {
+				// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
+				// get a proper build script, this must be strictly adhered to or things will go wrong.
+				include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm")
+			}
+
+			fn dispatch(ext: &mut $crate::Externalities, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
+				$crate::with_native_environment(ext, move || $native_module::apis::dispatch(method, data))?
+					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
+			}
+		}
+
+		impl $name {
+			fn new() -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor { _dummy: Default::default() }
+			}
+		}
+
+	}
+
 }
