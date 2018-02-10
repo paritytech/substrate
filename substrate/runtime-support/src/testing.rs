@@ -17,7 +17,7 @@
 //! Testing helpers.
 
 use primitives::AuthorityId;
-use ed25519::{Pair, Public};
+use ed25519::{Pair, Public, Signature};
 
 /// Set of test accounts.
 #[derive(Clone, Copy, PartialEq)]
@@ -48,8 +48,16 @@ impl Keyring {
 			.find(|&k| Public::from(k) == who)
 	}
 
+	pub fn from_raw_public(who: [u8; 32]) -> Option<Keyring> {
+		Self::from_public(Public::from_raw(who))
+	}
+
 	pub fn to_raw_public(self) -> [u8; 32] {
 		*Public::from(self).as_array_ref()
+	}
+
+	pub fn sign(self, msg: &[u8]) -> Signature {
+		Pair::from(self).sign(msg)
 	}
 }
 
@@ -87,6 +95,13 @@ impl From<Keyring> for Public {
 	fn from(k: Keyring) -> Self {
 		let pair: Pair = k.into();
 		pair.public()
+	}
+}
+
+impl From<Keyring> for [u8; 32] {
+	fn from(k: Keyring) -> Self {
+		let pair: Pair = k.into();
+		*pair.public().as_array_ref()
 	}
 }
 

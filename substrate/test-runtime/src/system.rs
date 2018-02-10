@@ -148,7 +148,7 @@ mod tests {
 	}
 
 	fn construct_signed_tx(tx: Transaction) -> UncheckedTransaction {
-		let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from)).unwrap()).sign(&tx.encode());
+		let signature = Keyring::from_raw_public(tx.from).unwrap().sign(&tx.encode());
 		UncheckedTransaction { tx, signature }
 	}
 
