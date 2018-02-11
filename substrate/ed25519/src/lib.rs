@@ -102,9 +102,6 @@ impl Pair {
 		Pair(signature::Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&seed[..])).unwrap())
 	}
 
-	/// Synonym for `from_seed`. @deprecated
-	pub fn from_secret(seed: &[u8; 32]) -> Pair { Self::from_seed(seed) }
-
 	/// Make a new key pair from the raw secret and public key (it will check to make sure
 	/// they correspond to each other).
 	pub fn from_both(secret_public: &[u8; 64]) -> Option<Pair> {
