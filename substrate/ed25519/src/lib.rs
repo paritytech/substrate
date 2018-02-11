@@ -60,7 +60,7 @@ impl Public {
 	}
 
 	/// Return a `Vec<u8>` filled with raw data.
-	pub fn to_raw_vec(&self) -> Vec<u8> {
+	pub fn to_raw_vec(self) -> Vec<u8> {
 		let r: &[u8; 32] = self.as_ref();
 		r.to_vec()
 	}
