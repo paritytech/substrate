@@ -171,7 +171,7 @@ impl<B, E> Client<B, E> where
 		let state = self.state_at(id)?;
 		(0..u32::decode(&mut state.storage(b":auth:len")?).ok_or(error::ErrorKind::AuthLen)?)
 			.map(|i| state.storage(&i.to_keyed_vec(b":auth:"))
-				.map_err(|e| error::ErrorKind::Backend)
+				.map_err(|_| error::ErrorKind::Backend)
 				.and_then(|mut s| AuthorityId::decode(&mut s).ok_or(error::ErrorKind::Auth(i)))
 				.map_err(Into::into)
 			).collect()
