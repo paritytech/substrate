@@ -257,7 +257,7 @@ mod tests {
 	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use test_runtime;
 
-	native_executor_instance!(Executor, test_runtime, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+	native_executor_instance!(Executor, test_runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
 	#[test]
 	fn authorities_call_works() {

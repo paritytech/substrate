@@ -64,7 +64,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	[stxs.len() as u8].encode()
 }
 
-pub mod apis {
+pub mod api {
 	use system;
 
 	impl_stubs!(

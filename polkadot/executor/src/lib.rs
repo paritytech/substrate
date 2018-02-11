@@ -18,7 +18,7 @@
 //! executed is equivalent to the natively compiled code.
 
 extern crate polkadot_runtime;
-extern crate substrate_executor;
+#[macro_use] extern crate substrate_executor;
 extern crate substrate_codec as codec;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_runtime_io as runtime_io;
@@ -30,36 +30,12 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
-use polkadot_runtime as runtime;
-use substrate_executor::error::{Error, ErrorKind};
-use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
-use state_machine::Externalities;
-
-/// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
-pub struct LocalNativeExecutionDispatch;
-
-impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
-	fn native_equivalent() -> &'static [u8] {
-		// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
-		// get a proper build script, this must be strictly adhered to or things will go wrong.
-		include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm")
-	}
-
-	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
-		::substrate_executor::with_native_environment(ext, move || runtime::api::dispatch(method, data))?
-			.ok_or_else(|| ErrorKind::MethodNotFound(method.to_owned()).into())
-	}
-}
-
-/// Creates new RustExecutor for contracts.
-pub fn executor() -> NativeExecutor<LocalNativeExecutionDispatch> {
-	NativeExecutor { _dummy: ::std::marker::PhantomData }
-}
+native_executor_instance!(pub Executor, polkadot_runtime::api::dispatch, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm"));
 
 #[cfg(test)]
 mod tests {
 	use runtime_io;
-	use super::*;
+	use super::Executor;
 	use substrate_executor::WasmExecutor;
 	use codec::{KeyedVec, Slicable, Joiner};
 	use runtime_support::{Keyring, Hashable};
@@ -99,7 +75,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -110,7 +86,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -123,7 +99,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -141,7 +117,7 @@ mod tests {
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -235,14 +211,14 @@ mod tests {
 	fn full_native_block_import_works() {
 		let mut t = new_test_ext();
 
-		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
+		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&Keyring::One.to_raw_public()), 42);
 			assert_eq!(balance(&Keyring::Two.to_raw_public()), 69);
 		});
 
-		executor().call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
+		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(balance(&Keyring::One.to_raw_public()), 32);

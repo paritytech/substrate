@@ -41,10 +41,14 @@ pub trait NativeExecutionDispatch {
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
 	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+
+	/// Mapping to the actual Executor type using this delegate.
+	type Executor;
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
+#[derive(Default)]
 pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	pub _dummy: ::std::marker::PhantomData<D>,
@@ -72,29 +76,36 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 
 #[macro_export]
 macro_rules! native_executor_instance {
-	($name:ident, $native_module:ident, $code:expr) => {
-		/// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
+	(pub $name:ident, $dispatcher:path, $code:expr) => {
 		pub struct $name;
-
+		native_executor_instance!(IMPL $name, $dispatcher, $code);
+	};
+	($name:ident, $dispatcher:path, $code:expr) => {
+		/// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
+		struct $name;
+		native_executor_instance!(IMPL $name, $dispatcher, $code);
+	};
+	(IMPL $name:ident, $dispatcher:path, $code:expr) => {
 		impl $crate::NativeExecutionDispatch for $name {
 			fn native_equivalent() -> &'static [u8] {
 				// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
-				include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm")
+				$code
 			}
 
 			fn dispatch(ext: &mut $crate::Externalities, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
-				$crate::with_native_environment(ext, move || $native_module::apis::dispatch(method, data))?
+				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
+
+			type Executor = $crate::NativeExecutor<Self>;
 		}
 
 		impl $name {
-			fn new() -> $crate::NativeExecutor<$name> {
+			pub fn new() -> $crate::NativeExecutor<$name> {
 				$crate::NativeExecutor { _dummy: Default::default() }
 			}
 		}
-
 	}
 
 }
