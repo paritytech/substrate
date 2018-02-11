@@ -27,12 +27,12 @@ extern crate substrate_primitives as primitives;
 
 pub mod storage;
 mod hashable;
+#[cfg(all(feature = "std", test))]
 #[macro_use]
-#[cfg(feature = "std")]
 mod keyring;
 
 pub use self::storage::StorageVec;
 pub use self::hashable::Hashable;
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", test))]
 pub use self::keyring::Keyring;
