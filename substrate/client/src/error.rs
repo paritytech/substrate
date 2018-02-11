@@ -45,6 +45,18 @@ error_chain! {
 			description("Blockchain error"),
 			display("Blockchain: {}", e),
 		}
+
+		/// Invalid state data.
+		AuthLen {
+			description("authority count state error"),
+			display("Current state of blockchain has invalid authority count value"),
+		}
+
+		/// Invalid state data.
+		Auth(i: u32) {
+			description("authority value state error"),
+			display("Current state of blockchain has invalid authority value for index {}", i),
+		}
 	}
 }
 

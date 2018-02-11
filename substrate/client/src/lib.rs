@@ -44,7 +44,7 @@ pub use blockchain::BlockId;
 
 use primitives::{block, AuthorityId};
 use primitives::storage::{StorageKey, StorageData};
-use codec::KeyedVec;
+use codec::{KeyedVec, Slicable};
 
 use blockchain::Backend as BlockchainBackend;
 use backend::BlockImportOperation;
@@ -169,12 +169,11 @@ impl<B, E> Client<B, E> where
 	/// Get the current set of authorities from storage.
 	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
 		let state = self.state_at(id)?;
-		(0..state.storage(b":auth:len")?.into_iter()
-				.rev()
-				.fold(0, |acc, &i| (acc << 8) + (i as u32)))
+		(0..u32::decode(&mut state.storage(b":auth:len")?).ok_or(error::ErrorKind::AuthLen)?)
 			.map(|i| state.storage(&i.to_keyed_vec(b":auth:"))
-				.map(|s| { let mut res = AuthorityId::default(); res.copy_from_slice(s); res })
-				.map_err(|e| e.into())
+				.map_err(|e| error::ErrorKind::Backend)
+				.and_then(|mut s| AuthorityId::decode(&mut s).ok_or(error::ErrorKind::Auth(i)))
+				.map_err(Into::into)
 			).collect()
 	}
 

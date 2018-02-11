@@ -41,9 +41,6 @@ pub trait NativeExecutionDispatch {
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
 	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
-
-	/// Mapping to the actual Executor type using this delegate.
-	type Executor;
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
@@ -97,8 +94,6 @@ macro_rules! native_executor_instance {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
-
-			type Executor = $crate::NativeExecutor<Self>;
 		}
 
 		impl $name {
