@@ -34,13 +34,65 @@ enum ActionKind {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Action {
 	/// Proposal of a block candidate.
-	Propose(usize, Block),
+	Propose(u32, Block),
 	/// Preparation to commit for a candidate.
-	Prepare(usize, HeaderHash),
+	Prepare(u32, HeaderHash),
 	/// Vote to commit to a candidate.
-	Commit(usize, HeaderHash),
+	Commit(u32, HeaderHash),
 	/// Vote to advance round after inactive primary.
-	AdvanceRound(usize),
+	AdvanceRound(u32),
+}
+
+impl Slicable for Action {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		match *self {
+			Action::Propose(ref round, ref block) => {
+				v.push(ActionKind::Propose as u8);
+				round.using_encoded(|s| v.extend(s));
+				block.using_encoded(|s| v.extend(s));
+			}
+			Action::Prepare(ref round, ref hash) => {
+				v.push(ActionKind::Prepare as u8);
+				round.using_encoded(|s| v.extend(s));
+				hash.using_encoded(|s| v.extend(s));
+			}
+			Action::Commit(ref round, ref hash) => {
+				v.push(ActionKind::Commit as u8);
+				round.using_encoded(|s| v.extend(s));
+				hash.using_encoded(|s| v.extend(s));
+			}
+			Action::AdvanceRound(ref round) => {
+				v.push(ActionKind::AdvanceRound as u8);
+				round.using_encoded(|s| v.extend(s));
+			}
+		}
+
+		v
+	}
+
+	fn decode<I: Input>(value: &mut I) -> Option<Self> {
+		match u8::decode(value) {
+			Some(x) if x == ActionKind::Propose as u8 => {
+				let (round, block) = try_opt!(Slicable::decode(value));
+				Some(Action::Propose(round, block))
+			}
+			Some(x) if x == ActionKind::Prepare as u8 => {
+				let (round, hash) = try_opt!(Slicable::decode(value));
+
+				Some(Action::Prepare(round, hash))
+			}
+			Some(x) if x == ActionKind::Commit as u8 => {
+				let (round, hash) = try_opt!(Slicable::decode(value));
+
+				Some(Action::Commit(round, hash))
+			}
+			Some(x) if x == ActionKind::AdvanceRound as u8 => {
+				Slicable::decode(value).map(Action::AdvanceRound)
+			}
+			_ => None,
+		}
+	}
 }
 
 /// Messages exchanged between participants in the BFT consensus.
@@ -51,4 +103,19 @@ pub struct Message {
 	pub parent: HeaderHash,
 	/// The action being broadcasted.
 	pub action: Action,
+}
+
+impl Slicable for Message {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = self.parent.encode();
+		self.action.using_encoded(|s| v.extend(s));
+		v
+	}
+
+	fn decode<I: Input>(value: &mut I) -> Option<Self> {
+		Some(Message {
+			parent: try_opt!(Slicable::decode(value)),
+			action: try_opt!(Slicable::decode(value)),
+		})
+	}
 }

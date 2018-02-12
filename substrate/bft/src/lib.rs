@@ -19,19 +19,22 @@
 mod accumulator;
 pub mod generic;
 
-#[cfg_attr(test, macro_use)]
-extern crate futures;
+extern crate substrate_codec as codec;
 extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
 extern crate ed25519;
 extern crate tokio_timer;
 
+#[cfg_attr(test, macro_use)]
+extern crate futures;
+
 use client::Client;
+use codec::Slicable;
 use ed25519::Signature;
 use primitives::block::{Block, Header, HeaderHash};
 use primitives::AuthorityId;
 
-use futures::{Stream, Sink, Future};
+use futures::{Stream, Future};
 use tokio_timer::Timer;
 
 pub use generic::InputStreamConcluded;
@@ -73,7 +76,7 @@ pub enum Error {
 
 impl From<InputStreamConcluded> for Error {
 	fn from(_: InputStreamConcluded) -> Error {
-		Error::IoTerminated;
+		Error::IoTerminated
 	}
 }
 
@@ -82,7 +85,7 @@ impl From<InputStreamConcluded> for Error {
 /// This will encapsulate creation and evaluation of proposals at a specific
 /// block.
 pub trait Proposer: Sized {
-    type CreateProposal: IntoFuture<Item=Block,Error=Error>;
+    type CreateProposal: Future<Item=Block,Error=Error>;
 
     /// Initialize the proposal logic on top of a specific header.
     // TODO: provide state context explicitly?
@@ -114,7 +117,7 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	type CreateProposal = P::CreateProposal;
 
 	fn local_id(&self) -> AuthorityId {
-		self.key.public()
+		self.key.public().0
 	}
 
 	fn proposal(&self) -> P::CreateProposal {
@@ -122,17 +125,49 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	}
 
 	fn candidate_digest(&self, proposal: &Block) -> HeaderHash {
-		unimplemented!() // TODO: calculate header hash.
+		proposal.header.hash()
 	}
 
 	fn sign_local(&self, message: Message) -> LocalizedMessage {
-		unimplemented!() // TODO: figure out message encoding.
+		use primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction};
+
+		let action = match message.clone() {
+			::generic::Message::Propose(r, p) => PrimitiveAction::Propose(r as u32, p),
+			::generic::Message::Prepare(r, h) => PrimitiveAction::Prepare(r as u32, h),
+			::generic::Message::Commit(r, h) => PrimitiveAction::Commit(r as u32, h),
+			::generic::Message::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
+		};
+
+		let primitive = PrimitiveMessage {
+			parent: self.parent_hash,
+			action,
+		};
+
+		let to_sign = Slicable::encode(&primitive);
+		let signature = self.key.sign(&to_sign);
+
+		LocalizedMessage {
+			message,
+			signature,
+			sender: self.key.public().0
+		}
 	}
 
 	fn round_proposer(&self, round: usize) -> AuthorityId {
+		use primitives::hashing::blake2_256;
+
 		// repeat blake2_256 on parent hash round + 1 times.
 		// use as index into authorities vec.
-		unimplemented!()
+		// TODO: parent hash is really insecure as a randomness beacon as
+		// the prior can easily influence the block hash.
+		let hashed = (0..round + 1).fold(self.parent_hash.0, |a, _| {
+			blake2_256(&a[..])
+		});
+
+		let index = u32::decode(&mut &hashed[..])
+			.expect("there are more than 4 bytes in a 32 byte hash; qed");
+
+		self.authorities[(index as usize) % self.authorities.len()]
 	}
 
 	fn candidate_valid(&self, proposal: &Block) -> bool {
@@ -140,6 +175,8 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	}
 
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
+		use std::time::Duration;
+
 		let round = ::std::cmp::min(63, round) as u32;
 		let timeout = 1u64.checked_shl(round)
 			.unwrap_or_else(u64::max_value)
@@ -149,5 +186,3 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 			.map_err(|_| Error::FaultyTimer))
 	}
 }
-
-/// Bft service built around

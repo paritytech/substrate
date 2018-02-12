@@ -80,10 +80,11 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
 
-pub mod storage;
-pub mod hash;
-pub mod uint;
+pub mod bft;
 pub mod block;
+pub mod hash;
+pub mod storage;
+pub mod uint;
 
 #[cfg(test)]
 mod tests;
