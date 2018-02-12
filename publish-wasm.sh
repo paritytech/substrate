@@ -7,7 +7,7 @@ REPO_AUTH="${GH_TOKEN}:@${REPO}"
 SRCS=( "polkadot/runtime/wasm" "substrate/executor/wasm" "substrate/test-runtime/wasm" )
 DST=".wasm-binaries"
 TARGET="wasm32-unknown-unknown"
-UTCDATE=`date -u "+%Y%m%d.%H%M%S"`
+UTCDATE=`date -u "+%Y%m%d%H%M%S"`
 
 pushd .
 
@@ -24,11 +24,11 @@ do
   cd ../../..
 done
 
-if [ "$TRAVIS_PULL_REQUEST" != "false" -o "$TRAVIS_BRANCH" != "master" ]; then
-  popd
-  echo "*** Skipping wasm binary publish"
-  exit 0
-fi
+# if [ "$TRAVIS_PULL_REQUEST" != "false" -o "$TRAVIS_BRANCH" != "master" ]; then
+#   popd
+#   echo "*** Skipping wasm binary publish"
+#   exit 0
+# fi
 
 echo "*** Cloning repo"
 rm -rf $DST
@@ -52,9 +52,16 @@ done
 
 if [ -f "package.json" ]; then
   echo "*** Updating package.json"
-  sed -i '.bak' "s/\"version\": \"[0-9.]*\"/\"version\": \"$UTCDATE\"/g" package.json
+  sed -i '.bak' "s/\"version\": \".*\"/\"version\": \"$UTCDATE\"/g" package.json
   rm -rf package.json.bak
 fi
+
+if [ "$TRAVIS_PULL_REQUEST" != "false" -o "$TRAVIS_BRANCH" != "master" ]; then
+  popd
+  echo "*** Skipping wasm binary publish"
+  exit 0
+fi
+
 
 echo "*** Adding to git"
 echo "$UTCDATE" > README.md
