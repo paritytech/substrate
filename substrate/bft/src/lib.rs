@@ -45,7 +45,7 @@ use primitives::block::{Block, Header, HeaderHash};
 use primitives::AuthorityId;
 use state_machine::CodeExecutor;
 
-use futures::{stream, task, Async, Sink, Future};
+use futures::{stream, task, Async, Sink, Future, IntoFuture};
 use futures::future::Executor;
 use futures::sync::oneshot;
 use tokio_timer::Timer;
@@ -83,7 +83,7 @@ pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, 
 /// This will encapsulate creation and evaluation of proposals at a specific
 /// block.
 pub trait Proposer: Sized {
-    type CreateProposal: Future<Item=Block,Error=Error>;
+    type CreateProposal: IntoFuture<Item=Block,Error=Error>;
 
     /// Initialize the proposal logic on top of a specific header.
     // TODO: provide state context explicitly?
@@ -147,15 +147,15 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	type Digest = HeaderHash;
 	type Signature = Signature;
 	type Candidate = Block;
-	type RoundTimeout = Box<Future<Item=(),Error=Error>>;
-	type CreateProposal = P::CreateProposal;
+	type RoundTimeout = Box<Future<Item=(),Error=Error> + Send>;
+	type CreateProposal = <P::CreateProposal as IntoFuture>::Future;
 
 	fn local_id(&self) -> AuthorityId {
 		self.key.public().0
 	}
 
-	fn proposal(&self) -> P::CreateProposal {
-		self.proposer.propose()
+	fn proposal(&self) -> Self::CreateProposal {
+		self.proposer.propose().into_future()
 	}
 
 	fn candidate_digest(&self, proposal: &Block) -> HeaderHash {
@@ -319,7 +319,6 @@ impl<P, E, I> BftService<P, E, I>
 	/// This will begin the consensus process to build a block on top of it.
 	/// If the executor fails to run the future, an error will be returned.
 	pub fn build_upon(&self, header: &Header) -> Result<(), Error> {
-		let parent_hash = header.parent_hash.clone();
 		let hash = header.hash();
 		let mut _preempted_consensus = None;
 
@@ -332,7 +331,7 @@ impl<P, E, I> BftService<P, E, I>
 
 		let bft_instance = BftInstance {
 			proposer,
-			parent_hash,
+			parent_hash: hash,
 			round_timeout_multiplier: self.round_timeout_multiplier,
 			timer: self.timer.clone(),
 			key: self.key.clone(),
@@ -364,9 +363,111 @@ impl<P, E, I> BftService<P, E, I>
 				cancel,
 			});
 
-			_preempted_consensus = live.remove(&parent_hash);
+			// cancel any agreements attempted to build upon this block's parent
+			// as clearly agreement has already been reached.
+			_preempted_consensus = live.remove(&header.parent_hash);
 		}
 
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::collections::HashSet;
+	use primitives::block;
+	use self::tokio_core::reactor::{Core, Handle};
+	use self::keyring::Keyring;
+
+	extern crate substrate_keyring as keyring;
+	extern crate tokio_core;
+
+	struct FakeClient {
+		authorities: Vec<AuthorityId>,
+		imported_heights: Mutex<HashSet<block::Number>>
+	}
+
+	impl BlockImport for FakeClient {
+		fn import_block(&self, block: Block, _justification: Justification) {
+			assert!(self.imported_heights.lock().insert(block.header.number))
+		}
+	}
+
+	impl Authorities for FakeClient {
+		fn authorities(&self, _at: &BlockId) -> Result<Vec<AuthorityId>, Error> {
+			Ok(self.authorities.clone())
+		}
+	}
+
+	struct DummyProposer(block::Number);
+
+	impl Proposer for DummyProposer {
+	    type CreateProposal = Result<Block, Error>;
+
+	    fn init(parent_header: &Header, _sign_with: Arc<ed25519::Pair>) -> Self {
+			DummyProposer(parent_header.number + 1)
+		}
+
+    	fn propose(&self) -> Result<Block, Error> {
+			Ok(Block {
+				header: Header::from_block_number(self.0),
+				transactions: Default::default()
+			})
+		}
+
+		fn evaluate(&self, proposal: &Block) -> bool {
+			proposal.header.number == self.0
+		}
+	}
+
+	fn make_service(client: FakeClient, handle: Handle)
+		-> BftService<DummyProposer, Handle, FakeClient>
+	{
+		BftService {
+			client: Arc::new(client),
+			executor: handle,
+			live_agreements: Mutex::new(HashMap::new()),
+			timer: Timer::default(),
+			round_timeout_multiplier: 4,
+			key: Arc::new(Keyring::One.into()),
+			_marker: Default::default(),
+		}
+	}
+
+	#[test]
+	fn future_gets_preempted() {
+		let client = FakeClient {
+			authorities: vec![
+				Keyring::One.to_raw_public(),
+				Keyring::Two.to_raw_public(),
+				Keyring::Alice.to_raw_public(),
+				Keyring::Eve.to_raw_public(),
+			],
+			imported_heights: Mutex::new(HashSet::new()),
+		};
+
+		let mut core = Core::new().unwrap();
+
+		let service = make_service(client, core.handle());
+
+		let first = Header::from_block_number(2);
+		let first_hash = first.hash();
+
+		let mut second = Header::from_block_number(3);
+		second.parent_hash = first_hash;
+		let second_hash = second.hash();
+
+		service.build_upon(&first).unwrap();
+		assert!(service.live_agreements.lock().contains_key(&first_hash));
+
+		// turn the core so the future gets polled and sends its task to the
+		// service. otherwise it deadlocks.
+		core.turn(Some(::std::time::Duration::from_millis(100)));
+		service.build_upon(&second).unwrap();
+		assert!(!service.live_agreements.lock().contains_key(&first_hash));
+		assert!(service.live_agreements.lock().contains_key(&second_hash));
+
+		core.turn(Some(::std::time::Duration::from_millis(100)));
 	}
 }
