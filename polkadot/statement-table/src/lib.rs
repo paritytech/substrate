@@ -36,13 +36,8 @@ pub type Misbehavior = generic::Misbehavior<CandidateReceipt, Hash, SessionKey, 
 /// A summary of import of a statement.
 pub type Summary = generic::Summary<Hash, Id>;
 
-
 /// Context necessary to construct a table.
 pub trait Context {
-	/// get the digest of a candidate.
-	// TODO: remove this when hashing logic finalized.
-	fn candidate_digest(candidate: &CandidateReceipt) -> Hash;
-
 	/// Whether a authority is a member of a group.
 	/// Members are meant to submit candidates and vote on validity.
 	fn is_member_of(&self, authority: &SessionKey, group: &Id) -> bool;
@@ -68,7 +63,7 @@ impl<C: Context> generic::Context for C {
 	type Candidate = CandidateReceipt;
 
 	fn candidate_digest(candidate: &CandidateReceipt) -> Hash {
-		<C as Context>::candidate_digest(candidate)
+		candidate.hash()
 	}
 
 	fn candidate_group(candidate: &CandidateReceipt) -> Id {
