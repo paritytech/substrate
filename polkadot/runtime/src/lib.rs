@@ -21,6 +21,7 @@
 extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_support as runtime_support;
+#[cfg(all(feature = "std", test))] extern crate substrate_keyring as keyring;
 
 #[cfg(feature = "std")] extern crate rustc_hex;
 

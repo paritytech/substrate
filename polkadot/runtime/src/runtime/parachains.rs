@@ -79,7 +79,7 @@ mod tests {
 	use super::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use runtime_support::{one, two};
+	use keyring::Keyring;
 	use runtime::{consensus, session};
 
 	fn simple_setup() -> TestExternalities {
