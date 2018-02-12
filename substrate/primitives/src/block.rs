@@ -17,19 +17,18 @@
 //! Block and header type definitions.
 
 #[cfg(feature = "std")]
-use bytes;
 use rstd::vec::Vec;
+use {bytes, Hash};
 use codec::{Input, Slicable};
-use hash::H256;
 
 /// Used to refer to a block number.
 pub type Number = u64;
 
 /// Hash used to refer to a block hash.
-pub type HeaderHash = H256;
+pub type HeaderHash = Hash;
 
 /// Hash used to refer to a transaction hash.
-pub type TransactionHash = H256;
+pub type TransactionHash = Hash;
 
 /// Simple generic transaction type.
 #[derive(PartialEq, Eq, Clone)]
@@ -127,9 +126,9 @@ pub struct Header {
 	/// Block number.
 	pub number: Number,
 	/// State root after this transition.
-	pub state_root: H256,
+	pub state_root: Hash,
 	/// The root of the trie that represents this block's transactions, indexed by a 32-byte integer.
-	pub transaction_root: H256,
+	pub transaction_root: Hash,
 	/// The digest of activity on the block.
 	pub digest: Digest,
 }
