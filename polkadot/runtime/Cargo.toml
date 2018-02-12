@@ -7,13 +7,15 @@ authors = ["Parity Technologies <admin@parity.io>"]
 rustc-hex = "1.0"
 hex-literal = "0.1.0"
 log = { version = "0.3", optional = true }
-substrate-keyring = { path = "../../substrate/keyring", optional = true }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-runtime-std = { path = "../../substrate/runtime-std" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-primitives = { path = "../../substrate/primitives" }
 polkadot-primitives = { path = "../primitives" }
+
+[dev-dependencies]
+substrate-keyring = { path = "../../substrate/keyring" }
 
 [features]
 default = ["std"]
@@ -24,6 +26,5 @@ std = [
 	"substrate-runtime-support/std",
 	"substrate-primitives/std",
 	"polkadot-primitives/std",
-	"substrate-keyring",
 	"log"
 ]

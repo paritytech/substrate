@@ -78,7 +78,7 @@ macro_rules! native_executor_instance {
 		native_executor_instance!(IMPL $name, $dispatcher, $code);
 	};
 	($name:ident, $dispatcher:path, $code:expr) => {
-		/// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
+		/// A unit struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
 		struct $name;
 		native_executor_instance!(IMPL $name, $dispatcher, $code);
 	};
