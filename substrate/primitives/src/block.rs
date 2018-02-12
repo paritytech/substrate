@@ -16,9 +16,10 @@
 
 //! Block and header type definitions.
 
-#[cfg(feature = "std")]
 use rstd::vec::Vec;
-use {bytes, Hash};
+#[cfg(feature = "std")]
+use bytes;
+use Hash;
 use codec::{Input, Slicable};
 
 /// Used to refer to a block number.
