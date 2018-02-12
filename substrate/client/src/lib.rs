@@ -39,9 +39,11 @@ pub mod blockchain;
 pub mod backend;
 pub mod in_mem;
 pub mod genesis;
+pub mod block_builder;
 
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
+pub use block_builder::BlockBuilder;
 
 use primitives::{block, AuthorityId};
 use primitives::storage::{StorageKey, StorageData};
@@ -59,6 +61,7 @@ pub struct Client<B, E> where B: backend::Backend {
 }
 
 /// Client info
+// TODO: split queue info from chain info and amalgamate into single struct.
 #[derive(Debug)]
 pub struct ClientInfo {
 	/// Best block hash.
@@ -167,6 +170,11 @@ impl<B, E> Client<B, E> where
 		self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0)
 	}
 
+	/// Clone a new instance of Executor.
+	pub fn clone_executor(&self) -> E where E: Clone {
+		self.executor.clone()
+	}
+
 	/// Get the current set of authorities from storage.
 	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
 		let state = self.state_at(id)?;
@@ -183,16 +191,19 @@ impl<B, E> Client<B, E> where
 	/// No changes are made.
 	pub fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let mut changes = state_machine::OverlayedChanges::default();
-		let state = self.state_at(id)?;
-
 		let return_data = state_machine::execute(
-			&state,
+			&self.state_at(id)?,
 			&mut changes,
 			&self.executor,
 			method,
 			call_data,
 		)?;
 		Ok(CallResult { return_data, changes })
+	}
+
+	/// Create a new block, built on the head of the chain.
+	pub fn new_block(&self) -> error::Result<BlockBuilder<B, E>> where E: Clone {
+		BlockBuilder::new(self)
 	}
 
 	/// Queue a block for import.
