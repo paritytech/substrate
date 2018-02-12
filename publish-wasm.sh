@@ -52,6 +52,7 @@ done
 
 if [ -f "package.json" ]; then
   echo "*** Updating package.json"
+  echo "sed -i '.bak' s/\"version\": \".*\"/\"version\": \"$UTCDATE\"/g package.json"
   sed -i '.bak' "s/\"version\": \".*\"/\"version\": \"$UTCDATE\"/g" package.json
   rm -rf package.json.bak
 fi
