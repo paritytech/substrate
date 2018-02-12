@@ -23,9 +23,11 @@ use std::hash::Hash;
 
 use futures::{future, Future, Stream, Sink, Poll, Async, AsyncSink};
 
-use accumulator::State;
+use self::accumulator::State;
 
-pub use accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification};
+pub use self::accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification};
+
+mod accumulator;
 
 #[cfg(test)]
 mod tests;

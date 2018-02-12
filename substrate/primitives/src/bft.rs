@@ -18,6 +18,7 @@
 
 use block::{Block, HeaderHash};
 use codec::{Slicable, Input};
+use rstd::vec::Vec;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]

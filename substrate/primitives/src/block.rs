@@ -147,6 +147,7 @@ impl Header {
 	}
 
 	/// Get the blake2-256 hash of this header.
+	#[cfg(feature = "std")]
 	pub fn hash(&self) -> HeaderHash {
 		::hashing::blake2_256(Slicable::encode(self).as_slice()).into()
 	}

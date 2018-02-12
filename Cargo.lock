@@ -1391,6 +1391,7 @@ name = "substrate-bft"
 version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
+ "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",

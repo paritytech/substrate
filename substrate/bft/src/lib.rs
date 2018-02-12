@@ -16,7 +16,7 @@
 
 //! BFT Agreement based on a rotating proposer in different rounds.
 
-mod accumulator;
+pub mod error;
 pub mod generic;
 
 extern crate substrate_codec as codec;
@@ -30,11 +30,14 @@ extern crate parking_lot;
 #[macro_use]
 extern crate futures;
 
+#[macro_use]
+extern crate error_chain;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use client::Client;
+use client::{BlockId, Client};
 use client::backend::Backend;
 use codec::Slicable;
 use ed25519::Signature;
@@ -43,12 +46,13 @@ use primitives::AuthorityId;
 use state_machine::CodeExecutor;
 
 use futures::{stream, task, Async, Sink, Future};
-use futures::future::{Executor, ExecuteErrorKind};
+use futures::future::Executor;
 use futures::sync::oneshot;
 use tokio_timer::Timer;
 use parking_lot::Mutex;
 
 pub use generic::InputStreamConcluded;
+pub use error::{Error, ErrorKind};
 
 /// Messages over the proposal.
 /// Each message carries an associated round number.
@@ -74,23 +78,6 @@ pub type Committed = generic::Committed<Block, HeaderHash, Signature>;
 /// Communication between BFT participants.
 pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, Signature>;
 
-/// Errors that can occur during agreement.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Error {
-	/// Io streams terminated.
-	IoTerminated,
-	/// Timer failed to fire.
-	FaultyTimer,
-	/// Unable to propose for some reason.
-	CannotPropose,
-}
-
-impl From<InputStreamConcluded> for Error {
-	fn from(_: InputStreamConcluded) -> Error {
-		Error::IoTerminated
-	}
-}
-
 /// Logic for a proposer.
 ///
 /// This will encapsulate creation and evaluation of proposals at a specific
@@ -115,6 +102,12 @@ pub trait BlockImport {
 	fn import_block(&self, block: Block, justification: Justification);
 }
 
+/// Trait for getting the authorities at a given block.
+pub trait Authorities {
+	/// Get the authorities at the given block.
+	fn authorities(&self, at: &BlockId) -> Result<Vec<AuthorityId>, Error>;
+}
+
 impl<B, E> BlockImport for Client<B, E>
 	where
 		B: Backend,
@@ -124,6 +117,17 @@ impl<B, E> BlockImport for Client<B, E>
 	fn import_block(&self, block: Block, _justification: Justification) {
 		// TODO: use justification.
 		let _ = self.import_block(block.header, Some(block.transactions));
+	}
+}
+
+impl<B, E> Authorities for Client<B, E>
+	where
+		B: Backend,
+		E: CodeExecutor,
+		client::error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	fn authorities(&self, at: &BlockId) -> Result<Vec<AuthorityId>, Error> {
+		self.authorities_at(at).map_err(|_| ErrorKind::StateUnavailable(*at).into())
 	}
 }
 
@@ -213,7 +217,7 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 			.saturating_mul(self.round_timeout_multiplier);
 
 		Box::new(self.timer.sleep(Duration::from_secs(timeout))
-			.map_err(|_| Error::FaultyTimer))
+			.map_err(|_| ErrorKind::FaultyTimer.into()))
 	}
 }
 
@@ -295,7 +299,7 @@ impl Drop for AgreementHandle {
 /// The BftService kicks off the agreement process on top of any blocks it
 /// is notified of.
 pub struct BftService<P, E, I> {
-	import: Arc<I>,
+	client: Arc<I>,
 	executor: E,
 	live_agreements: Mutex<HashMap<HeaderHash, AgreementHandle>>,
 	timer: Timer,
@@ -308,13 +312,13 @@ impl<P, E, I> BftService<P, E, I>
 	where
 		P: Proposer,
 		E: Executor<BftFuture<P, I>>,
-		I: BlockImport,
+		I: BlockImport + Authorities,
 {
 	/// Signal that a valid block with the given header has been imported.
 	///
 	/// This will begin the consensus process to build a block on top of it.
 	/// If the executor fails to run the future, an error will be returned.
-	pub fn build_upon(&self, header: &Header) -> Result<(), ExecuteErrorKind> {
+	pub fn build_upon(&self, header: &Header) -> Result<(), Error> {
 		let parent_hash = header.parent_hash.clone();
 		let hash = header.hash();
 		let mut _preempted_consensus = None;
@@ -322,7 +326,7 @@ impl<P, E, I> BftService<P, E, I>
 		let proposer = P::init(header, self.key.clone());
 
 		// TODO: check key is one of the authorities.
-		let authorities = Vec::new();
+		let authorities = self.client.authorities(&BlockId::Hash(hash))?;
 		let n = authorities.len();
 		let max_faulty = n.saturating_sub(1) / 3;
 
@@ -350,8 +354,8 @@ impl<P, E, I> BftService<P, E, I>
 			inner: agreement,
 			cancel: cancel.clone(),
 			send_task: Some(tx),
-			import: self.import.clone(),
-		}).map_err(|e| e.kind())?;
+			import: self.client.clone(),
+		}).map_err(|e| e.kind()).map_err(ErrorKind::Executor)?;
 
 		{
 			let mut live = self.live_agreements.lock();
