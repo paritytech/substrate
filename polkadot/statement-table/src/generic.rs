@@ -732,7 +732,7 @@ mod tests {
 		pub items: Vec<T>,
 	}
 
-	impl<V, T> ::StatementBatch<V, T> for VecBatch<V, T> {
+	impl<V, T> ::generic::StatementBatch<V, T> for VecBatch<V, T> {
 		fn targets(&self) -> &[V] { &self.targets }
 		fn is_empty(&self) -> bool { self.items.is_empty() }
 		fn push(&mut self, item: T) -> bool {

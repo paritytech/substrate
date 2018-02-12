@@ -52,9 +52,6 @@ extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 
-#[cfg(test)]
-pub mod tests;
-
 /// Information about a specific group.
 #[derive(Debug, Clone)]
 pub struct GroupInfo {
