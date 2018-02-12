@@ -109,6 +109,25 @@ pub trait Proposer: Sized {
     fn evaluate(&self, proposal: &Block) -> bool;
 }
 
+/// Block import trait.
+pub trait BlockImport {
+	/// Import a block alongside its corresponding justification.
+	fn import_block(&self, block: Block, justification: Justification);
+}
+
+impl<B, E> BlockImport for Client<B, E>
+	where
+		B: Backend,
+		E: CodeExecutor,
+		client::error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	fn import_block(&self, block: Block, _justification: Justification) {
+		// TODO: use justification.
+		let _ = self.import_block(block.header, Some(block.transactions));
+	}
+}
+
+
 /// Instance of BFT agreement.
 struct BftInstance<P> {
 	key: Arc<ed25519::Pair>,
@@ -218,20 +237,14 @@ impl Sink for Output {
 
 /// A future that resolves either when canceled (witnessing a block from the network at same height)
 /// or when agreement completes.
-pub struct BftFuture<P: Proposer, B: Backend, X: CodeExecutor> {
+pub struct BftFuture<P: Proposer, I> {
 	inner: generic::Agreement<BftInstance<P>, Input, Output>,
 	cancel: Arc<AtomicBool>,
 	send_task: Option<oneshot::Sender<task::Task>>,
-	client: Arc<Client<B, X>>,
+	import: Arc<I>,
 }
 
-impl<P, B, X> Future for BftFuture<P, B, X>
-	where
-		P: Proposer,
-		B: Backend,
-		X: CodeExecutor,
-		client::error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
-{
+impl<P: Proposer, I: BlockImport> Future for BftFuture<P, I> {
 	type Item = ();
 	type Error = ();
 
@@ -249,14 +262,10 @@ impl<P, B, X> Future for BftFuture<P, B, X>
 		// TODO: handle this error, at least by logging.
 		let committed = try_ready!(self.inner.poll().map_err(|_| ()));
 
-		// If we didn't see the justification (very unlikely),
+		// If we didn't see the proposal (very unlikely),
 		// we will get the block from the network later.
 		if let Some(justified_block) = committed.candidate {
-			// TODO: import justification alongside.xw
-			let _ = self.client.import_block(
-				justified_block.header,
-				Some(justified_block.transactions),
-			);
+			self.import.import_block(justified_block, committed.justification)
 		}
 
 		Ok(Async::Ready(()))
@@ -285,8 +294,8 @@ impl Drop for AgreementHandle {
 
 /// The BftService kicks off the agreement process on top of any blocks it
 /// is notified of.
-pub struct BftService<P, E, B: Backend, X: CodeExecutor> {
-	client: Arc<Client<B, X>>,
+pub struct BftService<P, E, I> {
+	import: Arc<I>,
 	executor: E,
 	live_agreements: Mutex<HashMap<HeaderHash, AgreementHandle>>,
 	timer: Timer,
@@ -295,13 +304,11 @@ pub struct BftService<P, E, B: Backend, X: CodeExecutor> {
 	_marker: ::std::marker::PhantomData<P>,
 }
 
-impl<P, E, B, X> BftService<P, E, B, X>
+impl<P, E, I> BftService<P, E, I>
 	where
 		P: Proposer,
-		E: Executor<BftFuture<P, B, X>>,
-		B: Backend,
-		X: CodeExecutor,
-		client::error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
+		E: Executor<BftFuture<P, I>>,
+		I: BlockImport,
 {
 	/// Signal that a valid block with the given header has been imported.
 	///
@@ -343,7 +350,7 @@ impl<P, E, B, X> BftService<P, E, B, X>
 			inner: agreement,
 			cancel: cancel.clone(),
 			send_task: Some(tx),
-			client: self.client.clone(),
+			import: self.import.clone(),
 		}).map_err(|e| e.kind())?;
 
 		{
