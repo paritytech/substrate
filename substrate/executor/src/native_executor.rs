@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use error::{Error, ErrorKind, Result};
-use state_machine::{Externalities, CodeExecutor};
+use state_machine::{CodeExecutor, Externalities};
 use wasm_executor::WasmExecutor;
 
 fn safe_call<F, U>(f: F) -> Result<U>
@@ -45,6 +45,7 @@ pub trait NativeExecutionDispatch {
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
+#[derive(Default)]
 pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	pub _dummy: ::std::marker::PhantomData<D>,
@@ -68,4 +69,38 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 			WasmExecutor.call(ext, code, method, data)
 		}
 	}
+}
+
+#[macro_export]
+macro_rules! native_executor_instance {
+	(pub $name:ident, $dispatcher:path, $code:expr) => {
+		pub struct $name;
+		native_executor_instance!(IMPL $name, $dispatcher, $code);
+	};
+	($name:ident, $dispatcher:path, $code:expr) => {
+		/// A unit struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
+		struct $name;
+		native_executor_instance!(IMPL $name, $dispatcher, $code);
+	};
+	(IMPL $name:ident, $dispatcher:path, $code:expr) => {
+		impl $crate::NativeExecutionDispatch for $name {
+			fn native_equivalent() -> &'static [u8] {
+				// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
+				// get a proper build script, this must be strictly adhered to or things will go wrong.
+				$code
+			}
+
+			fn dispatch(ext: &mut $crate::Externalities, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
+				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
+					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
+			}
+		}
+
+		impl $name {
+			pub fn new() -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor { _dummy: Default::default() }
+			}
+		}
+	}
+
 }

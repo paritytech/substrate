@@ -57,8 +57,10 @@ macro_rules! map {
 #[macro_use]
 mod wasm_utils;
 mod wasm_executor;
+#[macro_use]
 mod native_executor;
 
 pub mod error;
 pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
+pub use state_machine::Externalities;

@@ -215,15 +215,15 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use runtime_support::{one, two};
+	use keyring::Keyring;
 	use environment::with_env;
 	use polkadot_primitives::AccountId;
 	use runtime::{staking, session};
 
 	#[test]
 	fn staking_should_work() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 		let four = [4u8; 32];
 
@@ -360,8 +360,8 @@ mod tests {
 
 	#[test]
 	fn staking_balance_works() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&42u64)
@@ -375,8 +375,8 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_works() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64)
@@ -392,8 +392,8 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn staking_balance_transfer_when_bonded_doesnt_work() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64)

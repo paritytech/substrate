@@ -22,10 +22,11 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_codec as codec;
-extern crate substrate_executor as executor;
+#[cfg(test)] #[macro_use] extern crate substrate_executor as executor;
 extern crate ed25519;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_test_runtime as test_runtime;
+#[cfg(test)] extern crate substrate_keyring as keyring;
 
 extern crate triehash;
 extern crate parking_lot;
@@ -42,8 +43,9 @@ pub mod genesis;
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
 
-use primitives::block;
+use primitives::{block, AuthorityId};
 use primitives::storage::{StorageKey, StorageData};
+use codec::{KeyedVec, Slicable};
 
 use blockchain::Backend as BlockchainBackend;
 use backend::BlockImportOperation;
@@ -162,7 +164,18 @@ impl<B, E> Client<B, E> where
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId) -> error::Result<Vec<u8>> {
-		self.storage(id, &StorageKey(b":code:".to_vec())).map(|data| data.0)
+		self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0)
+	}
+
+	/// Get the current set of authorities from storage.
+	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
+		let state = self.state_at(id)?;
+		(0..u32::decode(&mut state.storage(b":auth:len")?).ok_or(error::ErrorKind::AuthLen)?)
+			.map(|i| state.storage(&i.to_keyed_vec(b":auth:"))
+				.map_err(|_| error::ErrorKind::Backend)
+				.and_then(|mut s| AuthorityId::decode(&mut s).ok_or(error::ErrorKind::Auth(i)))
+				.map_err(Into::into)
+			).collect()
 	}
 
 	/// Execute a call to a contract on top of state in a block of given hash.
@@ -233,5 +246,39 @@ impl<B, E> Client<B, E> where
 	/// Get block body by id.
 	pub fn body(&self, id: &BlockId) -> error::Result<Option<block::Body>> {
 		self.backend.blockchain().body(*id)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use codec::Slicable;
+	use keyring::Keyring;
+	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+	use test_runtime;
+
+	native_executor_instance!(Executor, test_runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+
+	#[test]
+	fn authorities_call_works() {
+		let genesis_config = GenesisConfig::new_simple(vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Bob.to_raw_public(),
+			Keyring::Charlie.to_raw_public()
+		], 1000);
+
+		let prepare_genesis = || {
+			let mut storage = genesis_config.genesis_map();
+			let block = genesis::construct_genesis_block(&storage);
+			storage.extend(additional_storage_with_genesis(&block));
+			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+		};
+		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+
+		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Bob.to_raw_public(),
+			Keyring::Charlie.to_raw_public()
+		]);
 	}
 }

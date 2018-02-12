@@ -31,7 +31,7 @@ use client::backend::Backend;
 use client::blockchain::BlockId;
 use client::Client;
 use polkadot_runtime::runtime;
-use polkadot_executor::LocalNativeExecutionDispatch as LocalDispatch;
+use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use primitives::{AccountId, SessionKey};
 use primitives::parachain::DutyRoster;
@@ -64,8 +64,8 @@ error_chain! {
 ///
 /// All calls should fail when the exact runtime is unknown.
 pub trait PolkadotApi {
-	/// Get authorities at a given block.
-	fn authorities(&self, at: &BlockId) -> Result<Vec<SessionKey>>;
+	/// Get session keys at a given block.
+	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>>;
 
 	/// Get validators at a given block.
 	fn validators(&self, at: &BlockId) -> Result<Vec<AccountId>>;
@@ -104,7 +104,7 @@ macro_rules! with_runtime {
 impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
 {
-	fn authorities(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
+	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
 		with_runtime!(self, at, ::runtime::consensus::authorities)
 	}
 
