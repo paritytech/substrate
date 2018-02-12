@@ -132,7 +132,7 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec};
-	use runtime_support::Keyring;
+	use keyring::Keyring;
 	use ::{Header, Digest, Transaction, UncheckedTransaction};
 
 	fn new_test_ext() -> TestExternalities {

@@ -7,6 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 rustc-hex = "1.0"
 hex-literal = "0.1.0"
 log = { version = "0.3", optional = true }
+substrate-keyring = { path = "../../substrate/keyring", optional = true }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-runtime-std = { path = "../../substrate/runtime-std" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
@@ -23,5 +24,6 @@ std = [
 	"substrate-runtime-support/std",
 	"substrate-primitives/std",
 	"polkadot-primitives/std",
+	"substrate-keyring",
 	"log"
 ]

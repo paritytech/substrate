@@ -13,6 +13,7 @@ substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-executor = { path = "../../substrate/executor" }
+substrate-keyring = { path = "../../substrate/keyring" }
 substrate-primitives = { path = "../../substrate/primitives" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }

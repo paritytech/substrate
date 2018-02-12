@@ -215,7 +215,7 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use runtime_support::Keyring;
+	use keyring::Keyring;
 	use environment::with_env;
 	use polkadot_primitives::AccountId;
 	use runtime::{staking, session};

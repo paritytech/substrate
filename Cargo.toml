@@ -25,6 +25,7 @@ members = [
 	"substrate/codec",
 	"substrate/environmental",
 	"substrate/executor",
+	"substrate/keyring",
 	"substrate/network",
 	"substrate/primitives",
 	"substrate/rpc-servers",

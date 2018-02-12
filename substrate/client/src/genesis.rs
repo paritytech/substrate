@@ -40,7 +40,8 @@ pub fn construct_genesis_block(storage: &HashMap<Vec<u8>, Vec<u8>>) -> Block {
 mod tests {
 	use super::*;
 	use codec::{Slicable, Joiner};
-	use runtime_support::{Keyring, Hashable};
+	use runtime_support::Hashable;
+	use keyring::Keyring;
 	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use executor::WasmExecutor;
 	use state_machine::{execute, OverlayedChanges};

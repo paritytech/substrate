@@ -27,6 +27,7 @@ extern crate polkadot_primitives as polkadot_primitives;
 extern crate ed25519;
 extern crate triehash;
 
+#[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
@@ -38,7 +39,8 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::WasmExecutor;
 	use codec::{KeyedVec, Slicable, Joiner};
-	use runtime_support::{Keyring, Hashable};
+	use keyring::Keyring;
+	use runtime_support::Hashable;
 	use polkadot_runtime::runtime::staking::balance;
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;

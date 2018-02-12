@@ -236,7 +236,7 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
-	use runtime_support::Keyring;
+	use keyring::Keyring;
 	use environment::with_env;
 	use primitives::hexdisplay::HexDisplay;
 	use polkadot_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};

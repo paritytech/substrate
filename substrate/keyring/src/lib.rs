@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Testing helpers.
+//! Support code for the runtime.
+
+#[macro_use] extern crate hex_literal;
+extern crate ed25519;
 
 use ed25519::{Pair, Public, Signature};
 

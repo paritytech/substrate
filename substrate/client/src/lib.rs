@@ -26,6 +26,7 @@ extern crate substrate_codec as codec;
 extern crate ed25519;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_test_runtime as test_runtime;
+#[cfg(test)] extern crate substrate_keyring as keyring;
 
 extern crate triehash;
 extern crate parking_lot;
@@ -252,7 +253,7 @@ impl<B, E> Client<B, E> where
 mod tests {
 	use super::*;
 	use codec::Slicable;
-	use runtime_support::Keyring;
+	use keyring::Keyring;
 	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use test_runtime;
 
