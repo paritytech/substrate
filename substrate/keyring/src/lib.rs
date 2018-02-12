@@ -110,3 +110,16 @@ impl From<Keyring> for [u8; 32] {
 		*pair.public().as_array_ref()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use ed25519::Verifiable;
+
+	#[test]
+	fn should_work() {
+		assert!(Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", &Keyring::Alice.into()));
+		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Bob!", &Keyring::Alice.into()));
+		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", &Keyring::Bob.into()));
+	}
+}

@@ -140,6 +140,18 @@ pub fn verify_strong(sig: &Signature, message: &[u8], pubkey: &Public) -> bool {
 	}
 }
 
+pub trait Verifiable {
+	/// Verify something that acts like a signature.
+	fn verify(&self, message: &[u8], pubkey: &Public) -> bool;
+}
+
+impl Verifiable for Signature {
+	/// Verify something that acts like a signature.
+	fn verify(&self, message: &[u8], pubkey: &Public) -> bool {
+		verify_strong(&self, message, pubkey)
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
