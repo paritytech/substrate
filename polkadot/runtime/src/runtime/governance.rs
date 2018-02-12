@@ -147,14 +147,14 @@ mod tests {
 	use super::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use runtime_support::{one, two};
+	use keyring::Keyring;
 	use environment::with_env;
 	use polkadot_primitives::{AccountId, Proposal};
 	use runtime::{staking, session};
 
 	fn new_test_ext() -> TestExternalities {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 
 		TestExternalities { storage: map![
@@ -176,8 +176,8 @@ mod tests {
 
 	#[test]
 	fn majority_voting_should_work() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 		let mut t = new_test_ext();
 
@@ -199,8 +199,8 @@ mod tests {
 
 	#[test]
 	fn majority_voting_should_work_after_unsuccessful_previous() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 		let mut t = new_test_ext();
 
@@ -228,8 +228,8 @@ mod tests {
 
 	#[test]
 	fn minority_voting_should_not_succeed() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 		let mut t = new_test_ext();
 
@@ -251,8 +251,8 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn old_voting_should_be_illegal() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 		let mut t = new_test_ext();
 
@@ -275,8 +275,8 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn double_voting_should_be_illegal() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 		let mut t = new_test_ext();
 
@@ -300,8 +300,8 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn over_proposing_should_be_illegal() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 		let mut t = new_test_ext();
 
@@ -324,8 +324,8 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn approving_without_proposal_should_be_illegal() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 		let mut t = new_test_ext();
 
@@ -347,8 +347,8 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn non_validator_approving_should_be_illegal() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 		let four = [4u8; 32];
 		let mut t = new_test_ext();

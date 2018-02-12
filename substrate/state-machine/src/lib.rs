@@ -130,11 +130,6 @@ impl fmt::Display for ExternalitiesError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "Externalities Error") }
 }
 
-fn to_keyed_vec(value: u32, mut prepend: Vec<u8>) -> Vec<u8> {
-	prepend.extend((0..::std::mem::size_of::<u32>()).into_iter().map(|i| (value >> (i * 8)) as u8));
-	prepend
-}
-
 /// Externalities: pinned to specific active address.
 pub trait Externalities {
 	/// Read storage of current contract being called.
@@ -148,20 +143,6 @@ pub trait Externalities {
 
 	/// Get the trie root of the current storage map.
 	fn storage_root(&self) -> [u8; 32];
-
-	/// Get the current set of authorities from storage.
-	fn authorities(&self) -> Result<Vec<&[u8]>, ExternalitiesError> {
-		(0..self.storage(b":auth:len")?.into_iter()
-				.rev()
-				.fold(0, |acc, &i| (acc << 8) + (i as u32)))
-			.map(|i| self.storage(&to_keyed_vec(i, b":auth:".to_vec())))
-			.collect()
-	}
-
-	/// Get the runtime code.
-	fn code(&self) -> Result<&[u8], ExternalitiesError> {
-		self.storage(b":code")
-	}
 }
 
 /// Code execution engine.
@@ -250,26 +231,6 @@ mod tests {
 		overlayed.set_storage(key.clone(), vec![]);
 		overlayed.commit_prospective();
 		assert!(overlayed.storage(&key).is_none());
-	}
-
-	#[test]
-	fn authorities_call_works() {
-		let mut ext = TestExternalities::default();
-
-		assert_eq!(ext.authorities(), Ok(vec![]));
-
-		ext.set_storage(b":auth:len".to_vec(), vec![0u8; 4]);
-		assert_eq!(ext.authorities(), Ok(vec![]));
-
-		ext.set_storage(b":auth:len".to_vec(), vec![1u8, 0, 0, 0]);
-		assert_eq!(ext.authorities(), Ok(vec![&[][..]]));
-
-		ext.set_storage(b":auth:\0\0\0\0".to_vec(), b"first".to_vec());
-		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..]]));
-
-		ext.set_storage(b":auth:len".to_vec(), vec![2u8, 0, 0, 0]);
-		ext.set_storage(b":auth:\x01\0\0\0".to_vec(), b"second".to_vec());
-		assert_eq!(ext.authorities(), Ok(vec![&b"first"[..], &b"second"[..]]));
 	}
 
 	macro_rules! map {

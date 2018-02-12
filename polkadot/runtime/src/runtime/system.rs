@@ -236,7 +236,7 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
-	use runtime_support::{one, two};
+	use keyring::Keyring;
 	use environment::with_env;
 	use primitives::hexdisplay::HexDisplay;
 	use polkadot_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
@@ -244,8 +244,8 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
@@ -268,8 +268,8 @@ mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 
 		TestExternalities { storage: map![
@@ -293,8 +293,8 @@ mod tests {
 
 	#[test]
 	fn block_import_works() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = new_test_ext();
 
@@ -319,8 +319,8 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = new_test_ext();
 
@@ -345,8 +345,8 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_transaction_root_fails() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = new_test_ext();
 

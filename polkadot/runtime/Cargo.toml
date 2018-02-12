@@ -14,6 +14,9 @@ substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-primitives = { path = "../../substrate/primitives" }
 polkadot-primitives = { path = "../primitives" }
 
+[dev-dependencies]
+substrate-keyring = { path = "../../substrate/keyring" }
+
 [features]
 default = ["std"]
 std = [

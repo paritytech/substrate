@@ -17,3 +17,4 @@ substrate-runtime-support = { path = "../runtime-support" }
 substrate-serializer = { path = "../serializer" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-test-runtime = { path = "../test-runtime" }
+substrate-keyring = { path = "../../substrate/keyring" }

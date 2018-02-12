@@ -16,3 +16,6 @@ substrate-executor = { path = "../../substrate/executor" }
 substrate-primitives = { path = "../../substrate/primitives" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
+
+[dev-dependencies]
+substrate-keyring = { path = "../../substrate/keyring" }

@@ -21,7 +21,7 @@ use error;
 use primitives::block;
 use blockchain::{self, BlockId};
 
-/// Block insertion transction. Keeps hold if the inseted block state and data.
+/// Block insertion transction. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation {
 	/// Associated state backend type.
 	type State: state_machine::backend::Backend;

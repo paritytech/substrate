@@ -18,7 +18,7 @@
 //! executed is equivalent to the natively compiled code.
 
 extern crate polkadot_runtime;
-extern crate substrate_executor;
+#[macro_use] extern crate substrate_executor;
 extern crate substrate_codec as codec;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_runtime_io as runtime_io;
@@ -27,48 +27,26 @@ extern crate polkadot_primitives as polkadot_primitives;
 extern crate ed25519;
 extern crate triehash;
 
+#[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
-use polkadot_runtime as runtime;
-use substrate_executor::error::{Error, ErrorKind};
-use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
-use state_machine::Externalities;
-
-/// A null struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
-pub struct LocalNativeExecutionDispatch;
-
-impl NativeExecutionDispatch for LocalNativeExecutionDispatch {
-	fn native_equivalent() -> &'static [u8] {
-		// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
-		// get a proper build script, this must be strictly adhered to or things will go wrong.
-		include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm")
-	}
-
-	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
-		::substrate_executor::with_native_environment(ext, move || runtime::api::dispatch(method, data))?
-			.ok_or_else(|| ErrorKind::MethodNotFound(method.to_owned()).into())
-	}
-}
-
-/// Creates new RustExecutor for contracts.
-pub fn executor() -> NativeExecutor<LocalNativeExecutionDispatch> {
-	NativeExecutor { _dummy: ::std::marker::PhantomData }
-}
+native_executor_instance!(pub Executor, polkadot_runtime::api::dispatch, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm"));
 
 #[cfg(test)]
 mod tests {
 	use runtime_io;
-	use super::*;
+	use super::Executor;
 	use substrate_executor::WasmExecutor;
 	use codec::{KeyedVec, Slicable, Joiner};
-	use runtime_support::{one, two, Hashable};
+	use keyring::Keyring;
+	use runtime_support::Hashable;
 	use polkadot_runtime::runtime::staking::balance;
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
 	use polkadot_primitives::{Hash, Header, BlockNumber, Block, Digest, Transaction,
-		UncheckedTransaction, Function, AccountId};
-	use ed25519::Pair;
+		UncheckedTransaction, Function};
+	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm");
@@ -82,11 +60,11 @@ mod tests {
 
 	fn tx() -> UncheckedTransaction {
 		let transaction = Transaction {
-			signed: one(),
+			signed: Keyring::One.to_raw_public(),
 			nonce: 0,
-			function: Function::StakingTransfer(two(), 69),
+			function: Function::StakingTransfer(Keyring::Two.to_raw_public(), 69),
 		};
-		let signature = secret_for(&transaction.signed).unwrap()
+		let signature = Keyring::from_raw_public(transaction.signed).unwrap()
 			.sign(&transaction.encode());
 
 		UncheckedTransaction { transaction, signature }
@@ -94,36 +72,36 @@ mod tests {
 
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
-		let one = one();
+		let one = Keyring::One.to_raw_public();
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
 	#[test]
 	fn panic_execution_with_native_equivalent_code_gives_error() {
-		let one = one();
+		let one = Keyring::One.to_raw_public();
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_err());
 	}
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -134,14 +112,14 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
 
-		let r = executor().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -151,8 +129,8 @@ mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 
 		TestExternalities { storage: map![
@@ -174,19 +152,11 @@ mod tests {
 		], }
 	}
 
-	fn secret_for(who: &AccountId) -> Option<Pair> {
-		match who {
-			x if *x == one() => Some(Pair::from_seed(b"12345678901234567890123456789012")),
-			x if *x == two() => Some("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60".into()),
-			_ => None,
-		}
-	}
-
 	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transaction>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|transaction| {
-			let signature = secret_for(&transaction.signed).unwrap()
+			let signature = Pair::from(Keyring::from_public(Public::from_raw(transaction.signed)).unwrap())
 				.sign(&transaction.encode());
 
 			UncheckedTransaction { transaction, signature }
@@ -212,9 +182,9 @@ mod tests {
 			[69u8; 32].into(),
 			hex!("2481853da20b9f4322f34650fea5f240dcbfb266d02db94bfa0153c31f4a29db").into(),
 			vec![Transaction {
-				signed: one(),
+				signed: Keyring::One.to_raw_public(),
 				nonce: 0,
-				function: Function::StakingTransfer(two(), 69),
+				function: Function::StakingTransfer(Keyring::Two.to_raw_public(), 69),
 			}]
 		)
 	}
@@ -226,14 +196,14 @@ mod tests {
 			hex!("1feb4d3a2e587079e6ce1685fa79994efd995e33cb289d39cded67aac1bb46a9").into(),
 			vec![
 				Transaction {
-					signed: two(),
+					signed: Keyring::Two.to_raw_public(),
 					nonce: 0,
-					function: Function::StakingTransfer(one(), 5),
+					function: Function::StakingTransfer(Keyring::One.to_raw_public(), 5),
 				},
 				Transaction {
-					signed: one(),
+					signed: Keyring::One.to_raw_public(),
 					nonce: 1,
-					function: Function::StakingTransfer(two(), 15),
+					function: Function::StakingTransfer(Keyring::Two.to_raw_public(), 15),
 				}
 			]
 		)
@@ -243,18 +213,18 @@ mod tests {
 	fn full_native_block_import_works() {
 		let mut t = new_test_ext();
 
-		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
+		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&one()), 42);
-			assert_eq!(balance(&two()), 69);
+			assert_eq!(balance(&Keyring::One.to_raw_public()), 42);
+			assert_eq!(balance(&Keyring::Two.to_raw_public()), 69);
 		});
 
-		executor().call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
+		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&one()), 32);
-			assert_eq!(balance(&two()), 79);
+			assert_eq!(balance(&Keyring::One.to_raw_public()), 32);
+			assert_eq!(balance(&Keyring::Two.to_raw_public()), 79);
 		});
 	}
 
@@ -265,21 +235,21 @@ mod tests {
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&one()), 42);
-			assert_eq!(balance(&two()), 69);
+			assert_eq!(balance(&Keyring::One.to_raw_public()), 42);
+			assert_eq!(balance(&Keyring::Two.to_raw_public()), 69);
 		});
 
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&one()), 32);
-			assert_eq!(balance(&two()), 79);
+			assert_eq!(balance(&Keyring::One.to_raw_public()), 32);
+			assert_eq!(balance(&Keyring::Two.to_raw_public()), 79);
 		});
 	}
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let one = one();
+		let one = Keyring::One.to_raw_public();
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		], };
@@ -291,8 +261,8 @@ mod tests {
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let one = one();
-		let two = two();
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
 
 		let mut t = TestExternalities { storage: map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]

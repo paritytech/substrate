@@ -19,15 +19,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate substrate_runtime_std as rstd;
-#[macro_use]
-extern crate substrate_runtime_io as runtime_io;
+#[macro_use] extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
+#[cfg(test)] extern crate ed25519;
+#[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
 
-#[cfg(feature = "std")]
-pub mod genesismap;
+#[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 mod transaction;
 mod unchecked_transaction;
@@ -63,7 +63,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	[stxs.len() as u8].encode()
 }
 
-pub mod apis {
+pub mod api {
 	use system;
 
 	impl_stubs!(

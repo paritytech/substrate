@@ -132,22 +132,23 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec};
-	use runtime_support::{one, two};
-	use ::{Header, Digest};
+	use keyring::Keyring;
+	use ::{Header, Digest, Transaction, UncheckedTransaction};
 
 	fn new_test_ext() -> TestExternalities {
-		let one = one();
-		let two = two();
-		let three = [3u8; 32];
-
 		TestExternalities { storage: map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => one.to_vec(),
-			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => two.to_vec(),
-			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => three.to_vec(),
-			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
+			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
+			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
+			twox_128(&Keyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		], }
+	}
+
+	fn construct_signed_tx(tx: Transaction) -> UncheckedTransaction {
+		let signature = Keyring::from_raw_public(tx.from).unwrap().sign(&tx.encode());
+		UncheckedTransaction { tx, signature }
 	}
 
 	#[test]
@@ -157,7 +158,7 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("89b5f5775a45310806a77f421d66bffeff190a519c55f2dcb21f251c2b714524").into(),
+			state_root: hex!("97dfcd1f8cbf8845fcb544f89332f1a94c1137f7d1b199ef0b0a6ed217015c3e").into(),
 			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
@@ -169,6 +170,73 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			execute_block(b);
+		});
+	}
+
+	#[test]
+	fn block_import_with_transaction_works() {
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 111);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 0);
+		});
+
+		let b = Block {
+			header: Header {
+				parent_hash: [69u8; 32].into(),
+				number: 1,
+				state_root: hex!("0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1").into(),
+				transaction_root: hex!("5e44188712452f900acfa1b4bf4084753122ea1856d58187dd33374a2ca653b1").into(),
+				digest: Digest { logs: vec![], },
+			},
+			transactions: vec![
+				construct_signed_tx(Transaction {
+					from: Keyring::Alice.to_raw_public(),
+					to: Keyring::Bob.to_raw_public(),
+					amount: 69,
+					nonce: 0,
+				})
+			],
+		};
+
+		with_externalities(&mut t, || {
+			execute_block(b.clone());
+
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 42);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 69);
+		});
+
+		let b = Block {
+			header: Header {
+				parent_hash: b.header.blake2_256().into(),
+				number: 2,
+				state_root: hex!("aea7c370a9fa4075b703742c22cc4fb12759bdd7d5aa5cdd85895447f838b81b").into(),
+				transaction_root: hex!("9ac45fbcc93fa6a8b5a3c44f04d936d53569c72a53fbc12eb58bf884f6dbfae5").into(),
+				digest: Digest { logs: vec![], },
+			},
+			transactions: vec![
+				construct_signed_tx(Transaction {
+					from: Keyring::Bob.to_raw_public(),
+					to: Keyring::Alice.to_raw_public(),
+					amount: 27,
+					nonce: 0,
+				}),
+				construct_signed_tx(Transaction {
+					from: Keyring::Alice.to_raw_public(),
+					to: Keyring::Charlie.to_raw_public(),
+					amount: 69,
+					nonce: 1,
+				})
+			],
+		};
+
+		with_externalities(&mut t, || {
+			execute_block(b);
+
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 0);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 42);
+			assert_eq!(balance_of(Keyring::Charlie.to_raw_public()), 69);
 		});
 	}
 }
