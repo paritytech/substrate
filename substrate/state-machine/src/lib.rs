@@ -32,6 +32,7 @@ extern crate triehash;
 extern crate byteorder;
 
 use std::collections::HashMap;
+use std::collections::hash_map::Drain;
 use std::fmt;
 
 pub mod backend;
@@ -42,73 +43,47 @@ pub use testing::TestExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
 
-/// Updates to be committed to the state.
-pub type Update = (Vec<u8>, Vec<u8>);
-
-// in-memory section of the state.
-#[derive(Debug, PartialEq, Default, Clone)]
-struct MemoryState {
-	storage: HashMap<Vec<u8>, Vec<u8>>,
-}
-
-impl MemoryState {
-	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
-		self.storage.get(key).map(|v| &v[..])
-	}
-
-	fn set_storage(&mut self, key: Vec<u8>, val: Vec<u8>) {
-		self.storage.insert(key, val);
-	}
-
-	fn update<I>(&mut self, changes: I) where I: IntoIterator<Item=Update> {
-		for (key, val) in changes {
-			if val.is_empty() {
-				self.storage.remove(&key);
-			} else {
-				self.storage.insert(key, val);
-			}
-		}
-	}
-}
-
 /// The overlayed changes to state to be queried on top of the backend.
 ///
 /// A transaction shares all prospective changes within an inner overlay
 /// that can be cleared.
 #[derive(Default)]
 pub struct OverlayedChanges {
-	prospective: MemoryState,
-	committed: MemoryState,
+	prospective: HashMap<Vec<u8>, Option<Vec<u8>>>,
+	committed: HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
 impl OverlayedChanges {
-	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
-		self.prospective.storage(key)
-			.or_else(|| self.committed.storage(key))
-			.and_then(|v| if v.is_empty() { None } else { Some(v) })
+	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
+	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
+	/// value has been set.
+	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
+		self.prospective.get(key)
+			.or_else(|| self.committed.get(key))
+			.map(|x| x.as_ref().map(AsRef::as_ref))
 	}
 
-	fn set_storage(&mut self, key: Vec<u8>, val: Vec<u8>) {
-		self.prospective.set_storage(key, val);
+	fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
+		self.prospective.insert(key, val);
 	}
 
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
-		self.prospective.storage.clear();
+		self.prospective.clear();
 	}
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
-		if self.committed.storage.is_empty() {
+		if self.committed.is_empty() {
 			::std::mem::swap(&mut self.prospective, &mut self.committed);
 		} else {
-			self.committed.update(self.prospective.storage.drain());
+			self.committed.extend(self.prospective.drain());
 		}
 	}
 
 	/// Drain prospective changes to an iterator.
-	pub fn drain(&mut self) -> ::std::collections::hash_map::Drain<std::vec::Vec<u8>, std::vec::Vec<u8>> {
-		self.committed.storage.drain()
+	pub fn drain(&mut self) -> Drain<Vec<u8>, Option<Vec<u8>>> {
+		self.committed.drain()
 	}
 }
 
@@ -133,10 +108,20 @@ impl fmt::Display for ExternalitiesError {
 /// Externalities: pinned to specific active address.
 pub trait Externalities {
 	/// Read storage of current contract being called.
-	fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError>;
+	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, ExternalitiesError>;
 
-	/// Set storage of current contract being called (effective immediately).
-	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>);
+	/// Set storage entry `key` of current contract being called (effective immediately).
+	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
+		self.place_storage(key, Some(value));
+	}
+
+	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
+	fn clear_storage(&mut self, key: &[u8]) {
+		self.place_storage(key.to_vec(), None);
+	}
+
+	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
+	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
@@ -172,7 +157,8 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<Vec<u8>, Box<Error>> {
+) -> Result<Vec<u8>, Box<Error>>
+{
 
 	let result = {
 		let mut externalities = ext::Ext {
@@ -180,7 +166,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			overlay: &mut *overlay
 		};
 		// make a copy.
-		let code = externalities.storage(b":code").unwrap_or(&[]).to_vec();
+		let code = externalities.storage(b":code").map_err(|e| Box::new(e) as Box<Error>)?.unwrap_or(&[]).to_vec();
 
 		exec.call(
 			&mut externalities,
@@ -216,21 +202,24 @@ mod tests {
 
 		assert!(overlayed.storage(&key).is_none());
 
-		overlayed.set_storage(key.clone(), vec![1, 2, 3]);
-		assert_eq!(overlayed.storage(&key).unwrap(), &[1, 2, 3]);
+		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
 		overlayed.commit_prospective();
-		assert_eq!(overlayed.storage(&key).unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
-		overlayed.set_storage(key.clone(), vec![]);
-		assert!(overlayed.storage(&key).is_none());
+		overlayed.set_storage(key.clone(), Some(vec![]));
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[][..]));
+
+		overlayed.set_storage(key.clone(), None);
+		assert!(overlayed.storage(&key).unwrap().is_none());
 
 		overlayed.discard_prospective();
-		assert_eq!(overlayed.storage(&key).unwrap(), &[1, 2, 3]);
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
-		overlayed.set_storage(key.clone(), vec![]);
+		overlayed.set_storage(key.clone(), None);
 		overlayed.commit_prospective();
-		assert!(overlayed.storage(&key).is_none());
+		assert!(overlayed.storage(&key).unwrap().is_none());
 	}
 
 	macro_rules! map {
@@ -244,16 +233,19 @@ mod tests {
 		let mut backend = InMemory::from(map![
 			b"doe".to_vec() => b"reindeer".to_vec(),
 			b"dog".to_vec() => b"puppyXXX".to_vec(),
-			b"dogglesworth".to_vec() => b"catXXX".to_vec()
+			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
+			b"doug".to_vec() => b"notadog".to_vec()
 		]);
 		let mut overlay = OverlayedChanges {
-			committed: MemoryState { storage: map![
-				b"dog".to_vec() => b"puppy".to_vec(),
-				b"dogglesworth".to_vec() => b"catYYY".to_vec()
-			], },
-			prospective: MemoryState { storage: map![
-				b"dogglesworth".to_vec() => b"cat".to_vec()
-			], },
+			committed: map![
+				b"dog".to_vec() => Some(b"puppy".to_vec()),
+				b"dogglesworth".to_vec() => Some(b"catYYY".to_vec()),
+				b"doug".to_vec() => Some(vec![])
+			],
+			prospective: map![
+				b"dogglesworth".to_vec() => Some(b"cat".to_vec()),
+				b"doug".to_vec() => None
+			],
 		};
 		let ext = Ext {
 			backend: &mut backend,
