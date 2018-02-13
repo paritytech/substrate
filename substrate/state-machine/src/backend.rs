@@ -17,8 +17,7 @@
 //! State machine backends. These manage the code and storage of contracts.
 
 use std::{error, fmt};
-
-use super::{Update, MemoryState};
+use std::collections::HashMap;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -26,12 +25,12 @@ pub trait Backend {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
-	/// Get keyed storage associated with specific address.
-	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error>;
+	/// Get keyed storage associated with specific address, or None if there is nothing associated.
+	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, Self::Error>;
 
 	/// Commit updates to the backend and get new state.
 	fn commit<I>(&mut self, changes: I)
-		where I: IntoIterator<Item=Update>;
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(&[u8], &[u8])>;
@@ -54,37 +53,28 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-#[derive(Debug, PartialEq, Default, Clone)]
-pub struct InMemory {
-	inner: MemoryState, // keeps all the state in memory.
-}
-
-impl InMemory {
-	/// Create a new instance from a given storage map.
-	pub fn from(storage: ::std::collections::HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		InMemory {
-			inner: MemoryState {
-				storage
-			}
-		}
-	}
-}
+pub type InMemory = HashMap<Vec<u8>, Vec<u8>>;
 
 impl Backend for InMemory {
 	type Error = Void;
 
-	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error> {
-		Ok(self.inner.storage(key).unwrap_or(&[]))
+	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, Self::Error> {
+		Ok(self.get(key).map(AsRef::as_ref))
 	}
 
 	fn commit<I>(&mut self, changes: I)
-		where I: IntoIterator<Item=Update>
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.inner.update(changes);
+		for (key, val) in changes {
+			match val {
+				Some(v) => { self.insert(key, v); },
+				None => { self.remove(&key); },
+			}
+		}
 	}
 
 	fn pairs(&self) -> Vec<(&[u8], &[u8])> {
-		self.inner.storage.iter().map(|(k, v)| (&k[..], &v[..])).collect()
+		self.iter().map(|(k, v)| (&k[..], &v[..])).collect()
 	}
 }
 
