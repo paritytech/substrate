@@ -40,6 +40,7 @@ mod testing;
 
 pub use testing::TestExternalities;
 pub use ext::Ext;
+pub use backend::Backend;
 
 /// Updates to be committed to the state.
 pub type Update = (Vec<u8>, Vec<u8>);

@@ -20,9 +20,6 @@ use std::{error, fmt};
 
 use super::{Update, MemoryState};
 
-/// Output of a commit.
-pub struct Committed {}
-
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 pub trait Backend {
@@ -33,7 +30,7 @@ pub trait Backend {
 	fn storage(&self, key: &[u8]) -> Result<&[u8], Self::Error>;
 
 	/// Commit updates to the backend and get new state.
-	fn commit<I>(&mut self, changes: I) -> Committed
+	fn commit<I>(&mut self, changes: I)
 		where I: IntoIterator<Item=Update>;
 
 	/// Get all key/value pairs into a Vec.
@@ -80,11 +77,10 @@ impl Backend for InMemory {
 		Ok(self.inner.storage(key).unwrap_or(&[]))
 	}
 
-	fn commit<I>(&mut self, changes: I) -> Committed
+	fn commit<I>(&mut self, changes: I)
 		where I: IntoIterator<Item=Update>
 	{
 		self.inner.update(changes);
-		Committed {}
 	}
 
 	fn pairs(&self) -> Vec<(&[u8], &[u8])> {
