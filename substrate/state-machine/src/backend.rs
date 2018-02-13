@@ -57,7 +57,7 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-#[derive(Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct InMemory {
 	inner: MemoryState, // keeps all the state in memory.
 }

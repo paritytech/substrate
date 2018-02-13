@@ -21,22 +21,24 @@ use error;
 use primitives::block;
 use blockchain::{self, BlockId};
 
-/// Block insertion transction. Keeps hold if the inserted block state and data.
+/// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation {
 	/// Associated state backend type.
 	type State: state_machine::backend::Backend;
 
 	/// Returns pending state.
-	fn state(&self) -> error::Result<Self::State>;
+	fn state(&self) -> error::Result<&Self::State>;
 	/// Append block data to the transaction.
-	fn import_block(&mut self, header: block::Header, body: Option<block::Body>, is_new_best: bool) -> error::Result<()>;
+	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, is_new_best: bool) -> error::Result<()>;
+	/// Inject storage data into the database.
+	fn set_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 	/// Inject storage data into the database.
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 }
 
 /// Client backend. Manages the data layer.
 pub trait Backend {
-	/// Associated block insertion transaction type.
+	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation;
 	/// Associated blockchain backend type.
 	type Blockchain: blockchain::Backend;
@@ -44,9 +46,9 @@ pub trait Backend {
 	type State: state_machine::backend::Backend;
 
 	/// Begin a new block insertion transaction with given parent block id.
-	fn begin_transaction(&self, block: BlockId) -> error::Result<Self::BlockImportOperation>;
+	fn begin_operation(&self, block: BlockId) -> error::Result<Self::BlockImportOperation>;
 	/// Commit block insertion.
-	fn commit_transaction(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
+	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns state backend for specified block.

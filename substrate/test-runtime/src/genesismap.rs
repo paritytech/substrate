@@ -62,7 +62,10 @@ macro_rules! map {
 
 pub fn additional_storage_with_genesis(genesis_block: &Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	use codec::Slicable;
+	use primitives::hexdisplay::HexDisplay;
+	println!("genesis hash {}", HexDisplay::from(&genesis_block.header.blake2_256()));
+	println!("genesis {}", HexDisplay::from(&genesis_block.header.encode()));
 	map![
-		twox_128(&b"latest"[..]).encode() => genesis_block.header.blake2_256().encode()
+		twox_128(&b"latest"[..]).to_vec() => genesis_block.header.blake2_256().to_vec()
 	]
 }
