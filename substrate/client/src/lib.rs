@@ -43,7 +43,6 @@ pub mod block_builder;
 
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
-pub use block_builder::BlockBuilder;
 
 use primitives::{block, AuthorityId};
 use primitives::storage::{StorageKey, StorageData};
@@ -202,8 +201,13 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<BlockBuilder<B, E>> where E: Clone {
-		BlockBuilder::new(self)
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E>> where E: Clone {
+		block_builder::BlockBuilder::new(self)
+	}
+
+	/// Create a new block, built on top of `parent`.
+	pub fn new_block_at(&self, parent: &BlockId) -> error::Result<block_builder::BlockBuilder<B, E>> where E: Clone {
+		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
 	/// Queue a block for import.
@@ -247,6 +251,22 @@ impl<B, E> Client<B, E> where
 	/// Get block hash by number.
 	pub fn block_hash(&self, block_number: block::Number) -> error::Result<Option<block::HeaderHash>> {
 		self.backend.blockchain().hash(block_number)
+	}
+
+	/// Convert an arbitrary block ID into a block hash.
+	pub fn block_hash_from_id(&self, id: &BlockId) -> error::Result<Option<block::HeaderHash>> {
+		match *id {
+			BlockId::Hash(h) => Ok(Some(h)),
+			BlockId::Number(n) => self.block_hash(n),
+		}
+	}
+
+	/// Convert an arbitrary block ID into a block hash.
+	pub fn block_number_from_id(&self, id: &BlockId) -> error::Result<Option<block::Number>> {
+		match *id {
+			BlockId::Hash(_) => Ok(self.header(id)?.map(|h| h.number)),
+			BlockId::Number(n) => Ok(Some(n)),
+		}
 	}
 
 	/// Get block header by id.

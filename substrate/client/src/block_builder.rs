@@ -42,24 +42,29 @@ impl<B, E> BlockBuilder<B, E> where
 	E: CodeExecutor + Clone,
 	error::Error: From<<<B as backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
-	/// Create a new instance of builder from the given client.
+	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &Client<B, E>) -> error::Result<Self> {
 		let best = (client.info().map(|i| i.chain.best_number)?..1)
 			.find(|&n| if let Ok(BlockStatus::InChain) = client.block_status(&BlockId::Number(n))
 				{ true } else { false })
 			.unwrap_or(0);
+		Self::at_block(&BlockId::Number(best), client)
+	}
 
+	/// Create a new instance of builder from the given client using a particular block's ID to
+	/// build upon.
+	pub fn at_block(block_id: &BlockId, client: &Client<B, E>) -> error::Result<Self> {
 		Ok(BlockBuilder {
 			header: Header {
-				number: best + 1,
-				parent_hash: client.block_hash(best)?.expect("We already ascertained this is InChain before; qed"),
+				number: client.block_number_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(*block_id))? + 1,
+				parent_hash: client.block_hash_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(*block_id))?,
 				state_root: Default::default(),
 				transaction_root: Default::default(),
 				digest: Default::default(),
 			},
 			transactions: Default::default(),
 			executor: client.clone_executor(),
-			state: client.state_at(&BlockId::Number(best))?,
+			state: client.state_at(block_id)?,
 			changes: Default::default(),
 		})
 	}
