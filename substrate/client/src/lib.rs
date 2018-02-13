@@ -306,10 +306,34 @@ mod tests {
 		};
 		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
 
+		assert_eq!(client.info().unwrap().chain.best_number, 0);
 		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
 			Keyring::Alice.to_raw_public(),
 			Keyring::Bob.to_raw_public(),
 			Keyring::Charlie.to_raw_public()
 		]);
+	}
+
+	#[test]
+	fn block_builder_works() {
+		let genesis_config = GenesisConfig::new_simple(vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Bob.to_raw_public(),
+			Keyring::Charlie.to_raw_public()
+		], 1000);
+
+		let prepare_genesis = || {
+			let mut storage = genesis_config.genesis_map();
+			let block = genesis::construct_genesis_block(&storage);
+			storage.extend(additional_storage_with_genesis(&block));
+			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+		};
+		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+
+		let builder = client.new_block().unwrap();
+		let block = builder.bake().unwrap();
+		client.import_block(block.header, Some(block.transactions)).unwrap();
+
+		assert_eq!(client.info().unwrap().chain.best_number, 1);
 	}
 }

@@ -45,10 +45,16 @@ pub trait NativeExecutionDispatch {
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	pub _dummy: ::std::marker::PhantomData<D>,
+}
+
+impl<D: NativeExecutionDispatch + Sync + Send> Clone for NativeExecutor<D> {
+	fn clone(&self) -> Self {
+		NativeExecutor { _dummy: Default::default() }
+	}
 }
 
 impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D> {
