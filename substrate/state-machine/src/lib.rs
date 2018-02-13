@@ -99,16 +99,19 @@ impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 /// would not be executed unless externalities were available. This is included for completeness,
 /// and as a transition away from the pre-existing framework.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ExternalitiesError;
+pub enum ExecutionError {
+	/// The entry `:code` doesn't exist in storage so there's no way we can execute anything.
+	CodeEntryDoesNotExist
+}
 
-impl fmt::Display for ExternalitiesError {
+impl fmt::Display for ExecutionError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "Externalities Error") }
 }
 
 /// Externalities: pinned to specific active address.
 pub trait Externalities {
 	/// Read storage of current contract being called.
-	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, ExternalitiesError>;
+	fn storage(&self, key: &[u8]) -> Option<&[u8]>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -166,7 +169,9 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			overlay: &mut *overlay
 		};
 		// make a copy.
-		let code = externalities.storage(b":code").map_err(|e| Box::new(e) as Box<Error>)?.unwrap_or(&[]).to_vec();
+		let code = externalities.storage(b":code")
+			.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
+			.to_vec();
 
 		exec.call(
 			&mut externalities,

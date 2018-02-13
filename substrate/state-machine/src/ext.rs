@@ -20,7 +20,7 @@ use std::{error, fmt};
 use std::collections::HashMap;
 use triehash::trie_root;
 use backend::Backend;
-use {Externalities, ExternalitiesError, OverlayedChanges};
+use {Externalities, OverlayedChanges};
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -76,11 +76,9 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 impl<'a, B: 'a> Externalities for Ext<'a, B>
 	where B: Backend
 {
-	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, ExternalitiesError> {
-		match self.overlay.storage(key) {
-			Some(x) => Ok(x),
-			None => self.backend.storage(key).map_err(|_| ExternalitiesError),
-		}
+	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
+		self.overlay.storage(key).unwrap_or_else(||
+			self.backend.storage(key).expect("Externalities not allowed to fail within runtime"))
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
