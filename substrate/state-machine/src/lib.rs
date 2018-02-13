@@ -99,7 +99,11 @@ impl OverlayedChanges {
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
-		self.committed.update(self.prospective.storage.drain());
+		if self.committed.storage.is_empty() {
+			::std::mem::swap(&mut self.prospective, &mut self.committed);
+		} else {
+			self.committed.update(self.prospective.storage.drain());
+		}
 	}
 
 	/// Drain prospective changes to an iterator.
