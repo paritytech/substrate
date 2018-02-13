@@ -17,15 +17,15 @@
 //! Test implementation for Externalities.
 
 use std::collections::HashMap;
-use super::{Externalities, ExternalitiesError};
+use super::Externalities;
 use triehash::trie_root;
 
 /// Simple HashMap based Externalities impl.
 pub type TestExternalities = HashMap<Vec<u8>, Vec<u8>>;
 
 impl Externalities for TestExternalities {
-	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, ExternalitiesError> {
-		Ok(self.get(key).map(AsRef::as_ref))
+	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
+		self.get(key).map(AsRef::as_ref)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
