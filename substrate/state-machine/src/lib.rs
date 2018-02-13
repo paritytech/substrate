@@ -42,13 +42,10 @@ pub use testing::TestExternalities;
 pub use ext::Ext;
 
 /// Updates to be committed to the state.
-pub enum Update {
-	/// Set storage of object at given key -- empty is deletion.
-	Storage(Vec<u8>, Vec<u8>),
-}
+pub type Update = (Vec<u8>, Vec<u8>);
 
 // in-memory section of the state.
-#[derive(Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone)]
 struct MemoryState {
 	storage: HashMap<Vec<u8>, Vec<u8>>,
 }
@@ -63,15 +60,11 @@ impl MemoryState {
 	}
 
 	fn update<I>(&mut self, changes: I) where I: IntoIterator<Item=Update> {
-		for update in changes {
-			match update {
-				Update::Storage(key, val) => {
-					if val.is_empty() {
-						self.storage.remove(&key);
-					} else {
-						self.storage.insert(key, val);
-					}
-				}
+		for (key, val) in changes {
+			if val.is_empty() {
+				self.storage.remove(&key);
+			} else {
+				self.storage.insert(key, val);
 			}
 		}
 	}
@@ -105,10 +98,12 @@ impl OverlayedChanges {
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
-		let storage_updates = self.prospective.storage.drain()
-			.map(|(key, value)| Update::Storage(key, value));
+		self.committed.update(self.prospective.storage.drain());
+	}
 
-		self.committed.update(storage_updates);
+	/// Drain prospective changes to an iterator.
+	pub fn drain(&mut self) -> ::std::collections::hash_map::Drain<std::vec::Vec<u8>, std::vec::Vec<u8>> {
+		self.committed.storage.drain()
 	}
 }
 
