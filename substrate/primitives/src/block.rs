@@ -178,6 +178,30 @@ mod tests {
 	use substrate_serializer as ser;
 
 	#[test]
+	fn test_header_encoding() {
+		let header = Header {
+			parent_hash: 5.into(),
+			number: 67,
+			state_root: 3.into(),
+			transaction_root: 6.into(),
+			digest: Digest { logs: vec![Log(vec![1]), Log(vec![2])] },
+		};
+
+		assert_eq!(header.encode(), vec![
+			// parent_hash
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5,
+			// number
+			67, 0, 0, 0, 0, 0, 0, 0,
+			// state_root
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3,
+			// transaction_root
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6,
+			// digest (length, log1, log2)
+			2, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 2
+		]);
+	}
+
+	#[test]
 	fn test_header_serialization() {
 		let header = Header {
 			parent_hash: 5.into(),
@@ -201,5 +225,28 @@ mod tests {
 
 		let v = header.encode();
 		assert_eq!(Header::decode(&mut &v[..]).unwrap(), header);
+	}
+
+	#[test]
+	fn test_block_encoding() {
+		let block = Block {
+			header: Header::from_block_number(12),
+			transactions: vec![Transaction(vec!(4))],
+		};
+
+		assert_eq!(block.encode(), vec![
+			// parent_hash
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			// number
+			12, 0, 0, 0, 0, 0, 0, 0,
+			// state_root
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			// transaction_root
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			// digest
+			0, 0, 0, 0,
+			// transactions (length, tx...)
+			1, 0, 0, 0, 1, 0, 0, 0, 4
+		]);
 	}
 }
