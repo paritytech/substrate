@@ -310,7 +310,6 @@ impl<B, E> Client<B, E> where
 mod tests {
 	use super::*;
 	use codec::Slicable;
-	use runtime_support::Hashable;
 	use keyring::Keyring;
 	use primitives::block::Transaction as PrimitiveTransaction;
 	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
@@ -337,8 +336,11 @@ mod tests {
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+		let genesis_hash = client.block_hash(0).unwrap().unwrap();
 
-		assert_eq!(client.block_hash_from_id(&BlockId::Number(0)).unwrap().unwrap().0, prepare_genesis().0.blake2_256());
+		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), genesis_hash);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public())).unwrap(), 1000);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public())).unwrap(), 0);
 	}
 
 	#[test]
@@ -381,17 +383,13 @@ mod tests {
 		};
 		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
 
-		let genesis_hash = genesis::construct_genesis_block(&genesis_config.genesis_map()).header.blake2_256();
-		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap().0, genesis_hash);
-
 		let builder = client.new_block().unwrap();
 		let block = builder.bake().unwrap();
-
-		assert_eq!(block.header.parent_hash.0, genesis_hash);
 
 		client.import_block(block.header, Some(block.transactions)).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
+		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
 	}
 
 	trait Signable {
