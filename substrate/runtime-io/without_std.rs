@@ -43,6 +43,7 @@ extern "C" {
 	fn ext_print_hex(data: *const u8, len: u32);
 	fn ext_print_num(value: u64);
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
+	fn ext_clear_storage(key_data: *const u8, key_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
@@ -55,11 +56,15 @@ extern "C" {
 }
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
-pub fn storage(key: &[u8]) -> Vec<u8> {
+pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 	let mut length: u32 = 0;
 	unsafe {
 		let ptr = ext_get_allocated_storage(key.as_ptr(), key.len() as u32, &mut length);
-		Vec::from_raw_parts(ptr, length as usize, length as usize)
+		if length == u32::max_value() {
+			None
+		} else {
+			Some(Vec::from_raw_parts(ptr, length as usize, length as usize))
+		}
 	}
 }
 
@@ -73,15 +78,27 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 	}
 }
 
+/// Set the storage to some particular key.
+pub fn clear_storage(key: &[u8]) {
+	unsafe {
+		ext_clear_storage(
+			key.as_ptr(), key.len() as u32
+		);
+	}
+}
+
 /// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
 /// the number of bytes that the key in storage was beyond the offset.
-pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
+pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 	unsafe {
-		ext_get_storage_into(
+		match ext_get_storage_into(
 			key.as_ptr(), key.len() as u32,
 			value_out.as_mut_ptr(), value_out.len() as u32,
 			value_offset as u32
-		) as usize
+		) {
+			none if none == u32::max_value() => None,
+			length => Some(length as usize),
+		}
 	}
 }
 

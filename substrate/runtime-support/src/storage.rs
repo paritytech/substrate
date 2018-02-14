@@ -24,8 +24,9 @@ use codec::{Slicable, KeyedVec};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-	let raw = runtime_io::storage(&twox_128(key)[..]);
-	Slicable::decode(&mut &raw[..])
+	let maybe_raw = runtime_io::storage(&twox_128(key)[..]);
+	maybe_raw.map(|raw| Slicable::decode(&mut &raw[..])
+		.expect("storage should contain a decodable value if there is some entry"))
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -85,17 +86,17 @@ pub fn take_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_v
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(key: &[u8]) -> bool {
-	let mut x = [0u8; 1];
-	runtime_io::read_storage(&twox_128(key)[..], &mut x[..], 0) >= 1
+	let mut x = [0u8; 0];
+	runtime_io::read_storage(&twox_128(key)[..], &mut x[..], 0).is_some()
 }
 
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(key: &[u8]) {
-	runtime_io::set_storage(&twox_128(key)[..], b"");
+	runtime_io::clear_storage(&twox_128(key)[..]);
 }
 
 /// Get a Vec of bytes from storage.
-pub fn get_raw(key: &[u8]) -> Vec<u8> {
+pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
 	runtime_io::storage(&twox_128(key)[..])
 }
 
@@ -127,12 +128,18 @@ pub trait StorageVec {
 		}
 	}
 
+	fn clear_item(index: u32) {
+		if index < Self::count() {
+			kill(&index.to_keyed_vec(Self::PREFIX));
+		}
+	}
+
 	fn item(index: u32) -> Self::Item {
 		get_or_default(&index.to_keyed_vec(Self::PREFIX))
 	}
 
 	fn set_count(count: u32) {
-		(count..Self::count()).for_each(|i| Self::set_item(i, &Self::Item::default()));
+		(count..Self::count()).for_each(Self::clear_item);
 		put(&b"len".to_keyed_vec(Self::PREFIX), &count);
 	}
 
@@ -146,8 +153,9 @@ pub mod unhashed {
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-		let raw = runtime_io::storage(key);
-		T::decode(&mut &raw[..])
+		let maybe_raw = runtime_io::storage(key);
+		maybe_raw.map(|raw| Slicable::decode(&mut &raw[..])
+			.expect("storage should contain a decodable value if there is some entry"))
 	}
 
 	/// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -207,17 +215,16 @@ pub mod unhashed {
 
 	/// Check to see if `key` has an explicit entry in storage.
 	pub fn exists(key: &[u8]) -> bool {
-		let mut x = [0u8; 1];
-		runtime_io::read_storage(key, &mut x[..], 0) >= 1
+		runtime_io::read_storage(key, &mut [0;0][..], 0).is_some()
 	}
 
 	/// Ensure `key` has no explicit entry in storage.
 	pub fn kill(key: &[u8]) {
-		runtime_io::set_storage(key, b"");
+		runtime_io::clear_storage(key);
 	}
 
 	/// Get a Vec of bytes from storage.
-	pub fn get_raw(key: &[u8]) -> Vec<u8> {
+	pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
 		runtime_io::storage(key)
 	}
 
@@ -249,12 +256,18 @@ pub mod unhashed {
 			}
 		}
 
+		fn clear_item(index: u32) {
+			if index < Self::count() {
+				kill(&index.to_keyed_vec(Self::PREFIX));
+			}
+		}
+
 		fn item(index: u32) -> Self::Item {
 			get_or_default(&index.to_keyed_vec(Self::PREFIX))
 		}
 
 		fn set_count(count: u32) {
-			(count..Self::count()).for_each(|i| Self::set_item(i, &Self::Item::default()));
+			(count..Self::count()).for_each(Self::clear_item);
 			put(&b"len".to_keyed_vec(Self::PREFIX), &count);
 		}
 
@@ -267,13 +280,12 @@ pub mod unhashed {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::collections::HashMap;
 	use primitives::hexdisplay::HexDisplay;
 	use runtime_io::{storage, twox_128, TestExternalities, with_externalities};
 
 	#[test]
 	fn integers_can_be_stored() {
-		let mut t = TestExternalities { storage: HashMap::new(), };
+		let mut t = TestExternalities::new();
 		with_externalities(&mut t, || {
 			let x = 69u32;
 			put(b":test", &x);
@@ -290,7 +302,7 @@ mod tests {
 
 	#[test]
 	fn bools_can_be_stored() {
-		let mut t = TestExternalities { storage: HashMap::new(), };
+		let mut t = TestExternalities::new();
 		with_externalities(&mut t, || {
 			let x = true;
 			put(b":test", &x);
@@ -308,11 +320,11 @@ mod tests {
 
 	#[test]
 	fn vecs_can_be_retrieved() {
-		let mut t = TestExternalities { storage: HashMap::new(), };
+		let mut t = TestExternalities::new();
 		with_externalities(&mut t, || {
 			runtime_io::set_storage(&twox_128(b":test"), b"\x0b\0\0\0Hello world");
 			let x = b"Hello world".to_vec();
-			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test"))));
+			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test")).unwrap()));
 			let y = get::<Vec<u8>>(b":test").unwrap();
 			assert_eq!(x, y);
 
@@ -321,7 +333,7 @@ mod tests {
 
 	#[test]
 	fn vecs_can_be_stored() {
-		let mut t = TestExternalities { storage: HashMap::new(), };
+		let mut t = TestExternalities::new();
 		let x = b"Hello world".to_vec();
 
 		with_externalities(&mut t, || {
@@ -330,7 +342,7 @@ mod tests {
 
 		println!("Ext is {:?}", t);
 		with_externalities(&mut t, || {
-			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test"))));
+			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test")).unwrap()));
 			let y: Vec<u8> = get(b":test").unwrap();
 			assert_eq!(x, y);
 		});
