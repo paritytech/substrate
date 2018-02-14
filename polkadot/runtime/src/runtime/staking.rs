@@ -227,7 +227,7 @@ mod tests {
 		let three = [3u8; 32];
 		let four = [4u8; 32];
 
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
 			twox_128(b"ses:val:len").to_vec() => vec![].and(&2u32),
 			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![10; 32],
@@ -239,7 +239,7 @@ mod tests {
 			twox_128(&two.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&20u64),
 			twox_128(&three.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&30u64),
 			twox_128(&four.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&40u64)
-		], };
+		];
 
 		with_externalities(&mut t, || {
 			assert_eq!(era_length(), 2u64);
@@ -296,10 +296,10 @@ mod tests {
 
 	#[test]
 	fn staking_eras_work() {
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
 			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&2u64)
-		], };
+		];
 		with_externalities(&mut t, || {
 			assert_eq!(era_length(), 2u64);
 			assert_eq!(sessions_per_era(), 2u64);
@@ -363,9 +363,9 @@ mod tests {
 		let one = Keyring::One.to_raw_public();
 		let two = Keyring::Two.to_raw_public();
 
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&42u64)
-		], };
+		];
 
 		with_externalities(&mut t, || {
 			assert_eq!(balance(&one), 42);
@@ -378,9 +378,9 @@ mod tests {
 		let one = Keyring::One.to_raw_public();
 		let two = Keyring::Two.to_raw_public();
 
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64)
-		], };
+		];
 
 		with_externalities(&mut t, || {
 			transfer(&one, &two, 69);
@@ -395,9 +395,9 @@ mod tests {
 		let one = Keyring::One.to_raw_public();
 		let two = Keyring::Two.to_raw_public();
 
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64)
-		], };
+		];
 
 		with_externalities(&mut t, || {
 			stake(&one);

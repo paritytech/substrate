@@ -171,34 +171,53 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 		this.ext.set_storage(key, value);
 	},
+	ext_clear_storage(key_data: *const u8, key_len: u32) => {
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
+		if let Some(preimage) = this.hash_lookup.get(&key) {
+			info!(target: "wasm-trace", "*** Clearing storage: %{}   [k={}]", ascii_format(&preimage), HexDisplay::from(&key));
+		} else {
+			info!(target: "wasm-trace", "*** Clearing storage:  {}   [k={}]", ascii_format(&key), HexDisplay::from(&key));
+		}
+		this.ext.clear_storage(&key);
+	},
+	// return 0 and place u32::max_value() into written_out if no value exists for the key.
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
-		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
+		let maybe_value = this.ext.storage(&key);
 
 		if let Some(preimage) = this.hash_lookup.get(&key) {
-			info!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
 		} else {
-			info!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
 		}
 
-		let offset = this.heap.allocate(value.len() as u32) as u32;
-		this.memory.set(offset, &value).map_err(|_| DummyUserError)?;
-
-		this.memory.write_primitive(written_out, value.len() as u32)?;
-		offset
+		if let Some(value) = maybe_value {
+			let offset = this.heap.allocate(value.len() as u32) as u32;
+			this.memory.set(offset, &value).map_err(|_| DummyUserError)?;
+			this.memory.write_primitive(written_out, value.len() as u32)?;
+			offset
+		} else {
+			this.memory.write_primitive(written_out, u32::max_value())?;
+			0
+		}
 	},
+	// return u32::max_value() if no value exists for the key.
 	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
-		let value = this.ext.storage(&key).map_err(|_| DummyUserError)?;
+		let maybe_value = this.ext.storage(&key);
 		if let Some(preimage) = this.hash_lookup.get(&key) {
-			info!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
 		} else {
-			info!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			info!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
 		}
-		let value = &value[value_offset as usize..];
-		let written = ::std::cmp::min(value_len as usize, value.len());
-		this.memory.set(value_data, &value[..written]).map_err(|_| DummyUserError)?;
-		written as u32
+		if let Some(value) = maybe_value {
+			let value = &value[value_offset as usize..];
+			let written = ::std::cmp::min(value_len as usize, value.len());
+			this.memory.set(value_data, &value[..written]).map_err(|_| DummyUserError)?;
+			written as u32
+		} else {
+			u32::max_value()
+		}
 	},
 	ext_storage_root(result: *mut u8) => {
 		let r = this.ext.storage_root();
@@ -369,7 +388,7 @@ mod tests {
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
 		];
-		assert_eq!(expected, ext.storage);
+		assert_eq!(expected, ext);
 	}
 
 	#[test]

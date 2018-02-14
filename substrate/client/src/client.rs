@@ -132,9 +132,10 @@ impl<B, E> Client<B, E> where
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
 	pub fn storage(&self, id: &BlockId, key: &StorageKey) -> error::Result<StorageData> {
-		Ok(self.state_at(id)?
-			.storage(&key.0)
-			.map(|x| StorageData(x.to_vec()))?)
+		Ok(StorageData(self.state_at(id)?
+			.storage(&key.0)?
+			.ok_or_else(|| error::ErrorKind::NoValueForKey(key.0.clone()))?
+			.to_vec()))
 	}
 
 	/// Get the code at a given block.
@@ -150,10 +151,11 @@ impl<B, E> Client<B, E> where
 	/// Get the current set of authorities from storage.
 	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
 		let state = self.state_at(id)?;
-		(0..u32::decode(&mut state.storage(b":auth:len")?).ok_or(error::ErrorKind::AuthLen)?)
+		(0..u32::decode(&mut state.storage(b":auth:len")?.ok_or(error::ErrorKind::AuthLenEmpty)?).ok_or(error::ErrorKind::AuthLenInvalid)?)
 			.map(|i| state.storage(&i.to_keyed_vec(b":auth:"))
 				.map_err(|_| error::ErrorKind::Backend)
-				.and_then(|mut s| AuthorityId::decode(&mut s).ok_or(error::ErrorKind::Auth(i)))
+				.and_then(|v| v.ok_or(error::ErrorKind::AuthEmpty(i)))
+				.and_then(|mut s| AuthorityId::decode(&mut s).ok_or(error::ErrorKind::AuthInvalid(i)))
 				.map_err(Into::into)
 			).collect()
 	}

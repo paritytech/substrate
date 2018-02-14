@@ -52,10 +52,17 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
 
-/// Set the storage to some particular key.
+/// Set the storage of some particular key to Some value.
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	ext::with(|ext|
 		ext.set_storage(key.to_vec(), value.to_vec())
+	);
+}
+
+/// Clear the storage of some particular key.
+pub fn clear_storage(key: &[u8]) {
+	ext::with(|ext|
+		ext.clear_storage(key)
 	);
 }
 
