@@ -33,6 +33,8 @@ extern crate substrate_executor;
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
+#[cfg(test)]
+extern crate substrate_runtime_support as runtime_support;
 
 pub mod chain;
 pub mod state;

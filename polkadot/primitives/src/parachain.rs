@@ -20,7 +20,9 @@
 use primitives::bytes;
 use primitives;
 use codec::{Input, Slicable, NonTrivialSlicable};
+use rstd::cmp::{PartialOrd, Ord, Ordering};
 use rstd::vec::Vec;
+use ::Hash;
 
 /// Unique identifier of a parachain.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
@@ -159,6 +161,55 @@ pub struct CandidateReceipt {
 	pub fees: u64,
 }
 
+impl Slicable for CandidateReceipt {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		self.parachain_index.using_encoded(|s| v.extend(s));
+		self.collator.using_encoded(|s| v.extend(s));
+		self.head_data.0.using_encoded(|s| v.extend(s));
+		self.balance_uploads.using_encoded(|s| v.extend(s));
+		self.egress_queue_roots.using_encoded(|s| v.extend(s));
+		self.fees.using_encoded(|s| v.extend(s));
+
+		v
+	}
+
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(CandidateReceipt {
+			parachain_index: try_opt!(Slicable::decode(input)),
+			collator: try_opt!(Slicable::decode(input)),
+			head_data: try_opt!(Slicable::decode(input).map(HeadData)),
+			balance_uploads: try_opt!(Slicable::decode(input)),
+			egress_queue_roots: try_opt!(Slicable::decode(input)),
+			fees: try_opt!(Slicable::decode(input)),
+		})
+	}
+}
+
+impl CandidateReceipt {
+	/// Get the blake2_256 hash
+	#[cfg(feature = "std")]
+	pub fn hash(&self) -> Hash {
+		let encoded = self.encode();
+		primitives::hashing::blake2_256(&encoded).into()
+	}
+}
+
+impl PartialOrd for CandidateReceipt {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for CandidateReceipt {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// TODO: compare signatures or something more sane
+		self.parachain_index.cmp(&other.parachain_index)
+			.then_with(|| self.head_data.cmp(&other.head_data))
+	}
+}
+
 /// Parachain ingress queue message.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -185,7 +236,7 @@ pub struct BlockData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u
 pub struct Header(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Parachain head data included in the chain.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct HeadData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
@@ -206,6 +257,74 @@ impl Slicable for Activity {
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.0.using_encoded(f)
+	}
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+#[repr(u8)]
+enum StatementKind {
+	Candidate = 1,
+	Valid = 2,
+	Invalid = 3,
+	Available = 4,
+}
+
+/// Statements which can be made about parachain candidates.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Statement {
+	/// Proposal of a parachain candidate.
+	Candidate(CandidateReceipt),
+	/// State that a parachain candidate is valid.
+	Valid(Hash),
+	/// Vote to commit to a candidate.
+	Invalid(Hash),
+	/// Vote to advance round after inactive primary.
+	Available(Hash),
+}
+
+impl Slicable for Statement {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		match *self {
+			Statement::Candidate(ref candidate) => {
+				v.push(StatementKind::Candidate as u8);
+				candidate.using_encoded(|s| v.extend(s));
+			}
+			Statement::Valid(ref hash) => {
+				v.push(StatementKind::Valid as u8);
+				hash.using_encoded(|s| v.extend(s));
+			}
+			Statement::Invalid(ref hash) => {
+				v.push(StatementKind::Invalid as u8);
+				hash.using_encoded(|s| v.extend(s));
+			}
+			Statement::Available(ref hash) => {
+				v.push(StatementKind::Available as u8);
+				hash.using_encoded(|s| v.extend(s));
+			}
+		}
+
+		v
+	}
+
+	fn decode<I: Input>(value: &mut I) -> Option<Self> {
+		match u8::decode(value) {
+			Some(x) if x == StatementKind::Candidate as u8 => {
+				Slicable::decode(value).map(Statement::Candidate)
+			}
+			Some(x) if x == StatementKind::Valid as u8 => {
+				Slicable::decode(value).map(Statement::Valid)
+			}
+			Some(x) if x == StatementKind::Invalid as u8 => {
+				Slicable::decode(value).map(Statement::Invalid)
+			}
+			Some(x) if x == StatementKind::Available as u8 => {
+				Slicable::decode(value).map(Statement::Available)
+			}
+			_ => None,
+		}
 	}
 }
 

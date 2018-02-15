@@ -1,18 +1,20 @@
 [package]
-name = "substrate-rpc"
+name = "substrate-bft"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-error-chain = "0.11"
-jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
-jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
+futures = "0.1.17"
 substrate-client = { path = "../client" }
+substrate-codec = { path = "../codec" }
 substrate-primitives = { path = "../primitives" }
 substrate-state-machine = { path = "../state-machine" }
-substrate-executor = { path = "../executor" }
+ed25519 = { path = "../ed25519" }
+tokio-timer = "0.1.2"
+parking_lot = "0.4"
+error-chain = "0.11"
 
 [dev-dependencies]
-assert_matches = "1.1"
+substrate-keyring = { path = "../keyring" }
 substrate-executor = { path = "../executor" }
-substrate-runtime-support = { path = "../runtime-support" }
+tokio-core = "0.1.12"

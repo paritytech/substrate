@@ -1,31 +1,89 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Tests for the candidate agreement strategy.
 
 use super::*;
 
-use tests::Network;
-
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures::prelude::*;
-use futures::sync::oneshot;
+use futures::sync::{oneshot, mpsc};
 use futures::future::FutureResult;
+
+struct Network<T> {
+	endpoints: Vec<mpsc::UnboundedSender<T>>,
+	input: mpsc::UnboundedReceiver<(usize, T)>,
+}
+
+impl<T: Clone + Send + 'static> Network<T> {
+	fn new(nodes: usize)
+		-> (Self, Vec<mpsc::UnboundedSender<(usize, T)>>, Vec<mpsc::UnboundedReceiver<T>>)
+	{
+		let mut inputs = Vec::with_capacity(nodes);
+		let mut outputs = Vec::with_capacity(nodes);
+		let mut endpoints = Vec::with_capacity(nodes);
+
+		let (in_tx, in_rx) = mpsc::unbounded();
+		for _ in 0..nodes {
+			let (out_tx, out_rx) = mpsc::unbounded();
+			inputs.push(in_tx.clone());
+			outputs.push(out_rx);
+			endpoints.push(out_tx);
+		}
+
+		let network = Network {
+			endpoints,
+			input: in_rx,
+		};
+
+		(network, inputs, outputs)
+	}
+
+	fn route_on_thread(self) {
+		::std::thread::spawn(move || { let _ = self.wait(); });
+	}
+}
+
+impl<T: Clone> Future for Network<T> {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<(), Self::Error> {
+		match try_ready!(self.input.poll()) {
+			None => Ok(Async::Ready(())),
+			Some((sender, item)) => {
+				{
+					let receiving_endpoints = self.endpoints
+						.iter()
+						.enumerate()
+						.filter(|&(i, _)| i != sender)
+						.map(|(_, x)| x);
+
+					for endpoint in receiving_endpoints {
+						let _ = endpoint.unbounded_send(item.clone());
+					}
+				}
+
+				self.poll()
+			}
+		}
+	}
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 struct Candidate(usize);

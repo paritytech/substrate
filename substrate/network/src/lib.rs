@@ -27,12 +27,19 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_client as client;
+extern crate substrate_runtime_support as runtime_support;
 extern crate serde;
 extern crate serde_json;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate error_chain;
+
+#[cfg(test)] extern crate env_logger;
+#[cfg(test)] extern crate substrate_test_runtime as test_runtime;
+#[cfg(test)] extern crate substrate_keyring as keyring;
+#[cfg(test)] #[macro_use] extern crate substrate_executor as executor;
+#[cfg(test)] extern crate substrate_codec as codec;
 
 mod service;
 mod sync;
@@ -44,13 +51,7 @@ mod config;
 mod chain;
 mod blocks;
 
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-extern crate substrate_executor;
-#[cfg(test)]
-extern crate env_logger;
+#[cfg(test)] mod test;
 
 pub use service::Service;
 pub use protocol::{ProtocolStatus};
@@ -59,5 +60,6 @@ pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, Ne
 
 // TODO: move it elsewhere
 fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {
-	primitives::hashing::blake2_256(&ser::encode(header)).into()
+	use runtime_support::Hashable;
+	header.blake2_256().into()
 }
