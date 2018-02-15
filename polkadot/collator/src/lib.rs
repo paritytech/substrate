@@ -61,7 +61,7 @@ pub trait ParachainContext {
 	fn produce_candidate<I: IntoIterator<Item=(ParaId, Message)>>(
 		&self,
 		ingress: I,
-	) -> (parachain::BlockData, polkadot_primitives::Signature);
+	) -> (parachain::BlockData, polkadot_primitives::AccountId, polkadot_primitives::Signature);
 }
 
 /// Relay chain context needed to collate.

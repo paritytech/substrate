@@ -29,28 +29,61 @@
 //!
 //! Groups themselves may be compromised by malicious authorities.
 
+extern crate futures;
+extern crate ed25519;
+extern crate parking_lot;
+extern crate tokio_timer;
+extern crate polkadot_client_api as polkadot_api;
+extern crate polkadot_collator as collator;
+extern crate polkadot_statement_table as table;
+extern crate polkadot_primitives;
+extern crate substrate_bft as bft;
+extern crate substrate_codec as codec;
+extern crate substrate_primitives as primitives;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use codec::Slicable;
 use table::Table;
 use table::generic::Statement as GenericStatement;
+use polkadot_api::PolkadotApi;
 use polkadot_primitives::Hash;
-use polkadot_primitives::parachain::{Id as ParaId, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
 use primitives::block::Block as SubstrateBlock;
 use primitives::AuthorityId;
 
+use futures::prelude::*;
+use futures::future;
 use parking_lot::Mutex;
 
-extern crate futures;
-extern crate ed25519;
-extern crate parking_lot;
-extern crate tokio_timer;
-extern crate polkadot_statement_table as table;
-extern crate polkadot_primitives;
-extern crate substrate_bft as bft;
-extern crate substrate_codec as codec;
-extern crate substrate_primitives as primitives;
+/// A handle to a statement table router.
+pub trait TableRouter {
+	/// Errors when fetching data from the network.
+	type Error;
+	/// Future that resolves when candidate data is fetched.
+	type FetchCandidate: IntoFuture<Item=BlockData,Error=Self::Error>;
+	/// Future that resolves when extrinsic candidate data is fetched.
+	type FetchExtrinsic: IntoFuture<Item=Extrinsic,Error=Self::Error>;
+
+	/// Note local candidate data.
+	fn local_candidate_data(&self, block_data: BlockData, extrinsic: Extrinsic);
+
+	/// Fetch block data for a specific candidate.
+	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> Self::FetchCandidate;
+
+	/// Fetch extrinsic data for a specific candidate.
+	fn fetch_extrinsic_data(&self, candidate: &CandidateReceipt) -> Self::FetchExtrinsic;
+}
+
+/// A long-lived network which can create statement table routing instances.
+pub trait Network {
+	/// The table router type.
+	type TableRouter;
+
+	/// Instantiate a table router.
+	fn table_router(&self, groups: HashMap<ParaId, GroupInfo>, table: Arc<SharedTable>) -> Self::TableRouter;
+}
 
 /// Information about a specific group.
 #[derive(Debug, Clone)]
@@ -134,6 +167,68 @@ impl SharedTableInner {
 		received_from: Option<AuthorityId>,
 	) -> Option<table::Summary> {
 		self.table.import_statement(context, statement, received_from)
+	}
+}
+
+/// Produced statements about a specific candidate.
+/// Both may be `None`.
+pub struct ProducedStatements {
+	/// A statement about the validity of the candidate.
+	pub validity: Option<table::Statement>,
+	/// A statement about the availability of the candidate.
+	pub availability: Option<table::Statement>,
+}
+
+/// Future that produces statements about a specific candidate.
+pub struct StatementProducer<D: Future, E: Future> {
+	fetch_block_data: Option<future::Fuse<D>>,
+	fetch_extrinsic: Option<future::Fuse<E>>,
+	produced_statements: ProducedStatements,
+	_key: Arc<ed25519::Pair>,
+}
+
+impl<D, E, Err> Future for StatementProducer<D, E>
+	where
+		D: Future<Item=BlockData,Error=Err>,
+		E: Future<Item=Extrinsic,Error=Err>,
+{
+	type Item = ProducedStatements;
+	type Error = Err;
+
+	fn poll(&mut self) -> Poll {
+		let mut done = true;
+		if let Some(ref mut fetch_block_data) = self.fetch_block_data {
+			match fetch_block_data.poll()? {
+				Async::Ready(_block_data) => {
+					// TODO: validate block data here.
+					unimplemented!();
+				},
+				Async::NotReady => {
+					done = false;
+				}
+			}
+		}
+
+		if let Some(ref mut fetch_extrinsic) = self.fetch_extrinsic {
+			match fetch_extrinsic.poll()? {
+				Async::Ready(_extrinsic) => {
+					// TODO: guarantee availability of data.
+					unimplemented!();
+				}
+				Async::NotReady => {
+					done = false;
+				}
+			}
+		}
+
+		if done {
+			Ok(Async::Ready(::std::mem::replace(self.produced_statements, ProducedStatements {
+				validity: None,
+				availability: None,
+			})))
+		} else {
+			Ok(Async::NotReady)
+		}
 	}
 }
 
