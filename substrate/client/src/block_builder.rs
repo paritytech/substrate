@@ -21,7 +21,7 @@ use codec::{Joiner, Slicable};
 use state_machine::{self, CodeExecutor};
 use primitives::{Header, Block};
 use primitives::block::Transaction;
-use {backend, error, BlockId, BlockStatus, Client};
+use {backend, error, BlockId, Client};
 use triehash::ordered_trie_root;
 
 /// Utility for building new (valid) blocks from a stream of transactions.
@@ -44,11 +44,7 @@ impl<B, E> BlockBuilder<B, E> where
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &Client<B, E>) -> error::Result<Self> {
-		let best = (client.info().map(|i| i.chain.best_number)?..1)
-			.find(|&n| if let Ok(BlockStatus::InChain) = client.block_status(&BlockId::Number(n))
-				{ true } else { false })
-			.unwrap_or(0);
-		Self::at_block(&BlockId::Number(best), client)
+		client.info().and_then(|i| Self::at_block(&BlockId::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
