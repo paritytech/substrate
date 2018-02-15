@@ -202,6 +202,11 @@ impl<B, E> Client<B, E> where
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
+	/// Author a new block, filling it with valid transactions from our transaction pool.
+	pub fn propose_block_at(&self, parent: &BlockId) -> block::Block {
+		unimplemented!()
+	}
+
 	/// Queue a block for import.
 	pub fn import_block(&self, header: block::Header, body: Option<block::Body>) -> error::Result<ImportResult> {
 		// TODO: import lock
@@ -223,6 +228,7 @@ impl<B, E> Client<B, E> where
 		)?;
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
+		trace!("Imported {}, (#{}), best={}", block::HeaderHash::from(header.blake2_256()), header.number, is_new_best);
 		transaction.set_block_data(header, body, is_new_best)?;
 		transaction.set_storage(overlay.drain())?;
 		self.backend.commit_operation(transaction)?;

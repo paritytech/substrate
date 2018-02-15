@@ -1,0 +1,8 @@
+[package]
+name = "polkadot-statement-table"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+substrate-primitives = { path = "../../substrate/primitives" }
+polkadot-primitives = { path = "../primitives" }

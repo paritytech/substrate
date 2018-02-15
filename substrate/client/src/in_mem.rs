@@ -197,39 +197,6 @@ impl Backend {
 			blockchain: Blockchain::new(),
 		}
 	}
-
-	/// Generate and import a sequence of blocks. A user supplied function is allowed to modify each block header. Useful for testing.
-	pub fn generate_blocks<F>(&self, count: usize, edit_header: F) where F: Fn(&mut block::Header) {
-		use backend::{Backend, BlockImportOperation};
-		let info = blockchain::Backend::info(&self.blockchain).expect("In-memory backend never fails");
-		let mut best_num = info.best_number;
-		let mut best_hash = info.best_hash;
-		let state_root = blockchain::Backend::header(&self.blockchain, BlockId::Hash(best_hash))
-			.expect("In-memory backend never fails")
-			.expect("Best header always exists in the blockchain")
-			.state_root;
-		for _ in 0 .. count {
-			best_num = best_num + 1;
-			let mut header = block::Header {
-				parent_hash: best_hash,
-				number: best_num,
-				state_root: state_root,
-				transaction_root: Default::default(),
-				digest: Default::default(),
-			};
-			edit_header(&mut header);
-
-			let mut tx = self.begin_operation(BlockId::Hash(best_hash)).expect("In-memory backend does not fail");
-			best_hash = header_hash(&header);
-			tx.set_block_data(header, Some(vec![]), true).expect("In-memory backend does not fail");
-			self.commit_operation(tx).expect("In-memory backend does not fail");
-		}
-	}
-
-	/// Generate and import a sequence of blocks. Useful for testing.
-	pub fn push_blocks(&self, count: usize) {
-		self.generate_blocks(count, |_| {})
-	}
 }
 
 impl backend::Backend for Backend {
