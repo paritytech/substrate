@@ -41,6 +41,9 @@ extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 
+#[macro_use]
+extern crate error_chain;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -49,13 +52,17 @@ use table::{Table, Context as TableContextTrait};
 use table::generic::Statement as GenericStatement;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::Hash;
-use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
-use primitives::block::Block as SubstrateBlock;
+use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
+use primitives::block::{Block as SubstrateBlock, Header, HeaderHash, Id as BlockId};
 use primitives::AuthorityId;
 
 use futures::prelude::*;
 use futures::future;
 use parking_lot::Mutex;
+
+pub use self::error::{ErrorKind, Error};
+
+mod error;
 
 /// A handle to a statement table router.
 pub trait TableRouter {
@@ -78,8 +85,9 @@ pub trait TableRouter {
 
 /// A long-lived network which can create statement table routing instances.
 pub trait Network {
-	/// The table router type.
-	type TableRouter;
+	/// The table router type. This should handle importing of any statements,
+	/// routing statements to peers, and driving completion of any `StatementProducers`.
+	type TableRouter: TableRouter;
 
 	/// Instantiate a table router.
 	fn table_router(&self, groups: HashMap<ParaId, GroupInfo>, table: Arc<SharedTable>) -> Self::TableRouter;
@@ -166,7 +174,7 @@ struct SharedTableInner {
 }
 
 impl SharedTableInner {
-	// Import a single statement. Provide a handle to a table router
+	// Import a single statement. Provide a handle to a table router.
 	fn import_statement<R: TableRouter>(
 		&mut self,
 		context: &TableContext,
@@ -391,5 +399,60 @@ impl SharedTable {
 	/// Get the local proposed block's hash.
 	pub fn proposed_hash(&self) -> Option<Hash> {
 		self.inner.lock().proposed_digest.clone()
+	}
+}
+
+/// Polkadot proposer factory.
+pub struct ProposerFactory<C, N> {
+	/// The client instance.
+	pub client: Arc<C>,
+	/// The backing network handle.
+	pub network: N,
+}
+
+fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<HashMap<ParaId, GroupInfo>, Error> {
+	if duty_roster.validator_duty.len() != authorities.len() {
+		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), duty_roster.validator_duty.len()))
+	}
+
+	if duty_roster.guarantor_duty.len() != authorities.len() {
+		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), duty_roster.guarantor_duty.len()))
+	}
+
+	let mut map = HashMap::new();
+
+	unimpleented!()
+}
+
+impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> {
+	type Proposer = Proposer<C, N::TableRouter>;
+	type Error = Error;
+
+	fn init(&self, parent_header: &Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
+		let parent_hash = parent_header.hash();
+		let duty_roster = self.client.duty_roster(&BlockId::Hash(parent_hash))?;
+
+		make_group_info(duty_roster, authorities);
+
+		unimplemented!()
+	}
+}
+
+/// The Polkadot proposer logic.
+pub struct Proposer<C, R> {
+	parent_hash: HeaderHash,
+	client: Arc<C>,
+	router: R,
+}
+
+impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
+	type CreateProposal = Result<SubstrateBlock, bft::Error>;
+
+	fn propose(&self) -> Self::CreateProposal {
+		unimplemented!()
+	}
+
+	fn evaluate(&self, proposal: &SubstrateBlock) -> bool {
+		unimplemented!()
 	}
 }
