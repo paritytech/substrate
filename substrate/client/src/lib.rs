@@ -52,6 +52,7 @@ use blockchain::Backend as BlockchainBackend;
 use backend::BlockImportOperation;
 use state_machine::backend::Backend as StateBackend;
 use state_machine::{Ext, OverlayedChanges};
+use runtime_support::Hashable;
 
 /// Polkadot Client
 #[derive(Debug)]
@@ -249,6 +250,7 @@ impl<B, E> Client<B, E> where
 		)?;
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
+		trace!("Imported {}, (#{}), best={}", block::HeaderHash::from(header.blake2_256()), header.number, is_new_best);
 		transaction.set_block_data(header, body, is_new_best)?;
 		transaction.set_storage(overlay.drain())?;
 		self.backend.commit_operation(transaction)?;
