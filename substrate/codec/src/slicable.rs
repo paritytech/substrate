@@ -53,6 +53,7 @@ pub trait Slicable: Sized {
 }
 
 /// Trait to mark that a type is not trivially (essentially "in place") serialisable.
+// TODO: under specialization, remove this and simply specialize in place serializable types.
 pub trait NonTrivialSlicable: Slicable {}
 
 impl<T: EndianSensitive> Slicable for T {
@@ -213,6 +214,8 @@ macro_rules! tuple_impl {
 				self.0.using_encoded(f)
 			}
 		}
+
+		impl<$one: NonTrivialSlicable> NonTrivialSlicable for ($one,) { }
 	};
 	($first:ident, $($rest:ident,)+) => {
 		impl<$first: Slicable, $($rest: Slicable),+>
@@ -248,6 +251,11 @@ macro_rules! tuple_impl {
 			}
 		}
 
+		impl<$first: Slicable, $($rest: Slicable),+>
+		NonTrivialSlicable
+		for ($first, $($rest),+)
+		{ }
+
 		tuple_impl!($($rest,)+);
 	}
 }
@@ -256,7 +264,7 @@ macro_rules! tuple_impl {
 mod inner_tuple_impl {
 	use rstd::vec::Vec;
 
-	use super::{Input, Slicable};
+	use super::{Input, Slicable, NonTrivialSlicable};
 	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 }
 

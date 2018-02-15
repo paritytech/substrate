@@ -41,7 +41,7 @@ pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {
 
 /// A public key.
 #[derive(PartialEq, Clone, Debug)]
-pub struct Public ([u8; 32]);
+pub struct Public(pub [u8; 32]);
 
 /// A key pair.
 pub struct Pair(signature::Ed25519KeyPair);

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The statement table.
+//! The statement table: generic implementation.
 //!
 //! This stores messages other authorities issue about candidates.
 //!
@@ -32,7 +32,21 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::hash::Hash;
 use std::fmt::Debug;
 
-use super::StatementBatch;
+/// A batch of statements to send out.
+pub trait StatementBatch<V, T> {
+	/// Get the target authorities of these statements.
+	fn targets(&self) -> &[V];
+
+	/// If the batch is empty.
+	fn is_empty(&self) -> bool;
+
+	/// Push a statement onto the batch. Returns false when the batch is full.
+	///
+	/// This is meant to do work like incrementally serializing the statements
+	/// into a vector of bytes while making sure the length is below a certain
+	/// amount.
+	fn push(&mut self, statement: T) -> bool;
+}
 
 /// Context for the statement table.
 pub trait Context {
@@ -380,7 +394,7 @@ impl<C: Context> Table<C> {
 		&self.detected_misbehavior
 	}
 
-	/// Fill a statement batch and note messages seen by the targets.
+	/// Fill a statement batch and note messages as seen by the targets.
 	pub fn fill_batch<B>(&mut self, batch: &mut B)
 		where B: StatementBatch<
 			C::AuthorityId,
@@ -709,8 +723,27 @@ impl<C: Context> Table<C> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use ::tests::VecBatch;
 	use std::collections::HashMap;
+
+	#[derive(Debug, Clone)]
+	struct VecBatch<V, T> {
+		pub max_len: usize,
+		pub targets: Vec<V>,
+		pub items: Vec<T>,
+	}
+
+	impl<V, T> ::generic::StatementBatch<V, T> for VecBatch<V, T> {
+		fn targets(&self) -> &[V] { &self.targets }
+		fn is_empty(&self) -> bool { self.items.is_empty() }
+		fn push(&mut self, item: T) -> bool {
+			if self.items.len() == self.max_len {
+				false
+			} else {
+				self.items.push(item);
+				true
+			}
+		}
+	}
 
 	fn create<C: Context>() -> Table<C> {
 		Table {
