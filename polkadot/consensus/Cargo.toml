@@ -1,0 +1,15 @@
+[package]
+name = "polkadot-consensus"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+futures = "0.1.17"
+parking_lot = "0.4"
+tokio-timer = "0.1.2"
+ed25519 = { path = "../../substrate/ed25519" }
+polkadot-primitives = { path = "../primitives" }
+polkadot-statement-table = { path = "../statement-table" }
+substrate-bft = { path = "../../substrate/bft" }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-primitives = { path = "../../substrate/primitives" }
