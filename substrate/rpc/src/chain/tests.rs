@@ -16,6 +16,7 @@
 
 use substrate_executor as executor;
 use client;
+use runtime_support::Hashable;
 use super::*;
 
 #[test]
@@ -31,7 +32,7 @@ fn should_return_header() {
 	let client = client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap();
 
 	assert_matches!(
-		ChainApi::header(&client, "af65e54217fb213853703d57b80fc5b2bb834bf923046294d7a49bff62f0a8b2".into()),
+		ChainApi::header(&client, test_genesis_block.blake2_256().into()),
 		Ok(Some(ref x)) if x == &block::Header {
 			parent_hash: 0.into(),
 			number: 0,
