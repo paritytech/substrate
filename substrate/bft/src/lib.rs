@@ -84,6 +84,16 @@ impl From<PrimitiveJustification> for UncheckedJustification {
 	}
 }
 
+impl From<UncheckedJustification> for PrimitiveJustification {
+	fn from(just: UncheckedJustification) -> Self {
+		PrimitiveJustification {
+			round_number: just.round_number as u32,
+			hash: just.digest,
+			signatures: just.signatures.into_iter().map(|s| (s.signer.into(), s.signature)).collect(),
+		}
+	}
+}
+
 /// Result of a committed round of BFT
 pub type Committed = generic::Committed<Block, HeaderHash, LocalizedSignature>;
 

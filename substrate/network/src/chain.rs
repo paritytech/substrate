@@ -40,6 +40,9 @@ pub trait Client: Send + Sync {
 
 	/// Get block body.
 	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error>;
+
+	/// Get block justification.
+	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error>;
 }
 
 impl<B, E> Client for PolkadotClient<B, E> where
@@ -71,5 +74,9 @@ impl<B, E> Client for PolkadotClient<B, E> where
 
 	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error> {
 		(self as &PolkadotClient<B, E>).body(id)
+	}
+
+	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error> {
+		(self as &PolkadotClient<B, E>).justification(id)
 	}
 }

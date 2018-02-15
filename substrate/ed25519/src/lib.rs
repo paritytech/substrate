@@ -98,6 +98,12 @@ impl AsRef<[u8]> for Public {
 	}
 }
 
+impl Into<[u8; 32]> for Public {
+	fn into(self) -> [u8; 32] {
+		self.0
+	}
+}
+
 impl Pair {
 	/// Generate new secure (random) key pair.
 	pub fn new() -> Pair {
