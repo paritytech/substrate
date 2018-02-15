@@ -21,7 +21,7 @@ use codec::{Joiner, Slicable};
 use state_machine::{self, CodeExecutor};
 use primitives::{Header, Block};
 use primitives::block::Transaction;
-use {backend, error, BlockId, BlockStatus, Client};
+use {backend, error, BlockId, Client};
 use triehash::ordered_trie_root;
 
 /// Utility for building new (valid) blocks from a stream of transactions.
@@ -44,11 +44,7 @@ impl<B, E> BlockBuilder<B, E> where
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &Client<B, E>) -> error::Result<Self> {
-		let best = (client.info().map(|i| i.chain.best_number)?..1)
-			.find(|&n| if let Ok(BlockStatus::InChain) = client.block_status(&BlockId::Number(n))
-				{ true } else { false })
-			.unwrap_or(0);
-		Self::at_block(&BlockId::Number(best), client)
+		client.info().and_then(|i| Self::at_block(&BlockId::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
@@ -75,7 +71,7 @@ impl<B, E> BlockBuilder<B, E> where
 	pub fn push(&mut self, tx: Transaction) -> error::Result<()> {
 		let output = state_machine::execute(&self.state, &mut self.changes, &self.executor, "execute_transaction",
 			&vec![].and(&self.header).and(&tx))?;
-		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime do must be valid");
+		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		self.transactions.push(tx);
 		Ok(())
 	}
@@ -85,7 +81,7 @@ impl<B, E> BlockBuilder<B, E> where
 		self.header.transaction_root = ordered_trie_root(self.transactions.iter().map(Slicable::encode)).0.into();
 		let output = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
 			&self.header.encode())?;
-		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime do must be valid");
+		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		Ok(Block {
 			header: self.header,
 			transactions: self.transactions,
