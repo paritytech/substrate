@@ -1,25 +1,21 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! BFT Agreement based on a rotating proposer in different rounds.
-
-mod accumulator;
-
-#[cfg(test)]
-mod tests;
+//! Very general implementation.
 
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
@@ -30,6 +26,11 @@ use futures::{future, Future, Stream, Sink, Poll, Async, AsyncSink};
 use self::accumulator::State;
 
 pub use self::accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification};
+
+mod accumulator;
+
+#[cfg(test)]
+mod tests;
 
 /// Messages over the proposal.
 /// Each message carries an associated round number.
@@ -46,7 +47,8 @@ pub enum Message<C, D> {
 }
 
 impl<C, D> Message<C, D> {
-	fn round_number(&self) -> usize {
+	/// Extract the round number.
+	pub fn round_number(&self) -> usize {
 		match *self {
 			Message::Propose(round, _) => round,
 			Message::Prepare(round, _) => round,
@@ -119,18 +121,14 @@ pub enum Communication<C, D, V, S> {
 	Auxiliary(PrepareJustification<D, S>),
 }
 
-/// Type alias for a localized message using only type parameters from `Context`.
-// TODO: actual type alias when it's no longer a warning.
-pub struct ContextCommunication<C: Context + ?Sized>(pub Communication<C::Candidate, C::Digest, C::AuthorityId, C::Signature>);
+/// Hack to get around type alias warning.
+pub trait TypeResolve {
+	/// Communication type.
+	type Communication;
+}
 
-impl<C: Context + ?Sized> Clone for ContextCommunication<C>
-	where
-		LocalizedMessage<C::Candidate, C::Digest, C::AuthorityId, C::Signature>: Clone,
-		PrepareJustification<C::Digest, C::Signature>: Clone,
-{
-	fn clone(&self) -> Self {
-		ContextCommunication(self.0.clone())
-	}
+impl<C: Context> TypeResolve for C {
+	type Communication = Communication<C::Candidate, C::Digest, C::AuthorityId, C::Signature>;
 }
 
 #[derive(Debug)]
@@ -326,7 +324,11 @@ impl<C: Context> Strategy<C> {
 	// rounds if necessary.
 	//
 	// only call within the context of a `Task`.
-	fn poll<E>(&mut self, context: &C, sending: &mut Sending<ContextCommunication<C>>)
+	fn poll<E>(
+		&mut self,
+		context: &C,
+		sending: &mut Sending<<C as TypeResolve>::Communication>
+	)
 		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, E>
 		where
 			C::RoundTimeout: Future<Error=E>,
@@ -359,7 +361,11 @@ impl<C: Context> Strategy<C> {
 
 	// perform one round of polling: attempt to broadcast messages and change the state.
 	// if the round or internal round-state changes, this should be called again.
-	fn poll_once<E>(&mut self, context: &C, sending: &mut Sending<ContextCommunication<C>>)
+	fn poll_once<E>(
+		&mut self,
+		context: &C,
+		sending: &mut Sending<<C as TypeResolve>::Communication>
+	)
 		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, E>
 		where
 			C::RoundTimeout: Future<Error=E>,
@@ -412,7 +418,11 @@ impl<C: Context> Strategy<C> {
 		Ok(Async::NotReady)
 	}
 
-	fn propose(&mut self, context: &C, sending: &mut Sending<ContextCommunication<C>>)
+	fn propose(
+		&mut self,
+		context: &C,
+		sending: &mut Sending<<C as TypeResolve>::Communication>
+	)
 		-> Result<(), <C::CreateProposal as Future>::Error>
 	{
 		if let LocalState::Start = self.local_state {
@@ -461,7 +471,7 @@ impl<C: Context> Strategy<C> {
 				// broadcast the justification along with the proposal if we are locked.
 				if let Some(ref locked) = self.locked {
 					sending.push(
-						ContextCommunication(Communication::Auxiliary(locked.justification.clone()))
+						Communication::Auxiliary(locked.justification.clone())
 					);
 				}
 
@@ -472,7 +482,11 @@ impl<C: Context> Strategy<C> {
 		Ok(())
 	}
 
-	fn prepare(&mut self, context: &C, sending: &mut Sending<ContextCommunication<C>>) {
+	fn prepare(
+		&mut self,
+		context: &C,
+		sending: &mut Sending<<C as TypeResolve>::Communication>
+	) {
 		// prepare only upon start or having proposed.
 		match self.local_state {
 			LocalState::Start | LocalState::Proposed => {},
@@ -511,7 +525,11 @@ impl<C: Context> Strategy<C> {
 		}
 	}
 
-	fn commit(&mut self, context: &C, sending: &mut Sending<ContextCommunication<C>>) {
+	fn commit(
+		&mut self,
+		context: &C,
+		sending: &mut Sending<<C as TypeResolve>::Communication>
+	) {
 		// commit only if we haven't voted to advance or committed already
 		match self.local_state {
 			LocalState::Committed | LocalState::VoteAdvance => return,
@@ -538,7 +556,11 @@ impl<C: Context> Strategy<C> {
 		}
 	}
 
-	fn vote_advance(&mut self, context: &C, sending: &mut Sending<ContextCommunication<C>>)
+	fn vote_advance(
+		&mut self,
+		context: &C,
+		sending: &mut Sending<<C as TypeResolve>::Communication>
+	)
 		-> Result<(), <C::RoundTimeout as Future>::Error>
 	{
 		// we can vote for advancement under all circumstances unless we have already.
@@ -606,11 +628,11 @@ impl<C: Context> Strategy<C> {
 		&mut self,
 		message: Message<C::Candidate, C::Digest>,
 		context: &C,
-		sending: &mut Sending<ContextCommunication<C>>
+		sending: &mut Sending<<C as TypeResolve>::Communication>
 	) {
 		let signed_message = context.sign_local(message);
 		self.import_message(signed_message.clone());
-		sending.push(ContextCommunication(Communication::Consensus(signed_message)));
+		sending.push(Communication::Consensus(signed_message));
 	}
 }
 
@@ -621,7 +643,7 @@ pub struct Agreement<C: Context, I, O> {
 	input: I,
 	output: O,
 	concluded: Option<Committed<C::Candidate, C::Digest, C::Signature>>,
-	sending: Sending<ContextCommunication<C>>,
+	sending: Sending<<C as TypeResolve>::Communication>,
 	strategy: Strategy<C>,
 }
 
@@ -630,8 +652,8 @@ impl<C, I, O, E> Future for Agreement<C, I, O>
 		C: Context,
 		C::RoundTimeout: Future<Error=E>,
 		C::CreateProposal: Future<Error=E>,
-		I: Stream<Item=ContextCommunication<C>,Error=E>,
-		O: Sink<SinkItem=ContextCommunication<C>,SinkError=E>,
+		I: Stream<Item=<C as TypeResolve>::Communication,Error=E>,
+		O: Sink<SinkItem=<C as TypeResolve>::Communication,SinkError=E>,
 		E: From<InputStreamConcluded>,
 {
 	type Item = Committed<C::Candidate, C::Digest, C::Signature>;
@@ -656,7 +678,7 @@ impl<C, I, O, E> Future for Agreement<C, I, O>
 				Async::NotReady => break,
 			};
 
-			match message.0 {
+			match message {
 				Communication::Consensus(message) => self.strategy.import_message(message),
 				Communication::Auxiliary(lock_proof)
 					=> self.strategy.import_lock_proof(&self.context, lock_proof),
@@ -705,8 +727,8 @@ pub fn agree<C: Context, I, O, E>(context: C, nodes: usize, max_faulty: usize, i
 		C: Context,
 		C::RoundTimeout: Future<Error=E>,
 		C::CreateProposal: Future<Error=E>,
-		I: Stream<Item=ContextCommunication<C>,Error=E>,
-		O: Sink<SinkItem=ContextCommunication<C>,SinkError=E>,
+		I: Stream<Item=<C as TypeResolve>::Communication,Error=E>,
+		O: Sink<SinkItem=<C as TypeResolve>::Communication,SinkError=E>,
 		E: From<InputStreamConcluded>,
 {
 	let strategy = Strategy::create(&context, nodes, max_faulty);
