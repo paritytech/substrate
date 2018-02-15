@@ -19,6 +19,7 @@
 use state_machine;
 use error;
 use primitives::block::{self, Id as BlockId};
+use primitives;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation {
@@ -28,7 +29,7 @@ pub trait BlockImportOperation {
 	/// Returns pending state.
 	fn state(&self) -> error::Result<&Self::State>;
 	/// Append block data to the transaction.
-	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, is_new_best: bool) -> error::Result<()>;
+	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()>;
 	/// Inject storage data into the database.
 	fn set_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 	/// Inject storage data into the database.

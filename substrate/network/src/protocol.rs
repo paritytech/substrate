@@ -222,14 +222,14 @@ impl Protocol {
 		};
 		let max = cmp::min(request.max.unwrap_or(u32::max_value()), MAX_BLOCK_DATA_RESPONSE) as usize;
 		// TODO: receipts, etc.
-		let (mut get_header, mut get_body) = (false, false);
+		let (mut get_header, mut get_body, mut get_justification) = (false, false, false);
 		for a in request.fields {
 			match a {
 				message::BlockAttribute::Header => get_header = true,
 				message::BlockAttribute::Body => get_body = true,
 				message::BlockAttribute::Receipt => unimplemented!(),
 				message::BlockAttribute::MessageQueue => unimplemented!(),
-				message::BlockAttribute::Justification => unimplemented!(),
+				message::BlockAttribute::Justification => get_justification = true,
 			}
 		}
 		while let Some(header) = self.chain.header(&id).unwrap_or(None) {
@@ -244,7 +244,7 @@ impl Protocol {
 				body: if get_body { self.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
 				receipt: None,
 				message_queue: None,
-				justification: None,
+				justification: if get_justification { self.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
 			};
 			blocks.push(block_data);
 			match request.direction {

@@ -215,45 +215,57 @@ impl ChainSync {
 		for block in new_blocks {
 			let origin = block.origin;
 			let block = block.block;
-			if let Some(header) = block.header {
-				let number = header.number;
-				let hash = header_hash(&header);
-				let parent = header.parent_hash;
-				let result = protocol.chain().import(
-					header,
-					block.justification.expect("always fetches justification while syncing; qed"),
-					block.body
-				);
-				match result {
-					Ok(ImportResult::AlreadyInChain) => {
-						trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
-						self.block_imported(&hash, number);
-					},
-					Ok(ImportResult::AlreadyQueued) => {
-						trace!(target: "sync", "Block already queued {}: {:?}", number, hash);
-						self.block_imported(&hash, number);
-					},
-					Ok(ImportResult::Queued) => {
-						trace!(target: "sync", "Block queued {}: {:?}", number, hash);
-						self.block_imported(&hash, number);
-						imported = imported + 1;
-					},
-					Ok(ImportResult::UnknownParent) => {
-						debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
-						self.restart(io, protocol);
-						return;
-					},
-					Ok(ImportResult::KnownBad) => {
-						debug!(target: "sync", "Bad block {}: {:?}", number, hash);
-						io.disable_peer(origin); //TODO: use persistent ID
-						self.restart(io, protocol);
-						return;
+			match (block.header, block.justification) {
+				(Some(header), Some(justification)) => {
+					let number = header.number;
+					let hash = header_hash(&header);
+					let parent = header.parent_hash;
+					let result = protocol.chain().import(
+						header,
+						justification,
+						block.body
+					);
+					match result {
+						Ok(ImportResult::AlreadyInChain) => {
+							trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
+							self.block_imported(&hash, number);
+						},
+						Ok(ImportResult::AlreadyQueued) => {
+							trace!(target: "sync", "Block already queued {}: {:?}", number, hash);
+							self.block_imported(&hash, number);
+						},
+						Ok(ImportResult::Queued) => {
+							trace!(target: "sync", "Block queued {}: {:?}", number, hash);
+							self.block_imported(&hash, number);
+							imported = imported + 1;
+						},
+						Ok(ImportResult::UnknownParent) => {
+							debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
+							self.restart(io, protocol);
+							return;
+						},
+						Ok(ImportResult::KnownBad) => {
+							debug!(target: "sync", "Bad block {}: {:?}", number, hash);
+							io.disable_peer(origin); //TODO: use persistent ID
+							self.restart(io, protocol);
+							return;
+						}
+						Err(e) => {
+							debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
+							self.restart(io, protocol);
+							return;
+						}
 					}
-					Err(e) => {
-						debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-						self.restart(io, protocol);
-						return;
-					}
+				},
+				(None, _) => {
+					debug!(target: "sync", "Header {} was not provided by {} ", block.hash, origin);
+					io.disable_peer(origin); //TODO: use persistent ID
+					return;
+				},
+				(_, None) => {
+					debug!(target: "sync", "Justification set for block {} was not provided by {} ", block.hash, origin);
+					io.disable_peer(origin); //TODO: use persistent ID
+					return;
 				}
 			}
 		}

@@ -17,6 +17,7 @@
 //! Polkadot blockchain trait
 
 use primitives::block::{self, Id as BlockId};
+use primitives;
 use error::Result;
 
 
@@ -26,6 +27,8 @@ pub trait Backend: Send + Sync {
 	fn header(&self, id: BlockId) -> Result<Option<block::Header>>;
 	/// Get block body. Returns `None` if block is not found.
 	fn body(&self, id: BlockId) -> Result<Option<block::Body>>;
+	/// Get block justification. Returns `None` if justification does not exist.
+	fn justification(&self, id: BlockId) -> Result<Option<primitives::bft::Justification>>;
 	/// Get blockchain info.
 	fn info(&self) -> Result<Info>;
 	/// Get block status.

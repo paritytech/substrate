@@ -53,6 +53,7 @@ use blockchain::Backend as BlockchainBackend;
 use backend::BlockImportOperation;
 use state_machine::backend::Backend as StateBackend;
 use state_machine::{Ext, OverlayedChanges};
+use runtime_support::Hashable;
 
 /// Polkadot Client
 #[derive(Debug)]
@@ -154,7 +155,7 @@ impl<B, E> Client<B, E> where
 			let (genesis_header, genesis_store) = build_genesis();
 			let mut op = backend.begin_operation(BlockId::Hash(block::HeaderHash::default()))?;
 			op.reset_storage(genesis_store.into_iter())?;
-			op.set_block_data(genesis_header, Some(vec![]), true)?;
+			op.set_block_data(genesis_header, Some(vec![]), None, true)?;
 			backend.commit_operation(op)?;
 		}
 		Ok(Client {
@@ -267,7 +268,7 @@ impl<B, E> Client<B, E> where
 		// TODO: import lock
 		// TODO: validate block
 		// TODO: import justification.
-		let (header, _) = header.into_inner();
+		let (header, justification) = header.into_inner();
 		match self.backend.blockchain().status(BlockId::Hash(header.parent_hash))? {
 			blockchain::BlockStatus::InChain => (),
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
@@ -285,7 +286,8 @@ impl<B, E> Client<B, E> where
 		)?;
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
-		transaction.set_block_data(header, body, is_new_best)?;
+		trace!("Imported {}, (#{}), best={}", block::HeaderHash::from(header.blake2_256()), header.number, is_new_best);
+		transaction.set_block_data(header, body, Some(justification.uncheck().into()), is_new_best)?;
 		transaction.set_storage(overlay.drain())?;
 		self.backend.commit_operation(transaction)?;
 		Ok(ImportResult::Queued)
@@ -339,6 +341,11 @@ impl<B, E> Client<B, E> where
 	/// Get block body by id.
 	pub fn body(&self, id: &BlockId) -> error::Result<Option<block::Body>> {
 		self.backend.blockchain().body(*id)
+	}
+
+	/// Get block justification set by id.
+	pub fn justification(&self, id: &BlockId) -> error::Result<Option<primitives::bft::Justification>> {
+		self.backend.blockchain().justification(*id)
 	}
 }
 

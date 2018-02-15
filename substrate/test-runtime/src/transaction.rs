@@ -54,3 +54,30 @@ impl Slicable for Transaction {
 }
 
 impl ::codec::NonTrivialSlicable for Transaction {}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use keyring::Keyring;
+
+	#[test]
+	fn test_tx_encoding() {
+		let tx = Transaction {
+			from: Keyring::Alice.to_raw_public(),
+			to: Keyring::Bob.to_raw_public(),
+			amount: 69,
+			nonce: 33,
+		};
+
+		assert_eq!(tx.encode(), vec![
+			// from
+			209, 114, 167, 76, 218, 76, 134, 89, 18, 195, 43, 160, 168, 10, 87, 174, 105, 171, 174, 65, 14, 92, 203, 89, 222, 232, 78, 47, 68, 50, 219, 79,
+			// to
+			215, 86, 142, 95, 10, 126, 218, 103, 168, 38, 145, 255, 55, 154, 196, 187, 164, 249, 201, 184, 89, 254, 119, 155, 93, 70, 54, 59, 97, 173, 45, 185,
+			// amount
+			69, 0, 0, 0, 0, 0, 0, 0,
+			// nonce
+			33, 0, 0, 0, 0, 0, 0, 0
+		]);
+	}
+}

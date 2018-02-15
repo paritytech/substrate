@@ -22,6 +22,7 @@ use state_machine;
 use error;
 use backend;
 use runtime_support::Hashable;
+use primitives;
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use blockchain::{self, BlockStatus};
 use state_machine::backend::Backend as StateBackend;
@@ -38,6 +39,7 @@ struct PendingBlock {
 #[derive(PartialEq, Eq, Clone)]
 struct Block {
 	header: block::Header,
+	justification: Option<primitives::bft::Justification>,
 	body: Option<block::Body>,
 }
 
@@ -90,12 +92,13 @@ impl Blockchain {
 		}
 	}
 
-	fn insert(&self, hash: HeaderHash, header: block::Header, body: Option<block::Body>, is_new_best: bool) {
+	fn insert(&self, hash: HeaderHash, header: block::Header, justification: Option<primitives::bft::Justification>, body: Option<block::Body>, is_new_best: bool) {
 		let number = header.number;
 		let mut storage = self.storage.write();
 		storage.blocks.insert(hash, Block {
 			header: header,
 			body: body,
+			justification: justification,
 		});
 		storage.hashes.insert(number, hash);
 		if is_new_best {
@@ -132,6 +135,10 @@ impl blockchain::Backend for Blockchain {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.body.clone())))
 	}
 
+	fn justification(&self, id: BlockId) -> error::Result<Option<primitives::bft::Justification>> {
+		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.justification.clone())))
+	}
+
 	fn info(&self) -> error::Result<blockchain::Info> {
 		let storage = self.storage.read();
 		Ok(blockchain::Info {
@@ -160,12 +167,13 @@ impl backend::BlockImportOperation for BlockImportOperation {
 		Ok(&self.pending_state)
 	}
 
-	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, is_new_best: bool) -> error::Result<()> {
+	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
 			block: Block {
 				header: header,
 				body: body,
+				justification: justification,
 			},
 			is_best: is_new_best,
 		});
@@ -197,39 +205,6 @@ impl Backend {
 			blockchain: Blockchain::new(),
 		}
 	}
-
-	/// Generate and import a sequence of blocks. A user supplied function is allowed to modify each block header. Useful for testing.
-	pub fn generate_blocks<F>(&self, count: usize, edit_header: F) where F: Fn(&mut block::Header) {
-		use backend::{Backend, BlockImportOperation};
-		let info = blockchain::Backend::info(&self.blockchain).expect("In-memory backend never fails");
-		let mut best_num = info.best_number;
-		let mut best_hash = info.best_hash;
-		let state_root = blockchain::Backend::header(&self.blockchain, BlockId::Hash(best_hash))
-			.expect("In-memory backend never fails")
-			.expect("Best header always exists in the blockchain")
-			.state_root;
-		for _ in 0 .. count {
-			best_num = best_num + 1;
-			let mut header = block::Header {
-				parent_hash: best_hash,
-				number: best_num,
-				state_root: state_root,
-				transaction_root: Default::default(),
-				digest: Default::default(),
-			};
-			edit_header(&mut header);
-
-			let mut tx = self.begin_operation(BlockId::Hash(best_hash)).expect("In-memory backend does not fail");
-			best_hash = header_hash(&header);
-			tx.set_block_data(header, Some(vec![]), true).expect("In-memory backend does not fail");
-			self.commit_operation(tx).expect("In-memory backend does not fail");
-		}
-	}
-
-	/// Generate and import a sequence of blocks. Useful for testing.
-	pub fn push_blocks(&self, count: usize) {
-		self.generate_blocks(count, |_| {})
-	}
 }
 
 impl backend::Backend for Backend {
@@ -253,7 +228,7 @@ impl backend::Backend for Backend {
 		if let Some(pending_block) = operation.pending_block {
 			let hash = header_hash(&pending_block.block.header);
 			self.states.write().insert(hash, operation.pending_state);
-			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.body, pending_block.is_best);
+			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.justification, pending_block.block.body, pending_block.is_best);
 		}
 		Ok(())
 	}
