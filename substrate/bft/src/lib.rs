@@ -40,7 +40,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use client::{BlockId, Client};
 use client::backend::Backend;
 use codec::Slicable;
-use ed25519::Signature;
+use ed25519::LocalizedSignature;
+use primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction};
 use primitives::block::{Block, Header, HeaderHash};
 use primitives::AuthorityId;
 use state_machine::CodeExecutor;
@@ -63,20 +64,23 @@ pub type LocalizedMessage = generic::LocalizedMessage<
 	Block,
 	HeaderHash,
 	AuthorityId,
-	Signature
+	LocalizedSignature
 >;
 
 /// Justification of some hash.
-pub type Justification = generic::Justification<HeaderHash, Signature>;
+pub type Justification = generic::Justification<HeaderHash, LocalizedSignature>;
 
 /// Justification of a prepare message.
-pub type PrepareJustification = generic::PrepareJustification<HeaderHash, Signature>;
+pub type PrepareJustification = generic::PrepareJustification<HeaderHash, LocalizedSignature>;
+
+/// Unchecked justification.
+pub type UncheckedJustification = generic::UncheckedJustification<HeaderHash, LocalizedSignature>;
 
 /// Result of a committed round of BFT
-pub type Committed = generic::Committed<Block, HeaderHash, Signature>;
+pub type Committed = generic::Committed<Block, HeaderHash, LocalizedSignature>;
 
 /// Communication between BFT participants.
-pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, Signature>;
+pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, LocalizedSignature>;
 
 /// Logic for a proposer.
 ///
@@ -131,7 +135,6 @@ impl<B, E> Authorities for Client<B, E>
 	}
 }
 
-
 /// Instance of BFT agreement.
 struct BftInstance<P> {
 	key: Arc<ed25519::Pair>,
@@ -145,7 +148,7 @@ struct BftInstance<P> {
 impl<P: Proposer> generic::Context for BftInstance<P> {
 	type AuthorityId = AuthorityId;
 	type Digest = HeaderHash;
-	type Signature = Signature;
+	type Signature = LocalizedSignature;
 	type Candidate = Block;
 	type RoundTimeout = Box<Future<Item=(),Error=Error> + Send>;
 	type CreateProposal = <P::CreateProposal as IntoFuture>::Future;
@@ -163,8 +166,6 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	}
 
 	fn sign_local(&self, message: Message) -> LocalizedMessage {
-		use primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction};
-
 		let action = match message.clone() {
 			::generic::Message::Propose(r, p) => PrimitiveAction::Propose(r as u32, p),
 			::generic::Message::Prepare(r, h) => PrimitiveAction::Prepare(r as u32, h),
@@ -178,7 +179,10 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 		};
 
 		let to_sign = Slicable::encode(&primitive);
-		let signature = self.key.sign(&to_sign);
+		let signature = LocalizedSignature {
+			signer: self.key.public(),
+			signature: self.key.sign(&to_sign),
+		};
 
 		LocalizedMessage {
 			message,
@@ -327,7 +331,7 @@ impl<P, E, I> BftService<P, E, I>
 		// TODO: check key is one of the authorities.
 		let authorities = self.client.authorities(&BlockId::Hash(hash))?;
 		let n = authorities.len();
-		let max_faulty = n.saturating_sub(1) / 3;
+		let max_faulty = max_faulty_of(n);
 
 		let bft_instance = BftInstance {
 			proposer,
@@ -370,6 +374,57 @@ impl<P, E, I> BftService<P, E, I>
 
 		Ok(())
 	}
+}
+
+/// Given a total number of authorities, yield the maximum faulty that would be allowed.
+/// This will always be under 1/3.
+pub fn max_faulty_of(n: usize) -> usize {
+	n.saturating_sub(1) / 3
+}
+
+fn check_justification_signed_message(authorities: &[AuthorityId], message: &[u8], just: UncheckedJustification)
+	-> Result<Justification, UncheckedJustification>
+{
+	just.check(authorities.len() - max_faulty_of(authorities.len()), |_, _, sig| {
+		let auth_id = sig.signer.0;
+		if !authorities.contains(&auth_id) { return None }
+
+		if ed25519::verify_strong(&sig.signature, message, &sig.signer) {
+			Some(sig.signer.0)
+		} else {
+			None
+		}
+	})
+}
+
+/// Check a full justification for a header hash.
+/// Provide all valid authorities.
+///
+/// On failure, returns the justification back.
+pub fn check_justification(authorities: &[AuthorityId], parent: HeaderHash, just: UncheckedJustification)
+	-> Result<Justification, UncheckedJustification>
+{
+	let message = Slicable::encode(&PrimitiveMessage {
+		parent,
+		action: PrimitiveAction::Commit(just.round_number as u32, just.digest),
+	});
+
+	check_justification_signed_message(authorities, &message[..], just)
+}
+
+/// Check a prepare justification for a header hash.
+/// Provide all valid authorities.
+///
+/// On failure, returns the justification back.
+pub fn check_prepare_justification(authorities: &[AuthorityId], parent: HeaderHash, just: UncheckedJustification)
+	-> Result<PrepareJustification, UncheckedJustification>
+{
+	let message = Slicable::encode(&PrimitiveMessage {
+		parent,
+		action: PrimitiveAction::Prepare(just.round_number as u32, just.digest),
+	});
+
+	check_justification_signed_message(authorities, &message[..], just)
 }
 
 #[cfg(test)]
@@ -469,5 +524,15 @@ mod tests {
 		assert!(service.live_agreements.lock().contains_key(&second_hash));
 
 		core.turn(Some(::std::time::Duration::from_millis(100)));
+	}
+
+	#[test]
+	fn max_faulty() {
+		assert_eq!(max_faulty_of(3), 0);
+		assert_eq!(max_faulty_of(4), 1);
+		assert_eq!(max_faulty_of(100), 33);
+		assert_eq!(max_faulty_of(0), 0);
+		assert_eq!(max_faulty_of(11), 3);
+		assert_eq!(max_faulty_of(99), 32);
 	}
 }

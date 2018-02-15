@@ -24,8 +24,17 @@ extern crate untrusted;
 use ring::{rand, signature};
 use primitives::hash::H512;
 
-/// Alias to 520-bit hash when used in the context of a signature on the relay chain.
+/// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = H512;
+
+/// A localized signature also contains sender information.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct LocalizedSignature {
+	/// The signer of the signature.
+	pub signer: Public,
+	/// The signature itself.
+	pub signature: Signature,
+}
 
 /// Verify a message without type checking the parameters' types for the right size.
 pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {
@@ -40,7 +49,7 @@ pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {
 }
 
 /// A public key.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
@@ -149,6 +158,12 @@ impl Verifiable for Signature {
 	/// Verify something that acts like a signature.
 	fn verify(&self, message: &[u8], pubkey: &Public) -> bool {
 		verify_strong(&self, message, pubkey)
+	}
+}
+
+impl Verifiable for LocalizedSignature {
+	fn verify(&self, message: &[u8], pubkey: &Public) -> bool {
+		pubkey == &self.signer && self.signature.verify(message, pubkey)
 	}
 }
 
