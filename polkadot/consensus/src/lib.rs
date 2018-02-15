@@ -89,12 +89,12 @@ pub trait Network {
 	/// routing statements to peers, and driving completion of any `StatementProducers`.
 	type TableRouter: TableRouter;
 
-	/// Instantiate a table router.
-	fn table_router(&self, groups: HashMap<ParaId, GroupInfo>, table: Arc<SharedTable>) -> Self::TableRouter;
+	/// Instantiate a table router using the given shared table.
+	fn table_router(&self, table: Arc<SharedTable>) -> Self::TableRouter;
 }
 
 /// Information about a specific group.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GroupInfo {
 	/// Authorities meant to check validity of candidates.
 	pub validity_guarantors: HashSet<AuthorityId>,
@@ -259,8 +259,7 @@ impl<D, E, Err> Future for StatementProducer<D, E>
 		if let Some(ref mut fetch_block_data) = self.fetch_block_data {
 			match fetch_block_data.poll()? {
 				Async::Ready(_block_data) => {
-					// TODO: validate block data here.
-					unimplemented!();
+					// TODO [PoC-2] : validate block data here and make statement.
 				},
 				Async::NotReady => {
 					done = false;
@@ -271,8 +270,7 @@ impl<D, E, Err> Future for StatementProducer<D, E>
 		if let Some(ref mut fetch_extrinsic) = self.fetch_extrinsic {
 			match fetch_extrinsic.poll()? {
 				Async::Ready(_extrinsic) => {
-					// TODO: guarantee availability of data.
-					unimplemented!();
+					// TODO [PoC-2]: guarantee availability of data and make statment.
 				}
 				Async::NotReady => {
 					done = false;
@@ -318,6 +316,11 @@ impl SharedTable {
 				checked_availability: HashSet::new(),
 			}))
 		}
+	}
+
+	/// Get group info.
+	pub fn group_info(&self) -> &HashMap<ParaId, GroupInfo> {
+		&self.context.groups
 	}
 
 	/// Import a single statement. Provide a handle to a table router
@@ -402,26 +405,57 @@ impl SharedTable {
 	}
 }
 
+fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<HashMap<ParaId, GroupInfo>, Error> {
+	if roster.validator_duty.len() != authorities.len() {
+		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), roster.validator_duty.len()))
+	}
+
+	if roster.guarantor_duty.len() != authorities.len() {
+		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), roster.guarantor_duty.len()))
+	}
+
+	let mut map = HashMap::new();
+
+	let duty_iter = authorities.iter().zip(&roster.validator_duty).zip(&roster.guarantor_duty);
+	for ((authority, v_duty), a_duty) in duty_iter {
+		use polkadot_primitives::parachain::Chain;
+
+		match *v_duty {
+			Chain::Relay => {}, // does nothing for now.
+			Chain::Parachain(ref id) => {
+				map.entry(id.clone()).or_insert_with(GroupInfo::default)
+					.validity_guarantors
+					.insert(authority.clone());
+			}
+		}
+
+		match *a_duty {
+			Chain::Relay => {}, // does nothing for now.
+			Chain::Parachain(ref id) => {
+				map.entry(id.clone()).or_insert_with(GroupInfo::default)
+					.availability_guarantors
+					.insert(authority.clone());
+			}
+		}
+	}
+
+	for live_group in map.values_mut() {
+		let validity_len = live_group.validity_guarantors.len();
+		let availability_len = live_group.availability_guarantors.len();
+
+		live_group.needed_validity = validity_len / 2 + validity_len % 2;
+		live_group.needed_availability = availability_len / 2 + availability_len % 2;
+	}
+
+	Ok(map)
+}
+
 /// Polkadot proposer factory.
 pub struct ProposerFactory<C, N> {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The backing network handle.
 	pub network: N,
-}
-
-fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<HashMap<ParaId, GroupInfo>, Error> {
-	if duty_roster.validator_duty.len() != authorities.len() {
-		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), duty_roster.validator_duty.len()))
-	}
-
-	if duty_roster.guarantor_duty.len() != authorities.len() {
-		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), duty_roster.guarantor_duty.len()))
-	}
-
-	let mut map = HashMap::new();
-
-	unimpleented!()
 }
 
 impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> {
@@ -432,9 +466,17 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 		let parent_hash = parent_header.hash();
 		let duty_roster = self.client.duty_roster(&BlockId::Hash(parent_hash))?;
 
-		make_group_info(duty_roster, authorities);
+		let group_info = make_group_info(duty_roster, authorities)?;
+		let table = Arc::new(SharedTable::new(group_info, sign_with, parent_hash));
+		let router = self.network.table_router(table.clone());
 
-		unimplemented!()
+		// TODO [PoC-2]: kick off collation process.
+		Ok(Proposer {
+			parent_hash,
+			table,
+			router,
+			client: self.client.clone(),
+		})
 	}
 }
 
@@ -442,6 +484,7 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 pub struct Proposer<C, R> {
 	parent_hash: HeaderHash,
 	client: Arc<C>,
+	table: Arc<SharedTable>,
 	router: R,
 }
 
