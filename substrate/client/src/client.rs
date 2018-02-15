@@ -18,6 +18,7 @@
 
 use primitives::{block, AuthorityId};
 use primitives::storage::{StorageKey, StorageData};
+use runtime_support::Hashable;
 use codec::{KeyedVec, Slicable};
 use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
 
