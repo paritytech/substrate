@@ -13,8 +13,10 @@ ed25519 = { path = "../ed25519" }
 substrate-codec = { path = "../codec" }
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
+substrate-runtime-io = { path = "../runtime-io" }
 substrate-runtime-support = { path = "../runtime-support" }
-substrate-serializer = { path = "../serializer" }
 substrate-state-machine = { path = "../state-machine" }
-substrate-test-runtime = { path = "../test-runtime" }
 substrate-keyring = { path = "../../substrate/keyring" }
+
+[dev-dependencies]
+substrate-test-runtime = { path = "../test-runtime" }

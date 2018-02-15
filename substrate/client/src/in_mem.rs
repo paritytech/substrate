@@ -21,13 +21,13 @@ use parking_lot::RwLock;
 use state_machine;
 use error;
 use backend;
-use primitives;
-use ser;
+use runtime_support::Hashable;
 use primitives::block::{self, HeaderHash};
 use blockchain::{self, BlockId, BlockStatus};
+use state_machine::backend::Backend as StateBackend;
 
 fn header_hash(header: &block::Header) -> block::HeaderHash {
-	primitives::hashing::blake2_256(&ser::encode(header)).into()
+	header.blake2_256().into()
 }
 
 struct PendingBlock {
@@ -41,7 +41,7 @@ struct Block {
 	body: Option<block::Body>,
 }
 
-/// In-memory transaction.
+/// In-memory operation.
 pub struct BlockImportOperation {
 	pending_block: Option<PendingBlock>,
 	pending_state: state_machine::backend::InMemory,
@@ -156,12 +156,12 @@ impl blockchain::Backend for Blockchain {
 impl backend::BlockImportOperation for BlockImportOperation {
 	type State = state_machine::backend::InMemory;
 
-	fn state(&self) -> error::Result<Self::State> {
-		Ok(self.pending_state.clone())
+	fn state(&self) -> error::Result<&Self::State> {
+		Ok(&self.pending_state)
 	}
 
-	fn import_block(&mut self, header: block::Header, body: Option<block::Body>, is_new_best: bool) -> error::Result<()> {
-		assert!(self.pending_block.is_none(), "Only one block per transaction is allowed");
+	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, is_new_best: bool) -> error::Result<()> {
+		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
 			block: Block {
 				header: header,
@@ -169,6 +169,11 @@ impl backend::BlockImportOperation for BlockImportOperation {
 			},
 			is_best: is_new_best,
 		});
+		Ok(())
+	}
+
+	fn set_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, changes: I) -> error::Result<()> {
+		self.pending_state.commit(changes);
 		Ok(())
 	}
 
@@ -192,39 +197,6 @@ impl Backend {
 			blockchain: Blockchain::new(),
 		}
 	}
-
-	/// Generate and import a sequence of blocks. A user supplied function is allowed to modify each block header. Useful for testing.
-	pub fn generate_blocks<F>(&self, count: usize, edit_header: F) where F: Fn(&mut block::Header) {
-		use backend::{Backend, BlockImportOperation};
-		let info = blockchain::Backend::info(&self.blockchain).expect("In-memory backend never fails");
-		let mut best_num = info.best_number;
-		let mut best_hash = info.best_hash;
-		let state_root = blockchain::Backend::header(&self.blockchain, BlockId::Hash(best_hash))
-			.expect("In-memory backend never fails")
-			.expect("Best header always exists in the blockchain")
-			.state_root;
-		for _ in 0 .. count {
-			best_num = best_num + 1;
-			let mut header = block::Header {
-				parent_hash: best_hash,
-				number: best_num,
-				state_root: state_root,
-				transaction_root: Default::default(),
-				digest: Default::default(),
-			};
-			edit_header(&mut header);
-
-			let mut tx = self.begin_transaction(BlockId::Hash(best_hash)).expect("In-memory backend does not fail");
-			best_hash = header_hash(&header);
-			tx.import_block(header, None, true).expect("In-memory backend does not fail");
-			self.commit_transaction(tx).expect("In-memory backend does not fail");
-		}
-	}
-
-	/// Generate and import a sequence of blocks. Useful for testing.
-	pub fn push_blocks(&self, count: usize) {
-		self.generate_blocks(count, |_| {})
-	}
 }
 
 impl backend::Backend for Backend {
@@ -232,7 +204,7 @@ impl backend::Backend for Backend {
 	type Blockchain = Blockchain;
 	type State = state_machine::backend::InMemory;
 
-	fn begin_transaction(&self, block: BlockId) -> error::Result<Self::BlockImportOperation> {
+	fn begin_operation(&self, block: BlockId) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
 			BlockId::Hash(h) if h.is_zero() => Self::State::default(),
 			_ => self.state_at(block)?,
@@ -244,10 +216,10 @@ impl backend::Backend for Backend {
 		})
 	}
 
-	fn commit_transaction(&self, transaction: Self::BlockImportOperation) -> error::Result<()> {
-		if let Some(pending_block) = transaction.pending_block {
+	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
+		if let Some(pending_block) = operation.pending_block {
 			let hash = header_hash(&pending_block.block.header);
-			self.states.write().insert(hash, transaction.pending_state);
+			self.states.write().insert(hash, operation.pending_state);
 			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.body, pending_block.is_best);
 		}
 		Ok(())

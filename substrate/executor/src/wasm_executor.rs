@@ -276,7 +276,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 /// Wasm rust executor for contracts.
 ///
 /// Executes the provided code in a sandboxed wasm runtime.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct WasmExecutor;
 
 impl CodeExecutor for WasmExecutor {
