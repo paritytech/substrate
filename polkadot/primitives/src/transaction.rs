@@ -152,7 +152,6 @@ impl Slicable for Proposal {
 	}
 }
 
-
 /// Public functions that can be dispatched to.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -314,7 +313,7 @@ pub struct UncheckedTransaction {
 
 impl Slicable for UncheckedTransaction {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		// This is a little more complicated than usua since the binary format must be compatible
+		// This is a little more complicated than usual since the binary format must be compatible
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
 		// will be a prefix of u32, which has the total number of bytes following (we don't need
 		// to use this).
