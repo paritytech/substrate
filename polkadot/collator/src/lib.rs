@@ -131,7 +131,7 @@ pub fn collate<'a, R, P>(local_id: ParaId, relay_context: R, para_context: P)
 		P: ParachainContext + 'a,
 {
 	Box::new(collate_ingress(relay_context).map(move |ingress| {
-		let (block_data, signature) = para_context.produce_candidate(
+		let (block_data, _, signature) = para_context.produce_candidate(
 			ingress.0.iter().flat_map(|&(id, ref msgs)| msgs.iter().cloned().map(move |msg| (id, msg)))
 		);
 

@@ -33,7 +33,7 @@ extern crate futures;
 extern crate ed25519;
 extern crate parking_lot;
 extern crate tokio_timer;
-extern crate polkadot_client_api as polkadot_api;
+extern crate polkadot_api;
 extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_primitives;
@@ -45,7 +45,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use codec::Slicable;
-use table::Table;
+use table::{Table, Context as TableContextTrait};
 use table::generic::Statement as GenericStatement;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::Hash;
@@ -122,6 +122,10 @@ impl table::Context for TableContext {
 }
 
 impl TableContext {
+	fn local_id(&self) -> AuthorityId {
+		self.key.public().0
+	}
+
 	fn sign_statement(&self, statement: table::Statement) -> table::SignedStatement {
 		let signature = sign_table_statement(&statement, &self.key, &self.parent_hash);
 		let local_id = self.key.public().0;
@@ -157,21 +161,68 @@ pub fn sign_table_statement(statement: &table::Statement, key: &ed25519::Pair, p
 struct SharedTableInner {
 	table: Table<TableContext>,
 	proposed_digest: Option<Hash>,
+	checked_validity: HashSet<Hash>,
+	checked_availability: HashSet<Hash>,
 }
 
 impl SharedTableInner {
-	fn import_statement(
+	// Import a single statement. Provide a handle to a table router
+	fn import_statement<R: TableRouter>(
 		&mut self,
 		context: &TableContext,
-		statement: ::table::SignedStatement,
+		router: &R,
+		statement: table::SignedStatement,
 		received_from: Option<AuthorityId>,
-	) -> Option<table::Summary> {
-		self.table.import_statement(context, statement, received_from)
+	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future> {
+		let mut producer = StatementProducer {
+			fetch_block_data: None,
+			fetch_extrinsic: None,
+			produced_statements: Default::default(),
+			_key: context.key.clone(),
+		};
+
+		let summary = match self.table.import_statement(context, statement, received_from) {
+			Some(summary) => summary,
+			None => return producer,
+		};
+
+		let local_id = context.local_id();
+		let is_validity_member = context.is_member_of(&local_id, &summary.group_id);
+		let is_availability_member =
+			context.is_availability_guarantor_of(&local_id, &summary.group_id);
+
+		let digest = &summary.candidate;
+
+		// TODO: consider a strategy based on the number of candidate votes as well.
+		// only check validity if this wasn't locally proposed.
+		let checking_validity = is_validity_member
+			&& self.proposed_digest.as_ref().map_or(true, |d| d != digest)
+			&& self.checked_validity.insert(digest.clone());
+
+		let checking_availability = is_availability_member && self.checked_availability.insert(digest.clone());
+
+		if checking_validity || checking_availability {
+			match self.table.get_candidate(&digest) {
+				None => {} // TODO: handle table inconsistency somehow?
+				Some(candidate) => {
+					if checking_validity {
+						producer.fetch_block_data = Some(router.fetch_block_data(candidate).into_future().fuse());
+					}
+
+					if checking_availability {
+						producer.fetch_extrinsic = Some(router.fetch_extrinsic_data(candidate).into_future().fuse());
+					}
+				}
+			}
+		}
+
+		producer
 	}
 }
 
 /// Produced statements about a specific candidate.
 /// Both may be `None`.
+#[derive(Default)]
 pub struct ProducedStatements {
 	/// A statement about the validity of the candidate.
 	pub validity: Option<table::Statement>,
@@ -195,7 +246,7 @@ impl<D, E, Err> Future for StatementProducer<D, E>
 	type Item = ProducedStatements;
 	type Error = Err;
 
-	fn poll(&mut self) -> Poll {
+	fn poll(&mut self) -> Poll<ProducedStatements, Err> {
 		let mut done = true;
 		if let Some(ref mut fetch_block_data) = self.fetch_block_data {
 			match fetch_block_data.poll()? {
@@ -222,10 +273,7 @@ impl<D, E, Err> Future for StatementProducer<D, E>
 		}
 
 		if done {
-			Ok(Async::Ready(::std::mem::replace(self.produced_statements, ProducedStatements {
-				validity: None,
-				availability: None,
-			})))
+			Ok(Async::Ready(::std::mem::replace(&mut self.produced_statements, Default::default())))
 		} else {
 			Ok(Async::NotReady)
 		}
@@ -242,7 +290,7 @@ impl Clone for SharedTable {
 	fn clone(&self) -> Self {
 		SharedTable {
 			context: self.context.clone(),
-			inner: self.inner.clone()
+			inner: self.inner.clone(),
 		}
 	}
 }
@@ -258,24 +306,29 @@ impl SharedTable {
 			inner: Arc::new(Mutex::new(SharedTableInner {
 				table: Table::default(),
 				proposed_digest: None,
+				checked_validity: HashSet::new(),
+				checked_availability: HashSet::new(),
 			}))
 		}
 	}
 
-	/// Import a single statement.
-	pub fn import_statement(
+	/// Import a single statement. Provide a handle to a table router
+	/// for dispatching any other requests which come up.
+	pub fn import_statement<R: TableRouter>(
 		&self,
+		router: &R,
 		statement: table::SignedStatement,
 		received_from: Option<AuthorityId>,
-	) -> Option<table::Summary> {
-		self.inner.lock().import_statement(&*self.context, statement, received_from)
+	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future> {
+		self.inner.lock().import_statement(&*self.context, router, statement, received_from)
 	}
 
 	/// Sign and import a local statement.
-	pub fn sign_and_import(
+	pub fn sign_and_import<R: TableRouter>(
 		&self,
+		router: &R,
 		statement: table::Statement,
-	) -> Option<table::Summary> {
+	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future> {
 		let proposed_digest = match statement {
 			GenericStatement::Candidate(ref c) => Some(c.hash()),
 			_ => None,
@@ -288,21 +341,25 @@ impl SharedTable {
 			inner.proposed_digest = proposed_digest;
 		}
 
-		inner.import_statement(&*self.context, signed_statement, None)
+		inner.import_statement(&*self.context, router, signed_statement, None)
 	}
 
 	/// Import many statements at once.
 	///
 	/// Provide an iterator yielding pairs of (statement, received_from).
-	pub fn import_statements<I, U>(&self, iterable: I) -> U
+	pub fn import_statements<R, I, U>(&self, router: &R, iterable: I) -> U
 		where
+			R: TableRouter,
 			I: IntoIterator<Item=(table::SignedStatement, Option<AuthorityId>)>,
-			U: ::std::iter::FromIterator<table::Summary>,
+			U: ::std::iter::FromIterator<StatementProducer<
+				<R::FetchCandidate as IntoFuture>::Future,
+				<R::FetchExtrinsic as IntoFuture>::Future>
+			>,
 	{
 		let mut inner = self.inner.lock();
 
-		iterable.into_iter().filter_map(move |(statement, received_from)| {
-			inner.import_statement(&*self.context, statement, received_from)
+		iterable.into_iter().map(move |(statement, received_from)| {
+			inner.import_statement(&*self.context, router, statement, received_from)
 		}).collect()
 	}
 
