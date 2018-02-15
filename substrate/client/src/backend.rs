@@ -18,8 +18,7 @@
 
 use state_machine;
 use error;
-use primitives::block;
-use blockchain::{self, BlockId};
+use primitives::block::{self, Id as BlockId};
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation {
@@ -41,7 +40,7 @@ pub trait Backend {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation;
 	/// Associated blockchain backend type.
-	type Blockchain: blockchain::Backend;
+	type Blockchain: ::blockchain::Backend;
 	/// Associated state backend type.
 	type State: state_machine::backend::Backend;
 

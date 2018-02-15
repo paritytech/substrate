@@ -17,10 +17,10 @@
 use std::collections::{HashMap, HashSet, BTreeMap};
 use std::{mem, cmp};
 use std::sync::Arc;
+use std::time;
 use parking_lot::RwLock;
 use serde_json;
-use std::time;
-use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber, Header};
+use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber, Header, Id as BlockId};
 use network::{PeerId, NodeId};
 
 use message::{self, Message};
@@ -30,7 +30,6 @@ use config::ProtocolConfig;
 use chain::Client;
 use io::SyncIo;
 use error;
-use client::BlockId;
 use super::header_hash;
 
 const REQUEST_TIMEOUT_SEC: u64 = 15;
@@ -230,6 +229,7 @@ impl Protocol {
 				message::BlockAttribute::Body => get_body = true,
 				message::BlockAttribute::Receipt => unimplemented!(),
 				message::BlockAttribute::MessageQueue => unimplemented!(),
+				message::BlockAttribute::Justification => unimplemented!(),
 			}
 		}
 		while let Some(header) = self.chain.header(&id).unwrap_or(None) {
@@ -244,6 +244,7 @@ impl Protocol {
 				body: if get_body { self.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
 				receipt: None,
 				message_queue: None,
+				justification: None,
 			};
 			blocks.push(block_data);
 			match request.direction {

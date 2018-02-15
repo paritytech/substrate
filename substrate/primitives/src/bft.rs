@@ -120,3 +120,35 @@ impl Slicable for Message {
 		})
 	}
 }
+
+/// Justification of a block.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct Justification {
+	/// The round consensus was reached in.
+	pub round_number: u32,
+	/// The hash of the header justified.
+	pub hash: HeaderHash,
+	/// The signatures and signers of the hash.
+	pub signatures: Vec<(::AuthorityId, ::Signature)>
+}
+
+impl Slicable for Justification {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		self.round_number.using_encoded(|s| v.extend(s));
+		self.hash.using_encoded(|s| v.extend(s));
+		self.signatures.using_encoded(|s| v.extend(s));
+
+		v
+	}
+
+	fn decode<I: Input>(value: &mut I) -> Option<Self> {
+		Some(Justification {
+			round_number: try_opt!(Slicable::decode(value)),
+			hash: try_opt!(Slicable::decode(value)),
+			signatures: try_opt!(Slicable::decode(value)),
+		})
+	}
+}

@@ -16,27 +16,9 @@
 
 //! Polkadot blockchain trait
 
-use std::fmt::{Display, Formatter, Error as FmtError};
-use primitives::block;
+use primitives::block::{self, Id as BlockId};
 use error::Result;
 
-/// Block indentification.
-#[derive(Debug, Clone, Copy)]
-pub enum BlockId {
-	/// Identify by block header hash.
-	Hash(block::HeaderHash),
-	/// Identify by block number.
-	Number(block::Number),
-}
-
-impl Display for BlockId {
-	fn fmt(&self, f: &mut Formatter) -> ::std::result::Result<(), FmtError> {
-		match *self {
-			BlockId::Hash(h) => h.fmt(f),
-			BlockId::Number(n) => n.fmt(f),
-		}
-	}
-}
 
 /// Blockchain database backend. Does not perform any validation.
 pub trait Backend: Send + Sync {

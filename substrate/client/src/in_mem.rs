@@ -22,8 +22,8 @@ use state_machine;
 use error;
 use backend;
 use runtime_support::Hashable;
-use primitives::block::{self, HeaderHash};
-use blockchain::{self, BlockId, BlockStatus};
+use primitives::block::{self, Id as BlockId, HeaderHash};
+use blockchain::{self, BlockStatus};
 use state_machine::backend::Backend as StateBackend;
 
 fn header_hash(header: &block::Header) -> block::HeaderHash {

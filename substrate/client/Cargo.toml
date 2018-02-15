@@ -10,6 +10,7 @@ parking_lot = "0.4"
 triehash = "0.1"
 hex-literal = "0.1"
 ed25519 = { path = "../ed25519" }
+substrate-bft = { path = "../bft" }
 substrate-codec = { path = "../codec" }
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }

@@ -98,3 +98,6 @@ pub type Hash = H256;
 
 /// An identifier for an authority in the consensus algorithm. The same as ed25519::Public.
 pub type AuthorityId = [u8; 32];
+
+/// A 512-bit value interpreted as a signature.
+pub type Signature = hash::H512;

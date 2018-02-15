@@ -18,8 +18,8 @@ use std::collections::HashMap;
 use io::SyncIo;
 use protocol::Protocol;
 use network::PeerId;
-use client::{ImportResult, BlockStatus, ClientInfo, BlockId};
-use primitives::block::{HeaderHash, Number as BlockNumber, Header};
+use client::{ImportResult, BlockStatus, ClientInfo};
+use primitives::block::{HeaderHash, Number as BlockNumber, Header, Id as BlockId};
 use blocks::{self, BlockCollection};
 use message::{self, Message};
 use super::header_hash;
@@ -80,7 +80,7 @@ impl ChainSync {
 			blocks: BlockCollection::new(),
 			best_queued_hash: info.best_queued_hash.unwrap_or(info.chain.best_hash),
 			best_queued_number: info.best_queued_number.unwrap_or(info.chain.best_number),
-			required_block_attributes: vec![message::BlockAttribute::Header, message::BlockAttribute::Body],
+			required_block_attributes: vec![message::BlockAttribute::Header, message::BlockAttribute::Body, message::BlockAttribute::Justification],
 		}
 	}
 
@@ -219,7 +219,11 @@ impl ChainSync {
 				let number = header.number;
 				let hash = header_hash(&header);
 				let parent = header.parent_hash;
-				let result = protocol.chain().import(header, block.body);
+				let result = protocol.chain().import(
+					header,
+					block.justification.expect("always fetches justification while syncing; qed"),
+					block.body
+				);
 				match result {
 					Ok(ImportResult::AlreadyInChain) => {
 						trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
@@ -398,7 +402,7 @@ impl ChainSync {
 	fn request_ancestry(io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, block: BlockNumber) {
 		let request = message::BlockRequest {
 			id: 0,
-			fields: vec![message::BlockAttribute::Header],
+			fields: vec![message::BlockAttribute::Header, message::BlockAttribute::Justification],
 			from: message::FromBlock::Number(block),
 			to: None,
 			direction: message::Direction::Ascending,

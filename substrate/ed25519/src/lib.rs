@@ -171,6 +171,11 @@ impl Verifiable for LocalizedSignature {
 mod test {
 	use super::*;
 
+	fn _test_primitives_signature_and_local_the_same() {
+		fn takes_two<T>(_: T, _: T) { }
+		takes_two(Signature::default(), primitives::Signature::default())
+	}
+
 	#[test]
 	fn test_vector_should_work() {
 		let pair: Pair = Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"));
