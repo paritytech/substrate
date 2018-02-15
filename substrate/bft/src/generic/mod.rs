@@ -74,6 +74,8 @@ pub struct LocalizedMessage<C, D, V, S> {
 /// Provides necessary types for protocol messages, and functions necessary for a
 /// participant to evaluate and create those messages.
 pub trait Context {
+	/// Errors which can occur from the futures in this context.
+	type Error: From<InputStreamConcluded>;
 	/// Candidate proposed.
 	type Candidate: Debug + Eq + Clone;
 	/// Candidate digest.
@@ -83,9 +85,11 @@ pub trait Context {
 	/// Signature.
 	type Signature: Debug + Eq + Clone;
 	/// A future that resolves when a round timeout is concluded.
-	type RoundTimeout: Future<Item=()>;
+	type RoundTimeout: Future<Item=(), Error=Self::Error>;
 	/// A future that resolves when a proposal is ready.
-	type CreateProposal: Future<Item=Self::Candidate>;
+	type CreateProposal: Future<Item=Self::Candidate, Error=Self::Error>;
+	/// A future that resolves when a proposal has been evaluated.
+	type EvaluateProposal: Future<Item=bool, Error=Self::Error>;
 
 	/// Get the local authority ID.
 	fn local_id(&self) -> Self::AuthorityId;
@@ -103,8 +107,8 @@ pub trait Context {
 	/// Get the proposer for a given round of consensus.
 	fn round_proposer(&self, round: usize) -> Self::AuthorityId;
 
-	/// Whether the candidate is valid.
-	fn candidate_valid(&self, candidate: &Self::Candidate) -> bool;
+	/// Whether the proposal is valid.
+	fn proposal_valid(&self, proposal: &Self::Candidate) -> Self::EvaluateProposal;
 
 	/// Create a round timeout. The context will determine the correct timeout
 	/// length, and create a future that will resolve when the timeout is
@@ -246,6 +250,7 @@ struct Strategy<C: Context> {
 	nodes: usize,
 	max_faulty: usize,
 	fetching_proposal: Option<C::CreateProposal>,
+	evaluating_proposal: Option<C::EvaluateProposal>,
 	round_timeout: future::Fuse<C::RoundTimeout>,
 	local_state: LocalState,
 	locked: Option<Locked<C::Digest, C::Signature>>,
@@ -278,6 +283,7 @@ impl<C: Context> Strategy<C> {
 			current_accumulator,
 			future_accumulator,
 			fetching_proposal: None,
+			evaluating_proposal: None,
 			local_state: LocalState::Start,
 			locked: None,
 			notable_candidates: HashMap::new(),
@@ -324,15 +330,12 @@ impl<C: Context> Strategy<C> {
 	// rounds if necessary.
 	//
 	// only call within the context of a `Task`.
-	fn poll<E>(
+	fn poll(
 		&mut self,
 		context: &C,
 		sending: &mut Sending<<C as TypeResolve>::Communication>
 	)
-		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, E>
-		where
-			C::RoundTimeout: Future<Error=E>,
-			C::CreateProposal: Future<Error=E>,
+		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, C::Error>
 	{
 		let mut last_watermark = (
 			self.current_accumulator.round_number(),
@@ -361,18 +364,15 @@ impl<C: Context> Strategy<C> {
 
 	// perform one round of polling: attempt to broadcast messages and change the state.
 	// if the round or internal round-state changes, this should be called again.
-	fn poll_once<E>(
+	fn poll_once(
 		&mut self,
 		context: &C,
 		sending: &mut Sending<<C as TypeResolve>::Communication>
 	)
-		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, E>
-		where
-			C::RoundTimeout: Future<Error=E>,
-			C::CreateProposal: Future<Error=E>,
+		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, C::Error>
 	{
 		self.propose(context, sending)?;
-		self.prepare(context, sending);
+		self.prepare(context, sending)?;
 		self.commit(context, sending);
 		self.vote_advance(context, sending)?;
 
@@ -423,7 +423,7 @@ impl<C: Context> Strategy<C> {
 		context: &C,
 		sending: &mut Sending<<C as TypeResolve>::Communication>
 	)
-		-> Result<(), <C::CreateProposal as Future>::Error>
+		-> Result<(), C::Error>
 	{
 		if let LocalState::Start = self.local_state {
 			let mut propose = false;
@@ -486,11 +486,13 @@ impl<C: Context> Strategy<C> {
 		&mut self,
 		context: &C,
 		sending: &mut Sending<<C as TypeResolve>::Communication>
-	) {
+	)
+		-> Result<(), C::Error>
+	{
 		// prepare only upon start or having proposed.
 		match self.local_state {
 			LocalState::Start | LocalState::Proposed => {},
-			_ => return
+			_ => return Ok(())
 		};
 
 		let mut prepare_for = None;
@@ -508,8 +510,17 @@ impl<C: Context> Strategy<C> {
 					// this is necessary to preserve the liveness property.
 					prepare_for = Some(digest);
 				}
-				None => if context.candidate_valid(candidate) {
-					prepare_for = Some(digest);
+				None => {
+					let res = self.evaluating_proposal
+						.get_or_insert_with(|| context.proposal_valid(candidate))
+						.poll()?;
+
+					if let Async::Ready(valid) = res {
+						self.evaluating_proposal = None;
+						if valid {
+							prepare_for = Some(digest);
+						}
+					}
 				}
 			}
 		}
@@ -523,6 +534,8 @@ impl<C: Context> Strategy<C> {
 			self.import_and_send_message(message, context, sending);
 			self.local_state = LocalState::Prepared;
 		}
+
+		Ok(())
 	}
 
 	fn commit(
@@ -561,7 +574,7 @@ impl<C: Context> Strategy<C> {
 		context: &C,
 		sending: &mut Sending<<C as TypeResolve>::Communication>
 	)
-		-> Result<(), <C::RoundTimeout as Future>::Error>
+		-> Result<(), C::Error>
 	{
 		// we can vote for advancement under all circumstances unless we have already.
 		if let LocalState::VoteAdvance = self.local_state { return Ok(()) }
@@ -592,6 +605,7 @@ impl<C: Context> Strategy<C> {
 		let threshold = self.nodes - self.max_faulty;
 
 		self.fetching_proposal = None;
+		self.evaluating_proposal = None;
 		self.round_timeout = context.begin_round_timeout(round).fuse();
 		self.local_state = LocalState::Start;
 
@@ -647,17 +661,14 @@ pub struct Agreement<C: Context, I, O> {
 	strategy: Strategy<C>,
 }
 
-impl<C, I, O, E> Future for Agreement<C, I, O>
+impl<C, I, O> Future for Agreement<C, I, O>
 	where
 		C: Context,
-		C::RoundTimeout: Future<Error=E>,
-		C::CreateProposal: Future<Error=E>,
-		I: Stream<Item=<C as TypeResolve>::Communication,Error=E>,
-		O: Sink<SinkItem=<C as TypeResolve>::Communication,SinkError=E>,
-		E: From<InputStreamConcluded>,
+		I: Stream<Item=<C as TypeResolve>::Communication,Error=C::Error>,
+		O: Sink<SinkItem=<C as TypeResolve>::Communication,SinkError=C::Error>,
 {
 	type Item = Committed<C::Candidate, C::Digest, C::Signature>;
-	type Error = E;
+	type Error = C::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// even if we've observed the conclusion, wait until all
@@ -721,15 +732,12 @@ impl<C, I, O, E> Future for Agreement<C, I, O>
 /// conclude without having witnessed the conclusion.
 /// In general, this future should be pre-empted by the import of a justification
 /// set for this block height.
-pub fn agree<C: Context, I, O, E>(context: C, nodes: usize, max_faulty: usize, input: I, output: O)
+pub fn agree<C: Context, I, O>(context: C, nodes: usize, max_faulty: usize, input: I, output: O)
 	-> Agreement<C, I, O>
 	where
 		C: Context,
-		C::RoundTimeout: Future<Error=E>,
-		C::CreateProposal: Future<Error=E>,
-		I: Stream<Item=<C as TypeResolve>::Communication,Error=E>,
-		O: Sink<SinkItem=<C as TypeResolve>::Communication,SinkError=E>,
-		E: From<InputStreamConcluded>,
+		I: Stream<Item=<C as TypeResolve>::Communication,Error=C::Error>,
+		O: Sink<SinkItem=<C as TypeResolve>::Communication,SinkError=C::Error>,
 {
 	let strategy = Strategy::create(&context, nodes, max_faulty);
 	Agreement {

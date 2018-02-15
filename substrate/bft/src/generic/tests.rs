@@ -159,12 +159,14 @@ struct TestContext {
 }
 
 impl Context for TestContext {
+	type Error = Error;
 	type Candidate = Candidate;
 	type Digest = Digest;
 	type AuthorityId = AuthorityId;
 	type Signature = Signature;
 	type RoundTimeout = Box<Future<Item=(), Error=Error>>;
 	type CreateProposal = FutureResult<Candidate, Error>;
+	type EvaluateProposal = FutureResult<bool, Error>;
 
 	fn local_id(&self) -> AuthorityId {
 		self.local_id.clone()
@@ -200,8 +202,8 @@ impl Context for TestContext {
 		self.shared.lock().unwrap().round_proposer(round)
 	}
 
-	fn candidate_valid(&self, candidate: &Candidate) -> bool {
-		candidate.0 % 3 != 0
+	fn proposal_valid(&self, proposal: &Candidate) -> FutureResult<bool, Error> {
+		Ok(proposal.0 % 3 != 0).into_future()
 	}
 
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {

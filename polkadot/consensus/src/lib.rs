@@ -473,7 +473,7 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
 			parent_hash,
-			table,
+			table: table,
 			router,
 			client: self.client.clone(),
 		})
@@ -489,13 +489,15 @@ pub struct Proposer<C, R> {
 }
 
 impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
-	type CreateProposal = Result<SubstrateBlock, bft::Error>;
+	type Error = Error;
+	type Create = Result<SubstrateBlock, Error>;
+	type Evaluate = Result<bool, Error>;
 
-	fn propose(&self) -> Self::CreateProposal {
+	fn propose(&self) -> Result<SubstrateBlock, Error> {
 		unimplemented!()
 	}
 
-	fn evaluate(&self, proposal: &SubstrateBlock) -> bool {
+	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
 		unimplemented!()
 	}
 }
