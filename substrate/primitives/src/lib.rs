@@ -91,8 +91,10 @@ mod tests;
 
 pub use self::hash::{H160, H256};
 pub use self::uint::{U256, U512};
-
 pub use block::{Block, Header};
+
+/// General hash type.
+pub type Hash = H256;
 
 /// An identifier for an authority in the consensus algorithm. The same as ed25519::Public.
 pub type AuthorityId = [u8; 32];

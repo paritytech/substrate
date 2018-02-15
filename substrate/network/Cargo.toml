@@ -22,7 +22,11 @@ substrate-primitives = { path = "../../substrate/primitives" }
 substrate-client = { path = "../../substrate/client" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-serializer = { path = "../../substrate/serializer" }
+substrate-runtime-support = { path = "../../substrate/runtime-support" }
 
 [dev-dependencies]
+substrate-test-runtime = { path = "../test-runtime" }
 substrate-executor = { path = "../../substrate/executor" }
+substrate-keyring = { path = "../../substrate/keyring" }
+substrate-codec = { path = "../../substrate/codec" }
 env_logger = "0.4"

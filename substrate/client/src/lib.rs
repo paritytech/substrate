@@ -18,13 +18,13 @@
 
 #![warn(missing_docs)]
 
+extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
-extern crate substrate_serializer as ser;
 extern crate substrate_codec as codec;
 #[cfg(test)] #[macro_use] extern crate substrate_executor as executor;
 extern crate ed25519;
-#[cfg(test)] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_test_runtime as test_runtime;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 
@@ -39,6 +39,7 @@ pub mod blockchain;
 pub mod backend;
 pub mod in_mem;
 pub mod genesis;
+pub mod block_builder;
 
 pub use blockchain::Info as ChainInfo;
 pub use blockchain::BlockId;
@@ -50,6 +51,8 @@ use codec::{KeyedVec, Slicable};
 use blockchain::Backend as BlockchainBackend;
 use backend::BlockImportOperation;
 use state_machine::backend::Backend as StateBackend;
+use state_machine::{Ext, OverlayedChanges};
+use runtime_support::Hashable;
 
 /// Polkadot Client
 #[derive(Debug)]
@@ -59,6 +62,7 @@ pub struct Client<B, E> where B: backend::Backend {
 }
 
 /// Client info
+// TODO: split queue info from chain info and amalgamate into single struct.
 #[derive(Debug)]
 pub struct ClientInfo {
 	/// Best block hash.
@@ -134,10 +138,10 @@ impl<B, E> Client<B, E> where
 		if backend.blockchain().header(BlockId::Number(0))?.is_none() {
 			trace!("Empty database, writing genesis block");
 			let (genesis_header, genesis_store) = build_genesis();
-			let mut tx = backend.begin_transaction(BlockId::Hash(block::HeaderHash::default()))?;
-			tx.reset_storage(genesis_store.into_iter())?;
-			tx.import_block(genesis_header, None, true)?;
-			backend.commit_transaction(tx)?;
+			let mut op = backend.begin_operation(BlockId::Hash(block::HeaderHash::default()))?;
+			op.reset_storage(genesis_store.into_iter())?;
+			op.set_block_data(genesis_header, Some(vec![]), true)?;
+			backend.commit_operation(op)?;
 		}
 		Ok(Client {
 			backend,
@@ -167,6 +171,11 @@ impl<B, E> Client<B, E> where
 		self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0)
 	}
 
+	/// Clone a new instance of Executor.
+	pub fn clone_executor(&self) -> E where E: Clone {
+		self.executor.clone()
+	}
+
 	/// Get the current set of authorities from storage.
 	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
 		let state = self.state_at(id)?;
@@ -183,16 +192,41 @@ impl<B, E> Client<B, E> where
 	/// No changes are made.
 	pub fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let mut changes = state_machine::OverlayedChanges::default();
-		let state = self.state_at(id)?;
-
 		let return_data = state_machine::execute(
-			&state,
+			&self.state_at(id)?,
 			&mut changes,
 			&self.executor,
 			method,
 			call_data,
 		)?;
 		Ok(CallResult { return_data, changes })
+	}
+
+	/// Set up the native execution environment to call into a native runtime code.
+	pub fn using_environment<F: FnOnce() -> T, T>(
+		&self, f: F
+	) -> error::Result<T> {
+		self.using_environment_at(&BlockId::Number(self.info()?.chain.best_number), &mut Default::default(), f)
+	}
+
+	/// Set up the native execution environment to call into a native runtime code.
+	pub fn using_environment_at<F: FnOnce() -> T, T>(
+		&self,
+		id: &BlockId,
+		overlay: &mut OverlayedChanges,
+		f: F
+	) -> error::Result<T> {
+		Ok(runtime_io::with_externalities(&mut Ext { backend: &self.state_at(id)?, overlay }, f))
+	}
+
+	/// Create a new block, built on the head of the chain.
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E>> where E: Clone {
+		block_builder::BlockBuilder::new(self)
+	}
+
+	/// Create a new block, built on top of `parent`.
+	pub fn new_block_at(&self, parent: &BlockId) -> error::Result<block_builder::BlockBuilder<B, E>> where E: Clone {
+		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
 	/// Queue a block for import.
@@ -204,13 +238,22 @@ impl<B, E> Client<B, E> where
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
 
-		let mut transaction = self.backend.begin_transaction(BlockId::Hash(header.parent_hash))?;
-		let mut _state = transaction.state()?;
-		// TODO: execute block on _state
+		let mut transaction = self.backend.begin_operation(BlockId::Hash(header.parent_hash))?;
+		let mut overlay = OverlayedChanges::default();
+
+		state_machine::execute(
+			transaction.state()?,
+			&mut overlay,
+			&self.executor,
+			"execute_block",
+			&block::Block { header: header.clone(), transactions: body.clone().unwrap_or_default().clone() }.encode()
+		)?;
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
-		transaction.import_block(header, body, is_new_best)?;
-		self.backend.commit_transaction(transaction)?;
+		trace!("Imported {}, (#{}), best={}", block::HeaderHash::from(header.blake2_256()), header.number, is_new_best);
+		transaction.set_block_data(header, body, is_new_best)?;
+		transaction.set_storage(overlay.drain())?;
+		self.backend.commit_operation(transaction)?;
 		Ok(ImportResult::Queued)
 	}
 
@@ -238,6 +281,22 @@ impl<B, E> Client<B, E> where
 		self.backend.blockchain().hash(block_number)
 	}
 
+	/// Convert an arbitrary block ID into a block hash.
+	pub fn block_hash_from_id(&self, id: &BlockId) -> error::Result<Option<block::HeaderHash>> {
+		match *id {
+			BlockId::Hash(h) => Ok(Some(h)),
+			BlockId::Number(n) => self.block_hash(n),
+		}
+	}
+
+	/// Convert an arbitrary block ID into a block hash.
+	pub fn block_number_from_id(&self, id: &BlockId) -> error::Result<Option<block::Number>> {
+		match *id {
+			BlockId::Hash(_) => Ok(self.header(id)?.map(|h| h.number)),
+			BlockId::Number(n) => Ok(Some(n)),
+		}
+	}
+
 	/// Get block header by id.
 	pub fn header(&self, id: &BlockId) -> error::Result<Option<block::Header>> {
 		self.backend.blockchain().header(*id)
@@ -254,10 +313,37 @@ mod tests {
 	use super::*;
 	use codec::Slicable;
 	use keyring::Keyring;
+	use primitives::block::Transaction as PrimitiveTransaction;
 	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+	use test_runtime::{UncheckedTransaction, Transaction};
 	use test_runtime;
 
 	native_executor_instance!(Executor, test_runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+
+	fn genesis_config() -> GenesisConfig {
+		GenesisConfig::new_simple(vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Bob.to_raw_public(),
+			Keyring::Charlie.to_raw_public()
+		], 1000)
+	}
+
+	fn prepare_genesis() -> (primitives::block::Header, Vec<(Vec<u8>, Vec<u8>)>) {
+		let mut storage = genesis_config().genesis_map();
+		let block = genesis::construct_genesis_block(&storage);
+		storage.extend(additional_storage_with_genesis(&block));
+		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+	}
+
+	#[test]
+	fn client_initialises_from_genesis_ok() {
+		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+		let genesis_hash = client.block_hash(0).unwrap().unwrap();
+
+		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), genesis_hash);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public())).unwrap(), 1000);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public())).unwrap(), 0);
+	}
 
 	#[test]
 	fn authorities_call_works() {
@@ -275,10 +361,79 @@ mod tests {
 		};
 		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
 
+		assert_eq!(client.info().unwrap().chain.best_number, 0);
 		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
 			Keyring::Alice.to_raw_public(),
 			Keyring::Bob.to_raw_public(),
 			Keyring::Charlie.to_raw_public()
 		]);
+	}
+
+	#[test]
+	fn block_builder_works_with_no_transactions() {
+		let genesis_config = GenesisConfig::new_simple(vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Bob.to_raw_public(),
+			Keyring::Charlie.to_raw_public()
+		], 1000);
+
+		let prepare_genesis = || {
+			let mut storage = genesis_config.genesis_map();
+			let block = genesis::construct_genesis_block(&storage);
+			storage.extend(additional_storage_with_genesis(&block));
+			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+		};
+		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+
+		let builder = client.new_block().unwrap();
+		let block = builder.bake().unwrap();
+
+		client.import_block(block.header, Some(block.transactions)).unwrap();
+
+		assert_eq!(client.info().unwrap().chain.best_number, 1);
+		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
+	}
+
+	trait Signable {
+		fn signed(self) -> PrimitiveTransaction;
+	}
+	impl Signable for Transaction {
+		fn signed(self) -> PrimitiveTransaction {
+			let signature = Keyring::from_raw_public(self.from.clone()).unwrap().sign(&self.encode());
+			PrimitiveTransaction::decode(&mut UncheckedTransaction { signature, tx: self }.encode().as_ref()).unwrap()
+		}
+	}
+
+	#[test]
+	fn block_builder_works_with_transactions() {
+		let genesis_config = GenesisConfig::new_simple(vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Bob.to_raw_public(),
+			Keyring::Charlie.to_raw_public()
+		], 1000);
+
+		let prepare_genesis = || {
+			let mut storage = genesis_config.genesis_map();
+			let block = genesis::construct_genesis_block(&storage);
+			storage.extend(additional_storage_with_genesis(&block));
+			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+		};
+		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+
+		let mut builder = client.new_block().unwrap();
+
+		builder.push(Transaction {
+			from: Keyring::Alice.to_raw_public(),
+			to: Keyring::Ferdie.to_raw_public(),
+			amount: 42,
+			nonce: 0
+		}.signed()).unwrap();
+		let block = builder.bake().unwrap();
+		client.import_block(block.header, Some(block.transactions)).unwrap();
+
+		assert_eq!(client.info().unwrap().chain.best_number, 1);
+		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public())).unwrap(), 958);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public())).unwrap(), 42);
 	}
 }
