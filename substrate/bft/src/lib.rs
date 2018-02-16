@@ -20,9 +20,7 @@ pub mod error;
 pub mod generic;
 
 extern crate substrate_codec as codec;
-extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
-extern crate substrate_state_machine as state_machine;
 extern crate ed25519;
 extern crate tokio_timer;
 extern crate parking_lot;
@@ -37,13 +35,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use client::{BlockId, Client};
-use client::backend::Backend;
 use codec::Slicable;
-use ed25519::Signature;
-use primitives::block::{Block, Header, HeaderHash};
+use ed25519::LocalizedSignature;
+use primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction, Justification as PrimitiveJustification};
+use primitives::block::{Block, Id as BlockId, Header, HeaderHash};
 use primitives::AuthorityId;
-use state_machine::CodeExecutor;
 
 use futures::{stream, task, Async, Sink, Future, IntoFuture};
 use futures::future::Executor;
@@ -63,20 +59,46 @@ pub type LocalizedMessage = generic::LocalizedMessage<
 	Block,
 	HeaderHash,
 	AuthorityId,
-	Signature
+	LocalizedSignature
 >;
 
 /// Justification of some hash.
-pub type Justification = generic::Justification<HeaderHash, Signature>;
+pub type Justification = generic::Justification<HeaderHash, LocalizedSignature>;
 
 /// Justification of a prepare message.
-pub type PrepareJustification = generic::PrepareJustification<HeaderHash, Signature>;
+pub type PrepareJustification = generic::PrepareJustification<HeaderHash, LocalizedSignature>;
+
+/// Unchecked justification.
+pub type UncheckedJustification = generic::UncheckedJustification<HeaderHash, LocalizedSignature>;
+
+impl From<PrimitiveJustification> for UncheckedJustification {
+	fn from(just: PrimitiveJustification) -> Self {
+		UncheckedJustification {
+			round_number: just.round_number as usize,
+			digest: just.hash,
+			signatures: just.signatures.into_iter().map(|(from, sig)| LocalizedSignature {
+				signer: ed25519::Public(from),
+				signature: sig,
+			}).collect(),
+		}
+	}
+}
+
+impl From<UncheckedJustification> for PrimitiveJustification {
+	fn from(just: UncheckedJustification) -> Self {
+		PrimitiveJustification {
+			round_number: just.round_number as u32,
+			hash: just.digest,
+			signatures: just.signatures.into_iter().map(|s| (s.signer.into(), s.signature)).collect(),
+		}
+	}
+}
 
 /// Result of a committed round of BFT
-pub type Committed = generic::Committed<Block, HeaderHash, Signature>;
+pub type Committed = generic::Committed<Block, HeaderHash, LocalizedSignature>;
 
 /// Communication between BFT participants.
-pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, Signature>;
+pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, LocalizedSignature>;
 
 /// Logic for a proposer.
 ///
@@ -108,30 +130,6 @@ pub trait Authorities {
 	fn authorities(&self, at: &BlockId) -> Result<Vec<AuthorityId>, Error>;
 }
 
-impl<B, E> BlockImport for Client<B, E>
-	where
-		B: Backend,
-		E: CodeExecutor,
-		client::error::Error: From<<B::State as state_machine::backend::Backend>::Error>
-{
-	fn import_block(&self, block: Block, _justification: Justification) {
-		// TODO: use justification.
-		let _ = self.import_block(block.header, Some(block.transactions));
-	}
-}
-
-impl<B, E> Authorities for Client<B, E>
-	where
-		B: Backend,
-		E: CodeExecutor,
-		client::error::Error: From<<B::State as state_machine::backend::Backend>::Error>
-{
-	fn authorities(&self, at: &BlockId) -> Result<Vec<AuthorityId>, Error> {
-		self.authorities_at(at).map_err(|_| ErrorKind::StateUnavailable(*at).into())
-	}
-}
-
-
 /// Instance of BFT agreement.
 struct BftInstance<P> {
 	key: Arc<ed25519::Pair>,
@@ -145,7 +143,7 @@ struct BftInstance<P> {
 impl<P: Proposer> generic::Context for BftInstance<P> {
 	type AuthorityId = AuthorityId;
 	type Digest = HeaderHash;
-	type Signature = Signature;
+	type Signature = LocalizedSignature;
 	type Candidate = Block;
 	type RoundTimeout = Box<Future<Item=(),Error=Error> + Send>;
 	type CreateProposal = <P::CreateProposal as IntoFuture>::Future;
@@ -163,28 +161,7 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	}
 
 	fn sign_local(&self, message: Message) -> LocalizedMessage {
-		use primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction};
-
-		let action = match message.clone() {
-			::generic::Message::Propose(r, p) => PrimitiveAction::Propose(r as u32, p),
-			::generic::Message::Prepare(r, h) => PrimitiveAction::Prepare(r as u32, h),
-			::generic::Message::Commit(r, h) => PrimitiveAction::Commit(r as u32, h),
-			::generic::Message::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
-		};
-
-		let primitive = PrimitiveMessage {
-			parent: self.parent_hash,
-			action,
-		};
-
-		let to_sign = Slicable::encode(&primitive);
-		let signature = self.key.sign(&to_sign);
-
-		LocalizedMessage {
-			message,
-			signature,
-			sender: self.key.public().0
-		}
+		sign_message(message, &*self.key, self.parent_hash.clone())
 	}
 
 	fn round_proposer(&self, round: usize) -> AuthorityId {
@@ -327,7 +304,7 @@ impl<P, E, I> BftService<P, E, I>
 		// TODO: check key is one of the authorities.
 		let authorities = self.client.authorities(&BlockId::Hash(hash))?;
 		let n = authorities.len();
-		let max_faulty = n.saturating_sub(1) / 3;
+		let max_faulty = max_faulty_of(n);
 
 		let bft_instance = BftInstance {
 			proposer,
@@ -369,6 +346,84 @@ impl<P, E, I> BftService<P, E, I>
 		}
 
 		Ok(())
+	}
+}
+
+/// Given a total number of authorities, yield the maximum faulty that would be allowed.
+/// This will always be under 1/3.
+pub fn max_faulty_of(n: usize) -> usize {
+	n.saturating_sub(1) / 3
+}
+
+fn check_justification_signed_message(authorities: &[AuthorityId], message: &[u8], just: UncheckedJustification)
+	-> Result<Justification, UncheckedJustification>
+{
+	just.check(authorities.len() - max_faulty_of(authorities.len()), |_, _, sig| {
+		let auth_id = sig.signer.0;
+		if !authorities.contains(&auth_id) { return None }
+
+		if ed25519::verify_strong(&sig.signature, message, &sig.signer) {
+			Some(sig.signer.0)
+		} else {
+			None
+		}
+	})
+}
+
+/// Check a full justification for a header hash.
+/// Provide all valid authorities.
+///
+/// On failure, returns the justification back.
+pub fn check_justification(authorities: &[AuthorityId], parent: HeaderHash, just: UncheckedJustification)
+	-> Result<Justification, UncheckedJustification>
+{
+	let message = Slicable::encode(&PrimitiveMessage {
+		parent,
+		action: PrimitiveAction::Commit(just.round_number as u32, just.digest),
+	});
+
+	check_justification_signed_message(authorities, &message[..], just)
+}
+
+/// Check a prepare justification for a header hash.
+/// Provide all valid authorities.
+///
+/// On failure, returns the justification back.
+pub fn check_prepare_justification(authorities: &[AuthorityId], parent: HeaderHash, just: UncheckedJustification)
+	-> Result<PrepareJustification, UncheckedJustification>
+{
+	let message = Slicable::encode(&PrimitiveMessage {
+		parent,
+		action: PrimitiveAction::Prepare(just.round_number as u32, just.digest),
+	});
+
+	check_justification_signed_message(authorities, &message[..], just)
+}
+
+/// Sign a BFT message with the given key.
+pub fn sign_message(message: Message, key: &ed25519::Pair, parent_hash: HeaderHash) -> LocalizedMessage {
+	let action = match message.clone() {
+		::generic::Message::Propose(r, p) => PrimitiveAction::Propose(r as u32, p),
+		::generic::Message::Prepare(r, h) => PrimitiveAction::Prepare(r as u32, h),
+		::generic::Message::Commit(r, h) => PrimitiveAction::Commit(r as u32, h),
+		::generic::Message::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
+	};
+
+	let primitive = PrimitiveMessage {
+		parent: parent_hash,
+		action,
+	};
+
+	let to_sign = Slicable::encode(&primitive);
+	let signature = LocalizedSignature {
+		signer: key.public(),
+		signature: key.sign(&to_sign),
+	};
+
+	LocalizedMessage {
+		message,
+		signature,
+		sender: key.public().0
 	}
 }
 
@@ -469,5 +524,77 @@ mod tests {
 		assert!(service.live_agreements.lock().contains_key(&second_hash));
 
 		core.turn(Some(::std::time::Duration::from_millis(100)));
+	}
+
+	#[test]
+	fn max_faulty() {
+		assert_eq!(max_faulty_of(3), 0);
+		assert_eq!(max_faulty_of(4), 1);
+		assert_eq!(max_faulty_of(100), 33);
+		assert_eq!(max_faulty_of(0), 0);
+		assert_eq!(max_faulty_of(11), 3);
+		assert_eq!(max_faulty_of(99), 32);
+	}
+
+	#[test]
+	fn justification_check_works() {
+		let parent_hash = Default::default();
+		let hash = [0xff; 32].into();
+
+		let authorities = vec![
+			Keyring::One.to_raw_public(),
+			Keyring::Two.to_raw_public(),
+			Keyring::Alice.to_raw_public(),
+			Keyring::Eve.to_raw_public(),
+		];
+
+		let authorities_keys = vec![
+			Keyring::One.into(),
+			Keyring::Two.into(),
+			Keyring::Alice.into(),
+			Keyring::Eve.into(),
+		];
+
+		let unchecked = UncheckedJustification {
+			digest: hash,
+			round_number: 1,
+			signatures: authorities_keys.iter().take(3).map(|key| {
+				sign_message(generic::Message::Commit(1, hash), key, parent_hash).signature
+			}).collect(),
+		};
+
+		assert!(check_justification(&authorities, parent_hash, unchecked).is_ok());
+
+		let unchecked = UncheckedJustification {
+			digest: hash,
+			round_number: 0, // wrong round number (vs. the signatures)
+			signatures: authorities_keys.iter().take(3).map(|key| {
+				sign_message(generic::Message::Commit(1, hash), key, parent_hash).signature
+			}).collect(),
+		};
+
+		assert!(check_justification(&authorities, parent_hash, unchecked).is_err());
+
+		// not enough signatures.
+		let unchecked = UncheckedJustification {
+			digest: hash,
+			round_number: 1,
+			signatures: authorities_keys.iter().take(2).map(|key| {
+				sign_message(generic::Message::Commit(1, hash), key, parent_hash).signature
+			}).collect(),
+		};
+
+		assert!(check_justification(&authorities, parent_hash, unchecked).is_err());
+
+		// wrong hash.
+		let unchecked = UncheckedJustification {
+			digest: [0xfe; 32].into(),
+			round_number: 1,
+			signatures: authorities_keys.iter().take(3).map(|key| {
+				sign_message(generic::Message::Commit(1, hash), key, parent_hash).signature
+			}).collect(),
+		};
+
+		assert!(check_justification(&authorities, parent_hash, unchecked).is_err());
 	}
 }
