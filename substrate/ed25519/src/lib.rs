@@ -24,8 +24,17 @@ extern crate untrusted;
 use ring::{rand, signature};
 use primitives::hash::H512;
 
-/// Alias to 520-bit hash when used in the context of a signature on the relay chain.
+/// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = H512;
+
+/// A localized signature also contains sender information.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct LocalizedSignature {
+	/// The signer of the signature.
+	pub signer: Public,
+	/// The signature itself.
+	pub signature: Signature,
+}
 
 /// Verify a message without type checking the parameters' types for the right size.
 pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {
@@ -40,7 +49,7 @@ pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {
 }
 
 /// A public key.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
@@ -86,6 +95,12 @@ impl AsRef<[u8; 32]> for Public {
 impl AsRef<[u8]> for Public {
 	fn as_ref(&self) -> &[u8] {
 		&self.0[..]
+	}
+}
+
+impl Into<[u8; 32]> for Public {
+	fn into(self) -> [u8; 32] {
+		self.0
 	}
 }
 
@@ -152,9 +167,20 @@ impl Verifiable for Signature {
 	}
 }
 
+impl Verifiable for LocalizedSignature {
+	fn verify(&self, message: &[u8], pubkey: &Public) -> bool {
+		pubkey == &self.signer && self.signature.verify(message, pubkey)
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
+
+	fn _test_primitives_signature_and_local_the_same() {
+		fn takes_two<T>(_: T, _: T) { }
+		takes_two(Signature::default(), primitives::Signature::default())
+	}
 
 	#[test]
 	fn test_vector_should_work() {

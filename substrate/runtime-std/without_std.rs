@@ -33,3 +33,4 @@ pub use core::mem;
 pub use core::ops;
 pub use core::ptr;
 pub use core::slice;
+pub use core::fmt;

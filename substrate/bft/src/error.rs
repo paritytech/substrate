@@ -19,7 +19,7 @@
 error_chain! {
 	errors {
 		/// Missing state at block with given Id.
-		StateUnavailable(b: ::client::BlockId) {
+		StateUnavailable(b: ::primitives::block::Id) {
 			description("State missing at given block."),
 			display("State unavailable at block {:?}", b),
 		}

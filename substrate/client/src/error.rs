@@ -30,7 +30,7 @@ error_chain! {
 		}
 
 		/// Unknown block.
-		UnknownBlock(h: blockchain::BlockId) {
+		UnknownBlock(h: ::primitives::block::Id) {
 			description("unknown block"),
 			display("UnknownBlock: {}", h),
 		}
@@ -75,6 +75,12 @@ error_chain! {
 		AuthInvalid(i: u32) {
 			description("authority value state error"),
 			display("Current state of blockchain has invalid authority value for index {}", i),
+		}
+
+		/// Bad justification for header.
+		BadJustification(h: ::primitives::block::Id) {
+			description("bad justification for header"),
+			display("bad justification for header: {}", h),
 		}
 	}
 }

@@ -40,6 +40,7 @@ extern crate serde_json;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] #[macro_use] extern crate substrate_executor as executor;
 #[cfg(test)] extern crate substrate_codec as codec;
+#[cfg(test)] extern crate substrate_bft as bft;
 
 mod service;
 mod sync;

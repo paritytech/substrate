@@ -16,6 +16,7 @@
 
 //! Block and header type definitions.
 
+use rstd::fmt;
 use rstd::vec::Vec;
 #[cfg(feature = "std")]
 use bytes;
@@ -174,6 +175,25 @@ impl Slicable for Header {
 		self.digest.using_encoded(|s| v.extend(s));
 
 		v
+	}
+}
+
+/// Block indentification.
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Id {
+	/// Identify by block header hash.
+	Hash(HeaderHash),
+	/// Identify by block number.
+	Number(Number),
+}
+
+impl fmt::Display for Id {
+	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		match *self {
+			Id::Hash(h) => h.fmt(f),
+			Id::Number(n) => n.fmt(f),
+		}
 	}
 }
 

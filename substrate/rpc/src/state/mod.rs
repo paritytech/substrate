@@ -21,7 +21,7 @@ mod error;
 #[cfg(test)]
 mod tests;
 
-use client::{self, Client, BlockId};
+use client::{self, Client};
 use primitives::block;
 use primitives::storage::{StorageKey, StorageData};
 use state_machine;
@@ -47,10 +47,10 @@ impl<B, E> StateApi for Client<B, E> where
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	fn storage(&self, key: StorageKey, block: block::HeaderHash) -> Result<StorageData> {
-		Ok(self.storage(&BlockId::Hash(block), &key)?)
+		Ok(self.storage(&block::Id::Hash(block), &key)?)
 	}
 
 	fn call(&self, method: String, data: Vec<u8>, block: block::HeaderHash) -> Result<Vec<u8>> {
-		Ok(self.call(&BlockId::Hash(block), &method, &data)?.return_data)
+		Ok(self.call(&block::Id::Hash(block), &method, &data)?.return_data)
 	}
 }
