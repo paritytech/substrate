@@ -66,7 +66,7 @@ pub mod transaction {
 	/// Check the validity of a transaction: whether it can appear at the given index
 	/// and whether it is correctly authenticated.
 	pub fn check(tx: UncheckedTransaction, index: u64) -> Result<CheckedTransaction, UncheckedTransaction> {
-		match tx.transaction.function.is_inherent() {
+		match tx.transaction.function.inherent_index() {
 			Some(correct_index) => {
 				let is_invalid = index != correct_index ||
 					tx.transaction.signed != ::polkadot_primitives::EVERYBODY ||

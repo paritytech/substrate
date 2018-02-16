@@ -181,11 +181,18 @@ fn execute_transaction(utx: UncheckedTransaction, tx_num: u64) {
 
 	// check nonce
 	let nonce_key = tx.signed.to_keyed_vec(NONCE_OF);
-	let expected_nonce: TxOrder = storage::get_or(&nonce_key, 0);
+	let (expected_nonce, increment_nonce) = if !tx.function.is_inherent() {
+		(storage::get_or(&nonce_key, 0), true)
+	} else {
+		(0, false)
+	};
+
 	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
-	// increment nonce in storage
-	storage::put(&nonce_key, &(expected_nonce + 1));
+	// increment nonce in storage, unless it's the EVERYBODY account.
+	if increment_nonce {
+		storage::put(&nonce_key, &(expected_nonce + 1));
+	}
 
 	// decode parameters and dispatch
 	dispatch_function(&tx.function, &tx.signed);
@@ -374,7 +381,7 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("3a850acf5aa9bd00d29c6ff44b05a233d9531190e431369dbe75ba0ad4a81dde").into(),
+			state_root: hex!("aa4fbcdc09b21e4366aebccd9b9ec0831a8a2765c712d3397f121ff8e60e21e2").into(),
 			transaction_root: hex!("328ae80be3adf358d2a2e188cbe1bfd3f8cd5b15a2e7666e2b4eccf7450efc32").into(),
 			digest: Digest { logs: vec![], },
 		};

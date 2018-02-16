@@ -212,7 +212,13 @@ impl Function {
 	/// block at the given index and no other.
 	///
 	/// Transactions containing inherent functions should not be signed.
-	pub fn is_inherent(&self) -> Option<u64> {
+	pub fn is_inherent(&self) -> bool {
+		self.inherent_index().is_some()
+	}
+
+	/// If this function is inherent, returns the index it should occupy
+	/// in the block. Otherwise returns `None`.
+	pub fn inherent_index(&self) -> Option<u64> {
 		match *self {
 			Function::TimestampSet(_) => Some(0),
 			_ => None,
