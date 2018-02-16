@@ -24,7 +24,7 @@ use codec::{KeyedVec, Slicable};
 use runtime_support::{Hashable, storage};
 use environment::with_env;
 use polkadot_primitives::{AccountId, Hash, TxOrder, BlockNumber, Block, Header,
-	UncheckedTransaction, Function, Log};
+	UncheckedTransaction, Function, InherentFunction, Log};
 use runtime::{staking, session};
 
 const NONCE_OF: &[u8] = b"sys:non:";
@@ -71,12 +71,8 @@ pub mod internal {
 		// any initial checks
 		initial_checks(&block);
 
-		// execute transactions
-		if (block.transactions.len() as u64) < Function::inherent_functions() {
-			panic!("Not enough transactions provided to fulfill all inherent functions.");
-		}
-
-		for (tx_num, tx) in block.transactions.iter().cloned().enumerate() {
+		// execute all transactions, inherent or otherwise.
+		for (tx_num, tx) in block.all_transactions().enumerate() {
 			super::execute_transaction(tx, tx_num as u64);
 		}
 
@@ -93,6 +89,8 @@ pub mod internal {
 
 	/// Execute a transaction outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
+	/// Note that when building a block transaction by transaction, the
+	/// inherent methods must be called manually.
 	pub fn execute_transaction(utx: UncheckedTransaction, mut header: Header) -> Header {
 		// populate environment from header.
 		with_env(|e| {
@@ -146,6 +144,9 @@ pub mod internal {
 /// Dispatch a function.
 fn dispatch_function(function: &Function, transactor: &AccountId) {
 	match *function {
+		Function::Inherent(InherentFunction::TimestampSet(t)) => {
+			::runtime::timestamp::public::set(t);
+		}
 		Function::StakingStake => {
 			::runtime::staking::public::stake(transactor);
 		}
@@ -157,9 +158,6 @@ fn dispatch_function(function: &Function, transactor: &AccountId) {
 		}
 		Function::SessionSetKey(session) => {
 			::runtime::session::public::set_key(transactor, &session);
-		}
-		Function::TimestampSet(t) => {
-			::runtime::timestamp::public::set(t);
 		}
 		Function::GovernancePropose(ref proposal) => {
 			::runtime::governance::public::propose(transactor, proposal);
@@ -208,7 +206,7 @@ fn initial_checks(block: &Block) {
 	);
 
 	// check transaction trie root represents the transactions.
-	let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
+	let txs = block.all_transactions().map(|tx| Slicable::encode(&tx)).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
 	info_expect_equal_hash(&header.transaction_root, &txs_root);
@@ -262,18 +260,11 @@ mod tests {
 	use keyring::Keyring;
 	use environment::with_env;
 	use primitives::hexdisplay::HexDisplay;
-	use polkadot_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
+	use polkadot_primitives::{Header, Body, Digest, UncheckedTransaction, Transaction, Function, InherentFunction};
 	use runtime::staking;
 
 	fn set_timestamp() -> UncheckedTransaction {
-		UncheckedTransaction {
-			transaction: Transaction {
-				signed: ::polkadot_primitives::EVERYBODY,
-				nonce: 0,
-				function: Function::TimestampSet(100_000),
-			},
-			signature: Default::default(),
-		}
+		UncheckedTransaction::inherent(InherentFunction::TimestampSet(100_000))
 	}
 
 	#[test]
@@ -352,29 +343,6 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
-	fn block_import_fails_without_inherent_txs() {
-		let mut t = new_test_ext();
-
-		let h = Header {
-			parent_hash: [69u8; 32].into(),
-			number: 1,
-			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0").into(),
-			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
-			digest: Digest { logs: vec![], },
-		};
-
-		let b = Block {
-			header: h,
-			transactions: vec![set_timestamp()],
-		};
-
-		with_externalities(&mut t, || {
-			execute_block(b);
-		});
-	}
-
-	#[test]
 	fn block_import_works() {
 		let mut t = new_test_ext();
 
@@ -388,7 +356,10 @@ mod tests {
 
 		let b = Block {
 			header: h,
-			transactions: vec![set_timestamp()],
+			body: Body {
+				timestamp: 100_000,
+				transactions: vec![]
+			}
 		};
 
 		with_externalities(&mut t, || {
@@ -414,7 +385,10 @@ mod tests {
 
 		let b = Block {
 			header: h,
-			transactions: vec![],
+			body: Body {
+				timestamp: 100_000,
+				transactions: vec![],
+			}
 		};
 
 		with_externalities(&mut t, || {
@@ -440,7 +414,10 @@ mod tests {
 
 		let b = Block {
 			header: h,
-			transactions: vec![],
+			body: Body {
+				timestamp: 100_000,
+				transactions: vec![],
+			}
 		};
 
 		with_externalities(&mut t, || {

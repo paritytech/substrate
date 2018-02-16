@@ -68,11 +68,7 @@ pub mod transaction {
 	pub fn check(tx: UncheckedTransaction, index: u64) -> Result<CheckedTransaction, UncheckedTransaction> {
 		match tx.transaction.function.inherent_index() {
 			Some(correct_index) => {
-				let is_invalid = index != correct_index ||
-					tx.transaction.signed != ::polkadot_primitives::EVERYBODY ||
-					tx.signature != Default::default();
-
-				if is_invalid { return Err(tx) }
+				if index != correct_index || !tx.is_well_formed() { return Err(tx) }
 				return Ok(CheckedTransaction(tx));
 			}
 			None => {

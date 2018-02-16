@@ -49,9 +49,9 @@ pub mod validator;
 pub mod block;
 pub mod transaction;
 
-pub use self::block::{Header, Block, Log, Digest};
+pub use self::block::{Header, Body, Block, Log, Digest};
 pub use self::block::Number as BlockNumber;
-pub use self::transaction::{Transaction, UncheckedTransaction, Function, Proposal};
+pub use self::transaction::{Transaction, UncheckedTransaction, Function, InherentFunction, Proposal};
 
 /// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
 /// (who matters). Essentially this means that a majority of validators have decided it is

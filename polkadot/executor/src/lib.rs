@@ -44,8 +44,10 @@ mod tests {
 	use polkadot_runtime::runtime::staking::balance;
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
-	use polkadot_primitives::{Hash, Header, BlockNumber, Block, Digest, Transaction,
-		UncheckedTransaction, Function};
+	use polkadot_primitives::{
+		Hash, Header, Body, BlockNumber, Block, Digest, Transaction,
+		UncheckedTransaction, Function, InherentFunction,
+	};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm");
@@ -83,14 +85,7 @@ mod tests {
 	}
 
 	fn set_timestamp(timestamp: u64) -> UncheckedTransaction {
-		UncheckedTransaction {
-			transaction: Transaction {
-				signed: ::polkadot_primitives::EVERYBODY,
-				nonce: 0,
-				function: Function::TimestampSet(timestamp),
-			},
-			signature: Default::default(),
-		}
+		UncheckedTransaction::inherent(InherentFunction::TimestampSet(timestamp))
 	}
 
 	fn tx() -> UncheckedTransaction {
@@ -119,27 +114,32 @@ mod tests {
 		use triehash::ordered_trie_root;
 
 
-		let body_transactions = txs.into_iter().map(|transaction| {
+		let transactions = txs.into_iter().map(|transaction| {
 			let signature = Pair::from(Keyring::from_public(Public::from_raw(transaction.signed)).unwrap())
 				.sign(&transaction.encode());
 
 			UncheckedTransaction { transaction, signature }
-		});
-
-		let transactions: Vec<_> = ::std::iter::once(set_timestamp(timestamp)).chain(body_transactions).collect();
-
-		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::encode)).0.into();
+		}).collect();
 
 		let header = Header {
 			parent_hash,
 			number,
 			state_root,
-			transaction_root,
+			transaction_root: Default::default(),
 			digest: Digest { logs: vec![], },
 		};
-		let hash = header.blake2_256();
 
-		(Block { header, transactions }.encode(), hash.into())
+		let mut block = Block {
+			header,
+			body: Body { timestamp, transactions },
+		};
+
+		let transaction_root = ordered_trie_root(block.all_transactions().map(|tx| Slicable::encode(&tx))).0.into();
+		block.header.transaction_root = transaction_root;
+
+		let hash = block.header.blake2_256();
+
+		(block.encode(), hash.into())
 	}
 
 	fn block1() -> (Vec<u8>, Hash) {
