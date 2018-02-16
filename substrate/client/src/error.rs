@@ -18,7 +18,6 @@
 
 use std;
 use state_machine;
-use blockchain;
 use primitives::hexdisplay::HexDisplay;
 
 error_chain! {

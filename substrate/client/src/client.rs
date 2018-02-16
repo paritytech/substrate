@@ -16,7 +16,7 @@
 
 //! Substrate Client
 
-use primitives::{block, AuthorityId};
+use primitives::{self, block, AuthorityId};
 use primitives::block::Id as BlockId;
 use primitives::storage::{StorageKey, StorageData};
 use runtime_support::Hashable;
@@ -24,8 +24,8 @@ use codec::{KeyedVec, Slicable};
 use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
 
 use backend::{self, BlockImportOperation};
-use blockchain::{self, Info as ChainInfo, BlockId, Backend as ChainBackend};
-use {error, in_mem, block_builder, runtime_io};
+use blockchain::{self, Info as ChainInfo, Backend as ChainBackend};
+use {error, in_mem, block_builder, runtime_io, bft};
 
 /// Polkadot Client
 #[derive(Debug)]
