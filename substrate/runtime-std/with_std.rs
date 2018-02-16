@@ -17,6 +17,7 @@
 pub use std::boxed;
 pub use std::cell;
 pub use std::cmp;
+pub use std::fmt;
 pub use std::iter;
 pub use std::mem;
 pub use std::ops;

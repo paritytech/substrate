@@ -28,12 +28,12 @@ extern crate substrate_state_machine as state_machine;
 extern crate error_chain;
 
 use client::backend::Backend;
-use client::blockchain::BlockId;
 use client::Client;
 use polkadot_runtime::runtime;
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use primitives::{AccountId, SessionKey};
+use primitives::block::Id as BlockId;
 use primitives::parachain::DutyRoster;
 
 error_chain! {

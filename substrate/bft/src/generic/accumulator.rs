@@ -83,6 +83,13 @@ impl<D, S> UncheckedJustification<D, S> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Justification<D,S>(UncheckedJustification<D,S>);
 
+impl<D, S> Justification<D, S> {
+	/// Convert this justification back to unchecked.
+	pub fn uncheck(self) -> UncheckedJustification<D, S> {
+		self.0
+	}
+}
+
 impl<D, S> ::std::ops::Deref for Justification<D, S> {
 	type Target = UncheckedJustification<D, S>;
 

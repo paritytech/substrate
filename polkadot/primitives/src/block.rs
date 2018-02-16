@@ -23,6 +23,8 @@ use rstd::vec::Vec;
 use codec::{Input, Slicable};
 use transaction::UncheckedTransaction;
 
+pub use primitives::block::Id;
+
 /// Used to refer to a block number.
 pub type Number = u64;
 

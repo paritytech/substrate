@@ -16,14 +16,15 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus, BlockId};
+use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus};
 use client::error::Error;
 use state_machine;
-use primitives::block;
+use primitives::block::{self, Id as BlockId};
+use primitives::bft::Justification;
 
-pub trait Client : Send + Sync {
+pub trait Client: Send + Sync {
 	/// Given a hash return a header
-	fn import(&self, header: block::Header, body: Option<block::Body>) -> Result<ImportResult, Error>;
+	fn import(&self, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error>;
 
 	/// Get blockchain info.
 	fn info(&self) -> Result<ClientInfo, Error>;
@@ -39,6 +40,9 @@ pub trait Client : Send + Sync {
 
 	/// Get block body.
 	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error>;
+
+	/// Get block justification.
+	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error>;
 }
 
 impl<B, E> Client for PolkadotClient<B, E> where
@@ -46,8 +50,10 @@ impl<B, E> Client for PolkadotClient<B, E> where
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>, {
 
-	fn import(&self, header: block::Header, body: Option<block::Body>) -> Result<ImportResult, Error> {
-		(self as &PolkadotClient<B, E>).import_block(header, body)
+	fn import(&self, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error> {
+		// TODO: defer justification check.
+		let justified_header = self.check_justification(header, justification.into())?;
+		(self as &PolkadotClient<B, E>).import_block(justified_header, body)
 	}
 
 	fn info(&self) -> Result<ClientInfo, Error> {
@@ -68,5 +74,9 @@ impl<B, E> Client for PolkadotClient<B, E> where
 
 	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error> {
 		(self as &PolkadotClient<B, E>).body(id)
+	}
+
+	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error> {
+		(self as &PolkadotClient<B, E>).justification(id)
 	}
 }

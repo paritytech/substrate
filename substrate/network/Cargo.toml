@@ -29,4 +29,5 @@ substrate-test-runtime = { path = "../test-runtime" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-codec = { path = "../../substrate/codec" }
+substrate-bft = { path = "../bft" }
 env_logger = "0.4"
