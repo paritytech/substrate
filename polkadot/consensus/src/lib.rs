@@ -52,6 +52,7 @@ use table::{Table, Context as TableContextTrait};
 use table::generic::Statement as GenericStatement;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::Hash;
+use polkadot_primitives::block::Block as PolkadotBlock;
 use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
 use primitives::block::{Block as SubstrateBlock, Header, HeaderHash, Id as BlockId};
 use primitives::AuthorityId;
@@ -498,6 +499,10 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	}
 
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
-		unimplemented!()
+		let encoded = Slicable::encode(proposal);
+		let _polkadot_encoded = PolkadotBlock::decode(&mut &encoded[..])
+			.ok_or_else(|| ErrorKind::ProposalNotForPolkadot)?;
+
+		Ok(true)
 	}
 }

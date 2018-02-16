@@ -27,5 +27,9 @@ error_chain! {
 			description("Duty Roster had invalid length"),
 			display("Invalid duty roster length: expected {}, got {}", expected, got),
 		}
+		ProposalNotForPolkadot {
+			description("Proposal provided not a Polkadot block."),
+			display("Proposal provided not a Polkadot block."),
+		}
 	}
 }

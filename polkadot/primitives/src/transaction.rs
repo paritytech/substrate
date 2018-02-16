@@ -204,6 +204,22 @@ pub enum Function {
 	GovernanceApprove(BlockNumber),
 }
 
+impl Function {
+	/// The number of inherent transactions.
+	pub fn inherent_functions() -> u64 { 1 }
+
+	/// Whether this function is "inherent": that it must be part of every
+	/// block at the given index and no other.
+	///
+	/// Transactions containing inherent functions should not be signed.
+	pub fn is_inherent(&self) -> Option<u64> {
+		match *self {
+			Function::TimestampSet(_) => Some(0),
+			_ => None,
+		}
+	}
+}
+
 impl Slicable for Function {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let id = try_opt!(u8::decode(input).and_then(FunctionId::from_u8));
