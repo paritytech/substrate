@@ -44,4 +44,4 @@ pub mod block_builder;
 mod client;
 
 pub use client::{Client, ClientInfo, CallResult, ImportResult, BlockStatus, new_in_mem};
-pub use blockchain::{Info as ChainInfo, BlockId};
+pub use blockchain::Info as ChainInfo;
