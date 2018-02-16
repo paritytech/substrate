@@ -19,8 +19,9 @@ mod sync;
 use std::collections::{VecDeque, HashSet, HashMap};
 use std::sync::Arc;
 use parking_lot::RwLock;
-use client::{self, BlockId, genesis};
+use client::{self, genesis};
 use client::block_builder::BlockBuilder;
+use primitives::block::Id as BlockId;
 use primitives;
 use executor;
 use io::SyncIo;
@@ -32,6 +33,7 @@ use runtime_support::Hashable;
 use test_runtime;
 use keyring::Keyring;
 use codec::Slicable;
+use bft;
 
 native_executor_instance!(Executor, test_runtime::api::dispatch, include_bytes!("../../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
@@ -100,7 +102,7 @@ pub struct TestPacket {
 }
 
 pub struct Peer {
-	chain: Arc<client::Client<client::in_mem::Backend, executor::NativeExecutor<Executor>>>,
+	client: Arc<client::Client<client::in_mem::Backend, executor::NativeExecutor<Executor>>>,
 	pub sync: Protocol,
 	pub queue: RwLock<VecDeque<TestPacket>>,
 }
@@ -108,9 +110,9 @@ pub struct Peer {
 impl Peer {
 	/// Called after blockchain has been populated to updated current state.
 	fn start(&self) {
-		// Update the sync state to the lates chain state.
-		let info = self.chain.info().expect("In-mem chain does not fail");
-		let header = self.chain.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
+		// Update the sync state to the latest chain state.
+		let info = self.client.info().expect("In-mem client does not fail");
+		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
 		self.sync.on_block_imported(&header);
 	}
 
@@ -158,13 +160,32 @@ impl Peer {
 	fn flush(&self) {
 	}
 
+	fn justify(header: &primitives::block::Header) -> bft::UncheckedJustification {
+		let hash = header.hash();
+		let authorities = vec![ Keyring::Alice.into() ];
+
+		bft::UncheckedJustification {
+			digest: hash,
+			signatures: authorities.iter().map(|key| {
+				bft::sign_message(
+					bft::generic::Message::Commit(1, hash),
+					key,
+					header.parent_hash
+				).signature
+			}).collect(),
+			round_number: 1,
+		}
+	}
+
 	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) where F: FnMut(&mut BlockBuilder<client::in_mem::Backend, executor::NativeExecutor<Executor>>) {
 		for _ in 0 .. count {
-			let mut builder = self.chain.new_block().unwrap();
+			let mut builder = self.client.new_block().unwrap();
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
 			trace!("Generating {}, (#{})", primitives::block::HeaderHash::from(block.header.blake2_256()), block.header.number);
-			self.chain.import_block(block.header, Some(block.transactions)).unwrap();
+			let justification = Self::justify(&block.header);
+			let justified = self.client.check_justification(block.header, justification).unwrap();
+			self.client.import_block(justified, Some(block.transactions)).unwrap();
 		}
 	}
 
@@ -221,11 +242,11 @@ impl TestNet {
 		};
 
 		for _ in 0..n {
-			let chain = Arc::new(client::new_in_mem(Executor::new(), Self::prepare_genesis).unwrap());
-			let sync = Protocol::new(config.clone(), chain.clone()).unwrap();
+			let client = Arc::new(client::new_in_mem(Executor::new(), Self::prepare_genesis).unwrap());
+			let sync = Protocol::new(config.clone(), client.clone()).unwrap();
 			net.peers.push(Arc::new(Peer {
 				sync: sync,
-				chain: chain,
+				client: client,
 				queue: RwLock::new(VecDeque::new()),
 			}));
 		}

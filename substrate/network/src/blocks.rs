@@ -205,6 +205,7 @@ mod test {
 			body: None,
 			message_queue: None,
 			receipt: None,
+			justification: None,
 		}).collect()
 	}
 

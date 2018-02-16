@@ -19,6 +19,7 @@
 use std::borrow::Borrow;
 use primitives::AuthorityId;
 use primitives::block::{Number as BlockNumber, HeaderHash, Header, Body};
+use primitives::bft::Justification;
 use service::Role as RoleFlags;
 
 pub type RequestId = u64;
@@ -85,6 +86,8 @@ pub enum BlockAttribute {
 	Receipt,
 	/// Include block message queue.
 	MessageQueue,
+	/// Include a justification for the block.
+	Justification,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -100,6 +103,8 @@ pub struct BlockData {
 	pub receipt: Option<Bytes>,
 	/// Block message queue if requested.
 	pub message_queue: Option<Bytes>,
+	/// Justification if requested.
+	pub justification: Option<Justification>,
 }
 
 #[serde(untagged)]

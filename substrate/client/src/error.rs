@@ -18,7 +18,6 @@
 
 use std;
 use state_machine;
-use blockchain;
 
 error_chain! {
 	errors {
@@ -29,7 +28,7 @@ error_chain! {
 		}
 
 		/// Unknown block.
-		UnknownBlock(h: blockchain::BlockId) {
+		UnknownBlock(h: ::primitives::block::Id) {
 			description("unknown block"),
 			display("UnknownBlock: {}", h),
 		}
@@ -44,6 +43,12 @@ error_chain! {
 		Blockchain(e: Box<std::error::Error + Send>) {
 			description("Blockchain error"),
 			display("Blockchain: {}", e),
+		}
+
+		/// Bad justification for header.
+		BadJustification(h: ::primitives::block::Id) {
+			description("bad justification for header"),
+			display("bad justification for header: {}", h),
 		}
 
 		/// Invalid state data.

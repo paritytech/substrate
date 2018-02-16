@@ -5,10 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 futures = "0.1.17"
-substrate-client = { path = "../client" }
 substrate-codec = { path = "../codec" }
 substrate-primitives = { path = "../primitives" }
-substrate-state-machine = { path = "../state-machine" }
 ed25519 = { path = "../ed25519" }
 tokio-timer = "0.1.2"
 parking_lot = "0.4"

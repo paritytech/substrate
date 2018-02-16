@@ -20,8 +20,8 @@ use std::vec::Vec;
 use codec::{Joiner, Slicable};
 use state_machine::{self, CodeExecutor};
 use primitives::{Header, Block};
-use primitives::block::Transaction;
-use {backend, error, BlockId, Client};
+use primitives::block::{Id as BlockId, Transaction};
+use {backend, error, Client};
 use triehash::ordered_trie_root;
 
 /// Utility for building new (valid) blocks from a stream of transactions.
