@@ -17,6 +17,7 @@
 //! Substrate Client
 
 use primitives::{block, AuthorityId};
+use primitives::block::Id as BlockId;
 use primitives::storage::{StorageKey, StorageData};
 use runtime_support::Hashable;
 use codec::{KeyedVec, Slicable};
@@ -81,6 +82,20 @@ pub enum BlockStatus {
 	Unknown,
 }
 
+/// A header paired with a justification which has already been checked.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct JustifiedHeader {
+	header: block::Header,
+	justification: bft::Justification,
+}
+
+impl JustifiedHeader {
+	/// Deconstruct the justified header into parts.
+	pub fn into_inner(self) -> (block::Header, bft::Justification) {
+		(self.header, self.justification)
+	}
+}
+
 /// Create an instance of in-memory client.
 pub fn new_in_mem<E, F>(
 	executor: E,
@@ -112,7 +127,7 @@ impl<B, E> Client<B, E> where
 			let (genesis_header, genesis_store) = build_genesis();
 			let mut op = backend.begin_operation(BlockId::Hash(block::HeaderHash::default()))?;
 			op.reset_storage(genesis_store.into_iter())?;
-			op.set_block_data(genesis_header, Some(vec![]), true)?;
+			op.set_block_data(genesis_header, Some(vec![]), None, true)?;
 			backend.commit_operation(op)?;
 		}
 		Ok(Client {
@@ -203,15 +218,36 @@ impl<B, E> Client<B, E> where
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
+	/// Check a header's justification.
+	pub fn check_justification(
+		&self,
+		header: block::Header,
+		justification: bft::UncheckedJustification,
+	) -> error::Result<JustifiedHeader> {
+		let authorities = self.authorities_at(&BlockId::Hash(header.parent_hash))?;
+		let just = bft::check_justification(&authorities[..], header.parent_hash, justification)
+			.map_err(|_| error::ErrorKind::BadJustification(BlockId::Hash(header.hash())))?;
+		Ok(JustifiedHeader {
+			header,
+			justification: just,
+		})
+	}
+
 	/// Author a new block, filling it with valid transactions from our transaction pool.
 	pub fn propose_block_at(&self, parent: &BlockId) -> block::Block {
 		unimplemented!()
 	}
 
 	/// Queue a block for import.
-	pub fn import_block(&self, header: block::Header, body: Option<block::Body>) -> error::Result<ImportResult> {
+	pub fn import_block(
+		&self,
+		header: JustifiedHeader,
+		body: Option<block::Body>,
+	) -> error::Result<ImportResult> {
 		// TODO: import lock
 		// TODO: validate block
+		// TODO: import justification.
+		let (header, justification) = header.into_inner();
 		match self.backend.blockchain().status(BlockId::Hash(header.parent_hash))? {
 			blockchain::BlockStatus::InChain => (),
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
@@ -230,7 +266,7 @@ impl<B, E> Client<B, E> where
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
 		trace!("Imported {}, (#{}), best={}", block::HeaderHash::from(header.blake2_256()), header.number, is_new_best);
-		transaction.set_block_data(header, body, is_new_best)?;
+		transaction.set_block_data(header, body, Some(justification.uncheck().into()), is_new_best)?;
 		transaction.set_storage(overlay.drain())?;
 		self.backend.commit_operation(transaction)?;
 		Ok(ImportResult::Queued)
@@ -285,6 +321,38 @@ impl<B, E> Client<B, E> where
 	pub fn body(&self, id: &BlockId) -> error::Result<Option<block::Body>> {
 		self.backend.blockchain().body(*id)
 	}
+
+	/// Get block justification set by id.
+	pub fn justification(&self, id: &BlockId) -> error::Result<Option<primitives::bft::Justification>> {
+		self.backend.blockchain().justification(*id)
+	}
+}
+
+impl<B, E> bft::BlockImport for Client<B, E>
+	where
+		B: backend::Backend,
+		E: state_machine::CodeExecutor,
+		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	fn import_block(&self, block: block::Block, justification: bft::Justification) {
+		let justified_header = JustifiedHeader {
+			header: block.header,
+			justification,
+		};
+
+		let _ = self.import_block(justified_header, Some(block.transactions));
+	}
+}
+
+impl<B, E> bft::Authorities for Client<B, E>
+	where
+		B: backend::Backend,
+		E: state_machine::CodeExecutor,
+		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	fn authorities(&self, at: &BlockId) -> Result<Vec<AuthorityId>, bft::Error> {
+		self.authorities_at(at).map_err(|_| bft::ErrorKind::StateUnavailable(*at).into())
+	}
 }
 
 #[cfg(test)]
@@ -315,6 +383,31 @@ mod tests {
 		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 	}
 
+	// since we are in the client module we can create falsely justified
+	// headers.
+	// TODO: remove this in favor of custom verification pipelines for the
+	// client
+	fn justify(header: &block::Header) -> bft::UncheckedJustification {
+		let hash = header.hash();
+		let authorities = vec![
+			Keyring::Alice.into(),
+			Keyring::Bob.into(),
+			Keyring::Charlie.into(),
+		];
+
+		bft::UncheckedJustification {
+			digest: hash,
+			signatures: authorities.iter().map(|key| {
+				bft::sign_message(
+					bft::generic::Message::Commit(1, hash),
+					key,
+					header.parent_hash
+				).signature
+			}).collect(),
+			round_number: 1,
+		}
+	}
+
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
@@ -327,11 +420,7 @@ mod tests {
 
 	#[test]
 	fn authorities_call_works() {
-		let genesis_config = GenesisConfig::new_simple(vec![
-			Keyring::Alice.to_raw_public(),
-			Keyring::Bob.to_raw_public(),
-			Keyring::Charlie.to_raw_public()
-		], 1000);
+		let genesis_config = genesis_config();
 
 		let prepare_genesis = || {
 			let mut storage = genesis_config.genesis_map();
@@ -351,11 +440,7 @@ mod tests {
 
 	#[test]
 	fn block_builder_works_with_no_transactions() {
-		let genesis_config = GenesisConfig::new_simple(vec![
-			Keyring::Alice.to_raw_public(),
-			Keyring::Bob.to_raw_public(),
-			Keyring::Charlie.to_raw_public()
-		], 1000);
+		let genesis_config = genesis_config();
 
 		let prepare_genesis = || {
 			let mut storage = genesis_config.genesis_map();
@@ -368,7 +453,9 @@ mod tests {
 		let builder = client.new_block().unwrap();
 		let block = builder.bake().unwrap();
 
-		client.import_block(block.header, Some(block.transactions)).unwrap();
+		let justification = justify(&block.header);
+		let justified = client.check_justification(block.header, justification).unwrap();
+		client.import_block(justified, Some(block.transactions)).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
@@ -409,7 +496,10 @@ mod tests {
 			nonce: 0
 		}.signed()).unwrap();
 		let block = builder.bake().unwrap();
-		client.import_block(block.header, Some(block.transactions)).unwrap();
+
+		let justification = justify(&block.header);
+		let justified = client.check_justification(block.header, justification).unwrap();
+		client.import_block(justified, Some(block.transactions)).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
