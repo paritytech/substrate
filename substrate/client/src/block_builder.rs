@@ -71,7 +71,7 @@ impl<B, E> BlockBuilder<B, E> where
 	pub fn push(&mut self, tx: Transaction) -> error::Result<()> {
 		let output = state_machine::execute(&self.state, &mut self.changes, &self.executor, "execute_transaction",
 			&vec![].and(&self.header).and(&tx))?;
-		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime do must be valid");
+		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		self.transactions.push(tx);
 		Ok(())
 	}
@@ -81,7 +81,7 @@ impl<B, E> BlockBuilder<B, E> where
 		self.header.transaction_root = ordered_trie_root(self.transactions.iter().map(Slicable::encode)).0.into();
 		let output = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
 			&self.header.encode())?;
-		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime do must be valid");
+		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		Ok(Block {
 			header: self.header,
 			transactions: self.transactions,
