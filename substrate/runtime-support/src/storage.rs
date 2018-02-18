@@ -22,11 +22,30 @@ use codec::{Slicable, KeyedVec};
 
 // TODO: consider using blake256 to avoid possible preimage attack.
 
-/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
+struct IncrementalInput<'a> {
+	key: &'a [u8],
+	pos: usize,
+}
+
+impl<'a> Input for IncrementalInput<'a> {
+	fn read(&mut self, into: &mut [u8]) -> usize {
+		let len = runtime_io::read_storage(self.key, into, self.pos).unwrap_or(0);
+		let read = ::rstd::cmp::min(len, into.len());
+		self.pos += read;
+		read
+	}
+}
+
+ /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-	let maybe_raw = runtime_io::storage(&twox_128(key)[..]);
-	maybe_raw.map(|raw| Slicable::decode(&mut &raw[..])
-		.expect("storage should contain a decodable value if there is some entry"))
+	let key = twox_128(key);
+	runtime_io::read_storage(&key[..], &mut [0; 0][..], 0).map(|_| {
+		let mut input = IncrementalInput {
+			key: &key[..],
+			pos: 0,
+		};
+		Slicable::decode(&mut input)
+	}
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -153,11 +172,15 @@ pub mod unhashed {
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
-		let maybe_raw = runtime_io::storage(key);
-		maybe_raw.map(|raw| Slicable::decode(&mut &raw[..])
-			.expect("storage should contain a decodable value if there is some entry"))
+		runtime_io::read_storage(key, &mut [0; 0][..], 0).map(|_| {
+			let mut input = IncrementalInput {
+				key,
+				pos: 0,
+			};
+			Slicable::decode(&mut input)
+		}
 	}
-
+		
 	/// Return the value of the item in storage under `key`, or the type's default if there is no
 	/// explicit entry.
 	pub fn get_or_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
