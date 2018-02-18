@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use runtime_io::{self, twox_128};
-use codec::{Slicable, KeyedVec};
+use codec::{Slicable, KeyedVec, Input};
 
 // TODO: consider using blake256 to avoid possible preimage attack.
 
@@ -44,8 +44,8 @@ pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 			key: &key[..],
 			pos: 0,
 		};
-		Slicable::decode(&mut input)
-	}
+		Slicable::decode(&mut input).expect("stroage is not null, therefore must be a valid type")
+	})
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -168,7 +168,7 @@ pub trait StorageVec {
 }
 
 pub mod unhashed {
-	use super::{runtime_io, Slicable, KeyedVec, Vec};
+	use super::{runtime_io, Slicable, KeyedVec, Vec, IncrementalInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
@@ -177,10 +177,10 @@ pub mod unhashed {
 				key,
 				pos: 0,
 			};
-			Slicable::decode(&mut input)
-		}
+			Slicable::decode(&mut input).expect("stroage is not null, therefore must be a valid type")
+		})
 	}
-		
+
 	/// Return the value of the item in storage under `key`, or the type's default if there is no
 	/// explicit entry.
 	pub fn get_or_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
