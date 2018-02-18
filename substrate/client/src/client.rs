@@ -233,11 +233,6 @@ impl<B, E> Client<B, E> where
 		})
 	}
 
-	/// Author a new block, filling it with valid transactions from our transaction pool.
-	pub fn propose_block_at(&self, parent: &BlockId) -> block::Block {
-		unimplemented!()
-	}
-
 	/// Queue a block for import.
 	pub fn import_block(
 		&self,
