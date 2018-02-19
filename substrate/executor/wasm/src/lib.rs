@@ -19,7 +19,7 @@ impl_stubs!(
 		set_storage(b"input", input);
 
 		print("storage");
-		let foo = storage(b"foo");
+		let foo = storage(b"foo").unwrap();
 
 		print("set_storage");
 		set_storage(b"baz", &foo);

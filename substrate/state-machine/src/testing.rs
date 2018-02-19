@@ -17,38 +17,28 @@
 //! Test implementation for Externalities.
 
 use std::collections::HashMap;
-use super::{Externalities, ExternalitiesError};
+use super::Externalities;
 use triehash::trie_root;
 
 /// Simple HashMap based Externalities impl.
-#[derive(Debug, Default)]
-pub struct TestExternalities {
-	/// The storage.
-	pub storage: HashMap<Vec<u8>, Vec<u8>>,
-}
-
-impl TestExternalities {
-	/// Create a new instance with empty storage.
-	pub fn new() -> Self {
-		TestExternalities {
-			storage: HashMap::new(),
-		}
-	}
-}
+pub type TestExternalities = HashMap<Vec<u8>, Vec<u8>>;
 
 impl Externalities for TestExternalities {
-	fn storage(&self, key: &[u8]) -> Result<&[u8], ExternalitiesError> {
-		Ok(self.storage.get(&key.to_vec()).map_or(&[] as &[u8], Vec::as_slice))
+	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
+		self.get(key).map(AsRef::as_ref)
 	}
 
-	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
-		self.storage.insert(key, value);
+	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
+		match maybe_value {
+			Some(value) => { self.insert(key, value); }
+			None => { self.remove(&key); }
+		}
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&self) -> [u8; 32] {
-		trie_root(self.storage.clone()).0
+		trie_root(self.clone()).0
 	}
 }
 
