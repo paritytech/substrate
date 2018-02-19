@@ -157,7 +157,7 @@ mod tests {
 		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 
-		TestExternalities { storage: map![
+		map![
 			twox_128(APPROVALS_REQUIRED).to_vec() => vec![].and(&667u32),
 			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
 			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
@@ -171,7 +171,7 @@ mod tests {
 			twox_128(b"sta:spe").to_vec() => vec![].and(&1u64),
 			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
 			twox_128(b"sta:era").to_vec() => vec![].and(&1u64)
-		], }
+		]
 	}
 
 	#[test]

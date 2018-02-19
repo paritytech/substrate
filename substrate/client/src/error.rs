@@ -18,6 +18,7 @@
 
 use std;
 use state_machine;
+use primitives::hexdisplay::HexDisplay;
 
 error_chain! {
 	errors {
@@ -45,22 +46,40 @@ error_chain! {
 			display("Blockchain: {}", e),
 		}
 
-		/// Bad justification for header.
-		BadJustification(h: ::primitives::block::Id) {
-			description("bad justification for header"),
-			display("bad justification for header: {}", h),
+		/// Attempt to read storage yet nothing set for that key.
+		NoValueForKey(key: Vec<u8>) {
+			description("storage doesn't contain key"),
+			display("Storage does not contain the key entry: {}", HexDisplay::from(key)),
 		}
 
 		/// Invalid state data.
-		AuthLen {
+		AuthLenEmpty {
+			description("authority count state error"),
+			display("Current state of blockchain has no authority count value"),
+		}
+
+		/// Invalid state data.
+		AuthEmpty(i: u32) {
+			description("authority value state error"),
+			display("Current state of blockchain has no authority value for index {}", i),
+		}
+
+		/// Invalid state data.
+		AuthLenInvalid {
 			description("authority count state error"),
 			display("Current state of blockchain has invalid authority count value"),
 		}
 
 		/// Invalid state data.
-		Auth(i: u32) {
+		AuthInvalid(i: u32) {
 			description("authority value state error"),
 			display("Current state of blockchain has invalid authority value for index {}", i),
+		}
+
+		/// Bad justification for header.
+		BadJustification(h: ::primitives::block::Id) {
+			description("bad justification for header"),
+			display("bad justification for header: {}", h),
 		}
 	}
 }
