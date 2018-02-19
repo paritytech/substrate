@@ -31,19 +31,20 @@ extern crate substrate_codec as codec;
 pub mod system;
 mod transaction;
 mod unchecked_transaction;
-mod block;
 
 use rstd::prelude::*;
 use codec::Slicable;
 
 use primitives::AuthorityId;
 use primitives::hash::H512;
+use primitives::block::generic;
 pub use primitives::hash::H256;
 pub use primitives::block::{Header, Number as BlockNumber, Digest};
 pub use transaction::Transaction;
 pub use unchecked_transaction::UncheckedTransaction;
-pub use block::Block;
 
+/// A test block.
+pub type Block = generic::Block<UncheckedTransaction>;
 /// An identifier for an account on this system.
 pub type AccountId = AuthorityId;
 /// Signature for our transactions.
