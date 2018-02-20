@@ -83,10 +83,10 @@ mod tests {
 	use runtime::{consensus, session};
 
 	fn simple_setup() -> TestExternalities {
-		TestExternalities { storage: map![
+		map![
 			twox_128(b"ses:val:len").to_vec() => vec![].and(&8u32),
 			twox_128(b"par:cou").to_vec() => vec![].and(&2u32)
-		], }
+		]
 	}
 
 	#[test]

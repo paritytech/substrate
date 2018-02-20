@@ -65,7 +65,7 @@ mod tests {
 		let two = Keyring::Two.to_raw_public();
 		let three = [3u8; 32];
 
-		TestExternalities { storage: map![
+		map![
 			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].encode(),
 			twox_128(b"gov:apr").to_vec() => vec![].and(&667u32),
 			twox_128(b"ses:len").to_vec() => vec![].and(&2u64),
@@ -81,7 +81,7 @@ mod tests {
 			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
 			twox_128(b"sta:era").to_vec() => vec![].and(&0u64),
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-		], }
+		]
 	}
 
 	fn set_timestamp(timestamp: u64) -> UncheckedTransaction {
@@ -182,9 +182,9 @@ mod tests {
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let one = Keyring::One.to_raw_public();
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
-		], };
+		];
 
 		let r = execute_tx_on(Executor::new(), &mut t, BLOATY_CODE, tx(), Header::from_block_number(1));
 		assert!(r.is_err());
@@ -193,9 +193,9 @@ mod tests {
 	#[test]
 	fn panic_execution_with_native_equivalent_code_gives_error() {
 		let one = Keyring::One.to_raw_public();
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
-		], };
+		];
 
 		let r = execute_tx_on(Executor::new(), &mut t, COMPACT_CODE, tx(), Header::from_block_number(1));
 		assert!(r.is_err());
@@ -206,9 +206,9 @@ mod tests {
 		let one = Keyring::One.to_raw_public();
 		let two = Keyring::Two.to_raw_public();
 
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-		], };
+		];
 
 		let r = execute_tx_on(Executor::new(), &mut t, COMPACT_CODE, tx(), Header::from_block_number(1));
 		assert!(r.is_ok());
@@ -224,9 +224,9 @@ mod tests {
 		let one = Keyring::One.to_raw_public();
 		let two = Keyring::Two.to_raw_public();
 
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-		], };
+		];
 
 		let r = execute_tx_on(Executor::new(), &mut t, BLOATY_CODE, tx(), Header::from_block_number(1));
 		assert!(r.is_ok());
@@ -278,9 +278,9 @@ mod tests {
 	#[test]
 	fn panic_execution_gives_error() {
 		let one = Keyring::One.to_raw_public();
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
-		], };
+		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm");
 		let r = execute_tx_on(WasmExecutor, &mut t, &foreign_code[..], tx(), Header::from_block_number(1));
@@ -292,9 +292,9 @@ mod tests {
 		let one = Keyring::One.to_raw_public();
 		let two = Keyring::Two.to_raw_public();
 
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-		], };
+		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm");
 		let r = execute_tx_on(WasmExecutor, &mut t, &foreign_code[..], tx(), Header::from_block_number(1));

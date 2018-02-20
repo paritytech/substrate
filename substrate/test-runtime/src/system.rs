@@ -136,14 +136,14 @@ mod tests {
 	use ::{Header, Digest, Transaction, UncheckedTransaction};
 
 	fn new_test_ext() -> TestExternalities {
-		TestExternalities { storage: map![
+		map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
 			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
 			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
 			twox_128(&Keyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-		], }
+		]
 	}
 
 	fn construct_signed_tx(tx: Transaction) -> UncheckedTransaction {

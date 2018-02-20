@@ -27,42 +27,42 @@ pub extern crate substrate_codec as codec;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256};
 
-pub use substrate_state_machine::{Externalities, ExternalitiesError, TestExternalities};
+pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 
 // TODO: use the real error, not NoError.
 
-environmental!(ext : trait Externalities);
+environmental!(ext: trait Externalities);
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
-pub fn storage(key: &[u8]) -> Vec<u8> {
-	ext::with(|ext| ext.storage(key).ok().map(|s| s.to_vec()))
+pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
+	ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
 		.expect("read_storage cannot be called outside of an Externalities-provided environment.")
-		.unwrap_or_else(Vec::new)
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
-/// the number of bytes that the key in storage was beyond the offset.
-pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> usize {
-	ext::with(|ext| {
-		if let Ok(value) = ext.storage(key) {
-			let value = &value[value_offset..];
-			let written = ::std::cmp::min(value.len(), value_out.len());
-			value_out[0..written].copy_from_slice(&value[0..written]);
-			value.len()
-		} else {
-			// no-entry is treated as an empty vector of bytes.
-			// TODO: consider allowing empty-vector to exist separately to no-entry (i.e. return
-			// Option<usize>)
-			0
-		}
-	}).expect("read_storage cannot be called outside of an Externalities-provided environment.")
+/// the number of bytes that the key in storage was beyond the offset or None if the storage entry
+/// doesn't exist at all.
+pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+	ext::with(|ext| ext.storage(key).map(|value| {
+		let value = &value[value_offset..];
+		let written = ::std::cmp::min(value.len(), value_out.len());
+		value_out[0..written].copy_from_slice(&value[0..written]);
+		value.len()
+	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
 
-/// Set the storage to some particular key.
+/// Set the storage of some particular key to Some value.
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	ext::with(|ext|
 		ext.set_storage(key.to_vec(), value.to_vec())
+	);
+}
+
+/// Clear the storage of some particular key.
+pub fn clear_storage(key: &[u8]) {
+	ext::with(|ext|
+		ext.clear_storage(key)
 	);
 }
 
@@ -164,37 +164,37 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities { storage: map![], };
+		let mut t = TestExternalities::new();
 		assert!(with_externalities(&mut t, || {
-			assert_eq!(storage(b"hello"), b"".to_vec());
+			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
-			assert_eq!(storage(b"hello"), b"world".to_vec());
-			assert_eq!(storage(b"foo"), b"".to_vec());
+			assert_eq!(storage(b"hello"), Some(b"world".to_vec()));
+			assert_eq!(storage(b"foo"), None);
 			set_storage(b"foo", &[1, 2, 3][..]);
 			true
 		}));
 
-		t.storage = map![b"foo".to_vec() => b"bar".to_vec()];
+		t = map![b"foo".to_vec() => b"bar".to_vec()];
 
 		assert!(!with_externalities(&mut t, || {
-			assert_eq!(storage(b"hello"), b"".to_vec());
-			assert_eq!(storage(b"foo"), b"bar".to_vec());
+			assert_eq!(storage(b"hello"), None);
+			assert_eq!(storage(b"foo"), Some(b"bar".to_vec()));
 			false
 		}));
 	}
 
 	#[test]
 	fn read_storage_works() {
-		let mut t = TestExternalities { storage: map![
+		let mut t: TestExternalities = map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
-		], };
+		];
 
 		with_externalities(&mut t, || {
 			let mut v = [0u8; 4];
-			assert!(read_storage(b":test", &mut v[..], 0) >= 4);
+			assert!(read_storage(b":test", &mut v[..], 0).unwrap() >= 4);
 			assert_eq!(v, [11u8, 0, 0, 0]);
 			let mut w = [0u8; 11];
-			assert!(read_storage(b":test", &mut w[..], 4) >= 11);
+			assert!(read_storage(b":test", &mut w[..], 4).unwrap() >= 11);
 			assert_eq!(&w, b"Hello world");
 		});
 	}

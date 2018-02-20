@@ -145,7 +145,7 @@ mod tests {
 	use runtime::{consensus, session};
 
 	fn simple_setup() -> TestExternalities {
-		TestExternalities { storage: map![
+		map![
 			twox_128(SESSION_LENGTH).to_vec() => vec![].and(&2u64),
 			// the validators (10, 20, ...)
 			twox_128(b"ses:val:len").to_vec() => vec![].and(&2u32),
@@ -155,7 +155,7 @@ mod tests {
 			b":auth:len".to_vec() => vec![].and(&2u32),
 			0u32.to_keyed_vec(b":auth:") => vec![11; 32],
 			1u32.to_keyed_vec(b":auth:") => vec![21; 32]
-		], }
+		]
 	}
 
 	#[test]
