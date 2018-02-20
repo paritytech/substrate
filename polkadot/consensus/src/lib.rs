@@ -50,8 +50,8 @@ use std::sync::Arc;
 use codec::Slicable;
 use table::{Table, Context as TableContextTrait};
 use table::generic::Statement as GenericStatement;
-use polkadot_api::PolkadotApi;
-use polkadot_primitives::Hash;
+use polkadot_api::{PolkadotApi, BlockBuilder};
+use polkadot_primitives::{Hash, Timestamp};
 use polkadot_primitives::block::Block as PolkadotBlock;
 use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId};
@@ -474,7 +474,6 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
 			parent_hash,
-			parent_header: parent_header.clone(),
 			_table: table,
 			_router: router,
 			client: self.client.clone(),
@@ -482,7 +481,7 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 	}
 }
 
-fn current_timestamp() -> ::polkadot_primitives::Timestamp {
+fn current_timestamp() -> Timestamp {
 	use std::time;
 
 	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
@@ -493,7 +492,6 @@ fn current_timestamp() -> ::polkadot_primitives::Timestamp {
 /// The Polkadot proposer logic.
 pub struct Proposer<C, R> {
 	parent_hash: HeaderHash,
-	parent_header: SubstrateHeader,
 	client: Arc<C>,
 	_table: Arc<SharedTable>,
 	_router: R,
@@ -505,30 +503,18 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	type Evaluate = Result<bool, Error>;
 
 	fn propose(&self) -> Result<SubstrateBlock, Error> {
-		use polkadot_primitives::{Header as PolkadotHeader, Body as PolkadotBody};
+		// TODO: handle case when current timestamp behind that in state.
+		let polkadot_block = self.client.build_block(
+			&BlockId::Hash(self.parent_hash),
+			current_timestamp()
+		)?.bake();
 
-		let header = PolkadotHeader {
-			parent_hash: self.parent_hash,
-			number: self.parent_header.number + 1,
-			state_root: Default::default(),
-			transaction_root: Default::default(),
-			digest: Default::default(),
-		};
+		// TODO: integrate transaction queue and `push_transaction`s.
 
-		let body = PolkadotBody {
-			// TODO: compare against parent block's and schedule proposal for then.
-			timestamp: current_timestamp(),
-			transactions: Vec::new(),
-		};
+		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
+			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
 
-		for tx in body.inherent_transactions() {
-			// import these TXs first.
-		}
-
-		// get transactions out of the queue.
-
-		// finalise block and get new header.
-		unimplemented!()
+		Ok(substrate_block)
 	}
 
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
@@ -540,10 +526,10 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 fn evaluate_proposal<C: PolkadotApi>(
 	proposal: &SubstrateBlock,
 	client: &C,
-	now: ::polkadot_primitives::Timestamp,
+	now: Timestamp,
 	parent_hash: &HeaderHash,
 ) -> Result<bool, Error> {
-	const MAX_TIMESTAMP_DRIFT: ::polkadot_primitives::Timestamp = 4;
+	const MAX_TIMESTAMP_DRIFT: Timestamp = 4;
 
 	let encoded = Slicable::encode(proposal);
 	let proposal = PolkadotBlock::decode(&mut &encoded[..])

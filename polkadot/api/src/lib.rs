@@ -32,8 +32,10 @@ use client::Client;
 use polkadot_runtime::runtime;
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
+use state_machine::OverlayedChanges;
 use primitives::{AccountId, SessionKey, Timestamp};
-use primitives::block::{Id as BlockId, Block};
+use primitives::block::{Id as BlockId, Block, Header, Body};
+use primitives::transaction::UncheckedTransaction;
 use primitives::parachain::DutyRoster;
 
 error_chain! {
@@ -43,9 +45,20 @@ error_chain! {
 			description("Unknown runtime code")
 			display("Unknown runtime code")
 		}
+		/// Unknown block ID.
 		UnknownBlock(b: BlockId) {
 			description("Unknown block")
 			display("Unknown block")
+		}
+		/// Attempted to push an inherent transaction manually.
+		PushedInherentTransaction(tx: UncheckedTransaction) {
+			description("Attempted to push an inherent transaction to a block."),
+			display("Pushed inherent transaction to a block: {:?}", tx),
+		}
+		/// Badly-formed transaction.
+		BadlyFormedTransaction(tx: UncheckedTransaction) {
+			description("Attempted to push a badly-formed transaction to a block."),
+			display("Pushed badly-formed transaction to a block: {:?}", tx),
 		}
 		/// Some other error.
 		// TODO: allow to be specified as associated type of PolkadotApi
@@ -60,10 +73,29 @@ error_chain! {
 	}
 }
 
+impl From<client::error::Error> for Error {
+	fn from(e: client::error::Error) -> Error {
+		match e {
+			client::error::Error(client::error::ErrorKind::UnknownBlock(b), _) => Error::from_kind(ErrorKind::UnknownBlock(b)),
+			other => Error::from_kind(ErrorKind::Other(Box::new(other) as Box<_>)),
+		}
+	}
+}
+
+pub trait BlockBuilder: Sized {
+	/// Push a non-inherent transaction.
+	fn push_transaction(&mut self, transaction: UncheckedTransaction) -> Result<()>;
+
+	/// Finalise the block.
+	fn bake(self) -> Block;
+}
+
 /// Trait encapsulating the Polkadot API.
 ///
 /// All calls should fail when the exact runtime is unknown.
 pub trait PolkadotApi {
+	type BlockBuilder: BlockBuilder;
+
 	/// Get session keys at a given block.
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>>;
 
@@ -78,24 +110,20 @@ pub trait PolkadotApi {
 
 	/// Evaluate a block and see if it gives an error.
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<()>;
-}
 
-fn convert_client_error(e: client::error::Error) -> Error {
-	match e {
-		client::error::Error(client::error::ErrorKind::UnknownBlock(b), _) => Error::from_kind(ErrorKind::UnknownBlock(b)),
-		other => Error::from_kind(ErrorKind::Other(Box::new(other) as Box<_>)),
-	}
+	/// Create a block builder on top of the parent block.
+	fn build_block(&self, parent: &BlockId, timestamp: u64) -> Result<Self::BlockBuilder>;
 }
 
 // set up the necessary scaffolding to execute the runtime.
 macro_rules! with_runtime {
 	($client: ident, $at: expr, $exec: expr) => {{
 		// bail if the code is not the same as the natively linked.
-		if $client.code_at($at).map_err(convert_client_error)? != LocalDispatch::native_equivalent() {
+		if $client.code_at($at)? != LocalDispatch::native_equivalent() {
 			bail!(ErrorKind::UnknownRuntime);
 		}
 
-		$client.state_at($at).map_err(convert_client_error).and_then(|state| {
+		$client.state_at($at).map_err(Error::from).and_then(|state| {
 			let mut changes = Default::default();
 			let mut ext = state_machine::Ext {
 				overlay: &mut changes,
@@ -110,6 +138,8 @@ macro_rules! with_runtime {
 impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
 {
+	type BlockBuilder = ClientBlockBuilder<B::State>;
+
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
 		with_runtime!(self, at, ::runtime::consensus::authorities)
 	}
@@ -128,5 +158,120 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<()> {
 		with_runtime!(self, at, || ::runtime::system::internal::execute_block(block))
+	}
+
+	fn build_block(&self, parent: &BlockId, timestamp: Timestamp) -> Result<Self::BlockBuilder> {
+		if self.code_at(parent)? != LocalDispatch::native_equivalent() {
+			bail!(ErrorKind::UnknownRuntime);
+		}
+
+		let header = Header {
+			parent_hash: self.block_hash_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))?,
+			number: self.block_number_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))? + 1,
+			state_root: Default::default(),
+			transaction_root: Default::default(),
+			digest: Default::default(),
+		};
+
+		let body = Body {
+			timestamp: timestamp,
+			transactions: Vec::new(),
+		};
+
+		let mut builder = ClientBlockBuilder {
+			parent: *parent,
+			changes: OverlayedChanges::default(),
+			state: self.state_at(parent)?,
+			header,
+			timestamp,
+			transactions: Vec::new(),
+		};
+
+		for inherent in body.inherent_transactions() {
+			builder.execute_transaction(inherent)?;
+		}
+
+		Ok(builder)
+	}
+}
+
+/// A polkadot block builder.
+#[derive(Debug, Clone)]
+pub struct ClientBlockBuilder<S> {
+	parent: BlockId,
+	changes: OverlayedChanges,
+	state: S,
+	header: Header,
+	timestamp: Timestamp,
+	transactions: Vec<UncheckedTransaction>,
+}
+
+impl<S: state_machine::Backend> ClientBlockBuilder<S>
+	where S::Error: Into<client::error::Error>
+{
+	// executes a transaction, inherent or otherwise, without appending to the list
+	fn execute_transaction(&mut self, transaction: UncheckedTransaction) -> Result<()> {
+		if !transaction.is_well_formed() {
+			bail!(ErrorKind::BadlyFormedTransaction(transaction));
+		}
+
+		let mut ext = state_machine::Ext {
+			overlay: &mut self.changes,
+			backend: &self.state,
+		};
+
+		// TODO: avoid clone
+		let header = self.header.clone();
+		let result = ::substrate_executor::with_native_environment(
+			&mut ext,
+			move || runtime::system::internal::execute_transaction(transaction, header),
+		).map_err(Into::into);
+
+		match result {
+			Ok(header) => {
+				ext.overlay.commit_prospective();
+				self.header = header;
+				Ok(())
+			}
+			Err(e) => {
+				ext.overlay.discard_prospective();
+				Err(e)
+			}
+		}
+	}
+}
+
+impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
+	where S::Error: Into<client::error::Error>
+{
+	fn push_transaction(&mut self, transaction: UncheckedTransaction) -> Result<()> {
+		if transaction.transaction.function.is_inherent() {
+			bail!(ErrorKind::PushedInherentTransaction(transaction));
+		} else {
+			self.execute_transaction(transaction.clone())?;
+			self.transactions.push(transaction);
+			Ok(())
+		}
+	}
+
+	fn bake(mut self) -> Block {
+		let mut ext = state_machine::Ext {
+			overlay: &mut self.changes,
+			backend: &self.state,
+		};
+
+		let old_header = self.header;
+		let final_header = ::substrate_executor::with_native_environment(
+			&mut ext,
+			move || runtime::system::internal::finalise_block(old_header)
+		).expect("all inherent transactions pushed; all other transactions executed correctly; qed");
+
+		Block {
+			header: final_header,
+			body: Body {
+				timestamp: self.timestamp,
+				transactions: self.transactions,
+			}
+		}
 	}
 }

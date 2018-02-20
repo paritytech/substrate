@@ -16,8 +16,7 @@
 
 //! Errors that can occur during the consensus process.
 
-use polkadot_primitives::Timestamp;
-use primitives::block::{Number as BlockNumber, HeaderHash};
+use primitives::block::HeaderHash;
 
 error_chain! {
 	links {
