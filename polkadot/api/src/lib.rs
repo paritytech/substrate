@@ -18,7 +18,7 @@
 //! runtime.
 
 extern crate polkadot_executor as polkadot_executor;
-extern crate polkadot_runtime ;
+extern crate polkadot_runtime;
 extern crate polkadot_primitives as primitives;
 extern crate substrate_client as client;
 extern crate substrate_executor as substrate_executor;
@@ -26,6 +26,9 @@ extern crate substrate_state_machine as state_machine;
 
 #[macro_use]
 extern crate error_chain;
+
+#[cfg(test)]
+extern crate substrate_keyring as keyring;
 
 use client::backend::Backend;
 use client::Client;
@@ -273,5 +276,63 @@ impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 				transactions: self.transactions,
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use client::in_mem::Backend as InMemory;
+	use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
+	use substrate_executor::NativeExecutionDispatch;
+	use keyring::Keyring;
+
+	fn validators() -> Vec<AccountId> {
+		vec![
+			Keyring::One.to_raw_public(),
+			Keyring::Two.to_raw_public(),
+		]
+	}
+
+	fn client() -> Client<InMemory, NativeExecutor<LocalDispatch>> {
+		::client::new_in_mem(
+			LocalDispatch::new(),
+			|| {
+				let config = GenesisConfig::new_simple(validators(), 100);
+
+				// override code entry.
+				let mut storage = config.genesis_map();
+				storage.insert(b":code".to_vec(), LocalDispatch::native_equivalent().to_vec());
+
+				let block = ::client::genesis::construct_genesis_block(
+					&config.genesis_map()
+				);
+				storage.extend(additional_storage_with_genesis(&block));
+				(block.header, storage.into_iter().collect())
+			}
+		).unwrap()
+	}
+
+	#[test]
+	fn gets_session_and_validator_keys() {
+		let client = client();
+		assert_eq!(client.session_keys(&BlockId::Number(0)).unwrap(), validators());
+		assert_eq!(client.validators(&BlockId::Number(0)).unwrap(), validators());
+	}
+
+	#[test]
+	fn build_block() {
+		let client = client();
+
+		let block_builder = client.build_block(&BlockId::Number(0), 1_000_000).unwrap();
+		let block = block_builder.bake();
+
+		assert_eq!(block.header.number, 1);
+	}
+
+	#[test]
+	fn cannot_build_block_on_unknown_parent() {
+		let client = client();
+		assert!(client.build_block(&BlockId::Number(100), 1_000_000).is_err());
 	}
 }
