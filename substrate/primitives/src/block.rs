@@ -90,6 +90,7 @@ impl Slicable for Digest {
 
 impl NonTrivialSlicable for Digest { }
 
+/// Generic types to be specialised later.
 pub mod generic {
 	use super::{Header, Slicable, Input, NonTrivialSlicable};
 
