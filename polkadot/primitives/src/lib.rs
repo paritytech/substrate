@@ -77,3 +77,6 @@ pub type Hash = primitives::H256;
 
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = primitives::hash::H512;
+
+/// A timestamp: seconds since the unix epoch.
+pub type Timestamp = u64;

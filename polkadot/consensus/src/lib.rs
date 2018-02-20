@@ -54,7 +54,7 @@ use polkadot_api::PolkadotApi;
 use polkadot_primitives::Hash;
 use polkadot_primitives::block::Block as PolkadotBlock;
 use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
-use primitives::block::{Block as SubstrateBlock, Header, HeaderHash, Id as BlockId};
+use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId};
 use primitives::AuthorityId;
 
 use futures::prelude::*;
@@ -463,7 +463,7 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 	type Proposer = Proposer<C, N::TableRouter>;
 	type Error = Error;
 
-	fn init(&self, parent_header: &Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
+	fn init(&self, parent_header: &SubstrateHeader, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
 		let parent_hash = parent_header.hash();
 		let duty_roster = self.client.duty_roster(&BlockId::Hash(parent_hash))?;
 
@@ -474,19 +474,29 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
 			parent_hash,
-			table: table,
-			router,
+			parent_header: parent_header.clone(),
+			_table: table,
+			_router: router,
 			client: self.client.clone(),
 		})
 	}
 }
 
+fn current_timestamp() -> ::polkadot_primitives::Timestamp {
+	use std::time;
+
+	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
+		.expect("now always later than unix epoch; qed")
+		.as_secs()
+}
+
 /// The Polkadot proposer logic.
 pub struct Proposer<C, R> {
 	parent_hash: HeaderHash,
+	parent_header: SubstrateHeader,
 	client: Arc<C>,
-	table: Arc<SharedTable>,
-	router: R,
+	_table: Arc<SharedTable>,
+	_router: R,
 }
 
 impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
@@ -495,14 +505,66 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	type Evaluate = Result<bool, Error>;
 
 	fn propose(&self) -> Result<SubstrateBlock, Error> {
+		use polkadot_primitives::{Header as PolkadotHeader, Body as PolkadotBody};
+
+		let header = PolkadotHeader {
+			parent_hash: self.parent_hash,
+			number: self.parent_header.number + 1,
+			state_root: Default::default(),
+			transaction_root: Default::default(),
+			digest: Default::default(),
+		};
+
+		let body = PolkadotBody {
+			// TODO: compare against parent block's and schedule proposal for then.
+			timestamp: current_timestamp(),
+			transactions: Vec::new(),
+		};
+
+		for tx in body.inherent_transactions() {
+			// import these TXs first.
+		}
+
+		// get transactions out of the queue.
+
+		// finalise block and get new header.
 		unimplemented!()
 	}
 
+	// TODO: certain kinds of errors here should lead to a misbehavior report.
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
-		let encoded = Slicable::encode(proposal);
-		let _polkadot_encoded = PolkadotBlock::decode(&mut &encoded[..])
-			.ok_or_else(|| ErrorKind::ProposalNotForPolkadot)?;
-
-		Ok(true)
+		evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash)
 	}
+}
+
+fn evaluate_proposal<C: PolkadotApi>(
+	proposal: &SubstrateBlock,
+	client: &C,
+	now: ::polkadot_primitives::Timestamp,
+	parent_hash: &HeaderHash,
+) -> Result<bool, Error> {
+	const MAX_TIMESTAMP_DRIFT: ::polkadot_primitives::Timestamp = 4;
+
+	let encoded = Slicable::encode(proposal);
+	let proposal = PolkadotBlock::decode(&mut &encoded[..])
+		.ok_or_else(|| ErrorKind::ProposalNotForPolkadot)?;
+
+	if proposal.header.parent_hash != *parent_hash {
+		bail!(ErrorKind::WrongParentHash(*parent_hash, proposal.header.parent_hash));
+	}
+
+	// no need to check number because
+	// a) we assume the parent is valid.
+	// b) the runtime checks that `proposal.parent_hash` == `block_hash(proposal.number - 1)`
+
+	let block_timestamp = proposal.body.timestamp;
+
+	// TODO: just defer using `tokio_timer` to delay prepare vote.
+	if block_timestamp > now + MAX_TIMESTAMP_DRIFT {
+		bail!(ErrorKind::TimestampInFuture)
+	}
+
+	// execute the block.
+	client.evaluate_block(&BlockId::Hash(*parent_hash), proposal)?;
+	Ok(true)
 }

@@ -32,8 +32,8 @@ use client::Client;
 use polkadot_runtime::runtime;
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
-use primitives::{AccountId, SessionKey};
-use primitives::block::Id as BlockId;
+use primitives::{AccountId, SessionKey, Timestamp};
+use primitives::block::{Id as BlockId, Block};
 use primitives::parachain::DutyRoster;
 
 error_chain! {
@@ -72,6 +72,12 @@ pub trait PolkadotApi {
 
 	/// Get the authority duty roster at a block.
 	fn duty_roster(&self, at: &BlockId) -> Result<DutyRoster>;
+
+	/// Get the timestamp registered at a block.
+	fn timestamp(&self, at: &BlockId) -> Result<Timestamp>;
+
+	/// Evaluate a block and see if it gives an error.
+	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<()>;
 }
 
 fn convert_client_error(e: client::error::Error) -> Error {
@@ -114,5 +120,13 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 
 	fn duty_roster(&self, at: &BlockId) -> Result<DutyRoster> {
 		with_runtime!(self, at, ::runtime::parachains::calculate_duty_roster)
+	}
+
+	fn timestamp(&self, at: &BlockId) -> Result<Timestamp> {
+		with_runtime!(self, at, ::runtime::timestamp::get)
+	}
+
+	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<()> {
+		with_runtime!(self, at, || ::runtime::system::internal::execute_block(block))
 	}
 }

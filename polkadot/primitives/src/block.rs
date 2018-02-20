@@ -69,19 +69,6 @@ impl Slicable for Digest {
 	}
 }
 
-/// The block body. Contains timestamp and transactions.
-// TODO: add candidates update as well.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Body {
-	/// The timestamp of the block.
-	pub timestamp: u64,
-	/// The transactions in the block.
-	pub transactions: Vec<UncheckedTransaction>,
-}
-
 /// Iterator over all inherent transactions.
 pub struct InherentTransactions<'a> {
 	number: u64,
@@ -107,6 +94,41 @@ impl<'a> Iterator for InherentTransactions<'a> {
 	}
 }
 
+/// Type alias for an iterator over all transactions in a block.
+pub type AllTransactions<'a> = ::rstd::iter::Chain<
+	InherentTransactions<'a>,
+	::rstd::iter::Cloned<::rstd::slice::Iter<'a, UncheckedTransaction>>,
+>;
+
+/// The block body. Contains timestamp and transactions.
+// TODO: add candidates update as well.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub struct Body {
+	/// The timestamp of the block.
+	pub timestamp: u64,
+	/// The transactions in the block.
+	pub transactions: Vec<UncheckedTransaction>,
+}
+
+impl Body {
+	/// Get an iterator over all inherent transactions of the body.
+	pub fn inherent_transactions(&self) -> InherentTransactions {
+		InherentTransactions {
+			number: 0,
+			body: self,
+		}
+	}
+
+	/// Get an iterator over all transactions in a block.
+	pub fn all_transactions(&self) -> AllTransactions {
+		self.inherent_transactions().chain(self.transactions.iter().cloned())
+	}
+}
+
+
 /// A Polkadot relay chain block.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -117,24 +139,15 @@ pub struct Block {
 	pub body: Body,
 }
 
-/// Type alias for an iterator over all transactions in a block.
-pub type AllTransactions<'a> = ::rstd::iter::Chain<
-	InherentTransactions<'a>,
-	::rstd::iter::Cloned<::rstd::slice::Iter<'a, UncheckedTransaction>>,
->;
-
 impl Block {
 	/// Get an iterator over all inherent transactions of the body.
 	pub fn inherent_transactions(&self) -> InherentTransactions {
-		InherentTransactions {
-			number: 0,
-			body: &self.body,
-		}
+		self.body.inherent_transactions()
 	}
 
 	/// Get an iterator over all transactions in a block.
 	pub fn all_transactions(&self) -> AllTransactions {
-		self.inherent_transactions().chain(self.body.transactions.iter().cloned())
+		self.body.all_transactions()
 	}
 }
 

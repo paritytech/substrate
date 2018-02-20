@@ -17,8 +17,7 @@
 //! Timestamp manager: just handles the current timestamp.
 
 use runtime_support::storage;
-
-pub type Timestamp = u64;
+use polkadot_primitives::Timestamp;
 
 const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
 
@@ -32,6 +31,10 @@ pub mod public {
 
 	/// Set the current time.
 	pub fn set(now: Timestamp) {
+		if super::get() > now {
+			panic!("last timestamp less than now");
+		}
+
 		storage::put(CURRENT_TIMESTAMP, &now);
 	}
 }

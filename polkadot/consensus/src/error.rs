@@ -16,6 +16,9 @@
 
 //! Errors that can occur during the consensus process.
 
+use polkadot_primitives::Timestamp;
+use primitives::block::{Number as BlockNumber, HeaderHash};
+
 error_chain! {
 	links {
 		PolkadotApi(::polkadot_api::Error, ::polkadot_api::ErrorKind);
@@ -30,6 +33,14 @@ error_chain! {
 		ProposalNotForPolkadot {
 			description("Proposal provided not a Polkadot block."),
 			display("Proposal provided not a Polkadot block."),
+		}
+		TimestampInFuture {
+			description("Proposal had timestamp too far in the future."),
+			display("Proposal had timestamp too far in the future."),
+		}
+		WrongParentHash(expected: HeaderHash, got: HeaderHash) {
+			description("Proposal had wrong parent hash."),
+			display("Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
 		}
 	}
 }
