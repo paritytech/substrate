@@ -91,12 +91,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let handler = rpc::rpc_handler(client);
 	let server = rpc::start_http(&address, handler)?;
 
-	if let Some(_) = matches.subcommand_matches("collator") {
-		info!("Starting collator.");
-		server.wait();
-		return Ok(());
-	}
-
 	if let Some(_) = matches.subcommand_matches("validator") {
 		info!("Starting validator.");
 		server.wait();
