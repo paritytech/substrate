@@ -9,6 +9,7 @@ log = "0.3"
 parking_lot = "0.4"
 triehash = "0.1"
 hex-literal = "0.1"
+multiqueue = "0.3"
 ed25519 = { path = "../ed25519" }
 substrate-bft = { path = "../bft" }
 substrate-codec = { path = "../codec" }

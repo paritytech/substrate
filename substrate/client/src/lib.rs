@@ -31,6 +31,7 @@ extern crate ed25519;
 
 extern crate triehash;
 extern crate parking_lot;
+extern crate multiqueue;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
@@ -43,5 +44,5 @@ pub mod genesis;
 pub mod block_builder;
 mod client;
 
-pub use client::{Client, ClientInfo, CallResult, ImportResult, BlockStatus, new_in_mem};
+pub use client::{Client, ClientInfo, CallResult, ImportResult, BlockStatus, BlockOrigin, new_in_mem};
 pub use blockchain::Info as ChainInfo;

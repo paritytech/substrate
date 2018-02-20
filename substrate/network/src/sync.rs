@@ -84,9 +84,13 @@ impl ChainSync {
 		}
 	}
 
+	fn best_seen_block(&self) -> Option<BlockNumber> {
+		self.peers.values().max_by_key(|p| p.best_number).map(|p| p.best_number)
+	}
+
 	/// Returns sync status
 	pub fn status(&self) -> Status {
-		let best_seen = self.peers.values().max_by_key(|p| p.best_number).map(|p| p.best_number);
+		let best_seen = self.best_seen_block();
 		let state = match &best_seen {
 			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > 5 => SyncState::Downloading,
 			_ => SyncState::Idle,
@@ -97,6 +101,7 @@ impl ChainSync {
 		}
 	}
 
+	/// Handle new connected peer.
 	pub fn new_peer(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId) {
 		if let Some(info) = protocol.peer_info(peer_id) {
 			match (protocol.chain().block_status(&BlockId::Hash(info.best_hash)), info.best_number) {
@@ -211,6 +216,7 @@ impl ChainSync {
 			vec![]
 		};
 
+		let best_seen = self.best_seen_block();
 		// Blocks in the response/drain should be in ascending order.
 		for block in new_blocks {
 			let origin = block.origin;
@@ -220,7 +226,9 @@ impl ChainSync {
 					let number = header.number;
 					let hash = header_hash(&header);
 					let parent = header.parent_hash;
+					let is_best = best_seen.as_ref().map_or(false, |n| number >= *n);
 					let result = protocol.chain().import(
+						is_best,
 						header,
 						justification,
 						block.body

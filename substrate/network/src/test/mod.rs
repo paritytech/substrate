@@ -19,7 +19,7 @@ mod sync;
 use std::collections::{VecDeque, HashSet, HashMap};
 use std::sync::Arc;
 use parking_lot::RwLock;
-use client::{self, genesis};
+use client::{self, genesis, BlockOrigin};
 use client::block_builder::BlockBuilder;
 use primitives::block::Id as BlockId;
 use primitives;
@@ -185,7 +185,7 @@ impl Peer {
 			trace!("Generating {}, (#{})", primitives::block::HeaderHash::from(block.header.blake2_256()), block.header.number);
 			let justification = Self::justify(&block.header);
 			let justified = self.client.check_justification(block.header, justification).unwrap();
-			self.client.import_block(justified, Some(block.transactions)).unwrap();
+			self.client.import_block(BlockOrigin::File, justified, Some(block.transactions)).unwrap();
 		}
 	}
 
