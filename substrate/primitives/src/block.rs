@@ -92,7 +92,7 @@ impl NonTrivialSlicable for Digest { }
 
 /// Generic types to be specialised later.
 pub mod generic {
-	use super::{Header, Slicable, Input, NonTrivialSlicable};
+	use super::{Header, Slicable, Input, NonTrivialSlicable, Vec};
 
 	/// A Block - this is generic for later specialisation in particular runtimes.
 	#[derive(PartialEq, Eq, Clone)]
