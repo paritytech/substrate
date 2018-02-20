@@ -18,7 +18,8 @@
 
 use rstd::prelude::*;
 use rstd::cell::RefCell;
-use runtime_io::print;
+use rstd::hash_map::{HashMap, Entry};
+use runtime_io::{print, blake2_256};
 use codec::KeyedVec;
 use runtime_support::{storage, StorageVec};
 use demo_primitives::{BlockNumber, AccountId};
@@ -42,8 +43,13 @@ const SESSIONS_PER_ERA: &[u8] = b"sta:spe";
 const NEXT_SESSIONS_PER_ERA: &[u8] = b"sta:nse";
 const CURRENT_ERA: &[u8] = b"sta:era";
 const LAST_ERA_LENGTH_CHANGE: &[u8] = b"sta:lec";
+
 const BALANCE_OF: &[u8] = b"sta:bal:";
 const BONDAGE_OF: &[u8] = b"sta:bon:";
+const CODE_OF: &[u8] = b"sta:cod:";
+const STORAGE_OF: &[u8] = b"sta:sto:";
+
+const CALL_DEPTH: &[u8] = b"sta:cde";
 
 /// The length of the bonding duration in eras.
 pub fn bonding_duration() -> BlockNumber {
@@ -94,17 +100,184 @@ pub fn bondage(who: &AccountId) -> Bondage {
 pub mod public {
 	use super::*;
 
-	/// Transfer some unlocked staking balance to another staker.
-	pub fn transfer(transactor: &AccountId, dest: &AccountId, value: Balance) {
+	/// Create a smart-contract account.
+	pub fn create(transactor: &AccountId, code: &[u8], value: Balance) {
 		let from_key = transactor.to_keyed_vec(BALANCE_OF);
 		let from_balance = storage::get_or_default::<Balance>(&from_key);
 		assert!(from_balance >= value);
+
+		let mut dest_pre = blake2_256(code).to_vec();
+		dest_pre.extend(&transactor[..]);
+		let dest = blake2_256(&dest_pre);
+		let code_key = dest.to_keyed_vec(CODE_OF);
+		assert!(!storage::exists(&code_key));
+		storage::put_raw(&code_key, code);
+
+		// TODO: a fee.
+
+		storage::put(&from_key, &(from_balance - value));
+		storage::put(&dest.to_keyed_vec(BALANCE_OF), &value);
+	}
+
+	type State = HashMap<AccountId, (Option<Balance>, Option<Vec<u8>>, HashMap<Vec<u8>, Option<Vec<u8>>>)>;
+
+	trait Externalities {
+		fn get_account_storage(&self, account: &AccountId, location: &[u8]) -> Option<Vec<u8>>;
+		fn get_account_code(&self, account: &AccountId) -> Vec<u8>;
+		fn get_account_balance(&self, account: &AccountId) -> Balance;
+	}
+
+	struct Ext<F1, F3, F5> where
+		F1 : Fn(&AccountId, &[u8]) -> Option<Vec<u8>>,
+		F3 : Fn(&AccountId) -> Vec<u8>,
+		F5 : Fn(&AccountId) -> Balance
+	{
+		do_get_account_storage: F1,
+		do_get_account_code: F3,
+		do_get_account_balance: F5,
+	}
+
+	impl<F1, F3, F5> Externalities for Ext<F1, F3, F5> where
+		F1 : Fn(&AccountId, &[u8]) -> Option<Vec<u8>>,
+		F3 : Fn(&AccountId) -> Vec<u8>,
+		F5 : Fn(&AccountId) -> Balance
+	{
+		fn get_account_storage(&self, account: &AccountId, location: &[u8]) -> Option<Vec<u8>> {
+			(self.do_get_account_storage)(account, location)
+		}
+		fn get_account_code(&self, account: &AccountId) -> Vec<u8> {
+			(self.do_get_account_code)(account)
+		}
+		fn get_account_balance(&self, account: &AccountId) -> Balance {
+			(self.do_get_account_balance)(account)
+		}
+	}
+
+	/// Transfer some unlocked staking balance to another staker.
+	/// TODO: probably want to state gas-limit and gas-price.
+	pub fn transfer(transactor: &AccountId, dest: &AccountId, value: Balance) {
+		let ext = Ext {
+			do_get_account_storage: |account: &AccountId, location: &[u8]| {
+				let mut v = transactor.to_keyed_vec(STORAGE_OF);
+				v.extend(location);
+				storage::get_raw(&v)
+			},
+			do_get_account_code: |account: &AccountId|
+				storage::get_raw(&account.to_keyed_vec(CODE_OF)).unwrap_or_default(),
+			do_get_account_balance: |account: &AccountId|
+				storage::get_or_default::<Balance>(&account.to_keyed_vec(BALANCE_OF)),
+		};
+
+		let to_commit = effect_transfer(transactor, dest, value, ext);
+
+		// commit anything that made it this far to storage
+		if let Some(commit_state) = to_commit {
+			for (address, (maybe_balance, maybe_code, storage)) in commit_state.into_iter() {
+				if let Some(balance) = maybe_balance {
+					storage::put(&address.to_keyed_vec(BALANCE_OF), &balance);
+				}
+				if let Some(code) = maybe_code {
+					storage::put(&address.to_keyed_vec(CODE_OF), &code);
+				}
+				let storage_key = transactor.to_keyed_vec(STORAGE_OF);
+				for (k, v) in storage.into_iter() {
+					let mut key = storage_key.clone();
+					key.extend(k);
+					if let Some(value) = v {
+						storage::put_raw(&key, &value);
+					} else {
+						storage::kill(&key);
+					}
+				}
+			}
+		}
+	}
+
+	fn effect_transfer<E: Externalities>(
+		transactor: &AccountId,
+		dest: &AccountId,
+		value: Balance,
+		ext: E
+	) -> Option<State> {
+		let call_depth: u32 = storage::get_or(CALL_DEPTH, 0);
+
+		let from_key = transactor.to_keyed_vec(BALANCE_OF);
+		let from_balance = storage::get_or_default::<Balance>(&from_key);
+		assert!(from_balance >= value);
+
 		let to_key = dest.to_keyed_vec(BALANCE_OF);
 		let to_balance: Balance = storage::get_or_default(&to_key);
 		assert!(bondage(transactor) <= bondage(dest));
 		assert!(to_balance + value > to_balance);	// no overflow
+
+		// TODO: a fee, based upon gaslimit/gasprice.
+		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
+		// code in contract itself and use that.
+
 		storage::put(&from_key, &(from_balance - value));
 		storage::put(&to_key, &(to_balance + value));
+
+		let local: RefCell<State> = RefCell::new(HashMap::new());
+
+		let should_commit = {
+			// Our local ext: Should be used for any transfers and creates that happen internally.
+			let ext = Ext {
+				do_get_account_storage: |account: &AccountId, location: &[u8]|
+					local.borrow().get(account)
+						.and_then(|a| a.2.get(location))
+						.cloned()
+						.unwrap_or_else(|| ext.get_account_storage(account, location)),
+				do_get_account_code: |account: &AccountId|
+					local.borrow().get(account)
+						.and_then(|a| a.1.clone())
+						.unwrap_or_else(|| ext.get_account_code(account)),
+				do_get_account_balance: |account: &AccountId|
+					local.borrow().get(account)
+						.and_then(|a| a.0)
+						.unwrap_or_else(|| ext.get_account_balance(account)),
+			};
+
+			let mut transfer = |inner_dest: &AccountId, value: Balance| {
+				if let Some(commit_state) = effect_transfer(dest, inner_dest, value, ext) {
+					let mut local = local.borrow_mut();
+					for (address, (maybe_balance, maybe_code, storage)) in commit_state.into_iter() {
+						match local.entry(address) {
+							Entry::Occupied(e) => {
+								let mut value = e.into_mut();
+								if maybe_balance.is_some() {
+									value.0 = maybe_balance;
+								}
+								if maybe_code.is_some() {
+									value.1 = maybe_code;
+								}
+								value.2.extend(storage.into_iter());
+							}
+							Entry::Vacant(e) => {
+								e.insert((maybe_balance, maybe_code, storage));
+							}
+						}
+					}
+				}
+			};
+
+			let mut create = |code: &[u8], value: Balance| unimplemented!();
+
+			storage::put(CALL_DEPTH, &(call_depth + 1));
+
+			// TODO: logging (logs are just placed in a notable storage-based vector and cleared every
+			// block).
+			// TODO: execute code with get_storage, set_storage, clear_storage, create and transfer as
+			// invokable externalities.
+
+			storage::put(CALL_DEPTH, &call_depth);
+			true
+		};
+
+		if should_commit {
+			Some(local.into_inner())
+		} else {
+			None
+		}
 	}
 
 	/// Declare the desire to stake for the transactor.
