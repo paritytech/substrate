@@ -90,11 +90,10 @@ impl Slicable for Digest {
 
 impl NonTrivialSlicable for Digest { }
 
-
-
 pub mod generic {
 	use super::{Header, Slicable, Input, NonTrivialSlicable};
 
+	/// A Block - this is generic for later specialisation in particular runtimes.
 	#[derive(PartialEq, Eq, Clone)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct Block<Transaction: PartialEq + Eq + Clone> {
@@ -125,6 +124,8 @@ pub mod generic {
 
 /// The body of a block is just a bunch of transactions.
 pub type Body = Vec<Transaction>;
+/// The header and body of a concrete, but unspecialised, block. Used by substrate to represent a
+/// block some fields of which the runtime alone knows how to interpret (e.g. the transactions).
 pub type Block = generic::Block<Transaction>;
 
 /// A substrate chain block header.
