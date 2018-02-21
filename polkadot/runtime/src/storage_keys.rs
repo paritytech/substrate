@@ -14,16 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime::{system, parachains, consensus, session};
+//! Definition of constant storage keys.
 
-impl_stubs!(
-	execute_block => |block| system::internal::execute_block(block),
-	execute_transaction => |(header, utx)| system::internal::execute_transaction(utx, header),
-	finalise_block => |header| system::internal::finalise_block(header),
-	validator_count => |()| session::validator_count(),
-	validators => |()| session::validators(),
-	authorities => |()| consensus::authorities(),
-	duty_roster => |()| parachains::calculate_duty_roster(),
-	timestamp => |()| ::runtime::timestamp::get(),
-	nonce => |account_id| system::nonce(account_id)
-);
+/// Prefixes account ID and stores u64 nonce.
+pub const NONCE_OF: &[u8] = b"sys:non:";
+/// Prefixes block number and stores hash of that block.
+pub const BLOCK_HASH_AT: &[u8] = b"sys:old:";
+/// Stores the temporary current transaction number.
+pub const TEMP_TRANSACTION_NUMBER: &[u8] = b"temp:txcount";

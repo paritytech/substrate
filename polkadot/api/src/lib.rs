@@ -36,7 +36,7 @@ use polkadot_runtime::runtime;
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine::OverlayedChanges;
-use primitives::{AccountId, SessionKey, Timestamp};
+use primitives::{AccountId, SessionKey, Timestamp, TxOrder};
 use primitives::block::{Id as BlockId, Block, Header, Body};
 use primitives::transaction::UncheckedTransaction;
 use primitives::parachain::DutyRoster;
@@ -127,6 +127,10 @@ pub trait PolkadotApi {
 	/// Get the timestamp registered at a block.
 	fn timestamp(&self, at: &Self::CheckedBlockId) -> Result<Timestamp>;
 
+	/// Get the nonce of an account at a block.
+	fn nonce(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<TxOrder>;
+
+
 	/// Evaluate a block and see if it gives an error.
 	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<()>;
 
@@ -192,6 +196,10 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 
 	fn evaluate_block(&self, at: &CheckedId, block: Block) -> Result<()> {
 		with_runtime!(self, at, || ::runtime::system::internal::execute_block(block))
+	}
+
+	fn nonce(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<TxOrder> {
+		with_runtime!(self, at, || ::runtime::system::nonce(account))
 	}
 
 	fn build_block(&self, parent: &CheckedId, timestamp: Timestamp) -> Result<Self::BlockBuilder> {

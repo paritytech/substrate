@@ -17,19 +17,20 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
-use rstd::prelude::*;
 use rstd::mem;
-use runtime_io::{print, storage_root, enumerated_trie_root};
-use codec::{KeyedVec, Slicable};
-use runtime_support::{Hashable, storage};
-use environment::with_env;
-use polkadot_primitives::{AccountId, Hash, TxOrder, BlockNumber, Block, Header,
-	UncheckedTransaction, Function, InherentFunction, Log};
-use runtime::{staking, session};
+use rstd::prelude::*;
 
-const NONCE_OF: &[u8] = b"sys:non:";
-const BLOCK_HASH_AT: &[u8] = b"sys:old:";
-const TEMP_TRANSACTION_NUMBER: &[u8] = b"temp:txcount:";
+use codec::{KeyedVec, Slicable};
+use environment::with_env;
+use polkadot_primitives::{
+	AccountId, Hash, TxOrder, BlockNumber, Block, Header,
+	UncheckedTransaction, Function, InherentFunction, Log
+};
+
+use runtime_io::{print, storage_root, enumerated_trie_root};
+use runtime_support::{Hashable, storage};
+use runtime::{staking, session};
+use storage_keys::{NONCE_OF, BLOCK_HASH_AT, TEMP_TRANSACTION_NUMBER};
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
@@ -139,6 +140,12 @@ pub mod internal {
 
 		header
 	}
+}
+
+/// Get an account's current nonce.
+pub fn nonce(account: AccountId) -> TxOrder {
+	let nonce_key = account.to_keyed_vec(NONCE_OF);
+	storage::get_or(&nonce_key, 0)
 }
 
 /// Dispatch a function.
