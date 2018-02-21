@@ -54,8 +54,6 @@ pub mod privileged {
 pub mod internal {
 	use super::*;
 
-	struct CheckedTransaction(UncheckedTransaction);
-
 	/// Deposits a log and ensures it matches the blocks log data.
 	pub fn deposit_log(log: Log) {
 		with_env(|e| e.digest.logs.push(log));
