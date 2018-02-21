@@ -465,7 +465,9 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 
 	fn init(&self, parent_header: &SubstrateHeader, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
 		let parent_hash = parent_header.hash();
-		let duty_roster = self.client.duty_roster(&BlockId::Hash(parent_hash))?;
+
+		let checked_id = self.client.check_id(BlockId::Hash(parent_hash))?;
+		let duty_roster = self.client.duty_roster(&checked_id)?;
 
 		let group_info = make_group_info(duty_roster, authorities)?;
 		let table = Arc::new(SharedTable::new(group_info, sign_with, parent_hash));
@@ -474,6 +476,7 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
 			parent_hash,
+			parent_id: checked_id,
 			_table: table,
 			_router: router,
 			client: self.client.clone(),
@@ -490,8 +493,9 @@ fn current_timestamp() -> Timestamp {
 }
 
 /// The Polkadot proposer logic.
-pub struct Proposer<C, R> {
+pub struct Proposer<C: PolkadotApi, R> {
 	parent_hash: HeaderHash,
+	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
 	_table: Arc<SharedTable>,
 	_router: R,
@@ -505,7 +509,7 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	fn propose(&self) -> Result<SubstrateBlock, Error> {
 		// TODO: handle case when current timestamp behind that in state.
 		let polkadot_block = self.client.build_block(
-			&BlockId::Hash(self.parent_hash),
+			&self.parent_id,
 			current_timestamp()
 		)?.bake();
 
@@ -519,7 +523,7 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
-		evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash)
+		evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id)
 	}
 }
 
@@ -528,6 +532,7 @@ fn evaluate_proposal<C: PolkadotApi>(
 	client: &C,
 	now: Timestamp,
 	parent_hash: &HeaderHash,
+	parent_id: &C::CheckedBlockId,
 ) -> Result<bool, Error> {
 	const MAX_TIMESTAMP_DRIFT: Timestamp = 4;
 
@@ -551,6 +556,6 @@ fn evaluate_proposal<C: PolkadotApi>(
 	}
 
 	// execute the block.
-	client.evaluate_block(&BlockId::Hash(*parent_hash), proposal)?;
+	client.evaluate_block(parent_id, proposal)?;
 	Ok(true)
 }
