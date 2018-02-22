@@ -500,7 +500,7 @@ mod tests {
 
 		let justification = justify(&block.header);
 		let justified = client.check_justification(block.header, justification).unwrap();
-		client.import_block(justified, Some(block.transactions)).unwrap();
+		client.import_block(BlockOrigin::Own, justified, Some(block.transactions)).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
@@ -544,7 +544,7 @@ mod tests {
 
 		let justification = justify(&block.header);
 		let justified = client.check_justification(block.header, justification).unwrap();
-		client.import_block(justified, Some(block.transactions)).unwrap();
+		client.import_block(BlockOrigin::Own, justified, Some(block.transactions)).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
