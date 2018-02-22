@@ -25,7 +25,9 @@ extern crate pwasm_alloc;
 pub use alloc::boxed;
 pub use alloc::rc;
 pub use alloc::vec;
-pub use alloc::collections::hash_map;
+pub mod collections {
+	pub use alloc::collections::hash_map;
+}
 pub use core::cell;
 pub use core::cmp;
 pub use core::intrinsics;

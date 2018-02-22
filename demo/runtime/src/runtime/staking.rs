@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::cell::RefCell;
-use rstd::hash_map::{HashMap, Entry};
+use rstd::collections::hash_map::{HashMap, Entry};
 use runtime_io::{print, blake2_256};
 use codec::KeyedVec;
 use runtime_support::{storage, StorageVec};
@@ -220,24 +220,24 @@ pub mod public {
 		let local: RefCell<State> = RefCell::new(HashMap::new());
 
 		let should_commit = {
-			// Our local ext: Should be used for any transfers and creates that happen internally.
-			let ext = Ext {
-				do_get_account_storage: |account: &AccountId, location: &[u8]|
-					local.borrow().get(account)
-						.and_then(|a| a.2.get(location))
-						.cloned()
-						.unwrap_or_else(|| ext.get_account_storage(account, location)),
-				do_get_account_code: |account: &AccountId|
-					local.borrow().get(account)
-						.and_then(|a| a.1.clone())
-						.unwrap_or_else(|| ext.get_account_code(account)),
-				do_get_account_balance: |account: &AccountId|
-					local.borrow().get(account)
-						.and_then(|a| a.0)
-						.unwrap_or_else(|| ext.get_account_balance(account)),
-			};
-
 			let mut transfer = |inner_dest: &AccountId, value: Balance| {
+				// Our local ext: Should be used for any transfers and creates that happen internally.
+				let ext = Ext {
+					do_get_account_storage: |account: &AccountId, location: &[u8]|
+						local.borrow().get(account)
+							.and_then(|a| a.2.get(location))
+							.cloned()
+							.unwrap_or_else(|| ext.get_account_storage(account, location)),
+					do_get_account_code: |account: &AccountId|
+						local.borrow().get(account)
+							.and_then(|a| a.1.clone())
+							.unwrap_or_else(|| ext.get_account_code(account)),
+					do_get_account_balance: |account: &AccountId|
+						local.borrow().get(account)
+							.and_then(|a| a.0)
+							.unwrap_or_else(|| ext.get_account_balance(account)),
+				};
+
 				if let Some(commit_state) = effect_transfer(dest, inner_dest, value, ext) {
 					let mut local = local.borrow_mut();
 					for (address, (maybe_balance, maybe_code, storage)) in commit_state.into_iter() {
@@ -259,8 +259,8 @@ pub mod public {
 					}
 				}
 			};
-
-			let mut create = |code: &[u8], value: Balance| unimplemented!();
+			let mut create = |code: &[u8], value: Balance| unimplemented!();		// TODO: use `create` and place in `local`
+			let mut set_storage = |code: &[u8], value: Balance| unimplemented!(); // TODO: use `local`
 
 			storage::put(CALL_DEPTH, &(call_depth + 1));
 
