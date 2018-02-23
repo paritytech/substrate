@@ -17,15 +17,19 @@
 use std::sync::Arc;
 use std::collections::{BTreeMap};
 use std::io;
+use multiqueue;
+use futures::sync::oneshot;
 use network::{NetworkProtocolHandler, NetworkService, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use primitives::block::{TransactionHash, Header};
+use primitives::Hash;
 use core_io::{TimerToken};
 use io::NetSyncIo;
 use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo, TransactionStats};
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
+use message::Statement;
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
@@ -50,6 +54,23 @@ pub trait SyncProvider: Send + Sync {
 	fn node_id(&self) -> Option<String>;
 	/// Returns propagation count for pending transactions.
 	fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats>;
+}
+
+/// ConsensusService
+pub trait ConsensusService: Send + Sync {
+	/// Get statement stream.
+	fn statements(&self) -> multiqueue::BroadcastFutReceiver<Statement>;
+	/// Send out a statement.
+	fn send_statement(&self, statement: Statement);
+	/// Maintain connectivity to given addresses.
+	fn connect_to_authorities(&self, addresses: &[String]);
+	/// Fetch candidate.
+	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Option<Vec<u8>>>;
+}
+
+/// devp2p Protocol handler
+struct ProtocolHandler {
+	protocol: Protocol,
 }
 
 /// Peer connection information
@@ -168,9 +189,27 @@ impl SyncProvider for Service {
 	}
 }
 
-struct ProtocolHandler {
-	/// Protocol handler
-	protocol: Protocol,
+/// ConsensusService
+impl ConsensusService for Service {
+	fn statements(&self) -> multiqueue::BroadcastFutReceiver<Statement> {
+		self.handler.protocol.statements()
+	}
+
+	fn connect_to_authorities(&self, _addresses: &[String]) {
+		//TODO: implement me
+	}
+
+	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Option<Vec<u8>>> {
+		self.network.with_context_eval(DOT_PROTOCOL_ID, |context| {
+			self.handler.protocol.fetch_candidate(&mut NetSyncIo::new(context), hash)
+		}).expect("DOT Service is registered")
+	}
+
+	fn send_statement(&self, statement: Statement) {
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			self.handler.protocol.send_statement(&mut NetSyncIo::new(context), &statement);
+		});
+	}
 }
 
 impl NetworkProtocolHandler for ProtocolHandler {
