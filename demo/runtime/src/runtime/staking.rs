@@ -301,8 +301,7 @@ pub mod public {
 
 			// TODO: logging (logs are just placed in a notable storage-based vector and cleared every
 			// block).
-			// TODO: execute code with get_storage, set_storage, clear_storage, create and transfer as
-			// invokable externalities.
+			// TODO: execute code with ext(), put_storage, create and transfer as externalities.
 
 			storage::put(CALL_DEPTH, &call_depth);
 			true
