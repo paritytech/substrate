@@ -17,8 +17,10 @@
 extern crate transaction_pool;
 extern crate polkadot_api;
 extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives as substrate_primitives;
 extern crate substrate_codec as codec;
 extern crate ed25519;
+extern crate ethereum_types;
 
 #[macro_use]
 extern crate error_chain;
@@ -31,8 +33,21 @@ use polkadot_api::PolkadotApi;
 use primitives::AccountId;
 use primitives::block::Id as BlockId;
 use primitives::transaction::UncheckedTransaction;
-use transaction_pool::Readiness;
+use transaction_pool::{Pool, Readiness};
 use transaction_pool::scoring::{Change, Choice};
+
+// TODO: make queue generic over hash and sender so we don't need ethereum-types
+pub use ethereum_types::{Address as TruncatedAccountId, H256 as TransactionHash};
+pub use transaction_pool::{Options, Status, LightStatus, NoopListener, VerifiedTransaction as VerifiedTransactionOps};
+
+/// Truncate an account ID to 160 bits.
+pub fn truncate_id(id: &AccountId) -> TruncatedAccountId {
+	TruncatedAccountId::from_slice(&id[..20])
+}
+
+/// Iterator over pending transactions.
+pub type PendingIterator<'a, C> =
+	transaction_pool::PendingIterator<'a, VerifiedTransaction, Ready<'a, C>, Scoring, NoopListener>;
 
 error_chain! {
 	errors {
@@ -46,31 +61,88 @@ error_chain! {
 			description("Transaction had bad signature."),
 			display("Transaction had bad signature."),
 		}
+		/// Import error.
+		Import(err: Box<::std::error::Error + Send>) {
+			description("Error importing transaction"),
+			display("Error importing transaction: {}", err.description()),
+		}
 	}
 }
 
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Debug, Clone)]
-pub struct VerifiedTransaction(UncheckedTransaction);
+pub struct VerifiedTransaction {
+	inner: UncheckedTransaction,
+	hash: TransactionHash,
+	address: TruncatedAccountId,
+	insertion_id: u64,
+}
 
 impl VerifiedTransaction {
 	/// Attempt to verify a transaction.
-	pub fn create(tx: UncheckedTransaction) -> Result<Self> {
+	fn create(tx: UncheckedTransaction, insertion_id: u64) -> Result<Self> {
 		if tx.is_inherent() {
 			bail!(ErrorKind::IsInherent(tx))
 		}
 
 		let message = codec::Slicable::encode(&tx);
 		if ed25519::verify(&*tx.signature, &message, &tx.transaction.signed[..]) {
-			Ok(VerifiedTransaction(tx))
+			// TODO: make transaction-pool use generic types.
+			let hash = substrate_primitives::hashing::blake2_256(&message);
+			let address = truncate_id(&tx.transaction.signed);
+			Ok(VerifiedTransaction {
+				inner: tx,
+				hash: hash.into(),
+				address,
+				insertion_id,
+			})
 		} else {
 			Err(ErrorKind::BadSignature(tx).into())
 		}
 	}
 
+	/// Access the underlying transaction.
+	pub fn as_transaction(&self) -> &UncheckedTransaction {
+		self.as_ref()
+	}
+
 	/// Consume the verified transaciton, yielding the unchecked counterpart.
 	pub fn into_inner(self) -> UncheckedTransaction {
-		self.0
+		self.inner
+	}
+
+	/// Get the 256-bit hash of this transaction.
+	pub fn hash(&self) -> &TransactionHash {
+		&self.hash
+	}
+
+	/// Get the truncated account ID of the sender of this transaction.
+	pub fn sender(&self) -> &TruncatedAccountId {
+		&self.address
+	}
+}
+
+impl AsRef<UncheckedTransaction> for VerifiedTransaction {
+	fn as_ref(&self) -> &UncheckedTransaction {
+		&self.inner
+	}
+}
+
+impl transaction_pool::VerifiedTransaction for VerifiedTransaction {
+	fn hash(&self) -> &TransactionHash {
+		&self.hash
+	}
+
+	fn sender(&self) -> &TruncatedAccountId {
+		&self.address
+	}
+
+	fn mem_usage(&self) -> usize {
+		1 // TODO
+	}
+
+	fn insertion_id(&self) -> u64 {
+		self.insertion_id
 	}
 }
 
@@ -81,11 +153,11 @@ impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
     type Score = u64;
 
     fn compare(&self, old: &VerifiedTransaction, other: &VerifiedTransaction) -> Ordering {
-		old.0.transaction.nonce.cmp(&other.0.transaction.nonce)
+		old.inner.transaction.nonce.cmp(&other.inner.transaction.nonce)
 	}
 
     fn choose(&self, old: &VerifiedTransaction, new: &VerifiedTransaction) -> Choice {
-		if old.0.transaction.nonce == new.0.transaction.nonce {
+		if old.inner.transaction.nonce == new.inner.transaction.nonce {
 			Choice::RejectNew // no fees to determine which is better
 		} else {
 			Choice::InsertNew
@@ -129,7 +201,7 @@ impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 
 impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for Ready<'a, T> {
 	fn is_ready(&mut self, tx: &VerifiedTransaction) -> Readiness {
-		let sender = tx.0.transaction.signed;
+		let sender = tx.inner.transaction.signed;
 
 		// TODO: find a way to handle nonce error properly -- will need changes to
 		// transaction-pool trait.
@@ -139,11 +211,72 @@ impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for R
 
 		*next_nonce += 1;
 
-		match tx.0.transaction.nonce.cmp(&next_nonce) {
+		match tx.inner.transaction.nonce.cmp(&next_nonce) {
 			Ordering::Greater => Readiness::Future,
 			Ordering::Equal => Readiness::Ready,
 			Ordering::Less => Readiness::Stalled,
 		}
+	}
+}
+
+/// The polkadot transaction pool.
+///
+/// Wraps a `transaction-pool::Pool`.
+pub struct TransactionPool {
+	inner: transaction_pool::Pool<VerifiedTransaction, Scoring>,
+	insertion_index: u64, // TODO: use AtomicU64 when it stabilizes
+}
+
+impl TransactionPool {
+	/// Create a new transaction pool.
+	pub fn new(options: Options) -> Self {
+		TransactionPool {
+			inner: Pool::new(NoopListener, Scoring, options),
+			insertion_index: 0,
+		}
+	}
+
+	/// Verify and import a transaction into the pool.
+	pub fn import(&mut self, tx: UncheckedTransaction) -> Result<Arc<VerifiedTransaction>> {
+		let insertion_index = self.insertion_index;
+		self.insertion_index += 1;
+
+		let verified = VerifiedTransaction::create(tx, insertion_index)?;
+
+		// TODO: just use a foreign link when the error type is made public.
+		self.inner.import(verified)
+			.map_err(|e| ErrorKind::Import(Box::new(e)))
+			.map_err(Into::into)
+	}
+
+	/// Clear the pool.
+	pub fn clear(&mut self) {
+		self.inner.clear();
+	}
+
+	/// Remove from the pool.
+	pub fn remove(&mut self, hash: &TransactionHash, is_valid: bool) -> Option<Arc<VerifiedTransaction>> {
+		self.inner.remove(hash, is_valid)
+	}
+
+	/// Cull transactions from the queue.
+	pub fn cull<T: PolkadotApi>(&mut self, senders: Option<&[TruncatedAccountId]>, ready: Ready<T>) -> usize {
+		self.inner.cull(senders, ready)
+	}
+
+	/// Get an iterator of pending transactions.
+	pub fn pending<'a, T: 'a + PolkadotApi>(&'a self, ready: Ready<'a, T>) -> PendingIterator<'a, T> {
+		self.inner.pending(ready)
+	}
+
+	/// Get the full status of the queue (including readiness)
+	pub fn status<T: PolkadotApi>(&self, ready: Ready<T>) -> Status {
+		self.inner.status(ready)
+	}
+
+	/// Returns light status of the pool.
+	pub fn light_status(&self) -> LightStatus {
+		self.inner.light_status()
 	}
 }
 
