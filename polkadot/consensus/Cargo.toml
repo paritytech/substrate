@@ -13,6 +13,7 @@ polkadot-api = { path = "../api" }
 polkadot-collator = { path = "../collator" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-statement-table = { path = "../statement-table" }
+polkadot-transaction-pool = { path = "../transaction-pool" }
 substrate-bft = { path = "../../substrate/bft" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-primitives = { path = "../../substrate/primitives" }

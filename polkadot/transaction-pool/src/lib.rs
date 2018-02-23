@@ -31,7 +31,6 @@ use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
 use primitives::AccountId;
-use primitives::block::Id as BlockId;
 use primitives::transaction::UncheckedTransaction;
 use transaction_pool::{Pool, Readiness};
 use transaction_pool::scoring::{Change, Choice};
@@ -76,6 +75,7 @@ pub struct VerifiedTransaction {
 	hash: TransactionHash,
 	address: TruncatedAccountId,
 	insertion_id: u64,
+	encoded_size: usize,
 }
 
 impl VerifiedTransaction {
@@ -93,6 +93,7 @@ impl VerifiedTransaction {
 			Ok(VerifiedTransaction {
 				inner: tx,
 				hash: hash.into(),
+				encoded_size: message.len(),
 				address,
 				insertion_id,
 			})
@@ -119,6 +120,11 @@ impl VerifiedTransaction {
 	/// Get the truncated account ID of the sender of this transaction.
 	pub fn sender(&self) -> &TruncatedAccountId {
 		&self.address
+	}
+
+	/// Get encoded size of the transaction.
+	pub fn encoded_size(&self) -> usize {
+		self.encoded_size
 	}
 }
 
@@ -188,14 +194,25 @@ pub struct Ready<'a, T: 'a + PolkadotApi> {
 	known_nonces: HashMap<AccountId, ::primitives::TxOrder>,
 }
 
+impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
+	fn clone(&self) -> Self {
+		Ready {
+			at_block: self.at_block.clone(),
+			api_handle: self.api_handle,
+			known_nonces: self.known_nonces.clone(),
+		}
+	}
+}
+
 impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
-	/// Create a new readiness evaluator at the given block.
-	pub fn create(at: BlockId, client: &'a T) -> polkadot_api::Result<Self> {
-		client.check_id(at).map(|id| Ready {
-			at_block: id,
+	/// Create a new readiness evaluator at the given block. Requires that
+	/// the ID has already been checked for local corresponding and available state.
+	pub fn create(at: T::CheckedBlockId, client: &'a T) -> Self {
+		Ready {
+			at_block: at,
 			api_handle: client,
 			known_nonces: HashMap::new(),
-		})
+		}
 	}
 }
 
