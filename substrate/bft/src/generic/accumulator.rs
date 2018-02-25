@@ -122,6 +122,15 @@ struct VoteCounts {
 	committed: usize,
 }
 
+/// Misbehavior which can occur.
+#[derive(Debug, Clone)]
+pub enum Misbehavior<Digest, Signature> {
+	/// Issued two conflicting prepare messages.
+	DoublePrepare((Digest, Signature), (Digest, Signature)),
+	/// Issued two conflicting commit messages.
+	DoubleCommit((Digest, Signature), (Digest, Signature)),
+}
+
 /// Accumulates messages for a given round of BFT consensus.
 ///
 /// This isn't tied to the "view" of a single authority. It
@@ -132,7 +141,7 @@ pub struct Accumulator<Candidate, Digest, AuthorityId, Signature>
 	where
 	Candidate: Eq + Clone,
 	Digest: Hash + Eq + Clone,
-	AuthorityId: Hash + Eq,
+	AuthorityId: Hash + Eq + Clone,
 	Signature: Eq + Clone,
 {
 	round_number: usize,
@@ -144,13 +153,14 @@ pub struct Accumulator<Candidate, Digest, AuthorityId, Signature>
 	vote_counts: HashMap<Digest, VoteCounts>,
 	advance_round: HashSet<AuthorityId>,
 	state: State<Candidate, Digest, Signature>,
+	misbehavior: HashMap<AuthorityId, Misbehavior<Digest, Signature>>,
 }
 
 impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, AuthorityId, Signature>
 	where
 	Candidate: Eq + Clone,
 	Digest: Hash + Eq + Clone,
-	AuthorityId: Hash + Eq,
+	AuthorityId: Hash + Eq + Clone,
 	Signature: Eq + Clone,
 {
 	/// Create a new state accumulator.
@@ -165,6 +175,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 			vote_counts: HashMap::new(),
 			advance_round: HashSet::new(),
 			state: State::Begin,
+			misbehavior: HashMap::new(),
 		}
 	}
 
@@ -185,6 +196,11 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 	/// Inspect the current consensus state.
 	pub fn state(&self) -> &State<Candidate, Digest, Signature> {
 		&self.state
+	}
+
+	/// Inspect the current observed misbehavior
+	pub fn misbehavior(&self) -> &HashMap<AuthorityId, Misbehavior<Digest, Signature>> {
+		&self.misbehavior
 	}
 
 	/// Import a message. Importing duplicates is fine, but the signature
@@ -227,19 +243,29 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		signature: Signature,
 	) {
 		// ignore any subsequent prepares by the same sender.
-		// TODO: if digest is different, that's misbehavior.
-		let threshold_prepared = if let Entry::Vacant(vacant) = self.prepares.entry(sender) {
-			vacant.insert((digest.clone(), signature));
-			let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
-			count.prepared += 1;
+		let threshold_prepared = match self.prepares.entry(sender.clone()) {
+			Entry::Vacant(vacant) => {
+				vacant.insert((digest.clone(), signature));
+				let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
+				count.prepared += 1;
 
-			if count.prepared >= self.threshold {
-				Some(digest)
-			} else {
+				if count.prepared >= self.threshold {
+					Some(digest)
+				} else {
+					None
+				}
+			}
+			Entry::Occupied(occupied) => {
+				// if digest is different, that's misbehavior.
+				if occupied.get().0 != digest {
+					self.misbehavior.insert(
+						sender,
+						Misbehavior::DoublePrepare(occupied.get().clone(), (digest, signature))
+					);
+				}
+
 				None
 			}
-		} else {
-			None
 		};
 
 		// only allow transition to prepare from begin or proposed state.
@@ -270,19 +296,29 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		signature: Signature,
 	) {
 		// ignore any subsequent commits by the same sender.
-		// TODO: if digest is different, that's misbehavior.
-		let threshold_committed = if let Entry::Vacant(vacant) = self.commits.entry(sender) {
-			vacant.insert((digest.clone(), signature));
-			let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
-			count.committed += 1;
+		let threshold_committed = match self.commits.entry(sender.clone()) {
+			Entry::Vacant(vacant) => {
+				vacant.insert((digest.clone(), signature));
+				let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
+				count.committed += 1;
 
-			if count.committed >= self.threshold {
-				Some(digest)
-			} else {
+				if count.committed >= self.threshold {
+					Some(digest)
+				} else {
+					None
+				}
+			}
+			Entry::Occupied(occupied) => {
+				// if digest is different, that's misbehavior.
+				if occupied.get().0 != digest {
+					self.misbehavior.insert(
+						sender,
+						Misbehavior::DoubleCommit(occupied.get().clone(), (digest, signature))
+					);
+				}
+
 				None
 			}
-		} else {
-			None
 		};
 
 		// transition to concluded state always valid.
@@ -333,7 +369,7 @@ mod tests {
 	#[derive(Hash, PartialEq, Eq, Clone, Debug)]
 	pub struct Digest(usize);
 
-	#[derive(Hash, PartialEq, Eq, Debug)]
+	#[derive(Hash, PartialEq, Eq, Debug, Clone)]
 	pub struct AuthorityId(usize);
 
 	#[derive(PartialEq, Eq, Clone, Debug)]
@@ -604,6 +640,56 @@ mod tests {
 		match accumulator.state() {
 			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
 			s => panic!("wrong state: {:?}", s),
+		}
+	}
+
+	#[test]
+	fn double_prepare_is_misbehavior() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		for i in 0..7 {
+			accumulator.import_message(LocalizedMessage {
+				sender: AuthorityId(i),
+				signature: Signature(999, i),
+				message: Message::Prepare(1, Digest(999)),
+			});
+
+			assert!(!accumulator.misbehavior.contains_key(&AuthorityId(i)));
+
+			accumulator.import_message(LocalizedMessage {
+				sender: AuthorityId(i),
+				signature: Signature(123, i),
+				message: Message::Prepare(1, Digest(123)),
+			});
+
+			assert!(accumulator.misbehavior.contains_key(&AuthorityId(i)));
+
+		}
+	}
+
+	#[test]
+	fn double_commit_is_misbehavior() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		for i in 0..7 {
+			accumulator.import_message(LocalizedMessage {
+				sender: AuthorityId(i),
+				signature: Signature(999, i),
+				message: Message::Commit(1, Digest(999)),
+			});
+
+			assert!(!accumulator.misbehavior.contains_key(&AuthorityId(i)));
+
+			accumulator.import_message(LocalizedMessage {
+				sender: AuthorityId(i),
+				signature: Signature(123, i),
+				message: Message::Commit(1, Digest(123)),
+			});
+
+			assert!(accumulator.misbehavior.contains_key(&AuthorityId(i)));
+
 		}
 	}
 }
