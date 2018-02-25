@@ -18,6 +18,7 @@
 //! Very general implementation.
 
 use std::collections::{HashMap, VecDeque};
+use std::collections::hash_map;
 use std::fmt::Debug;
 use std::hash::Hash;
 
@@ -25,7 +26,7 @@ use futures::{future, Future, Stream, Sink, Poll, Async, AsyncSink};
 
 use self::accumulator::State;
 
-pub use self::accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification};
+pub use self::accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification, Misbehavior};
 
 mod accumulator;
 
@@ -258,6 +259,7 @@ struct Strategy<C: Context> {
 	current_accumulator: Accumulator<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
 	future_accumulator: Accumulator<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
 	local_id: C::AuthorityId,
+	misbehavior: HashMap<C::AuthorityId, Misbehavior<C::Digest, C::Signature>>,
 }
 
 impl<C: Context> Strategy<C> {
@@ -289,6 +291,7 @@ impl<C: Context> Strategy<C> {
 			notable_candidates: HashMap::new(),
 			round_timeout: timeout.fuse(),
 			local_id: context.local_id(),
+			misbehavior: HashMap::new(),
 		}
 	}
 
@@ -298,10 +301,17 @@ impl<C: Context> Strategy<C> {
 	) {
 		let round_number = msg.message.round_number();
 
-		if round_number == self.current_accumulator.round_number() {
-			self.current_accumulator.import_message(msg);
+		let sender = msg.sender.clone();
+		let misbehavior = if round_number == self.current_accumulator.round_number() {
+			self.current_accumulator.import_message(msg)
 		} else if round_number == self.future_accumulator.round_number() {
-			self.future_accumulator.import_message(msg);
+			self.future_accumulator.import_message(msg)
+		} else {
+			Ok(())
+		};
+
+		if let Err(misbehavior) = misbehavior {
+			self.misbehavior.insert(sender, misbehavior);
 		}
 	}
 
@@ -712,6 +722,13 @@ impl<C, I, O> Future for Agreement<C, I, O>
 				Ok(Async::NotReady)
 			}
 		}
+	}
+}
+
+impl<C: Context, I, O> Agreement<C, I, O> {
+	/// Drain the misbehavior vector.
+	pub fn drain_misbehavior(&mut self) -> hash_map::Drain<C::AuthorityId, Misbehavior<C::Digest, C::Signature>> {
+		self.strategy.misbehavior.drain()
 	}
 }
 

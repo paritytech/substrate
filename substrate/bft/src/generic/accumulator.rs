@@ -126,9 +126,9 @@ struct VoteCounts {
 #[derive(Debug, Clone)]
 pub enum Misbehavior<Digest, Signature> {
 	/// Issued two conflicting prepare messages.
-	DoublePrepare((Digest, Signature), (Digest, Signature)),
+	DoublePrepare(usize, (Digest, Signature), (Digest, Signature)),
 	/// Issued two conflicting commit messages.
-	DoubleCommit((Digest, Signature), (Digest, Signature)),
+	DoubleCommit(usize, (Digest, Signature), (Digest, Signature)),
 }
 
 /// Accumulates messages for a given round of BFT consensus.
@@ -153,7 +153,6 @@ pub struct Accumulator<Candidate, Digest, AuthorityId, Signature>
 	vote_counts: HashMap<Digest, VoteCounts>,
 	advance_round: HashSet<AuthorityId>,
 	state: State<Candidate, Digest, Signature>,
-	misbehavior: HashMap<AuthorityId, Misbehavior<Digest, Signature>>,
 }
 
 impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, AuthorityId, Signature>
@@ -175,7 +174,6 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 			vote_counts: HashMap::new(),
 			advance_round: HashSet::new(),
 			state: State::Begin,
-			misbehavior: HashMap::new(),
 		}
 	}
 
@@ -198,21 +196,15 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		&self.state
 	}
 
-	/// Inspect the current observed misbehavior
-	pub fn misbehavior(&self) -> &HashMap<AuthorityId, Misbehavior<Digest, Signature>> {
-		&self.misbehavior
-	}
-
 	/// Import a message. Importing duplicates is fine, but the signature
 	/// and authorization should have already been checked.
 	pub fn import_message(
 		&mut self,
 		message: LocalizedMessage<Candidate, Digest, AuthorityId, Signature>,
-	)
-	{
+	) -> Result<(), Misbehavior<Digest, Signature>> {
 		// message from different round.
 		if message.message.round_number() != self.round_number {
-			return;
+			return Ok(());
 		}
 
 		let (sender, signature) = (message.sender, message.signature);
@@ -229,11 +221,13 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		&mut self,
 		proposal: Candidate,
 		sender: AuthorityId,
-	) {
-		if sender != self.round_proposer || self.proposal.is_some() { return }
+	) -> Result<(), Misbehavior<Digest, Signature>> {
+		// TODO: find a way to check for proposal misbehavior without opening up DoS vectors.
+		if sender != self.round_proposer || self.proposal.is_some() { return Ok(()) }
 
 		self.proposal = Some(proposal.clone());
 		self.state = State::Proposed(proposal);
+		Ok(())
 	}
 
 	fn import_prepare(
@@ -241,7 +235,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		digest: Digest,
 		sender: AuthorityId,
 		signature: Signature,
-	) {
+	) -> Result<(), Misbehavior<Digest, Signature>> {
 		// ignore any subsequent prepares by the same sender.
 		let threshold_prepared = match self.prepares.entry(sender.clone()) {
 			Entry::Vacant(vacant) => {
@@ -258,10 +252,11 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 			Entry::Occupied(occupied) => {
 				// if digest is different, that's misbehavior.
 				if occupied.get().0 != digest {
-					self.misbehavior.insert(
-						sender,
-						Misbehavior::DoublePrepare(occupied.get().clone(), (digest, signature))
-					);
+					return Err(Misbehavior::DoublePrepare(
+						self.round_number,
+						occupied.get().clone(),
+						(digest, signature)
+					));
 				}
 
 				None
@@ -287,6 +282,8 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 				signatures: signatures,
 			}));
 		}
+
+		Ok(())
 	}
 
 	fn import_commit(
@@ -294,7 +291,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		digest: Digest,
 		sender: AuthorityId,
 		signature: Signature,
-	) {
+	) -> Result<(), Misbehavior<Digest, Signature>> {
 		// ignore any subsequent commits by the same sender.
 		let threshold_committed = match self.commits.entry(sender.clone()) {
 			Entry::Vacant(vacant) => {
@@ -311,10 +308,11 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 			Entry::Occupied(occupied) => {
 				// if digest is different, that's misbehavior.
 				if occupied.get().0 != digest {
-					self.misbehavior.insert(
-						sender,
-						Misbehavior::DoubleCommit(occupied.get().clone(), (digest, signature))
-					);
+					return Err(Misbehavior::DoubleCommit(
+						self.round_number,
+						occupied.get().clone(),
+						(digest, signature)
+					));
 				}
 
 				None
@@ -338,15 +336,17 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 				signatures: signatures,
 			}));
 		}
+
+		Ok(())
 	}
 
 	fn import_advance_round(
 		&mut self,
 		sender: AuthorityId,
-	) {
+	) -> Result<(), Misbehavior<Digest, Signature>> {
 		self.advance_round.insert(sender);
 
-		if self.advance_round.len() < self.threshold { return }
+		if self.advance_round.len() < self.threshold { return Ok(()) }
 
 		// allow transition to new round only if we haven't produced a justification
 		// yet.
@@ -355,7 +355,9 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 			State::Prepared(j) => State::Advanced(Some(j)),
 			State::Advanced(j) => State::Advanced(j),
 			State::Begin | State::Proposed(_) => State::Advanced(None),
-		}
+		};
+
+		Ok(())
 	}
 }
 
@@ -415,7 +417,7 @@ mod tests {
 			sender: AuthorityId(5),
 			signature: Signature(999, 5),
 			message: Message::Propose(1, Candidate(999)),
-		});
+		}).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Begin);
 
@@ -423,7 +425,7 @@ mod tests {
 			sender: AuthorityId(8),
 			signature: Signature(999, 8),
 			message: Message::Propose(1, Candidate(999)),
-		});
+		}).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 	}
@@ -437,7 +439,7 @@ mod tests {
 			sender: AuthorityId(8),
 			signature: Signature(999, 8),
 			message: Message::Propose(1, Candidate(999)),
-		});
+		}).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 
@@ -446,7 +448,7 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Prepare(1, Digest(999)),
-			});
+			}).unwrap();
 
 			assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 		}
@@ -455,7 +457,7 @@ mod tests {
 			sender: AuthorityId(7),
 			signature: Signature(999, 7),
 			message: Message::Prepare(1, Digest(999)),
-		});
+		}).unwrap();
 
 		match accumulator.state() {
 			&State::Prepared(ref j) => assert_eq!(j.digest, Digest(999)),
@@ -472,7 +474,7 @@ mod tests {
 			sender: AuthorityId(8),
 			signature: Signature(999, 8),
 			message: Message::Propose(1, Candidate(999)),
-		});
+		}).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 
@@ -481,7 +483,7 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Prepare(1, Digest(999)),
-			});
+			}).unwrap();
 
 			assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 		}
@@ -490,7 +492,7 @@ mod tests {
 			sender: AuthorityId(7),
 			signature: Signature(999, 7),
 			message: Message::Prepare(1, Digest(999)),
-		});
+		}).unwrap();
 
 		match accumulator.state() {
 			&State::Prepared(ref j) => assert_eq!(j.digest, Digest(999)),
@@ -502,7 +504,7 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Commit(1, Digest(999)),
-			});
+			}).unwrap();
 
 			match accumulator.state() {
 				&State::Prepared(_) => {},
@@ -514,7 +516,7 @@ mod tests {
 			sender: AuthorityId(7),
 			signature: Signature(999, 7),
 			message: Message::Commit(1, Digest(999)),
-		});
+		}).unwrap();
 
 		match accumulator.state() {
 			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
@@ -531,7 +533,7 @@ mod tests {
 			sender: AuthorityId(8),
 			signature: Signature(999, 8),
 			message: Message::Propose(1, Candidate(999)),
-		});
+		}).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 
@@ -540,7 +542,7 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Prepare(1, Digest(999)),
-			});
+			}).unwrap();
 		}
 
 		match accumulator.state() {
@@ -553,7 +555,7 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::AdvanceRound(1),
-			});
+			}).unwrap();
 
 			match accumulator.state() {
 				&State::Prepared(_) => {},
@@ -565,7 +567,7 @@ mod tests {
 			sender: AuthorityId(7),
 			signature: Signature(999, 7),
 			message: Message::AdvanceRound(1),
-		});
+		}).unwrap();
 
 		match accumulator.state() {
 			&State::Advanced(Some(_)) => {},
@@ -583,7 +585,7 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Prepare(1, Digest(999)),
-			});
+			}).unwrap();
 		}
 
 		match accumulator.state() {
@@ -596,7 +598,7 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Commit(1, Digest(999)),
-			});
+			}).unwrap();
 		}
 
 		match accumulator.state() {
@@ -615,7 +617,7 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(1, i),
 				message: Message::AdvanceRound(1),
-			});
+			}).unwrap();
 		}
 
 		match accumulator.state() {
@@ -634,7 +636,7 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Commit(1, Digest(999)),
-			});
+			}).unwrap();
 		}
 
 		match accumulator.state() {
@@ -653,17 +655,15 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Prepare(1, Digest(999)),
-			});
+			}).unwrap();
 
-			assert!(!accumulator.misbehavior.contains_key(&AuthorityId(i)));
-
-			accumulator.import_message(LocalizedMessage {
+			let res = accumulator.import_message(LocalizedMessage {
 				sender: AuthorityId(i),
 				signature: Signature(123, i),
 				message: Message::Prepare(1, Digest(123)),
 			});
 
-			assert!(accumulator.misbehavior.contains_key(&AuthorityId(i)));
+			assert!(res.is_err());
 
 		}
 	}
@@ -678,17 +678,15 @@ mod tests {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
 				message: Message::Commit(1, Digest(999)),
-			});
+			}).unwrap();
 
-			assert!(!accumulator.misbehavior.contains_key(&AuthorityId(i)));
-
-			accumulator.import_message(LocalizedMessage {
+			let res = accumulator.import_message(LocalizedMessage {
 				sender: AuthorityId(i),
 				signature: Signature(123, i),
 				message: Message::Commit(1, Digest(123)),
 			});
 
-			assert!(accumulator.misbehavior.contains_key(&AuthorityId(i)));
+			assert!(res.is_err());
 
 		}
 	}

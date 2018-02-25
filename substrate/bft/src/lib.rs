@@ -100,6 +100,9 @@ pub type Committed = generic::Committed<Block, HeaderHash, LocalizedSignature>;
 /// Communication between BFT participants.
 pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, LocalizedSignature>;
 
+/// Misbehavior observed from BFT participants.
+pub type Misbehavior = generic::Misbehavior<HeaderHash, LocalizedSignature>;
+
 /// Proposer factory. Can be used to create a proposer instance.
 pub trait ProposerFactory {
 	/// The proposer type this creates.
@@ -264,6 +267,9 @@ impl<P: Proposer, I: BlockImport> Future for BftFuture<P, I> {
 		if let Some(justified_block) = committed.candidate {
 			self.import.import_block(justified_block, committed.justification)
 		}
+
+		// TODO: have a trait member to pass misbehavior reports into.
+		let _misbehavior = self.inner.drain_misbehavior();
 
 		Ok(Async::Ready(()))
 	}
