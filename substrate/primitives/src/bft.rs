@@ -19,6 +19,7 @@
 use block::{Block, HeaderHash};
 use codec::{Slicable, Input};
 use rstd::vec::Vec;
+use ::{AuthorityId, Signature};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -150,5 +151,138 @@ impl Slicable for Justification {
 			hash: try_opt!(Slicable::decode(value)),
 			signatures: try_opt!(Slicable::decode(value)),
 		})
+	}
+}
+
+// single-byte code to represent misbehavior kind.
+#[repr(u8)]
+enum MisbehaviorCode {
+	/// BFT: double prepare.
+	BftDoublePrepare = 0x11,
+	/// BFT: double commit.
+	BftDoubleCommit = 0x12,
+}
+
+impl MisbehaviorCode {
+	fn from_u8(x: u8) -> Option<Self> {
+		match x {
+			0x11 => Some(MisbehaviorCode::BftDoublePrepare),
+			0x12 => Some(MisbehaviorCode::BftDoubleCommit),
+			_ => None,
+		}
+	}
+}
+
+/// Misbehavior kinds.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum MisbehaviorKind {
+	/// BFT: double prepare.
+	BftDoublePrepare((HeaderHash, Signature), (HeaderHash, Signature)),
+	/// BFT: double commit.
+	BftDoubleCommit((HeaderHash, Signature), (HeaderHash, Signature)),
+}
+
+/// A report of misbehavior by an authority.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct MisbehaviorReport {
+	/// The round number consensus was reached in.
+	pub round_number: u32,
+	/// The parent hash of the block where the misbehavior occurred.
+	pub parent_hash: HeaderHash,
+	/// The authority who misbehavior.
+	pub target: AuthorityId,
+	/// The misbehavior kind.
+	pub misbehavior: MisbehaviorKind,
+}
+
+impl Slicable for MisbehaviorReport {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		self.round_number.using_encoded(|s| v.extend(s));
+		self.parent_hash.using_encoded(|s| v.extend(s));
+		self.target.using_encoded(|s| v.extend(s));
+
+		match self.misbehavior {
+			MisbehaviorKind::BftDoublePrepare((ref h_a, ref s_a), (ref h_b, ref s_b)) => {
+				(MisbehaviorCode::BftDoublePrepare as u8).using_encoded(|s| v.extend(s));
+				h_a.using_encoded(|s| v.extend(s));
+				s_a.using_encoded(|s| v.extend(s));
+				h_b.using_encoded(|s| v.extend(s));
+				s_b.using_encoded(|s| v.extend(s));
+			}
+			MisbehaviorKind::BftDoubleCommit((ref h_a, ref s_a), (ref h_b, ref s_b)) => {
+				(MisbehaviorCode::BftDoubleCommit as u8).using_encoded(|s| v.extend(s));
+				h_a.using_encoded(|s| v.extend(s));
+				s_a.using_encoded(|s| v.extend(s));
+				h_b.using_encoded(|s| v.extend(s));
+				s_b.using_encoded(|s| v.extend(s));
+			}
+		}
+
+		v
+	}
+
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		let round_number = u32::decode(input)?;
+		let parent_hash = HeaderHash::decode(input)?;
+		let target = AuthorityId::decode(input)?;
+
+		let misbehavior = match u8::decode(input).and_then(MisbehaviorCode::from_u8)? {
+			MisbehaviorCode::BftDoublePrepare => {
+				MisbehaviorKind::BftDoublePrepare(
+					(HeaderHash::decode(input)?, Signature::decode(input)?),
+					(HeaderHash::decode(input)?, Signature::decode(input)?),
+				)
+			}
+			MisbehaviorCode::BftDoubleCommit => {
+				MisbehaviorKind::BftDoubleCommit(
+					(HeaderHash::decode(input)?, Signature::decode(input)?),
+					(HeaderHash::decode(input)?, Signature::decode(input)?),
+				)
+			}
+		};
+
+		Some(MisbehaviorReport {
+			round_number,
+			parent_hash,
+			target,
+			misbehavior,
+		})
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn misbehavior_report_roundtrip() {
+		let report = MisbehaviorReport {
+			round_number: 511,
+			parent_hash: [0; 32].into(),
+			target: [1; 32].into(),
+			misbehavior: MisbehaviorKind::BftDoubleCommit(
+				([2; 32].into(), [3; 64].into()),
+				([4; 32].into(), [5; 64].into()),
+			),
+		};
+
+		let encoded = report.encode();
+		assert_eq!(MisbehaviorReport::decode(&mut &encoded[..]).unwrap(), report);
+
+		let report = MisbehaviorReport {
+			round_number: 511,
+			parent_hash: [0; 32].into(),
+			target: [1; 32].into(),
+			misbehavior: MisbehaviorKind::BftDoublePrepare(
+				([2; 32].into(), [3; 64].into()),
+				([4; 32].into(), [5; 64].into()),
+			),
+		};
+
+		let encoded = report.encode();
+		assert_eq!(MisbehaviorReport::decode(&mut &encoded[..]).unwrap(), report);
 	}
 }
