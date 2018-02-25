@@ -11,3 +11,6 @@ polkadot-primitives = { path = "../primitives" }
 substrate-client = { path = "../../substrate/client" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
+
+[dev-dependencies]
+substrate-keyring = { path = "../../substrate/keyring" }

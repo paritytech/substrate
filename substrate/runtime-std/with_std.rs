@@ -26,5 +26,5 @@ pub use std::rc;
 pub use std::slice;
 pub use std::vec;
 pub mod collections {
-	pub use std::collections::hash_map;
+	pub use std::collections::btree_map;
 }

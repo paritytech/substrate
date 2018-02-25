@@ -26,7 +26,7 @@ pub use alloc::boxed;
 pub use alloc::rc;
 pub use alloc::vec;
 pub mod collections {
-	pub use alloc::collections::hash_map;
+	pub use alloc::btree_map;
 }
 pub use core::cell;
 pub use core::cmp;

@@ -47,6 +47,12 @@ error_chain! {
 			description("Unable to dispatch agreement future"),
 			display("Unable to dispatch agreement future: {:?}", e),
 		}
+
+		/// Some other error.
+		Other(e: Box<::std::error::Error + Send>) {
+			description("Other error")
+			display("Other error: {}", e.description())
+		}
 	}
 }
 

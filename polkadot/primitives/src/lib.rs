@@ -49,9 +49,9 @@ pub mod validator;
 pub mod block;
 pub mod transaction;
 
-pub use self::block::{Header, Block, Log, Digest};
+pub use self::block::{Header, Body, Block, Log, Digest};
 pub use self::block::Number as BlockNumber;
-pub use self::transaction::{Transaction, UncheckedTransaction, Function, Proposal};
+pub use self::transaction::{Transaction, UncheckedTransaction, Function, InherentFunction, Proposal};
 
 /// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
 /// (who matters). Essentially this means that a majority of validators have decided it is
@@ -75,5 +75,8 @@ pub type TxOrder = u64;
 /// A hash of some data used by the relay chain.
 pub type Hash = primitives::H256;
 
-/// Alias to 520-bit hash when used in the context of a signature on the relay chain.
+/// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = primitives::hash::H512;
+
+/// A timestamp: seconds since the unix epoch.
+pub type Timestamp = u64;
