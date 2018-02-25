@@ -47,7 +47,7 @@ pub use backend::Backend;
 ///
 /// A transaction shares all prospective changes within an inner overlay
 /// that can be cleared.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct OverlayedChanges {
 	prospective: HashMap<Vec<u8>, Option<Vec<u8>>>,
 	committed: HashMap<Vec<u8>, Option<Vec<u8>>>,

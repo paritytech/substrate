@@ -179,7 +179,7 @@ impl Slicable for Header {
 }
 
 /// Block indentification.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Id {
 	/// Identify by block header hash.

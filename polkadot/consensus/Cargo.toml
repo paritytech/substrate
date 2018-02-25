@@ -8,6 +8,9 @@ futures = "0.1.17"
 parking_lot = "0.4"
 tokio-timer = "0.1.2"
 ed25519 = { path = "../../substrate/ed25519" }
+error-chain = "0.11"
+polkadot-api = { path = "../api" }
+polkadot-collator = { path = "../collator" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-statement-table = { path = "../statement-table" }
 substrate-bft = { path = "../../substrate/bft" }
