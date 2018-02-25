@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::cell::RefCell;
-use rstd::collections::hash_map::{HashMap, Entry};
+use rstd::collections::btree_map::{BTreeMap, Entry};
 use runtime_io::{print, blake2_256};
 use codec::KeyedVec;
 use runtime_support::{storage, StorageVec};
@@ -98,7 +98,7 @@ pub fn bondage(who: &AccountId) -> Bondage {
 pub mod public {
 	use super::*;
 
-	type State = HashMap<AccountId, (Option<Balance>, Option<Vec<u8>>, HashMap<Vec<u8>, Option<Vec<u8>>>)>;
+	type State = BTreeMap<AccountId, (Option<Balance>, Option<Vec<u8>>, BTreeMap<Vec<u8>, Option<Vec<u8>>>)>;
 
 	trait Externalities {
 		fn get_storage(&self, account: &AccountId, location: &[u8]) -> Option<Vec<u8>>;
@@ -215,7 +215,7 @@ pub mod public {
 			return None;
 		}
 
-		let mut local = HashMap::new();
+		let mut local = BTreeMap::new();
 
 		// two inserts are safe
 		assert!(&dest != transactor);
@@ -251,7 +251,7 @@ pub mod public {
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
 
-		let local: RefCell<State> = RefCell::new(HashMap::new());
+		let local: RefCell<State> = RefCell::new(BTreeMap::new());
 
 		if transactor != dest {
 			let mut local = local.borrow_mut();

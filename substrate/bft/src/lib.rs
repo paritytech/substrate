@@ -100,22 +100,35 @@ pub type Committed = generic::Committed<Block, HeaderHash, LocalizedSignature>;
 /// Communication between BFT participants.
 pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, LocalizedSignature>;
 
+/// Proposer factory. Can be used to create a proposer instance.
+pub trait ProposerFactory {
+	/// The proposer type this creates.
+	type Proposer: Proposer;
+	/// Error which can occur upon creation.
+	type Error: From<Error>;
+
+	/// Initialize the proposal logic on top of a specific header.
+	// TODO: provide state context explicitly?
+	fn init(&self, parent_header: &Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Self::Error>;
+}
+
 /// Logic for a proposer.
 ///
 /// This will encapsulate creation and evaluation of proposals at a specific
 /// block.
-pub trait Proposer: Sized {
-    type CreateProposal: IntoFuture<Item=Block,Error=Error>;
+pub trait Proposer {
+	/// Error type which can occur when proposing or evaluating.
+	type Error: From<Error> + From<InputStreamConcluded> + 'static;
+	/// Future that resolves to a created proposal.
+	type Create: IntoFuture<Item=Block,Error=Self::Error>;
+	/// Future that resolves when a proposal is evaluated.
+	type Evaluate: IntoFuture<Item=bool,Error=Self::Error>;
 
-    /// Initialize the proposal logic on top of a specific header.
-    // TODO: provide state context explicitly?
-    fn init(parent_header: &Header, sign_with: Arc<ed25519::Pair>) -> Self;
-
-    /// Create a proposal.
-    fn propose(&self) -> Self::CreateProposal;
-    /// Evaluate proposal. True means valid.
+	/// Create a proposal.
+	fn propose(&self) -> Self::Create;
+	/// Evaluate proposal. True means valid.
 	// TODO: change this to a future.
-    fn evaluate(&self, proposal: &Block) -> bool;
+	fn evaluate(&self, proposal: &Block) -> Self::Evaluate;
 }
 
 /// Block import trait.
@@ -141,12 +154,14 @@ struct BftInstance<P> {
 }
 
 impl<P: Proposer> generic::Context for BftInstance<P> {
+	type Error = P::Error;
 	type AuthorityId = AuthorityId;
 	type Digest = HeaderHash;
 	type Signature = LocalizedSignature;
 	type Candidate = Block;
-	type RoundTimeout = Box<Future<Item=(),Error=Error> + Send>;
-	type CreateProposal = <P::CreateProposal as IntoFuture>::Future;
+	type RoundTimeout = Box<Future<Item=(),Error=Self::Error> + Send>;
+	type CreateProposal = <P::Create as IntoFuture>::Future;
+	type EvaluateProposal = <P::Evaluate as IntoFuture>::Future;
 
 	fn local_id(&self) -> AuthorityId {
 		self.key.public().0
@@ -181,8 +196,8 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 		self.authorities[(index as usize) % self.authorities.len()]
 	}
 
-	fn candidate_valid(&self, proposal: &Block) -> bool {
-		self.proposer.evaluate(proposal)
+	fn proposal_valid(&self, proposal: &Block) -> Self::EvaluateProposal {
+		self.proposer.evaluate(proposal).into_future()
 	}
 
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
@@ -194,24 +209,25 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 			.saturating_mul(self.round_timeout_multiplier);
 
 		Box::new(self.timer.sleep(Duration::from_secs(timeout))
-			.map_err(|_| ErrorKind::FaultyTimer.into()))
+			.map_err(|_| Error::from(ErrorKind::FaultyTimer))
+			.map_err(Into::into))
 	}
 }
 
-type Input = stream::Empty<Communication, Error>;
+type Input<E> = stream::Empty<Communication, E>;
 
 // "black hole" output sink.
-struct Output;
+struct Output<E>(::std::marker::PhantomData<E>);
 
-impl Sink for Output {
+impl<E> Sink for Output<E> {
 	type SinkItem = Communication;
-	type SinkError = Error;
+	type SinkError = E;
 
-	fn start_send(&mut self, _item: Communication) -> ::futures::StartSend<Communication, Error> {
+	fn start_send(&mut self, _item: Communication) -> ::futures::StartSend<Communication, E> {
 		Ok(::futures::AsyncSink::Ready)
 	}
 
-	fn poll_complete(&mut self) -> ::futures::Poll<(), Error> {
+	fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
 		Ok(Async::Ready(()))
 	}
 }
@@ -219,7 +235,7 @@ impl Sink for Output {
 /// A future that resolves either when canceled (witnessing a block from the network at same height)
 /// or when agreement completes.
 pub struct BftFuture<P: Proposer, I> {
-	inner: generic::Agreement<BftInstance<P>, Input, Output>,
+	inner: generic::Agreement<BftInstance<P>, Input<P::Error>, Output<P::Error>>,
 	cancel: Arc<AtomicBool>,
 	send_task: Option<oneshot::Sender<task::Task>>,
 	import: Arc<I>,
@@ -282,29 +298,37 @@ pub struct BftService<P, E, I> {
 	timer: Timer,
 	round_timeout_multiplier: u64,
 	key: Arc<ed25519::Pair>, // TODO: key changing over time.
-	_marker: ::std::marker::PhantomData<P>,
+	factory: P,
 }
 
 impl<P, E, I> BftService<P, E, I>
 	where
-		P: Proposer,
-		E: Executor<BftFuture<P, I>>,
+		P: ProposerFactory,
+		E: Executor<BftFuture<P::Proposer, I>>,
 		I: BlockImport + Authorities,
 {
 	/// Signal that a valid block with the given header has been imported.
 	///
-	/// This will begin the consensus process to build a block on top of it.
-	/// If the executor fails to run the future, an error will be returned.
-	pub fn build_upon(&self, header: &Header) -> Result<(), Error> {
+	/// If the local signing key is an authority, this will begin the consensus process to build a
+	/// block on top of it. If the executor fails to run the future, an error will be returned.
+	pub fn build_upon(&self, header: &Header) -> Result<(), P::Error> {
 		let hash = header.hash();
-		let mut _preempted_consensus = None;
+		let mut _preempted_consensus = None; // defers drop of live to the end.
 
-		let proposer = P::init(header, self.key.clone());
+		let authorities = self.client.authorities(&BlockId::Hash(hash))?;
 
 		// TODO: check key is one of the authorities.
-		let authorities = self.client.authorities(&BlockId::Hash(hash))?;
 		let n = authorities.len();
 		let max_faulty = max_faulty_of(n);
+
+		let local_id = self.key.public().0;
+
+		if !authorities.contains(&local_id) {
+			self.live_agreements.lock().remove(&header.parent_hash);
+			return Ok(())
+		}
+
+		let proposer = self.factory.init(header, &authorities, self.key.clone())?;
 
 		let bft_instance = BftInstance {
 			proposer,
@@ -320,7 +344,7 @@ impl<P, E, I> BftService<P, E, I>
 			n,
 			max_faulty,
 			stream::empty(),
-			Output,
+			Output(Default::default()),
 		);
 
 		let cancel = Arc::new(AtomicBool::new(false));
@@ -331,7 +355,7 @@ impl<P, E, I> BftService<P, E, I>
 			cancel: cancel.clone(),
 			send_task: Some(tx),
 			import: self.client.clone(),
-		}).map_err(|e| e.kind()).map_err(ErrorKind::Executor)?;
+		}).map_err(|e| e.kind()).map_err(ErrorKind::Executor).map_err(Error::from)?;
 
 		{
 			let mut live = self.live_agreements.lock();
@@ -455,29 +479,37 @@ mod tests {
 		}
 	}
 
+	struct DummyFactory;
 	struct DummyProposer(block::Number);
 
-	impl Proposer for DummyProposer {
-	    type CreateProposal = Result<Block, Error>;
+	impl ProposerFactory for DummyFactory {
+		type Proposer = DummyProposer;
+		type Error = Error;
 
-	    fn init(parent_header: &Header, _sign_with: Arc<ed25519::Pair>) -> Self {
-			DummyProposer(parent_header.number + 1)
+		fn init(&self, parent_header: &Header, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>) -> Result<DummyProposer, Error> {
+			Ok(DummyProposer(parent_header.number + 1))
 		}
+	}
 
-    	fn propose(&self) -> Result<Block, Error> {
+	impl Proposer for DummyProposer {
+		type Error = Error;
+		type Create = Result<Block, Error>;
+		type Evaluate = Result<bool, Error>;
+
+		fn propose(&self) -> Result<Block, Error> {
 			Ok(Block {
 				header: Header::from_block_number(self.0),
 				transactions: Default::default()
 			})
 		}
 
-		fn evaluate(&self, proposal: &Block) -> bool {
-			proposal.header.number == self.0
+		fn evaluate(&self, proposal: &Block) -> Result<bool, Error> {
+			Ok(proposal.header.number == self.0)
 		}
 	}
 
 	fn make_service(client: FakeClient, handle: Handle)
-		-> BftService<DummyProposer, Handle, FakeClient>
+		-> BftService<DummyFactory, Handle, FakeClient>
 	{
 		BftService {
 			client: Arc::new(client),
@@ -486,7 +518,7 @@ mod tests {
 			timer: Timer::default(),
 			round_timeout_multiplier: 4,
 			key: Arc::new(Keyring::One.into()),
-			_marker: Default::default(),
+			factory: DummyFactory
 		}
 	}
 

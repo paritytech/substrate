@@ -17,7 +17,6 @@
 //! Environment API: Allows certain information to be accessed throughout the runtime.
 
 use rstd::boxed::Box;
-use rstd::mem;
 use rstd::cell::RefCell;
 use rstd::rc::Rc;
 
@@ -32,6 +31,8 @@ pub struct Environment {
 	pub parent_hash: Hash,
 	/// The current block digest.
 	pub digest: Digest,
+	/// The current transaction index
+	pub transaction_index: u64,
 }
 
 /// Do something with the environment and return its value. Keep the function short.
@@ -52,7 +53,7 @@ fn env() -> Rc<RefCell<Environment>> {
 			let singleton: Rc<RefCell<Environment>> = Rc::new(RefCell::new(Default::default()));
 
 			// Put it in the heap so it can outlive this call
-			SINGLETON = mem::transmute(Box::new(singleton));
+			SINGLETON = Box::into_raw(Box::new(singleton)) as *const _;
 		}
 
 		// Now we give out a copy of the data that is safe to use concurrently.
@@ -73,7 +74,7 @@ fn env() -> Rc<RefCell<Environment>> {
 			let singleton: Rc<RefCell<Environment>> = Rc::new(RefCell::new(Default::default()));
 
 			// Put it in the heap so it can outlive this call
-			*s.borrow_mut() = mem::transmute(Box::new(singleton));
+			*s.borrow_mut() = Box::into_raw(Box::new(singleton)) as *const _;
 		}
 
 		// Now we give out a copy of the data that is safe to use concurrently.

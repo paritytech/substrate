@@ -1037,6 +1037,7 @@ dependencies = [
  "polkadot-runtime 0.1.0",
  "substrate-client 0.1.0",
  "substrate-executor 0.1.0",
+ "substrate-keyring 0.1.0",
  "substrate-state-machine 0.1.0",
 ]
 
@@ -1077,8 +1078,11 @@ name = "polkadot-consensus"
 version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
+ "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-api 0.1.0",
+ "polkadot-collator 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-statement-table 0.1.0",
  "substrate-bft 0.1.0",

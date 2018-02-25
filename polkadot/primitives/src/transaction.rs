@@ -18,6 +18,7 @@
 
 use rstd::vec::Vec;
 use codec::{Input, Slicable};
+use ::Signature;
 
 #[cfg(feature = "std")]
 use std::fmt;
@@ -184,12 +185,35 @@ impl FunctionId {
 	}
 }
 
+/// Inherent functions on the runtime.
+/// These must be called each block by the `EVERYBODY` account.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub enum InherentFunction {
+	/// Set the timestamp.
+	TimestampSet(u64),
+}
+
+impl InherentFunction {
+	/// Get the number of inherent functions.
+	pub fn count() -> u64 {
+		1
+	}
+
+	/// Get the index.
+	pub fn index(&self) -> u64 {
+		match *self {
+			InherentFunction::TimestampSet(_) => 0,
+		}
+	}
+}
+
 /// Functions on the runtime.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum Function {
-	/// Set the timestamp.
-	TimestampSet(u64),
+	/// An inherent function.
+	Inherent(InherentFunction),
 	/// Set temporary session key as a validator.
 	SessionSetKey(::SessionKey),
 	/// Staking subsystem: begin staking.
@@ -204,12 +228,34 @@ pub enum Function {
 	GovernanceApprove(BlockNumber),
 }
 
+impl Function {
+	/// The number of inherent functions.
+	pub fn inherent_functions() -> u64 { InherentFunction::count() }
+
+	/// Whether this function is "inherent": that it must be part of every
+	/// block at the given index and no other.
+	///
+	/// Transactions containing inherent functions should not be signed.
+	pub fn is_inherent(&self) -> bool {
+		self.inherent_index().is_some()
+	}
+
+	/// If this function is inherent, returns the index it should occupy
+	/// in the block. Otherwise returns `None`.
+	pub fn inherent_index(&self) -> Option<u64> {
+		match *self {
+			Function::Inherent(ref inner) => Some(inner.index()),
+			_ => None,
+		}
+	}
+}
+
 impl Slicable for Function {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let id = try_opt!(u8::decode(input).and_then(FunctionId::from_u8));
 		Some(match id {
 			FunctionId::TimestampSet =>
-				Function::TimestampSet(try_opt!(Slicable::decode(input))),
+				Function::Inherent(InherentFunction::TimestampSet(try_opt!(Slicable::decode(input)))),
 			FunctionId::SessionSetKey =>
 				Function::SessionSetKey(try_opt!(Slicable::decode(input))),
 			FunctionId::StakingStake => Function::StakingStake,
@@ -230,7 +276,7 @@ impl Slicable for Function {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		match *self {
-			Function::TimestampSet(ref data) => {
+			Function::Inherent(InherentFunction::TimestampSet(ref data)) => {
 				(FunctionId::TimestampSet as u8).using_encoded(|s| v.extend(s));
 				data.using_encoded(|s| v.extend(s));
 			}
@@ -308,7 +354,33 @@ pub struct UncheckedTransaction {
 	/// The actual transaction information.
 	pub transaction: Transaction,
 	/// The signature; should be an Ed25519 signature applied to the serialised `transaction` field.
-	pub signature: super::Signature,
+	pub signature: Signature,
+}
+
+impl UncheckedTransaction {
+	/// Whether the transaction is well-formed. In particular checks that
+	/// inherent transactions have the correct signed and signature fields.
+	///
+	/// Does not check signatures on other transactions.
+	pub fn is_well_formed(&self) -> bool {
+		if self.transaction.function.is_inherent() {
+			self.transaction.signed == ::EVERYBODY && self.signature == Signature::zero()
+		} else {
+			true
+		}
+	}
+
+	/// Create a new inherent-style transaction from the given function.
+	pub fn inherent(function: InherentFunction) -> Self {
+		UncheckedTransaction {
+			transaction: Transaction {
+				function: Function::Inherent(function),
+				nonce: 0,
+				signed: ::EVERYBODY
+			},
+			signature: Signature::zero(),
+		}
+	}
 }
 
 impl Slicable for UncheckedTransaction {
@@ -372,7 +444,7 @@ mod tests {
 			transaction: Transaction {
 				signed: [1; 32],
 				nonce: 999u64,
-				function: Function::TimestampSet(135135),
+				function: Function::Inherent(InherentFunction::TimestampSet(135135)),
 			},
 			signature: primitives::hash::H512([0; 64]),
 		};

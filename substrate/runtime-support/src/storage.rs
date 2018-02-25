@@ -66,13 +66,8 @@ pub fn get_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_va
 	get(key).unwrap_or_else(default_value)
 }
 
-/// Please `value` in storage under `key`.
+/// Put `value` in storage under `key`.
 pub fn put<T: Slicable>(key: &[u8], value: &T) {
-	value.using_encoded(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
-}
-
-/// Please `value` in storage under `key`.
-pub fn place<T: Slicable>(key: &[u8], value: T) {
 	value.using_encoded(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
 }
 
@@ -199,13 +194,8 @@ pub mod unhashed {
 		get(key).unwrap_or_else(default_value)
 	}
 
-	/// Please `value` in storage under `key`.
+	/// Put `value` in storage under `key`.
 	pub fn put<T: Slicable>(key: &[u8], value: &T) {
-		value.using_encoded(|slice| runtime_io::set_storage(key, slice));
-	}
-
-	/// Please `value` in storage under `key`.
-	pub fn place<T: Slicable>(key: &[u8], value: T) {
 		value.using_encoded(|slice| runtime_io::set_storage(key, slice));
 	}
 
