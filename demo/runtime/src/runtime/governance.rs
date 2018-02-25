@@ -30,6 +30,7 @@ use codec::KeyedVec;
 use runtime_support::storage;
 use demo_primitives::{Proposal, AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
+use dispatch::enact_proposal;
 
 const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
 const CURRENT_PROPOSAL: &[u8] = b"gov:pro";
@@ -108,36 +109,6 @@ pub mod internal {
 			if approved == approvals_required {
 				enact_proposal(proposal);
 			}
-		}
-	}
-
-	fn enact_proposal(proposal: Proposal) {
-		match proposal {
-			Proposal::SystemSetCode(code) => {
-				system::privileged::set_code(&code);
-			}
-			Proposal::SessionSetLength(value) => {
-				session::privileged::set_length(value);
-			}
-			Proposal::SessionForceNewSession => {
-				session::privileged::force_new_session();
-			}
-			Proposal::StakingSetSessionsPerEra(value) => {
-				staking::privileged::set_sessions_per_era(value);
-			}
-			Proposal::StakingSetBondingDuration(value) => {
-				staking::privileged::set_bonding_duration(value);
-			}
-			Proposal::StakingSetValidatorCount(value) => {
-				staking::privileged::set_validator_count(value);
-			}
-			Proposal::StakingForceNewEra => {
-				staking::privileged::force_new_era()
-			}
-			Proposal::GovernanceSetApprovalPpmRequired(value) => {
-				self::privileged::set_approval_ppm_required(value);
-			}
-
 		}
 	}
 }
