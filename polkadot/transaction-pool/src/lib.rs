@@ -156,13 +156,13 @@ impl transaction_pool::VerifiedTransaction for VerifiedTransaction {
 pub struct Scoring;
 
 impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
-    type Score = u64;
+	type Score = u64;
 
-    fn compare(&self, old: &VerifiedTransaction, other: &VerifiedTransaction) -> Ordering {
+	fn compare(&self, old: &VerifiedTransaction, other: &VerifiedTransaction) -> Ordering {
 		old.inner.transaction.nonce.cmp(&other.inner.transaction.nonce)
 	}
 
-    fn choose(&self, old: &VerifiedTransaction, new: &VerifiedTransaction) -> Choice {
+	fn choose(&self, old: &VerifiedTransaction, new: &VerifiedTransaction) -> Choice {
 		if old.inner.transaction.nonce == new.inner.transaction.nonce {
 			Choice::RejectNew // no fees to determine which is better
 		} else {
@@ -170,19 +170,19 @@ impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
 		}
 	}
 
-    fn update_scores(
-        &self,
-        txs: &[Arc<VerifiedTransaction>],
-        scores: &mut [Self::Score],
-        _change: Change
-    ) {
+	fn update_scores(
+		&self,
+		txs: &[Arc<VerifiedTransaction>],
+		scores: &mut [Self::Score],
+		_change: Change
+	) {
 		for i in 0..txs.len() {
 			// all the same score since there are no fees.
 			// TODO: prioritize things like misbehavior or fishermen reports
 			scores[i] = 1;
 		}
 	}
-    fn should_replace(&self, _old: &VerifiedTransaction, _new: &VerifiedTransaction) -> bool {
+	fn should_replace(&self, _old: &VerifiedTransaction, _new: &VerifiedTransaction) -> bool {
 		false // no fees to determine which is better.
 	}
 }
