@@ -34,7 +34,6 @@ extern crate polkadot_primitives;
 pub mod api;
 pub mod environment;
 pub mod runtime;
-pub mod storage_keys;
 
 #[cfg(feature = "std")] pub mod genesismap;
 

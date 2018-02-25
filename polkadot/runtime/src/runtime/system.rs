@@ -30,7 +30,13 @@ use polkadot_primitives::{
 use runtime_io::{print, storage_root, enumerated_trie_root};
 use runtime_support::{Hashable, storage};
 use runtime::{staking, session};
-use storage_keys::{NONCE_OF, BLOCK_HASH_AT, TEMP_TRANSACTION_NUMBER};
+
+/// Prefixes account ID and stores u64 nonce.
+pub const NONCE_OF: &[u8] = b"sys:non:";
+/// Prefixes block number and stores hash of that block.
+pub const BLOCK_HASH_AT: &[u8] = b"sys:old:";
+/// Stores the temporary current transaction number.
+pub const TEMP_TRANSACTION_NUMBER: &[u8] = b"temp:txcount";
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
