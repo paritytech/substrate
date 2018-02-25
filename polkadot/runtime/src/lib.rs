@@ -41,7 +41,7 @@ pub mod api;
 pub mod transaction {
 	use rstd::ops;
 	use polkadot_primitives::Signature;
-	pub use polkadot_primitives::{Transaction, UncheckedTransaction};
+	pub use polkadot_primitives::{Transaction, Function, UncheckedTransaction};
 
 	/// A type-safe indicator that a transaction has been checked.
 	#[derive(PartialEq, Eq, Clone)]
@@ -63,10 +63,20 @@ pub mod transaction {
 		}
 	}
 
-	/// Check the signature on a transaction.
-	///
-	/// On failure, return the transaction back.
-	pub fn check(tx: UncheckedTransaction) -> Result<CheckedTransaction, UncheckedTransaction> {
+	/// Check the validity of a transaction: whether it can appear at the given index
+	/// and whether it is correctly authenticated.
+	pub fn check(tx: UncheckedTransaction, index: u64) -> Result<CheckedTransaction, UncheckedTransaction> {
+		match tx.transaction.function.inherent_index() {
+			Some(correct_index) => {
+				if index != correct_index || !tx.is_well_formed() { return Err(tx) }
+				return Ok(CheckedTransaction(tx));
+			}
+			None => {
+				// non-inherent functions must appear after inherent.
+				if index < Function::inherent_functions() { return Err(tx) }
+			}
+		}
+
 		let msg = ::codec::Slicable::encode(&tx.transaction);
 		if ::runtime_io::ed25519_verify(&tx.signature.0, &msg, &tx.transaction.signed) {
 			Ok(CheckedTransaction(tx))
