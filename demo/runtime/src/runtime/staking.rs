@@ -49,8 +49,6 @@ const BONDAGE_OF: &[u8] = b"sta:bon:";
 const CODE_OF: &[u8] = b"sta:cod:";
 const STORAGE_OF: &[u8] = b"sta:sto:";
 
-const CALL_DEPTH: &[u8] = b"sta:cde";
-
 /// The length of the bonding duration in eras.
 pub fn bonding_duration() -> BlockNumber {
 	storage::get_or_default(BONDING_DURATION)
@@ -242,8 +240,6 @@ pub mod public {
 		value: Balance,
 		ext: E
 	) -> Option<State> {
-		let call_depth: u32 = storage::get_or(CALL_DEPTH, 0);
-
 		let from_balance = ext.get_balance(transactor);
 		assert!(from_balance >= value);
 
@@ -297,13 +293,9 @@ pub mod public {
 					.2.insert(location, value);
 			};
 
-			storage::put(CALL_DEPTH, &(call_depth + 1));
-
-			// TODO: logging (logs are just placed in a notable storage-based vector and cleared every
+			// TODO: logging (logs are just appended into a notable storage-based vector and cleared every
 			// block).
 			// TODO: execute code with ext(), put_storage, create and transfer as externalities.
-
-			storage::put(CALL_DEPTH, &call_depth);
 			true
 		};
 
