@@ -31,9 +31,12 @@ extern crate demo_primitives;
 
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
+extern crate integer_sqrt;
+
 pub mod environment;
 pub mod runtime;
 pub mod api;
+pub mod dispatch;
 
 #[cfg(feature = "std")] pub mod genesismap;
 

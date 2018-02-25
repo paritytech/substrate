@@ -28,5 +28,8 @@ pub mod timestamp;
 pub mod session;
 #[allow(unused)]
 pub mod governance;
+#[allow(unused)]
+pub mod democracy;
+
 
 // TODO: polkadao

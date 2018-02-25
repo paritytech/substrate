@@ -43,6 +43,7 @@ const SESSIONS_PER_ERA: &[u8] = b"sta:spe";
 const NEXT_SESSIONS_PER_ERA: &[u8] = b"sta:nse";
 const CURRENT_ERA: &[u8] = b"sta:era";
 const LAST_ERA_LENGTH_CHANGE: &[u8] = b"sta:lec";
+const TOTAL_STAKE: &[u8] = b"sta:tot";
 
 const BALANCE_OF: &[u8] = b"sta:bal:";
 const BONDAGE_OF: &[u8] = b"sta:bon:";
@@ -87,6 +88,11 @@ pub fn balance(who: &AccountId) -> Balance {
 /// The liquidity-state of a given account.
 pub fn bondage(who: &AccountId) -> Bondage {
 	storage::get_or_default(&who.to_keyed_vec(BONDAGE_OF))
+}
+
+/// The total amount of stake on the system.
+pub fn total_stake() -> Balance {
+	storage::get_or(TOTAL_STAKE, 0)
 }
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
@@ -434,6 +440,7 @@ mod tests {
 			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&2u64),
 			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
 			twox_128(BONDING_DURATION).to_vec() => vec![].and(&3u64),
+			twox_128(TOTAL_STAKE).to_vec() => vec![].and(&100u64),
 			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&10u64),
 			twox_128(&two.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&20u64),
 			twox_128(&three.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&30u64),
