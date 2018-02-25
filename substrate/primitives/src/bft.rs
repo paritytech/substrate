@@ -175,7 +175,7 @@ impl MisbehaviorCode {
 
 /// Misbehavior kinds.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum MisbehaviorKind {
 	/// BFT: double prepare.
 	BftDoublePrepare((HeaderHash, Signature), (HeaderHash, Signature)),
@@ -185,7 +185,7 @@ pub enum MisbehaviorKind {
 
 /// A report of misbehavior by an authority.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct MisbehaviorReport {
 	/// The round number consensus was reached in.
 	pub round_number: u32,
