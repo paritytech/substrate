@@ -22,6 +22,7 @@ use runtime_io::print;
 use codec::KeyedVec;
 use runtime_support::{storage, StorageVec};
 use polkadot_primitives::{BlockNumber, AccountId};
+use primitives::bft::{MisbehaviorReport, MisbehaviorKind};
 use runtime::{system, session, governance};
 
 /// The balance of an account.
@@ -33,7 +34,7 @@ pub type Bondage = u64;
 struct IntentionStorageVec {}
 impl StorageVec for IntentionStorageVec {
 	type Item = AccountId;
-	const PREFIX: &'static[u8] = b"sta:wil:";
+	const PREFIX: &'static [u8] = b"sta:wil:";
 }
 
 const BONDING_DURATION: &[u8] = b"sta:loc";
@@ -131,6 +132,13 @@ pub mod public {
 		}
 		IntentionStorageVec::set_items(&intentions);
 		storage::put(&transactor.to_keyed_vec(BONDAGE_OF), &(current_era() + bonding_duration()));
+	}
+
+	/// Report misbehavior. Only validators may do this.
+	pub fn report_misbehavior(misbehavior: &MisbehaviorReport) {
+		// 1. check that the target was a validator at the current block.
+		// 2. check the report.
+
 	}
 }
 

@@ -275,6 +275,7 @@ impl<P: Proposer, I: BlockImport> Future for BftFuture<P, I> {
 impl<P: Proposer, I> Drop for BftFuture<P, I> {
 	fn drop(&mut self) {
 		// TODO: have a trait member to pass misbehavior reports into.
+		// map authority IDs onto validator IDs.
 		let _misbehavior = self.inner.drain_misbehavior();
 	}
 }

@@ -191,6 +191,8 @@ pub struct MisbehaviorReport {
 	pub round_number: u32,
 	/// The parent hash of the block where the misbehavior occurred.
 	pub parent_hash: HeaderHash,
+	/// The parent number of the block where the misbehavior occurred.
+	pub parent_number: ::block::Number,
 	/// The authority who misbehavior.
 	pub target: AuthorityId,
 	/// The misbehavior kind.
@@ -202,6 +204,7 @@ impl Slicable for MisbehaviorReport {
 		let mut v = Vec::new();
 		self.round_number.using_encoded(|s| v.extend(s));
 		self.parent_hash.using_encoded(|s| v.extend(s));
+		self.parent_number.using_encoded(|s| v.extend(s));
 		self.target.using_encoded(|s| v.extend(s));
 
 		match self.misbehavior {
@@ -227,6 +230,7 @@ impl Slicable for MisbehaviorReport {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let round_number = u32::decode(input)?;
 		let parent_hash = HeaderHash::decode(input)?;
+		let parent_number = ::block::Number::decode(input)?;
 		let target = AuthorityId::decode(input)?;
 
 		let misbehavior = match u8::decode(input).and_then(MisbehaviorCode::from_u8)? {
@@ -247,6 +251,7 @@ impl Slicable for MisbehaviorReport {
 		Some(MisbehaviorReport {
 			round_number,
 			parent_hash,
+			parent_number,
 			target,
 			misbehavior,
 		})
@@ -262,6 +267,7 @@ mod test {
 		let report = MisbehaviorReport {
 			round_number: 511,
 			parent_hash: [0; 32].into(),
+			parent_number: 999,
 			target: [1; 32].into(),
 			misbehavior: MisbehaviorKind::BftDoubleCommit(
 				([2; 32].into(), [3; 64].into()),
@@ -275,6 +281,7 @@ mod test {
 		let report = MisbehaviorReport {
 			round_number: 511,
 			parent_hash: [0; 32].into(),
+			parent_number: 999,
 			target: [1; 32].into(),
 			misbehavior: MisbehaviorKind::BftDoublePrepare(
 				([2; 32].into(), [3; 64].into()),
