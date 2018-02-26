@@ -38,7 +38,7 @@ pub mod internal {
 	///
 	/// Called by `next_session` only.
 	pub fn set_authorities<'a, I: IntoIterator<Item=&'a SessionKey>>(authorities: I) {
-		AuthorityStorageVec::set_items::<I>(authorities);
+		AuthorityStorageVec::set_items(authorities);
 	}
 
 	/// Set a single authority by index.

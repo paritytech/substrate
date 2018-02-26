@@ -138,9 +138,9 @@ pub trait StorageVec {
 	{
 		let mut count: u32 = 0;
 
-		for (v, i) in items.into_iter().enumerate() {
+		for i in items.into_iter() {
+			put(&count.to_keyed_vec(Self::PREFIX), i);
 			count = count.checked_add(1).expect("exceeded runtime storage capacity");
-			put(&v.to_keyed_vec(Self::PREFIX), i);
 		}
 
 		Self::set_count(count);
@@ -282,9 +282,9 @@ pub mod unhashed {
 		{
 			let mut count: u32 = 0;
 
-			for (v, i) in items.into_iter().enumerate() {
+			for i in items.into_iter() {
+				put(&count.to_keyed_vec(Self::PREFIX), i);
 				count = count.checked_add(1).expect("exceeded runtime storage capacity");
-				put(&v.to_keyed_vec(Self::PREFIX), i);
 			}
 
 			Self::set_count(count);
