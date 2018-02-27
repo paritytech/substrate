@@ -23,9 +23,9 @@ use runtime_support::storage;
 use demo_primitives::{Proposal, AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
 
-const CURRENT_PROPOSAL: &[u8] = b"gov:pro";
-const VOTE_OF: &[u8] = b"gov:vot:";
-const VOTERS: &[u8] = b"gov:vtr:";
+const CURRENT_PROPOSAL: &[u8] = b"dem:pro";
+const VOTE_OF: &[u8] = b"dem:vot:";
+const VOTERS: &[u8] = b"dem:vtr:";
 
 pub mod public {
 	use super::*;
