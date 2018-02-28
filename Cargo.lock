@@ -1471,6 +1471,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-misbehavior-check"
+version = "0.1.0"
+dependencies = [
+ "substrate-bft 0.1.0",
+ "substrate-codec 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-runtime-io 0.1.0",
+]
+
+[[package]]
 name = "substrate-network"
 version = "0.1.0"
 dependencies = [

@@ -178,17 +178,15 @@ impl MisbehaviorCode {
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum MisbehaviorKind {
 	/// BFT: double prepare.
-	BftDoublePrepare((HeaderHash, Signature), (HeaderHash, Signature)),
+	BftDoublePrepare(u32, (HeaderHash, Signature), (HeaderHash, Signature)),
 	/// BFT: double commit.
-	BftDoubleCommit((HeaderHash, Signature), (HeaderHash, Signature)),
+	BftDoubleCommit(u32, (HeaderHash, Signature), (HeaderHash, Signature)),
 }
 
 /// A report of misbehavior by an authority.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct MisbehaviorReport {
-	/// The round number consensus was reached in.
-	pub round_number: u32,
 	/// The parent hash of the block where the misbehavior occurred.
 	pub parent_hash: HeaderHash,
 	/// The parent number of the block where the misbehavior occurred.
@@ -202,21 +200,22 @@ pub struct MisbehaviorReport {
 impl Slicable for MisbehaviorReport {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
-		self.round_number.using_encoded(|s| v.extend(s));
 		self.parent_hash.using_encoded(|s| v.extend(s));
 		self.parent_number.using_encoded(|s| v.extend(s));
 		self.target.using_encoded(|s| v.extend(s));
 
 		match self.misbehavior {
-			MisbehaviorKind::BftDoublePrepare((ref h_a, ref s_a), (ref h_b, ref s_b)) => {
+			MisbehaviorKind::BftDoublePrepare(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
 				(MisbehaviorCode::BftDoublePrepare as u8).using_encoded(|s| v.extend(s));
+				round.using_encoded(|s| v.extend(s));
 				h_a.using_encoded(|s| v.extend(s));
 				s_a.using_encoded(|s| v.extend(s));
 				h_b.using_encoded(|s| v.extend(s));
 				s_b.using_encoded(|s| v.extend(s));
 			}
-			MisbehaviorKind::BftDoubleCommit((ref h_a, ref s_a), (ref h_b, ref s_b)) => {
+			MisbehaviorKind::BftDoubleCommit(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
 				(MisbehaviorCode::BftDoubleCommit as u8).using_encoded(|s| v.extend(s));
+				round.using_encoded(|s| v.extend(s));
 				h_a.using_encoded(|s| v.extend(s));
 				s_a.using_encoded(|s| v.extend(s));
 				h_b.using_encoded(|s| v.extend(s));
@@ -228,7 +227,6 @@ impl Slicable for MisbehaviorReport {
 	}
 
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let round_number = u32::decode(input)?;
 		let parent_hash = HeaderHash::decode(input)?;
 		let parent_number = ::block::Number::decode(input)?;
 		let target = AuthorityId::decode(input)?;
@@ -236,12 +234,14 @@ impl Slicable for MisbehaviorReport {
 		let misbehavior = match u8::decode(input).and_then(MisbehaviorCode::from_u8)? {
 			MisbehaviorCode::BftDoublePrepare => {
 				MisbehaviorKind::BftDoublePrepare(
+					u32::decode(input)?,
 					(HeaderHash::decode(input)?, Signature::decode(input)?),
 					(HeaderHash::decode(input)?, Signature::decode(input)?),
 				)
 			}
 			MisbehaviorCode::BftDoubleCommit => {
 				MisbehaviorKind::BftDoubleCommit(
+					u32::decode(input)?,
 					(HeaderHash::decode(input)?, Signature::decode(input)?),
 					(HeaderHash::decode(input)?, Signature::decode(input)?),
 				)
@@ -249,7 +249,6 @@ impl Slicable for MisbehaviorReport {
 		};
 
 		Some(MisbehaviorReport {
-			round_number,
 			parent_hash,
 			parent_number,
 			target,
@@ -265,11 +264,11 @@ mod test {
 	#[test]
 	fn misbehavior_report_roundtrip() {
 		let report = MisbehaviorReport {
-			round_number: 511,
 			parent_hash: [0; 32].into(),
 			parent_number: 999,
 			target: [1; 32].into(),
 			misbehavior: MisbehaviorKind::BftDoubleCommit(
+				511,
 				([2; 32].into(), [3; 64].into()),
 				([4; 32].into(), [5; 64].into()),
 			),
@@ -279,11 +278,11 @@ mod test {
 		assert_eq!(MisbehaviorReport::decode(&mut &encoded[..]).unwrap(), report);
 
 		let report = MisbehaviorReport {
-			round_number: 511,
 			parent_hash: [0; 32].into(),
 			parent_number: 999,
 			target: [1; 32].into(),
 			misbehavior: MisbehaviorKind::BftDoublePrepare(
+				511,
 				([2; 32].into(), [3; 64].into()),
 				([4; 32].into(), [5; 64].into()),
 			),
