@@ -30,6 +30,8 @@ pub mod session;
 pub mod governance;
 #[allow(unused)]
 pub mod democracy;
+#[allow(unused)]
+pub mod council;
 
 
 // TODO: polkadao

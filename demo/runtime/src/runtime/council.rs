@@ -66,64 +66,119 @@ use runtime::staking::Balance;
 // vec<voter> (all voters. order unimportant - just need to be enumerable.)
 // voter -> (last round, Vec<bool>)
 
-const CURRENT_VOTE: &[u8] = b"cou:cur";
+type VoteIndex = u32;
+
+const ACTIVE_COUNCIL: &[u8] = b"cou:act";
+
 const APPROVALS_OF: &[u8] = b"cou:apr:";
 const VOTERS: &[u8] = b"cou:vrs";
 const CANDIDATES: &[u8] = b"cou:can";
 
+const VOTE_COUNT: &[u8] = b"cou:vco";
+
 const CANDIDACY_BOND: &[u8] = b"cou:cbo";
 const VOTING_BOND: &[u8] = b"cou:vbo";
-
 const CARRY_COUNT: &[u8] = b"cou:cco";
 const PRESENTATION_DURATION: &[u8] = b"cou:pdu";
+const TERM_DURATION: &[u8] = b"cou:trm";
+const DESIRED_SEATS: &[u8] = b"cou:sts";
 
+const NEXT_FINALISE: &[u8] = b"cou:nxt";
+const STAKE_SNAPSHOT: &[u8] = b"cou:sss";
 const WINNERS: &[u8] = b"cou:win";
 
 /// How much should be locked up in order to submit one's candidacy.
 pub fn candidacy_bond() -> Balance {
-	unimplemented!();
+	storage::get(CANDIDACY_BOND)
+		.expect("all core parameters of council module must be in place")
 }
 
 /// How much should be locked up in order to be able to submit votes.
 pub fn voting_bond() -> Balance {
-	unimplemented!();
+	storage::get(VOTING_BOND)
+		.expect("all core parameters of council module must be in place")
 }
 
 /// How long to give each top candidate to present themselves after the vote ends.
 pub fn presentation_duration() -> BlockNumber {
-	unimplemented!();
+	storage::get(PRESENTATION_DURATION)
+		.expect("all core parameters of council module must be in place")
+}
+
+/// How long each position is active for.
+pub fn term_duration() -> BlockNumber {
+	storage::get(TERM_DURATION)
+		.expect("all core parameters of council module must be in place")
+}
+
+/// Number of accounts that should be sitting on the council.
+pub fn desired_seats() -> u32 {
+	storage::get(DESIRED_SEATS)
+		.expect("all core parameters of council module must be in place")
 }
 
 /// How many runners-up should have their approvals persist until the next vote.
 pub fn carry_count() -> u32 {
-	unimplemented!();
+	storage::get(CARRY_COUNT)
+		.expect("all core parameters of council module must be in place")
 }
 
 /// The current council. When there's a vote going on, this should still be used for executive
 /// matters.
-pub fn active_council() -> Vec<AccountId> {
-	unimplemented!();
+pub fn active_council() -> Vec<(AccountId, BlockNumber)> {
+	storage::get_or_default(ACTIVE_COUNCIL)
 }
 
-/// The information on the current vote:
-/// - The block number where voting will end;
-/// - The specific council members to be replaced.
-pub fn current_vote() -> Option<(BlockNumber, Vec<AccountId>)> {
+/// The block number on which the tally for the next election will happen. `None` only if the
+/// desired seats of the council is zero.
+pub fn next_tally() -> Option<BlockNumber> {
+	let desired_seats = desired_seats();
+	if desired_seats == 0 {
+		None
+	} else {
+		let c = active_council();
+		let (next_possible, count, coming) =
+			if let Some((tally_end, comers, leavers)) = next_finalise() {
+				// if there's a tally in progress, then next tally can begin immediately afterwards
+				(tally_end, c.len() - leavers.len() + comers as usize, comers)
+			} else {
+				(system::block_number(), c.len(), 0)
+			};
+		if count < desired_seats as usize {
+			Some(next_possible)
+		} else {
+			// next tally begins once enough council members expire to bring members below desired.
+			if desired_seats <= coming {
+				Some(next_possible + term_duration())
+			} else {
+				Some(c[c.len() - (desired_seats - coming) as usize].1)
+			}
+		}
+	}
+}
+
+/// The accounts holding the seats that will become free on the next tally.
+pub fn next_finalise() -> Option<(BlockNumber, u32, Vec<AccountId>)> {
+	storage::get(NEXT_FINALISE)
+}
+
+/// The number of seats that will be elected on the next tally.
+pub fn empty_seats() -> u32 {
 	unimplemented!();
 }
 
 /// The total number of votes that have happened or are in progress.
 pub fn vote_index() -> VoteIndex {
-	unimplemented!();
+	storage::get_or_default(VOTE_COUNT)
 }
 
 /// The queue of candidate indices that will be cleared.
-pub fn candidate_clear_queue() -> {
+pub fn candidate_clear_queue(vote: VoteIndex) -> Vec<u32> {
 	unimplemented!();
 }
 
 /// The last cleared vote index that this voter was last active at.
-pub fn voter_last_active(voter: &AddressId) -> VoteIndex {
+pub fn voter_last_active(voter: &AccountId) -> VoteIndex {
 	unimplemented!();
 }
 
@@ -134,7 +189,7 @@ pub mod public {
 	/// when it was last active until the penultimate vote should result in no approvals.
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
-	pub fn kill_inactive_voter(signed: &AccountId, who: &AddressId) {
+	pub fn kill_inactive_voter(signed: &AccountId, who: &AccountId) {
 		unimplemented!();
 	}
 
@@ -164,13 +219,30 @@ pub mod privileged {
 	/// election when they expire. If more, then a new vote will be started if one is not already
 	/// in progress.
 	pub fn set_desired_seats(count: u32) {
-		unimplemented!();
+		storage::put(DESIRED_SEATS, &count);
 	}
 
-	/// Remove a particular member. A new vote will be started if one is not already in progress.
+	/// Remove a particular member. A tally will happen instantly (if not already in a presentation
+	/// period) to fill the seat if removal means that the desired members are not met.
 	/// This is effective immediately.
-	pub fn remove_member(who: AddressId) {
-		unimplemented!();
+	pub fn remove_member(who: &AccountId) {
+		let new_council: Vec<(AccountId, BlockNumber)> = active_council()
+			.into_iter()
+			.filter(|i| i.0 != *who)
+			.collect();
+		storage::put(ACTIVE_COUNCIL, &new_council);
+	}
+
+	/// Set the presentation duration. If there is current a vote being presented for, will
+	/// invoke `finalise_vote`.
+	pub fn set_presentation_duration(count: BlockNumber) {
+		storage::put(PRESENTATION_DURATION, &count);
+	}
+
+	/// Set the presentation duration. If there is current a vote being presented for, will
+	/// invoke `finalise_vote`.
+	pub fn set_term_duration(count: BlockNumber) {
+		storage::put(TERM_DURATION, &count);
 	}
 }
 
@@ -181,19 +253,21 @@ pub mod internal {
 
 	/// Current era is ending; we should finish up any proposals.
 	pub fn end_block() {
-		if let Some((number, removals)) = current_vote() {
+		if let Some(number) = next_tally() {
 			if system::block_number() == number {
-				close_voting(removals.len() as u32);
+				close_voting();
 			}
-			if system::block_number() == number + presentation_duration() {
-				finalise_vote(removals);
+		}
+		if let Some((number, _, _)) = next_finalise() {
+			if system::block_number() == number {
+				finalise_vote();
 			}
 		}
 	}
 }
 
 /// Close the voting, snapshot the staking and the number of seats that are actually up for grabs.
-fn close_voting(removal_count: u32) {
+fn close_voting() {
 	unimplemented!();
 }
 
@@ -201,7 +275,7 @@ fn close_voting(removal_count: u32) {
 /// candidates in their place. If the total council members is less than the desired membership
 /// a new vote is started.
 /// Clears all presented candidates, returning the bond of the elected ones.
-fn finalise_vote(seats: u32, removals: Vec<AccountId>) {
+fn finalise_vote() {
 	unimplemented!();
 }
 
@@ -258,15 +332,6 @@ mod tests {
 			assert_eq!(staking::total_stake(), 210u64);
 
 			with_env(|e| e.block_number = 1);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2));
-			public::vote(&alice, 1, true);
-
-			assert_eq!(public::tally(), (10, 0));
-
-			democracy::internal::end_of_an_era();
-			staking::internal::check_new_era();
-
-			assert_eq!(staking::era_length(), 2u64);
 		});
 	}
 }
