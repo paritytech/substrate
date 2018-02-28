@@ -12,6 +12,7 @@ substrate-runtime-std = { path = "../../substrate/runtime-std" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-primitives = { path = "../../substrate/primitives" }
+substrate-misbehavior-check = { path = "../../substrate/misbehavior-check" }
 polkadot-primitives = { path = "../primitives" }
 
 [dev-dependencies]
@@ -25,6 +26,7 @@ std = [
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
 	"substrate-primitives/std",
+	"substrate-misbehavior-check/std",
 	"polkadot-primitives/std",
 	"log"
 ]

@@ -53,6 +53,10 @@ fn commit(parent: HeaderHash, round_number: u32, hash: HeaderHash) -> Message {
 }
 
 /// Evaluate misbehavior.
+///
+/// Doesn't check that the header hash in question is
+/// valid or whether the misbehaving authority was part of
+/// the set at that block.
 pub fn evaluate_misbehavior(
 	misbehaved: &AuthorityId,
 	parent_hash: HeaderHash,

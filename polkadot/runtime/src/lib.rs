@@ -21,6 +21,7 @@
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
+extern crate substrate_misbehavior_check as misbehavior_check;
 extern crate polkadot_primitives;
 
 #[cfg(all(feature = "std", test))]
@@ -29,8 +30,7 @@ extern crate substrate_keyring as keyring;
 #[cfg(feature = "std")]
 extern crate rustc_hex;
 
-#[cfg(feature = "std")]
-#[macro_use]
+#[cfg_attr(any(test, feature = "std"), macro_use)]
 extern crate substrate_primitives as primitives;
 
 #[macro_use]

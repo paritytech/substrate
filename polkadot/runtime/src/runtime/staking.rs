@@ -156,7 +156,7 @@ pub mod public {
 			Some(pos) => validators.get(pos).expect("validators and authorities have same cardinality; qed"),
 		};
 
-		// any invalidity here is actually its own misbehavior.
+		// any invalidity beyond this point is actually its own misbehavior.
 		let target = match authorities.iter().position(|x| x == &report.target) {
 			None => {
 				slash(reporting_validator, None);
@@ -165,7 +165,12 @@ pub mod public {
 			Some(pos) => validators.get(pos).expect("validators and authorities have same cardinality; qed"),
 		};
 
-		unimplemented!()
+		let misbehaved = ::misbehavior_check::evaluate_misbehavior(&report.target, report.parent_hash, &report.misbehavior);
+		if misbehaved {
+			slash(target, Some(reporting_validator))
+		} else {
+			slash(reporting_validator, None);
+		}
 	}
 }
 
@@ -454,6 +459,33 @@ mod tests {
 		with_externalities(&mut t, || {
 			stake(&one);
 			transfer(&one, &two, 69);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn misbehavior_report_by_non_validator_panics() {
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
+
+		let mut t: TestExternalities = map![
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64)
+		];
+
+		with_externalities(&mut t, || {
+			// the misbehavior report here is invalid, but that
+			// actually doesn't panic; instead it would slash the bad
+			// reporter.
+			report_misbehavior(&one, &MisbehaviorReport {
+				parent_hash: [0; 32].into(),
+				parent_number: 0,
+				target: two,
+				misbehavior: MisbehaviorKind::BftDoubleCommit(
+					2,
+					([1; 32].into(), [2; 64].into()),
+					([3; 32].into(), [4; 64].into()),
+				),
+			})
 		});
 	}
 }
