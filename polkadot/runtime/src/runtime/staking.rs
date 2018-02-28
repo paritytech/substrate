@@ -21,15 +21,9 @@ use rstd::cell::RefCell;
 use runtime_io::print;
 use codec::KeyedVec;
 use runtime_support::{storage, StorageVec};
-use polkadot_primitives::{BlockNumber, AccountId};
+use polkadot_primitives::{Balance, Bondage, BlockNumber, AccountId};
 use primitives::bft::{MisbehaviorReport, MisbehaviorKind};
-use runtime::{system, session, governance};
-
-/// The balance of an account.
-pub type Balance = u64;
-
-/// The amount of bonding period left in an account. Measured in eras.
-pub type Bondage = u64;
+use runtime::{system, session, governance, consensus};
 
 struct IntentionStorageVec {}
 impl StorageVec for IntentionStorageVec {
@@ -81,9 +75,14 @@ pub fn balance(who: &AccountId) -> Balance {
 	storage::get_or_default(&who.to_keyed_vec(BALANCE_OF))
 }
 
-/// The liquidity-state of a given account.
+/// Gives the index of the era where the account's balance will no longer
+/// be bonded.
 pub fn bondage(who: &AccountId) -> Bondage {
 	storage::get_or_default(&who.to_keyed_vec(BONDAGE_OF))
+}
+
+fn set_balance(who: &AccountId, amount: Balance) {
+	storage::put(&who.to_keyed_vec(BALANCE_OF), &amount)
 }
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
@@ -114,7 +113,7 @@ pub mod public {
 	pub fn stake(transactor: &AccountId) {
 		let mut intentions = IntentionStorageVec::items();
 		// can't be in the list twice.
-		assert!(intentions.iter().find(|t| *t == transactor).is_none(), "Cannot stake if already staked.");
+		assert!(intentions.iter().find(|t| t == &transactor).is_none(), "Cannot stake if already staked.");
 		intentions.push(transactor.clone());
 		IntentionStorageVec::set_items(&intentions);
 		storage::put(&transactor.to_keyed_vec(BONDAGE_OF), &u64::max_value());
@@ -134,11 +133,39 @@ pub mod public {
 		storage::put(&transactor.to_keyed_vec(BONDAGE_OF), &(current_era() + bonding_duration()));
 	}
 
-	/// Report misbehavior. Only validators may do this.
-	pub fn report_misbehavior(misbehavior: &MisbehaviorReport) {
-		// 1. check that the target was a validator at the current block.
-		// 2. check the report.
+	/// Report misbehavior. Only validators may do this, signing under
+	/// the authority key of the session the report corresponds to.
+	///
+	/// Reports older than one session in the past will be ignored.
+	pub fn report_misbehavior(transactor: &AccountId, report: &MisbehaviorReport) {
+		let (validators, authorities) = if report.parent_number < session::last_session_start().unwrap_or(0) {
+			panic!("report is too old");
+		} else if report.parent_number < session::current_start_block() {
+			session::last_session_keys().into_iter().unzip()
+		} else {
+			(session::validators(), consensus::authorities())
+		};
 
+		if report.parent_hash != system::block_hash(report.parent_number) {
+			// report out of chain.
+			panic!("report not from this blockchain");
+		}
+
+		let reporting_validator = match authorities.iter().position(|x| x == transactor) {
+			None => panic!("only validators may report"),
+			Some(pos) => validators.get(pos).expect("validators and authorities have same cardinality; qed"),
+		};
+
+		// any invalidity here is actually its own misbehavior.
+		let target = match authorities.iter().position(|x| x == &report.target) {
+			None => {
+				slash(reporting_validator, None);
+				return;
+			}
+			Some(pos) => validators.get(pos).expect("validators and authorities have same cardinality; qed"),
+		};
+
+		unimplemented!()
 	}
 }
 
@@ -176,6 +203,23 @@ pub mod internal {
 		if (system::block_number() - last_era_length_change()) % era_length() == 0 {
 			new_era();
 		}
+	}
+}
+
+/// Slash a validator, with an optional benefactor.
+fn slash(who: &AccountId, benefactor: Option<&AccountId>) {
+	// the reciprocal of the proportion of the amount slashed to give
+	// to the benefactor.
+	const SLASH_REWARD_DENOMINATOR: Balance = 10;
+
+	let slashed = balance(who);
+	set_balance(who, 0);
+
+	if let Some(benefactor) = benefactor {
+		let reward = slashed / SLASH_REWARD_DENOMINATOR;
+
+		let prior = balance(benefactor);
+		set_balance(benefactor, prior + reward);
 	}
 }
 

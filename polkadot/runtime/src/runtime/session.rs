@@ -38,9 +38,9 @@ impl StorageVec for ValidatorStorageVec {
 }
 
 // the session keys before the previous.
-struct LastSessionKeys;
-impl StorageVec for LastSessionKeys {
-	type Item = SessionKey;
+struct LastValidators;
+impl StorageVec for LastValidators {
+	type Item = (AccountId, SessionKey);
 	const PREFIX: &'static [u8] = b"ses:old:";
 }
 
@@ -72,9 +72,9 @@ pub fn current_start_block() -> BlockNumber {
 	storage::get_or(CURRENT_SESSION_START, 0)
 }
 
-/// Get the last session's authority keys.
-pub fn last_session_keys() -> Vec<SessionKey> {
-	LastSessionKeys::items()
+/// Get the last session's validators, paired with their authority keys.
+pub fn last_session_keys() -> Vec<(AccountId, SessionKey)> {
+	LastValidators::items()
 }
 
 /// Get the start block of the last session.
@@ -124,10 +124,10 @@ pub mod internal {
 	/// Called by staking::next_era() only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[AccountId]) {
-		println!("new era: {:?}", new);
-
+		LastValidators::set_items(
+			new.iter().cloned().zip(consensus::authorities())
+		);
 		ValidatorStorageVec::set_items(new);
-		LastSessionKeys::set_items(&consensus::authorities());
 		consensus::internal::set_authorities(new);
 	}
 
@@ -153,12 +153,19 @@ fn rotate_session() {
 		storage::kill(NEXT_SESSION_LENGTH);
 	}
 
+	let validators = validators();
+
 	storage::put(LAST_SESSION_START, &current_start_block());
 	storage::put(CURRENT_SESSION_START, &system::block_number());
-	LastSessionKeys::set_items(&consensus::authorities());
+	LastValidators::set_items(
+		validators.iter()
+			.cloned()
+			.zip(consensus::authorities())
+	);
+
 
 	// Update any changes in session keys.
-	validators().iter().enumerate().for_each(|(i, v)| {
+	validators.iter().enumerate().for_each(|(i, v)| {
 		let k = v.to_keyed_vec(NEXT_KEY_FOR);
 		if let Some(n) = storage::take(&k) {
 			// this is fine because the authorities vector currently

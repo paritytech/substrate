@@ -80,3 +80,9 @@ pub type Signature = primitives::hash::H512;
 
 /// A timestamp: seconds since the unix epoch.
 pub type Timestamp = u64;
+
+/// The balance of an account.
+pub type Balance = u64;
+
+/// The amount of bonding period left in an account. Measured in eras.
+pub type Bondage = u64;

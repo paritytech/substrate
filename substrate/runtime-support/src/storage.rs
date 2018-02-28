@@ -17,6 +17,7 @@
 //! Stuff to do with the runtime's storage.
 
 use rstd::prelude::*;
+use rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
 use codec::{Slicable, KeyedVec, Input};
 
@@ -131,15 +132,15 @@ pub trait StorageVec {
 	}
 
 	/// Set the current set of items.
-	fn set_items<'a, I>(items: I)
+	fn set_items<I, T>(items: I)
 		where
-			I: IntoIterator<Item=&'a Self::Item>,
-			Self::Item: 'a,
+			I: IntoIterator<Item=T>,
+			T: Borrow<Self::Item>,
 	{
 		let mut count: u32 = 0;
 
 		for i in items.into_iter() {
-			put(&count.to_keyed_vec(Self::PREFIX), i);
+			put(&count.to_keyed_vec(Self::PREFIX), i.borrow());
 			count = count.checked_add(1).expect("exceeded runtime storage capacity");
 		}
 
@@ -180,6 +181,7 @@ pub trait StorageVec {
 }
 
 pub mod unhashed {
+	use rstd::borrow::Borrow;
 	use super::{runtime_io, Slicable, KeyedVec, Vec, IncrementalInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
@@ -275,15 +277,15 @@ pub mod unhashed {
 		}
 
 		/// Set the current set of items.
-		fn set_items<'a, I>(items: I)
+		fn set_items<I, T>(items: I)
 			where
-				I: IntoIterator<Item=&'a Self::Item>,
-				Self::Item: 'a,
+				I: IntoIterator<Item=T>,
+				T: Borrow<Self::Item>,
 		{
 			let mut count: u32 = 0;
 
 			for i in items.into_iter() {
-				put(&count.to_keyed_vec(Self::PREFIX), i);
+				put(&count.to_keyed_vec(Self::PREFIX), i.borrow());
 				count = count.checked_add(1).expect("exceeded runtime storage capacity");
 			}
 
