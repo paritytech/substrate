@@ -112,6 +112,16 @@ impl Slicable for Vec<u8> {
 	}
 }
 
+impl Slicable for Vec<bool> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		<Vec<u8>>::decode(input).map(|a| a.into_iter().map(|b| b != 0).collect())
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		<Vec<u8>>::encode(&self.iter().map(|&b| if b {1} else {0}).collect())
+	}
+}
+
 macro_rules! impl_vec_simple_array {
 	($($size:expr),*) => {
 		$(

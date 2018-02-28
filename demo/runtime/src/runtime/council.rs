@@ -68,24 +68,30 @@ use runtime::staking::Balance;
 
 type VoteIndex = u32;
 
-const ACTIVE_COUNCIL: &[u8] = b"cou:act";
-
-const APPROVALS_OF: &[u8] = b"cou:apr:";
-const VOTERS: &[u8] = b"cou:vrs";
-const CANDIDATES: &[u8] = b"cou:can";
-
-const VOTE_COUNT: &[u8] = b"cou:vco";
-
+// parameters
 const CANDIDACY_BOND: &[u8] = b"cou:cbo";
 const VOTING_BOND: &[u8] = b"cou:vbo";
+const PRESENT_SLASH_PER_VOTER: &[u8] = b"cou:pss";
 const CARRY_COUNT: &[u8] = b"cou:cco";
 const PRESENTATION_DURATION: &[u8] = b"cou:pdu";
 const TERM_DURATION: &[u8] = b"cou:trm";
 const DESIRED_SEATS: &[u8] = b"cou:sts";
 
+// permanent state (always relevant, changes only at the finalisation of voting)
+const ACTIVE_COUNCIL: &[u8] = b"cou:act";
+const VOTE_COUNT: &[u8] = b"cou:vco";
+
+// persistent state (always relevant, changes constantly)
+const APPROVALS_OF: &[u8] = b"cou:apr:";
+const REGISTER_INDEX_OF: &[u8] = b"cou:reg:";	// Candidate -> VoteIndex
+const LAST_ACTIVE_OF: &[u8] = b"cou:lac:";		// Voter -> VoteIndex
+const VOTERS: &[u8] = b"cou:vrs";
+const CANDIDATES: &[u8] = b"cou:can";
+
+// temporary state (only relevant during finalisation/presentation)
 const NEXT_FINALISE: &[u8] = b"cou:nxt";
-const STAKE_SNAPSHOT: &[u8] = b"cou:sss";
-const WINNERS: &[u8] = b"cou:win";
+const SNAPSHOTED_STAKE_OF: &[u8] = b"cou:sss:";		// AccountId -> Balance
+const WINNERS: &[u8] = b"cou:win";					// Vec<(Balance, AccountId)> ORDERED low -> high
 
 /// How much should be locked up in order to submit one's candidacy.
 pub fn candidacy_bond() -> Balance {
@@ -108,6 +114,12 @@ pub fn presentation_duration() -> BlockNumber {
 /// How long each position is active for.
 pub fn term_duration() -> BlockNumber {
 	storage::get(TERM_DURATION)
+		.expect("all core parameters of council module must be in place")
+}
+
+/// The punishment, per voter, if you provide an invalid presentation.
+pub fn present_slash_per_voter() -> Balance {
+	storage::get(PRESENT_SLASH_PER_VOTER)
 		.expect("all core parameters of council module must be in place")
 }
 
@@ -149,6 +161,8 @@ pub fn next_tally() -> Option<BlockNumber> {
 		} else {
 			// next tally begins once enough council members expire to bring members below desired.
 			if desired_seats <= coming {
+				// the entire amount of desired seats is less than those new members - we'll have
+				// to wait until they expire.
 				Some(next_possible + term_duration())
 			} else {
 				Some(c[c.len() - (desired_seats - coming) as usize].1)
@@ -162,31 +176,36 @@ pub fn next_finalise() -> Option<(BlockNumber, u32, Vec<AccountId>)> {
 	storage::get(NEXT_FINALISE)
 }
 
-/// The number of seats that will be elected on the next tally.
-pub fn empty_seats() -> u32 {
-	unimplemented!();
-}
-
 /// The total number of votes that have happened or are in progress.
 pub fn vote_index() -> VoteIndex {
 	storage::get_or_default(VOTE_COUNT)
 }
 
-/// The queue of candidate indices that will be cleared.
-pub fn candidate_clear_queue(vote: VoteIndex) -> Vec<u32> {
-	unimplemented!();
+/// The vote index that the candidate `who` was registered or `None` if they are not currently
+/// registered.
+pub fn candidate_reg_index(who: &AccountId) -> Option<VoteIndex> {
+	storage::get(&who.to_keyed_vec(REGISTER_INDEX_OF))
 }
 
 /// The last cleared vote index that this voter was last active at.
-pub fn voter_last_active(voter: &AccountId) -> VoteIndex {
-	unimplemented!();
+pub fn voter_last_active(voter: &AccountId) -> Option<VoteIndex> {
+	storage::get(LAST_ACTIVE_OF)
 }
 
 pub mod public {
 	use super::*;
 
-	/// Remove a voter. For it not to panic, the combination of candidate_clear_queue from the
-	/// when it was last active until the penultimate vote should result in no approvals.
+	/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
+	/// are registered.
+	pub fn set_approvals(who: &AccountId, votes: &Vec<bool>, index: VoteIndex) {
+		assert_eq!(index, vote_index());
+		storage::put(&who.to_keyed_vec(APPROVALS_OF), votes);
+		storage::put(&who.to_keyed_vec(LAST_ACTIVE_OF), &index);
+	}
+
+	/// Remove a voter. For it not to be a bond-consuming no-op, all approved candidate indices
+	/// must now be either unregistered or registered to a candidate that registered the slot after
+	/// the voter gave their last approval set.
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
 	pub fn kill_inactive_voter(signed: &AccountId, who: &AccountId) {
@@ -207,7 +226,9 @@ pub mod public {
 
 	/// Claim that `signed` is one of the top carry_count() + current_vote().1 candidates.
 	/// Only works if the block number >= current_vote().0 and < current_vote().0 + presentation_duration()
-	pub fn present(signed: &AccountId) {
+	/// `signed` should have at least
+	pub fn present(signed: &AccountId, who: &AccountId, index: VoteIndex) {
+		assert_eq!(index, vote_index());
 		unimplemented!();
 	}
 }
@@ -255,27 +276,34 @@ pub mod internal {
 	pub fn end_block() {
 		if let Some(number) = next_tally() {
 			if system::block_number() == number {
-				close_voting();
+				start_tally();
 			}
 		}
 		if let Some((number, _, _)) = next_finalise() {
 			if system::block_number() == number {
-				finalise_vote();
+				finalise_tally();
 			}
 		}
 	}
 }
 
 /// Close the voting, snapshot the staking and the number of seats that are actually up for grabs.
-fn close_voting() {
-	unimplemented!();
+fn start_tally() {
+	let active_council = active_council();
+	let desired_seats = desired_seats() as usize;
+	let number = system::block_number();
+	let expiring = active_council.iter().take_while(|i| i.1 == number).cloned().collect::<Vec<_>>();
+	if active_council.len() - expiring.len() < desired_seats {
+		let empty_seats = desired_seats - (active_council.len() - expiring.len());
+		storage::put(NEXT_FINALISE, &(number + presentation_duration(), empty_seats as u32, expiring));
+	}
 }
 
 /// Finalise the vote, removing each of the `removals` and inserting `seats` of the most approved
 /// candidates in their place. If the total council members is less than the desired membership
 /// a new vote is started.
 /// Clears all presented candidates, returning the bond of the elected ones.
-fn finalise_vote() {
+fn finalise_tally() {
 	unimplemented!();
 }
 
