@@ -82,17 +82,17 @@ const ACTIVE_COUNCIL: &[u8] = b"cou:act";
 const VOTE_COUNT: &[u8] = b"cou:vco";
 
 // persistent state (always relevant, changes constantly)
-const APPROVALS_OF: &[u8] = b"cou:apr:";
+const APPROVALS_OF: &[u8] = b"cou:apr:";		// Vec<bool>
 const REGISTER_INDEX_OF: &[u8] = b"cou:reg:";	// Candidate -> VoteIndex
 const LAST_ACTIVE_OF: &[u8] = b"cou:lac:";		// Voter -> VoteIndex
-const VOTERS: &[u8] = b"cou:vrs";
-const CANDIDATES: &[u8] = b"cou:can";
-const CANDIDATE_COUNT: &[u8] = b"cou:cnc";
+const VOTERS: &[u8] = b"cou:vrs";				// Vec<AccountId>
+const CANDIDATES: &[u8] = b"cou:can";			// Vec<AccountId>, has holes
+const CANDIDATE_COUNT: &[u8] = b"cou:cnc";		// u32
 
 // temporary state (only relevant during finalisation/presentation)
 const NEXT_FINALISE: &[u8] = b"cou:nxt";
-const SNAPSHOTED_STAKE_OF: &[u8] = b"cou:sss:";		// AccountId -> Balance
-const WINNERS: &[u8] = b"cou:win";					// Vec<(Balance, AccountId)> ORDERED low -> high
+const SNAPSHOTED_STAKES: &[u8] = b"cou:sss";		// Vec<Balance>
+const LEADERBOARD: &[u8] = b"cou:win";				// Vec<(Balance, AccountId)> ORDERED low -> high
 
 /// How much should be locked up in order to submit one's candidacy.
 pub fn candidacy_bond() -> Balance {
@@ -200,7 +200,12 @@ pub fn candidate_reg_index(who: &AccountId) -> Option<VoteIndex> {
 
 /// The last cleared vote index that this voter was last active at.
 pub fn voter_last_active(voter: &AccountId) -> Option<VoteIndex> {
-	storage::get(LAST_ACTIVE_OF)
+	storage::get(&voter.to_keyed_vec(LAST_ACTIVE_OF))
+}
+
+/// The last cleared vote index that this voter was last active at.
+pub fn approvals_of(voter: &AccountId) -> Vec<bool> {
+	storage::get_or_default(&voter.to_keyed_vec(APPROVALS_OF))
 }
 
 pub mod public {
@@ -220,6 +225,11 @@ pub mod public {
 			// break.
 //			assert!(staking::unlock_block(signed) == staking::LockStatus::Liquid);
 			staking::internal::set_balance(signed, b - voting_bond());
+			storage::put(VOTERS, &{
+				let mut v: Vec<AccountId> = storage::get_or_default(VOTERS);
+				v.push(signed.clone());
+				v
+			});
 		}
 		storage::put(&signed.to_keyed_vec(APPROVALS_OF), votes);
 		storage::put(&signed.to_keyed_vec(LAST_ACTIVE_OF), &index);
@@ -236,9 +246,16 @@ pub mod public {
 	}
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
-	pub fn retract_voter(signed: &AccountId) {
+	pub fn retract_voter(signed: &AccountId, index: u32) {
 		assert!(!presentation_active());
 		assert!(storage::exists(&signed.to_keyed_vec(LAST_ACTIVE_OF)));
+		storage::put(VOTERS, &{
+			let mut v: Vec<AccountId> = storage::get_or_default(VOTERS);
+			let index = index as usize;
+			assert!(index < v.len() && v[index] == *signed);
+			v.swap_remove(index);
+			v
+		});
 		storage::kill(&signed.to_keyed_vec(APPROVALS_OF));
 		storage::kill(&signed.to_keyed_vec(LAST_ACTIVE_OF));
 		staking::internal::set_balance(signed, staking::balance(signed) + voting_bond());
@@ -271,10 +288,38 @@ pub mod public {
 	/// Claim that `signed` is one of the top carry_count() + current_vote().1 candidates.
 	/// Only works if the block number >= current_vote().0 and < current_vote().0 + presentation_duration()
 	/// `signed` should have at least
-	pub fn present(signed: &AccountId, who: &AccountId, index: VoteIndex) {
+	pub fn present(signed: &AccountId, candidate: &AccountId, candidate_index: u32, total: Balance, index: VoteIndex) {
 		assert_eq!(index, vote_index());
 		assert!(presentation_active());
-		unimplemented!();
+		let b = staking::balance(signed);
+		let stakes: Vec<Balance> = storage::get_or_default(SNAPSHOTED_STAKES);
+		let voters: Vec<AccountId> = storage::get_or_default(VOTERS);
+		let bad_presentation_punishment = present_slash_per_voter() * voters.len() as Balance;
+		assert!(b >= bad_presentation_punishment);
+
+		let mut leaderboard: Vec<(Balance, AccountId)> = storage::get_or_default(LEADERBOARD);
+		assert!(total > leaderboard[0].0);
+
+		let registered_since = storage::get(&candidate.to_keyed_vec(REGISTER_INDEX_OF)).expect("presented candidate must be current");
+		let candidate_index = candidate_index as usize;
+		let actual_total = voters.iter()
+			.zip(stakes.iter())
+			.filter_map(|(voter, stake)|
+				match voter_last_active(voter) {
+					Some(b) if b >= registered_since =>
+						approvals_of(voter).get(candidate_index)
+							.and_then(|approved| if *approved { Some(stake) } else { None }),
+					_ => None,
+				})
+			.sum();
+		if total == actual_total {
+			// insert into leaderboard
+			leaderboard[0] = (total, candidate.clone());
+			leaderboard.sort_by_key(|&(t, _)| t);
+			storage::put(LEADERBOARD, &leaderboard);
+		} else {
+			staking::internal::set_balance(signed, b - bad_presentation_punishment);
+		}
 	}
 }
 
@@ -341,6 +386,13 @@ fn start_tally() {
 	if active_council.len() - expiring.len() < desired_seats {
 		let empty_seats = desired_seats - (active_council.len() - expiring.len());
 		storage::put(NEXT_FINALISE, &(number + presentation_duration(), empty_seats as u32, expiring));
+
+		let voters: Vec<AccountId> = storage::get_or_default(VOTERS);
+		let votes: Vec<Balance> = voters.iter().map(staking::balance).collect();
+		storage::put(SNAPSHOTED_STAKES, &votes);
+
+		// initialise leaderboard.
+		storage::put(LEADERBOARD, &vec![(0 as Balance, AccountId::default()); empty_seats]);
 	}
 }
 
@@ -350,6 +402,7 @@ fn start_tally() {
 /// Clears all presented candidates, returning the bond of the elected ones.
 fn finalise_tally() {
 	unimplemented!();
+	storage::kill(SNAPSHOTED_STAKES);
 }
 
 #[cfg(test)]
