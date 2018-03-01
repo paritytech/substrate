@@ -162,12 +162,8 @@ impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
 		old.inner.transaction.nonce.cmp(&other.inner.transaction.nonce)
 	}
 
-	fn choose(&self, old: &VerifiedTransaction, new: &VerifiedTransaction) -> Choice {
-		if old.inner.transaction.nonce == new.inner.transaction.nonce {
-			Choice::RejectNew // no fees to determine which is better
-		} else {
-			Choice::InsertNew
-		}
+	fn choose(&self, _old: &VerifiedTransaction, _new: &VerifiedTransaction) -> Choice {
+		Choice::InsertNew
 	}
 
 	fn update_scores(
