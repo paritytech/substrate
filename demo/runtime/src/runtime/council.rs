@@ -74,6 +74,7 @@ const VOTING_BOND: &[u8] = b"cou:vbo";
 const PRESENT_SLASH_PER_VOTER: &[u8] = b"cou:pss";
 const CARRY_COUNT: &[u8] = b"cou:cco";
 const PRESENTATION_DURATION: &[u8] = b"cou:pdu";
+const VOTING_PERIOD: &[u8] = b"cou:per";
 const TERM_DURATION: &[u8] = b"cou:trm";
 const DESIRED_SEATS: &[u8] = b"cou:sts";
 
@@ -109,6 +110,12 @@ pub fn voting_bond() -> Balance {
 /// How long to give each top candidate to present themselves after the vote ends.
 pub fn presentation_duration() -> BlockNumber {
 	storage::get(PRESENTATION_DURATION)
+		.expect("all core parameters of council module must be in place")
+}
+
+/// How often (in blocks) to check for new votes.
+pub fn voting_period() -> BlockNumber {
+	storage::get(VOTING_PERIOD)
 		.expect("all core parameters of council module must be in place")
 }
 
@@ -152,6 +159,11 @@ pub fn is_a_candidate(who: &AccountId) -> bool {
 	storage::exists(&who.to_keyed_vec(REGISTER_INFO_OF))
 }
 
+pub fn next_vote_from(n: BlockNumber) -> BlockNumber {
+	let voting_period = voting_period();
+	(n + voting_period - 1) / voting_period * voting_period
+}
+
 /// The block number on which the tally for the next election will happen. `None` only if the
 /// desired seats of the council is zero.
 pub fn next_tally() -> Option<BlockNumber> {
@@ -178,7 +190,7 @@ pub fn next_tally() -> Option<BlockNumber> {
 			} else {
 				Some(c[c.len() - (desired_seats - coming) as usize].1)
 			}
-		}
+		}.map(next_vote_from)
 	}
 }
 
@@ -261,7 +273,6 @@ pub mod public {
 		let who_index = who_index as usize;
 		assert!(signed_index < voters.len() && voters[signed_index] == *signed);
 		assert!(who_index < voters.len() && voters[who_index] == *who);
-
 
 		// will definitely kill one of signed or who now.
 
@@ -403,15 +414,18 @@ pub mod internal {
 	use demo_primitives::Proposal;
 	use dispatch::enact_proposal;
 
-	/// Current era is ending; we should finish up any proposals.
+	/// Check there's nothing to do this block
 	pub fn end_block() {
-		if let Some(number) = next_tally() {
-			if system::block_number() == number {
-				start_tally();
+		let block_number = system::block_number();
+		if block_number % voting_period() {
+			if let Some(number) = next_tally() {
+				if block_number == number {
+					start_tally();
+				}
 			}
 		}
 		if let Some((number, _, _)) = next_finalise() {
-			if system::block_number() == number {
+			if block_number == number {
 				finalise_tally();
 			}
 		}
