@@ -192,6 +192,16 @@ pub fn vote_index() -> VoteIndex {
 	storage::get_or_default(VOTE_COUNT)
 }
 
+/// The present candidate list.
+pub fn candidates() -> Vec<AccountId> {
+	storage::get_or_default(CANDIDATES)
+}
+
+/// The present voter list.
+pub fn voters() -> Vec<AccountId> {
+	storage::get_or_default(VOTERS)
+}
+
 /// The vote index and list slot that the candidate `who` was registered or `None` if they are not
 /// currently registered.
 pub fn candidate_reg_info(who: &AccountId) -> Option<(VoteIndex, u32)> {
@@ -240,24 +250,54 @@ pub mod public {
 	/// the voter gave their last approval set.
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
-	pub fn kill_inactive_voter(signed: &AccountId, who: &AccountId) {
+	pub fn kill_inactive_voter(signed: &AccountId, signed_index: u32, who: &AccountId, who_index: u32, assumed_vote_index: VoteIndex) {
 		assert!(!presentation_active());
-		unimplemented!();
+		assert!(voter_last_active(signed).is_some());
+		let last_active = voter_last_active(who).expect("target for inactivity cleanup must be active");
+		assert!(assumed_vote_index == vote_index());
+		assert!(last_active < assumed_vote_index);
+		let voters = voters();
+		let signed_index = signed_index as usize;
+		let who_index = who_index as usize;
+		assert!(signed_index < voters.len() && voters[signed_index] == *signed);
+		assert!(who_index < voters.len() && voters[who_index] == *who);
+
+
+		// will definitely kill one of signed or who now.
+
+		let valid = !approvals_of(who).iter()
+			.zip(candidates().iter())
+			.any(|(&appr, addr)|
+				appr &&
+				*addr != AccountId::default() &&
+				candidate_reg_info(addr)
+					.expect("all items in candidates list are registered").0 <= last_active);
+
+		remove_voter(
+			if valid { who } else { signed },
+			if valid { who_index } else { signed_index },
+			voters
+		);
+		if valid {
+			staking::internal::set_balance(signed, staking::balance(signed) + voting_bond());
+		}
+	}
+
+	/// Remove a voter from the system. Will panic if voters()[index] != voter.
+	fn remove_voter(voter: &AccountId, index: usize, mut voters: Vec<AccountId>) {
+		storage::put(VOTERS, &{ voters.swap_remove(index); voters });
+		storage::kill(&voter.to_keyed_vec(APPROVALS_OF));
+		storage::kill(&voter.to_keyed_vec(LAST_ACTIVE_OF));
 	}
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
 	pub fn retract_voter(signed: &AccountId, index: u32) {
 		assert!(!presentation_active());
 		assert!(storage::exists(&signed.to_keyed_vec(LAST_ACTIVE_OF)));
-		storage::put(VOTERS, &{
-			let mut v: Vec<AccountId> = storage::get_or_default(VOTERS);
-			let index = index as usize;
-			assert!(index < v.len() && v[index] == *signed);
-			v.swap_remove(index);
-			v
-		});
-		storage::kill(&signed.to_keyed_vec(APPROVALS_OF));
-		storage::kill(&signed.to_keyed_vec(LAST_ACTIVE_OF));
+		let voters = voters();
+		let index = index as usize;
+		assert!(index < voters.len() && voters[index] == *signed);
+		remove_voter(signed, index, voters);
 		staking::internal::set_balance(signed, staking::balance(signed) + voting_bond());
 	}
 
