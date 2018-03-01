@@ -83,7 +83,7 @@ const VOTE_COUNT: &[u8] = b"cou:vco";
 
 // persistent state (always relevant, changes constantly)
 const APPROVALS_OF: &[u8] = b"cou:apr:";		// Vec<bool>
-const REGISTER_INDEX_OF: &[u8] = b"cou:reg:";	// Candidate -> VoteIndex
+const REGISTER_INFO_OF: &[u8] = b"cou:reg:";	// Candidate -> (VoteIndex, u32)
 const LAST_ACTIVE_OF: &[u8] = b"cou:lac:";		// Voter -> VoteIndex
 const VOTERS: &[u8] = b"cou:vrs";				// Vec<AccountId>
 const CANDIDATES: &[u8] = b"cou:can";			// Vec<AccountId>, has holes
@@ -149,7 +149,7 @@ pub fn active_council() -> Vec<(AccountId, BlockNumber)> {
 
 /// If `who` a candidate at the moment?
 pub fn is_a_candidate(who: &AccountId) -> bool {
-	storage::exists(&who.to_keyed_vec(REGISTER_INDEX_OF))
+	storage::exists(&who.to_keyed_vec(REGISTER_INFO_OF))
 }
 
 /// The block number on which the tally for the next election will happen. `None` only if the
@@ -192,10 +192,10 @@ pub fn vote_index() -> VoteIndex {
 	storage::get_or_default(VOTE_COUNT)
 }
 
-/// The vote index that the candidate `who` was registered or `None` if they are not currently
-/// registered.
-pub fn candidate_reg_index(who: &AccountId) -> Option<VoteIndex> {
-	storage::get(&who.to_keyed_vec(REGISTER_INDEX_OF))
+/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
+/// currently registered.
+pub fn candidate_reg_info(who: &AccountId) -> Option<(VoteIndex, u32)> {
+	storage::get(&who.to_keyed_vec(REGISTER_INFO_OF))
 }
 
 /// The last cleared vote index that this voter was last active at.
@@ -282,13 +282,13 @@ pub mod public {
 
 		storage::put(CANDIDATES, &{ let mut c = candidates; c[slot] = signed.clone(); c });
 		storage::put(CANDIDATE_COUNT, &(count as u32 + 1));
-		storage::put(&signed.to_keyed_vec(REGISTER_INDEX_OF), &vote_index());
+		storage::put(&signed.to_keyed_vec(REGISTER_INFO_OF), &(vote_index(), slot));
 	}
 
 	/// Claim that `signed` is one of the top carry_count() + current_vote().1 candidates.
 	/// Only works if the block number >= current_vote().0 and < current_vote().0 + presentation_duration()
 	/// `signed` should have at least
-	pub fn present(signed: &AccountId, candidate: &AccountId, candidate_index: u32, total: Balance, index: VoteIndex) {
+	pub fn present(signed: &AccountId, candidate: &AccountId, total: Balance, index: VoteIndex) {
 		assert_eq!(index, vote_index());
 		assert!(presentation_active());
 		let b = staking::balance(signed);
@@ -300,19 +300,20 @@ pub mod public {
 		let mut leaderboard: Vec<(Balance, AccountId)> = storage::get_or_default(LEADERBOARD);
 		assert!(total > leaderboard[0].0);
 
-		let registered_since = storage::get(&candidate.to_keyed_vec(REGISTER_INDEX_OF)).expect("presented candidate must be current");
-		let candidate_index = candidate_index as usize;
+		let (registered_since, candidate_index): (VoteIndex, u32) =
+			storage::get(&candidate.to_keyed_vec(REGISTER_INFO_OF)).expect("presented candidate must be current");
 		let actual_total = voters.iter()
 			.zip(stakes.iter())
 			.filter_map(|(voter, stake)|
 				match voter_last_active(voter) {
 					Some(b) if b >= registered_since =>
-						approvals_of(voter).get(candidate_index)
+						approvals_of(voter).get(candidate_index as usize)
 							.and_then(|approved| if *approved { Some(stake) } else { None }),
 					_ => None,
 				})
 			.sum();
-		if total == actual_total {
+		let dupe = leaderboard.iter().find(|&&(_, ref c)| c == candidate).is_some();
+		if total == actual_total && !dupe {
 			// insert into leaderboard
 			leaderboard[0] = (total, candidate.clone());
 			leaderboard.sort_by_key(|&(t, _)| t);
@@ -392,7 +393,8 @@ fn start_tally() {
 		storage::put(SNAPSHOTED_STAKES, &votes);
 
 		// initialise leaderboard.
-		storage::put(LEADERBOARD, &vec![(0 as Balance, AccountId::default()); empty_seats]);
+		let leaderboard_size = empty_seats + carry_count() as usize;
+		storage::put(LEADERBOARD, &vec![(0 as Balance, AccountId::default()); leaderboard_size]);
 	}
 }
 
@@ -401,8 +403,60 @@ fn start_tally() {
 /// a new vote is started.
 /// Clears all presented candidates, returning the bond of the elected ones.
 fn finalise_tally() {
-	unimplemented!();
 	storage::kill(SNAPSHOTED_STAKES);
+	let (_, coming, expiring): (BlockNumber, u32, Vec<AccountId>) = storage::take(NEXT_FINALISE)
+		.expect("finalise can only be called after a tally is started.");
+	let leaderboard: Vec<(Balance, AccountId)> = storage::take(LEADERBOARD).unwrap_or_default();
+	let new_expiry = system::block_number() + term_duration();
+
+	// return bond to winners.
+	let candidacy_bond = candidacy_bond();
+	for &(_, ref w) in leaderboard.iter()
+		.rev()
+		.take_while(|&&(b, _)| b != 0)
+		.take(coming as usize)
+	{
+		staking::internal::set_balance(w, staking::balance(w) + candidacy_bond);
+	}
+
+	// set the new council.
+	let new_council: Vec<_> = active_council()
+		.into_iter()
+		.skip(expiring.len())
+		.chain(leaderboard.iter()
+			.rev()
+			.take_while(|&&(b, _)| b != 0)
+			.take(coming as usize)
+			.cloned()
+			.map(|(_, a)| (a, new_expiry)))
+		.collect();
+	storage::put(ACTIVE_COUNCIL, &new_council);
+
+	// clear all except runners-up from candidate list.
+	let candidates: Vec<AccountId> = storage::get_or_default(CANDIDATES);
+	let mut new_candidates = vec![AccountId::default(); candidates.len()];	// shrink later.
+	let runners_up = leaderboard.into_iter()
+		.rev()
+		.take_while(|&(b, _)| b != 0)
+		.skip(coming as usize)
+		.map(|(_, a)| (a, candidate_reg_info(&a).expect("runner up must b registered").1));
+	let mut count = 0u32;
+	for (address, slot) in runners_up {
+		new_candidates[slot as usize] = address;
+		count += 1;
+	}
+	for (old, new) in candidates.iter().zip(new_candidates.iter()) {
+		if old != new {
+			// removed - kill it
+			storage::kill(&old.to_keyed_vec(REGISTER_INFO_OF));
+		}
+	}
+	// discard any superfluous slots.
+	if let Some(last_index) = new_candidates.iter().rposition(|c| *c != AccountId::default()) {
+		new_candidates.truncate(last_index + 1);
+	}
+	storage::put(CANDIDATES, &(new_candidates));
+	storage::put(CANDIDATE_COUNT, &count);
 }
 
 #[cfg(test)]
