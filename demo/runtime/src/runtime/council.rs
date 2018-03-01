@@ -87,6 +87,7 @@ const REGISTER_INDEX_OF: &[u8] = b"cou:reg:";	// Candidate -> VoteIndex
 const LAST_ACTIVE_OF: &[u8] = b"cou:lac:";		// Voter -> VoteIndex
 const VOTERS: &[u8] = b"cou:vrs";
 const CANDIDATES: &[u8] = b"cou:can";
+const CANDIDATE_COUNT: &[u8] = b"cou:cnc";
 
 // temporary state (only relevant during finalisation/presentation)
 const NEXT_FINALISE: &[u8] = b"cou:nxt";
@@ -135,10 +136,20 @@ pub fn carry_count() -> u32 {
 		.expect("all core parameters of council module must be in place")
 }
 
+/// True if we're currently in a presentation period.
+pub fn presentation_active() -> bool {
+	storage::exists(NEXT_FINALISE)
+}
+
 /// The current council. When there's a vote going on, this should still be used for executive
 /// matters.
 pub fn active_council() -> Vec<(AccountId, BlockNumber)> {
 	storage::get_or_default(ACTIVE_COUNCIL)
+}
+
+/// If `who` a candidate at the moment?
+pub fn is_a_candidate(who: &AccountId) -> bool {
+	storage::exists(&who.to_keyed_vec(REGISTER_INDEX_OF))
 }
 
 /// The block number on which the tally for the next election will happen. `None` only if the
@@ -197,10 +208,21 @@ pub mod public {
 
 	/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 	/// are registered.
-	pub fn set_approvals(who: &AccountId, votes: &Vec<bool>, index: VoteIndex) {
+	pub fn set_approvals(signed: &AccountId, votes: &Vec<bool>, index: VoteIndex) {
+		assert!(!presentation_active());
 		assert_eq!(index, vote_index());
-		storage::put(&who.to_keyed_vec(APPROVALS_OF), votes);
-		storage::put(&who.to_keyed_vec(LAST_ACTIVE_OF), &index);
+		if !storage::exists(&signed.to_keyed_vec(LAST_ACTIVE_OF)) {
+			// not yet a voter - deduct bond.
+			let b = staking::balance(signed);
+			assert!(b >= voting_bond());
+			// TODO: this is no good as it precludes active stakers. check that when we allow
+			// deductions of actively staked balances that things in the staking module don't
+			// break.
+//			assert!(staking::unlock_block(signed) == staking::LockStatus::Liquid);
+			staking::internal::set_balance(signed, b - voting_bond());
+		}
+		storage::put(&signed.to_keyed_vec(APPROVALS_OF), votes);
+		storage::put(&signed.to_keyed_vec(LAST_ACTIVE_OF), &index);
 	}
 
 	/// Remove a voter. For it not to be a bond-consuming no-op, all approved candidate indices
@@ -209,19 +231,41 @@ pub mod public {
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
 	pub fn kill_inactive_voter(signed: &AccountId, who: &AccountId) {
+		assert!(!presentation_active());
 		unimplemented!();
 	}
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
-	pub fn retract_voter(signed: AccountId) {
-		unimplemented!();
+	pub fn retract_voter(signed: &AccountId) {
+		assert!(!presentation_active());
+		assert!(storage::exists(&signed.to_keyed_vec(LAST_ACTIVE_OF)));
+		storage::kill(&signed.to_keyed_vec(APPROVALS_OF));
+		storage::kill(&signed.to_keyed_vec(LAST_ACTIVE_OF));
+		staking::internal::set_balance(signed, staking::balance(signed) + voting_bond());
 	}
 
 	/// Submit oneself for candidacy.
 	///
-	/// Account must have enough cash in it to pay the bond.
-	pub fn submit_candidacy(signed: &AccountId) {
-		unimplemented!();
+	/// Account must have enough transferrable funds in it to pay the bond.
+	pub fn submit_candidacy(signed: &AccountId, slot: u32) {
+		assert!(!is_a_candidate(signed));
+		let b = staking::balance(signed);
+		let candidacy_bond = candidacy_bond();
+		assert!(b >= candidacy_bond);
+		assert!(staking::unlock_block(signed) == staking::LockStatus::Liquid);
+		staking::internal::set_balance(signed, b - candidacy_bond);
+
+		let slot = slot as usize;
+		let count = storage::get_or_default::<u32>(CANDIDATE_COUNT) as usize;
+		let candidates: Vec<AccountId> = storage::get_or_default(CANDIDATES);
+		assert!(
+			(slot == count && count == candidates.len()) ||
+			(slot < candidates.len() && candidates[slot] == AccountId::default())
+		);
+
+		storage::put(CANDIDATES, &{ let mut c = candidates; c[slot] = signed.clone(); c });
+		storage::put(CANDIDATE_COUNT, &(count as u32 + 1));
+		storage::put(&signed.to_keyed_vec(REGISTER_INDEX_OF), &vote_index());
 	}
 
 	/// Claim that `signed` is one of the top carry_count() + current_vote().1 candidates.
@@ -229,6 +273,7 @@ pub mod public {
 	/// `signed` should have at least
 	pub fn present(signed: &AccountId, who: &AccountId, index: VoteIndex) {
 		assert_eq!(index, vote_index());
+		assert!(presentation_active());
 		unimplemented!();
 	}
 }
