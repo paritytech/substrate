@@ -85,9 +85,25 @@ pub fn balance(who: &AccountId) -> Balance {
 	storage::get_or_default(&who.to_keyed_vec(BALANCE_OF))
 }
 
-/// The liquidity-state of a given account.
+/// The block at which the `who`'s funds become entirely liquid.
 pub fn bondage(who: &AccountId) -> Bondage {
 	storage::get_or_default(&who.to_keyed_vec(BONDAGE_OF))
+}
+
+#[derive(PartialEq, Copy, Clone)]
+pub enum LockStatus {
+	Liquid,
+	LockedUntil(BlockNumber),
+	Staked,
+}
+
+/// The block at which the `who`'s funds become entirely liquid.
+pub fn unlock_block(who: &AccountId) -> LockStatus {
+	match bondage(who) {
+		i if i == Bondage::max_value() => LockStatus::Staked,
+		i if i <= system::block_number() => LockStatus::Liquid,
+		i => LockStatus::LockedUntil(i),
+	}
 }
 
 /// The total amount of stake on the system.
@@ -366,6 +382,13 @@ pub mod privileged {
 
 pub mod internal {
 	use super::*;
+
+	/// Set the balance of an account.
+	/// Needless to say, this is super low-level and accordingly dangerous. Ensure any modules that
+	/// use it are auditted to the hilt.
+	pub fn set_balance(who: &AccountId, value: Balance) {
+		storage::put(&who.to_keyed_vec(BALANCE_OF), &value);
+	}
 
 	/// Hook to be called after to transaction processing.
 	pub fn check_new_era() {
