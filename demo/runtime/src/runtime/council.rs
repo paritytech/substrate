@@ -615,14 +615,80 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 1);
-
 			assert_eq!(candidates(), Vec::<AccountId>::new());
+			assert_eq!(candidate_reg_info(&alice), None);
+			assert_eq!(candidate_reg_info(&bob), None);
+
 			public::submit_candidacy(&alice, 0);
-
 			assert_eq!(candidates(), vec![alice.clone()]);
-			public::submit_candidacy(&bob, 1);
+			assert_eq!(candidate_reg_info(&alice), Some((0 as VoteIndex, 0u32)));
+			assert_eq!(candidate_reg_info(&bob), None);
 
+			public::submit_candidacy(&bob, 1);
 			assert_eq!(candidates(), vec![alice.clone(), bob.clone()]);
+			assert_eq!(candidate_reg_info(&alice), Some((0 as VoteIndex, 0u32)));
+			assert_eq!(candidate_reg_info(&bob), Some((0 as VoteIndex, 1u32)));
+		});
+	}
+
+	fn new_test_ext_with_candidate_holes() -> TestExternalities {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+		t.insert(twox_128(CANDIDATES).to_vec(), vec![].and(&vec![AccountId::default(), AccountId::default(), alice.clone()]));
+		t.insert(twox_128(CANDIDATE_COUNT).to_vec(), vec![].and(&1u32));
+		t.insert(twox_128(&alice.to_keyed_vec(REGISTER_INFO_OF)).to_vec(), vec![].and(&(0 as VoteIndex, 2u32)));
+		t
+	}
+
+	#[test]
+	fn candidate_submission_using_free_slot_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext_with_candidate_holes();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			assert_eq!(candidates(), vec![AccountId::default(), AccountId::default(), alice.clone()]);
+
+			public::submit_candidacy(&bob, 1);
+			assert_eq!(candidates(), vec![AccountId::default(), bob.clone(), alice.clone()]);
+
+			public::submit_candidacy(&charlie, 0);
+			assert_eq!(candidates(), vec![charlie.clone(), bob.clone(), alice.clone()]);
+		});
+	}
+
+	#[test]
+	fn candidate_submission_using_alternative_free_slot_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext_with_candidate_holes();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			assert_eq!(candidates(), vec![AccountId::default(), AccountId::default(), alice.clone()]);
+
+			public::submit_candidacy(&bob, 0);
+			assert_eq!(candidates(), vec![bob.clone(), AccountId::default(), alice.clone()]);
+
+			public::submit_candidacy(&charlie, 1);
+			assert_eq!(candidates(), vec![bob.clone(), charlie.clone(), alice.clone()]);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn candidate_submission_not_using_free_slot_should_panic() {
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext_with_candidate_holes();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::submit_candidacy(&dave, 3);
 		});
 	}
 
