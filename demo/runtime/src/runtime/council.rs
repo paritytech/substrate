@@ -377,6 +377,7 @@ pub mod public {
 				})
 			.sum();
 		let dupe = leaderboard.iter().find(|&&(_, ref c)| c == candidate).is_some();
+		println!("-> {}", actual_total);
 		if total == actual_total && !dupe {
 			// insert into leaderboard
 			leaderboard[0] = (total, candidate.clone());
@@ -1007,8 +1008,71 @@ mod tests {
 			assert!(is_a_candidate(&dave));
 			assert_eq!(vote_index(), 1);
 			assert_eq!(voter_last_active(&bob), Some(0));
+			assert_eq!(voter_last_active(&charlie), Some(0));
+			assert_eq!(voter_last_active(&dave), Some(0));
 			assert_eq!(voter_last_active(&eve), Some(0));
+			assert_eq!(voter_last_active(&ferdie), Some(0));
 			assert_eq!(candidate_reg_info(&charlie), Some((0, 2)));
+			assert_eq!(candidate_reg_info(&dave), Some((0, 3)));
+		});
+	}
+
+	#[test]
+	fn second_tally_should_use_runners_up() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let ferdie = Keyring::Ferdie.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&alice, 0);
+			public::set_approvals(&ferdie, &vec![true], 0);
+			public::submit_candidacy(&bob, 1);
+			public::set_approvals(&bob, &vec![false, true], 0);
+			public::submit_candidacy(&charlie, 2);
+			public::set_approvals(&charlie, &vec![false, false, true], 0);
+			public::submit_candidacy(&dave, 3);
+			public::set_approvals(&dave, &vec![false, false, false, true], 0);
+			public::submit_candidacy(&eve, 4);
+			public::set_approvals(&eve, &vec![false, false, false, false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &alice, 57, 0);
+			public::present(&dave, &charlie, 18, 0);
+			public::present(&dave, &dave, 28, 0);
+			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 8);
+			public::set_approvals(&ferdie, &vec![false, false, true, false], 1);
+			privileged::set_desired_seats(3);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 10);
+			public::present(&dave, &charlie, 75, 1);
+			public::present(&dave, &dave, 28, 1);
+			internal::end_block();
+
+			assert!(!presentation_active());
+			assert_eq!(active_council(), vec![(alice.clone(), 11), (eve.clone(), 11), (charlie.clone(), 15)]);
+
+			assert!(!is_a_candidate(&alice));
+			assert!(!is_a_candidate(&bob));
+			assert!(!is_a_candidate(&charlie));
+			assert!(!is_a_candidate(&eve));
+			assert!(is_a_candidate(&dave));
+			assert_eq!(vote_index(), 2);
+			assert_eq!(voter_last_active(&bob), Some(0));
+			assert_eq!(voter_last_active(&charlie), Some(0));
+			assert_eq!(voter_last_active(&dave), Some(0));
+			assert_eq!(voter_last_active(&eve), Some(0));
+			assert_eq!(voter_last_active(&ferdie), Some(1));
+
 			assert_eq!(candidate_reg_info(&dave), Some((0, 3)));
 		});
 	}
