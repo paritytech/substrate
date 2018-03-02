@@ -377,7 +377,6 @@ pub mod public {
 				})
 			.sum();
 		let dupe = leaderboard.iter().find(|&&(_, ref c)| c == candidate).is_some();
-		println!("-> {}", actual_total);
 		if total == actual_total && !dupe {
 			// insert into leaderboard
 			leaderboard[0] = (total, candidate.clone());
@@ -569,14 +568,14 @@ mod tests {
 			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
 			twox_128(b"sta:era").to_vec() => vec![].and(&1u64),
 
-			twox_128(b"cou:cbo").to_vec() => vec![].and(&9u64), // CANDIDACY_BOND
-			twox_128(b"cou:vbo").to_vec() => vec![].and(&3u64), // VOTING_BOND
-			twox_128(b"cou:pss").to_vec() => vec![].and(&1u64), // PRESENT_SLASH_PER_VOTER
-			twox_128(b"cou:cco").to_vec() => vec![].and(&2u64), // CARRY_COUNT
-			twox_128(b"cou:pdu").to_vec() => vec![].and(&2u64), // PRESENTATION_DURATION
-			twox_128(b"cou:per").to_vec() => vec![].and(&4u64), // VOTING_PERIOD
-			twox_128(b"cou:trm").to_vec() => vec![].and(&5u64), // TERM_DURATION
-			twox_128(b"cou:sts").to_vec() => vec![].and(&2u64)  // DESIRED_SEATS
+			twox_128(CANDIDACY_BOND).to_vec() => vec![].and(&9u64),
+			twox_128(VOTING_BOND).to_vec() => vec![].and(&3u64),
+			twox_128(PRESENT_SLASH_PER_VOTER).to_vec() => vec![].and(&1u64),
+			twox_128(CARRY_COUNT).to_vec() => vec![].and(&2u64),
+			twox_128(PRESENTATION_DURATION).to_vec() => vec![].and(&2u64),
+			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&4u64),
+			twox_128(TERM_DURATION).to_vec() => vec![].and(&5u64),
+			twox_128(DESIRED_SEATS).to_vec() => vec![].and(&2u64)
 		]
 	}
 
@@ -1014,7 +1013,7 @@ mod tests {
 			public::present(&dave, &charlie, 18, 0);
 			public::present(&dave, &dave, 28, 0);
 			public::present(&dave, &eve, 38, 0);
-			
+
 			assert_eq!(leaderboard(), Some(vec![
 				(18, charlie.clone()),
 				(28, dave.clone()),
