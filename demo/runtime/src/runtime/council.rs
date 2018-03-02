@@ -462,7 +462,7 @@ pub mod internal {
 	}
 }
 
-/// Remove a voter from the system. Will panic if voters()[index] != voter.
+/// Remove a voter from the system. Trusts that voters()[index] != voter.
 fn remove_voter(voter: &AccountId, index: usize, mut voters: Vec<AccountId>) {
 	storage::put(VOTERS, &{ voters.swap_remove(index); voters });
 	storage::kill(&voter.to_keyed_vec(APPROVALS_OF));
