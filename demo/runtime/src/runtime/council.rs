@@ -42,38 +42,40 @@ use runtime::staking::Balance;
 // - submit candidacy (you pay a "candidate" bond; O(1); one extra DB entry, two DB changes)
 // - present winner/runner-up (you may pay a "presentation" bond of O(voters) if the presentation is invalid; O(voters) compute; )
 // protected operations:
-// - remove candidacy (remove all votes for a candidate)
+// - remove candidacy (remove all votes for a candidate) (one fewer DB entry, two DB changes)
+
+// to avoid a potentially problematic case of not-enough approvals prior to voting causing a
+// back-to-back votes that have no way of ending, then there's a forced grace period between votes.
+// to keep the system as stateless as possible (making it a bit easier to reason about), we just
+// restrict when votes can begin to blocks that lie on boundaries (`voting_period`).
 
 // for an approval vote of C councilers:
 
-// top K candidates are maintained between votes. all others are discarded.
+// top K runners-up are maintained between votes. all others are discarded.
 // - candidate removed & bond returned when elected.
 // - candidate removed & bond burned when discarded.
 
-// at the point that the vote ends, all voters' balances are snapshotted.
+// at the point that the vote ends (), all voters' balances are snapshotted.
 
 // for B blocks following, there's a counting period whereby each of the candidates that believe
 // they fall in the top K+C voted can present themselves. they get the total stake
-// recorded (based on the snapshot); an ordered list is maintained. Noone may present themselves
-// that, if elected, would result in being included twice on the council (important since existing
-// councilers will will have their approval votes as it may be that they don't get removed), nor
-// if existing presenters would mean they're not in the top K+C.
+// recorded (based on the snapshot); an ordered list is maintained (the leaderboard). Noone may
+// present themselves that, if elected, would result in being included twice on the council
+// (important since existing councilers will will have their approval votes as it may be that they
+// don't get removed), nor if existing presenters would mean they're not in the top K+C.
 
-// following B blocks, the top C+K that presented themselves have their bond returned and the
-// top C candidates are elected. the top C candidates have their bond returned.
+// following B blocks, the top C candidates are elected and have their bond returned. the top C
+// candidates and all other candidates beyond the top C+K are cleared.
 
-// the top C candidates and all other candidates beyond the top C+K are cleared and the clearing
-// mask is appended to mask list (ready to be applied to vote arrays).
+// vote-clearing happens lazily; for an approval to count, the most recent vote at the time of the
+// voter's most recent vote must be no later than the most recent vote at the time that the
+// candidate in the approval position was registered there. as candidates are removed from the
+// register and others join in their place, this prevent an approval meant for an earlier candidate
+// being used to elect a new candidate.
 
-// vote-clearing happens lazily, with previous write also storing the round and all subsequent
-// rounds' operations applied at the next read/write time.
-
-// vote buffer size increases as required.
-// bond taken for initial approval, returned when clearing.
-
-// vec<candidate> (list of addresses, each bonded, can contain "holes" of null addresses). Order important.
-// vec<voter> (all voters. order unimportant - just need to be enumerable.)
-// voter -> (last round, Vec<bool>)
+// the candidate list increases as needed, but the contents (though not really the capacity) reduce
+// after each vote as all but K entries are cleared. newly registering candidates must use cleared
+// entries before they increase the capacity.
 
 type VoteIndex = u32;
 
@@ -83,6 +85,7 @@ const VOTING_BOND: &[u8] = b"cou:vbo";
 const PRESENT_SLASH_PER_VOTER: &[u8] = b"cou:pss";
 const CARRY_COUNT: &[u8] = b"cou:cco";
 const PRESENTATION_DURATION: &[u8] = b"cou:pdu";
+const INACTIVE_GRACE_PERIOD: &[u8] = b"cou:vgp";
 const VOTING_PERIOD: &[u8] = b"cou:per";
 const TERM_DURATION: &[u8] = b"cou:trm";
 const DESIRED_SEATS: &[u8] = b"cou:sts";
@@ -125,6 +128,13 @@ pub fn presentation_duration() -> BlockNumber {
 /// How often (in blocks) to check for new votes.
 pub fn voting_period() -> BlockNumber {
 	storage::get(VOTING_PERIOD)
+		.expect("all core parameters of council module must be in place")
+}
+
+/// How many votes need to go by after a voter's last vote before they can be reaped if their
+/// approvals are moot.
+pub fn inactivity_grace_period() -> VoteIndex {
+	storage::get(INACTIVE_GRACE_PERIOD)
 		.expect("all core parameters of council module must be in place")
 }
 
@@ -277,12 +287,12 @@ pub mod public {
 	/// the voter gave their last approval set.
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
-	pub fn kill_inactive_voter(signed: &AccountId, signed_index: u32, who: &AccountId, who_index: u32, assumed_vote_index: VoteIndex) {
+	pub fn reap_inactive_voter(signed: &AccountId, signed_index: u32, who: &AccountId, who_index: u32, assumed_vote_index: VoteIndex) {
 		assert!(!presentation_active());
 		assert!(voter_last_active(signed).is_some());
 		let last_active = voter_last_active(who).expect("target for inactivity cleanup must be active");
 		assert!(assumed_vote_index == vote_index());
-		assert!(last_active < assumed_vote_index - 1);
+		assert!(last_active < assumed_vote_index - inactivity_grace_period());
 		let voters = voters();
 		let signed_index = signed_index as usize;
 		let who_index = who_index as usize;
@@ -356,7 +366,8 @@ pub mod public {
 	/// `signed` should have at least
 	pub fn present(signed: &AccountId, candidate: &AccountId, total: Balance, index: VoteIndex) {
 		assert_eq!(index, vote_index());
-		assert!(presentation_active());
+		let (_, _, expiring): (BlockNumber, u32, Vec<AccountId>) = storage::get(NEXT_FINALISE)
+			.expect("present can only be called after a tally is started.");
 		let b = staking::balance(signed);
 		let stakes: Vec<Balance> = storage::get_or_default(SNAPSHOTED_STAKES);
 		let voters: Vec<AccountId> = storage::get_or_default(VOTERS);
@@ -365,6 +376,10 @@ pub mod public {
 
 		let mut leaderboard = leaderboard().expect("leaderboard must exist while present phase active");
 		assert!(total > leaderboard[0].0);
+
+		if let Some(p) = active_council().iter().position(|&(ref c, _)| c == candidate) {
+			assert!(p < expiring.len());
+		}
 
 		let (registered_since, candidate_index): (VoteIndex, u32) =
 			storage::get(&candidate.to_keyed_vec(REGISTER_INFO_OF)).expect("presented candidate must be current");
@@ -584,7 +599,8 @@ mod tests {
 			twox_128(PRESENTATION_DURATION).to_vec() => vec![].and(&2u64),
 			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&4u64),
 			twox_128(TERM_DURATION).to_vec() => vec![].and(&5u64),
-			twox_128(DESIRED_SEATS).to_vec() => vec![].and(&2u64)
+			twox_128(DESIRED_SEATS).to_vec() => vec![].and(&2u64),
+			twox_128(INACTIVE_GRACE_PERIOD).to_vec() => vec![].and(&1u32)
 		]
 	}
 
@@ -984,7 +1000,7 @@ mod tests {
 			public::present(&dave, &eve, 38, 1);
 			internal::end_block();
 
-			public::kill_inactive_voter(
+			public::reap_inactive_voter(
 				&eve, voters().iter().position(|&i| i == eve).unwrap() as u32,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
 				2
@@ -994,6 +1010,33 @@ mod tests {
 			assert_eq!(approvals_of(&bob).len(), 0);
 			assert_eq!(staking::balance(&bob), 17);
 			assert_eq!(staking::balance(&eve), 50);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn presenting_for_double_election_should_panic() {
+		let bob = Keyring::Bob.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&bob, 0);
+			public::set_approvals(&bob, &vec![true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 8);
+			public::submit_candidacy(&bob, 0);
+			public::set_approvals(&bob, &vec![true], 1);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 10);
+			public::present(&dave, &bob, 8, 1);
 		});
 	}
 
@@ -1028,7 +1071,7 @@ mod tests {
 			with_env(|e| e.block_number = 11);
 			public::submit_candidacy(&alice, 0);
 
-			public::kill_inactive_voter(
+			public::reap_inactive_voter(
 				&eve, voters().iter().position(|&i| i == eve).unwrap() as u32,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
 				2
@@ -1068,7 +1111,7 @@ mod tests {
 			public::present(&dave, &eve, 38, 1);
 			internal::end_block();
 
-			public::kill_inactive_voter(
+			public::reap_inactive_voter(
 				&bob, 42,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
 				2
@@ -1103,7 +1146,7 @@ mod tests {
 			public::present(&dave, &eve, 38, 1);
 			internal::end_block();
 
-			public::kill_inactive_voter(
+			public::reap_inactive_voter(
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
 				&bob, 42,
 				2
@@ -1147,7 +1190,7 @@ mod tests {
 			public::present(&dave, &charlie, 18, 1);
 			internal::end_block();
 
-			public::kill_inactive_voter(
+			public::reap_inactive_voter(
 				&dave, voters().iter().position(|&i| i == dave).unwrap() as u32,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
 				2
@@ -1186,7 +1229,7 @@ mod tests {
 			public::present(&dave, &eve, 38, 1);
 			internal::end_block();
 
-			public::kill_inactive_voter(
+			public::reap_inactive_voter(
 				&dave, 0,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
 				2
