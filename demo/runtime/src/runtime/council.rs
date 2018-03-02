@@ -952,6 +952,80 @@ mod tests {
 
 	#[test]
 	#[should_panic]
+	fn presenting_loser_should_panic() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let ferdie = Keyring::Ferdie.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&alice, 0);
+			public::set_approvals(&ferdie, &vec![true], 0);
+			public::submit_candidacy(&bob, 1);
+			public::set_approvals(&bob, &vec![false, true], 0);
+			public::submit_candidacy(&charlie, 2);
+			public::set_approvals(&charlie, &vec![false, false, true], 0);
+			public::submit_candidacy(&dave, 3);
+			public::set_approvals(&dave, &vec![false, false, false, true], 0);
+			public::submit_candidacy(&eve, 4);
+			public::set_approvals(&eve, &vec![false, false, false, false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &alice, 57, 0);
+			public::present(&dave, &charlie, 18, 0);
+			public::present(&dave, &dave, 28, 0);
+			public::present(&dave, &eve, 38, 0);
+			public::present(&dave, &bob, 8, 0);
+		});
+	}
+
+	#[test]
+	fn presenting_loser_first_should_not_matter() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let ferdie = Keyring::Ferdie.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&alice, 0);
+			public::set_approvals(&ferdie, &vec![true], 0);
+			public::submit_candidacy(&bob, 1);
+			public::set_approvals(&bob, &vec![false, true], 0);
+			public::submit_candidacy(&charlie, 2);
+			public::set_approvals(&charlie, &vec![false, false, true], 0);
+			public::submit_candidacy(&dave, 3);
+			public::set_approvals(&dave, &vec![false, false, false, true], 0);
+			public::submit_candidacy(&eve, 4);
+			public::set_approvals(&eve, &vec![false, false, false, false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &alice, 57, 0);
+			public::present(&dave, &charlie, 18, 0);
+			public::present(&dave, &dave, 28, 0);
+			public::present(&dave, &eve, 38, 0);
+			
+			assert_eq!(leaderboard(), Some(vec![
+				(18, charlie.clone()),
+				(28, dave.clone()),
+				(38, eve.clone()),
+				(57, alice.clone())
+			]));
+		});
+	}
+
+	#[test]
+	#[should_panic]
 	fn present_panics_outside_of_presentation_period() {
 		let eve = Keyring::Eve.to_raw_public();
 		let mut t = new_test_ext();
