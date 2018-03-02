@@ -975,6 +975,32 @@ mod tests {
 	}
 
 	#[test]
+	fn double_presentations_should_be_punished() {
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &eve, 38, 0);
+			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			assert_eq!(active_council(), vec![(eve.clone(), 11), (bob.clone(), 11)]);
+			assert_eq!(staking::balance(&dave), 38);
+		});
+	}
+
+	#[test]
 	fn retracting_inactive_voter_should_work() {
 		let bob = Keyring::Bob.to_raw_public();
 		let eve = Keyring::Eve.to_raw_public();
