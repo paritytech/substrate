@@ -726,6 +726,11 @@ impl<C, I, O> Future for Agreement<C, I, O>
 }
 
 impl<C: Context, I, O> Agreement<C, I, O> {
+	/// Get a reference to the underlying context.
+	pub fn context(&self) -> &C {
+		&self.context
+	}
+
 	/// Drain the misbehavior vector.
 	pub fn drain_misbehavior(&mut self) -> hash_map::Drain<C::AuthorityId, Misbehavior<C::Digest, C::Signature>> {
 		self.strategy.misbehavior.drain()

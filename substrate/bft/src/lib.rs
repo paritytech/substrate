@@ -132,6 +132,8 @@ pub trait Proposer {
 	/// Evaluate proposal. True means valid.
 	// TODO: change this to a future.
 	fn evaluate(&self, proposal: &Block) -> Self::Evaluate;
+	/// Import witnessed misbehavior.
+	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, Misbehavior)>);
 }
 
 /// Block import trait.
@@ -275,7 +277,8 @@ impl<P: Proposer, I: BlockImport> Future for BftFuture<P, I> {
 impl<P: Proposer, I> Drop for BftFuture<P, I> {
 	fn drop(&mut self) {
 		// TODO: have a trait member to pass misbehavior reports into.
-		let _misbehavior = self.inner.drain_misbehavior();
+		let misbehavior = self.inner.drain_misbehavior().collect::<Vec<_>>();
+		self.inner.context().proposer.import_misbehavior(misbehavior);
 	}
 }
 
@@ -327,7 +330,6 @@ impl<P, E, I> BftService<P, E, I>
 
 		let authorities = self.client.authorities(&BlockId::Hash(hash))?;
 
-		// TODO: check key is one of the authorities.
 		let n = authorities.len();
 		let max_faulty = max_faulty_of(n);
 
