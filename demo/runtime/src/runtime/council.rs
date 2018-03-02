@@ -948,4 +948,68 @@ mod tests {
 			assert_eq!(voter_last_active(&eve), Some(0));
 		});
 	}
+
+	#[test]
+	fn runners_up_should_be_kept() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let ferdie = Keyring::Ferdie.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			assert!(!presentation_active());
+
+			public::submit_candidacy(&alice, 0);
+			public::set_approvals(&ferdie, &vec![true], 0);
+			public::submit_candidacy(&bob, 1);
+			public::set_approvals(&bob, &vec![false, true], 0);
+			public::submit_candidacy(&charlie, 2);
+			public::set_approvals(&charlie, &vec![false, false, true], 0);
+			public::submit_candidacy(&dave, 3);
+			public::set_approvals(&dave, &vec![false, false, false, true], 0);
+			public::submit_candidacy(&eve, 4);
+			public::set_approvals(&eve, &vec![false, false, false, false, true], 0);
+
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			assert!(presentation_active());
+			public::present(&dave, &alice, 57, 0);
+			assert_eq!(leaderboard(), Some(vec![
+				(0, AccountId::default()),
+				(0, AccountId::default()),
+				(0, AccountId::default()),
+				(57, alice.clone())
+			]));
+			public::present(&dave, &charlie, 18, 0);
+			public::present(&dave, &dave, 28, 0);
+			public::present(&dave, &eve, 38, 0);
+			assert_eq!(leaderboard(), Some(vec![
+				(18, charlie.clone()),
+				(28, dave.clone()),
+				(38, eve.clone()),
+				(57, alice.clone())
+			]));
+
+			internal::end_block();
+
+			assert!(!presentation_active());
+			assert_eq!(active_council(), vec![(alice.clone(), 11), (eve.clone(), 11)]);
+
+			assert!(!is_a_candidate(&alice));
+			assert!(!is_a_candidate(&eve));
+			assert!(!is_a_candidate(&bob));
+			assert!(is_a_candidate(&charlie));
+			assert!(is_a_candidate(&dave));
+			assert_eq!(vote_index(), 1);
+			assert_eq!(voter_last_active(&bob), Some(0));
+			assert_eq!(voter_last_active(&eve), Some(0));
+			assert_eq!(candidate_reg_info(&charlie), Some((0, 2)));
+			assert_eq!(candidate_reg_info(&dave), Some((0, 3)));
+		});
+	}
 }
