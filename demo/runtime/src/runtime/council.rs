@@ -231,6 +231,11 @@ pub fn approvals_of(voter: &AccountId) -> Vec<bool> {
 	storage::get_or_default(&voter.to_keyed_vec(APPROVALS_OF))
 }
 
+/// Get the leaderboard if we;re in the presentation phase.
+pub fn leaderboard() -> Option<Vec<(Balance, AccountId)>> {
+	storage::get(LEADERBOARD)
+}
+
 pub mod public {
 	use super::*;
 
@@ -356,7 +361,7 @@ pub mod public {
 		let bad_presentation_punishment = present_slash_per_voter() * voters.len() as Balance;
 		assert!(b >= bad_presentation_punishment);
 
-		let mut leaderboard: Vec<(Balance, AccountId)> = storage::get_or_default(LEADERBOARD);
+		let mut leaderboard = leaderboard().expect("leaderboard must exist while present phase active");
 		assert!(total > leaderboard[0].0);
 
 		let (registered_since, candidate_index): (VoteIndex, u32) =
@@ -519,6 +524,7 @@ fn finalise_tally() {
 	}
 	storage::put(CANDIDATES, &(new_candidates));
 	storage::put(CANDIDATE_COUNT, &count);
+	storage::put(VOTE_COUNT, &(vote_index() + 1));
 }
 
 #[cfg(test)]
@@ -904,6 +910,42 @@ mod tests {
 			public::submit_candidacy(&charlie, 0);
 			public::set_approvals(&alice, &vec![true], 0);
 			public::retract_voter(&bob, 0);
+		});
+	}
+
+	#[test]
+	fn simple_tally_should_work() {
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			assert!(!presentation_active());
+
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			assert!(presentation_active());
+			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &eve, 38, 0);
+			assert_eq!(leaderboard(), Some(vec![(0, AccountId::default()), (0, AccountId::default()), (8, bob.clone()), (38, eve.clone())]));
+
+			internal::end_block();
+
+			assert!(!presentation_active());
+			assert_eq!(active_council(), vec![(eve.clone(), 11), (bob.clone(), 11)]);
+
+			assert!(!is_a_candidate(&bob));
+			assert!(!is_a_candidate(&eve));
+			assert_eq!(vote_index(), 1);
+			assert_eq!(voter_last_active(&bob), Some(0));
+			assert_eq!(voter_last_active(&eve), Some(0));
 		});
 	}
 }
