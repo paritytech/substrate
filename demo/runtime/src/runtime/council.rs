@@ -23,15 +23,23 @@ use demo_primitives::{Proposal, AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
 use runtime::staking::Balance;
 
-// no polynomial attack:
-// all public operations should be constant time.
-// all protected operations may be at most O(public operations)
+// no polynomial attacks:
+//
+// all unbonded public operations should be constant time.
+// all other public operations must be linear time in terms of prior public operations and:
+// - those "valid" ones that cost nothing be limited to a constant number per single protected operation
+// - the rest costing the same order as the computational complexity
+// all protected operations must complete in at most O(public operations)
+//
+// any storage requirements should be bonded by the same order as the volume.
 
 // public operations:
-// - express approval (ideally, express all approvals)
-// - re-express approval (ideally, re-express all approvals)
+// - express approvals
+// - re-express approvals
 // - clear all approvals
+// - remove inactive voter
 // - submit candidacy
+// - present winner/runner-up
 // protected operations:
 // - remove candidacy (remove all votes for a candidate)
 
@@ -968,6 +976,44 @@ mod tests {
 			public::present(&dave, &bob, 8, 0);
 			public::present(&dave, &eve, 38, 0);
 			internal::end_block();
+
+			public::kill_inactive_voter(
+				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
+				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
+				1
+			);
+
+			assert_eq!(voters(), vec![eve.clone()]);
+			assert_eq!(approvals_of(&bob).len(), 0);
+			assert_eq!(staking::balance(&bob), 20);
+		});
+	}
+
+	#[test]
+	fn retracting_inactive_voter_with_other_candidates_in_slots_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 7);
+			public::submit_candidacy(&alice, 0);
+			public::submit_candidacy(&charlie, 1);
 
 			public::kill_inactive_voter(
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
