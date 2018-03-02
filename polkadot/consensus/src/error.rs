@@ -41,6 +41,13 @@ error_chain! {
 			description("Proposal had wrong parent hash."),
 			display("Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
 		}
+		ProposalTooLarge(size: usize) {
+			description("Proposal exceeded the maximum size."),
+			display(
+				"Proposal exceeded the maximum size of {} by {} bytes.",
+				::MAX_TRANSACTIONS_SIZE, ::MAX_TRANSACTIONS_SIZE.saturating_sub(*size)
+			),
+		}
 	}
 }
 

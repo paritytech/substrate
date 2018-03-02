@@ -237,7 +237,10 @@ impl Function {
 	///
 	/// Transactions containing inherent functions should not be signed.
 	pub fn is_inherent(&self) -> bool {
-		self.inherent_index().is_some()
+		match *self {
+			Function::Inherent(_) => true,
+			_ => false,
+		}
 	}
 
 	/// If this function is inherent, returns the index it should occupy
@@ -368,6 +371,11 @@ impl UncheckedTransaction {
 		} else {
 			true
 		}
+	}
+
+	/// Whether this transaction invokes an inherent function.
+	pub fn is_inherent(&self) -> bool {
+		self.transaction.function.is_inherent()
 	}
 
 	/// Create a new inherent-style transaction from the given function.
