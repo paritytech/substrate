@@ -951,6 +951,90 @@ mod tests {
 	}
 
 	#[test]
+	#[should_panic]
+	fn present_panics_outside_of_presentation_period() {
+		let eve = Keyring::Eve.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			assert!(!presentation_active());
+			public::present(&eve, &eve, 1, 0);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn present_panics_with_invalid_vote_index() {
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 1);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn present_panics_when_presenter_is_poor() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			assert!(!presentation_active());
+
+			public::submit_candidacy(&alice, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			assert_eq!(staking::balance(&alice), 1);
+			public::present(&alice, &alice, 17, 0);
+		});
+	}
+
+	#[test]
+	fn invalid_present_tally_should_slash() {
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			assert!(!presentation_active());
+			assert_eq!(staking::balance(&dave), 40);
+
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 80, 0);
+
+			assert_eq!(staking::balance(&dave), 38);
+		});
+	}
+
+	#[test]
 	fn runners_up_should_be_kept() {
 		let alice = Keyring::Alice.to_raw_public();
 		let bob = Keyring::Bob.to_raw_public();
