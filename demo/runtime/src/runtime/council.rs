@@ -159,6 +159,7 @@ pub fn is_a_candidate(who: &AccountId) -> bool {
 	storage::exists(&who.to_keyed_vec(REGISTER_INFO_OF))
 }
 
+/// Determine the block that a vote can happen on which is no less than `n`.
 pub fn next_vote_from(n: BlockNumber) -> BlockNumber {
 	let voting_period = voting_period();
 	(n + voting_period - 1) / voting_period * voting_period
@@ -321,7 +322,6 @@ pub mod public {
 		let candidacy_bond = candidacy_bond();
 		assert!(b >= candidacy_bond);
 		assert!(staking::unlock_block(signed) == staking::LockStatus::Liquid);
-		staking::internal::set_balance(signed, b - candidacy_bond);
 
 		let slot = slot as usize;
 		let count = storage::get_or_default::<u32>(CANDIDATE_COUNT) as usize;
@@ -331,7 +331,15 @@ pub mod public {
 			(slot < candidates.len() && candidates[slot] == AccountId::default())
 		);
 
-		storage::put(CANDIDATES, &{ let mut c = candidates; c[slot] = signed.clone(); c });
+		staking::internal::set_balance(signed, b - candidacy_bond);
+
+		let mut candidates = candidates;
+		if slot == candidates.len() {
+			candidates.push(signed.clone());
+		} else {
+			candidates[slot] = signed.clone();
+		}
+		storage::put(CANDIDATES, &candidates);
 		storage::put(CANDIDATE_COUNT, &(count as u32 + 1));
 		storage::put(&signed.to_keyed_vec(REGISTER_INFO_OF), &(vote_index(), slot));
 	}
@@ -417,7 +425,7 @@ pub mod internal {
 	/// Check there's nothing to do this block
 	pub fn end_block() {
 		let block_number = system::block_number();
-		if block_number % voting_period() {
+		if block_number % voting_period() == 0 {
 			if let Some(number) = next_tally() {
 				if block_number == number {
 					start_tally();
@@ -552,20 +560,122 @@ mod tests {
 			twox_128(b"sta:tot").to_vec() => vec![].and(&210u64),
 			twox_128(b"sta:spe").to_vec() => vec![].and(&1u64),
 			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].and(&1u64)
+			twox_128(b"sta:era").to_vec() => vec![].and(&1u64),
+
+			twox_128(b"cou:cbo").to_vec() => vec![].and(&9u64), // CANDIDACY_BOND
+			twox_128(b"cou:vbo").to_vec() => vec![].and(&3u64), // VOTING_BOND
+			twox_128(b"cou:pss").to_vec() => vec![].and(&1u64), // PRESENT_SLASH_PER_VOTER
+			twox_128(b"cou:cco").to_vec() => vec![].and(&2u64), // CARRY_COUNT
+			twox_128(b"cou:pdu").to_vec() => vec![].and(&2u64), // PRESENTATION_DURATION
+			twox_128(b"cou:per").to_vec() => vec![].and(&4u64), // VOTING_PERIOD
+			twox_128(b"cou:trm").to_vec() => vec![].and(&5u64), // TERM_DURATION
+			twox_128(b"cou:sts").to_vec() => vec![].and(&2u64)  // DESIRED_SEATS
 		]
 	}
 
 	#[test]
-	fn simple_passing_should_work() {
+	fn basic_environment_works() {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			assert_eq!(next_vote_from(1), 4);
+			assert_eq!(next_vote_from(4), 4);
+			assert_eq!(next_vote_from(5), 8);
+			assert_eq!(vote_index(), 0);
+			assert_eq!(candidacy_bond(), 9);
+			assert_eq!(voting_bond(), 3);
+			assert_eq!(present_slash_per_voter(), 1);
+			assert_eq!(presentation_duration(), 2);
+			assert_eq!(voting_period(), 4);
+			assert_eq!(term_duration(), 5);
+			assert_eq!(desired_seats(), 2);
+			assert_eq!(carry_count(), 2);
+
+			assert_eq!(active_council(), vec![]);
+			assert_eq!(next_tally(), Some(4));
+			assert_eq!(presentation_active(), false);
+			assert_eq!(next_finalise(), None);
+
+			assert_eq!(candidates(), Vec::<AccountId>::new());
+			assert_eq!(is_a_candidate(&alice), false);
+			assert_eq!(candidate_reg_info(&alice), None);
+
+			assert_eq!(voters(), Vec::<AccountId>::new());
+			assert_eq!(voter_last_active(&alice), None);
+			assert_eq!(approvals_of(&alice), vec![]);
+		});
+	}
+
+	#[test]
+	fn simple_candidate_submission_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+
+			assert_eq!(candidates(), Vec::<AccountId>::new());
+			public::submit_candidacy(&alice, 0);
+
+			assert_eq!(candidates(), vec![alice.clone()]);
+			public::submit_candidacy(&bob, 1);
+
+			assert_eq!(candidates(), vec![alice.clone(), bob.clone()]);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn bad_candidate_slot_submission_should_panic() {
 		let alice = Keyring::Alice.to_raw_public();
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
-			assert_eq!(staking::era_length(), 1u64);
-			assert_eq!(staking::total_stake(), 210u64);
-
 			with_env(|e| e.block_number = 1);
+			assert_eq!(candidates(), Vec::<AccountId>::new());
+			public::submit_candidacy(&alice, 1);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn non_free_candidate_slot_submission_should_panic() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			assert_eq!(candidates(), Vec::<AccountId>::new());
+			public::submit_candidacy(&alice, 0);
+			public::submit_candidacy(&bob, 0);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn dupe_candidate_submission_should_panic() {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			assert_eq!(candidates(), Vec::<AccountId>::new());
+			public::submit_candidacy(&alice, 0);
+			public::submit_candidacy(&alice, 1);
+		});
+	}
+
+	#[test]
+	fn voting_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+
 		});
 	}
 }
