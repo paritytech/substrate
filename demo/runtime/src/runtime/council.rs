@@ -31,15 +31,16 @@ use runtime::staking::Balance;
 // - the rest costing the same order as the computational complexity
 // all protected operations must complete in at most O(public operations)
 //
+// we assume "beneficial" transactions will have the same access as attack transactions.
+//
 // any storage requirements should be bonded by the same order as the volume.
 
 // public operations:
-// - express approvals
-// - re-express approvals
-// - clear all approvals
-// - remove inactive voter
-// - submit candidacy
-// - present winner/runner-up
+// - express approvals (you pay in a "voter" bond the first time you do this; O(1); one extra DB entry, one DB change)
+// - remove active voter (you get your "voter" bond back; O(1); one fewer DB entry, one DB change)
+// - remove inactive voter (either you or the target is removed; if the target, you get their "voter" bond back; O(1); one fewer DB entry, one DB change)
+// - submit candidacy (you pay a "candidate" bond; O(1); one extra DB entry, two DB changes)
+// - present winner/runner-up (you may pay a "presentation" bond of O(voters) if the presentation is invalid; O(voters) compute; )
 // protected operations:
 // - remove candidacy (remove all votes for a candidate)
 
@@ -281,7 +282,7 @@ pub mod public {
 		assert!(voter_last_active(signed).is_some());
 		let last_active = voter_last_active(who).expect("target for inactivity cleanup must be active");
 		assert!(assumed_vote_index == vote_index());
-		assert!(last_active < assumed_vote_index);
+		assert!(last_active < assumed_vote_index - 1);
 		let voters = voters();
 		let signed_index = signed_index as usize;
 		let who_index = who_index as usize;
@@ -967,25 +968,32 @@ mod tests {
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 4);
 			public::submit_candidacy(&bob, 0);
-			public::submit_candidacy(&eve, 1);
-			public::set_approvals(&bob, &vec![true, false], 0);
-			public::set_approvals(&eve, &vec![false, true], 0);
+			public::set_approvals(&bob, &vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
 			public::present(&dave, &bob, 8, 0);
-			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 8);
+			public::submit_candidacy(&eve, 0);
+			public::set_approvals(&eve, &vec![true], 1);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 10);
+			public::present(&dave, &eve, 38, 1);
 			internal::end_block();
 
 			public::kill_inactive_voter(
+				&eve, voters().iter().position(|&i| i == eve).unwrap() as u32,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
-				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
-				1
+				2
 			);
 
 			assert_eq!(voters(), vec![eve.clone()]);
 			assert_eq!(approvals_of(&bob).len(), 0);
-			assert_eq!(staking::balance(&bob), 20);
+			assert_eq!(staking::balance(&bob), 17);
+			assert_eq!(staking::balance(&eve), 50);
 		});
 	}
 
@@ -1001,29 +1009,35 @@ mod tests {
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 4);
 			public::submit_candidacy(&bob, 0);
-			public::submit_candidacy(&eve, 1);
-			public::set_approvals(&bob, &vec![true, false], 0);
-			public::set_approvals(&eve, &vec![false, true], 0);
+			public::set_approvals(&bob, &vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
 			public::present(&dave, &bob, 8, 0);
-			public::present(&dave, &eve, 38, 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 7);
+			with_env(|e| e.block_number = 8);
+			public::submit_candidacy(&eve, 0);
+			public::set_approvals(&eve, &vec![true], 1);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 10);
+			public::present(&dave, &eve, 38, 1);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 11);
 			public::submit_candidacy(&alice, 0);
-			public::submit_candidacy(&charlie, 1);
 
 			public::kill_inactive_voter(
+				&eve, voters().iter().position(|&i| i == eve).unwrap() as u32,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
-				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
-				1
+				2
 			);
 
 			assert_eq!(voters(), vec![eve.clone()]);
 			assert_eq!(approvals_of(&bob).len(), 0);
-			assert_eq!(staking::balance(&bob), 20);
+			assert_eq!(staking::balance(&bob), 17);
+			assert_eq!(staking::balance(&eve), 50);
 		});
 	}
 
@@ -1038,20 +1052,26 @@ mod tests {
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 4);
 			public::submit_candidacy(&bob, 0);
-			public::submit_candidacy(&eve, 1);
-			public::set_approvals(&bob, &vec![true, false], 0);
-			public::set_approvals(&eve, &vec![false, true], 0);
+			public::set_approvals(&bob, &vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
 			public::present(&dave, &bob, 8, 0);
-			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 8);
+			public::submit_candidacy(&eve, 0);
+			public::set_approvals(&eve, &vec![true], 1);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 10);
+			public::present(&dave, &eve, 38, 1);
 			internal::end_block();
 
 			public::kill_inactive_voter(
 				&bob, 42,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
-				1
+				2
 			);
 		});
 	}
@@ -1067,20 +1087,26 @@ mod tests {
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 4);
 			public::submit_candidacy(&bob, 0);
-			public::submit_candidacy(&eve, 1);
-			public::set_approvals(&bob, &vec![true, false], 0);
-			public::set_approvals(&eve, &vec![false, true], 0);
+			public::set_approvals(&bob, &vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
 			public::present(&dave, &bob, 8, 0);
-			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 8);
+			public::submit_candidacy(&eve, 0);
+			public::set_approvals(&eve, &vec![true], 1);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 10);
+			public::present(&dave, &eve, 38, 1);
 			internal::end_block();
 
 			public::kill_inactive_voter(
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
 				&bob, 42,
-				1
+				2
 			);
 		});
 	}
@@ -1088,6 +1114,7 @@ mod tests {
 	#[test]
 	fn attempting_to_retract_active_voter_should_slash_reporter() {
 		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
 		let eve = Keyring::Eve.to_raw_public();
 		let dave = Keyring::Dave.to_raw_public();
 		let mut t = new_test_ext();
@@ -1095,28 +1122,38 @@ mod tests {
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 4);
 			public::submit_candidacy(&bob, 0);
-			public::submit_candidacy(&dave, 1);
-			public::submit_candidacy(&eve, 2);
-			public::set_approvals(&bob, &vec![true, false, false], 0);
-			public::set_approvals(&dave, &vec![false, true, false], 0);
-			public::set_approvals(&eve, &vec![false, false, true], 0);
+			public::submit_candidacy(&charlie, 1);
+			public::submit_candidacy(&dave, 2);
+			public::submit_candidacy(&eve, 3);
+			public::set_approvals(&bob, &vec![true, false, false, false], 0);
+			public::set_approvals(&charlie, &vec![false, true, false, false], 0);
+			public::set_approvals(&dave, &vec![false, false, true, false], 0);
+			public::set_approvals(&eve, &vec![false, false, false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
 			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &charlie, 18, 0);
 			public::present(&dave, &dave, 28, 0);
 			public::present(&dave, &eve, 38, 0);
 			internal::end_block();
 
-			assert_eq!(candidates(), vec![bob.clone()]);
+			with_env(|e| e.block_number = 8);
+			privileged::set_desired_seats(3);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 10);
+			public::present(&dave, &bob, 8, 1);
+			public::present(&dave, &charlie, 18, 1);
+			internal::end_block();
 
 			public::kill_inactive_voter(
 				&dave, voters().iter().position(|&i| i == dave).unwrap() as u32,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
-				1
+				2
 			);
 
-			assert_eq!(voters(), vec![bob.clone(), eve.clone()]);
+			assert_eq!(voters(), vec![bob.clone(), charlie.clone(), eve.clone()]);
 			assert_eq!(approvals_of(&dave).len(), 0);
 			assert_eq!(staking::balance(&dave), 37);
 		});
@@ -1133,20 +1170,26 @@ mod tests {
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 4);
 			public::submit_candidacy(&bob, 0);
-			public::submit_candidacy(&eve, 1);
-			public::set_approvals(&bob, &vec![true, false], 0);
-			public::set_approvals(&eve, &vec![false, true], 0);
+			public::set_approvals(&bob, &vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
 			public::present(&dave, &bob, 8, 0);
-			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 8);
+			public::submit_candidacy(&eve, 0);
+			public::set_approvals(&eve, &vec![true], 1);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 10);
+			public::present(&dave, &eve, 38, 1);
 			internal::end_block();
 
 			public::kill_inactive_voter(
 				&dave, 0,
 				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
-				1
+				2
 			);
 		});
 	}
