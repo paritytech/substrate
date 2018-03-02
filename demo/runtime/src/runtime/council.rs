@@ -300,13 +300,6 @@ pub mod public {
 		}
 	}
 
-	/// Remove a voter from the system. Will panic if voters()[index] != voter.
-	fn remove_voter(voter: &AccountId, index: usize, mut voters: Vec<AccountId>) {
-		storage::put(VOTERS, &{ voters.swap_remove(index); voters });
-		storage::kill(&voter.to_keyed_vec(APPROVALS_OF));
-		storage::kill(&voter.to_keyed_vec(LAST_ACTIVE_OF));
-	}
-
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
 	pub fn retract_voter(signed: &AccountId, index: u32) {
 		assert!(!presentation_active());
@@ -443,6 +436,13 @@ pub mod internal {
 			}
 		}
 	}
+}
+
+/// Remove a voter from the system. Will panic if voters()[index] != voter.
+fn remove_voter(voter: &AccountId, index: usize, mut voters: Vec<AccountId>) {
+	storage::put(VOTERS, &{ voters.swap_remove(index); voters });
+	storage::kill(&voter.to_keyed_vec(APPROVALS_OF));
+	storage::kill(&voter.to_keyed_vec(LAST_ACTIVE_OF));
 }
 
 /// Close the voting, snapshot the staking and the number of seats that are actually up for grabs.
@@ -946,6 +946,162 @@ mod tests {
 			assert_eq!(vote_index(), 1);
 			assert_eq!(voter_last_active(&bob), Some(0));
 			assert_eq!(voter_last_active(&eve), Some(0));
+		});
+	}
+
+	#[test]
+	fn retracting_inactive_voter_should_work() {
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			public::kill_inactive_voter(
+				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
+				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
+				1
+			);
+
+			assert_eq!(voters(), vec![eve.clone()]);
+			assert_eq!(approvals_of(&bob).len(), 0);
+			assert_eq!(staking::balance(&bob), 20);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn retracting_inactive_voter_with_bad_reporter_index_should_panic() {
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			public::kill_inactive_voter(
+				&bob, 42,
+				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
+				1
+			);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn retracting_inactive_voter_with_bad_target_index_should_panic() {
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			public::kill_inactive_voter(
+				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
+				&bob, 42,
+				1
+			);
+		});
+	}
+
+	#[test]
+	fn attempting_to_retract_active_voter_should_slash_reporter() {
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&dave, 1);
+			public::submit_candidacy(&eve, 2);
+			public::set_approvals(&bob, &vec![true, false, false], 0);
+			public::set_approvals(&dave, &vec![false, true, false], 0);
+			public::set_approvals(&eve, &vec![false, false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &dave, 28, 0);
+			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			assert_eq!(candidates(), vec![bob.clone()]);
+
+			public::kill_inactive_voter(
+				&dave, voters().iter().position(|&i| i == dave).unwrap() as u32,
+				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
+				1
+			);
+
+			assert_eq!(voters(), vec![bob.clone(), eve.clone()]);
+			assert_eq!(approvals_of(&dave).len(), 0);
+			assert_eq!(staking::balance(&dave), 37);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn attempting_to_retract_inactive_voter_by_nonvoter_should_panic() {
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 4);
+			public::submit_candidacy(&bob, 0);
+			public::submit_candidacy(&eve, 1);
+			public::set_approvals(&bob, &vec![true, false], 0);
+			public::set_approvals(&eve, &vec![false, true], 0);
+			internal::end_block();
+
+			with_env(|e| e.block_number = 6);
+			public::present(&dave, &bob, 8, 0);
+			public::present(&dave, &eve, 38, 0);
+			internal::end_block();
+
+			public::kill_inactive_voter(
+				&dave, 0,
+				&bob, voters().iter().position(|&i| i == bob).unwrap() as u32,
+				1
+			);
 		});
 	}
 
