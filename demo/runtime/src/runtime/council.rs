@@ -618,16 +618,22 @@ mod tests {
 			assert_eq!(candidates(), Vec::<AccountId>::new());
 			assert_eq!(candidate_reg_info(&alice), None);
 			assert_eq!(candidate_reg_info(&bob), None);
+			assert_eq!(is_a_candidate(&alice), false);
+			assert_eq!(is_a_candidate(&bob), false);
 
 			public::submit_candidacy(&alice, 0);
 			assert_eq!(candidates(), vec![alice.clone()]);
 			assert_eq!(candidate_reg_info(&alice), Some((0 as VoteIndex, 0u32)));
 			assert_eq!(candidate_reg_info(&bob), None);
+			assert_eq!(is_a_candidate(&alice), true);
+			assert_eq!(is_a_candidate(&bob), false);
 
 			public::submit_candidacy(&bob, 1);
 			assert_eq!(candidates(), vec![alice.clone(), bob.clone()]);
 			assert_eq!(candidate_reg_info(&alice), Some((0 as VoteIndex, 0u32)));
 			assert_eq!(candidate_reg_info(&bob), Some((0 as VoteIndex, 1u32)));
+			assert_eq!(is_a_candidate(&alice), true);
+			assert_eq!(is_a_candidate(&bob), true);
 		});
 	}
 
@@ -737,11 +743,167 @@ mod tests {
 	#[test]
 	fn voting_should_work() {
 		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let _ferdie = Keyring::Ferdie.to_raw_public();
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 1);
 
+			public::submit_candidacy(&eve, 0);
+
+			public::set_approvals(&alice, &vec![true], 0);
+			public::set_approvals(&dave, &vec![true], 0);
+
+			assert_eq!(approvals_of(&alice), vec![true]);
+			assert_eq!(approvals_of(&dave), vec![true]);
+			assert_eq!(voters(), vec![alice.clone(), dave.clone()]);
+
+			public::submit_candidacy(&bob, 1);
+			public::submit_candidacy(&charlie, 2);
+
+			public::set_approvals(&bob, &vec![false, true, true], 0);
+			public::set_approvals(&charlie, &vec![false, true, true], 0);
+
+			assert_eq!(approvals_of(&alice), vec![true]);
+			assert_eq!(approvals_of(&dave), vec![true]);
+			assert_eq!(approvals_of(&bob), vec![false, true, true]);
+			assert_eq!(approvals_of(&charlie), vec![false, true, true]);
+
+			assert_eq!(voters(), vec![alice.clone(), dave.clone(), bob.clone(), charlie.clone()]);
+
+
+		});
+	}
+
+	#[test]
+	fn resubmitting_voting_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let _ferdie = Keyring::Ferdie.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+
+			public::submit_candidacy(&eve, 0);
+			public::set_approvals(&dave, &vec![true], 0);
+
+			assert_eq!(approvals_of(&dave), vec![true]);
+
+			public::submit_candidacy(&bob, 1);
+			public::submit_candidacy(&charlie, 2);
+			public::set_approvals(&dave, &vec![true, false, true], 0);
+
+			assert_eq!(approvals_of(&dave), vec![true, false, true]);
+		});
+	}
+
+	#[test]
+	fn retracting_voter_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let _ferdie = Keyring::Ferdie.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+
+			public::submit_candidacy(&eve, 0);
+			public::submit_candidacy(&bob, 1);
+			public::submit_candidacy(&charlie, 2);
+
+			public::set_approvals(&alice, &vec![true], 0);
+			public::set_approvals(&bob, &vec![false, true, true], 0);
+			public::set_approvals(&charlie, &vec![false, true, true], 0);
+			public::set_approvals(&dave, &vec![true, false, true], 0);
+
+			assert_eq!(voters(), vec![alice.clone(), bob.clone(), charlie.clone(), dave.clone()]);
+			assert_eq!(approvals_of(&alice), vec![true]);
+			assert_eq!(approvals_of(&bob), vec![false, true, true]);
+			assert_eq!(approvals_of(&charlie), vec![false, true, true]);
+			assert_eq!(approvals_of(&dave), vec![true, false, true]);
+
+			public::retract_voter(&alice, 0);
+
+			assert_eq!(voters(), vec![dave.clone(), bob.clone(), charlie.clone()]);
+			assert_eq!(approvals_of(&alice), Vec::<bool>::new());
+			assert_eq!(approvals_of(&bob), vec![false, true, true]);
+			assert_eq!(approvals_of(&charlie), vec![false, true, true]);
+			assert_eq!(approvals_of(&dave), vec![true, false, true]);
+
+			public::retract_voter(&bob, 1);
+
+			assert_eq!(voters(), vec![dave.clone(), charlie.clone()]);
+			assert_eq!(approvals_of(&alice), Vec::<bool>::new());
+			assert_eq!(approvals_of(&bob), Vec::<bool>::new());
+			assert_eq!(approvals_of(&charlie), vec![false, true, true]);
+			assert_eq!(approvals_of(&dave), vec![true, false, true]);
+
+			public::retract_voter(&charlie, 1);
+
+			assert_eq!(voters(), vec![dave.clone()]);
+			assert_eq!(approvals_of(&alice), Vec::<bool>::new());
+			assert_eq!(approvals_of(&bob), Vec::<bool>::new());
+			assert_eq!(approvals_of(&charlie), Vec::<bool>::new());
+			assert_eq!(approvals_of(&dave), vec![true, false, true]);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn invalid_retraction_index_should_panic() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::submit_candidacy(&charlie, 0);
+			public::set_approvals(&alice, &vec![true], 0);
+			public::set_approvals(&bob, &vec![true], 0);
+			public::retract_voter(&alice, 1);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn overflow_retraction_index_should_panic() {
+		let alice = Keyring::Alice.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::submit_candidacy(&charlie, 0);
+			public::set_approvals(&alice, &vec![true], 0);
+			public::retract_voter(&alice, 1);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn non_voter_retraction_should_panic() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::submit_candidacy(&charlie, 0);
+			public::set_approvals(&alice, &vec![true], 0);
+			public::retract_voter(&bob, 0);
 		});
 	}
 }
