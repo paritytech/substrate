@@ -118,7 +118,7 @@ impl Slicable for Vec<u64> {
 		u32::decode(input).and_then(move |len| {
 			let len = len as usize;
 			let mut vec = Vec::with_capacity(len);
-			for i in 0..len {
+			for _ in 0..len {
 				vec.push(u64::decode(input)?);
 			}
 			Some(vec)

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime::{system, parachains, consensus, session, timestamp};
+use runtime::{system, parachains, consensus, session};
 
 impl_stubs!(
 	execute_block => |block| system::internal::execute_block(block),
@@ -24,5 +24,6 @@ impl_stubs!(
 	validators => |()| session::validators(),
 	authorities => |()| consensus::authorities(),
 	duty_roster => |()| parachains::calculate_duty_roster(),
-	get_timestamp => |()| timestamp::get()
+	timestamp => |()| ::runtime::timestamp::get(),
+	nonce => |account_id| system::nonce(account_id)
 );

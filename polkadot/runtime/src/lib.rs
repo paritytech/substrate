@@ -31,9 +31,9 @@ extern crate polkadot_primitives;
 
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
+pub mod api;
 pub mod environment;
 pub mod runtime;
-pub mod api;
 
 #[cfg(feature = "std")] pub mod genesismap;
 

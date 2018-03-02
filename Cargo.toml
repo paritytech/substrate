@@ -21,6 +21,7 @@ members = [
 	"polkadot/primitives",
 	"polkadot/runtime",
 	"polkadot/statement-table",
+	"polkadot/transaction-pool",
 	"polkadot/validator",
 	"substrate/bft",
 	"substrate/client",
