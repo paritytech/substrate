@@ -28,7 +28,7 @@ use runtime_support::Hashable;
 
 struct CandidateRequest {
 	id: message::RequestId,
-	completion: oneshot::Sender<Option<Vec<u8>>>,
+	completion: oneshot::Sender<Vec<u8>>,
 }
 
 struct PeerConsensus {
@@ -87,7 +87,7 @@ impl Consensus {
 		self.statement_stream.add_stream()
 	}
 
-	pub fn fetch_candidate(&mut self, io: &mut SyncIo, protocol: &Protocol, hash: &Hash) -> oneshot::Receiver<Option<Vec<u8>>> {
+	pub fn fetch_candidate(&mut self, io: &mut SyncIo, protocol: &Protocol, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
 		// Request from the first peer that has it available.
 		// TODO: random peer selection.
 		trace!(target:"sync", "Trying to fetch candidate {:?}", hash);
@@ -119,6 +119,11 @@ impl Consensus {
 		}
 	}
 
+	pub fn set_local_candidate(&mut self, candidate: Option<(Hash, Vec<u8>)>) {
+		trace!(target:"sync", "Set local candidate to {:?}", candidate.as_ref().map(|&(h, _)| h));
+		self.our_candidate = candidate;
+	}
+
 	pub fn on_candidate_request(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, request: message::CandidateRequest) {
 		let response = match self.our_candidate {
 			Some((ref hash, ref data)) if *hash == request.hash => Some(data.clone()),
@@ -135,8 +140,10 @@ impl Consensus {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			if let Some(request) = peer.candidate_fetch.take() {
 				if response.id == request.id {
-					if let Err(e) = request.completion.send(response.data) {
-						trace!(target:"sync", "Error sending candidate data notification: {:?}", e);
+					if let Some(data) = response.data {
+						if let Err(e) = request.completion.send(data) {
+							trace!(target:"sync", "Error sending candidate data notification: {:?}", e);
+						}
 					}
 				} else {
 					trace!(target:"sync", "Unexpected candidate response from {}", peer_id);

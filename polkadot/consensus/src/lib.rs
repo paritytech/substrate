@@ -40,6 +40,7 @@ extern crate polkadot_primitives;
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
+extern crate substrate_network;
 
 #[macro_use]
 extern crate error_chain;
@@ -64,6 +65,7 @@ use parking_lot::Mutex;
 pub use self::error::{ErrorKind, Error};
 
 mod error;
+mod network;
 
 /// A handle to a statement table router.
 pub trait TableRouter {
@@ -75,7 +77,7 @@ pub trait TableRouter {
 	type FetchExtrinsic: IntoFuture<Item=Extrinsic,Error=Self::Error>;
 
 	/// Note local candidate data.
-	fn local_candidate_data(&self, block_data: BlockData, extrinsic: Extrinsic);
+	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: Extrinsic);
 
 	/// Fetch block data for a specific candidate.
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> Self::FetchCandidate;

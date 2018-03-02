@@ -58,11 +58,12 @@ mod consensus;
 
 #[cfg(test)] mod test;
 
-pub use service::Service;
+pub use service::{Service, FetchFuture, StatementStream, ConsensusService};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, NetworkConfiguration};
 pub use message::Statement;
+pub use error::Error;
 
 // TODO: move it elsewhere
 fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {

@@ -301,13 +301,18 @@ impl Protocol {
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn fetch_candidate(&self, io: &mut SyncIo, hash: &Hash) -> oneshot::Receiver<Option<Vec<u8>>> {
+	pub fn fetch_candidate(&self, io: &mut SyncIo, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
 		self.consensus.lock().fetch_candidate(io, self, hash)
 	}
 
 	/// See `ConsensusService` trait.
 	pub fn send_statement(&self, io: &mut SyncIo, statement: &message::Statement) {
 		self.consensus.lock().send_statement(io, self, statement)
+	}
+
+	/// See `ConsensusService` trait.
+	pub fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
+		self.consensus.lock().set_local_candidate(candidate)
 	}
 
 	/// Perform time based maintenance.

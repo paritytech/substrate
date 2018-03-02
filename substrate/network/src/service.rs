@@ -34,6 +34,11 @@ use message::Statement;
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
 
+/// Type that represents fetch completion future.
+pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
+/// Type that represents statement future stream.
+pub type StatementStream = multiqueue::BroadcastFutReceiver<Statement>;
+
 bitflags! {
 	pub struct Role: u32 {
 		const NONE = 0b00000000;
@@ -65,7 +70,10 @@ pub trait ConsensusService: Send + Sync {
 	/// Maintain connectivity to given addresses.
 	fn connect_to_authorities(&self, addresses: &[String]);
 	/// Fetch candidate.
-	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Option<Vec<u8>>>;
+	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Vec<u8>>;
+	/// Note local candidate. Accepts candidate receipt hash and candidate data.
+	/// Pass `None` to clear the candidate.
+	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>);
 }
 
 /// devp2p Protocol handler
@@ -199,7 +207,7 @@ impl ConsensusService for Service {
 		//TODO: implement me
 	}
 
-	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Option<Vec<u8>>> {
+	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
 		self.network.with_context_eval(DOT_PROTOCOL_ID, |context| {
 			self.handler.protocol.fetch_candidate(&mut NetSyncIo::new(context), hash)
 		}).expect("DOT Service is registered")
@@ -209,6 +217,10 @@ impl ConsensusService for Service {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
 			self.handler.protocol.send_statement(&mut NetSyncIo::new(context), &statement);
 		});
+	}
+
+	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
+		self.handler.protocol.set_local_candidate(candidate)
 	}
 }
 
