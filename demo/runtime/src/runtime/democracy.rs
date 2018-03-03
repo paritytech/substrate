@@ -177,7 +177,8 @@ pub mod public {
 	pub fn second(signed: &AccountId, proposal: PropIndex) {
 		let b = staking::balance(signed);
 		let key = proposal.to_keyed_vec(DEPOSIT_OF);
-		let mut deposit: (Balance, Vec<AccountId>) = storage::get(&key).expect("can only second an existing proposal");
+		let mut deposit: (Balance, Vec<AccountId>) =
+			storage::get(&key).expect("can only second an existing proposal");
 		assert!(b >= deposit.0);
 		deposit.1.push(*signed);
 
@@ -208,10 +209,7 @@ pub mod privileged {
 	use super::*;
 
 	/// Can be called directly by the council.
-	pub fn start_referendum(
-		proposal: Proposal,
-		vote_threshold: VoteThreshold
-	) {
+	pub fn start_referendum(proposal: Proposal, vote_threshold: VoteThreshold) {
 		inject_referendum(system::block_number() + voting_period(), proposal, vote_threshold);
 	}
 
@@ -410,7 +408,7 @@ mod tests {
 			assert_eq!(staking::era_length(), 2u64);
 		});
 	}
-/*
+
 	#[test]
 	fn controversial_low_turnout_voting_should_work() {
 		let alice = Keyring::Alice.to_raw_public();
@@ -423,17 +421,14 @@ mod tests {
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
-			assert_eq!(staking::era_length(), 1u64);
-			assert_eq!(staking::total_stake(), 210u64);
-
 			with_env(|e| e.block_number = 1);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2));
-			public::vote(&eve, 1, false);
-			public::vote(&ferdie, 1, true);
+			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
+			public::vote(&eve, r, false);
+			public::vote(&ferdie, r, true);
 
-			assert_eq!(public::tally(), (60, 50));
+			assert_eq!(tally(r), (60, 50));
 
-			democracy::internal::end_of_an_era();
+			democracy::internal::end_block();
 			staking::internal::check_new_era();
 
 			assert_eq!(staking::era_length(), 1u64);
@@ -456,17 +451,17 @@ mod tests {
 			assert_eq!(staking::total_stake(), 210u64);
 
 			with_env(|e| e.block_number = 1);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2));
-			public::vote(&dave, 1, true);
-			public::vote(&eve, 1, false);
-			public::vote(&ferdie, 1, true);
+			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
+			public::vote(&dave, r, true);
+			public::vote(&eve, r, false);
+			public::vote(&ferdie, r, true);
 
-			assert_eq!(public::tally(), (100, 50));
+			assert_eq!(tally(r), (100, 50));
 
-			democracy::internal::end_of_an_era();
+			democracy::internal::end_block();
 			staking::internal::check_new_era();
 
 			assert_eq!(staking::era_length(), 2u64);
 		});
-	}*/
+	}
 }
