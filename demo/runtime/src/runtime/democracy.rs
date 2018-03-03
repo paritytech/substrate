@@ -96,7 +96,7 @@ pub fn launch_period() -> BlockNumber {
 }
 
 /// The public proposals. Unsorted.
-pub fn public_props() -> Vec<(PropIndex, Proposal, Balance)> {
+pub fn public_props() -> Vec<(PropIndex, Proposal)> {
 	storage::get_or_default(PUBLIC_PROPS)
 }
 
@@ -240,10 +240,15 @@ pub mod internal {
 				.enumerate()
 				.max_by_key(|x| locked_for((x.1).0))
 			{
-				let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
-				storage::kill(&prop_index.to_keyed_vec(DEPOSIT_OF));
+				let (prop_index, proposal) = public_props.swap_remove(winner_index);
+				let (deposit, depositors): (Balance, Vec<AccountId>) =
+					storage::take(&prop_index.to_keyed_vec(DEPOSIT_OF))
+						.expect("depositors always exist for current proposals");
+				// refund depositors
+				for d in &depositors {
+					staking::internal::set_balance(d, staking::balance(d) + deposit);
+				}
 				storage::put(PUBLIC_PROPS, &public_props);
-
 				inject_referendum(now + voting_period(), proposal, VoteThreshold::SuperMajorityApprove);
 			}
 		}
