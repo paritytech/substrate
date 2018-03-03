@@ -74,6 +74,7 @@ const PUBLIC_PROP_COUNT: &[u8] = b"dem:cou";	// PropIndex
 const PUBLIC_PROPS: &[u8] = b"dem:pub";			// Vec<(PropIndex, Proposal)>
 const DEPOSIT_OF: &[u8] = b"dem:dep:";			// PropIndex -> (Balance, Vec<AccountId>)
 const LAUNCH_PERIOD: &[u8] = b"dem:lau";		// BlockNumber
+const MINIMUM_DEPOSIT: &[u8] = b"dem:min";		// Balance
 
 // referenda
 const VOTING_PERIOD: &[u8] = b"dem:per";		// BlockNumber
@@ -82,6 +83,12 @@ const NEXT_TALLY: &[u8] = b"dem:nxt";			// ReferendumIndex
 const REFERENDUM_INFO_OF: &[u8] = b"dem:pro:";	// ReferendumIndex -> (BlockNumber, Proposal, VoteThreshold)
 const VOTERS_FOR: &[u8] = b"dem:vtr:";			// ReferendumIndex -> Vec<AccountId>
 const VOTE_OF: &[u8] = b"dem:vot:";				// (ReferendumIndex, AccountId) -> bool
+
+/// The minimum amount to be used as a deposit for a public referendum proposal.
+pub fn minimum_deposit() -> Balance {
+	storage::get(MINIMUM_DEPOSIT)
+		.expect("all core parameters of council module must be in place")
+}
 
 /// How often (in blocks) to check for new votes.
 pub fn voting_period() -> BlockNumber {
@@ -159,6 +166,7 @@ pub mod public {
 
 	/// Propose a sensitive action to be taken.
 	pub fn propose(signed: &AccountId, proposal: &Proposal, value: Balance) {
+		assert!(value >= minimum_deposit());
 		let b = staking::balance(signed);
 		assert!(b >= value);
 
@@ -321,7 +329,8 @@ mod tests {
 			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
 			twox_128(b"sta:era").to_vec() => vec![].and(&1u64),
 			twox_128(LAUNCH_PERIOD).to_vec() => vec![].and(&1u64),
-			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64)
+			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64),
+			twox_128(MINIMUM_DEPOSIT).to_vec() => vec![].and(&1u64)
 		]
 	}
 
