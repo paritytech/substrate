@@ -18,73 +18,203 @@
 
 use rstd::prelude::*;
 use integer_sqrt::IntegerSquareRoot;
-use codec::KeyedVec;
+use codec::{KeyedVec, Slicable, Input, NonTrivialSlicable};
 use runtime_support::storage;
 use demo_primitives::{Proposal, AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
+use runtime::staking::Balance;
 
-const CURRENT_PROPOSAL: &[u8] = b"dem:pro";
-const VOTE_OF: &[u8] = b"dem:vot:";
-const VOTERS: &[u8] = b"dem:vtr:";
+pub type PropIndex = u32;
+pub type ReferendumIndex = u32;
+
+pub enum VoteThreshold {
+	SuperMajorityApprove,
+	SuperMajorityAgainst,
+	SimpleMajority,
+}
+
+impl Slicable for VoteThreshold {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u8::decode(input).and_then(|v| match v {
+			0 => Some(VoteThreshold::SuperMajorityApprove),
+			1 => Some(VoteThreshold::SuperMajorityAgainst),
+			2 => Some(VoteThreshold::SimpleMajority),
+			_ => None,
+		})
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		match *self {
+			VoteThreshold::SuperMajorityApprove => 0u8,
+			VoteThreshold::SuperMajorityAgainst => 1u8,
+			VoteThreshold::SimpleMajority => 2u8,
+		}.using_encoded(f)
+	}
+}
+impl NonTrivialSlicable for VoteThreshold {}
+
+impl VoteThreshold {
+	/// Given `approve` votes for and `against` votes against from a total electorate size of
+	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
+	/// overall outcome is in favour of approval.
+	pub fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool {
+		let voters = approve + against;
+		match *self {
+			VoteThreshold::SuperMajorityApprove =>
+				voters.integer_sqrt() * approve / electorate.integer_sqrt() > against,
+			VoteThreshold::SuperMajorityAgainst =>
+				approve > voters.integer_sqrt() * against / electorate.integer_sqrt(),
+			VoteThreshold::SimpleMajority => approve > against,
+		}
+	}
+}
+
+// public proposals
+const PUBLIC_PROP_COUNT: &[u8] = b"dem:cou";	// PropIndex
+const PUBLIC_PROPS: &[u8] = b"dem:pub";			// Vec<(PropIndex, Proposal)>
+const LOCKED_FOR: &[u8] = b"dem:loc:";			// PropIndex -> Balance
+const LAUNCH_PERIOD: &[u8] = b"dem:lau";		// BlockNumber
+
+// referenda
+const VOTING_PERIOD: &[u8] = b"dem:per";		// BlockNumber
+const REFERENDUM_COUNT: &[u8] = b"dem:cou";		// ReferendumIndex
+const NEXT_TALLY: &[u8] = b"dem:nxt";			// ReferendumIndex
+const REFERENDUM_INFO_OF: &[u8] = b"dem:pro";	// ReferendumIndex -> (BlockNumber, Proposal, VoteThreshold)
+const VOTERS: &[u8] = b"dem:vtr:";				// ReferendumIndex -> Vec<AccountId>
+const VOTE_OF: &[u8] = b"dem:vot:";				// (ReferendumIndex, AccountId) -> bool
+
+/// How often (in blocks) to check for new votes.
+pub fn voting_period() -> BlockNumber {
+	storage::get(VOTING_PERIOD)
+		.expect("all core parameters of council module must be in place")
+}
+
+/// How often (in blocks) new public referenda are launched.
+pub fn launch_period() -> BlockNumber {
+	storage::get(LAUNCH_PERIOD)
+		.expect("all core parameters of council module must be in place")
+}
+
+/// The public proposals. Unsorted.
+pub fn public_props() -> Vec<(PropIndex, Proposal)> {
+	storage::get_or_default(PUBLIC_PROPS)
+}
+
+/// Get the amount locked in support of `proposal`; false if proposal isn't a valid proposal
+/// index.
+pub fn locked_for(proposal: PropIndex) -> Option<Balance> {
+	storage::get(&proposal.to_keyed_vec(LOCKED_FOR))
+}
+
+/// Return true if `ref_index` is an on-going referendum.
+pub fn is_active_referendum(ref_index: ReferendumIndex) -> bool {
+	storage::exists(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF))
+}
+
+/// Get the voters for the current proposal.
+pub fn voters_for(ref_index: ReferendumIndex) -> Vec<AccountId> {
+	storage::get_or_default(&ref_index.to_keyed_vec(VOTERS))
+}
+
+/// Get the vote, if Some, of `who`.
+pub fn vote_of(who: &AccountId, ref_index: ReferendumIndex) -> Option<bool> {
+	storage::get(&(*who, ref_index).to_keyed_vec(VOTE_OF))
+}
+
+/// Get the info concerning the next referendum.
+pub fn referendum_info(ref_index: ReferendumIndex) -> Option<(BlockNumber, Proposal, VoteThreshold)> {
+	storage::get(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF))
+}
+
+/// Get all referendums ready for tally at block `n`.
+pub fn maturing_referendums_at(n: BlockNumber) -> Vec<(ReferendumIndex, BlockNumber, Proposal, VoteThreshold)> {
+	let next: ReferendumIndex = storage::get_or_default(NEXT_TALLY);
+	let last: ReferendumIndex = storage::get_or_default(REFERENDUM_COUNT);
+	(next..last).into_iter()
+		.filter_map(|i| referendum_info(i).map(|(n, p, t)| (i, n, p, t)))
+		.take_while(|&(_, block_number, _, _)| block_number == n)
+		.collect()
+}
+
+/// Get the voters for the current proposal.
+pub fn tally(ref_index: ReferendumIndex) -> (staking::Balance, staking::Balance) {
+	voters_for(ref_index).iter()
+		.map(|a| (staking::balance(a), vote_of(a, ref_index).expect("all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed")))
+		.map(|(bal, vote)| if vote { (bal, 0) } else { (0, bal) })
+		.fold((0, 0), |(a, b), (c, d)| (a + c, b + d))
+}
+
+/// Get the next free referendum index, aka the number of referendums started so far.
+pub fn next_free_ref_index() -> ReferendumIndex {
+	storage::get_or_default(REFERENDUM_COUNT)
+}
 
 pub mod public {
 	use super::*;
 
-	/// Get the voters for the current proposal.
-	pub fn voters() -> Vec<AccountId> {
-		storage::get_or_default(VOTERS)
-	}
+	/// Propose a sensitive action to be taken.
+	pub fn propose(signed: &AccountId, proposal: &Proposal, lock: Balance) {
+		let b = staking::balance(signed);
+		assert!(b >= lock);
 
-	/// Get the vote, if Some, of `who`.
-	pub fn vote_of(who: &AccountId) -> Option<bool> {
-		storage::get(&who.to_keyed_vec(VOTE_OF))
-	}
+		staking::internal::set_balance(signed, b - lock);
 
-	/// Get the voters for the current proposal.
-	pub fn tally() -> (staking::Balance, staking::Balance) {
-		voters().iter()
-			.map(|a| (staking::balance(a), vote_of(a).expect("all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed")))
-			.map(|(bal, vote)| if vote { (bal, 0) } else { (0, bal) })
-			.fold((0, 0), |(a, b), (c, d)| (a + c, b + d))
+		let index: PropIndex = storage::get_or_default(PUBLIC_PROP_COUNT);
+		storage::put(PUBLIC_PROP_COUNT, &(index + 1));
+		storage::put(&index.to_keyed_vec(LOCKED_FOR), &lock);
+
+		let mut props: Vec<(PropIndex, Proposal)> = storage::get_or_default(PUBLIC_PROPS);
+		props.push((index, proposal.clone()));
+		storage::put(PUBLIC_PROPS, &props);
 	}
 
 	/// Propose a sensitive action to be taken.
-	pub fn propose(validator: &AccountId, proposal: &Proposal) {
-		if storage::exists(CURRENT_PROPOSAL) {
-			panic!("there may only be one proposal per era.");
-		}
-		storage::put(CURRENT_PROPOSAL, proposal);
+	pub fn second(signed: &AccountId, proposal: PropIndex, lock: Balance) {
+		let b = staking::balance(signed);
+		assert!(b >= lock);
+		let key = proposal.to_keyed_vec(LOCKED_FOR);
+		let balance: Balance = storage::get(&key).expect("can only second an existing proposal");
+
+		staking::internal::set_balance(signed, b - lock);
+		storage::put(&key, &(balance + lock));
 	}
 
-	/// Vote for or against the proposal.
-	pub fn vote(who: &AccountId, era_index: BlockNumber, way: bool) {
-		if era_index != staking::current_era() {
-			panic!("approval vote applied on non-current era.")
+	/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
+	/// false would be a vote to keep the status quo..
+	pub fn vote(signed: &AccountId, ref_index: ReferendumIndex, approve_proposal: bool) {
+		if !is_active_referendum(ref_index) {
+			panic!("vote given for invalid referendum.")
 		}
-		if !storage::exists(CURRENT_PROPOSAL) {
-			panic!("there must be a proposal in order to approve.");
-		}
-		if staking::balance(who) == 0 {
+		if staking::balance(signed) == 0 {
 			panic!("transactor must have balance to signal approval.");
 		}
-		let key = who.to_keyed_vec(VOTE_OF);
+		let key = (*signed, ref_index).to_keyed_vec(VOTE_OF);
 		if !storage::exists(&key) {
-			let mut voters = voters();
-			voters.push(who.clone());
+			let mut voters = voters_for(ref_index);
+			voters.push(signed.clone());
 			storage::put(VOTERS, &voters);
 		}
-		storage::put(&key, &way);
+		storage::put(&key, &approve_proposal);
 	}
 }
 
 pub mod privileged {
 	use super::*;
 
-	pub fn clear_proposal() {
-		for v in public::voters() {
-			storage::kill(&v.to_keyed_vec(VOTE_OF));
+	/// Can be called directly by the council.
+	pub fn start_referendum(
+		proposal: Proposal,
+		vote_threshold: VoteThreshold
+	) {
+		inject_referendum(system::block_number() + voting_period(), proposal, vote_threshold);
+	}
+
+	/// Remove a referendum.
+	pub fn clear_referendum(ref_index: ReferendumIndex) {
+		for v in voters_for(ref_index) {
+			storage::kill(&(v, ref_index).to_keyed_vec(VOTE_OF));
 		}
-		storage::kill(VOTERS);
+		storage::kill(&ref_index.to_keyed_vec(VOTERS));
 	}
 }
 
@@ -94,21 +224,49 @@ pub mod internal {
 	use dispatch::enact_proposal;
 
 	/// Current era is ending; we should finish up any proposals.
-	pub fn end_of_an_era() {
-		// tally up votes for the current proposal, if any. enact if there are sufficient approvals.
-		if let Some(proposal) = storage::take::<Proposal>(CURRENT_PROPOSAL) {
-			let tally = public::tally();
-			let total_stake = staking::total_stake();
-			privileged::clear_proposal();
+	pub fn end_block() {
+		let now = system::block_number();
 
-			// TODO: protect against overflows.
-			let threshold = (tally.0 + tally.1).integer_sqrt() * tally.0 / total_stake.integer_sqrt();
+		// pick out another public referendum if it's time.
+		if now % launch_period() == 0 {
+			let mut public_props = public_props();
+			if let Some((winner_index, _)) = public_props.iter()
+				.enumerate()
+				.max_by_key(|x| locked_for((x.1).0))
+			{
+				let (_, proposal) = public_props.swap_remove(winner_index);
+				storage::put(PUBLIC_PROPS, &public_props);
 
-			if tally.1 < threshold {
-				enact_proposal(proposal);
+				inject_referendum(now + voting_period(), proposal, VoteThreshold::SuperMajorityApprove);
 			}
 		}
+
+		// tally up votes for any expiring referenda.
+		for (index, _, proposal, vote_threshold) in maturing_referendums_at(now) {
+			let (approve, against) = tally(index);
+			let total_stake = staking::total_stake();
+			privileged::clear_referendum(index);
+			if vote_threshold.approved(approve, against, total_stake) {
+				enact_proposal(proposal);
+			}
+			storage::put(NEXT_TALLY, &(index + 1));
+		}
 	}
+}
+
+/// Start a referendum
+fn inject_referendum(
+	end: BlockNumber,
+	proposal: Proposal,
+	vote_threshold: VoteThreshold
+) {
+	let ref_index: ReferendumIndex = storage::get_or_default(REFERENDUM_COUNT);
+	if ref_index > 0 && referendum_info(ref_index - 1).map(|i| i.0 < end).unwrap_or(false) {
+		panic!("Cannot inject a referendum that ends earlier than preceeding referendum");
+	}
+
+	storage::put(REFERENDUM_COUNT, &(ref_index + 1));
+	storage::put(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF), &(end, proposal, vote_threshold));
 }
 
 #[cfg(test)]
