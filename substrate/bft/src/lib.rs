@@ -518,6 +518,8 @@ mod tests {
 		fn evaluate(&self, proposal: &Block) -> Result<bool, Error> {
 			Ok(proposal.header.number == self.0)
 		}
+
+		fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior)>) {}
 	}
 
 	fn make_service(client: FakeClient, handle: Handle)
