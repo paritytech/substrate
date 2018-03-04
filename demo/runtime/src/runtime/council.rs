@@ -511,7 +511,7 @@ fn finalise_tally() {
 	}
 
 	// set the new council.
-	let new_council: Vec<_> = active_council()
+	let mut new_council: Vec<_> = active_council()
 		.into_iter()
 		.skip(expiring.len())
 		.chain(leaderboard.iter()
@@ -521,6 +521,7 @@ fn finalise_tally() {
 			.cloned()
 			.map(|(_, a)| (a, new_expiry)))
 		.collect();
+	new_council.sort_by_key(|&(_, expiry)| expiry);
 	storage::put(ACTIVE_COUNCIL, &new_council);
 
 	// clear all except runners-up from candidate list.
@@ -530,7 +531,7 @@ fn finalise_tally() {
 		.rev()
 		.take_while(|&(b, _)| b != 0)
 		.skip(coming as usize)
-		.map(|(_, a)| (a, candidate_reg_info(&a).expect("runner up must b registered").1));
+		.map(|(_, a)| (a, candidate_reg_info(&a).expect("runner up must be registered").1));
 	let mut count = 0u32;
 	for (address, slot) in runners_up {
 		new_candidates[slot as usize] = address;
