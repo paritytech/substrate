@@ -26,9 +26,10 @@ use ::{AuthorityId, Signature};
 #[repr(u8)]
 enum ActionKind {
 	Propose = 1,
-	Prepare = 2,
-	Commit = 3,
-	AdvanceRound = 4,
+	ProposeHeader = 2,
+	Prepare = 3,
+	Commit = 4,
+	AdvanceRound = 5,
 }
 
 /// Actions which can be taken during the BFT process.
@@ -37,6 +38,9 @@ enum ActionKind {
 pub enum Action {
 	/// Proposal of a block candidate.
 	Propose(u32, Block),
+	/// Proposal header of a block candidate. Accompanies any proposal,
+	/// but is used for misbehavior reporting since blocks themselves are big.
+	ProposeHeader(u32, HeaderHash),
 	/// Preparation to commit for a candidate.
 	Prepare(u32, HeaderHash),
 	/// Vote to commit to a candidate.
@@ -53,6 +57,11 @@ impl Slicable for Action {
 				v.push(ActionKind::Propose as u8);
 				round.using_encoded(|s| v.extend(s));
 				block.using_encoded(|s| v.extend(s));
+			}
+			Action::ProposeHeader(ref round, ref hash) => {
+				v.push(ActionKind::ProposeHeader as u8);
+				round.using_encoded(|s| v.extend(s));
+				hash.using_encoded(|s| v.extend(s));
 			}
 			Action::Prepare(ref round, ref hash) => {
 				v.push(ActionKind::Prepare as u8);
@@ -78,6 +87,11 @@ impl Slicable for Action {
 			Some(x) if x == ActionKind::Propose as u8 => {
 				let (round, block) = try_opt!(Slicable::decode(value));
 				Some(Action::Propose(round, block))
+			}
+			Some(x) if x == ActionKind::ProposeHeader as u8 => {
+				let (round, hash) = try_opt!(Slicable::decode(value));
+
+				Some(Action::ProposeHeader(round, hash))
 			}
 			Some(x) if x == ActionKind::Prepare as u8 => {
 				let (round, hash) = try_opt!(Slicable::decode(value));
