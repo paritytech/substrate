@@ -23,7 +23,7 @@ use runtime_io::{print, blake2_256};
 use codec::KeyedVec;
 use runtime_support::{storage, StorageVec};
 use demo_primitives::{BlockNumber, AccountId};
-use runtime::{system, session, governance};
+use runtime::{system, session};
 
 /// The balance of an account.
 pub type Balance = u64;
@@ -406,9 +406,6 @@ pub mod internal {
 /// NOTE: This always happens immediately before a session change to ensure that new validators
 /// get a chance to set their session keys.
 fn new_era() {
-	// Inform governance module that it's the end of an era
-	governance::internal::end_of_an_era();
-
 	// Increment current era.
 	storage::put(CURRENT_ERA, &(current_era() + 1));
 

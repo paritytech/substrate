@@ -89,6 +89,26 @@ impl<T: EndianSensitive> Slicable for T {
 	}
 }
 
+impl Slicable for Option<bool> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u8::decode(input).and_then(|v| match v {
+			0 => Some(Some(false)),
+			1 => Some(Some(true)),
+			2 => Some(None),
+			_ => None,
+		})
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		match *self {
+			Some(false) => 0u8,
+			Some(true) => 1u8,
+			None => 2u8,
+		}.using_encoded(f)
+	}
+}
+impl NonTrivialSlicable for Option<bool> {}
+
 impl Slicable for Vec<u8> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).and_then(move |len| {

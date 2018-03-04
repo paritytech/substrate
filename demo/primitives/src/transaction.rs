@@ -44,10 +44,6 @@ enum InternalFunctionId {
 	StakingSetValidatorCount = 0x22,
 	/// Force a new staking era.
 	StakingForceNewEra = 0x23,
-
-	/// Set the per-mille of validator approval required for governance changes.
-	GovernanceSetApprovalPpmRequired = 0x30,
-
 }
 
 impl InternalFunctionId {
@@ -61,7 +57,6 @@ impl InternalFunctionId {
 			InternalFunctionId::StakingSetBondingDuration,
 			InternalFunctionId::StakingSetValidatorCount,
 			InternalFunctionId::StakingForceNewEra,
-			InternalFunctionId::GovernanceSetApprovalPpmRequired,
 		];
 		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
@@ -85,9 +80,6 @@ pub enum Proposal {
 	StakingSetValidatorCount(u32),
 	/// Force a new staking era.
 	StakingForceNewEra,
-	/// Set the per-mille of validator approval required for governance changes.
-	GovernanceSetApprovalPpmRequired(u32),
-
 }
 
 impl Slicable for Proposal {
@@ -106,8 +98,6 @@ impl Slicable for Proposal {
 			InternalFunctionId::StakingSetValidatorCount =>
 				Proposal::StakingSetValidatorCount(try_opt!(Slicable::decode(input))),
 			InternalFunctionId::StakingForceNewEra => Proposal::StakingForceNewEra,
-			InternalFunctionId::GovernanceSetApprovalPpmRequired =>
-				Proposal::GovernanceSetApprovalPpmRequired(try_opt!(Slicable::decode(input))),
 		};
 
 		Some(function)
@@ -142,10 +132,6 @@ impl Slicable for Proposal {
 			Proposal::StakingForceNewEra => {
 				(InternalFunctionId::StakingForceNewEra as u8).using_encoded(|s| v.extend(s));
 			}
-			Proposal::GovernanceSetApprovalPpmRequired(ref data) => {
-				(InternalFunctionId::GovernanceSetApprovalPpmRequired as u8).using_encoded(|s| v.extend(s));
-				data.using_encoded(|s| v.extend(s));
-			}
 		}
 
 		v
@@ -167,10 +153,6 @@ enum FunctionId {
 	StakingUnstake = 0x21,
 	/// Staking subsystem: transfer stake.
 	StakingTransfer = 0x22,
-	/// Make a proposal for the governance system.
-	GovernancePropose = 0x30,
-	/// Approve a proposal for the governance system.
-	GovernanceApprove = 0x31,
 }
 
 impl FunctionId {
@@ -179,7 +161,7 @@ impl FunctionId {
 		use self::*;
 		let functions = [FunctionId::StakingStake, FunctionId::StakingUnstake,
 			FunctionId::StakingTransfer, FunctionId::SessionSetKey, FunctionId::TimestampSet,
-			FunctionId::GovernancePropose, FunctionId::GovernanceApprove];
+			];
 		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
 }
@@ -198,10 +180,6 @@ pub enum Function {
 	StakingUnstake,
 	/// Staking subsystem: transfer stake.
 	StakingTransfer(::AccountId, u64),
-	/// Make a proposal for the governance system.
-	GovernancePropose(Proposal),
-	/// Approve a proposal for the governance system.
-	GovernanceApprove(BlockNumber),
 }
 
 impl Slicable for Function {
@@ -220,10 +198,6 @@ impl Slicable for Function {
 
 				Function::StakingTransfer(to, amount)
 			}
-			FunctionId::GovernancePropose =>
-				Function::GovernancePropose(try_opt!(Slicable::decode(input))),
-			FunctionId::GovernanceApprove =>
-				Function::GovernanceApprove(try_opt!(Slicable::decode(input))),
 		})
 	}
 
@@ -248,14 +222,6 @@ impl Slicable for Function {
 				(FunctionId::StakingTransfer as u8).using_encoded(|s| v.extend(s));
 				to.using_encoded(|s| v.extend(s));
 				amount.using_encoded(|s| v.extend(s));
-			}
-			Function::GovernancePropose(ref data) => {
-				(FunctionId::GovernancePropose as u8).using_encoded(|s| v.extend(s));
-				data.using_encoded(|s| v.extend(s));
-			}
-			Function::GovernanceApprove(ref data) => {
-				(FunctionId::GovernanceApprove as u8).using_encoded(|s| v.extend(s));
-				data.using_encoded(|s| v.extend(s));
 			}
 		}
 

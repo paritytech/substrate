@@ -17,7 +17,7 @@
 //! Democratic system: Handles administration of general stakeholder voting.
 
 use demo_primitives::Proposal;
-use runtime::{staking, system, session, governance};
+use runtime::{staking, system, session};
 
 pub fn enact_proposal(proposal: Proposal) {
 	match proposal {
@@ -41,9 +41,6 @@ pub fn enact_proposal(proposal: Proposal) {
 		}
 		Proposal::StakingForceNewEra => {
 			staking::privileged::force_new_era()
-		}
-		Proposal::GovernanceSetApprovalPpmRequired(value) => {
-			governance::privileged::set_approval_ppm_required(value);
 		}
 	}
 }
