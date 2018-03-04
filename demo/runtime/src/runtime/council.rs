@@ -77,35 +77,35 @@ use runtime::staking::Balance;
 // after each vote as all but K entries are cleared. newly registering candidates must use cleared
 // entries before they increase the capacity.
 
-type VoteIndex = u32;
+pub type VoteIndex = u32;
 
 // parameters
-const CANDIDACY_BOND: &[u8] = b"cou:cbo";
-const VOTING_BOND: &[u8] = b"cou:vbo";
-const PRESENT_SLASH_PER_VOTER: &[u8] = b"cou:pss";
-const CARRY_COUNT: &[u8] = b"cou:cco";
-const PRESENTATION_DURATION: &[u8] = b"cou:pdu";
-const INACTIVE_GRACE_PERIOD: &[u8] = b"cou:vgp";
-const VOTING_PERIOD: &[u8] = b"cou:per";
-const TERM_DURATION: &[u8] = b"cou:trm";
-const DESIRED_SEATS: &[u8] = b"cou:sts";
+pub const CANDIDACY_BOND: &[u8] = b"cou:cbo";
+pub const VOTING_BOND: &[u8] = b"cou:vbo";
+pub const PRESENT_SLASH_PER_VOTER: &[u8] = b"cou:pss";
+pub const CARRY_COUNT: &[u8] = b"cou:cco";
+pub const PRESENTATION_DURATION: &[u8] = b"cou:pdu";
+pub const INACTIVE_GRACE_PERIOD: &[u8] = b"cou:vgp";
+pub const VOTING_PERIOD: &[u8] = b"cou:per";
+pub const TERM_DURATION: &[u8] = b"cou:trm";
+pub const DESIRED_SEATS: &[u8] = b"cou:sts";
 
 // permanent state (always relevant, changes only at the finalisation of voting)
-const ACTIVE_COUNCIL: &[u8] = b"cou:act";
-const VOTE_COUNT: &[u8] = b"cou:vco";
+pub const ACTIVE_COUNCIL: &[u8] = b"cou:act";
+pub const VOTE_COUNT: &[u8] = b"cou:vco";
 
 // persistent state (always relevant, changes constantly)
-const APPROVALS_OF: &[u8] = b"cou:apr:";		// Vec<bool>
-const REGISTER_INFO_OF: &[u8] = b"cou:reg:";	// Candidate -> (VoteIndex, u32)
-const LAST_ACTIVE_OF: &[u8] = b"cou:lac:";		// Voter -> VoteIndex
-const VOTERS: &[u8] = b"cou:vrs";				// Vec<AccountId>
-const CANDIDATES: &[u8] = b"cou:can";			// Vec<AccountId>, has holes
-const CANDIDATE_COUNT: &[u8] = b"cou:cnc";		// u32
+pub const APPROVALS_OF: &[u8] = b"cou:apr:";		// Vec<bool>
+pub const REGISTER_INFO_OF: &[u8] = b"cou:reg:";	// Candidate -> (VoteIndex, u32)
+pub const LAST_ACTIVE_OF: &[u8] = b"cou:lac:";		// Voter -> VoteIndex
+pub const VOTERS: &[u8] = b"cou:vrs";				// Vec<AccountId>
+pub const CANDIDATES: &[u8] = b"cou:can";			// Vec<AccountId>, has holes
+pub const CANDIDATE_COUNT: &[u8] = b"cou:cnc";		// u32
 
 // temporary state (only relevant during finalisation/presentation)
-const NEXT_FINALISE: &[u8] = b"cou:nxt";
-const SNAPSHOTED_STAKES: &[u8] = b"cou:sss";		// Vec<Balance>
-const LEADERBOARD: &[u8] = b"cou:win";				// Vec<(Balance, AccountId)> ORDERED low -> high
+pub const NEXT_FINALISE: &[u8] = b"cou:nxt";
+pub const SNAPSHOTED_STAKES: &[u8] = b"cou:sss";		// Vec<Balance>
+pub const LEADERBOARD: &[u8] = b"cou:win";				// Vec<(Balance, AccountId)> ORDERED low -> high
 
 /// How much should be locked up in order to submit one's candidacy.
 pub fn candidacy_bond() -> Balance {
@@ -552,6 +552,30 @@ fn finalise_tally() {
 }
 
 #[cfg(test)]
+pub mod testing {
+	use super::*;
+	use runtime_io::{twox_128, TestExternalities};
+	use codec::Joiner;
+	use runtime::democracy;
+
+	pub fn externalities() -> TestExternalities {
+		let extras: TestExternalities = map![
+			twox_128(CANDIDACY_BOND).to_vec() => vec![].and(&9u64),
+			twox_128(VOTING_BOND).to_vec() => vec![].and(&3u64),
+			twox_128(PRESENT_SLASH_PER_VOTER).to_vec() => vec![].and(&1u64),
+			twox_128(CARRY_COUNT).to_vec() => vec![].and(&2u64),
+			twox_128(PRESENTATION_DURATION).to_vec() => vec![].and(&2u64),
+			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&4u64),
+			twox_128(TERM_DURATION).to_vec() => vec![].and(&5u64),
+			twox_128(DESIRED_SEATS).to_vec() => vec![].and(&2u64),
+			twox_128(INACTIVE_GRACE_PERIOD).to_vec() => vec![].and(&1u32)
+		];
+		democracy::testing::externalities()
+			.into_iter().chain(extras.into_iter()).collect()
+	}
+}
+
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
@@ -562,46 +586,7 @@ mod tests {
 	use runtime::{staking, session, democracy};
 
 	fn new_test_ext() -> TestExternalities {
-		let alice = Keyring::Alice.to_raw_public();
-		let bob = Keyring::Bob.to_raw_public();
-		let charlie = Keyring::Charlie.to_raw_public();
-		let dave = Keyring::Dave.to_raw_public();
-		let eve = Keyring::Eve.to_raw_public();
-		let ferdie = Keyring::Ferdie.to_raw_public();
-		let one = Keyring::One.to_raw_public();
-
-		map![
-			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => alice.to_vec(),
-			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => bob.to_vec(),
-			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => charlie.to_vec(),
-			twox_128(b"sta:wil:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => alice.to_vec(),
-			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => bob.to_vec(),
-			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => charlie.to_vec(),
-			twox_128(&alice.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&10u64),
-			twox_128(&bob.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&20u64),
-			twox_128(&charlie.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&30u64),
-			twox_128(&dave.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&40u64),
-			twox_128(&eve.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&50u64),
-			twox_128(&ferdie.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&60u64),
-			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&1u64),
-			twox_128(b"sta:tot").to_vec() => vec![].and(&210u64),
-			twox_128(b"sta:spe").to_vec() => vec![].and(&1u64),
-			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].and(&1u64),
-
-			twox_128(CANDIDACY_BOND).to_vec() => vec![].and(&9u64),
-			twox_128(VOTING_BOND).to_vec() => vec![].and(&3u64),
-			twox_128(PRESENT_SLASH_PER_VOTER).to_vec() => vec![].and(&1u64),
-			twox_128(CARRY_COUNT).to_vec() => vec![].and(&2u64),
-			twox_128(PRESENTATION_DURATION).to_vec() => vec![].and(&2u64),
-			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&4u64),
-			twox_128(TERM_DURATION).to_vec() => vec![].and(&5u64),
-			twox_128(DESIRED_SEATS).to_vec() => vec![].and(&2u64),
-			twox_128(INACTIVE_GRACE_PERIOD).to_vec() => vec![].and(&1u32)
-		]
+		testing::externalities()
 	}
 
 	#[test]

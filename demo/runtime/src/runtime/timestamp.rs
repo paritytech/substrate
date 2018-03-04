@@ -20,7 +20,7 @@ use runtime_support::storage;
 
 pub type Timestamp = u64;
 
-const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
+pub const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
 
 /// Get the current time.
 pub fn get() -> Timestamp {

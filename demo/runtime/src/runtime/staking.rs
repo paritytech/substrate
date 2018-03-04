@@ -31,24 +31,26 @@ pub type Balance = u64;
 /// The amount of bonding period left in an account. Measured in eras.
 pub type Bondage = u64;
 
-struct IntentionStorageVec {}
+pub const BONDING_DURATION: &[u8] = b"sta:loc";
+pub const VALIDATOR_COUNT: &[u8] = b"sta:vac";
+pub const SESSIONS_PER_ERA: &[u8] = b"sta:spe";
+pub const NEXT_SESSIONS_PER_ERA: &[u8] = b"sta:nse";
+pub const CURRENT_ERA: &[u8] = b"sta:era";
+pub const LAST_ERA_LENGTH_CHANGE: &[u8] = b"sta:lec";
+pub const TOTAL_STAKE: &[u8] = b"sta:tot";
+pub const INTENTION_AT: &[u8] = b"sta:wil:";
+pub const INTENTION_COUNT: &[u8] = b"sta:wil:len";
+
+pub const BALANCE_OF: &[u8] = b"sta:bal:";
+pub const BONDAGE_OF: &[u8] = b"sta:bon:";
+pub const CODE_OF: &[u8] = b"sta:cod:";
+pub const STORAGE_OF: &[u8] = b"sta:sto:";
+
+pub struct IntentionStorageVec {}
 impl StorageVec for IntentionStorageVec {
 	type Item = AccountId;
-	const PREFIX: &'static[u8] = b"sta:wil:";
+	const PREFIX: &'static[u8] = INTENTION_AT;
 }
-
-const BONDING_DURATION: &[u8] = b"sta:loc";
-const VALIDATOR_COUNT: &[u8] = b"sta:vac";
-const SESSIONS_PER_ERA: &[u8] = b"sta:spe";
-const NEXT_SESSIONS_PER_ERA: &[u8] = b"sta:nse";
-const CURRENT_ERA: &[u8] = b"sta:era";
-const LAST_ERA_LENGTH_CHANGE: &[u8] = b"sta:lec";
-const TOTAL_STAKE: &[u8] = b"sta:tot";
-
-const BALANCE_OF: &[u8] = b"sta:bal:";
-const BONDAGE_OF: &[u8] = b"sta:bon:";
-const CODE_OF: &[u8] = b"sta:cod:";
-const STORAGE_OF: &[u8] = b"sta:sto:";
 
 /// The length of the bonding duration in eras.
 pub fn bonding_duration() -> BlockNumber {
@@ -435,6 +437,33 @@ fn new_era() {
 }
 
 #[cfg(test)]
+pub mod testing {
+	use super::*;
+	use runtime_io::{twox_128, TestExternalities};
+	use codec::{Joiner, KeyedVec};
+	use keyring::Keyring;
+	use runtime::session;
+
+	pub fn externalities(session_length: u64, sessions_per_era: u64, current_era: u64) -> TestExternalities {
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
+		let three = [3u8; 32];
+
+		let extras: TestExternalities = map![
+			twox_128(INTENTION_COUNT).to_vec() => vec![].and(&3u32),
+			twox_128(&0u32.to_keyed_vec(INTENTION_AT)).to_vec() => one.to_vec(),
+			twox_128(&1u32.to_keyed_vec(INTENTION_AT)).to_vec() => two.to_vec(),
+			twox_128(&2u32.to_keyed_vec(INTENTION_AT)).to_vec() => three.to_vec(),
+			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&sessions_per_era),
+			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
+			twox_128(CURRENT_ERA).to_vec() => vec![].and(&current_era),
+			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+		];
+		session::testing::externalities(session_length).into_iter().chain(extras.into_iter()).collect()
+	}
+}
+
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use super::internal::*;
@@ -456,10 +485,10 @@ mod tests {
 		let four = [4u8; 32];
 
 		let mut t: TestExternalities = map![
-			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].and(&2u32),
-			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![10; 32],
-			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => vec![20; 32],
+			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
+			twox_128(session::VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
+			twox_128(&0u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => vec![10; 32],
+			twox_128(&1u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => vec![20; 32],
 			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&2u64),
 			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
 			twox_128(BONDING_DURATION).to_vec() => vec![].and(&3u64),
@@ -526,7 +555,7 @@ mod tests {
 	#[test]
 	fn staking_eras_work() {
 		let mut t: TestExternalities = map![
-			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
+			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
 			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&2u64)
 		];
 		with_externalities(&mut t, || {

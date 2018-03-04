@@ -70,19 +70,24 @@ impl VoteThreshold {
 }
 
 // public proposals
-const PUBLIC_PROP_COUNT: &[u8] = b"dem:ppc";	// PropIndex
-const PUBLIC_PROPS: &[u8] = b"dem:pub";			// Vec<(PropIndex, Proposal)>
-const DEPOSIT_OF: &[u8] = b"dem:dep:";			// PropIndex -> (Balance, Vec<AccountId>)
-const LAUNCH_PERIOD: &[u8] = b"dem:lau";		// BlockNumber
-const MINIMUM_DEPOSIT: &[u8] = b"dem:min";		// Balance
+pub const PUBLIC_PROP_COUNT: &[u8] = b"dem:ppc";	// PropIndex
+pub const PUBLIC_PROPS: &[u8] = b"dem:pub";			// Vec<(PropIndex, Proposal)>
+pub const DEPOSIT_OF: &[u8] = b"dem:dep:";			// PropIndex -> (Balance, Vec<AccountId>)
+pub const LAUNCH_PERIOD: &[u8] = b"dem:lau";		// BlockNumber
+pub const MINIMUM_DEPOSIT: &[u8] = b"dem:min";		// Balance
+
+// council proposals
+pub const COUNCIL_PROPOSAL: &[u8] = b"dem:cou:pro";	// (BlockNumber, Proposal)
+pub const COUNCIL_VOTE_OF: &[u8] = b"dem:cou:vot:";	// AccountId -> CouncilVote
+pub const COUNCIL_VOTERS: &[u8] = b"dem:cou:vts";	// Vec<AccountId>
 
 // referenda
-const VOTING_PERIOD: &[u8] = b"dem:per";		// BlockNumber
-const REFERENDUM_COUNT: &[u8] = b"dem:rco";		// ReferendumIndex
-const NEXT_TALLY: &[u8] = b"dem:nxt";			// ReferendumIndex
-const REFERENDUM_INFO_OF: &[u8] = b"dem:pro:";	// ReferendumIndex -> (BlockNumber, Proposal, VoteThreshold)
-const VOTERS_FOR: &[u8] = b"dem:vtr:";			// ReferendumIndex -> Vec<AccountId>
-const VOTE_OF: &[u8] = b"dem:vot:";				// (ReferendumIndex, AccountId) -> bool
+pub const VOTING_PERIOD: &[u8] = b"dem:per";		// BlockNumber
+pub const REFERENDUM_COUNT: &[u8] = b"dem:rco";		// ReferendumIndex
+pub const NEXT_TALLY: &[u8] = b"dem:nxt";			// ReferendumIndex
+pub const REFERENDUM_INFO_OF: &[u8] = b"dem:pro:";	// ReferendumIndex -> (BlockNumber, Proposal, VoteThreshold)
+pub const VOTERS_FOR: &[u8] = b"dem:vtr:";			// ReferendumIndex -> Vec<AccountId>
+pub const VOTE_OF: &[u8] = b"dem:vot:";				// (ReferendumIndex, AccountId) -> bool
 
 /// The minimum amount to be used as a deposit for a public referendum proposal.
 pub fn minimum_deposit() -> Balance {
@@ -289,6 +294,52 @@ fn inject_referendum(
 }
 
 #[cfg(test)]
+pub mod testing {
+	use super::*;
+	use runtime_io::{twox_128, TestExternalities};
+	use codec::Joiner;
+	use keyring::Keyring;
+	use runtime::{session, staking};
+
+	pub fn externalities() -> TestExternalities {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let charlie = Keyring::Charlie.to_raw_public();
+		let dave = Keyring::Dave.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let ferdie = Keyring::Ferdie.to_raw_public();
+		let one = Keyring::One.to_raw_public();
+
+		map![
+			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
+			twox_128(session::VALIDATOR_COUNT).to_vec() => vec![].and(&3u32),
+			twox_128(&0u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => alice.to_vec(),
+			twox_128(&1u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => bob.to_vec(),
+			twox_128(&2u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => charlie.to_vec(),
+			twox_128(staking::INTENTION_COUNT).to_vec() => vec![].and(&3u32),
+			twox_128(&0u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => alice.to_vec(),
+			twox_128(&1u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => bob.to_vec(),
+			twox_128(&2u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => charlie.to_vec(),
+			twox_128(&alice.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&10u64),
+			twox_128(&bob.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&20u64),
+			twox_128(&charlie.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&30u64),
+			twox_128(&dave.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&40u64),
+			twox_128(&eve.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&50u64),
+			twox_128(&ferdie.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&60u64),
+			twox_128(&one.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&1u64),
+			twox_128(staking::TOTAL_STAKE).to_vec() => vec![].and(&210u64),
+			twox_128(staking::SESSIONS_PER_ERA).to_vec() => vec![].and(&1u64),
+			twox_128(staking::VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
+			twox_128(staking::CURRENT_ERA).to_vec() => vec![].and(&1u64),
+
+			twox_128(LAUNCH_PERIOD).to_vec() => vec![].and(&1u64),
+			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64),
+			twox_128(MINIMUM_DEPOSIT).to_vec() => vec![].and(&1u64)
+		]
+	}
+}
+
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
@@ -299,39 +350,7 @@ mod tests {
 	use runtime::{staking, session, democracy};
 
 	fn new_test_ext() -> TestExternalities {
-		let alice = Keyring::Alice.to_raw_public();
-		let bob = Keyring::Bob.to_raw_public();
-		let charlie = Keyring::Charlie.to_raw_public();
-		let dave = Keyring::Dave.to_raw_public();
-		let eve = Keyring::Eve.to_raw_public();
-		let ferdie = Keyring::Ferdie.to_raw_public();
-		let one = Keyring::One.to_raw_public();
-
-		map![
-			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => alice.to_vec(),
-			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => bob.to_vec(),
-			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => charlie.to_vec(),
-			twox_128(b"sta:wil:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => alice.to_vec(),
-			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => bob.to_vec(),
-			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => charlie.to_vec(),
-			twox_128(&alice.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&10u64),
-			twox_128(&bob.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&20u64),
-			twox_128(&charlie.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&30u64),
-			twox_128(&dave.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&40u64),
-			twox_128(&eve.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&50u64),
-			twox_128(&ferdie.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&60u64),
-			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![].and(&1u64),
-			twox_128(b"sta:tot").to_vec() => vec![].and(&210u64),
-			twox_128(b"sta:spe").to_vec() => vec![].and(&1u64),
-			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].and(&1u64),
-			twox_128(LAUNCH_PERIOD).to_vec() => vec![].and(&1u64),
-			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64),
-			twox_128(MINIMUM_DEPOSIT).to_vec() => vec![].and(&1u64)
-		]
+		testing::externalities()
 	}
 
 	#[test]
