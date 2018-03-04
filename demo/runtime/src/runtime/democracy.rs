@@ -70,7 +70,7 @@ impl VoteThreshold {
 }
 
 // public proposals
-const PUBLIC_PROP_COUNT: &[u8] = b"dem:cou";	// PropIndex
+const PUBLIC_PROP_COUNT: &[u8] = b"dem:ppc";	// PropIndex
 const PUBLIC_PROPS: &[u8] = b"dem:pub";			// Vec<(PropIndex, Proposal)>
 const DEPOSIT_OF: &[u8] = b"dem:dep:";			// PropIndex -> (Balance, Vec<AccountId>)
 const LAUNCH_PERIOD: &[u8] = b"dem:lau";		// BlockNumber
@@ -78,7 +78,7 @@ const MINIMUM_DEPOSIT: &[u8] = b"dem:min";		// Balance
 
 // referenda
 const VOTING_PERIOD: &[u8] = b"dem:per";		// BlockNumber
-const REFERENDUM_COUNT: &[u8] = b"dem:cou";		// ReferendumIndex
+const REFERENDUM_COUNT: &[u8] = b"dem:rco";		// ReferendumIndex
 const NEXT_TALLY: &[u8] = b"dem:nxt";			// ReferendumIndex
 const REFERENDUM_INFO_OF: &[u8] = b"dem:pro:";	// ReferendumIndex -> (BlockNumber, Proposal, VoteThreshold)
 const VOTERS_FOR: &[u8] = b"dem:vtr:";			// ReferendumIndex -> Vec<AccountId>
@@ -103,13 +103,13 @@ pub fn launch_period() -> BlockNumber {
 }
 
 /// The public proposals. Unsorted.
-pub fn public_props() -> Vec<(PropIndex, Proposal)> {
+pub fn public_props() -> Vec<(PropIndex, Proposal, AccountId)> {
 	storage::get_or_default(PUBLIC_PROPS)
 }
 
 /// Those who have locked a deposit.
 pub fn deposit_lockers(proposal: PropIndex) -> Option<(Balance, Vec<AccountId>)> {
-	storage::get(DEPOSIT_OF)
+	storage::get(&proposal.to_keyed_vec(DEPOSIT_OF))
 }
 
 /// Get the amount locked in support of `proposal`; false if proposal isn't a valid proposal
@@ -176,8 +176,8 @@ pub mod public {
 		storage::put(PUBLIC_PROP_COUNT, &(index + 1));
 		storage::put(&index.to_keyed_vec(DEPOSIT_OF), &(value, vec![*signed]));
 
-		let mut props: Vec<(PropIndex, Proposal)> = storage::get_or_default(PUBLIC_PROPS);
-		props.push((index, proposal.clone()));
+		let mut props = public_props();
+		props.push((index, proposal.clone(), *signed));
 		storage::put(PUBLIC_PROPS, &props);
 	}
 
@@ -244,9 +244,9 @@ pub mod internal {
 			let mut public_props = public_props();
 			if let Some((winner_index, _)) = public_props.iter()
 				.enumerate()
-				.max_by_key(|x| locked_for((x.1).0))
+				.max_by_key(|x| locked_for((x.1).0).expect("All current public proposals have an amount locked"))
 			{
-				let (prop_index, proposal) = public_props.swap_remove(winner_index);
+				let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
 				let (deposit, depositors): (Balance, Vec<AccountId>) =
 					storage::take(&prop_index.to_keyed_vec(DEPOSIT_OF))
 						.expect("depositors always exist for current proposals");
@@ -278,8 +278,8 @@ fn inject_referendum(
 	proposal: Proposal,
 	vote_threshold: VoteThreshold
 ) -> ReferendumIndex {
-	let ref_index: ReferendumIndex = storage::get_or_default(REFERENDUM_COUNT);
-	if ref_index > 0 && referendum_info(ref_index - 1).map(|i| i.0 < end).unwrap_or(false) {
+	let ref_index = next_free_ref_index();
+	if ref_index > 0 && referendum_info(ref_index - 1).map(|i| i.0 > end).unwrap_or(false) {
 		panic!("Cannot inject a referendum that ends earlier than preceeding referendum");
 	}
 
@@ -341,8 +341,89 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(launch_period(), 1u64);
 			assert_eq!(voting_period(), 1u64);
+			assert_eq!(minimum_deposit(), 1u64);
+			assert_eq!(next_free_ref_index(), 0u32);
 			assert_eq!(staking::sessions_per_era(), 1u64);
 			assert_eq!(staking::total_stake(), 210u64);
+		});
+	}
+
+	// TODO: test VoteThreshold
+
+	// fn proposal_with_deposit_below_minimum_should_panic()
+	// fn poor_seconder_should_panic()
+
+	#[test]
+	fn locked_for_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 2u64);
+			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(4), 4u64);
+			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(3), 3u64);
+			assert_eq!(locked_for(0), Some(2));
+			assert_eq!(locked_for(1), Some(4));
+			assert_eq!(locked_for(2), Some(3));
+		});
+	}
+
+	#[test]
+	fn single_proposal_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 1u64);
+			democracy::internal::end_block();
+
+			with_env(|e| e.block_number = 2);
+			let r = 0;
+			public::vote(&alice, r, true);
+
+			assert_eq!(next_free_ref_index(), 1);
+			assert_eq!(voters_for(r), vec![alice.clone()]);
+			assert_eq!(vote_of(&alice, r), Some(true));
+			assert_eq!(tally(r), (10, 0));
+
+			democracy::internal::end_block();
+			staking::internal::check_new_era();
+
+			assert_eq!(staking::era_length(), 2u64);
+		});
+	}
+
+	#[test]
+	fn runners_up_should_come_after() {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 0);
+			public::propose(&alice, &Proposal::StakingSetBondingDuration(2), 2u64);
+			public::propose(&alice, &Proposal::StakingSetBondingDuration(4), 4u64);
+			public::propose(&alice, &Proposal::StakingSetBondingDuration(3), 3u64);
+			democracy::internal::end_block();
+
+			with_env(|e| e.block_number = 1);
+			public::vote(&alice, 0, true);
+			democracy::internal::end_block();
+			staking::internal::check_new_era();
+			assert_eq!(staking::bonding_duration(), 4u64);
+
+			with_env(|e| e.block_number = 2);
+			public::vote(&alice, 1, true);
+			democracy::internal::end_block();
+			staking::internal::check_new_era();
+			assert_eq!(staking::bonding_duration(), 3u64);
+
+			with_env(|e| e.block_number = 3);
+			public::vote(&alice, 2, true);
+			democracy::internal::end_block();
+			staking::internal::check_new_era();
+			assert_eq!(staking::bonding_duration(), 2u64);
 		});
 	}
 
