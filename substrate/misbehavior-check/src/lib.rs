@@ -80,28 +80,34 @@ pub fn evaluate_misbehavior(
 mod tests {
 	use super::*;
 
-	use substrate_bft::generic::Message as GenericMessage;
+	use substrate_bft::generic;
 	use keyring::ed25519;
 	use keyring::Keyring;
 
 	fn sign_prepare(key: &ed25519::Pair, round: u32, hash: HeaderHash, parent_hash: HeaderHash) -> (HeaderHash, Signature) {
-		let sig = substrate_bft::sign_message(
-			GenericMessage::Prepare(round as _, hash),
+		let msg = substrate_bft::sign_message(
+			generic::Message::Vote(generic::Vote::Prepare(round as _, hash)),
 			key,
 			parent_hash
-		).signature.signature;
+		);
 
-		(hash, sig)
+		match msg {
+			generic::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
+			_ => panic!("signing vote leads to signed vote"),
+		}
 	}
 
 	fn sign_commit(key: &ed25519::Pair, round: u32, hash: HeaderHash, parent_hash: HeaderHash) -> (HeaderHash, Signature) {
-		let sig = substrate_bft::sign_message(
-			GenericMessage::Commit(round as _, hash),
+		let msg = substrate_bft::sign_message(
+			generic::Message::Vote(generic::Vote::Commit(round as _, hash)),
 			key,
 			parent_hash
-		).signature.signature;
+		);
 
-		(hash, sig)
+		match msg {
+			generic::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
+			_ => panic!("signing vote leads to signed vote"),
+		}
 	}
 
 	#[test]

@@ -602,6 +602,8 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 				parent_number: self.parent_number,
 				target,
 				misbehavior: match misbehavior {
+					GenericMisbehavior::ProposeOutOfTurn(_, _, _) => continue,
+					GenericMisbehavior::DoublePropose(_, _, _) => continue,
 					GenericMisbehavior::DoublePrepare(round, (h1, s1), (h2, s2))
 						=> MisbehaviorKind::BftDoublePrepare(round as u32, (h1, s1.signature), (h2, s2.signature)),
 					GenericMisbehavior::DoubleCommit(round, (h1, s1), (h2, s2))
