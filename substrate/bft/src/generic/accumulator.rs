@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
-use generic::{Vote, LocalizedMessage};
+use generic::{Vote, LocalizedMessage, LocalizedProposal};
 
 /// Justification for some state at a given round.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +122,13 @@ struct VoteCounts {
 	committed: usize,
 }
 
+#[derive(Debug)]
+struct Proposal<Candidate, Digest, Signature> {
+	proposal: Candidate,
+	digest: Digest,
+	digest_signature: Signature,
+}
+
 /// Misbehavior which can occur.
 #[derive(Debug, Clone)]
 pub enum Misbehavior<Digest, Signature> {
@@ -151,7 +158,7 @@ pub struct Accumulator<Candidate, Digest, AuthorityId, Signature>
 	round_number: usize,
 	threshold: usize,
 	round_proposer: AuthorityId,
-	proposal: Option<Candidate>,
+	proposal: Option<Proposal<Candidate, Digest, Signature>>,
 	prepares: HashMap<AuthorityId, (Digest, Signature)>,
 	commits: HashMap<AuthorityId, (Digest, Signature)>,
 	vote_counts: HashMap<Digest, VoteCounts>,
@@ -192,7 +199,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 	}
 
 	pub fn proposal(&self) -> Option<&Candidate> {
-		self.proposal.as_ref()
+		self.proposal.as_ref().map(|p| &p.proposal)
 	}
 
 	/// Inspect the current consensus state.
@@ -212,8 +219,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		}
 
 		match message {
-			LocalizedMessage::Propose(proposal) =>
-				self.import_proposal(proposal.proposal, proposal.sender, proposal.digest_signature),
+			LocalizedMessage::Propose(proposal) => self.import_proposal(proposal),
 			LocalizedMessage::Vote(vote) => {
 				let (sender, signature) = (vote.sender, vote.signature);
 				match vote.vote {
@@ -227,15 +233,39 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 
 	fn import_proposal(
 		&mut self,
-		proposal: Candidate,
-		sender: AuthorityId,
-		_digest_signature: Signature,
+		proposal: LocalizedProposal<Candidate, Digest, AuthorityId, Signature>,
 	) -> Result<(), Misbehavior<Digest, Signature>> {
-		// TODO: find a way to check for proposal misbehavior without opening up DoS vectors.
-		if sender != self.round_proposer || self.proposal.is_some() { return Ok(()) }
+		let sender = proposal.sender;
 
-		self.proposal = Some(proposal.clone());
-		self.state = State::Proposed(proposal);
+		if sender != self.round_proposer {
+			return Err(Misbehavior::ProposeOutOfTurn(
+				self.round_number,
+				proposal.digest,
+				proposal.digest_signature)
+			);
+		}
+
+		match self.proposal {
+			Some(ref p) if &p.digest != &proposal.digest => {
+				return Err(Misbehavior::DoublePropose(
+					self.round_number,
+					{
+						let old = self.proposal.as_ref().expect("just checked to be Some; qed");
+						(old.digest.clone(), old.digest_signature.clone())
+					},
+					(proposal.digest.clone(), proposal.digest_signature.clone())
+				))
+			}
+			_ => {},
+		}
+
+		self.proposal = Some(Proposal {
+			proposal: proposal.proposal.clone(),
+			digest: proposal.digest,
+			digest_signature: proposal.digest_signature,
+		});
+
+		self.state = State::Proposed(proposal.proposal);
 		Ok(())
 	}
 
@@ -423,13 +453,16 @@ mod tests {
 		let mut accumulator = Accumulator::<_, Digest, _, _>::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
-		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
+		let res = accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
 			sender: AuthorityId(5),
 			full_signature: Signature(999, 5),
 			digest_signature: Signature(999, 5),
 			proposal: Candidate(999),
+			digest: Digest(999),
 			round_number: 1,
-		})).unwrap();
+		}));
+
+		assert!(res.is_err());
 
 		assert_eq!(accumulator.state(), &State::Begin);
 
@@ -438,6 +471,7 @@ mod tests {
 			full_signature: Signature(999, 8),
 			digest_signature: Signature(999, 8),
 			proposal: Candidate(999),
+			digest: Digest(999),
 			round_number: 1,
 		})).unwrap();
 
@@ -455,6 +489,7 @@ mod tests {
 			digest_signature: Signature(999, 8),
 			round_number: 1,
 			proposal: Candidate(999),
+			digest: Digest(999),
 		})).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
@@ -492,6 +527,7 @@ mod tests {
 			digest_signature: Signature(999, 8),
 			round_number: 1,
 			proposal: Candidate(999),
+			digest: Digest(999),
 		})).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
@@ -553,6 +589,7 @@ mod tests {
 			digest_signature: Signature(999, 8),
 			round_number: 1,
 			proposal: Candidate(999),
+			digest: Digest(999),
 		})).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
@@ -709,5 +746,31 @@ mod tests {
 			assert!(res.is_err());
 
 		}
+	}
+
+	#[test]
+	fn double_propose_is_misbehavior() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
+			sender: AuthorityId(8),
+			full_signature: Signature(999, 8),
+			digest_signature: Signature(999, 8),
+			round_number: 1,
+			proposal: Candidate(999),
+			digest: Digest(999),
+		})).unwrap();
+
+		let res = accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
+			sender: AuthorityId(8),
+			full_signature: Signature(500, 8),
+			digest_signature: Signature(500, 8),
+			round_number: 1,
+			proposal: Candidate(500),
+			digest: Digest(500),
+		}));
+
+		assert!(res.is_err());
 	}
 }

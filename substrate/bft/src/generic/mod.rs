@@ -73,11 +73,13 @@ impl<C, D> From<Vote<D>> for Message<C, D> {
 
 /// A localized proposal message. Contains two signed pieces of data.
 #[derive(Debug, Clone)]
-pub struct LocalizedProposal<C, V, S> {
+pub struct LocalizedProposal<C, D, V, S> {
 	/// The round number.
 	pub round_number: usize,
 	/// The proposal sent.
 	pub proposal: C,
+	/// The digest of the proposal.
+	pub digest: D,
 	/// The sender of the proposal
 	pub sender: V,
 	/// The signature on the message (propose, round number, digest)
@@ -101,7 +103,7 @@ pub struct LocalizedVote<D, V, S> {
 #[derive(Debug, Clone)]
 pub enum LocalizedMessage<C, D, V, S> {
 	/// A proposal.
-	Propose(LocalizedProposal<C, V, S>),
+	Propose(LocalizedProposal<C, D, V, S>),
 	/// A vote.
 	Vote(LocalizedVote<D, V, S>),
 }

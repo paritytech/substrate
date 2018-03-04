@@ -455,12 +455,14 @@ pub fn sign_message(message: Message, key: &ed25519::Pair, parent_hash: HeaderHa
 
 	match message {
 		::generic::Message::Propose(r, proposal) => {
-			let action_header = PrimitiveAction::ProposeHeader(r as u32, proposal.header.hash());
+			let header_hash = proposal.header.hash();
+			let action_header = PrimitiveAction::ProposeHeader(r as u32, header_hash.clone());
 			let action_propose = PrimitiveAction::Propose(r as u32, proposal.clone());
 
 			::generic::LocalizedMessage::Propose(::generic::LocalizedProposal {
 				round_number: r,
 				proposal,
+				digest: header_hash,
 				sender: signer.0,
 				digest_signature: sign_action(action_header),
 				full_signature: sign_action(action_propose),

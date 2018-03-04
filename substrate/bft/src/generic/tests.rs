@@ -195,6 +195,7 @@ impl Context for TestContext {
 		match message {
 			Message::Propose(r, proposal) => LocalizedMessage::Propose(LocalizedProposal {
 				round_number: r,
+				digest: Digest(proposal.0),
 				proposal,
 				digest_signature: signature.clone(),
 				full_signature: signature,
