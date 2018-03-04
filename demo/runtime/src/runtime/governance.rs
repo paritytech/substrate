@@ -32,9 +32,9 @@ use demo_primitives::{Proposal, AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
 use dispatch::enact_proposal;
 
-const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
-const CURRENT_PROPOSAL: &[u8] = b"gov:pro";
-const APPROVAL_OF: &[u8] = b"gov:app:";
+pub const APPROVALS_REQUIRED: &[u8] = b"gov:apr";
+pub const CURRENT_PROPOSAL: &[u8] = b"gov:pro";
+pub const APPROVAL_OF: &[u8] = b"gov:app:";
 
 /// The proportion of validators required for a propsal to be approved measured as the number out
 /// of 1000.
@@ -114,6 +114,21 @@ pub mod internal {
 }
 
 #[cfg(test)]
+pub mod testing {
+	use super::*;
+	use runtime_io::{twox_128, TestExternalities};
+	use codec::Joiner;
+
+	pub fn externalities(session_length: u64, sessions_per_era: u64, current_era: u64) -> TestExternalities {
+		let extras: TestExternalities = map![
+			twox_128(APPROVALS_REQUIRED).to_vec() => vec![].and(&667u32)
+		];
+		staking::testing::externalities(session_length, sessions_per_era, current_era)
+			.into_iter().chain(extras.into_iter()).collect()
+	}
+}
+
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
@@ -124,25 +139,7 @@ mod tests {
 	use runtime::{staking, session};
 
 	fn new_test_ext() -> TestExternalities {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-		let three = [3u8; 32];
-
-		map![
-			twox_128(APPROVALS_REQUIRED).to_vec() => vec![].and(&667u32),
-			twox_128(b"ses:len").to_vec() => vec![].and(&1u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
-			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => two.to_vec(),
-			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:wil:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => one.to_vec(),
-			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => two.to_vec(),
-			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:spe").to_vec() => vec![].and(&1u64),
-			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].and(&1u64)
-		]
+		testing::externalities(1, 1, 1)
 	}
 
 	#[test]

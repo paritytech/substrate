@@ -27,9 +27,9 @@ use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Block, Header,
 	UncheckedTransaction, Function, Log};
 use runtime::{staking, session};
 
-const NONCE_OF: &[u8] = b"sys:non:";
-const BLOCK_HASH_AT: &[u8] = b"sys:old:";
-const CODE: &[u8] = b"sys:cod";
+pub const NONCE_OF: &[u8] = b"sys:non:";
+pub const BLOCK_HASH_AT: &[u8] = b"sys:old:";
+pub const CODE: &[u8] = b"sys:cod";
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
@@ -230,6 +230,19 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 }
 
 #[cfg(test)]
+pub mod testing {
+	use super::*;
+	use runtime_io::{twox_128, TestExternalities};
+	use codec::Joiner;
+
+	pub fn externalities() -> TestExternalities {
+		map![
+			twox_128(&0u64.to_keyed_vec(BLOCK_HASH_AT)).to_vec() => [69u8; 32].encode()
+		]
+	}
+}
+
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use super::internal::*;
@@ -240,7 +253,7 @@ mod tests {
 	use environment::with_env;
 	use primitives::hexdisplay::HexDisplay;
 	use demo_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
-	use runtime::staking;
+	use runtime::{governance, staking};
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
@@ -248,7 +261,7 @@ mod tests {
 		let two = Keyring::Two.to_raw_public();
 
 		let mut t: TestExternalities = map![
-			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&one.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let tx = UncheckedTransaction {
@@ -268,27 +281,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-		let three = [3u8; 32];
-
-		map![
-			twox_128(&0u64.to_keyed_vec(b"sys:old:")).to_vec() => [69u8; 32].encode(),
-			twox_128(b"gov:apr").to_vec() => vec![].and(&667u32),
-			twox_128(b"ses:len").to_vec() => vec![].and(&2u64),
-			twox_128(b"ses:val:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b"ses:val:")).to_vec() => one.to_vec(),
-			twox_128(&1u32.to_keyed_vec(b"ses:val:")).to_vec() => two.to_vec(),
-			twox_128(&2u32.to_keyed_vec(b"ses:val:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:wil:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b"sta:wil:")).to_vec() => one.to_vec(),
-			twox_128(&1u32.to_keyed_vec(b"sta:wil:")).to_vec() => two.to_vec(),
-			twox_128(&2u32.to_keyed_vec(b"sta:wil:")).to_vec() => three.to_vec(),
-			twox_128(b"sta:spe").to_vec() => vec![].and(&2u64),
-			twox_128(b"sta:vac").to_vec() => vec![].and(&3u64),
-			twox_128(b"sta:era").to_vec() => vec![].and(&0u64),
-			twox_128(&one.to_keyed_vec(b"sta:bal:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-		]
+		governance::testing::externalities(2, 2, 0)
 	}
 
 	#[test]

@@ -23,16 +23,18 @@ use runtime_support::{storage, StorageVec};
 use demo_primitives::{AccountId, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
 
-const SESSION_LENGTH: &[u8] = b"ses:len";
-const CURRENT_INDEX: &[u8] = b"ses:ind";
-const LAST_LENGTH_CHANGE: &[u8] = b"ses:llc";
-const NEXT_KEY_FOR: &[u8] = b"ses:nxt:";
-const NEXT_SESSION_LENGTH: &[u8] = b"ses:nln";
+pub const SESSION_LENGTH: &[u8] = b"ses:len";
+pub const CURRENT_INDEX: &[u8] = b"ses:ind";
+pub const LAST_LENGTH_CHANGE: &[u8] = b"ses:llc";
+pub const NEXT_KEY_FOR: &[u8] = b"ses:nxt:";
+pub const NEXT_SESSION_LENGTH: &[u8] = b"ses:nln";
+pub const VALIDATOR_AT: &[u8] = b"ses:val:";
+pub const VALIDATOR_COUNT: &[u8] = b"ses:val:len";
 
 struct ValidatorStorageVec {}
 impl StorageVec for ValidatorStorageVec {
 	type Item = AccountId;
-	const PREFIX: &'static[u8] = b"ses:val:";
+	const PREFIX: &'static[u8] = VALIDATOR_AT;
 }
 
 /// Get the current set of validators.
@@ -129,6 +131,30 @@ fn rotate_session() {
 			consensus::internal::set_authority(i as u32, &n);
 		}
 	});
+}
+
+#[cfg(test)]
+pub mod testing {
+	use super::*;
+	use runtime_io::{twox_128, TestExternalities};
+	use codec::{Joiner, KeyedVec};
+	use keyring::Keyring;
+	use runtime::system;
+
+	pub fn externalities(session_length: u64) -> TestExternalities {
+		let one = Keyring::One.to_raw_public();
+		let two = Keyring::Two.to_raw_public();
+		let three = [3u8; 32];
+
+		let extras: TestExternalities = map![
+			twox_128(SESSION_LENGTH).to_vec() => vec![].and(&session_length),
+			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&3u32),
+			twox_128(&0u32.to_keyed_vec(VALIDATOR_AT)).to_vec() => one.to_vec(),
+			twox_128(&1u32.to_keyed_vec(VALIDATOR_AT)).to_vec() => two.to_vec(),
+			twox_128(&2u32.to_keyed_vec(VALIDATOR_AT)).to_vec() => three.to_vec()
+		];
+		system::testing::externalities().into_iter().chain(extras.into_iter()).collect()
+	}
 }
 
 #[cfg(test)]
