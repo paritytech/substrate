@@ -350,9 +350,6 @@ mod tests {
 
 	// TODO: test VoteThreshold
 
-	// fn proposal_with_deposit_below_minimum_should_panic()
-	// fn poor_seconder_should_panic()
-
 	#[test]
 	fn locked_for_should_work() {
 		let alice = Keyring::Alice.to_raw_public();
@@ -392,6 +389,85 @@ mod tests {
 			staking::internal::check_new_era();
 
 			assert_eq!(staking::era_length(), 2u64);
+		});
+	}
+
+	#[test]
+	fn deposit_for_proposals_should_be_taken() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 5u64);
+			public::second(&bob, 0);
+			public::second(&eve, 0);
+			public::second(&eve, 0);
+			public::second(&eve, 0);
+			assert_eq!(staking::balance(&alice), 5u64);
+			assert_eq!(staking::balance(&bob), 15u64);
+			assert_eq!(staking::balance(&eve), 35u64);
+		});
+	}
+
+	#[test]
+	fn deposit_for_proposals_should_be_returned() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let eve = Keyring::Eve.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 5u64);
+			public::second(&bob, 0);
+			public::second(&eve, 0);
+			public::second(&eve, 0);
+			public::second(&eve, 0);
+			democracy::internal::end_block();
+			assert_eq!(staking::balance(&alice), 10u64);
+			assert_eq!(staking::balance(&bob), 20u64);
+			assert_eq!(staking::balance(&eve), 50u64);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn proposal_with_deposit_below_minimum_should_panic() {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 0u64);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn poor_proposer_should_panic() {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 11u64);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn poor_seconder_should_panic() {
+		let alice = Keyring::Alice.to_raw_public();
+		let bob = Keyring::Bob.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			public::propose(&bob, &Proposal::StakingSetSessionsPerEra(2), 11u64);
+			public::second(&alice, 0);
 		});
 	}
 
