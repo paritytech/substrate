@@ -144,12 +144,6 @@ pub mod internal {
 			Function::TimestampSet(t) => {
 				::runtime::timestamp::public::set(t);
 			}
-			Function::GovernancePropose(ref proposal) => {
-				::runtime::governance::public::propose(transactor, proposal);
-			}
-			Function::GovernanceApprove(era_index) => {
-				::runtime::governance::public::approve(transactor, era_index);
-			}
 		}
 	}
 }
@@ -253,7 +247,7 @@ mod tests {
 	use environment::with_env;
 	use primitives::hexdisplay::HexDisplay;
 	use demo_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
-	use runtime::{governance, staking};
+	use runtime::staking;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
@@ -281,7 +275,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		governance::testing::externalities(2, 2, 0)
+		staking::testing::externalities(2, 2, 0)
 	}
 
 	#[test]
@@ -294,7 +288,7 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0").into(),
+			state_root: hex!("52eb24906a4110a605d29d4e2f01b43cb169d375d709b138cc8ce50ad5f7ce85").into(),
 			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};

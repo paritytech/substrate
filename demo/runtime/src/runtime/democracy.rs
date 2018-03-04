@@ -76,11 +76,6 @@ pub const DEPOSIT_OF: &[u8] = b"dem:dep:";			// PropIndex -> (Balance, Vec<Accou
 pub const LAUNCH_PERIOD: &[u8] = b"dem:lau";		// BlockNumber
 pub const MINIMUM_DEPOSIT: &[u8] = b"dem:min";		// Balance
 
-// council proposals
-pub const COUNCIL_PROPOSAL: &[u8] = b"dem:cou:pro";	// (BlockNumber, Proposal)
-pub const COUNCIL_VOTE_OF: &[u8] = b"dem:cou:vot:";	// AccountId -> CouncilVote
-pub const COUNCIL_VOTERS: &[u8] = b"dem:cou:vts";	// Vec<AccountId>
-
 // referenda
 pub const VOTING_PERIOD: &[u8] = b"dem:per";		// BlockNumber
 pub const REFERENDUM_COUNT: &[u8] = b"dem:rco";		// ReferendumIndex

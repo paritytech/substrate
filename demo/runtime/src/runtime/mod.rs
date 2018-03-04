@@ -27,11 +27,8 @@ pub mod timestamp;
 #[allow(unused)]
 pub mod session;
 #[allow(unused)]
-pub mod governance;
-#[allow(unused)]
 pub mod democracy;
 #[allow(unused)]
 pub mod council;
-
-
-// TODO: polkadao
+#[allow(unused)]
+pub mod council_vote;
