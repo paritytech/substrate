@@ -418,6 +418,20 @@ mod tests {
 
 	#[test]
 	fn list() {
+		let storage = RefCell::new(HashMap::new());
+		assert_eq!(List::len(&storage), 0);
+		assert!(List::items(&storage).is_empty());
 
+		List::set_items(&[0, 2, 4, 6, 8], &storage);
+		assert_eq!(List::items(&storage), &[0, 2, 4, 6, 8]);
+		assert_eq!(List::len(&storage), 5);
+
+		List::set_item(2, &10, &storage);
+		assert_eq!(List::items(&storage), &[0, 2, 10, 6, 8]);
+		assert_eq!(List::len(&storage), 5);
+
+		List::clear(&storage);
+		assert_eq!(List::len(&storage), 0);
+		assert!(List::items(&storage).is_empty());
 	}
 }
