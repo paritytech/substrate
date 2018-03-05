@@ -91,8 +91,8 @@ pub const TERM_DURATION: &[u8] = b"cou:trm";
 pub const DESIRED_SEATS: &[u8] = b"cou:sts";
 
 // permanent state (always relevant, changes only at the finalisation of voting)
-pub const ACTIVE_COUNCIL: &[u8] = b"cou:act";
-pub const VOTE_COUNT: &[u8] = b"cou:vco";
+pub const ACTIVE_COUNCIL: &[u8] = b"cou:act";		// Vec<(AccountId, expiry: BlockNumber)>
+pub const VOTE_COUNT: &[u8] = b"cou:vco";			// VoteIndex
 
 // persistent state (always relevant, changes constantly)
 pub const APPROVALS_OF: &[u8] = b"cou:apr:";		// Vec<bool>

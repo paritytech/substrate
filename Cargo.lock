@@ -1598,6 +1598,7 @@ version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
