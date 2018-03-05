@@ -309,6 +309,29 @@ mod tests {
 	}
 
 	#[test]
+	fn retry_after_cooloff_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			with_env(|e| e.block_number = 1);
+			let proposal = Proposal::StakingSetBondingDuration(42);
+			let hash = proposal.blake2_256();
+			public::propose(Alice, &proposal);
+			public::veto(Bob, &hash);
+
+			with_env(|e| e.block_number = 3);
+			public::propose(Alice, &proposal);
+			public::vote(Bob, &hash, false);
+			public::vote(Charlie, &hash, true);
+			internal::end_block(3);
+
+			with_env(|e| e.block_number = 4);
+			internal::end_block(4);
+			assert_eq!(proposals().len(), 0);
+			assert_eq!(democracy::active_referendums(), vec![(0, 5, Proposal::StakingSetBondingDuration(42), VoteThreshold::SimpleMajority)]);
+
+		});
+	}
+
+	#[test]
 	fn alternative_double_veto_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
