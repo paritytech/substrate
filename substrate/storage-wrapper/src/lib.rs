@@ -14,6 +14,38 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Strongly typed wrappers around values in storage.
+//!
+//! This crate exports a macro `storage_items!` and traits describing behavior of generated
+//! structs.
+//!
+//! Three kinds of data types are currently supported:
+//!   - values
+//!   - maps
+//!   - lists
+//!
+//! # Examples:
+//!
+//! ```rust
+//! #[macro_use]
+//! extern crate substrate_storage_wrapper;
+//!
+//! type AuthorityId = [u8; 32];
+//! type Balance = u64;
+//! pub type SessionKey = [u8; 32];
+//!
+//! storage_items! {
+//!     // public value
+//!     pub Value: b"stored_key" => SessionKey;
+//!     // private map.
+//!     Balances: b"private_map:" => map [AuthorityId => Balance];
+//!     // private list.
+//!     Authorities: b"auth:" => list [AuthorityId];
+//! }
+//!
+//!# fn main() { }
+//! ```
+
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
 
@@ -44,6 +76,53 @@ pub trait StorageValue<T: codec::Slicable> {
 	fn load_from<S: Storage>(storage: &S) -> Option<T>;
 	/// Store a value under this key into the provded storage instance.
 	fn store_into<S: Storage>(val: &T, storage: &S);
+	/// Clear the storage value.
+	fn kill<S: Storage>(storage: &S);
+}
+
+/// A strongly-typed list in storage.
+pub trait StorageList<T: codec::Slicable> {
+	/// Get the prefix key in storage.
+	fn prefix() -> &'static [u8];
+
+	/// Get the key used to store the length field.
+	fn len_key() -> Vec<u8>;
+
+	/// Get the storage key used to fetch a value at a given index.
+	fn key_for(index: u32) -> Vec<u8>;
+
+	/// Read out all the items.
+	fn items<S: Storage>(storage: &S) -> Vec<T>;
+
+	/// Set the current set of items.
+	fn set_items<S: Storage>(items: &[T], storage: &S);
+
+	/// Set the item at the given index.
+	fn set_item<S: Storage>(index: u32, item: &T, storage: &S);
+
+	/// Load the value at given index. Returns `None` if the index is out-of-bounds.
+	fn get<S: Storage>(index: u32, storage: &S) -> Option<T>;
+
+	/// Load the length of the list
+	fn len<S: Storage>(storage: &S) -> u32;
+
+	/// Clear the list.
+	fn clear<S: Storage>(storage: &S);
+}
+
+/// A strongly-typed map in storage.
+pub trait StorageMap<K: codec::Slicable, V: codec::Slicable> {
+	/// Get the prefix key in storage.
+	fn prefix() -> &'static [u8];
+
+	/// Get the storage key used to fetch a value corresponding to a specific key.
+	fn key_for(x: &K) -> Vec<u8>;
+
+	/// Load the value associated with the given key from the map.
+	fn load_from<S: Storage>(key: &K, storage: &S) -> Option<V>;
+
+	/// Store a value to be associated with the given key from the map.
+	fn store_into<S: Storage>(key: &K, val: &V, storage: &S);
 }
 
 #[macro_export]
@@ -53,6 +132,7 @@ macro_rules! __storage_items_internal {
 	(($($vis:tt)*) $name: ident: $key: expr => $ty:ty) => {
 		$($vis)* struct $name;
 
+		#[allow(unused)]
 		impl $name {
 			/// Get the storage key.
 			$($vis)* fn key() -> &'static [u8] {
@@ -68,6 +148,11 @@ macro_rules! __storage_items_internal {
 			$($vis)* fn store_into<S: $crate::Storage>(val: &$ty, storage: &S) {
 				storage.store($key, val)
 			}
+
+			/// Kill the value.
+			$($vis)* fn kill<S: $crate::Storage>(storage: &S) {
+				storage.kill($key)
+			}
 		}
 
 		impl $crate::StorageValue<$ty> for $name {
@@ -82,12 +167,17 @@ macro_rules! __storage_items_internal {
 			fn store_into<S: $crate::Storage>(val: &$ty, storage: &S) {
 				$name::store_into(val, storage)
 			}
+
+			fn kill<S: $crate::Storage>(storage: &S) {
+				$name::kill(storage)
+			}
 		}
 	};
 	// generator for maps.
 	(($($vis:tt)*) $name: ident: $prefix: expr => map [$kty: ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
+		#[allow(unused)]
 		impl $name {
 			/// Get the prefix key in storage.
 			$($vis)* fn prefix() -> &'static [u8] {
@@ -97,7 +187,7 @@ macro_rules! __storage_items_internal {
 			/// Get the storage key used to fetch a value corresponding to a specific key.
 			$($vis)* fn key_for(x: &$kty) -> Vec<u8> {
 				let mut key = $prefix.to_vec();
-				key.extend($crate::codec::Slicable::encode(&index));
+				key.extend($crate::codec::Slicable::encode(x));
 				key
 			}
 
@@ -113,11 +203,30 @@ macro_rules! __storage_items_internal {
 				storage.store(&key[..], val);
 			}
 		}
+
+		impl $crate::StorageMap<$kty, $ty> for $name {
+			fn prefix() -> &'static [u8] {
+				$prefix
+			}
+
+			fn key_for(x: &$kty) -> Vec<u8> {
+				$name::key_for(x)
+			}
+
+			fn load_from<S: $crate::Storage>(key: &$kty, storage: &S) -> Option<$ty> {
+				$name::load_from(key, storage)
+			}
+
+			fn store_into<S: $crate::Storage>(key: &$kty, val: &$ty, storage: &S) {
+				$name::store_into(key, val, storage)
+			}
+		}
 	};
 	// generator for lists.
 	(($($vis:tt)*) $name: ident: $prefix: expr => list [$ty:ty]) => {
 		$($vis)* struct $name;
 
+		#[allow(unused)]
 		impl $name {
 			/// Get the prefix key in storage.
 			$($vis)* fn prefix() -> &'static [u8] {
@@ -160,19 +269,29 @@ macro_rules! __storage_items_internal {
 				}
 			}
 
-			$($vis)* fn clear_item<S: $crate::Storage>(index: u32, storage: &S) {
-				if index < $name::len(storage) {
-					storage.kill(&$name::key_for(index));
-				}
-			}
-
-			/// Load the value at given index. Returns `None` if `len
+			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
 			$($vis)* fn get<S: $crate::Storage>(index: u32, storage: &S) -> Option<$ty> {
 				storage.load(&$name::key_for(index)[..])
 			}
 
+			/// Load the length of the list.
 			$($vis)* fn len<S: $crate::Storage>(storage: &S) -> u32 {
 				storage.load(&$name::len_key()).unwrap_or_default()
+			}
+
+			/// Clear the list.
+			$($vis)* fn clear<S: $crate::Storage>(storage: &S) {
+				for i in 0..$name::len(storage) {
+					$name::clear_item(i, storage);
+				}
+
+				storage.kill(&$name::len_key()[..])
+			}
+
+			fn clear_item<S: $crate::Storage>(index: u32, storage: &S) {
+				if index < $name::len(storage) {
+					storage.kill(&$name::key_for(index));
+				}
 			}
 
 			fn set_len<S: $crate::Storage>(count: u32, storage: &S) {
@@ -180,27 +299,55 @@ macro_rules! __storage_items_internal {
 				storage.store(&$name::len_key(), &count);
 			}
 		}
+
+		impl $crate::StorageList<$ty> for $name {
+			/// Get the prefix key in storage.
+			fn prefix() -> &'static [u8] {
+				$prefix
+			}
+
+			/// Get the key used to store the length field.
+			// TODO: concat macro should accept byte literals.
+			fn len_key() -> Vec<u8> {
+				$name::len_key()
+			}
+
+			/// Get the storage key used to fetch a value at a given index.
+			fn key_for(index: u32) -> Vec<u8> {
+				$name::key_for(index)
+			}
+
+			/// Read out all the items.
+			fn items<S: $crate::Storage>(storage: &S) -> Vec<$ty> {
+				$name::items(storage)
+			}
+
+			/// Set the current set of items.
+			fn set_items<S: $crate::Storage>(items: &[$ty], storage: &S) {
+				$name::set_items(items, storage)
+			}
+
+			fn set_item<S: $crate::Storage>(index: u32, item: &$ty, storage: &S) {
+				$name::set_item(index, item, storage)
+			}
+
+			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
+			fn get<S: $crate::Storage>(index: u32, storage: &S) -> Option<$ty> {
+				$name::get(index, storage)
+			}
+
+			fn len<S: $crate::Storage>(storage: &S) -> u32 {
+				$name::len(storage)
+			}
+
+			fn clear<S: $crate::Storage>(storage: &S) {
+				$name::clear(storage)
+			}
+		}
 	};
 }
 
-/// Declares wrappers around stored data.
-///
-/// storage_items! {
-///     Authorities: ":auth:" => list [AuthorityId]; // list
-///     Balances: ":bal:" => map [AccountId => Balance]; // map
-///     Code: ":code" => Vec<u8>; // creates a single value. stored under that key.
-///     ...
-/// }
-///
-/// Authorities::len_key() -> &'static [u8];
-/// Authorities::load_len(&Storage) -> u32
-/// Authorities::key_for(n) -> Vec<u8>;
-/// Authorities::load_from(&Storage, n) -> Option<AuthorityId>;
-/// // ... KeyedVec-like API
-///
-/// Code::load_from(&Storage) -> Option<Vec<u8>>; // assumes a `Decodable` trait where the `<[u8] as Decodable>::Decoded = Vec<u8>`
-/// Code::store_in(&mut Storage, &[u8]);
-/// Code::key() -> &'static [u8]; // for low-level usage.
+/// Declares strongly-typed wrappers around codec-compatible types in storage.
 #[macro_export]
 macro_rules! storage_items {
 	// simple values
@@ -236,10 +383,41 @@ macro_rules! storage_items {
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
+	use std::cell::RefCell;
+	use codec::Slicable;
 	use super::*;
 
+	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
+		fn load<T: Slicable>(&self, key: &[u8]) -> Option<T> {
+			self.borrow_mut().get(key).map(|v| T::decode(&mut &v[..]).unwrap())
+		}
+
+		fn store<T: Slicable>(&self, key: &[u8], val: &T) {
+			self.borrow_mut().insert(key.to_owned(), val.encode());
+		}
+
+		fn kill(&self, key: &[u8]) {
+			self.borrow_mut().remove(key);
+		}
+	}
+
+	storage_items! {
+		Value: b"a" => u32;
+		List: b"b:" => list [u64];
+	}
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
+	fn value() {
+		let storage = RefCell::new(HashMap::new());
+		assert!(Value::load_from(&storage).is_none());
+		Value::store_into(&100_000, &storage);
+		assert_eq!(Value::load_from(&storage), Some(100_000));
+		Value::kill(&storage);
+		assert!(Value::load_from(&storage).is_none());
+	}
+
+	#[test]
+	fn list() {
+
+	}
 }
