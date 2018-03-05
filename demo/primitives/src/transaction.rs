@@ -44,6 +44,8 @@ enum InternalFunctionId {
 	StakingSetValidatorCount = 0x22,
 	/// Force a new staking era.
 	StakingForceNewEra = 0x23,
+	/// See below.
+	DemocracyCancelReferendum = 0x30,
 }
 
 impl InternalFunctionId {
@@ -57,6 +59,7 @@ impl InternalFunctionId {
 			InternalFunctionId::StakingSetBondingDuration,
 			InternalFunctionId::StakingSetValidatorCount,
 			InternalFunctionId::StakingForceNewEra,
+			InternalFunctionId::DemocracyCancelReferendum,
 		];
 		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
@@ -80,24 +83,27 @@ pub enum Proposal {
 	StakingSetValidatorCount(u32),
 	/// Force a new staking era.
 	StakingForceNewEra,
+	/// Cancel a referendum.
+	DemocracyCancelReferendum(u32),
 }
 
 impl Slicable for Proposal {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let id = try_opt!(u8::decode(input).and_then(InternalFunctionId::from_u8));
+		let id = u8::decode(input).and_then(InternalFunctionId::from_u8)?;
 		let function = match id {
 			InternalFunctionId::SystemSetCode =>
-				Proposal::SystemSetCode(try_opt!(Slicable::decode(input))),
+				Proposal::SystemSetCode(Slicable::decode(input)?),
 			InternalFunctionId::SessionSetLength =>
-				Proposal::SessionSetLength(try_opt!(Slicable::decode(input))),
+				Proposal::SessionSetLength(Slicable::decode(input)?),
 			InternalFunctionId::SessionForceNewSession => Proposal::SessionForceNewSession,
 			InternalFunctionId::StakingSetSessionsPerEra =>
-				Proposal::StakingSetSessionsPerEra(try_opt!(Slicable::decode(input))),
+				Proposal::StakingSetSessionsPerEra(Slicable::decode(input)?),
 			InternalFunctionId::StakingSetBondingDuration =>
-				Proposal::StakingSetBondingDuration(try_opt!(Slicable::decode(input))),
+				Proposal::StakingSetBondingDuration(Slicable::decode(input)?),
 			InternalFunctionId::StakingSetValidatorCount =>
-				Proposal::StakingSetValidatorCount(try_opt!(Slicable::decode(input))),
+				Proposal::StakingSetValidatorCount(Slicable::decode(input)?),
 			InternalFunctionId::StakingForceNewEra => Proposal::StakingForceNewEra,
+			InternalFunctionId::DemocracyCancelReferendum => Proposal::DemocracyCancelReferendum(Slicable::decode(input)?),
 		};
 
 		Some(function)
@@ -131,6 +137,10 @@ impl Slicable for Proposal {
 			}
 			Proposal::StakingForceNewEra => {
 				(InternalFunctionId::StakingForceNewEra as u8).using_encoded(|s| v.extend(s));
+			}
+			Proposal::DemocracyCancelReferendum(ref data) => {
+				(InternalFunctionId::DemocracyCancelReferendum as u8).using_encoded(|s| v.extend(s));
+				data.using_encoded(|s| v.extend(s));
 			}
 		}
 

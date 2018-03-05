@@ -27,6 +27,8 @@ use runtime::staking::Balance;
 pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
+#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub enum VoteThreshold {
 	SuperMajorityApprove,
 	SuperMajorityAgainst,
@@ -136,6 +138,15 @@ pub fn vote_of(who: &AccountId, ref_index: ReferendumIndex) -> Option<bool> {
 /// Get the info concerning the next referendum.
 pub fn referendum_info(ref_index: ReferendumIndex) -> Option<(BlockNumber, Proposal, VoteThreshold)> {
 	storage::get(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF))
+}
+
+/// Get all referendums currently active.
+pub fn active_referendums() -> Vec<(ReferendumIndex, BlockNumber, Proposal, VoteThreshold)> {
+	let next: ReferendumIndex = storage::get_or_default(NEXT_TALLY);
+	let last: ReferendumIndex = storage::get_or_default(REFERENDUM_COUNT);
+	(next..last).into_iter()
+		.filter_map(|i| referendum_info(i).map(|(n, p, t)| (i, n, p, t)))
+		.collect()
 }
 
 /// Get all referendums ready for tally at block `n`.
