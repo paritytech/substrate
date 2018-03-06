@@ -65,20 +65,20 @@ fn kill_veto_of(proposal: &ProposalHash) {
 	storage::kill(&proposal.to_keyed_vec(VETOED_PROPOSAL))
 }
 
-pub fn will_still_be_councillor_at<P: AsRef<AccountId>>(who: P, n: BlockNumber) -> bool {
+pub fn will_still_be_councillor_at(who: &AccountId, n: BlockNumber) -> bool {
 	council::active_council().iter()
-		.find(|&&(ref a, _)| a == who.as_ref())
+		.find(|&&(ref a, _)| a == who)
 		.map(|&(_, expires)| expires > n)
 		.unwrap_or(false)
 }
 
-pub fn is_councillor<P: AsRef<AccountId>>(who: P) -> bool {
+pub fn is_councillor(who: &AccountId) -> bool {
 	council::active_council().iter()
-		.any(|&(ref a, _)| a == who.as_ref())
+		.any(|&(ref a, _)| a == who)
 }
 
-pub fn vote_of<P: AsRef<AccountId>>(who: P, proposal: &ProposalHash) -> Option<bool> {
-	storage::get(&(*proposal, *who.as_ref()).to_keyed_vec(COUNCIL_VOTE_OF))
+pub fn vote_of(who: &AccountId, proposal: &ProposalHash) -> Option<bool> {
+	storage::get(&(*proposal, *who).to_keyed_vec(COUNCIL_VOTE_OF))
 }
 
 pub fn proposal_voters(proposal: &ProposalHash) -> Vec<AccountId> {
@@ -122,7 +122,7 @@ fn take_proposal_if_expiring_at(n: BlockNumber) -> Option<(Proposal, ProposalHas
 pub mod public {
 	use super::*;
 
-	pub fn propose<P: AsRef<AccountId> + Copy>(signed: P, proposal: &Proposal) {
+	pub fn propose(signed: &AccountId, proposal: &Proposal) {
 		let expiry = system::block_number() + voting_period();
 		assert!(will_still_be_councillor_at(signed, expiry));
 
@@ -136,29 +136,29 @@ pub mod public {
 		set_proposals(&proposals);
 
 		storage::put(&proposal_hash.to_keyed_vec(PROPOSAL_OF), proposal);
-		storage::put(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS), &vec![*signed.as_ref()]);
-		storage::put(&(proposal_hash, *(signed.as_ref())).to_keyed_vec(COUNCIL_VOTE_OF), &true);
+		storage::put(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS), &vec![*signed]);
+		storage::put(&(proposal_hash, *signed).to_keyed_vec(COUNCIL_VOTE_OF), &true);
 	}
 
-	pub fn vote<P: AsRef<AccountId> + Copy>(signed: P, proposal: &ProposalHash, approve: bool) {
+	pub fn vote(signed: &AccountId, proposal: &ProposalHash, approve: bool) {
 		if vote_of(signed, proposal).is_none() {
 			let mut voters = proposal_voters(proposal);
-			voters.push(*signed.as_ref());
+			voters.push(*signed);
 			storage::put(&proposal.to_keyed_vec(PROPOSAL_VOTERS), &voters);
 		}
-		storage::put(&(*proposal, *(signed.as_ref())).to_keyed_vec(COUNCIL_VOTE_OF), &approve);
+		storage::put(&(*proposal, *signed).to_keyed_vec(COUNCIL_VOTE_OF), &approve);
 	}
 
-	pub fn veto<P: AsRef<AccountId> + Copy>(signed: P, proposal_hash: &ProposalHash) {
+	pub fn veto(signed: &AccountId, proposal_hash: &ProposalHash) {
 		assert!(is_councillor(signed), "only councillors may veto council proposals");
 		assert!(storage::exists(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS)), "proposal must exist to be vetoed");
 
 		let mut existing_vetoers = veto_of(&proposal_hash)
 			.map(|pair| pair.1)
 			.unwrap_or_else(Vec::new);
-		let insert_position = existing_vetoers.binary_search(signed.as_ref())
+		let insert_position = existing_vetoers.binary_search(signed)
 			.expect_err("a councillor may not veto a proposal twice");
-		existing_vetoers.insert(insert_position, *signed.as_ref());
+		existing_vetoers.insert(insert_position, *signed);
 		set_veto_of(&proposal_hash, system::block_number() + cooloff_period(), existing_vetoers);
 
 		set_proposals(&proposals().into_iter().filter(|&(_, h)| h != *proposal_hash).collect::<Vec<_>>());
@@ -255,15 +255,15 @@ mod tests {
 			assert_eq!(staking::bonding_duration(), 0);
 			assert_eq!(cooloff_period(), 2);
 			assert_eq!(voting_period(), 1);
-			assert_eq!(will_still_be_councillor_at(Alice, 1), true);
-			assert_eq!(will_still_be_councillor_at(Alice, 10), false);
-			assert_eq!(will_still_be_councillor_at(Dave, 10), false);
-			assert_eq!(is_councillor(Alice), true);
-			assert_eq!(is_councillor(Dave), false);
+			assert_eq!(will_still_be_councillor_at(&Alice, 1), true);
+			assert_eq!(will_still_be_councillor_at(&Alice, 10), false);
+			assert_eq!(will_still_be_councillor_at(&Dave, 10), false);
+			assert_eq!(is_councillor(&Alice), true);
+			assert_eq!(is_councillor(&Dave), false);
 			assert_eq!(proposals(), Vec::<(BlockNumber, ProposalHash)>::new());
 			assert_eq!(proposal_voters(&ProposalHash::default()), Vec::<AccountId>::new());
 			assert_eq!(is_vetoed(&ProposalHash::default()), false);
-			assert_eq!(vote_of(Alice, &ProposalHash::default()), None);
+			assert_eq!(vote_of(&Alice, &ProposalHash::default()), None);
 			assert_eq!(tally(&ProposalHash::default()), (0, 0, 3));
 		});
 	}
@@ -278,9 +278,9 @@ mod tests {
 
 			let cancellation = Proposal::DemocracyCancelReferendum(0);
 			let hash = cancellation.blake2_256();
-			public::propose(Alice, &cancellation);
-			public::vote(Bob, &hash, true);
-			public::vote(Charlie, &hash, true);
+			public::propose(&Alice, &cancellation);
+			public::vote(&Bob, &hash, true);
+			public::vote(&Charlie, &hash, true);
 			assert_eq!(proposals(), vec![(2, hash)]);
 			internal::end_block(1);
 
@@ -300,9 +300,9 @@ mod tests {
 
 			let cancellation = Proposal::DemocracyCancelReferendum(0);
 			let hash = cancellation.blake2_256();
-			public::propose(Alice, &cancellation);
-			public::vote(Bob, &hash, true);
-			public::vote(Charlie, &hash, false);
+			public::propose(&Alice, &cancellation);
+			public::vote(&Bob, &hash, true);
+			public::vote(&Charlie, &hash, false);
 			internal::end_block(1);
 
 			with_env(|e| e.block_number = 2);
@@ -320,8 +320,8 @@ mod tests {
 
 			let cancellation = Proposal::DemocracyCancelReferendum(0);
 			let hash = cancellation.blake2_256();
-			public::propose(Alice, &cancellation);
-			public::vote(Bob, &hash, true);
+			public::propose(&Alice, &cancellation);
+			public::vote(&Bob, &hash, true);
 			internal::end_block(1);
 
 			with_env(|e| e.block_number = 2);
@@ -336,8 +336,8 @@ mod tests {
 			with_env(|e| e.block_number = 1);
 			let proposal = Proposal::StakingSetBondingDuration(42);
 			let hash = proposal.blake2_256();
-			public::propose(Alice, &proposal);
-			public::veto(Bob, &hash);
+			public::propose(&Alice, &proposal);
+			public::veto(&Bob, &hash);
 			assert_eq!(proposals().len(), 0);
 			assert_eq!(democracy::active_referendums().len(), 0);
 		});
@@ -350,12 +350,12 @@ mod tests {
 			with_env(|e| e.block_number = 1);
 			let proposal = Proposal::StakingSetBondingDuration(42);
 			let hash = proposal.blake2_256();
-			public::propose(Alice, &proposal);
-			public::veto(Bob, &hash);
+			public::propose(&Alice, &proposal);
+			public::veto(&Bob, &hash);
 
 			with_env(|e| e.block_number = 3);
-			public::propose(Alice, &proposal);
-			public::veto(Bob, &hash);
+			public::propose(&Alice, &proposal);
+			public::veto(&Bob, &hash);
 		});
 	}
 
@@ -366,11 +366,11 @@ mod tests {
 			with_env(|e| e.block_number = 1);
 			let proposal = Proposal::StakingSetBondingDuration(42);
 			let hash = proposal.blake2_256();
-			public::propose(Alice, &proposal);
-			public::veto(Bob, &hash);
+			public::propose(&Alice, &proposal);
+			public::veto(&Bob, &hash);
 
 			with_env(|e| e.block_number = 2);
-			public::propose(Alice, &proposal);
+			public::propose(&Alice, &proposal);
 		});
 	}
 
@@ -380,13 +380,13 @@ mod tests {
 			with_env(|e| e.block_number = 1);
 			let proposal = Proposal::StakingSetBondingDuration(42);
 			let hash = proposal.blake2_256();
-			public::propose(Alice, &proposal);
-			public::veto(Bob, &hash);
+			public::propose(&Alice, &proposal);
+			public::veto(&Bob, &hash);
 
 			with_env(|e| e.block_number = 3);
-			public::propose(Alice, &proposal);
-			public::vote(Bob, &hash, false);
-			public::vote(Charlie, &hash, true);
+			public::propose(&Alice, &proposal);
+			public::vote(&Bob, &hash, false);
+			public::vote(&Charlie, &hash, true);
 			internal::end_block(3);
 
 			with_env(|e| e.block_number = 4);
@@ -402,12 +402,12 @@ mod tests {
 			with_env(|e| e.block_number = 1);
 			let proposal = Proposal::StakingSetBondingDuration(42);
 			let hash = proposal.blake2_256();
-			public::propose(Alice, &proposal);
-			public::veto(Bob, &hash);
+			public::propose(&Alice, &proposal);
+			public::veto(&Bob, &hash);
 
 			with_env(|e| e.block_number = 3);
-			public::propose(Alice, &proposal);
-			public::veto(Charlie, &hash);
+			public::propose(&Alice, &proposal);
+			public::veto(&Charlie, &hash);
 			assert_eq!(proposals().len(), 0);
 			assert_eq!(democracy::active_referendums().len(), 0);
 		});
@@ -419,10 +419,10 @@ mod tests {
 			with_env(|e| e.block_number = 1);
 			let proposal = Proposal::StakingSetBondingDuration(42);
 			let hash = proposal.blake2_256();
-			public::propose(Alice, &proposal);
+			public::propose(&Alice, &proposal);
 			assert_eq!(proposals().len(), 1);
 			assert_eq!(proposal_voters(&hash), vec![Alice.to_raw_public()]);
-			assert_eq!(vote_of(Alice, &hash), Some(true));
+			assert_eq!(vote_of(&Alice, &hash), Some(true));
 			assert_eq!(tally(&hash), (1, 0, 2));
 		});
 	}
@@ -431,7 +431,7 @@ mod tests {
 	fn unvoted_proposal_should_expire_without_action() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(Alice, &Proposal::StakingSetBondingDuration(42));
+			public::propose(&Alice, &Proposal::StakingSetBondingDuration(42));
 			assert_eq!(tally(&Proposal::StakingSetBondingDuration(42).blake2_256()), (1, 0, 2));
 			internal::end_block(1);
 
@@ -446,9 +446,9 @@ mod tests {
 	fn unanimous_proposal_should_expire_with_biased_referendum() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(Alice, &Proposal::StakingSetBondingDuration(42));
-			public::vote(Bob, &Proposal::StakingSetBondingDuration(42).blake2_256(), true);
-			public::vote(Charlie, &Proposal::StakingSetBondingDuration(42).blake2_256(), true);
+			public::propose(&Alice, &Proposal::StakingSetBondingDuration(42));
+			public::vote(&Bob, &Proposal::StakingSetBondingDuration(42).blake2_256(), true);
+			public::vote(&Charlie, &Proposal::StakingSetBondingDuration(42).blake2_256(), true);
 			assert_eq!(tally(&Proposal::StakingSetBondingDuration(42).blake2_256()), (3, 0, 0));
 			internal::end_block(1);
 
@@ -463,9 +463,9 @@ mod tests {
 	fn majority_proposal_should_expire_with_unbiased_referendum() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(Alice, &Proposal::StakingSetBondingDuration(42));
-			public::vote(Bob, &Proposal::StakingSetBondingDuration(42).blake2_256(), true);
-			public::vote(Charlie, &Proposal::StakingSetBondingDuration(42).blake2_256(), false);
+			public::propose(&Alice, &Proposal::StakingSetBondingDuration(42));
+			public::vote(&Bob, &Proposal::StakingSetBondingDuration(42).blake2_256(), true);
+			public::vote(&Charlie, &Proposal::StakingSetBondingDuration(42).blake2_256(), false);
 			assert_eq!(tally(&Proposal::StakingSetBondingDuration(42).blake2_256()), (2, 1, 0));
 			internal::end_block(1);
 
@@ -481,7 +481,7 @@ mod tests {
 	fn propose_by_public_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(Dave, &Proposal::StakingSetBondingDuration(42));
+			public::propose(&Dave, &Proposal::StakingSetBondingDuration(42));
 		});
 	}
 }
