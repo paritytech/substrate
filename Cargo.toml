@@ -38,7 +38,6 @@ members = [
 	"substrate/runtime-support",
 	"substrate/serializer",
 	"substrate/state-machine",
-	"substrate/storage-wrapper",
 	"substrate/test-runtime",
 ]
 exclude = [

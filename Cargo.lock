@@ -1652,13 +1652,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-storage-wrapper"
-version = "0.1.0"
-dependencies = [
- "substrate-codec 0.1.0",
-]
-
-[[package]]
 name = "substrate-test-runtime"
 version = "0.1.0"
 dependencies = [
