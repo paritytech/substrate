@@ -308,35 +308,27 @@ pub mod testing {
 	use super::*;
 	use runtime_io::{twox_128, TestExternalities};
 	use codec::Joiner;
-	use keyring::Keyring;
+	use keyring::Keyring::*;
 	use runtime::{session, staking};
 
 	pub fn externalities() -> TestExternalities {
-		let alice = Keyring::Alice.to_raw_public();
-		let bob = Keyring::Bob.to_raw_public();
-		let charlie = Keyring::Charlie.to_raw_public();
-		let dave = Keyring::Dave.to_raw_public();
-		let eve = Keyring::Eve.to_raw_public();
-		let ferdie = Keyring::Ferdie.to_raw_public();
-		let one = Keyring::One.to_raw_public();
-
 		map![
 			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
 			twox_128(session::VALIDATOR_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => alice.to_vec(),
-			twox_128(&1u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => bob.to_vec(),
-			twox_128(&2u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => charlie.to_vec(),
+			twox_128(&0u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => Alice.to_raw_public_vec(),
+			twox_128(&1u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => Bob.to_raw_public_vec(),
+			twox_128(&2u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => Charlie.to_raw_public_vec(),
 			twox_128(staking::INTENTION_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => alice.to_vec(),
-			twox_128(&1u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => bob.to_vec(),
-			twox_128(&2u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => charlie.to_vec(),
-			twox_128(&alice.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&10u64),
-			twox_128(&bob.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&20u64),
-			twox_128(&charlie.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&30u64),
-			twox_128(&dave.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&40u64),
-			twox_128(&eve.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&50u64),
-			twox_128(&ferdie.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&60u64),
-			twox_128(&one.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&1u64),
+			twox_128(&0u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => Alice.to_raw_public_vec(),
+			twox_128(&1u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => Bob.to_raw_public_vec(),
+			twox_128(&2u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => Charlie.to_raw_public_vec(),
+			twox_128(&Alice.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&10u64),
+			twox_128(&Bob.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&20u64),
+			twox_128(&Charlie.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&30u64),
+			twox_128(&Dave.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&40u64),
+			twox_128(&Eve.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&50u64),
+			twox_128(&Ferdie.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&60u64),
+			twox_128(&One.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&1u64),
 			twox_128(staking::TOTAL_STAKE).to_vec() => vec![].and(&210u64),
 			twox_128(staking::SESSIONS_PER_ERA).to_vec() => vec![].and(&1u64),
 			twox_128(staking::VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
@@ -354,7 +346,7 @@ mod tests {
 	use super::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use keyring::Keyring;
+	use keyring::Keyring::*;
 	use environment::with_env;
 	use demo_primitives::{AccountId, Proposal};
 	use runtime::{staking, session, democracy};
@@ -365,9 +357,7 @@ mod tests {
 
 	#[test]
 	fn params_should_work() {
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(launch_period(), 1u64);
 			assert_eq!(voting_period(), 1u64);
 			assert_eq!(minimum_deposit(), 1u64);
@@ -381,14 +371,11 @@ mod tests {
 
 	#[test]
 	fn locked_for_should_work() {
-		let alice = Keyring::Alice.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 2u64);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(4), 4u64);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(3), 3u64);
+			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 2u64);
+			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(4), 4u64);
+			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(3), 3u64);
 			assert_eq!(locked_for(0), Some(2));
 			assert_eq!(locked_for(1), Some(4));
 			assert_eq!(locked_for(2), Some(3));
@@ -397,21 +384,18 @@ mod tests {
 
 	#[test]
 	fn single_proposal_should_work() {
-		let alice = Keyring::Alice.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 1u64);
+			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 1u64);
 			democracy::internal::end_block(system::block_number());
 
 			with_env(|e| e.block_number = 2);
 			let r = 0;
-			public::vote(&alice, r, true);
+			public::vote(&Alice, r, true);
 
 			assert_eq!(next_free_ref_index(), 1);
-			assert_eq!(voters_for(r), vec![alice.clone()]);
-			assert_eq!(vote_of(&alice, r), Some(true));
+			assert_eq!(voters_for(r), vec![Alice.to_raw_public()]);
+			assert_eq!(vote_of(&Alice, r), Some(true));
 			assert_eq!(tally(r), (10, 0));
 
 			democracy::internal::end_block(system::block_number());
@@ -423,109 +407,86 @@ mod tests {
 
 	#[test]
 	fn deposit_for_proposals_should_be_taken() {
-		let alice = Keyring::Alice.to_raw_public();
-		let bob = Keyring::Bob.to_raw_public();
-		let eve = Keyring::Eve.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 5u64);
-			public::second(&bob, 0);
-			public::second(&eve, 0);
-			public::second(&eve, 0);
-			public::second(&eve, 0);
-			assert_eq!(staking::balance(&alice), 5u64);
-			assert_eq!(staking::balance(&bob), 15u64);
-			assert_eq!(staking::balance(&eve), 35u64);
+			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 5u64);
+			public::second(&Bob, 0);
+			public::second(&Eve, 0);
+			public::second(&Eve, 0);
+			public::second(&Eve, 0);
+			assert_eq!(staking::balance(&Alice), 5u64);
+			assert_eq!(staking::balance(&Bob), 15u64);
+			assert_eq!(staking::balance(&Eve), 35u64);
 		});
 	}
 
 	#[test]
 	fn deposit_for_proposals_should_be_returned() {
-		let alice = Keyring::Alice.to_raw_public();
-		let bob = Keyring::Bob.to_raw_public();
-		let eve = Keyring::Eve.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 5u64);
-			public::second(&bob, 0);
-			public::second(&eve, 0);
-			public::second(&eve, 0);
-			public::second(&eve, 0);
+			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 5u64);
+			public::second(&Bob, 0);
+			public::second(&Eve, 0);
+			public::second(&Eve, 0);
+			public::second(&Eve, 0);
 			democracy::internal::end_block(system::block_number());
-			assert_eq!(staking::balance(&alice), 10u64);
-			assert_eq!(staking::balance(&bob), 20u64);
-			assert_eq!(staking::balance(&eve), 50u64);
+			assert_eq!(staking::balance(&Alice), 10u64);
+			assert_eq!(staking::balance(&Bob), 20u64);
+			assert_eq!(staking::balance(&Eve), 50u64);
 		});
 	}
 
 	#[test]
 	#[should_panic]
 	fn proposal_with_deposit_below_minimum_should_panic() {
-		let alice = Keyring::Alice.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 0u64);
+			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 0u64);
 		});
 	}
 
 	#[test]
 	#[should_panic]
 	fn poor_proposer_should_panic() {
-		let alice = Keyring::Alice.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 11u64);
+			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 11u64);
 		});
 	}
 
 	#[test]
 	#[should_panic]
 	fn poor_seconder_should_panic() {
-		let alice = Keyring::Alice.to_raw_public();
-		let bob = Keyring::Bob.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&bob, &Proposal::StakingSetSessionsPerEra(2), 11u64);
-			public::second(&alice, 0);
+			public::propose(&Bob, &Proposal::StakingSetSessionsPerEra(2), 11u64);
+			public::second(&Alice, 0);
 		});
 	}
 
 	#[test]
 	fn runners_up_should_come_after() {
-		let alice = Keyring::Alice.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 0);
-			public::propose(&alice, &Proposal::StakingSetBondingDuration(2), 2u64);
-			public::propose(&alice, &Proposal::StakingSetBondingDuration(4), 4u64);
-			public::propose(&alice, &Proposal::StakingSetBondingDuration(3), 3u64);
+			public::propose(&Alice, &Proposal::StakingSetBondingDuration(2), 2u64);
+			public::propose(&Alice, &Proposal::StakingSetBondingDuration(4), 4u64);
+			public::propose(&Alice, &Proposal::StakingSetBondingDuration(3), 3u64);
 			democracy::internal::end_block(system::block_number());
 
 			with_env(|e| e.block_number = 1);
-			public::vote(&alice, 0, true);
+			public::vote(&Alice, 0, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 4u64);
 
 			with_env(|e| e.block_number = 2);
-			public::vote(&alice, 1, true);
+			public::vote(&Alice, 1, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 3u64);
 
 			with_env(|e| e.block_number = 3);
-			public::vote(&alice, 2, true);
+			public::vote(&Alice, 2, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 2u64);
@@ -534,16 +495,13 @@ mod tests {
 
 	#[test]
 	fn simple_passing_should_work() {
-		let alice = Keyring::Alice.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&alice, r, true);
+			public::vote(&Alice, r, true);
 
-			assert_eq!(voters_for(r), vec![alice.clone()]);
-			assert_eq!(vote_of(&alice, r), Some(true));
+			assert_eq!(voters_for(r), vec![Alice.to_raw_public()]);
+			assert_eq!(vote_of(&Alice, r), Some(true));
 			assert_eq!(tally(r), (10, 0));
 
 			democracy::internal::end_block(system::block_number());
@@ -555,13 +513,10 @@ mod tests {
 
 	#[test]
 	fn cancel_referendum_should_work() {
-		let alice = Keyring::Alice.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&alice, r, true);
+			public::vote(&Alice, r, true);
 			privileged::cancel_referendum(r);
 
 			democracy::internal::end_block(system::block_number());
@@ -573,16 +528,13 @@ mod tests {
 
 	#[test]
 	fn simple_failing_should_work() {
-		let alice = Keyring::Alice.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&alice, r, false);
+			public::vote(&Alice, r, false);
 
-			assert_eq!(voters_for(r), vec![alice.clone()]);
-			assert_eq!(vote_of(&alice, r), Some(false));
+			assert_eq!(voters_for(r), vec![Alice.to_raw_public()]);
+			assert_eq!(vote_of(&Alice, r), Some(false));
 			assert_eq!(tally(r), (0, 10));
 
 			democracy::internal::end_block(system::block_number());
@@ -594,24 +546,15 @@ mod tests {
 
 	#[test]
 	fn controversial_voting_should_work() {
-		let alice = Keyring::Alice.to_raw_public();
-		let bob = Keyring::Bob.to_raw_public();
-		let charlie = Keyring::Charlie.to_raw_public();
-		let dave = Keyring::Dave.to_raw_public();
-		let eve = Keyring::Eve.to_raw_public();
-		let ferdie = Keyring::Ferdie.to_raw_public();
-		let one = Keyring::One.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&alice, r, true);
-			public::vote(&bob, r, false);
-			public::vote(&charlie, r, false);
-			public::vote(&dave, r, true);
-			public::vote(&eve, r, false);
-			public::vote(&ferdie, r, true);
+			public::vote(&Alice, r, true);
+			public::vote(&Bob, r, false);
+			public::vote(&Charlie, r, false);
+			public::vote(&Dave, r, true);
+			public::vote(&Eve, r, false);
+			public::vote(&Ferdie, r, true);
 
 			assert_eq!(tally(r), (110, 100));
 
@@ -624,20 +567,11 @@ mod tests {
 
 	#[test]
 	fn controversial_low_turnout_voting_should_work() {
-		let alice = Keyring::Alice.to_raw_public();
-		let bob = Keyring::Bob.to_raw_public();
-		let charlie = Keyring::Charlie.to_raw_public();
-		let dave = Keyring::Dave.to_raw_public();
-		let eve = Keyring::Eve.to_raw_public();
-		let ferdie = Keyring::Ferdie.to_raw_public();
-		let one = Keyring::One.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&eve, r, false);
-			public::vote(&ferdie, r, true);
+			public::vote(&Eve, r, false);
+			public::vote(&Ferdie, r, true);
 
 			assert_eq!(tally(r), (60, 50));
 
@@ -650,24 +584,15 @@ mod tests {
 
 	#[test]
 	fn passing_low_turnout_voting_should_work() {
-		let alice = Keyring::Alice.to_raw_public();
-		let bob = Keyring::Bob.to_raw_public();
-		let charlie = Keyring::Charlie.to_raw_public();
-		let dave = Keyring::Dave.to_raw_public();
-		let eve = Keyring::Eve.to_raw_public();
-		let ferdie = Keyring::Ferdie.to_raw_public();
-		let one = Keyring::One.to_raw_public();
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::total_stake(), 210u64);
 
 			with_env(|e| e.block_number = 1);
 			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&dave, r, true);
-			public::vote(&eve, r, false);
-			public::vote(&ferdie, r, true);
+			public::vote(&Dave, r, true);
+			public::vote(&Eve, r, false);
+			public::vote(&Ferdie, r, true);
 
 			assert_eq!(tally(r), (100, 50));
 
