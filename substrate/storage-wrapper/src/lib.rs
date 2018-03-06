@@ -73,11 +73,13 @@ pub trait StorageValue<T: codec::Slicable> {
 	/// Get the storage key.
 	fn key() -> &'static [u8];
 	/// Load the value from the provided storage instance.
-	fn load_from<S: Storage>(storage: &S) -> Option<T>;
+	fn load<S: Storage>(storage: &S) -> Option<T>;
 	/// Store a value under this key into the provded storage instance.
-	fn store_into<S: Storage>(val: &T, storage: &S);
+	fn store<S: Storage>(val: &T, storage: &S);
 	/// Clear the storage value.
 	fn kill<S: Storage>(storage: &S);
+	/// Take a value from storage, removing it afterwards.
+	fn take<S: Storage>(storage: &S) -> Option<T>;
 }
 
 /// A strongly-typed list in storage.
@@ -119,10 +121,16 @@ pub trait StorageMap<K: codec::Slicable, V: codec::Slicable> {
 	fn key_for(x: &K) -> Vec<u8>;
 
 	/// Load the value associated with the given key from the map.
-	fn load_from<S: Storage>(key: &K, storage: &S) -> Option<V>;
+	fn get<S: Storage>(key: &K, storage: &S) -> Option<V>;
 
 	/// Store a value to be associated with the given key from the map.
-	fn store_into<S: Storage>(key: &K, val: &V, storage: &S);
+	fn insert<S: Storage>(key: &K, val: &V, storage: &S);
+
+	/// Remove the value under a key.
+	fn remove<S: Storage>(key: &K, storage: &S);
+
+	/// Take the value under a key.
+	fn take<S: Storage>(key: &K, storage: &S) -> Option<V>;
 }
 
 #[macro_export]
@@ -140,18 +148,23 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Load the value from the provided storage instance.
-			$($vis)* fn load_from<S: $crate::Storage>(storage: &S) -> Option<$ty> {
+			$($vis)* fn load<S: $crate::Storage>(storage: &S) -> Option<$ty> {
 				storage.load($key)
 			}
 
 			/// Store a value under this key into the provded storage instance.
-			$($vis)* fn store_into<S: $crate::Storage>(val: &$ty, storage: &S) {
+			$($vis)* fn store<S: $crate::Storage>(val: &$ty, storage: &S) {
 				storage.store($key, val)
 			}
 
 			/// Kill the value.
 			$($vis)* fn kill<S: $crate::Storage>(storage: &S) {
 				storage.kill($key)
+			}
+
+			/// Take and remove the value from the provided storage instance.
+			$($vis)* fn take<S: $crate::Storage>(storage: &S) -> Option<$ty> {
+				storage.take($key)
 			}
 		}
 
@@ -160,16 +173,20 @@ macro_rules! __storage_items_internal {
 				$key
 			}
 
-			fn load_from<S: $crate::Storage>(storage: &S) -> Option<$ty> {
-				$name::load_from(storage)
+			fn load<S: $crate::Storage>(storage: &S) -> Option<$ty> {
+				$name::load(storage)
 			}
 
-			fn store_into<S: $crate::Storage>(val: &$ty, storage: &S) {
-				$name::store_into(val, storage)
+			fn store<S: $crate::Storage>(val: &$ty, storage: &S) {
+				$name::store(val, storage)
 			}
 
 			fn kill<S: $crate::Storage>(storage: &S) {
 				$name::kill(storage)
+			}
+
+			fn take<S: $crate::Storage>(storage: &S) -> Option<$ty> {
+				$name::take(storage)
 			}
 		}
 	};
@@ -192,15 +209,26 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Load the value associated with the given key from the map.
-			$($vis)* fn load_from<S: $crate::Storage>(key: &$kty, storage: &S) -> Option<$ty> {
+			$($vis)* fn get<S: $crate::Storage>(key: &$kty, storage: &S) -> Option<$ty> {
 				let key = $name::key_for(key);
 				storage.load(&key[..])
 			}
 
 			/// Store a value to be associated with the given key from the map.
-			$($vis)* fn store_into<S: $crate::Storage>(key: &$kty, val: &$ty, storage: &S) {
+			$($vis)* fn insert<S: $crate::Storage>(key: &$kty, val: &$ty, storage: &S) {
 				let key = $name::key_for(key);
 				storage.store(&key[..], val);
+			}
+
+			/// Remove the value from storage.
+			$($vis)* fn remove<S: $crate::Storage>(key: &$kty, storage: &S) {
+				storage.kill(&$name::key_for(key)[..]);
+			}
+
+			/// Take the value, reading and removing it.
+			$($vis)* fn take<S: $crate::Storage>(key: &$kty, storage: &S) -> Option<$ty> {
+				let key = $name::key_for(key);
+				storage.take(&key[..])
 			}
 		}
 
@@ -213,12 +241,20 @@ macro_rules! __storage_items_internal {
 				$name::key_for(x)
 			}
 
-			fn load_from<S: $crate::Storage>(key: &$kty, storage: &S) -> Option<$ty> {
-				$name::load_from(key, storage)
+			fn get<S: $crate::Storage>(key: &$kty, storage: &S) -> Option<$ty> {
+				$name::get(key, storage)
 			}
 
-			fn store_into<S: $crate::Storage>(key: &$kty, val: &$ty, storage: &S) {
-				$name::store_into(key, val, storage)
+			fn insert<S: $crate::Storage>(key: &$kty, val: &$ty, storage: &S) {
+				$name::insert(key, val, storage)
+			}
+
+			fn remove<S: $crate::Storage>(key: &$kty, storage: &S) {
+				$name::remove(key, storage)
+			}
+
+			fn take<S: $crate::Storage>(key: &$kty, storage: &S) -> Option<$ty> {
+				$name::take(key, storage)
 			}
 		}
 	};
@@ -404,16 +440,17 @@ mod tests {
 	storage_items! {
 		Value: b"a" => u32;
 		List: b"b:" => list [u64];
+		Map: b"c:" => map [u32 => [u8; 32]];
 	}
 
     #[test]
 	fn value() {
 		let storage = RefCell::new(HashMap::new());
-		assert!(Value::load_from(&storage).is_none());
-		Value::store_into(&100_000, &storage);
-		assert_eq!(Value::load_from(&storage), Some(100_000));
+		assert!(Value::load(&storage).is_none());
+		Value::store(&100_000, &storage);
+		assert_eq!(Value::load(&storage), Some(100_000));
 		Value::kill(&storage);
-		assert!(Value::load_from(&storage).is_none());
+		assert!(Value::load(&storage).is_none());
 	}
 
 	#[test]
@@ -433,5 +470,16 @@ mod tests {
 		List::clear(&storage);
 		assert_eq!(List::len(&storage), 0);
 		assert!(List::items(&storage).is_empty());
+	}
+
+	#[test]
+	fn map() {
+		let storage = RefCell::new(HashMap::new());
+		assert!(Map::get(&5, &storage).is_none());
+		Map::insert(&5, &[1; 32], &storage);
+		assert_eq!(Map::get(&5, &storage), Some([1; 32]));
+		assert_eq!(Map::take(&5, &storage), Some([1; 32]));
+		assert!(Map::get(&5, &storage).is_none());
+		assert!(Map::get(&999, &storage).is_none());
 	}
 }
