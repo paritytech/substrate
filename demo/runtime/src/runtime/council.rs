@@ -265,13 +265,7 @@ pub mod public {
 		assert_eq!(index, vote_index());
 		if !storage::exists(&signed.to_keyed_vec(LAST_ACTIVE_OF)) {
 			// not yet a voter - deduct bond.
-			let b = staking::balance(signed);
-			assert!(b >= voting_bond());
-			// TODO: this is no good as it precludes active stakers. check that when we allow
-			// deductions of actively staked balances that things in the staking module don't
-			// break.
-//			assert!(staking::unlock_block(signed) == staking::LockStatus::Liquid);
-			staking::internal::set_balance(signed, b - voting_bond());
+			staking::internal::reserve_balance(signed, voting_bond());
 			storage::put(VOTERS, &{
 				let mut v: Vec<AccountId> = storage::get_or_default(VOTERS);
 				v.push(signed.clone());
@@ -288,16 +282,16 @@ pub mod public {
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
 	pub fn reap_inactive_voter(signed: &AccountId, signed_index: u32, who: &AccountId, who_index: u32, assumed_vote_index: VoteIndex) {
-		assert!(!presentation_active());
-		assert!(voter_last_active(signed).is_some());
+		assert!(!presentation_active(), "cannot reap during presentation period");
+		assert!(voter_last_active(signed).is_some(), "reaper must be a voter");
 		let last_active = voter_last_active(who).expect("target for inactivity cleanup must be active");
-		assert!(assumed_vote_index == vote_index());
-		assert!(last_active < assumed_vote_index - inactivity_grace_period());
+		assert!(assumed_vote_index == vote_index(), "vote index not current");
+		assert!(last_active < assumed_vote_index - inactivity_grace_period(), "cannot reap during grace perid");
 		let voters = voters();
 		let signed_index = signed_index as usize;
 		let who_index = who_index as usize;
-		assert!(signed_index < voters.len() && voters[signed_index] == *signed);
-		assert!(who_index < voters.len() && voters[who_index] == *who);
+		assert!(signed_index < voters.len() && voters[signed_index] == *signed, "bad reporter index");
+		assert!(who_index < voters.len() && voters[who_index] == *who, "bad target index");
 
 		// will definitely kill one of signed or who now.
 
@@ -315,40 +309,39 @@ pub mod public {
 			voters
 		);
 		if valid {
-			staking::internal::set_balance(signed, staking::balance(signed) + voting_bond());
+			staking::internal::transfer_reserved_balance(who, signed, voting_bond());
+		} else {
+			staking::internal::slash_reserved(signed, voting_bond());
 		}
 	}
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
 	pub fn retract_voter(signed: &AccountId, index: u32) {
-		assert!(!presentation_active());
-		assert!(storage::exists(&signed.to_keyed_vec(LAST_ACTIVE_OF)));
+		assert!(!presentation_active(), "cannot retract when presenting");
+		assert!(storage::exists(&signed.to_keyed_vec(LAST_ACTIVE_OF)), "cannot retract non-voter");
 		let voters = voters();
 		let index = index as usize;
-		assert!(index < voters.len() && voters[index] == *signed);
+		assert!(index < voters.len(), "retraction index invalid");
+		assert!(voters[index] == *signed, "retraction index mismatch");
 		remove_voter(signed, index, voters);
-		staking::internal::set_balance(signed, staking::balance(signed) + voting_bond());
+		staking::internal::unreserve_balance(signed, voting_bond());
 	}
 
 	/// Submit oneself for candidacy.
 	///
 	/// Account must have enough transferrable funds in it to pay the bond.
 	pub fn submit_candidacy(signed: &AccountId, slot: u32) {
-		assert!(!is_a_candidate(signed));
-		let b = staking::balance(signed);
-		let candidacy_bond = candidacy_bond();
-		assert!(b >= candidacy_bond);
-		assert!(staking::unlock_block(signed) == staking::LockStatus::Liquid);
+		assert!(!is_a_candidate(signed), "duplicate candidate submission");
+		assert!(staking::internal::deduct_unbonded(signed, candidacy_bond()), "candidate has not enough funds");
 
 		let slot = slot as usize;
 		let count = storage::get_or_default::<u32>(CANDIDATE_COUNT) as usize;
 		let candidates: Vec<AccountId> = storage::get_or_default(CANDIDATES);
 		assert!(
 			(slot == count && count == candidates.len()) ||
-			(slot < candidates.len() && candidates[slot] == AccountId::default())
+			(slot < candidates.len() && candidates[slot] == AccountId::default()),
+			"invalid candidate slot"
 		);
-
-		staking::internal::set_balance(signed, b - candidacy_bond);
 
 		let mut candidates = candidates;
 		if slot == candidates.len() {
@@ -365,20 +358,19 @@ pub mod public {
 	/// Only works if the block number >= current_vote().0 and < current_vote().0 + presentation_duration()
 	/// `signed` should have at least
 	pub fn present(signed: &AccountId, candidate: &AccountId, total: Balance, index: VoteIndex) {
-		assert_eq!(index, vote_index());
+		assert_eq!(index, vote_index(), "index not current");
 		let (_, _, expiring): (BlockNumber, u32, Vec<AccountId>) = storage::get(NEXT_FINALISE)
-			.expect("present can only be called after a tally is started.");
-		let b = staking::balance(signed);
+			.expect("cannot present outside of presentation period");
 		let stakes: Vec<Balance> = storage::get_or_default(SNAPSHOTED_STAKES);
 		let voters: Vec<AccountId> = storage::get_or_default(VOTERS);
 		let bad_presentation_punishment = present_slash_per_voter() * voters.len() as Balance;
-		assert!(b >= bad_presentation_punishment);
+		assert!(staking::can_slash(signed, bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
 		let mut leaderboard = leaderboard().expect("leaderboard must exist while present phase active");
-		assert!(total > leaderboard[0].0);
+		assert!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
 
 		if let Some(p) = active_council().iter().position(|&(ref c, _)| c == candidate) {
-			assert!(p < expiring.len());
+			assert!(p < expiring.len(), "candidate must not form a duplicated member if elected");
 		}
 
 		let (registered_since, candidate_index): (VoteIndex, u32) =
@@ -400,7 +392,7 @@ pub mod public {
 			leaderboard.sort_by_key(|&(t, _)| t);
 			storage::put(LEADERBOARD, &leaderboard);
 		} else {
-			staking::internal::set_balance(signed, b - bad_presentation_punishment);
+			staking::internal::slash(signed, bad_presentation_punishment);
 		}
 	}
 }
@@ -500,6 +492,8 @@ fn finalise_tally() {
 	let leaderboard: Vec<(Balance, AccountId)> = storage::take(LEADERBOARD).unwrap_or_default();
 	let new_expiry = system::block_number() + term_duration();
 
+	println!("Finalising tally {} {}, {:?}", system::block_number(), coming, leaderboard);
+
 	// return bond to winners.
 	let candidacy_bond = candidacy_bond();
 	for &(_, ref w) in leaderboard.iter()
@@ -507,7 +501,9 @@ fn finalise_tally() {
 		.take_while(|&&(b, _)| b != 0)
 		.take(coming as usize)
 	{
-		staking::internal::set_balance(w, staking::balance(w) + candidacy_bond);
+		println!("Refunding by {:?}, {:?}", candidacy_bond, staking::balance(w));
+		staking::internal::refund(w, candidacy_bond);
+		println!("Refunded to {:?}", staking::balance(w));
 	}
 
 	// set the new council.
@@ -690,7 +686,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "invalid candidate slot")]
 	fn candidate_submission_not_using_free_slot_should_panic() {
 		let mut t = new_test_ext_with_candidate_holes();
 
@@ -701,7 +697,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "invalid candidate slot")]
 	fn bad_candidate_slot_submission_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
@@ -711,7 +707,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "invalid candidate slot")]
 	fn non_free_candidate_slot_submission_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
@@ -722,13 +718,23 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "duplicate candidate submission")]
 	fn dupe_candidate_submission_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
 			public::submit_candidacy(&Alice, 0);
 			public::submit_candidacy(&Alice, 1);
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "candidate has not enough funds")]
+	fn poor_candidate_submission_should_panic() {
+		with_externalities(&mut new_test_ext(), || {
+			with_env(|e| e.block_number = 1);
+			assert_eq!(candidates(), Vec::<AccountId>::new());
+			public::submit_candidacy(&One, 0);
 		});
 	}
 
@@ -828,7 +834,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "retraction index mismatch")]
 	fn invalid_retraction_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
@@ -840,7 +846,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "retraction index invalid")]
 	fn overflow_retraction_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
@@ -851,7 +857,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "cannot retract non-voter")]
 	fn non_voter_retraction_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
@@ -875,9 +881,9 @@ mod tests {
 
 			with_env(|e| e.block_number = 6);
 			assert!(presentation_active());
-			public::present(&Dave, &Bob, 8, 0);
-			public::present(&Dave, &Eve, 38, 0);
-			assert_eq!(leaderboard(), Some(vec![(0, AccountId::default()), (0, AccountId::default()), (8, Bob.into()), (38, Eve.into())]));
+			public::present(&Dave, &Bob, 11, 0);
+			public::present(&Dave, &Eve, 41, 0);
+			assert_eq!(leaderboard(), Some(vec![(0, AccountId::default()), (0, AccountId::default()), (11, Bob.into()), (41, Eve.into())]));
 
 			internal::end_block();
 
@@ -895,6 +901,8 @@ mod tests {
 	#[test]
 	fn double_presentations_should_be_punished() {
 		with_externalities(&mut new_test_ext(), || {
+			assert!(staking::can_slash(&Dave, 10));
+
 			with_env(|e| e.block_number = 4);
 			public::submit_candidacy(&Bob, 0);
 			public::submit_candidacy(&Eve, 1);
@@ -903,9 +911,9 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 0);
-			public::present(&Dave, &Eve, 38, 0);
-			public::present(&Dave, &Eve, 38, 0);
+			public::present(&Dave, &Bob, 11, 0);
+			public::present(&Dave, &Eve, 41, 0);
+			public::present(&Dave, &Eve, 41, 0);
 			internal::end_block();
 
 			assert_eq!(active_council(), vec![(Eve.to_raw_public(), 11), (Bob.into(), 11)]);
@@ -922,7 +930,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 0);
+			public::present(&Dave, &Bob, 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -931,7 +939,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Eve, 38, 1);
+			public::present(&Dave, &Eve, 41, 1);
 			internal::end_block();
 
 			public::reap_inactive_voter(
@@ -943,12 +951,12 @@ mod tests {
 			assert_eq!(voters(), vec![Eve.to_raw_public()]);
 			assert_eq!(approvals_of(&Bob).len(), 0);
 			assert_eq!(staking::balance(&Bob), 17);
-			assert_eq!(staking::balance(&Eve), 50);
+			assert_eq!(staking::balance(&Eve), 53);
 		});
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "candidate must not form a duplicated member if elected")]
 	fn presenting_for_double_election_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
@@ -957,7 +965,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 0);
+			public::present(&Dave, &Bob, 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -966,7 +974,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Bob, 8, 1);
+			public::present(&Dave, &Bob, 11, 1);
 		});
 	}
 
@@ -979,7 +987,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 0);
+			public::present(&Dave, &Bob, 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -988,7 +996,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Eve, 38, 1);
+			public::present(&Dave, &Eve, 41, 1);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 11);
@@ -1003,12 +1011,12 @@ mod tests {
 			assert_eq!(voters(), vec![Eve.to_raw_public()]);
 			assert_eq!(approvals_of(&Bob).len(), 0);
 			assert_eq!(staking::balance(&Bob), 17);
-			assert_eq!(staking::balance(&Eve), 50);
+			assert_eq!(staking::balance(&Eve), 53);
 		});
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "bad reporter index")]
 	fn retracting_inactive_voter_with_bad_reporter_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
@@ -1038,7 +1046,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "bad target index")]
 	fn retracting_inactive_voter_with_bad_target_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
@@ -1082,10 +1090,10 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 0);
-			public::present(&Dave, &Charlie, 18, 0);
-			public::present(&Dave, &Dave, 28, 0);
-			public::present(&Dave, &Eve, 38, 0);
+			public::present(&Dave, &Bob, 11, 0);
+			public::present(&Dave, &Charlie, 21, 0);
+			public::present(&Dave, &Dave, 31, 0);
+			public::present(&Dave, &Eve, 41, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -1093,8 +1101,8 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Bob, 8, 1);
-			public::present(&Dave, &Charlie, 18, 1);
+			public::present(&Dave, &Bob, 11, 1);
+			public::present(&Dave, &Charlie, 21, 1);
 			internal::end_block();
 
 			public::reap_inactive_voter(
@@ -1110,7 +1118,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "reaper must be a voter")]
 	fn attempting_to_retract_inactive_voter_by_nonvoter_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
@@ -1119,7 +1127,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 0);
+			public::present(&Dave, &Bob, 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -1128,7 +1136,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Eve, 38, 1);
+			public::present(&Dave, &Eve, 41, 1);
 			internal::end_block();
 
 			public::reap_inactive_voter(
@@ -1140,7 +1148,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "candidate not worthy of leaderboard")]
 	fn presenting_loser_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
@@ -1157,11 +1165,11 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Alice, 57, 0);
-			public::present(&Dave, &Charlie, 18, 0);
-			public::present(&Dave, &Dave, 28, 0);
-			public::present(&Dave, &Eve, 38, 0);
-			public::present(&Dave, &Bob, 8, 0);
+			public::present(&Dave, &Alice, 60, 0);
+			public::present(&Dave, &Charlie, 21, 0);
+			public::present(&Dave, &Dave, 31, 0);
+			public::present(&Dave, &Eve, 41, 0);
+			public::present(&Dave, &Bob, 11, 0);
 		});
 	}
 
@@ -1182,23 +1190,23 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 0);
-			public::present(&Dave, &Alice, 57, 0);
-			public::present(&Dave, &Charlie, 18, 0);
-			public::present(&Dave, &Dave, 28, 0);
-			public::present(&Dave, &Eve, 38, 0);
+			public::present(&Dave, &Bob, 11, 0);
+			public::present(&Dave, &Alice, 60, 0);
+			public::present(&Dave, &Charlie, 21, 0);
+			public::present(&Dave, &Dave, 31, 0);
+			public::present(&Dave, &Eve, 41, 0);
 
 			assert_eq!(leaderboard(), Some(vec![
-				(18, Charlie.into()),
-				(28, Dave.into()),
-				(38, Eve.into()),
-				(57, Alice.to_raw_public())
+				(21, Charlie.into()),
+				(31, Dave.into()),
+				(41, Eve.into()),
+				(60, Alice.to_raw_public())
 			]));
 		});
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "cannot present outside of presentation period")]
 	fn present_panics_outside_of_presentation_period() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
@@ -1208,7 +1216,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "index not current")]
 	fn present_panics_with_invalid_vote_index() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
@@ -1219,12 +1227,12 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 1);
+			public::present(&Dave, &Bob, 11, 1);
 		});
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "presenter must have sufficient slashable funds")]
 	fn present_panics_when_presenter_is_poor() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
@@ -1238,7 +1246,7 @@ mod tests {
 
 			with_env(|e| e.block_number = 6);
 			assert_eq!(staking::balance(&Alice), 1);
-			public::present(&Alice, &Alice, 17, 0);
+			public::present(&Alice, &Alice, 30, 0);
 		});
 	}
 
@@ -1283,21 +1291,21 @@ mod tests {
 
 			with_env(|e| e.block_number = 6);
 			assert!(presentation_active());
-			public::present(&Dave, &Alice, 57, 0);
+			public::present(&Dave, &Alice, 60, 0);
 			assert_eq!(leaderboard(), Some(vec![
 				(0, AccountId::default()),
 				(0, AccountId::default()),
 				(0, AccountId::default()),
-				(57, Alice.to_raw_public())
+				(60, Alice.to_raw_public())
 			]));
-			public::present(&Dave, &Charlie, 18, 0);
-			public::present(&Dave, &Dave, 28, 0);
-			public::present(&Dave, &Eve, 38, 0);
+			public::present(&Dave, &Charlie, 21, 0);
+			public::present(&Dave, &Dave, 31, 0);
+			public::present(&Dave, &Eve, 41, 0);
 			assert_eq!(leaderboard(), Some(vec![
-				(18, Charlie.into()),
-				(28, Dave.into()),
-				(38, Eve.into()),
-				(57, Alice.to_raw_public())
+				(21, Charlie.into()),
+				(31, Dave.into()),
+				(41, Eve.into()),
+				(60, Alice.to_raw_public())
 			]));
 
 			internal::end_block();
@@ -1338,10 +1346,10 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Alice, 57, 0);
-			public::present(&Dave, &Charlie, 18, 0);
-			public::present(&Dave, &Dave, 28, 0);
-			public::present(&Dave, &Eve, 38, 0);
+			public::present(&Dave, &Alice, 60, 0);
+			public::present(&Dave, &Charlie, 21, 0);
+			public::present(&Dave, &Dave, 31, 0);
+			public::present(&Dave, &Eve, 41, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -1350,8 +1358,8 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Charlie, 75, 1);
-			public::present(&Dave, &Dave, 28, 1);
+			public::present(&Dave, &Charlie, 81, 1);
+			public::present(&Dave, &Dave, 31, 1);
 			internal::end_block();
 
 			assert!(!presentation_active());

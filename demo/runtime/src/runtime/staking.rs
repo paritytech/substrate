@@ -17,6 +17,7 @@
 //! Staking manager: Handles balances and periodically determines the best set of validators.
 
 use rstd::prelude::*;
+use rstd::cmp;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use runtime_io::{print, blake2_256};
@@ -42,6 +43,7 @@ pub const INTENTION_AT: &[u8] = b"sta:wil:";
 pub const INTENTION_COUNT: &[u8] = b"sta:wil:len";
 
 pub const BALANCE_OF: &[u8] = b"sta:bal:";
+pub const RESERVED_BALANCE_OF: &[u8] = b"sta:lbo:";
 pub const BONDAGE_OF: &[u8] = b"sta:bon:";
 pub const CODE_OF: &[u8] = b"sta:cod:";
 pub const STORAGE_OF: &[u8] = b"sta:sto:";
@@ -84,7 +86,24 @@ pub fn last_era_length_change() -> BlockNumber {
 
 /// The balance of a given account.
 pub fn balance(who: &AccountId) -> Balance {
+	free_balance(who) + reserved_balance(who)
+}
+
+/// The balance of a given account.
+pub fn free_balance(who: &AccountId) -> Balance {
 	storage::get_or_default(&who.to_keyed_vec(BALANCE_OF))
+}
+
+/// The amount of the balance of a given account that is exterally reserved; this can still get
+/// slashed, but gets slashed last of all.
+pub fn reserved_balance(who: &AccountId) -> Balance {
+	storage::get_or_default(&who.to_keyed_vec(RESERVED_BALANCE_OF))
+}
+
+/// Some result as `slash(who, value)` (but without the side-effects) asuming there are no
+/// balance changes in the meantime.
+pub fn can_slash(who: &AccountId, value: Balance) -> bool {
+	balance(who) >= value
 }
 
 /// The block at which the `who`'s funds become entirely liquid.
@@ -388,7 +407,7 @@ pub mod internal {
 	/// Set the balance of an account.
 	/// Needless to say, this is super low-level and accordingly dangerous. Ensure any modules that
 	/// use it are auditted to the hilt.
-	pub fn set_balance(who: &AccountId, value: Balance) {
+	pub fn set_free_balance(who: &AccountId, value: Balance) {
 		storage::put(&who.to_keyed_vec(BALANCE_OF), &value);
 	}
 
@@ -399,6 +418,72 @@ pub mod internal {
 			new_era();
 		}
 	}
+
+	/// Deduct from an unbonded balance. true if it happened.
+	pub fn deduct_unbonded(who: &AccountId, value: Balance) -> bool {
+		if let LockStatus::Liquid = unlock_block(who) {
+			let b = free_balance(who);
+			if b >= value {
+				set_free_balance(who, b - value);
+				return true;
+			}
+		}
+		false
+	}
+
+	/// Refund some balance.
+	pub fn refund(who: &AccountId, value: Balance) {
+		set_free_balance(who, free_balance(who) + value)
+	}
+
+	/// Will slash any balance, but prefer free over reserved.
+	pub fn slash(who: &AccountId, value: Balance) -> bool {
+		let free_balance = free_balance(who);
+		let free_slash = cmp::min(free_balance, value);
+		set_free_balance(who, free_balance - free_slash);
+		if free_slash < value {
+			slash_reserved(who, value - free_slash)
+		} else {
+			true
+		}
+	}
+
+	/// Moves `value` from balance to reserved balance.
+	pub fn reserve_balance(who: &AccountId, value: Balance) {
+		let b = free_balance(who);
+		assert!(b >= value);
+		set_free_balance(who, b - value);
+		set_reserved_balance(who, reserved_balance(who) + value);
+	}
+
+	/// Moves `value` from reserved balance to balance.
+	pub fn unreserve_balance(who: &AccountId, value: Balance) {
+		let b = reserved_balance(who);
+		let value = cmp::min(b, value);
+		set_reserved_balance(who, b - value);
+		set_free_balance(who, free_balance(who) + value);
+	}
+
+	/// Moves `value` from reserved balance to balance.
+	pub fn slash_reserved(who: &AccountId, value: Balance) -> bool {
+		let b = reserved_balance(who);
+		let slash = cmp::min(b, value);
+		set_reserved_balance(who, b - slash);
+		value == slash
+	}
+
+	/// Moves `value` from reserved balance to balance.
+	pub fn transfer_reserved_balance(slashed: &AccountId, beneficiary: &AccountId, value: Balance) {
+		let b = reserved_balance(slashed);
+		let value = cmp::min(b, value);
+		set_reserved_balance(slashed, b - value);
+		set_free_balance(beneficiary, free_balance(beneficiary) + value);
+	}
+}
+
+/// Set the reserved portion of `who`'s balance.
+fn set_reserved_balance(who: &AccountId, value: Balance) {
+	storage::put(&who.to_keyed_vec(RESERVED_BALANCE_OF), &value);
 }
 
 /// The era has changed - enact new staking set.
