@@ -335,7 +335,7 @@ pub trait StorageVec {
 }
 
 pub mod unhashed {
-	use super::{runtime_io, Slicable, Vec, IncrementalInput};
+	use super::{runtime_io, Slicable, Vec, KeyedVec, IncrementalInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
@@ -416,6 +416,48 @@ pub mod unhashed {
 	/// Put a raw byte slice into storage.
 	pub fn put_raw(key: &[u8], value: &[u8]) {
 		runtime_io::set_storage(key, value)
+	}
+
+	/// A trait to conveniently store a vector of storable data.
+	pub trait StorageVec {
+		type Item: Default + Sized + Slicable;
+		const PREFIX: &'static [u8];
+
+		/// Get the current set of items.
+		fn items() -> Vec<Self::Item> {
+			(0..Self::count()).into_iter().map(Self::item).collect()
+		}
+
+		/// Set the current set of items.
+		fn set_items(items: &[Self::Item]) {
+			Self::set_count(items.len() as u32);
+			items.iter().enumerate().for_each(|(v, ref i)| Self::set_item(v as u32, i));
+		}
+
+		fn set_item(index: u32, item: &Self::Item) {
+			if index < Self::count() {
+				put(&index.to_keyed_vec(Self::PREFIX), item);
+			}
+		}
+
+		fn clear_item(index: u32) {
+			if index < Self::count() {
+				kill(&index.to_keyed_vec(Self::PREFIX));
+			}
+		}
+
+		fn item(index: u32) -> Self::Item {
+			get_or_default(&index.to_keyed_vec(Self::PREFIX))
+		}
+
+		fn set_count(count: u32) {
+			(count..Self::count()).for_each(Self::clear_item);
+			put(&b"len".to_keyed_vec(Self::PREFIX), &count);
+		}
+
+		fn count() -> u32 {
+			get_or_default(&b"len".to_keyed_vec(Self::PREFIX))
+		}
 	}
 }
 
