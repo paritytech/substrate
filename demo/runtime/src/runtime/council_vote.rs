@@ -190,8 +190,11 @@ pub mod internal {
 	pub fn end_block(now: BlockNumber) {
 		while let Some((proposal, proposal_hash)) = take_proposal_if_expiring_at(now) {
 			let tally = take_tally(&proposal_hash);
-			if let (&Proposal::DemocracyCancelReferendum(ref_index), (_, 0 ,0)) = (&proposal, tally) {
-				democracy::privileged::clear_referendum(ref_index);
+			println!("Executing proposal {:?} {:?}", proposal, tally);
+			if let &Proposal::DemocracyCancelReferendum(ref_index) = &proposal {
+				if let (_, 0, 0) = tally {
+					democracy::privileged::cancel_referendum(ref_index);
+				}
 			} else {
 				if tally.0 > tally.1 + tally.2 {
 					kill_veto_of(&proposal_hash);
@@ -211,7 +214,7 @@ pub mod testing {
 	use runtime_io::{twox_128, TestExternalities};
 	use keyring::Keyring::{Alice, Bob, Charlie};
 	use codec::Joiner;
-	use runtime::council;
+	use runtime::{council, democracy};
 
 	pub fn externalities() -> TestExternalities {
 		let expiry: BlockNumber = 10;
@@ -222,7 +225,8 @@ pub mod testing {
 				(Charlie.into(), expiry)
 			]),
 			twox_128(COOLOFF_PERIOD).to_vec() => vec![].and(&2u64),
-			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64)
+			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64),
+			twox_128(democracy::VOTING_PERIOD).to_vec() => vec![].and(&3u64)
 		];
 		council::testing::externalities()
 			.into_iter().chain(extras.into_iter()).collect()
@@ -261,6 +265,68 @@ mod tests {
 			assert_eq!(is_vetoed(&ProposalHash::default()), false);
 			assert_eq!(vote_of(Alice, &ProposalHash::default()), None);
 			assert_eq!(tally(&ProposalHash::default()), (0, 0, 3));
+		});
+	}
+
+	#[test]
+	fn referendum_cancellation_should_work_when_unanimous() {
+		with_externalities(&mut new_test_ext(), || {
+			with_env(|e| e.block_number = 1);
+			let proposal = Proposal::StakingSetBondingDuration(42);
+			democracy::privileged::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
+			assert_eq!(democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
+
+			let cancellation = Proposal::DemocracyCancelReferendum(0);
+			let hash = cancellation.blake2_256();
+			public::propose(Alice, &cancellation);
+			public::vote(Bob, &hash, true);
+			public::vote(Charlie, &hash, true);
+			assert_eq!(proposals(), vec![(2, hash)]);
+			internal::end_block(1);
+
+			with_env(|e| e.block_number = 2);
+			internal::end_block(2);
+			assert_eq!(democracy::active_referendums(), vec![]);
+			assert_eq!(staking::bonding_duration(), 0);
+		});
+	}
+
+	#[test]
+	fn referendum_cancellation_should_fail_when_not_unanimous() {
+		with_externalities(&mut new_test_ext(), || {
+			with_env(|e| e.block_number = 1);
+			let proposal = Proposal::StakingSetBondingDuration(42);
+			democracy::privileged::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
+
+			let cancellation = Proposal::DemocracyCancelReferendum(0);
+			let hash = cancellation.blake2_256();
+			public::propose(Alice, &cancellation);
+			public::vote(Bob, &hash, true);
+			public::vote(Charlie, &hash, false);
+			internal::end_block(1);
+
+			with_env(|e| e.block_number = 2);
+			internal::end_block(2);
+			assert_eq!(democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
+		});
+	}
+
+	#[test]
+	fn referendum_cancellation_should_fail_when_abstentions() {
+		with_externalities(&mut new_test_ext(), || {
+			with_env(|e| e.block_number = 1);
+			let proposal = Proposal::StakingSetBondingDuration(42);
+			democracy::privileged::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
+
+			let cancellation = Proposal::DemocracyCancelReferendum(0);
+			let hash = cancellation.blake2_256();
+			public::propose(Alice, &cancellation);
+			public::vote(Bob, &hash, true);
+			internal::end_block(1);
+
+			with_env(|e| e.block_number = 2);
+			internal::end_block(2);
+			assert_eq!(democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
 		});
 	}
 
@@ -326,8 +392,7 @@ mod tests {
 			with_env(|e| e.block_number = 4);
 			internal::end_block(4);
 			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums(), vec![(0, 5, Proposal::StakingSetBondingDuration(42), VoteThreshold::SimpleMajority)]);
-
+			assert_eq!(democracy::active_referendums(), vec![(0, 7, Proposal::StakingSetBondingDuration(42), VoteThreshold::SimpleMajority)]);
 		});
 	}
 
@@ -390,7 +455,7 @@ mod tests {
 			with_env(|e| e.block_number = 2);
 			internal::end_block(2);
 			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums(), vec![(0, 3, Proposal::StakingSetBondingDuration(42), VoteThreshold::SuperMajorityAgainst)]);
+			assert_eq!(democracy::active_referendums(), vec![(0, 5, Proposal::StakingSetBondingDuration(42), VoteThreshold::SuperMajorityAgainst)]);
 		});
 	}
 
@@ -407,7 +472,7 @@ mod tests {
 			with_env(|e| e.block_number = 2);
 			internal::end_block(2);
 			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums(), vec![(0, 3, Proposal::StakingSetBondingDuration(42), VoteThreshold::SimpleMajority)]);
+			assert_eq!(democracy::active_referendums(), vec![(0, 5, Proposal::StakingSetBondingDuration(42), VoteThreshold::SimpleMajority)]);
 		});
 	}
 
