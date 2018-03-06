@@ -43,7 +43,7 @@ pub fn enact_proposal(proposal: Proposal) {
 			staking::privileged::force_new_era()
 		}
 		Proposal::DemocracyCancelReferendum(ref_index) => {
-			democracy::privileged::clear_referendum(ref_index)
+			democracy::privileged::cancel_referendum(ref_index)
 		}
 	}
 }

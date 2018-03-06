@@ -233,11 +233,8 @@ pub mod privileged {
 	}
 
 	/// Remove a referendum.
-	pub fn clear_referendum(ref_index: ReferendumIndex) {
-		for v in voters_for(ref_index) {
-			storage::kill(&(v, ref_index).to_keyed_vec(VOTE_OF));
-		}
-		storage::kill(&ref_index.to_keyed_vec(VOTERS_FOR));
+	pub fn cancel_referendum(ref_index: ReferendumIndex) {
+		clear_referendum(ref_index);
 	}
 }
 
@@ -247,9 +244,7 @@ pub mod internal {
 	use dispatch::enact_proposal;
 
 	/// Current era is ending; we should finish up any proposals.
-	pub fn end_block() {
-		let now = system::block_number();
-
+	pub fn end_block(now: BlockNumber) {
 		// pick out another public referendum if it's time.
 		if now % launch_period() == 0 {
 			let mut public_props = public_props();
@@ -274,7 +269,7 @@ pub mod internal {
 		for (index, _, proposal, vote_threshold) in maturing_referendums_at(now) {
 			let (approve, against) = tally(index);
 			let total_stake = staking::total_stake();
-			privileged::clear_referendum(index);
+			clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
 				enact_proposal(proposal);
 			}
@@ -297,6 +292,15 @@ fn inject_referendum(
 	storage::put(REFERENDUM_COUNT, &(ref_index + 1));
 	storage::put(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF), &(end, proposal, vote_threshold));
 	ref_index
+}
+
+/// Remove all info on a referendum.
+fn clear_referendum(ref_index: ReferendumIndex) {
+	storage::kill(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF));
+	storage::kill(&ref_index.to_keyed_vec(VOTERS_FOR));
+	for v in voters_for(ref_index) {
+		storage::kill(&(v, ref_index).to_keyed_vec(VOTE_OF));
+	}
 }
 
 #[cfg(test)]
@@ -399,7 +403,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 1);
 			public::propose(&alice, &Proposal::StakingSetSessionsPerEra(2), 1u64);
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 
 			with_env(|e| e.block_number = 2);
 			let r = 0;
@@ -410,7 +414,7 @@ mod tests {
 			assert_eq!(vote_of(&alice, r), Some(true));
 			assert_eq!(tally(r), (10, 0));
 
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 
 			assert_eq!(staking::era_length(), 2u64);
@@ -451,7 +455,7 @@ mod tests {
 			public::second(&eve, 0);
 			public::second(&eve, 0);
 			public::second(&eve, 0);
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			assert_eq!(staking::balance(&alice), 10u64);
 			assert_eq!(staking::balance(&bob), 20u64);
 			assert_eq!(staking::balance(&eve), 50u64);
@@ -506,23 +510,23 @@ mod tests {
 			public::propose(&alice, &Proposal::StakingSetBondingDuration(2), 2u64);
 			public::propose(&alice, &Proposal::StakingSetBondingDuration(4), 4u64);
 			public::propose(&alice, &Proposal::StakingSetBondingDuration(3), 3u64);
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 
 			with_env(|e| e.block_number = 1);
 			public::vote(&alice, 0, true);
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 4u64);
 
 			with_env(|e| e.block_number = 2);
 			public::vote(&alice, 1, true);
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 3u64);
 
 			with_env(|e| e.block_number = 3);
 			public::vote(&alice, 2, true);
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 2u64);
 		});
@@ -542,10 +546,28 @@ mod tests {
 			assert_eq!(vote_of(&alice, r), Some(true));
 			assert_eq!(tally(r), (10, 0));
 
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 
 			assert_eq!(staking::era_length(), 2u64);
+		});
+	}
+
+	#[test]
+	fn cancel_referendum_should_work() {
+		let alice = Keyring::Alice.to_raw_public();
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			with_env(|e| e.block_number = 1);
+			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
+			public::vote(&alice, r, true);
+			privileged::cancel_referendum(r);
+
+			democracy::internal::end_block(system::block_number());
+			staking::internal::check_new_era();
+
+			assert_eq!(staking::era_length(), 1u64);
 		});
 	}
 
@@ -563,7 +585,7 @@ mod tests {
 			assert_eq!(vote_of(&alice, r), Some(false));
 			assert_eq!(tally(r), (0, 10));
 
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 
 			assert_eq!(staking::era_length(), 1u64);
@@ -593,7 +615,7 @@ mod tests {
 
 			assert_eq!(tally(r), (110, 100));
 
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 
 			assert_eq!(staking::era_length(), 2u64);
@@ -619,7 +641,7 @@ mod tests {
 
 			assert_eq!(tally(r), (60, 50));
 
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 
 			assert_eq!(staking::era_length(), 1u64);
@@ -649,7 +671,7 @@ mod tests {
 
 			assert_eq!(tally(r), (100, 50));
 
-			democracy::internal::end_block();
+			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 
 			assert_eq!(staking::era_length(), 2u64);
