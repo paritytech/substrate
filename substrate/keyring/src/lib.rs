@@ -21,6 +21,7 @@
 extern crate ed25519;
 
 use std::collections::HashMap;
+use std::ops::Deref;
 use ed25519::{Pair, Public, Signature};
 
 /// Set of test accounts.
@@ -65,7 +66,20 @@ impl Keyring {
 	}
 
 	pub fn sign(self, msg: &[u8]) -> Signature {
-		AsRef::<Pair>::as_ref(&self).sign(msg)
+		Pair::from(self).sign(msg)
+	}
+
+	pub fn pair(self) -> Pair {
+		match self {
+			Keyring::Alice => Pair::from_seed(b"Alice                           "),
+			Keyring::Bob => Pair::from_seed(b"Bob                             "),
+			Keyring::Charlie => Pair::from_seed(b"Charlie                         "),
+			Keyring::Dave => Pair::from_seed(b"Dave                            "),
+			Keyring::Eve => Pair::from_seed(b"Eve                             "),
+			Keyring::Ferdie => Pair::from_seed(b"Ferdie                          "),
+			Keyring::One => Pair::from_seed(b"12345678901234567890123456789012"),
+			Keyring::Two => Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")),
+		}
 	}
 }
 
@@ -86,16 +100,16 @@ impl From<Keyring> for &'static str {
 
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
-		let mut m = HashMap::new();
-		m.insert(Keyring::Alice,	Pair::from_seed(b"Alice                           "));
-		m.insert(Keyring::Bob,		Pair::from_seed(b"Bob                             "));
-		m.insert(Keyring::Charlie,	Pair::from_seed(b"Charlie                         "));
-		m.insert(Keyring::Dave,		Pair::from_seed(b"Dave                            "));
-		m.insert(Keyring::Eve,		Pair::from_seed(b"Eve                             "));
-		m.insert(Keyring::Ferdie,	Pair::from_seed(b"Ferdie                          "));
-		m.insert(Keyring::One,		Pair::from_seed(b"12345678901234567890123456789012"));
-		m.insert(Keyring::Two,		Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")));
-		m
+		[
+			Keyring::Alice,
+			Keyring::Bob,
+			Keyring::Charlie,
+			Keyring::Dave,
+			Keyring::Eve,
+			Keyring::Ferdie,
+			Keyring::One,
+			Keyring::Two,
+		].iter().map(|&i| (i, i.pair())).collect()
 	};
 
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
@@ -106,6 +120,12 @@ lazy_static! {
 impl From<Keyring> for Public {
 	fn from(k: Keyring) -> Self {
 		(*PUBLIC_KEYS).get(&k).unwrap().clone()
+	}
+}
+
+impl From<Keyring> for Pair {
+	fn from(k: Keyring) -> Self {
+		k.pair()
 	}
 }
 
@@ -127,21 +147,16 @@ impl AsRef<[u8; 32]> for Keyring {
 	}
 }
 
-impl AsRef<[u8]> for Keyring {
-	fn as_ref(&self) -> &[u8] {
-		(*PUBLIC_KEYS).get(self).unwrap().as_array_ref()
-	}
-}
-
 impl AsRef<Public> for Keyring {
 	fn as_ref(&self) -> &Public {
 		(*PUBLIC_KEYS).get(self).unwrap()
 	}
 }
 
-impl AsRef<Pair> for Keyring {
-	fn as_ref(&self) -> &Pair {
-		(*PRIVATE_KEYS).get(self).unwrap()
+impl Deref for Keyring {
+	type Target = [u8; 32];
+	fn deref(&self) -> &[u8; 32] {
+		(*PUBLIC_KEYS).get(self).unwrap().as_array_ref()
 	}
 }
 
