@@ -7,7 +7,7 @@ REPO_AUTH="${GH_TOKEN}:@${REPO}"
 SRCS=( "polkadot/runtime/wasm" "substrate/executor/wasm" "substrate/test-runtime/wasm" )
 DST=".wasm-binaries"
 TARGET="wasm32-unknown-unknown"
-UTCDATE=`date -u "+%Y%m%d.%H%M%S"`
+UTCDATE=`date -u "+%Y%m%d.%H%M%S.0"`
 
 pushd .
 
