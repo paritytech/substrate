@@ -178,10 +178,7 @@ pub mod public {
 	/// Propose a sensitive action to be taken.
 	pub fn propose(signed: &AccountId, proposal: &Proposal, value: Balance) {
 		assert!(value >= minimum_deposit());
-		let b = staking::balance(signed);
-		assert!(b >= value);
-
-		staking::internal::set_balance(signed, b - value);
+		assert!(staking::internal::deduct_unbonded(signed, value));
 
 		let index: PropIndex = storage::get_or_default(PUBLIC_PROP_COUNT);
 		storage::put(PUBLIC_PROP_COUNT, &(index + 1));
@@ -194,14 +191,12 @@ pub mod public {
 
 	/// Propose a sensitive action to be taken.
 	pub fn second(signed: &AccountId, proposal: PropIndex) {
-		let b = staking::balance(signed);
 		let key = proposal.to_keyed_vec(DEPOSIT_OF);
 		let mut deposit: (Balance, Vec<AccountId>) =
 			storage::get(&key).expect("can only second an existing proposal");
-		assert!(b >= deposit.0);
-		deposit.1.push(*signed);
+		assert!(staking::internal::deduct_unbonded(signed, deposit.0));
 
-		staking::internal::set_balance(signed, b - deposit.0);
+		deposit.1.push(*signed);
 		storage::put(&key, &deposit);
 	}
 
@@ -258,7 +253,7 @@ pub mod internal {
 						.expect("depositors always exist for current proposals");
 				// refund depositors
 				for d in &depositors {
-					staking::internal::set_balance(d, staking::balance(d) + deposit);
+					staking::internal::refund(d, deposit);
 				}
 				storage::put(PUBLIC_PROPS, &public_props);
 				inject_referendum(now + voting_period(), proposal, VoteThreshold::SuperMajorityApprove);
