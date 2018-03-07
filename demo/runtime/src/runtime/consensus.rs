@@ -21,6 +21,7 @@ use runtime_support::storage::unhashed::StorageVec;
 use demo_primitives::SessionKey;
 
 pub const AUTHORITY_AT: &'static[u8] = b":auth:";
+pub const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 
 struct AuthorityStorageVec {}
 impl StorageVec for AuthorityStorageVec {

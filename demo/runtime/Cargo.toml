@@ -12,11 +12,9 @@ substrate-runtime-std = { path = "../../substrate/runtime-std" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-primitives = { path = "../../substrate/primitives" }
+substrate-keyring = { path = "../../substrate/keyring" }
 demo-primitives = { path = "../primitives" }
 integer-sqrt = "0.1.0"
-
-[dev-dependencies]
-substrate-keyring = { path = "../../substrate/keyring" }
 
 [features]
 default = ["std"]

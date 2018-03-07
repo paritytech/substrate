@@ -77,7 +77,20 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		session_length: 720,	// that's 1 hour per session.
 		sessions_per_era: 24,	// 24 hours per era.
 		bonding_duration: 90,	// 90 days per bond.
-		approval_ratio: 667,	// 66.7% approvals required for legislation.
+		launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
+		voting_period: 120 * 24 * 28,	// 4 weeks to discuss & vote on an active referendum
+		minimum_deposit: 1000,	// 1000 as the minimum deposit for a referendum
+		candidacy_bond: 1000,	// 1000 to become a council candidate
+		voter_bond: 100,		// 100 down to vote for a candidate
+		present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
+		carry_count: 24,		// carry over the 24 runners-up to the next council election
+		presentation_duration: 120 * 24,	// one day for presenting winners.
+		council_election_voting_period: 7 * 120 * 24,	// one week period between possible council elections.
+		council_term_duration: 180 * 120 * 24,	// 180 day term duration for the council.
+		desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
+		inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
+		cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
+		council_proposal_voting_period: 7 * 120 * 24, // 7 day voting period for council members.
 	};
 	let prepare_genesis = || {
 		storage = genesis_config.genesis_map();

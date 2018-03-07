@@ -560,11 +560,11 @@ pub mod testing {
 			twox_128(CANDIDACY_BOND).to_vec() => vec![].and(&9u64),
 			twox_128(VOTING_BOND).to_vec() => vec![].and(&3u64),
 			twox_128(PRESENT_SLASH_PER_VOTER).to_vec() => vec![].and(&1u64),
-			twox_128(CARRY_COUNT).to_vec() => vec![].and(&2u64),
+			twox_128(CARRY_COUNT).to_vec() => vec![].and(&2u32),
 			twox_128(PRESENTATION_DURATION).to_vec() => vec![].and(&2u64),
 			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&4u64),
 			twox_128(TERM_DURATION).to_vec() => vec![].and(&5u64),
-			twox_128(DESIRED_SEATS).to_vec() => vec![].and(&2u64),
+			twox_128(DESIRED_SEATS).to_vec() => vec![].and(&2u32),
 			twox_128(INACTIVE_GRACE_PERIOD).to_vec() => vec![].and(&1u32)
 		];
 		democracy::testing::externalities()
