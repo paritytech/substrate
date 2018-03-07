@@ -223,7 +223,7 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	}
 }
 
-#[cfg(test)]
+#[cfg(any(feature = "std", test))]
 pub mod testing {
 	use super::*;
 	use runtime_io::{twox_128, TestExternalities};

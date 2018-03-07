@@ -518,7 +518,7 @@ fn new_era() {
 	);
 }
 
-#[cfg(test)]
+#[cfg(any(feature = "std", test))] 
 pub mod testing {
 	use super::*;
 	use runtime_io::{twox_128, TestExternalities};
