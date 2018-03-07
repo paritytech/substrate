@@ -141,7 +141,20 @@ pub fn total_stake() -> Balance {
 pub mod public {
 	use super::*;
 
-	type State = BTreeMap<AccountId, (Option<Balance>, Option<Vec<u8>>, BTreeMap<Vec<u8>, Option<Vec<u8>>>)>;
+	#[derive(Default)]
+	struct ChangeEntry {
+		balance: Option<Balance>,
+		code: Option<Vec<u8>>,
+		storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+	}
+
+	impl ChangeEntry {
+		pub fn balance_changed(b: Balance) -> Self {
+			ChangeEntry { balance: Some(b), code: None, storage: Default::default() }
+		}
+	}
+
+	type State = BTreeMap<AccountId, ChangeEntry>;
 
 	trait Externalities {
 		fn get_storage(&self, account: &AccountId, location: &[u8]) -> Option<Vec<u8>>;
@@ -191,15 +204,15 @@ pub mod public {
 	}
 
 	fn commit_state(s: State) {
-		for (address, (maybe_balance, maybe_code, storage)) in s.into_iter() {
-			if let Some(balance) = maybe_balance {
+		for (address, changed) in s.into_iter() {
+			if let Some(balance) = changed.balance {
 				storage::put(&address.to_keyed_vec(BALANCE_OF), &balance);
 			}
-			if let Some(code) = maybe_code {
+			if let Some(code) = changed.code {
 				storage::put(&address.to_keyed_vec(CODE_OF), &code);
 			}
 			let storage_key = address.to_keyed_vec(STORAGE_OF);
-			for (k, v) in storage.into_iter() {
+			for (k, v) in changed.storage.into_iter() {
 				let mut key = storage_key.clone();
 				key.extend(k);
 				if let Some(value) = v {
@@ -212,20 +225,20 @@ pub mod public {
 	}
 
 	fn merge_state(commit_state: State, local: &mut State) {
-		for (address, (maybe_balance, maybe_code, storage)) in commit_state.into_iter() {
+		for (address, changed) in commit_state.into_iter() {
 			match local.entry(address) {
 				Entry::Occupied(e) => {
 					let mut value = e.into_mut();
-					if maybe_balance.is_some() {
-						value.0 = maybe_balance;
+					if changed.balance.is_some() {
+						value.balance = changed.balance;
 					}
-					if maybe_code.is_some() {
-						value.1 = maybe_code;
+					if changed.code.is_some() {
+						value.code = changed.code;
 					}
-					value.2.extend(storage.into_iter());
+					value.storage.extend(changed.storage.into_iter());
 				}
 				Entry::Vacant(e) => {
-					e.insert((maybe_balance, maybe_code, storage));
+					e.insert(changed);
 				}
 			}
 		}
@@ -262,8 +275,8 @@ pub mod public {
 
 		// two inserts are safe
 		assert!(&dest != transactor);
-		local.insert(dest, (Some(value), Some(code.to_vec()), Default::default()));
-		local.insert(transactor.clone(), (Some(from_balance - value), None, Default::default()));
+		local.insert(dest, ChangeEntry { balance: Some(value), code: Some(code.to_vec()), storage: Default::default() });
+		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - value));
 
 		Some(local)
 	}
@@ -298,8 +311,8 @@ pub mod public {
 
 		if transactor != dest {
 			let mut local = local.borrow_mut();
-			local.insert(transactor.clone(), (Some(from_balance - value), None, Default::default()));
-			local.insert(dest.clone(), (Some(to_balance + value), None, Default::default()));
+			local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - value));
+			local.insert(dest.clone(), ChangeEntry::balance_changed(to_balance + value));
 		}
 
 		let should_commit = {
@@ -307,16 +320,16 @@ pub mod public {
 			let ext = || Ext {
 				do_get_storage: |account: &AccountId, location: &[u8]|
 					local.borrow().get(account)
-						.and_then(|a| a.2.get(location))
+						.and_then(|a| a.storage.get(location))
 						.cloned()
 						.unwrap_or_else(|| ext.get_storage(account, location)),
 				do_get_code: |account: &AccountId|
 					local.borrow().get(account)
-						.and_then(|a| a.1.clone())
+						.and_then(|a| a.code.clone())
 						.unwrap_or_else(|| ext.get_code(account)),
 				do_get_balance: |account: &AccountId|
 					local.borrow().get(account)
-						.and_then(|a| a.0)
+						.and_then(|a| a.balance)
 						.unwrap_or_else(|| ext.get_balance(account)),
 			};
 			let mut transfer = |inner_dest: &AccountId, value: Balance| {
@@ -332,8 +345,8 @@ pub mod public {
 			let mut put_storage = |location: Vec<u8>, value: Option<Vec<u8>>| {
 				local.borrow_mut()
 					.entry(dest.clone())
-					.or_insert((None, None, Default::default()))
-					.2.insert(location, value);
+					.or_insert(Default::default())
+					.storage.insert(location, value);
 			};
 
 			// TODO: logging (logs are just appended into a notable storage-based vector and cleared every
@@ -518,7 +531,7 @@ fn new_era() {
 	);
 }
 
-#[cfg(any(feature = "std", test))] 
+#[cfg(any(feature = "std", test))]
 pub mod testing {
 	use super::*;
 	use runtime_io::{twox_128, TestExternalities};
