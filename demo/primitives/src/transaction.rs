@@ -18,6 +18,7 @@
 
 use rstd::vec::Vec;
 use codec::{Input, Slicable};
+use {AccountId, SessionKey};
 
 #[cfg(feature = "std")]
 use std::fmt;
@@ -153,16 +154,27 @@ impl Slicable for Proposal {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[repr(u8)]
 enum FunctionId {
-	/// Set the timestamp.
 	TimestampSet = 0x00,
-	/// Set temporary session key as a validator.
+
 	SessionSetKey = 0x10,
-	/// Staking subsystem: begin staking.
+
 	StakingStake = 0x20,
-	/// Staking subsystem: stop staking.
 	StakingUnstake = 0x21,
-	/// Staking subsystem: transfer stake.
 	StakingTransfer = 0x22,
+
+	CouncilVotePropose = 0x30,
+	CouncilVoteVote = 0x31,
+	CouncilVoteVeto = 0x32,
+
+	CouncilSetApprovals = 0x40,
+	CouncilReapInactiveVoter = 0x41,
+	CouncilRetractVoter = 0x42,
+	CouncilSubmitCandidacy = 0x43,
+	CouncilPresentWinner = 0x44,
+
+	DemocracyPropose = 0x50,
+	DemocracySecond = 0x51,
+	DemocracyVote = 0x52,
 }
 
 impl FunctionId {
@@ -179,17 +191,29 @@ impl FunctionId {
 /// Functions on the runtime.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[allow(missing_docs)]
 pub enum Function {
-	/// Set the timestamp.
 	TimestampSet(u64),
-	/// Set temporary session key as a validator.
-	SessionSetKey(::SessionKey),
-	/// Staking subsystem: begin staking.
+
+	SessionSetKey(SessionKey),
+
 	StakingStake,
-	/// Staking subsystem: stop staking.
 	StakingUnstake,
-	/// Staking subsystem: transfer stake.
-	StakingTransfer(::AccountId, u64),
+	StakingTransfer(AccountId, u64),
+
+	CouncilVotePropose(Proposal),
+	CouncilVoteVote([u8; 32], bool),
+	CouncilVoteVeto([u8; 32]),
+
+	CouncilSetApprovals(Vec<bool>, u32),
+	CouncilReapInactiveVoter(u32, AccountId, u32, u32),
+	CouncilRetractVoter(u32),
+	CouncilSubmitCandidacy(u32),
+	CouncilPresentWinner(AccountId, u64, u32),
+
+	DemocracyPropose(Proposal, u64),
+	DemocracySecond(u32),
+	DemocracyVote(u32, bool),
 }
 
 impl Slicable for Function {
@@ -197,16 +221,53 @@ impl Slicable for Function {
 		let id = try_opt!(u8::decode(input).and_then(FunctionId::from_u8));
 		Some(match id {
 			FunctionId::TimestampSet =>
-				Function::TimestampSet(try_opt!(Slicable::decode(input))),
+				Function::TimestampSet(Slicable::decode(input)?),
 			FunctionId::SessionSetKey =>
-				Function::SessionSetKey(try_opt!(Slicable::decode(input))),
+				Function::SessionSetKey(Slicable::decode(input)?),
 			FunctionId::StakingStake => Function::StakingStake,
 			FunctionId::StakingUnstake => Function::StakingUnstake,
 			FunctionId::StakingTransfer => {
-				let to  = try_opt!(Slicable::decode(input));
-				let amount = try_opt!(Slicable::decode(input));
-
+				let to = Slicable::decode(input)?;
+				let amount = Slicable::decode(input)?;
 				Function::StakingTransfer(to, amount)
+			}
+			FunctionId::CouncilVotePropose => Function::CouncilVotePropose(Slicable::decode(input)?),
+			FunctionId::CouncilVoteVote => {
+				let a = Slicable::decode(input)?;
+				let b = Slicable::decode(input)?;
+				Function::CouncilVoteVote(a, b)
+			}
+			FunctionId::CouncilVoteVeto => Function::CouncilVoteVeto(Slicable::decode(input)?),
+			FunctionId::CouncilSetApprovals => {
+				let a = Slicable::decode(input)?;
+				let b = Slicable::decode(input)?;
+				Function::CouncilSetApprovals(a, b)
+			}
+			FunctionId::CouncilReapInactiveVoter => {
+				let a = Slicable::decode(input)?;
+				let b = Slicable::decode(input)?;
+				let c = Slicable::decode(input)?;
+				let d = Slicable::decode(input)?;
+				Function::CouncilReapInactiveVoter(a, b, c, d)
+			}
+			FunctionId::CouncilRetractVoter => Function::CouncilRetractVoter(Slicable::decode(input)?),
+			FunctionId::CouncilSubmitCandidacy => Function::CouncilSubmitCandidacy(Slicable::decode(input)?),
+			FunctionId::CouncilPresentWinner => {
+				let a = Slicable::decode(input)?;
+				let b = Slicable::decode(input)?;
+				let c = Slicable::decode(input)?;
+				Function::CouncilPresentWinner(a, b, c)
+			}
+			FunctionId::DemocracyPropose => {
+				let a = Slicable::decode(input)?;
+				let b = Slicable::decode(input)?;
+				Function::DemocracyPropose(a, b)
+			}
+			FunctionId::DemocracySecond => Function::DemocracySecond(Slicable::decode(input)?),
+			FunctionId::DemocracyVote => {
+				let a = Slicable::decode(input)?;
+				let b = Slicable::decode(input)?;
+				Function::DemocracyVote(a, b)
 			}
 		})
 	}
@@ -233,6 +294,7 @@ impl Slicable for Function {
 				to.using_encoded(|s| v.extend(s));
 				amount.using_encoded(|s| v.extend(s));
 			}
+			_ => {}
 		}
 
 		v

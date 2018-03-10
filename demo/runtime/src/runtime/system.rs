@@ -144,6 +144,39 @@ pub mod internal {
 			Function::TimestampSet(t) => {
 				::runtime::timestamp::public::set(t);
 			}
+			Function::CouncilVotePropose(ref a) => {
+				::runtime::council_vote::public::propose(transactor, a);
+			}
+			Function::CouncilVoteVote(ref a, b) => {
+				::runtime::council_vote::public::vote(transactor, a, b);
+			}
+			Function::CouncilVoteVeto(ref a) => {
+				::runtime::council_vote::public::veto(transactor, a);
+			}
+			Function::CouncilSetApprovals(ref a, b) => {
+				::runtime::council::public::set_approvals(transactor, a, b);
+			}
+			Function::CouncilReapInactiveVoter(a, ref b, c, d) => {
+				::runtime::council::public::reap_inactive_voter(transactor, a, b, c, d);
+			}
+			Function::CouncilRetractVoter(a) => {
+				::runtime::council::public::retract_voter(transactor, a);
+			}
+			Function::CouncilSubmitCandidacy(a) => {
+				::runtime::council::public::submit_candidacy(transactor, a);
+			}
+			Function::CouncilPresentWinner(ref a, b, c) => {
+				::runtime::council::public::present_winner(transactor, a, b, c);
+			}
+			Function::DemocracyPropose(ref a, b) => {
+				::runtime::democracy::public::propose(transactor, a, b);
+			}
+			Function::DemocracySecond(a) => {
+				::runtime::democracy::public::second(transactor, a);
+			}
+			Function::DemocracyVote(a, b) => {
+				::runtime::democracy::public::vote(transactor, a, b);
+			}
 		}
 	}
 }

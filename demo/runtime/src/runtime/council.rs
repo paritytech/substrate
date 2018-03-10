@@ -258,6 +258,11 @@ pub fn leaderboard() -> Option<Vec<(Balance, AccountId)>> {
 pub mod public {
 	use super::*;
 
+	// CouncilVotePropose(AccountId, Proposal)
+	// CouncilVoteVote(AccountId, [u8; 32], bool)
+	// CouncilVoteVeto(AccountId, [u8; 32])
+	// CouncilSetApprovals(AccountId, Vec<bool>, u32)
+	// CouncilReapInactiveVoter(AccountId, u32, AccountId, u32, u32)
 	/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 	/// are registered.
 	pub fn set_approvals(signed: &AccountId, votes: &Vec<bool>, index: VoteIndex) {
@@ -354,10 +359,14 @@ pub mod public {
 		storage::put(&signed.to_keyed_vec(REGISTER_INFO_OF), &(vote_index(), slot));
 	}
 
+	// CouncilRetractVoter(AccountId, u32)
+	// CouncilSubmitCandidacy(AccountId, u32)
+	// CouncilPresent(AccountId, u32)
+
 	/// Claim that `signed` is one of the top carry_count() + current_vote().1 candidates.
 	/// Only works if the block number >= current_vote().0 and < current_vote().0 + presentation_duration()
 	/// `signed` should have at least
-	pub fn present(signed: &AccountId, candidate: &AccountId, total: Balance, index: VoteIndex) {
+	pub fn present_winner(signed: &AccountId, candidate: &AccountId, total: Balance, index: VoteIndex) {
 		assert_eq!(index, vote_index(), "index not current");
 		let (_, _, expiring): (BlockNumber, u32, Vec<AccountId>) = storage::get(NEXT_FINALISE)
 			.expect("cannot present outside of presentation period");
@@ -881,8 +890,8 @@ mod tests {
 
 			with_env(|e| e.block_number = 6);
 			assert!(presentation_active());
-			public::present(&Dave, &Bob, 11, 0);
-			public::present(&Dave, &Eve, 41, 0);
+			public::present_winner(&Dave, &Bob, 11, 0);
+			public::present_winner(&Dave, &Eve, 41, 0);
 			assert_eq!(leaderboard(), Some(vec![(0, AccountId::default()), (0, AccountId::default()), (11, Bob.into()), (41, Eve.into())]));
 
 			internal::end_block();
@@ -911,9 +920,9 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 11, 0);
-			public::present(&Dave, &Eve, 41, 0);
-			public::present(&Dave, &Eve, 41, 0);
+			public::present_winner(&Dave, &Bob, 11, 0);
+			public::present_winner(&Dave, &Eve, 41, 0);
+			public::present_winner(&Dave, &Eve, 41, 0);
 			internal::end_block();
 
 			assert_eq!(active_council(), vec![(Eve.to_raw_public(), 11), (Bob.into(), 11)]);
@@ -930,7 +939,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 11, 0);
+			public::present_winner(&Dave, &Bob, 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -939,7 +948,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Eve, 41, 1);
+			public::present_winner(&Dave, &Eve, 41, 1);
 			internal::end_block();
 
 			public::reap_inactive_voter(
@@ -965,7 +974,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 11, 0);
+			public::present_winner(&Dave, &Bob, 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -974,7 +983,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Bob, 11, 1);
+			public::present_winner(&Dave, &Bob, 11, 1);
 		});
 	}
 
@@ -987,7 +996,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 11, 0);
+			public::present_winner(&Dave, &Bob, 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -996,7 +1005,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Eve, 41, 1);
+			public::present_winner(&Dave, &Eve, 41, 1);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 11);
@@ -1025,7 +1034,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 0);
+			public::present_winner(&Dave, &Bob, 8, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -1034,7 +1043,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Eve, 38, 1);
+			public::present_winner(&Dave, &Eve, 38, 1);
 			internal::end_block();
 
 			public::reap_inactive_voter(
@@ -1055,7 +1064,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 8, 0);
+			public::present_winner(&Dave, &Bob, 8, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -1064,7 +1073,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Eve, 38, 1);
+			public::present_winner(&Dave, &Eve, 38, 1);
 			internal::end_block();
 
 			public::reap_inactive_voter(
@@ -1090,10 +1099,10 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 11, 0);
-			public::present(&Dave, &Charlie, 21, 0);
-			public::present(&Dave, &Dave, 31, 0);
-			public::present(&Dave, &Eve, 41, 0);
+			public::present_winner(&Dave, &Bob, 11, 0);
+			public::present_winner(&Dave, &Charlie, 21, 0);
+			public::present_winner(&Dave, &Dave, 31, 0);
+			public::present_winner(&Dave, &Eve, 41, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -1101,8 +1110,8 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Bob, 11, 1);
-			public::present(&Dave, &Charlie, 21, 1);
+			public::present_winner(&Dave, &Bob, 11, 1);
+			public::present_winner(&Dave, &Charlie, 21, 1);
 			internal::end_block();
 
 			public::reap_inactive_voter(
@@ -1127,7 +1136,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 11, 0);
+			public::present_winner(&Dave, &Bob, 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -1136,7 +1145,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Eve, 41, 1);
+			public::present_winner(&Dave, &Eve, 41, 1);
 			internal::end_block();
 
 			public::reap_inactive_voter(
@@ -1165,11 +1174,11 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Alice, 60, 0);
-			public::present(&Dave, &Charlie, 21, 0);
-			public::present(&Dave, &Dave, 31, 0);
-			public::present(&Dave, &Eve, 41, 0);
-			public::present(&Dave, &Bob, 11, 0);
+			public::present_winner(&Dave, &Alice, 60, 0);
+			public::present_winner(&Dave, &Charlie, 21, 0);
+			public::present_winner(&Dave, &Dave, 31, 0);
+			public::present_winner(&Dave, &Eve, 41, 0);
+			public::present_winner(&Dave, &Bob, 11, 0);
 		});
 	}
 
@@ -1190,11 +1199,11 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 11, 0);
-			public::present(&Dave, &Alice, 60, 0);
-			public::present(&Dave, &Charlie, 21, 0);
-			public::present(&Dave, &Dave, 31, 0);
-			public::present(&Dave, &Eve, 41, 0);
+			public::present_winner(&Dave, &Bob, 11, 0);
+			public::present_winner(&Dave, &Alice, 60, 0);
+			public::present_winner(&Dave, &Charlie, 21, 0);
+			public::present_winner(&Dave, &Dave, 31, 0);
+			public::present_winner(&Dave, &Eve, 41, 0);
 
 			assert_eq!(leaderboard(), Some(vec![
 				(21, Charlie.into()),
@@ -1211,7 +1220,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
 			assert!(!presentation_active());
-			public::present(&Eve, &Eve, 1, 0);
+			public::present_winner(&Eve, &Eve, 1, 0);
 		});
 	}
 
@@ -1227,7 +1236,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 11, 1);
+			public::present_winner(&Dave, &Bob, 11, 1);
 		});
 	}
 
@@ -1246,7 +1255,7 @@ mod tests {
 
 			with_env(|e| e.block_number = 6);
 			assert_eq!(staking::balance(&Alice), 1);
-			public::present(&Alice, &Alice, 30, 0);
+			public::present_winner(&Alice, &Alice, 30, 0);
 		});
 	}
 
@@ -1264,7 +1273,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Bob, 80, 0);
+			public::present_winner(&Dave, &Bob, 80, 0);
 
 			assert_eq!(staking::balance(&Dave), 38);
 		});
@@ -1291,16 +1300,16 @@ mod tests {
 
 			with_env(|e| e.block_number = 6);
 			assert!(presentation_active());
-			public::present(&Dave, &Alice, 60, 0);
+			public::present_winner(&Dave, &Alice, 60, 0);
 			assert_eq!(leaderboard(), Some(vec![
 				(0, AccountId::default()),
 				(0, AccountId::default()),
 				(0, AccountId::default()),
 				(60, Alice.to_raw_public())
 			]));
-			public::present(&Dave, &Charlie, 21, 0);
-			public::present(&Dave, &Dave, 31, 0);
-			public::present(&Dave, &Eve, 41, 0);
+			public::present_winner(&Dave, &Charlie, 21, 0);
+			public::present_winner(&Dave, &Dave, 31, 0);
+			public::present_winner(&Dave, &Eve, 41, 0);
 			assert_eq!(leaderboard(), Some(vec![
 				(21, Charlie.into()),
 				(31, Dave.into()),
@@ -1346,10 +1355,10 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present(&Dave, &Alice, 60, 0);
-			public::present(&Dave, &Charlie, 21, 0);
-			public::present(&Dave, &Dave, 31, 0);
-			public::present(&Dave, &Eve, 41, 0);
+			public::present_winner(&Dave, &Alice, 60, 0);
+			public::present_winner(&Dave, &Charlie, 21, 0);
+			public::present_winner(&Dave, &Dave, 31, 0);
+			public::present_winner(&Dave, &Eve, 41, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
@@ -1358,8 +1367,8 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present(&Dave, &Charlie, 81, 1);
-			public::present(&Dave, &Dave, 31, 1);
+			public::present_winner(&Dave, &Charlie, 81, 1);
+			public::present_winner(&Dave, &Dave, 31, 1);
 			internal::end_block();
 
 			assert!(!presentation_active());
