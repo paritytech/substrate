@@ -294,7 +294,7 @@ impl Slicable for Function {
 				to.using_encoded(|s| v.extend(s));
 				amount.using_encoded(|s| v.extend(s));
 			}
-			_ => {}
+			_ => { unimplemented!() }
 		}
 
 		v
