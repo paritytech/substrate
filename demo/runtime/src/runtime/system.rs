@@ -243,7 +243,7 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec, Slicable};
-	use keyring::Keyring;
+	use keyring::Keyring::*;
 	use environment::with_env;
 	use primitives::hexdisplay::HexDisplay;
 	use demo_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
@@ -251,26 +251,23 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-
 		let mut t: TestExternalities = map![
-			twox_128(&one.to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&One.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let tx = UncheckedTransaction {
 			transaction: Transaction {
-				signed: one.clone(),
+				signed: One.into(),
 				nonce: 0,
-				function: Function::StakingTransfer(two, 69),
+				function: Function::StakingTransfer(Two.into(), 69),
 			},
 			signature: hex!("5f9832c5a4a39e2dd4a3a0c5b400e9836beb362cb8f7d845a8291a2ae6fe366612e080e4acd0b5a75c3d0b6ee69614a68fb63698c1e76bf1f2dcd8fa617ddf05").into(),
 		};
 
 		with_externalities(&mut t, || {
 			internal::execute_transaction(tx, Header::from_block_number(1));
-			assert_eq!(staking::balance(&one), 42);
-			assert_eq!(staking::balance(&two), 69);
+			assert_eq!(staking::balance(&One), 42);
+			assert_eq!(staking::balance(&Two), 69);
 		});
 	}
 
@@ -280,15 +277,12 @@ mod tests {
 
 	#[test]
 	fn block_import_works() {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-
 		let mut t = new_test_ext();
 
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("52eb24906a4110a605d29d4e2f01b43cb169d375d709b138cc8ce50ad5f7ce85").into(),
+			state_root: hex!("f4f6408fe3ce1d78d30bb7ed625b32f91e45b8b566023df309cfd93c6f4af9a4").into(),
 			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
@@ -306,9 +300,6 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-
 		let mut t = new_test_ext();
 
 		let h = Header {
@@ -332,9 +323,6 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_transaction_root_fails() {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-
 		let mut t = new_test_ext();
 
 		let h = Header {

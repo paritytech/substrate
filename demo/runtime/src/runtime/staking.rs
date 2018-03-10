@@ -112,6 +112,7 @@ pub fn bondage(who: &AccountId) -> Bondage {
 }
 
 #[derive(PartialEq, Copy, Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub enum LockStatus {
 	Liquid,
 	LockedUntil(BlockNumber),
@@ -486,11 +487,12 @@ pub mod internal {
 	}
 
 	/// Moves `value` from reserved balance to balance.
-	pub fn transfer_reserved_balance(slashed: &AccountId, beneficiary: &AccountId, value: Balance) {
+	pub fn transfer_reserved_balance(slashed: &AccountId, beneficiary: &AccountId, value: Balance) -> bool {
 		let b = reserved_balance(slashed);
-		let value = cmp::min(b, value);
-		set_reserved_balance(slashed, b - value);
-		set_free_balance(beneficiary, free_balance(beneficiary) + value);
+		let slash = cmp::min(b, value);
+		set_reserved_balance(slashed, b - slash);
+		set_free_balance(beneficiary, free_balance(beneficiary) + slash);
+		slash == value
 	}
 }
 
@@ -536,23 +538,19 @@ pub mod testing {
 	use super::*;
 	use runtime_io::{twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec};
-	use keyring::Keyring;
+	use keyring::Keyring::*;
 	use runtime::session;
 
 	pub fn externalities(session_length: u64, sessions_per_era: u64, current_era: u64) -> TestExternalities {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-		let three = [3u8; 32];
-
 		let extras: TestExternalities = map![
 			twox_128(INTENTION_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(INTENTION_AT)).to_vec() => one.to_vec(),
-			twox_128(&1u32.to_keyed_vec(INTENTION_AT)).to_vec() => two.to_vec(),
-			twox_128(&2u32.to_keyed_vec(INTENTION_AT)).to_vec() => three.to_vec(),
+			twox_128(&0u32.to_keyed_vec(INTENTION_AT)).to_vec() => Alice.to_raw_public_vec(),
+			twox_128(&1u32.to_keyed_vec(INTENTION_AT)).to_vec() => Bob.to_raw_public_vec(),
+			twox_128(&2u32.to_keyed_vec(INTENTION_AT)).to_vec() => Charlie.to_raw_public_vec(),
 			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&sessions_per_era),
 			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
 			twox_128(CURRENT_ERA).to_vec() => vec![].and(&current_era),
-			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 		session::testing::externalities(session_length).into_iter().chain(extras.into_iter()).collect()
 	}
@@ -567,18 +565,13 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
-	use keyring::Keyring;
+	use keyring::Keyring::*;
 	use environment::with_env;
 	use demo_primitives::AccountId;
 	use runtime::{staking, session};
 
 	#[test]
 	fn staking_should_work() {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-		let three = [3u8; 32];
-		let four = [4u8; 32];
-
 		let mut t: TestExternalities = map![
 			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
 			twox_128(session::VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
@@ -588,10 +581,10 @@ mod tests {
 			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
 			twox_128(BONDING_DURATION).to_vec() => vec![].and(&3u64),
 			twox_128(TOTAL_STAKE).to_vec() => vec![].and(&100u64),
-			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&10u64),
-			twox_128(&two.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&20u64),
-			twox_128(&three.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&30u64),
-			twox_128(&four.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&40u64)
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&10u64),
+			twox_128(&Bob.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&20u64),
+			twox_128(&Charlie.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&30u64),
+			twox_128(&Dave.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&40u64)
 		];
 
 		with_externalities(&mut t, || {
@@ -602,48 +595,48 @@ mod tests {
 
 			// Block 1: Add three validators. No obvious change.
 			with_env(|e| e.block_number = 1);
-			stake(&one);
-			stake(&two);
-			stake(&four);
+			stake(&Alice);
+			stake(&Bob);
+			stake(&Dave);
 			check_new_era();
 			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
 
 			// Block 2: New validator set now.
 			with_env(|e| e.block_number = 2);
 			check_new_era();
-			assert_eq!(session::validators(), vec![four.clone(), two.clone()]);
+			assert_eq!(session::validators(), vec![Dave.to_raw_public(), Bob.into()]);
 
 			// Block 3: Unstake highest, introduce another staker. No change yet.
 			with_env(|e| e.block_number = 3);
-			stake(&three);
-			unstake(&four);
+			stake(&Charlie);
+			unstake(&Dave);
 			check_new_era();
 
 			// Block 4: New era - validators change.
 			with_env(|e| e.block_number = 4);
 			check_new_era();
-			assert_eq!(session::validators(), vec![three.clone(), two.clone()]);
+			assert_eq!(session::validators(), vec![Charlie.to_raw_public(), Bob.into()]);
 
 			// Block 5: Transfer stake from highest to lowest. No change yet.
 			with_env(|e| e.block_number = 5);
-			transfer(&four, &one, 40);
+			transfer(&Dave, &Alice, 40);
 			check_new_era();
 
 			// Block 6: Lowest now validator.
 			with_env(|e| e.block_number = 6);
 			check_new_era();
-			assert_eq!(session::validators(), vec![one.clone(), three.clone()]);
+			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Charlie.into()]);
 
 			// Block 7: Unstake three. No change yet.
 			with_env(|e| e.block_number = 7);
-			unstake(&three);
+			unstake(&Charlie);
 			check_new_era();
-			assert_eq!(session::validators(), vec![one.clone(), three.clone()]);
+			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Charlie.into()]);
 
 			// Block 8: Back to one and two.
 			with_env(|e| e.block_number = 8);
 			check_new_era();
-			assert_eq!(session::validators(), vec![one.clone(), two.clone()]);
+			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Bob.into()]);
 		});
 	}
 
@@ -713,48 +706,173 @@ mod tests {
 
 	#[test]
 	fn staking_balance_works() {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-
-		let mut t: TestExternalities = map![
-			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&42u64)
-		];
-
-		with_externalities(&mut t, || {
-			assert_eq!(balance(&one), 42);
-			assert_eq!(balance(&two), 0);
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 42);
+			assert_eq!(free_balance(&Alice), 42);
+			assert_eq!(reserved_balance(&Alice), 0);
+			assert_eq!(balance(&Alice), 42);
+			assert_eq!(free_balance(&Bob), 0);
+			assert_eq!(reserved_balance(&Bob), 0);
+			assert_eq!(balance(&Bob), 0);
 		});
 	}
 
 	#[test]
 	fn staking_balance_transfer_works() {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
-
-		let mut t: TestExternalities = map![
-			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64)
-		];
-
-		with_externalities(&mut t, || {
-			transfer(&one, &two, 69);
-			assert_eq!(balance(&one), 42);
-			assert_eq!(balance(&two), 69);
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			transfer(&Alice, &Bob, 69);
+			assert_eq!(balance(&Alice), 42);
+			assert_eq!(balance(&Bob), 69);
 		});
 	}
 
 	#[test]
 	#[should_panic]
-	fn staking_balance_transfer_when_bonded_doesnt_work() {
-		let one = Keyring::One.to_raw_public();
-		let two = Keyring::Two.to_raw_public();
+	fn staking_balance_transfer_when_bonded_panics() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			stake(&Alice);
+			transfer(&Alice, &Bob, 69);
+		});
+	}
 
+	#[test]
+	fn reserving_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+
+			assert_eq!(balance(&Alice), 111);
+			assert_eq!(free_balance(&Alice), 111);
+			assert_eq!(reserved_balance(&Alice), 0);
+
+			reserve_balance(&Alice, 69);
+
+			assert_eq!(balance(&Alice), 111);
+			assert_eq!(free_balance(&Alice), 42);
+			assert_eq!(reserved_balance(&Alice), 69);
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn staking_balance_transfer_when_reserved_panics() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			reserve_balance(&Alice, 69);
+			transfer(&Alice, &Bob, 69);
+		});
+	}
+
+	#[test]
+	fn deducting_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			assert!(deduct_unbonded(&Alice, 69));
+			assert_eq!(free_balance(&Alice), 42);
+		});
+	}
+
+	#[test]
+	fn deducting_balance_should_fail_when_bonded() {
 		let mut t: TestExternalities = map![
-			twox_128(&one.to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64)
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64),
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BONDAGE_OF)).to_vec() => vec![].and(&2u64)
 		];
-
 		with_externalities(&mut t, || {
-			stake(&one);
-			transfer(&one, &two, 69);
+			with_env(|e| e.block_number = 1);
+			assert_eq!(unlock_block(&Alice), LockStatus::LockedUntil(2));
+			assert!(!deduct_unbonded(&Alice, 69));
+		});
+	}
+
+	#[test]
+	fn refunding_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 42);
+			refund(&Alice, 69);
+			assert_eq!(free_balance(&Alice), 111);
+		});
+	}
+
+	#[test]
+	fn slashing_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			reserve_balance(&Alice, 69);
+			assert!(slash(&Alice, 69));
+			assert_eq!(free_balance(&Alice), 0);
+			assert_eq!(reserved_balance(&Alice), 42);
+		});
+	}
+
+	#[test]
+	fn slashing_incomplete_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 42);
+			reserve_balance(&Alice, 21);
+			assert!(!slash(&Alice, 69));
+			assert_eq!(free_balance(&Alice), 0);
+			assert_eq!(reserved_balance(&Alice), 0);
+		});
+	}
+
+	#[test]
+	fn unreserving_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			reserve_balance(&Alice, 111);
+			unreserve_balance(&Alice, 42);
+			assert_eq!(reserved_balance(&Alice), 69);
+			assert_eq!(free_balance(&Alice), 42);
+		});
+	}
+
+	#[test]
+	fn slashing_reserved_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			reserve_balance(&Alice, 111);
+			assert!(slash_reserved(&Alice, 42));
+			assert_eq!(reserved_balance(&Alice), 69);
+			assert_eq!(free_balance(&Alice), 0);
+		});
+	}
+
+	#[test]
+	fn slashing_incomplete_reserved_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			reserve_balance(&Alice, 42);
+			assert!(!slash_reserved(&Alice, 69));
+			assert_eq!(free_balance(&Alice), 69);
+			assert_eq!(reserved_balance(&Alice), 0);
+		});
+	}
+
+	#[test]
+	fn transferring_reserved_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			reserve_balance(&Alice, 111);
+			assert!(transfer_reserved_balance(&Alice, &Bob, 42));
+			assert_eq!(reserved_balance(&Alice), 69);
+			assert_eq!(free_balance(&Alice), 0);
+			assert_eq!(reserved_balance(&Bob), 0);
+			assert_eq!(free_balance(&Bob), 42);
+		});
+	}
+
+	#[test]
+	fn transferring_incomplete_reserved_balance_should_work() {
+		with_externalities(&mut TestExternalities::default(), || {
+			set_free_balance(&Alice, 111);
+			reserve_balance(&Alice, 42);
+			assert!(!transfer_reserved_balance(&Alice, &Bob, 69));
+			assert_eq!(reserved_balance(&Alice), 0);
+			assert_eq!(free_balance(&Alice), 69);
+			assert_eq!(reserved_balance(&Bob), 0);
+			assert_eq!(free_balance(&Bob), 42);
 		});
 	}
 }
