@@ -39,7 +39,7 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::WasmExecutor;
 	use codec::{KeyedVec, Slicable, Joiner};
-	use keyring::Keyring::{self, One, Two};
+	use keyring::Keyring::{self, Alice, Bob};
 	use runtime_support::Hashable;
 	use demo_runtime::runtime::staking::{self, balance, BALANCE_OF};
 	use state_machine::{CodeExecutor, TestExternalities};
@@ -60,9 +60,9 @@ mod tests {
 
 	fn tx() -> UncheckedTransaction {
 		let transaction = Transaction {
-			signed: One.into(),
+			signed: Alice.into(),
 			nonce: 0,
-			function: Function::StakingTransfer(Two.into(), 69),
+			function: Function::StakingTransfer(Bob.into(), 69),
 		};
 		let signature = Keyring::from_raw_public(transaction.signed).unwrap()
 			.sign(&transaction.encode());
@@ -73,7 +73,7 @@ mod tests {
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t: TestExternalities = map![
-			twox_128(&One.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
@@ -83,7 +83,7 @@ mod tests {
 	#[test]
 	fn panic_execution_with_native_equivalent_code_gives_error() {
 		let mut t: TestExternalities = map![
-			twox_128(&One.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
@@ -93,30 +93,30 @@ mod tests {
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t: TestExternalities = map![
-			twox_128(&One.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&One), 42);
-			assert_eq!(balance(&Two), 69);
+			assert_eq!(balance(&Alice), 42);
+			assert_eq!(balance(&Bob), 69);
 		});
 	}
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t: TestExternalities = map![
-			twox_128(&One.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&One), 42);
-			assert_eq!(balance(&Two), 69);
+			assert_eq!(balance(&Alice), 42);
+			assert_eq!(balance(&Bob), 69);
 		});
 	}
 
@@ -152,11 +152,11 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("6f0202ee141932f5cf9efad76d9200ec0ae98e2782335c5c7940be6a66bb9418").into(),
+			hex!("970ae19447bef129c88ee80c72797fa9dfeda4ca1a26d10102b669d776eb0ccf").into(),
 			vec![Transaction {
-				signed: One.into(),
+				signed: Alice.into(),
 				nonce: 0,
-				function: Function::StakingTransfer(Two.into(), 69),
+				function: Function::StakingTransfer(Bob.into(), 69),
 			}]
 		)
 	}
@@ -165,17 +165,17 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("04a2ca0ff5cdbe6a0ceb75009b4e707c8d052f28c95e9a7751ea814b13b95c92").into(),
+			hex!("347ece6ef0d193bd7c2bfbda17706b82eb24c0965f415784a44b138f0df034cd").into(),
 			vec![
 				Transaction {
-					signed: Two.into(),
+					signed: Bob.into(),
 					nonce: 0,
-					function: Function::StakingTransfer(One.into(), 5),
+					function: Function::StakingTransfer(Alice.into(), 5),
 				},
 				Transaction {
-					signed: One.into(),
+					signed: Alice.into(),
 					nonce: 1,
-					function: Function::StakingTransfer(Two.into(), 15),
+					function: Function::StakingTransfer(Bob.into(), 15),
 				}
 			]
 		)
@@ -188,15 +188,15 @@ mod tests {
 		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&One), 42);
-			assert_eq!(balance(&Two), 69);
+			assert_eq!(balance(&Alice), 42);
+			assert_eq!(balance(&Bob), 69);
 		});
 
 		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&One), 32);
-			assert_eq!(balance(&Two), 79);
+			assert_eq!(balance(&Alice), 32);
+			assert_eq!(balance(&Bob), 79);
 		});
 	}
 
@@ -207,22 +207,22 @@ mod tests {
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&One), 42);
-			assert_eq!(balance(&Two), 69);
+			assert_eq!(balance(&Alice), 42);
+			assert_eq!(balance(&Bob), 69);
 		});
 
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&One), 32);
-			assert_eq!(balance(&Two), 79);
+			assert_eq!(balance(&Alice), 32);
+			assert_eq!(balance(&Bob), 79);
 		});
 	}
 
 	#[test]
 	fn panic_execution_gives_error() {
 		let mut t: TestExternalities = map![
-			twox_128(&One.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -233,7 +233,7 @@ mod tests {
 	#[test]
 	fn successful_execution_gives_ok() {
 		let mut t: TestExternalities = map![
-			twox_128(&One.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm");
@@ -241,8 +241,8 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(balance(&One), 42);
-			assert_eq!(balance(&Two), 69);
+			assert_eq!(balance(&Alice), 42);
+			assert_eq!(balance(&Bob), 69);
 		});
 	}
 }
