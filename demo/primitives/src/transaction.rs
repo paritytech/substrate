@@ -183,7 +183,12 @@ impl FunctionId {
 		use self::*;
 		let functions = [FunctionId::StakingStake, FunctionId::StakingUnstake,
 			FunctionId::StakingTransfer, FunctionId::SessionSetKey, FunctionId::TimestampSet,
-			];
+			FunctionId::CouncilVotePropose, FunctionId::CouncilVoteVote, FunctionId::CouncilVoteVeto,
+			FunctionId::CouncilSetApprovals, FunctionId::CouncilReapInactiveVoter,
+			FunctionId::CouncilRetractVoter, FunctionId::CouncilSubmitCandidacy,
+			FunctionId::CouncilPresentWinner, FunctionId::DemocracyPropose,
+			FunctionId::DemocracySecond, FunctionId::DemocracyVote,
+		];
 		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
 }
@@ -218,7 +223,7 @@ pub enum Function {
 
 impl Slicable for Function {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let id = try_opt!(u8::decode(input).and_then(FunctionId::from_u8));
+		let id = u8::decode(input).and_then(FunctionId::from_u8)?;
 		Some(match id {
 			FunctionId::TimestampSet =>
 				Function::TimestampSet(Slicable::decode(input)?),
