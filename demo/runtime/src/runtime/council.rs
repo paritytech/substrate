@@ -258,11 +258,6 @@ pub fn leaderboard() -> Option<Vec<(Balance, AccountId)>> {
 pub mod public {
 	use super::*;
 
-	// CouncilVotePropose(AccountId, Proposal)
-	// CouncilVoteVote(AccountId, [u8; 32], bool)
-	// CouncilVoteVeto(AccountId, [u8; 32])
-	// CouncilSetApprovals(AccountId, Vec<bool>, u32)
-	// CouncilReapInactiveVoter(AccountId, u32, AccountId, u32, u32)
 	/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 	/// are registered.
 	pub fn set_approvals(signed: &AccountId, votes: &Vec<bool>, index: VoteIndex) {
@@ -358,10 +353,6 @@ pub mod public {
 		storage::put(CANDIDATE_COUNT, &(count as u32 + 1));
 		storage::put(&signed.to_keyed_vec(REGISTER_INFO_OF), &(vote_index(), slot));
 	}
-
-	// CouncilRetractVoter(AccountId, u32)
-	// CouncilSubmitCandidacy(AccountId, u32)
-	// CouncilPresent(AccountId, u32)
 
 	/// Claim that `signed` is one of the top carry_count() + current_vote().1 candidates.
 	/// Only works if the block number >= current_vote().0 and < current_vote().0 + presentation_duration()

@@ -51,11 +51,6 @@ pub use self::block::{Header, Block, Log, Digest};
 pub use self::block::Number as BlockNumber;
 pub use self::transaction::{Transaction, UncheckedTransaction, Function, Proposal};
 
-/// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
-/// (who matters). Essentially this means that a majority of validators have decided it is
-/// "correct".
-pub const EVERYBODY: AccountId = [255u8; 32];
-
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
 /// certainly continue to be the same as the substrate's `AuthorityId`.
 pub type AccountId = primitives::AuthorityId;
@@ -63,9 +58,6 @@ pub type AccountId = primitives::AuthorityId;
 /// The Ed25519 pub key of an session that belongs to an authority of the relay chain. This is
 /// exactly equivalent to what the substrate calls an "authority".
 pub type SessionKey = primitives::AuthorityId;
-
-/// Indentifier for a chain.
-pub type ChainID = u64;
 
 /// Index of a transaction in the relay chain.
 pub type TxOrder = u64;
