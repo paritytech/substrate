@@ -72,7 +72,7 @@ impl Slicable for Digest {
 /// The block "body": A bunch of transactions.
 pub type Body = Vec<UncheckedTransaction>;
 
-/// A Polkadot relay chain block.
+/// A block on the chain.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Block {
@@ -98,9 +98,7 @@ impl Slicable for Block {
 	}
 }
 
-/// A relay chain block header.
-///
-/// https://github.com/w3f/polkadot-spec/blob/master/spec.md#header
+/// Header for a block.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]

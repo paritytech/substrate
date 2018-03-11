@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Polkadot runtime.
+//! The Substrate Demo runtime.
 
 #[allow(unused)]
 pub mod system;
