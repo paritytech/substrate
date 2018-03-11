@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Shareable Polkadot types.
+//! Low-level types used throughout the Substrate Demo code.
 
 #![warn(missing_docs)]
 
