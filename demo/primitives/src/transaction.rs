@@ -63,6 +63,13 @@ impl InternalFunctionId {
 			InternalFunctionId::StakingSetValidatorCount,
 			InternalFunctionId::StakingForceNewEra,
 			InternalFunctionId::DemocracyCancelReferendum,
+			InternalFunctionId::DemocracyStartReferendum,
+			InternalFunctionId::CouncilSetDesiredSeats,
+			InternalFunctionId::CouncilRemoveMember,
+			InternalFunctionId::CouncilSetPresentationDuration,
+			InternalFunctionId::CouncilSetTermDuration,
+			InternalFunctionId::CouncilVoteSetCooloffPeriod,
+			InternalFunctionId::CouncilVoteSetVotingPeriod,
 		];
 		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
