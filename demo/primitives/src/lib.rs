@@ -49,7 +49,7 @@ pub mod transaction;
 
 pub use self::block::{Header, Block, Log, Digest};
 pub use self::block::Number as BlockNumber;
-pub use self::transaction::{Transaction, UncheckedTransaction, Function, Proposal};
+pub use self::transaction::{Transaction, UncheckedTransaction, Function, Proposal, VoteThreshold};
 
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
 /// certainly continue to be the same as the substrate's `AuthorityId`.

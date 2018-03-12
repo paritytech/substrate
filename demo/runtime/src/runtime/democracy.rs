@@ -20,46 +20,25 @@ use rstd::prelude::*;
 use integer_sqrt::IntegerSquareRoot;
 use codec::{KeyedVec, Slicable, Input, NonTrivialSlicable};
 use runtime_support::storage;
-use demo_primitives::{Proposal, AccountId, Hash, BlockNumber};
+use demo_primitives::{Proposal, AccountId, Hash, BlockNumber, VoteThreshold};
 use runtime::{staking, system, session};
 use runtime::staking::Balance;
 
 pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
-#[cfg_attr(test, derive(Debug))]
-#[derive(Clone, Copy, PartialEq)]
-pub enum VoteThreshold {
-	SuperMajorityApprove,
-	SuperMajorityAgainst,
-	SimpleMajority,
-}
-
-impl Slicable for VoteThreshold {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		u8::decode(input).and_then(|v| match v {
-			0 => Some(VoteThreshold::SuperMajorityApprove),
-			1 => Some(VoteThreshold::SuperMajorityAgainst),
-			2 => Some(VoteThreshold::SimpleMajority),
-			_ => None,
-		})
-	}
-
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		match *self {
-			VoteThreshold::SuperMajorityApprove => 0u8,
-			VoteThreshold::SuperMajorityAgainst => 1u8,
-			VoteThreshold::SimpleMajority => 2u8,
-		}.using_encoded(f)
-	}
-}
-impl NonTrivialSlicable for VoteThreshold {}
-
-impl VoteThreshold {
+trait Approved {
 	/// Given `approve` votes for and `against` votes against from a total electorate size of
 	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
 	/// overall outcome is in favour of approval.
-	pub fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool {
+	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool;
+}
+
+impl Approved for VoteThreshold {
+	/// Given `approve` votes for and `against` votes against from a total electorate size of
+	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
+	/// overall outcome is in favour of approval.
+	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool {
 		let voters = approve + against;
 		match *self {
 			VoteThreshold::SuperMajorityApprove =>
@@ -236,7 +215,7 @@ pub mod privileged {
 pub mod internal {
 	use super::*;
 	use demo_primitives::Proposal;
-	use dispatch::enact_proposal;
+	use dispatch;
 
 	/// Current era is ending; we should finish up any proposals.
 	pub fn end_block(now: BlockNumber) {
@@ -266,7 +245,7 @@ pub mod internal {
 			let total_stake = staking::total_stake();
 			clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
-				enact_proposal(proposal);
+				dispatch::proposal(proposal);
 			}
 			storage::put(NEXT_TALLY, &(index + 1));
 		}

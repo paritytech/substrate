@@ -26,6 +26,7 @@ use environment::with_env;
 use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Block, Header,
 	UncheckedTransaction, Function, Log};
 use runtime::{staking, session};
+use dispatch;
 
 pub const NONCE_OF: &[u8] = b"sys:non:";
 pub const BLOCK_HASH_AT: &[u8] = b"sys:old:";
@@ -125,60 +126,6 @@ pub mod internal {
 
 		header
 	}
-
-	/// Dispatch a function.
-	pub fn dispatch_function(function: &Function, transactor: &AccountId) {
-		match *function {
-			Function::StakingStake => {
-				::runtime::staking::public::stake(transactor);
-			}
-			Function::StakingUnstake => {
-				::runtime::staking::public::unstake(transactor);
-			}
-			Function::StakingTransfer(dest, value) => {
-				::runtime::staking::public::transfer(transactor, &dest, value);
-			}
-			Function::SessionSetKey(session) => {
-				::runtime::session::public::set_key(transactor, &session);
-			}
-			Function::TimestampSet(t) => {
-				::runtime::timestamp::public::set(t);
-			}
-			Function::CouncilVotePropose(ref a) => {
-				::runtime::council_vote::public::propose(transactor, a);
-			}
-			Function::CouncilVoteVote(ref a, b) => {
-				::runtime::council_vote::public::vote(transactor, a, b);
-			}
-			Function::CouncilVoteVeto(ref a) => {
-				::runtime::council_vote::public::veto(transactor, a);
-			}
-			Function::CouncilSetApprovals(ref a, b) => {
-				::runtime::council::public::set_approvals(transactor, a, b);
-			}
-			Function::CouncilReapInactiveVoter(a, ref b, c, d) => {
-				::runtime::council::public::reap_inactive_voter(transactor, a, b, c, d);
-			}
-			Function::CouncilRetractVoter(a) => {
-				::runtime::council::public::retract_voter(transactor, a);
-			}
-			Function::CouncilSubmitCandidacy(a) => {
-				::runtime::council::public::submit_candidacy(transactor, a);
-			}
-			Function::CouncilPresentWinner(ref a, b, c) => {
-				::runtime::council::public::present_winner(transactor, a, b, c);
-			}
-			Function::DemocracyPropose(ref a, b) => {
-				::runtime::democracy::public::propose(transactor, a, b);
-			}
-			Function::DemocracySecond(a) => {
-				::runtime::democracy::public::second(transactor, a);
-			}
-			Function::DemocracyVote(a, b) => {
-				::runtime::democracy::public::vote(transactor, a, b);
-			}
-		}
-	}
 }
 
 fn execute_transaction(utx: UncheckedTransaction) {
@@ -199,7 +146,7 @@ fn execute_transaction(utx: UncheckedTransaction) {
 	storage::put(&nonce_key, &(expected_nonce + 1));
 
 	// decode parameters and dispatch
-	internal::dispatch_function(&tx.function, &tx.signed);
+	dispatch::function(&tx.function, &tx.signed);
 }
 
 fn initial_checks(block: &Block) {

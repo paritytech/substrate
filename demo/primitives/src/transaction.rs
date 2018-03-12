@@ -17,7 +17,7 @@
 //! Transaction type.
 
 use rstd::vec::Vec;
-use codec::{Input, Slicable};
+use codec::{Input, Slicable, NonTrivialSlicable};
 use {AccountId, SessionKey};
 
 #[cfg(feature = "std")]
@@ -29,24 +29,26 @@ use block::Number as BlockNumber;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[repr(u8)]
 enum InternalFunctionId {
-	/// Set the system's code.
 	SystemSetCode = 0x00,
 
-	/// Set the session length.
 	SessionSetLength = 0x10,
-	/// Force a new session.
 	SessionForceNewSession = 0x11,
 
-	/// Set the number of sessions per era.
 	StakingSetSessionsPerEra = 0x20,
-	/// Set the minimum bonding duration for staking.
 	StakingSetBondingDuration = 0x21,
-	/// Set the validator count for staking.
 	StakingSetValidatorCount = 0x22,
-	/// Force a new staking era.
 	StakingForceNewEra = 0x23,
-	/// See below.
+
 	DemocracyCancelReferendum = 0x30,
+	DemocracyStartReferendum = 0x31,
+
+	CouncilSetDesiredSeats = 0x40,
+	CouncilRemoveMember = 0x41,
+	CouncilSetPresentationDuration = 0x42,
+	CouncilSetTermDuration = 0x43,
+
+	CouncilVoteSetCooloffPeriod = 0x50,
+	CouncilVoteSetVotingPeriod = 0x51,
 }
 
 impl InternalFunctionId {
@@ -66,26 +68,57 @@ impl InternalFunctionId {
 	}
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub enum VoteThreshold {
+	/// A supermajority of approvals is needed to pass this vote.
+	SuperMajorityApprove,
+	/// A supermajority of rejects is needed to fail this vote.
+	SuperMajorityAgainst,
+	/// A simple majority of approvals is needed to pass this vote.
+	SimpleMajority,
+}
+
+impl Slicable for VoteThreshold {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u8::decode(input).and_then(|v| match v {
+			0 => Some(VoteThreshold::SuperMajorityApprove),
+			1 => Some(VoteThreshold::SuperMajorityAgainst),
+			2 => Some(VoteThreshold::SimpleMajority),
+			_ => None,
+		})
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		match *self {
+			VoteThreshold::SuperMajorityApprove => 0u8,
+			VoteThreshold::SuperMajorityAgainst => 1u8,
+			VoteThreshold::SimpleMajority => 2u8,
+		}.using_encoded(f)
+	}
+}
+impl NonTrivialSlicable for VoteThreshold {}
+
 /// Internal functions that can be dispatched to.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[allow(missing_docs)]
 pub enum Proposal {
-	/// Set the system's code.
 	SystemSetCode(Vec<u8>),
-	/// Set the session length.
 	SessionSetLength(BlockNumber),
-	/// Force a new session.
 	SessionForceNewSession,
-	/// Set the number of sessions per era.
 	StakingSetSessionsPerEra(BlockNumber),
-	/// Set the minimum bonding duration for staking.
 	StakingSetBondingDuration(BlockNumber),
-	/// Set the validator count for staking.
 	StakingSetValidatorCount(u32),
-	/// Force a new staking era.
 	StakingForceNewEra,
-	/// Cancel a referendum.
+	DemocracyStartReferendum(Box<Proposal>, VoteThreshold),
 	DemocracyCancelReferendum(u32),
+	CouncilSetDesiredSeats(u32),
+	CouncilRemoveMember(AccountId),
+	CouncilSetPresentationDuration(BlockNumber),
+	CouncilSetTermDuration(BlockNumber),
+	CouncilVoteSetCooloffPeriod(BlockNumber),
+	CouncilVoteSetVotingPeriod(BlockNumber),
 }
 
 impl Slicable for Proposal {
@@ -104,7 +137,18 @@ impl Slicable for Proposal {
 			InternalFunctionId::StakingSetValidatorCount =>
 				Proposal::StakingSetValidatorCount(Slicable::decode(input)?),
 			InternalFunctionId::StakingForceNewEra => Proposal::StakingForceNewEra,
+			InternalFunctionId::DemocracyStartReferendum => {
+				let a = Slicable::decode(input)?;
+				let b = Slicable::decode(input)?;
+				Proposal::DemocracyStartReferendum(Box::new(a), b)
+			}
 			InternalFunctionId::DemocracyCancelReferendum => Proposal::DemocracyCancelReferendum(Slicable::decode(input)?),
+			InternalFunctionId::CouncilSetDesiredSeats => Proposal::CouncilSetDesiredSeats(Slicable::decode(input)?),
+			InternalFunctionId::CouncilRemoveMember => Proposal::CouncilRemoveMember(Slicable::decode(input)?),
+			InternalFunctionId::CouncilSetPresentationDuration => Proposal::CouncilSetPresentationDuration(Slicable::decode(input)?),
+			InternalFunctionId::CouncilSetTermDuration => Proposal::CouncilSetTermDuration(Slicable::decode(input)?),
+			InternalFunctionId::CouncilVoteSetCooloffPeriod => Proposal::CouncilVoteSetCooloffPeriod(Slicable::decode(input)?),
+			InternalFunctionId::CouncilVoteSetVotingPeriod => Proposal::CouncilVoteSetVotingPeriod(Slicable::decode(input)?),
 		};
 
 		Some(function)
@@ -143,6 +187,7 @@ impl Slicable for Proposal {
 				(InternalFunctionId::DemocracyCancelReferendum as u8).using_encoded(|s| v.extend(s));
 				data.using_encoded(|s| v.extend(s));
 			}
+			_ => { unimplemented!() }
 		}
 
 		v
