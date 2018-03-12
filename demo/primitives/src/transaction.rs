@@ -136,26 +136,35 @@ impl Slicable for Proposal {
 				Proposal::SystemSetCode(Slicable::decode(input)?),
 			InternalFunctionId::SessionSetLength =>
 				Proposal::SessionSetLength(Slicable::decode(input)?),
-			InternalFunctionId::SessionForceNewSession => Proposal::SessionForceNewSession,
+			InternalFunctionId::SessionForceNewSession =>
+				Proposal::SessionForceNewSession,
 			InternalFunctionId::StakingSetSessionsPerEra =>
 				Proposal::StakingSetSessionsPerEra(Slicable::decode(input)?),
 			InternalFunctionId::StakingSetBondingDuration =>
 				Proposal::StakingSetBondingDuration(Slicable::decode(input)?),
 			InternalFunctionId::StakingSetValidatorCount =>
 				Proposal::StakingSetValidatorCount(Slicable::decode(input)?),
-			InternalFunctionId::StakingForceNewEra => Proposal::StakingForceNewEra,
+			InternalFunctionId::StakingForceNewEra =>
+				Proposal::StakingForceNewEra,
 			InternalFunctionId::DemocracyStartReferendum => {
 				let a = Slicable::decode(input)?;
 				let b = Slicable::decode(input)?;
 				Proposal::DemocracyStartReferendum(Box::new(a), b)
 			}
-			InternalFunctionId::DemocracyCancelReferendum => Proposal::DemocracyCancelReferendum(Slicable::decode(input)?),
-			InternalFunctionId::CouncilSetDesiredSeats => Proposal::CouncilSetDesiredSeats(Slicable::decode(input)?),
-			InternalFunctionId::CouncilRemoveMember => Proposal::CouncilRemoveMember(Slicable::decode(input)?),
-			InternalFunctionId::CouncilSetPresentationDuration => Proposal::CouncilSetPresentationDuration(Slicable::decode(input)?),
-			InternalFunctionId::CouncilSetTermDuration => Proposal::CouncilSetTermDuration(Slicable::decode(input)?),
-			InternalFunctionId::CouncilVoteSetCooloffPeriod => Proposal::CouncilVoteSetCooloffPeriod(Slicable::decode(input)?),
-			InternalFunctionId::CouncilVoteSetVotingPeriod => Proposal::CouncilVoteSetVotingPeriod(Slicable::decode(input)?),
+			InternalFunctionId::DemocracyCancelReferendum =>
+				Proposal::DemocracyCancelReferendum(Slicable::decode(input)?),
+			InternalFunctionId::CouncilSetDesiredSeats =>
+				Proposal::CouncilSetDesiredSeats(Slicable::decode(input)?),
+			InternalFunctionId::CouncilRemoveMember =>
+				Proposal::CouncilRemoveMember(Slicable::decode(input)?),
+			InternalFunctionId::CouncilSetPresentationDuration =>
+				Proposal::CouncilSetPresentationDuration(Slicable::decode(input)?),
+			InternalFunctionId::CouncilSetTermDuration =>
+				Proposal::CouncilSetTermDuration(Slicable::decode(input)?),
+			InternalFunctionId::CouncilVoteSetCooloffPeriod =>
+				Proposal::CouncilVoteSetCooloffPeriod(Slicable::decode(input)?),
+			InternalFunctionId::CouncilVoteSetVotingPeriod =>
+				Proposal::CouncilVoteSetVotingPeriod(Slicable::decode(input)?),
 		};
 
 		Some(function)
