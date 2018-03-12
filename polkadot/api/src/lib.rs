@@ -36,7 +36,7 @@ use polkadot_runtime::runtime;
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine::OverlayedChanges;
-use primitives::{AccountId, SessionKey, Timestamp};
+use primitives::{AccountId, SessionKey, Timestamp, TxOrder};
 use primitives::block::{Id as BlockId, Block, Header, Body};
 use primitives::transaction::UncheckedTransaction;
 use primitives::parachain::DutyRoster;
@@ -85,6 +85,7 @@ impl From<client::error::Error> for Error {
 	}
 }
 
+/// A builder for blocks.
 pub trait BlockBuilder: Sized {
 	/// Push a non-inherent transaction.
 	fn push_transaction(&mut self, transaction: UncheckedTransaction) -> Result<()>;
@@ -93,40 +94,64 @@ pub trait BlockBuilder: Sized {
 	fn bake(self) -> Block;
 }
 
+/// A checked block identifier.
+pub trait CheckedBlockId: Clone {
+	/// Yield the underlying block ID.
+	fn block_id(&self) -> &BlockId;
+}
+
 /// Trait encapsulating the Polkadot API.
 ///
 /// All calls should fail when the exact runtime is unknown.
 pub trait PolkadotApi {
+	/// A checked block ID. Used to avoid redundancy of code check.
+	type CheckedBlockId: CheckedBlockId;
+	/// The type used to build blocks.
 	type BlockBuilder: BlockBuilder;
 
+	/// Check whether requests at the given block ID can be served.
+	///
+	/// It should not be possible to instantiate this type without going
+	/// through this function.
+	fn check_id(&self, id: BlockId) -> Result<Self::CheckedBlockId>;
+
 	/// Get session keys at a given block.
-	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>>;
+	fn session_keys(&self, at: &Self::CheckedBlockId) -> Result<Vec<SessionKey>>;
 
 	/// Get validators at a given block.
-	fn validators(&self, at: &BlockId) -> Result<Vec<AccountId>>;
+	fn validators(&self, at: &Self::CheckedBlockId) -> Result<Vec<AccountId>>;
 
 	/// Get the authority duty roster at a block.
-	fn duty_roster(&self, at: &BlockId) -> Result<DutyRoster>;
+	fn duty_roster(&self, at: &Self::CheckedBlockId) -> Result<DutyRoster>;
 
 	/// Get the timestamp registered at a block.
-	fn timestamp(&self, at: &BlockId) -> Result<Timestamp>;
+	fn timestamp(&self, at: &Self::CheckedBlockId) -> Result<Timestamp>;
+
+	/// Get the nonce of an account at a block.
+	fn nonce(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<TxOrder>;
+
 
 	/// Evaluate a block and see if it gives an error.
-	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<()>;
+	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<()>;
 
 	/// Create a block builder on top of the parent block.
-	fn build_block(&self, parent: &BlockId, timestamp: u64) -> Result<Self::BlockBuilder>;
+	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: u64) -> Result<Self::BlockBuilder>;
+}
+
+/// A checked block ID used for the substrate-client implementation of CheckedBlockId;
+#[derive(Debug, Clone, Copy)]
+pub struct CheckedId(BlockId);
+
+impl CheckedBlockId for CheckedId {
+	fn block_id(&self) -> &BlockId {
+		&self.0
+	}
 }
 
 // set up the necessary scaffolding to execute the runtime.
 macro_rules! with_runtime {
 	($client: ident, $at: expr, $exec: expr) => {{
-		// bail if the code is not the same as the natively linked.
-		if $client.code_at($at)? != LocalDispatch::native_equivalent() {
-			bail!(ErrorKind::UnknownRuntime);
-		}
-
-		$client.state_at($at).map_err(Error::from).and_then(|state| {
+		$client.state_at($at.block_id()).map_err(Error::from).and_then(|state| {
 			let mut changes = Default::default();
 			let mut ext = state_machine::Ext {
 				overlay: &mut changes,
@@ -141,33 +166,44 @@ macro_rules! with_runtime {
 impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
 {
+	type CheckedBlockId = CheckedId;
 	type BlockBuilder = ClientBlockBuilder<B::State>;
 
-	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
-		with_runtime!(self, at, ::runtime::consensus::authorities)
-	}
-
-	fn validators(&self, at: &BlockId) -> Result<Vec<AccountId>> {
-		with_runtime!(self, at, ::runtime::session::validators)
-	}
-
-	fn duty_roster(&self, at: &BlockId) -> Result<DutyRoster> {
-		with_runtime!(self, at, ::runtime::parachains::calculate_duty_roster)
-	}
-
-	fn timestamp(&self, at: &BlockId) -> Result<Timestamp> {
-		with_runtime!(self, at, ::runtime::timestamp::get)
-	}
-
-	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<()> {
-		with_runtime!(self, at, || ::runtime::system::internal::execute_block(block))
-	}
-
-	fn build_block(&self, parent: &BlockId, timestamp: Timestamp) -> Result<Self::BlockBuilder> {
-		if self.code_at(parent)? != LocalDispatch::native_equivalent() {
+	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
+		// bail if the code is not the same as the natively linked.
+		if self.code_at(&id)? != LocalDispatch::native_equivalent() {
 			bail!(ErrorKind::UnknownRuntime);
 		}
 
+		Ok(CheckedId(id))
+	}
+
+	fn session_keys(&self, at: &CheckedId) -> Result<Vec<SessionKey>> {
+		with_runtime!(self, at, ::runtime::consensus::authorities)
+	}
+
+	fn validators(&self, at: &CheckedId) -> Result<Vec<AccountId>> {
+		with_runtime!(self, at, ::runtime::session::validators)
+	}
+
+	fn duty_roster(&self, at: &CheckedId) -> Result<DutyRoster> {
+		with_runtime!(self, at, ::runtime::parachains::calculate_duty_roster)
+	}
+
+	fn timestamp(&self, at: &CheckedId) -> Result<Timestamp> {
+		with_runtime!(self, at, ::runtime::timestamp::get)
+	}
+
+	fn evaluate_block(&self, at: &CheckedId, block: Block) -> Result<()> {
+		with_runtime!(self, at, || ::runtime::system::internal::execute_block(block))
+	}
+
+	fn nonce(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<TxOrder> {
+		with_runtime!(self, at, || ::runtime::system::nonce(account))
+	}
+
+	fn build_block(&self, parent: &CheckedId, timestamp: Timestamp) -> Result<Self::BlockBuilder> {
+		let parent = parent.block_id();
 		let header = Header {
 			parent_hash: self.block_hash_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))?,
 			number: self.block_number_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))? + 1,
@@ -316,23 +352,24 @@ mod tests {
 	#[test]
 	fn gets_session_and_validator_keys() {
 		let client = client();
-		assert_eq!(client.session_keys(&BlockId::Number(0)).unwrap(), validators());
-		assert_eq!(client.validators(&BlockId::Number(0)).unwrap(), validators());
+		let id = client.check_id(BlockId::Number(0)).unwrap();
+		assert_eq!(client.session_keys(&id).unwrap(), validators());
+		assert_eq!(client.validators(&id).unwrap(), validators());
 	}
 
 	#[test]
 	fn build_block() {
 		let client = client();
 
-		let block_builder = client.build_block(&BlockId::Number(0), 1_000_000).unwrap();
+		let id = client.check_id(BlockId::Number(0)).unwrap();
+		let block_builder = client.build_block(&id, 1_000_000).unwrap();
 		let block = block_builder.bake();
 
 		assert_eq!(block.header.number, 1);
 	}
 
 	#[test]
-	fn cannot_build_block_on_unknown_parent() {
-		let client = client();
-		assert!(client.build_block(&BlockId::Number(100), 1_000_000).is_err());
+	fn fails_to_check_id_for_unknown_block() {
+		assert!(client().check_id(BlockId::Number(100)).is_err());
 	}
 }
