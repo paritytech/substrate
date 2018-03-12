@@ -21,9 +21,12 @@ use rstd::cell::RefCell;
 use runtime_io::print;
 use codec::KeyedVec;
 use runtime_support::{storage, StorageVec};
-use polkadot_primitives::{Balance, Bondage, BlockNumber, AccountId};
+use polkadot_primitives::{BlockNumber, AccountId};
 use primitives::bft::{MisbehaviorReport, MisbehaviorKind};
 use runtime::{system, session, governance, consensus};
+
+type Balance = u64;
+type Bondage = u64;
 
 struct IntentionStorageVec {}
 impl StorageVec for IntentionStorageVec {
