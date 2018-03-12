@@ -434,7 +434,6 @@ pub mod privileged {
 pub mod internal {
 	use super::*;
 	use demo_primitives::Proposal;
-	use dispatch::enact_proposal;
 
 	/// Check there's nothing to do this block
 	pub fn end_block() {

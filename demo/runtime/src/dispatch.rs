@@ -14,36 +14,83 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Democratic system: Handles administration of general stakeholder voting.
+//! Dispatch system. Just dispatches calls.
 
-use demo_primitives::Proposal;
-use runtime::{staking, system, session, democracy};
+use demo_primitives::{Function, Proposal, AccountId};
+use runtime::{staking, system, session, democracy, council, council_vote, timestamp};
 
-pub fn enact_proposal(proposal: Proposal) {
+/// Dispatch a proposal.
+pub fn proposal(proposal: Proposal) {
 	match proposal {
-		Proposal::SystemSetCode(code) => {
-			system::privileged::set_code(&code);
-		}
-		Proposal::SessionSetLength(value) => {
-			session::privileged::set_length(value);
-		}
-		Proposal::SessionForceNewSession => {
-			session::privileged::force_new_session();
-		}
-		Proposal::StakingSetSessionsPerEra(value) => {
-			staking::privileged::set_sessions_per_era(value);
-		}
-		Proposal::StakingSetBondingDuration(value) => {
-			staking::privileged::set_bonding_duration(value);
-		}
-		Proposal::StakingSetValidatorCount(value) => {
-			staking::privileged::set_validator_count(value);
-		}
-		Proposal::StakingForceNewEra => {
-			staking::privileged::force_new_era()
-		}
-		Proposal::DemocracyCancelReferendum(ref_index) => {
-			democracy::privileged::cancel_referendum(ref_index)
-		}
+		Proposal::SystemSetCode(ref a) =>
+			system::privileged::set_code(a),
+		Proposal::SessionSetLength(a) =>
+			session::privileged::set_length(a),
+		Proposal::SessionForceNewSession =>
+			session::privileged::force_new_session(),
+		Proposal::StakingSetSessionsPerEra(a) =>
+			staking::privileged::set_sessions_per_era(a),
+		Proposal::StakingSetBondingDuration(a) =>
+			staking::privileged::set_bonding_duration(a),
+		Proposal::StakingSetValidatorCount(a) =>
+			staking::privileged::set_validator_count(a),
+		Proposal::StakingForceNewEra =>
+			staking::privileged::force_new_era(),
+		Proposal::DemocracyCancelReferendum(a) =>
+			democracy::privileged::cancel_referendum(a),
+		Proposal::DemocracyStartReferendum(a, b) =>
+			democracy::privileged::start_referendum(*a, b),
+		Proposal::DemocracyCancelReferendum(a) =>
+			democracy::privileged::cancel_referendum(a),
+		Proposal::CouncilSetDesiredSeats(a) =>
+			council::privileged::set_desired_seats(a),
+		Proposal::CouncilRemoveMember(a) =>
+			council::privileged::remove_member(&a),
+		Proposal::CouncilSetPresentationDuration(a) =>
+			council::privileged::set_presentation_duration(a),
+		Proposal::CouncilSetTermDuration(a) =>
+			council::privileged::set_term_duration(a),
+		Proposal::CouncilVoteSetCooloffPeriod(a) =>
+			council_vote::privileged::set_cooloff_period(a),
+		Proposal::CouncilVoteSetVotingPeriod(a) =>
+			council_vote::privileged::set_voting_period(a),
+	}
+}
+
+/// Dispatch a function.
+pub fn function(function: &Function, transactor: &AccountId) {
+	match *function {
+		Function::StakingStake =>
+			staking::public::stake(transactor),
+		Function::StakingUnstake =>
+			staking::public::unstake(transactor),
+		Function::StakingTransfer(dest, value) =>
+			staking::public::transfer(transactor, &dest, value),
+		Function::SessionSetKey(session) =>
+			session::public::set_key(transactor, &session),
+		Function::TimestampSet(t) =>
+			timestamp::public::set(t),
+		Function::CouncilVotePropose(ref a) =>
+			council_vote::public::propose(transactor, a),
+		Function::CouncilVoteVote(ref a, b) =>
+			council_vote::public::vote(transactor, a, b),
+		Function::CouncilVoteVeto(ref a) =>
+			council_vote::public::veto(transactor, a),
+		Function::CouncilSetApprovals(ref a, b) =>
+			council::public::set_approvals(transactor, a, b),
+		Function::CouncilReapInactiveVoter(a, ref b, c, d) =>
+			council::public::reap_inactive_voter(transactor, a, b, c, d),
+		Function::CouncilRetractVoter(a) =>
+			council::public::retract_voter(transactor, a),
+		Function::CouncilSubmitCandidacy(a) =>
+			council::public::submit_candidacy(transactor, a),
+		Function::CouncilPresentWinner(ref a, b, c) =>
+			council::public::present_winner(transactor, a, b, c),
+		Function::DemocracyPropose(ref a, b) =>
+			democracy::public::propose(transactor, a, b),
+		Function::DemocracySecond(a) =>
+			democracy::public::second(transactor, a),
+		Function::DemocracyVote(a, b) =>
+			democracy::public::vote(transactor, a, b),
 	}
 }

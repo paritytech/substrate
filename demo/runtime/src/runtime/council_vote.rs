@@ -184,8 +184,8 @@ pub mod privileged {
 
 pub mod internal {
 	use super::*;
-	use runtime::democracy::VoteThreshold;
 	use runtime::democracy::privileged::start_referendum;
+	use demo_primitives::VoteThreshold;
 
 	pub fn end_block(now: BlockNumber) {
 		while let Some((proposal, proposal_hash)) = take_proposal_if_expiring_at(now) {
@@ -240,9 +240,8 @@ mod tests {
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring::{Alice, Bob, Charlie, Dave};
 	use environment::with_env;
-	use demo_primitives::{AccountId, Proposal};
+	use demo_primitives::{AccountId, Proposal, VoteThreshold};
 	use runtime::{staking, council, democracy};
-	use runtime::democracy::VoteThreshold;
 
 	fn new_test_ext() -> TestExternalities {
 		testing::externalities()
