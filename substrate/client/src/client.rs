@@ -393,11 +393,16 @@ mod tests {
 		bft::UncheckedJustification {
 			digest: hash,
 			signatures: authorities.iter().map(|key| {
-				bft::sign_message(
-					bft::generic::Message::Commit(1, hash),
+				let msg = bft::sign_message(
+					bft::generic::Vote::Commit(1, hash).into(),
 					key,
 					header.parent_hash
-				).signature
+				);
+
+				match msg {
+					bft::generic::LocalizedMessage::Vote(vote) => vote.signature,
+					_ => panic!("signing vote leads to signed vote"),
+				}
 			}).collect(),
 			round_number: 1,
 		}
