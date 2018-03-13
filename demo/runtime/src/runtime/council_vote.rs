@@ -20,9 +20,11 @@ use rstd::prelude::*;
 use codec::{KeyedVec, Slicable, Input, NonTrivialSlicable};
 use runtime_support::Hashable;
 use runtime_support::storage;
-use demo_primitives::{Proposal, AccountId, Hash, BlockNumber};
+use demo_primitives::{AccountId, Hash, BlockNumber};
 use runtime::{system, democracy, council};
-use runtime::staking::Balance;
+use runtime::staking::{PublicPass, Balance};
+use runtime::system::PrivPass;
+use dispatch::PrivCall as Proposal;
 
 type ProposalHash = [u8; 32];
 
@@ -119,12 +121,17 @@ fn take_proposal_if_expiring_at(n: BlockNumber) -> Option<(Proposal, ProposalHas
 	}
 }
 
-pub mod public {
-	use super::*;
+impl_dispatch! {
+	pub mod public;
+	fn propose(proposal: Box<Proposal>) = 0;
+	fn vote(proposal: ProposalHash, approve: bool) = 1;
+	fn veto(proposal_hash: ProposalHash) = 2;
+}
 
-	pub fn propose(signed: &AccountId, proposal: &Proposal) {
+impl<'a> public::Dispatch for PublicPass<'a> {
+	fn propose(self, proposal: Box<Proposal>) {
 		let expiry = system::block_number() + voting_period();
-		assert!(will_still_be_councillor_at(signed, expiry));
+		assert!(will_still_be_councillor_at(&self, expiry));
 
 		let proposal_hash = proposal.blake2_256();
 
@@ -135,65 +142,70 @@ pub mod public {
 		proposals.sort_by_key(|&(expiry, _)| expiry);
 		set_proposals(&proposals);
 
-		storage::put(&proposal_hash.to_keyed_vec(PROPOSAL_OF), proposal);
-		storage::put(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS), &vec![*signed]);
-		storage::put(&(proposal_hash, *signed).to_keyed_vec(COUNCIL_VOTE_OF), &true);
+		storage::put(&proposal_hash.to_keyed_vec(PROPOSAL_OF), &proposal);
+		storage::put(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS), &vec![*self]);
+		storage::put(&(proposal_hash, *self).to_keyed_vec(COUNCIL_VOTE_OF), &true);
 	}
 
-	pub fn vote(signed: &AccountId, proposal: &ProposalHash, approve: bool) {
-		if vote_of(signed, proposal).is_none() {
-			let mut voters = proposal_voters(proposal);
-			voters.push(*signed);
+	fn vote(self, proposal: ProposalHash, approve: bool) {
+		if vote_of(&self, &proposal).is_none() {
+			let mut voters = proposal_voters(&proposal);
+			voters.push(*self);
 			storage::put(&proposal.to_keyed_vec(PROPOSAL_VOTERS), &voters);
 		}
-		storage::put(&(*proposal, *signed).to_keyed_vec(COUNCIL_VOTE_OF), &approve);
+		storage::put(&(proposal, *self).to_keyed_vec(COUNCIL_VOTE_OF), &approve);
 	}
 
-	pub fn veto(signed: &AccountId, proposal_hash: &ProposalHash) {
-		assert!(is_councillor(signed), "only councillors may veto council proposals");
+	fn veto(self, proposal_hash: ProposalHash) {
+		assert!(is_councillor(&self), "only councillors may veto council proposals");
 		assert!(storage::exists(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS)), "proposal must exist to be vetoed");
 
 		let mut existing_vetoers = veto_of(&proposal_hash)
 			.map(|pair| pair.1)
 			.unwrap_or_else(Vec::new);
-		let insert_position = existing_vetoers.binary_search(signed)
+		let insert_position = existing_vetoers.binary_search(&self)
 			.expect_err("a councillor may not veto a proposal twice");
-		existing_vetoers.insert(insert_position, *signed);
+		existing_vetoers.insert(insert_position, *self);
 		set_veto_of(&proposal_hash, system::block_number() + cooloff_period(), existing_vetoers);
 
-		set_proposals(&proposals().into_iter().filter(|&(_, h)| h != *proposal_hash).collect::<Vec<_>>());
+		set_proposals(&proposals().into_iter().filter(|&(_, h)| h != proposal_hash).collect::<Vec<_>>());
 		storage::kill(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS));
 		storage::kill(&proposal_hash.to_keyed_vec(PROPOSAL_OF));
 		for (c, _) in council::active_council() {
-			storage::kill(&(*proposal_hash, c).to_keyed_vec(COUNCIL_VOTE_OF));
+			storage::kill(&(proposal_hash, c).to_keyed_vec(COUNCIL_VOTE_OF));
 		}
 	}
 }
 
-pub mod privileged {
-	use super::*;
+impl_dispatch! {
+	pub mod privileged;
+	fn set_cooloff_period(blocks: BlockNumber) = 0;
+	fn set_voting_period(blocks: BlockNumber) = 1;
+}
 
-	pub fn set_cooloff_period(blocks: BlockNumber) {
+impl privileged::Dispatch for PrivPass {
+	fn set_cooloff_period(self, blocks: BlockNumber) {
 		storage::put(COOLOFF_PERIOD, &blocks);
 	}
 
-	pub fn set_voting_period(blocks: BlockNumber) {
+	fn set_voting_period(self, blocks: BlockNumber) {
 		storage::put(VOTING_PERIOD, &blocks);
 	}
 }
 
 pub mod internal {
 	use super::*;
-	use runtime::democracy::privileged::start_referendum;
-	use demo_primitives::VoteThreshold;
+	use runtime::democracy::privileged::Dispatch;
+	use runtime::democracy::VoteThreshold;
+	use runtime::democracy::internal::start_referendum;
 
 	pub fn end_block(now: BlockNumber) {
 		while let Some((proposal, proposal_hash)) = take_proposal_if_expiring_at(now) {
 			let tally = take_tally(&proposal_hash);
 			println!("Executing proposal {:?} {:?}", proposal, tally);
-			if let &Proposal::DemocracyCancelReferendum(ref_index) = &proposal {
+			if let &Proposal::Democracy(democracy::privileged::Call::cancel_referendum(ref_index)) = &proposal {
 				if let (_, 0, 0) = tally {
-					democracy::privileged::cancel_referendum(ref_index);
+					democracy::privileged::Call::cancel_referendum(ref_index).dispatch(PrivPass);
 				}
 			} else {
 				if tally.0 > tally.1 + tally.2 {
@@ -240,7 +252,8 @@ mod tests {
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring::{Alice, Bob, Charlie, Dave};
 	use environment::with_env;
-	use demo_primitives::{AccountId, Proposal, VoteThreshold};
+	use demo_primitives::AccountId;
+	use runtime::democracy::VoteThreshold;
 	use runtime::{staking, council, democracy};
 
 	fn new_test_ext() -> TestExternalities {
@@ -267,11 +280,19 @@ mod tests {
 		});
 	}
 
+	fn sessions_per_era_propsal(value: u64) -> Proposal {
+		Proposal::Staking(staking::privileged::Call::set_sessions_per_era(value))
+	}
+
+	fn bonding_duration_propsal(value: u64) -> Proposal {
+		Proposal::Staking(staking::privileged::Call::set_bonding_duration(value))
+	}
+
 	#[test]
 	fn referendum_cancellation_should_work_when_unanimous() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = Proposal::StakingSetBondingDuration(42);
+			let proposal = bonding_duration_propsal(42);
 			democracy::privileged::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
 			assert_eq!(democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
 

@@ -23,6 +23,9 @@
 extern crate substrate_runtime_support as runtime_support;
 #[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
 
+#[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
+#[cfg(feature = "std")] extern crate serde;
+
 #[cfg(feature = "std")] extern crate rustc_hex;
 
 extern crate substrate_codec as codec;
@@ -33,48 +36,12 @@ extern crate demo_primitives;
 
 extern crate integer_sqrt;
 
+#[macro_use] pub mod dispatch;
+
+pub mod block;
+pub mod transaction;
 pub mod environment;
 pub mod runtime;
 pub mod api;
-pub mod dispatch;
 
 #[cfg(feature = "std")] pub mod genesismap;
-
-/// Type definitions and helpers for transactions.
-pub mod transaction {
-	use rstd::ops;
-	use demo_primitives::Signature;
-	pub use demo_primitives::{Transaction, UncheckedTransaction};
-
-	/// A type-safe indicator that a transaction has been checked.
-	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Debug))]
-	pub struct CheckedTransaction(UncheckedTransaction);
-
-	impl CheckedTransaction {
-		/// Get a reference to the checked signature.
-		pub fn signature(&self) -> &Signature {
-			&self.0.signature
-		}
-	}
-
-	impl ops::Deref for CheckedTransaction {
-		type Target = Transaction;
-
-		fn deref(&self) -> &Transaction {
-			&self.0.transaction
-		}
-	}
-
-	/// Check the signature on a transaction.
-	///
-	/// On failure, return the transaction back.
-	pub fn check(tx: UncheckedTransaction) -> Result<CheckedTransaction, UncheckedTransaction> {
-		let msg = ::codec::Slicable::encode(&tx.transaction);
-		if ::runtime_io::ed25519_verify(&tx.signature.0, &msg, &tx.transaction.signed) {
-			Ok(CheckedTransaction(tx))
-		} else {
-			Err(tx)
-		}
-	}
-}

@@ -23,14 +23,16 @@ use runtime_io::{print, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use runtime_support::{Hashable, storage};
 use environment::with_env;
-use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Block, Header,
-	UncheckedTransaction, Function, Log};
+use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Header, Log};
+use block::Block;
+use transaction::UncheckedTransaction;
 use runtime::{staking, session};
 use dispatch;
 
 pub const NONCE_OF: &[u8] = b"sys:non:";
 pub const BLOCK_HASH_AT: &[u8] = b"sys:old:";
 pub const CODE: &[u8] = b"sys:cod";
+
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
@@ -41,6 +43,8 @@ pub fn block_number() -> BlockNumber {
 pub fn block_hash(number: BlockNumber) -> Hash {
 	storage::get_or_default(&number.to_keyed_vec(BLOCK_HASH_AT))
 }
+
+pub struct PrivPass;
 
 pub mod privileged {
 	use super::*;
@@ -137,16 +141,19 @@ fn execute_transaction(utx: UncheckedTransaction) {
 		Err(_) => panic!("All transactions should be properly signed"),
 	};
 
-	// check nonce
-	let nonce_key = tx.signed.to_keyed_vec(NONCE_OF);
-	let expected_nonce: TxOrder = storage::get_or(&nonce_key, 0);
-	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
+	{
+		// check nonce
+		let nonce_key = tx.signed.to_keyed_vec(NONCE_OF);
+		let expected_nonce: TxOrder = storage::get_or(&nonce_key, 0);
+		assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
-	// increment nonce in storage
-	storage::put(&nonce_key, &(expected_nonce + 1));
+		// increment nonce in storage
+		storage::put(&nonce_key, &(expected_nonce + 1));
+	}
 
 	// decode parameters and dispatch
-	dispatch::function(&tx.function, &tx.signed);
+	let tx = tx.drain().transaction;
+	tx.function.dispatch(staking::PublicPass::new(&tx.signed));
 }
 
 fn initial_checks(block: &Block) {
@@ -226,8 +233,11 @@ mod tests {
 	use keyring::Keyring::*;
 	use environment::with_env;
 	use primitives::hexdisplay::HexDisplay;
-	use demo_primitives::{Header, Digest, UncheckedTransaction, Transaction, Function};
+	use demo_primitives::{Header, Digest};
+	use transaction::{UncheckedTransaction, Transaction};
 	use runtime::staking;
+	use dispatch::public::Call as PubCall;
+	use runtime::staking::public::Call as StakingCall;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
@@ -239,7 +249,7 @@ mod tests {
 			transaction: Transaction {
 				signed: One.into(),
 				nonce: 0,
-				function: Function::StakingTransfer(Two.into(), 69),
+				function: PubCall::Staking(StakingCall::transfer(Two.into(), 69)),
 			},
 			signature: hex!("5f9832c5a4a39e2dd4a3a0c5b400e9836beb362cb8f7d845a8291a2ae6fe366612e080e4acd0b5a75c3d0b6ee69614a68fb63698c1e76bf1f2dcd8fa617ddf05").into(),
 		};

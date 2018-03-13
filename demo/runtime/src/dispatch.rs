@@ -16,81 +16,230 @@
 
 //! Dispatch system. Just dispatches calls.
 
-use demo_primitives::{Function, Proposal, AccountId};
-use runtime::{staking, system, session, democracy, council, council_vote, timestamp};
+use demo_primitives::AccountId;
+use runtime::{staking, system, session, democracy, council, council_vote};
+use runtime::staking::public::Dispatch as staking_d;
+use runtime::staking::privileged::Dispatch as staking_pd;
+use runtime::timestamp::public::Dispatch as timestamp_d;
 
-/// Dispatch a proposal.
-pub fn proposal(proposal: Proposal) {
-	match proposal {
-		Proposal::SystemSetCode(ref a) =>
-			system::privileged::set_code(a),
-		Proposal::SessionSetLength(a) =>
-			session::privileged::set_length(a),
-		Proposal::SessionForceNewSession =>
-			session::privileged::force_new_session(),
-		Proposal::StakingSetSessionsPerEra(a) =>
-			staking::privileged::set_sessions_per_era(a),
-		Proposal::StakingSetBondingDuration(a) =>
-			staking::privileged::set_bonding_duration(a),
-		Proposal::StakingSetValidatorCount(a) =>
-			staking::privileged::set_validator_count(a),
-		Proposal::StakingForceNewEra =>
-			staking::privileged::force_new_era(),
-		Proposal::DemocracyCancelReferendum(a) =>
-			democracy::privileged::cancel_referendum(a),
-		Proposal::DemocracyStartReferendum(a, b) =>
-			democracy::privileged::start_referendum(*a, b),
-		Proposal::DemocracyCancelReferendum(a) =>
-			democracy::privileged::cancel_referendum(a),
-		Proposal::CouncilSetDesiredSeats(a) =>
-			council::privileged::set_desired_seats(a),
-		Proposal::CouncilRemoveMember(a) =>
-			council::privileged::remove_member(&a),
-		Proposal::CouncilSetPresentationDuration(a) =>
-			council::privileged::set_presentation_duration(a),
-		Proposal::CouncilSetTermDuration(a) =>
-			council::privileged::set_term_duration(a),
-		Proposal::CouncilVoteSetCooloffPeriod(a) =>
-			council_vote::privileged::set_cooloff_period(a),
-		Proposal::CouncilVoteSetVotingPeriod(a) =>
-			council_vote::privileged::set_voting_period(a),
+pub use rstd::prelude::Vec;
+pub use codec::{Slicable, Input, NonTrivialSlicable};
+
+#[macro_export]
+macro_rules! impl_dispatch {
+	(
+		pub mod $mod_name:ident;
+		$(
+			fn $fn_name:ident(
+				$(
+					$param_name:ident : $param:ty
+				),*
+			)
+			= $id:expr ;
+		)*
+	) => {
+		pub mod $mod_name {
+			use super::*;
+
+			#[derive(Clone, Copy, PartialEq, Eq)]
+			#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+			#[repr(u32)]
+			#[allow(non_camel_case_types)]
+			enum Id {
+				$(
+					#[allow(non_camel_case_types)]
+					$fn_name = $id,
+				)*
+			}
+
+			impl Id {
+				/// Derive `Some` value from a `u8`, or `None` if it's invalid.
+				fn from_u8(value: u8) -> Option<Id> {
+					use self::*;
+					let functions = [
+						$( Id::$fn_name ),*
+					];
+					functions.iter().map(|&f| f).find(|&f| value == f as u8)
+				}
+			}
+
+			#[derive(Clone, PartialEq, Eq)]
+			#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+			#[allow(missing_docs)]
+			pub enum Call {
+				$(
+					#[allow(non_camel_case_types)]
+					$fn_name ( $( $param ),* )
+				,)*
+			}
+
+			pub trait Dispatch: Sized {
+				$(
+					fn $fn_name (self, $( $param_name: $param ),* );
+				)*
+			}
+
+			impl Call {
+				pub fn dispatch<D: Dispatch>(self, d: D) {
+					match self {
+						$(
+							Call::$fn_name( $( $param_name ),* ) =>
+								d.$fn_name( $( $param_name ),* ),
+						)*
+					}
+				}
+			}
+
+			impl $crate::dispatch::Slicable for Call {
+				fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
+					let id = u8::decode(input).and_then(Id::from_u8)?;
+					Some(match id {
+						$(
+							Id::$fn_name => {
+								$(
+									let $param_name = $crate::dispatch::Slicable::decode(input)?;
+								)*
+								Call :: $fn_name( $( $param_name ),* )
+							}
+						)*
+					})
+				}
+
+				fn encode(&self) -> Vec<u8> {
+					let mut v = $crate::dispatch::Vec::new();
+					match *self {
+						$(
+							Call::$fn_name(
+								$(
+									ref $param_name
+								),*
+							) => {
+								(Id::$fn_name as u8).using_encoded(|s| v.extend(s));
+								$(
+									$param_name.using_encoded(|s| v.extend(s));
+								)*
+							}
+						)*
+					}
+					v
+				}
+
+				fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+					f(self.encode().as_slice())
+				}
+			}
+			impl $crate::dispatch::NonTrivialSlicable for Call {}
+		}
 	}
 }
 
-/// Dispatch a function.
-pub fn function(function: &Function, transactor: &AccountId) {
-	match *function {
-		Function::StakingStake =>
-			staking::public::stake(transactor),
-		Function::StakingUnstake =>
-			staking::public::unstake(transactor),
-		Function::StakingTransfer(dest, value) =>
-			staking::public::transfer(transactor, &dest, value),
-		Function::SessionSetKey(session) =>
-			session::public::set_key(transactor, &session),
-		Function::TimestampSet(t) =>
-			timestamp::public::set(t),
-		Function::CouncilVotePropose(ref a) =>
-			council_vote::public::propose(transactor, a),
-		Function::CouncilVoteVote(ref a, b) =>
-			council_vote::public::vote(transactor, a, b),
-		Function::CouncilVoteVeto(ref a) =>
-			council_vote::public::veto(transactor, a),
-		Function::CouncilSetApprovals(ref a, b) =>
-			council::public::set_approvals(transactor, a, b),
-		Function::CouncilReapInactiveVoter(a, ref b, c, d) =>
-			council::public::reap_inactive_voter(transactor, a, b, c, d),
-		Function::CouncilRetractVoter(a) =>
-			council::public::retract_voter(transactor, a),
-		Function::CouncilSubmitCandidacy(a) =>
-			council::public::submit_candidacy(transactor, a),
-		Function::CouncilPresentWinner(ref a, b, c) =>
-			council::public::present_winner(transactor, a, b, c),
-		Function::DemocracyPropose(ref a, b) =>
-			democracy::public::propose(transactor, a, b),
-		Function::DemocracySecond(a) =>
-			democracy::public::second(transactor, a),
-		Function::DemocracyVote(a, b) =>
-			democracy::public::vote(transactor, a, b),
+macro_rules! impl_meta_dispatch {
+	(
+		pub mod $super_name:ident;
+		path $path:ident;
+		trait $trait:ty;
+		$(
+			$camelcase:ident(mod $sub_name:ident) = $id:expr ;
+		)*
+	) => {
+		pub mod $super_name {
+			use super::*;
+
+			#[derive(Clone, Copy, PartialEq, Eq)]
+			#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+			#[repr(u32)]
+			#[allow(non_camel_case_types)]
+			enum Id {
+				$(
+					#[allow(non_camel_case_types)]
+					$camelcase = $id,
+				)*
+			}
+
+			impl Id {
+				/// Derive `Some` value from a `u8`, or `None` if it's invalid.
+				fn from_u8(value: u8) -> Option<Id> {
+					use self::*;
+					let functions = [
+						$( Id::$camelcase ),*
+					];
+					functions.iter().map(|&f| f).find(|&f| value == f as u8)
+				}
+			}
+
+			#[derive(Clone, PartialEq, Eq)]
+			#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+			#[allow(missing_docs)]
+			pub enum Call {
+				$(
+					#[allow(non_camel_case_types)]
+					$camelcase ( $crate::runtime::$sub_name::$path::Call )
+				,)*
+			}
+
+			impl Call {
+				pub fn dispatch(self, d: $trait) {
+					match self {
+						$(
+							Call::$camelcase(x) => x.dispatch(d),
+						)*
+					}
+				}
+			}
+
+			impl $crate::dispatch::Slicable for Call {
+				fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
+					let id = u8::decode(input).and_then(Id::from_u8)?;
+					Some(match id {
+						$(
+							Id::$camelcase =>
+								Call::$camelcase( $crate::dispatch::Slicable::decode(input)? ),
+						)*
+					})
+				}
+
+				fn encode(&self) -> Vec<u8> {
+					let mut v = $crate::dispatch::Vec::new();
+					match *self {
+						$(
+							Call::$camelcase( ref sub ) => {
+								(Id::$camelcase as u8).using_encoded(|s| v.extend(s));
+								sub.using_encoded(|s| v.extend(s));
+							}
+						)*
+					}
+					v
+				}
+
+				fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+					f(self.encode().as_slice())
+				}
+			}
+			impl $crate::dispatch::NonTrivialSlicable for Call {}
+		}
 	}
 }
+
+impl_meta_dispatch! {
+	pub mod public;
+	path public;
+	trait staking::PublicPass;
+	Staking(mod staking) = 0;
+	Timestamp(mod timestamp) = 1;
+	Democracy(mod democracy) = 5;
+	Council(mod council) = 6;
+	CouncilVote(mod council) = 7;
+}
+
+impl_meta_dispatch! {
+	pub mod privileged;
+	path privileged;
+	trait system::PrivPass;
+	Staking(mod staking) = 0;
+	Democracy(mod democracy) = 5;
+	Council(mod council) = 6;
+	CouncilVote(mod council) = 7;
+}
+
+pub use self::privileged::Call as PrivCall;
+pub use self::public::Call as PubCall;
