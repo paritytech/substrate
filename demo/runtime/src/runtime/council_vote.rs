@@ -255,6 +255,8 @@ mod tests {
 	use demo_primitives::AccountId;
 	use runtime::democracy::VoteThreshold;
 	use runtime::{staking, council, democracy};
+	use super::public::Dispatch;
+	use super::privileged::Dispatch as PrivDispatch;
 
 	fn new_test_ext() -> TestExternalities {
 		testing::externalities()
@@ -280,27 +282,31 @@ mod tests {
 		});
 	}
 
-	fn sessions_per_era_propsal(value: u64) -> Proposal {
+	fn sessions_per_era_proposal(value: u64) -> Proposal {
 		Proposal::Staking(staking::privileged::Call::set_sessions_per_era(value))
 	}
 
-	fn bonding_duration_propsal(value: u64) -> Proposal {
+	fn bonding_duration_proposal(value: u64) -> Proposal {
 		Proposal::Staking(staking::privileged::Call::set_bonding_duration(value))
+	}
+
+	fn cancel_referendum_proposal(id: u32) -> Proposal {
+		Proposal::Democracy(democracy::privileged::Call::cancel_referendum(id))
 	}
 
 	#[test]
 	fn referendum_cancellation_should_work_when_unanimous() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = bonding_duration_propsal(42);
-			democracy::privileged::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
+			let proposal = bonding_duration_proposal(42);
+			democracy::internal::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
 			assert_eq!(democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
 
-			let cancellation = Proposal::DemocracyCancelReferendum(0);
+			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256();
-			public::propose(&Alice, &cancellation);
-			public::vote(&Bob, &hash, true);
-			public::vote(&Charlie, &hash, true);
+			PublicPass::new(&Alice).propose(Box::new(cancellation));
+			PublicPass::new(&Bob).vote(hash, true);
+			PublicPass::new(&Charlie).vote(hash, true);
 			assert_eq!(proposals(), vec![(2, hash)]);
 			internal::end_block(1);
 
@@ -315,14 +321,14 @@ mod tests {
 	fn referendum_cancellation_should_fail_when_not_unanimous() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = Proposal::StakingSetBondingDuration(42);
-			democracy::privileged::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
+			let proposal = bonding_duration_proposal(42);
+			democracy::internal::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
 
-			let cancellation = Proposal::DemocracyCancelReferendum(0);
+			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256();
-			public::propose(&Alice, &cancellation);
-			public::vote(&Bob, &hash, true);
-			public::vote(&Charlie, &hash, false);
+			PublicPass::new(&Alice).propose(Box::new(cancellation));
+			PublicPass::new(&Bob).vote(hash, true);
+			PublicPass::new(&Charlie).vote(hash, false);
 			internal::end_block(1);
 
 			with_env(|e| e.block_number = 2);
@@ -335,13 +341,13 @@ mod tests {
 	fn referendum_cancellation_should_fail_when_abstentions() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = Proposal::StakingSetBondingDuration(42);
-			democracy::privileged::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
+			let proposal = bonding_duration_proposal(42);
+			democracy::internal::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
 
-			let cancellation = Proposal::DemocracyCancelReferendum(0);
+			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256();
-			public::propose(&Alice, &cancellation);
-			public::vote(&Bob, &hash, true);
+			PublicPass::new(&Alice).propose(Box::new(cancellation));
+			PublicPass::new(&Bob).vote(hash, true);
 			internal::end_block(1);
 
 			with_env(|e| e.block_number = 2);
@@ -354,10 +360,10 @@ mod tests {
 	fn veto_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = Proposal::StakingSetBondingDuration(42);
+			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			public::propose(&Alice, &proposal);
-			public::veto(&Bob, &hash);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Bob).veto(hash);
 			assert_eq!(proposals().len(), 0);
 			assert_eq!(democracy::active_referendums().len(), 0);
 		});
@@ -368,14 +374,14 @@ mod tests {
 	fn double_veto_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = Proposal::StakingSetBondingDuration(42);
+			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			public::propose(&Alice, &proposal);
-			public::veto(&Bob, &hash);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Bob).veto(hash);
 
 			with_env(|e| e.block_number = 3);
-			public::propose(&Alice, &proposal);
-			public::veto(&Bob, &hash);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Bob).veto(hash);
 		});
 	}
 
@@ -384,13 +390,13 @@ mod tests {
 	fn retry_in_cooloff_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = Proposal::StakingSetBondingDuration(42);
+			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			public::propose(&Alice, &proposal);
-			public::veto(&Bob, &hash);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Bob).veto(hash);
 
 			with_env(|e| e.block_number = 2);
-			public::propose(&Alice, &proposal);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
 		});
 	}
 
@@ -398,21 +404,21 @@ mod tests {
 	fn retry_after_cooloff_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = Proposal::StakingSetBondingDuration(42);
+			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			public::propose(&Alice, &proposal);
-			public::veto(&Bob, &hash);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Bob).veto(hash);
 
 			with_env(|e| e.block_number = 3);
-			public::propose(&Alice, &proposal);
-			public::vote(&Bob, &hash, false);
-			public::vote(&Charlie, &hash, true);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Bob).vote(hash, false);
+			PublicPass::new(&Charlie).vote(hash, true);
 			internal::end_block(3);
 
 			with_env(|e| e.block_number = 4);
 			internal::end_block(4);
 			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums(), vec![(0, 7, Proposal::StakingSetBondingDuration(42), VoteThreshold::SimpleMajority)]);
+			assert_eq!(democracy::active_referendums(), vec![(0, 7, bonding_duration_proposal(42), VoteThreshold::SimpleMajority)]);
 		});
 	}
 
@@ -420,14 +426,14 @@ mod tests {
 	fn alternative_double_veto_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = Proposal::StakingSetBondingDuration(42);
+			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			public::propose(&Alice, &proposal);
-			public::veto(&Bob, &hash);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Bob).veto(hash);
 
 			with_env(|e| e.block_number = 3);
-			public::propose(&Alice, &proposal);
-			public::veto(&Charlie, &hash);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Charlie).veto(hash);
 			assert_eq!(proposals().len(), 0);
 			assert_eq!(democracy::active_referendums().len(), 0);
 		});
@@ -437,9 +443,9 @@ mod tests {
 	fn simple_propose_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let proposal = Proposal::StakingSetBondingDuration(42);
+			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			public::propose(&Alice, &proposal);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
 			assert_eq!(proposals().len(), 1);
 			assert_eq!(proposal_voters(&hash), vec![Alice.to_raw_public()]);
 			assert_eq!(vote_of(&Alice, &hash), Some(true));
@@ -451,8 +457,9 @@ mod tests {
 	fn unvoted_proposal_should_expire_without_action() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Alice, &Proposal::StakingSetBondingDuration(42));
-			assert_eq!(tally(&Proposal::StakingSetBondingDuration(42).blake2_256()), (1, 0, 2));
+			let proposal = bonding_duration_proposal(42);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			assert_eq!(tally(&proposal.blake2_256()), (1, 0, 2));
 			internal::end_block(1);
 
 			with_env(|e| e.block_number = 2);
@@ -466,16 +473,17 @@ mod tests {
 	fn unanimous_proposal_should_expire_with_biased_referendum() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Alice, &Proposal::StakingSetBondingDuration(42));
-			public::vote(&Bob, &Proposal::StakingSetBondingDuration(42).blake2_256(), true);
-			public::vote(&Charlie, &Proposal::StakingSetBondingDuration(42).blake2_256(), true);
-			assert_eq!(tally(&Proposal::StakingSetBondingDuration(42).blake2_256()), (3, 0, 0));
+			let proposal = bonding_duration_proposal(42);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Bob).vote(proposal.blake2_256(), true);
+			PublicPass::new(&Charlie).vote(proposal.blake2_256(), true);
+			assert_eq!(tally(&proposal.blake2_256()), (3, 0, 0));
 			internal::end_block(1);
 
 			with_env(|e| e.block_number = 2);
 			internal::end_block(2);
 			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums(), vec![(0, 5, Proposal::StakingSetBondingDuration(42), VoteThreshold::SuperMajorityAgainst)]);
+			assert_eq!(democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SuperMajorityAgainst)]);
 		});
 	}
 
@@ -483,16 +491,17 @@ mod tests {
 	fn majority_proposal_should_expire_with_unbiased_referendum() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Alice, &Proposal::StakingSetBondingDuration(42));
-			public::vote(&Bob, &Proposal::StakingSetBondingDuration(42).blake2_256(), true);
-			public::vote(&Charlie, &Proposal::StakingSetBondingDuration(42).blake2_256(), false);
-			assert_eq!(tally(&Proposal::StakingSetBondingDuration(42).blake2_256()), (2, 1, 0));
+			let proposal = bonding_duration_proposal(42);
+			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			PublicPass::new(&Bob).vote(proposal.blake2_256(), true);
+			PublicPass::new(&Charlie).vote(proposal.blake2_256(), false);
+			assert_eq!(tally(&proposal.blake2_256()), (2, 1, 0));
 			internal::end_block(1);
 
 			with_env(|e| e.block_number = 2);
 			internal::end_block(2);
 			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums(), vec![(0, 5, Proposal::StakingSetBondingDuration(42), VoteThreshold::SimpleMajority)]);
+			assert_eq!(democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SimpleMajority)]);
 		});
 	}
 
@@ -501,7 +510,8 @@ mod tests {
 	fn propose_by_public_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Dave, &Proposal::StakingSetBondingDuration(42));
+			let proposal = bonding_duration_proposal(42);
+			PublicPass::new(&Dave).propose(Box::new(proposal));
 		});
 	}
 }
