@@ -17,7 +17,7 @@
 //! Support code for the runtime.
 
 #[macro_use] extern crate hex_literal;
-extern crate ed25519;
+pub extern crate ed25519;
 
 use ed25519::{Pair, Public, Signature};
 

@@ -23,7 +23,7 @@ use polkadot_primitives::SessionKey;
 struct AuthorityStorageVec {}
 impl StorageVec for AuthorityStorageVec {
 	type Item = SessionKey;
-	const PREFIX: &'static[u8] = b":auth:";
+	const PREFIX: &'static [u8] = b":auth:";
 }
 
 /// Get the current set of authorities. These are the session keys.
@@ -37,7 +37,7 @@ pub mod internal {
 	/// Set the current set of authorities' session keys.
 	///
 	/// Called by `next_session` only.
-	pub fn set_authorities(authorities: &[SessionKey]) {
+	pub fn set_authorities<'a, I: IntoIterator<Item=&'a SessionKey>>(authorities: I) {
 		AuthorityStorageVec::set_items(authorities);
 	}
 
