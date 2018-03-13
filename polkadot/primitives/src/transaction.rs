@@ -18,6 +18,7 @@
 
 use rstd::vec::Vec;
 use codec::{Input, Slicable};
+use primitives::bft::MisbehaviorReport;
 use ::Signature;
 
 #[cfg(feature = "std")]
@@ -168,6 +169,8 @@ enum FunctionId {
 	StakingUnstake = 0x21,
 	/// Staking subsystem: transfer stake.
 	StakingTransfer = 0x22,
+	/// Report misbehavior.
+	StakingReportMisbehavior = 0x23,
 	/// Make a proposal for the governance system.
 	GovernancePropose = 0x30,
 	/// Approve a proposal for the governance system.
@@ -178,9 +181,16 @@ impl FunctionId {
 	/// Derive `Some` value from a `u8`, or `None` if it's invalid.
 	fn from_u8(value: u8) -> Option<FunctionId> {
 		use self::*;
-		let functions = [FunctionId::StakingStake, FunctionId::StakingUnstake,
-			FunctionId::StakingTransfer, FunctionId::SessionSetKey, FunctionId::TimestampSet,
-			FunctionId::GovernancePropose, FunctionId::GovernanceApprove];
+		let functions = [
+			FunctionId::StakingStake,
+			FunctionId::StakingUnstake,
+			FunctionId::StakingTransfer,
+			FunctionId::StakingReportMisbehavior,
+			FunctionId::SessionSetKey,
+			FunctionId::TimestampSet,
+			FunctionId::GovernancePropose,
+			FunctionId::GovernanceApprove,
+		];
 		functions.iter().map(|&f| f).find(|&f| value == f as u8)
 	}
 }
@@ -222,6 +232,8 @@ pub enum Function {
 	StakingUnstake,
 	/// Staking subsystem: transfer stake.
 	StakingTransfer(::AccountId, u64),
+	/// Staking subsystem: report misbehavior of a validator.
+	ReportMisbehavior(MisbehaviorReport),
 	/// Make a proposal for the governance system.
 	GovernancePropose(Proposal),
 	/// Approve a proposal for the governance system.
@@ -269,6 +281,7 @@ impl Slicable for Function {
 
 				Function::StakingTransfer(to, amount)
 			}
+			FunctionId::StakingReportMisbehavior => Function::ReportMisbehavior(MisbehaviorReport::decode(input)?),
 			FunctionId::GovernancePropose =>
 				Function::GovernancePropose(try_opt!(Slicable::decode(input))),
 			FunctionId::GovernanceApprove =>
@@ -292,6 +305,10 @@ impl Slicable for Function {
 			}
 			Function::StakingUnstake => {
 				(FunctionId::StakingUnstake as u8).using_encoded(|s| v.extend(s));
+			}
+			Function::ReportMisbehavior(ref report) => {
+				(FunctionId::StakingReportMisbehavior as u8).using_encoded(|s| v.extend(s));
+				report.using_encoded(|s| v.extend(s));
 			}
 			Function::StakingTransfer(ref to, ref amount) => {
 				(FunctionId::StakingTransfer as u8).using_encoded(|s| v.extend(s));

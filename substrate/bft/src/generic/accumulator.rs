@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Message accumulator for each round of BFT consensus.
+//! Vote accumulator for each round of BFT consensus.
 
 use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
-use generic::{Message, LocalizedMessage};
+use generic::{Vote, LocalizedMessage, LocalizedProposal};
 
 /// Justification for some state at a given round.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +122,26 @@ struct VoteCounts {
 	committed: usize,
 }
 
+#[derive(Debug)]
+struct Proposal<Candidate, Digest, Signature> {
+	proposal: Candidate,
+	digest: Digest,
+	digest_signature: Signature,
+}
+
+/// Misbehavior which can occur.
+#[derive(Debug, Clone)]
+pub enum Misbehavior<Digest, Signature> {
+	/// Proposed out-of-turn.
+	ProposeOutOfTurn(usize, Digest, Signature),
+	/// Issued two conflicting proposals.
+	DoublePropose(usize, (Digest, Signature), (Digest, Signature)),
+	/// Issued two conflicting prepare messages.
+	DoublePrepare(usize, (Digest, Signature), (Digest, Signature)),
+	/// Issued two conflicting commit messages.
+	DoubleCommit(usize, (Digest, Signature), (Digest, Signature)),
+}
+
 /// Accumulates messages for a given round of BFT consensus.
 ///
 /// This isn't tied to the "view" of a single authority. It
@@ -132,13 +152,13 @@ pub struct Accumulator<Candidate, Digest, AuthorityId, Signature>
 	where
 	Candidate: Eq + Clone,
 	Digest: Hash + Eq + Clone,
-	AuthorityId: Hash + Eq,
+	AuthorityId: Hash + Eq + Clone,
 	Signature: Eq + Clone,
 {
 	round_number: usize,
 	threshold: usize,
 	round_proposer: AuthorityId,
-	proposal: Option<Candidate>,
+	proposal: Option<Proposal<Candidate, Digest, Signature>>,
 	prepares: HashMap<AuthorityId, (Digest, Signature)>,
 	commits: HashMap<AuthorityId, (Digest, Signature)>,
 	vote_counts: HashMap<Digest, VoteCounts>,
@@ -150,7 +170,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 	where
 	Candidate: Eq + Clone,
 	Digest: Hash + Eq + Clone,
-	AuthorityId: Hash + Eq,
+	AuthorityId: Hash + Eq + Clone,
 	Signature: Eq + Clone,
 {
 	/// Create a new state accumulator.
@@ -179,7 +199,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 	}
 
 	pub fn proposal(&self) -> Option<&Candidate> {
-		self.proposal.as_ref()
+		self.proposal.as_ref().map(|p| &p.proposal)
 	}
 
 	/// Inspect the current consensus state.
@@ -192,32 +212,61 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 	pub fn import_message(
 		&mut self,
 		message: LocalizedMessage<Candidate, Digest, AuthorityId, Signature>,
-	)
-	{
+	) -> Result<(), Misbehavior<Digest, Signature>> {
 		// message from different round.
-		if message.message.round_number() != self.round_number {
-			return;
+		if message.round_number() != self.round_number {
+			return Ok(());
 		}
 
-		let (sender, signature) = (message.sender, message.signature);
-
-		match message.message {
-			Message::Propose(_, p) => self.import_proposal(p, sender),
-			Message::Prepare(_, d) => self.import_prepare(d, sender, signature),
-			Message::Commit(_, d) => self.import_commit(d, sender, signature),
-			Message::AdvanceRound(_) => self.import_advance_round(sender),
+		match message {
+			LocalizedMessage::Propose(proposal) => self.import_proposal(proposal),
+			LocalizedMessage::Vote(vote) => {
+				let (sender, signature) = (vote.sender, vote.signature);
+				match vote.vote {
+					Vote::Prepare(_, d) => self.import_prepare(d, sender, signature),
+					Vote::Commit(_, d) => self.import_commit(d, sender, signature),
+					Vote::AdvanceRound(_) => self.import_advance_round(sender),
+				}
+			}
 		}
 	}
 
 	fn import_proposal(
 		&mut self,
-		proposal: Candidate,
-		sender: AuthorityId,
-	) {
-		if sender != self.round_proposer || self.proposal.is_some() { return }
+		proposal: LocalizedProposal<Candidate, Digest, AuthorityId, Signature>,
+	) -> Result<(), Misbehavior<Digest, Signature>> {
+		let sender = proposal.sender;
 
-		self.proposal = Some(proposal.clone());
-		self.state = State::Proposed(proposal);
+		if sender != self.round_proposer {
+			return Err(Misbehavior::ProposeOutOfTurn(
+				self.round_number,
+				proposal.digest,
+				proposal.digest_signature)
+			);
+		}
+
+		match self.proposal {
+			Some(ref p) if &p.digest != &proposal.digest => {
+				return Err(Misbehavior::DoublePropose(
+					self.round_number,
+					{
+						let old = self.proposal.as_ref().expect("just checked to be Some; qed");
+						(old.digest.clone(), old.digest_signature.clone())
+					},
+					(proposal.digest.clone(), proposal.digest_signature.clone())
+				))
+			}
+			_ => {},
+		}
+
+		self.proposal = Some(Proposal {
+			proposal: proposal.proposal.clone(),
+			digest: proposal.digest,
+			digest_signature: proposal.digest_signature,
+		});
+
+		self.state = State::Proposed(proposal.proposal);
+		Ok(())
 	}
 
 	fn import_prepare(
@@ -225,21 +274,32 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		digest: Digest,
 		sender: AuthorityId,
 		signature: Signature,
-	) {
+	) -> Result<(), Misbehavior<Digest, Signature>> {
 		// ignore any subsequent prepares by the same sender.
-		// TODO: if digest is different, that's misbehavior.
-		let threshold_prepared = if let Entry::Vacant(vacant) = self.prepares.entry(sender) {
-			vacant.insert((digest.clone(), signature));
-			let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
-			count.prepared += 1;
+		let threshold_prepared = match self.prepares.entry(sender.clone()) {
+			Entry::Vacant(vacant) => {
+				vacant.insert((digest.clone(), signature));
+				let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
+				count.prepared += 1;
 
-			if count.prepared >= self.threshold {
-				Some(digest)
-			} else {
+				if count.prepared >= self.threshold {
+					Some(digest)
+				} else {
+					None
+				}
+			}
+			Entry::Occupied(occupied) => {
+				// if digest is different, that's misbehavior.
+				if occupied.get().0 != digest {
+					return Err(Misbehavior::DoublePrepare(
+						self.round_number,
+						occupied.get().clone(),
+						(digest, signature)
+					));
+				}
+
 				None
 			}
-		} else {
-			None
 		};
 
 		// only allow transition to prepare from begin or proposed state.
@@ -261,6 +321,8 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 				signatures: signatures,
 			}));
 		}
+
+		Ok(())
 	}
 
 	fn import_commit(
@@ -268,21 +330,32 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		digest: Digest,
 		sender: AuthorityId,
 		signature: Signature,
-	) {
+	) -> Result<(), Misbehavior<Digest, Signature>> {
 		// ignore any subsequent commits by the same sender.
-		// TODO: if digest is different, that's misbehavior.
-		let threshold_committed = if let Entry::Vacant(vacant) = self.commits.entry(sender) {
-			vacant.insert((digest.clone(), signature));
-			let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
-			count.committed += 1;
+		let threshold_committed = match self.commits.entry(sender.clone()) {
+			Entry::Vacant(vacant) => {
+				vacant.insert((digest.clone(), signature));
+				let count = self.vote_counts.entry(digest.clone()).or_insert_with(Default::default);
+				count.committed += 1;
 
-			if count.committed >= self.threshold {
-				Some(digest)
-			} else {
+				if count.committed >= self.threshold {
+					Some(digest)
+				} else {
+					None
+				}
+			}
+			Entry::Occupied(occupied) => {
+				// if digest is different, that's misbehavior.
+				if occupied.get().0 != digest {
+					return Err(Misbehavior::DoubleCommit(
+						self.round_number,
+						occupied.get().clone(),
+						(digest, signature)
+					));
+				}
+
 				None
 			}
-		} else {
-			None
 		};
 
 		// transition to concluded state always valid.
@@ -302,15 +375,17 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 				signatures: signatures,
 			}));
 		}
+
+		Ok(())
 	}
 
 	fn import_advance_round(
 		&mut self,
 		sender: AuthorityId,
-	) {
+	) -> Result<(), Misbehavior<Digest, Signature>> {
 		self.advance_round.insert(sender);
 
-		if self.advance_round.len() < self.threshold { return }
+		if self.advance_round.len() < self.threshold { return Ok(()) }
 
 		// allow transition to new round only if we haven't produced a justification
 		// yet.
@@ -319,13 +394,16 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 			State::Prepared(j) => State::Advanced(Some(j)),
 			State::Advanced(j) => State::Advanced(j),
 			State::Begin | State::Proposed(_) => State::Advanced(None),
-		}
+		};
+
+		Ok(())
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use generic::{LocalizedMessage, LocalizedProposal, LocalizedVote};
 
 	#[derive(Clone, PartialEq, Eq, Debug)]
 	pub struct Candidate(usize);
@@ -333,7 +411,7 @@ mod tests {
 	#[derive(Hash, PartialEq, Eq, Clone, Debug)]
 	pub struct Digest(usize);
 
-	#[derive(Hash, PartialEq, Eq, Debug)]
+	#[derive(Hash, PartialEq, Eq, Debug, Clone)]
 	pub struct AuthorityId(usize);
 
 	#[derive(PartialEq, Eq, Clone, Debug)]
@@ -375,19 +453,27 @@ mod tests {
 		let mut accumulator = Accumulator::<_, Digest, _, _>::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
-		accumulator.import_message(LocalizedMessage {
+		let res = accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
 			sender: AuthorityId(5),
-			signature: Signature(999, 5),
-			message: Message::Propose(1, Candidate(999)),
-		});
+			full_signature: Signature(999, 5),
+			digest_signature: Signature(999, 5),
+			proposal: Candidate(999),
+			digest: Digest(999),
+			round_number: 1,
+		}));
+
+		assert!(res.is_err());
 
 		assert_eq!(accumulator.state(), &State::Begin);
 
-		accumulator.import_message(LocalizedMessage {
+		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
 			sender: AuthorityId(8),
-			signature: Signature(999, 8),
-			message: Message::Propose(1, Candidate(999)),
-		});
+			full_signature: Signature(999, 8),
+			digest_signature: Signature(999, 8),
+			proposal: Candidate(999),
+			digest: Digest(999),
+			round_number: 1,
+		})).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 	}
@@ -397,29 +483,32 @@ mod tests {
 		let mut accumulator = Accumulator::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
-		accumulator.import_message(LocalizedMessage {
+		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
 			sender: AuthorityId(8),
-			signature: Signature(999, 8),
-			message: Message::Propose(1, Candidate(999)),
-		});
+			full_signature: Signature(999, 8),
+			digest_signature: Signature(999, 8),
+			round_number: 1,
+			proposal: Candidate(999),
+			digest: Digest(999),
+		})).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 
 		for i in 0..6 {
-			accumulator.import_message(LocalizedMessage {
+			accumulator.import_message(LocalizedVote {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
-				message: Message::Prepare(1, Digest(999)),
-			});
+				vote: Vote::Prepare(1, Digest(999)),
+			}.into()).unwrap();
 
 			assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 		}
 
-		accumulator.import_message(LocalizedMessage {
+		accumulator.import_message(LocalizedVote {
 			sender: AuthorityId(7),
 			signature: Signature(999, 7),
-			message: Message::Prepare(1, Digest(999)),
-		});
+			vote: Vote::Prepare(1, Digest(999)),
+		}.into()).unwrap();
 
 		match accumulator.state() {
 			&State::Prepared(ref j) => assert_eq!(j.digest, Digest(999)),
@@ -432,29 +521,32 @@ mod tests {
 		let mut accumulator = Accumulator::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
-		accumulator.import_message(LocalizedMessage {
+		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
 			sender: AuthorityId(8),
-			signature: Signature(999, 8),
-			message: Message::Propose(1, Candidate(999)),
-		});
+			full_signature: Signature(999, 8),
+			digest_signature: Signature(999, 8),
+			round_number: 1,
+			proposal: Candidate(999),
+			digest: Digest(999),
+		})).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 
 		for i in 0..6 {
-			accumulator.import_message(LocalizedMessage {
+			accumulator.import_message(LocalizedVote {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
-				message: Message::Prepare(1, Digest(999)),
-			});
+				vote: Vote::Prepare(1, Digest(999)),
+			}.into()).unwrap();
 
 			assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 		}
 
-		accumulator.import_message(LocalizedMessage {
+		accumulator.import_message(LocalizedVote {
 			sender: AuthorityId(7),
 			signature: Signature(999, 7),
-			message: Message::Prepare(1, Digest(999)),
-		});
+			vote: Vote::Prepare(1, Digest(999)),
+		}.into()).unwrap();
 
 		match accumulator.state() {
 			&State::Prepared(ref j) => assert_eq!(j.digest, Digest(999)),
@@ -462,11 +554,11 @@ mod tests {
 		}
 
 		for i in 0..6 {
-			accumulator.import_message(LocalizedMessage {
+			accumulator.import_message(LocalizedVote {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
-				message: Message::Commit(1, Digest(999)),
-			});
+				vote: Vote::Commit(1, Digest(999)),
+			}.into()).unwrap();
 
 			match accumulator.state() {
 				&State::Prepared(_) => {},
@@ -474,11 +566,11 @@ mod tests {
 			}
 		}
 
-		accumulator.import_message(LocalizedMessage {
+		accumulator.import_message(LocalizedVote {
 			sender: AuthorityId(7),
 			signature: Signature(999, 7),
-			message: Message::Commit(1, Digest(999)),
-		});
+			vote: Vote::Commit(1, Digest(999)),
+		}.into()).unwrap();
 
 		match accumulator.state() {
 			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
@@ -491,20 +583,23 @@ mod tests {
 		let mut accumulator = Accumulator::new(1, 7, AuthorityId(8));
 		assert_eq!(accumulator.state(), &State::Begin);
 
-		accumulator.import_message(LocalizedMessage {
+		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
 			sender: AuthorityId(8),
-			signature: Signature(999, 8),
-			message: Message::Propose(1, Candidate(999)),
-		});
+			full_signature: Signature(999, 8),
+			digest_signature: Signature(999, 8),
+			round_number: 1,
+			proposal: Candidate(999),
+			digest: Digest(999),
+		})).unwrap();
 
 		assert_eq!(accumulator.state(), &State::Proposed(Candidate(999)));
 
 		for i in 0..7 {
-			accumulator.import_message(LocalizedMessage {
+			accumulator.import_message(LocalizedVote {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
-				message: Message::Prepare(1, Digest(999)),
-			});
+				vote: Vote::Prepare(1, Digest(999)),
+			}.into()).unwrap();
 		}
 
 		match accumulator.state() {
@@ -513,11 +608,11 @@ mod tests {
 		}
 
 		for i in 0..6 {
-			accumulator.import_message(LocalizedMessage {
+			accumulator.import_message(LocalizedVote {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
-				message: Message::AdvanceRound(1),
-			});
+				vote: Vote::AdvanceRound(1),
+			}.into()).unwrap();
 
 			match accumulator.state() {
 				&State::Prepared(_) => {},
@@ -525,11 +620,11 @@ mod tests {
 			}
 		}
 
-		accumulator.import_message(LocalizedMessage {
+		accumulator.import_message(LocalizedVote {
 			sender: AuthorityId(7),
 			signature: Signature(999, 7),
-			message: Message::AdvanceRound(1),
-		});
+			vote: Vote::AdvanceRound(1),
+		}.into()).unwrap();
 
 		match accumulator.state() {
 			&State::Advanced(Some(_)) => {},
@@ -543,11 +638,11 @@ mod tests {
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		for i in 0..7 {
-			accumulator.import_message(LocalizedMessage {
+			accumulator.import_message(LocalizedVote {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
-				message: Message::Prepare(1, Digest(999)),
-			});
+				vote: Vote::Prepare(1, Digest(999)),
+			}.into()).unwrap();
 		}
 
 		match accumulator.state() {
@@ -556,11 +651,11 @@ mod tests {
 		}
 
 		for i in 0..7 {
-			accumulator.import_message(LocalizedMessage {
+			accumulator.import_message(LocalizedVote {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
-				message: Message::Commit(1, Digest(999)),
-			});
+				vote: Vote::Commit(1, Digest(999)),
+			}.into()).unwrap();
 		}
 
 		match accumulator.state() {
@@ -575,11 +670,11 @@ mod tests {
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		for i in 0..7 {
-			accumulator.import_message(LocalizedMessage {
+			accumulator.import_message(LocalizedVote {
 				sender: AuthorityId(i),
 				signature: Signature(1, i),
-				message: Message::AdvanceRound(1),
-			});
+				vote: Vote::AdvanceRound(1),
+			}.into()).unwrap();
 		}
 
 		match accumulator.state() {
@@ -594,16 +689,88 @@ mod tests {
 		assert_eq!(accumulator.state(), &State::Begin);
 
 		for i in 0..7 {
-			accumulator.import_message(LocalizedMessage {
+			accumulator.import_message(LocalizedVote {
 				sender: AuthorityId(i),
 				signature: Signature(999, i),
-				message: Message::Commit(1, Digest(999)),
-			});
+				vote: Vote::Commit(1, Digest(999)),
+			}.into()).unwrap();
 		}
 
 		match accumulator.state() {
 			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
 			s => panic!("wrong state: {:?}", s),
 		}
+	}
+
+	#[test]
+	fn double_prepare_is_misbehavior() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		for i in 0..7 {
+			accumulator.import_message(LocalizedVote {
+				sender: AuthorityId(i),
+				signature: Signature(999, i),
+				vote: Vote::Prepare(1, Digest(999)),
+			}.into()).unwrap();
+
+			let res = accumulator.import_message(LocalizedVote {
+				sender: AuthorityId(i),
+				signature: Signature(123, i),
+				vote: Vote::Prepare(1, Digest(123)),
+			}.into());
+
+			assert!(res.is_err());
+
+		}
+	}
+
+	#[test]
+	fn double_commit_is_misbehavior() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		for i in 0..7 {
+			accumulator.import_message(LocalizedVote {
+				sender: AuthorityId(i),
+				signature: Signature(999, i),
+				vote: Vote::Commit(1, Digest(999)),
+			}.into()).unwrap();
+
+			let res = accumulator.import_message(LocalizedVote {
+				sender: AuthorityId(i),
+				signature: Signature(123, i),
+				vote: Vote::Commit(1, Digest(123)),
+			}.into());
+
+			assert!(res.is_err());
+
+		}
+	}
+
+	#[test]
+	fn double_propose_is_misbehavior() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
+			sender: AuthorityId(8),
+			full_signature: Signature(999, 8),
+			digest_signature: Signature(999, 8),
+			round_number: 1,
+			proposal: Candidate(999),
+			digest: Digest(999),
+		})).unwrap();
+
+		let res = accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
+			sender: AuthorityId(8),
+			full_signature: Signature(500, 8),
+			digest_signature: Signature(500, 8),
+			round_number: 1,
+			proposal: Candidate(500),
+			digest: Digest(500),
+		}));
+
+		assert!(res.is_err());
 	}
 }

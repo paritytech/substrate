@@ -162,7 +162,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("c8776c92e8012bf6b3f206448eda3f00bca26d77f220f4714c81cbc92a30e1e2").into(),
+			hex!("5604fe023cd6effd93aec9b4a008398abdd32afb3fec988a19aa853ab0424a7c").into(),
 			200_000,
 			vec![
 				Transaction {

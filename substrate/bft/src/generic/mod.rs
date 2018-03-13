@@ -18,6 +18,7 @@
 //! Very general implementation.
 
 use std::collections::{HashMap, VecDeque};
+use std::collections::hash_map;
 use std::fmt::Debug;
 use std::hash::Hash;
 
@@ -25,19 +26,16 @@ use futures::{future, Future, Stream, Sink, Poll, Async, AsyncSink};
 
 use self::accumulator::State;
 
-pub use self::accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification};
+pub use self::accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification, Misbehavior};
 
 mod accumulator;
 
 #[cfg(test)]
 mod tests;
 
-/// Messages over the proposal.
-/// Each message carries an associated round number.
+/// Votes during a round.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Message<C, D> {
-	/// Send a full proposal.
-	Propose(usize, C),
+pub enum Vote<D> {
 	/// Prepare to vote for proposal with digest D.
 	Prepare(usize, D),
 	/// Commit to proposal with digest D..
@@ -46,27 +44,92 @@ pub enum Message<C, D> {
 	AdvanceRound(usize),
 }
 
-impl<C, D> Message<C, D> {
+impl<D> Vote<D> {
 	/// Extract the round number.
 	pub fn round_number(&self) -> usize {
 		match *self {
-			Message::Propose(round, _) => round,
-			Message::Prepare(round, _) => round,
-			Message::Commit(round, _) => round,
-			Message::AdvanceRound(round) => round,
+			Vote::Prepare(round, _) => round,
+			Vote::Commit(round, _) => round,
+			Vote::AdvanceRound(round) => round,
 		}
 	}
 }
 
-/// A localized message, including the sender.
+/// Messages over the proposal.
+/// Each message carries an associated round number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Message<C, D> {
+	/// A proposal itself.
+	Propose(usize, C),
+	/// A vote of some kind, localized to a round number.
+	Vote(Vote<D>),
+}
+
+impl<C, D> From<Vote<D>> for Message<C, D> {
+	fn from(vote: Vote<D>) -> Self {
+		Message::Vote(vote)
+	}
+}
+
+/// A localized proposal message. Contains two signed pieces of data.
 #[derive(Debug, Clone)]
-pub struct LocalizedMessage<C, D, V, S> {
-	/// The message received.
-	pub message: Message<C, D>,
+pub struct LocalizedProposal<C, D, V, S> {
+	/// The round number.
+	pub round_number: usize,
+	/// The proposal sent.
+	pub proposal: C,
+	/// The digest of the proposal.
+	pub digest: D,
+	/// The sender of the proposal
+	pub sender: V,
+	/// The signature on the message (propose, round number, digest)
+	pub digest_signature: S,
+	/// The signature on the message (propose, round number, proposal)
+	pub full_signature: S,
+}
+
+/// A localized vote message, including the sender.
+#[derive(Debug, Clone)]
+pub struct LocalizedVote<D, V, S> {
+	/// The message sent.
+	pub vote: Vote<D>,
 	/// The sender of the message
 	pub sender: V,
 	/// The signature of the message.
 	pub signature: S,
+}
+
+/// A localized message.
+#[derive(Debug, Clone)]
+pub enum LocalizedMessage<C, D, V, S> {
+	/// A proposal.
+	Propose(LocalizedProposal<C, D, V, S>),
+	/// A vote.
+	Vote(LocalizedVote<D, V, S>),
+}
+
+impl<C, D, V, S> LocalizedMessage<C, D, V, S> {
+	/// Extract the sender.
+	pub fn sender(&self) -> &V {
+		match *self {
+			LocalizedMessage::Propose(ref proposal) => &proposal.sender,
+			LocalizedMessage::Vote(ref vote) => &vote.sender,
+		}
+	}
+
+	/// Extract the round number.
+	pub fn round_number(&self) -> usize {
+		match *self {
+			LocalizedMessage::Propose(ref proposal) => proposal.round_number,
+			LocalizedMessage::Vote(ref vote) => vote.vote.round_number(),
+		}
+	}
+}
+
+impl<C, D, V, S> From<LocalizedVote<D, V, S>> for LocalizedMessage<C, D, V, S> {
+	fn from(vote: LocalizedVote<D, V, S>) -> Self {
+		LocalizedMessage::Vote(vote)
+	}
 }
 
 /// Context necessary for agreement.
@@ -101,6 +164,8 @@ pub trait Context {
 	fn candidate_digest(&self, candidate: &Self::Candidate) -> Self::Digest;
 
 	/// Sign a message using the local authority ID.
+	/// In the case of a proposal message, it should sign on the hash and
+	/// the bytes of the proposal.
 	fn sign_local(&self, message: Message<Self::Candidate, Self::Digest>)
 		-> LocalizedMessage<Self::Candidate, Self::Digest, Self::AuthorityId, Self::Signature>;
 
@@ -258,6 +323,7 @@ struct Strategy<C: Context> {
 	current_accumulator: Accumulator<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
 	future_accumulator: Accumulator<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
 	local_id: C::AuthorityId,
+	misbehavior: HashMap<C::AuthorityId, Misbehavior<C::Digest, C::Signature>>,
 }
 
 impl<C: Context> Strategy<C> {
@@ -289,6 +355,7 @@ impl<C: Context> Strategy<C> {
 			notable_candidates: HashMap::new(),
 			round_timeout: timeout.fuse(),
 			local_id: context.local_id(),
+			misbehavior: HashMap::new(),
 		}
 	}
 
@@ -296,12 +363,19 @@ impl<C: Context> Strategy<C> {
 		&mut self,
 		msg: LocalizedMessage<C::Candidate, C::Digest, C::AuthorityId, C::Signature>
 	) {
-		let round_number = msg.message.round_number();
+		let round_number = msg.round_number();
 
-		if round_number == self.current_accumulator.round_number() {
-			self.current_accumulator.import_message(msg);
+		let sender = msg.sender().clone();
+		let misbehavior = if round_number == self.current_accumulator.round_number() {
+			self.current_accumulator.import_message(msg)
 		} else if round_number == self.future_accumulator.round_number() {
-			self.future_accumulator.import_message(msg);
+			self.future_accumulator.import_message(msg)
+		} else {
+			Ok(())
+		};
+
+		if let Err(misbehavior) = misbehavior {
+			self.misbehavior.insert(sender, misbehavior);
 		}
 	}
 
@@ -526,10 +600,10 @@ impl<C: Context> Strategy<C> {
 		}
 
 		if let Some(digest) = prepare_for {
-			let message = Message::Prepare(
+			let message = Vote::Prepare(
 				self.current_accumulator.round_number(),
 				digest
-			);
+			).into();
 
 			self.import_and_send_message(message, context, sending);
 			self.local_state = LocalState::Prepared;
@@ -559,10 +633,10 @@ impl<C: Context> Strategy<C> {
 		}
 
 		if let Some(digest) = commit_for {
-			let message = Message::Commit(
+			let message = Vote::Commit(
 				self.current_accumulator.round_number(),
 				digest
-			);
+			).into();
 
 			self.import_and_send_message(message, context, sending);
 			self.local_state = LocalState::Committed;
@@ -588,9 +662,9 @@ impl<C: Context> Strategy<C> {
 		}
 
 		if attempt_advance {
-			let message = Message::AdvanceRound(
+			let message = Vote::AdvanceRound(
 				self.current_accumulator.round_number(),
-			);
+			).into();
 
 			self.import_and_send_message(message, context, sending);
 			self.local_state = LocalState::VoteAdvance;
@@ -712,6 +786,18 @@ impl<C, I, O> Future for Agreement<C, I, O>
 				Ok(Async::NotReady)
 			}
 		}
+	}
+}
+
+impl<C: Context, I, O> Agreement<C, I, O> {
+	/// Get a reference to the underlying context.
+	pub fn context(&self) -> &C {
+		&self.context
+	}
+
+	/// Drain the misbehavior vector.
+	pub fn drain_misbehavior(&mut self) -> hash_map::Drain<C::AuthorityId, Misbehavior<C::Digest, C::Signature>> {
+		self.strategy.misbehavior.drain()
 	}
 }
 
