@@ -224,8 +224,9 @@ impl_meta_dispatch! {
 	pub mod public;
 	path public;
 	trait staking::PublicPass;
-	Staking(mod staking) = 0;
-	Timestamp(mod timestamp) = 1;
+	Session(mod session) = 1;
+	Staking(mod staking) = 2;
+	Timestamp(mod timestamp) = 3;
 	Democracy(mod democracy) = 5;
 	Council(mod council) = 6;
 	CouncilVote(mod council) = 7;
@@ -235,7 +236,9 @@ impl_meta_dispatch! {
 	pub mod privileged;
 	path privileged;
 	trait system::PrivPass;
-	Staking(mod staking) = 0;
+	System(mod system) = 0;
+	Session(mod session) = 1;
+	Staking(mod staking) = 2;
 	Democracy(mod democracy) = 5;
 	Council(mod council) = 6;
 	CouncilVote(mod council) = 7;

@@ -46,12 +46,15 @@ pub fn block_hash(number: BlockNumber) -> Hash {
 
 pub struct PrivPass;
 
-pub mod privileged {
-	use super::*;
+impl_dispatch! {
+	pub mod privileged;
+	fn set_code(new: Vec<u8>) = 0;
+}
 
+impl privileged::Dispatch for PrivPass {
 	/// Set the new code.
-	pub fn set_code(new: &[u8]) {
-		storage::unhashed::put_raw(b":code", new);
+	fn set_code(self, new: Vec<u8>) {
+		storage::unhashed::put_raw(b":code", &new);
 	}
 }
 

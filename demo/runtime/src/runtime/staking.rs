@@ -249,7 +249,7 @@ impl privileged::Dispatch for system::PrivPass {
 	/// Force there to be a new era. This also forces a new session immediately after.
 	fn force_new_era(self) {
 		new_era();
-		session::privileged::force_new_session();
+		session::internal::rotate_session();
 	}
 }
 
