@@ -19,7 +19,6 @@
 extern crate ring;
 extern crate substrate_primitives as primitives;
 extern crate untrusted;
-#[macro_use] extern crate hex_literal;
 
 use ring::{rand, signature};
 use primitives::hash::H512;
@@ -54,6 +53,12 @@ pub struct Public(pub [u8; 32]);
 
 /// A key pair.
 pub struct Pair(signature::Ed25519KeyPair);
+
+impl From<signature::Ed25519KeyPair> for Pair {
+	fn from(key: signature::Ed25519KeyPair) -> Self {
+		Pair(key)
+	}
+}
 
 impl Public {
 	/// A new instance from the given 32-byte `data`.
@@ -105,26 +110,30 @@ impl Into<[u8; 32]> for Public {
 }
 
 impl Pair {
-	/// Generate new secure (random) key pair.
-	pub fn new() -> Pair {
+	/// Generate new secure (random) key pair, yielding it and the corresponding pkcs#8 bytes.
+	pub fn generate_with_pkcs8() -> (Self, [u8; 85]) {
 		let rng = rand::SystemRandom::new();
-		let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
-		Pair(signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).unwrap())
+		let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).expect("system randomness is available; qed");
+		let pair = Self::from_pkcs8(&pkcs8_bytes).expect("just-generated pkcs#8 data is valid; qed");
+
+		(pair, pkcs8_bytes)
+	}
+
+	/// Generate new secure (random) key pair.
+	pub fn generate() -> Pair {
+		let (pair, _) = Self::generate_with_pkcs8();
+		pair
+	}
+
+	/// Generate from pkcs#8 bytes.
+	pub fn from_pkcs8(pkcs8_bytes: &[u8]) -> Result<Self, ::ring::error::Unspecified> {
+		signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).map(Pair)
 	}
 
 	/// Make a new key pair from a seed phrase.
+	/// NOTE: prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
 	pub fn from_seed(seed: &[u8; 32]) -> Pair {
 		Pair(signature::Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&seed[..])).unwrap())
-	}
-
-	/// Make a new key pair from the raw secret and public key (it will check to make sure
-	/// they correspond to each other).
-	pub fn from_both(secret_public: &[u8; 64]) -> Option<Pair> {
-		let mut pkcs8_bytes: Vec<_> = hex!("3053020101300506032b657004220420").to_vec();
-		pkcs8_bytes.extend_from_slice(&secret_public[0..32]);
-		pkcs8_bytes.extend_from_slice(&[0xa1u8, 0x23, 0x03, 0x21, 0x00]);
-		pkcs8_bytes.extend_from_slice(&secret_public[32..64]);
-		signature::Ed25519KeyPair::from_pkcs8_maybe_unchecked(untrusted::Input::from(&pkcs8_bytes)).ok().map(Pair)
 	}
 
 	/// Sign a message.
@@ -195,7 +204,7 @@ mod test {
 
 	#[test]
 	fn generated_pair_should_work() {
-		let pair = Pair::new();
+		let pair = Pair::generate();
 		let public = pair.public();
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
@@ -213,5 +222,13 @@ mod test {
 		let signature = pair.sign(&message[..]);
 		println!("Correct signature: {}", HexDisplay::from(&signature.0));
 		assert!(verify_strong(&signature, &message[..], &public));
+	}
+
+	#[test]
+	fn generate_with_pkcs8_recovery_possible() {
+		let (pair1, pkcs8) = Pair::generate_with_pkcs8();
+		let pair2 = Pair::from_pkcs8(&pkcs8).unwrap();
+
+		assert_eq!(pair1.public(), pair2.public());
 	}
 }
