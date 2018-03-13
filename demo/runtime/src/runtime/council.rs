@@ -256,7 +256,6 @@ pub fn leaderboard() -> Option<Vec<(Balance, AccountId)>> {
 	storage::get(LEADERBOARD)
 }
 
-
 impl_dispatch! {
 	pub mod public;
 	fn set_approvals(votes: Vec<bool>, index: VoteIndex) = 0;
