@@ -155,6 +155,9 @@ pub trait StorageValue<T: Slicable> {
 	fn get() -> Option<T>;
 
 	/// Load the value from the provided storage instance.
+	fn require() -> T { Self::get().expect("Required values must be present") }
+
+	/// Load the value from the provided storage instance.
 	fn get_or(alt: T) -> T { Self::get().unwrap_or(alt) }
 
 	/// Load the value from the provided storage instance.
@@ -278,6 +281,9 @@ pub trait StorageMap<K: Slicable, V: Slicable> {
 
 	/// Load the value associated with the given key from the map.
 	fn get(key: &K) -> Option<V>;
+
+	/// Load the value from the provided storage instance.
+	fn require(key: &K) -> V { Self::get(key).expect("Required values must be present") }
 
 	/// Load the value from the provided storage instance.
 	fn get_or(key: &K, alt: V) -> V { Self::get(key).unwrap_or(alt) }

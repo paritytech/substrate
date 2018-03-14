@@ -186,24 +186,24 @@ macro_rules! __storage_items_internal {
 
 			/// Load the value associated with the given key from the map.
 			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Option<$ty> {
-				let key = $name::key_for(key);
+				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.get(&key[..])
 			}
 
 			/// Store a value to be associated with the given key from the map.
 			fn insert<S: $crate::GenericStorage>(key: &$kty, val: &$ty, storage: &S) {
-				let key = $name::key_for(key);
+				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.put(&key[..], val);
 			}
 
 			/// Remove the value from storage.
 			fn remove<S: $crate::GenericStorage>(key: &$kty, storage: &S) {
-				storage.kill(&$name::key_for(key)[..]);
+				storage.kill(&<$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key)[..]);
 			}
 
 			/// Take the value, reading and removing it.
 			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Option<$ty> {
-				let key = $name::key_for(key);
+				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.take(&key[..])
 			}
 		}
@@ -214,14 +214,14 @@ macro_rules! __storage_items_internal {
 
 		impl $name {
 			fn clear_item<S: $crate::GenericStorage>(index: u32, storage: &S) {
-				if index < $name::len(storage) {
-					storage.kill(&$name::key_for(index));
+				if index < <$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
+					storage.kill(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index));
 				}
 			}
 
 			fn set_len<S: $crate::GenericStorage>(count: u32, storage: &S) {
-				(count..$name::len(storage)).for_each(|i| $name::clear_item(i, storage));
-				storage.put(&$name::len_key(), &count);
+				(count..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
+				storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key(), &count);
 			}
 		}
 
@@ -248,8 +248,8 @@ macro_rules! __storage_items_internal {
 
 			/// Read out all the items.
 			fn items<S: $crate::GenericStorage>(storage: &S) -> Vec<$ty> {
-				(0..$name::len(storage))
-					.map(|i| $name::get(i, storage).expect("all items within length are set; qed"))
+				(0..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage))
+					.map(|i| <$name as $crate::storage::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
 					.collect()
 			}
 
@@ -258,32 +258,32 @@ macro_rules! __storage_items_internal {
 				$name::set_len(items.len() as u32, storage);
 				items.iter()
 					.enumerate()
-					.for_each(|(i, item)| $name::set_item(i as u32, item, storage));
+					.for_each(|(i, item)| <$name as $crate::storage::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
 			}
 
 			fn set_item<S: $crate::GenericStorage>(index: u32, item: &$ty, storage: &S) {
-				if index < $name::len(storage) {
-					storage.put(&$name::key_for(index)[..], item);
+				if index < <$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
+					storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..], item);
 				}
 			}
 
 			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
 			fn get<S: $crate::GenericStorage>(index: u32, storage: &S) -> Option<$ty> {
-				storage.get(&$name::key_for(index)[..])
+				storage.get(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..])
 			}
 
 			/// Load the length of the list.
 			fn len<S: $crate::GenericStorage>(storage: &S) -> u32 {
-				storage.get(&$name::len_key()).unwrap_or_default()
+				storage.get(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
 			}
 
 			/// Clear the list.
 			fn clear<S: $crate::GenericStorage>(storage: &S) {
-				for i in 0..$name::len(storage) {
+				for i in 0..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
 					$name::clear_item(i, storage);
 				}
 
-				storage.kill(&$name::len_key()[..])
+				storage.kill(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key()[..])
 			}
 		}
 	};

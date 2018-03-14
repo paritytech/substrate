@@ -22,23 +22,21 @@ use runtime::staking::PublicPass;
 pub type Timestamp = u64;
 
 storage_items! {
-	pub now: b"tim:val" => Timestamp;
+	pub Now: b"tim:val" => Timestamp;
 }
 
 /// Get the current time.
-pub fn get() -> Timestamp {
-	now::get_or_default()
-}
+pub fn get() -> Timestamp { Now::require() }
 
 impl_dispatch! {
 	pub mod public;
-	fn set(new_now: Timestamp) = 0;
+	fn set(now: Timestamp) = 0;
 }
 
 impl<'a> public::Dispatch for PublicPass<'a> {
 	/// Set the current time.
-	fn set(self, new_now: Timestamp) {
-		now::put(&new_now);
+	fn set(self, now: Timestamp) {
+		Now::put(&now);
 	}
 }
 
@@ -57,7 +55,7 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let mut t: TestExternalities = map![
-			twox_128(now::key()).to_vec() => vec![].and(&42u64)
+			twox_128(Now::key()).to_vec() => vec![].and(&42u64)
 		];
 
 		with_externalities(&mut t, || {

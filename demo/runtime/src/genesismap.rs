@@ -19,7 +19,7 @@
 use codec::{KeyedVec, Joiner};
 use std::collections::HashMap;
 use runtime_io::twox_128;
-use runtime_support::Hashable;
+use runtime_support::{Hashable, StorageMap};
 use primitives::Block;
 use demo_primitives::{BlockNumber, AccountId};
 use runtime::staking::Balance;
@@ -113,7 +113,7 @@ impl GenesisConfig {
 			)
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
-				(system::CODE[..].into(), wasm_runtime),
+				(b":code".to_vec(), wasm_runtime),
 				(consensus::AUTHORITY_COUNT[..].into(), vec![].and(&(self.authorities.len() as u32))),
 			].into_iter())
 			.chain(self.authorities.iter()
@@ -127,6 +127,6 @@ impl GenesisConfig {
 pub fn additional_storage_with_genesis(genesis_block: &Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	use codec::Slicable;
 	map![
-		twox_128(&0u64.to_keyed_vec(system::BLOCK_HASH_AT)).to_vec() => genesis_block.header.blake2_256().encode()
+		system::BlockHash::key_for(&0) => genesis_block.header.blake2_256().encode()
 	]
 }

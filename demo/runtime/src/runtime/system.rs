@@ -21,7 +21,7 @@ use rstd::prelude::*;
 use rstd::mem;
 use runtime_io::{print, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
-use runtime_support::{Hashable, storage};
+use runtime_support::{Hashable, storage, StorageValue, StorageMap};
 use environment::with_env;
 use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Header, Log};
 use block::Block;
@@ -29,10 +29,10 @@ use transaction::UncheckedTransaction;
 use runtime::{staking, session};
 use dispatch;
 
-pub const NONCE_OF: &[u8] = b"sys:non:";
-pub const BLOCK_HASH_AT: &[u8] = b"sys:old:";
-pub const CODE: &[u8] = b"sys:cod";
-
+storage_items! {
+	pub Nonce: b"sys:non" => map [ AccountId => TxOrder ];
+	pub BlockHash: b"sys:old" => map [ BlockNumber => [u8; 32] ];
+}
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
@@ -40,8 +40,8 @@ pub fn block_number() -> BlockNumber {
 }
 
 /// Get the block hash of a given block (uses storage).
-pub fn block_hash(number: BlockNumber) -> Hash {
-	storage::get_or_default(&number.to_keyed_vec(BLOCK_HASH_AT))
+pub fn block_hash(number: BlockNumber) -> Option<Hash> {
+	BlockHash::get(&number).map(Into::into)
 }
 
 pub struct PrivPass;
@@ -146,12 +146,11 @@ fn execute_transaction(utx: UncheckedTransaction) {
 
 	{
 		// check nonce
-		let nonce_key = tx.signed.to_keyed_vec(NONCE_OF);
-		let expected_nonce: TxOrder = storage::get_or(&nonce_key, 0);
+		let expected_nonce: TxOrder = Nonce::get_or(&tx.signed, 0);
 		assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
 		// increment nonce in storage
-		storage::put(&nonce_key, &(expected_nonce + 1));
+		Nonce::insert(&tx.signed, &(expected_nonce + 1));
 	}
 
 	// decode parameters and dispatch
@@ -164,7 +163,7 @@ fn initial_checks(block: &Block) {
 
 	// check parent_hash is correct.
 	assert!(
-		header.number > 0 && block_hash(header.number - 1) == header.parent_hash,
+		header.number > 0 && block_hash(header.number - 1).map(|h| h == header.parent_hash).unwrap_or(false),
 		"Parent hash should be valid."
 	);
 
@@ -193,7 +192,7 @@ fn final_checks(block: &Block) {
 fn post_finalise(header: &Header) {
 	// store the header hash in storage; we can't do it before otherwise there would be a
 	// cyclic dependency.
-	storage::put(&header.number.to_keyed_vec(BLOCK_HASH_AT), &header.blake2_256());
+	BlockHash::insert(&header.number, &header.blake2_256());
 }
 
 #[cfg(feature = "std")]
@@ -221,7 +220,7 @@ pub mod testing {
 
 	pub fn externalities() -> TestExternalities {
 		map![
-			twox_128(&0u64.to_keyed_vec(BLOCK_HASH_AT)).to_vec() => [69u8; 32].encode()
+			twox_128(&BlockHash::key_for(&0)).to_vec() => [69u8; 32].encode()
 		]
 	}
 }
@@ -278,7 +277,7 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("584e0c1f4d4b96153591e3906d756762493dffeb5fa7159e7107014aec8d9c3d").into(),
+			state_root: hex!("c3cd675eefaa269502ee6dc1af7b9941c0be462eb31a5273c00cec40a8ace837").into(),
 			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
