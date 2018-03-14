@@ -20,7 +20,7 @@
 
 #[allow(unused_imports)] #[macro_use] extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_runtime_support as runtime_support;
+#[macro_use] extern crate substrate_runtime_support as runtime_support;
 #[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
 
 #[cfg(feature = "std")] #[macro_use] extern crate serde_derive;

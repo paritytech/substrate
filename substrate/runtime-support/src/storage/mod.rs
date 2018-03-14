@@ -47,7 +47,7 @@ pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 			key: &key[..],
 			pos: 0,
 		};
-		Slicable::decode(&mut input).expect("stroage is not null, therefore must be a valid type")
+		Slicable::decode(&mut input).expect("storage is not null, therefore must be a valid type")
 	})
 }
 
@@ -126,23 +126,23 @@ struct RuntimeStorage;
 
 impl ::GenericStorage for RuntimeStorage {
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn load<T: Slicable>(&self, key: &[u8]) -> Option<T> {
-		get(key)
+	fn get<T: Slicable>(&self, key: &[u8]) -> Option<T> {
+		super::storage::get(key)
 	}
 
 	/// Put a value in under a key.
-	fn store<T: Slicable>(&self, key: &[u8], val: &T) {
-		put(key, val)
+	fn put<T: Slicable>(&self, key: &[u8], val: &T) {
+		super::storage::put(key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]) {
-		kill(key)
+		super::storage::kill(key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Slicable>(&self, key: &[u8]) -> Option<T> {
-		take(key)
+		super::storage::take(key)
 	}
 }
 
@@ -150,25 +150,47 @@ impl ::GenericStorage for RuntimeStorage {
 pub trait StorageValue<T: Slicable> {
 	/// Get the storage key.
 	fn key() -> &'static [u8];
+
 	/// Load the value from the provided storage instance.
-	fn load() -> Option<T>;
+	fn get() -> Option<T>;
+
+	/// Load the value from the provided storage instance.
+	fn get_or(alt: T) -> T { Self::get().unwrap_or(alt) }
+
+	/// Load the value from the provided storage instance.
+	fn get_or_else<F: FnOnce() -> T>(alt: F) -> T { Self::get().unwrap_or_else(alt) }
+
+	/// Load the value from the provided storage instance.
+	fn get_or_default() -> T where T: Default { Self::get().unwrap_or_else(Default::default) }
+
 	/// Store a value under this key into the provded storage instance.
-	fn store(val: &T);
+	fn put(val: &T);
+
 	/// Clear the storage value.
 	fn kill();
+
 	/// Take a value from storage, removing it afterwards.
 	fn take() -> Option<T>;
+
+	/// Load the value from the provided storage instance.
+	fn take_or(alt: T) -> T { Self::take().unwrap_or(alt) }
+
+	/// Load the value from the provided storage instance.
+	fn take_or_else<F: FnOnce() -> T>(alt: F) -> T { Self::take().unwrap_or_else(alt) }
+
+	/// Load the value from the provided storage instance.
+	fn take_or_default() -> T where T: Default { Self::take().unwrap_or_else(Default::default) }
 }
 
 impl<T: Slicable, U> StorageValue<T> for U where U: generator::StorageValue<T> {
 	fn key() -> &'static [u8] {
 		<U as generator::StorageValue<T>>::key()
 	}
-	fn load() -> Option<T> {
-		U::load(&RuntimeStorage)
+	fn get() -> Option<T> {
+		U::get(&RuntimeStorage)
 	}
-	fn store(val: &T) {
-		U::store(val, &RuntimeStorage)
+	fn put(val: &T) {
+		U::put(val, &RuntimeStorage)
 	}
 	fn kill() {
 		U::kill(&RuntimeStorage)
@@ -256,6 +278,15 @@ pub trait StorageMap<K: Slicable, V: Slicable> {
 
 	/// Load the value associated with the given key from the map.
 	fn get(key: &K) -> Option<V>;
+
+	/// Load the value from the provided storage instance.
+	fn get_or(key: &K, alt: V) -> V { Self::get(key).unwrap_or(alt) }
+
+	/// Load the value from the provided storage instance.
+	fn get_or_else<F: FnOnce() -> V>(key: &K, alt: F) -> V { Self::get(key).unwrap_or_else(alt) }
+
+	/// Load the value from the provided storage instance.
+	fn get_or_default(key: &K) -> V where V: Default { Self::get(key).unwrap_or_else(Default::default) }
 
 	/// Store a value to be associated with the given key from the map.
 	fn insert(key: &K, val: &V);
