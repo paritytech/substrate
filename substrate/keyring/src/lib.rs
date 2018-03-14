@@ -17,12 +17,15 @@
 //! Support code for the runtime.
 
 #[macro_use] extern crate hex_literal;
+#[macro_use] extern crate lazy_static;
 pub extern crate ed25519;
 
+use std::collections::HashMap;
+use std::ops::Deref;
 use ed25519::{Pair, Public, Signature};
 
 /// Set of test accounts.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Keyring {
 	Alice,
 	Bob,
@@ -65,6 +68,19 @@ impl Keyring {
 	pub fn sign(self, msg: &[u8]) -> Signature {
 		Pair::from(self).sign(msg)
 	}
+
+	pub fn pair(self) -> Pair {
+		match self {
+			Keyring::Alice => Pair::from_seed(b"Alice                           "),
+			Keyring::Bob => Pair::from_seed(b"Bob                             "),
+			Keyring::Charlie => Pair::from_seed(b"Charlie                         "),
+			Keyring::Dave => Pair::from_seed(b"Dave                            "),
+			Keyring::Eve => Pair::from_seed(b"Eve                             "),
+			Keyring::Ferdie => Pair::from_seed(b"Ferdie                          "),
+			Keyring::One => Pair::from_seed(b"12345678901234567890123456789012"),
+			Keyring::Two => Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")),
+		}
+	}
 }
 
 impl From<Keyring> for &'static str {
@@ -82,32 +98,65 @@ impl From<Keyring> for &'static str {
 	}
 }
 
-impl From<Keyring> for Pair {
-	fn from(k: Keyring) -> Self {
-		match k {
-			Keyring::Alice => 		Pair::from_seed(b"Alice                           "),
-			Keyring::Bob => 		Pair::from_seed(b"Bob                             "),
-			Keyring::Charlie => 	Pair::from_seed(b"Charlie                         "),
-			Keyring::Dave => 		Pair::from_seed(b"Dave                            "),
-			Keyring::Eve => 		Pair::from_seed(b"Eve                             "),
-			Keyring::Ferdie => 		Pair::from_seed(b"Ferdie                          "),
-			Keyring::One => 		Pair::from_seed(b"12345678901234567890123456789012"),
-			Keyring::Two => 		Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")),
-		}
-	}
+lazy_static! {
+	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
+		[
+			Keyring::Alice,
+			Keyring::Bob,
+			Keyring::Charlie,
+			Keyring::Dave,
+			Keyring::Eve,
+			Keyring::Ferdie,
+			Keyring::One,
+			Keyring::Two,
+		].iter().map(|&i| (i, i.pair())).collect()
+	};
+
+	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
+		PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect()
+	};
 }
 
 impl From<Keyring> for Public {
 	fn from(k: Keyring) -> Self {
-		let pair: Pair = k.into();
-		pair.public()
+		(*PUBLIC_KEYS).get(&k).unwrap().clone()
+	}
+}
+
+impl From<Keyring> for Pair {
+	fn from(k: Keyring) -> Self {
+		k.pair()
 	}
 }
 
 impl From<Keyring> for [u8; 32] {
 	fn from(k: Keyring) -> Self {
-		let pair: Pair = k.into();
-		*pair.public().as_array_ref()
+		*(*PUBLIC_KEYS).get(&k).unwrap().as_array_ref()
+	}
+}
+
+impl From<Keyring> for &'static [u8; 32] {
+	fn from(k: Keyring) -> Self {
+		(*PUBLIC_KEYS).get(&k).unwrap().as_array_ref()
+	}
+}
+
+impl AsRef<[u8; 32]> for Keyring {
+	fn as_ref(&self) -> &[u8; 32] {
+		(*PUBLIC_KEYS).get(self).unwrap().as_array_ref()
+	}
+}
+
+impl AsRef<Public> for Keyring {
+	fn as_ref(&self) -> &Public {
+		(*PUBLIC_KEYS).get(self).unwrap()
+	}
+}
+
+impl Deref for Keyring {
+	type Target = [u8; 32];
+	fn deref(&self) -> &[u8; 32] {
+		(*PUBLIC_KEYS).get(self).unwrap().as_array_ref()
 	}
 }
 
@@ -118,8 +167,8 @@ mod tests {
 
 	#[test]
 	fn should_work() {
-		assert!(Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", &Keyring::Alice.into()));
-		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Bob!", &Keyring::Alice.into()));
-		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", &Keyring::Bob.into()));
+		assert!(Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", Keyring::Alice));
+		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Bob!", Keyring::Alice));
+		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", Keyring::Bob));
 	}
 }

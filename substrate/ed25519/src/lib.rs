@@ -37,8 +37,8 @@ pub struct LocalizedSignature {
 }
 
 /// Verify a message without type checking the parameters' types for the right size.
-pub fn verify(sig: &[u8], message: &[u8], public: &[u8]) -> bool {
-	let public_key = untrusted::Input::from(public);
+pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], public: P) -> bool {
+	let public_key = untrusted::Input::from(public.as_ref());
 	let msg = untrusted::Input::from(message);
 	let sig = untrusted::Input::from(sig);
 
@@ -104,6 +104,18 @@ impl Into<[u8; 32]> for Public {
 	}
 }
 
+impl AsRef<Public> for Public {
+	fn as_ref(&self) -> &Public {
+		&self
+	}
+}
+
+impl AsRef<Pair> for Pair {
+	fn as_ref(&self) -> &Pair {
+		&self
+	}
+}
+
 impl Pair {
 	/// Generate new secure (random) key pair.
 	pub fn new() -> Pair {
@@ -144,8 +156,8 @@ impl Pair {
 }
 
 /// Verify a signature on a message.
-pub fn verify_strong(sig: &Signature, message: &[u8], pubkey: &Public) -> bool {
-	let public_key = untrusted::Input::from(&pubkey.0[..]);
+pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: P) -> bool {
+	let public_key = untrusted::Input::from(&pubkey.as_ref().0[..]);
 	let msg = untrusted::Input::from(message);
 	let sig = untrusted::Input::from(&sig.0[..]);
 
@@ -157,19 +169,19 @@ pub fn verify_strong(sig: &Signature, message: &[u8], pubkey: &Public) -> bool {
 
 pub trait Verifiable {
 	/// Verify something that acts like a signature.
-	fn verify(&self, message: &[u8], pubkey: &Public) -> bool;
+	fn verify<P: AsRef<Public>>(&self, message: &[u8], pubkey: P) -> bool;
 }
 
 impl Verifiable for Signature {
 	/// Verify something that acts like a signature.
-	fn verify(&self, message: &[u8], pubkey: &Public) -> bool {
+	fn verify<P: AsRef<Public>>(&self, message: &[u8], pubkey: P) -> bool {
 		verify_strong(&self, message, pubkey)
 	}
 }
 
 impl Verifiable for LocalizedSignature {
-	fn verify(&self, message: &[u8], pubkey: &Public) -> bool {
-		pubkey == &self.signer && self.signature.verify(message, pubkey)
+	fn verify<P: AsRef<Public>>(&self, message: &[u8], pubkey: P) -> bool {
+		pubkey.as_ref() == &self.signer && self.signature.verify(message, pubkey)
 	}
 }
 

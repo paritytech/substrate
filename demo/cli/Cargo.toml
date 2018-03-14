@@ -1,0 +1,24 @@
+[package]
+name = "demo-cli"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate Demo node implementation in Rust."
+
+[dependencies]
+clap = { version = "2.27", features = ["yaml"] }
+env_logger = "0.4"
+error-chain = "0.11"
+log = "0.3"
+hex-literal = "0.1"
+triehash = "0.1"
+ed25519 = { path = "../../substrate/ed25519" }
+substrate-client = { path = "../../substrate/client" }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-state-machine = { path = "../../substrate/state-machine" }
+substrate-executor = { path = "../../substrate/executor" }
+substrate-primitives = { path = "../../substrate/primitives" }
+substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
+demo-primitives = { path = "../primitives" }
+demo-executor = { path = "../executor" }
+demo-runtime = { path = "../runtime" }
