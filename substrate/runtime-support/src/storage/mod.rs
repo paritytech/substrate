@@ -493,7 +493,6 @@ pub mod unhashed {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::hexdisplay;
 	use runtime_io::{twox_128, TestExternalities, with_externalities};
 
 	#[test]

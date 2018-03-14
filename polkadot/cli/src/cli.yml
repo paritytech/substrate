@@ -1,5 +1,5 @@
 name: polkadot
-author: "Parity Team <admin@polkadot.io>"
+author: "Parity Team <admin@parity.io>"
 about: Polkadot Node Rust Implementation
 args:
   - log:

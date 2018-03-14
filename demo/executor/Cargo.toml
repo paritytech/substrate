@@ -1,0 +1,21 @@
+[package]
+name = "demo-executor"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate Demo node implementation in Rust."
+
+[dependencies]
+hex-literal = "0.1"
+triehash = { version = "0.1" }
+ed25519 = { path = "../../substrate/ed25519" }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-runtime-support = { path = "../../substrate/runtime-support" }
+substrate-state-machine = { path = "../../substrate/state-machine" }
+substrate-executor = { path = "../../substrate/executor" }
+substrate-primitives = { path = "../../substrate/primitives" }
+demo-primitives = { path = "../primitives" }
+demo-runtime = { path = "../runtime" }
+
+[dev-dependencies]
+substrate-keyring = { path = "../../substrate/keyring" }
