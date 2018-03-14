@@ -40,9 +40,14 @@ members = [
 	"substrate/serializer",
 	"substrate/state-machine",
 	"substrate/test-runtime",
+	"demo/runtime",
+	"demo/primitives",
+	"demo/executor",
+	"demo/cli",
 ]
 exclude = [
 	"polkadot/runtime/wasm",
+	"demo/runtime/wasm",
 	"substrate/executor/wasm",
 	"substrate/pwasm-alloc",
 	"substrate/pwasm-libc",

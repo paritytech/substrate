@@ -89,6 +89,26 @@ impl<T: EndianSensitive> Slicable for T {
 	}
 }
 
+impl Slicable for Option<bool> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u8::decode(input).and_then(|v| match v {
+			0 => Some(Some(false)),
+			1 => Some(Some(true)),
+			2 => Some(None),
+			_ => None,
+		})
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		match *self {
+			Some(false) => 0u8,
+			Some(true) => 1u8,
+			None => 2u8,
+		}.using_encoded(f)
+	}
+}
+impl NonTrivialSlicable for Option<bool> {}
+
 impl Slicable for Vec<u8> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).and_then(move |len| {
@@ -109,6 +129,43 @@ impl Slicable for Vec<u8> {
 		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 		r.extend_from_slice(self);
 		r
+	}
+}
+
+// TODO: implement for all primitives.
+impl Slicable for Vec<u64> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u32::decode(input).and_then(move |len| {
+			let len = len as usize;
+			let mut vec = Vec::with_capacity(len);
+			for _ in 0..len {
+				vec.push(u64::decode(input)?);
+			}
+			Some(vec)
+		})
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		let len = self.len();
+		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
+
+		// TODO: optimise - no need to create a new vec and copy - can just reserve and encode in place
+		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
+		for i in self.iter() {
+			r.extend(&i.encode());
+		}
+		r
+	}
+}
+
+// TODO: use a BitVec-like representation.
+impl Slicable for Vec<bool> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		<Vec<u8>>::decode(input).map(|a| a.into_iter().map(|b| b != 0).collect())
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		<Vec<u8>>::encode(&self.iter().map(|&b| if b {1} else {0}).collect())
 	}
 }
 

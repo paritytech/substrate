@@ -21,7 +21,7 @@ use rstd::vec::Vec;
 #[cfg(feature = "std")]
 use bytes;
 use Hash;
-use codec::{Input, Slicable};
+use codec::{Input, Slicable, NonTrivialSlicable};
 
 /// Used to refer to a block number.
 pub type Number = u64;
@@ -47,7 +47,9 @@ impl Slicable for Transaction {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for Transaction { }
+impl NonTrivialSlicable for Transaction { }
+
+
 
 /// Execution log (event)
 #[derive(PartialEq, Eq, Clone)]
@@ -64,7 +66,9 @@ impl Slicable for Log {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for Log { }
+impl NonTrivialSlicable for Log { }
+
+
 
 /// The digest of a block, useful for light-clients.
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -84,40 +88,49 @@ impl Slicable for Digest {
 	}
 }
 
+impl NonTrivialSlicable for Digest { }
+
+/// Generic types to be specialised later.
+pub mod generic {
+	use super::{Header, Slicable, Input, NonTrivialSlicable, Vec};
+
+	/// A Block - this is generic for later specialisation in particular runtimes.
+	#[derive(PartialEq, Eq, Clone)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+	pub struct Block<Transaction: PartialEq + Eq + Clone> {
+		/// The block header.
+		pub header: Header,
+		/// All relay-chain transactions.
+		pub transactions: Vec<Transaction>,
+	}
+
+	impl<T: PartialEq + Eq + Clone> Slicable for Block<T> where Vec<T>: Slicable {
+		fn decode<I: Input>(input: &mut I) -> Option<Self> {
+			Some(Block {
+				header: try_opt!(Slicable::decode(input)),
+				transactions: try_opt!(Slicable::decode(input)),
+			})
+		}
+
+		fn encode(&self) -> Vec<u8> {
+			let mut v: Vec<u8> = Vec::new();
+			v.extend(self.header.encode());
+			v.extend(self.transactions.encode());
+			v
+		}
+	}
+
+	impl<T: PartialEq + Eq + Clone> NonTrivialSlicable for Block<T> where Vec<T>: Slicable { }
+}
+
 /// The body of a block is just a bunch of transactions.
 pub type Body = Vec<Transaction>;
+/// The header and body of a concrete, but unspecialised, block. Used by substrate to represent a
+/// block some fields of which the runtime alone knows how to interpret (e.g. the transactions).
+pub type Block = generic::Block<Transaction>;
 
-/// A Substrate relay chain block.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Block {
-	/// The block header.
-	pub header: Header,
-	/// All relay-chain transactions.
-	pub transactions: Body,
-}
-
-impl Slicable for Block {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Block {
-			header: try_opt!(Slicable::decode(input)),
-			transactions: try_opt!(Slicable::decode(input)),
-		})
-	}
-
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		v.extend(self.header.encode());
-		v.extend(self.transactions.encode());
-
-		v
-	}
-}
-
-/// A relay chain block header.
-///
-/// https://github.com/w3f/polkadot-spec/blob/master/spec.md#header
+/// A substrate chain block header.
+// TODO: split out into light-client-specific fields and runtime-specific fields.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
@@ -131,6 +144,9 @@ pub struct Header {
 	pub state_root: Hash,
 	/// The root of the trie that represents this block's transactions, indexed by a 32-byte integer.
 	pub transaction_root: Hash,
+	// TODO...
+//	/// The root of the trie that represents the receipts from this block's transactions
+//	pub receipts_root: Hash,
 	/// The digest of activity on the block.
 	pub digest: Digest,
 }
