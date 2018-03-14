@@ -30,6 +30,9 @@ extern crate hex_literal;
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = H512;
 
+/// Length of the PKCS#8 encoding of the key.
+pub const PKCS_LEN: usize = 85;
+
 /// A localized signature also contains sender information.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct LocalizedSignature {
@@ -109,7 +112,7 @@ impl Into<[u8; 32]> for Public {
 
 impl Pair {
 	/// Generate new secure (random) key pair, yielding it and the corresponding pkcs#8 bytes.
-	pub fn generate_with_pkcs8() -> (Self, [u8; 85]) {
+	pub fn generate_with_pkcs8() -> (Self, [u8; PKCS_LEN]) {
 		let rng = rand::SystemRandom::new();
 		let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).expect("system randomness is available; qed");
 		let pair = Self::from_pkcs8(&pkcs8_bytes).expect("just-generated pkcs#8 data is valid; qed");
