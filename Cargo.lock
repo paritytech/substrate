@@ -1076,6 +1076,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "polkadot-keystore"
+version = "0.1.0"
+dependencies = [
+ "ed25519 0.1.0",
+ "ethkey 0.3.0 (git+https://github.com/paritytech/parity.git)",
+]
+
+[[package]]
 name = "polkadot-primitives"
 version = "0.1.0"
 dependencies = [

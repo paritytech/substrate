@@ -1,0 +1,8 @@
+[package]
+name = "polkadot-keystore"
+version = "0.1.0"
+authors = ["Parity Technologies <robert@parity.io>"]
+
+[dependencies]
+ethkey = { git = "https://github.com/paritytech/parity", default_features = false }
+ed25519 = { path = "../../substrate/ed25519" }

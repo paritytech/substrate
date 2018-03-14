@@ -23,6 +23,10 @@ extern crate untrusted;
 use ring::{rand, signature};
 use primitives::hash::H512;
 
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
+
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = H512;
 
@@ -53,12 +57,6 @@ pub struct Public(pub [u8; 32]);
 
 /// A key pair.
 pub struct Pair(signature::Ed25519KeyPair);
-
-impl From<signature::Ed25519KeyPair> for Pair {
-	fn from(key: signature::Ed25519KeyPair) -> Self {
-		Pair(key)
-	}
-}
 
 impl Public {
 	/// A new instance from the given 32-byte `data`.
@@ -133,7 +131,10 @@ impl Pair {
 	/// Make a new key pair from a seed phrase.
 	/// NOTE: prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
 	pub fn from_seed(seed: &[u8; 32]) -> Pair {
-		Pair(signature::Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&seed[..])).unwrap())
+		let key = signature::Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&seed[..]))
+			.expect("seed has valid length; qed");
+
+		Pair(key)
 	}
 
 	/// Sign a message.
@@ -149,6 +150,16 @@ impl Pair {
 		let pk = self.0.public_key_bytes();
 		r.copy_from_slice(pk);
 		Public(r)
+	}
+
+	/// Derive a child key. Probably unsafe and broken.
+	// TODO: proper HD derivation https://cardanolaunch.com/assets/Ed25519_BIP.pdf
+	pub fn derive_child_probably_bad(&self, chain_data: &[u8]) -> Pair {
+		let sig = self.sign(chain_data);
+		let mut seed = [0u8; 32];
+		seed.copy_from_slice(&sig.0[..32]);
+
+		Pair::from_seed(&seed)
 	}
 }
 
@@ -230,5 +241,11 @@ mod test {
 		let pair2 = Pair::from_pkcs8(&pkcs8).unwrap();
 
 		assert_eq!(pair1.public(), pair2.public());
+	}
+
+	#[test]
+	fn derive_child() {
+		let pair = Pair::generate();
+		let _pair2 = pair.derive_child_probably_bad(b"session_1234");
 	}
 }
