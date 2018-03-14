@@ -603,6 +603,7 @@ pub mod testing {
 			twox_128(&2u32.to_keyed_vec(INTENTION_AT)).to_vec() => Charlie.to_raw_public_vec(),
 			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&sessions_per_era),
 			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
+			twox_128(TRANSACTION_FEE).to_vec() => vec![].and(&1u64),
 			twox_128(CURRENT_ERA).to_vec() => vec![].and(&current_era),
 			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
@@ -637,6 +638,7 @@ mod tests {
 			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
 			twox_128(BONDING_DURATION).to_vec() => vec![].and(&3u64),
 			twox_128(TOTAL_STAKE).to_vec() => vec![].and(&100u64),
+			twox_128(TRANSACTION_FEE).to_vec() => vec![].and(&0u64),
 			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&10u64),
 			twox_128(&Bob.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&20u64),
 			twox_128(&Charlie.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&30u64),
@@ -775,8 +777,8 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_works() {
-		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
+			set_free_balance(&Alice, 112);
 			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
 			assert_eq!(balance(&Alice), 42);
 			assert_eq!(balance(&Bob), 69);

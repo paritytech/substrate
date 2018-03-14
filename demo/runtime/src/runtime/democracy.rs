@@ -265,6 +265,11 @@ pub mod internal {
 		inject_referendum(system::block_number() + voting_period(), proposal, vote_threshold);
 	}
 
+	/// Remove a referendum.
+	pub fn cancel_referendum(ref_index: ReferendumIndex) {
+		clear_referendum(ref_index);
+	}
+
 	/// Current era is ending; we should finish up any proposals.
 	pub fn end_block(now: BlockNumber) {
 		// pick out another public referendum if it's time.
@@ -355,6 +360,7 @@ pub mod testing {
 			twox_128(staking::SESSIONS_PER_ERA).to_vec() => vec![].and(&1u64),
 			twox_128(staking::VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
 			twox_128(staking::CURRENT_ERA).to_vec() => vec![].and(&1u64),
+			twox_128(staking::TRANSACTION_FEE).to_vec() => vec![].and(&1u64),
 
 			twox_128(LAUNCH_PERIOD).to_vec() => vec![].and(&1u64),
 			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64),

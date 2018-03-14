@@ -205,7 +205,7 @@ pub mod internal {
 			println!("Executing proposal {:?} {:?}", proposal, tally);
 			if let &Proposal::Democracy(democracy::privileged::Call::cancel_referendum(ref_index)) = &proposal {
 				if let (_, 0, 0) = tally {
-					democracy::privileged::Call::cancel_referendum(ref_index).dispatch(PrivPass);
+					democracy::internal::cancel_referendum(ref_index);
 				}
 			} else {
 				if tally.0 > tally.1 + tally.2 {

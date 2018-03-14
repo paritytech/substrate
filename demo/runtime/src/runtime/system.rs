@@ -245,7 +245,8 @@ mod tests {
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
 		let mut t: TestExternalities = map![
-			twox_128(&One.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&One.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(staking::TRANSACTION_FEE).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let tx = UncheckedTransaction {
@@ -254,12 +255,14 @@ mod tests {
 				nonce: 0,
 				function: PubCall::Staking(StakingCall::transfer(Two.into(), 69)),
 			},
-			signature: hex!("5f9832c5a4a39e2dd4a3a0c5b400e9836beb362cb8f7d845a8291a2ae6fe366612e080e4acd0b5a75c3d0b6ee69614a68fb63698c1e76bf1f2dcd8fa617ddf05").into(),
+			signature: hex!("3a682213cb10e8e375fe0817fe4d220a4622d910088809ed7fc8b4ea3871531dbadb22acfedd28a100a0b7bd2d274e0ff873655b13c88f4640b5569db3222706").into(),
 		};
+
+		println!("TX: {}", HexDisplay::from(&tx.transaction.encode()));
 
 		with_externalities(&mut t, || {
 			internal::execute_transaction(tx, Header::from_block_number(1));
-			assert_eq!(staking::balance(&One), 42);
+			assert_eq!(staking::balance(&One), 32);
 			assert_eq!(staking::balance(&Two), 69);
 		});
 	}
@@ -275,7 +278,7 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("f4f6408fe3ce1d78d30bb7ed625b32f91e45b8b566023df309cfd93c6f4af9a4").into(),
+			state_root: hex!("584e0c1f4d4b96153591e3906d756762493dffeb5fa7159e7107014aec8d9c3d").into(),
 			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};

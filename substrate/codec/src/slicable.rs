@@ -81,7 +81,7 @@ impl<T: Slicable> Slicable for Box<T> {
 	}
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		(*self).using_encoded(f)
+		self.as_ref().using_encoded(f)
 	}
 }
 
