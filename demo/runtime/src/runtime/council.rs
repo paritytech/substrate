@@ -491,8 +491,6 @@ fn finalise_tally() {
 	let leaderboard: Vec<(Balance, AccountId)> = storage::take(LEADERBOARD).unwrap_or_default();
 	let new_expiry = system::block_number() + term_duration();
 
-	println!("Finalising tally {} {}, {:?}", system::block_number(), coming, leaderboard);
-
 	// return bond to winners.
 	let candidacy_bond = candidacy_bond();
 	for &(_, ref w) in leaderboard.iter()
@@ -500,9 +498,7 @@ fn finalise_tally() {
 		.take_while(|&&(b, _)| b != 0)
 		.take(coming as usize)
 	{
-		println!("Refunding by {:?}, {:?}", candidacy_bond, staking::balance(w));
 		staking::internal::refund(w, candidacy_bond);
-		println!("Refunded to {:?}", staking::balance(w));
 	}
 
 	// set the new council.
