@@ -191,10 +191,21 @@ impl Context for TestContext {
 		-> LocalizedMessage<Candidate, Digest, AuthorityId, Signature>
 	{
 		let signature = Signature(message.clone(), self.local_id.clone());
-		LocalizedMessage {
-			message,
-			signature,
-			sender: self.local_id.clone()
+
+		match message {
+			Message::Propose(r, proposal) => LocalizedMessage::Propose(LocalizedProposal {
+				round_number: r,
+				digest: Digest(proposal.0),
+				proposal,
+				digest_signature: signature.clone(),
+				full_signature: signature,
+				sender: self.local_id.clone(),
+			}),
+			Message::Vote(vote) => LocalizedMessage::Vote(LocalizedVote {
+				vote,
+				signature,
+				sender: self.local_id.clone(),
+			}),
 		}
 	}
 
@@ -333,7 +344,7 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 		round_number: locked_round,
 		digest: locked_digest.clone(),
 		signatures: (0..7)
-			.map(|i| Signature(Message::Prepare(locked_round, locked_digest.clone()), AuthorityId(i)))
+			.map(|i| Signature(Message::Vote(Vote::Prepare(locked_round, locked_digest.clone())), AuthorityId(i)))
 			.collect()
 	}.check(7, |_, _, s| Some(s.1.clone())).unwrap();
 

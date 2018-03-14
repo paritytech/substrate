@@ -100,6 +100,9 @@ pub type Committed = generic::Committed<Block, HeaderHash, LocalizedSignature>;
 /// Communication between BFT participants.
 pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, LocalizedSignature>;
 
+/// Misbehavior observed from BFT participants.
+pub type Misbehavior = generic::Misbehavior<HeaderHash, LocalizedSignature>;
+
 /// Proposer factory. Can be used to create a proposer instance.
 pub trait ProposerFactory {
 	/// The proposer type this creates.
@@ -129,6 +132,8 @@ pub trait Proposer {
 	/// Evaluate proposal. True means valid.
 	// TODO: change this to a future.
 	fn evaluate(&self, proposal: &Block) -> Self::Evaluate;
+	/// Import witnessed misbehavior.
+	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, Misbehavior)>);
 }
 
 /// Block import trait.
@@ -269,6 +274,14 @@ impl<P: Proposer, I: BlockImport> Future for BftFuture<P, I> {
 	}
 }
 
+impl<P: Proposer, I> Drop for BftFuture<P, I> {
+	fn drop(&mut self) {
+		// TODO: have a trait member to pass misbehavior reports into.
+		let misbehavior = self.inner.drain_misbehavior().collect::<Vec<_>>();
+		self.inner.context().proposer.import_misbehavior(misbehavior);
+	}
+}
+
 struct AgreementHandle {
 	cancel: Arc<AtomicBool>,
 	task: Option<oneshot::Receiver<task::Task>>,
@@ -317,7 +330,6 @@ impl<P, E, I> BftService<P, E, I>
 
 		let authorities = self.client.authorities(&BlockId::Hash(hash))?;
 
-		// TODO: check key is one of the authorities.
 		let n = authorities.len();
 		let max_faulty = max_faulty_of(n);
 
@@ -426,28 +438,49 @@ pub fn check_prepare_justification(authorities: &[AuthorityId], parent: HeaderHa
 
 /// Sign a BFT message with the given key.
 pub fn sign_message(message: Message, key: &ed25519::Pair, parent_hash: HeaderHash) -> LocalizedMessage {
-	let action = match message.clone() {
-		::generic::Message::Propose(r, p) => PrimitiveAction::Propose(r as u32, p),
-		::generic::Message::Prepare(r, h) => PrimitiveAction::Prepare(r as u32, h),
-		::generic::Message::Commit(r, h) => PrimitiveAction::Commit(r as u32, h),
-		::generic::Message::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
+	let signer = key.public();
+
+	let sign_action = |action| {
+		let primitive = PrimitiveMessage {
+			parent: parent_hash,
+			action,
+		};
+
+		let to_sign = Slicable::encode(&primitive);
+		LocalizedSignature {
+			signer: signer.clone(),
+			signature: key.sign(&to_sign),
+		}
 	};
 
-	let primitive = PrimitiveMessage {
-		parent: parent_hash,
-		action,
-	};
+	match message {
+		::generic::Message::Propose(r, proposal) => {
+			let header_hash = proposal.header.hash();
+			let action_header = PrimitiveAction::ProposeHeader(r as u32, header_hash.clone());
+			let action_propose = PrimitiveAction::Propose(r as u32, proposal.clone());
 
-	let to_sign = Slicable::encode(&primitive);
-	let signature = LocalizedSignature {
-		signer: key.public(),
-		signature: key.sign(&to_sign),
-	};
+			::generic::LocalizedMessage::Propose(::generic::LocalizedProposal {
+				round_number: r,
+				proposal,
+				digest: header_hash,
+				sender: signer.0,
+				digest_signature: sign_action(action_header),
+				full_signature: sign_action(action_propose),
+			})
+		}
+		::generic::Message::Vote(vote) => {
+			let action = match vote {
+				::generic::Vote::Prepare(r, h) => PrimitiveAction::Prepare(r as u32, h),
+				::generic::Vote::Commit(r, h) => PrimitiveAction::Commit(r as u32, h),
+				::generic::Vote::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
+			};
 
-	LocalizedMessage {
-		message,
-		signature,
-		sender: key.public().0
+			::generic::LocalizedMessage::Vote(::generic::LocalizedVote {
+				vote: vote,
+				sender: signer.0,
+				signature: sign_action(action),
+			})
+		}
 	}
 }
 
@@ -506,6 +539,8 @@ mod tests {
 		fn evaluate(&self, proposal: &Block) -> Result<bool, Error> {
 			Ok(proposal.header.number == self.0)
 		}
+
+		fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior)>) {}
 	}
 
 	fn make_service(client: FakeClient, handle: Handle)
@@ -519,6 +554,13 @@ mod tests {
 			round_timeout_multiplier: 4,
 			key: Arc::new(Keyring::One.into()),
 			factory: DummyFactory
+		}
+	}
+
+	fn sign_vote(vote: ::generic::Vote<HeaderHash>, key: &ed25519::Pair, parent_hash: HeaderHash) -> LocalizedSignature {
+		match sign_message(vote.into(), key, parent_hash) {
+			::generic::LocalizedMessage::Vote(vote) => vote.signature,
+			_ => panic!("signing vote leads to signed vote"),
 		}
 	}
 
@@ -591,7 +633,7 @@ mod tests {
 			digest: hash,
 			round_number: 1,
 			signatures: authorities_keys.iter().take(3).map(|key| {
-				sign_message(generic::Message::Commit(1, hash), key, parent_hash).signature
+				sign_vote(generic::Vote::Commit(1, hash).into(), key, parent_hash)
 			}).collect(),
 		};
 
@@ -601,7 +643,7 @@ mod tests {
 			digest: hash,
 			round_number: 0, // wrong round number (vs. the signatures)
 			signatures: authorities_keys.iter().take(3).map(|key| {
-				sign_message(generic::Message::Commit(1, hash), key, parent_hash).signature
+				sign_vote(generic::Vote::Commit(1, hash).into(), key, parent_hash)
 			}).collect(),
 		};
 
@@ -612,7 +654,7 @@ mod tests {
 			digest: hash,
 			round_number: 1,
 			signatures: authorities_keys.iter().take(2).map(|key| {
-				sign_message(generic::Message::Commit(1, hash), key, parent_hash).signature
+				sign_vote(generic::Vote::Commit(1, hash).into(), key, parent_hash)
 			}).collect(),
 		};
 
@@ -623,7 +665,7 @@ mod tests {
 			digest: [0xfe; 32].into(),
 			round_number: 1,
 			signatures: authorities_keys.iter().take(3).map(|key| {
-				sign_message(generic::Message::Commit(1, hash), key, parent_hash).signature
+				sign_vote(generic::Vote::Commit(1, hash).into(), key, parent_hash)
 			}).collect(),
 		};
 

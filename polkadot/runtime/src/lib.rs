@@ -19,23 +19,33 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate substrate_runtime_std as rstd;
-#[macro_use] extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_support as runtime_support;
-#[cfg(all(feature = "std", test))] extern crate substrate_keyring as keyring;
-
-#[cfg(feature = "std")] extern crate rustc_hex;
-
 extern crate substrate_codec as codec;
-#[cfg(feature = "std")] #[macro_use] extern crate substrate_primitives as primitives;
+extern crate substrate_misbehavior_check as misbehavior_check;
 extern crate polkadot_primitives;
 
-#[cfg(test)] #[macro_use] extern crate hex_literal;
+#[cfg(all(feature = "std", test))]
+extern crate substrate_keyring as keyring;
+
+#[cfg(feature = "std")]
+extern crate rustc_hex;
+
+#[cfg_attr(any(test, feature = "std"), macro_use)]
+extern crate substrate_primitives as primitives;
+
+#[macro_use]
+extern crate substrate_runtime_io as runtime_io;
+
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
 
 pub mod api;
 pub mod environment;
 pub mod runtime;
 
-#[cfg(feature = "std")] pub mod genesismap;
+#[cfg(feature = "std")]
+pub mod genesismap;
 
 /// Type definitions and helpers for transactions.
 pub mod transaction {

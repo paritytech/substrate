@@ -21,8 +21,7 @@ use std::collections::HashMap;
 use runtime_io::twox_128;
 use runtime_support::Hashable;
 use primitives::Block;
-use polkadot_primitives::{BlockNumber, AccountId};
-use runtime::staking::Balance;
+use polkadot_primitives::{Balance, BlockNumber, AccountId};
 
 /// Configuration of a general Polkadot genesis block.
 pub struct GenesisConfig {

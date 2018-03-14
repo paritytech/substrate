@@ -40,8 +40,6 @@ pub fn proposal(proposal: Proposal) {
 			democracy::privileged::cancel_referendum(a),
 		Proposal::DemocracyStartReferendum(a, b) =>
 			democracy::privileged::start_referendum(*a, b),
-		Proposal::DemocracyCancelReferendum(a) =>
-			democracy::privileged::cancel_referendum(a),
 		Proposal::CouncilSetDesiredSeats(a) =>
 			council::privileged::set_desired_seats(a),
 		Proposal::CouncilRemoveMember(a) =>

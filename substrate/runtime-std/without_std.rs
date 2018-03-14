@@ -28,6 +28,7 @@ pub use alloc::vec;
 pub mod collections {
 	pub use alloc::btree_map;
 }
+pub use core::borrow;
 pub use core::cell;
 pub use core::cmp;
 pub use core::intrinsics;

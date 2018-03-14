@@ -18,7 +18,7 @@
 
 #[macro_use] extern crate hex_literal;
 #[macro_use] extern crate lazy_static;
-extern crate ed25519;
+pub extern crate ed25519;
 
 use std::collections::HashMap;
 use std::ops::Deref;

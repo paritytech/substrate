@@ -31,8 +31,6 @@ pub struct Environment {
 	pub parent_hash: Hash,
 	/// The current block digest.
 	pub digest: Digest,
-	/// The current transaction index
-	pub transaction_index: u64,
 }
 
 /// Do something with the environment and return its value. Keep the function short.

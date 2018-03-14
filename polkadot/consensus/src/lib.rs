@@ -45,6 +45,9 @@ extern crate substrate_primitives as primitives;
 #[macro_use]
 extern crate error_chain;
 
+#[macro_use]
+extern crate log;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -55,9 +58,9 @@ use polkadot_api::{PolkadotApi, BlockBuilder};
 use polkadot_primitives::{Hash, Timestamp};
 use polkadot_primitives::block::Block as PolkadotBlock;
 use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
-use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId};
+use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
-use transaction_pool::TransactionPool;
+use transaction_pool::{Ready, TransactionPool};
 
 use futures::prelude::*;
 use futures::future;
@@ -477,17 +480,19 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 		let duty_roster = self.client.duty_roster(&checked_id)?;
 
 		let group_info = make_group_info(duty_roster, authorities)?;
-		let table = Arc::new(SharedTable::new(group_info, sign_with, parent_hash));
+		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
 		let router = self.network.table_router(table.clone());
 
 		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
 			parent_hash,
+			parent_number: parent_header.number,
 			parent_id: checked_id,
-			_table: table,
-			_router: router,
+			local_key: sign_with,
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
+			_table: table,
+			_router: router,
 		})
 	}
 }
@@ -503,8 +508,10 @@ fn current_timestamp() -> Timestamp {
 /// The Polkadot proposer logic.
 pub struct Proposer<C: PolkadotApi, R> {
 	parent_hash: HeaderHash,
+	parent_number: BlockNumber,
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
+	local_key: Arc<ed25519::Pair>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
 	_table: Arc<SharedTable>,
 	_router: R,
@@ -516,8 +523,6 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	type Evaluate = Result<bool, Error>;
 
 	fn propose(&self) -> Result<SubstrateBlock, Error> {
-		use transaction_pool::Ready;
-
 		// TODO: handle case when current timestamp behind that in state.
 		let mut block_builder = self.client.build_block(
 			&self.parent_id,
@@ -564,6 +569,65 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
 		evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id)
+	}
+
+	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior)>) {
+		use bft::generic::Misbehavior as GenericMisbehavior;
+		use primitives::bft::{MisbehaviorKind, MisbehaviorReport};
+		use polkadot_primitives::transaction::{Function, Transaction, UncheckedTransaction};
+
+		let local_id = self.local_key.public().0;
+		let mut pool = self.transaction_pool.lock();
+		let mut next_nonce = {
+			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
+
+			let cur_nonce = pool.pending(readiness_evaluator)
+				.filter(|tx| tx.as_transaction().transaction.signed == local_id)
+				.last()
+				.map(|tx| Ok(tx.as_transaction().transaction.nonce))
+				.unwrap_or_else(|| self.client.nonce(&self.parent_id, local_id));
+
+			match cur_nonce {
+				Ok(cur_nonce) => cur_nonce + 1,
+				Err(e) => {
+					warn!(target: "consensus", "Error computing next transaction nonce: {}", e);
+					return;
+				}
+			}
+		};
+
+		for (target, misbehavior) in misbehavior {
+			let report = MisbehaviorReport {
+				parent_hash: self.parent_hash,
+				parent_number: self.parent_number,
+				target,
+				misbehavior: match misbehavior {
+					GenericMisbehavior::ProposeOutOfTurn(_, _, _) => continue,
+					GenericMisbehavior::DoublePropose(_, _, _) => continue,
+					GenericMisbehavior::DoublePrepare(round, (h1, s1), (h2, s2))
+						=> MisbehaviorKind::BftDoublePrepare(round as u32, (h1, s1.signature), (h2, s2.signature)),
+					GenericMisbehavior::DoubleCommit(round, (h1, s1), (h2, s2))
+						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1, s1.signature), (h2, s2.signature)),
+				}
+			};
+
+			let tx = Transaction {
+				signed: local_id,
+				nonce: next_nonce,
+				function: Function::ReportMisbehavior(report),
+			};
+
+			next_nonce += 1;
+
+			let message = tx.encode();
+			let signature = self.local_key.sign(&message);
+			let tx = UncheckedTransaction {
+				transaction: tx,
+				signature,
+			};
+
+			pool.import(tx).expect("locally signed transaction is valid; qed");
+		}
 	}
 }
 
