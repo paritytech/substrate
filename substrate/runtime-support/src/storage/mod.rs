@@ -21,6 +21,8 @@ use rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
 use codec::{Slicable, KeyedVec, Input};
 
+pub mod generator;
+
 // TODO: consider using blake256 to avoid possible preimage attack.
 
 struct IncrementalInput<'a> {
@@ -120,8 +122,178 @@ pub fn put_raw(key: &[u8], value: &[u8]) {
 	runtime_io::set_storage(&twox_128(key)[..], value)
 }
 
+struct RuntimeStorage;
+
+impl ::GenericStorage for RuntimeStorage {
+	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
+	fn load<T: Slicable>(&self, key: &[u8]) -> Option<T> {
+		get(key)
+	}
+
+	/// Put a value in under a key.
+	fn store<T: Slicable>(&self, key: &[u8], val: &T) {
+		put(key, val)
+	}
+
+	/// Remove the bytes of a key from storage.
+	fn kill(&self, key: &[u8]) {
+		kill(key)
+	}
+
+	/// Take a value from storage, deleting it after reading.
+	fn take<T: Slicable>(&self, key: &[u8]) -> Option<T> {
+		take(key)
+	}
+}
+
+/// A trait for working with macro-generated storage values under the substrate storage API.
+pub trait StorageValue<T: Slicable> {
+	/// Get the storage key.
+	fn key() -> &'static [u8];
+	/// Load the value from the provided storage instance.
+	fn load() -> Option<T>;
+	/// Store a value under this key into the provded storage instance.
+	fn store(val: &T);
+	/// Clear the storage value.
+	fn kill();
+	/// Take a value from storage, removing it afterwards.
+	fn take() -> Option<T>;
+}
+
+impl<T: Slicable, U> StorageValue<T> for U where U: generator::StorageValue<T> {
+	fn key() -> &'static [u8] {
+		<U as generator::StorageValue<T>>::key()
+	}
+	fn load() -> Option<T> {
+		U::load(&RuntimeStorage)
+	}
+	fn store(val: &T) {
+		U::store(val, &RuntimeStorage)
+	}
+	fn kill() {
+		U::kill(&RuntimeStorage)
+	}
+	fn take() -> Option<T> {
+		U::take(&RuntimeStorage)
+	}
+}
+
+/// A strongly-typed list in storage.
+pub trait StorageList<T: Slicable> {
+	/// Get the prefix key in storage.
+	fn prefix() -> &'static [u8];
+
+	/// Get the key used to store the length field.
+	fn len_key() -> Vec<u8>;
+
+	/// Get the storage key used to fetch a value at a given index.
+	fn key_for(index: u32) -> Vec<u8>;
+
+	/// Read out all the items.
+	fn items() -> Vec<T>;
+
+	/// Set the current set of items.
+	fn set_items(items: &[T]);
+
+	/// Set the item at the given index.
+	fn set_item(index: u32, item: &T);
+
+	/// Load the value at given index. Returns `None` if the index is out-of-bounds.
+	fn get(index: u32) -> Option<T>;
+
+	/// Load the length of the list
+	fn len() -> u32;
+
+	/// Clear the list.
+	fn clear();
+}
+
+impl<T: Slicable, U> StorageList<T> for U where U: generator::StorageList<T> {
+	fn prefix() -> &'static [u8] {
+		<U as generator::StorageList<T>>::prefix()
+	}
+
+	fn len_key() -> Vec<u8> {
+		<U as generator::StorageList<T>>::len_key()
+	}
+
+	fn key_for(index: u32) -> Vec<u8> {
+		<U as generator::StorageList<T>>::key_for(index)
+	}
+
+	fn items() -> Vec<T> {
+		U::items(&RuntimeStorage)
+	}
+
+	fn set_items(items: &[T]) {
+		U::set_items(items, &RuntimeStorage)
+	}
+
+	fn set_item(index: u32, item: &T) {
+		U::set_item(index, item, &RuntimeStorage)
+	}
+
+	fn get(index: u32) -> Option<T> {
+		U::get(index, &RuntimeStorage)
+	}
+
+	fn len() -> u32 {
+		U::len(&RuntimeStorage)
+	}
+
+	fn clear() {
+		U::clear(&RuntimeStorage)
+	}
+}
+
+/// A strongly-typed map in storage.
+pub trait StorageMap<K: Slicable, V: Slicable> {
+	/// Get the prefix key in storage.
+	fn prefix() -> &'static [u8];
+
+	/// Get the storage key used to fetch a value corresponding to a specific key.
+	fn key_for(x: &K) -> Vec<u8>;
+
+	/// Load the value associated with the given key from the map.
+	fn get(key: &K) -> Option<V>;
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert(key: &K, val: &V);
+
+	/// Remove the value under a key.
+	fn remove(key: &K);
+
+	/// Take the value under a key.
+	fn take(key: &K) -> Option<V>;
+}
+
+impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::StorageMap<K, V> {
+	fn prefix() -> &'static [u8] {
+		<U as generator::StorageMap<K, V>>::prefix()
+	}
+
+	fn key_for(item: &K) -> Vec<u8> {
+		<U as generator::StorageMap<K, V>>::key_for(item)
+	}
+
+	fn get(key: &K) -> Option<V> {
+		U::get(key, &RuntimeStorage)
+	}
+
+	fn insert(key: &K, val: &V) {
+		U::insert(key, val, &RuntimeStorage)
+	}
+
+	fn remove(key: &K) {
+		U::remove(key, &RuntimeStorage)
+	}
+
+	fn take(key: &K) -> Option<V> {
+		U::take(key, &RuntimeStorage)
+	}
+}
+
 /// A trait to conveniently store a vector of storable data.
-// TODO: add iterator support
 pub trait StorageVec {
 	type Item: Default + Sized + Slicable;
 	const PREFIX: &'static [u8];
@@ -266,7 +438,6 @@ pub mod unhashed {
 	}
 
 	/// A trait to conveniently store a vector of storable data.
-	// TODO: add iterator support
 	pub trait StorageVec {
 		type Item: Default + Sized + Slicable;
 		const PREFIX: &'static [u8];
