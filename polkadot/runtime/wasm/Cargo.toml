@@ -12,6 +12,7 @@ substrate-runtime-std = { path = "../../../substrate/runtime-std", default-featu
 substrate-runtime-io = { path = "../../../substrate/runtime-io", default-features = false }
 substrate-runtime-support = { path = "../../../substrate/runtime-support", default-features = false }
 substrate-primitives = { path = "../../../substrate/primitives", default-features = false }
+substrate-misbehavior-check = { path = "../../../substrate/misbehavior-check", default-features = false }
 polkadot-primitives = { path = "../../primitives", default-features = false }
 
 [features]
@@ -22,6 +23,7 @@ std = [
 	"substrate-runtime-std/std",
 	"substrate-runtime-support/std",
 	"substrate-primitives/std",
+	"substrate-misbehavior-check/std",
 	"polkadot-primitives/std",
 ]
 

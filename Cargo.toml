@@ -30,6 +30,7 @@ members = [
 	"substrate/executor",
 	"substrate/keyring",
 	"substrate/network",
+	"substrate/misbehavior-check",
 	"substrate/primitives",
 	"substrate/rpc-servers",
 	"substrate/rpc",

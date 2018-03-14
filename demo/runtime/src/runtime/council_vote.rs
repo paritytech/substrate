@@ -190,7 +190,6 @@ pub mod internal {
 	pub fn end_block(now: BlockNumber) {
 		while let Some((proposal, proposal_hash)) = take_proposal_if_expiring_at(now) {
 			let tally = take_tally(&proposal_hash);
-			println!("Executing proposal {:?} {:?}", proposal, tally);
 			if let &Proposal::DemocracyCancelReferendum(ref_index) = &proposal {
 				if let (_, 0, 0) = tally {
 					democracy::privileged::cancel_referendum(ref_index);

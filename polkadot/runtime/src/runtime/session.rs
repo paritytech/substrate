@@ -25,14 +25,23 @@ use runtime::{system, staking, consensus};
 
 const SESSION_LENGTH: &[u8] = b"ses:len";
 const CURRENT_INDEX: &[u8] = b"ses:ind";
+const CURRENT_SESSION_START: &[u8] = b"ses:sta";
+const LAST_SESSION_START: &[u8] = b"ses:lst";
 const LAST_LENGTH_CHANGE: &[u8] = b"ses:llc";
 const NEXT_KEY_FOR: &[u8] = b"ses:nxt:";
 const NEXT_SESSION_LENGTH: &[u8] = b"ses:nln";
 
-struct ValidatorStorageVec {}
+struct ValidatorStorageVec;
 impl StorageVec for ValidatorStorageVec {
 	type Item = AccountId;
-	const PREFIX: &'static[u8] = b"ses:val:";
+	const PREFIX: &'static [u8] = b"ses:val:";
+}
+
+// the session keys before the previous.
+struct LastValidators;
+impl StorageVec for LastValidators {
+	type Item = (AccountId, SessionKey);
+	const PREFIX: &'static [u8] = b"ses:old:";
 }
 
 /// Get the current set of validators.
@@ -50,9 +59,29 @@ pub fn validator_count() -> u32 {
 	ValidatorStorageVec::count() as u32
 }
 
-/// The current era index.
+/// The current session index.
 pub fn current_index() -> BlockNumber {
 	storage::get_or(CURRENT_INDEX, 0)
+}
+
+/// Get the starting block of the current session.
+pub fn current_start_block() -> BlockNumber {
+	// this seems like it's computable just by examining the current block number, session length,
+	// and last length change, but it's not simple to tell whether we are before or after
+	// a session rotation on a block which will have one.
+	storage::get_or(CURRENT_SESSION_START, 0)
+}
+
+/// Get the last session's validators, paired with their authority keys.
+pub fn last_session_keys() -> Vec<(AccountId, SessionKey)> {
+	LastValidators::items()
+}
+
+/// Get the start block of the last session.
+/// In general this is computable from the session length,
+/// but when the current session is the first with a new length it is uncomputable.
+pub fn last_session_start() -> Option<BlockNumber> {
+	storage::get(LAST_SESSION_START)
 }
 
 /// The block number at which the era length last changed.
@@ -90,11 +119,14 @@ pub mod privileged {
 pub mod internal {
 	use super::*;
 
-	/// Set the current set of validators.
+	/// Transition to a new era, with a new set of valiators.
 	///
 	/// Called by staking::next_era() only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[AccountId]) {
+		LastValidators::set_items(
+			new.iter().cloned().zip(consensus::authorities())
+		);
 		ValidatorStorageVec::set_items(new);
 		consensus::internal::set_authorities(new);
 	}
@@ -114,7 +146,6 @@ pub mod internal {
 fn rotate_session() {
 	// Increment current session index.
 	storage::put(CURRENT_INDEX, &(current_index() + 1));
-
 	// Enact era length change.
 	if let Some(next_len) = storage::get::<u64>(NEXT_SESSION_LENGTH) {
 		storage::put(SESSION_LENGTH, &next_len);
@@ -122,10 +153,23 @@ fn rotate_session() {
 		storage::kill(NEXT_SESSION_LENGTH);
 	}
 
+	let validators = validators();
+
+	storage::put(LAST_SESSION_START, &current_start_block());
+	storage::put(CURRENT_SESSION_START, &system::block_number());
+	LastValidators::set_items(
+		validators.iter()
+			.cloned()
+			.zip(consensus::authorities())
+	);
+
+
 	// Update any changes in session keys.
-	validators().iter().enumerate().for_each(|(i, v)| {
+	validators.iter().enumerate().for_each(|(i, v)| {
 		let k = v.to_keyed_vec(NEXT_KEY_FOR);
 		if let Some(n) = storage::take(&k) {
+			// this is fine because the authorities vector currently
+			// matches the validators length perfectly.
 			consensus::internal::set_authority(i as u32, &n);
 		}
 	});

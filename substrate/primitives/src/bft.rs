@@ -19,15 +19,17 @@
 use block::{Block, HeaderHash};
 use codec::{Slicable, Input};
 use rstd::vec::Vec;
+use ::{AuthorityId, Signature};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 #[repr(u8)]
 enum ActionKind {
 	Propose = 1,
-	Prepare = 2,
-	Commit = 3,
-	AdvanceRound = 4,
+	ProposeHeader = 2,
+	Prepare = 3,
+	Commit = 4,
+	AdvanceRound = 5,
 }
 
 /// Actions which can be taken during the BFT process.
@@ -36,6 +38,9 @@ enum ActionKind {
 pub enum Action {
 	/// Proposal of a block candidate.
 	Propose(u32, Block),
+	/// Proposal header of a block candidate. Accompanies any proposal,
+	/// but is used for misbehavior reporting since blocks themselves are big.
+	ProposeHeader(u32, HeaderHash),
 	/// Preparation to commit for a candidate.
 	Prepare(u32, HeaderHash),
 	/// Vote to commit to a candidate.
@@ -52,6 +57,11 @@ impl Slicable for Action {
 				v.push(ActionKind::Propose as u8);
 				round.using_encoded(|s| v.extend(s));
 				block.using_encoded(|s| v.extend(s));
+			}
+			Action::ProposeHeader(ref round, ref hash) => {
+				v.push(ActionKind::ProposeHeader as u8);
+				round.using_encoded(|s| v.extend(s));
+				hash.using_encoded(|s| v.extend(s));
 			}
 			Action::Prepare(ref round, ref hash) => {
 				v.push(ActionKind::Prepare as u8);
@@ -77,6 +87,11 @@ impl Slicable for Action {
 			Some(x) if x == ActionKind::Propose as u8 => {
 				let (round, block) = try_opt!(Slicable::decode(value));
 				Some(Action::Propose(round, block))
+			}
+			Some(x) if x == ActionKind::ProposeHeader as u8 => {
+				let (round, hash) = try_opt!(Slicable::decode(value));
+
+				Some(Action::ProposeHeader(round, hash))
 			}
 			Some(x) if x == ActionKind::Prepare as u8 => {
 				let (round, hash) = try_opt!(Slicable::decode(value));
@@ -150,5 +165,144 @@ impl Slicable for Justification {
 			hash: try_opt!(Slicable::decode(value)),
 			signatures: try_opt!(Slicable::decode(value)),
 		})
+	}
+}
+
+// single-byte code to represent misbehavior kind.
+#[repr(u8)]
+enum MisbehaviorCode {
+	/// BFT: double prepare.
+	BftDoublePrepare = 0x11,
+	/// BFT: double commit.
+	BftDoubleCommit = 0x12,
+}
+
+impl MisbehaviorCode {
+	fn from_u8(x: u8) -> Option<Self> {
+		match x {
+			0x11 => Some(MisbehaviorCode::BftDoublePrepare),
+			0x12 => Some(MisbehaviorCode::BftDoubleCommit),
+			_ => None,
+		}
+	}
+}
+
+/// Misbehavior kinds.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum MisbehaviorKind {
+	/// BFT: double prepare.
+	BftDoublePrepare(u32, (HeaderHash, Signature), (HeaderHash, Signature)),
+	/// BFT: double commit.
+	BftDoubleCommit(u32, (HeaderHash, Signature), (HeaderHash, Signature)),
+}
+
+/// A report of misbehavior by an authority.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct MisbehaviorReport {
+	/// The parent hash of the block where the misbehavior occurred.
+	pub parent_hash: HeaderHash,
+	/// The parent number of the block where the misbehavior occurred.
+	pub parent_number: ::block::Number,
+	/// The authority who misbehavior.
+	pub target: AuthorityId,
+	/// The misbehavior kind.
+	pub misbehavior: MisbehaviorKind,
+}
+
+impl Slicable for MisbehaviorReport {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		self.parent_hash.using_encoded(|s| v.extend(s));
+		self.parent_number.using_encoded(|s| v.extend(s));
+		self.target.using_encoded(|s| v.extend(s));
+
+		match self.misbehavior {
+			MisbehaviorKind::BftDoublePrepare(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
+				(MisbehaviorCode::BftDoublePrepare as u8).using_encoded(|s| v.extend(s));
+				round.using_encoded(|s| v.extend(s));
+				h_a.using_encoded(|s| v.extend(s));
+				s_a.using_encoded(|s| v.extend(s));
+				h_b.using_encoded(|s| v.extend(s));
+				s_b.using_encoded(|s| v.extend(s));
+			}
+			MisbehaviorKind::BftDoubleCommit(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
+				(MisbehaviorCode::BftDoubleCommit as u8).using_encoded(|s| v.extend(s));
+				round.using_encoded(|s| v.extend(s));
+				h_a.using_encoded(|s| v.extend(s));
+				s_a.using_encoded(|s| v.extend(s));
+				h_b.using_encoded(|s| v.extend(s));
+				s_b.using_encoded(|s| v.extend(s));
+			}
+		}
+
+		v
+	}
+
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		let parent_hash = HeaderHash::decode(input)?;
+		let parent_number = ::block::Number::decode(input)?;
+		let target = AuthorityId::decode(input)?;
+
+		let misbehavior = match u8::decode(input).and_then(MisbehaviorCode::from_u8)? {
+			MisbehaviorCode::BftDoublePrepare => {
+				MisbehaviorKind::BftDoublePrepare(
+					u32::decode(input)?,
+					(HeaderHash::decode(input)?, Signature::decode(input)?),
+					(HeaderHash::decode(input)?, Signature::decode(input)?),
+				)
+			}
+			MisbehaviorCode::BftDoubleCommit => {
+				MisbehaviorKind::BftDoubleCommit(
+					u32::decode(input)?,
+					(HeaderHash::decode(input)?, Signature::decode(input)?),
+					(HeaderHash::decode(input)?, Signature::decode(input)?),
+				)
+			}
+		};
+
+		Some(MisbehaviorReport {
+			parent_hash,
+			parent_number,
+			target,
+			misbehavior,
+		})
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn misbehavior_report_roundtrip() {
+		let report = MisbehaviorReport {
+			parent_hash: [0; 32].into(),
+			parent_number: 999,
+			target: [1; 32].into(),
+			misbehavior: MisbehaviorKind::BftDoubleCommit(
+				511,
+				([2; 32].into(), [3; 64].into()),
+				([4; 32].into(), [5; 64].into()),
+			),
+		};
+
+		let encoded = report.encode();
+		assert_eq!(MisbehaviorReport::decode(&mut &encoded[..]).unwrap(), report);
+
+		let report = MisbehaviorReport {
+			parent_hash: [0; 32].into(),
+			parent_number: 999,
+			target: [1; 32].into(),
+			misbehavior: MisbehaviorKind::BftDoublePrepare(
+				511,
+				([2; 32].into(), [3; 64].into()),
+				([4; 32].into(), [5; 64].into()),
+			),
+		};
+
+		let encoded = report.encode();
+		assert_eq!(MisbehaviorReport::decode(&mut &encoded[..]).unwrap(), report);
 	}
 }

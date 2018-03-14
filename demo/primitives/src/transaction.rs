@@ -16,7 +16,7 @@
 
 //! Transaction type.
 
-use rstd::vec::Vec;
+use rstd::prelude::*;
 use codec::{Input, Slicable, NonTrivialSlicable};
 use {AccountId, SessionKey};
 
@@ -75,6 +75,7 @@ impl InternalFunctionId {
 	}
 }
 
+/// A means of determining whether a referendum has gone through or not.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum VoteThreshold {

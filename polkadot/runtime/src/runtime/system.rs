@@ -167,6 +167,9 @@ fn dispatch_function(function: &Function, transactor: &AccountId) {
 		Function::StakingTransfer(dest, value) => {
 			::runtime::staking::public::transfer(transactor, &dest, value);
 		}
+		Function::ReportMisbehavior(ref report) => {
+			::runtime::staking::public::report_misbehavior(transactor, report)
+		}
 		Function::SessionSetKey(session) => {
 			::runtime::session::public::set_key(transactor, &session);
 		}
