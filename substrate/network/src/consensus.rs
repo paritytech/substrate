@@ -42,17 +42,22 @@ pub struct Consensus {
 	our_candidate: Option<(Hash, Vec<u8>)>,
 	statement_sink: multiqueue::BroadcastFutSender<message::Statement>,
 	statement_stream: multiqueue::BroadcastFutReceiver<message::Statement>,
+	bft_message_sink: multiqueue::BroadcastFutSender<message::BftMessage>,
+	bft_message_stream: multiqueue::BroadcastFutReceiver<message::BftMessage>,
 }
 
 impl Consensus {
 	/// Create a new instance.
 	pub fn new() -> Consensus {
-		let (sink, stream) = multiqueue::broadcast_fut_queue(64);
+		let (statement_sink, statement_stream) = multiqueue::broadcast_fut_queue(64);
+		let (bft_sink, bft_stream) = multiqueue::broadcast_fut_queue(64);
 		Consensus {
 			peers: HashMap::new(),
 			our_candidate: None,
-			statement_sink: sink,
-			statement_stream: stream,
+			statement_sink: statement_sink,
+			statement_stream: statement_stream,
+			bft_message_sink: bft_sink,
+			bft_message_stream: bft_stream,
 		}
 	}
 
@@ -79,12 +84,27 @@ impl Consensus {
 				trace!(target:"sync", "Error broadcasting statement notification: {:?}", e);
 			}
 		} else {
-				trace!(target:"sync", "Ignored statement from unregistered peer {}", peer_id);
+			trace!(target:"sync", "Ignored statement from unregistered peer {}", peer_id);
 		}
 	}
 
 	pub fn statements(&self) -> multiqueue::BroadcastFutReceiver<message::Statement>{
 		self.statement_stream.add_stream()
+	}
+
+	pub fn on_bft_message(&mut self, peer_id: PeerId, message: message::BftMessage) {
+		if self.peers.contains_key(&peer_id) {
+			// TODO: validate signature?
+			if let Err(e) = self.bft_message_sink.try_send(message) {
+				trace!(target:"sync", "Error broadcasting BFT message notification: {:?}", e);
+			}
+		} else {
+			trace!(target:"sync", "Ignored BFT statement from unregistered peer {}", peer_id);
+		}
+	}
+
+	pub fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<message::BftMessage>{
+		self.bft_message_stream.add_stream()
 	}
 
 	pub fn fetch_candidate(&mut self, io: &mut SyncIo, protocol: &Protocol, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
@@ -111,11 +131,19 @@ impl Consensus {
 		return receiver;
 	}
 
-	pub fn send_statement(&mut self, io: &mut SyncIo, protocol: &Protocol, statement: &message::Statement) {
+	pub fn send_statement(&mut self, io: &mut SyncIo, protocol: &Protocol, statement: message::Statement) {
 		// Broadcast statement to all validators.
 		trace!(target:"sync", "Broadcasting statement {:?}", statement);
 		for peer in self.peers.keys() {
 			protocol.send_message(io, *peer, Message::Statement(statement.clone()));
+		}
+	}
+
+	pub fn send_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, message: message::BftMessage) {
+		// Broadcast message to all validators.
+		trace!(target:"sync", "Broadcasting BFT message {:?}", message);
+		for peer in self.peers.keys() {
+			protocol.send_message(io, *peer, Message::BftMessage(message.clone()));
 		}
 	}
 

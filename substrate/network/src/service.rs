@@ -29,15 +29,17 @@ use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo, Transacti
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
-use message::Statement;
+use message::{Statement, BftMessage};
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
-/// Type that represents statement future stream.
+/// Type that represents statement stream.
 pub type StatementStream = multiqueue::BroadcastFutReceiver<Statement>;
+/// Type that represents bft messages stream.
+pub type BftMessageStream = multiqueue::BroadcastFutReceiver<BftMessage>;
 
 bitflags! {
 	pub struct Role: u32 {
@@ -74,6 +76,11 @@ pub trait ConsensusService: Send + Sync {
 	/// Note local candidate. Accepts candidate receipt hash and candidate data.
 	/// Pass `None` to clear the candidate.
 	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>);
+
+	/// Get BFT message stream.
+	fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<BftMessage>;
+	/// Send out a BFT message.
+	fn send_bft_message(&self, message: BftMessage);
 }
 
 /// devp2p Protocol handler
@@ -215,12 +222,22 @@ impl ConsensusService for Service {
 
 	fn send_statement(&self, statement: Statement) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.send_statement(&mut NetSyncIo::new(context), &statement);
+			self.handler.protocol.send_statement(&mut NetSyncIo::new(context), statement);
 		});
 	}
 
 	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
 		self.handler.protocol.set_local_candidate(candidate)
+	}
+
+	fn bft_messages(&self) -> BftMessageStream {
+		self.handler.protocol.bft_messages()
+	}
+
+	fn send_bft_message(&self, message: BftMessage) {
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			self.handler.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
+		});
 	}
 }
 

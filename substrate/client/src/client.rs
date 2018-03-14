@@ -29,12 +29,21 @@ use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend};
 use {error, in_mem, block_builder, runtime_io, bft};
 
+/// Type that implements `futures::Stream` of block import events.
+pub type BlockchainEventStream = multiqueue::BroadcastFutReceiver<BlockImportNotification>;
+
 /// Polkadot Client
 pub struct Client<B, E> where B: backend::Backend {
 	backend: B,
 	executor: E,
 	import_notification_sink: Mutex<multiqueue::BroadcastFutSender<BlockImportNotification>>,
 	import_notification_stream: Mutex<multiqueue::BroadcastFutReceiver<BlockImportNotification>>,
+}
+
+/// A source of blockchain evenets.
+pub trait BlockchainEvents {
+	/// Get block import event stream.
+	fn import_notification_stream(&self) -> BlockchainEventStream;
 }
 
 /// Client info
@@ -166,11 +175,6 @@ impl<B, E> Client<B, E> where
 			import_notification_sink: Mutex::new(sink),
 			import_notification_stream: Mutex::new(stream),
 		})
-	}
-
-	/// Get block import event stream.
-	pub fn import_notification_stream(&self) -> multiqueue::BroadcastFutReceiver<BlockImportNotification> {
-		self.import_notification_stream.lock().add_stream()
 	}
 
 	/// Get a reference to the state at a given block.
@@ -397,6 +401,18 @@ impl<B, E> bft::Authorities for Client<B, E>
 {
 	fn authorities(&self, at: &BlockId) -> Result<Vec<AuthorityId>, bft::Error> {
 		self.authorities_at(at).map_err(|_| bft::ErrorKind::StateUnavailable(*at).into())
+	}
+}
+
+impl<B, E> BlockchainEvents for Client<B, E>
+	where
+		B: backend::Backend,
+		E: state_machine::CodeExecutor,
+		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	/// Get block import event stream.
+	fn import_notification_stream(&self) -> BlockchainEventStream {
+		self.import_notification_stream.lock().add_stream()
 	}
 }
 

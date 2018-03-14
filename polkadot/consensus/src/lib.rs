@@ -43,9 +43,12 @@ extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network;
 
+extern crate tokio_core;
+extern crate substrate_keyring;
+extern crate substrate_client as client;
+
 #[macro_use]
 extern crate error_chain;
-
 #[macro_use]
 extern crate log;
 
@@ -70,7 +73,7 @@ use parking_lot::Mutex;
 pub use self::error::{ErrorKind, Error};
 
 mod error;
-mod network;
+mod service;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;

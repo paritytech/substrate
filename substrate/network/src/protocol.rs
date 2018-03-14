@@ -178,6 +178,7 @@ impl Protocol {
 			Message::Statement(s) => self.on_statement(io, peer_id, s),
 			Message::CandidateRequest(r) => self.on_candidate_request(io, peer_id, r),
 			Message::CandidateResponse(r) => self.on_candidate_response(io, peer_id, r),
+			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m),
 		}
 	}
 
@@ -295,6 +296,21 @@ impl Protocol {
 		self.consensus.lock().on_statement(peer, statement);
 	}
 
+	fn on_bft_message(&self, _io: &mut SyncIo, peer: PeerId, message: message::BftMessage) {
+		trace!(target: "sync", "BFT message from {}: {:?}", peer, message);
+		self.consensus.lock().on_bft_message(peer, message);
+	}
+
+	/// See `ConsensusService` trait.
+	pub fn send_bft_message(&self, io: &mut SyncIo, message: message::BftMessage) {
+		self.consensus.lock().send_bft_message(io, self, message)
+	}
+
+	/// See `ConsensusService` trait.
+	pub fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<message::BftMessage> {
+		self.consensus.lock().bft_messages()
+	}
+
 	/// See `ConsensusService` trait.
 	pub fn statements(&self) -> multiqueue::BroadcastFutReceiver<message::Statement> {
 		self.consensus.lock().statements()
@@ -306,7 +322,7 @@ impl Protocol {
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn send_statement(&self, io: &mut SyncIo, statement: &message::Statement) {
+	pub fn send_statement(&self, io: &mut SyncIo, statement: message::Statement) {
 		self.consensus.lock().send_statement(io, self, statement)
 	}
 

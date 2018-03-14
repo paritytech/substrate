@@ -28,6 +28,7 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_client as client;
 extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_bft;
 extern crate serde;
 extern crate serde_json;
 extern crate futures;
@@ -58,11 +59,11 @@ mod consensus;
 
 #[cfg(test)] mod test;
 
-pub use service::{Service, FetchFuture, StatementStream, ConsensusService};
+pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, NetworkConfiguration};
-pub use message::Statement;
+pub use message::{Statement, BftMessage, ConsensusVote, SignedConsensusMessage};
 pub use error::Error;
 
 // TODO: move it elsewhere

@@ -41,7 +41,7 @@ use primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction, Ju
 use primitives::block::{Block, Id as BlockId, Header, HeaderHash};
 use primitives::AuthorityId;
 
-use futures::{stream, task, Async, Sink, Future, IntoFuture};
+use futures::{task, Async, Stream, Sink, Future, IntoFuture};
 use futures::future::Executor;
 use futures::sync::oneshot;
 use tokio_timer::Timer;
@@ -219,34 +219,25 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	}
 }
 
-type Input<E> = stream::Empty<Communication, E>;
-
-// "black hole" output sink.
-struct Output<E>(::std::marker::PhantomData<E>);
-
-impl<E> Sink for Output<E> {
-	type SinkItem = Communication;
-	type SinkError = E;
-
-	fn start_send(&mut self, _item: Communication) -> ::futures::StartSend<Communication, E> {
-		Ok(::futures::AsyncSink::Ready)
-	}
-
-	fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
-		Ok(Async::Ready(()))
-	}
-}
-
 /// A future that resolves either when canceled (witnessing a block from the network at same height)
 /// or when agreement completes.
-pub struct BftFuture<P: Proposer, I> {
-	inner: generic::Agreement<BftInstance<P>, Input<P::Error>, Output<P::Error>>,
+pub struct BftFuture<P, I, InStream, OutSink> where
+	P: Proposer,
+	InStream: Stream<Item=Communication, Error=P::Error>,
+	OutSink: Sink<SinkItem=Communication, SinkError=P::Error>,
+{
+	inner: generic::Agreement<BftInstance<P>, InStream, OutSink>,
 	cancel: Arc<AtomicBool>,
 	send_task: Option<oneshot::Sender<task::Task>>,
 	import: Arc<I>,
 }
 
-impl<P: Proposer, I: BlockImport> Future for BftFuture<P, I> {
+impl<P, I, InStream, OutSink> Future for BftFuture<P, I, InStream, OutSink> where
+	P: Proposer,
+	I: BlockImport,
+	InStream: Stream<Item=Communication, Error=P::Error>,
+	OutSink: Sink<SinkItem=Communication, SinkError=P::Error>,
+{
 	type Item = ();
 	type Error = ();
 
@@ -274,7 +265,11 @@ impl<P: Proposer, I: BlockImport> Future for BftFuture<P, I> {
 	}
 }
 
-impl<P: Proposer, I> Drop for BftFuture<P, I> {
+impl<P, I, InStream, OutSink> Drop for BftFuture<P, I, InStream, OutSink> where
+	P: Proposer,
+	InStream: Stream<Item=Communication, Error=P::Error>,
+	OutSink: Sink<SinkItem=Communication, SinkError=P::Error>,
+{
 	fn drop(&mut self) {
 		// TODO: have a trait member to pass misbehavior reports into.
 		let misbehavior = self.inner.drain_misbehavior().collect::<Vec<_>>();
@@ -304,9 +299,8 @@ impl Drop for AgreementHandle {
 
 /// The BftService kicks off the agreement process on top of any blocks it
 /// is notified of.
-pub struct BftService<P, E, I> {
+pub struct BftService<P, I> {
 	client: Arc<I>,
-	executor: E,
 	live_agreements: Mutex<HashMap<HeaderHash, AgreementHandle>>,
 	timer: Timer,
 	round_timeout_multiplier: u64,
@@ -314,17 +308,33 @@ pub struct BftService<P, E, I> {
 	factory: P,
 }
 
-impl<P, E, I> BftService<P, E, I>
+impl<P, I> BftService<P, I>
 	where
 		P: ProposerFactory,
-		E: Executor<BftFuture<P::Proposer, I>>,
 		I: BlockImport + Authorities,
 {
+
+	/// Create a new service instance.
+	pub fn new(client: Arc<I>, key: Arc<ed25519::Pair>, factory: P) -> BftService<P, I> {
+		BftService {
+			client: client,
+			live_agreements: Mutex::new(HashMap::new()),
+			timer: Timer::default(),
+			round_timeout_multiplier: 4,
+			key: key, // TODO: key changing over time.
+			factory: factory,
+		}
+	}
+
 	/// Signal that a valid block with the given header has been imported.
 	///
 	/// If the local signing key is an authority, this will begin the consensus process to build a
 	/// block on top of it. If the executor fails to run the future, an error will be returned.
-	pub fn build_upon(&self, header: &Header) -> Result<(), P::Error> {
+	pub fn build_upon<InStream, OutSink, E>(&self, header: &Header, input: InStream, output: OutSink, executor: E) -> Result<(), P::Error> where
+		InStream: Stream<Item=Communication, Error=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
+		OutSink: Sink<SinkItem=Communication, SinkError=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
+		E: Executor<BftFuture<P::Proposer, I, InStream, OutSink>>,
+	{
 		let hash = header.hash();
 		let mut _preempted_consensus = None; // defers drop of live to the end.
 
@@ -355,14 +365,14 @@ impl<P, E, I> BftService<P, E, I>
 			bft_instance,
 			n,
 			max_faulty,
-			stream::empty(),
-			Output(Default::default()),
+			input,
+			output,
 		);
 
 		let cancel = Arc::new(AtomicBool::new(false));
 		let (tx, rx) = oneshot::channel();
 
-		self.executor.execute(BftFuture {
+		executor.execute(BftFuture {
 			inner: agreement,
 			cancel: cancel.clone(),
 			send_task: Some(tx),
@@ -389,6 +399,12 @@ impl<P, E, I> BftService<P, E, I>
 /// This will always be under 1/3.
 pub fn max_faulty_of(n: usize) -> usize {
 	n.saturating_sub(1) / 3
+}
+
+/// Given a total number of authorities, yield the minimum required signatures.
+/// This will always be over 2/3.
+pub fn bft_threshold(n: usize) -> usize {
+	n - max_faulty_of(n)
 }
 
 fn check_justification_signed_message(authorities: &[AuthorityId], message: &[u8], just: UncheckedJustification)
@@ -509,6 +525,24 @@ mod tests {
 	impl Authorities for FakeClient {
 		fn authorities(&self, _at: &BlockId) -> Result<Vec<AuthorityId>, Error> {
 			Ok(self.authorities.clone())
+		}
+	}
+
+	type Input<E> = stream::Empty<Communication, E>;
+
+	// "black hole" output sink.
+	struct Output<E>(::std::marker::PhantomData<E>);
+
+	impl<E> Sink for Output<E> {
+		type SinkItem = Communication;
+		type SinkError = E;
+
+		fn start_send(&mut self, _item: Communication) -> ::futures::StartSend<Communication, E> {
+			Ok(::futures::AsyncSink::Ready)
+		}
+
+		fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
+			Ok(Async::Ready(()))
 		}
 	}
 

@@ -33,7 +33,7 @@ enum ActionKind {
 }
 
 /// Actions which can be taken during the BFT process.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Action {
 	/// Proposal of a block candidate.
@@ -112,7 +112,7 @@ impl Slicable for Action {
 }
 
 /// Messages exchanged between participants in the BFT consensus.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Message {
 	/// The parent header hash this action is relative to.

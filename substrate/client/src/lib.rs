@@ -44,5 +44,6 @@ pub mod genesis;
 pub mod block_builder;
 mod client;
 
-pub use client::{Client, ClientInfo, CallResult, ImportResult, BlockStatus, BlockOrigin, new_in_mem};
+pub use client::{Client, ClientInfo, CallResult, ImportResult,
+	BlockStatus, BlockOrigin, new_in_mem, BlockchainEventStream, BlockchainEvents};
 pub use blockchain::Info as ChainInfo;

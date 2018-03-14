@@ -17,7 +17,7 @@
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
 use primitives::{AuthorityId, Hash};
-use primitives::block::{Number as BlockNumber, HeaderHash, Header, Body};
+use primitives::block::{Number as BlockNumber, HeaderHash, Header, Body, Block};
 use primitives::bft::Justification;
 use service::Role as RoleFlags;
 use ed25519;
@@ -154,6 +154,62 @@ pub struct Statement {
 	pub sender: AuthorityId,
 }
 
+/// Communication that can occur between participants in consensus.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum BftMessage {
+	/// A consensus message (proposal or vote)
+	Consensus(SignedConsensusMessage),
+	/// Auxiliary communication (just proof-of-lock for now).
+	Auxiliary(Justification),
+}
+
+/// A localized proposal message. Contains two signed pieces of data.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct SignedConsensusProposal {
+	/// The round number.
+	pub round_number: u32,
+	/// The proposal sent.
+	pub proposal: Block,
+	/// The digest of the proposal.
+	pub digest: Hash,
+	/// The sender of the proposal
+	pub sender: AuthorityId,
+	/// The signature on the message (propose, round number, digest)
+	pub digest_signature: ed25519::Signature,
+	/// The signature on the message (propose, round number, proposal)
+	pub full_signature: ed25519::Signature,
+}
+
+/// A localized vote message, including the sender.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct SignedConsensusVote {
+	/// The message sent.
+	pub vote: ConsensusVote,
+	/// The sender of the message
+	pub sender: AuthorityId,
+	/// The signature of the message.
+	pub signature: ed25519::Signature,
+}
+
+/// Votes during a consensus round.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum ConsensusVote {
+	/// Prepare to vote for proposal with digest D.
+	Prepare(u32, Hash),
+	/// Commit to proposal with digest D..
+	Commit(u32, Hash),
+	/// Propose advancement to a new round.
+	AdvanceRound(u32),
+}
+
+/// A localized message.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum SignedConsensusMessage {
+	/// A proposal.
+	Propose(SignedConsensusProposal),
+	/// A vote.
+	Vote(SignedConsensusVote),
+}
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 /// A network message.
 pub enum Message {
@@ -171,6 +227,8 @@ pub enum Message {
 	CandidateRequest(CandidateRequest),
 	/// Candidate response.
 	CandidateResponse(CandidateResponse),
+	/// BFT Consensus statement.
+	BftMessage(BftMessage),
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
