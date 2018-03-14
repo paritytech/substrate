@@ -16,12 +16,7 @@
 
 //! Dispatch system. Just dispatches calls.
 
-use demo_primitives::AccountId;
-use runtime::{staking, system, session, democracy, council, council_vote};
-use runtime::staking::public::Dispatch as staking_d;
-use runtime::staking::privileged::Dispatch as staking_pd;
-use runtime::timestamp::public::Dispatch as timestamp_d;
-
+use runtime::{staking, system};
 pub use rstd::prelude::Vec;
 pub use codec::{Slicable, Input, NonTrivialSlicable};
 
@@ -105,7 +100,7 @@ macro_rules! impl_dispatch {
 					})
 				}
 
-				fn encode(&self) -> Vec<u8> {
+				fn encode(&self) -> $crate::dispatch::Vec<u8> {
 					let mut v = $crate::dispatch::Vec::new();
 					match *self {
 						$(

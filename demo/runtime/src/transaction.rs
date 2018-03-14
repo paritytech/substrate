@@ -16,16 +16,14 @@
 
 //! Transaction type.
 
-use rstd::vec::Vec;
+use rstd::prelude::*;
 use rstd::ops;
-use codec::{Input, Slicable, NonTrivialSlicable};
-use demo_primitives::{AccountId, TxOrder, SessionKey, Signature};
+use codec::{Input, Slicable};
+use demo_primitives::{AccountId, TxOrder, Signature};
 use dispatch::PubCall;
 
 #[cfg(feature = "std")]
 use std::fmt;
-
-use block::Number as BlockNumber;
 
 /// A vetted and verified transaction from the external world.
 #[derive(PartialEq, Eq, Clone)]
@@ -42,9 +40,9 @@ pub struct Transaction {
 impl Slicable for Transaction {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Transaction {
-			signed: try_opt!(Slicable::decode(input)),
-			nonce: try_opt!(Slicable::decode(input)),
-			function: try_opt!(Slicable::decode(input)),
+			signed: Slicable::decode(input)?,
+			nonce: Slicable::decode(input)?,
+			function: Slicable::decode(input)?,
 		})
 	}
 
@@ -77,11 +75,11 @@ impl Slicable for UncheckedTransaction {
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
 		// will be a prefix of u32, which has the total number of bytes following (we don't need
 		// to use this).
-		let _length_do_not_remove_me_see_above: u32 = try_opt!(Slicable::decode(input));
+		let _length_do_not_remove_me_see_above: u32 = Slicable::decode(input)?;
 
 		Some(UncheckedTransaction {
-			transaction: try_opt!(Slicable::decode(input)),
-			signature: try_opt!(Slicable::decode(input)),
+			transaction: Slicable::decode(input)?,
+			signature: Slicable::decode(input)?,
 		})
 	}
 

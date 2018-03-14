@@ -16,8 +16,7 @@
 
 //! Block and header type definitions.
 
-#[cfg(feature = "std")]
-use rstd::vec::Vec;
+use rstd::prelude::*;
 use codec::{Input, Slicable};
 use transaction::UncheckedTransaction;
 
@@ -38,7 +37,7 @@ pub struct Block {
 
 impl Slicable for Block {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let (header, transactions) = try_opt!(Slicable::decode(input));
+		let (header, transactions) = Slicable::decode(input)?;
 		Some(Block { header, transactions })
 	}
 

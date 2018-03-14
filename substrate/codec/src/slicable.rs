@@ -16,8 +16,8 @@
 
 //! Serialisation.
 
+use rstd::prelude::*;
 use rstd::{mem, slice};
-use rstd::vec::Vec;
 use super::joiner::Joiner;
 
 /// Trait that allows reading of data into a slice.
@@ -149,7 +149,7 @@ macro_rules! impl_vec_simple_array {
 	($($size:expr),*) => {
 		$(
 			impl<T> Slicable for Vec<[T; $size]>
-				where [T; $size]: EndianSensitive + Slicable
+				where [T; $size]: Slicable
 			{
 				fn decode<I: Input>(input: &mut I) -> Option<Self> {
 					u32::decode(input).and_then(move |len| {

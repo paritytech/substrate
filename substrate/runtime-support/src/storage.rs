@@ -17,6 +17,7 @@
 //! Stuff to do with the runtime's storage.
 
 use rstd::prelude::*;
+use rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
 use codec::{Slicable, KeyedVec, Input};
 
@@ -131,9 +132,26 @@ pub trait StorageVec {
 	}
 
 	/// Set the current set of items.
-	fn set_items(items: &[Self::Item]) {
-		Self::set_count(items.len() as u32);
-		items.iter().enumerate().for_each(|(v, ref i)| Self::set_item(v as u32, i));
+	fn set_items<I, T>(items: I)
+		where
+			I: IntoIterator<Item=T>,
+			T: Borrow<Self::Item>,
+	{
+		let mut count: u32 = 0;
+
+		for i in items.into_iter() {
+			put(&count.to_keyed_vec(Self::PREFIX), i.borrow());
+			count = count.checked_add(1).expect("exceeded runtime storage capacity");
+		}
+
+		Self::set_count(count);
+	}
+
+	/// Push an item.
+	fn push(item: &Self::Item) {
+		let len = Self::count();
+		put(&len.to_keyed_vec(Self::PREFIX), item);
+		Self::set_count(len + 1);
 	}
 
 	fn set_item(index: u32, item: &Self::Item) {
@@ -163,6 +181,7 @@ pub trait StorageVec {
 }
 
 pub mod unhashed {
+	use rstd::borrow::Borrow;
 	use super::{runtime_io, Slicable, KeyedVec, Vec, IncrementalInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
@@ -258,9 +277,19 @@ pub mod unhashed {
 		}
 
 		/// Set the current set of items.
-		fn set_items(items: &[Self::Item]) {
-			Self::set_count(items.len() as u32);
-			items.iter().enumerate().for_each(|(v, ref i)| Self::set_item(v as u32, i));
+		fn set_items<I, T>(items: I)
+			where
+				I: IntoIterator<Item=T>,
+				T: Borrow<Self::Item>,
+		{
+			let mut count: u32 = 0;
+
+			for i in items.into_iter() {
+				put(&count.to_keyed_vec(Self::PREFIX), i.borrow());
+				count = count.checked_add(1).expect("exceeded runtime storage capacity");
+			}
+
+			Self::set_count(count);
 		}
 
 		fn set_item(index: u32, item: &Self::Item) {
@@ -293,8 +322,8 @@ pub mod unhashed {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::hexdisplay::HexDisplay;
-	use runtime_io::{storage, twox_128, TestExternalities, with_externalities};
+	use primitives::hexdisplay;
+	use runtime_io::{twox_128, TestExternalities, with_externalities};
 
 	#[test]
 	fn integers_can_be_stored() {
@@ -337,7 +366,6 @@ mod tests {
 		with_externalities(&mut t, || {
 			runtime_io::set_storage(&twox_128(b":test"), b"\x0b\0\0\0Hello world");
 			let x = b"Hello world".to_vec();
-			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test")).unwrap()));
 			let y = get::<Vec<u8>>(b":test").unwrap();
 			assert_eq!(x, y);
 
@@ -353,9 +381,7 @@ mod tests {
 			put(b":test", &x);
 		});
 
-		println!("Ext is {:?}", t);
 		with_externalities(&mut t, || {
-			println!("Hex: {}", HexDisplay::from(&storage(&twox_128(b":test")).unwrap()));
 			let y: Vec<u8> = get(b":test").unwrap();
 			assert_eq!(x, y);
 		});
