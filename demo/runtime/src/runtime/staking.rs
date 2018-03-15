@@ -578,10 +578,8 @@ mod tests {
 	#[test]
 	fn staking_should_work() {
 		let mut t: TestExternalities = map![
-			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
-			twox_128(session::VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
-			twox_128(&0u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => vec![10; 32],
-			twox_128(&1u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => vec![20; 32],
+			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
+			twox_128(session::Validators::key()).to_vec() => vec![].and(&vec![[10u8; 32], [20; 32]]),
 			twox_128(&SessionsPerEra::key()).to_vec() => vec![].and(&2u64),
 			twox_128(&ValidatorCount::key()).to_vec() => vec![].and(&2u32),
 			twox_128(&BondingDuration::key()).to_vec() => vec![].and(&3u64),
@@ -649,7 +647,7 @@ mod tests {
 	#[test]
 	fn staking_eras_work() {
 		let mut t: TestExternalities = map![
-			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
+			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
 			twox_128(&SessionsPerEra::key()).to_vec() => vec![].and(&2u64)
 		];
 		with_externalities(&mut t, || {

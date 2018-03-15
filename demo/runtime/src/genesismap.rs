@@ -80,8 +80,8 @@ impl GenesisConfig {
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
 		let wasm_runtime = include_bytes!("../wasm/genesis.wasm").to_vec();
 		vec![
-			(&session::SESSION_LENGTH[..], vec![].and(&self.session_length)),
-			(&session::VALIDATOR_COUNT[..], vec![].and(&(self.validators.len() as u32))),
+			(session::SessionLength::key(), vec![].and(&self.session_length)),
+			(session::Validators::key(), vec![].and(&self.validators)),
 
 			(&staking::Intention::len_key()[..], vec![].and(&0u32)),
 			(&staking::SessionsPerEra::key()[..], vec![].and(&self.sessions_per_era)),
@@ -105,11 +105,8 @@ impl GenesisConfig {
 			(&council_vote::VOTING_PERIOD[..], vec![].and(&self.council_proposal_voting_period))
 		].into_iter()
 			.map(|(k, v)| (k.into(), v))
-			.chain(self.validators.iter()
-				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(session::VALIDATOR_AT), vec![].and(account)))
-			).chain(self.balances.iter()
-				.map(|&(account, balance)| (account.to_keyed_vec(staking::BALANCE_OF), vec![].and(&balance)))
+			.chain(self.balances.iter()
+				.map(|&(account, balance)| (staking::FreeBalanceOf::key_for(&account), vec![].and(&balance)))
 			)
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
@@ -127,6 +124,6 @@ impl GenesisConfig {
 pub fn additional_storage_with_genesis(genesis_block: &Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	use codec::Slicable;
 	map![
-		system::BlockHash::key_for(&0) => genesis_block.header.blake2_256().encode()
+		system::BlockHashAt::key_for(&0) => genesis_block.header.blake2_256().encode()
 	]
 }
