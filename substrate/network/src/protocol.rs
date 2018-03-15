@@ -27,9 +27,9 @@ use primitives::Hash;
 use network::{PeerId, NodeId};
 
 use message::{self, Message};
-use sync::{ChainSync, Status as SyncStatus};
+use sync::{ChainSync, Status as SyncStatus, SyncState};
 use consensus::Consensus;
-use service::Role;
+use service::{Role, TransactionPool};
 use config::ProtocolConfig;
 use chain::Client;
 use io::SyncIo;
@@ -49,10 +49,11 @@ pub struct Protocol {
 	genesis_hash: HeaderHash,
 	sync: RwLock<ChainSync>,
 	consensus: Mutex<Consensus>,
-	/// All connected peers
+	// All connected peers
 	peers: RwLock<HashMap<PeerId, Peer>>,
-	/// Connected peers pending Status message.
+	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<PeerId, time::Instant>>,
+	transaction_pool: Arc<TransactionPool>,
 }
 
 /// Syncing status and statistics
@@ -80,8 +81,8 @@ struct Peer {
 	block_request: Option<message::BlockRequest>,
 	/// Request timestamp
 	request_timestamp: Option<time::Instant>,
-	/// Holds a set of transactions recently sent to this peer to avoid spamming.
-	_last_sent_transactions: HashSet<TransactionHash>,
+	/// Holds a set of transactions known to this peer.
+	known_transactions: HashSet<TransactionHash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
 }
@@ -109,7 +110,7 @@ pub struct TransactionStats {
 
 impl Protocol {
 	/// Create a new instance.
-	pub fn new(config: ProtocolConfig, chain: Arc<Client>) -> error::Result<Protocol>  {
+	pub fn new(config: ProtocolConfig, chain: Arc<Client>, transaction_pool: Arc<TransactionPool>) -> error::Result<Protocol>  {
 		let info = chain.info()?;
 		let protocol = Protocol {
 			config: config,
@@ -119,6 +120,7 @@ impl Protocol {
 			consensus: Mutex::new(Consensus::new()),
 			peers: RwLock::new(HashMap::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
+			transaction_pool: transaction_pool,
 		};
 		Ok(protocol)
 	}
@@ -179,6 +181,7 @@ impl Protocol {
 			Message::CandidateRequest(r) => self.on_candidate_request(io, peer_id, r),
 			Message::CandidateResponse(r) => self.on_candidate_response(io, peer_id, r),
 			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m),
+			Message::Transactions(m) => self.on_transactions(io, peer_id, m),
 		}
 	}
 
@@ -401,7 +404,7 @@ impl Protocol {
 				best_number: status.best_number,
 				block_request: None,
 				request_timestamp: None,
-				_last_sent_transactions: HashSet::new(),
+				known_transactions: HashSet::new(),
 				next_request_id: 0,
 			};
 			peers.insert(peer_id.clone(), peer);
@@ -410,6 +413,41 @@ impl Protocol {
 		}
 		self.sync.write().new_peer(io, self, peer_id);
 		self.consensus.lock().new_peer(io, self, peer_id, &status.roles);
+	}
+
+	/// Called when peer sends us new transactions
+	fn on_transactions(&self, _io: &mut SyncIo, peer_id: PeerId, transactions: message::Transactions) {
+		// Accept transactions only when fully synced
+		if self.sync.read().status().state != SyncState::Idle {
+			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
+			return;
+		}
+		trace!(target: "sync", "Received {} transactions from {}", peer_id, transactions.len());
+		let mut peers = self.peers.write();
+		if let Some(ref mut peer) = peers.get_mut(&peer_id) {
+			for t in transactions {
+				if let Some(hash) = self.transaction_pool.import(&t) {
+					peer.known_transactions.insert(hash);
+				}
+			}
+		}
+	}
+
+	/// Called when peer sends us new transactions
+	pub fn propagate_transactions(&self, io: &mut SyncIo, transactions: &[(TransactionHash, Vec<u8>)]) {
+		// Accept transactions only when fully synced
+		if self.sync.read().status().state != SyncState::Idle {
+			return;
+		}
+		let mut peers = self.peers.write();
+		for (peer_id, ref mut peer) in peers.iter_mut() {
+			let to_send: Vec<_> = transactions.iter().filter_map(|&(hash, ref t)|
+				if peer.known_transactions.insert(hash.clone()) { Some(t.clone()) } else { None }).collect();
+			if !to_send.is_empty() {
+				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), peer_id);
+				self.send_message(io, *peer_id, Message::Transactions(to_send));
+			}
+		}
 	}
 
 	/// Send Status message
@@ -445,9 +483,6 @@ impl Protocol {
 
 	pub fn on_block_imported(&self, header: &Header) {
 		self.sync.write().update_chain_info(&header);
-	}
-
-	pub fn on_new_transactions(&self) {
 	}
 
 	pub fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats> {

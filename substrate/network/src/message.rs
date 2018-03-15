@@ -124,6 +124,9 @@ pub enum Direction {
 	Descending,
 }
 
+/// A set of transactions.
+pub type Transactions = Vec<Vec<u8>>;
+
 /// Statements circulated among peers.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum UnsignedStatement {
@@ -221,6 +224,8 @@ pub enum Message {
 	BlockResponse(BlockResponse),
 	/// Block announce.
 	BlockAnnounce(BlockAnnounce),
+	/// Transactions.
+	Transactions(Transactions),
 	/// Consensus statement.
 	Statement(Statement),
 	/// Candidate data request.

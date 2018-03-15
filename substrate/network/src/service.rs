@@ -63,6 +63,14 @@ pub trait SyncProvider: Send + Sync {
 	fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats>;
 }
 
+/// Transaction pool interface
+pub trait TransactionPool: Send + Sync {
+	/// Get transactions from the pool that are ready to be propagated.
+	fn transactions(&self) -> Vec<(TransactionHash, Vec<u8>)>;
+	/// Import a transction into the pool.
+	fn import(&self, transaction: &[u8]) -> Option<TransactionHash>;
+}
+
 /// ConsensusService
 pub trait ConsensusService: Send + Sync {
 	/// Get statement stream.
@@ -113,6 +121,8 @@ pub struct Params {
 	pub network_config: NetworkConfiguration,
 	/// Polkadot relay chain access point.
 	pub chain: Arc<Client>,
+	/// Transaction pool.
+	pub transaction_pool: Arc<TransactionPool>,
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
@@ -126,13 +136,11 @@ pub struct Service {
 impl Service {
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params) -> Result<Arc<Service>, Error> {
-
 		let service = NetworkService::new(params.network_config.clone(), None)?;
-
 		let sync = Arc::new(Service {
 			network: service,
 			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(params.config, params.chain.clone())?,
+				protocol: Protocol::new(params.config, params.chain.clone(), params.transaction_pool)?,
 			}),
 		});
 
@@ -145,8 +153,10 @@ impl Service {
 	}
 
 	/// Called when new transactons are imported by the client.
-	pub fn on_new_transactions(&self) {
-		self.handler.protocol.on_new_transactions()
+	pub fn on_new_transactions(&self, transactions: &[(TransactionHash, Vec<u8>)]) {
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context), transactions);
+		});
 	}
 
 	fn start(&self) {
