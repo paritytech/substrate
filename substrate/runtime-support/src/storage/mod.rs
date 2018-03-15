@@ -123,9 +123,13 @@ pub fn put_raw(key: &[u8], value: &[u8]) {
 	runtime_io::set_storage(&twox_128(key)[..], value)
 }
 
-struct RuntimeStorage;
+pub struct RuntimeStorage;
 
 impl ::GenericStorage for RuntimeStorage {
+	fn exists(&self, key: &[u8]) -> bool {
+		super::storage::exists(key)
+	}
+
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Slicable>(&self, key: &[u8]) -> Option<T> {
 		super::storage::get(key)
@@ -155,6 +159,9 @@ pub trait StorageValue<T: Slicable> {
 	/// Get the storage key.
 	fn key() -> &'static [u8];
 
+	/// Does the value (explicitly) exist in storage?
+	fn exists() -> bool;
+
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
 
@@ -173,6 +180,9 @@ impl<T: Slicable, U> StorageValue<T> for U where U: generator::StorageValue<T> {
 
 	fn key() -> &'static [u8] {
 		<U as generator::StorageValue<T>>::key()
+	}
+	fn exists() -> bool {
+		U::exists(&RuntimeStorage)
 	}
 	fn get() -> Self::Query {
 		U::get(&RuntimeStorage)
@@ -265,19 +275,22 @@ pub trait StorageMap<K: Slicable, V: Slicable> {
 	fn prefix() -> &'static [u8];
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for(x: &K) -> Vec<u8>;
+	fn key_for<KeyArg: ArgType<K>>(key: KeyArg) -> Vec<u8>;
+
+	/// Does the value (explicitly) exist in storage?
+	fn exists<KeyArg: ArgType<K>>(key: KeyArg) -> bool;
 
 	/// Load the value associated with the given key from the map.
-	fn get(key: &K) -> Self::Query;
+	fn get<KeyArg: ArgType<K>>(key: KeyArg) -> Self::Query;
 
 	/// Store a value to be associated with the given key from the map.
 	fn insert<KeyArg: ArgType<K>, ValArg: ArgType<V>>(key: KeyArg, val: ValArg);
 
 	/// Remove the value under a key.
-	fn remove(key: &K);
+	fn remove<KeyArg: ArgType<K>>(key: KeyArg);
 
 	/// Take the value under a key.
-	fn take(key: &K) -> Self::Query;
+	fn take<KeyArg: ArgType<K>>(key: KeyArg) -> Self::Query;
 }
 
 impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::StorageMap<K, V> {
@@ -287,12 +300,22 @@ impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::Sto
 		<U as generator::StorageMap<K, V>>::prefix()
 	}
 
-	fn key_for(item: &K) -> Vec<u8> {
-		<U as generator::StorageMap<K, V>>::key_for(item)
+	fn key_for<KeyArg: ArgType<K>>(key: KeyArg) -> Vec<u8> {
+		key.dispatch_with_ref(|item|
+			<U as generator::StorageMap<K, V>>::key_for(item)
+		)
 	}
 
-	fn get(key: &K) -> Self::Query {
-		U::get(key, &RuntimeStorage)
+	fn exists<KeyArg: ArgType<K>>(key: KeyArg) -> bool {
+		key.dispatch_with_ref(|item|
+			U::exists(item, &RuntimeStorage)
+		)
+	}
+
+	fn get<KeyArg: ArgType<K>>(key: KeyArg) -> Self::Query {
+		key.dispatch_with_ref(|item|
+			U::get(item, &RuntimeStorage)
+		)
 	}
 
 	fn insert<KeyArg: ArgType<K>, ValArg: ArgType<V>>(key: KeyArg, val: ValArg) {
@@ -303,12 +326,16 @@ impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::Sto
 		)
 	}
 
-	fn remove(key: &K) {
-		U::remove(key, &RuntimeStorage)
+	fn remove<KeyArg: ArgType<K>>(key: KeyArg) {
+		key.dispatch_with_ref(|key|
+			U::remove(key, &RuntimeStorage)
+		)
 	}
 
-	fn take(key: &K) -> Self::Query {
-		U::take(key, &RuntimeStorage)
+	fn take<KeyArg: ArgType<K>>(key: KeyArg) -> Self::Query {
+		key.dispatch_with_ref(|key|
+			U::take(key, &RuntimeStorage)
+		)
 	}
 }
 

@@ -109,7 +109,7 @@ const NOBODY: AccountId = [0u8; 32];
 
 impl<'a> PublicPass<'a> {
 	pub fn new(transactor: &AccountId) -> PublicPass {
-		let b = FreeBalanceOf::get(&transactor);
+		let b = FreeBalanceOf::get(transactor);
 		let transaction_fee = TransactionFee::get();
 		assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
 		FreeBalanceOf::insert(transactor, b - transaction_fee);
@@ -553,7 +553,7 @@ pub mod testing {
 			twox_128(&ValidatorCount::key()).to_vec() => vec![].and(&3u64),
 			twox_128(&TransactionFee::key()).to_vec() => vec![].and(&1u64),
 			twox_128(&CurrentEra::key()).to_vec() => vec![].and(&current_era),
-			twox_128(&FreeBalanceOf::key_for(&Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 		session::testing::externalities(session_length).into_iter().chain(extras.into_iter()).collect()
 	}
@@ -585,10 +585,10 @@ mod tests {
 			twox_128(&BondingDuration::key()).to_vec() => vec![].and(&3u64),
 			twox_128(&TotalStake::key()).to_vec() => vec![].and(&100u64),
 			twox_128(&TransactionFee::key()).to_vec() => vec![].and(&0u64),
-			twox_128(&FreeBalanceOf::key_for(&Alice)).to_vec() => vec![].and(&10u64),
-			twox_128(&FreeBalanceOf::key_for(&Bob)).to_vec() => vec![].and(&20u64),
-			twox_128(&FreeBalanceOf::key_for(&Charlie)).to_vec() => vec![].and(&30u64),
-			twox_128(&FreeBalanceOf::key_for(&Dave)).to_vec() => vec![].and(&40u64)
+			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![].and(&10u64),
+			twox_128(&FreeBalanceOf::key_for(*Bob)).to_vec() => vec![].and(&20u64),
+			twox_128(&FreeBalanceOf::key_for(*Charlie)).to_vec() => vec![].and(&30u64),
+			twox_128(&FreeBalanceOf::key_for(*Dave)).to_vec() => vec![].and(&40u64)
 		];
 
 		with_externalities(&mut t, || {
@@ -712,11 +712,11 @@ mod tests {
 	fn staking_balance_works() {
 		with_externalities(&mut TestExternalities::default(), || {
 			FreeBalanceOf::insert(*Alice, 42);
-			assert_eq!(FreeBalanceOf::get(&Alice), 42);
-			assert_eq!(ReservedBalanceOf::get(&Alice), 0);
+			assert_eq!(FreeBalanceOf::get(*Alice), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
 			assert_eq!(balance(&Alice), 42);
-			assert_eq!(FreeBalanceOf::get(&Bob), 0);
-			assert_eq!(ReservedBalanceOf::get(&Bob), 0);
+			assert_eq!(FreeBalanceOf::get(*Bob), 0);
+			assert_eq!(ReservedBalanceOf::get(*Bob), 0);
 			assert_eq!(balance(&Bob), 0);
 		});
 	}
@@ -747,14 +747,14 @@ mod tests {
 			FreeBalanceOf::insert(*Alice, 111);
 
 			assert_eq!(balance(&Alice), 111);
-			assert_eq!(FreeBalanceOf::get(&Alice), 111);
-			assert_eq!(ReservedBalanceOf::get(&Alice), 0);
+			assert_eq!(FreeBalanceOf::get(*Alice), 111);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
 
 			reserve_balance(&Alice, 69);
 
 			assert_eq!(balance(&Alice), 111);
-			assert_eq!(FreeBalanceOf::get(&Alice), 42);
-			assert_eq!(ReservedBalanceOf::get(&Alice), 69);
+			assert_eq!(FreeBalanceOf::get(*Alice), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 69);
 		});
 	}
 
@@ -773,15 +773,15 @@ mod tests {
 		with_externalities(&mut TestExternalities::default(), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			assert!(deduct_unbonded(&Alice, 69));
-			assert_eq!(FreeBalanceOf::get(&Alice), 42);
+			assert_eq!(FreeBalanceOf::get(*Alice), 42);
 		});
 	}
 
 	#[test]
 	fn deducting_balance_should_fail_when_bonded() {
 		let mut t: TestExternalities = map![
-			twox_128(&FreeBalanceOf::key_for(&Alice)).to_vec() => vec![].and(&111u64),
-			twox_128(&BondageOf::key_for(&Alice)).to_vec() => vec![].and(&2u64)
+			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![].and(&111u64),
+			twox_128(&BondageOf::key_for(*Alice)).to_vec() => vec![].and(&2u64)
 		];
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 1);
@@ -795,7 +795,7 @@ mod tests {
 		with_externalities(&mut TestExternalities::default(), || {
 			FreeBalanceOf::insert(*Alice, 42);
 			refund(&Alice, 69);
-			assert_eq!(FreeBalanceOf::get(&Alice), 111);
+			assert_eq!(FreeBalanceOf::get(*Alice), 111);
 		});
 	}
 
@@ -805,8 +805,8 @@ mod tests {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 69);
 			assert!(slash(&Alice, 69));
-			assert_eq!(FreeBalanceOf::get(&Alice), 0);
-			assert_eq!(ReservedBalanceOf::get(&Alice), 42);
+			assert_eq!(FreeBalanceOf::get(*Alice), 0);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 42);
 		});
 	}
 
@@ -816,8 +816,8 @@ mod tests {
 			FreeBalanceOf::insert(*Alice, 42);
 			reserve_balance(&Alice, 21);
 			assert!(!slash(&Alice, 69));
-			assert_eq!(FreeBalanceOf::get(&Alice), 0);
-			assert_eq!(ReservedBalanceOf::get(&Alice), 0);
+			assert_eq!(FreeBalanceOf::get(*Alice), 0);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
 		});
 	}
 
@@ -827,8 +827,8 @@ mod tests {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			unreserve_balance(&Alice, 42);
-			assert_eq!(ReservedBalanceOf::get(&Alice), 69);
-			assert_eq!(FreeBalanceOf::get(&Alice), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 69);
+			assert_eq!(FreeBalanceOf::get(*Alice), 42);
 		});
 	}
 
@@ -838,8 +838,8 @@ mod tests {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			assert!(slash_reserved(&Alice, 42));
-			assert_eq!(ReservedBalanceOf::get(&Alice), 69);
-			assert_eq!(FreeBalanceOf::get(&Alice), 0);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 69);
+			assert_eq!(FreeBalanceOf::get(*Alice), 0);
 		});
 	}
 
@@ -849,8 +849,8 @@ mod tests {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 42);
 			assert!(!slash_reserved(&Alice, 69));
-			assert_eq!(FreeBalanceOf::get(&Alice), 69);
-			assert_eq!(ReservedBalanceOf::get(&Alice), 0);
+			assert_eq!(FreeBalanceOf::get(*Alice), 69);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
 		});
 	}
 
@@ -860,10 +860,10 @@ mod tests {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			assert!(transfer_reserved_balance(&Alice, &Bob, 42));
-			assert_eq!(ReservedBalanceOf::get(&Alice), 69);
-			assert_eq!(FreeBalanceOf::get(&Alice), 0);
-			assert_eq!(ReservedBalanceOf::get(&Bob), 0);
-			assert_eq!(FreeBalanceOf::get(&Bob), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 69);
+			assert_eq!(FreeBalanceOf::get(*Alice), 0);
+			assert_eq!(ReservedBalanceOf::get(*Bob), 0);
+			assert_eq!(FreeBalanceOf::get(*Bob), 42);
 		});
 	}
 
@@ -873,10 +873,10 @@ mod tests {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 42);
 			assert!(!transfer_reserved_balance(&Alice, &Bob, 69));
-			assert_eq!(ReservedBalanceOf::get(&Alice), 0);
-			assert_eq!(FreeBalanceOf::get(&Alice), 69);
-			assert_eq!(ReservedBalanceOf::get(&Bob), 0);
-			assert_eq!(FreeBalanceOf::get(&Bob), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
+			assert_eq!(FreeBalanceOf::get(*Alice), 69);
+			assert_eq!(ReservedBalanceOf::get(*Bob), 0);
+			assert_eq!(FreeBalanceOf::get(*Bob), 42);
 		});
 	}
 }

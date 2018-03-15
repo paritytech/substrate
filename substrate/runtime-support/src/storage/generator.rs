@@ -69,6 +69,9 @@ impl<V> ArgType<V> for AsRef<V> where AsRef<V>: Sized {
 */
 /// Abstraction around storage.
 pub trait Storage {
+	/// true if the key exists in storage.
+	fn exists(&self, key: &[u8]) -> bool;
+
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: codec::Slicable>(&self, key: &[u8]) -> Option<T>;
 
@@ -106,6 +109,11 @@ pub trait StorageValue<T: codec::Slicable> {
 	/// Get the storage key.
 	fn key() -> &'static [u8];
 
+	/// true if the value is defined in storage.
+	fn exists<S: Storage>(storage: &S) -> bool {
+		storage.exists(Self::key())
+	}
+
 	/// Load the value from the provided storage instance.
 	fn get<S: Storage>(storage: &S) -> Self::Query;
 
@@ -113,10 +121,14 @@ pub trait StorageValue<T: codec::Slicable> {
 	fn take<S: Storage>(storage: &S) -> Self::Query;
 
 	/// Store a value under this key into the provded storage instance.
-	fn put<S: Storage>(val: &T, storage: &S) { storage.put(Self::key(), val) }
+	fn put<S: Storage>(val: &T, storage: &S) {
+		storage.put(Self::key(), val)
+	}
 
 	/// Clear the storage value.
-	fn kill<S: Storage>(storage: &S) { storage.kill(Self::key()) }
+	fn kill<S: Storage>(storage: &S) {
+		storage.kill(Self::key())
+	}
 }
 
 /// A strongly-typed list in storage.
@@ -160,17 +172,26 @@ pub trait StorageMap<K: codec::Slicable, V: codec::Slicable> {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	fn key_for(x: &K) -> Vec<u8>;
 
+	/// true if the value is defined in storage.
+	fn exists<S: Storage>(key: &K, storage: &S) -> bool {
+		storage.exists(&Self::key_for(key)[..])
+	}
+
 	/// Load the value associated with the given key from the map.
 	fn get<S: Storage>(key: &K, storage: &S) -> Self::Query;
 
-	/// Store a value to be associated with the given key from the map.
-	fn insert<S: Storage>(key: &K, val: &V, storage: &S);
-
-	/// Remove the value under a key.
-	fn remove<S: Storage>(key: &K, storage: &S);
-
 	/// Take the value under a key.
 	fn take<S: Storage>(key: &K, storage: &S) -> Self::Query;
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<S: Storage>(key: &K, val: &V, storage: &S) {
+		storage.put(&Self::key_for(key)[..], val);
+	}
+
+	/// Remove the value under a key.
+	fn remove<S: Storage>(key: &K, storage: &S) {
+		storage.kill(&Self::key_for(key)[..]);
+	}
 }
 
 #[macro_export]
@@ -179,7 +200,7 @@ macro_rules! __storage_items_internal {
 	// generator for values.
 	(($($vis:tt)*) ($get_fn:ident) ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		__storage_items_internal!{ ($($vis)*) () ($gettype) ($getter) ($taker) $name : $key => $ty }
-		pub fn $get_fn() -> $gettype { $name :: get() }
+		pub fn $get_fn() -> $gettype { <$name as $crate::storage::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
 	};
 	(($($vis:tt)*) () ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
@@ -207,7 +228,7 @@ macro_rules! __storage_items_internal {
 	(($($vis:tt)*) ($get_fn:ident) ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		__storage_items_internal!{ ($($vis)*) () ($gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
 		pub fn $get_fn<K: $crate::storage::generator::ArgType<$kty>>(key: K) -> $gettype {
-			key.dispatch_with_ref($name :: get)
+			key.dispatch_with_ref(|k| <$name as $crate::storage::generator::StorageMap<$kty, $ty>> :: get(k, &$crate::storage::RuntimeStorage))
 		}
 	};
 	(($($vis:tt)*) () ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
@@ -232,17 +253,6 @@ macro_rules! __storage_items_internal {
 			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
 				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$getter(&key[..])
-			}
-
-			/// Store a value to be associated with the given key from the map.
-			fn insert<S: $crate::GenericStorage>(key: &$kty, val: &$ty, storage: &S) {
-				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
-				storage.put(&key[..], val);
-			}
-
-			/// Remove the value from storage.
-			fn remove<S: $crate::GenericStorage>(key: &$kty, storage: &S) {
-				storage.kill(&<$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key)[..]);
 			}
 
 			/// Take the value, reading and removing it.
@@ -459,6 +469,10 @@ mod tests {
 	use super::*;
 
 	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
+		fn exists(&self, key: &[u8]) -> bool {
+			self.borrow_mut().get(key).is_some()
+		}
+
 		fn get<T: Slicable>(&self, key: &[u8]) -> Option<T> {
 			self.borrow_mut().get(key).map(|v| T::decode(&mut &v[..]).unwrap())
 		}

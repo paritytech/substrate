@@ -242,7 +242,7 @@ mod tests {
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
 		let mut t: TestExternalities = map![
-			twox_128(&staking::FreeBalanceOf::key_for(&One)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(&staking::FreeBalanceOf::key_for(*One)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(staking::TransactionFee::key()).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 

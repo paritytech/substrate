@@ -87,9 +87,9 @@ impl GenesisConfig {
 			(&staking::SessionsPerEra::key()[..], vec![].and(&self.sessions_per_era)),
 			(&staking::CurrentEra::key()[..], vec![].and(&0u64)),
 
-			(&democracy::LAUNCH_PERIOD[..], vec![].and(&self.launch_period)),
-			(&democracy::VOTING_PERIOD[..], vec![].and(&self.voting_period)),
-			(&democracy::MINIMUM_DEPOSIT[..], vec![].and(&self.minimum_deposit)),
+			(democracy::LaunchPeriod::key(), vec![].and(&self.launch_period)),
+			(democracy::VotingPeriod::key(), vec![].and(&self.voting_period)),
+			(democracy::MinimumDeposit::key(), vec![].and(&self.minimum_deposit)),
 
 			(&council::CANDIDACY_BOND[..], vec![].and(&self.candidacy_bond)),
 			(&council::VOTING_BOND[..], vec![].and(&self.voter_bond)),
