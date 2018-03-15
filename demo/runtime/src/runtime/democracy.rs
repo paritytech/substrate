@@ -295,7 +295,7 @@ pub mod internal {
 		// tally up votes for any expiring referenda.
 		for (index, _, proposal, vote_threshold) in maturing_referendums_at(now) {
 			let (approve, against) = tally(index);
-			let total_stake = staking::total_stake();
+			let total_stake = staking::TotalStake::get();
 			clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
 				proposal.dispatch(PrivPass);
@@ -334,6 +334,7 @@ fn clear_referendum(ref_index: ReferendumIndex) {
 pub mod testing {
 	use super::*;
 	use runtime_io::{twox_128, TestExternalities};
+	use runtime_support::{StorageList, StorageValue, StorageMap};
 	use codec::Joiner;
 	use keyring::Keyring::*;
 	use runtime::{session, staking};
@@ -345,22 +346,22 @@ pub mod testing {
 			twox_128(&0u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => Alice.to_raw_public_vec(),
 			twox_128(&1u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => Bob.to_raw_public_vec(),
 			twox_128(&2u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => Charlie.to_raw_public_vec(),
-			twox_128(staking::INTENTION_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => Alice.to_raw_public_vec(),
-			twox_128(&1u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => Bob.to_raw_public_vec(),
-			twox_128(&2u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => Charlie.to_raw_public_vec(),
-			twox_128(&Alice.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&10u64),
-			twox_128(&Bob.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&20u64),
-			twox_128(&Charlie.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&30u64),
-			twox_128(&Dave.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&40u64),
-			twox_128(&Eve.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&50u64),
-			twox_128(&Ferdie.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&60u64),
-			twox_128(&One.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&1u64),
-			twox_128(staking::TOTAL_STAKE).to_vec() => vec![].and(&210u64),
-			twox_128(staking::SESSIONS_PER_ERA).to_vec() => vec![].and(&1u64),
-			twox_128(staking::VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
-			twox_128(staking::CURRENT_ERA).to_vec() => vec![].and(&1u64),
-			twox_128(staking::TRANSACTION_FEE).to_vec() => vec![].and(&1u64),
+			twox_128(&staking::Intention::len_key()).to_vec() => vec![].and(&3u32),
+			twox_128(&staking::Intention::key_for(0)).to_vec() => Alice.to_raw_public_vec(),
+			twox_128(&staking::Intention::key_for(1)).to_vec() => Bob.to_raw_public_vec(),
+			twox_128(&staking::Intention::key_for(2)).to_vec() => Charlie.to_raw_public_vec(),
+			twox_128(&staking::FreeBalanceOf::key_for(&Alice)).to_vec() => vec![].and(&10u64),
+			twox_128(&staking::FreeBalanceOf::key_for(&Bob)).to_vec() => vec![].and(&20u64),
+			twox_128(&staking::FreeBalanceOf::key_for(&Charlie)).to_vec() => vec![].and(&30u64),
+			twox_128(&staking::FreeBalanceOf::key_for(&Dave)).to_vec() => vec![].and(&40u64),
+			twox_128(&staking::FreeBalanceOf::key_for(&Eve)).to_vec() => vec![].and(&50u64),
+			twox_128(&staking::FreeBalanceOf::key_for(&Ferdie)).to_vec() => vec![].and(&60u64),
+			twox_128(&staking::FreeBalanceOf::key_for(&One)).to_vec() => vec![].and(&1u64),
+			twox_128(staking::TotalStake::key()).to_vec() => vec![].and(&210u64),
+			twox_128(staking::SessionsPerEra::key()).to_vec() => vec![].and(&1u64),
+			twox_128(staking::ValidatorCount::key()).to_vec() => vec![].and(&3u64),
+			twox_128(staking::CurrentEra::key()).to_vec() => vec![].and(&1u64),
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![].and(&1u64),
 
 			twox_128(LAUNCH_PERIOD).to_vec() => vec![].and(&1u64),
 			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64),
@@ -373,6 +374,7 @@ pub mod testing {
 mod tests {
 	use super::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
+	use runtime_support::{StorageValue, StorageMap};
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring::*;
 	use environment::with_env;
@@ -394,8 +396,8 @@ mod tests {
 			assert_eq!(voting_period(), 1u64);
 			assert_eq!(minimum_deposit(), 1u64);
 			assert_eq!(next_free_ref_index(), 0u32);
-			assert_eq!(staking::sessions_per_era(), 1u64);
-			assert_eq!(staking::total_stake(), 210u64);
+			assert_eq!(staking::SessionsPerEra::get(), 1u64);
+			assert_eq!(staking::TotalStake::get(), 210u64);
 		});
 	}
 
@@ -519,19 +521,19 @@ mod tests {
 			PublicPass::test(&Alice).vote(0, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
-			assert_eq!(staking::bonding_duration(), 4u64);
+			assert_eq!(staking::BondingDuration::get(), 4u64);
 
 			with_env(|e| e.block_number = 2);
 			PublicPass::test(&Alice).vote(1, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
-			assert_eq!(staking::bonding_duration(), 3u64);
+			assert_eq!(staking::BondingDuration::get(), 3u64);
 
 			with_env(|e| e.block_number = 3);
 			PublicPass::test(&Alice).vote(2, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
-			assert_eq!(staking::bonding_duration(), 2u64);
+			assert_eq!(staking::BondingDuration::get(), 2u64);
 		});
 	}
 
@@ -632,7 +634,7 @@ mod tests {
 	fn passing_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(staking::era_length(), 1u64);
-			assert_eq!(staking::total_stake(), 210u64);
+			assert_eq!(staking::TotalStake::get(), 210u64);
 
 			with_env(|e| e.block_number = 1);
 			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);

@@ -19,7 +19,7 @@
 use codec::{KeyedVec, Joiner};
 use std::collections::HashMap;
 use runtime_io::twox_128;
-use runtime_support::{Hashable, StorageMap};
+use runtime_support::{Hashable, StorageMap, StorageList, StorageValue};
 use primitives::Block;
 use demo_primitives::{BlockNumber, AccountId};
 use runtime::staking::Balance;
@@ -83,9 +83,9 @@ impl GenesisConfig {
 			(&session::SESSION_LENGTH[..], vec![].and(&self.session_length)),
 			(&session::VALIDATOR_COUNT[..], vec![].and(&(self.validators.len() as u32))),
 
-			(&staking::INTENTION_COUNT[..], vec![].and(&0u32)),
-			(&staking::SESSIONS_PER_ERA[..], vec![].and(&self.sessions_per_era)),
-			(&staking::CURRENT_ERA[..], vec![].and(&0u64)),
+			(&staking::Intention::len_key()[..], vec![].and(&0u32)),
+			(&staking::SessionsPerEra::key()[..], vec![].and(&self.sessions_per_era)),
+			(&staking::CurrentEra::key()[..], vec![].and(&0u64)),
 
 			(&democracy::LAUNCH_PERIOD[..], vec![].and(&self.launch_period)),
 			(&democracy::VOTING_PERIOD[..], vec![].and(&self.voting_period)),
@@ -113,7 +113,7 @@ impl GenesisConfig {
 			)
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
-				(b":code".to_vec(), wasm_runtime),
+				(system::CODE.to_vec(), wasm_runtime),
 				(consensus::AUTHORITY_COUNT[..].into(), vec![].and(&(self.authorities.len() as u32))),
 			].into_iter())
 			.chain(self.authorities.iter()

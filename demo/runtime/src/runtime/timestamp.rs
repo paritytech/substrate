@@ -22,11 +22,8 @@ use runtime::staking::PublicPass;
 pub type Timestamp = u64;
 
 storage_items! {
-	pub Now: b"tim:val" => Timestamp;
+	pub Now: b"tim:val" => required Timestamp;
 }
-
-/// Get the current time.
-pub fn get() -> Timestamp { Now::require() }
 
 impl_dispatch! {
 	pub mod public;
@@ -59,9 +56,9 @@ mod tests {
 		];
 
 		with_externalities(&mut t, || {
-			assert_eq!(get(), 42);
+			assert_eq!(Now::get(), 42);
 			PublicPass::nobody().set(69);
-			assert_eq!(get(), 69);
+			assert_eq!(Now::get(), 69);
 		});
 	}
 }

@@ -30,18 +30,15 @@ use runtime::{staking, session};
 use dispatch;
 
 storage_items! {
-	pub Nonce: b"sys:non" => map [ AccountId => TxOrder ];
-	pub BlockHash: b"sys:old" => map [ BlockNumber => [u8; 32] ];
+	pub Nonce: b"sys:non" => default map [ AccountId => TxOrder ];
+	pub BlockHashAt: b"sys:old" => required map [ BlockNumber => Hash ];
 }
+
+pub const CODE: &'static[u8] = b":code";
 
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
 	with_env(|e| e.block_number)
-}
-
-/// Get the block hash of a given block (uses storage).
-pub fn block_hash(number: BlockNumber) -> Option<Hash> {
-	BlockHash::get(&number).map(Into::into)
 }
 
 pub struct PrivPass;
@@ -54,7 +51,7 @@ impl_dispatch! {
 impl privileged::Dispatch for PrivPass {
 	/// Set the new code.
 	fn set_code(self, new: Vec<u8>) {
-		storage::unhashed::put_raw(b":code", &new);
+		storage::unhashed::put_raw(CODE, &new);
 	}
 }
 
@@ -146,7 +143,7 @@ fn execute_transaction(utx: UncheckedTransaction) {
 
 	{
 		// check nonce
-		let expected_nonce: TxOrder = Nonce::get_or(&tx.signed, 0);
+		let expected_nonce: TxOrder = Nonce::get(&tx.signed);
 		assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
 		// increment nonce in storage
@@ -163,7 +160,7 @@ fn initial_checks(block: &Block) {
 
 	// check parent_hash is correct.
 	assert!(
-		header.number > 0 && block_hash(header.number - 1).map(|h| h == header.parent_hash).unwrap_or(false),
+		header.number > 0 && BlockHashAt::get(&(header.number - 1)) == header.parent_hash,
 		"Parent hash should be valid."
 	);
 
@@ -192,7 +189,7 @@ fn final_checks(block: &Block) {
 fn post_finalise(header: &Header) {
 	// store the header hash in storage; we can't do it before otherwise there would be a
 	// cyclic dependency.
-	BlockHash::insert(&header.number, &header.blake2_256());
+	BlockHashAt::insert(&header.number, &header.blake2_256().into());
 }
 
 #[cfg(feature = "std")]
@@ -220,7 +217,7 @@ pub mod testing {
 
 	pub fn externalities() -> TestExternalities {
 		map![
-			twox_128(&BlockHash::key_for(&0)).to_vec() => [69u8; 32].encode()
+			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode()
 		]
 	}
 }
@@ -231,6 +228,7 @@ mod tests {
 	use super::internal::*;
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
+	use runtime_support::StorageValue;
 	use codec::{Joiner, KeyedVec, Slicable};
 	use keyring::Keyring::*;
 	use environment::with_env;
@@ -244,8 +242,8 @@ mod tests {
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
 		let mut t: TestExternalities = map![
-			twox_128(&One.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TRANSACTION_FEE).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&staking::FreeBalanceOf::key_for(&One)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 
 		let tx = UncheckedTransaction {
