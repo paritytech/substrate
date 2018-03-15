@@ -17,6 +17,7 @@
 //! Keystore (and session key management) for polkadot.
 
 extern crate ethcrypto as crypto;
+extern crate subtle;
 extern crate ed25519;
 extern crate rand;
 extern crate serde_json;
@@ -109,7 +110,7 @@ impl EncryptedKey {
 
 		let mac = crypto::derive_mac(&derived_right_bits, &self.ciphertext).keccak256();
 
-		if mac != self.mac {
+		if subtle::slices_equal(&mac[..], &self.mac[..]) != 1 {
 			return Err(ErrorKind::InvalidPassword.into());
 		}
 
