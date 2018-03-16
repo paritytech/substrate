@@ -194,7 +194,7 @@ mod tests {
 	use super::*;
 	use tempdir::TempDir;
 
-    #[test]
+	#[test]
 	fn encrypt_and_decrypt() {
 		let plain = [1; PKCS_LEN];
 		let encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", KEY_ITERATIONS as u32);
