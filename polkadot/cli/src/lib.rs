@@ -18,6 +18,7 @@
 
 #![warn(missing_docs)]
 
+extern crate app_dirs;
 extern crate env_logger;
 extern crate ed25519;
 extern crate triehash;
@@ -29,6 +30,7 @@ extern crate substrate_rpc_servers as rpc;
 extern crate polkadot_primitives;
 extern crate polkadot_executor;
 extern crate polkadot_runtime;
+extern crate polkadot_keystore as keystore;
 
 #[macro_use]
 extern crate hex_literal;
@@ -41,9 +43,12 @@ extern crate log;
 
 pub mod error;
 
+use std::path::{Path, PathBuf};
+
 use codec::Slicable;
 use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
 use client::genesis;
+use keystore::Store as Keystore;
 
 /// Parse command line arguments and start the node.
 ///
@@ -79,12 +84,19 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		bonding_duration: 90,	// 90 days per bond.
 		approval_ratio: 667,	// 66.7% approvals required for legislation.
 	};
+
 	let prepare_genesis = || {
 		storage = genesis_config.genesis_map();
 		let block = genesis::construct_genesis_block(&storage);
 		storage.extend(additional_storage_with_genesis(&block));
 		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 	};
+
+	let keystore_path = matches.value_of("keystore")
+		.map(|x| Path::new(x).to_owned())
+		.unwrap_or_else(default_keystore_path);
+
+	let _keystore = Keystore::open(keystore_path).map_err(::error::ErrorKind::Keystore)?;
 	let client = client::new_in_mem(executor, prepare_genesis)?;
 
 	let address = "127.0.0.1:9933".parse().unwrap();
@@ -107,6 +119,21 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let _ = clap::App::from_yaml(yaml).print_long_help();
 
 	Ok(())
+}
+
+fn default_keystore_path() -> PathBuf {
+	use app_dirs::{AppInfo, AppDataType};
+
+	let app_info = AppInfo {
+		name: "Polkadot",
+		author: "Parity Technologies",
+	};
+
+	app_dirs::get_app_dir(
+		AppDataType::UserData,
+		&app_info,
+		"keystore",
+	).expect("app directories exist on all supported platforms; qed")
 }
 
 fn init_logger(pattern: &str) {
