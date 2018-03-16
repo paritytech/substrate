@@ -91,18 +91,18 @@ impl GenesisConfig {
 			(democracy::VotingPeriod::key(), vec![].and(&self.voting_period)),
 			(democracy::MinimumDeposit::key(), vec![].and(&self.minimum_deposit)),
 
-			(&council::CANDIDACY_BOND[..], vec![].and(&self.candidacy_bond)),
-			(&council::VOTING_BOND[..], vec![].and(&self.voter_bond)),
-			(&council::PRESENT_SLASH_PER_VOTER[..], vec![].and(&self.present_slash_per_voter)),
-			(&council::CARRY_COUNT[..], vec![].and(&self.carry_count)),
-			(&council::PRESENTATION_DURATION[..], vec![].and(&self.presentation_duration)),
-			(&council::VOTING_PERIOD[..], vec![].and(&self.council_election_voting_period)),
-			(&council::TERM_DURATION[..], vec![].and(&self.council_term_duration)),
-			(&council::DESIRED_SEATS[..], vec![].and(&self.desired_seats)),
-			(&council::INACTIVE_GRACE_PERIOD[..], vec![].and(&self.inactive_grace_period)),
+			(council::CandidacyBond::key(), vec![].and(&self.candidacy_bond)),
+			(council::VotingBond::key(), vec![].and(&self.voter_bond)),
+			(council::PresentSlashPerVoter::key(), vec![].and(&self.present_slash_per_voter)),
+			(council::CarryCount::key(), vec![].and(&self.carry_count)),
+			(council::PresentationDuration::key(), vec![].and(&self.presentation_duration)),
+			(council::VotingPeriod::key(), vec![].and(&self.council_election_voting_period)),
+			(council::TermDuration::key(), vec![].and(&self.council_term_duration)),
+			(council::DesiredSeats::key(), vec![].and(&self.desired_seats)),
+			(council::InactiveGracePeriod::key(), vec![].and(&self.inactive_grace_period)),
 
-			(&council_vote::COOLOFF_PERIOD[..], vec![].and(&self.cooloff_period)),
-			(&council_vote::VOTING_PERIOD[..], vec![].and(&self.council_proposal_voting_period))
+			(council_vote::CooloffPeriod::key(), vec![].and(&self.cooloff_period)),
+			(council_vote::VotingPeriod::key(), vec![].and(&self.council_proposal_voting_period))
 		].into_iter()
 			.map(|(k, v)| (k.into(), v))
 			.chain(self.balances.iter()

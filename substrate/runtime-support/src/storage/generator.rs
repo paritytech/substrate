@@ -48,25 +48,8 @@
 
 use codec;
 use rstd::vec::Vec;
+pub use rstd::borrow::Borrow;
 
-/// Trait to allow passing by either value or reference
-pub trait ArgType<V> {
-	/// Dispatch `f` with argument derived from self.
-	fn dispatch_with_ref<F: FnOnce(&V) -> R, R>(self, f: F) -> R;
-}
-
-impl<V> ArgType<V> for V {
-	fn dispatch_with_ref<F: FnOnce(&V) -> R, R>(self, f: F) -> R { f(&self) }
-}
-
-impl<'a, V> ArgType<V> for &'a V {
-	fn dispatch_with_ref<F: FnOnce(&V) -> R, R>(self, f: F) -> R { f(self) }
-}
-/*
-impl<V> ArgType<V> for AsRef<V> where AsRef<V>: Sized {
-	fn dispatch_with_ref<F: FnOnce(&V) -> R, R>(self, f: F) -> R { f(self.as_ref()) }
-}
-*/
 /// Abstraction around storage.
 pub trait Storage {
 	/// true if the key exists in storage.
@@ -227,8 +210,8 @@ macro_rules! __storage_items_internal {
 	// generator for maps.
 	(($($vis:tt)*) ($get_fn:ident) ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		__storage_items_internal!{ ($($vis)*) () ($gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
-		pub fn $get_fn<K: $crate::storage::generator::ArgType<$kty>>(key: K) -> $gettype {
-			key.dispatch_with_ref(|k| <$name as $crate::storage::generator::StorageMap<$kty, $ty>> :: get(k, &$crate::storage::RuntimeStorage))
+		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
+			<$name as $crate::storage::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
 		}
 	};
 	(($($vis:tt)*) () ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {

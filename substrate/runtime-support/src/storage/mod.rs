@@ -22,7 +22,6 @@ use runtime_io::{self, twox_128};
 use codec::{Slicable, KeyedVec, Input};
 
 pub mod generator;
-use self::generator::ArgType;
 
 // TODO: consider using blake256 to avoid possible preimage attack.
 
@@ -166,7 +165,7 @@ pub trait StorageValue<T: Slicable> {
 	fn get() -> Self::Query;
 
 	/// Store a value under this key into the provded storage instance.
-	fn put<Arg: ArgType<T>>(val: Arg);
+	fn put<Arg: Borrow<T>>(val: Arg);
 
 	/// Clear the storage value.
 	fn kill();
@@ -187,8 +186,8 @@ impl<T: Slicable, U> StorageValue<T> for U where U: generator::StorageValue<T> {
 	fn get() -> Self::Query {
 		U::get(&RuntimeStorage)
 	}
-	fn put<Arg: ArgType<T>>(val: Arg) {
-		val.dispatch_with_ref(|val| U::put(val, &RuntimeStorage))
+	fn put<Arg: Borrow<T>>(val: Arg) {
+		U::put(val.borrow(), &RuntimeStorage)
 	}
 	fn kill() {
 		U::kill(&RuntimeStorage)
@@ -216,7 +215,7 @@ pub trait StorageList<T: Slicable> {
 	fn set_items(items: &[T]);
 
 	/// Set the item at the given index.
-	fn set_item<Arg: ArgType<T>>(index: u32, val: Arg);
+	fn set_item<Arg: Borrow<T>>(index: u32, val: Arg);
 
 	/// Load the value at given index. Returns `None` if the index is out-of-bounds.
 	fn get(index: u32) -> Option<T>;
@@ -249,8 +248,8 @@ impl<T: Slicable, U> StorageList<T> for U where U: generator::StorageList<T> {
 		U::set_items(items, &RuntimeStorage)
 	}
 
-	fn set_item<Arg: ArgType<T>>(index: u32, val: Arg) {
-		val.dispatch_with_ref(|val| U::set_item(index, val, &RuntimeStorage))
+	fn set_item<Arg: Borrow<T>>(index: u32, val: Arg) {
+		U::set_item(index, val.borrow(), &RuntimeStorage)
 	}
 
 	fn get(index: u32) -> Option<T> {
@@ -275,22 +274,22 @@ pub trait StorageMap<K: Slicable, V: Slicable> {
 	fn prefix() -> &'static [u8];
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for<KeyArg: ArgType<K>>(key: KeyArg) -> Vec<u8>;
+	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8>;
 
 	/// Does the value (explicitly) exist in storage?
-	fn exists<KeyArg: ArgType<K>>(key: KeyArg) -> bool;
+	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
 
 	/// Load the value associated with the given key from the map.
-	fn get<KeyArg: ArgType<K>>(key: KeyArg) -> Self::Query;
+	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<KeyArg: ArgType<K>, ValArg: ArgType<V>>(key: KeyArg, val: ValArg);
+	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg);
 
 	/// Remove the value under a key.
-	fn remove<KeyArg: ArgType<K>>(key: KeyArg);
+	fn remove<KeyArg: Borrow<K>>(key: KeyArg);
 
 	/// Take the value under a key.
-	fn take<KeyArg: ArgType<K>>(key: KeyArg) -> Self::Query;
+	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 }
 
 impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::StorageMap<K, V> {
@@ -300,42 +299,28 @@ impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::Sto
 		<U as generator::StorageMap<K, V>>::prefix()
 	}
 
-	fn key_for<KeyArg: ArgType<K>>(key: KeyArg) -> Vec<u8> {
-		key.dispatch_with_ref(|item|
-			<U as generator::StorageMap<K, V>>::key_for(item)
-		)
+	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8> {
+		<U as generator::StorageMap<K, V>>::key_for(key.borrow())
 	}
 
-	fn exists<KeyArg: ArgType<K>>(key: KeyArg) -> bool {
-		key.dispatch_with_ref(|item|
-			U::exists(item, &RuntimeStorage)
-		)
+	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
+		U::exists(key.borrow(), &RuntimeStorage)
 	}
 
-	fn get<KeyArg: ArgType<K>>(key: KeyArg) -> Self::Query {
-		key.dispatch_with_ref(|item|
-			U::get(item, &RuntimeStorage)
-		)
+	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
+		U::get(key.borrow(), &RuntimeStorage)
 	}
 
-	fn insert<KeyArg: ArgType<K>, ValArg: ArgType<V>>(key: KeyArg, val: ValArg) {
-		val.dispatch_with_ref(|val|
-			key.dispatch_with_ref(|key|
-				U::insert(key, val, &RuntimeStorage)
-			)
-		)
+	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
+		U::insert(key.borrow(), val.borrow(), &RuntimeStorage)
 	}
 
-	fn remove<KeyArg: ArgType<K>>(key: KeyArg) {
-		key.dispatch_with_ref(|key|
-			U::remove(key, &RuntimeStorage)
-		)
+	fn remove<KeyArg: Borrow<K>>(key: KeyArg) {
+		U::remove(key.borrow(), &RuntimeStorage)
 	}
 
-	fn take<KeyArg: ArgType<K>>(key: KeyArg) -> Self::Query {
-		key.dispatch_with_ref(|key|
-			U::take(key, &RuntimeStorage)
-		)
+	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
+		U::take(key.borrow(), &RuntimeStorage)
 	}
 }
 
