@@ -46,7 +46,8 @@ mod tests {
 	use demo_primitives::{Hash, Header, BlockNumber, Digest};
 	use demo_runtime::transaction::{Transaction, UncheckedTransaction};
 	use demo_runtime::block::Block;
-	use demo_runtime::runtime::staking::{self, FreeBalanceOf, balance};
+	use demo_runtime::runtime::staking::{FreeBalanceOf, balance};
+	use demo_runtime::runtime::{staking, system};
 	use demo_runtime::dispatch;
 	use ed25519::{Public, Pair};
 
@@ -98,7 +99,8 @@ mod tests {
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t: TestExternalities = map![
 			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8]
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8],
+			twox_128(&system::BlockHashAt::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
 		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
@@ -114,7 +116,8 @@ mod tests {
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t: TestExternalities = map![
 			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8]
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8],
+			twox_128(&system::BlockHashAt::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
 		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
@@ -229,7 +232,8 @@ mod tests {
 	fn panic_execution_gives_error() {
 		let mut t: TestExternalities = map![
 			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8]
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8],
+			twox_128(&system::BlockHashAt::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -241,7 +245,8 @@ mod tests {
 	fn successful_execution_gives_ok() {
 		let mut t: TestExternalities = map![
 			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8]
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8],
+			twox_128(&system::BlockHashAt::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm");

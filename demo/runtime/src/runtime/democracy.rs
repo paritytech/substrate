@@ -372,7 +372,7 @@ mod tests {
 	#[test]
 	fn locked_for_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			propose_sessions_per_era(&Alice, 2, 2u64);
 			propose_sessions_per_era(&Alice, 4, 4u64);
 			propose_sessions_per_era(&Alice, 3, 3u64);
@@ -385,11 +385,11 @@ mod tests {
 	#[test]
 	fn single_proposal_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			propose_sessions_per_era(&Alice, 2, 1u64);
 			democracy::internal::end_block(system::block_number());
 
-			with_env(|e| e.block_number = 2);
+			system::testing::set_block_number(2);
 			let r = 0;
 			PublicPass::test(&Alice).vote(r, true);
 
@@ -408,7 +408,7 @@ mod tests {
 	#[test]
 	fn deposit_for_proposals_should_be_taken() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			propose_sessions_per_era(&Alice, 2, 5u64);
 			PublicPass::test(&Bob).second(0);
 			PublicPass::test(&Eve).second(0);
@@ -423,7 +423,7 @@ mod tests {
 	#[test]
 	fn deposit_for_proposals_should_be_returned() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			propose_sessions_per_era(&Alice, 2, 5u64);
 			PublicPass::test(&Bob).second(0);
 			PublicPass::test(&Eve).second(0);
@@ -440,7 +440,7 @@ mod tests {
 	#[should_panic]
 	fn proposal_with_deposit_below_minimum_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			propose_sessions_per_era(&Alice, 2, 0u64);
 		});
 	}
@@ -449,7 +449,7 @@ mod tests {
 	#[should_panic]
 	fn poor_proposer_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			propose_sessions_per_era(&Alice, 2, 11u64);
 		});
 	}
@@ -458,7 +458,7 @@ mod tests {
 	#[should_panic]
 	fn poor_seconder_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			propose_sessions_per_era(&Bob, 2, 11u64);
 			PublicPass::test(&Alice).second(0);
 		});
@@ -472,25 +472,25 @@ mod tests {
 	#[test]
 	fn runners_up_should_come_after() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 0);
+			system::testing::set_block_number(0);
 			propose_bonding_duration(&Alice, 2, 2u64);
 			propose_bonding_duration(&Alice, 4, 4u64);
 			propose_bonding_duration(&Alice, 3, 3u64);
 			democracy::internal::end_block(system::block_number());
 
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			PublicPass::test(&Alice).vote(0, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 4u64);
 
-			with_env(|e| e.block_number = 2);
+			system::testing::set_block_number(2);
 			PublicPass::test(&Alice).vote(1, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 3u64);
 
-			with_env(|e| e.block_number = 3);
+			system::testing::set_block_number(3);
 			PublicPass::test(&Alice).vote(2, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
@@ -505,7 +505,7 @@ mod tests {
 	#[test]
 	fn simple_passing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
 			PublicPass::test(&Alice).vote(r, true);
 
@@ -523,7 +523,7 @@ mod tests {
 	#[test]
 	fn cancel_referendum_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
 			PublicPass::test(&Alice).vote(r, true);
 			PrivPass.cancel_referendum(r);
@@ -538,7 +538,7 @@ mod tests {
 	#[test]
 	fn simple_failing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
 			PublicPass::test(&Alice).vote(r, false);
 
@@ -556,7 +556,7 @@ mod tests {
 	#[test]
 	fn controversial_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
 			PublicPass::test(&Alice).vote(r, true);
 			PublicPass::test(&Bob).vote(r, false);
@@ -577,7 +577,7 @@ mod tests {
 	#[test]
 	fn controversial_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
 			PublicPass::test(&Eve).vote(r, false);
 			PublicPass::test(&Ferdie).vote(r, true);
@@ -597,7 +597,7 @@ mod tests {
 			assert_eq!(staking::era_length(), 1u64);
 			assert_eq!(staking::total_stake(), 210u64);
 
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
 			PublicPass::test(&Dave).vote(r, true);
 			PublicPass::test(&Eve).vote(r, false);

@@ -571,7 +571,7 @@ mod tests {
 	use keyring::Keyring::*;
 	use environment::with_env;
 	use demo_primitives::AccountId;
-	use runtime::{staking, session};
+	use runtime::{staking, session, system};
 	use runtime::system::PrivPass;
 	use runtime::staking::public::{Call, Dispatch};
 	use runtime::staking::privileged::{Call as PCall, Dispatch as PDispatch};
@@ -600,7 +600,7 @@ mod tests {
 			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
 
 			// Block 1: Add three validators. No obvious change.
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			public::Call::stake().dispatch(PublicPass::new(&Alice));
 			PublicPass::new(&Bob).stake();
 			PublicPass::new(&Dave).stake();
@@ -608,39 +608,39 @@ mod tests {
 			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
 
 			// Block 2: New validator set now.
-			with_env(|e| e.block_number = 2);
+			system::testing::set_block_number(2);
 			check_new_era();
 			assert_eq!(session::validators(), vec![Dave.to_raw_public(), Bob.into()]);
 
 			// Block 3: Unstake highest, introduce another staker. No change yet.
-			with_env(|e| e.block_number = 3);
+			system::testing::set_block_number(3);
 			PublicPass::new(&Charlie).stake();
 			PublicPass::new(&Dave).unstake();
 			check_new_era();
 
 			// Block 4: New era - validators change.
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			check_new_era();
 			assert_eq!(session::validators(), vec![Charlie.to_raw_public(), Bob.into()]);
 
 			// Block 5: Transfer stake from highest to lowest. No change yet.
-			with_env(|e| e.block_number = 5);
+			system::testing::set_block_number(5);
 			PublicPass::new(&Dave).transfer(Alice.to_raw_public(), 40);
 			check_new_era();
 
 			// Block 6: Lowest now validator.
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			check_new_era();
 			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Charlie.into()]);
 
 			// Block 7: Unstake three. No change yet.
-			with_env(|e| e.block_number = 7);
+			system::testing::set_block_number(7);
 			PublicPass::new(&Charlie).unstake();
 			check_new_era();
 			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Charlie.into()]);
 
 			// Block 8: Back to one and two.
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			check_new_era();
 			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Bob.into()]);
 		});
@@ -661,21 +661,21 @@ mod tests {
 			assert_eq!(CurrentEra::get(), 0u64);
 
 			// Block 1: No change.
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			check_new_era();
 			assert_eq!(SessionsPerEra::get(), 2u64);
 			assert_eq!(LastEraLengthChange::get(), 0u64);
 			assert_eq!(CurrentEra::get(), 0u64);
 
 			// Block 2: Simple era change.
-			with_env(|e| e.block_number = 2);
+			system::testing::set_block_number(2);
 			check_new_era();
 			assert_eq!(SessionsPerEra::get(), 2u64);
 			assert_eq!(LastEraLengthChange::get(), 0u64);
 			assert_eq!(CurrentEra::get(), 1u64);
 
 			// Block 3: Schedule an era length change; no visible changes.
-			with_env(|e| e.block_number = 3);
+			system::testing::set_block_number(3);
 			PrivPass.set_sessions_per_era(3);
 			check_new_era();
 			assert_eq!(SessionsPerEra::get(), 2u64);
@@ -683,28 +683,28 @@ mod tests {
 			assert_eq!(CurrentEra::get(), 1u64);
 
 			// Block 4: Era change kicks in.
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			check_new_era();
 			assert_eq!(SessionsPerEra::get(), 3u64);
 			assert_eq!(LastEraLengthChange::get(), 4u64);
 			assert_eq!(CurrentEra::get(), 2u64);
 
 			// Block 5: No change.
-			with_env(|e| e.block_number = 5);
+			system::testing::set_block_number(5);
 			check_new_era();
 			assert_eq!(SessionsPerEra::get(), 3u64);
 			assert_eq!(LastEraLengthChange::get(), 4u64);
 			assert_eq!(CurrentEra::get(), 2u64);
 
 			// Block 6: No change.
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			check_new_era();
 			assert_eq!(SessionsPerEra::get(), 3u64);
 			assert_eq!(LastEraLengthChange::get(), 4u64);
 			assert_eq!(CurrentEra::get(), 2u64);
 
 			// Block 7: Era increment.
-			with_env(|e| e.block_number = 7);
+			system::testing::set_block_number(7);
 			check_new_era();
 			assert_eq!(SessionsPerEra::get(), 3u64);
 			assert_eq!(LastEraLengthChange::get(), 4u64);
@@ -714,7 +714,7 @@ mod tests {
 
 	#[test]
 	fn staking_balance_works() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 42);
 			assert_eq!(FreeBalanceOf::get(*Alice), 42);
 			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
@@ -738,7 +738,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn staking_balance_transfer_when_bonded_panics() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			PublicPass::new(&Alice).stake();
 			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
@@ -747,7 +747,7 @@ mod tests {
 
 	#[test]
 	fn reserving_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 
 			assert_eq!(balance(&Alice), 111);
@@ -765,7 +765,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn staking_balance_transfer_when_reserved_panics() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 69);
 			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
@@ -774,7 +774,7 @@ mod tests {
 
 	#[test]
 	fn deducting_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			assert!(deduct_unbonded(&Alice, 69));
 			assert_eq!(FreeBalanceOf::get(*Alice), 42);
@@ -788,7 +788,7 @@ mod tests {
 			twox_128(&BondageOf::key_for(*Alice)).to_vec() => vec![].and(&2u64)
 		];
 		with_externalities(&mut t, || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			assert_eq!(unlock_block(&Alice), LockStatus::LockedUntil(2));
 			assert!(!deduct_unbonded(&Alice, 69));
 		});
@@ -796,7 +796,7 @@ mod tests {
 
 	#[test]
 	fn refunding_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 42);
 			refund(&Alice, 69);
 			assert_eq!(FreeBalanceOf::get(*Alice), 111);
@@ -805,7 +805,7 @@ mod tests {
 
 	#[test]
 	fn slashing_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 69);
 			assert!(slash(&Alice, 69));
@@ -816,7 +816,7 @@ mod tests {
 
 	#[test]
 	fn slashing_incomplete_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 42);
 			reserve_balance(&Alice, 21);
 			assert!(!slash(&Alice, 69));
@@ -827,7 +827,7 @@ mod tests {
 
 	#[test]
 	fn unreserving_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			unreserve_balance(&Alice, 42);
@@ -838,7 +838,7 @@ mod tests {
 
 	#[test]
 	fn slashing_reserved_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			assert!(slash_reserved(&Alice, 42));
@@ -849,7 +849,7 @@ mod tests {
 
 	#[test]
 	fn slashing_incomplete_reserved_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 42);
 			assert!(!slash_reserved(&Alice, 69));
@@ -860,7 +860,7 @@ mod tests {
 
 	#[test]
 	fn transferring_reserved_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			assert!(transfer_reserved_balance(&Alice, &Bob, 42));
@@ -873,7 +873,7 @@ mod tests {
 
 	#[test]
 	fn transferring_incomplete_reserved_balance_should_work() {
-		with_externalities(&mut TestExternalities::default(), || {
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 42);
 			assert!(!transfer_reserved_balance(&Alice, &Bob, 69));

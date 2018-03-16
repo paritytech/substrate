@@ -222,8 +222,15 @@ pub mod testing {
 
 	pub fn externalities() -> TestExternalities {
 		map![
-			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode()
+			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode(),
+			twox_128(Number::key()).to_vec() => 1u64.encode(),
+			twox_128(ParentHash::key()).to_vec() => [69u8; 32].encode(),
+			twox_128(RandomSeed::key()).to_vec() => [0u8; 32].encode()
 		]
+	}
+
+	pub fn set_block_number(n: BlockNumber) {
+		Number::put(n);
 	}
 }
 
@@ -247,7 +254,8 @@ mod tests {
 	fn staking_balance_transfer_dispatch_works() {
 		let mut t: TestExternalities = map![
 			twox_128(&staking::FreeBalanceOf::key_for(*One)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode()
 		];
 
 		let tx = UncheckedTransaction {
