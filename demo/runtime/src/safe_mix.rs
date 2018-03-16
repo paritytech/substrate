@@ -17,6 +17,7 @@
 //! Means of mixing a series of hashes to create a single secure hash.
 
 use rstd::ops::{BitAnd, BitOr};
+use rstd::cmp;
 
 fn sub_mix<T>(seeds: &[T]) -> T where
 	T: BitAnd<Output = T> + BitOr<Output = T> + Copy
@@ -29,6 +30,8 @@ pub fn mix<T>(seeds: &[T]) -> Result<T, ()> where
 	T: BitAnd<Output = T> + BitOr<Output = T>,
 	T: Default + Copy
 {
+	Ok(mix_iter(seeds.iter().cloned()))
+	/*
 	let max_depth = (0..12)
 		.scan(1, |a, _| { *a *= 3; Some(*a) })
 		.position(|v| seeds.len() == v)
@@ -52,7 +55,37 @@ pub fn mix<T>(seeds: &[T]) -> Result<T, ()> where
 		}
 	}
 	Ok(accum[max_depth][0])
+	*/
 }
+
+pub fn mix_iter<T, I>(seeds: I) -> T where
+	T: BitAnd<Output = T> + BitOr<Output = T>,
+	T: Default + Copy,
+	I: Iterator<Item = T>
+{
+	let mut accum = [[T::default(); 3]; 13];
+	let mut max_depth = 0;
+	for (i, seed) in seeds.enumerate() {
+		accum[0][i % 3] = seed;
+		let mut index_at_depth = i;
+		for depth in 0..13 {
+			if index_at_depth % 3 != 2 {
+				break;
+			}
+			index_at_depth /= 3;
+
+			// end of the threesome at depth.
+			accum[depth + 1][index_at_depth % 3] = sub_mix(&accum[depth]);
+			max_depth = cmp::max(max_depth, depth + 1);
+			if max_depth == 12 {
+				break;
+			}
+		}
+	}
+	accum[max_depth][0]
+}
+
+
 
 #[cfg(test)]
 mod tests {

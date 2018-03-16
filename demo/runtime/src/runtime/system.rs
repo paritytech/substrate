@@ -22,24 +22,24 @@ use rstd::mem;
 use runtime_io::{print, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use runtime_support::{Hashable, storage, StorageValue, StorageMap};
-use environment::with_env;
 use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Header, Log};
-use block::Block;
+use block::{self, Block};
 use transaction::UncheckedTransaction;
 use runtime::{staking, session};
 use dispatch;
+use safe_mix::mix_iter;
 
 storage_items! {
-	pub Nonce: b"sys:non" => default map [ AccountId => TxOrder ];
-	pub BlockHashAt: b"sys:old" => required map [ BlockNumber => Hash ];
+	pub Nonce get(nonce): b"sys:non" => default map [ AccountId => TxOrder ];
+	pub BlockHashAt get(block_hash): b"sys:old" => required map [ BlockNumber => Hash ];
+	RandomSeed get(random_seed): b"sys:rnd" => required Hash;
+	// The current block number being processed. Set by `execute_block`.
+	Number get(block_number): b"sys:num" => required BlockNumber;
+	ParentHash get(parent_hash): b"sys:pha" => required Hash;
+	Digest: b"sys:dig" => default block::Digest;
 }
 
 pub const CODE: &'static[u8] = b":code";
-
-/// The current block number being processed. Set by `execute_block`.
-pub fn block_number() -> BlockNumber {
-	with_env(|e| e.block_number)
-}
 
 pub struct PrivPass;
 
@@ -62,16 +62,17 @@ pub mod internal {
 
 	/// Deposits a log and ensures it matches the blocks log data.
 	pub fn deposit_log(log: Log) {
-		with_env(|e| e.digest.logs.push(log));
+		let mut l = Digest::get();
+		l.logs.push(log);
+		Digest::put(l);
 	}
 
 	/// Actually execute all transitioning for `block`.
 	pub fn execute_block(mut block: Block) {
 		// populate environment from header.
-		with_env(|e| {
-			e.block_number = block.header.number;
-			e.parent_hash = block.header.parent_hash;
-		});
+		Number::put(block.header.number);
+		ParentHash::put(block.header.parent_hash);
+		RandomSeed::put(calculate_random());
 
 		// any initial checks
 		initial_checks(&block);
@@ -94,17 +95,14 @@ pub mod internal {
 	/// This doesn't attempt to validate anything regarding the block.
 	pub fn execute_transaction(utx: UncheckedTransaction, mut header: Header) -> Header {
 		// populate environment from header.
-		with_env(|e| {
-			e.block_number = header.number;
-			e.parent_hash = header.parent_hash;
-			mem::swap(&mut header.digest, &mut e.digest);
-		});
+		Number::put(header.number);
+		ParentHash::put(header.parent_hash);
+		Digest::put(&header.digest);
+		RandomSeed::put(calculate_random());
 
 		super::execute_transaction(utx);
 
-		with_env(|e| {
-			mem::swap(&mut header.digest, &mut e.digest);
-		});
+		header.digest = Digest::get();
 		header
 	}
 
@@ -112,19 +110,16 @@ pub mod internal {
 	/// except state-root.
 	pub fn finalise_block(mut header: Header) -> Header {
 		// populate environment from header.
-		with_env(|e| {
-			e.block_number = header.number;
-			e.parent_hash = header.parent_hash;
-			mem::swap(&mut header.digest, &mut e.digest);
-		});
+		Number::put(header.number);
+		ParentHash::put(header.parent_hash);
+		Digest::put(&header.digest);
+		RandomSeed::put(calculate_random());
 
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
 
 		header.state_root = storage_root().into();
-		with_env(|e| {
-			mem::swap(&mut header.digest, &mut e.digest);
-		});
+		header.digest = Digest::get();
 
 		post_finalise(&header);
 
@@ -176,9 +171,12 @@ fn final_checks(block: &Block) {
 	let ref header = block.header;
 
 	// check digest
-	with_env(|e| {
-		assert!(header.digest == e.digest);
-	});
+	assert!(header.digest == Digest::get());
+
+	Number::kill();
+	ParentHash::kill();
+	RandomSeed::kill();
+	Digest::kill();
 
 	// check storage root.
 	let storage_root = storage_root().into();
@@ -190,6 +188,13 @@ fn post_finalise(header: &Header) {
 	// store the header hash in storage; we can't do it before otherwise there would be a
 	// cyclic dependency.
 	BlockHashAt::insert(&header.number, &header.blake2_256().into());
+}
+
+fn calculate_random() -> Hash {
+	let c = block_number() - 1;
+	mix_iter((0..81)
+		.map(|i| if c >= i { block_hash(c - i) } else { Default::default() })
+	)
 }
 
 #[cfg(feature = "std")]
@@ -231,7 +236,6 @@ mod tests {
 	use runtime_support::StorageValue;
 	use codec::{Joiner, KeyedVec, Slicable};
 	use keyring::Keyring::*;
-	use environment::with_env;
 	use primitives::hexdisplay::HexDisplay;
 	use demo_primitives::{Header, Digest};
 	use transaction::{UncheckedTransaction, Transaction};
