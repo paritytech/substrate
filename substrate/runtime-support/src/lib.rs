@@ -20,11 +20,14 @@
 
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
+
+#[doc(hidden)]
+pub extern crate substrate_codec as codec;
+pub use self::storage::generator::Storage as GenericStorage;
 
 pub mod storage;
 mod hashable;
 
-pub use self::storage::StorageVec;
+pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;

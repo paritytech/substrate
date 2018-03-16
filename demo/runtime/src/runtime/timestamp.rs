@@ -16,16 +16,13 @@
 
 //! Timestamp manager: just handles the current timestamp.
 
-use runtime_support::storage;
+use runtime_support::storage::StorageValue;
 use runtime::staking::PublicPass;
 
 pub type Timestamp = u64;
 
-pub const CURRENT_TIMESTAMP: &[u8] = b"tim:val";
-
-/// Get the current time.
-pub fn get() -> Timestamp {
-	storage::get_or_default(CURRENT_TIMESTAMP)
+storage_items! {
+	pub Now: b"tim:val" => required Timestamp;
 }
 
 impl_dispatch! {
@@ -36,7 +33,7 @@ impl_dispatch! {
 impl<'a> public::Dispatch for PublicPass<'a> {
 	/// Set the current time.
 	fn set(self, now: Timestamp) {
-		storage::put(CURRENT_TIMESTAMP, &now);
+		Now::put(&now);
 	}
 }
 
@@ -46,6 +43,7 @@ mod tests {
 	use super::public::*;
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
+	use runtime_support::storage::StorageValue;
 	use runtime::timestamp;
 	use codec::{Joiner, KeyedVec};
 	use demo_primitives::AccountId;
@@ -54,13 +52,13 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let mut t: TestExternalities = map![
-			twox_128(CURRENT_TIMESTAMP).to_vec() => vec![].and(&42u64)
+			twox_128(Now::key()).to_vec() => vec![].and(&42u64)
 		];
 
 		with_externalities(&mut t, || {
-			assert_eq!(get(), 42);
+			assert_eq!(Now::get(), 42);
 			PublicPass::nobody().set(69);
-			assert_eq!(get(), 69);
+			assert_eq!(Now::get(), 69);
 		});
 	}
 }

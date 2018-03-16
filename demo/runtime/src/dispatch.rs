@@ -50,11 +50,12 @@ macro_rules! impl_dispatch {
 			impl Id {
 				/// Derive `Some` value from a `u8`, or `None` if it's invalid.
 				fn from_u8(value: u8) -> Option<Id> {
-					use self::*;
-					let functions = [
-						$( Id::$fn_name ),*
-					];
-					functions.iter().map(|&f| f).find(|&f| value == f as u8)
+					match value {
+						$(
+							$id => Some(Id::$fn_name),
+						)*
+						_ => None,
+					}
 				}
 			}
 
@@ -154,11 +155,12 @@ macro_rules! impl_meta_dispatch {
 			impl Id {
 				/// Derive `Some` value from a `u8`, or `None` if it's invalid.
 				fn from_u8(value: u8) -> Option<Id> {
-					use self::*;
-					let functions = [
-						$( Id::$camelcase ),*
-					];
-					functions.iter().map(|&f| f).find(|&f| value == f as u8)
+					match value {
+						$(
+							$id => Some(Id::$camelcase),
+						)*
+						_ => None,
+					}
 				}
 			}
 

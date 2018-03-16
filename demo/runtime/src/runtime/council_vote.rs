@@ -17,9 +17,10 @@
 //! Council voting system.
 
 use rstd::prelude::*;
+use rstd::borrow::Borrow;
 use codec::{KeyedVec, Slicable, Input, NonTrivialSlicable};
 use runtime_support::Hashable;
-use runtime_support::storage;
+use runtime_support::{StorageValue, StorageMap};
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use runtime::{system, democracy, council};
 use runtime::staking::{PublicPass, Balance};
@@ -28,43 +29,28 @@ use dispatch::PrivCall as Proposal;
 
 type ProposalHash = [u8; 32];
 
-pub const COOLOFF_PERIOD: &[u8] = b"cov:cooloff";		// BlockNumber
-pub const VOTING_PERIOD: &[u8] = b"cov:period";			// BlockNumber
-
-pub const PROPOSALS: &[u8] = b"cov:prs";				// Vec<(expiry: BlockNumber, ProposalHash)> ordered by expiry.
-pub const PROPOSAL_OF: &[u8] = b"cov:pro";				// ProposalHash -> Proposal
-pub const PROPOSAL_VOTERS: &[u8] = b"cov:voters:";		// ProposalHash -> Vec<AccountId>
-pub const COUNCIL_VOTE_OF: &[u8] = b"cov:vote:";		// (ProposalHash, AccountId) -> bool
-pub const VETOED_PROPOSAL: &[u8] = b"cov:veto:";		// ProposalHash -> (BlockNumber, sorted_vetoers: Vec<AccountId>)
-
-pub fn cooloff_period() -> BlockNumber {
-	storage::get(COOLOFF_PERIOD).expect("all parameters must be defined")
+storage_items! {
+	pub CooloffPeriod get(cooloff_period): b"cov:cooloff" => required BlockNumber;
+	pub VotingPeriod get(voting_period): b"cov:period" => required BlockNumber;
+	pub Proposals get(proposals): b"cov:prs" => default Vec<(BlockNumber, ProposalHash)>; // ordered by expiry.
+	pub ProposalOf get(proposal_of): b"cov:pro" => map [ ProposalHash => Proposal ];
+	pub ProposalVoters get(proposal_voters): b"cov:voters:" => default map [ ProposalHash => Vec<AccountId> ];
+	pub CouncilVoteOf get(vote_of): b"cov:vote:" => map [ (ProposalHash, AccountId) => bool ];
+	pub VetoedProposal get(veto_of): b"cov:veto:" => map [ ProposalHash => (BlockNumber, Vec<AccountId>) ];
 }
 
-pub fn voting_period() -> BlockNumber {
-	storage::get(VOTING_PERIOD).expect("all parameters must be defined")
-}
-
-pub fn proposals() -> Vec<(BlockNumber, ProposalHash)> {
-	storage::get_or_default(PROPOSALS)
-}
-
-pub fn is_vetoed(proposal: &ProposalHash) -> bool {
-	storage::get(&proposal.to_keyed_vec(VETOED_PROPOSAL))
+pub fn is_vetoed<B: Borrow<ProposalHash>>(proposal: B) -> bool {
+	VetoedProposal::get(proposal.borrow())
 		.map(|(expiry, _): (BlockNumber, Vec<AccountId>)| system::block_number() < expiry)
 		.unwrap_or(false)
 }
 
-pub fn veto_of(proposal: &ProposalHash) -> Option<(BlockNumber, Vec<AccountId>)> {
-	storage::get(&proposal.to_keyed_vec(VETOED_PROPOSAL))
-}
-
 fn set_veto_of(proposal: &ProposalHash, expiry: BlockNumber, vetoers: Vec<AccountId>) {
-	storage::put(&proposal.to_keyed_vec(VETOED_PROPOSAL), &(expiry, vetoers))
+	VetoedProposal::insert(proposal, (expiry, vetoers));
 }
 
 fn kill_veto_of(proposal: &ProposalHash) {
-	storage::kill(&proposal.to_keyed_vec(VETOED_PROPOSAL))
+	VetoedProposal::remove(proposal);
 }
 
 pub fn will_still_be_councillor_at(who: &AccountId, n: BlockNumber) -> bool {
@@ -79,20 +65,12 @@ pub fn is_councillor(who: &AccountId) -> bool {
 		.any(|&(ref a, _)| a == who)
 }
 
-pub fn vote_of(who: &AccountId, proposal: &ProposalHash) -> Option<bool> {
-	storage::get(&(*proposal, *who).to_keyed_vec(COUNCIL_VOTE_OF))
-}
-
-pub fn proposal_voters(proposal: &ProposalHash) -> Vec<AccountId> {
-	storage::get_or_default(&proposal.to_keyed_vec(PROPOSAL_VOTERS))
-}
-
 pub fn tally(proposal_hash: &ProposalHash) -> (u32, u32, u32) {
-	generic_tally(proposal_hash, |w: &AccountId, p: &ProposalHash| storage::get(&(*p, *w).to_keyed_vec(COUNCIL_VOTE_OF)))
+	generic_tally(proposal_hash, |w: &AccountId, p: &ProposalHash| CouncilVoteOf::get((*p, *w)))
 }
 
 fn take_tally(proposal_hash: &ProposalHash) -> (u32, u32, u32) {
-	generic_tally(proposal_hash, |w: &AccountId, p: &ProposalHash| storage::get(&(*p, *w).to_keyed_vec(COUNCIL_VOTE_OF)))
+	generic_tally(proposal_hash, |w: &AccountId, p: &ProposalHash| CouncilVoteOf::take((*p, *w)))
 }
 
 fn generic_tally<F: Fn(&AccountId, &ProposalHash) -> Option<bool>>(proposal_hash: &ProposalHash, vote_of: F) -> (u32, u32, u32) {
@@ -105,7 +83,7 @@ fn generic_tally<F: Fn(&AccountId, &ProposalHash) -> Option<bool>>(proposal_hash
 }
 
 fn set_proposals(p: &Vec<(BlockNumber, ProposalHash)>) {
-	storage::put(PROPOSALS, p)
+	Proposals::put(p);
 }
 
 fn take_proposal_if_expiring_at(n: BlockNumber) -> Option<(Proposal, ProposalHash)> {
@@ -114,7 +92,7 @@ fn take_proposal_if_expiring_at(n: BlockNumber) -> Option<(Proposal, ProposalHas
 		Some(&(expiry, hash)) if expiry == n => {
 			// yes this is horrible, but fixing it will need substantial work in storage.
 			set_proposals(&proposals[1..].to_vec());
-			let proposal = storage::take(&hash.to_keyed_vec(PROPOSAL_OF)).expect("all queued proposal hashes must have associated proposals");
+			let proposal = ProposalOf::take(hash).expect("all queued proposal hashes must have associated proposals");
 			Some((proposal, hash))
 		}
 		_ => None,
@@ -142,23 +120,23 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 		proposals.sort_by_key(|&(expiry, _)| expiry);
 		set_proposals(&proposals);
 
-		storage::put(&proposal_hash.to_keyed_vec(PROPOSAL_OF), &proposal);
-		storage::put(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS), &vec![*self]);
-		storage::put(&(proposal_hash, *self).to_keyed_vec(COUNCIL_VOTE_OF), &true);
+		ProposalOf::insert(proposal_hash, *proposal);
+		ProposalVoters::insert(proposal_hash, vec![*self]);
+		CouncilVoteOf::insert((proposal_hash, *self), true);
 	}
 
 	fn vote(self, proposal: ProposalHash, approve: bool) {
-		if vote_of(&self, &proposal).is_none() {
+		if vote_of((*self, proposal)).is_none() {
 			let mut voters = proposal_voters(&proposal);
 			voters.push(*self);
-			storage::put(&proposal.to_keyed_vec(PROPOSAL_VOTERS), &voters);
+			ProposalVoters::insert(proposal, voters);
 		}
-		storage::put(&(proposal, *self).to_keyed_vec(COUNCIL_VOTE_OF), &approve);
+		CouncilVoteOf::insert((proposal, *self), approve);
 	}
 
 	fn veto(self, proposal_hash: ProposalHash) {
 		assert!(is_councillor(&self), "only councillors may veto council proposals");
-		assert!(storage::exists(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS)), "proposal must exist to be vetoed");
+		assert!(ProposalVoters::exists(&proposal_hash), "proposal must exist to be vetoed");
 
 		let mut existing_vetoers = veto_of(&proposal_hash)
 			.map(|pair| pair.1)
@@ -169,10 +147,10 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 		set_veto_of(&proposal_hash, system::block_number() + cooloff_period(), existing_vetoers);
 
 		set_proposals(&proposals().into_iter().filter(|&(_, h)| h != proposal_hash).collect::<Vec<_>>());
-		storage::kill(&proposal_hash.to_keyed_vec(PROPOSAL_VOTERS));
-		storage::kill(&proposal_hash.to_keyed_vec(PROPOSAL_OF));
+		ProposalVoters::remove(proposal_hash);
+		ProposalOf::remove(proposal_hash);
 		for (c, _) in council::active_council() {
-			storage::kill(&(proposal_hash, c).to_keyed_vec(COUNCIL_VOTE_OF));
+			CouncilVoteOf::remove((proposal_hash, c));
 		}
 	}
 }
@@ -185,11 +163,11 @@ impl_dispatch! {
 
 impl privileged::Dispatch for PrivPass {
 	fn set_cooloff_period(self, blocks: BlockNumber) {
-		storage::put(COOLOFF_PERIOD, &blocks);
+		CooloffPeriod::put(blocks);
 	}
 
 	fn set_voting_period(self, blocks: BlockNumber) {
-		storage::put(VOTING_PERIOD, &blocks);
+		VotingPeriod::put(blocks);
 	}
 }
 
@@ -230,14 +208,14 @@ pub mod testing {
 	pub fn externalities() -> TestExternalities {
 		let expiry: BlockNumber = 10;
 		let extras: TestExternalities = map![
-			twox_128(council::ACTIVE_COUNCIL).to_vec() => vec![].and(&vec![
+			twox_128(council::ActiveCouncil::key()).to_vec() => vec![].and(&vec![
 				(Alice.to_raw_public(), expiry),
 				(Bob.into(), expiry),
 				(Charlie.into(), expiry)
 			]),
-			twox_128(COOLOFF_PERIOD).to_vec() => vec![].and(&2u64),
-			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64),
-			twox_128(democracy::VOTING_PERIOD).to_vec() => vec![].and(&3u64)
+			twox_128(CooloffPeriod::key()).to_vec() => vec![].and(&2u64),
+			twox_128(VotingPeriod::key()).to_vec() => vec![].and(&1u64),
+			twox_128(democracy::VotingPeriod::key()).to_vec() => vec![].and(&3u64)
 		];
 		council::testing::externalities()
 			.into_iter().chain(extras.into_iter()).collect()
@@ -274,9 +252,9 @@ mod tests {
 			assert_eq!(is_councillor(&Alice), true);
 			assert_eq!(is_councillor(&Dave), false);
 			assert_eq!(proposals(), Vec::<(BlockNumber, ProposalHash)>::new());
-			assert_eq!(proposal_voters(&ProposalHash::default()), Vec::<AccountId>::new());
+			assert_eq!(proposal_voters(ProposalHash::default()), Vec::<AccountId>::new());
 			assert_eq!(is_vetoed(&ProposalHash::default()), false);
-			assert_eq!(vote_of(&Alice, &ProposalHash::default()), None);
+			assert_eq!(vote_of((*Alice, ProposalHash::default())), None);
 			assert_eq!(tally(&ProposalHash::default()), (0, 0, 3));
 		});
 	}
@@ -447,7 +425,7 @@ mod tests {
 			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
 			assert_eq!(proposals().len(), 1);
 			assert_eq!(proposal_voters(&hash), vec![Alice.to_raw_public()]);
-			assert_eq!(vote_of(&Alice, &hash), Some(true));
+			assert_eq!(vote_of((hash, *Alice)), Some(true));
 			assert_eq!(tally(&hash), (1, 0, 2));
 		});
 	}
