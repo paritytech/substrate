@@ -151,7 +151,6 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring;
-	use environment::with_env;
 	use demo_primitives::AccountId;
 	use runtime::{consensus, session};
 

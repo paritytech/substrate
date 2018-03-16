@@ -41,7 +41,6 @@ extern crate integer_sqrt;
 pub mod safe_mix;
 pub mod block;
 pub mod transaction;
-pub mod environment;
 pub mod runtime;
 pub mod api;
 

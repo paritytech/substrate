@@ -228,7 +228,6 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring::{Alice, Bob, Charlie, Dave};
-	use environment::with_env;
 	use demo_primitives::AccountId;
 	use runtime::democracy::VoteThreshold;
 	use runtime::{staking, council, democracy};
