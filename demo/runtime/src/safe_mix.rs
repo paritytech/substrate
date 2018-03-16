@@ -16,28 +16,26 @@
 
 //! Means of mixing a series of hashes to create a single secure hash.
 
-fn sub_mix(seeds: &[u64]) -> u64 {
+use rstd::ops::{BitAnd, BitOr};
+
+fn sub_mix<T>(seeds: &[T]) -> T where
+	T: BitAnd<Output = T> + BitOr<Output = T> + Copy
+{
 	(seeds[0] & seeds[1]) | (seeds[1] & seeds[2]) | (seeds[0] & seeds[2])
 }
 
 /// 3x3 mixing.
-pub fn mix33(seeds: &[u64]) -> u64 {
-	let mut working = [0u64; 3];
-	for i in 0..3 {
-		working[i] = sub_mix(&seeds[i * 3..i * 3 + 3]);
-	}
-	sub_mix(&working)
-}
-
-/// 3x3 mixing.
-pub fn mix(seeds: &[u64]) -> Result<u64, ()> {
+pub fn mix<T>(seeds: &[T]) -> Result<T, ()> where
+	T: BitAnd<Output = T> + BitOr<Output = T>,
+	T: Default + Copy
+{
 	let max_depth = (0..12)
 		.scan(1, |a, _| { *a *= 3; Some(*a) })
 		.position(|v| seeds.len() == v)
 		.ok_or(())?;
 	assert!(max_depth <= 11);
 
-	let mut accum = [[0u64; 3]; 12];
+	let mut accum = [[T::default(); 3]; 12];
 	for i in 0..seeds.len() / 3 {
 		// first level:
 		accum[0][i % 3] = sub_mix(&seeds[i * 3..i * 3 + 3]);
