@@ -5,7 +5,11 @@ args:
   - log:
       short: l
       value_name: LOG_PATTERN
-      help: Sets a custom logging
+      help: Sets a custom logging filter
+      takes_value: true
+  - keystore-path:
+      value_name: KEYSTORE_PATH
+      help: specify custom keystore path
       takes_value: true
 subcommands:
   - collator:
