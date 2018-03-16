@@ -323,6 +323,7 @@ pub mod testing {
 			twox_128(staking::ValidatorCount::key()).to_vec() => vec![].and(&3u64),
 			twox_128(staking::CurrentEra::key()).to_vec() => vec![].and(&1u64),
 			twox_128(staking::TransactionFee::key()).to_vec() => vec![].and(&1u64),
+			twox_128(staking::BondingDuration::key()).to_vec() => vec![].and(&0u64),
 
 			twox_128(LaunchPeriod::key()).to_vec() => vec![].and(&1u64),
 			twox_128(VotingPeriod::key()).to_vec() => vec![].and(&1u64),

@@ -425,7 +425,7 @@ mod tests {
 			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
 			assert_eq!(proposals().len(), 1);
 			assert_eq!(proposal_voters(&hash), vec![Alice.to_raw_public()]);
-			assert_eq!(vote_of((*Alice, hash)), Some(true));
+			assert_eq!(vote_of((hash, *Alice)), Some(true));
 			assert_eq!(tally(&hash), (1, 0, 2));
 		});
 	}

@@ -549,10 +549,11 @@ pub mod testing {
 			twox_128(&Intention::key_for(0)).to_vec() => Alice.to_raw_public_vec(),
 			twox_128(&Intention::key_for(1)).to_vec() => Bob.to_raw_public_vec(),
 			twox_128(&Intention::key_for(2)).to_vec() => Charlie.to_raw_public_vec(),
-			twox_128(&SessionsPerEra::key()).to_vec() => vec![].and(&sessions_per_era),
-			twox_128(&ValidatorCount::key()).to_vec() => vec![].and(&3u64),
-			twox_128(&TransactionFee::key()).to_vec() => vec![].and(&1u64),
-			twox_128(&CurrentEra::key()).to_vec() => vec![].and(&current_era),
+			twox_128(SessionsPerEra::key()).to_vec() => vec![].and(&sessions_per_era),
+			twox_128(ValidatorCount::key()).to_vec() => vec![].and(&3u64),
+			twox_128(BondingDuration::key()).to_vec() => vec![].and(&0u64),
+			twox_128(TransactionFee::key()).to_vec() => vec![].and(&1u64),
+			twox_128(CurrentEra::key()).to_vec() => vec![].and(&current_era),
 			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 		session::testing::externalities(session_length).into_iter().chain(extras.into_iter()).collect()
@@ -580,11 +581,12 @@ mod tests {
 		let mut t: TestExternalities = map![
 			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
 			twox_128(session::Validators::key()).to_vec() => vec![].and(&vec![[10u8; 32], [20; 32]]),
-			twox_128(&SessionsPerEra::key()).to_vec() => vec![].and(&2u64),
-			twox_128(&ValidatorCount::key()).to_vec() => vec![].and(&2u32),
-			twox_128(&BondingDuration::key()).to_vec() => vec![].and(&3u64),
-			twox_128(&TotalStake::key()).to_vec() => vec![].and(&100u64),
-			twox_128(&TransactionFee::key()).to_vec() => vec![].and(&0u64),
+			twox_128(CurrentEra::key()).to_vec() => vec![].and(&0u64),
+			twox_128(SessionsPerEra::key()).to_vec() => vec![].and(&2u64),
+			twox_128(ValidatorCount::key()).to_vec() => vec![].and(&2u32),
+			twox_128(BondingDuration::key()).to_vec() => vec![].and(&3u64),
+			twox_128(TotalStake::key()).to_vec() => vec![].and(&100u64),
+			twox_128(TransactionFee::key()).to_vec() => vec![].and(&0u64),
 			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![].and(&10u64),
 			twox_128(&FreeBalanceOf::key_for(*Bob)).to_vec() => vec![].and(&20u64),
 			twox_128(&FreeBalanceOf::key_for(*Charlie)).to_vec() => vec![].and(&30u64),
@@ -648,7 +650,9 @@ mod tests {
 	fn staking_eras_work() {
 		let mut t: TestExternalities = map![
 			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
-			twox_128(&SessionsPerEra::key()).to_vec() => vec![].and(&2u64)
+			twox_128(SessionsPerEra::key()).to_vec() => vec![].and(&2u64),
+			twox_128(ValidatorCount::key()).to_vec() => vec![].and(&2u32),
+			twox_128(CurrentEra::key()).to_vec() => vec![].and(&0u64)
 		];
 		with_externalities(&mut t, || {
 			assert_eq!(era_length(), 2u64);

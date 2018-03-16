@@ -135,6 +135,7 @@ pub mod testing {
 
 		let extras: TestExternalities = map![
 			twox_128(SessionLength::key()).to_vec() => vec![].and(&session_length),
+			twox_128(CurrentIndex::key()).to_vec() => vec![].and(&0u64),
 			twox_128(Validators::key()).to_vec() => vec![].and(&vec![One.into(), Two.into(), three])
 		];
 		system::testing::externalities().into_iter().chain(extras.into_iter()).collect()
@@ -157,6 +158,7 @@ mod tests {
 	fn simple_setup() -> TestExternalities {
 		map![
 			twox_128(SessionLength::key()).to_vec() => vec![].and(&2u64),
+			twox_128(CurrentIndex::key()).to_vec() => vec![].and(&0u64),
 			// the validators (10, 20, ...)
 			twox_128(Validators::key()).to_vec() => vec![].and(&vec![[10u8; 32], [20; 32]]),
 			// initial session keys (11, 21, ...)
