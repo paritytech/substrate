@@ -27,7 +27,7 @@ use block::{self, Block};
 use transaction::UncheckedTransaction;
 use runtime::{staking, session};
 use dispatch;
-use safe_mix::mix_iter;
+use safe_mix::Mixed;
 
 storage_items! {
 	pub Nonce get(nonce): b"sys:non" => default map [ AccountId => TxOrder ];
@@ -192,9 +192,9 @@ fn post_finalise(header: &Header) {
 
 fn calculate_random() -> Hash {
 	let c = block_number() - 1;
-	mix_iter((0..81)
+	(0..81)
 		.map(|i| if c >= i { block_hash(c - i) } else { Default::default() })
-	)
+		.mixed()
 }
 
 #[cfg(feature = "std")]

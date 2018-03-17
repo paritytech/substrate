@@ -25,67 +25,50 @@ fn sub_mix<T>(seeds: &[T]) -> T where
 	(seeds[0] & seeds[1]) | (seeds[1] & seeds[2]) | (seeds[0] & seeds[2])
 }
 
-/// 3x3 mixing.
+/// Mix a slice.
 pub fn mix<T>(seeds: &[T]) -> Result<T, ()> where
 	T: BitAnd<Output = T> + BitOr<Output = T>,
 	T: Default + Copy
 {
-	Ok(mix_iter(seeds.iter().cloned()))
-	/*
-	let max_depth = (0..12)
-		.scan(1, |a, _| { *a *= 3; Some(*a) })
-		.position(|v| seeds.len() == v)
-		.ok_or(())?;
-	assert!(max_depth <= 11);
-
-	let mut accum = [[T::default(); 3]; 12];
-	for i in 0..seeds.len() / 3 {
-		// first level:
-		accum[0][i % 3] = sub_mix(&seeds[i * 3..i * 3 + 3]);
-
-		let mut index_at_depth = i;
-		for depth in 0..12 {
-			if index_at_depth % 3 != 2 {
-				break;
-			}
-			index_at_depth /= 3;
-
-			// end of the threesome at depth.
-			accum[depth + 1][index_at_depth] = sub_mix(&accum[depth]);
-		}
-	}
-	Ok(accum[max_depth][0])
-	*/
+	Ok(seeds.iter().cloned().mixed())
 }
 
-pub fn mix_iter<T, I>(seeds: I) -> T where
-	T: BitAnd<Output = T> + BitOr<Output = T>,
-	T: Default + Copy,
-	I: Iterator<Item = T>
+/// The mixed trait for mixing a ssequence.
+pub trait Mixed {
+	/// The items in the sequence and simultaneously the return of the mixing.
+	type Item;
+	/// The output of the mixing algorithm on the sequence.
+	fn mixed(self) -> Self::Item;
+}
+
+impl<I, T> Mixed for I where
+	I: Iterator<Item = T>,
+	T: BitAnd<Output = T> + BitOr<Output = T> + Default + Copy
 {
-	let mut accum = [[T::default(); 3]; 13];
-	let mut max_depth = 0;
-	for (i, seed) in seeds.enumerate() {
-		accum[0][i % 3] = seed;
-		let mut index_at_depth = i;
-		for depth in 0..13 {
-			if index_at_depth % 3 != 2 {
-				break;
-			}
-			index_at_depth /= 3;
+	type Item = T;
+	fn mixed(self) -> Self::Item {
+		let mut accum = [[T::default(); 3]; 13];
+		let mut max_depth = 0;
+		for (i, seed) in self.enumerate() {
+			accum[0][i % 3] = seed;
+			let mut index_at_depth = i;
+			for depth in 0..13 {
+				if index_at_depth % 3 != 2 {
+					break;
+				}
+				index_at_depth /= 3;
 
-			// end of the threesome at depth.
-			accum[depth + 1][index_at_depth % 3] = sub_mix(&accum[depth]);
-			max_depth = cmp::max(max_depth, depth + 1);
-			if max_depth == 12 {
-				break;
+				// end of the threesome at depth.
+				accum[depth + 1][index_at_depth % 3] = sub_mix(&accum[depth]);
+				max_depth = cmp::max(max_depth, depth + 1);
+				if max_depth == 12 {
+					break;
+				}
 			}
 		}
+		accum[max_depth][0]
 	}
-	accum[max_depth][0]
 }
-
-
 
 #[cfg(test)]
 mod tests {
