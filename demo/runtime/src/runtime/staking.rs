@@ -17,14 +17,14 @@
 //! Staking manager: Handles balances and periodically determines the best set of validators.
 
 use rstd::prelude::*;
-use rstd::cmp;
+use rstd::{ops, cmp};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use runtime_io::{print, blake2_256};
-use codec::KeyedVec;
+use codec::{Slicable, Input, KeyedVec};
 use runtime_support::{storage, StorageVec};
 use demo_primitives::{BlockNumber, AccountId};
-use runtime::{system, session};
+use runtime::{system, session, democracy};
 
 /// The balance of an account.
 pub type Balance = u64;
@@ -41,6 +41,7 @@ pub const LAST_ERA_LENGTH_CHANGE: &[u8] = b"sta:lec";
 pub const TOTAL_STAKE: &[u8] = b"sta:tot";
 pub const INTENTION_AT: &[u8] = b"sta:wil:";
 pub const INTENTION_COUNT: &[u8] = b"sta:wil:len";
+pub const TRANSACTION_FEE: &[u8] = b"sta:fee";
 
 pub const BALANCE_OF: &[u8] = b"sta:bal:";
 pub const RESERVED_BALANCE_OF: &[u8] = b"sta:lbo:";
@@ -52,6 +53,11 @@ pub struct IntentionStorageVec {}
 impl StorageVec for IntentionStorageVec {
 	type Item = AccountId;
 	const PREFIX: &'static[u8] = INTENTION_AT;
+}
+
+/// The fee to be paid for making a transaction.
+pub fn transaction_fee() -> Balance {
+	storage::get(TRANSACTION_FEE).expect("All basic parameters should be defined")
 }
 
 /// The length of the bonding duration in eras.
@@ -133,17 +139,131 @@ pub fn total_stake() -> Balance {
 	storage::get_or(TOTAL_STAKE, 0)
 }
 
+pub struct PublicPass<'a> (&'a AccountId);
+
+const NOBODY: AccountId = [0u8; 32];
+
+impl<'a> PublicPass<'a> {
+	pub fn new(transactor: &AccountId) -> PublicPass {
+		let b = free_balance(&transactor);
+		let transaction_fee = transaction_fee();
+		assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
+		internal::set_free_balance(&transactor, b - transaction_fee);
+		PublicPass(transactor)
+	}
+
+	#[cfg(test)]
+	pub fn test(signed: &AccountId) -> PublicPass {
+		PublicPass(signed)
+	}
+
+	#[cfg(test)]
+	pub fn nobody() -> PublicPass<'static> {
+		PublicPass(&NOBODY)
+	}
+
+	/// Create a smart-contract account.
+	pub fn create(self, code: &[u8], value: Balance) {
+		// commit anything that made it this far to storage
+		if let Some(commit) = private::effect_create(self.0, code, value, private::DirectExt) {
+			private::commit_state(commit);
+		}
+	}
+}
+
+impl<'a> ops::Deref for PublicPass<'a> {
+	type Target = AccountId;
+	fn deref(&self) -> &AccountId {
+		self.0
+	}
+}
+
+impl_dispatch! {
+	pub mod public;
+	fn transfer(dest: AccountId, value: Balance) = 0;
+	fn stake() = 1;
+	fn unstake() = 2;
+}
+
+impl<'a> public::Dispatch for PublicPass<'a> {
+	/// Transfer some unlocked staking balance to another staker.
+	/// TODO: probably want to state gas-limit and gas-price.
+	fn transfer(self, dest: AccountId, value: Balance) {
+		// commit anything that made it this far to storage
+		if let Some(commit) = private::effect_transfer(&self, &dest, value, private::DirectExt) {
+			private::commit_state(commit);
+		}
+	}
+
+	/// Declare the desire to stake for the transactor.
+	///
+	/// Effects will be felt at the beginning of the next era.
+	fn stake(self) {
+		let mut intentions = IntentionStorageVec::items();
+		// can't be in the list twice.
+		assert!(intentions.iter().find(|&t| *t == *self).is_none(), "Cannot stake if already staked.");
+		intentions.push(self.clone());
+		IntentionStorageVec::set_items(&intentions);
+		storage::put(&self.to_keyed_vec(BONDAGE_OF), &u64::max_value());
+	}
+
+	/// Retract the desire to stake for the transactor.
+	///
+	/// Effects will be felt at the beginning of the next era.
+	fn unstake(self) {
+		let mut intentions = IntentionStorageVec::items();
+		if let Some(position) = intentions.iter().position(|&t| t == *self) {
+			intentions.swap_remove(position);
+		} else {
+			panic!("Cannot unstake if not already staked.");
+		}
+		IntentionStorageVec::set_items(&intentions);
+		storage::put(&self.to_keyed_vec(BONDAGE_OF), &(current_era() + bonding_duration()));
+	}
+}
+
+impl_dispatch! {
+	pub mod privileged;
+	fn set_sessions_per_era(new: BlockNumber) = 0;
+	fn set_bonding_duration(new: BlockNumber) = 1;
+	fn set_validator_count(new: u32) = 2;
+	fn force_new_era() = 3;
+}
+
+impl privileged::Dispatch for democracy::PrivPass {
+	/// Set the number of sessions in an era.
+	fn set_sessions_per_era(self, new: BlockNumber) {
+		storage::put(NEXT_SESSIONS_PER_ERA, &new);
+	}
+
+	/// The length of the bonding duration in eras.
+	fn set_bonding_duration(self, new: BlockNumber) {
+		storage::put(BONDING_DURATION, &new);
+	}
+
+	/// The length of a staking era in sessions.
+	fn set_validator_count(self, new: u32) {
+		storage::put(VALIDATOR_COUNT, &new);
+	}
+
+	/// Force there to be a new era. This also forces a new session immediately after.
+	fn force_new_era(self) {
+		new_era();
+		session::internal::rotate_session();
+	}
+}
+
 // Each identity's stake may be in one of three bondage states, given by an integer:
 // - n | n <= current_era(): inactive: free to be transferred.
 // - ~0: active: currently representing a validator.
 // - n | n > current_era(): deactivating: recently representing a validator and not yet
 //   ready for transfer.
 
-pub mod public {
+mod private {
 	use super::*;
 
 	#[derive(Default)]
-	struct ChangeEntry {
+	pub struct ChangeEntry {
 		balance: Option<Balance>,
 		code: Option<Vec<u8>>,
 		storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
@@ -157,7 +277,7 @@ pub mod public {
 
 	type State = BTreeMap<AccountId, ChangeEntry>;
 
-	trait Externalities {
+	pub trait Externalities {
 		fn get_storage(&self, account: &AccountId, location: &[u8]) -> Option<Vec<u8>>;
 		fn get_code(&self, account: &AccountId) -> Vec<u8>;
 		fn get_balance(&self, account: &AccountId) -> Balance;
@@ -173,7 +293,7 @@ pub mod public {
 		do_get_balance: F5,
 	}
 
-	struct DirectExt;
+	pub struct DirectExt;
 	impl Externalities for DirectExt {
 		fn get_storage(&self, account: &AccountId, location: &[u8]) -> Option<Vec<u8>> {
 			let mut v = account.to_keyed_vec(STORAGE_OF);
@@ -204,7 +324,7 @@ pub mod public {
 		}
 	}
 
-	fn commit_state(s: State) {
+	pub fn commit_state(s: State) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
 				storage::put(&address.to_keyed_vec(BALANCE_OF), &balance);
@@ -245,15 +365,7 @@ pub mod public {
 		}
 	}
 
-	/// Create a smart-contract account.
-	pub fn create(transactor: &AccountId, code: &[u8], value: Balance) {
-		// commit anything that made it this far to storage
-		if let Some(commit) = effect_create(transactor, code, value, DirectExt) {
-			commit_state(commit);
-		}
-	}
-
-	fn effect_create<E: Externalities>(
+	pub fn effect_create<E: Externalities>(
 		transactor: &AccountId,
 		code: &[u8],
 		value: Balance,
@@ -282,16 +394,7 @@ pub mod public {
 		Some(local)
 	}
 
-	/// Transfer some unlocked staking balance to another staker.
-	/// TODO: probably want to state gas-limit and gas-price.
-	pub fn transfer(transactor: &AccountId, dest: &AccountId, value: Balance) {
-		// commit anything that made it this far to storage
-		if let Some(commit) = effect_transfer(transactor, dest, value, DirectExt) {
-			commit_state(commit);
-		}
-	}
-
-	fn effect_transfer<E: Externalities>(
+	pub fn effect_transfer<E: Externalities>(
 		transactor: &AccountId,
 		dest: &AccountId,
 		value: Balance,
@@ -361,57 +464,6 @@ pub mod public {
 		} else {
 			None
 		}
-	}
-
-	/// Declare the desire to stake for the transactor.
-	///
-	/// Effects will be felt at the beginning of the next era.
-	pub fn stake(transactor: &AccountId) {
-		let mut intentions = IntentionStorageVec::items();
-		// can't be in the list twice.
-		assert!(intentions.iter().find(|t| *t == transactor).is_none(), "Cannot stake if already staked.");
-		intentions.push(transactor.clone());
-		IntentionStorageVec::set_items(&intentions);
-		storage::put(&transactor.to_keyed_vec(BONDAGE_OF), &u64::max_value());
-	}
-
-	/// Retract the desire to stake for the transactor.
-	///
-	/// Effects will be felt at the beginning of the next era.
-	pub fn unstake(transactor: &AccountId) {
-		let mut intentions = IntentionStorageVec::items();
-		if let Some(position) = intentions.iter().position(|t| t == transactor) {
-			intentions.swap_remove(position);
-		} else {
-			panic!("Cannot unstake if not already staked.");
-		}
-		IntentionStorageVec::set_items(&intentions);
-		storage::put(&transactor.to_keyed_vec(BONDAGE_OF), &(current_era() + bonding_duration()));
-	}
-}
-
-pub mod privileged {
-	use super::*;
-
-	/// Set the number of sessions in an era.
-	pub fn set_sessions_per_era(new: BlockNumber) {
-		storage::put(NEXT_SESSIONS_PER_ERA, &new);
-	}
-
-	/// The length of the bonding duration in eras.
-	pub fn set_bonding_duration(new: BlockNumber) {
-		storage::put(BONDING_DURATION, &new);
-	}
-
-	/// The length of a staking era in sessions.
-	pub fn set_validator_count(new: u32) {
-		storage::put(VALIDATOR_COUNT, &new);
-	}
-
-	/// Force there to be a new era. This also forces a new session immediately after.
-	pub fn force_new_era() {
-		new_era();
-		session::privileged::force_new_session();
 	}
 }
 
@@ -540,6 +592,8 @@ pub mod testing {
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring::*;
 	use runtime::session;
+	use super::public::{Call, Dispatch};
+	use super::privileged::{Dispatch as PrivDispatch, Call as PrivCall};
 
 	pub fn externalities(session_length: u64, sessions_per_era: u64, current_era: u64) -> TestExternalities {
 		let extras: TestExternalities = map![
@@ -549,6 +603,7 @@ pub mod testing {
 			twox_128(&2u32.to_keyed_vec(INTENTION_AT)).to_vec() => Charlie.to_raw_public_vec(),
 			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&sessions_per_era),
 			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
+			twox_128(TRANSACTION_FEE).to_vec() => vec![].and(&1u64),
 			twox_128(CURRENT_ERA).to_vec() => vec![].and(&current_era),
 			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
@@ -560,7 +615,6 @@ pub mod testing {
 mod tests {
 	use super::*;
 	use super::internal::*;
-	use super::public::*;
 	use super::privileged::*;
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
@@ -569,6 +623,9 @@ mod tests {
 	use environment::with_env;
 	use demo_primitives::AccountId;
 	use runtime::{staking, session};
+	use runtime::democracy::PrivPass;
+	use runtime::staking::public::{Call, Dispatch};
+	use runtime::staking::privileged::{Call as PCall, Dispatch as PDispatch};
 
 	#[test]
 	fn staking_should_work() {
@@ -581,6 +638,7 @@ mod tests {
 			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
 			twox_128(BONDING_DURATION).to_vec() => vec![].and(&3u64),
 			twox_128(TOTAL_STAKE).to_vec() => vec![].and(&100u64),
+			twox_128(TRANSACTION_FEE).to_vec() => vec![].and(&0u64),
 			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&10u64),
 			twox_128(&Bob.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&20u64),
 			twox_128(&Charlie.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&30u64),
@@ -595,9 +653,9 @@ mod tests {
 
 			// Block 1: Add three validators. No obvious change.
 			with_env(|e| e.block_number = 1);
-			stake(&Alice);
-			stake(&Bob);
-			stake(&Dave);
+			public::Call::stake().dispatch(PublicPass::new(&Alice));
+			PublicPass::new(&Bob).stake();
+			PublicPass::new(&Dave).stake();
 			check_new_era();
 			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
 
@@ -608,8 +666,8 @@ mod tests {
 
 			// Block 3: Unstake highest, introduce another staker. No change yet.
 			with_env(|e| e.block_number = 3);
-			stake(&Charlie);
-			unstake(&Dave);
+			PublicPass::new(&Charlie).stake();
+			PublicPass::new(&Dave).unstake();
 			check_new_era();
 
 			// Block 4: New era - validators change.
@@ -619,7 +677,7 @@ mod tests {
 
 			// Block 5: Transfer stake from highest to lowest. No change yet.
 			with_env(|e| e.block_number = 5);
-			transfer(&Dave, &Alice, 40);
+			PublicPass::new(&Dave).transfer(Alice.to_raw_public(), 40);
 			check_new_era();
 
 			// Block 6: Lowest now validator.
@@ -629,7 +687,7 @@ mod tests {
 
 			// Block 7: Unstake three. No change yet.
 			with_env(|e| e.block_number = 7);
-			unstake(&Charlie);
+			PublicPass::new(&Charlie).unstake();
 			check_new_era();
 			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Charlie.into()]);
 
@@ -668,7 +726,7 @@ mod tests {
 
 			// Block 3: Schedule an era length change; no visible changes.
 			with_env(|e| e.block_number = 3);
-			set_sessions_per_era(3);
+			PrivPass::test().set_sessions_per_era(3);
 			check_new_era();
 			assert_eq!(sessions_per_era(), 2u64);
 			assert_eq!(last_era_length_change(), 0u64);
@@ -719,9 +777,9 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_works() {
-		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
-			transfer(&Alice, &Bob, 69);
+		with_externalities(&mut testing::externalities(1, 3, 1), || {
+			set_free_balance(&Alice, 112);
+			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
 			assert_eq!(balance(&Alice), 42);
 			assert_eq!(balance(&Bob), 69);
 		});
@@ -732,8 +790,8 @@ mod tests {
 	fn staking_balance_transfer_when_bonded_panics() {
 		with_externalities(&mut TestExternalities::default(), || {
 			set_free_balance(&Alice, 111);
-			stake(&Alice);
-			transfer(&Alice, &Bob, 69);
+			PublicPass::new(&Alice).stake();
+			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
 		});
 	}
 
@@ -760,7 +818,7 @@ mod tests {
 		with_externalities(&mut TestExternalities::default(), || {
 			set_free_balance(&Alice, 111);
 			reserve_balance(&Alice, 69);
-			transfer(&Alice, &Bob, 69);
+			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
 		});
 	}
 

@@ -20,12 +20,57 @@ use rstd::prelude::*;
 use integer_sqrt::IntegerSquareRoot;
 use codec::{KeyedVec, Slicable, Input, NonTrivialSlicable};
 use runtime_support::storage;
-use demo_primitives::{Proposal, AccountId, Hash, BlockNumber, VoteThreshold};
+use demo_primitives::{AccountId, Hash, BlockNumber};
+use dispatch::PrivCall as Proposal;
 use runtime::{staking, system, session};
-use runtime::staking::Balance;
+use runtime::staking::{PublicPass, Balance};
 
+/// A token for privileged dispatch. Can only be created in this module.
+pub struct PrivPass((),);
+
+impl PrivPass {
+	fn new() -> PrivPass { PrivPass((),) }
+
+	#[cfg(test)]
+	pub fn test() -> PrivPass { PrivPass((),) }
+}
+
+/// A proposal index.
 pub type PropIndex = u32;
+/// A referendum index.
 pub type ReferendumIndex = u32;
+
+/// A means of determining if a vote is past pass threshold.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub enum VoteThreshold {
+	/// A supermajority of approvals is needed to pass this vote.
+	SuperMajorityApprove,
+	/// A supermajority of rejects is needed to fail this vote.
+	SuperMajorityAgainst,
+	/// A simple majority of approvals is needed to pass this vote.
+	SimpleMajority,
+}
+
+impl Slicable for VoteThreshold {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		u8::decode(input).and_then(|v| match v {
+			0 => Some(VoteThreshold::SuperMajorityApprove),
+			1 => Some(VoteThreshold::SuperMajorityAgainst),
+			2 => Some(VoteThreshold::SimpleMajority),
+			_ => None,
+		})
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		match *self {
+			VoteThreshold::SuperMajorityApprove => 0u8,
+			VoteThreshold::SuperMajorityAgainst => 1u8,
+			VoteThreshold::SimpleMajority => 2u8,
+		}.using_encoded(f)
+	}
+}
+impl NonTrivialSlicable for VoteThreshold {}
 
 trait Approved {
 	/// Given `approve` votes for and `against` votes against from a total electorate size of
@@ -151,55 +196,79 @@ pub fn next_free_ref_index() -> ReferendumIndex {
 	storage::get_or_default(REFERENDUM_COUNT)
 }
 
-pub mod public {
-	use super::*;
+impl_dispatch! {
+	pub mod public;
+	fn propose(proposal: Box<Proposal>, value: Balance) = 0;
+	fn second(proposal: PropIndex) = 1;
+	fn vote(ref_index: ReferendumIndex, approve_proposal: bool) = 2;
+}
 
+impl<'a> public::Dispatch for PublicPass<'a> {
 	/// Propose a sensitive action to be taken.
-	pub fn propose(signed: &AccountId, proposal: &Proposal, value: Balance) {
+	fn propose(self, proposal: Box<Proposal>, value: Balance) {
 		assert!(value >= minimum_deposit());
-		assert!(staking::internal::deduct_unbonded(signed, value));
+		assert!(staking::internal::deduct_unbonded(&self, value));
 
 		let index: PropIndex = storage::get_or_default(PUBLIC_PROP_COUNT);
 		storage::put(PUBLIC_PROP_COUNT, &(index + 1));
-		storage::put(&index.to_keyed_vec(DEPOSIT_OF), &(value, vec![*signed]));
+		storage::put(&index.to_keyed_vec(DEPOSIT_OF), &(value, vec![*self]));
 
 		let mut props = public_props();
-		props.push((index, proposal.clone(), *signed));
+		props.push((index, (*proposal).clone(), *self));
 		storage::put(PUBLIC_PROPS, &props);
 	}
 
 	/// Propose a sensitive action to be taken.
-	pub fn second(signed: &AccountId, proposal: PropIndex) {
+	fn second(self, proposal: PropIndex) {
 		let key = proposal.to_keyed_vec(DEPOSIT_OF);
 		let mut deposit: (Balance, Vec<AccountId>) =
 			storage::get(&key).expect("can only second an existing proposal");
-		assert!(staking::internal::deduct_unbonded(signed, deposit.0));
+		assert!(staking::internal::deduct_unbonded(&self, deposit.0));
 
-		deposit.1.push(*signed);
+		deposit.1.push(*self);
 		storage::put(&key, &deposit);
 	}
 
 	/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
 	/// false would be a vote to keep the status quo..
-	pub fn vote(signed: &AccountId, ref_index: ReferendumIndex, approve_proposal: bool) {
+	fn vote(self, ref_index: ReferendumIndex, approve_proposal: bool) {
 		if !is_active_referendum(ref_index) {
 			panic!("vote given for invalid referendum.")
 		}
-		if staking::balance(signed) == 0 {
+		if staking::balance(&self) == 0 {
 			panic!("transactor must have balance to signal approval.");
 		}
-		let key = (*signed, ref_index).to_keyed_vec(VOTE_OF);
+		let key = (*self, ref_index).to_keyed_vec(VOTE_OF);
 		if !storage::exists(&key) {
 			let mut voters = voters_for(ref_index);
-			voters.push(signed.clone());
+			voters.push(self.clone());
 			storage::put(&ref_index.to_keyed_vec(VOTERS_FOR), &voters);
 		}
 		storage::put(&key, &approve_proposal);
 	}
 }
 
-pub mod privileged {
+impl_dispatch! {
+	pub mod privileged;
+	fn start_referendum(proposal: Box<Proposal>, vote_threshold: VoteThreshold) = 0;
+	fn cancel_referendum(ref_index: ReferendumIndex) = 1;
+}
+
+impl privileged::Dispatch for PrivPass {
+	/// Start a referendum.
+	fn start_referendum(self, proposal: Box<Proposal>, vote_threshold: VoteThreshold) {
+		inject_referendum(system::block_number() + voting_period(), *proposal, vote_threshold);
+	}
+
+	/// Remove a referendum.
+	fn cancel_referendum(self, ref_index: ReferendumIndex) {
+		clear_referendum(ref_index);
+	}
+}
+
+pub mod internal {
 	use super::*;
+	use dispatch;
 
 	/// Can be called directly by the council.
 	pub fn start_referendum(proposal: Proposal, vote_threshold: VoteThreshold) {
@@ -210,12 +279,6 @@ pub mod privileged {
 	pub fn cancel_referendum(ref_index: ReferendumIndex) {
 		clear_referendum(ref_index);
 	}
-}
-
-pub mod internal {
-	use super::*;
-	use demo_primitives::Proposal;
-	use dispatch;
 
 	/// Current era is ending; we should finish up any proposals.
 	pub fn end_block(now: BlockNumber) {
@@ -245,7 +308,7 @@ pub mod internal {
 			let total_stake = staking::total_stake();
 			clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
-				dispatch::proposal(proposal);
+				proposal.dispatch(PrivPass::new());
 			}
 			storage::put(NEXT_TALLY, &(index + 1));
 		}
@@ -307,6 +370,7 @@ pub mod testing {
 			twox_128(staking::SESSIONS_PER_ERA).to_vec() => vec![].and(&1u64),
 			twox_128(staking::VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
 			twox_128(staking::CURRENT_ERA).to_vec() => vec![].and(&1u64),
+			twox_128(staking::TRANSACTION_FEE).to_vec() => vec![].and(&1u64),
 
 			twox_128(LAUNCH_PERIOD).to_vec() => vec![].and(&1u64),
 			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64),
@@ -322,7 +386,11 @@ mod tests {
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring::*;
 	use environment::with_env;
-	use demo_primitives::{AccountId, Proposal};
+	use demo_primitives::AccountId;
+	use dispatch::PrivCall as Proposal;
+	use runtime::staking::PublicPass;
+	use super::public::Dispatch;
+	use super::privileged::Dispatch as PrivDispatch;
 	use runtime::{staking, session, democracy};
 
 	fn new_test_ext() -> TestExternalities {
@@ -343,13 +411,18 @@ mod tests {
 
 	// TODO: test VoteThreshold
 
+	fn propose_sessions_per_era(who: &AccountId, value: u64, locked: Balance) {
+		PublicPass::test(who).
+			propose(Box::new(Proposal::Staking(staking::privileged::Call::set_sessions_per_era(value))), locked);
+	}
+
 	#[test]
 	fn locked_for_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 2u64);
-			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(4), 4u64);
-			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(3), 3u64);
+			propose_sessions_per_era(&Alice, 2, 2u64);
+			propose_sessions_per_era(&Alice, 4, 4u64);
+			propose_sessions_per_era(&Alice, 3, 3u64);
 			assert_eq!(locked_for(0), Some(2));
 			assert_eq!(locked_for(1), Some(4));
 			assert_eq!(locked_for(2), Some(3));
@@ -360,12 +433,12 @@ mod tests {
 	fn single_proposal_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 1u64);
+			propose_sessions_per_era(&Alice, 2, 1u64);
 			democracy::internal::end_block(system::block_number());
 
 			with_env(|e| e.block_number = 2);
 			let r = 0;
-			public::vote(&Alice, r, true);
+			PublicPass::test(&Alice).vote(r, true);
 
 			assert_eq!(next_free_ref_index(), 1);
 			assert_eq!(voters_for(r), vec![Alice.to_raw_public()]);
@@ -383,11 +456,11 @@ mod tests {
 	fn deposit_for_proposals_should_be_taken() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 5u64);
-			public::second(&Bob, 0);
-			public::second(&Eve, 0);
-			public::second(&Eve, 0);
-			public::second(&Eve, 0);
+			propose_sessions_per_era(&Alice, 2, 5u64);
+			PublicPass::test(&Bob).second(0);
+			PublicPass::test(&Eve).second(0);
+			PublicPass::test(&Eve).second(0);
+			PublicPass::test(&Eve).second(0);
 			assert_eq!(staking::balance(&Alice), 5u64);
 			assert_eq!(staking::balance(&Bob), 15u64);
 			assert_eq!(staking::balance(&Eve), 35u64);
@@ -398,11 +471,11 @@ mod tests {
 	fn deposit_for_proposals_should_be_returned() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 5u64);
-			public::second(&Bob, 0);
-			public::second(&Eve, 0);
-			public::second(&Eve, 0);
-			public::second(&Eve, 0);
+			propose_sessions_per_era(&Alice, 2, 5u64);
+			PublicPass::test(&Bob).second(0);
+			PublicPass::test(&Eve).second(0);
+			PublicPass::test(&Eve).second(0);
+			PublicPass::test(&Eve).second(0);
 			democracy::internal::end_block(system::block_number());
 			assert_eq!(staking::balance(&Alice), 10u64);
 			assert_eq!(staking::balance(&Bob), 20u64);
@@ -415,7 +488,7 @@ mod tests {
 	fn proposal_with_deposit_below_minimum_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 0u64);
+			propose_sessions_per_era(&Alice, 2, 0u64);
 		});
 	}
 
@@ -424,7 +497,7 @@ mod tests {
 	fn poor_proposer_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Alice, &Proposal::StakingSetSessionsPerEra(2), 11u64);
+			propose_sessions_per_era(&Alice, 2, 11u64);
 		});
 	}
 
@@ -433,46 +506,55 @@ mod tests {
 	fn poor_seconder_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::propose(&Bob, &Proposal::StakingSetSessionsPerEra(2), 11u64);
-			public::second(&Alice, 0);
+			propose_sessions_per_era(&Bob, 2, 11u64);
+			PublicPass::test(&Alice).second(0);
 		});
+	}
+
+	fn propose_bonding_duration(who: &AccountId, value: u64, locked: Balance) {
+		PublicPass::test(who).
+			propose(Box::new(Proposal::Staking(staking::privileged::Call::set_bonding_duration(value))), locked);
 	}
 
 	#[test]
 	fn runners_up_should_come_after() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 0);
-			public::propose(&Alice, &Proposal::StakingSetBondingDuration(2), 2u64);
-			public::propose(&Alice, &Proposal::StakingSetBondingDuration(4), 4u64);
-			public::propose(&Alice, &Proposal::StakingSetBondingDuration(3), 3u64);
+			propose_bonding_duration(&Alice, 2, 2u64);
+			propose_bonding_duration(&Alice, 4, 4u64);
+			propose_bonding_duration(&Alice, 3, 3u64);
 			democracy::internal::end_block(system::block_number());
 
 			with_env(|e| e.block_number = 1);
-			public::vote(&Alice, 0, true);
+			PublicPass::test(&Alice).vote(0, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 4u64);
 
 			with_env(|e| e.block_number = 2);
-			public::vote(&Alice, 1, true);
+			PublicPass::test(&Alice).vote(1, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 3u64);
 
 			with_env(|e| e.block_number = 3);
-			public::vote(&Alice, 2, true);
+			PublicPass::test(&Alice).vote(2, true);
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
 			assert_eq!(staking::bonding_duration(), 2u64);
 		});
 	}
 
+	fn sessions_per_era_propsal(value: u64) -> Proposal {
+		Proposal::Staking(staking::privileged::Call::set_sessions_per_era(value))
+	}
+
 	#[test]
 	fn simple_passing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&Alice, r, true);
+			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			PublicPass::test(&Alice).vote(r, true);
 
 			assert_eq!(voters_for(r), vec![Alice.to_raw_public()]);
 			assert_eq!(vote_of(&Alice, r), Some(true));
@@ -489,9 +571,9 @@ mod tests {
 	fn cancel_referendum_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&Alice, r, true);
-			privileged::cancel_referendum(r);
+			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			PublicPass::test(&Alice).vote(r, true);
+			PrivPass::new().cancel_referendum(r);
 
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
@@ -504,8 +586,8 @@ mod tests {
 	fn simple_failing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&Alice, r, false);
+			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			PublicPass::test(&Alice).vote(r, false);
 
 			assert_eq!(voters_for(r), vec![Alice.to_raw_public()]);
 			assert_eq!(vote_of(&Alice, r), Some(false));
@@ -522,13 +604,13 @@ mod tests {
 	fn controversial_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&Alice, r, true);
-			public::vote(&Bob, r, false);
-			public::vote(&Charlie, r, false);
-			public::vote(&Dave, r, true);
-			public::vote(&Eve, r, false);
-			public::vote(&Ferdie, r, true);
+			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			PublicPass::test(&Alice).vote(r, true);
+			PublicPass::test(&Bob).vote(r, false);
+			PublicPass::test(&Charlie).vote(r, false);
+			PublicPass::test(&Dave).vote(r, true);
+			PublicPass::test(&Eve).vote(r, false);
+			PublicPass::test(&Ferdie).vote(r, true);
 
 			assert_eq!(tally(r), (110, 100));
 
@@ -543,9 +625,9 @@ mod tests {
 	fn controversial_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&Eve, r, false);
-			public::vote(&Ferdie, r, true);
+			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			PublicPass::test(&Eve).vote(r, false);
+			PublicPass::test(&Ferdie).vote(r, true);
 
 			assert_eq!(tally(r), (60, 50));
 
@@ -563,10 +645,10 @@ mod tests {
 			assert_eq!(staking::total_stake(), 210u64);
 
 			with_env(|e| e.block_number = 1);
-			let r = inject_referendum(1, Proposal::StakingSetSessionsPerEra(2), VoteThreshold::SuperMajorityApprove);
-			public::vote(&Dave, r, true);
-			public::vote(&Eve, r, false);
-			public::vote(&Ferdie, r, true);
+			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			PublicPass::test(&Dave).vote(r, true);
+			PublicPass::test(&Eve).vote(r, false);
+			PublicPass::test(&Ferdie).vote(r, true);
 
 			assert_eq!(tally(r), (100, 50));
 

@@ -17,6 +17,7 @@
 //! Timestamp manager: just handles the current timestamp.
 
 use runtime_support::storage;
+use runtime::staking::PublicPass;
 
 pub type Timestamp = u64;
 
@@ -27,11 +28,14 @@ pub fn get() -> Timestamp {
 	storage::get_or_default(CURRENT_TIMESTAMP)
 }
 
-pub mod public {
-	use super::*;
+impl_dispatch! {
+	pub mod public;
+	fn set(now: Timestamp) = 0;
+}
 
+impl<'a> public::Dispatch for PublicPass<'a> {
 	/// Set the current time.
-	pub fn set(now: Timestamp) {
+	fn set(self, now: Timestamp) {
 		storage::put(CURRENT_TIMESTAMP, &now);
 	}
 }
@@ -44,6 +48,8 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use runtime::timestamp;
 	use codec::{Joiner, KeyedVec};
+	use demo_primitives::AccountId;
+	use runtime::staking::PublicPass;
 
 	#[test]
 	fn timestamp_works() {
@@ -53,7 +59,7 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			assert_eq!(get(), 42);
-			set(69);
+			PublicPass::nobody().set(69);
 			assert_eq!(get(), 69);
 		});
 	}

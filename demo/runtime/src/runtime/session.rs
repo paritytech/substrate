@@ -22,6 +22,8 @@ use codec::KeyedVec;
 use runtime_support::{storage, StorageVec};
 use demo_primitives::{AccountId, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
+use runtime::democracy::PrivPass;
+use runtime::staking::PublicPass;
 
 pub const SESSION_LENGTH: &[u8] = b"ses:len";
 pub const CURRENT_INDEX: &[u8] = b"ses:ind";
@@ -62,28 +64,35 @@ pub fn last_length_change() -> BlockNumber {
 	storage::get_or(LAST_LENGTH_CHANGE, 0)
 }
 
-pub mod public {
-	use super::*;
+impl_dispatch! {
+	pub mod public;
+	fn set_key(key: SessionKey) = 0;
+}
 
+impl<'a> public::Dispatch for PublicPass<'a> {
 	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 	/// session.
-	pub fn set_key(validator: &AccountId, key: &SessionKey) {
+	fn set_key(self, key: SessionKey) {
 		// set new value for next session
-		storage::put(&validator.to_keyed_vec(NEXT_KEY_FOR), key);
+		storage::put(&self.to_keyed_vec(NEXT_KEY_FOR), &key);
 	}
 }
 
-pub mod privileged {
-	use super::*;
+impl_dispatch! {
+	pub mod privileged;
+	fn set_length(new: BlockNumber) = 0;
+	fn force_new_session() = 1;
+}
 
+impl privileged::Dispatch for PrivPass {
 	/// Set a new era length. Won't kick in until the next era change (at current length).
-	pub fn set_length(new: BlockNumber) {
+	fn set_length(self, new: BlockNumber) {
 		storage::put(NEXT_SESSION_LENGTH, &new);
 	}
 
 	/// Forces a new session.
-	pub fn force_new_session() {
-		rotate_session();
+	fn force_new_session(self) {
+		internal::rotate_session();
 	}
 }
 
@@ -110,27 +119,27 @@ pub mod internal {
 			rotate_session();
 		}
 	}
-}
 
-/// Move onto next session: register the new authority set.
-fn rotate_session() {
-	// Increment current session index.
-	storage::put(CURRENT_INDEX, &(current_index() + 1));
+	/// Move onto next session: register the new authority set.
+	pub fn rotate_session() {
+		// Increment current session index.
+		storage::put(CURRENT_INDEX, &(current_index() + 1));
 
-	// Enact era length change.
-	if let Some(next_len) = storage::get::<u64>(NEXT_SESSION_LENGTH) {
-		storage::put(SESSION_LENGTH, &next_len);
-		storage::put(LAST_LENGTH_CHANGE, &system::block_number());
-		storage::kill(NEXT_SESSION_LENGTH);
-	}
-
-	// Update any changes in session keys.
-	validators().iter().enumerate().for_each(|(i, v)| {
-		let k = v.to_keyed_vec(NEXT_KEY_FOR);
-		if let Some(n) = storage::take(&k) {
-			consensus::internal::set_authority(i as u32, &n);
+		// Enact era length change.
+		if let Some(next_len) = storage::get::<u64>(NEXT_SESSION_LENGTH) {
+			storage::put(SESSION_LENGTH, &next_len);
+			storage::put(LAST_LENGTH_CHANGE, &system::block_number());
+			storage::kill(NEXT_SESSION_LENGTH);
 		}
-	});
+
+		// Update any changes in session keys.
+		validators().iter().enumerate().for_each(|(i, v)| {
+			let k = v.to_keyed_vec(NEXT_KEY_FOR);
+			if let Some(n) = storage::take(&k) {
+				consensus::internal::set_authority(i as u32, &n);
+			}
+		});
+	}
 }
 
 #[cfg(any(feature = "std", test))]
@@ -161,7 +170,7 @@ pub mod testing {
 mod tests {
 	use super::*;
 	use super::public::*;
-	use super::privileged::*;
+	use super::privileged::Dispatch as PrivDispatch;
 	use super::internal::*;
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
@@ -200,14 +209,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			// Block 1: Change to length 3; no visible change.
 			with_env(|e| e.block_number = 1);
-			set_length(3);
+			PrivPass::test().set_length(3);
 			check_rotate_session();
 			assert_eq!(length(), 2);
 			assert_eq!(current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
 			with_env(|e| e.block_number = 2);
-			set_length(3);
+			PrivPass::test().set_length(3);
 			check_rotate_session();
 			assert_eq!(length(), 3);
 			assert_eq!(current_index(), 1);
@@ -220,7 +229,7 @@ mod tests {
 
 			// Block 4: Change to length 2; no visible change.
 			with_env(|e| e.block_number = 4);
-			set_length(2);
+			PrivPass::test().set_length(2);
 			check_rotate_session();
 			assert_eq!(length(), 3);
 			assert_eq!(current_index(), 1);
@@ -261,7 +270,7 @@ mod tests {
 
 			// Block 3: Set new key for validator 2; no visible change.
 			with_env(|e| e.block_number = 3);
-			set_key(&[20; 32], &[22; 32]);
+			PublicPass::test(&[20; 32]).set_key([22; 32]);
 			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
 
 			check_rotate_session();
