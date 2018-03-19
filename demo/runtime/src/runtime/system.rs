@@ -109,12 +109,13 @@ pub mod internal {
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
 
+		RandomSeed::kill();
 		let header = Header {
-			number: block_number(),
-			parent_hash: parent_hash(),
+			number: Number::take(),
+			digest: Digest::take(),
+			parent_hash: ParentHash::take(),
+			transaction_root: TransactionsRoot::take(),
 			state_root: storage_root().into(),
-			digest: Digest::get(),
-			transaction_root: transactions_root(),
 		};
 
 		post_finalise(&header);
@@ -169,15 +170,21 @@ fn final_checks(block: &Block) {
 	// check digest
 	assert!(header.digest == Digest::get());
 
-	Number::kill();
-	ParentHash::kill();
-	RandomSeed::kill();
-	Digest::kill();
+	// remove temporaries.
+	kill_temps();
 
 	// check storage root.
 	let storage_root = storage_root().into();
 	info_expect_equal_hash(&header.state_root, &storage_root);
 	assert!(header.state_root == storage_root, "Storage root must match that calculated.");
+}
+
+fn kill_temps() {
+	Number::kill();
+	ParentHash::kill();
+	RandomSeed::kill();
+	Digest::kill();
+	TransactionsRoot::kill();
 }
 
 fn post_finalise(header: &Header) {
@@ -282,7 +289,7 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("5dd9af63b95f4c111123f1dfa3a9e3c504c60b6e9fd2cb0487bf2d8235aabb02").into(),
+			state_root: hex!("cc3f1f5db826013193e502c76992b5e933b12367e37a269a9822b89218323e9f").into(),
 			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};

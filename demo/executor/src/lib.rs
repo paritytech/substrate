@@ -77,10 +77,13 @@ mod tests {
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t: TestExternalities = map![
 			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8]
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8],
+			twox_128(&system::BlockHashAt::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, BLOATY_CODE, "initialise_block", &vec![].and(&Header::from_block_number(1u64)));
+		assert!(r.is_ok());
+		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -88,10 +91,13 @@ mod tests {
 	fn panic_execution_with_native_equivalent_code_gives_error() {
 		let mut t: TestExternalities = map![
 			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8]
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![0u8; 8],
+			twox_128(&system::BlockHashAt::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, COMPACT_CODE, "initialise_block", &vec![].and(&Header::from_block_number(1u64)));
+		assert!(r.is_ok());
+		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -103,7 +109,9 @@ mod tests {
 			twox_128(&system::BlockHashAt::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, COMPACT_CODE, "initialise_block", &vec![].and(&Header::from_block_number(1u64)));
+		assert!(r.is_ok());
+		let r = Executor::new().call(&mut t, COMPACT_CODE, "execute_transaction", &vec![].and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -120,7 +128,9 @@ mod tests {
 			twox_128(&system::BlockHashAt::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = Executor::new().call(&mut t, BLOATY_CODE, "initialise_block", &vec![].and(&Header::from_block_number(1u64)));
+		assert!(r.is_ok());
+		let r = Executor::new().call(&mut t, BLOATY_CODE, "execute_transaction", &vec![].and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
@@ -237,7 +247,9 @@ mod tests {
 		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&Header::from_block_number(1u64)));
+		assert!(r.is_ok());
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].and(&tx()));
 		assert!(r.is_err());
 	}
 
@@ -250,7 +262,9 @@ mod tests {
 		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].and(&Header::from_block_number(1u64)).and(&tx()));
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&Header::from_block_number(1u64)));
+		assert!(r.is_ok());
+		let r = WasmExecutor.call(&mut t, &foreign_code[..], "execute_transaction", &vec![].and(&tx()));
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
