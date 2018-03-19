@@ -15,6 +15,8 @@
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Means of mixing a series of hashes to create a single secure hash.
+//!
+//! Described in http://www.cs.huji.ac.il/~nati/PAPERS/coll_coin_fl.pdf
 
 use rstd::ops::{BitAnd, BitOr};
 use rstd::cmp;
