@@ -37,6 +37,7 @@ storage_items! {
 
 pub const CODE: &'static[u8] = b":code";
 
+
 /// The current block number being processed. Set by `execute_block`.
 pub fn block_number() -> BlockNumber {
 	with_env(|e| e.block_number)
@@ -50,7 +51,7 @@ impl_dispatch! {
 impl privileged::Dispatch for PrivPass {
 	/// Set the new code.
 	fn set_code(self, new: Vec<u8>) {
-		storage::unhashed::put_raw(CODE, &new);
+		storage::unhashed::put_raw(b":code", &new);
 	}
 }
 
