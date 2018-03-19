@@ -47,7 +47,7 @@ pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 			key: &key[..],
 			pos: 0,
 		};
-		Slicable::decode(&mut input).expect("stroage is not null, therefore must be a valid type")
+		Slicable::decode(&mut input).expect("storage is not null, therefore must be a valid type")
 	})
 }
 
@@ -122,58 +122,78 @@ pub fn put_raw(key: &[u8], value: &[u8]) {
 	runtime_io::set_storage(&twox_128(key)[..], value)
 }
 
-struct RuntimeStorage;
+/// The underlying runtime storage.
+pub struct RuntimeStorage;
 
 impl ::GenericStorage for RuntimeStorage {
+	fn exists(&self, key: &[u8]) -> bool {
+		super::storage::exists(key)
+	}
+
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn load<T: Slicable>(&self, key: &[u8]) -> Option<T> {
-		get(key)
+	fn get<T: Slicable>(&self, key: &[u8]) -> Option<T> {
+		super::storage::get(key)
 	}
 
 	/// Put a value in under a key.
-	fn store<T: Slicable>(&self, key: &[u8], val: &T) {
-		put(key, val)
+	fn put<T: Slicable>(&self, key: &[u8], val: &T) {
+		super::storage::put(key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]) {
-		kill(key)
+		super::storage::kill(key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Slicable>(&self, key: &[u8]) -> Option<T> {
-		take(key)
+		super::storage::take(key)
 	}
 }
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 pub trait StorageValue<T: Slicable> {
+	/// The type that get/take return.
+	type Query;
+
 	/// Get the storage key.
 	fn key() -> &'static [u8];
+
+	/// Does the value (explicitly) exist in storage?
+	fn exists() -> bool;
+
 	/// Load the value from the provided storage instance.
-	fn load() -> Option<T>;
+	fn get() -> Self::Query;
+
 	/// Store a value under this key into the provded storage instance.
-	fn store(val: &T);
+	fn put<Arg: Borrow<T>>(val: Arg);
+
 	/// Clear the storage value.
 	fn kill();
+
 	/// Take a value from storage, removing it afterwards.
-	fn take() -> Option<T>;
+	fn take() -> Self::Query;
 }
 
 impl<T: Slicable, U> StorageValue<T> for U where U: generator::StorageValue<T> {
+	type Query = U::Query;
+
 	fn key() -> &'static [u8] {
 		<U as generator::StorageValue<T>>::key()
 	}
-	fn load() -> Option<T> {
-		U::load(&RuntimeStorage)
+	fn exists() -> bool {
+		U::exists(&RuntimeStorage)
 	}
-	fn store(val: &T) {
-		U::store(val, &RuntimeStorage)
+	fn get() -> Self::Query {
+		U::get(&RuntimeStorage)
+	}
+	fn put<Arg: Borrow<T>>(val: Arg) {
+		U::put(val.borrow(), &RuntimeStorage)
 	}
 	fn kill() {
 		U::kill(&RuntimeStorage)
 	}
-	fn take() -> Option<T> {
+	fn take() -> Self::Query {
 		U::take(&RuntimeStorage)
 	}
 }
@@ -196,7 +216,7 @@ pub trait StorageList<T: Slicable> {
 	fn set_items(items: &[T]);
 
 	/// Set the item at the given index.
-	fn set_item(index: u32, item: &T);
+	fn set_item<Arg: Borrow<T>>(index: u32, val: Arg);
 
 	/// Load the value at given index. Returns `None` if the index is out-of-bounds.
 	fn get(index: u32) -> Option<T>;
@@ -229,8 +249,8 @@ impl<T: Slicable, U> StorageList<T> for U where U: generator::StorageList<T> {
 		U::set_items(items, &RuntimeStorage)
 	}
 
-	fn set_item(index: u32, item: &T) {
-		U::set_item(index, item, &RuntimeStorage)
+	fn set_item<Arg: Borrow<T>>(index: u32, val: Arg) {
+		U::set_item(index, val.borrow(), &RuntimeStorage)
 	}
 
 	fn get(index: u32) -> Option<T> {
@@ -248,48 +268,60 @@ impl<T: Slicable, U> StorageList<T> for U where U: generator::StorageList<T> {
 
 /// A strongly-typed map in storage.
 pub trait StorageMap<K: Slicable, V: Slicable> {
+	/// The type that get/take return.
+	type Query;
+
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for(x: &K) -> Vec<u8>;
+	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8>;
+
+	/// Does the value (explicitly) exist in storage?
+	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
 
 	/// Load the value associated with the given key from the map.
-	fn get(key: &K) -> Option<V>;
+	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert(key: &K, val: &V);
+	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg);
 
 	/// Remove the value under a key.
-	fn remove(key: &K);
+	fn remove<KeyArg: Borrow<K>>(key: KeyArg);
 
 	/// Take the value under a key.
-	fn take(key: &K) -> Option<V>;
+	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 }
 
 impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::StorageMap<K, V> {
+	type Query = U::Query;
+
 	fn prefix() -> &'static [u8] {
 		<U as generator::StorageMap<K, V>>::prefix()
 	}
 
-	fn key_for(item: &K) -> Vec<u8> {
-		<U as generator::StorageMap<K, V>>::key_for(item)
+	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8> {
+		<U as generator::StorageMap<K, V>>::key_for(key.borrow())
 	}
 
-	fn get(key: &K) -> Option<V> {
-		U::get(key, &RuntimeStorage)
+	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
+		U::exists(key.borrow(), &RuntimeStorage)
 	}
 
-	fn insert(key: &K, val: &V) {
-		U::insert(key, val, &RuntimeStorage)
+	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
+		U::get(key.borrow(), &RuntimeStorage)
 	}
 
-	fn remove(key: &K) {
-		U::remove(key, &RuntimeStorage)
+	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
+		U::insert(key.borrow(), val.borrow(), &RuntimeStorage)
 	}
 
-	fn take(key: &K) -> Option<V> {
-		U::take(key, &RuntimeStorage)
+	fn remove<KeyArg: Borrow<K>>(key: KeyArg) {
+		U::remove(key.borrow(), &RuntimeStorage)
+	}
+
+	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
+		U::take(key.borrow(), &RuntimeStorage)
 	}
 }
 

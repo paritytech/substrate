@@ -36,7 +36,7 @@
 //!
 //! storage_items! {
 //!     // public value
-//!     pub Value: b"stored_key" => SessionKey;
+//!     pub Value: b"putd_key" => SessionKey;
 //!     // private map.
 //!     Balances: b"private_map:" => map [AuthorityId => Balance];
 //!     // private list.
@@ -48,38 +48,73 @@
 
 use codec;
 use rstd::vec::Vec;
+#[doc(hidden)]
+pub use rstd::borrow::Borrow;
 
 /// Abstraction around storage.
 pub trait Storage {
+	/// true if the key exists in storage.
+	fn exists(&self, key: &[u8]) -> bool;
+
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn load<T: codec::Slicable>(&self, key: &[u8]) -> Option<T>;
+	fn get<T: codec::Slicable>(&self, key: &[u8]) -> Option<T>;
+
+	/// Load the bytes of a key from storage. Can panic if the type is incorrect. Will panic if
+	/// it's not there.
+	fn require<T: codec::Slicable>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
+
+	/// Load the bytes of a key from storage. Can panic if the type is incorrect. The type's
+	/// default is returned if it's not there.
+	fn get_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
 
 	/// Put a value in under a key.
-	fn store<T: codec::Slicable>(&self, key: &[u8], val: &T);
+	fn put<T: codec::Slicable>(&self, key: &[u8], val: &T);
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]);
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: codec::Slicable>(&self, key: &[u8]) -> Option<T> {
-		let value = self.load(key);
+		let value = self.get(key);
 		self.kill(key);
 		value
 	}
+
+	/// Take a value from storage, deleting it after reading.
+	fn take_or_panic<T: codec::Slicable>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
+
+	/// Take a value from storage, deleting it after reading.
+	fn take_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
 }
 
 /// A strongly-typed value kept in storage.
 pub trait StorageValue<T: codec::Slicable> {
+	/// The type that get/take returns.
+	type Query;
+
 	/// Get the storage key.
 	fn key() -> &'static [u8];
+
+	/// true if the value is defined in storage.
+	fn exists<S: Storage>(storage: &S) -> bool {
+		storage.exists(Self::key())
+	}
+
 	/// Load the value from the provided storage instance.
-	fn load<S: Storage>(storage: &S) -> Option<T>;
-	/// Store a value under this key into the provded storage instance.
-	fn store<S: Storage>(val: &T, storage: &S);
-	/// Clear the storage value.
-	fn kill<S: Storage>(storage: &S);
+	fn get<S: Storage>(storage: &S) -> Self::Query;
+
 	/// Take a value from storage, removing it afterwards.
-	fn take<S: Storage>(storage: &S) -> Option<T>;
+	fn take<S: Storage>(storage: &S) -> Self::Query;
+
+	/// Store a value under this key into the provded storage instance.
+	fn put<S: Storage>(val: &T, storage: &S) {
+		storage.put(Self::key(), val)
+	}
+
+	/// Clear the storage value.
+	fn kill<S: Storage>(storage: &S) {
+		storage.kill(Self::key())
+	}
 }
 
 /// A strongly-typed list in storage.
@@ -87,7 +122,7 @@ pub trait StorageList<T: codec::Slicable> {
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 
-	/// Get the key used to store the length field.
+	/// Get the key used to put the length field.
 	fn len_key() -> Vec<u8>;
 
 	/// Get the storage key used to fetch a value at a given index.
@@ -114,225 +149,119 @@ pub trait StorageList<T: codec::Slicable> {
 
 /// A strongly-typed map in storage.
 pub trait StorageMap<K: codec::Slicable, V: codec::Slicable> {
+	/// The type that get/take returns.
+	type Query;
+
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	fn key_for(x: &K) -> Vec<u8>;
 
+	/// true if the value is defined in storage.
+	fn exists<S: Storage>(key: &K, storage: &S) -> bool {
+		storage.exists(&Self::key_for(key)[..])
+	}
+
 	/// Load the value associated with the given key from the map.
-	fn get<S: Storage>(key: &K, storage: &S) -> Option<V>;
-
-	/// Store a value to be associated with the given key from the map.
-	fn insert<S: Storage>(key: &K, val: &V, storage: &S);
-
-	/// Remove the value under a key.
-	fn remove<S: Storage>(key: &K, storage: &S);
+	fn get<S: Storage>(key: &K, storage: &S) -> Self::Query;
 
 	/// Take the value under a key.
-	fn take<S: Storage>(key: &K, storage: &S) -> Option<V>;
+	fn take<S: Storage>(key: &K, storage: &S) -> Self::Query;
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<S: Storage>(key: &K, val: &V, storage: &S) {
+		storage.put(&Self::key_for(key)[..], val);
+	}
+
+	/// Remove the value under a key.
+	fn remove<S: Storage>(key: &K, storage: &S) {
+		storage.kill(&Self::key_for(key)[..]);
+	}
 }
 
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __storage_items_internal {
 	// generator for values.
-	(($($vis:tt)*) $name: ident: $key: expr => $ty:ty) => {
+	(($($vis:tt)*) ($get_fn:ident) ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
+		__storage_items_internal!{ ($($vis)*) () ($gettype) ($getter) ($taker) $name : $key => $ty }
+		pub fn $get_fn() -> $gettype { <$name as $crate::storage::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
+	};
+	(($($vis:tt)*) () ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
 
-		#[allow(unused)]
-		impl $name {
-			/// Get the storage key.
-			$($vis)* fn key() -> &'static [u8] {
-				$key
-			}
-
-			/// Load the value from the provided storage instance.
-			$($vis)* fn load<S: $crate::GenericStorage>(storage: &S) -> Option<$ty> {
-				storage.load($key)
-			}
-
-			/// Store a value under this key into the provded storage instance.
-			$($vis)* fn store<S: $crate::GenericStorage>(val: &$ty, storage: &S) {
-				storage.store($key, val)
-			}
-
-			/// Kill the value.
-			$($vis)* fn kill<S: $crate::GenericStorage>(storage: &S) {
-				storage.kill($key)
-			}
-
-			/// Take and remove the value from the provided storage instance.
-			$($vis)* fn take<S: $crate::GenericStorage>(storage: &S) -> Option<$ty> {
-				storage.take($key)
-			}
-		}
-
 		impl $crate::storage::generator::StorageValue<$ty> for $name {
+			type Query = $gettype;
+
+			/// Get the storage key.
 			fn key() -> &'static [u8] {
 				$key
 			}
 
-			fn load<S: $crate::GenericStorage>(storage: &S) -> Option<$ty> {
-				$name::load(storage)
+			/// Load the value from the provided storage instance.
+			fn get<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
+				storage.$getter($key)
 			}
 
-			fn store<S: $crate::GenericStorage>(val: &$ty, storage: &S) {
-				$name::store(val, storage)
-			}
-
-			fn kill<S: $crate::GenericStorage>(storage: &S) {
-				$name::kill(storage)
-			}
-
-			fn take<S: $crate::GenericStorage>(storage: &S) -> Option<$ty> {
-				$name::take(storage)
+			/// Take a value from storage, removing it afterwards.
+			fn take<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
+				storage.$taker($key)
 			}
 		}
 	};
 	// generator for maps.
-	(($($vis:tt)*) $name: ident: $prefix: expr => map [$kty: ty => $ty:ty]) => {
+	(($($vis:tt)*) ($get_fn:ident) ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
+		__storage_items_internal!{ ($($vis)*) () ($gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
+		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
+			<$name as $crate::storage::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
+		}
+	};
+	(($($vis:tt)*) () ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
-		#[allow(unused)]
-		impl $name {
+		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
+			type Query = $gettype;
+
 			/// Get the prefix key in storage.
-			$($vis)* fn prefix() -> &'static [u8] {
+			fn prefix() -> &'static [u8] {
 				$prefix
 			}
 
 			/// Get the storage key used to fetch a value corresponding to a specific key.
-			$($vis)* fn key_for(x: &$kty) -> Vec<u8> {
+			fn key_for(x: &$kty) -> Vec<u8> {
 				let mut key = $prefix.to_vec();
 				key.extend($crate::codec::Slicable::encode(x));
 				key
 			}
 
 			/// Load the value associated with the given key from the map.
-			$($vis)* fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Option<$ty> {
-				let key = $name::key_for(key);
-				storage.load(&key[..])
-			}
-
-			/// Store a value to be associated with the given key from the map.
-			$($vis)* fn insert<S: $crate::GenericStorage>(key: &$kty, val: &$ty, storage: &S) {
-				let key = $name::key_for(key);
-				storage.store(&key[..], val);
-			}
-
-			/// Remove the value from storage.
-			$($vis)* fn remove<S: $crate::GenericStorage>(key: &$kty, storage: &S) {
-				storage.kill(&$name::key_for(key)[..]);
+			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+				storage.$getter(&key[..])
 			}
 
 			/// Take the value, reading and removing it.
-			$($vis)* fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Option<$ty> {
-				let key = $name::key_for(key);
-				storage.take(&key[..])
-			}
-		}
-
-		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
-			fn prefix() -> &'static [u8] {
-				$prefix
-			}
-
-			fn key_for(x: &$kty) -> Vec<u8> {
-				$name::key_for(x)
-			}
-
-			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Option<$ty> {
-				$name::get(key, storage)
-			}
-
-			fn insert<S: $crate::GenericStorage>(key: &$kty, val: &$ty, storage: &S) {
-				$name::insert(key, val, storage)
-			}
-
-			fn remove<S: $crate::GenericStorage>(key: &$kty, storage: &S) {
-				$name::remove(key, storage)
-			}
-
-			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Option<$ty> {
-				$name::take(key, storage)
+			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+				storage.$taker(&key[..])
 			}
 		}
 	};
 	// generator for lists.
-	(($($vis:tt)*) $name: ident: $prefix: expr => list [$ty:ty]) => {
+	(($($vis:tt)*) $name:ident : $prefix:expr => list [$ty:ty]) => {
 		$($vis)* struct $name;
 
-		#[allow(unused)]
 		impl $name {
-			/// Get the prefix key in storage.
-			$($vis)* fn prefix() -> &'static [u8] {
-				$prefix
-			}
-
-			/// Get the key used to store the length field.
-			// TODO: concat macro should accept byte literals.
-			$($vis)* fn len_key() -> Vec<u8> {
-				let mut key = $prefix.to_vec();
-				key.extend(b"len");
-				key
-			}
-
-			/// Get the storage key used to fetch a value at a given index.
-			$($vis)* fn key_for(index: u32) -> Vec<u8> {
-				let mut key = $prefix.to_vec();
-				key.extend($crate::codec::Slicable::encode(&index));
-				key
-			}
-
-			/// Read out all the items.
-			$($vis)* fn items<S: $crate::GenericStorage>(storage: &S) -> Vec<$ty> {
-				(0..$name::len(storage))
-					.map(|i| $name::get(i, storage).expect("all items within length are set; qed"))
-					.collect()
-			}
-
-			/// Set the current set of items.
-			$($vis)* fn set_items<S: $crate::GenericStorage>(items: &[$ty], storage: &S) {
-				$name::set_len(items.len() as u32, storage);
-				items.iter()
-					.enumerate()
-					.for_each(|(i, item)| $name::set_item(i as u32, item, storage));
-			}
-
-			$($vis)* fn set_item<S: $crate::GenericStorage>(index: u32, item: &$ty, storage: &S) {
-				if index < $name::len(storage) {
-					storage.store(&$name::key_for(index)[..], item);
-				}
-			}
-
-			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
-			$($vis)* fn get<S: $crate::GenericStorage>(index: u32, storage: &S) -> Option<$ty> {
-				storage.load(&$name::key_for(index)[..])
-			}
-
-			/// Load the length of the list.
-			$($vis)* fn len<S: $crate::GenericStorage>(storage: &S) -> u32 {
-				storage.load(&$name::len_key()).unwrap_or_default()
-			}
-
-			/// Clear the list.
-			$($vis)* fn clear<S: $crate::GenericStorage>(storage: &S) {
-				for i in 0..$name::len(storage) {
-					$name::clear_item(i, storage);
-				}
-
-				storage.kill(&$name::len_key()[..])
-			}
-
 			fn clear_item<S: $crate::GenericStorage>(index: u32, storage: &S) {
-				if index < $name::len(storage) {
-					storage.kill(&$name::key_for(index));
+				if index < <$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
+					storage.kill(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index));
 				}
 			}
 
 			fn set_len<S: $crate::GenericStorage>(count: u32, storage: &S) {
-				(count..$name::len(storage)).for_each(|i| $name::clear_item(i, storage));
-				storage.store(&$name::len_key(), &count);
+				(count..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
+				storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key(), &count);
 			}
 		}
 
@@ -342,42 +271,59 @@ macro_rules! __storage_items_internal {
 				$prefix
 			}
 
-			/// Get the key used to store the length field.
+			/// Get the key used to put the length field.
 			// TODO: concat macro should accept byte literals.
 			fn len_key() -> Vec<u8> {
-				$name::len_key()
+				let mut key = $prefix.to_vec();
+				key.extend(b"len");
+				key
 			}
 
 			/// Get the storage key used to fetch a value at a given index.
 			fn key_for(index: u32) -> Vec<u8> {
-				$name::key_for(index)
+				let mut key = $prefix.to_vec();
+				key.extend($crate::codec::Slicable::encode(&index));
+				key
 			}
 
 			/// Read out all the items.
 			fn items<S: $crate::GenericStorage>(storage: &S) -> Vec<$ty> {
-				$name::items(storage)
+				(0..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage))
+					.map(|i| <$name as $crate::storage::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
+					.collect()
 			}
 
 			/// Set the current set of items.
 			fn set_items<S: $crate::GenericStorage>(items: &[$ty], storage: &S) {
-				$name::set_items(items, storage)
+				$name::set_len(items.len() as u32, storage);
+				items.iter()
+					.enumerate()
+					.for_each(|(i, item)| <$name as $crate::storage::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
 			}
 
 			fn set_item<S: $crate::GenericStorage>(index: u32, item: &$ty, storage: &S) {
-				$name::set_item(index, item, storage)
+				if index < <$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
+					storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..], item);
+				}
 			}
 
 			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
 			fn get<S: $crate::GenericStorage>(index: u32, storage: &S) -> Option<$ty> {
-				$name::get(index, storage)
+				storage.get(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..])
 			}
 
+			/// Load the length of the list.
 			fn len<S: $crate::GenericStorage>(storage: &S) -> u32 {
-				$name::len(storage)
+				storage.get(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
 			}
 
+			/// Clear the list.
 			fn clear<S: $crate::GenericStorage>(storage: &S) {
-				$name::clear(storage)
+				for i in 0..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
+					$name::clear_item(i, storage);
+				}
+
+				storage.kill(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key()[..])
 			}
 		}
 	};
@@ -387,29 +333,114 @@ macro_rules! __storage_items_internal {
 #[macro_export]
 macro_rules! storage_items {
 	// simple values
-	($name: ident: $key: expr => $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!(() $name: $key => $ty);
+	($name:ident : $key:expr => $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!(() () (Option<$ty>) (get) (take) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
-	(pub $name: ident: $key: expr => $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!((pub) $name: $key => $ty);
+	(pub $name:ident : $key:expr => $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!((pub) () (Option<$ty>) (get) (take) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
+	($name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!(() () ($ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!((pub) () ($ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+	($name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!(() () ($ty) (require) (take_or_panic) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!((pub) () ($ty) (require) (take_or_panic) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+
+	($name:ident get($getfn:ident) : $key:expr => $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!(() ($getfn) (Option<$ty>) (get) (take) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident get($getfn:ident) : $key:expr => $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!((pub) ($getfn) (Option<$ty>) (get) (take) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+	($name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!(() ($getfn) ($ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!((pub) ($getfn) ($ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+	($name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!(() ($getfn) ($ty) (require) (take_or_panic) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
+		__storage_items_internal!((pub) ($getfn) ($ty) (require) (take_or_panic) $name: $key => $ty);
+		storage_items!($($t)*);
+	};
+
 	// maps
-	($name: ident: $prefix: expr => map [$kty: ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!(() $name: $prefix => map [$kty => $ty]);
+	($name:ident : $prefix:expr => map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!(() () (Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
-	(pub $name: ident: $prefix: expr => map [$kty: ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!((pub) $name: $prefix => map [$kty => $ty]);
+	(pub $name:ident : $prefix:expr => map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!((pub) () (Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
+	($name:ident : $prefix:expr => default map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!(() () ($ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident : $prefix:expr => default map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!((pub) () ($ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+	($name:ident : $prefix:expr => required map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!(() () ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident : $prefix:expr => required map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!((pub) () ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+
+	($name:ident get($getfn:ident) : $prefix:expr => map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!(() ($getfn) (Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident get($getfn:ident) : $prefix:expr => map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!((pub) ($getfn) (Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+	($name:ident get($getfn:ident) : $prefix:expr => default map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!(() ($getfn) ($ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident get($getfn:ident) : $prefix:expr => default map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!((pub) ($getfn) ($ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+	($name:ident get($getfn:ident) : $prefix:expr => required map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!(() ($getfn) ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+	(pub $name:ident get($getfn:ident) : $prefix:expr => required map [$kty: ty => $ty:ty]; $($t:tt)*) => {
+		__storage_items_internal!((pub) ($getfn) ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		storage_items!($($t)*);
+	};
+
+
 	// lists
-	($name: ident: $prefix: expr => list [$ty:ty]; $($t:tt)*) => {
+	($name:ident : $prefix:expr => list [$ty:ty]; $($t:tt)*) => {
 		__storage_items_internal!(() $name: $prefix => list [$ty]);
 		storage_items!($($t)*);
 	};
-	(pub $name: ident: $prefix: expr => list [$ty:ty]; $($t:tt)*) => {
+	(pub $name:ident : $prefix:expr => list [$ty:ty]; $($t:tt)*) => {
 		__storage_items_internal!((pub) $name: $prefix => list [$ty]);
 		storage_items!($($t)*);
 	};
@@ -424,11 +455,15 @@ mod tests {
 	use super::*;
 
 	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
-		fn load<T: Slicable>(&self, key: &[u8]) -> Option<T> {
+		fn exists(&self, key: &[u8]) -> bool {
+			self.borrow_mut().get(key).is_some()
+		}
+
+		fn get<T: Slicable>(&self, key: &[u8]) -> Option<T> {
 			self.borrow_mut().get(key).map(|v| T::decode(&mut &v[..]).unwrap())
 		}
 
-		fn store<T: Slicable>(&self, key: &[u8], val: &T) {
+		fn put<T: Slicable>(&self, key: &[u8], val: &T) {
 			self.borrow_mut().insert(key.to_owned(), val.encode());
 		}
 
@@ -443,14 +478,14 @@ mod tests {
 		Map: b"c:" => map [u32 => [u8; 32]];
 	}
 
-    #[test]
+	#[test]
 	fn value() {
 		let storage = RefCell::new(HashMap::new());
-		assert!(Value::load(&storage).is_none());
-		Value::store(&100_000, &storage);
-		assert_eq!(Value::load(&storage), Some(100_000));
+		assert!(Value::get(&storage).is_none());
+		Value::put(&100_000, &storage);
+		assert_eq!(Value::get(&storage), Some(100_000));
 		Value::kill(&storage);
-		assert!(Value::load(&storage).is_none());
+		assert!(Value::get(&storage).is_none());
 	}
 
 	#[test]
