@@ -29,9 +29,8 @@ extern crate substrate_rpc_servers as rpc;
 extern crate polkadot_primitives;
 extern crate polkadot_executor;
 extern crate polkadot_runtime;
+extern crate polkadot_service as service;
 
-#[macro_use]
-extern crate hex_literal;
 #[macro_use]
 extern crate clap;
 #[macro_use]
@@ -40,10 +39,6 @@ extern crate error_chain;
 extern crate log;
 
 pub mod error;
-
-use codec::Slicable;
-use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
-use client::genesis;
 
 /// Parse command line arguments and start the node.
 ///
@@ -64,45 +59,27 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let log_pattern = matches.value_of("log").unwrap_or("");
 	init_logger(log_pattern);
 
-	// Create client
-	let executor = polkadot_executor::Executor::new();
-	let mut storage = Default::default();
-	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
-
-	let genesis_config = GenesisConfig {
-		validators: vec![god_key.clone()],
-		authorities: vec![god_key.clone()],
-		balances: vec![(god_key.clone(), 1u64 << 63)].into_iter().collect(),
-		block_time: 5,			// 5 second block time.
-		session_length: 720,	// that's 1 hour per session.
-		sessions_per_era: 24,	// 24 hours per era.
-		bonding_duration: 90,	// 90 days per bond.
-		approval_ratio: 667,	// 66.7% approvals required for legislation.
-	};
-	let prepare_genesis = || {
-		storage = genesis_config.genesis_map();
-		let block = genesis::construct_genesis_block(&storage);
-		storage.extend(additional_storage_with_genesis(&block));
-		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
-	};
-	let client = client::new_in_mem(executor, prepare_genesis)?;
-
-	let address = "127.0.0.1:9933".parse().unwrap();
-	let handler = rpc::rpc_handler(client);
-	let server = rpc::start_http(&address, handler)?;
+	let mut role = service::Role::FULL;
 
 	if let Some(_) = matches.subcommand_matches("collator") {
 		info!("Starting collator.");
-		server.wait();
-		return Ok(());
+		role = service::Role::COLLATOR;
 	}
-
-	if let Some(_) = matches.subcommand_matches("validator") {
+	else if let Some(_) = matches.subcommand_matches("validator") {
 		info!("Starting validator.");
-		server.wait();
-		return Ok(());
+		role = service::Role::VALIDATOR;
 	}
 
+	let mut config = service::Configuration::default();
+	config.roles = role;
+
+	let service = service::Service::new(config)?;
+
+	let address = "127.0.0.1:9933".parse().unwrap();
+	let handler = rpc::rpc_handler(service.client());
+	let server = rpc::start_http(&address, handler)?;
+
+	server.wait();
 	println!("No command given.\n");
 	let _ = clap::App::from_yaml(yaml).print_long_help();
 

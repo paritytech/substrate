@@ -71,6 +71,7 @@ use futures::future;
 use parking_lot::Mutex;
 
 pub use self::error::{ErrorKind, Error};
+pub use service::Service;
 
 mod error;
 mod service;

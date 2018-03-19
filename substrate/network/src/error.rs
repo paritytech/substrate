@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
+//! Polkadot service possible errors.
+
 use network::Error as NetworkError;
 use client;
 
@@ -23,7 +25,7 @@ error_chain! {
 	}
 
 	links {
-		Client(client::error::Error, client::error::ErrorKind);
+		Client(client::error::Error, client::error::ErrorKind) #[doc="Blockchain error"];
 	}
 
 	errors {

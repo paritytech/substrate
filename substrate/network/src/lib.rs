@@ -51,20 +51,21 @@ mod sync;
 mod protocol;
 mod io;
 mod message;
-mod error;
 mod config;
 mod chain;
 mod blocks;
 mod consensus;
+pub mod error;
 
 #[cfg(test)] mod test;
 
-pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream};
+pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream, TransactionPool, Params, ManageNetwork};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, NetworkConfiguration};
-pub use message::{Statement, BftMessage, ConsensusVote, SignedConsensusMessage};
+pub use message::{Statement, BftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
+pub use config::{Role, ProtocolConfig};
 
 // TODO: move it elsewhere
 fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {

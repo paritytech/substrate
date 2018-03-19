@@ -36,7 +36,6 @@ use transaction_pool::TransactionPool;
 use ed25519;
 use super::{TableRouter, SharedTable, ProposerFactory};
 
-//struct BftSink<E>(::std::marker::PhantomData<E>);
 struct BftSink<E> {
 	network: Arc<net::ConsensusService>,
 	_e: ::std::marker::PhantomData<E>,
@@ -46,7 +45,30 @@ impl<E> Sink for BftSink<E> {
 	type SinkItem = bft::Communication;
 	type SinkError = E;
 
-	fn start_send(&mut self, _item: bft::Communication) -> ::futures::StartSend<bft::Communication, E> {
+	fn start_send(&mut self, message: bft::Communication) -> ::futures::StartSend<bft::Communication, E> {
+		let network_message = match message {
+			bft::generic::Communication::Consensus(c) => net::BftMessage::Consensus(match c {
+				bft::generic::LocalizedMessage::Propose(proposal) => net::SignedConsensusMessage::Propose(net::SignedConsensusProposal {
+					round_number: proposal.round_number as u32,
+					proposal: proposal.proposal,
+					digest: proposal.digest,
+					sender: proposal.sender,
+					digest_signature: proposal.digest_signature.signature,
+					full_signature: proposal.full_signature.signature,
+				}),
+				bft::generic::LocalizedMessage::Vote(vote) => net::SignedConsensusMessage::Vote(net::SignedConsensusVote {
+					sender: vote.sender,
+					signature: vote.signature.signature,
+					vote: match vote.vote {
+						bft::generic::Vote::Prepare(r, h) => net::ConsensusVote::Prepare(r as u32, h),
+						bft::generic::Vote::Commit(r, h) => net::ConsensusVote::Commit(r as u32, h),
+						bft::generic::Vote::AdvanceRound(r) => net::ConsensusVote::AdvanceRound(r as u32),
+					}
+				}),
+			}),
+			bft::generic::Communication::Auxiliary(justification) => net::BftMessage::Auxiliary(justification.uncheck().into()),
+		};
+		self.network.send_bft_message(network_message);
 		Ok(::futures::AsyncSink::Ready)
 	}
 
@@ -55,20 +77,21 @@ impl<E> Sink for BftSink<E> {
 	}
 }
 
-struct Service {
+/// Consensus service. Starts working when created.
+pub struct Service {
 	thread: Option<thread::JoinHandle<()>>,
 }
 
 struct Network(Arc<net::ConsensusService>);
 
 impl Service {
-	fn new<C>(client: Arc<C>, network: Arc<net::ConsensusService>, transaction_pool: Arc<Mutex<TransactionPool>>) -> Service
+	/// Create and start a new instance.
+	pub fn new<C>(client: Arc<C>, network: Arc<net::ConsensusService>, transaction_pool: Arc<Mutex<TransactionPool>>) -> Service
 		where C: BlockchainEvents + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
 	{
 		let thread = thread::spawn(move || {
+			let mut core = Core::new().expect("tokio::Core could not be created");
 			loop {
-				let events = network.statements();
-				let mut core = Core::new().expect("tokio::Core could not be created");
 				let key = Arc::new(Keyring::One.into());
 				let factory = ProposerFactory {
 					client: client.clone(),
@@ -86,7 +109,8 @@ impl Service {
 					let output = BftSink { network: network.clone(), _e: Default::default() };
 					bft_service.build_upon(&notification.header, input, output, handle.clone())
 				}).map_err(|e| debug!("BFT agreement error: {:?}", e));
-				if let Err(e) = core.run(start_bft.into_future()) {
+				if let Err(_e) = core.run(start_bft.into_future()) {
+					debug!("BFT event loop stopped");
 					break;
 				}
 			}
@@ -154,7 +178,7 @@ impl Drop for Service {
 
 impl super::Network for Network {
 	type TableRouter = Router;
-	fn table_router(&self, table: Arc<SharedTable>) -> Self::TableRouter {
+	fn table_router(&self, _table: Arc<SharedTable>) -> Self::TableRouter {
 		Router {
 			network: self.0.clone()
 		}
@@ -162,7 +186,6 @@ impl super::Network for Network {
 }
 
 type FetchCandidateAdapter = future::Map<net::FetchFuture, fn(Vec<u8>) -> BlockData>;
-type FetchExtrinsicAdapter = future::Map<net::FetchFuture, fn(Vec<u8>) -> Extrinsic>;
 
 struct Router {
 	network: Arc<net::ConsensusService>,
@@ -171,10 +194,6 @@ struct Router {
 impl Router {
 	fn fetch_candidate_adapter(data: Vec<u8>) -> BlockData {
 		BlockData(data)
-	}
-
-	fn fetch_extrinsic_adapter(_data: Vec<u8>) -> Extrinsic {
-		Extrinsic
 	}
 }
 

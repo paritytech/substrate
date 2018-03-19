@@ -14,19 +14,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-pub use service::Role;
+//! Service configuration.
 
-/// Protocol configuration
-#[derive(Clone)]
-pub struct ProtocolConfig {
-	/// Assigned roles.
+use transaction_pool;
+pub use network::Role;
+pub use network::NetworkConfiguration;
+
+/// Service configuration.
+pub struct Configuration {
+	/// Node roles.
 	pub roles: Role,
+	/// Transaction pool configuration.
+	pub transaction_pool: transaction_pool::Options,
+	/// Network configuration.
+	pub network: NetworkConfiguration,
+	// TODO: add more network, client, tx pool configuration options
 }
 
-impl Default for ProtocolConfig {
-	fn default() -> ProtocolConfig {
-		ProtocolConfig {
+impl Default for Configuration {
+	fn default() -> Configuration {
+		Configuration {
 			roles: Role::FULL,
+			transaction_pool: Default::default(),
+			network: Default::default(),
 		}
 	}
 }
+

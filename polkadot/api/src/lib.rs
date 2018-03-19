@@ -140,7 +140,7 @@ pub trait PolkadotApi {
 
 /// A checked block ID used for the substrate-client implementation of CheckedBlockId;
 #[derive(Debug, Clone, Copy)]
-pub struct CheckedId(BlockId);
+pub struct CheckedId(pub BlockId);
 
 impl CheckedBlockId for CheckedId {
 	fn block_id(&self) -> &BlockId {

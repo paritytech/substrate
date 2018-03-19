@@ -14,17 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Initialization errors.
+//! Errors that can occur during the service operation.
 
 use client;
+use network;
 
 error_chain! {
-	foreign_links {
-		Io(::std::io::Error) #[doc="IO error"];
-		Cli(::clap::Error) #[doc="CLI error"];
-		Service(::service::Error) #[doc="Polkadot service error"];
-	}
 	links {
 		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
-    }
+		Network(network::error::Error, network::error::ErrorKind) #[doc="Network error"];
+	}
+
+	errors {
+		ProposalNotForPolkadot {
+			description("Proposal provided not a Polkadot block."),
+			display("Proposal provided not a Polkadot block."),
+		}
+	}
 }

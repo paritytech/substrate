@@ -42,11 +42,17 @@ pub type StatementStream = multiqueue::BroadcastFutReceiver<Statement>;
 pub type BftMessageStream = multiqueue::BroadcastFutReceiver<BftMessage>;
 
 bitflags! {
+	/// Node roles bitmask.
 	pub struct Role: u32 {
+		/// No network.
 		const NONE = 0b00000000;
+		/// Full node, doe not participate in consensus.
 		const FULL = 0b00000001;
+		/// Light client node.
 		const LIGHT = 0b00000010;
+		/// Act as a validator.
 		const VALIDATOR = 0b00000100;
+		/// Act as a collator.
 		const COLLATOR = 0b00001000;
 	}
 }
@@ -173,6 +179,12 @@ impl Service {
 	fn stop(&self) {
 		self.handler.protocol.abort();
 		self.network.stop().unwrap_or_else(|e| warn!("Error stopping network: {:?}", e));
+	}
+}
+
+impl Drop for Service {
+	fn drop(&mut self) {
+		self.stop();
 	}
 }
 
