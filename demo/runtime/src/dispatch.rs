@@ -16,7 +16,7 @@
 
 //! Dispatch system. Just dispatches calls.
 
-use runtime::{staking, system};
+use runtime::{staking, democracy};
 pub use rstd::prelude::Vec;
 pub use codec::{Slicable, Input, NonTrivialSlicable};
 
@@ -232,7 +232,7 @@ impl_meta_dispatch! {
 impl_meta_dispatch! {
 	pub mod privileged;
 	path privileged;
-	trait system::PrivPass;
+	trait democracy::PrivPass;
 	System(mod system) = 0;
 	Session(mod session) = 1;
 	Staking(mod staking) = 2;

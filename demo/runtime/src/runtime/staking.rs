@@ -24,7 +24,7 @@ use runtime_io::{print, blake2_256};
 use codec::{Slicable, Input, KeyedVec};
 use runtime_support::{storage, StorageVec};
 use demo_primitives::{BlockNumber, AccountId};
-use runtime::{system, session};
+use runtime::{system, session, democracy};
 
 /// The balance of an account.
 pub type Balance = u64;
@@ -230,7 +230,7 @@ impl_dispatch! {
 	fn force_new_era() = 3;
 }
 
-impl privileged::Dispatch for system::PrivPass {
+impl privileged::Dispatch for democracy::PrivPass {
 	/// Set the number of sessions in an era.
 	fn set_sessions_per_era(self, new: BlockNumber) {
 		storage::put(NEXT_SESSIONS_PER_ERA, &new);
@@ -623,7 +623,7 @@ mod tests {
 	use environment::with_env;
 	use demo_primitives::AccountId;
 	use runtime::{staking, session};
-	use runtime::system::PrivPass;
+	use runtime::democracy::PrivPass;
 	use runtime::staking::public::{Call, Dispatch};
 	use runtime::staking::privileged::{Call as PCall, Dispatch as PDispatch};
 

@@ -22,7 +22,7 @@ use codec::KeyedVec;
 use runtime_support::{storage, StorageVec};
 use demo_primitives::{AccountId, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
-use runtime::system::PrivPass;
+use runtime::democracy::PrivPass;
 use runtime::staking::PublicPass;
 
 pub const SESSION_LENGTH: &[u8] = b"ses:len";

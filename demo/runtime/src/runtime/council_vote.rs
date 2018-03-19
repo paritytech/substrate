@@ -23,7 +23,7 @@ use runtime_support::storage;
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use runtime::{system, democracy, council};
 use runtime::staking::{PublicPass, Balance};
-use runtime::system::PrivPass;
+use runtime::democracy::PrivPass;
 use dispatch::PrivCall as Proposal;
 
 type ProposalHash = [u8; 32];

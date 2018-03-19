@@ -27,6 +27,7 @@ use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Header, Log};
 use block::Block;
 use transaction::UncheckedTransaction;
 use runtime::{staking, session};
+use runtime::democracy::PrivPass;
 use dispatch;
 
 pub const NONCE_OF: &[u8] = b"sys:non:";
@@ -43,8 +44,6 @@ pub fn block_number() -> BlockNumber {
 pub fn block_hash(number: BlockNumber) -> Hash {
 	storage::get_or_default(&number.to_keyed_vec(BLOCK_HASH_AT))
 }
-
-pub struct PrivPass;
 
 impl_dispatch! {
 	pub mod privileged;

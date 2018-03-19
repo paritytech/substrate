@@ -21,7 +21,7 @@ use codec::KeyedVec;
 use runtime_support::storage;
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
-use runtime::system::PrivPass;
+use runtime::democracy::PrivPass;
 use runtime::staking::{PublicPass, Balance};
 
 // no polynomial attacks:
