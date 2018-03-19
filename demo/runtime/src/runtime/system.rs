@@ -26,6 +26,7 @@ use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Header, Log};
 use block::{self, Block};
 use transaction::UncheckedTransaction;
 use runtime::{staking, session};
+use runtime::democracy::PrivPass;
 use dispatch;
 use safe_mix::Mixed;
 
@@ -39,7 +40,13 @@ storage_items! {
 	Digest: b"sys:dig" => default block::Digest;
 }
 
+storage_items! {
+	pub Nonce: b"sys:non" => default map [ AccountId => TxOrder ];
+	pub BlockHashAt: b"sys:old" => required map [ BlockNumber => Hash ];
+}
+
 pub const CODE: &'static[u8] = b":code";
+
 
 pub struct PrivPass;
 

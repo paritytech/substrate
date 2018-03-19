@@ -22,7 +22,7 @@ use codec::KeyedVec;
 use runtime_support::{storage, StorageValue, StorageMap};
 use demo_primitives::{AccountId, SessionKey, BlockNumber};
 use runtime::{system, staking, consensus};
-use runtime::system::PrivPass;
+use runtime::democracy::PrivPass;
 use runtime::staking::PublicPass;
 
 storage_items!{
@@ -183,14 +183,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			// Block 1: Change to length 3; no visible change.
 			system::testing::set_block_number(1);
-			PrivPass.set_length(3);
+			PrivPass::test().set_length(3);
 			check_rotate_session();
 			assert_eq!(length(), 2);
 			assert_eq!(current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
 			system::testing::set_block_number(2);
-			PrivPass.set_length(3);
+			PrivPass::test().set_length(3);
 			check_rotate_session();
 			assert_eq!(length(), 3);
 			assert_eq!(current_index(), 1);
@@ -203,7 +203,7 @@ mod tests {
 
 			// Block 4: Change to length 2; no visible change.
 			system::testing::set_block_number(4);
-			PrivPass.set_length(2);
+			PrivPass::test().set_length(2);
 			check_rotate_session();
 			assert_eq!(length(), 3);
 			assert_eq!(current_index(), 1);

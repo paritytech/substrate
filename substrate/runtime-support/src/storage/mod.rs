@@ -122,6 +122,7 @@ pub fn put_raw(key: &[u8], value: &[u8]) {
 	runtime_io::set_storage(&twox_128(key)[..], value)
 }
 
+/// The underlying runtime storage.
 pub struct RuntimeStorage;
 
 impl ::GenericStorage for RuntimeStorage {
