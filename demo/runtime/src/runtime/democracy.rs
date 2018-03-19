@@ -26,10 +26,10 @@ use runtime::{staking, system, session};
 use runtime::staking::{PublicPass, Balance};
 
 /// A token for privileged dispatch. Can only be created in this module.
-pub struct PrivPass;
+pub struct PrivPass((),);
 
 impl PrivPass {
-	fn new() -> PrivPass { PrivPass }
+	fn new() -> PrivPass { PrivPass((),) }
 }
 
 /// A proposal index.
