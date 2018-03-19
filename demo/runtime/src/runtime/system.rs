@@ -37,6 +37,7 @@ storage_items! {
 	// The current block number being processed. Set by `execute_block`.
 	Number get(block_number): b"sys:num" => required BlockNumber;
 	ParentHash get(parent_hash): b"sys:pha" => required Hash;
+	TransactionsRoot get(transactions_root): b"sys:txr" => required Hash;
 	Digest: b"sys:dig" => default block::Digest;
 }
 
@@ -68,10 +69,7 @@ pub mod internal {
 
 	/// Actually execute all transitioning for `block`.
 	pub fn execute_block(mut block: Block) {
-		// populate environment from header.
-		Number::put(block.header.number);
-		ParentHash::put(block.header.parent_hash);
-		RandomSeed::put(calculate_random());
+		initialise_block(&block.header);
 
 		// any initial checks
 		initial_checks(&block);
@@ -90,35 +88,34 @@ pub mod internal {
 		post_finalise(&block.header);
 	}
 
-	/// Execute a transaction outside of the block execution function.
-	/// This doesn't attempt to validate anything regarding the block.
-	pub fn execute_transaction(utx: UncheckedTransaction, mut header: Header) -> Header {
+	/// Start the execution of a particular block.
+	pub fn initialise_block(mut header: &Header) {
 		// populate environment from header.
 		Number::put(header.number);
 		ParentHash::put(header.parent_hash);
-		Digest::put(&header.digest);
+		TransactionsRoot::put(header.transaction_root);
 		RandomSeed::put(calculate_random());
+	}
 
+	/// Execute a transaction outside of the block execution function.
+	/// This doesn't attempt to validate anything regarding the block.
+	pub fn execute_transaction(utx: UncheckedTransaction) {
 		super::execute_transaction(utx);
-
-		header.digest = Digest::get();
-		header
 	}
 
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
-	pub fn finalise_block(mut header: Header) -> Header {
-		// populate environment from header.
-		Number::put(header.number);
-		ParentHash::put(header.parent_hash);
-		Digest::put(&header.digest);
-		RandomSeed::put(calculate_random());
-
+	pub fn finalise_block() -> Header {
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
 
-		header.state_root = storage_root().into();
-		header.digest = Digest::get();
+		let header = Header {
+			number: block_number(),
+			parent_hash: parent_hash(),
+			state_root: storage_root().into(),
+			digest: Digest::get(),
+			transaction_root: transactions_root(),
+		};
 
 		post_finalise(&header);
 
@@ -266,10 +263,9 @@ mod tests {
 			signature: hex!("3a682213cb10e8e375fe0817fe4d220a4622d910088809ed7fc8b4ea3871531dbadb22acfedd28a100a0b7bd2d274e0ff873655b13c88f4640b5569db3222706").into(),
 		};
 
-		println!("TX: {}", HexDisplay::from(&tx.transaction.encode()));
-
 		with_externalities(&mut t, || {
-			internal::execute_transaction(tx, Header::from_block_number(1));
+			internal::initialise_block(&Header::from_block_number(1));
+			internal::execute_transaction(tx);
 			assert_eq!(staking::balance(&One), 32);
 			assert_eq!(staking::balance(&Two), 69);
 		});
@@ -286,7 +282,7 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("cc3f1f5db826013193e502c76992b5e933b12367e37a269a9822b89218323e9f").into(),
+			state_root: hex!("5dd9af63b95f4c111123f1dfa3a9e3c504c60b6e9fd2cb0487bf2d8235aabb02").into(),
 			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};

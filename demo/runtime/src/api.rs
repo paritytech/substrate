@@ -18,8 +18,9 @@ use runtime::{system, consensus, session};
 
 impl_stubs!(
 	execute_block => |block| system::internal::execute_block(block),
-	execute_transaction => |(header, utx)| system::internal::execute_transaction(utx, header),
-	finalise_block => |header| system::internal::finalise_block(header),
+	initialise_block => |header| system::internal::initialise_block(&header),
+	execute_transaction => |utx| system::internal::execute_transaction(utx),
+	finalise_block => |()| system::internal::finalise_block(),
 	validator_count => |()| session::validator_count(),
 	validators => |()| session::validators(),
 	authorities => |()| consensus::authorities()
