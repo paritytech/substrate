@@ -19,7 +19,8 @@
 //! Described in http://www.cs.huji.ac.il/~nati/PAPERS/coll_coin_fl.pdf
 
 use rstd::ops::{BitAnd, BitOr};
-use rstd::cmp;
+
+const MAX_DEPTH: usize = 17;
 
 fn sub_mix<T>(seeds: &[T]) -> T where
 	T: BitAnd<Output = T> + BitOr<Output = T> + Copy
@@ -49,26 +50,29 @@ impl<I, T> Mixed for I where
 {
 	type Item = T;
 	fn mixed(self) -> Self::Item {
-		let mut accum = [[T::default(); 3]; 13];
-		let mut max_depth = 0;
+		let mut accum = [[T::default(); 3]; MAX_DEPTH];
+		let mut result = T::default();
 		for (i, seed) in self.enumerate() {
 			accum[0][i % 3] = seed;
 			let mut index_at_depth = i;
-			for depth in 0..13 {
+			for depth in 0..MAX_DEPTH {
 				if index_at_depth % 3 != 2 {
 					break;
 				}
 				index_at_depth /= 3;
+				result = sub_mix(&accum[depth]);
 
 				// end of the threesome at depth.
-				accum[depth + 1][index_at_depth % 3] = sub_mix(&accum[depth]);
-				max_depth = cmp::max(max_depth, depth + 1);
-				if max_depth == 12 {
+				if depth == MAX_DEPTH - 1 {
+					// end of our stack - bail with result.
 					break;
+				} else {
+					// save in the stack for parent computation
+					accum[depth + 1][index_at_depth % 3] = result;
 				}
 			}
 		}
-		accum[max_depth][0]
+		result
 	}
 }
 

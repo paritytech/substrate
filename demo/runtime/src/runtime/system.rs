@@ -40,15 +40,7 @@ storage_items! {
 	Digest: b"sys:dig" => default block::Digest;
 }
 
-storage_items! {
-	pub Nonce: b"sys:non" => default map [ AccountId => TxOrder ];
-	pub BlockHashAt: b"sys:old" => required map [ BlockNumber => Hash ];
-}
-
 pub const CODE: &'static[u8] = b":code";
-
-
-pub struct PrivPass;
 
 impl_dispatch! {
 	pub mod privileged;

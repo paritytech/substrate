@@ -535,7 +535,7 @@ mod tests {
 			system::testing::set_block_number(1);
 			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
 			PublicPass::test(&Alice).vote(r, true);
-			PrivPass.cancel_referendum(r);
+			PrivPass::test().cancel_referendum(r);
 
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();
