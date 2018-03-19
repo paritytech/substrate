@@ -21,7 +21,6 @@ use primitives::bytes;
 use primitives::H256;
 use rstd::vec::Vec;
 use codec::{Input, Slicable};
-use transaction::UncheckedTransaction;
 
 pub use primitives::block::Id;
 
@@ -30,9 +29,6 @@ pub type Number = u64;
 
 /// Hash used to refer to a block hash.
 pub type HeaderHash = H256;
-
-/// Hash used to refer to a transaction hash.
-pub type TransactionHash = H256;
 
 /// Execution log (event)
 #[derive(PartialEq, Eq, Clone)]
@@ -66,35 +62,6 @@ impl Slicable for Digest {
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.logs.using_encoded(f)
-	}
-}
-
-/// The block "body": A bunch of transactions.
-pub type Body = Vec<UncheckedTransaction>;
-
-/// A block on the chain.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Block {
-	/// The block header.
-	pub header: Header,
-	/// All relay-chain transactions.
-	pub transactions: Body,
-}
-
-impl Slicable for Block {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let (header, transactions) = try_opt!(Slicable::decode(input));
-		Some(Block { header, transactions })
-	}
-
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		v.extend(self.header.encode());
-		v.extend(self.transactions.encode());
-
-		v
 	}
 }
 

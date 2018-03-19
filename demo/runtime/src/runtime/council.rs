@@ -19,9 +19,10 @@
 use rstd::prelude::*;
 use codec::KeyedVec;
 use runtime_support::storage;
-use demo_primitives::{Proposal, AccountId, Hash, BlockNumber};
+use demo_primitives::{AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
-use runtime::staking::Balance;
+use runtime::democracy::PrivPass;
+use runtime::staking::{PublicPass, Balance};
 
 // no polynomial attacks:
 //
@@ -255,25 +256,32 @@ pub fn leaderboard() -> Option<Vec<(Balance, AccountId)>> {
 	storage::get(LEADERBOARD)
 }
 
-pub mod public {
-	use super::*;
+impl_dispatch! {
+	pub mod public;
+	fn set_approvals(votes: Vec<bool>, index: VoteIndex) = 0;
+	fn reap_inactive_voter(signed_index: u32, who: AccountId, who_index: u32, assumed_vote_index: VoteIndex) = 1;
+	fn retract_voter(index: u32) = 2;
+	fn submit_candidacy(slot: u32) = 3;
+	fn present_winner(candidate: AccountId, total: Balance, index: VoteIndex) = 4;
+}
 
+impl<'a> public::Dispatch for PublicPass<'a> {
 	/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 	/// are registered.
-	pub fn set_approvals(signed: &AccountId, votes: &Vec<bool>, index: VoteIndex) {
+	fn set_approvals(self, votes: Vec<bool>, index: VoteIndex) {
 		assert!(!presentation_active());
 		assert_eq!(index, vote_index());
-		if !storage::exists(&signed.to_keyed_vec(LAST_ACTIVE_OF)) {
+		if !storage::exists(&self.to_keyed_vec(LAST_ACTIVE_OF)) {
 			// not yet a voter - deduct bond.
-			staking::internal::reserve_balance(signed, voting_bond());
+			staking::internal::reserve_balance(&self, voting_bond());
 			storage::put(VOTERS, &{
 				let mut v: Vec<AccountId> = storage::get_or_default(VOTERS);
-				v.push(signed.clone());
+				v.push(self.clone());
 				v
 			});
 		}
-		storage::put(&signed.to_keyed_vec(APPROVALS_OF), votes);
-		storage::put(&signed.to_keyed_vec(LAST_ACTIVE_OF), &index);
+		storage::put(&self.to_keyed_vec(APPROVALS_OF), &votes);
+		storage::put(&self.to_keyed_vec(LAST_ACTIVE_OF), &index);
 	}
 
 	/// Remove a voter. For it not to be a bond-consuming no-op, all approved candidate indices
@@ -281,21 +289,21 @@ pub mod public {
 	/// the voter gave their last approval set.
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
-	pub fn reap_inactive_voter(signed: &AccountId, signed_index: u32, who: &AccountId, who_index: u32, assumed_vote_index: VoteIndex) {
+	fn reap_inactive_voter(self, signed_index: u32, who: AccountId, who_index: u32, assumed_vote_index: VoteIndex) {
 		assert!(!presentation_active(), "cannot reap during presentation period");
-		assert!(voter_last_active(signed).is_some(), "reaper must be a voter");
-		let last_active = voter_last_active(who).expect("target for inactivity cleanup must be active");
+		assert!(voter_last_active(&self).is_some(), "reaper must be a voter");
+		let last_active = voter_last_active(&who).expect("target for inactivity cleanup must be active");
 		assert!(assumed_vote_index == vote_index(), "vote index not current");
 		assert!(last_active < assumed_vote_index - inactivity_grace_period(), "cannot reap during grace perid");
 		let voters = voters();
 		let signed_index = signed_index as usize;
 		let who_index = who_index as usize;
-		assert!(signed_index < voters.len() && voters[signed_index] == *signed, "bad reporter index");
-		assert!(who_index < voters.len() && voters[who_index] == *who, "bad target index");
+		assert!(signed_index < voters.len() && voters[signed_index] == *self, "bad reporter index");
+		assert!(who_index < voters.len() && voters[who_index] == who, "bad target index");
 
 		// will definitely kill one of signed or who now.
 
-		let valid = !approvals_of(who).iter()
+		let valid = !approvals_of(&who).iter()
 			.zip(candidates().iter())
 			.any(|(&appr, addr)|
 				appr &&
@@ -304,35 +312,35 @@ pub mod public {
 					.expect("all items in candidates list are registered").0 <= last_active);
 
 		remove_voter(
-			if valid { who } else { signed },
+			if valid { &who } else { &self },
 			if valid { who_index } else { signed_index },
 			voters
 		);
 		if valid {
-			staking::internal::transfer_reserved_balance(who, signed, voting_bond());
+			staking::internal::transfer_reserved_balance(&who, &self, voting_bond());
 		} else {
-			staking::internal::slash_reserved(signed, voting_bond());
+			staking::internal::slash_reserved(&self, voting_bond());
 		}
 	}
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
-	pub fn retract_voter(signed: &AccountId, index: u32) {
+	fn retract_voter(self, index: u32) {
 		assert!(!presentation_active(), "cannot retract when presenting");
-		assert!(storage::exists(&signed.to_keyed_vec(LAST_ACTIVE_OF)), "cannot retract non-voter");
+		assert!(storage::exists(&self.to_keyed_vec(LAST_ACTIVE_OF)), "cannot retract non-voter");
 		let voters = voters();
 		let index = index as usize;
 		assert!(index < voters.len(), "retraction index invalid");
-		assert!(voters[index] == *signed, "retraction index mismatch");
-		remove_voter(signed, index, voters);
-		staking::internal::unreserve_balance(signed, voting_bond());
+		assert!(voters[index] == *self, "retraction index mismatch");
+		remove_voter(&self, index, voters);
+		staking::internal::unreserve_balance(&self, voting_bond());
 	}
 
 	/// Submit oneself for candidacy.
 	///
 	/// Account must have enough transferrable funds in it to pay the bond.
-	pub fn submit_candidacy(signed: &AccountId, slot: u32) {
-		assert!(!is_a_candidate(signed), "duplicate candidate submission");
-		assert!(staking::internal::deduct_unbonded(signed, candidacy_bond()), "candidate has not enough funds");
+	fn submit_candidacy(self, slot: u32) {
+		assert!(!is_a_candidate(&self), "duplicate candidate submission");
+		assert!(staking::internal::deduct_unbonded(&self, candidacy_bond()), "candidate has not enough funds");
 
 		let slot = slot as usize;
 		let count = storage::get_or_default::<u32>(CANDIDATE_COUNT) as usize;
@@ -345,31 +353,31 @@ pub mod public {
 
 		let mut candidates = candidates;
 		if slot == candidates.len() {
-			candidates.push(signed.clone());
+			candidates.push(self.clone());
 		} else {
-			candidates[slot] = signed.clone();
+			candidates[slot] = self.clone();
 		}
 		storage::put(CANDIDATES, &candidates);
 		storage::put(CANDIDATE_COUNT, &(count as u32 + 1));
-		storage::put(&signed.to_keyed_vec(REGISTER_INFO_OF), &(vote_index(), slot));
+		storage::put(&self.to_keyed_vec(REGISTER_INFO_OF), &(vote_index(), slot));
 	}
 
 	/// Claim that `signed` is one of the top carry_count() + current_vote().1 candidates.
 	/// Only works if the block number >= current_vote().0 and < current_vote().0 + presentation_duration()
 	/// `signed` should have at least
-	pub fn present_winner(signed: &AccountId, candidate: &AccountId, total: Balance, index: VoteIndex) {
+	fn present_winner(self, candidate: AccountId, total: Balance, index: VoteIndex) {
 		assert_eq!(index, vote_index(), "index not current");
 		let (_, _, expiring): (BlockNumber, u32, Vec<AccountId>) = storage::get(NEXT_FINALISE)
 			.expect("cannot present outside of presentation period");
 		let stakes: Vec<Balance> = storage::get_or_default(SNAPSHOTED_STAKES);
 		let voters: Vec<AccountId> = storage::get_or_default(VOTERS);
 		let bad_presentation_punishment = present_slash_per_voter() * voters.len() as Balance;
-		assert!(staking::can_slash(signed, bad_presentation_punishment), "presenter must have sufficient slashable funds");
+		assert!(staking::can_slash(&self, bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
 		let mut leaderboard = leaderboard().expect("leaderboard must exist while present phase active");
 		assert!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
 
-		if let Some(p) = active_council().iter().position(|&(ref c, _)| c == candidate) {
+		if let Some(p) = active_council().iter().position(|&(ref c, _)| c == &candidate) {
 			assert!(p < expiring.len(), "candidate must not form a duplicated member if elected");
 		}
 
@@ -385,55 +393,60 @@ pub mod public {
 					_ => None,
 				})
 			.sum();
-		let dupe = leaderboard.iter().find(|&&(_, ref c)| c == candidate).is_some();
+		let dupe = leaderboard.iter().find(|&&(_, ref c)| c == &candidate).is_some();
 		if total == actual_total && !dupe {
 			// insert into leaderboard
 			leaderboard[0] = (total, candidate.clone());
 			leaderboard.sort_by_key(|&(t, _)| t);
 			storage::put(LEADERBOARD, &leaderboard);
 		} else {
-			staking::internal::slash(signed, bad_presentation_punishment);
+			staking::internal::slash(&self, bad_presentation_punishment);
 		}
 	}
 }
 
-pub mod privileged {
-	use super::*;
+impl_dispatch! {
+	pub mod privileged;
+	fn set_desired_seats(count: u32) = 0;
+	fn remove_member(who: AccountId) = 1;
+	fn set_presentation_duration(count: BlockNumber) = 2;
+	fn set_term_duration(count: BlockNumber) = 3;
+}
 
+impl privileged::Dispatch for PrivPass {
 	/// Set the desired member count; if lower than the current count, then seats will not be up
 	/// election when they expire. If more, then a new vote will be started if one is not already
 	/// in progress.
-	pub fn set_desired_seats(count: u32) {
+	fn set_desired_seats(self, count: u32) {
 		storage::put(DESIRED_SEATS, &count);
 	}
 
 	/// Remove a particular member. A tally will happen instantly (if not already in a presentation
 	/// period) to fill the seat if removal means that the desired members are not met.
 	/// This is effective immediately.
-	pub fn remove_member(who: &AccountId) {
+	fn remove_member(self, who: AccountId) {
 		let new_council: Vec<(AccountId, BlockNumber)> = active_council()
 			.into_iter()
-			.filter(|i| i.0 != *who)
+			.filter(|i| i.0 != who)
 			.collect();
 		storage::put(ACTIVE_COUNCIL, &new_council);
 	}
 
 	/// Set the presentation duration. If there is current a vote being presented for, will
 	/// invoke `finalise_vote`.
-	pub fn set_presentation_duration(count: BlockNumber) {
+	fn set_presentation_duration(self, count: BlockNumber) {
 		storage::put(PRESENTATION_DURATION, &count);
 	}
 
 	/// Set the presentation duration. If there is current a vote being presented for, will
 	/// invoke `finalise_vote`.
-	pub fn set_term_duration(count: BlockNumber) {
+	fn set_term_duration(self, count: BlockNumber) {
 		storage::put(TERM_DURATION, &count);
 	}
 }
 
 pub mod internal {
 	use super::*;
-	use demo_primitives::Proposal;
 
 	/// Check there's nothing to do this block
 	pub fn end_block() {
@@ -574,8 +587,10 @@ mod tests {
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring::*;
 	use environment::with_env;
-	use demo_primitives::{AccountId, Proposal};
+	use demo_primitives::AccountId;
 	use runtime::{staking, session, democracy};
+	use super::public::Dispatch;
+	use super::privileged::Dispatch as PrivDispatch;
 
 	fn new_test_ext() -> TestExternalities {
 		testing::externalities()
@@ -624,14 +639,14 @@ mod tests {
 			assert_eq!(is_a_candidate(&Alice), false);
 			assert_eq!(is_a_candidate(&Bob), false);
 
-			public::submit_candidacy(&Alice, 0);
+			PublicPass::test(&Alice).submit_candidacy(0);
 			assert_eq!(candidates(), vec![Alice.to_raw_public()]);
 			assert_eq!(candidate_reg_info(&Alice), Some((0 as VoteIndex, 0u32)));
 			assert_eq!(candidate_reg_info(&Bob), None);
 			assert_eq!(is_a_candidate(&Alice), true);
 			assert_eq!(is_a_candidate(&Bob), false);
 
-			public::submit_candidacy(&Bob, 1);
+			PublicPass::test(&Bob).submit_candidacy(1);
 			assert_eq!(candidates(), vec![Alice.to_raw_public(), Bob.into()]);
 			assert_eq!(candidate_reg_info(&Alice), Some((0 as VoteIndex, 0u32)));
 			assert_eq!(candidate_reg_info(&Bob), Some((0 as VoteIndex, 1u32)));
@@ -656,10 +671,10 @@ mod tests {
 			with_env(|e| e.block_number = 1);
 			assert_eq!(candidates(), vec![AccountId::default(), AccountId::default(), Alice.to_raw_public()]);
 
-			public::submit_candidacy(&Bob, 1);
+			PublicPass::test(&Bob).submit_candidacy(1);
 			assert_eq!(candidates(), vec![AccountId::default(), Bob.into(), Alice.to_raw_public()]);
 
-			public::submit_candidacy(&Charlie, 0);
+			PublicPass::test(&Charlie).submit_candidacy(0);
 			assert_eq!(candidates(), vec![Charlie.into(), Bob.into(), Alice.to_raw_public()]);
 		});
 	}
@@ -672,10 +687,10 @@ mod tests {
 			with_env(|e| e.block_number = 1);
 			assert_eq!(candidates(), vec![AccountId::default(), AccountId::default(), Alice.into()]);
 
-			public::submit_candidacy(&Bob, 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
 			assert_eq!(candidates(), vec![Bob.into(), AccountId::default(), Alice.into()]);
 
-			public::submit_candidacy(&Charlie, 1);
+			PublicPass::test(&Charlie).submit_candidacy(1);
 			assert_eq!(candidates(), vec![Bob.to_raw_public(), Charlie.into(), Alice.into()]);
 		});
 	}
@@ -687,7 +702,7 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 1);
-			public::submit_candidacy(&Dave, 3);
+			PublicPass::test(&Dave).submit_candidacy(3);
 		});
 	}
 
@@ -697,7 +712,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
-			public::submit_candidacy(&Alice, 1);
+			PublicPass::test(&Alice).submit_candidacy(1);
 		});
 	}
 
@@ -707,8 +722,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
-			public::submit_candidacy(&Alice, 0);
-			public::submit_candidacy(&Bob, 0);
+			PublicPass::test(&Alice).submit_candidacy(0);
+			PublicPass::test(&Bob).submit_candidacy(0);
 		});
 	}
 
@@ -718,8 +733,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
-			public::submit_candidacy(&Alice, 0);
-			public::submit_candidacy(&Alice, 1);
+			PublicPass::test(&Alice).submit_candidacy(0);
+			PublicPass::test(&Alice).submit_candidacy(1);
 		});
 	}
 
@@ -729,7 +744,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
-			public::submit_candidacy(&One, 0);
+			PublicPass::test(&One).submit_candidacy(0);
 		});
 	}
 
@@ -738,20 +753,20 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 
-			public::submit_candidacy(&Eve, 0);
+			PublicPass::test(&Eve).submit_candidacy(0);
 
-			public::set_approvals(&Alice, &vec![true], 0);
-			public::set_approvals(&Dave, &vec![true], 0);
+			PublicPass::test(&Alice).set_approvals(vec![true], 0);
+			PublicPass::test(&Dave).set_approvals(vec![true], 0);
 
 			assert_eq!(approvals_of(&Alice), vec![true]);
 			assert_eq!(approvals_of(&Dave), vec![true]);
 			assert_eq!(voters(), vec![Alice.to_raw_public(), Dave.into()]);
 
-			public::submit_candidacy(&Bob, 1);
-			public::submit_candidacy(&Charlie, 2);
+			PublicPass::test(&Bob).submit_candidacy(1);
+			PublicPass::test(&Charlie).submit_candidacy(2);
 
-			public::set_approvals(&Bob, &vec![false, true, true], 0);
-			public::set_approvals(&Charlie, &vec![false, true, true], 0);
+			PublicPass::test(&Bob).set_approvals(vec![false, true, true], 0);
+			PublicPass::test(&Charlie).set_approvals(vec![false, true, true], 0);
 
 			assert_eq!(approvals_of(&Alice), vec![true]);
 			assert_eq!(approvals_of(&Dave), vec![true]);
@@ -759,8 +774,6 @@ mod tests {
 			assert_eq!(approvals_of(&Charlie), vec![false, true, true]);
 
 			assert_eq!(voters(), vec![Alice.to_raw_public(), Dave.into(), Bob.into(), Charlie.into()]);
-
-
 		});
 	}
 
@@ -769,14 +782,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 
-			public::submit_candidacy(&Eve, 0);
-			public::set_approvals(&Dave, &vec![true], 0);
+			PublicPass::test(&Eve).submit_candidacy(0);
+			PublicPass::test(&Dave).set_approvals(vec![true], 0);
 
 			assert_eq!(approvals_of(&Dave), vec![true]);
 
-			public::submit_candidacy(&Bob, 1);
-			public::submit_candidacy(&Charlie, 2);
-			public::set_approvals(&Dave, &vec![true, false, true], 0);
+			PublicPass::test(&Bob).submit_candidacy(1);
+			PublicPass::test(&Charlie).submit_candidacy(2);
+			PublicPass::test(&Dave).set_approvals(vec![true, false, true], 0);
 
 			assert_eq!(approvals_of(&Dave), vec![true, false, true]);
 		});
@@ -787,14 +800,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 
-			public::submit_candidacy(&Eve, 0);
-			public::submit_candidacy(&Bob, 1);
-			public::submit_candidacy(&Charlie, 2);
+			PublicPass::test(&Eve).submit_candidacy(0);
+			PublicPass::test(&Bob).submit_candidacy(1);
+			PublicPass::test(&Charlie).submit_candidacy(2);
 
-			public::set_approvals(&Alice, &vec![true], 0);
-			public::set_approvals(&Bob, &vec![false, true, true], 0);
-			public::set_approvals(&Charlie, &vec![false, true, true], 0);
-			public::set_approvals(&Dave, &vec![true, false, true], 0);
+			PublicPass::test(&Alice).set_approvals(vec![true], 0);
+			PublicPass::test(&Bob).set_approvals(vec![false, true, true], 0);
+			PublicPass::test(&Charlie).set_approvals(vec![false, true, true], 0);
+			PublicPass::test(&Dave).set_approvals(vec![true, false, true], 0);
 
 			assert_eq!(voters(), vec![Alice.to_raw_public(), Bob.into(), Charlie.into(), Dave.into()]);
 			assert_eq!(approvals_of(&Alice), vec![true]);
@@ -802,7 +815,7 @@ mod tests {
 			assert_eq!(approvals_of(&Charlie), vec![false, true, true]);
 			assert_eq!(approvals_of(&Dave), vec![true, false, true]);
 
-			public::retract_voter(&Alice, 0);
+			PublicPass::test(&Alice).retract_voter(0);
 
 			assert_eq!(voters(), vec![Dave.to_raw_public(), Bob.into(), Charlie.into()]);
 			assert_eq!(approvals_of(&Alice), Vec::<bool>::new());
@@ -810,7 +823,7 @@ mod tests {
 			assert_eq!(approvals_of(&Charlie), vec![false, true, true]);
 			assert_eq!(approvals_of(&Dave), vec![true, false, true]);
 
-			public::retract_voter(&Bob, 1);
+			PublicPass::test(&Bob).retract_voter(1);
 
 			assert_eq!(voters(), vec![Dave.to_raw_public(), Charlie.into()]);
 			assert_eq!(approvals_of(&Alice), Vec::<bool>::new());
@@ -818,7 +831,7 @@ mod tests {
 			assert_eq!(approvals_of(&Charlie), vec![false, true, true]);
 			assert_eq!(approvals_of(&Dave), vec![true, false, true]);
 
-			public::retract_voter(&Charlie, 1);
+			PublicPass::test(&Charlie).retract_voter(1);
 
 			assert_eq!(voters(), vec![Dave.to_raw_public()]);
 			assert_eq!(approvals_of(&Alice), Vec::<bool>::new());
@@ -833,10 +846,10 @@ mod tests {
 	fn invalid_retraction_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::submit_candidacy(&Charlie, 0);
-			public::set_approvals(&Alice, &vec![true], 0);
-			public::set_approvals(&Bob, &vec![true], 0);
-			public::retract_voter(&Alice, 1);
+			PublicPass::test(&Charlie).submit_candidacy(0);
+			PublicPass::test(&Alice).set_approvals(vec![true], 0);
+			PublicPass::test(&Bob).set_approvals(vec![true], 0);
+			PublicPass::test(&Alice).retract_voter(1);
 		});
 	}
 
@@ -845,9 +858,9 @@ mod tests {
 	fn overflow_retraction_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::submit_candidacy(&Charlie, 0);
-			public::set_approvals(&Alice, &vec![true], 0);
-			public::retract_voter(&Alice, 1);
+			PublicPass::test(&Charlie).submit_candidacy(0);
+			PublicPass::test(&Alice).set_approvals(vec![true], 0);
+			PublicPass::test(&Alice).retract_voter(1);
 		});
 	}
 
@@ -856,9 +869,9 @@ mod tests {
 	fn non_voter_retraction_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
-			public::submit_candidacy(&Charlie, 0);
-			public::set_approvals(&Alice, &vec![true], 0);
-			public::retract_voter(&Bob, 0);
+			PublicPass::test(&Charlie).submit_candidacy(0);
+			PublicPass::test(&Alice).set_approvals(vec![true], 0);
+			PublicPass::test(&Bob).retract_voter(0);
 		});
 	}
 
@@ -868,16 +881,16 @@ mod tests {
 			with_env(|e| e.block_number = 4);
 			assert!(!presentation_active());
 
-			public::submit_candidacy(&Bob, 0);
-			public::submit_candidacy(&Eve, 1);
-			public::set_approvals(&Bob, &vec![true, false], 0);
-			public::set_approvals(&Eve, &vec![false, true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Eve).submit_candidacy(1);
+			PublicPass::test(&Bob).set_approvals(vec![true, false], 0);
+			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
 			assert!(presentation_active());
-			public::present_winner(&Dave, &Bob, 11, 0);
-			public::present_winner(&Dave, &Eve, 41, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
 			assert_eq!(leaderboard(), Some(vec![(0, AccountId::default()), (0, AccountId::default()), (11, Bob.into()), (41, Eve.into())]));
 
 			internal::end_block();
@@ -899,16 +912,16 @@ mod tests {
 			assert!(staking::can_slash(&Dave, 10));
 
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Bob, 0);
-			public::submit_candidacy(&Eve, 1);
-			public::set_approvals(&Bob, &vec![true, false], 0);
-			public::set_approvals(&Eve, &vec![false, true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Eve).submit_candidacy(1);
+			PublicPass::test(&Bob).set_approvals(vec![true, false], 0);
+			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 11, 0);
-			public::present_winner(&Dave, &Eve, 41, 0);
-			public::present_winner(&Dave, &Eve, 41, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
 			internal::end_block();
 
 			assert_eq!(active_council(), vec![(Eve.to_raw_public(), 11), (Bob.into(), 11)]);
@@ -920,26 +933,26 @@ mod tests {
 	fn retracting_inactive_voter_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Bob, 0);
-			public::set_approvals(&Bob, &vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 11, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			public::submit_candidacy(&Eve, 0);
-			public::set_approvals(&Eve, &vec![true], 1);
+			PublicPass::test(&Eve).submit_candidacy(0);
+			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present_winner(&Dave, &Eve, 41, 1);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 1);
 			internal::end_block();
 
-			public::reap_inactive_voter(
-				&Eve, voters().iter().position(|&i| i == *Eve).unwrap() as u32,
-				&Bob, voters().iter().position(|&i| i == *Bob).unwrap() as u32,
+			PublicPass::test(&Eve).reap_inactive_voter(
+				voters().iter().position(|&i| i == *Eve).unwrap() as u32,
+				Bob.into(), voters().iter().position(|&i| i == *Bob).unwrap() as u32,
 				2
 			);
 
@@ -955,21 +968,21 @@ mod tests {
 	fn presenting_for_double_election_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Bob, 0);
-			public::set_approvals(&Bob, &vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 11, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			public::submit_candidacy(&Bob, 0);
-			public::set_approvals(&Bob, &vec![true], 1);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Bob).set_approvals(vec![true], 1);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present_winner(&Dave, &Bob, 11, 1);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 1);
 		});
 	}
 
@@ -977,29 +990,29 @@ mod tests {
 	fn retracting_inactive_voter_with_other_candidates_in_slots_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Bob, 0);
-			public::set_approvals(&Bob, &vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 11, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			public::submit_candidacy(&Eve, 0);
-			public::set_approvals(&Eve, &vec![true], 1);
+			PublicPass::test(&Eve).submit_candidacy(0);
+			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present_winner(&Dave, &Eve, 41, 1);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 1);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 11);
-			public::submit_candidacy(&Alice, 0);
+			PublicPass::test(&Alice).submit_candidacy(0);
 
-			public::reap_inactive_voter(
-				&Eve, voters().iter().position(|&i| i == *Eve).unwrap() as u32,
-				&Bob, voters().iter().position(|&i| i == *Bob).unwrap() as u32,
+			PublicPass::test(&Eve).reap_inactive_voter(
+				voters().iter().position(|&i| i == *Eve).unwrap() as u32,
+				Bob.into(), voters().iter().position(|&i| i == *Bob).unwrap() as u32,
 				2
 			);
 
@@ -1015,26 +1028,26 @@ mod tests {
 	fn retracting_inactive_voter_with_bad_reporter_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Bob, 0);
-			public::set_approvals(&Bob, &vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 8, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 8, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			public::submit_candidacy(&Eve, 0);
-			public::set_approvals(&Eve, &vec![true], 1);
+			PublicPass::test(&Eve).submit_candidacy(0);
+			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present_winner(&Dave, &Eve, 38, 1);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 38, 1);
 			internal::end_block();
 
-			public::reap_inactive_voter(
-				&Bob, 42,
-				&Bob, voters().iter().position(|&i| i == *Bob).unwrap() as u32,
+			PublicPass::test(&Bob).reap_inactive_voter(
+				42,
+				Bob.into(), voters().iter().position(|&i| i == *Bob).unwrap() as u32,
 				2
 			);
 		});
@@ -1045,26 +1058,26 @@ mod tests {
 	fn retracting_inactive_voter_with_bad_target_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Bob, 0);
-			public::set_approvals(&Bob, &vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 8, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 8, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			public::submit_candidacy(&Eve, 0);
-			public::set_approvals(&Eve, &vec![true], 1);
+			PublicPass::test(&Eve).submit_candidacy(0);
+			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present_winner(&Dave, &Eve, 38, 1);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 38, 1);
 			internal::end_block();
 
-			public::reap_inactive_voter(
-				&Bob, voters().iter().position(|&i| i == *Bob).unwrap() as u32,
-				&Bob, 42,
+			PublicPass::test(&Bob).reap_inactive_voter(
+				voters().iter().position(|&i| i == *Bob).unwrap() as u32,
+				Bob.into(), 42,
 				2
 			);
 		});
@@ -1074,35 +1087,35 @@ mod tests {
 	fn attempting_to_retract_active_voter_should_slash_reporter() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Bob, 0);
-			public::submit_candidacy(&Charlie, 1);
-			public::submit_candidacy(&Dave, 2);
-			public::submit_candidacy(&Eve, 3);
-			public::set_approvals(&Bob, &vec![true, false, false, false], 0);
-			public::set_approvals(&Charlie, &vec![false, true, false, false], 0);
-			public::set_approvals(&Dave, &vec![false, false, true, false], 0);
-			public::set_approvals(&Eve, &vec![false, false, false, true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Charlie).submit_candidacy(1);
+			PublicPass::test(&Dave).submit_candidacy(2);
+			PublicPass::test(&Eve).submit_candidacy(3);
+			PublicPass::test(&Bob).set_approvals(vec![true, false, false, false], 0);
+			PublicPass::test(&Charlie).set_approvals(vec![false, true, false, false], 0);
+			PublicPass::test(&Dave).set_approvals(vec![false, false, true, false], 0);
+			PublicPass::test(&Eve).set_approvals(vec![false, false, false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 11, 0);
-			public::present_winner(&Dave, &Charlie, 21, 0);
-			public::present_winner(&Dave, &Dave, 31, 0);
-			public::present_winner(&Dave, &Eve, 41, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
+			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 0);
+			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 0);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			privileged::set_desired_seats(3);
+			PrivPass::test().set_desired_seats(3);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present_winner(&Dave, &Bob, 11, 1);
-			public::present_winner(&Dave, &Charlie, 21, 1);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 1);
+			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 1);
 			internal::end_block();
 
-			public::reap_inactive_voter(
-				&Dave, voters().iter().position(|&i| i == *Dave).unwrap() as u32,
-				&Bob, voters().iter().position(|&i| i == *Bob).unwrap() as u32,
+			PublicPass::test(&Dave).reap_inactive_voter(
+				voters().iter().position(|&i| i == *Dave).unwrap() as u32,
+				Bob.into(), voters().iter().position(|&i| i == *Bob).unwrap() as u32,
 				2
 			);
 
@@ -1117,26 +1130,26 @@ mod tests {
 	fn attempting_to_retract_inactive_voter_by_nonvoter_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Bob, 0);
-			public::set_approvals(&Bob, &vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 11, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			public::submit_candidacy(&Eve, 0);
-			public::set_approvals(&Eve, &vec![true], 1);
+			PublicPass::test(&Eve).submit_candidacy(0);
+			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present_winner(&Dave, &Eve, 41, 1);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 1);
 			internal::end_block();
 
-			public::reap_inactive_voter(
-				&Dave, 0,
-				&Bob, voters().iter().position(|&i| i == *Bob).unwrap() as u32,
+			PublicPass::test(&Dave).reap_inactive_voter(
+				0,
+				Bob.into(), voters().iter().position(|&i| i == *Bob).unwrap() as u32,
 				2
 			);
 		});
@@ -1147,24 +1160,24 @@ mod tests {
 	fn presenting_loser_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Alice, 0);
-			public::set_approvals(&Ferdie, &vec![true], 0);
-			public::submit_candidacy(&Bob, 1);
-			public::set_approvals(&Bob, &vec![false, true], 0);
-			public::submit_candidacy(&Charlie, 2);
-			public::set_approvals(&Charlie, &vec![false, false, true], 0);
-			public::submit_candidacy(&Dave, 3);
-			public::set_approvals(&Dave, &vec![false, false, false, true], 0);
-			public::submit_candidacy(&Eve, 4);
-			public::set_approvals(&Eve, &vec![false, false, false, false, true], 0);
+			PublicPass::test(&Alice).submit_candidacy(0);
+			PublicPass::test(&Ferdie).set_approvals(vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(1);
+			PublicPass::test(&Bob).set_approvals(vec![false, true], 0);
+			PublicPass::test(&Charlie).submit_candidacy(2);
+			PublicPass::test(&Charlie).set_approvals(vec![false, false, true], 0);
+			PublicPass::test(&Dave).submit_candidacy(3);
+			PublicPass::test(&Dave).set_approvals(vec![false, false, false, true], 0);
+			PublicPass::test(&Eve).submit_candidacy(4);
+			PublicPass::test(&Eve).set_approvals(vec![false, false, false, false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Alice, 60, 0);
-			public::present_winner(&Dave, &Charlie, 21, 0);
-			public::present_winner(&Dave, &Dave, 31, 0);
-			public::present_winner(&Dave, &Eve, 41, 0);
-			public::present_winner(&Dave, &Bob, 11, 0);
+			PublicPass::test(&Dave).present_winner(Alice.into(), 60, 0);
+			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 0);
+			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 0);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 		});
 	}
 
@@ -1172,24 +1185,24 @@ mod tests {
 	fn presenting_loser_first_should_not_matter() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Alice, 0);
-			public::set_approvals(&Ferdie, &vec![true], 0);
-			public::submit_candidacy(&Bob, 1);
-			public::set_approvals(&Bob, &vec![false, true], 0);
-			public::submit_candidacy(&Charlie, 2);
-			public::set_approvals(&Charlie, &vec![false, false, true], 0);
-			public::submit_candidacy(&Dave, 3);
-			public::set_approvals(&Dave, &vec![false, false, false, true], 0);
-			public::submit_candidacy(&Eve, 4);
-			public::set_approvals(&Eve, &vec![false, false, false, false, true], 0);
+			PublicPass::test(&Alice).submit_candidacy(0);
+			PublicPass::test(&Ferdie).set_approvals(vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(1);
+			PublicPass::test(&Bob).set_approvals(vec![false, true], 0);
+			PublicPass::test(&Charlie).submit_candidacy(2);
+			PublicPass::test(&Charlie).set_approvals(vec![false, false, true], 0);
+			PublicPass::test(&Dave).submit_candidacy(3);
+			PublicPass::test(&Dave).set_approvals(vec![false, false, false, true], 0);
+			PublicPass::test(&Eve).submit_candidacy(4);
+			PublicPass::test(&Eve).set_approvals(vec![false, false, false, false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 11, 0);
-			public::present_winner(&Dave, &Alice, 60, 0);
-			public::present_winner(&Dave, &Charlie, 21, 0);
-			public::present_winner(&Dave, &Dave, 31, 0);
-			public::present_winner(&Dave, &Eve, 41, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
+			PublicPass::test(&Dave).present_winner(Alice.into(), 60, 0);
+			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 0);
+			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 0);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
 
 			assert_eq!(leaderboard(), Some(vec![
 				(21, Charlie.into()),
@@ -1206,7 +1219,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
 			assert!(!presentation_active());
-			public::present_winner(&Eve, &Eve, 1, 0);
+			PublicPass::test(&Eve).present_winner(Eve.into(), 1, 0);
 		});
 	}
 
@@ -1215,14 +1228,14 @@ mod tests {
 	fn present_panics_with_invalid_vote_index() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Bob, 0);
-			public::submit_candidacy(&Eve, 1);
-			public::set_approvals(&Bob, &vec![true, false], 0);
-			public::set_approvals(&Eve, &vec![false, true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Eve).submit_candidacy(1);
+			PublicPass::test(&Bob).set_approvals(vec![true, false], 0);
+			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 11, 1);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 1);
 		});
 	}
 
@@ -1233,15 +1246,15 @@ mod tests {
 			with_env(|e| e.block_number = 4);
 			assert!(!presentation_active());
 
-			public::submit_candidacy(&Alice, 0);
-			public::submit_candidacy(&Eve, 1);
-			public::set_approvals(&Bob, &vec![true, false], 0);
-			public::set_approvals(&Eve, &vec![false, true], 0);
+			PublicPass::test(&Alice).submit_candidacy(0);
+			PublicPass::test(&Eve).submit_candidacy(1);
+			PublicPass::test(&Bob).set_approvals(vec![true, false], 0);
+			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
 			assert_eq!(staking::balance(&Alice), 1);
-			public::present_winner(&Alice, &Alice, 30, 0);
+			PublicPass::test(&Alice).present_winner(Alice.into(), 30, 0);
 		});
 	}
 
@@ -1252,14 +1265,14 @@ mod tests {
 			assert!(!presentation_active());
 			assert_eq!(staking::balance(&Dave), 40);
 
-			public::submit_candidacy(&Bob, 0);
-			public::submit_candidacy(&Eve, 1);
-			public::set_approvals(&Bob, &vec![true, false], 0);
-			public::set_approvals(&Eve, &vec![false, true], 0);
+			PublicPass::test(&Bob).submit_candidacy(0);
+			PublicPass::test(&Eve).submit_candidacy(1);
+			PublicPass::test(&Bob).set_approvals(vec![true, false], 0);
+			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Bob, 80, 0);
+			PublicPass::test(&Dave).present_winner(Bob.into(), 80, 0);
 
 			assert_eq!(staking::balance(&Dave), 38);
 		});
@@ -1271,31 +1284,31 @@ mod tests {
 			with_env(|e| e.block_number = 4);
 			assert!(!presentation_active());
 
-			public::submit_candidacy(&Alice, 0);
-			public::set_approvals(&Ferdie, &vec![true], 0);
-			public::submit_candidacy(&Bob, 1);
-			public::set_approvals(&Bob, &vec![false, true], 0);
-			public::submit_candidacy(&Charlie, 2);
-			public::set_approvals(&Charlie, &vec![false, false, true], 0);
-			public::submit_candidacy(&Dave, 3);
-			public::set_approvals(&Dave, &vec![false, false, false, true], 0);
-			public::submit_candidacy(&Eve, 4);
-			public::set_approvals(&Eve, &vec![false, false, false, false, true], 0);
+			PublicPass::test(&Alice).submit_candidacy(0);
+			PublicPass::test(&Ferdie).set_approvals(vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(1);
+			PublicPass::test(&Bob).set_approvals(vec![false, true], 0);
+			PublicPass::test(&Charlie).submit_candidacy(2);
+			PublicPass::test(&Charlie).set_approvals(vec![false, false, true], 0);
+			PublicPass::test(&Dave).submit_candidacy(3);
+			PublicPass::test(&Dave).set_approvals(vec![false, false, false, true], 0);
+			PublicPass::test(&Eve).submit_candidacy(4);
+			PublicPass::test(&Eve).set_approvals(vec![false, false, false, false, true], 0);
 
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
 			assert!(presentation_active());
-			public::present_winner(&Dave, &Alice, 60, 0);
+			PublicPass::test(&Dave).present_winner(Alice.into(), 60, 0);
 			assert_eq!(leaderboard(), Some(vec![
 				(0, AccountId::default()),
 				(0, AccountId::default()),
 				(0, AccountId::default()),
 				(60, Alice.to_raw_public())
 			]));
-			public::present_winner(&Dave, &Charlie, 21, 0);
-			public::present_winner(&Dave, &Dave, 31, 0);
-			public::present_winner(&Dave, &Eve, 41, 0);
+			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 0);
+			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 0);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
 			assert_eq!(leaderboard(), Some(vec![
 				(21, Charlie.into()),
 				(31, Dave.into()),
@@ -1328,33 +1341,33 @@ mod tests {
 	fn second_tally_should_use_runners_up() {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 4);
-			public::submit_candidacy(&Alice, 0);
-			public::set_approvals(&Ferdie, &vec![true], 0);
-			public::submit_candidacy(&Bob, 1);
-			public::set_approvals(&Bob, &vec![false, true], 0);
-			public::submit_candidacy(&Charlie, 2);
-			public::set_approvals(&Charlie, &vec![false, false, true], 0);
-			public::submit_candidacy(&Dave, 3);
-			public::set_approvals(&Dave, &vec![false, false, false, true], 0);
-			public::submit_candidacy(&Eve, 4);
-			public::set_approvals(&Eve, &vec![false, false, false, false, true], 0);
+			PublicPass::test(&Alice).submit_candidacy(0);
+			PublicPass::test(&Ferdie).set_approvals(vec![true], 0);
+			PublicPass::test(&Bob).submit_candidacy(1);
+			PublicPass::test(&Bob).set_approvals(vec![false, true], 0);
+			PublicPass::test(&Charlie).submit_candidacy(2);
+			PublicPass::test(&Charlie).set_approvals(vec![false, false, true], 0);
+			PublicPass::test(&Dave).submit_candidacy(3);
+			PublicPass::test(&Dave).set_approvals(vec![false, false, false, true], 0);
+			PublicPass::test(&Eve).submit_candidacy(4);
+			PublicPass::test(&Eve).set_approvals(vec![false, false, false, false, true], 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 6);
-			public::present_winner(&Dave, &Alice, 60, 0);
-			public::present_winner(&Dave, &Charlie, 21, 0);
-			public::present_winner(&Dave, &Dave, 31, 0);
-			public::present_winner(&Dave, &Eve, 41, 0);
+			PublicPass::test(&Dave).present_winner(Alice.into(), 60, 0);
+			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 0);
+			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 0);
+			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			public::set_approvals(&Ferdie, &vec![false, false, true, false], 1);
-			privileged::set_desired_seats(3);
+			PublicPass::test(&Ferdie).set_approvals(vec![false, false, true, false], 1);
+			PrivPass::test().set_desired_seats(3);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
-			public::present_winner(&Dave, &Charlie, 81, 1);
-			public::present_winner(&Dave, &Dave, 31, 1);
+			PublicPass::test(&Dave).present_winner(Charlie.into(), 81, 1);
+			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 1);
 			internal::end_block();
 
 			assert!(!presentation_active());
