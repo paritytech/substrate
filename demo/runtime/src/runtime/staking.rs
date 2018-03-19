@@ -726,7 +726,7 @@ mod tests {
 
 			// Block 3: Schedule an era length change; no visible changes.
 			with_env(|e| e.block_number = 3);
-			PrivPass.set_sessions_per_era(3);
+			PrivPass::test().set_sessions_per_era(3);
 			check_new_era();
 			assert_eq!(sessions_per_era(), 2u64);
 			assert_eq!(last_era_length_change(), 0u64);

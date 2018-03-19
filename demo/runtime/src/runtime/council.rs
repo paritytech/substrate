@@ -1105,7 +1105,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			PrivPass.set_desired_seats(3);
+			PrivPass::test().set_desired_seats(3);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
@@ -1362,7 +1362,7 @@ mod tests {
 
 			with_env(|e| e.block_number = 8);
 			PublicPass::test(&Ferdie).set_approvals(vec![false, false, true, false], 1);
-			PrivPass.set_desired_seats(3);
+			PrivPass::test().set_desired_seats(3);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);

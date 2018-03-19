@@ -30,6 +30,9 @@ pub struct PrivPass((),);
 
 impl PrivPass {
 	fn new() -> PrivPass { PrivPass((),) }
+
+	#[cfg(test)]
+	pub fn test() -> PrivPass { PrivPass((),) }
 }
 
 /// A proposal index.
