@@ -36,7 +36,7 @@ pub fn mix<T>(seeds: &[T]) -> Result<T, ()> where
 	Ok(seeds.iter().cloned().mixed())
 }
 
-/// The mixed trait for mixing a ssequence.
+/// The mixed trait for mixing a sequence.
 pub trait Mixed {
 	/// The items in the sequence and simultaneously the return of the mixing.
 	type Item;
