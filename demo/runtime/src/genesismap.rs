@@ -19,7 +19,7 @@
 use codec::{KeyedVec, Joiner};
 use std::collections::HashMap;
 use runtime_io::twox_128;
-use runtime_support::Hashable;
+use runtime_support::{Hashable, StorageMap, StorageList, StorageValue};
 use primitives::Block;
 use demo_primitives::{BlockNumber, AccountId};
 use runtime::staking::Balance;
@@ -80,40 +80,37 @@ impl GenesisConfig {
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
 		let wasm_runtime = include_bytes!("../wasm/genesis.wasm").to_vec();
 		vec![
-			(&session::SESSION_LENGTH[..], vec![].and(&self.session_length)),
-			(&session::VALIDATOR_COUNT[..], vec![].and(&(self.validators.len() as u32))),
+			(session::SessionLength::key(), vec![].and(&self.session_length)),
+			(session::Validators::key(), vec![].and(&self.validators)),
 
-			(&staking::INTENTION_COUNT[..], vec![].and(&0u32)),
-			(&staking::SESSIONS_PER_ERA[..], vec![].and(&self.sessions_per_era)),
-			(&staking::CURRENT_ERA[..], vec![].and(&0u64)),
+			(&staking::Intention::len_key()[..], vec![].and(&0u32)),
+			(&staking::SessionsPerEra::key()[..], vec![].and(&self.sessions_per_era)),
+			(&staking::CurrentEra::key()[..], vec![].and(&0u64)),
 
-			(&democracy::LAUNCH_PERIOD[..], vec![].and(&self.launch_period)),
-			(&democracy::VOTING_PERIOD[..], vec![].and(&self.voting_period)),
-			(&democracy::MINIMUM_DEPOSIT[..], vec![].and(&self.minimum_deposit)),
+			(democracy::LaunchPeriod::key(), vec![].and(&self.launch_period)),
+			(democracy::VotingPeriod::key(), vec![].and(&self.voting_period)),
+			(democracy::MinimumDeposit::key(), vec![].and(&self.minimum_deposit)),
 
-			(&council::CANDIDACY_BOND[..], vec![].and(&self.candidacy_bond)),
-			(&council::VOTING_BOND[..], vec![].and(&self.voter_bond)),
-			(&council::PRESENT_SLASH_PER_VOTER[..], vec![].and(&self.present_slash_per_voter)),
-			(&council::CARRY_COUNT[..], vec![].and(&self.carry_count)),
-			(&council::PRESENTATION_DURATION[..], vec![].and(&self.presentation_duration)),
-			(&council::VOTING_PERIOD[..], vec![].and(&self.council_election_voting_period)),
-			(&council::TERM_DURATION[..], vec![].and(&self.council_term_duration)),
-			(&council::DESIRED_SEATS[..], vec![].and(&self.desired_seats)),
-			(&council::INACTIVE_GRACE_PERIOD[..], vec![].and(&self.inactive_grace_period)),
+			(council::CandidacyBond::key(), vec![].and(&self.candidacy_bond)),
+			(council::VotingBond::key(), vec![].and(&self.voter_bond)),
+			(council::PresentSlashPerVoter::key(), vec![].and(&self.present_slash_per_voter)),
+			(council::CarryCount::key(), vec![].and(&self.carry_count)),
+			(council::PresentationDuration::key(), vec![].and(&self.presentation_duration)),
+			(council::VotingPeriod::key(), vec![].and(&self.council_election_voting_period)),
+			(council::TermDuration::key(), vec![].and(&self.council_term_duration)),
+			(council::DesiredSeats::key(), vec![].and(&self.desired_seats)),
+			(council::InactiveGracePeriod::key(), vec![].and(&self.inactive_grace_period)),
 
-			(&council_vote::COOLOFF_PERIOD[..], vec![].and(&self.cooloff_period)),
-			(&council_vote::VOTING_PERIOD[..], vec![].and(&self.council_proposal_voting_period))
+			(council_vote::CooloffPeriod::key(), vec![].and(&self.cooloff_period)),
+			(council_vote::VotingPeriod::key(), vec![].and(&self.council_proposal_voting_period))
 		].into_iter()
 			.map(|(k, v)| (k.into(), v))
-			.chain(self.validators.iter()
-				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(session::VALIDATOR_AT), vec![].and(account)))
-			).chain(self.balances.iter()
-				.map(|&(account, balance)| (account.to_keyed_vec(staking::BALANCE_OF), vec![].and(&balance)))
+			.chain(self.balances.iter()
+				.map(|&(account, balance)| (staking::FreeBalanceOf::key_for(&account), vec![].and(&balance)))
 			)
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
-				(system::CODE[..].into(), wasm_runtime),
+				(system::CODE.to_vec(), wasm_runtime),
 				(consensus::AUTHORITY_COUNT[..].into(), vec![].and(&(self.authorities.len() as u32))),
 			].into_iter())
 			.chain(self.authorities.iter()
@@ -127,6 +124,6 @@ impl GenesisConfig {
 pub fn additional_storage_with_genesis(genesis_block: &Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	use codec::Slicable;
 	map![
-		twox_128(&0u64.to_keyed_vec(system::BLOCK_HASH_AT)).to_vec() => genesis_block.header.blake2_256().encode()
+		system::BlockHashAt::key_for(&0) => genesis_block.header.blake2_256().encode()
 	]
 }

@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use integer_sqrt::IntegerSquareRoot;
 use codec::{KeyedVec, Slicable, Input, NonTrivialSlicable};
-use runtime_support::storage;
+use runtime_support::{StorageValue, StorageMap};
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use dispatch::PrivCall as Proposal;
 use runtime::{staking, system, session};
@@ -95,48 +95,36 @@ impl Approved for VoteThreshold {
 	}
 }
 
+storage_items! {
+	// The number of (public) proposals that have been made so far.
+	pub PublicPropCount get(public_prop_count): b"dem:ppc" => default PropIndex;
+	// The public proposals. Unsorted.
+	pub PublicProps get(public_props): b"dem:pub" => default Vec<(PropIndex, Proposal, AccountId)>;
+	// Those who have locked a deposit.
+	pub DepositOf get(deposit_lockers): b"dem:dep:" => map [ PropIndex => (Balance, Vec<AccountId>) ];
+	// How often (in blocks) new public referenda are launched.
+	pub LaunchPeriod get(launch_period): b"dem:lau" => required BlockNumber;
+	// The minimum amount to be used as a deposit for a public referendum proposal.
+	pub MinimumDeposit get(minimum_deposit): b"dem:min" => required Balance;
+
+	// How often (in blocks) to check for new votes.
+	pub VotingPeriod get(voting_period): b"dem:per" => required BlockNumber;
+
+	// The next free referendum index, aka the number of referendums started so far.
+	pub ReferendumCount get(next_free_ref_index): b"dem:rco" => default ReferendumIndex;
+	// The next referendum index that should be tallied.
+	pub NextTally get(next_tally): b"dem:nxt" => default ReferendumIndex;
+	// Information concerning any given referendum.
+	pub ReferendumInfoOf get(referendum_info): b"dem:pro:" => map [ ReferendumIndex => (BlockNumber, Proposal, VoteThreshold) ];
+
+	// Get the voters for the current proposal.
+	pub VotersFor get(voters_for): b"dem:vtr:" => default map [ ReferendumIndex => Vec<AccountId> ];
+
+	// Get the vote, if Some, of `who`.
+	pub VoteOf get(vote_of): b"dem:vot:" => map [ (ReferendumIndex, AccountId) => bool ];
+}
+
 // public proposals
-pub const PUBLIC_PROP_COUNT: &[u8] = b"dem:ppc";	// PropIndex
-pub const PUBLIC_PROPS: &[u8] = b"dem:pub";			// Vec<(PropIndex, Proposal)>
-pub const DEPOSIT_OF: &[u8] = b"dem:dep:";			// PropIndex -> (Balance, Vec<AccountId>)
-pub const LAUNCH_PERIOD: &[u8] = b"dem:lau";		// BlockNumber
-pub const MINIMUM_DEPOSIT: &[u8] = b"dem:min";		// Balance
-
-// referenda
-pub const VOTING_PERIOD: &[u8] = b"dem:per";		// BlockNumber
-pub const REFERENDUM_COUNT: &[u8] = b"dem:rco";		// ReferendumIndex
-pub const NEXT_TALLY: &[u8] = b"dem:nxt";			// ReferendumIndex
-pub const REFERENDUM_INFO_OF: &[u8] = b"dem:pro:";	// ReferendumIndex -> (BlockNumber, Proposal, VoteThreshold)
-pub const VOTERS_FOR: &[u8] = b"dem:vtr:";			// ReferendumIndex -> Vec<AccountId>
-pub const VOTE_OF: &[u8] = b"dem:vot:";				// (ReferendumIndex, AccountId) -> bool
-
-/// The minimum amount to be used as a deposit for a public referendum proposal.
-pub fn minimum_deposit() -> Balance {
-	storage::get(MINIMUM_DEPOSIT)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// How often (in blocks) to check for new votes.
-pub fn voting_period() -> BlockNumber {
-	storage::get(VOTING_PERIOD)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// How often (in blocks) new public referenda are launched.
-pub fn launch_period() -> BlockNumber {
-	storage::get(LAUNCH_PERIOD)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// The public proposals. Unsorted.
-pub fn public_props() -> Vec<(PropIndex, Proposal, AccountId)> {
-	storage::get_or_default(PUBLIC_PROPS)
-}
-
-/// Those who have locked a deposit.
-pub fn deposit_lockers(proposal: PropIndex) -> Option<(Balance, Vec<AccountId>)> {
-	storage::get(&proposal.to_keyed_vec(DEPOSIT_OF))
-}
 
 /// Get the amount locked in support of `proposal`; false if proposal isn't a valid proposal
 /// index.
@@ -146,28 +134,13 @@ pub fn locked_for(proposal: PropIndex) -> Option<Balance> {
 
 /// Return true if `ref_index` is an on-going referendum.
 pub fn is_active_referendum(ref_index: ReferendumIndex) -> bool {
-	storage::exists(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF))
-}
-
-/// Get the voters for the current proposal.
-pub fn voters_for(ref_index: ReferendumIndex) -> Vec<AccountId> {
-	storage::get_or_default(&ref_index.to_keyed_vec(VOTERS_FOR))
-}
-
-/// Get the vote, if Some, of `who`.
-pub fn vote_of(who: &AccountId, ref_index: ReferendumIndex) -> Option<bool> {
-	storage::get(&(*who, ref_index).to_keyed_vec(VOTE_OF))
-}
-
-/// Get the info concerning the next referendum.
-pub fn referendum_info(ref_index: ReferendumIndex) -> Option<(BlockNumber, Proposal, VoteThreshold)> {
-	storage::get(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF))
+	ReferendumInfoOf::exists(ref_index)
 }
 
 /// Get all referendums currently active.
 pub fn active_referendums() -> Vec<(ReferendumIndex, BlockNumber, Proposal, VoteThreshold)> {
-	let next: ReferendumIndex = storage::get_or_default(NEXT_TALLY);
-	let last: ReferendumIndex = storage::get_or_default(REFERENDUM_COUNT);
+	let next = NextTally::get();
+	let last = ReferendumCount::get();
 	(next..last).into_iter()
 		.filter_map(|i| referendum_info(i).map(|(n, p, t)| (i, n, p, t)))
 		.collect()
@@ -175,8 +148,8 @@ pub fn active_referendums() -> Vec<(ReferendumIndex, BlockNumber, Proposal, Vote
 
 /// Get all referendums ready for tally at block `n`.
 pub fn maturing_referendums_at(n: BlockNumber) -> Vec<(ReferendumIndex, BlockNumber, Proposal, VoteThreshold)> {
-	let next: ReferendumIndex = storage::get_or_default(NEXT_TALLY);
-	let last: ReferendumIndex = storage::get_or_default(REFERENDUM_COUNT);
+	let next = NextTally::get();
+	let last = ReferendumCount::get();
 	(next..last).into_iter()
 		.filter_map(|i| referendum_info(i).map(|(n, p, t)| (i, n, p, t)))
 		.take_while(|&(_, block_number, _, _)| block_number == n)
@@ -186,14 +159,9 @@ pub fn maturing_referendums_at(n: BlockNumber) -> Vec<(ReferendumIndex, BlockNum
 /// Get the voters for the current proposal.
 pub fn tally(ref_index: ReferendumIndex) -> (staking::Balance, staking::Balance) {
 	voters_for(ref_index).iter()
-		.map(|a| (staking::balance(a), vote_of(a, ref_index).expect("all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed")))
+		.map(|a| (staking::balance(a), vote_of((ref_index, *a)).expect("all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed")))
 		.map(|(bal, vote)| if vote { (bal, 0) } else { (0, bal) })
 		.fold((0, 0), |(a, b), (c, d)| (a + c, b + d))
-}
-
-/// Get the next free referendum index, aka the number of referendums started so far.
-pub fn next_free_ref_index() -> ReferendumIndex {
-	storage::get_or_default(REFERENDUM_COUNT)
 }
 
 impl_dispatch! {
@@ -209,24 +177,22 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 		assert!(value >= minimum_deposit());
 		assert!(staking::internal::deduct_unbonded(&self, value));
 
-		let index: PropIndex = storage::get_or_default(PUBLIC_PROP_COUNT);
-		storage::put(PUBLIC_PROP_COUNT, &(index + 1));
-		storage::put(&index.to_keyed_vec(DEPOSIT_OF), &(value, vec![*self]));
+		let index = PublicPropCount::get();
+		PublicPropCount::put(index + 1);
+		DepositOf::insert(index, (value, vec![*self]));
 
 		let mut props = public_props();
 		props.push((index, (*proposal).clone(), *self));
-		storage::put(PUBLIC_PROPS, &props);
+		PublicProps::put(props);
 	}
 
 	/// Propose a sensitive action to be taken.
 	fn second(self, proposal: PropIndex) {
-		let key = proposal.to_keyed_vec(DEPOSIT_OF);
-		let mut deposit: (Balance, Vec<AccountId>) =
-			storage::get(&key).expect("can only second an existing proposal");
+		let mut deposit = DepositOf::get(proposal).expect("can only second an existing proposal");
 		assert!(staking::internal::deduct_unbonded(&self, deposit.0));
 
 		deposit.1.push(*self);
-		storage::put(&key, &deposit);
+		DepositOf::insert(proposal, deposit);
 	}
 
 	/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
@@ -238,13 +204,12 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 		if staking::balance(&self) == 0 {
 			panic!("transactor must have balance to signal approval.");
 		}
-		let key = (*self, ref_index).to_keyed_vec(VOTE_OF);
-		if !storage::exists(&key) {
+		if !VoteOf::exists(&(ref_index, *self)) {
 			let mut voters = voters_for(ref_index);
 			voters.push(self.clone());
-			storage::put(&ref_index.to_keyed_vec(VOTERS_FOR), &voters);
+			VotersFor::insert(ref_index, voters);
 		}
-		storage::put(&key, &approve_proposal);
+		VoteOf::insert(&(ref_index, *self), approve_proposal);
 	}
 }
 
@@ -291,13 +256,12 @@ pub mod internal {
 			{
 				let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
 				let (deposit, depositors): (Balance, Vec<AccountId>) =
-					storage::take(&prop_index.to_keyed_vec(DEPOSIT_OF))
-						.expect("depositors always exist for current proposals");
+					DepositOf::take(prop_index).expect("depositors always exist for current proposals");
 				// refund depositors
 				for d in &depositors {
 					staking::internal::refund(d, deposit);
 				}
-				storage::put(PUBLIC_PROPS, &public_props);
+				PublicProps::put(public_props);
 				inject_referendum(now + voting_period(), proposal, VoteThreshold::SuperMajorityApprove);
 			}
 		}
@@ -310,7 +274,7 @@ pub mod internal {
 			if vote_threshold.approved(approve, against, total_stake) {
 				proposal.dispatch(PrivPass::new());
 			}
-			storage::put(NEXT_TALLY, &(index + 1));
+			NextTally::put(index + 1);
 		}
 	}
 }
@@ -326,17 +290,17 @@ fn inject_referendum(
 		panic!("Cannot inject a referendum that ends earlier than preceeding referendum");
 	}
 
-	storage::put(REFERENDUM_COUNT, &(ref_index + 1));
-	storage::put(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF), &(end, proposal, vote_threshold));
+	ReferendumCount::put(ref_index + 1);
+	ReferendumInfoOf::insert(ref_index, (end, proposal, vote_threshold));
 	ref_index
 }
 
 /// Remove all info on a referendum.
 fn clear_referendum(ref_index: ReferendumIndex) {
-	storage::kill(&ref_index.to_keyed_vec(REFERENDUM_INFO_OF));
-	storage::kill(&ref_index.to_keyed_vec(VOTERS_FOR));
+	ReferendumInfoOf::remove(ref_index);
+	VotersFor::remove(ref_index);
 	for v in voters_for(ref_index) {
-		storage::kill(&(v, ref_index).to_keyed_vec(VOTE_OF));
+		VoteOf::remove((ref_index, v));
 	}
 }
 
@@ -344,37 +308,36 @@ fn clear_referendum(ref_index: ReferendumIndex) {
 pub mod testing {
 	use super::*;
 	use runtime_io::{twox_128, TestExternalities};
+	use runtime_support::{StorageList, StorageValue, StorageMap};
 	use codec::Joiner;
 	use keyring::Keyring::*;
 	use runtime::{session, staking};
 
 	pub fn externalities() -> TestExternalities {
 		map![
-			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
-			twox_128(session::VALIDATOR_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => Alice.to_raw_public_vec(),
-			twox_128(&1u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => Bob.to_raw_public_vec(),
-			twox_128(&2u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => Charlie.to_raw_public_vec(),
-			twox_128(staking::INTENTION_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => Alice.to_raw_public_vec(),
-			twox_128(&1u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => Bob.to_raw_public_vec(),
-			twox_128(&2u32.to_keyed_vec(staking::INTENTION_AT)).to_vec() => Charlie.to_raw_public_vec(),
-			twox_128(&Alice.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&10u64),
-			twox_128(&Bob.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&20u64),
-			twox_128(&Charlie.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&30u64),
-			twox_128(&Dave.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&40u64),
-			twox_128(&Eve.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&50u64),
-			twox_128(&Ferdie.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&60u64),
-			twox_128(&One.to_raw_public().to_keyed_vec(staking::BALANCE_OF)).to_vec() => vec![].and(&1u64),
-			twox_128(staking::TOTAL_STAKE).to_vec() => vec![].and(&210u64),
-			twox_128(staking::SESSIONS_PER_ERA).to_vec() => vec![].and(&1u64),
-			twox_128(staking::VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
-			twox_128(staking::CURRENT_ERA).to_vec() => vec![].and(&1u64),
-			twox_128(staking::TRANSACTION_FEE).to_vec() => vec![].and(&1u64),
+			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
+			twox_128(session::Validators::key()).to_vec() => vec![].and(&vec![Alice.to_raw_public(), Bob.into(), Charlie.into()]),
+			twox_128(&staking::Intention::len_key()).to_vec() => vec![].and(&3u32),
+			twox_128(&staking::Intention::key_for(0)).to_vec() => Alice.to_raw_public_vec(),
+			twox_128(&staking::Intention::key_for(1)).to_vec() => Bob.to_raw_public_vec(),
+			twox_128(&staking::Intention::key_for(2)).to_vec() => Charlie.to_raw_public_vec(),
+			twox_128(&staking::FreeBalanceOf::key_for(*Alice)).to_vec() => vec![].and(&10u64),
+			twox_128(&staking::FreeBalanceOf::key_for(*Bob)).to_vec() => vec![].and(&20u64),
+			twox_128(&staking::FreeBalanceOf::key_for(*Charlie)).to_vec() => vec![].and(&30u64),
+			twox_128(&staking::FreeBalanceOf::key_for(*Dave)).to_vec() => vec![].and(&40u64),
+			twox_128(&staking::FreeBalanceOf::key_for(*Eve)).to_vec() => vec![].and(&50u64),
+			twox_128(&staking::FreeBalanceOf::key_for(*Ferdie)).to_vec() => vec![].and(&60u64),
+			twox_128(&staking::FreeBalanceOf::key_for(*One)).to_vec() => vec![].and(&1u64),
+			twox_128(staking::TotalStake::key()).to_vec() => vec![].and(&210u64),
+			twox_128(staking::SessionsPerEra::key()).to_vec() => vec![].and(&1u64),
+			twox_128(staking::ValidatorCount::key()).to_vec() => vec![].and(&3u64),
+			twox_128(staking::CurrentEra::key()).to_vec() => vec![].and(&1u64),
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![].and(&1u64),
+			twox_128(staking::BondingDuration::key()).to_vec() => vec![].and(&0u64),
 
-			twox_128(LAUNCH_PERIOD).to_vec() => vec![].and(&1u64),
-			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&1u64),
-			twox_128(MINIMUM_DEPOSIT).to_vec() => vec![].and(&1u64)
+			twox_128(LaunchPeriod::key()).to_vec() => vec![].and(&1u64),
+			twox_128(VotingPeriod::key()).to_vec() => vec![].and(&1u64),
+			twox_128(MinimumDeposit::key()).to_vec() => vec![].and(&1u64)
 		]
 	}
 }
@@ -442,7 +405,7 @@ mod tests {
 
 			assert_eq!(next_free_ref_index(), 1);
 			assert_eq!(voters_for(r), vec![Alice.to_raw_public()]);
-			assert_eq!(vote_of(&Alice, r), Some(true));
+			assert_eq!(vote_of((r, *Alice)), Some(true));
 			assert_eq!(tally(r), (10, 0));
 
 			democracy::internal::end_block(system::block_number());
@@ -557,7 +520,7 @@ mod tests {
 			PublicPass::test(&Alice).vote(r, true);
 
 			assert_eq!(voters_for(r), vec![Alice.to_raw_public()]);
-			assert_eq!(vote_of(&Alice, r), Some(true));
+			assert_eq!(vote_of((r, *Alice)), Some(true));
 			assert_eq!(tally(r), (10, 0));
 
 			democracy::internal::end_block(system::block_number());
@@ -590,7 +553,7 @@ mod tests {
 			PublicPass::test(&Alice).vote(r, false);
 
 			assert_eq!(voters_for(r), vec![Alice.to_raw_public()]);
-			assert_eq!(vote_of(&Alice, r), Some(false));
+			assert_eq!(vote_of((r, *Alice)), Some(false));
 			assert_eq!(tally(r), (0, 10));
 
 			democracy::internal::end_block(system::block_number());

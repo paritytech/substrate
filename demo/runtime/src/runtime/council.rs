@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use codec::KeyedVec;
-use runtime_support::storage;
+use runtime_support::{StorageMap, StorageValue};
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
 use runtime::democracy::PrivPass;
@@ -80,103 +80,66 @@ use runtime::staking::{PublicPass, Balance};
 
 pub type VoteIndex = u32;
 
-// parameters
-pub const CANDIDACY_BOND: &[u8] = b"cou:cbo";
-pub const VOTING_BOND: &[u8] = b"cou:vbo";
-pub const PRESENT_SLASH_PER_VOTER: &[u8] = b"cou:pss";
-pub const CARRY_COUNT: &[u8] = b"cou:cco";
-pub const PRESENTATION_DURATION: &[u8] = b"cou:pdu";
-pub const INACTIVE_GRACE_PERIOD: &[u8] = b"cou:vgp";
-pub const VOTING_PERIOD: &[u8] = b"cou:per";
-pub const TERM_DURATION: &[u8] = b"cou:trm";
-pub const DESIRED_SEATS: &[u8] = b"cou:sts";
+storage_items! {
+	// parameters
+	// How much should be locked up in order to submit one's candidacy.
+	pub CandidacyBond get(candidacy_bond): b"cou:cbo" => required Balance;
+	// How much should be locked up in order to be able to submit votes.
+	pub VotingBond get(voting_bond): b"cou:vbo" => required Balance;
+	// The punishment, per voter, if you provide an invalid presentation.
+	pub PresentSlashPerVoter get(present_slash_per_voter): b"cou:pss" => required Balance;
+	// How many runners-up should have their approvals persist until the next vote.
+	pub CarryCount get(carry_count): b"cou:cco" => required u32;
+	// How long to give each top candidate to present themselves after the vote ends.
+	pub PresentationDuration get(presentation_duration): b"cou:pdu" => required BlockNumber;
+	// How many votes need to go by after a voter's last vote before they can be reaped if their
+	// approvals are moot.
+	pub InactiveGracePeriod get(inactivity_grace_period): b"cou:vgp" => required VoteIndex;
+	// How often (in blocks) to check for new votes.
+	pub VotingPeriod get(voting_period): b"cou:per" => required BlockNumber;
+	// How long each position is active for.
+	pub TermDuration get(term_duration): b"cou:trm" => required BlockNumber;
+	// Number of accounts that should be sitting on the council.
+	pub DesiredSeats get(desired_seats): b"cou:sts" => required u32;
 
-// permanent state (always relevant, changes only at the finalisation of voting)
-pub const ACTIVE_COUNCIL: &[u8] = b"cou:act";		// Vec<(AccountId, expiry: BlockNumber)>
-pub const VOTE_COUNT: &[u8] = b"cou:vco";			// VoteIndex
+	// permanent state (always relevant, changes only at the finalisation of voting)
+	// The current council. When there's a vote going on, this should still be used for executive
+	// matters.
+	pub ActiveCouncil get(active_council): b"cou:act" => default Vec<(AccountId, BlockNumber)>;
+	// The total number of votes that have happened or are in progress.
+	pub VoteCount get(vote_index): b"cou:vco" => default VoteIndex;
 
-// persistent state (always relevant, changes constantly)
-pub const APPROVALS_OF: &[u8] = b"cou:apr:";		// Vec<bool>
-pub const REGISTER_INFO_OF: &[u8] = b"cou:reg:";	// Candidate -> (VoteIndex, u32)
-pub const LAST_ACTIVE_OF: &[u8] = b"cou:lac:";		// Voter -> VoteIndex
-pub const VOTERS: &[u8] = b"cou:vrs";				// Vec<AccountId>
-pub const CANDIDATES: &[u8] = b"cou:can";			// Vec<AccountId>, has holes
-pub const CANDIDATE_COUNT: &[u8] = b"cou:cnc";		// u32
+	// persistent state (always relevant, changes constantly)
+	// The last cleared vote index that this voter was last active at.
+	pub ApprovalsOf get(approvals_of): b"cou:apr" => default map [ AccountId => Vec<bool> ];
+	// The vote index and list slot that the candidate `who` was registered or `None` if they are not
+	// currently registered.
+	pub RegisterInfoOf get(candidate_reg_info): b"cou:reg" => map [ AccountId => (VoteIndex, u32) ];
+	// The last cleared vote index that this voter was last active at.
+	pub LastActiveOf get(voter_last_active): b"cou:lac" => map [ AccountId => VoteIndex ];
+	// The present voter list.
+	pub Voters get(voters): b"cou:vrs" => default Vec<AccountId>;
+	// The present candidate list.
+	pub Candidates get(candidates): b"cou:can" => default Vec<AccountId>; // has holes
+	pub CandidateCount get(candidate_count): b"cou:cnc" => default u32;
 
-// temporary state (only relevant during finalisation/presentation)
-pub const NEXT_FINALISE: &[u8] = b"cou:nxt";
-pub const SNAPSHOTED_STAKES: &[u8] = b"cou:sss";		// Vec<Balance>
-pub const LEADERBOARD: &[u8] = b"cou:win";				// Vec<(Balance, AccountId)> ORDERED low -> high
-
-/// How much should be locked up in order to submit one's candidacy.
-pub fn candidacy_bond() -> Balance {
-	storage::get(CANDIDACY_BOND)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// How much should be locked up in order to be able to submit votes.
-pub fn voting_bond() -> Balance {
-	storage::get(VOTING_BOND)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// How long to give each top candidate to present themselves after the vote ends.
-pub fn presentation_duration() -> BlockNumber {
-	storage::get(PRESENTATION_DURATION)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// How often (in blocks) to check for new votes.
-pub fn voting_period() -> BlockNumber {
-	storage::get(VOTING_PERIOD)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// How many votes need to go by after a voter's last vote before they can be reaped if their
-/// approvals are moot.
-pub fn inactivity_grace_period() -> VoteIndex {
-	storage::get(INACTIVE_GRACE_PERIOD)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// How long each position is active for.
-pub fn term_duration() -> BlockNumber {
-	storage::get(TERM_DURATION)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// The punishment, per voter, if you provide an invalid presentation.
-pub fn present_slash_per_voter() -> Balance {
-	storage::get(PRESENT_SLASH_PER_VOTER)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// Number of accounts that should be sitting on the council.
-pub fn desired_seats() -> u32 {
-	storage::get(DESIRED_SEATS)
-		.expect("all core parameters of council module must be in place")
-}
-
-/// How many runners-up should have their approvals persist until the next vote.
-pub fn carry_count() -> u32 {
-	storage::get(CARRY_COUNT)
-		.expect("all core parameters of council module must be in place")
+	// temporary state (only relevant during finalisation/presentation)
+	// The accounts holding the seats that will become free on the next tally.
+	pub NextFinalise get(next_finalise): b"cou:nxt" => (BlockNumber, u32, Vec<AccountId>);
+	// The stakes as they were at the point that the vote ended.
+	pub SnapshotedStakes get(snapshoted_stakes): b"cou:sss" => required Vec<Balance>;
+	// Get the leaderboard if we;re in the presentation phase.
+	pub Leaderboard get(leaderboard): b"cou:win" => Vec<(Balance, AccountId)>; // ORDERED low -> high
 }
 
 /// True if we're currently in a presentation period.
 pub fn presentation_active() -> bool {
-	storage::exists(NEXT_FINALISE)
-}
-
-/// The current council. When there's a vote going on, this should still be used for executive
-/// matters.
-pub fn active_council() -> Vec<(AccountId, BlockNumber)> {
-	storage::get_or_default(ACTIVE_COUNCIL)
+	NextFinalise::exists()
 }
 
 /// If `who` a candidate at the moment?
 pub fn is_a_candidate(who: &AccountId) -> bool {
-	storage::exists(&who.to_keyed_vec(REGISTER_INFO_OF))
+	RegisterInfoOf::exists(who)
 }
 
 /// Determine the block that a vote can happen on which is no less than `n`.
@@ -215,47 +178,6 @@ pub fn next_tally() -> Option<BlockNumber> {
 	}
 }
 
-/// The accounts holding the seats that will become free on the next tally.
-pub fn next_finalise() -> Option<(BlockNumber, u32, Vec<AccountId>)> {
-	storage::get(NEXT_FINALISE)
-}
-
-/// The total number of votes that have happened or are in progress.
-pub fn vote_index() -> VoteIndex {
-	storage::get_or_default(VOTE_COUNT)
-}
-
-/// The present candidate list.
-pub fn candidates() -> Vec<AccountId> {
-	storage::get_or_default(CANDIDATES)
-}
-
-/// The present voter list.
-pub fn voters() -> Vec<AccountId> {
-	storage::get_or_default(VOTERS)
-}
-
-/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
-/// currently registered.
-pub fn candidate_reg_info(who: &AccountId) -> Option<(VoteIndex, u32)> {
-	storage::get(&who.to_keyed_vec(REGISTER_INFO_OF))
-}
-
-/// The last cleared vote index that this voter was last active at.
-pub fn voter_last_active(voter: &AccountId) -> Option<VoteIndex> {
-	storage::get(&voter.to_keyed_vec(LAST_ACTIVE_OF))
-}
-
-/// The last cleared vote index that this voter was last active at.
-pub fn approvals_of(voter: &AccountId) -> Vec<bool> {
-	storage::get_or_default(&voter.to_keyed_vec(APPROVALS_OF))
-}
-
-/// Get the leaderboard if we;re in the presentation phase.
-pub fn leaderboard() -> Option<Vec<(Balance, AccountId)>> {
-	storage::get(LEADERBOARD)
-}
-
 impl_dispatch! {
 	pub mod public;
 	fn set_approvals(votes: Vec<bool>, index: VoteIndex) = 0;
@@ -271,17 +193,17 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 	fn set_approvals(self, votes: Vec<bool>, index: VoteIndex) {
 		assert!(!presentation_active());
 		assert_eq!(index, vote_index());
-		if !storage::exists(&self.to_keyed_vec(LAST_ACTIVE_OF)) {
+		if !LastActiveOf::exists(*self) {
 			// not yet a voter - deduct bond.
 			staking::internal::reserve_balance(&self, voting_bond());
-			storage::put(VOTERS, &{
-				let mut v: Vec<AccountId> = storage::get_or_default(VOTERS);
+			Voters::put({
+				let mut v = Voters::get();
 				v.push(self.clone());
 				v
 			});
 		}
-		storage::put(&self.to_keyed_vec(APPROVALS_OF), &votes);
-		storage::put(&self.to_keyed_vec(LAST_ACTIVE_OF), &index);
+		ApprovalsOf::insert(*self, votes);
+		LastActiveOf::insert(*self, index);
 	}
 
 	/// Remove a voter. For it not to be a bond-consuming no-op, all approved candidate indices
@@ -291,7 +213,7 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 	/// May be called by anyone. Returns the voter deposit to `signed`.
 	fn reap_inactive_voter(self, signed_index: u32, who: AccountId, who_index: u32, assumed_vote_index: VoteIndex) {
 		assert!(!presentation_active(), "cannot reap during presentation period");
-		assert!(voter_last_active(&self).is_some(), "reaper must be a voter");
+		assert!(voter_last_active(*self).is_some(), "reaper must be a voter");
 		let last_active = voter_last_active(&who).expect("target for inactivity cleanup must be active");
 		assert!(assumed_vote_index == vote_index(), "vote index not current");
 		assert!(last_active < assumed_vote_index - inactivity_grace_period(), "cannot reap during grace perid");
@@ -326,7 +248,7 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
 	fn retract_voter(self, index: u32) {
 		assert!(!presentation_active(), "cannot retract when presenting");
-		assert!(storage::exists(&self.to_keyed_vec(LAST_ACTIVE_OF)), "cannot retract non-voter");
+		assert!(LastActiveOf::exists(*self), "cannot retract non-voter");
 		let voters = voters();
 		let index = index as usize;
 		assert!(index < voters.len(), "retraction index invalid");
@@ -343,8 +265,8 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 		assert!(staking::internal::deduct_unbonded(&self, candidacy_bond()), "candidate has not enough funds");
 
 		let slot = slot as usize;
-		let count = storage::get_or_default::<u32>(CANDIDATE_COUNT) as usize;
-		let candidates: Vec<AccountId> = storage::get_or_default(CANDIDATES);
+		let count = CandidateCount::get() as usize;
+		let candidates = Candidates::get();
 		assert!(
 			(slot == count && count == candidates.len()) ||
 			(slot < candidates.len() && candidates[slot] == AccountId::default()),
@@ -357,20 +279,20 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 		} else {
 			candidates[slot] = self.clone();
 		}
-		storage::put(CANDIDATES, &candidates);
-		storage::put(CANDIDATE_COUNT, &(count as u32 + 1));
-		storage::put(&self.to_keyed_vec(REGISTER_INFO_OF), &(vote_index(), slot));
+		Candidates::put(candidates);
+		CandidateCount::put(count as u32 + 1);
+		RegisterInfoOf::insert(*self, (vote_index(), slot as u32));
 	}
 
 	/// Claim that `signed` is one of the top carry_count() + current_vote().1 candidates.
-	/// Only works if the block number >= current_vote().0 and < current_vote().0 + presentation_duration()
+	/// Only works if the `block_number >= current_vote().0` and `< current_vote().0 + presentation_duration()``
 	/// `signed` should have at least
 	fn present_winner(self, candidate: AccountId, total: Balance, index: VoteIndex) {
 		assert_eq!(index, vote_index(), "index not current");
-		let (_, _, expiring): (BlockNumber, u32, Vec<AccountId>) = storage::get(NEXT_FINALISE)
+		let (_, _, expiring) = NextFinalise::get()
 			.expect("cannot present outside of presentation period");
-		let stakes: Vec<Balance> = storage::get_or_default(SNAPSHOTED_STAKES);
-		let voters: Vec<AccountId> = storage::get_or_default(VOTERS);
+		let stakes = SnapshotedStakes::get();
+		let voters = Voters::get();
 		let bad_presentation_punishment = present_slash_per_voter() * voters.len() as Balance;
 		assert!(staking::can_slash(&self, bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
@@ -382,14 +304,14 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 		}
 
 		let (registered_since, candidate_index): (VoteIndex, u32) =
-			storage::get(&candidate.to_keyed_vec(REGISTER_INFO_OF)).expect("presented candidate must be current");
+			RegisterInfoOf::get(candidate).expect("presented candidate must be current");
 		let actual_total = voters.iter()
 			.zip(stakes.iter())
 			.filter_map(|(voter, stake)|
 				match voter_last_active(voter) {
 					Some(b) if b >= registered_since =>
 						approvals_of(voter).get(candidate_index as usize)
-							.and_then(|approved| if *approved { Some(stake) } else { None }),
+							.and_then(|approved| if *approved { Some(*stake) } else { None }),
 					_ => None,
 				})
 			.sum();
@@ -398,7 +320,7 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 			// insert into leaderboard
 			leaderboard[0] = (total, candidate.clone());
 			leaderboard.sort_by_key(|&(t, _)| t);
-			storage::put(LEADERBOARD, &leaderboard);
+			Leaderboard::put(leaderboard);
 		} else {
 			staking::internal::slash(&self, bad_presentation_punishment);
 		}
@@ -418,7 +340,7 @@ impl privileged::Dispatch for PrivPass {
 	/// election when they expire. If more, then a new vote will be started if one is not already
 	/// in progress.
 	fn set_desired_seats(self, count: u32) {
-		storage::put(DESIRED_SEATS, &count);
+		DesiredSeats::put(count);
 	}
 
 	/// Remove a particular member. A tally will happen instantly (if not already in a presentation
@@ -429,19 +351,19 @@ impl privileged::Dispatch for PrivPass {
 			.into_iter()
 			.filter(|i| i.0 != who)
 			.collect();
-		storage::put(ACTIVE_COUNCIL, &new_council);
+		ActiveCouncil::put(new_council);
 	}
 
 	/// Set the presentation duration. If there is current a vote being presented for, will
 	/// invoke `finalise_vote`.
 	fn set_presentation_duration(self, count: BlockNumber) {
-		storage::put(PRESENTATION_DURATION, &count);
+		PresentationDuration::put(count);
 	}
 
 	/// Set the presentation duration. If there is current a vote being presented for, will
 	/// invoke `finalise_vote`.
 	fn set_term_duration(self, count: BlockNumber) {
-		storage::put(TERM_DURATION, &count);
+		TermDuration::put(count);
 	}
 }
 
@@ -468,9 +390,9 @@ pub mod internal {
 
 /// Remove a voter from the system. Trusts that voters()[index] != voter.
 fn remove_voter(voter: &AccountId, index: usize, mut voters: Vec<AccountId>) {
-	storage::put(VOTERS, &{ voters.swap_remove(index); voters });
-	storage::kill(&voter.to_keyed_vec(APPROVALS_OF));
-	storage::kill(&voter.to_keyed_vec(LAST_ACTIVE_OF));
+	Voters::put({ voters.swap_remove(index); voters });
+	ApprovalsOf::remove(voter);
+	LastActiveOf::remove(voter);
 }
 
 /// Close the voting, snapshot the staking and the number of seats that are actually up for grabs.
@@ -478,18 +400,18 @@ fn start_tally() {
 	let active_council = active_council();
 	let desired_seats = desired_seats() as usize;
 	let number = system::block_number();
-	let expiring = active_council.iter().take_while(|i| i.1 == number).cloned().collect::<Vec<_>>();
+	let expiring = active_council.iter().take_while(|i| i.1 == number).map(|i| i.0).collect::<Vec<_>>();
 	if active_council.len() - expiring.len() < desired_seats {
 		let empty_seats = desired_seats - (active_council.len() - expiring.len());
-		storage::put(NEXT_FINALISE, &(number + presentation_duration(), empty_seats as u32, expiring));
+		NextFinalise::put((number + presentation_duration(), empty_seats as u32, expiring));
 
-		let voters: Vec<AccountId> = storage::get_or_default(VOTERS);
-		let votes: Vec<Balance> = voters.iter().map(staking::balance).collect();
-		storage::put(SNAPSHOTED_STAKES, &votes);
+		let voters = Voters::get();
+		let votes = voters.iter().map(staking::balance).collect::<Vec<_>>();
+		SnapshotedStakes::put(votes);
 
 		// initialise leaderboard.
 		let leaderboard_size = empty_seats + carry_count() as usize;
-		storage::put(LEADERBOARD, &vec![(0 as Balance, AccountId::default()); leaderboard_size]);
+		Leaderboard::put(vec![(0 as Balance, AccountId::default()); leaderboard_size]);
 	}
 }
 
@@ -498,10 +420,10 @@ fn start_tally() {
 /// a new vote is started.
 /// Clears all presented candidates, returning the bond of the elected ones.
 fn finalise_tally() {
-	storage::kill(SNAPSHOTED_STAKES);
-	let (_, coming, expiring): (BlockNumber, u32, Vec<AccountId>) = storage::take(NEXT_FINALISE)
+	SnapshotedStakes::kill();
+	let (_, coming, expiring): (BlockNumber, u32, Vec<AccountId>) = NextFinalise::take()
 		.expect("finalise can only be called after a tally is started.");
-	let leaderboard: Vec<(Balance, AccountId)> = storage::take(LEADERBOARD).unwrap_or_default();
+	let leaderboard: Vec<(Balance, AccountId)> = Leaderboard::take().unwrap_or_default();
 	let new_expiry = system::block_number() + term_duration();
 
 	// return bond to winners.
@@ -526,10 +448,10 @@ fn finalise_tally() {
 			.map(|(_, a)| (a, new_expiry)))
 		.collect();
 	new_council.sort_by_key(|&(_, expiry)| expiry);
-	storage::put(ACTIVE_COUNCIL, &new_council);
+	ActiveCouncil::put(new_council);
 
 	// clear all except runners-up from candidate list.
-	let candidates: Vec<AccountId> = storage::get_or_default(CANDIDATES);
+	let candidates = Candidates::get();
 	let mut new_candidates = vec![AccountId::default(); candidates.len()];	// shrink later.
 	let runners_up = leaderboard.into_iter()
 		.rev()
@@ -544,16 +466,16 @@ fn finalise_tally() {
 	for (old, new) in candidates.iter().zip(new_candidates.iter()) {
 		if old != new {
 			// removed - kill it
-			storage::kill(&old.to_keyed_vec(REGISTER_INFO_OF));
+			RegisterInfoOf::remove(old);
 		}
 	}
 	// discard any superfluous slots.
 	if let Some(last_index) = new_candidates.iter().rposition(|c| *c != AccountId::default()) {
 		new_candidates.truncate(last_index + 1);
 	}
-	storage::put(CANDIDATES, &(new_candidates));
-	storage::put(CANDIDATE_COUNT, &count);
-	storage::put(VOTE_COUNT, &(vote_index() + 1));
+	Candidates::put(new_candidates);
+	CandidateCount::put(count);
+	VoteCount::put(vote_index() + 1);
 }
 
 #[cfg(test)]
@@ -565,15 +487,15 @@ pub mod testing {
 
 	pub fn externalities() -> TestExternalities {
 		let extras: TestExternalities = map![
-			twox_128(CANDIDACY_BOND).to_vec() => vec![].and(&9u64),
-			twox_128(VOTING_BOND).to_vec() => vec![].and(&3u64),
-			twox_128(PRESENT_SLASH_PER_VOTER).to_vec() => vec![].and(&1u64),
-			twox_128(CARRY_COUNT).to_vec() => vec![].and(&2u32),
-			twox_128(PRESENTATION_DURATION).to_vec() => vec![].and(&2u64),
-			twox_128(VOTING_PERIOD).to_vec() => vec![].and(&4u64),
-			twox_128(TERM_DURATION).to_vec() => vec![].and(&5u64),
-			twox_128(DESIRED_SEATS).to_vec() => vec![].and(&2u32),
-			twox_128(INACTIVE_GRACE_PERIOD).to_vec() => vec![].and(&1u32)
+			twox_128(CandidacyBond::key()).to_vec() => vec![].and(&9u64),
+			twox_128(VotingBond::key()).to_vec() => vec![].and(&3u64),
+			twox_128(PresentSlashPerVoter::key()).to_vec() => vec![].and(&1u64),
+			twox_128(CarryCount::key()).to_vec() => vec![].and(&2u32),
+			twox_128(PresentationDuration::key()).to_vec() => vec![].and(&2u64),
+			twox_128(VotingPeriod::key()).to_vec() => vec![].and(&4u64),
+			twox_128(TermDuration::key()).to_vec() => vec![].and(&5u64),
+			twox_128(DesiredSeats::key()).to_vec() => vec![].and(&2u32),
+			twox_128(InactiveGracePeriod::key()).to_vec() => vec![].and(&1u32)
 		];
 		democracy::testing::externalities()
 			.into_iter().chain(extras.into_iter()).collect()
@@ -621,11 +543,11 @@ mod tests {
 
 			assert_eq!(candidates(), Vec::<AccountId>::new());
 			assert_eq!(is_a_candidate(&Alice), false);
-			assert_eq!(candidate_reg_info(&Alice), None);
+			assert_eq!(candidate_reg_info(*Alice), None);
 
 			assert_eq!(voters(), Vec::<AccountId>::new());
-			assert_eq!(voter_last_active(&Alice), None);
-			assert_eq!(approvals_of(&Alice), vec![]);
+			assert_eq!(voter_last_active(*Alice), None);
+			assert_eq!(approvals_of(*Alice), vec![]);
 		});
 	}
 
@@ -634,22 +556,22 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			with_env(|e| e.block_number = 1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
-			assert_eq!(candidate_reg_info(&Alice), None);
-			assert_eq!(candidate_reg_info(&Bob), None);
+			assert_eq!(candidate_reg_info(*Alice), None);
+			assert_eq!(candidate_reg_info(*Bob), None);
 			assert_eq!(is_a_candidate(&Alice), false);
 			assert_eq!(is_a_candidate(&Bob), false);
 
 			PublicPass::test(&Alice).submit_candidacy(0);
 			assert_eq!(candidates(), vec![Alice.to_raw_public()]);
-			assert_eq!(candidate_reg_info(&Alice), Some((0 as VoteIndex, 0u32)));
-			assert_eq!(candidate_reg_info(&Bob), None);
+			assert_eq!(candidate_reg_info(*Alice), Some((0 as VoteIndex, 0u32)));
+			assert_eq!(candidate_reg_info(*Bob), None);
 			assert_eq!(is_a_candidate(&Alice), true);
 			assert_eq!(is_a_candidate(&Bob), false);
 
 			PublicPass::test(&Bob).submit_candidacy(1);
 			assert_eq!(candidates(), vec![Alice.to_raw_public(), Bob.into()]);
-			assert_eq!(candidate_reg_info(&Alice), Some((0 as VoteIndex, 0u32)));
-			assert_eq!(candidate_reg_info(&Bob), Some((0 as VoteIndex, 1u32)));
+			assert_eq!(candidate_reg_info(*Alice), Some((0 as VoteIndex, 0u32)));
+			assert_eq!(candidate_reg_info(*Bob), Some((0 as VoteIndex, 1u32)));
 			assert_eq!(is_a_candidate(&Alice), true);
 			assert_eq!(is_a_candidate(&Bob), true);
 		});
@@ -657,9 +579,9 @@ mod tests {
 
 	fn new_test_ext_with_candidate_holes() -> TestExternalities {
 		let mut t = new_test_ext();
-		t.insert(twox_128(CANDIDATES).to_vec(), vec![].and(&vec![AccountId::default(), AccountId::default(), Alice.to_raw_public()]));
-		t.insert(twox_128(CANDIDATE_COUNT).to_vec(), vec![].and(&1u32));
-		t.insert(twox_128(&Alice.to_raw_public().to_keyed_vec(REGISTER_INFO_OF)).to_vec(), vec![].and(&(0 as VoteIndex, 2u32)));
+		t.insert(twox_128(Candidates::key()).to_vec(), vec![].and(&vec![AccountId::default(), AccountId::default(), Alice.to_raw_public()]));
+		t.insert(twox_128(CandidateCount::key()).to_vec(), vec![].and(&1u32));
+		t.insert(twox_128(&RegisterInfoOf::key_for(*Alice)).to_vec(), vec![].and(&(0 as VoteIndex, 2u32)));
 		t
 	}
 
@@ -758,8 +680,8 @@ mod tests {
 			PublicPass::test(&Alice).set_approvals(vec![true], 0);
 			PublicPass::test(&Dave).set_approvals(vec![true], 0);
 
-			assert_eq!(approvals_of(&Alice), vec![true]);
-			assert_eq!(approvals_of(&Dave), vec![true]);
+			assert_eq!(approvals_of(*Alice), vec![true]);
+			assert_eq!(approvals_of(*Dave), vec![true]);
 			assert_eq!(voters(), vec![Alice.to_raw_public(), Dave.into()]);
 
 			PublicPass::test(&Bob).submit_candidacy(1);
@@ -768,10 +690,10 @@ mod tests {
 			PublicPass::test(&Bob).set_approvals(vec![false, true, true], 0);
 			PublicPass::test(&Charlie).set_approvals(vec![false, true, true], 0);
 
-			assert_eq!(approvals_of(&Alice), vec![true]);
-			assert_eq!(approvals_of(&Dave), vec![true]);
-			assert_eq!(approvals_of(&Bob), vec![false, true, true]);
-			assert_eq!(approvals_of(&Charlie), vec![false, true, true]);
+			assert_eq!(approvals_of(*Alice), vec![true]);
+			assert_eq!(approvals_of(*Dave), vec![true]);
+			assert_eq!(approvals_of(*Bob), vec![false, true, true]);
+			assert_eq!(approvals_of(*Charlie), vec![false, true, true]);
 
 			assert_eq!(voters(), vec![Alice.to_raw_public(), Dave.into(), Bob.into(), Charlie.into()]);
 		});
@@ -785,13 +707,13 @@ mod tests {
 			PublicPass::test(&Eve).submit_candidacy(0);
 			PublicPass::test(&Dave).set_approvals(vec![true], 0);
 
-			assert_eq!(approvals_of(&Dave), vec![true]);
+			assert_eq!(approvals_of(*Dave), vec![true]);
 
 			PublicPass::test(&Bob).submit_candidacy(1);
 			PublicPass::test(&Charlie).submit_candidacy(2);
 			PublicPass::test(&Dave).set_approvals(vec![true, false, true], 0);
 
-			assert_eq!(approvals_of(&Dave), vec![true, false, true]);
+			assert_eq!(approvals_of(*Dave), vec![true, false, true]);
 		});
 	}
 
@@ -810,34 +732,34 @@ mod tests {
 			PublicPass::test(&Dave).set_approvals(vec![true, false, true], 0);
 
 			assert_eq!(voters(), vec![Alice.to_raw_public(), Bob.into(), Charlie.into(), Dave.into()]);
-			assert_eq!(approvals_of(&Alice), vec![true]);
-			assert_eq!(approvals_of(&Bob), vec![false, true, true]);
-			assert_eq!(approvals_of(&Charlie), vec![false, true, true]);
-			assert_eq!(approvals_of(&Dave), vec![true, false, true]);
+			assert_eq!(approvals_of(*Alice), vec![true]);
+			assert_eq!(approvals_of(*Bob), vec![false, true, true]);
+			assert_eq!(approvals_of(*Charlie), vec![false, true, true]);
+			assert_eq!(approvals_of(*Dave), vec![true, false, true]);
 
 			PublicPass::test(&Alice).retract_voter(0);
 
 			assert_eq!(voters(), vec![Dave.to_raw_public(), Bob.into(), Charlie.into()]);
-			assert_eq!(approvals_of(&Alice), Vec::<bool>::new());
-			assert_eq!(approvals_of(&Bob), vec![false, true, true]);
-			assert_eq!(approvals_of(&Charlie), vec![false, true, true]);
-			assert_eq!(approvals_of(&Dave), vec![true, false, true]);
+			assert_eq!(approvals_of(*Alice), Vec::<bool>::new());
+			assert_eq!(approvals_of(*Bob), vec![false, true, true]);
+			assert_eq!(approvals_of(*Charlie), vec![false, true, true]);
+			assert_eq!(approvals_of(*Dave), vec![true, false, true]);
 
 			PublicPass::test(&Bob).retract_voter(1);
 
 			assert_eq!(voters(), vec![Dave.to_raw_public(), Charlie.into()]);
-			assert_eq!(approvals_of(&Alice), Vec::<bool>::new());
-			assert_eq!(approvals_of(&Bob), Vec::<bool>::new());
-			assert_eq!(approvals_of(&Charlie), vec![false, true, true]);
-			assert_eq!(approvals_of(&Dave), vec![true, false, true]);
+			assert_eq!(approvals_of(*Alice), Vec::<bool>::new());
+			assert_eq!(approvals_of(*Bob), Vec::<bool>::new());
+			assert_eq!(approvals_of(*Charlie), vec![false, true, true]);
+			assert_eq!(approvals_of(*Dave), vec![true, false, true]);
 
 			PublicPass::test(&Charlie).retract_voter(1);
 
 			assert_eq!(voters(), vec![Dave.to_raw_public()]);
-			assert_eq!(approvals_of(&Alice), Vec::<bool>::new());
-			assert_eq!(approvals_of(&Bob), Vec::<bool>::new());
-			assert_eq!(approvals_of(&Charlie), Vec::<bool>::new());
-			assert_eq!(approvals_of(&Dave), vec![true, false, true]);
+			assert_eq!(approvals_of(*Alice), Vec::<bool>::new());
+			assert_eq!(approvals_of(*Bob), Vec::<bool>::new());
+			assert_eq!(approvals_of(*Charlie), Vec::<bool>::new());
+			assert_eq!(approvals_of(*Dave), vec![true, false, true]);
 		});
 	}
 
@@ -901,8 +823,8 @@ mod tests {
 			assert!(!is_a_candidate(&Bob));
 			assert!(!is_a_candidate(&Eve));
 			assert_eq!(vote_index(), 1);
-			assert_eq!(voter_last_active(&Bob), Some(0));
-			assert_eq!(voter_last_active(&Eve), Some(0));
+			assert_eq!(voter_last_active(*Bob), Some(0));
+			assert_eq!(voter_last_active(*Eve), Some(0));
 		});
 	}
 
@@ -957,7 +879,7 @@ mod tests {
 			);
 
 			assert_eq!(voters(), vec![Eve.to_raw_public()]);
-			assert_eq!(approvals_of(&Bob).len(), 0);
+			assert_eq!(approvals_of(*Bob).len(), 0);
 			assert_eq!(staking::balance(&Bob), 17);
 			assert_eq!(staking::balance(&Eve), 53);
 		});
@@ -1017,7 +939,7 @@ mod tests {
 			);
 
 			assert_eq!(voters(), vec![Eve.to_raw_public()]);
-			assert_eq!(approvals_of(&Bob).len(), 0);
+			assert_eq!(approvals_of(*Bob).len(), 0);
 			assert_eq!(staking::balance(&Bob), 17);
 			assert_eq!(staking::balance(&Eve), 53);
 		});
@@ -1120,7 +1042,7 @@ mod tests {
 			);
 
 			assert_eq!(voters(), vec![Bob.to_raw_public(), Charlie.into(), Eve.into()]);
-			assert_eq!(approvals_of(&Dave).len(), 0);
+			assert_eq!(approvals_of(*Dave).len(), 0);
 			assert_eq!(staking::balance(&Dave), 37);
 		});
 	}
@@ -1327,13 +1249,13 @@ mod tests {
 			assert!(is_a_candidate(&Charlie));
 			assert!(is_a_candidate(&Dave));
 			assert_eq!(vote_index(), 1);
-			assert_eq!(voter_last_active(&Bob), Some(0));
-			assert_eq!(voter_last_active(&Charlie), Some(0));
-			assert_eq!(voter_last_active(&Dave), Some(0));
-			assert_eq!(voter_last_active(&Eve), Some(0));
-			assert_eq!(voter_last_active(&Ferdie), Some(0));
-			assert_eq!(candidate_reg_info(&Charlie), Some((0, 2)));
-			assert_eq!(candidate_reg_info(&Dave), Some((0, 3)));
+			assert_eq!(voter_last_active(*Bob), Some(0));
+			assert_eq!(voter_last_active(*Charlie), Some(0));
+			assert_eq!(voter_last_active(*Dave), Some(0));
+			assert_eq!(voter_last_active(*Eve), Some(0));
+			assert_eq!(voter_last_active(*Ferdie), Some(0));
+			assert_eq!(candidate_reg_info(*Charlie), Some((0, 2)));
+			assert_eq!(candidate_reg_info(*Dave), Some((0, 3)));
 		});
 	}
 
@@ -1379,13 +1301,13 @@ mod tests {
 			assert!(!is_a_candidate(&Eve));
 			assert!(is_a_candidate(&Dave));
 			assert_eq!(vote_index(), 2);
-			assert_eq!(voter_last_active(&Bob), Some(0));
-			assert_eq!(voter_last_active(&Charlie), Some(0));
-			assert_eq!(voter_last_active(&Dave), Some(0));
-			assert_eq!(voter_last_active(&Eve), Some(0));
-			assert_eq!(voter_last_active(&Ferdie), Some(1));
+			assert_eq!(voter_last_active(*Bob), Some(0));
+			assert_eq!(voter_last_active(*Charlie), Some(0));
+			assert_eq!(voter_last_active(*Dave), Some(0));
+			assert_eq!(voter_last_active(*Eve), Some(0));
+			assert_eq!(voter_last_active(*Ferdie), Some(1));
 
-			assert_eq!(candidate_reg_info(&Dave), Some((0, 3)));
+			assert_eq!(candidate_reg_info(*Dave), Some((0, 3)));
 		});
 	}
 }

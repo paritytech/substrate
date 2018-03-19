@@ -22,7 +22,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use runtime_io::{print, blake2_256};
 use codec::{Slicable, Input, KeyedVec};
-use runtime_support::{storage, StorageVec};
+use runtime_support::{storage, StorageValue, StorageList, StorageMap};
 use demo_primitives::{BlockNumber, AccountId};
 use runtime::{system, session, democracy};
 
@@ -32,89 +32,58 @@ pub type Balance = u64;
 /// The amount of bonding period left in an account. Measured in eras.
 pub type Bondage = u64;
 
-pub const BONDING_DURATION: &[u8] = b"sta:loc";
-pub const VALIDATOR_COUNT: &[u8] = b"sta:vac";
-pub const SESSIONS_PER_ERA: &[u8] = b"sta:spe";
-pub const NEXT_SESSIONS_PER_ERA: &[u8] = b"sta:nse";
-pub const CURRENT_ERA: &[u8] = b"sta:era";
-pub const LAST_ERA_LENGTH_CHANGE: &[u8] = b"sta:lec";
-pub const TOTAL_STAKE: &[u8] = b"sta:tot";
-pub const INTENTION_AT: &[u8] = b"sta:wil:";
-pub const INTENTION_COUNT: &[u8] = b"sta:wil:len";
-pub const TRANSACTION_FEE: &[u8] = b"sta:fee";
+storage_items! {
+	// The length of the bonding duration in eras.
+	pub BondingDuration get(bonding_duration): b"sta:loc" => required BlockNumber;
+	// The length of a staking era in sessions.
+	pub ValidatorCount get(validator_count): b"sta:vac" => required u32;
+	// The length of a staking era in sessions.
+	pub SessionsPerEra get(sessions_per_era): b"sta:spe" => required BlockNumber;
+	// The total amount of stake on the system.
+	pub TotalStake get(total_stake): b"sta:tot" => required Balance;
+	// The fee to be paid for making a transaction.
+	pub TransactionFee get(transaction_fee): b"sta:fee" => required Balance;
 
-pub const BALANCE_OF: &[u8] = b"sta:bal:";
-pub const RESERVED_BALANCE_OF: &[u8] = b"sta:lbo:";
-pub const BONDAGE_OF: &[u8] = b"sta:bon:";
-pub const CODE_OF: &[u8] = b"sta:cod:";
-pub const STORAGE_OF: &[u8] = b"sta:sto:";
+	// The current era index.
+	pub CurrentEra get(current_era): b"sta:era" => required BlockNumber;
+	// All the accounts with a desire to stake.
+	pub Intention: b"sta:wil:" => list [ AccountId ];
+	// The next value of sessions per era.
+	pub NextSessionsPerEra get(next_sessions_per_era): b"sta:nse" => BlockNumber;
+	// The block number at which the era length last changed.
+	pub LastEraLengthChange get(last_era_length_change): b"sta:lec" => default BlockNumber;
 
-pub struct IntentionStorageVec {}
-impl StorageVec for IntentionStorageVec {
-	type Item = AccountId;
-	const PREFIX: &'static[u8] = INTENTION_AT;
-}
+	// The balance of a given account.
+	pub FreeBalanceOf get(free_balance_of): b"sta:bal:" => default map [ AccountId => Balance ];
 
-/// The fee to be paid for making a transaction.
-pub fn transaction_fee() -> Balance {
-	storage::get(TRANSACTION_FEE).expect("All basic parameters should be defined")
-}
+	// The amount of the balance of a given account that is exterally reserved; this can still get
+	// slashed, but gets slashed last of all.
+	pub ReservedBalanceOf get(reserved_balance_of): b"sta:lbo:" => default map [ AccountId => Balance ];
 
-/// The length of the bonding duration in eras.
-pub fn bonding_duration() -> BlockNumber {
-	storage::get_or_default(BONDING_DURATION)
-}
+	// The block at which the `who`'s funds become entirely liquid.
+	pub BondageOf get(bondage_of): b"sta:bon:" => default map [ AccountId => Bondage ];
 
-/// The length of a staking era in sessions.
-pub fn validator_count() -> usize {
-	storage::get_or_default::<u32>(VALIDATOR_COUNT) as usize
+	// The code associated with an account.
+	pub CodeOf: b"sta:cod:" => default map [ AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+
+	// The storage items associated with an account/key.
+	pub StorageOf: b"sta:sto:" => map [ (AccountId, Vec<u8>) => Vec<u8> ];	// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
 }
 
 /// The length of a staking era in blocks.
 pub fn era_length() -> BlockNumber {
-	sessions_per_era() * session::length()
+	SessionsPerEra::get() * session::length()
 }
 
-/// The length of a staking era in sessions.
-pub fn sessions_per_era() -> BlockNumber {
-	storage::get_or_default(SESSIONS_PER_ERA)
-}
-
-/// The current era index.
-pub fn current_era() -> BlockNumber {
-	storage::get_or_default(CURRENT_ERA)
-}
-
-/// The block number at which the era length last changed.
-pub fn last_era_length_change() -> BlockNumber {
-	storage::get_or_default(LAST_ERA_LENGTH_CHANGE)
-}
-
-/// The balance of a given account.
+/// The combined balance of `who`.
 pub fn balance(who: &AccountId) -> Balance {
-	free_balance(who) + reserved_balance(who)
-}
-
-/// The balance of a given account.
-pub fn free_balance(who: &AccountId) -> Balance {
-	storage::get_or_default(&who.to_keyed_vec(BALANCE_OF))
-}
-
-/// The amount of the balance of a given account that is exterally reserved; this can still get
-/// slashed, but gets slashed last of all.
-pub fn reserved_balance(who: &AccountId) -> Balance {
-	storage::get_or_default(&who.to_keyed_vec(RESERVED_BALANCE_OF))
+	FreeBalanceOf::get(who) + ReservedBalanceOf::get(who)
 }
 
 /// Some result as `slash(who, value)` (but without the side-effects) asuming there are no
 /// balance changes in the meantime.
 pub fn can_slash(who: &AccountId, value: Balance) -> bool {
 	balance(who) >= value
-}
-
-/// The block at which the `who`'s funds become entirely liquid.
-pub fn bondage(who: &AccountId) -> Bondage {
-	storage::get_or_default(&who.to_keyed_vec(BONDAGE_OF))
 }
 
 #[derive(PartialEq, Copy, Clone)]
@@ -127,16 +96,11 @@ pub enum LockStatus {
 
 /// The block at which the `who`'s funds become entirely liquid.
 pub fn unlock_block(who: &AccountId) -> LockStatus {
-	match bondage(who) {
+	match BondageOf::get(who) {
 		i if i == Bondage::max_value() => LockStatus::Staked,
 		i if i <= system::block_number() => LockStatus::Liquid,
 		i => LockStatus::LockedUntil(i),
 	}
-}
-
-/// The total amount of stake on the system.
-pub fn total_stake() -> Balance {
-	storage::get_or(TOTAL_STAKE, 0)
 }
 
 pub struct PublicPass<'a> (&'a AccountId);
@@ -145,10 +109,10 @@ const NOBODY: AccountId = [0u8; 32];
 
 impl<'a> PublicPass<'a> {
 	pub fn new(transactor: &AccountId) -> PublicPass {
-		let b = free_balance(&transactor);
-		let transaction_fee = transaction_fee();
+		let b = FreeBalanceOf::get(transactor);
+		let transaction_fee = TransactionFee::get();
 		assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
-		internal::set_free_balance(&transactor, b - transaction_fee);
+		FreeBalanceOf::insert(transactor, b - transaction_fee);
 		PublicPass(transactor)
 	}
 
@@ -199,26 +163,26 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 	///
 	/// Effects will be felt at the beginning of the next era.
 	fn stake(self) {
-		let mut intentions = IntentionStorageVec::items();
+		let mut intentions = Intention::items();
 		// can't be in the list twice.
 		assert!(intentions.iter().find(|&t| *t == *self).is_none(), "Cannot stake if already staked.");
 		intentions.push(self.clone());
-		IntentionStorageVec::set_items(&intentions);
-		storage::put(&self.to_keyed_vec(BONDAGE_OF), &u64::max_value());
+		Intention::set_items(&intentions);
+		BondageOf::insert(*self, u64::max_value());
 	}
 
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
 	fn unstake(self) {
-		let mut intentions = IntentionStorageVec::items();
+		let mut intentions = Intention::items();
 		if let Some(position) = intentions.iter().position(|&t| t == *self) {
 			intentions.swap_remove(position);
 		} else {
 			panic!("Cannot unstake if not already staked.");
 		}
-		IntentionStorageVec::set_items(&intentions);
-		storage::put(&self.to_keyed_vec(BONDAGE_OF), &(current_era() + bonding_duration()));
+		Intention::set_items(&intentions);
+		BondageOf::insert(*self, CurrentEra::get() + BondingDuration::get());
 	}
 }
 
@@ -233,17 +197,17 @@ impl_dispatch! {
 impl privileged::Dispatch for democracy::PrivPass {
 	/// Set the number of sessions in an era.
 	fn set_sessions_per_era(self, new: BlockNumber) {
-		storage::put(NEXT_SESSIONS_PER_ERA, &new);
+		NextSessionsPerEra::put(&new);
 	}
 
 	/// The length of the bonding duration in eras.
 	fn set_bonding_duration(self, new: BlockNumber) {
-		storage::put(BONDING_DURATION, &new);
+		BondingDuration::put(&new);
 	}
 
 	/// The length of a staking era in sessions.
 	fn set_validator_count(self, new: u32) {
-		storage::put(VALIDATOR_COUNT, &new);
+		ValidatorCount::put(&new);
 	}
 
 	/// Force there to be a new era. This also forces a new session immediately after.
@@ -254,9 +218,9 @@ impl privileged::Dispatch for democracy::PrivPass {
 }
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
-// - n | n <= current_era(): inactive: free to be transferred.
+// - n | n <= CurrentEra::get(): inactive: free to be transferred.
 // - ~0: active: currently representing a validator.
-// - n | n > current_era(): deactivating: recently representing a validator and not yet
+// - n | n > CurrentEra::get(): deactivating: recently representing a validator and not yet
 //   ready for transfer.
 
 mod private {
@@ -296,15 +260,13 @@ mod private {
 	pub struct DirectExt;
 	impl Externalities for DirectExt {
 		fn get_storage(&self, account: &AccountId, location: &[u8]) -> Option<Vec<u8>> {
-			let mut v = account.to_keyed_vec(STORAGE_OF);
-			v.extend(location);
-			storage::get_raw(&v)
+			StorageOf::get(&(*account, location.to_vec()))
 		}
 		fn get_code(&self, account: &AccountId) -> Vec<u8> {
-			storage::get_raw(&account.to_keyed_vec(CODE_OF)).unwrap_or_default()
+			CodeOf::get(account)
 		}
 		fn get_balance(&self, account: &AccountId) -> Balance {
-			storage::get_or_default::<Balance>(&account.to_keyed_vec(BALANCE_OF))
+			FreeBalanceOf::get(account)
 		}
 	}
 
@@ -327,19 +289,16 @@ mod private {
 	pub fn commit_state(s: State) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
-				storage::put(&address.to_keyed_vec(BALANCE_OF), &balance);
+				FreeBalanceOf::insert(address, balance);
 			}
 			if let Some(code) = changed.code {
-				storage::put(&address.to_keyed_vec(CODE_OF), &code);
+				CodeOf::insert(&address, &code);
 			}
-			let storage_key = address.to_keyed_vec(STORAGE_OF);
 			for (k, v) in changed.storage.into_iter() {
-				let mut key = storage_key.clone();
-				key.extend(k);
 				if let Some(value) = v {
-					storage::put_raw(&key, &value);
+					StorageOf::insert(&(address, k), &value);
 				} else {
-					storage::kill(&key);
+					StorageOf::remove(&(address, k));
 				}
 			}
 		}
@@ -404,7 +363,7 @@ mod private {
 		assert!(from_balance >= value);
 
 		let to_balance = ext.get_balance(dest);
-		assert!(bondage(transactor) <= bondage(dest));
+		assert!(BondageOf::get(transactor) <= BondageOf::get(dest));
 		assert!(to_balance + value > to_balance);	// no overflow
 
 		// TODO: a fee, based upon gaslimit/gasprice.
@@ -470,17 +429,10 @@ mod private {
 pub mod internal {
 	use super::*;
 
-	/// Set the balance of an account.
-	/// Needless to say, this is super low-level and accordingly dangerous. Ensure any modules that
-	/// use it are auditted to the hilt.
-	pub fn set_free_balance(who: &AccountId, value: Balance) {
-		storage::put(&who.to_keyed_vec(BALANCE_OF), &value);
-	}
-
 	/// Hook to be called after to transaction processing.
 	pub fn check_new_era() {
 		// check block number and call new_era if necessary.
-		if (system::block_number() - last_era_length_change()) % era_length() == 0 {
+		if (system::block_number() - LastEraLengthChange::get()) % era_length() == 0 {
 			new_era();
 		}
 	}
@@ -488,9 +440,9 @@ pub mod internal {
 	/// Deduct from an unbonded balance. true if it happened.
 	pub fn deduct_unbonded(who: &AccountId, value: Balance) -> bool {
 		if let LockStatus::Liquid = unlock_block(who) {
-			let b = free_balance(who);
+			let b = FreeBalanceOf::get(who);
 			if b >= value {
-				set_free_balance(who, b - value);
+				FreeBalanceOf::insert(who, &(b - value));
 				return true;
 			}
 		}
@@ -499,14 +451,14 @@ pub mod internal {
 
 	/// Refund some balance.
 	pub fn refund(who: &AccountId, value: Balance) {
-		set_free_balance(who, free_balance(who) + value)
+		FreeBalanceOf::insert(who, &(FreeBalanceOf::get(who) + value))
 	}
 
 	/// Will slash any balance, but prefer free over reserved.
 	pub fn slash(who: &AccountId, value: Balance) -> bool {
-		let free_balance = free_balance(who);
+		let free_balance = FreeBalanceOf::get(who);
 		let free_slash = cmp::min(free_balance, value);
-		set_free_balance(who, free_balance - free_slash);
+		FreeBalanceOf::insert(who, &(free_balance - free_slash));
 		if free_slash < value {
 			slash_reserved(who, value - free_slash)
 		} else {
@@ -516,41 +468,36 @@ pub mod internal {
 
 	/// Moves `value` from balance to reserved balance.
 	pub fn reserve_balance(who: &AccountId, value: Balance) {
-		let b = free_balance(who);
+		let b = FreeBalanceOf::get(who);
 		assert!(b >= value);
-		set_free_balance(who, b - value);
-		set_reserved_balance(who, reserved_balance(who) + value);
+		FreeBalanceOf::insert(who, &(b - value));
+		ReservedBalanceOf::insert(who, &(ReservedBalanceOf::get(who) + value));
 	}
 
 	/// Moves `value` from reserved balance to balance.
 	pub fn unreserve_balance(who: &AccountId, value: Balance) {
-		let b = reserved_balance(who);
+		let b = ReservedBalanceOf::get(who);
 		let value = cmp::min(b, value);
-		set_reserved_balance(who, b - value);
-		set_free_balance(who, free_balance(who) + value);
+		ReservedBalanceOf::insert(who, &(b - value));
+		FreeBalanceOf::insert(who, &(FreeBalanceOf::get(who) + value));
 	}
 
 	/// Moves `value` from reserved balance to balance.
 	pub fn slash_reserved(who: &AccountId, value: Balance) -> bool {
-		let b = reserved_balance(who);
+		let b = ReservedBalanceOf::get(who);
 		let slash = cmp::min(b, value);
-		set_reserved_balance(who, b - slash);
+		ReservedBalanceOf::insert(who, &(b - slash));
 		value == slash
 	}
 
 	/// Moves `value` from reserved balance to balance.
 	pub fn transfer_reserved_balance(slashed: &AccountId, beneficiary: &AccountId, value: Balance) -> bool {
-		let b = reserved_balance(slashed);
+		let b = ReservedBalanceOf::get(slashed);
 		let slash = cmp::min(b, value);
-		set_reserved_balance(slashed, b - slash);
-		set_free_balance(beneficiary, free_balance(beneficiary) + slash);
+		ReservedBalanceOf::insert(slashed, &(b - slash));
+		FreeBalanceOf::insert(beneficiary, &(FreeBalanceOf::get(beneficiary) + slash));
 		slash == value
 	}
-}
-
-/// Set the reserved portion of `who`'s balance.
-fn set_reserved_balance(who: &AccountId, value: Balance) {
-	storage::put(&who.to_keyed_vec(RESERVED_BALANCE_OF), &value);
 }
 
 /// The era has changed - enact new staking set.
@@ -559,20 +506,21 @@ fn set_reserved_balance(who: &AccountId, value: Balance) {
 /// get a chance to set their session keys.
 fn new_era() {
 	// Increment current era.
-	storage::put(CURRENT_ERA, &(current_era() + 1));
+	CurrentEra::put(&(CurrentEra::get() + 1));
 
 	// Enact era length change.
-	let next_spe: u64 = storage::get_or_default(NEXT_SESSIONS_PER_ERA);
-	if next_spe > 0 && next_spe != sessions_per_era() {
-		storage::put(SESSIONS_PER_ERA, &next_spe);
-		storage::put(LAST_ERA_LENGTH_CHANGE, &system::block_number());
+	if let Some(next_spe) = NextSessionsPerEra::get() {
+		if next_spe != SessionsPerEra::get() {
+			SessionsPerEra::put(&next_spe);
+			LastEraLengthChange::put(&system::block_number());
+		}
 	}
 
 	// evaluate desired staking amounts and nominations and optimise to find the best
 	// combination of validators, then use session::internal::set_validators().
 	// for now, this just orders would-be stakers by their balances and chooses the top-most
-	// validator_count() of them.
-	let mut intentions = IntentionStorageVec::items()
+	// ValidatorCount::get() of them.
+	let mut intentions = Intention::items()
 		.into_iter()
 		.map(|v| (balance(&v), v))
 		.collect::<Vec<_>>();
@@ -580,7 +528,7 @@ fn new_era() {
 	session::internal::set_validators(
 		&intentions.into_iter()
 			.map(|(_, v)| v)
-			.take(validator_count())
+			.take(ValidatorCount::get() as usize)
 			.collect::<Vec<_>>()
 	);
 }
@@ -597,15 +545,16 @@ pub mod testing {
 
 	pub fn externalities(session_length: u64, sessions_per_era: u64, current_era: u64) -> TestExternalities {
 		let extras: TestExternalities = map![
-			twox_128(INTENTION_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(INTENTION_AT)).to_vec() => Alice.to_raw_public_vec(),
-			twox_128(&1u32.to_keyed_vec(INTENTION_AT)).to_vec() => Bob.to_raw_public_vec(),
-			twox_128(&2u32.to_keyed_vec(INTENTION_AT)).to_vec() => Charlie.to_raw_public_vec(),
-			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&sessions_per_era),
-			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&3u64),
-			twox_128(TRANSACTION_FEE).to_vec() => vec![].and(&1u64),
-			twox_128(CURRENT_ERA).to_vec() => vec![].and(&current_era),
-			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&Intention::len_key()).to_vec() => vec![].and(&3u32),
+			twox_128(&Intention::key_for(0)).to_vec() => Alice.to_raw_public_vec(),
+			twox_128(&Intention::key_for(1)).to_vec() => Bob.to_raw_public_vec(),
+			twox_128(&Intention::key_for(2)).to_vec() => Charlie.to_raw_public_vec(),
+			twox_128(SessionsPerEra::key()).to_vec() => vec![].and(&sessions_per_era),
+			twox_128(ValidatorCount::key()).to_vec() => vec![].and(&3u64),
+			twox_128(BondingDuration::key()).to_vec() => vec![].and(&0u64),
+			twox_128(TransactionFee::key()).to_vec() => vec![].and(&1u64),
+			twox_128(CurrentEra::key()).to_vec() => vec![].and(&current_era),
+			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 		session::testing::externalities(session_length).into_iter().chain(extras.into_iter()).collect()
 	}
@@ -630,25 +579,24 @@ mod tests {
 	#[test]
 	fn staking_should_work() {
 		let mut t: TestExternalities = map![
-			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
-			twox_128(session::VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
-			twox_128(&0u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => vec![10; 32],
-			twox_128(&1u32.to_keyed_vec(session::VALIDATOR_AT)).to_vec() => vec![20; 32],
-			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&2u64),
-			twox_128(VALIDATOR_COUNT).to_vec() => vec![].and(&2u32),
-			twox_128(BONDING_DURATION).to_vec() => vec![].and(&3u64),
-			twox_128(TOTAL_STAKE).to_vec() => vec![].and(&100u64),
-			twox_128(TRANSACTION_FEE).to_vec() => vec![].and(&0u64),
-			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&10u64),
-			twox_128(&Bob.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&20u64),
-			twox_128(&Charlie.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&30u64),
-			twox_128(&Dave.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&40u64)
+			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
+			twox_128(session::Validators::key()).to_vec() => vec![].and(&vec![[10u8; 32], [20; 32]]),
+			twox_128(CurrentEra::key()).to_vec() => vec![].and(&0u64),
+			twox_128(SessionsPerEra::key()).to_vec() => vec![].and(&2u64),
+			twox_128(ValidatorCount::key()).to_vec() => vec![].and(&2u32),
+			twox_128(BondingDuration::key()).to_vec() => vec![].and(&3u64),
+			twox_128(TotalStake::key()).to_vec() => vec![].and(&100u64),
+			twox_128(TransactionFee::key()).to_vec() => vec![].and(&0u64),
+			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![].and(&10u64),
+			twox_128(&FreeBalanceOf::key_for(*Bob)).to_vec() => vec![].and(&20u64),
+			twox_128(&FreeBalanceOf::key_for(*Charlie)).to_vec() => vec![].and(&30u64),
+			twox_128(&FreeBalanceOf::key_for(*Dave)).to_vec() => vec![].and(&40u64)
 		];
 
 		with_externalities(&mut t, || {
 			assert_eq!(era_length(), 2u64);
-			assert_eq!(validator_count(), 2usize);
-			assert_eq!(bonding_duration(), 3u64);
+			assert_eq!(ValidatorCount::get(), 2);
+			assert_eq!(BondingDuration::get(), 3);
 			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
 
 			// Block 1: Add three validators. No obvious change.
@@ -701,76 +649,78 @@ mod tests {
 	#[test]
 	fn staking_eras_work() {
 		let mut t: TestExternalities = map![
-			twox_128(session::SESSION_LENGTH).to_vec() => vec![].and(&1u64),
-			twox_128(SESSIONS_PER_ERA).to_vec() => vec![].and(&2u64)
+			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
+			twox_128(SessionsPerEra::key()).to_vec() => vec![].and(&2u64),
+			twox_128(ValidatorCount::key()).to_vec() => vec![].and(&2u32),
+			twox_128(CurrentEra::key()).to_vec() => vec![].and(&0u64)
 		];
 		with_externalities(&mut t, || {
 			assert_eq!(era_length(), 2u64);
-			assert_eq!(sessions_per_era(), 2u64);
-			assert_eq!(last_era_length_change(), 0u64);
-			assert_eq!(current_era(), 0u64);
+			assert_eq!(SessionsPerEra::get(), 2u64);
+			assert_eq!(LastEraLengthChange::get(), 0u64);
+			assert_eq!(CurrentEra::get(), 0u64);
 
 			// Block 1: No change.
 			with_env(|e| e.block_number = 1);
 			check_new_era();
-			assert_eq!(sessions_per_era(), 2u64);
-			assert_eq!(last_era_length_change(), 0u64);
-			assert_eq!(current_era(), 0u64);
+			assert_eq!(SessionsPerEra::get(), 2u64);
+			assert_eq!(LastEraLengthChange::get(), 0u64);
+			assert_eq!(CurrentEra::get(), 0u64);
 
 			// Block 2: Simple era change.
 			with_env(|e| e.block_number = 2);
 			check_new_era();
-			assert_eq!(sessions_per_era(), 2u64);
-			assert_eq!(last_era_length_change(), 0u64);
-			assert_eq!(current_era(), 1u64);
+			assert_eq!(SessionsPerEra::get(), 2u64);
+			assert_eq!(LastEraLengthChange::get(), 0u64);
+			assert_eq!(CurrentEra::get(), 1u64);
 
 			// Block 3: Schedule an era length change; no visible changes.
 			with_env(|e| e.block_number = 3);
 			PrivPass::test().set_sessions_per_era(3);
 			check_new_era();
-			assert_eq!(sessions_per_era(), 2u64);
-			assert_eq!(last_era_length_change(), 0u64);
-			assert_eq!(current_era(), 1u64);
+			assert_eq!(SessionsPerEra::get(), 2u64);
+			assert_eq!(LastEraLengthChange::get(), 0u64);
+			assert_eq!(CurrentEra::get(), 1u64);
 
 			// Block 4: Era change kicks in.
 			with_env(|e| e.block_number = 4);
 			check_new_era();
-			assert_eq!(sessions_per_era(), 3u64);
-			assert_eq!(last_era_length_change(), 4u64);
-			assert_eq!(current_era(), 2u64);
+			assert_eq!(SessionsPerEra::get(), 3u64);
+			assert_eq!(LastEraLengthChange::get(), 4u64);
+			assert_eq!(CurrentEra::get(), 2u64);
 
 			// Block 5: No change.
 			with_env(|e| e.block_number = 5);
 			check_new_era();
-			assert_eq!(sessions_per_era(), 3u64);
-			assert_eq!(last_era_length_change(), 4u64);
-			assert_eq!(current_era(), 2u64);
+			assert_eq!(SessionsPerEra::get(), 3u64);
+			assert_eq!(LastEraLengthChange::get(), 4u64);
+			assert_eq!(CurrentEra::get(), 2u64);
 
 			// Block 6: No change.
 			with_env(|e| e.block_number = 6);
 			check_new_era();
-			assert_eq!(sessions_per_era(), 3u64);
-			assert_eq!(last_era_length_change(), 4u64);
-			assert_eq!(current_era(), 2u64);
+			assert_eq!(SessionsPerEra::get(), 3u64);
+			assert_eq!(LastEraLengthChange::get(), 4u64);
+			assert_eq!(CurrentEra::get(), 2u64);
 
 			// Block 7: Era increment.
 			with_env(|e| e.block_number = 7);
 			check_new_era();
-			assert_eq!(sessions_per_era(), 3u64);
-			assert_eq!(last_era_length_change(), 4u64);
-			assert_eq!(current_era(), 3u64);
+			assert_eq!(SessionsPerEra::get(), 3u64);
+			assert_eq!(LastEraLengthChange::get(), 4u64);
+			assert_eq!(CurrentEra::get(), 3u64);
 		});
 	}
 
 	#[test]
 	fn staking_balance_works() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 42);
-			assert_eq!(free_balance(&Alice), 42);
-			assert_eq!(reserved_balance(&Alice), 0);
+			FreeBalanceOf::insert(*Alice, 42);
+			assert_eq!(FreeBalanceOf::get(*Alice), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
 			assert_eq!(balance(&Alice), 42);
-			assert_eq!(free_balance(&Bob), 0);
-			assert_eq!(reserved_balance(&Bob), 0);
+			assert_eq!(FreeBalanceOf::get(*Bob), 0);
+			assert_eq!(ReservedBalanceOf::get(*Bob), 0);
 			assert_eq!(balance(&Bob), 0);
 		});
 	}
@@ -778,7 +728,7 @@ mod tests {
 	#[test]
 	fn staking_balance_transfer_works() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			set_free_balance(&Alice, 112);
+			FreeBalanceOf::insert(*Alice, 112);
 			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
 			assert_eq!(balance(&Alice), 42);
 			assert_eq!(balance(&Bob), 69);
@@ -789,7 +739,7 @@ mod tests {
 	#[should_panic]
 	fn staking_balance_transfer_when_bonded_panics() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 			PublicPass::new(&Alice).stake();
 			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
 		});
@@ -798,17 +748,17 @@ mod tests {
 	#[test]
 	fn reserving_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 
 			assert_eq!(balance(&Alice), 111);
-			assert_eq!(free_balance(&Alice), 111);
-			assert_eq!(reserved_balance(&Alice), 0);
+			assert_eq!(FreeBalanceOf::get(*Alice), 111);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
 
 			reserve_balance(&Alice, 69);
 
 			assert_eq!(balance(&Alice), 111);
-			assert_eq!(free_balance(&Alice), 42);
-			assert_eq!(reserved_balance(&Alice), 69);
+			assert_eq!(FreeBalanceOf::get(*Alice), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 69);
 		});
 	}
 
@@ -816,7 +766,7 @@ mod tests {
 	#[should_panic]
 	fn staking_balance_transfer_when_reserved_panics() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 69);
 			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
 		});
@@ -825,17 +775,17 @@ mod tests {
 	#[test]
 	fn deducting_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 			assert!(deduct_unbonded(&Alice, 69));
-			assert_eq!(free_balance(&Alice), 42);
+			assert_eq!(FreeBalanceOf::get(*Alice), 42);
 		});
 	}
 
 	#[test]
 	fn deducting_balance_should_fail_when_bonded() {
 		let mut t: TestExternalities = map![
-			twox_128(&Alice.to_raw_public().to_keyed_vec(BALANCE_OF)).to_vec() => vec![].and(&111u64),
-			twox_128(&Alice.to_raw_public().to_keyed_vec(BONDAGE_OF)).to_vec() => vec![].and(&2u64)
+			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![].and(&111u64),
+			twox_128(&BondageOf::key_for(*Alice)).to_vec() => vec![].and(&2u64)
 		];
 		with_externalities(&mut t, || {
 			with_env(|e| e.block_number = 1);
@@ -847,90 +797,90 @@ mod tests {
 	#[test]
 	fn refunding_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 42);
+			FreeBalanceOf::insert(*Alice, 42);
 			refund(&Alice, 69);
-			assert_eq!(free_balance(&Alice), 111);
+			assert_eq!(FreeBalanceOf::get(*Alice), 111);
 		});
 	}
 
 	#[test]
 	fn slashing_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 69);
 			assert!(slash(&Alice, 69));
-			assert_eq!(free_balance(&Alice), 0);
-			assert_eq!(reserved_balance(&Alice), 42);
+			assert_eq!(FreeBalanceOf::get(*Alice), 0);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 42);
 		});
 	}
 
 	#[test]
 	fn slashing_incomplete_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 42);
+			FreeBalanceOf::insert(*Alice, 42);
 			reserve_balance(&Alice, 21);
 			assert!(!slash(&Alice, 69));
-			assert_eq!(free_balance(&Alice), 0);
-			assert_eq!(reserved_balance(&Alice), 0);
+			assert_eq!(FreeBalanceOf::get(*Alice), 0);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
 		});
 	}
 
 	#[test]
 	fn unreserving_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			unreserve_balance(&Alice, 42);
-			assert_eq!(reserved_balance(&Alice), 69);
-			assert_eq!(free_balance(&Alice), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 69);
+			assert_eq!(FreeBalanceOf::get(*Alice), 42);
 		});
 	}
 
 	#[test]
 	fn slashing_reserved_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			assert!(slash_reserved(&Alice, 42));
-			assert_eq!(reserved_balance(&Alice), 69);
-			assert_eq!(free_balance(&Alice), 0);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 69);
+			assert_eq!(FreeBalanceOf::get(*Alice), 0);
 		});
 	}
 
 	#[test]
 	fn slashing_incomplete_reserved_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 42);
 			assert!(!slash_reserved(&Alice, 69));
-			assert_eq!(free_balance(&Alice), 69);
-			assert_eq!(reserved_balance(&Alice), 0);
+			assert_eq!(FreeBalanceOf::get(*Alice), 69);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
 		});
 	}
 
 	#[test]
 	fn transferring_reserved_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			assert!(transfer_reserved_balance(&Alice, &Bob, 42));
-			assert_eq!(reserved_balance(&Alice), 69);
-			assert_eq!(free_balance(&Alice), 0);
-			assert_eq!(reserved_balance(&Bob), 0);
-			assert_eq!(free_balance(&Bob), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 69);
+			assert_eq!(FreeBalanceOf::get(*Alice), 0);
+			assert_eq!(ReservedBalanceOf::get(*Bob), 0);
+			assert_eq!(FreeBalanceOf::get(*Bob), 42);
 		});
 	}
 
 	#[test]
 	fn transferring_incomplete_reserved_balance_should_work() {
 		with_externalities(&mut TestExternalities::default(), || {
-			set_free_balance(&Alice, 111);
+			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 42);
 			assert!(!transfer_reserved_balance(&Alice, &Bob, 69));
-			assert_eq!(reserved_balance(&Alice), 0);
-			assert_eq!(free_balance(&Alice), 69);
-			assert_eq!(reserved_balance(&Bob), 0);
-			assert_eq!(free_balance(&Bob), 42);
+			assert_eq!(ReservedBalanceOf::get(*Alice), 0);
+			assert_eq!(FreeBalanceOf::get(*Alice), 69);
+			assert_eq!(ReservedBalanceOf::get(*Bob), 0);
+			assert_eq!(FreeBalanceOf::get(*Bob), 42);
 		});
 	}
 }

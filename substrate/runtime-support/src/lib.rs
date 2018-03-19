@@ -29,5 +29,5 @@ pub use self::storage::generator::Storage as GenericStorage;
 pub mod storage;
 mod hashable;
 
-pub use self::storage::StorageVec;
+pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
