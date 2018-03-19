@@ -29,29 +29,29 @@ fn sub_mix<T>(seeds: &[T]) -> T where
 }
 
 /// Mix a slice.
-pub fn mix<T>(seeds: &[T]) -> Result<T, ()> where
+pub fn triplet_mix<T>(seeds: &[T]) -> Result<T, ()> where
 	T: BitAnd<Output = T> + BitOr<Output = T>,
 	T: Default + Copy
 {
-	Ok(seeds.iter().cloned().mixed())
+	Ok(seeds.iter().cloned().triplet_mix())
 }
 
 /// The mixed trait for mixing a sequence.
-pub trait Mixed {
+pub trait TripletMix {
 	/// The items in the sequence and simultaneously the return of the mixing.
 	type Item;
 	/// The output of the mixing algorithm on the sequence. Items in the sequence beyond
 	/// the largest power of three that fits within the the sequence up until `3 ** MAX_DEPTH`
 	/// are ignored.
-	fn mixed(self) -> Self::Item;
+	fn triplet_mix(self) -> Self::Item;
 }
 
-impl<I, T> Mixed for I where
+impl<I, T> TripletMix for I where
 	I: Iterator<Item = T>,
 	T: BitAnd<Output = T> + BitOr<Output = T> + Default + Copy
 {
 	type Item = T;
-	fn mixed(self) -> Self::Item {
+	fn triplet_mix(self) -> Self::Item {
 		let mut accum = [[T::default(); 3]; MAX_DEPTH];
 		let mut result = T::default();
 		for (i, seed) in self.enumerate() {
@@ -104,35 +104,35 @@ mod tests {
 	}
 
 	#[test]
-	fn mix_works_on_first_level() {
-		assert_eq!(mix(&[0, 0, 0][..]).unwrap(), 0);
-		assert_eq!(mix(&[0, 0, 1][..]).unwrap(), 0);
-		assert_eq!(mix(&[0, 1, 0][..]).unwrap(), 0);
-		assert_eq!(mix(&[0, 1, 1][..]).unwrap(), 1);
-		assert_eq!(mix(&[1, 0, 0][..]).unwrap(), 0);
-		assert_eq!(mix(&[1, 0, 1][..]).unwrap(), 1);
-		assert_eq!(mix(&[1, 1, 0][..]).unwrap(), 1);
-		assert_eq!(mix(&[1, 1, 1][..]).unwrap(), 1);
+	fn triplet_mix_works_on_first_level() {
+		assert_eq!(triplet_mix(&[0, 0, 0][..]).unwrap(), 0);
+		assert_eq!(triplet_mix(&[0, 0, 1][..]).unwrap(), 0);
+		assert_eq!(triplet_mix(&[0, 1, 0][..]).unwrap(), 0);
+		assert_eq!(triplet_mix(&[0, 1, 1][..]).unwrap(), 1);
+		assert_eq!(triplet_mix(&[1, 0, 0][..]).unwrap(), 0);
+		assert_eq!(triplet_mix(&[1, 0, 1][..]).unwrap(), 1);
+		assert_eq!(triplet_mix(&[1, 1, 0][..]).unwrap(), 1);
+		assert_eq!(triplet_mix(&[1, 1, 1][..]).unwrap(), 1);
 
-		assert_eq!(mix(&[0, 0, 0][..]).unwrap(), 0);
-		assert_eq!(mix(&[0, 0, 2][..]).unwrap(), 0);
-		assert_eq!(mix(&[0, 2, 0][..]).unwrap(), 0);
-		assert_eq!(mix(&[0, 2, 2][..]).unwrap(), 2);
-		assert_eq!(mix(&[2, 0, 0][..]).unwrap(), 0);
-		assert_eq!(mix(&[2, 0, 2][..]).unwrap(), 2);
-		assert_eq!(mix(&[2, 2, 0][..]).unwrap(), 2);
-		assert_eq!(mix(&[2, 2, 2][..]).unwrap(), 2);
+		assert_eq!(triplet_mix(&[0, 0, 0][..]).unwrap(), 0);
+		assert_eq!(triplet_mix(&[0, 0, 2][..]).unwrap(), 0);
+		assert_eq!(triplet_mix(&[0, 2, 0][..]).unwrap(), 0);
+		assert_eq!(triplet_mix(&[0, 2, 2][..]).unwrap(), 2);
+		assert_eq!(triplet_mix(&[2, 0, 0][..]).unwrap(), 0);
+		assert_eq!(triplet_mix(&[2, 0, 2][..]).unwrap(), 2);
+		assert_eq!(triplet_mix(&[2, 2, 0][..]).unwrap(), 2);
+		assert_eq!(triplet_mix(&[2, 2, 2][..]).unwrap(), 2);
 	}
 
 	#[test]
-	fn mix_works_on_second_level() {
-		assert_eq!(mix(&[0, 0, 0, 0, 0, 1, 0, 1, 0][..]).unwrap(), 0);
-		assert_eq!(mix(&[0, 1, 1, 1, 0, 0, 1, 0, 1][..]).unwrap(), 1);
-		assert_eq!(mix(&[1, 1, 0, 1, 1, 1, 0, 0, 0][..]).unwrap(), 1);
+	fn triplet_mix_works_on_second_level() {
+		assert_eq!(triplet_mix(&[0, 0, 0, 0, 0, 1, 0, 1, 0][..]).unwrap(), 0);
+		assert_eq!(triplet_mix(&[0, 1, 1, 1, 0, 0, 1, 0, 1][..]).unwrap(), 1);
+		assert_eq!(triplet_mix(&[1, 1, 0, 1, 1, 1, 0, 0, 0][..]).unwrap(), 1);
 	}
 
 	#[test]
-	fn mix_works_on_third_level() {
-		assert_eq!(mix(&[0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0][..]).unwrap(), 1);
+	fn triplet_mix_works_on_third_level() {
+		assert_eq!(triplet_mix(&[0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0][..]).unwrap(), 1);
 	}
 }

@@ -28,7 +28,7 @@ use transaction::UncheckedTransaction;
 use runtime::{staking, session};
 use runtime::democracy::PrivPass;
 use dispatch;
-use safe_mix::Mixed;
+use safe_mix::TripletMix;
 
 storage_items! {
 	pub Nonce get(nonce): b"sys:non" => default map [ AccountId => TxOrder ];
@@ -190,7 +190,7 @@ fn calculate_random() -> Hash {
 	let c = block_number() - 1;
 	(0..81)
 		.map(|i| if c >= i { block_hash(c - i) } else { Default::default() })
-		.mixed()
+		.triplet_mix()
 }
 
 #[cfg(feature = "std")]
