@@ -81,7 +81,7 @@ pub trait Storage {
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn seize<T: codec::Slicable>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
+	fn take_or_panic<T: codec::Slicable>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
 
 	/// Take a value from storage, deleting it after reading.
 	fn take_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
@@ -350,11 +350,11 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 	($name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!(() () ($ty) (require) (seize) $name: $key => $ty);
+		__storage_items_internal!(() () ($ty) (require) (take_or_panic) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!((pub) () ($ty) (require) (seize) $name: $key => $ty);
+		__storage_items_internal!((pub) () ($ty) (require) (take_or_panic) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 
@@ -375,11 +375,11 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!(() ($getfn) ($ty) (require) (seize) $name: $key => $ty);
+		__storage_items_internal!(() ($getfn) ($ty) (require) (take_or_panic) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!((pub) ($getfn) ($ty) (require) (seize) $name: $key => $ty);
+		__storage_items_internal!((pub) ($getfn) ($ty) (require) (take_or_panic) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 
@@ -401,11 +401,11 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 	($name:ident : $prefix:expr => required map [$kty: ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!(() () ($ty) (require) (seize) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!(() () ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $prefix:expr => required map [$kty: ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!((pub) () ($ty) (require) (seize) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!((pub) () ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 
@@ -426,11 +426,11 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $prefix:expr => required map [$kty: ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!(() ($getfn) ($ty) (require) (seize) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!(() ($getfn) ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $prefix:expr => required map [$kty: ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!((pub) ($getfn) ($ty) (require) (seize) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!((pub) ($getfn) ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 
