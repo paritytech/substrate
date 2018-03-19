@@ -59,10 +59,12 @@ pub trait Storage {
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: codec::Slicable>(&self, key: &[u8]) -> Option<T>;
 
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
+	/// Load the bytes of a key from storage. Can panic if the type is incorrect. Will panic if
+	/// it's not there.
 	fn require<T: codec::Slicable>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
 
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
+	/// Load the bytes of a key from storage. Can panic if the type is incorrect. The type's
+	/// default is returned if it's not there.
 	fn get_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
 
 	/// Put a value in under a key.
