@@ -20,6 +20,7 @@ use runtime::{staking, democracy};
 pub use rstd::prelude::Vec;
 pub use codec::{Slicable, Input, NonTrivialSlicable};
 
+/// Implement a dispatch module to create a pairing of a dispatch trait and enum.
 #[macro_export]
 macro_rules! impl_dispatch {
 	(
