@@ -20,7 +20,7 @@
 
 use rstd::ops::{BitAnd, BitOr};
 
-const MAX_DEPTH: usize = 17;
+pub const MAX_DEPTH: usize = 17;
 
 fn sub_mix<T>(seeds: &[T]) -> T where
 	T: BitAnd<Output = T> + BitOr<Output = T> + Copy
@@ -40,7 +40,9 @@ pub fn mix<T>(seeds: &[T]) -> Result<T, ()> where
 pub trait Mixed {
 	/// The items in the sequence and simultaneously the return of the mixing.
 	type Item;
-	/// The output of the mixing algorithm on the sequence.
+	/// The output of the mixing algorithm on the sequence. Items in the sequence beyond
+	/// the largest power of three that fits within the the sequence up until `3 ** MAX_DEPTH`
+	/// are ignored.
 	fn mixed(self) -> Self::Item;
 }
 
