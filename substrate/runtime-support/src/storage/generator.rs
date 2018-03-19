@@ -48,6 +48,7 @@
 
 use codec;
 use rstd::vec::Vec;
+#[doc(hidden)]
 pub use rstd::borrow::Borrow;
 
 /// Abstraction around storage.
