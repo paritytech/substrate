@@ -21,7 +21,7 @@ use codec::KeyedVec;
 use runtime_support::{StorageMap, StorageValue};
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
-use runtime::system::PrivPass;
+use runtime::democracy::PrivPass;
 use runtime::staking::{PublicPass, Balance};
 
 // no polynomial attacks:
@@ -1027,7 +1027,7 @@ mod tests {
 			internal::end_block();
 
 			with_env(|e| e.block_number = 8);
-			PrivPass.set_desired_seats(3);
+			PrivPass::test().set_desired_seats(3);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);
@@ -1284,7 +1284,7 @@ mod tests {
 
 			with_env(|e| e.block_number = 8);
 			PublicPass::test(&Ferdie).set_approvals(vec![false, false, true, false], 1);
-			PrivPass.set_desired_seats(3);
+			PrivPass::test().set_desired_seats(3);
 			internal::end_block();
 
 			with_env(|e| e.block_number = 10);

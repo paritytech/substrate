@@ -23,12 +23,24 @@ use runtime_support::{StorageValue, StorageMap};
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use dispatch::PrivCall as Proposal;
 use runtime::{staking, system, session};
-use runtime::system::PrivPass;
 use runtime::staking::{PublicPass, Balance};
 
+/// A token for privileged dispatch. Can only be created in this module.
+pub struct PrivPass((),);
+
+impl PrivPass {
+	fn new() -> PrivPass { PrivPass((),) }
+
+	#[cfg(test)]
+	pub fn test() -> PrivPass { PrivPass((),) }
+}
+
+/// A proposal index.
 pub type PropIndex = u32;
+/// A referendum index.
 pub type ReferendumIndex = u32;
 
+/// A means of determining if a vote is past pass threshold.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum VoteThreshold {
@@ -152,8 +164,6 @@ pub fn tally(ref_index: ReferendumIndex) -> (staking::Balance, staking::Balance)
 		.fold((0, 0), |(a, b), (c, d)| (a + c, b + d))
 }
 
-pub type BoxedProposal = Box<Proposal>;
-
 impl_dispatch! {
 	pub mod public;
 	fn propose(proposal: Box<Proposal>, value: Balance) = 0;
@@ -262,7 +272,7 @@ pub mod internal {
 			let total_stake = staking::total_stake();
 			clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
-				proposal.dispatch(PrivPass);
+				proposal.dispatch(PrivPass::new());
 			}
 			NextTally::put(index + 1);
 		}
@@ -526,7 +536,7 @@ mod tests {
 			with_env(|e| e.block_number = 1);
 			let r = inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
 			PublicPass::test(&Alice).vote(r, true);
-			PrivPass.cancel_referendum(r);
+			PrivPass::new().cancel_referendum(r);
 
 			democracy::internal::end_block(system::block_number());
 			staking::internal::check_new_era();

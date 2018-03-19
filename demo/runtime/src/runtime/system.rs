@@ -27,6 +27,7 @@ use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Header, Log};
 use block::Block;
 use transaction::UncheckedTransaction;
 use runtime::{staking, session};
+use runtime::democracy::PrivPass;
 use dispatch;
 
 storage_items! {
@@ -40,8 +41,6 @@ pub const CODE: &'static[u8] = b":code";
 pub fn block_number() -> BlockNumber {
 	with_env(|e| e.block_number)
 }
-
-pub struct PrivPass;
 
 impl_dispatch! {
 	pub mod privileged;
@@ -254,8 +253,6 @@ mod tests {
 			},
 			signature: hex!("3a682213cb10e8e375fe0817fe4d220a4622d910088809ed7fc8b4ea3871531dbadb22acfedd28a100a0b7bd2d274e0ff873655b13c88f4640b5569db3222706").into(),
 		};
-
-		println!("TX: {}", HexDisplay::from(&tx.transaction.encode()));
 
 		with_externalities(&mut t, || {
 			internal::execute_transaction(tx, Header::from_block_number(1));

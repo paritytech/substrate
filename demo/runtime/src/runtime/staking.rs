@@ -24,7 +24,7 @@ use runtime_io::{print, blake2_256};
 use codec::{Slicable, Input, KeyedVec};
 use runtime_support::{storage, StorageValue, StorageList, StorageMap};
 use demo_primitives::{BlockNumber, AccountId};
-use runtime::{system, session};
+use runtime::{system, session, democracy};
 
 /// The balance of an account.
 pub type Balance = u64;
@@ -194,7 +194,7 @@ impl_dispatch! {
 	fn force_new_era() = 3;
 }
 
-impl privileged::Dispatch for system::PrivPass {
+impl privileged::Dispatch for democracy::PrivPass {
 	/// Set the number of sessions in an era.
 	fn set_sessions_per_era(self, new: BlockNumber) {
 		NextSessionsPerEra::put(&new);
@@ -572,7 +572,7 @@ mod tests {
 	use environment::with_env;
 	use demo_primitives::AccountId;
 	use runtime::{staking, session};
-	use runtime::system::PrivPass;
+	use runtime::democracy::PrivPass;
 	use runtime::staking::public::{Call, Dispatch};
 	use runtime::staking::privileged::{Call as PCall, Dispatch as PDispatch};
 
@@ -676,7 +676,7 @@ mod tests {
 
 			// Block 3: Schedule an era length change; no visible changes.
 			with_env(|e| e.block_number = 3);
-			PrivPass.set_sessions_per_era(3);
+			PrivPass::test().set_sessions_per_era(3);
 			check_new_era();
 			assert_eq!(SessionsPerEra::get(), 2u64);
 			assert_eq!(LastEraLengthChange::get(), 0u64);
