@@ -193,8 +193,6 @@ pub fn next_free_ref_index() -> ReferendumIndex {
 	storage::get_or_default(REFERENDUM_COUNT)
 }
 
-pub type BoxedProposal = Box<Proposal>;
-
 impl_dispatch! {
 	pub mod public;
 	fn propose(proposal: Box<Proposal>, value: Balance) = 0;

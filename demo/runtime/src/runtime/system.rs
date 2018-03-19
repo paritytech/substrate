@@ -257,8 +257,6 @@ mod tests {
 			signature: hex!("3a682213cb10e8e375fe0817fe4d220a4622d910088809ed7fc8b4ea3871531dbadb22acfedd28a100a0b7bd2d274e0ff873655b13c88f4640b5569db3222706").into(),
 		};
 
-		println!("TX: {}", HexDisplay::from(&tx.transaction.encode()));
-
 		with_externalities(&mut t, || {
 			internal::execute_transaction(tx, Header::from_block_number(1));
 			assert_eq!(staking::balance(&One), 32);
