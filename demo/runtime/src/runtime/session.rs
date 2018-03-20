@@ -151,7 +151,6 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring;
-	use environment::with_env;
 	use demo_primitives::AccountId;
 	use runtime::{consensus, session};
 
@@ -183,46 +182,46 @@ mod tests {
 		let mut t = simple_setup();
 		with_externalities(&mut t, || {
 			// Block 1: Change to length 3; no visible change.
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			PrivPass::test().set_length(3);
 			check_rotate_session();
 			assert_eq!(length(), 2);
 			assert_eq!(current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
-			with_env(|e| e.block_number = 2);
+			system::testing::set_block_number(2);
 			PrivPass::test().set_length(3);
 			check_rotate_session();
 			assert_eq!(length(), 3);
 			assert_eq!(current_index(), 1);
 
 			// Block 3: Length now changed to 3. Index incremented.
-			with_env(|e| e.block_number = 3);
+			system::testing::set_block_number(3);
 			check_rotate_session();
 			assert_eq!(length(), 3);
 			assert_eq!(current_index(), 1);
 
 			// Block 4: Change to length 2; no visible change.
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PrivPass::test().set_length(2);
 			check_rotate_session();
 			assert_eq!(length(), 3);
 			assert_eq!(current_index(), 1);
 
 			// Block 5: Length now changed to 2. Index incremented.
-			with_env(|e| e.block_number = 5);
+			system::testing::set_block_number(5);
 			check_rotate_session();
 			assert_eq!(length(), 2);
 			assert_eq!(current_index(), 2);
 
 			// Block 6: No change.
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			check_rotate_session();
 			assert_eq!(length(), 2);
 			assert_eq!(current_index(), 2);
 
 			// Block 7: Next index.
-			with_env(|e| e.block_number = 7);
+			system::testing::set_block_number(7);
 			check_rotate_session();
 			assert_eq!(length(), 2);
 			assert_eq!(current_index(), 3);
@@ -234,17 +233,17 @@ mod tests {
 		let mut t = simple_setup();
 		with_externalities(&mut t, || {
 			// Block 1: No change
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			check_rotate_session();
 			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
 
 			// Block 2: Session rollover, but no change.
-			with_env(|e| e.block_number = 2);
+			system::testing::set_block_number(2);
 			check_rotate_session();
 			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
 
 			// Block 3: Set new key for validator 2; no visible change.
-			with_env(|e| e.block_number = 3);
+			system::testing::set_block_number(3);
 			PublicPass::test(&[20; 32]).set_key([22; 32]);
 			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
 
@@ -252,7 +251,7 @@ mod tests {
 			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
 
 			// Block 4: Session rollover, authority 2 changes.
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			check_rotate_session();
 			assert_eq!(consensus::authorities(), vec![[11u8; 32], [22u8; 32]]);
 		});

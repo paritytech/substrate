@@ -508,7 +508,6 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring::*;
-	use environment::with_env;
 	use demo_primitives::AccountId;
 	use runtime::{staking, session, democracy};
 	use super::public::Dispatch;
@@ -522,7 +521,7 @@ mod tests {
 	fn basic_environment_works() {
 		let mut t = new_test_ext();
 		with_externalities(&mut t, || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			assert_eq!(next_vote_from(1), 4);
 			assert_eq!(next_vote_from(4), 4);
 			assert_eq!(next_vote_from(5), 8);
@@ -554,7 +553,7 @@ mod tests {
 	#[test]
 	fn simple_candidate_submission_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
 			assert_eq!(candidate_reg_info(*Alice), None);
 			assert_eq!(candidate_reg_info(*Bob), None);
@@ -590,7 +589,7 @@ mod tests {
 		let mut t = new_test_ext_with_candidate_holes();
 
 		with_externalities(&mut t, || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			assert_eq!(candidates(), vec![AccountId::default(), AccountId::default(), Alice.to_raw_public()]);
 
 			PublicPass::test(&Bob).submit_candidacy(1);
@@ -606,7 +605,7 @@ mod tests {
 		let mut t = new_test_ext_with_candidate_holes();
 
 		with_externalities(&mut t, || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			assert_eq!(candidates(), vec![AccountId::default(), AccountId::default(), Alice.into()]);
 
 			PublicPass::test(&Bob).submit_candidacy(0);
@@ -623,7 +622,7 @@ mod tests {
 		let mut t = new_test_ext_with_candidate_holes();
 
 		with_externalities(&mut t, || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			PublicPass::test(&Dave).submit_candidacy(3);
 		});
 	}
@@ -632,7 +631,7 @@ mod tests {
 	#[should_panic(expected = "invalid candidate slot")]
 	fn bad_candidate_slot_submission_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
 			PublicPass::test(&Alice).submit_candidacy(1);
 		});
@@ -642,7 +641,7 @@ mod tests {
 	#[should_panic(expected = "invalid candidate slot")]
 	fn non_free_candidate_slot_submission_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
 			PublicPass::test(&Alice).submit_candidacy(0);
 			PublicPass::test(&Bob).submit_candidacy(0);
@@ -653,7 +652,7 @@ mod tests {
 	#[should_panic(expected = "duplicate candidate submission")]
 	fn dupe_candidate_submission_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
 			PublicPass::test(&Alice).submit_candidacy(0);
 			PublicPass::test(&Alice).submit_candidacy(1);
@@ -664,7 +663,7 @@ mod tests {
 	#[should_panic(expected = "candidate has not enough funds")]
 	fn poor_candidate_submission_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			assert_eq!(candidates(), Vec::<AccountId>::new());
 			PublicPass::test(&One).submit_candidacy(0);
 		});
@@ -673,7 +672,7 @@ mod tests {
 	#[test]
 	fn voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 
 			PublicPass::test(&Eve).submit_candidacy(0);
 
@@ -702,7 +701,7 @@ mod tests {
 	#[test]
 	fn resubmitting_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 
 			PublicPass::test(&Eve).submit_candidacy(0);
 			PublicPass::test(&Dave).set_approvals(vec![true], 0);
@@ -720,7 +719,7 @@ mod tests {
 	#[test]
 	fn retracting_voter_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 
 			PublicPass::test(&Eve).submit_candidacy(0);
 			PublicPass::test(&Bob).submit_candidacy(1);
@@ -767,7 +766,7 @@ mod tests {
 	#[should_panic(expected = "retraction index mismatch")]
 	fn invalid_retraction_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			PublicPass::test(&Charlie).submit_candidacy(0);
 			PublicPass::test(&Alice).set_approvals(vec![true], 0);
 			PublicPass::test(&Bob).set_approvals(vec![true], 0);
@@ -779,7 +778,7 @@ mod tests {
 	#[should_panic(expected = "retraction index invalid")]
 	fn overflow_retraction_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			PublicPass::test(&Charlie).submit_candidacy(0);
 			PublicPass::test(&Alice).set_approvals(vec![true], 0);
 			PublicPass::test(&Alice).retract_voter(1);
@@ -790,7 +789,7 @@ mod tests {
 	#[should_panic(expected = "cannot retract non-voter")]
 	fn non_voter_retraction_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			PublicPass::test(&Charlie).submit_candidacy(0);
 			PublicPass::test(&Alice).set_approvals(vec![true], 0);
 			PublicPass::test(&Bob).retract_voter(0);
@@ -800,7 +799,7 @@ mod tests {
 	#[test]
 	fn simple_tally_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			assert!(!presentation_active());
 
 			PublicPass::test(&Bob).submit_candidacy(0);
@@ -809,7 +808,7 @@ mod tests {
 			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			assert!(presentation_active());
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
@@ -833,14 +832,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			assert!(staking::can_slash(&Dave, 10));
 
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Eve).submit_candidacy(1);
 			PublicPass::test(&Bob).set_approvals(vec![true, false], 0);
 			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
@@ -854,21 +853,21 @@ mod tests {
 	#[test]
 	fn retracting_inactive_voter_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			PublicPass::test(&Eve).submit_candidacy(0);
 			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 10);
+			system::testing::set_block_number(10);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 1);
 			internal::end_block();
 
@@ -889,21 +888,21 @@ mod tests {
 	#[should_panic(expected = "candidate must not form a duplicated member if elected")]
 	fn presenting_for_double_election_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Bob).set_approvals(vec![true], 1);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 10);
+			system::testing::set_block_number(10);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 1);
 		});
 	}
@@ -911,25 +910,25 @@ mod tests {
 	#[test]
 	fn retracting_inactive_voter_with_other_candidates_in_slots_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			PublicPass::test(&Eve).submit_candidacy(0);
 			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 10);
+			system::testing::set_block_number(10);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 1);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 11);
+			system::testing::set_block_number(11);
 			PublicPass::test(&Alice).submit_candidacy(0);
 
 			PublicPass::test(&Eve).reap_inactive_voter(
@@ -949,21 +948,21 @@ mod tests {
 	#[should_panic(expected = "bad reporter index")]
 	fn retracting_inactive_voter_with_bad_reporter_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 8, 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			PublicPass::test(&Eve).submit_candidacy(0);
 			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 10);
+			system::testing::set_block_number(10);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 38, 1);
 			internal::end_block();
 
@@ -979,21 +978,21 @@ mod tests {
 	#[should_panic(expected = "bad target index")]
 	fn retracting_inactive_voter_with_bad_target_index_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 8, 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			PublicPass::test(&Eve).submit_candidacy(0);
 			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 10);
+			system::testing::set_block_number(10);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 38, 1);
 			internal::end_block();
 
@@ -1008,7 +1007,7 @@ mod tests {
 	#[test]
 	fn attempting_to_retract_active_voter_should_slash_reporter() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Charlie).submit_candidacy(1);
 			PublicPass::test(&Dave).submit_candidacy(2);
@@ -1019,18 +1018,18 @@ mod tests {
 			PublicPass::test(&Eve).set_approvals(vec![false, false, false, true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 0);
 			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 0);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			PrivPass::test().set_desired_seats(3);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 10);
+			system::testing::set_block_number(10);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 1);
 			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 1);
 			internal::end_block();
@@ -1051,21 +1050,21 @@ mod tests {
 	#[should_panic(expected = "reaper must be a voter")]
 	fn attempting_to_retract_inactive_voter_by_nonvoter_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Bob).set_approvals(vec![true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			PublicPass::test(&Eve).submit_candidacy(0);
 			PublicPass::test(&Eve).set_approvals(vec![true], 1);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 10);
+			system::testing::set_block_number(10);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 1);
 			internal::end_block();
 
@@ -1081,7 +1080,7 @@ mod tests {
 	#[should_panic(expected = "candidate not worthy of leaderboard")]
 	fn presenting_loser_should_panic() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Alice).submit_candidacy(0);
 			PublicPass::test(&Ferdie).set_approvals(vec![true], 0);
 			PublicPass::test(&Bob).submit_candidacy(1);
@@ -1094,7 +1093,7 @@ mod tests {
 			PublicPass::test(&Eve).set_approvals(vec![false, false, false, false, true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Alice.into(), 60, 0);
 			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 0);
 			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 0);
@@ -1106,7 +1105,7 @@ mod tests {
 	#[test]
 	fn presenting_loser_first_should_not_matter() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Alice).submit_candidacy(0);
 			PublicPass::test(&Ferdie).set_approvals(vec![true], 0);
 			PublicPass::test(&Bob).submit_candidacy(1);
@@ -1119,7 +1118,7 @@ mod tests {
 			PublicPass::test(&Eve).set_approvals(vec![false, false, false, false, true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 0);
 			PublicPass::test(&Dave).present_winner(Alice.into(), 60, 0);
 			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 0);
@@ -1139,7 +1138,7 @@ mod tests {
 	#[should_panic(expected = "cannot present outside of presentation period")]
 	fn present_panics_outside_of_presentation_period() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			assert!(!presentation_active());
 			PublicPass::test(&Eve).present_winner(Eve.into(), 1, 0);
 		});
@@ -1149,14 +1148,14 @@ mod tests {
 	#[should_panic(expected = "index not current")]
 	fn present_panics_with_invalid_vote_index() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Bob).submit_candidacy(0);
 			PublicPass::test(&Eve).submit_candidacy(1);
 			PublicPass::test(&Bob).set_approvals(vec![true, false], 0);
 			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 11, 1);
 		});
 	}
@@ -1165,7 +1164,7 @@ mod tests {
 	#[should_panic(expected = "presenter must have sufficient slashable funds")]
 	fn present_panics_when_presenter_is_poor() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			assert!(!presentation_active());
 
 			PublicPass::test(&Alice).submit_candidacy(0);
@@ -1174,7 +1173,7 @@ mod tests {
 			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			assert_eq!(staking::balance(&Alice), 1);
 			PublicPass::test(&Alice).present_winner(Alice.into(), 30, 0);
 		});
@@ -1183,7 +1182,7 @@ mod tests {
 	#[test]
 	fn invalid_present_tally_should_slash() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			assert!(!presentation_active());
 			assert_eq!(staking::balance(&Dave), 40);
 
@@ -1193,7 +1192,7 @@ mod tests {
 			PublicPass::test(&Eve).set_approvals(vec![false, true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Bob.into(), 80, 0);
 
 			assert_eq!(staking::balance(&Dave), 38);
@@ -1203,7 +1202,7 @@ mod tests {
 	#[test]
 	fn runners_up_should_be_kept() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			assert!(!presentation_active());
 
 			PublicPass::test(&Alice).submit_candidacy(0);
@@ -1219,7 +1218,7 @@ mod tests {
 
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			assert!(presentation_active());
 			PublicPass::test(&Dave).present_winner(Alice.into(), 60, 0);
 			assert_eq!(leaderboard(), Some(vec![
@@ -1262,7 +1261,7 @@ mod tests {
 	#[test]
 	fn second_tally_should_use_runners_up() {
 		with_externalities(&mut new_test_ext(), || {
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			PublicPass::test(&Alice).submit_candidacy(0);
 			PublicPass::test(&Ferdie).set_approvals(vec![true], 0);
 			PublicPass::test(&Bob).submit_candidacy(1);
@@ -1275,19 +1274,19 @@ mod tests {
 			PublicPass::test(&Eve).set_approvals(vec![false, false, false, false, true], 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			PublicPass::test(&Dave).present_winner(Alice.into(), 60, 0);
 			PublicPass::test(&Dave).present_winner(Charlie.into(), 21, 0);
 			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 0);
 			PublicPass::test(&Dave).present_winner(Eve.into(), 41, 0);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			PublicPass::test(&Ferdie).set_approvals(vec![false, false, true, false], 1);
 			PrivPass::test().set_desired_seats(3);
 			internal::end_block();
 
-			with_env(|e| e.block_number = 10);
+			system::testing::set_block_number(10);
 			PublicPass::test(&Dave).present_winner(Charlie.into(), 81, 1);
 			PublicPass::test(&Dave).present_winner(Dave.into(), 31, 1);
 			internal::end_block();

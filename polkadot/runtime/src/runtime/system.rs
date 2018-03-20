@@ -264,6 +264,15 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	}
 }
 
+#[cfg(any(feature = "std", test))]
+pub mod testing {
+	use super::*;
+
+	pub fn set_block_number(n: BlockNumber) {
+		with_env(|e| e.block_number = n);
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

@@ -22,26 +22,26 @@ use rstd::mem;
 use runtime_io::{print, storage_root, enumerated_trie_root};
 use codec::{KeyedVec, Slicable};
 use runtime_support::{Hashable, storage, StorageValue, StorageMap};
-use environment::with_env;
 use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Header, Log};
-use block::Block;
+use block::{self, Block};
 use transaction::UncheckedTransaction;
 use runtime::{staking, session};
 use runtime::democracy::PrivPass;
 use dispatch;
+use safe_mix::TripletMix;
 
 storage_items! {
-	pub Nonce: b"sys:non" => default map [ AccountId => TxOrder ];
-	pub BlockHashAt: b"sys:old" => required map [ BlockNumber => Hash ];
+	pub Nonce get(nonce): b"sys:non" => default map [ AccountId => TxOrder ];
+	pub BlockHashAt get(block_hash): b"sys:old" => required map [ BlockNumber => Hash ];
+	RandomSeed get(random_seed): b"sys:rnd" => required Hash;
+	// The current block number being processed. Set by `execute_block`.
+	Number get(block_number): b"sys:num" => required BlockNumber;
+	ParentHash get(parent_hash): b"sys:pha" => required Hash;
+	TransactionsRoot get(transactions_root): b"sys:txr" => required Hash;
+	Digest: b"sys:dig" => default block::Digest;
 }
 
 pub const CODE: &'static[u8] = b":code";
-
-
-/// The current block number being processed. Set by `execute_block`.
-pub fn block_number() -> BlockNumber {
-	with_env(|e| e.block_number)
-}
 
 impl_dispatch! {
 	pub mod privileged;
@@ -51,7 +51,7 @@ impl_dispatch! {
 impl privileged::Dispatch for PrivPass {
 	/// Set the new code.
 	fn set_code(self, new: Vec<u8>) {
-		storage::unhashed::put_raw(b":code", &new);
+		storage::unhashed::put_raw(CODE, &new);
 	}
 }
 
@@ -62,16 +62,14 @@ pub mod internal {
 
 	/// Deposits a log and ensures it matches the blocks log data.
 	pub fn deposit_log(log: Log) {
-		with_env(|e| e.digest.logs.push(log));
+		let mut l = Digest::get();
+		l.logs.push(log);
+		Digest::put(l);
 	}
 
 	/// Actually execute all transitioning for `block`.
 	pub fn execute_block(mut block: Block) {
-		// populate environment from header.
-		with_env(|e| {
-			e.block_number = block.header.number;
-			e.parent_hash = block.header.parent_hash;
-		});
+		initialise_block(&block.header);
 
 		// any initial checks
 		initial_checks(&block);
@@ -90,41 +88,35 @@ pub mod internal {
 		post_finalise(&block.header);
 	}
 
+	/// Start the execution of a particular block.
+	pub fn initialise_block(mut header: &Header) {
+		// populate environment from header.
+		Number::put(header.number);
+		ParentHash::put(header.parent_hash);
+		TransactionsRoot::put(header.transaction_root);
+		RandomSeed::put(calculate_random());
+	}
+
 	/// Execute a transaction outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
-	pub fn execute_transaction(utx: UncheckedTransaction, mut header: Header) -> Header {
-		// populate environment from header.
-		with_env(|e| {
-			e.block_number = header.number;
-			e.parent_hash = header.parent_hash;
-			mem::swap(&mut header.digest, &mut e.digest);
-		});
-
+	pub fn execute_transaction(utx: UncheckedTransaction) {
 		super::execute_transaction(utx);
-
-		with_env(|e| {
-			mem::swap(&mut header.digest, &mut e.digest);
-		});
-		header
 	}
 
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
-	pub fn finalise_block(mut header: Header) -> Header {
-		// populate environment from header.
-		with_env(|e| {
-			e.block_number = header.number;
-			e.parent_hash = header.parent_hash;
-			mem::swap(&mut header.digest, &mut e.digest);
-		});
-
+	pub fn finalise_block() -> Header {
 		staking::internal::check_new_era();
 		session::internal::check_rotate_session();
 
-		header.state_root = storage_root().into();
-		with_env(|e| {
-			mem::swap(&mut header.digest, &mut e.digest);
-		});
+		RandomSeed::kill();
+		let header = Header {
+			number: Number::take(),
+			digest: Digest::take(),
+			parent_hash: ParentHash::take(),
+			transaction_root: TransactionsRoot::take(),
+			state_root: storage_root().into(),
+		};
 
 		post_finalise(&header);
 
@@ -176,9 +168,10 @@ fn final_checks(block: &Block) {
 	let ref header = block.header;
 
 	// check digest
-	with_env(|e| {
-		assert!(header.digest == e.digest);
-	});
+	assert!(header.digest == Digest::get());
+
+	// remove temporaries.
+	kill_temps();
 
 	// check storage root.
 	let storage_root = storage_root().into();
@@ -186,10 +179,25 @@ fn final_checks(block: &Block) {
 	assert!(header.state_root == storage_root, "Storage root must match that calculated.");
 }
 
+fn kill_temps() {
+	Number::kill();
+	ParentHash::kill();
+	RandomSeed::kill();
+	Digest::kill();
+	TransactionsRoot::kill();
+}
+
 fn post_finalise(header: &Header) {
 	// store the header hash in storage; we can't do it before otherwise there would be a
 	// cyclic dependency.
 	BlockHashAt::insert(&header.number, &header.blake2_256().into());
+}
+
+fn calculate_random() -> Hash {
+	let c = block_number() - 1;
+	(0..81)
+		.map(|i| if c >= i { block_hash(c - i) } else { Default::default() })
+		.triplet_mix()
 }
 
 #[cfg(feature = "std")]
@@ -217,8 +225,15 @@ pub mod testing {
 
 	pub fn externalities() -> TestExternalities {
 		map![
-			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode()
+			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode(),
+			twox_128(Number::key()).to_vec() => 1u64.encode(),
+			twox_128(ParentHash::key()).to_vec() => [69u8; 32].encode(),
+			twox_128(RandomSeed::key()).to_vec() => [0u8; 32].encode()
 		]
+	}
+
+	pub fn set_block_number(n: BlockNumber) {
+		Number::put(n);
 	}
 }
 
@@ -231,7 +246,6 @@ mod tests {
 	use runtime_support::StorageValue;
 	use codec::{Joiner, KeyedVec, Slicable};
 	use keyring::Keyring::*;
-	use environment::with_env;
 	use primitives::hexdisplay::HexDisplay;
 	use demo_primitives::{Header, Digest};
 	use transaction::{UncheckedTransaction, Transaction};
@@ -243,7 +257,8 @@ mod tests {
 	fn staking_balance_transfer_dispatch_works() {
 		let mut t: TestExternalities = map![
 			twox_128(&staking::FreeBalanceOf::key_for(*One)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(staking::TransactionFee::key()).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode()
 		];
 
 		let tx = UncheckedTransaction {
@@ -256,7 +271,8 @@ mod tests {
 		};
 
 		with_externalities(&mut t, || {
-			internal::execute_transaction(tx, Header::from_block_number(1));
+			internal::initialise_block(&Header::from_block_number(1));
+			internal::execute_transaction(tx);
 			assert_eq!(staking::balance(&One), 32);
 			assert_eq!(staking::balance(&Two), 69);
 		});
