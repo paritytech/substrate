@@ -28,10 +28,5 @@ error_chain! {
 		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
     }
 	errors {
-		/// Key store errors
-		Keystore(e: ::keystore::Error) {
-			description("Keystore error"),
-			display("Keystore error: {:?}", e),
-		}
 	}
 }

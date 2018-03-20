@@ -26,9 +26,10 @@ error_chain! {
 	}
 
 	errors {
-		ProposalNotForPolkadot {
-			description("Proposal provided not a Polkadot block."),
-			display("Proposal provided not a Polkadot block."),
+		/// Key store errors
+		Keystore(e: ::keystore::Error) {
+			description("Keystore error"),
+			display("Keystore error: {:?}", e),
 		}
 	}
 }

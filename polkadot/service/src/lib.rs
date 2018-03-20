@@ -144,7 +144,7 @@ impl Service {
 			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 		};
 
-		let _keystore = Keystore::open(config.keystore_path).map_err(::error::ErrorKind::Keystore)?;
+		let _keystore = Keystore::open(config.keystore_path.into()).map_err(::error::ErrorKind::Keystore)?;
 		let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
 		let best_header = client.header(&BlockId::Hash(client.info()?.chain.best_hash))?.expect("Best header always exists; qed");
 		info!("Starting Polkadot. Best block is #{}", best_header.number);

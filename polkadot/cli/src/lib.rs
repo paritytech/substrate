@@ -66,7 +66,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(default_keystore_path);
+		.unwrap_or_else(default_keystore_path)
+		.to_string_lossy()
+		.into();
 
 	let mut role = service::Role::FULL;
 	if let Some(_) = matches.subcommand_matches("collator") {
