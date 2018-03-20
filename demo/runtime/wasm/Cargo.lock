@@ -105,6 +105,7 @@ version = "0.1.0"
 dependencies = [
  "demo-primitives 0.1.0",
  "integer-sqrt 0.1.0 (git+https://github.com/paritytech/integer-sqrt-rs.git)",
+ "safe-mix 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
@@ -544,6 +545,13 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "semver 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "safe-mix"
+version = "0.1.0"
+dependencies = [
+ "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

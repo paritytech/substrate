@@ -14,6 +14,7 @@ substrate-runtime-support = { path = "../../../substrate/runtime-support", defau
 substrate-primitives = { path = "../../../substrate/primitives", default-features = false }
 demo-primitives = { path = "../../primitives", default-features = false }
 integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
+safe-mix = { path = "../../../safe-mix", default-features = false }
 
 [features]
 default = []

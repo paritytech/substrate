@@ -26,6 +26,7 @@ extern crate substrate_primitives as primitives;
 pub extern crate substrate_codec as codec;
 pub use self::storage::generator::Storage as GenericStorage;
 
+pub mod dispatch;
 pub mod storage;
 mod hashable;
 

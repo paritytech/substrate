@@ -1462,6 +1462,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "safe-mix"
+version = "0.1.0"
+dependencies = [
+ "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "safemem"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -22,6 +22,7 @@
 #[macro_use] extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 #[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
+extern crate safe_mix;
 
 #[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
 #[cfg(feature = "std")] extern crate serde;
@@ -36,9 +37,7 @@ extern crate demo_primitives;
 
 extern crate integer_sqrt;
 
-#[macro_use] pub mod dispatch;
-
-pub mod safe_mix;
+pub mod dispatch;
 pub mod block;
 pub mod transaction;
 pub mod runtime;

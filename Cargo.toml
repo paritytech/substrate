@@ -45,6 +45,7 @@ members = [
 	"demo/primitives",
 	"demo/executor",
 	"demo/cli",
+	"safe-mix",
 ]
 exclude = [
 	"polkadot/runtime/wasm",
