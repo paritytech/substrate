@@ -25,6 +25,7 @@ extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_executor;
 extern crate polkadot_api;
+extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
@@ -72,6 +73,7 @@ pub struct Service {
 	thread: Option<thread::JoinHandle<()>>,
 	client: Arc<Client>,
 	network: Arc<network::Service>,
+	_consensus: Option<consensus::Service>,
 }
 
 struct TransactionPoolAdapter {
@@ -141,9 +143,11 @@ impl Service {
 		};
 
 		let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
+		let best_header = client.header(&BlockId::Hash(client.info()?.chain.best_hash))?.expect("Best header always exists; qed");
+		info!("Starting Polkadot. Best block is #{}", best_header.number);
 		let transaction_pool = Arc::new(Mutex::new(TransactionPool::new(config.transaction_pool)));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			pool: transaction_pool,
+			pool: transaction_pool.clone(),
 			client: client.clone(),
 		});
 		let network_params = network::Params {
@@ -155,6 +159,13 @@ impl Service {
 			transaction_pool: transaction_pool_adapter,
 		};
 		let network = network::Service::new(network_params)?;
+
+		// Spin consensus service if configured
+		let consensus_service = if config.roles & Role::VALIDATOR == Role::VALIDATOR {
+			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool, &best_header))
+		} else {
+			None
+		};
 
 		let thread_client = client.clone();
 		let thread_network = network.clone();
@@ -177,6 +188,7 @@ impl Service {
 			thread: Some(thread),
 			client: client.clone(),
 			network: network.clone(),
+			_consensus: consensus_service,
 		})
 	}
 

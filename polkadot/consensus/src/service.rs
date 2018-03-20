@@ -24,11 +24,11 @@ use std::sync::Arc;
 use futures::{future, Future, Stream, Sink, Async, Canceled};
 use parking_lot::Mutex;
 use substrate_network as net;
-use tokio_core::reactor::Core;
+use tokio_core::reactor;
 use client::BlockchainEvents;
 use substrate_keyring::Keyring;
 use primitives::{Hash, AuthorityId};
-use primitives::block::{Id as BlockId, HeaderHash};
+use primitives::block::{Id as BlockId, HeaderHash, Header};
 use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
 use polkadot_api::PolkadotApi;
 use bft::{self, BftService};
@@ -86,28 +86,29 @@ struct Network(Arc<net::ConsensusService>);
 
 impl Service {
 	/// Create and start a new instance.
-	pub fn new<C>(client: Arc<C>, network: Arc<net::ConsensusService>, transaction_pool: Arc<Mutex<TransactionPool>>) -> Service
+	pub fn new<C>(client: Arc<C>, network: Arc<net::ConsensusService>, transaction_pool: Arc<Mutex<TransactionPool>>, best_header: &Header) -> Service
 		where C: BlockchainEvents + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
 	{
+		let best_header = best_header.clone();
 		let thread = thread::spawn(move || {
-			let mut core = Core::new().expect("tokio::Core could not be created");
+			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
+			let key = Arc::new(Keyring::One.into());
+			let factory = ProposerFactory {
+				client: client.clone(),
+				transaction_pool: transaction_pool.clone(),
+				network: Network(network.clone()),
+			};
+			let bft_service = BftService::new(client.clone(), key, factory);
+			// Kickstart BFT agreement on start.
+			if let Err(e) = Self::run_bft(&bft_service, network.clone(), &*client, core.handle(), &best_header) {
+				debug!("Error starting initial BFT agreement: {:?}", e);
+			}
 			loop {
-				let key = Arc::new(Keyring::One.into());
-				let factory = ProposerFactory {
-					client: client.clone(),
-					transaction_pool: transaction_pool.clone(),
-					network: Network(network.clone()),
-				};
-				let bft_service = BftService::new(client.clone(), key, factory);
 				let handle = core.handle();
 				let start_bft = client.import_notification_stream().map(|notification| {
-					let hash = notification.header.hash();
-					let authorities = client.authorities(&BlockId::Hash(hash))?;
-					let input = network.bft_messages()
-						.filter_map(move |message| Self::process_message(message, &authorities, hash.clone()))
-						.map_err(|_| bft::InputStreamConcluded.into());
-					let output = BftSink { network: network.clone(), _e: Default::default() };
-					bft_service.build_upon(&notification.header, input, output, handle.clone())
+					if let Err(e) = Self::run_bft(&bft_service, network.clone(), &*client, handle.clone(), &notification.header) {
+						debug!("Error starting BFT agreement: {:?}", e);
+					}
 				}).map_err(|e| debug!("BFT agreement error: {:?}", e));
 				if let Err(_e) = core.run(start_bft.into_future()) {
 					debug!("BFT event loop stopped");
@@ -116,8 +117,21 @@ impl Service {
 			}
 		});
 		Service {
-			thread: Some(thread),
+			thread: Some(thread)
 		}
+	}
+
+	fn run_bft<C, P>(bft_service: &BftService<P, C>, network: Arc<net::ConsensusService>, client: &C, handle: reactor::Handle, header: &Header) -> Result<(), <P as bft::ProposerFactory>::Error> where
+		C: bft::Authorities + bft::BlockImport + Send + Sync + 'static,
+		P: bft::ProposerFactory + 'static,
+	{
+		let hash = header.hash();
+		let authorities = client.authorities(&BlockId::Hash(hash))?;
+		let input = network.bft_messages()
+			.filter_map(move |message| Self::process_message(message, &authorities, hash.clone()))
+			.map_err(|_| bft::InputStreamConcluded.into());
+		let output = BftSink { network: network.clone(), _e: Default::default() };
+		bft_service.build_upon(&header, input, output, handle.clone())
 	}
 
 	fn process_message(msg: net::BftMessage, authorities: &[AuthorityId], parent_hash: HeaderHash) -> Option<bft::Communication> {
