@@ -22,6 +22,7 @@
 use std::thread;
 use std::sync::Arc;
 use futures::{future, Future, Stream, Sink, Async, Canceled};
+use futures::future::Executor;
 use parking_lot::Mutex;
 use substrate_network as net;
 use tokio_core::reactor;
@@ -35,6 +36,7 @@ use bft::{self, BftService};
 use transaction_pool::TransactionPool;
 use ed25519;
 use super::{TableRouter, SharedTable, ProposerFactory};
+use error::{Error, ErrorKind};
 
 struct BftSink<E> {
 	network: Arc<net::ConsensusService>,
@@ -42,9 +44,11 @@ struct BftSink<E> {
 }
 
 
-fn run_bft<C, P>(bft_service: &BftService<P, C>, network: Arc<net::ConsensusService>, client: &C, handle: reactor::Handle, header: &Header) -> Result<(), <P as bft::ProposerFactory>::Error> where
+fn run_bft<C, P>(bft_service: &BftService<P, C>, network: Arc<net::ConsensusService>, client: &C, handle: reactor::Handle, header: &Header)
+	-> Result<(), Error> where
 	C: bft::Authorities + bft::BlockImport + Send + Sync + 'static,
 	P: bft::ProposerFactory + 'static,
+	Error: From<<P as bft::ProposerFactory>::Error>,
 {
 	let hash = header.hash();
 	let authorities = client.authorities(&BlockId::Hash(hash))?;
@@ -56,7 +60,9 @@ fn run_bft<C, P>(bft_service: &BftService<P, C>, network: Arc<net::ConsensusServ
 		})
 		.map_err(|_| bft::InputStreamConcluded.into());
 	let output = BftSink { network: network.clone(), _e: Default::default() };
-	bft_service.build_upon(&header, input, output, handle.clone())
+	let bft = bft_service.build_upon(&header, input, output)?;
+	handle.execute(bft).map_err(|e| ErrorKind::Executor(e.kind()))?;
+	Ok(())
 }
 
 fn process_message(msg: net::BftMessage, authorities: &[AuthorityId], parent_hash: HeaderHash) -> Result<bft::Communication, bft::Error> {
