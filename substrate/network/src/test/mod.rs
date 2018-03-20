@@ -21,12 +21,13 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client::{self, genesis, BlockOrigin};
 use client::block_builder::BlockBuilder;
-use primitives::block::Id as BlockId;
+use primitives::block::{Id as BlockId, TransactionHash};
 use primitives;
 use executor;
 use io::SyncIo;
 use protocol::Protocol;
 use config::ProtocolConfig;
+use service::TransactionPool;
 use network::{PeerId, SessionInfo, Error as NetworkError};
 use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use runtime_support::Hashable;
@@ -215,6 +216,18 @@ impl Peer {
 	}
 }
 
+struct EmptyTransactionPool;
+
+impl TransactionPool for EmptyTransactionPool {
+	fn transactions(&self) -> Vec<(TransactionHash, Vec<u8>)> {
+		Vec::new()
+	}
+
+	fn import(&self, _transaction: &[u8]) -> Option<TransactionHash> {
+		None
+	}
+}
+
 pub struct TestNet {
 	pub peers: Vec<Arc<Peer>>,
 	pub started: bool,
@@ -248,7 +261,8 @@ impl TestNet {
 
 		for _ in 0..n {
 			let client = Arc::new(client::new_in_mem(Executor::new(), Self::prepare_genesis).unwrap());
-			let sync = Protocol::new(config.clone(), client.clone()).unwrap();
+			let tx_pool = Arc::new(EmptyTransactionPool);
+			let sync = Protocol::new(config.clone(), client.clone(), tx_pool).unwrap();
 			net.peers.push(Arc::new(Peer {
 				sync: sync,
 				client: client,

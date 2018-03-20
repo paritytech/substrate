@@ -208,6 +208,8 @@ impl Service {
 
 impl Drop for Service {
 	fn drop(&mut self) {
+		self.client.stop_notifications();
+		self.network.stop_network();
 		if let Some(thread) = self.thread.take() {
 			thread.join().expect("The service thread has panicked");
 		}

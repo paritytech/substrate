@@ -474,6 +474,7 @@ impl Protocol {
 		sync.clear();
 		peers.clear();
 		handshaking_peers.clear();
+		self.consensus.lock().restart();
 	}
 
 	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce) {

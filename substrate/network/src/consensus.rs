@@ -26,6 +26,8 @@ use primitives::Hash;
 use message::{self, Message};
 use runtime_support::Hashable;
 
+const QUEUE_SIZE: u64 = 64;
+
 struct CandidateRequest {
 	id: message::RequestId,
 	completion: oneshot::Sender<Vec<u8>>,
@@ -49,8 +51,8 @@ pub struct Consensus {
 impl Consensus {
 	/// Create a new instance.
 	pub fn new() -> Consensus {
-		let (statement_sink, statement_stream) = multiqueue::broadcast_fut_queue(64);
-		let (bft_sink, bft_stream) = multiqueue::broadcast_fut_queue(64);
+		let (statement_sink, statement_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
+		let (bft_sink, bft_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
 		Consensus {
 			peers: HashMap::new(),
 			our_candidate: None,
@@ -59,6 +61,16 @@ impl Consensus {
 			bft_message_sink: bft_sink,
 			bft_message_stream: bft_stream,
 		}
+	}
+
+	/// Closes all notification streams.
+	pub fn restart(&mut self) {
+		let (statement_sink, statement_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
+		let (bft_sink, bft_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
+		self.statement_sink = statement_sink;
+		self.statement_stream = statement_stream;
+		self.bft_message_sink = bft_sink;
+		self.bft_message_stream = bft_stream;
 	}
 
 	/// Handle new connected peer.

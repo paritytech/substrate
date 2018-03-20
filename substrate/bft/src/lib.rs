@@ -410,6 +410,7 @@ pub fn bft_threshold(n: usize) -> usize {
 fn check_justification_signed_message(authorities: &[AuthorityId], message: &[u8], just: UncheckedJustification)
 	-> Result<Justification, UncheckedJustification>
 {
+	// TODO: return additional error information.
 	just.check(authorities.len() - max_faulty_of(authorities.len()), |_, _, sig| {
 		let auth_id = sig.signer.0;
 		if !authorities.contains(&auth_id) { return None }
@@ -450,6 +451,58 @@ pub fn check_prepare_justification(authorities: &[AuthorityId], parent: HeaderHa
 	});
 
 	check_justification_signed_message(authorities, &message[..], just)
+}
+
+/// Check proposal message signatures and authority.
+/// Provide all valid authorities.
+pub fn check_proposal(
+	authorities: &[AuthorityId],
+	parent_hash: &HeaderHash,
+	propose: &::generic::LocalizedProposal<Block, HeaderHash, AuthorityId, LocalizedSignature>)
+	-> Result<(), Error>
+{
+	if !authorities.contains(&propose.sender) {
+		return Err(ErrorKind::InvalidSender(propose.sender.into()).into());
+	}
+
+	let action_header = PrimitiveAction::ProposeHeader(propose.round_number as u32, propose.digest.clone());
+	let action_propose = PrimitiveAction::Propose(propose.round_number as u32, propose.proposal.clone());
+	check_action(action_header, parent_hash, &propose.digest_signature)?;
+	check_action(action_propose, parent_hash, &propose.full_signature)
+}
+
+/// Check vote message signatures and authority.
+/// Provide all valid authorities.
+pub fn check_vote(
+	authorities: &[AuthorityId],
+	parent_hash: &HeaderHash,
+	vote: &::generic::LocalizedVote<HeaderHash, AuthorityId, LocalizedSignature>)
+	-> Result<(), Error>
+{
+	if !authorities.contains(&vote.sender) {
+		return Err(ErrorKind::InvalidSender(vote.sender.into()).into());
+	}
+
+	let action = match vote.vote {
+		::generic::Vote::Prepare(r, h) => PrimitiveAction::Prepare(r as u32, h),
+		::generic::Vote::Commit(r, h) => PrimitiveAction::Commit(r as u32, h),
+		::generic::Vote::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
+	};
+	check_action(action, parent_hash, &vote.signature)
+}
+
+fn check_action(action: PrimitiveAction, parent_hash: &HeaderHash, sig: &LocalizedSignature) -> Result<(), Error> {
+	let primitive = PrimitiveMessage {
+		parent: parent_hash.clone(),
+		action,
+	};
+
+	let message = Slicable::encode(&primitive);
+	if ed25519::verify_strong(&sig.signature, &message, &sig.signer) {
+		Ok(())
+	} else {
+		Err(ErrorKind::InvalidSignature(sig.signature.into(), sig.signer.clone().into()).into())
+	}
 }
 
 /// Sign a BFT message with the given key.
@@ -505,8 +558,9 @@ mod tests {
 	use super::*;
 	use std::collections::HashSet;
 	use primitives::block;
-	use self::tokio_core::reactor::{Core, Handle};
+	use self::tokio_core::reactor::{Core};
 	use self::keyring::Keyring;
+	use futures::stream;
 
 	extern crate substrate_keyring as keyring;
 	extern crate tokio_core;
@@ -527,8 +581,6 @@ mod tests {
 			Ok(self.authorities.clone())
 		}
 	}
-
-	type Input<E> = stream::Empty<Communication, E>;
 
 	// "black hole" output sink.
 	struct Output<E>(::std::marker::PhantomData<E>);
@@ -577,12 +629,11 @@ mod tests {
 		fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior)>) {}
 	}
 
-	fn make_service(client: FakeClient, handle: Handle)
-		-> BftService<DummyFactory, Handle, FakeClient>
+	fn make_service(client: FakeClient)
+		-> BftService<DummyFactory, FakeClient>
 	{
 		BftService {
 			client: Arc::new(client),
-			executor: handle,
 			live_agreements: Mutex::new(HashMap::new()),
 			timer: Timer::default(),
 			round_timeout_multiplier: 4,
@@ -612,7 +663,7 @@ mod tests {
 
 		let mut core = Core::new().unwrap();
 
-		let service = make_service(client, core.handle());
+		let service = make_service(client);
 
 		let first = Header::from_block_number(2);
 		let first_hash = first.hash();
@@ -621,13 +672,13 @@ mod tests {
 		second.parent_hash = first_hash;
 		let second_hash = second.hash();
 
-		service.build_upon(&first).unwrap();
+		service.build_upon(&first, stream::empty(), Output(Default::default()), core.handle()).unwrap();
 		assert!(service.live_agreements.lock().contains_key(&first_hash));
 
 		// turn the core so the future gets polled and sends its task to the
 		// service. otherwise it deadlocks.
 		core.turn(Some(::std::time::Duration::from_millis(100)));
-		service.build_upon(&second).unwrap();
+		service.build_upon(&second, stream::empty(), Output(Default::default()), core.handle()).unwrap();
 		assert!(!service.live_agreements.lock().contains_key(&first_hash));
 		assert!(service.live_agreements.lock().contains_key(&second_hash));
 
@@ -704,5 +755,70 @@ mod tests {
 		};
 
 		assert!(check_justification(&authorities, parent_hash, unchecked).is_err());
+	}
+
+	#[test]
+	fn propose_check_works() {
+		let parent_hash = Default::default();
+
+		let authorities = vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Eve.to_raw_public(),
+		];
+
+		let block = Block {
+			header: Header::from_block_number(1),
+			transactions: Default::default()
+		};
+
+		let proposal = sign_message(::generic::Message::Propose(1, block.clone()), &Keyring::Alice.pair(), parent_hash);;
+		if let ::generic::LocalizedMessage::Propose(proposal) = proposal {
+			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
+			let mut invalid_round = proposal.clone();
+			invalid_round.round_number = 0;
+			assert!(check_proposal(&authorities, &parent_hash, &invalid_round).is_err());
+			let mut invalid_digest = proposal.clone();
+			invalid_digest.digest = [0xfe; 32].into();
+			assert!(check_proposal(&authorities, &parent_hash, &invalid_digest).is_err());
+		} else {
+			assert!(false);
+		}
+
+		// Not an authority
+		let proposal = sign_message(::generic::Message::Propose(1, block), &Keyring::Bob.pair(), parent_hash);;
+		if let ::generic::LocalizedMessage::Propose(proposal) = proposal {
+			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
+		} else {
+			assert!(false);
+		}
+	}
+
+	#[test]
+	fn vote_check_works() {
+		let parent_hash = Default::default();
+		let hash = [0xff; 32].into();
+
+		let authorities = vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Eve.to_raw_public(),
+		];
+
+		let vote = sign_message(::generic::Message::Vote(::generic::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
+		if let ::generic::LocalizedMessage::Vote(vote) = vote {
+			assert!(check_vote(&authorities, &parent_hash, &vote).is_ok());
+			let mut invalid_sender = vote.clone();
+			invalid_sender.signature.signer = Keyring::Eve.into();
+			assert!(check_vote(&authorities, &parent_hash, &invalid_sender).is_err());
+		} else {
+			assert!(false);
+		}
+
+		// Not an authority
+		let vote = sign_message(::generic::Message::Vote(::generic::Vote::Prepare(1, hash)), &Keyring::Bob.pair(), parent_hash);;
+		if let ::generic::LocalizedMessage::Vote(vote) = vote {
+			assert!(check_vote(&authorities, &parent_hash, &vote).is_err());
+		} else {
+			assert!(false);
+		}
 	}
 }

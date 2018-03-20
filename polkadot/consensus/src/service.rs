@@ -41,8 +41,75 @@ struct BftSink<E> {
 	_e: ::std::marker::PhantomData<E>,
 }
 
+
+fn run_bft<C, P>(bft_service: &BftService<P, C>, network: Arc<net::ConsensusService>, client: &C, handle: reactor::Handle, header: &Header) -> Result<(), <P as bft::ProposerFactory>::Error> where
+	C: bft::Authorities + bft::BlockImport + Send + Sync + 'static,
+	P: bft::ProposerFactory + 'static,
+{
+	let hash = header.hash();
+	let authorities = client.authorities(&BlockId::Hash(hash))?;
+	let input = network.bft_messages()
+		.filter_map(move |message| {
+			process_message(message, &authorities, hash.clone())
+				.map_err(|e| debug!("Message validation failed: {:?}", e))
+				.ok()
+		})
+		.map_err(|_| bft::InputStreamConcluded.into());
+	let output = BftSink { network: network.clone(), _e: Default::default() };
+	bft_service.build_upon(&header, input, output, handle.clone())
+}
+
+fn process_message(msg: net::BftMessage, authorities: &[AuthorityId], parent_hash: HeaderHash) -> Result<bft::Communication, bft::Error> {
+	Ok(match msg {
+		net::BftMessage::Consensus(c) => bft::generic::Communication::Consensus(match c {
+			net::SignedConsensusMessage::Propose(proposal) => bft::generic::LocalizedMessage::Propose({
+				let proposal = bft::generic::LocalizedProposal {
+					round_number: proposal.round_number as usize,
+					proposal: proposal.proposal,
+					digest: proposal.digest,
+					sender: proposal.sender,
+					digest_signature: ed25519::LocalizedSignature {
+						signature: proposal.digest_signature,
+						signer: ed25519::Public(proposal.sender),
+					},
+					full_signature: ed25519::LocalizedSignature {
+						signature: proposal.full_signature,
+						signer: ed25519::Public(proposal.sender),
+					}
+				};
+				bft::check_proposal(authorities, &parent_hash, &proposal)?;
+				proposal
+			}),
+			net::SignedConsensusMessage::Vote(vote) => bft::generic::LocalizedMessage::Vote({
+				let vote = bft::generic::LocalizedVote {
+					sender: vote.sender,
+					signature: ed25519::LocalizedSignature {
+						signature: vote.signature,
+						signer: ed25519::Public(vote.sender),
+					},
+					vote: match vote.vote {
+						net::ConsensusVote::Prepare(r, h) => bft::generic::Vote::Prepare(r as usize, h),
+						net::ConsensusVote::Commit(r, h) => bft::generic::Vote::Commit(r as usize, h),
+						net::ConsensusVote::AdvanceRound(r) => bft::generic::Vote::AdvanceRound(r as usize),
+					}
+				};
+				bft::check_vote(authorities, &parent_hash, &vote)?;
+				vote
+			}),
+		}),
+		net::BftMessage::Auxiliary(a) => {
+			let justification = bft::UncheckedJustification::from(a);
+			// TODO: get proper error
+			let justification: Result<_, bft::Error> = bft::check_prepare_justification(authorities, parent_hash, justification)
+				.map_err(|_| bft::ErrorKind::InvalidJustification.into());
+			bft::generic::Communication::Auxiliary(justification?)
+		},
+	})
+}
+
 impl<E> Sink for BftSink<E> {
 	type SinkItem = bft::Communication;
+	// TODO: replace this with the ! type when that's stabilized
 	type SinkError = E;
 
 	fn start_send(&mut self, message: bft::Communication) -> ::futures::StartSend<bft::Communication, E> {
@@ -100,13 +167,13 @@ impl Service {
 			};
 			let bft_service = BftService::new(client.clone(), key, factory);
 			// Kickstart BFT agreement on start.
-			if let Err(e) = Self::run_bft(&bft_service, network.clone(), &*client, core.handle(), &best_header) {
+			if let Err(e) = run_bft(&bft_service, network.clone(), &*client, core.handle(), &best_header) {
 				debug!("Error starting initial BFT agreement: {:?}", e);
 			}
 			loop {
 				let handle = core.handle();
 				let start_bft = client.import_notification_stream().map(|notification| {
-					if let Err(e) = Self::run_bft(&bft_service, network.clone(), &*client, handle.clone(), &notification.header) {
+					if let Err(e) = run_bft(&bft_service, network.clone(), &*client, handle.clone(), &notification.header) {
 						debug!("Error starting BFT agreement: {:?}", e);
 					}
 				}).map_err(|e| debug!("BFT agreement error: {:?}", e));
@@ -119,66 +186,6 @@ impl Service {
 		Service {
 			thread: Some(thread)
 		}
-	}
-
-	fn run_bft<C, P>(bft_service: &BftService<P, C>, network: Arc<net::ConsensusService>, client: &C, handle: reactor::Handle, header: &Header) -> Result<(), <P as bft::ProposerFactory>::Error> where
-		C: bft::Authorities + bft::BlockImport + Send + Sync + 'static,
-		P: bft::ProposerFactory + 'static,
-	{
-		let hash = header.hash();
-		let authorities = client.authorities(&BlockId::Hash(hash))?;
-		let input = network.bft_messages()
-			.filter_map(move |message| Self::process_message(message, &authorities, hash.clone()))
-			.map_err(|_| bft::InputStreamConcluded.into());
-		let output = BftSink { network: network.clone(), _e: Default::default() };
-		bft_service.build_upon(&header, input, output, handle.clone())
-	}
-
-	fn process_message(msg: net::BftMessage, authorities: &[AuthorityId], parent_hash: HeaderHash) -> Option<bft::Communication> {
-		// TODO: check all signatures
-		Some(match msg {
-			net::BftMessage::Consensus(c) => bft::generic::Communication::Consensus(match c {
-				net::SignedConsensusMessage::Propose(proposal) => bft::generic::LocalizedMessage::Propose(bft::generic::LocalizedProposal {
-					round_number: proposal.round_number as usize,
-					proposal: proposal.proposal,
-					digest: proposal.digest,
-					sender: proposal.sender,
-					digest_signature: ed25519::LocalizedSignature {
-						signature: proposal.digest_signature,
-						signer: ed25519::Public(proposal.sender),
-					},
-					full_signature: ed25519::LocalizedSignature {
-						signature: proposal.full_signature,
-						signer: ed25519::Public(proposal.sender),
-					},
-
-				}),
-				net::SignedConsensusMessage::Vote(vote) => bft::generic::LocalizedMessage::Vote(bft::generic::LocalizedVote {
-					sender: vote.sender,
-					signature: ed25519::LocalizedSignature {
-						signature: vote.signature,
-						signer: ed25519::Public(vote.sender),
-					},
-					vote: match vote.vote {
-						net::ConsensusVote::Prepare(r, h) => bft::generic::Vote::Prepare(r as usize, h),
-						net::ConsensusVote::Commit(r, h) => bft::generic::Vote::Commit(r as usize, h),
-						net::ConsensusVote::AdvanceRound(r) => bft::generic::Vote::AdvanceRound(r as usize),
-					}
-
-				}),
-			}),
-			net::BftMessage::Auxiliary(a) => {
-				let justification = bft::UncheckedJustification::from(a);
-				let justification = match bft::check_prepare_justification(authorities, parent_hash, justification) {
-					Ok(j) => j,
-					Err(e) => {
-						debug!("Error checking BFT message justification: {:?}", e);
-						return None;
-					}
-				};
-				bft::generic::Communication::Auxiliary(justification)
-			},
-		})
 	}
 }
 

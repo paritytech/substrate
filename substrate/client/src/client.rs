@@ -32,6 +32,8 @@ use {error, in_mem, block_builder, runtime_io, bft};
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream = multiqueue::BroadcastFutReceiver<BlockImportNotification>;
 
+const NOTIFICATION_QUEUE_SIZE: u64 = 64;
+
 /// Polkadot Client
 pub struct Client<B, E> where B: backend::Backend {
 	backend: B,
@@ -160,7 +162,7 @@ impl<B, E> Client<B, E> where
 		where
 			F: FnOnce() -> (block::Header, Vec<(Vec<u8>, Vec<u8>)>)
 	{
-		let (sink, stream) = multiqueue::broadcast_fut_queue(64);
+		let (sink, stream) = multiqueue::broadcast_fut_queue(NOTIFICATION_QUEUE_SIZE);
 		if backend.blockchain().header(BlockId::Number(0))?.is_none() {
 			trace!("Empty database, writing genesis block");
 			let (genesis_header, genesis_store) = build_genesis();
@@ -203,6 +205,13 @@ impl<B, E> Client<B, E> where
 	/// Clone a new instance of Executor.
 	pub fn clone_executor(&self) -> E where E: Clone {
 		self.executor.clone()
+	}
+
+	/// Close notification streams.
+	pub fn stop_notifications(&self) {
+		let (sink, stream) = multiqueue::broadcast_fut_queue(NOTIFICATION_QUEUE_SIZE);
+		*self.import_notification_sink.lock() = sink;
+		*self.import_notification_stream.lock() = stream;
 	}
 
 	/// Get the current set of authorities from storage.
