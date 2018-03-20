@@ -86,7 +86,7 @@ pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
 }
 
 /// Verify a ed25519 signature.
-pub fn ed25519_verify(sig: &[u8; 64], msg: &[u8], pubkey: &[u8; 32]) -> bool {
+pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
 	ed25519::verify(sig, msg, pubkey)
 }
 

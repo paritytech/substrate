@@ -18,6 +18,7 @@
 
 #![warn(missing_docs)]
 
+extern crate app_dirs;
 extern crate env_logger;
 extern crate ed25519;
 extern crate triehash;
@@ -40,6 +41,8 @@ extern crate log;
 
 pub mod error;
 
+use std::path::{Path, PathBuf};
+
 /// Parse command line arguments and start the node.
 ///
 /// IANA unassigned port ranges that we could use:
@@ -59,8 +62,13 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let log_pattern = matches.value_of("log").unwrap_or("");
 	init_logger(log_pattern);
 
-	let mut role = service::Role::FULL;
+	let mut config = service::Configuration::default();
 
+	config.keystore_path = matches.value_of("keystore")
+		.map(|x| Path::new(x).to_owned())
+		.unwrap_or_else(default_keystore_path);
+
+	let mut role = service::Role::FULL;
 	if let Some(_) = matches.subcommand_matches("collator") {
 		info!("Starting collator.");
 		role = service::Role::COLLATOR;
@@ -70,7 +78,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		role = service::Role::VALIDATOR;
 	}
 
-	let mut config = service::Configuration::default();
 	config.roles = role;
 
 	let service = service::Service::new(config)?;
@@ -84,6 +91,21 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let _ = clap::App::from_yaml(yaml).print_long_help();
 
 	Ok(())
+}
+
+fn default_keystore_path() -> PathBuf {
+	use app_dirs::{AppInfo, AppDataType};
+
+	let app_info = AppInfo {
+		name: "Polkadot",
+		author: "Parity Technologies",
+	};
+
+	app_dirs::get_app_dir(
+		AppDataType::UserData,
+		&app_info,
+		"keystore",
+	).expect("app directories exist on all supported platforms; qed")
 }
 
 fn init_logger(pattern: &str) {

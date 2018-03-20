@@ -28,6 +28,8 @@ pub struct Configuration {
 	pub transaction_pool: transaction_pool::Options,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
+	/// Path to key files.
+	pub keystore_path: String,
 	// TODO: add more network, client, tx pool configuration options
 }
 
@@ -37,6 +39,7 @@ impl Default for Configuration {
 			roles: Role::FULL,
 			transaction_pool: Default::default(),
 			network: Default::default(),
+			keystore_path: Default::default(),
 		}
 	}
 }

@@ -1,11 +1,15 @@
 name: polkadot
-author: "Parity Team <admin@polkadot.io>"
+author: "Parity Team <admin@parity.io>"
 about: Polkadot Node Rust Implementation
 args:
   - log:
       short: l
       value_name: LOG_PATTERN
-      help: Sets a custom logging
+      help: Sets a custom logging filter
+      takes_value: true
+  - keystore-path:
+      value_name: KEYSTORE_PATH
+      help: specify custom keystore path
       takes_value: true
 subcommands:
   - collator:

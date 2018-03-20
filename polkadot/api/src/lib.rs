@@ -17,7 +17,7 @@
 //! Strongly typed API for Polkadot based around the locally-compiled native
 //! runtime.
 
-extern crate polkadot_executor as polkadot_executor;
+extern crate polkadot_executor;
 extern crate polkadot_runtime;
 extern crate polkadot_primitives as primitives;
 extern crate substrate_client as client;
