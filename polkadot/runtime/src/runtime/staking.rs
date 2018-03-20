@@ -310,7 +310,7 @@ mod tests {
 			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
 
 			// Block 1: Add three validators. No obvious change.
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			stake(&one);
 			stake(&two);
 			stake(&four);
@@ -318,39 +318,39 @@ mod tests {
 			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
 
 			// Block 2: New validator set now.
-			with_env(|e| e.block_number = 2);
+			system::testing::set_block_number(2);
 			check_new_era();
 			assert_eq!(session::validators(), vec![four.clone(), two.clone()]);
 
 			// Block 3: Unstake highest, introduce another staker. No change yet.
-			with_env(|e| e.block_number = 3);
+			system::testing::set_block_number(3);
 			stake(&three);
 			unstake(&four);
 			check_new_era();
 
 			// Block 4: New era - validators change.
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			check_new_era();
 			assert_eq!(session::validators(), vec![three.clone(), two.clone()]);
 
 			// Block 5: Transfer stake from highest to lowest. No change yet.
-			with_env(|e| e.block_number = 5);
+			system::testing::set_block_number(5);
 			transfer(&four, &one, 40);
 			check_new_era();
 
 			// Block 6: Lowest now validator.
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			check_new_era();
 			assert_eq!(session::validators(), vec![one.clone(), three.clone()]);
 
 			// Block 7: Unstake three. No change yet.
-			with_env(|e| e.block_number = 7);
+			system::testing::set_block_number(7);
 			unstake(&three);
 			check_new_era();
 			assert_eq!(session::validators(), vec![one.clone(), three.clone()]);
 
 			// Block 8: Back to one and two.
-			with_env(|e| e.block_number = 8);
+			system::testing::set_block_number(8);
 			check_new_era();
 			assert_eq!(session::validators(), vec![one.clone(), two.clone()]);
 		});
@@ -369,21 +369,21 @@ mod tests {
 			assert_eq!(current_era(), 0u64);
 
 			// Block 1: No change.
-			with_env(|e| e.block_number = 1);
+			system::testing::set_block_number(1);
 			check_new_era();
 			assert_eq!(sessions_per_era(), 2u64);
 			assert_eq!(last_era_length_change(), 0u64);
 			assert_eq!(current_era(), 0u64);
 
 			// Block 2: Simple era change.
-			with_env(|e| e.block_number = 2);
+			system::testing::set_block_number(2);
 			check_new_era();
 			assert_eq!(sessions_per_era(), 2u64);
 			assert_eq!(last_era_length_change(), 0u64);
 			assert_eq!(current_era(), 1u64);
 
 			// Block 3: Schedule an era length change; no visible changes.
-			with_env(|e| e.block_number = 3);
+			system::testing::set_block_number(3);
 			set_sessions_per_era(3);
 			check_new_era();
 			assert_eq!(sessions_per_era(), 2u64);
@@ -391,28 +391,28 @@ mod tests {
 			assert_eq!(current_era(), 1u64);
 
 			// Block 4: Era change kicks in.
-			with_env(|e| e.block_number = 4);
+			system::testing::set_block_number(4);
 			check_new_era();
 			assert_eq!(sessions_per_era(), 3u64);
 			assert_eq!(last_era_length_change(), 4u64);
 			assert_eq!(current_era(), 2u64);
 
 			// Block 5: No change.
-			with_env(|e| e.block_number = 5);
+			system::testing::set_block_number(5);
 			check_new_era();
 			assert_eq!(sessions_per_era(), 3u64);
 			assert_eq!(last_era_length_change(), 4u64);
 			assert_eq!(current_era(), 2u64);
 
 			// Block 6: No change.
-			with_env(|e| e.block_number = 6);
+			system::testing::set_block_number(6);
 			check_new_era();
 			assert_eq!(sessions_per_era(), 3u64);
 			assert_eq!(last_era_length_change(), 4u64);
 			assert_eq!(current_era(), 2u64);
 
 			// Block 7: Era increment.
-			with_env(|e| e.block_number = 7);
+			system::testing::set_block_number(7);
 			check_new_era();
 			assert_eq!(sessions_per_era(), 3u64);
 			assert_eq!(last_era_length_change(), 4u64);
