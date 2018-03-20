@@ -18,11 +18,10 @@
 
 use rstd::prelude::*;
 use codec::KeyedVec;
-use runtime_support::{StorageMap, StorageValue};
+use runtime_support::{StorageMap, StorageValue, PublicPass, PrivPass};
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use runtime::{staking, system, session};
-use runtime::democracy::PrivPass;
-use runtime::staking::{PublicPass, Balance};
+use runtime::staking::Balance;
 
 // no polynomial attacks:
 //
@@ -180,11 +179,11 @@ pub fn next_tally() -> Option<BlockNumber> {
 
 impl_dispatch! {
 	pub mod public;
-	fn set_approvals(votes: Vec<bool>, index: VoteIndex) = 0;
-	fn reap_inactive_voter(signed_index: u32, who: AccountId, who_index: u32, assumed_vote_index: VoteIndex) = 1;
-	fn retract_voter(index: u32) = 2;
-	fn submit_candidacy(slot: u32) = 3;
-	fn present_winner(candidate: AccountId, total: Balance, index: VoteIndex) = 4;
+	fn set_approvals(self, votes: Vec<bool>, index: VoteIndex) = 0;
+	fn reap_inactive_voter(self, signed_index: u32, who: AccountId, who_index: u32, assumed_vote_index: VoteIndex) = 1;
+	fn retract_voter(self, index: u32) = 2;
+	fn submit_candidacy(self, slot: u32) = 3;
+	fn present_winner(self, candidate: AccountId, total: Balance, index: VoteIndex) = 4;
 }
 
 impl<'a> public::Dispatch for PublicPass<'a> {
@@ -329,10 +328,10 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 
 impl_dispatch! {
 	pub mod privileged;
-	fn set_desired_seats(count: u32) = 0;
-	fn remove_member(who: AccountId) = 1;
-	fn set_presentation_duration(count: BlockNumber) = 2;
-	fn set_term_duration(count: BlockNumber) = 3;
+	fn set_desired_seats(self, count: u32) = 0;
+	fn remove_member(self, who: AccountId) = 1;
+	fn set_presentation_duration(self, count: BlockNumber) = 2;
+	fn set_term_duration(self, count: BlockNumber) = 3;
 }
 
 impl privileged::Dispatch for PrivPass {

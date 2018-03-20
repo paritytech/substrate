@@ -16,30 +16,30 @@
 
 //! Dispatch system. Just dispatches calls.
 
-use runtime::{self, staking, democracy};
+use {runtime, runtime_support, consensus};
 
 impl_meta_dispatch! {
 	pub mod public;
-	path runtime :: _ :: public;
-	trait staking::PublicPass;
-	Session(mod session) = 1;
-	Staking(mod staking) = 2;
-	Timestamp(mod timestamp) = 3;
-	Democracy(mod democracy) = 5;
-	Council(mod council) = 6;
-	CouncilVote(mod council) = 7;
+	path public;
+	trait runtime_support::PublicPass;
+	Session(mod runtime::session) = 1;
+	Staking(mod runtime::staking) = 2;
+	Timestamp(mod runtime::timestamp) = 3;
+	Democracy(mod runtime::democracy) = 5;
+	Council(mod runtime::council) = 6;
+	CouncilVote(mod runtime::council_vote) = 7;
 }
 
 impl_meta_dispatch! {
 	pub mod privileged;
-	path runtime :: _ :: privileged;
-	trait democracy::PrivPass;
-	System(mod system) = 0;
-	Session(mod session) = 1;
-	Staking(mod staking) = 2;
-	Democracy(mod democracy) = 5;
-	Council(mod council) = 6;
-	CouncilVote(mod council) = 7;
+	path privileged;
+	trait runtime_support::PrivPass;
+	Consensus(mod consensus) = 0;
+	Session(mod runtime::session) = 1;
+	Staking(mod runtime::staking) = 2;
+	Democracy(mod runtime::democracy) = 5;
+	Council(mod runtime::council) = 6;
+	CouncilVote(mod runtime::council_vote) = 7;
 }
 
 pub use self::privileged::Call as PrivCall;

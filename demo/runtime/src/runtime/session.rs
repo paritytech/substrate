@@ -21,9 +21,9 @@ use rstd::prelude::*;
 use codec::KeyedVec;
 use runtime_support::{storage, StorageValue, StorageMap};
 use demo_primitives::{AccountId, SessionKey, BlockNumber};
-use runtime::{system, staking, consensus};
-use runtime::democracy::PrivPass;
-use runtime::staking::PublicPass;
+use runtime::{system, staking};
+use runtime_support::{PrivPass, PublicPass};
+use consensus;
 
 storage_items!{
 	// The current set of validators.
@@ -48,7 +48,7 @@ pub fn validator_count() -> u32 {
 
 impl_dispatch! {
 	pub mod public;
-	fn set_key(key: SessionKey) = 0;
+	fn set_key(self, key: SessionKey) = 0;
 }
 
 impl<'a> public::Dispatch for PublicPass<'a> {
@@ -62,8 +62,8 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 
 impl_dispatch! {
 	pub mod privileged;
-	fn set_length(new: BlockNumber) = 0;
-	fn force_new_session() = 1;
+	fn set_length(self, new: BlockNumber) = 0;
+	fn force_new_session(self) = 1;
 }
 
 impl privileged::Dispatch for PrivPass {
@@ -152,7 +152,8 @@ mod tests {
 	use codec::{KeyedVec, Joiner};
 	use keyring::Keyring;
 	use demo_primitives::AccountId;
-	use runtime::{consensus, session};
+	use runtime::session;
+	use consensus;
 
 	fn simple_setup() -> TestExternalities {
 		map![

@@ -38,6 +38,7 @@ members = [
 	"substrate/runtime-io",
 	"substrate/runtime-std",
 	"substrate/runtime-support",
+	"substrate/runtime/consensus",
 	"substrate/serializer",
 	"substrate/state-machine",
 	"substrate/test-runtime",

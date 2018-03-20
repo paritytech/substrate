@@ -16,9 +16,20 @@
 
 //! Conensus module for runtime; manages the authority set ready for the native code.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[allow(unused_imports)] #[macro_use] extern crate substrate_runtime_std as rstd;
+#[macro_use] extern crate substrate_runtime_support as runtime_support;
+
+#[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
+#[cfg(feature = "std")] extern crate serde;
+
 use rstd::prelude::*;
+use runtime_support::storage;
 use runtime_support::storage::unhashed::StorageVec;
-use demo_primitives::SessionKey;
+use runtime_support::dispatch::PrivPass;
+
+pub type SessionKey = [u8; 32];
 
 pub const AUTHORITY_AT: &'static[u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
@@ -29,13 +40,32 @@ impl StorageVec for AuthorityStorageVec {
 	const PREFIX: &'static[u8] = AUTHORITY_AT;
 }
 
+pub const CODE: &'static[u8] = b":code";
+
 /// Get the current set of authorities. These are the session keys.
 pub fn authorities() -> Vec<SessionKey> {
 	AuthorityStorageVec::items()
 }
 
+impl_dispatch! {
+	pub mod privileged;
+	fn set_code(self, new: Vec<u8>) = 0;
+}
+
+impl privileged::Dispatch for PrivPass {
+	/// Set the new code.
+	fn set_code(self, new: Vec<u8>) {
+		internal::set_code(new);
+	}
+}
+
 pub mod internal {
 	use super::*;
+
+	/// Set the new code.
+	pub fn set_code(new: Vec<u8>) {
+		storage::unhashed::put_raw(CODE, &new);
+	}
 
 	/// Set the current set of authorities' session keys.
 	///

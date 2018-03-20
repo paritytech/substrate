@@ -32,3 +32,4 @@ mod hashable;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
+pub use self::dispatch::{PrivPass, PublicPass};

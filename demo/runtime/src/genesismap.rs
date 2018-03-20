@@ -23,7 +23,8 @@ use runtime_support::{Hashable, StorageMap, StorageList, StorageValue};
 use primitives::Block;
 use demo_primitives::{BlockNumber, AccountId};
 use runtime::staking::Balance;
-use runtime::{staking, session, consensus, system, democracy, council, council_vote};
+use runtime::{staking, session, system, democracy, council, council_vote};
+use consensus;
 
 /// Configuration of a general Substrate Demo genesis block.
 pub struct GenesisConfig {
@@ -110,7 +111,7 @@ impl GenesisConfig {
 			)
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
-				(system::CODE.to_vec(), wasm_runtime),
+				(consensus::CODE.to_vec(), wasm_runtime),
 				(consensus::AUTHORITY_COUNT[..].into(), vec![].and(&(self.authorities.len() as u32))),
 			].into_iter())
 			.chain(self.authorities.iter()

@@ -16,6 +16,7 @@ substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-keyring = { path = "../../substrate/keyring" }
+substrate-runtime-consensus = { path = "../../substrate/runtime/consensus" }
 demo-primitives = { path = "../primitives" }
 integer-sqrt = "0.1.0"
 
@@ -27,6 +28,7 @@ std = [
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
 	"substrate-primitives/std",
+	"substrate-runtime-consensus/std",
 	"demo-primitives/std",
 	"serde_derive",
 	"serde/std",

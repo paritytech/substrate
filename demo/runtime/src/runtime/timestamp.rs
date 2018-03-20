@@ -17,7 +17,7 @@
 //! Timestamp manager: just handles the current timestamp.
 
 use runtime_support::storage::StorageValue;
-use runtime::staking::PublicPass;
+use runtime_support::PublicPass;
 
 pub type Timestamp = u64;
 
@@ -27,7 +27,7 @@ storage_items! {
 
 impl_dispatch! {
 	pub mod public;
-	fn set(now: Timestamp) = 0;
+	fn set(self, now: Timestamp) = 0;
 }
 
 impl<'a> public::Dispatch for PublicPass<'a> {
@@ -47,7 +47,7 @@ mod tests {
 	use runtime::timestamp;
 	use codec::{Joiner, KeyedVec};
 	use demo_primitives::AccountId;
-	use runtime::staking::PublicPass;
+	use runtime_support::PublicPass;
 
 	#[test]
 	fn timestamp_works() {

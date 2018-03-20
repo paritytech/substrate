@@ -17,7 +17,48 @@
 //! Dispatch system. Just dispatches calls.
 
 pub use rstd::prelude::Vec;
+use rstd::ops;
 pub use codec::{Slicable, Input, NonTrivialSlicable};
+
+/// Default public dispatch; assumes a 32-byte ID.
+pub struct PublicPass<'a> (&'a [u8; 32]);
+
+const NOBODY: [u8; 32] = [0u8; 32];
+
+impl<'a> PublicPass<'a> {
+	/// New instance.
+	pub fn unchecked_new(who: &[u8; 32]) -> PublicPass {
+		PublicPass(who)
+	}
+
+	/// New instance.
+	pub fn nobody() -> PublicPass<'static> {
+		PublicPass(&NOBODY)
+	}
+
+	/// New instance.
+	pub fn test(who: &[u8; 32]) -> PublicPass {
+		PublicPass(who)
+	}
+}
+
+impl<'a> ops::Deref for PublicPass<'a> {
+	type Target = [u8; 32];
+	fn deref(&self) -> &[u8; 32] {
+		self.0
+	}
+}
+
+/// Default privileged dispatch.
+pub struct PrivPass (());
+
+impl PrivPass {
+	/// New instance.
+	pub fn unchecked_new() -> PrivPass { PrivPass(()) }
+
+	/// New instance.
+	pub fn test() -> PrivPass { PrivPass(()) }
+}
 
 /// Implement a dispatch module to create a pairing of a dispatch trait and enum.
 #[macro_export]
@@ -25,10 +66,10 @@ macro_rules! impl_dispatch {
 	(
 		pub mod $mod_name:ident;
 		$(
-			fn $fn_name:ident(
+			fn $fn_name:ident(self
 				$(
-					$param_name:ident : $param:ty
-				),*
+					, $param_name:ident : $param:ty
+				)*
 			)
 			= $id:expr ;
 		)*
@@ -134,10 +175,10 @@ macro_rules! impl_dispatch {
 macro_rules! impl_meta_dispatch {
 	(
 		pub mod $super_name:ident;
-		path $base_path:ident :: _ :: $path:ident;
+		path $path:ident;
 		trait $trait:ty;
 		$(
-			$camelcase:ident(mod $sub_name:ident) = $id:expr ;
+			$camelcase:ident(mod $sub_name_head:ident $( :: $sub_name_tail:ident )* ) = $id:expr ;
 		)*
 	) => {
 		pub mod $super_name {
@@ -172,7 +213,7 @@ macro_rules! impl_meta_dispatch {
 			pub enum Call {
 				$(
 					#[allow(non_camel_case_types)]
-					$camelcase ( $base_path :: $sub_name::$path::Call )
+					$camelcase ( $sub_name_head $( :: $sub_name_tail )* ::$path::Call )
 				,)*
 			}
 

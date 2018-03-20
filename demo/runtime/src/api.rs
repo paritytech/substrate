@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime::{system, consensus, session};
+use runtime::{system, session};
+use consensus;
 
 impl_stubs!(
 	execute_block => |block| system::internal::execute_block(block),
