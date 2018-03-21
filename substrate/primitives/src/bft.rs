@@ -112,7 +112,7 @@ impl Slicable for Action {
 }
 
 /// Messages exchanged between participants in the BFT consensus.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Message {
 	/// The parent header hash this action is relative to.
