@@ -33,7 +33,7 @@ enum ActionKind {
 }
 
 /// Actions which can be taken during the BFT process.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Action {
 	/// Proposal of a block candidate.
