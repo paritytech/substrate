@@ -26,7 +26,7 @@ use demo_primitives::{AccountId, Hash, TxOrder, BlockNumber, Header, Log};
 use block::{self, Block};
 use transaction::UncheckedTransaction;
 use runtime::{staking, session};
-use runtime::democracy::PrivPass;
+use runtime::staking::public_pass_from_payment;
 use dispatch;
 use safe_mix::TripletMix;
 
@@ -39,20 +39,6 @@ storage_items! {
 	ParentHash get(parent_hash): b"sys:pha" => required Hash;
 	TransactionsRoot get(transactions_root): b"sys:txr" => required Hash;
 	Digest: b"sys:dig" => default block::Digest;
-}
-
-pub const CODE: &'static[u8] = b":code";
-
-impl_dispatch! {
-	pub mod privileged;
-	fn set_code(new: Vec<u8>) = 0;
-}
-
-impl privileged::Dispatch for PrivPass {
-	/// Set the new code.
-	fn set_code(self, new: Vec<u8>) {
-		storage::unhashed::put_raw(CODE, &new);
-	}
 }
 
 pub mod internal {
@@ -144,7 +130,7 @@ fn execute_transaction(utx: UncheckedTransaction) {
 
 	// decode parameters and dispatch
 	let tx = tx.drain().transaction;
-	tx.function.dispatch(staking::PublicPass::new(&tx.signed));
+	tx.function.dispatch(public_pass_from_payment(&tx.signed));
 }
 
 fn initial_checks(block: &Block) {

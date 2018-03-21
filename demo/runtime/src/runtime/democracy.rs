@@ -19,21 +19,11 @@
 use rstd::prelude::*;
 use integer_sqrt::IntegerSquareRoot;
 use codec::{KeyedVec, Slicable, Input, NonTrivialSlicable};
-use runtime_support::{StorageValue, StorageMap};
+use runtime_support::{StorageValue, StorageMap, PublicPass, PrivPass};
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use dispatch::PrivCall as Proposal;
 use runtime::{staking, system, session};
-use runtime::staking::{PublicPass, Balance};
-
-/// A token for privileged dispatch. Can only be created in this module.
-pub struct PrivPass((),);
-
-impl PrivPass {
-	fn new() -> PrivPass { PrivPass((),) }
-
-	#[cfg(test)]
-	pub fn test() -> PrivPass { PrivPass((),) }
-}
+use runtime::staking::Balance;
 
 /// A proposal index.
 pub type PropIndex = u32;
@@ -166,9 +156,9 @@ pub fn tally(ref_index: ReferendumIndex) -> (staking::Balance, staking::Balance)
 
 impl_dispatch! {
 	pub mod public;
-	fn propose(proposal: Box<Proposal>, value: Balance) = 0;
-	fn second(proposal: PropIndex) = 1;
-	fn vote(ref_index: ReferendumIndex, approve_proposal: bool) = 2;
+	fn propose(self, proposal: Box<Proposal>, value: Balance) = 0;
+	fn second(self, proposal: PropIndex) = 1;
+	fn vote(self, ref_index: ReferendumIndex, approve_proposal: bool) = 2;
 }
 
 impl<'a> public::Dispatch for PublicPass<'a> {
@@ -215,8 +205,8 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 
 impl_dispatch! {
 	pub mod privileged;
-	fn start_referendum(proposal: Box<Proposal>, vote_threshold: VoteThreshold) = 0;
-	fn cancel_referendum(ref_index: ReferendumIndex) = 1;
+	fn start_referendum(self, proposal: Box<Proposal>, vote_threshold: VoteThreshold) = 0;
+	fn cancel_referendum(self, ref_index: ReferendumIndex) = 1;
 }
 
 impl privileged::Dispatch for PrivPass {
@@ -272,7 +262,7 @@ pub mod internal {
 			let total_stake = staking::total_stake();
 			clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
-				proposal.dispatch(PrivPass::new());
+				proposal.dispatch(PrivPass::unchecked_new());
 			}
 			NextTally::put(index + 1);
 		}
@@ -350,7 +340,7 @@ mod tests {
 	use keyring::Keyring::*;
 	use demo_primitives::AccountId;
 	use dispatch::PrivCall as Proposal;
-	use runtime::staking::PublicPass;
+	use runtime_support::PublicPass;
 	use super::public::Dispatch;
 	use super::privileged::Dispatch as PrivDispatch;
 	use runtime::{staking, session, democracy};

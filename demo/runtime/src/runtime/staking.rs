@@ -22,7 +22,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use runtime_io::{print, blake2_256};
 use codec::{Slicable, Input, KeyedVec};
-use runtime_support::{storage, StorageValue, StorageList, StorageMap};
+use runtime_support::{storage, StorageValue, StorageList, StorageMap, PublicPass, PrivPass};
 use demo_primitives::{BlockNumber, AccountId};
 use runtime::{system, session, democracy};
 
@@ -103,50 +103,28 @@ pub fn unlock_block(who: &AccountId) -> LockStatus {
 	}
 }
 
-pub struct PublicPass<'a> (&'a AccountId);
-
-const NOBODY: AccountId = [0u8; 32];
-
-impl<'a> PublicPass<'a> {
-	pub fn new(transactor: &AccountId) -> PublicPass {
-		let b = FreeBalanceOf::get(transactor);
-		let transaction_fee = TransactionFee::get();
-		assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
-		FreeBalanceOf::insert(transactor, b - transaction_fee);
-		PublicPass(transactor)
-	}
-
-	#[cfg(test)]
-	pub fn test(signed: &AccountId) -> PublicPass {
-		PublicPass(signed)
-	}
-
-	#[cfg(test)]
-	pub fn nobody() -> PublicPass<'static> {
-		PublicPass(&NOBODY)
-	}
-
-	/// Create a smart-contract account.
-	pub fn create(self, code: &[u8], value: Balance) {
-		// commit anything that made it this far to storage
-		if let Some(commit) = private::effect_create(self.0, code, value, private::DirectExt) {
-			private::commit_state(commit);
-		}
+/// Create a smart-contract account.
+pub fn create(pass: PublicPass, code: &[u8], value: Balance) {
+	// commit anything that made it this far to storage
+	if let Some(commit) = private::effect_create(&pass, code, value, private::DirectExt) {
+		private::commit_state(commit);
 	}
 }
 
-impl<'a> ops::Deref for PublicPass<'a> {
-	type Target = AccountId;
-	fn deref(&self) -> &AccountId {
-		self.0
-	}
+/// New PublicPass instance through making a payment.
+pub fn public_pass_from_payment(transactor: &AccountId) -> PublicPass {
+	let b = FreeBalanceOf::get(transactor);
+	let transaction_fee = TransactionFee::get();
+	assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
+	FreeBalanceOf::insert(transactor, b - transaction_fee);
+	PublicPass::unchecked_new(transactor)
 }
 
 impl_dispatch! {
 	pub mod public;
-	fn transfer(dest: AccountId, value: Balance) = 0;
-	fn stake() = 1;
-	fn unstake() = 2;
+	fn transfer(self, dest: AccountId, value: Balance) = 0;
+	fn stake(self) = 1;
+	fn unstake(self) = 2;
 }
 
 impl<'a> public::Dispatch for PublicPass<'a> {
@@ -188,13 +166,13 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 
 impl_dispatch! {
 	pub mod privileged;
-	fn set_sessions_per_era(new: BlockNumber) = 0;
-	fn set_bonding_duration(new: BlockNumber) = 1;
-	fn set_validator_count(new: u32) = 2;
-	fn force_new_era() = 3;
+	fn set_sessions_per_era(self, new: BlockNumber) = 0;
+	fn set_bonding_duration(self, new: BlockNumber) = 1;
+	fn set_validator_count(self, new: u32) = 2;
+	fn force_new_era(self) = 3;
 }
 
-impl privileged::Dispatch for democracy::PrivPass {
+impl privileged::Dispatch for PrivPass {
 	/// Set the number of sessions in an era.
 	fn set_sessions_per_era(self, new: BlockNumber) {
 		NextSessionsPerEra::put(&new);
@@ -571,7 +549,7 @@ mod tests {
 	use keyring::Keyring::*;
 	use demo_primitives::AccountId;
 	use runtime::{staking, session};
-	use runtime::democracy::PrivPass;
+	use runtime_support::PrivPass;
 	use runtime::staking::public::{Call, Dispatch};
 	use runtime::staking::privileged::{Call as PCall, Dispatch as PDispatch};
 
@@ -600,9 +578,9 @@ mod tests {
 
 			// Block 1: Add three validators. No obvious change.
 			system::testing::set_block_number(1);
-			public::Call::stake().dispatch(PublicPass::new(&Alice));
-			PublicPass::new(&Bob).stake();
-			PublicPass::new(&Dave).stake();
+			public::Call::stake().dispatch(public_pass_from_payment(&Alice));
+			public_pass_from_payment(&Bob).stake();
+			public_pass_from_payment(&Dave).stake();
 			check_new_era();
 			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
 
@@ -613,8 +591,8 @@ mod tests {
 
 			// Block 3: Unstake highest, introduce another staker. No change yet.
 			system::testing::set_block_number(3);
-			PublicPass::new(&Charlie).stake();
-			PublicPass::new(&Dave).unstake();
+			public_pass_from_payment(&Charlie).stake();
+			public_pass_from_payment(&Dave).unstake();
 			check_new_era();
 
 			// Block 4: New era - validators change.
@@ -624,7 +602,7 @@ mod tests {
 
 			// Block 5: Transfer stake from highest to lowest. No change yet.
 			system::testing::set_block_number(5);
-			PublicPass::new(&Dave).transfer(Alice.to_raw_public(), 40);
+			public_pass_from_payment(&Dave).transfer(Alice.to_raw_public(), 40);
 			check_new_era();
 
 			// Block 6: Lowest now validator.
@@ -634,7 +612,7 @@ mod tests {
 
 			// Block 7: Unstake three. No change yet.
 			system::testing::set_block_number(7);
-			PublicPass::new(&Charlie).unstake();
+			public_pass_from_payment(&Charlie).unstake();
 			check_new_era();
 			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Charlie.into()]);
 
@@ -728,7 +706,7 @@ mod tests {
 	fn staking_balance_transfer_works() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 112);
-			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
+			public_pass_from_payment(&Alice).transfer(Bob.to_raw_public(), 69);
 			assert_eq!(balance(&Alice), 42);
 			assert_eq!(balance(&Bob), 69);
 		});
@@ -739,8 +717,8 @@ mod tests {
 	fn staking_balance_transfer_when_bonded_panics() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
-			PublicPass::new(&Alice).stake();
-			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
+			public_pass_from_payment(&Alice).stake();
+			public_pass_from_payment(&Alice).transfer(Bob.to_raw_public(), 69);
 		});
 	}
 
@@ -767,7 +745,7 @@ mod tests {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
 			FreeBalanceOf::insert(*Alice, 111);
 			reserve_balance(&Alice, 69);
-			PublicPass::new(&Alice).transfer(Bob.to_raw_public(), 69);
+			public_pass_from_payment(&Alice).transfer(Bob.to_raw_public(), 69);
 		});
 	}
 

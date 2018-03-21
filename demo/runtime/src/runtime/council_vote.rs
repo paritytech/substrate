@@ -19,12 +19,10 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use codec::{KeyedVec, Slicable, Input, NonTrivialSlicable};
-use runtime_support::Hashable;
-use runtime_support::{StorageValue, StorageMap};
+use runtime_support::{PublicPass, PrivPass, Hashable, StorageValue, StorageMap};
 use demo_primitives::{AccountId, Hash, BlockNumber};
 use runtime::{system, democracy, council};
-use runtime::staking::{PublicPass, Balance};
-use runtime::democracy::PrivPass;
+use runtime::staking::{Balance};
 use dispatch::PrivCall as Proposal;
 
 type ProposalHash = [u8; 32];
@@ -101,9 +99,9 @@ fn take_proposal_if_expiring_at(n: BlockNumber) -> Option<(Proposal, ProposalHas
 
 impl_dispatch! {
 	pub mod public;
-	fn propose(proposal: Box<Proposal>) = 0;
-	fn vote(proposal: ProposalHash, approve: bool) = 1;
-	fn veto(proposal_hash: ProposalHash) = 2;
+	fn propose(self, proposal: Box<Proposal>) = 0;
+	fn vote(self, proposal: ProposalHash, approve: bool) = 1;
+	fn veto(self, proposal_hash: ProposalHash) = 2;
 }
 
 impl<'a> public::Dispatch for PublicPass<'a> {
@@ -157,8 +155,8 @@ impl<'a> public::Dispatch for PublicPass<'a> {
 
 impl_dispatch! {
 	pub mod privileged;
-	fn set_cooloff_period(blocks: BlockNumber) = 0;
-	fn set_voting_period(blocks: BlockNumber) = 1;
+	fn set_cooloff_period(self, blocks: BlockNumber) = 0;
+	fn set_voting_period(self, blocks: BlockNumber) = 1;
 }
 
 impl privileged::Dispatch for PrivPass {
@@ -280,9 +278,9 @@ mod tests {
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256();
-			PublicPass::new(&Alice).propose(Box::new(cancellation));
-			PublicPass::new(&Bob).vote(hash, true);
-			PublicPass::new(&Charlie).vote(hash, true);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(cancellation));
+			staking::public_pass_from_payment(&Bob).vote(hash, true);
+			staking::public_pass_from_payment(&Charlie).vote(hash, true);
 			assert_eq!(proposals(), vec![(2, hash)]);
 			internal::end_block(1);
 
@@ -302,9 +300,9 @@ mod tests {
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256();
-			PublicPass::new(&Alice).propose(Box::new(cancellation));
-			PublicPass::new(&Bob).vote(hash, true);
-			PublicPass::new(&Charlie).vote(hash, false);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(cancellation));
+			staking::public_pass_from_payment(&Bob).vote(hash, true);
+			staking::public_pass_from_payment(&Charlie).vote(hash, false);
 			internal::end_block(1);
 
 			system::testing::set_block_number(2);
@@ -322,8 +320,8 @@ mod tests {
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256();
-			PublicPass::new(&Alice).propose(Box::new(cancellation));
-			PublicPass::new(&Bob).vote(hash, true);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(cancellation));
+			staking::public_pass_from_payment(&Bob).vote(hash, true);
 			internal::end_block(1);
 
 			system::testing::set_block_number(2);
@@ -338,8 +336,8 @@ mod tests {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Bob).veto(hash);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Bob).veto(hash);
 			assert_eq!(proposals().len(), 0);
 			assert_eq!(democracy::active_referendums().len(), 0);
 		});
@@ -352,12 +350,12 @@ mod tests {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Bob).veto(hash);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Bob).veto(hash);
 
 			system::testing::set_block_number(3);
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Bob).veto(hash);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Bob).veto(hash);
 		});
 	}
 
@@ -368,11 +366,11 @@ mod tests {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Bob).veto(hash);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Bob).veto(hash);
 
 			system::testing::set_block_number(2);
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
 		});
 	}
 
@@ -382,13 +380,13 @@ mod tests {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Bob).veto(hash);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Bob).veto(hash);
 
 			system::testing::set_block_number(3);
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Bob).vote(hash, false);
-			PublicPass::new(&Charlie).vote(hash, true);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Bob).vote(hash, false);
+			staking::public_pass_from_payment(&Charlie).vote(hash, true);
 			internal::end_block(3);
 
 			system::testing::set_block_number(4);
@@ -404,12 +402,12 @@ mod tests {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Bob).veto(hash);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Bob).veto(hash);
 
 			system::testing::set_block_number(3);
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Charlie).veto(hash);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Charlie).veto(hash);
 			assert_eq!(proposals().len(), 0);
 			assert_eq!(democracy::active_referendums().len(), 0);
 		});
@@ -421,7 +419,7 @@ mod tests {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
 			let hash = proposal.blake2_256();
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
 			assert_eq!(proposals().len(), 1);
 			assert_eq!(proposal_voters(&hash), vec![Alice.to_raw_public()]);
 			assert_eq!(vote_of((hash, *Alice)), Some(true));
@@ -434,7 +432,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
 			assert_eq!(tally(&proposal.blake2_256()), (1, 0, 2));
 			internal::end_block(1);
 
@@ -450,9 +448,9 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Bob).vote(proposal.blake2_256(), true);
-			PublicPass::new(&Charlie).vote(proposal.blake2_256(), true);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Bob).vote(proposal.blake2_256(), true);
+			staking::public_pass_from_payment(&Charlie).vote(proposal.blake2_256(), true);
 			assert_eq!(tally(&proposal.blake2_256()), (3, 0, 0));
 			internal::end_block(1);
 
@@ -468,9 +466,9 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			PublicPass::new(&Alice).propose(Box::new(proposal.clone()));
-			PublicPass::new(&Bob).vote(proposal.blake2_256(), true);
-			PublicPass::new(&Charlie).vote(proposal.blake2_256(), false);
+			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			staking::public_pass_from_payment(&Bob).vote(proposal.blake2_256(), true);
+			staking::public_pass_from_payment(&Charlie).vote(proposal.blake2_256(), false);
 			assert_eq!(tally(&proposal.blake2_256()), (2, 1, 0));
 			internal::end_block(1);
 
@@ -487,7 +485,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			system::testing::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			PublicPass::new(&Dave).propose(Box::new(proposal));
+			staking::public_pass_from_payment(&Dave).propose(Box::new(proposal));
 		});
 	}
 }
