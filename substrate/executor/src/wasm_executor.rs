@@ -35,10 +35,23 @@ struct Heap {
 }
 
 impl Heap {
-	fn new() -> Self {
-		Heap {
-			end: 262144,
+	fn new(memory: &MemoryInstance) -> Result<Self> {
+		const HEAP_SIZE_IN_PAGES: u32 = 8;
+		const PAGE_SIZE_IN_BYTES: u32 = 65536;
+
+		let prev_page_count = memory.grow(HEAP_SIZE_IN_PAGES).map_err(
+			|_: ::parity_wasm::interpreter::Error<DummyUserError>| Error::from(ErrorKind::Runtime),
+		)?;
+		if prev_page_count == 0xFFFFFFFF {
+			// Wasm vm refuses to mount the specified amount of new pages. This
+			// could mean that wasm binary specifies memory limit and we are trying
+			// to allocate beyond that limit.
+			return Err(ErrorKind::Runtime.into());
 		}
+		let allocated_area_start = prev_page_count * PAGE_SIZE_IN_BYTES;
+		Ok(Heap {
+			end: allocated_area_start as u32,
+		})
 	}
 	fn allocate(&mut self, size: u32) -> u32 {
 		let r = self.end;
@@ -57,13 +70,13 @@ struct FunctionExecutor<'e, E: Externalities + 'e> {
 }
 
 impl<'e, E: Externalities> FunctionExecutor<'e, E> {
-	fn new(m: &Arc<MemoryInstance>, e: &'e mut E) -> Self {
-		FunctionExecutor {
-			heap: Heap::new(),
+	fn new(m: &Arc<MemoryInstance>, e: &'e mut E) -> Result<Self> {
+		Ok(FunctionExecutor {
+			heap: Heap::new(&*m)?,
 			memory: Arc::clone(m),
 			ext: e,
 			hash_lookup: HashMap::new(),
-		}
+		})
 	}
 }
 
@@ -317,7 +330,7 @@ impl CodeExecutor for WasmExecutor {
 		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<E>::SIGNATURES]).expect("runtime signatures always provided; qed");
 
 		let memory = module.memory(ItemIndex::Internal(0)).expect("all modules compiled with rustc include memory segments; qed");
-		let mut fec = FunctionExecutor::new(&memory, ext);
+		let mut fec = FunctionExecutor::new(&memory, ext)?;
 
 		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
