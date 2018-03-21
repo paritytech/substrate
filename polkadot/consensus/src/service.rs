@@ -22,7 +22,6 @@
 use std::thread;
 use std::sync::Arc;
 use futures::{future, Future, Stream, Sink, Async, Canceled};
-use futures::future::Executor;
 use parking_lot::Mutex;
 use substrate_network as net;
 use tokio_core::reactor;
@@ -36,33 +35,11 @@ use bft::{self, BftService};
 use transaction_pool::TransactionPool;
 use ed25519;
 use super::{TableRouter, SharedTable, ProposerFactory};
-use error::{Error, ErrorKind};
+use error::Error;
 
 struct BftSink<E> {
 	network: Arc<net::ConsensusService>,
 	_e: ::std::marker::PhantomData<E>,
-}
-
-
-fn run_bft<C, P>(bft_service: &BftService<P, C>, network: Arc<net::ConsensusService>, client: &C, handle: reactor::Handle, header: &Header)
-	-> Result<(), Error> where
-	C: bft::Authorities + bft::BlockImport + Send + Sync + 'static,
-	P: bft::ProposerFactory + 'static,
-	Error: From<<P as bft::ProposerFactory>::Error>,
-{
-	let hash = header.hash();
-	let authorities = client.authorities(&BlockId::Hash(hash))?;
-	let input = network.bft_messages()
-		.filter_map(move |message| {
-			process_message(message, &authorities, hash.clone())
-				.map_err(|e| debug!("Message validation failed: {:?}", e))
-				.ok()
-		})
-		.map_err(|_| bft::InputStreamConcluded.into());
-	let output = BftSink { network: network.clone(), _e: Default::default() };
-	let bft = bft_service.build_upon(&header, input, output)?;
-	handle.execute(bft).map_err(|e| ErrorKind::Executor(e.kind()))?;
-	Ok(())
 }
 
 fn process_message(msg: net::BftMessage, authorities: &[AuthorityId], parent_hash: HeaderHash) -> Result<bft::Communication, bft::Error> {
@@ -162,6 +139,7 @@ impl Service {
 	pub fn new<C>(client: Arc<C>, network: Arc<net::ConsensusService>, transaction_pool: Arc<Mutex<TransactionPool>>, best_header: &Header) -> Service
 		where C: BlockchainEvents + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
 	{
+
 		let best_header = best_header.clone();
 		let thread = thread::spawn(move || {
 			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
@@ -172,21 +150,31 @@ impl Service {
 				network: Network(network.clone()),
 			};
 			let bft_service = BftService::new(client.clone(), key, factory);
+			let build_bft = |header: &Header| -> Result<_, Error> {
+				let hash = header.hash();
+				let authorities = client.authorities(&BlockId::Hash(hash))?;
+				let input = network.bft_messages()
+					.filter_map(move |message| {
+						process_message(message, &authorities, hash.clone())
+							.map_err(|e| debug!("Message validation failed: {:?}", e))
+							.ok()
+					})
+					.map_err(|_| bft::InputStreamConcluded.into());
+				let output = BftSink { network: network.clone(), _e: Default::default() };
+				Ok(bft_service.build_upon(&header, input, output)?)
+			};
 			// Kickstart BFT agreement on start.
-			if let Err(e) = run_bft(&bft_service, network.clone(), &*client, core.handle(), &best_header) {
+			if let Err(e) = build_bft(&best_header)
+				.map_err(|e| debug!("Error creating initial BFT agreement: {:?}", e))
+				.and_then(|bft| core.run(bft))
+			{
 				debug!("Error starting initial BFT agreement: {:?}", e);
 			}
-			loop {
-				let handle = core.handle();
-				let start_bft = client.import_notification_stream().map(|notification| {
-					if let Err(e) = run_bft(&bft_service, network.clone(), &*client, handle.clone(), &notification.header) {
-						debug!("Error starting BFT agreement: {:?}", e);
-					}
-				}).map_err(|e| debug!("BFT agreement error: {:?}", e));
-				if let Err(_e) = core.run(start_bft.into_future()) {
-					debug!("BFT event loop stopped");
-					break;
-				}
+			let bft = client.import_notification_stream().and_then(|notification| {
+				build_bft(&notification.header).map_err(|e| debug!("BFT agreement error: {:?}", e))
+			}).for_each(|f| f);
+			if let Err(e) = core.run(bft) {
+				debug!("BFT event loop error {:?}", e);
 			}
 		});
 		Service {

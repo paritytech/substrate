@@ -32,7 +32,7 @@ use {error, in_mem, block_builder, runtime_io, bft};
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream = multiqueue::BroadcastFutReceiver<BlockImportNotification>;
 
-const NOTIFICATION_QUEUE_SIZE: u64 = 64;
+const NOTIFICATION_QUEUE_SIZE: u64 = 1 << 63;
 
 /// Polkadot Client
 pub struct Client<B, E> where B: backend::Backend {

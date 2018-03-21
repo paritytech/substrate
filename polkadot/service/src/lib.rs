@@ -175,15 +175,12 @@ impl Service {
 		let thread = thread::spawn(move || {
 			thread_network.start_network();
 			let mut core = Core::new().expect("tokio::Core could not be created");
-			// Main loop
-			loop {
-				let events = thread_client.import_notification_stream().map(|notification| {
-					thread_network.on_block_imported(&notification.header);
-				});
-				if let Err(_) = core.run(events.into_future()) {
-					debug!("Polkadot service event loop shutdown");
-					break;
-				}
+			let events = thread_client.import_notification_stream().for_each(|notification| {
+				thread_network.on_block_imported(&notification.header);
+				Ok(())
+			});
+			if let Err(e) = core.run(events) {
+				debug!("Polkadot service event loop shutdown with {:?}", e);
 			}
 			debug!("Polkadot service shutdown");
 		});

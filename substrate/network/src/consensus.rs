@@ -26,7 +26,7 @@ use primitives::Hash;
 use message::{self, Message};
 use runtime_support::Hashable;
 
-const QUEUE_SIZE: u64 = 64;
+const QUEUE_SIZE: u64 = 1 << 63;
 
 struct CandidateRequest {
 	id: message::RequestId,
