@@ -25,7 +25,7 @@ error_chain! {
 	}
 
 	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Blockchain error"];
+		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
 	}
 
 	errors {
