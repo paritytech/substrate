@@ -32,7 +32,8 @@ use {error, in_mem, block_builder, runtime_io, bft};
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream = multiqueue::BroadcastFutReceiver<BlockImportNotification>;
 
-const NOTIFICATION_QUEUE_SIZE: u64 = 1 << 63;
+//TODO: The queue is preallocated in multiqueue. Make it unbounded
+const NOTIFICATION_QUEUE_SIZE: u64 = 1 << 16;
 
 /// Polkadot Client
 pub struct Client<B, E> where B: backend::Backend {
@@ -105,6 +106,8 @@ pub enum BlockOrigin {
 	NetworkInitialSync,
 	/// Block was broadcasted on the network.
 	NetworkBroadcast,
+	/// Block that was received from the network and validated in the consensus process.
+	ConsensusBroadcast,
 	/// Block that was collated by this node.
 	Own,
 	/// Block was imported from a file.
@@ -316,7 +319,7 @@ impl<B, E> Client<B, E> where
 		transaction.set_storage(overlay.drain())?;
 		self.backend.commit_operation(transaction)?;
 
-		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own {
+		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
 			let notification = BlockImportNotification {
 				origin: origin,
 				header: header,

@@ -26,7 +26,8 @@ use primitives::Hash;
 use message::{self, Message};
 use runtime_support::Hashable;
 
-const QUEUE_SIZE: u64 = 1 << 63;
+//TODO: The queue is preallocated in multiqueue. Make it unbounded
+const QUEUE_SIZE: u64 = 1 << 16;
 
 struct CandidateRequest {
 	id: message::RequestId,
