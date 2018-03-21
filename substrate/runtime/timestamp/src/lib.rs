@@ -16,6 +16,16 @@
 
 //! Timestamp manager: just handles the current timestamp.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[macro_use] extern crate substrate_runtime_std as rstd;
+#[macro_use] extern crate substrate_runtime_support as runtime_support;
+#[cfg(test)] extern crate substrate_runtime_io as runtime_io;
+#[cfg(test)] extern crate substrate_codec as codec;
+
+#[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
+#[cfg(feature = "std")] extern crate serde;
+
 use runtime_support::storage::StorageValue;
 use runtime_support::PublicPass;
 
@@ -43,10 +53,8 @@ mod tests {
 	use super::public::*;
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
+	use codec::Joiner;
 	use runtime_support::storage::StorageValue;
-	use runtime::timestamp;
-	use codec::{Joiner, KeyedVec};
-	use demo_primitives::AccountId;
 	use runtime_support::PublicPass;
 
 	#[test]

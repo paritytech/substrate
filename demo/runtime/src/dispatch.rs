@@ -16,7 +16,7 @@
 
 //! Dispatch system. Just dispatches calls.
 
-use {runtime, runtime_support, consensus};
+use {runtime, runtime_support, consensus, timestamp};
 
 impl_meta_dispatch! {
 	pub mod public;
@@ -24,7 +24,7 @@ impl_meta_dispatch! {
 	trait runtime_support::PublicPass;
 	Session(mod runtime::session) = 1;
 	Staking(mod runtime::staking) = 2;
-	Timestamp(mod runtime::timestamp) = 3;
+	Timestamp(mod timestamp) = 3;
 	Democracy(mod runtime::democracy) = 5;
 	Council(mod runtime::council) = 6;
 	CouncilVote(mod runtime::council_vote) = 7;

@@ -12,6 +12,7 @@ substrate-runtime-std = { path = "../../../substrate/runtime-std", default-featu
 substrate-runtime-io = { path = "../../../substrate/runtime-io", default-features = false }
 substrate-runtime-support = { path = "../../../substrate/runtime-support", default-features = false }
 substrate-runtime-consensus = { path = "../../../substrate/runtime/consensus", default-features = false }
+substrate-runtime-timestamp = { path = "../../../substrate/runtime/timestamp", default-features = false }
 substrate-primitives = { path = "../../../substrate/primitives", default-features = false }
 demo-primitives = { path = "../../primitives", default-features = false }
 integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
@@ -25,6 +26,7 @@ std = [
 	"substrate-runtime-std/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-consensus/std",
+	"substrate-runtime-timestamp/std",
 	"substrate-primitives/std",
 	"demo-primitives/std",
 ]

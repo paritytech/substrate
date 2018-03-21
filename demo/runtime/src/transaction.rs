@@ -162,7 +162,7 @@ mod tests {
 	use codec::Slicable;
 	use primitives::hexdisplay::HexDisplay;
 	use dispatch::public::Call;
-	use runtime::timestamp::public::Call as TimestampCall;
+	use timestamp::public::Call as TimestampCall;
 
 	#[test]
 	fn serialize_unchecked() {
