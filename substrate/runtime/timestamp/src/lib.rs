@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use] extern crate substrate_runtime_std as rstd;
+#[cfg_attr(test, macro_use)] extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_runtime_io as runtime_io;
 #[cfg(test)] extern crate substrate_codec as codec;

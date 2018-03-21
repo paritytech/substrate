@@ -14,11 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[macro_use]
-extern crate environmental;
+#[macro_use] extern crate environmental;
 
 extern crate substrate_state_machine;
-#[macro_use] extern crate substrate_primitives as primitives;
+#[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
 extern crate triehash;
 extern crate ed25519;
 

@@ -24,13 +24,6 @@
 #![cfg_attr(feature = "std", doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
 #![cfg_attr(not(feature = "std"), doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
 
-#[macro_export]
-macro_rules! map {
-	($( $name:expr => $value:expr ),*) => (
-		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-	)
-}
-
 #[cfg(feature = "std")]
 include!("../with_std.rs");
 
