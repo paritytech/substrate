@@ -150,7 +150,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(<Now<TraitImpl>>::get(), 42);
 //			assert_eq!(Timestamp::NOW.get(), 42);
-			<public::Callable<TraitImpl>>::set(69).dispatch(&0);
+			public::Callable::set::<TraitImpl>(69).dispatch(&0);
 			assert_eq!(<Timestamp as StorageItems>::NowS::get(), 69);
 //			assert_eq!(Timestamp::NOW.get(), 69);
 		});
