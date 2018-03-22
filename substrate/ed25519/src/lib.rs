@@ -55,11 +55,17 @@ pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], public: P) -> bool {
 }
 
 /// A public key.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
 pub struct Pair(signature::Ed25519KeyPair);
+
+impl ::std::hash::Hash for Public {
+	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+		self.0.hash(state);
+	}
+}
 
 impl Public {
 	/// A new instance from the given 32-byte `data`.
@@ -119,6 +125,18 @@ impl AsRef<Public> for Public {
 impl AsRef<Pair> for Pair {
 	fn as_ref(&self) -> &Pair {
 		&self
+	}
+}
+
+impl ::std::fmt::Display for Public {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		write!(f, "{}", ::primitives::hexdisplay::HexDisplay::from(&self.0))
+	}
+}
+
+impl ::std::fmt::Debug for Public {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		write!(f, "{}", ::primitives::hexdisplay::HexDisplay::from(&self.0))
 	}
 }
 

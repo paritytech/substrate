@@ -56,7 +56,6 @@ use transaction_pool::TransactionPool;
 use substrate_keyring::Keyring;
 use substrate_executor::NativeExecutor;
 use polkadot_executor::Executor as LocalDispatch;
-use polkadot_primitives::AccountId;
 use keystore::Store as Keystore;
 use polkadot_api::PolkadotApi;
 use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
@@ -126,12 +125,27 @@ impl Service {
 		// Create client
 		let executor = polkadot_executor::Executor::new();
 		let mut storage = Default::default();
-		let key: AccountId = Keyring::One.into();
+
+		let mut keystore = Keystore::open(config.keystore_path.into())?;
+		for seed in &config.keys {
+			keystore.generate_from_seed(seed)?;
+		}
+
+		if keystore.contents()?.is_empty() {
+			let key = keystore.generate("")?;
+			info!("Generated a new keypair: {:?}", key.public());
+		}
 
 		let genesis_config = GenesisConfig {
-			validators: vec![key.clone()],
-			authorities: vec![key.clone()],
-			balances: vec![(Keyring::One.into(), 1u64 << 63), (Keyring::Two.into(), 1u64 << 63)].into_iter().collect(),
+			validators: vec![Keyring::Alice.into(), Keyring::Bob.into(), Keyring::Charlie.into()],
+			authorities: vec![Keyring::Alice.into(), Keyring::Bob.into(), Keyring::Charlie.into()],
+			balances: vec![
+				(Keyring::One.into(), 1u64 << 63),
+				(Keyring::Two.into(), 1u64 << 63),
+				(Keyring::Alice.into(), 1u64 << 63),
+				(Keyring::Bob.into(), 1u64 << 63),
+				(Keyring::Charlie.into(), 1u64 << 63),
+			].into_iter().collect(),
 			block_time: 5,			// 5 second block time.
 			session_length: 720,	// that's 1 hour per session.
 			sessions_per_era: 24,	// 24 hours per era.
@@ -145,7 +159,6 @@ impl Service {
 			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 		};
 
-		let _keystore = Keystore::open(config.keystore_path.into()).map_err(::error::ErrorKind::Keystore)?;
 		let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
 		let best_header = client.header(&BlockId::Hash(client.info()?.chain.best_hash))?.expect("Best header always exists; qed");
 		info!("Starting Polkadot. Best block is #{}", best_header.number);
@@ -166,7 +179,10 @@ impl Service {
 
 		// Spin consensus service if configured
 		let consensus_service = if config.roles & Role::VALIDATOR == Role::VALIDATOR {
-			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool, &best_header))
+			// Load the first available key. Code above makes sure it exisis.
+			let key = keystore.load(&keystore.contents()?[0], "")?;
+			info!("Using authority key {:?}", key.public());
+			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool, key, &best_header))
 		} else {
 			None
 		};
