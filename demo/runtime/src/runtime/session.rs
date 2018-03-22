@@ -19,10 +19,9 @@
 
 use rstd::prelude::*;
 use codec::KeyedVec;
-use runtime_support::{storage, StorageValue, StorageMap};
+use runtime_support::{storage, StorageValue, StorageMap, PrivPass, PublicPass};
 use demo_primitives::{AccountId, SessionKey, BlockNumber};
-use runtime::{system, staking};
-use runtime_support::{PrivPass, PublicPass};
+use runtime::system;
 use consensus;
 
 storage_items!{

@@ -21,7 +21,7 @@
 #[cfg_attr(test, macro_use)] extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_runtime_io as runtime_io;
-#[cfg(test)] extern crate substrate_codec as codec;
+extern crate substrate_codec as codec;
 
 #[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
 #[cfg(feature = "std")] extern crate serde;
@@ -29,44 +29,130 @@
 use runtime_support::storage::StorageValue;
 use runtime_support::PublicPass;
 
-pub type Timestamp = u64;
+pub trait Trait {
+	type Timestamp: codec::Slicable;
+	type PublicAux;
+	type PrivAux;
+}
+pub struct Module<T: Trait>(::std::marker::PhantomData<T>);
 
+// TODO: create from storage_items macro.
+/*
 storage_items! {
+	trait Trait;
 	pub Now: b"tim:val" => required Timestamp;
 }
+*/
+pub struct Now<T: Trait>(::std::marker::PhantomData<T>);
+impl<T: Trait> ::runtime_support::storage::generator::StorageValue<T::Timestamp> for Now<T> {
+	type Query = T::Timestamp;
 
-impl_dispatch! {
-	pub mod public;
-	fn set(self, now: Timestamp) = 0;
+	/// Get the storage key.
+	fn key() -> &'static [u8] {
+		b"tim:val"
+	}
+
+	/// Load the value from the provided storage instance.
+	fn get<S: ::runtime_support::GenericStorage>(storage: &S) -> Self::Query {
+		storage.require(<Self as ::runtime_support::storage::generator::StorageValue<T::Timestamp>>::key())
+	}
+
+	/// Take a value from storage, removing it afterwards.
+	fn take<S: ::runtime_support::GenericStorage>(storage: &S) -> Self::Query {
+		storage.take_or_panic(<Self as ::runtime_support::storage::generator::StorageValue<T::Timestamp>>::key())
+	}
+}
+// TODO: all `Storage*` functions should take `self` parameter to avoid need for obscure `<Now<TraitImpl>>::`
+// syntax. this can be cleaned up once we get `type`s in `impl`s.
+/*impl<T: Trait> Module<T> {
+	pub const NOW: Now<T> = Now(::std::marker::PhantomData::<T>);
+}*/
+
+/*
+// This would be nice but not currently supported.
+impl<T: Trait> Module<T> {
+	type Now = super::Now<T>;
+}*/
+
+pub trait StorageItems {
+	type NowS;
+}
+impl<T: Trait> StorageItems for Module<T> {
+	type NowS = Now<T>;
 }
 
-impl<'a> public::Dispatch for PublicPass<'a> {
+impl<T: Trait> Module<T> {
+	pub fn get() -> T::Timestamp { <Now<T>>::get() }
+//	pub fn get() -> T::Timestamp { Self::NOW.get() }
+}
+
+// TODO: implement `Callable` and `Dispatch` in `impl_dispatch` macro.
+/*
+impl_dispatch! {
+	trait Trait;
+	pub mod public;
+	fn set(_, now: Timestamp) = 0;
+}
+*/
+
+pub trait Dispatchable {
+	type AuxType;
+	fn dispatch(self, aux: &Self::AuxType);
+}
+
+pub mod public {
+	use super::Trait;
+	pub enum Callable<T: Trait> { set(T::Timestamp) }
+	pub trait Dispatch<T: Trait> { fn set(aux: &T::PublicAux, now: T::Timestamp); }
+
+	impl<T: Trait> super::Dispatchable for Callable<T> where super::Module<T>: Dispatch<T> {
+		type AuxType = T::PublicAux;
+		fn dispatch(self, aux: &Self::AuxType) {
+			match self {
+				Callable::set(a) => <super::Module<T>>::set(aux, a),
+			}
+		}
+	}
+}
+
+impl<T: Trait> public::Dispatch<T> for Module<T> {
 	/// Set the current time.
-	fn set(self, now: Timestamp) {
-		Now::put(&now);
+	fn set(_aux: &T::PublicAux, now: T::Timestamp) {
+		<Now<T>>::put(now);
+//		Self::NOW.put(now);
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use super::public::*;
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::Joiner;
 	use runtime_support::storage::StorageValue;
 	use runtime_support::PublicPass;
 
+	struct TraitImpl;
+	impl super::Trait for TraitImpl {
+		type Timestamp = u64;
+		type PublicAux = u64;
+		type PrivAux = ();
+	}
+	type Timestamp = super::Module<TraitImpl>;
+
 	#[test]
 	fn timestamp_works() {
+
 		let mut t: TestExternalities = map![
-			twox_128(Now::key()).to_vec() => vec![].and(&42u64)
+			twox_128(<Now<TraitImpl>>::key()).to_vec() => vec![].and(&42u64)
 		];
 
 		with_externalities(&mut t, || {
-			assert_eq!(Now::get(), 42);
-			PublicPass::nobody().set(69);
-			assert_eq!(Now::get(), 69);
+			assert_eq!(<Now<TraitImpl>>::get(), 42);
+//			assert_eq!(Timestamp::NOW.get(), 42);
+			<public::Callable<TraitImpl>>::set(69).dispatch(&0);
+			assert_eq!(<Timestamp as StorageItems>::NowS::get(), 69);
+//			assert_eq!(Timestamp::NOW.get(), 69);
 		});
 	}
 }
