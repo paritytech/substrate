@@ -30,60 +30,21 @@ use runtime_support::storage::StorageValue;
 use runtime_support::PublicPass;
 
 pub trait Trait {
-	type Timestamp: codec::Slicable;
+	type Timestamp: codec::Slicable + Default;
 	type PublicAux;
 	type PrivAux;
 }
 pub struct Module<T: Trait>(::std::marker::PhantomData<T>);
 
 // TODO: create from storage_items macro.
-/*
-storage_items! {
-	trait Trait;
-	pub Now: b"tim:val" => required Timestamp;
+decl_storage! {
+	trait Trait as T;
+	pub store Store for Module;
+	pub Now: b"tim:val" => required T::Timestamp;
+	Then: b"tim:then" => default T::Timestamp;
 }
-*/
-pub struct Now<T: Trait>(::std::marker::PhantomData<T>);
-impl<T: Trait> ::runtime_support::storage::generator::StorageValue<T::Timestamp> for Now<T> {
-	type Query = T::Timestamp;
-
-	/// Get the storage key.
-	fn key() -> &'static [u8] {
-		b"tim:val"
-	}
-
-	/// Load the value from the provided storage instance.
-	fn get<S: ::runtime_support::GenericStorage>(storage: &S) -> Self::Query {
-		storage.require(<Self as ::runtime_support::storage::generator::StorageValue<T::Timestamp>>::key())
-	}
-
-	/// Take a value from storage, removing it afterwards.
-	fn take<S: ::runtime_support::GenericStorage>(storage: &S) -> Self::Query {
-		storage.take_or_panic(<Self as ::runtime_support::storage::generator::StorageValue<T::Timestamp>>::key())
-	}
-}
-// TODO: consider this idiom.
-/*impl<T: Trait> Module<T> {
-	pub const NOW: Now<T> = Now(::std::marker::PhantomData::<T>);
-}*/
-
-// TODO: revisit this idiom once we get `type`s in `impl`s.
-/*
-// This would be nice but not currently supported.
-impl<T: Trait> Module<T> {
-	type Now = super::Now<T>;
-}*/
-
-pub trait Store {
-	type Now;
-}
-impl<T: Trait> Store for Module<T> {
-	type Now = Now<T>;
-}
-
 impl<T: Trait> Module<T> {
 	pub fn get() -> T::Timestamp { <Now<T>>::get() }
-//	pub fn get() -> T::Timestamp { Self::NOW.get() }
 }
 
 // TODO: implement `Callable` and `Dispatch` in `impl_dispatch` macro.

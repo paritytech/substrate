@@ -26,6 +26,7 @@ pub use std::ptr;
 pub use std::rc;
 pub use std::slice;
 pub use std::vec;
+pub use std::marker;
 pub mod collections {
 	pub use std::collections::btree_map;
 }

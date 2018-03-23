@@ -38,3 +38,4 @@ pub use core::ops;
 pub use core::ptr;
 pub use core::slice;
 pub use core::fmt;
+pub use core::marker;
