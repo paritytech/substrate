@@ -62,23 +62,23 @@ impl<T: Trait> ::runtime_support::storage::generator::StorageValue<T::Timestamp>
 		storage.take_or_panic(<Self as ::runtime_support::storage::generator::StorageValue<T::Timestamp>>::key())
 	}
 }
-// TODO: all `Storage*` functions should take `self` parameter to avoid need for obscure `<Now<TraitImpl>>::`
-// syntax. this can be cleaned up once we get `type`s in `impl`s.
+// TODO: consider this idiom.
 /*impl<T: Trait> Module<T> {
 	pub const NOW: Now<T> = Now(::std::marker::PhantomData::<T>);
 }*/
 
+// TODO: revisit this idiom once we get `type`s in `impl`s.
 /*
 // This would be nice but not currently supported.
 impl<T: Trait> Module<T> {
 	type Now = super::Now<T>;
 }*/
 
-pub trait StorageItems {
-	type NowS;
+pub trait Store {
+	type Now;
 }
-impl<T: Trait> StorageItems for Module<T> {
-	type NowS = Now<T>;
+impl<T: Trait> Store for Module<T> {
+	type Now = Now<T>;
 }
 
 impl<T: Trait> Module<T> {
@@ -97,6 +97,7 @@ impl_dispatch! {
 
 pub trait Dispatchable {
 	type AuxType;
+	type TraitType;
 	fn dispatch(self, aux: &Self::AuxType);
 }
 
@@ -106,6 +107,7 @@ pub mod public {
 	pub trait Dispatch<T: Trait> { fn set(aux: &T::PublicAux, now: T::Timestamp); }
 
 	impl<T: Trait> super::Dispatchable for Callable<T> where super::Module<T>: Dispatch<T> {
+		type TraitType = T;
 		type AuxType = T::PublicAux;
 		fn dispatch(self, aux: &Self::AuxType) {
 			match self {
@@ -118,8 +120,13 @@ pub mod public {
 impl<T: Trait> public::Dispatch<T> for Module<T> {
 	/// Set the current time.
 	fn set(_aux: &T::PublicAux, now: T::Timestamp) {
-		<Now<T>>::put(now);
-//		Self::NOW.put(now);
+		<Self as Store>::Now::put(now);
+	}
+}
+
+impl<T: Trait> Module<T> {
+	pub fn dispatch<D: Dispatchable<TraitType = T>>(d: D, aux: &D::AuxType) {
+		d.dispatch(aux);
 	}
 }
 
@@ -144,14 +151,14 @@ mod tests {
 	fn timestamp_works() {
 
 		let mut t: TestExternalities = map![
-			twox_128(<Now<TraitImpl>>::key()).to_vec() => vec![].and(&42u64)
+			twox_128(<Timestamp as Store>::Now::key()).to_vec() => vec![].and(&42u64)
 		];
 
 		with_externalities(&mut t, || {
-			assert_eq!(<Now<TraitImpl>>::get(), 42);
+			assert_eq!(<Timestamp as Store>::Now::get(), 42);
 //			assert_eq!(Timestamp::NOW.get(), 42);
-			public::Callable::set::<TraitImpl>(69).dispatch(&0);
-			assert_eq!(<Timestamp as StorageItems>::NowS::get(), 69);
+			Timestamp::dispatch(public::Callable::set(69), &0);
+			assert_eq!(<Timestamp as Store>::Now::get(), 69);
 //			assert_eq!(Timestamp::NOW.get(), 69);
 		});
 	}
