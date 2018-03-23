@@ -27,67 +27,36 @@ extern crate substrate_codec as codec;
 #[cfg(feature = "std")] extern crate serde;
 
 use runtime_support::storage::StorageValue;
-use runtime_support::PublicPass;
 
 pub trait Trait {
-	type Timestamp: codec::Slicable + Default;
+	type Timestamp: codec::Slicable + Default + serde::Serialize;
 	type PublicAux;
 	type PrivAux;
 }
-pub struct Module<T: Trait>(::std::marker::PhantomData<T>);
 
-// TODO: create from storage_items macro.
 decl_storage! {
 	trait Trait as T;
 	pub store Store for Module;
 	pub Now: b"tim:val" => required T::Timestamp;
-	Then: b"tim:then" => default T::Timestamp;
+	pub Then: b"tim:then" => default T::Timestamp;
 }
+
+decl_module! {
+	trait Trait as T;
+	pub mod public for Module;
+	aux T::PublicAux {
+		fn set(_, now: T::Timestamp) = 0;
+	}
+}
+
 impl<T: Trait> Module<T> {
 	pub fn get() -> T::Timestamp { <Now<T>>::get() }
-}
-
-// TODO: implement `Callable` and `Dispatch` in `impl_dispatch` macro.
-/*
-impl_dispatch! {
-	trait Trait;
-	pub mod public;
-	fn set(_, now: Timestamp) = 0;
-}
-*/
-
-pub trait Dispatchable {
-	type AuxType;
-	type TraitType;
-	fn dispatch(self, aux: &Self::AuxType);
-}
-
-pub mod public {
-	use super::Trait;
-	pub enum Callable<T: Trait> { set(T::Timestamp) }
-	pub trait Dispatch<T: Trait> { fn set(aux: &T::PublicAux, now: T::Timestamp); }
-
-	impl<T: Trait> super::Dispatchable for Callable<T> where super::Module<T>: Dispatch<T> {
-		type TraitType = T;
-		type AuxType = T::PublicAux;
-		fn dispatch(self, aux: &Self::AuxType) {
-			match self {
-				Callable::set(a) => <super::Module<T>>::set(aux, a),
-			}
-		}
-	}
 }
 
 impl<T: Trait> public::Dispatch<T> for Module<T> {
 	/// Set the current time.
 	fn set(_aux: &T::PublicAux, now: T::Timestamp) {
 		<Self as Store>::Now::put(now);
-	}
-}
-
-impl<T: Trait> Module<T> {
-	pub fn dispatch<D: Dispatchable<TraitType = T>>(d: D, aux: &D::AuxType) {
-		d.dispatch(aux);
 	}
 }
 
@@ -98,15 +67,14 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::Joiner;
 	use runtime_support::storage::StorageValue;
-	use runtime_support::PublicPass;
 
 	struct TraitImpl;
-	impl super::Trait for TraitImpl {
+	impl Trait for TraitImpl {
 		type Timestamp = u64;
 		type PublicAux = u64;
 		type PrivAux = ();
 	}
-	type Timestamp = super::Module<TraitImpl>;
+	type Timestamp = Module<TraitImpl>;
 
 	#[test]
 	fn timestamp_works() {
@@ -117,10 +85,8 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			assert_eq!(<Timestamp as Store>::Now::get(), 42);
-//			assert_eq!(Timestamp::NOW.get(), 42);
-			Timestamp::dispatch(public::Callable::set(69), &0);
+			Timestamp::dispatch(public::Call::set(69), &0);
 			assert_eq!(<Timestamp as Store>::Now::get(), 69);
-//			assert_eq!(Timestamp::NOW.get(), 69);
 		});
 	}
 }
