@@ -21,7 +21,7 @@ use runtime_support::Hashable;
 use {consensus, timestamp, system, demo_primitives, primitives};
 
 // TODO: move into runtime support.
-struct BlakeTwo256;
+pub struct BlakeTwo256;
 impl system::Hashing for BlakeTwo256 {
 	type Output = primitives::H256;
 	fn hash_of<S: Slicable>(s: &S) -> Self::Output {
@@ -32,20 +32,19 @@ impl system::Hashing for BlakeTwo256 {
 type PublicAux = demo_primitives::AccountId;
 type PrivAux = ();
 
-#[cfg_attr(feature = "std", derive(Debug))]
-struct Concrete;
+pub struct Concrete;
 
 impl timestamp::Trait for Concrete {
 	type Value = u64;
 	type PublicAux = PublicAux;
 }
-type Timestamp = timestamp::Module<Concrete>;
+pub type Timestamp = timestamp::Module<Concrete>;
 
 impl consensus::Trait for Concrete {
 	type SessionKey = demo_primitives::AccountId;
 	type PrivAux = PrivAux;
 }
-type Consensus = consensus::Module<Concrete>;
+pub type Consensus = consensus::Module<Concrete>;
 
 impl system::Trait for Concrete {
 	type TxOrder = demo_primitives::TxOrder;
@@ -55,8 +54,7 @@ impl system::Trait for Concrete {
 	type Digest = demo_primitives::block::Digest;
 	type AccountId = demo_primitives::AccountId;
 }
-type System = system::Module<Concrete>;
-
+pub type System = system::Module<Concrete>;
 
 impl_outer_dispatch! {
 	pub enum PubCall where aux: PublicAux {
@@ -67,9 +65,7 @@ impl_outer_dispatch! {
 //		Council = 6,
 //		CouncilVote = 7,
 	}
-}
 
-impl_outer_dispatch! {
 	pub enum PrivCall where aux: PrivAux {
 		Consensus = 0,
 //		Session = 1,

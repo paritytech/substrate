@@ -384,7 +384,7 @@ macro_rules! impl_outer_dispatch {
 		}
 		impl $crate::dispatch::NonTrivialSlicable for $call_type {}
 
-		impl_outer_dispatch{$($rest)*}
+		impl_outer_dispatch!{ $($rest)* }
 	}
 }
 

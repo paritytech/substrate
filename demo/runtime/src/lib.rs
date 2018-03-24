@@ -35,18 +35,16 @@ extern crate safe_mix;
 #[cfg(feature = "std")] extern crate rustc_hex;
 
 extern crate substrate_codec as codec;
-#[cfg(feature = "std")] #[macro_use] extern crate substrate_primitives as primitives;
+#[cfg(feature = "std")] #[allow(unused_imports)] #[macro_use] extern crate substrate_primitives as primitives;
 extern crate demo_primitives;
 
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
 extern crate integer_sqrt;
 
-pub mod dispatch;
+pub mod runtime;
 pub mod block;
 pub mod transaction;
-pub mod runtime;
 pub mod api;
-pub mod runtime2;
 
-#[cfg(feature = "std")] pub mod genesismap;
+//#[cfg(feature = "std")] pub mod genesismap;

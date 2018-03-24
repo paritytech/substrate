@@ -20,14 +20,14 @@ use rstd::prelude::*;
 use rstd::ops;
 use codec::{Input, Slicable};
 use demo_primitives::{AccountId, TxOrder, Signature};
-use dispatch::PubCall;
+use runtime::PubCall;
 
 #[cfg(feature = "std")]
 use std::fmt;
 
 /// A vetted and verified transaction from the external world.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct Transaction {
 	/// Who signed it (note this is not a signature).
 	pub signed: AccountId,
@@ -61,7 +61,7 @@ impl ::codec::NonTrivialSlicable for Transaction {}
 
 /// A transactions right from the external world. Unchecked.
 #[derive(Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize))]
 pub struct UncheckedTransaction {
 	/// The actual transaction information.
 	pub transaction: Transaction,

@@ -27,7 +27,7 @@ pub type Body = Vec<UncheckedTransaction>;
 
 /// A block on the chain.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct Block {
 	/// The block header.
 	pub header: Header,

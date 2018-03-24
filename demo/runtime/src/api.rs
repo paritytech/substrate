@@ -14,15 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime::{system, session};
-use consensus;
+use runtime;
 
 impl_stubs!(
-	execute_block => |block| system::internal::execute_block(block),
+	authorities => |()| runtime::Consensus::authorities()
+/*	execute_block => |block| system::internal::execute_block(block),
 	initialise_block => |header| system::internal::initialise_block(&header),
 	execute_transaction => |utx| system::internal::execute_transaction(utx),
 	finalise_block => |()| system::internal::finalise_block(),
 	validator_count => |()| session::validator_count(),
-	validators => |()| session::validators(),
-	authorities => |()| consensus::authorities()
+	validators => |()| session::validators(),*/
 );
