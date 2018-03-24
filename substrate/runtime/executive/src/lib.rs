@@ -45,31 +45,6 @@ use runtime::staking::public_pass_from_payment;
 use safe_mix::TripletMix;
 use consensus;
 
-pub trait Trait {
-	type TxOrder: Parameter + Default + PartialOrd + Ord;
-	type BlockNumber: Parameter;
-	type Hash: Parameter + BitOr + BitAnd;
-	type Digest: Parameter + Default;
-	type Consensus: consensus::Trait;
-}
-
-decl_module! {
-	pub struct Module<T: Trait>;
-}
-
-decl_storage! {
-	pub trait Store for Module<T: Trait>;
-
-	pub Nonce get(nonce): b"sys:non" => default map [ T::Consensus::SessionId => TxOrder ];
-	pub BlockHashAt get(block_hash): b"sys:old" => required map [ BlockNumber => Hash ];
-	RandomSeed get(random_seed): b"sys:rnd" => required Hash;
-	// The current block number being processed. Set by `execute_block`.
-	Number get(block_number): b"sys:num" => required BlockNumber;
-	ParentHash get(parent_hash): b"sys:pha" => required Hash;
-	TransactionsRoot get(transactions_root): b"sys:txr" => required Hash;
-	Digest: b"sys:dig" => default block::Digest;
-}
-
 pub trait Checkable {
 	type CheckedType;
 	fn check(self) -> Option<Self::CheckedType>;
@@ -78,71 +53,96 @@ pub trait Checkable {
 pub trait Dispatchable {
 	type AccountIdType;
 	type TxOrderType;
-	fn nonce(&self) -> Self::TxOrder;
-	fn sender(&self) -> &Self::AccountId;
+	fn nonce(&self) -> Self::TxOrderType;
+	fn sender(&self) -> &Self::AccountIdType;
 	fn dispatch(self);
 }
 
-impl Dispatchable for CheckedTransaction {
-	type TxOrderType;
-	fn nonce(&self) -> Self::TxOrder {
-
-	}
-
-	fn sender(&self) -> &Self::AccountId;
-	fn dispatch(self);
+pub trait Blocky: Sized {
+	type Number: Sized;
+	type Hash: Sized;
+	type Digest: Sized;
+	type Transaction: Sized;
+	type Header: Sized + Slicable;
+	fn number(&self) -> Self::Number;
+	fn transactions_root(&self) -> &Self::Hash;
+	fn state_root(&self) -> &Self::Hash;
+	fn parent_hash(&self) -> &Self::Hash;
+	fn digest(&self) -> &Self::Digest;
+	fn transactions(&self) -> Iterator<&Transaction>;
+	fn to_header(
+		number: Self::Number,
+		transactions_root: Self::Hash,
+		state_root: Self::Hash,
+		parent_hash: Self::Hash,
+		digest: Self::Digest
+	) -> Self::Header;
 }
 
-impl Checkable for UncheckedTransaction {
-	type CheckedType = CheckedTransaction;
+pub struct Executive<
+	Unchecked: Checkable<CheckedType = Checked> + PartialEq + Eq + Clone + Slicable,
+	Checked: Dispatchable,
+	System: system::Trait,
+	Block: Blocky,
+>(PhantomData<(Unchecked, Checked, System, Block)>);
 
-	fn check(self) -> Option<CheckedType> {
+impl<
+	Unchecked: Checkable<CheckedType = Checked> + PartialEq + Eq + Clone + Slicable,
+	Checked: Dispatchable<TxOrderType = Self::System::TxOrder>,
+	System: system::Trait,
+	Block: Blocky<
+		Transaction = Self::Unchecked,
+		Number = Self::System::Number,
+		Hash = Self::System::Hash,
+		Digest = Self::System::Digest
+	>,
+> Executive<Unchecked, Checked, System, Block> {
+//	type Block = generic::Block<Unchecked>;
+//	type System = system::Module<System>
 
+	/// Start the execution of a particular block.
+	pub fn initialise_block(block: &Block) {
+		system::initialise(block.number(), block.parent_hash(), block.transactions_root());
 	}
-}
 
-pub struct Internal<Unchecked: Checkable<CheckedType = Checked> + PartialEq + Eq + Clone, Checked: Dispatchable>;
+	fn initial_checks(block: &Block) {
+		// check parent_hash is correct.
+		assert!(
+			header.number() > System::Number::from(0u64) && <system::Module<System>>::block_hash(header.number - System::Number::from(1u64)) == *block.parent_hash(),
+			"Parent hash should be valid."
+		);
 
-impl<Unchecked, Checked> Internal<Unchecked: Checkable<CheckedType = Checked> + PartialEq + Eq + Clone, Checked: Dispatchable> {
-	type Block = generic::Block<Unchecked>;
-
-	/// Deposits a log and ensures it matches the blocks log data.
-	pub fn deposit_log(log: Log) {
-		let mut l = Digest::get();
-		l.logs.push(log);
-		Digest::put(l);
+		// check transaction trie root represents the transactions.
+		let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
+		let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
+		let txs_root = enumerated_trie_root(&txs).into();
+		info_expect_equal_hash(&header.transaction_root, &txs_root);
+		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitioning for `block`.
 	pub fn execute_block(mut block: Block) {
-		initialise_block(&block.header);
+		initialise_block(&block);
 
 		// any initial checks
 		initial_checks(&block);
 
 		// execute transactions
-		block.transactions.iter().cloned().for_each(execute_transaction);
+		block.transactions().cloned().for_each(execute_transaction);
 
 		// post-transactional book-keeping.
-		staking::internal::check_new_era();
-		session::internal::check_rotate_session();
+		// TODO: some way of getting these in in a modular way.
+//		staking::internal::check_new_era();
+//		session::internal::check_rotate_session();
 
 		// any final checks
 		final_checks(&block);
 
 		// any stuff that we do after taking the storage root.
-		post_finalise(&block.header);
+		post_finalise(&block);
 	}
-
-	/// Start the execution of a particular block.
-	pub fn initialise_block(mut header: &Header) {
-		// populate environment from header.
-		Number::put(header.number);
-		ParentHash::put(header.parent_hash);
-		TransactionsRoot::put(header.transaction_root);
-		RandomSeed::put(calculate_random());
-	}
-
+/*
+	// TODO fix.
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalise_block() -> Header {
@@ -162,122 +162,50 @@ impl<Unchecked, Checked> Internal<Unchecked: Checkable<CheckedType = Checked> + 
 
 		header
 	}
-
+*/
 	/// Execute a transaction outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
 	pub fn execute_transaction(utx: UncheckedTransaction) {
 		// Verify the signature is good.
-		let tx = match transaction::check(utx) {
+		let tx = match utx.check() {
 			Ok(tx) => tx,
 			Err(_) => panic!("All transactions should be properly signed"),
 		};
 
 		{
 			// check nonce
-			let expected_nonce: TxOrder = Nonce::get(&tx.signed);
+			let expected_nonce = <system::Module<System>>::nonce(tx.sender());
 			assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
 			// increment nonce in storage
-			Nonce::insert(&tx.signed, &(expected_nonce + 1));
+			<system::Module<System>>::inc_nonce(tx.sender());
 		}
 
 		// decode parameters and dispatch
-//		let tx = tx.drain().transaction;
-//		tx.function.dispatch(public_pass_from_payment(&tx.signed));
 		tx.dispatch();
 	}
 
-	fn initial_checks(block: &Block) {
-		let ref header = block.header;
-
-		// check parent_hash is correct.
-		assert!(
-			header.number > 0 && BlockHashAt::get(&(header.number - 1)) == header.parent_hash,
-			"Parent hash should be valid."
-		);
-
-		// check transaction trie root represents the transactions.
-		let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
-		let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-		let txs_root = enumerated_trie_root(&txs).into();
-		info_expect_equal_hash(&header.transaction_root, &txs_root);
-		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
-	}
 
 	fn final_checks(block: &Block) {
-		let ref header = block.header;
-
 		// check digest
-		assert!(header.digest == Digest::get());
+		assert!(block.digest() == &<system::Module<System>>::digest());
 
 		// remove temporaries.
-		kill_temps();
+		<system::Module<System>>::kill_temps();
 
 		// check storage root.
 		let storage_root = storage_root().into();
-		info_expect_equal_hash(&header.state_root, &storage_root);
-		assert!(header.state_root == storage_root, "Storage root must match that calculated.");
+//		info_expect_equal_hash(block.state_root(), &storage_root);	// TODO use the check_equal trait.
+		assert!(block.state_root() == &storage_root, "Storage root must match that calculated.");
 	}
 
-	fn kill_temps() {
-		Number::kill();
-		ParentHash::kill();
-		RandomSeed::kill();
-		Digest::kill();
-		TransactionsRoot::kill();
-	}
-
-	fn post_finalise(header: &Header) {
+	fn post_finalise(block: &Block) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
-		BlockHashAt::insert(&header.number, &header.blake2_256().into());
-	}
-
-	fn calculate_random() -> Hash {
-		let c = block_number() - 1;
-		(0..81)
-			.map(|i| if c >= i { block_hash(c - i) } else { Default::default() })
-			.triplet_mix()
-	}
-
-	#[cfg(feature = "std")]
-	fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
-		use primitives::hexdisplay::HexDisplay;
-		if given != expected {
-			println!("Hash: given={}, expected={}", HexDisplay::from(&given.0), HexDisplay::from(&expected.0));
-		}
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
-		if given != expected {
-			print("Hash not equal");
-			print(&given.0[..]);
-			print(&expected.0[..]);
-		}
+		<system::Module<T::System>>::record_block_hash(block.number(), &block.to_header())
 	}
 }
-
-#[cfg(any(feature = "std", test))]
-pub mod testing {
-	use super::*;
-	use runtime_io::{twox_128, TestExternalities};
-	use codec::Joiner;
-
-	pub fn externalities() -> TestExternalities {
-		map![
-			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode(),
-			twox_128(Number::key()).to_vec() => 1u64.encode(),
-			twox_128(ParentHash::key()).to_vec() => [69u8; 32].encode(),
-			twox_128(RandomSeed::key()).to_vec() => [0u8; 32].encode()
-		]
-	}
-
-	pub fn set_block_number(n: BlockNumber) {
-		Number::put(n);
-	}
-}
-
+/*
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -391,3 +319,4 @@ mod tests {
 		});
 	}
 }
+*/

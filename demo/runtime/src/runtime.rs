@@ -57,7 +57,7 @@ impl system::Trait for Concrete {
 pub type System = system::Module<Concrete>;
 
 impl_outer_dispatch! {
-	pub enum PubCall where aux: PublicAux {
+	pub enum Call where aux: PublicAux {
 //		Session = 1,
 //		Staking = 2,
 		Timestamp = 3,

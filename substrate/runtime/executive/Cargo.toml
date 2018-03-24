@@ -1,17 +1,19 @@
 [package]
-name = "substrate-runtime-system"
+name = "substrate-runtime-executive"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 hex-literal = "0.1.0"
 serde = { version = "1.0", default_features = false }
+substrate-codec = { path = "../../codec", default_features = false }
+substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-support = { path = "../../runtime-support", default_features = false }
 substrate-runtime-consensus = { path = "../consensus", default_features = false }
+substrate-runtime-system = { path = "../system", default_features = false }
 
 [dev-dependencies]
-substrate-codec = { path = "../../codec", default_features = false }
 substrate-runtime-io = { path = "../../runtime-io", default_features = false }
 
 [features]
@@ -21,6 +23,8 @@ std = [
 	"substrate-runtime-support/std",
 	"serde/std",
 	"substrate-codec/std",
+	"substrate-primitives/std",
 	"substrate-runtime-io/std",
 	"substrate-runtime-consensus/std",
+	"substrate-runtime-system/std",
 ]

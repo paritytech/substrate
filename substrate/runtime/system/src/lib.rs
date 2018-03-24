@@ -68,7 +68,7 @@ impl CheckEqual for primitives::Hash {
 }
 
 pub trait Trait {
-	type TxOrder: Parameter + Default + PartialOrd + Ord;
+	type TxOrder: Parameter + Default + PartialOrd + Ord + rstd::ops::Add<Self::TxOrder, Output = Self::TxOrder> + From<u64>;
 	type BlockNumber: Parameter + PartialOrd<Self::BlockNumber> + Ord + rstd::ops::Sub<Self::BlockNumber, Output = Self::BlockNumber> + From<u64>;
 	type Hash: Parameter + rstd::ops::BitOr<Self::Hash, Output = Self::Hash> + rstd::ops::BitAnd<Self::Hash, Output = Self::Hash> + Default + Copy + CheckEqual;
 	type Hashing: Hashing<Output = Self::Hash>;
@@ -91,7 +91,7 @@ decl_storage! {
 	Number get(block_number): b"sys:num" => required T::BlockNumber;
 	ParentHash get(parent_hash): b"sys:pha" => required T::Hash;
 	TransactionsRoot get(transactions_root): b"sys:txr" => required T::Hash;
-	Digest: b"sys:dig" => default block::Digest;
+	Digest: b"sys:dig" => default block::Digest;	// TODO: change to T::Digest (will require traitification)
 }
 
 impl<T: Trait> Module<T> {
@@ -152,6 +152,11 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn set_block_number(n: T::BlockNumber) {
 		<Number<T>>::put(n);
+	}
+
+	/// Increment a particular account's nonce by 1.
+	pub fn inc_nonce(who: &T::AccountId) {
+		<Number<T>>::insert(who, Self::nonce(who) + T::TxOrder::from(1u64));
 	}
 }
 

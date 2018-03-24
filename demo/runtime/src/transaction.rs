@@ -21,6 +21,7 @@ use rstd::ops;
 use codec::{Input, Slicable};
 use demo_primitives::{AccountId, TxOrder, Signature};
 use runtime::PubCall;
+use executive::{Checkable, Executable};
 
 #[cfg(feature = "std")]
 use std::fmt;
@@ -127,11 +128,6 @@ impl CheckedTransaction {
 	pub fn signature(&self) -> &Signature {
 		&self.0.signature
 	}
-
-	/// Get the inner object.
-	pub fn drain(self) -> UncheckedTransaction {
-		self.0
-	}
 }
 
 impl ops::Deref for CheckedTransaction {
@@ -154,6 +150,32 @@ pub fn check(tx: UncheckedTransaction) -> Result<CheckedTransaction, UncheckedTr
 	}
 }
 
+impl Checkable for UncheckedTransaction {
+	type CheckedType = CheckedTransaction;
+
+	fn check(self) -> Result<Self::CheckedType, Self> {
+		check(self)
+	}
+}
+
+impl Executable for CheckedTransaction {
+	type TxOrderType = TxOrder;
+	type AccountIdType = AccountId;
+
+	fn nonce(&self) -> Self::TxOrderType {
+		self.0.nonce
+	}
+
+	fn sender(&self) -> &Self::AccountIdType {
+		self.0.signed
+	}
+
+	fn execute(self) {
+		let tx = self.0.transaction;
+		//TODO: take payment e.g. public_pass_from_payment
+		tx.function.dispatch(&tx.signed);
+	}
+}
 
 #[cfg(test)]
 mod tests {
@@ -161,8 +183,8 @@ mod tests {
 	use primitives;
 	use codec::Slicable;
 	use primitives::hexdisplay::HexDisplay;
-	use dispatch::public::Call;
-	use timestamp::public::Call as TimestampCall;
+	use timestamp;
+	use runtime::Call;
 
 	#[test]
 	fn serialize_unchecked() {
@@ -170,7 +192,7 @@ mod tests {
 			transaction: Transaction {
 				signed: [1; 32],
 				nonce: 999u64,
-				function: Call::Timestamp(TimestampCall::set(135135)),
+				function: Call::Timestamp(timestamp::Call::set(135135)),
 			},
 			signature: primitives::hash::H512([0; 64]),
 		};
