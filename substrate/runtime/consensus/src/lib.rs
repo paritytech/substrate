@@ -22,9 +22,6 @@
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 
-#[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
-#[cfg(feature = "std")] extern crate serde;
-
 use rstd::prelude::*;
 use runtime_support::storage;
 use runtime_support::storage::unhashed::StorageVec;
@@ -60,15 +57,6 @@ impl<T: Trait> Module<T> {
 
 	/// Set the new code.
 	fn set_code(_aux: &T::PrivAux, new: Vec<u8>) {
-		Internal::<T>::set_code(new);
-	}
-}
-
-pub struct Internal<T: Trait>(rstd::marker::PhantomData<T>);
-
-impl<T: Trait> Internal<T> {
-	/// Set the new code.
-	pub fn set_code(new: Vec<u8>) {
 		storage::unhashed::put_raw(CODE, &new);
 	}
 

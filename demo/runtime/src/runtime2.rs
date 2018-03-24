@@ -16,7 +16,18 @@
 
 //! Dispatch system. Just dispatches calls.
 
-use {consensus, timestamp, demo_primitives};
+use codec::Slicable;
+use runtime_support::Hashable;
+use {consensus, timestamp, system, demo_primitives, primitives};
+
+// TODO: move into runtime support.
+struct BlakeTwo256;
+impl system::Hashing for BlakeTwo256 {
+	type Output = primitives::H256;
+	fn hash_of<S: Slicable>(s: &S) -> Self::Output {
+		Self::Output::from(s.blake2_256())
+	}
+}
 
 type PublicAux = demo_primitives::AccountId;
 type PrivAux = ();
@@ -36,41 +47,33 @@ impl consensus::Trait for Concrete {
 }
 type Consensus = consensus::Module<Concrete>;
 
+impl system::Trait for Concrete {
+	type TxOrder = demo_primitives::TxOrder;
+	type BlockNumber = demo_primitives::BlockNumber;
+	type Hash = demo_primitives::Hash;
+	type Hashing = BlakeTwo256;
+	type Digest = demo_primitives::block::Digest;
+	type AccountId = demo_primitives::AccountId;
+}
+type System = system::Module<Concrete>;
+
+
 impl_outer_dispatch! {
 	pub enum PubCall where aux: PublicAux;
+//	Session = 1;
+//	Staking = 2;
 	Timestamp = 3;
+//	Democracy = 5;
+//	Council = 6;
+//	CouncilVote = 7;
 }
 
 impl_outer_dispatch! {
 	pub enum PrivCall where aux: PrivAux;
 	Consensus = 0;
+//	Session = 1;
+//	Staking = 2;
+//	Democracy = 5;
+//	Council = 6;
+//	CouncilVote = 7;
 }
-
-/*
-impl_meta_dispatch! {
-	pub mod public;
-	path public;
-	trait runtime_support::PublicPass;
-	Session(mod runtime::session) = 1;
-	Staking(mod runtime::staking) = 2;
-	Timestamp(mod timestamp) = 3;
-	Democracy(mod runtime::democracy) = 5;
-	Council(mod runtime::council) = 6;
-	CouncilVote(mod runtime::council_vote) = 7;
-}
-
-impl_meta_dispatch! {
-	pub mod privileged;
-	path privileged;
-	trait runtime_support::PrivPass;
-	Consensus(mod consensus) = 0;
-	Session(mod runtime::session) = 1;
-	Staking(mod runtime::staking) = 2;
-	Democracy(mod runtime::democracy) = 5;
-	Council(mod runtime::council) = 6;
-	CouncilVote(mod runtime::council_vote) = 7;
-}
-
-pub use self::privileged::Call as PrivCall;
-pub use self::public::Call as PubCall;
-*/

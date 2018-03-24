@@ -22,10 +22,8 @@
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
-#[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
-//#[cfg(feature = "std")] extern crate serde;
 
-use runtime_support::storage::StorageValue;
+use runtime_support::StorageValue;
 use runtime_support::Parameter;
 
 pub trait Trait {
@@ -42,8 +40,7 @@ decl_module! {
 
 decl_storage! {
 	pub trait Store for Module<T: Trait>;
-	pub Now: b"tim:val" => required T::Value;
-	pub Then: b"tim:then" => default T::Value;
+	pub Now get(now): b"tim:val" => required T::Value;
 }
 
 impl<T: Trait> Module<T> {
@@ -82,7 +79,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			assert_eq!(<Timestamp as Store>::Now::get(), 42);
 			Timestamp::dispatch(Call::set(69), &0);
-			assert_eq!(<Timestamp as Store>::Now::get(), 69);
+			assert_eq!(Timestamp::now(), 69);
 		});
 	}
 }

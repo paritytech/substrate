@@ -23,6 +23,7 @@
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 
 extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
