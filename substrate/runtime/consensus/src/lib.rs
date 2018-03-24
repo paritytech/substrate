@@ -40,14 +40,13 @@ impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
 
 pub const CODE: &'static[u8] = b":code";
 
-pub trait Trait: PartialEq + Eq + Clone {
+pub trait Trait {
 	type SessionKey: codec::Slicable + Default;
 	type PrivAux;
 }
 
 decl_module! {
-	trait Trait as T;
-	pub struct Module;
+	pub struct Module<T: Trait>;
 	pub enum PrivCall where aux: T::PrivAux {
 		fn set_code(aux, new: Vec<u8>) = 0;
 	}

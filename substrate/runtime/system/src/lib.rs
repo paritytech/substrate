@@ -44,7 +44,11 @@ use safe_mix::TripletMix;
 
 type TxOrder = u64;
 
-storage_items! {
+
+
+decl_storage! {
+	pub trait Store for Module<T: Trait>;
+
 	pub Nonce get(nonce): b"sys:non" => default map [ AuthorityId => TxOrder ];
 	pub BlockHashAt get(block_hash): b"sys:old" => required map [ BlockNumber => Hash ];
 	RandomSeed get(random_seed): b"sys:rnd" => required Hash;

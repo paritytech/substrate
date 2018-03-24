@@ -45,4 +45,6 @@ include!("../without_std.rs");
 pub mod prelude {
 	pub use ::vec::Vec;
 	pub use ::boxed::Box;
+	pub use ::cmp::{Eq, PartialEq};
+	pub use ::clone::Clone;
 }

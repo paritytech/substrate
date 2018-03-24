@@ -533,8 +533,7 @@ macro_rules! __decl_storage_item {
 #[macro_export]
 macro_rules! decl_storage {
 	(
-		trait $traittype:ident as $traitinstance:ident;
-		store $storetype:ident for $modulename:ident;
+		trait $storetype:ident for $modulename:ident<$traitinstance:ident: $traittype:ident>;
 		$($t:tt)*
 	) => {
 		__decl_storage_items!($traittype $traitinstance $($t)*);
@@ -546,8 +545,7 @@ macro_rules! decl_storage {
 		}
 	};
 	(
-		trait $traittype:ident as $traitinstance:ident;
-		pub store $storetype:ident for $modulename:ident;
+		pub trait $storetype:ident for $modulename:ident<$traitinstance:ident: $traittype:ident>;
 		$($t:tt)*
 	) => {
 		__decl_storage_items!($traittype $traitinstance $($t)*);

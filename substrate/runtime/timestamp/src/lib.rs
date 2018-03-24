@@ -22,30 +22,28 @@
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
-
 #[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
-#[cfg(feature = "std")] extern crate serde;
+//#[cfg(feature = "std")] extern crate serde;
 
 use runtime_support::storage::StorageValue;
+use runtime_support::Parameter;
 
-pub trait Trait {//}: PartialEq + Eq + Clone {
-	type Value: codec::Slicable + Default + serde::Serialize + Clone + Eq;
+pub trait Trait {
+	type Value: Parameter + Default;
 	type PublicAux;
 }
 
-decl_storage! {
-	trait Trait as T;
-	pub store Store for Module;
-	pub Now: b"tim:val" => required T::Value;
-	pub Then: b"tim:then" => default T::Value;
-}
-
 decl_module! {
-	trait Trait as T;
-	pub struct Module;
+	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
 		fn set(aux, now: T::Value) = 0;
 	}
+}
+
+decl_storage! {
+	pub trait Store for Module<T: Trait>;
+	pub Now: b"tim:val" => required T::Value;
+	pub Then: b"tim:then" => default T::Value;
 }
 
 impl<T: Trait> Module<T> {

@@ -21,7 +21,6 @@ use {consensus, timestamp, demo_primitives};
 type PublicAux = demo_primitives::AccountId;
 type PrivAux = ();
 
-#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 struct Concrete;
 

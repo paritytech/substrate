@@ -16,9 +16,12 @@
 
 //! Dispatch system. Just dispatches calls.
 
-pub use rstd::prelude::Vec;
+pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
+#[cfg(feature = "std")]
+pub use std::fmt;
 pub use rstd::marker::PhantomData;
 use rstd::ops;
+use serde;
 pub use codec::{Slicable, Input, NonTrivialSlicable};
 
 /// Default public dispatch; assumes a 32-byte ID.
@@ -80,19 +83,42 @@ pub trait Callable<Aux> {
 	type CallType: Dispatchable + Slicable + ::serde::Serialize + Clone + PartialEq + Eq;
 }
 
+#[cfg(feature = "std")]
+pub trait Parameter: Slicable + serde::Serialize + Clone + Eq + fmt::Debug {}
+
+#[cfg(feature = "std")]
+impl<T> Parameter for T where T: Slicable + serde::Serialize + Clone + Eq + fmt::Debug {
+}
+
+#[cfg(not(feature = "std"))]
+pub trait Parameter: Slicable + serde::Serialize + Clone + Eq {}
+
+#[cfg(not(feature = "std"))]
+impl<T> Parameter for T where T: Slicable + serde::Serialize + Clone + Eq {
+}
+
+
 /// Declare a struct for this module, then implement dispatch logic to create a pairing of several
 /// dispatch traits and enums.
 #[macro_export]
 macro_rules! decl_module {
 	(
-		trait $trait_name:ident as $trait_instance:ident;
-		pub struct $mod_type:ident;
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$($rest:tt)*
 	) => {
 		pub struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
 		decl_dispatch! {
-			trait $trait_name as $trait_instance;
-			impl for $mod_type;
+			impl for $mod_type<$trait_instance: $trait_name>;
+			$($rest)*
+		}
+	};
+	(
+		struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
+		$($rest:tt)*
+	) => {
+		struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
+		decl_dispatch! {
+			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
 		}
 	}
@@ -102,8 +128,7 @@ macro_rules! decl_module {
 #[macro_export]
 macro_rules! decl_dispatch {
 	(
-		trait $trait_name:ident as $trait_instance:ident;
-		impl for $mod_type:ident;
+		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		pub enum $call_type:ident where aux: $aux_type:ty {
 			$(
 				fn $fn_name:ident(aux
@@ -117,22 +142,19 @@ macro_rules! decl_dispatch {
 		$($rest:tt)*
 	) => {
 		__decl_dispatch_module! {
-			trait $trait_name as $trait_instance;
-			impl for $mod_type;
+			impl for $mod_type<$trait_instance: $trait_name>;
 			pub enum $call_type where aux: $aux_type;
 			$(
 				fn $fn_name(aux, $($param_name: $param),*)= $id;
 			)*
 		}
 		decl_dispatch! {
-			trait $trait_name as $trait_instance;
-			impl for $mod_type;
+			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
 		}
 	};
 	(
-		trait $trait_name:ident as $trait_instance:ident;
-		impl for $mod_type:ident;
+		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<TraitType = $trait_instance>>(d: D, aux: &D::AuxType) {
@@ -155,8 +177,7 @@ macro_rules! __decl_dispatch_fns {
 /// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
 macro_rules! __decl_dispatch_module {
 	(
-		trait $trait_name:ident as $trait_instance:ident;
-		impl for $mod_type:ident;
+		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		pub enum $call_type:ident where aux: $aux_type:ty;
 		$(
 			fn $fn_name:ident(aux
@@ -167,8 +188,7 @@ macro_rules! __decl_dispatch_module {
 			= $id:expr ;
 		)*
 	) => {
-		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+		#[cfg_attr(feature = "std", derive(Serialize))]
 		#[allow(missing_docs)]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			$(
@@ -178,13 +198,66 @@ macro_rules! __decl_dispatch_module {
 			__PhantomItem($crate::dispatch::PhantomData<$trait_instance>),
 		}
 
-/*		pub trait Dispatch<$trait_instance: $trait_name>: Sized {
-			__decl_dispatch_fns!{ $aux_type => $( $fn_name ( $( $param_name $param )* ) )* }
-		}*/
+		// manual implementation of clone/eq/partialeq because using derive erroneously requires
+		// clone/eq/partialeq from T.
+		impl<$trait_instance: $trait_name> $crate::dispatch::Clone
+			for $call_type<$trait_instance>
+		{
+			fn clone(&self) -> Self {
+				match *self {
+					$(
+						$call_type::$fn_name( $( ref $param_name ),* ) =>
+							$call_type::$fn_name( $( $param_name.clone() ),* )
+					,)*
+					$call_type::__PhantomItem(_) => unreachable!(),
+				}
+			}
+		}
+		impl<$trait_instance: $trait_name> $crate::dispatch::PartialEq
+			for $call_type<$trait_instance>
+		{
+			fn eq(&self, other: &Self) -> bool {
+				match *self {$(
+					$call_type::$fn_name( $( ref $param_name ),* ) => {
+						let self_params = ( $( $param_name, )* );
+						if let $call_type::$fn_name( $( ref $param_name ),* ) = *other {
+								self_params == ( $( $param_name, )* )
+						} else {
+							if let $call_type::__PhantomItem(_) = *other {
+								unreachable!()
+							} else {
+								false
+							}
+						}
+					}
+					$call_type::__PhantomItem(_) => unreachable!(),
+				)*}
+			}
+		}
+		impl<$trait_instance: $trait_name> $crate::dispatch::Eq
+			for $call_type<$trait_instance>
+		{}
+
+		#[cfg(feature = "std")]
+		impl<$trait_instance: $trait_name> $crate::dispatch::fmt::Debug
+			for $call_type<$trait_instance>
+		{
+			fn fmt(&self, f: &mut $crate::dispatch::fmt::Formatter) -> Result<(), $crate::dispatch::fmt::Error> {
+				match *self {
+					$(
+						$call_type::$fn_name( $( ref $param_name ),* ) =>
+							write!(f, "{}{:?}",
+								stringify!($fn_name),
+								( $( $param_name.clone(), )* )
+							)
+					,)*
+					$call_type::__PhantomItem(_) => unreachable!(),
+				}
+			}
+		}
 
 		impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
 			for $call_type<$trait_instance>
-//			where $mod_type<$trait_instance>: Dispatch<$trait_instance>
 		{
 			type TraitType = $trait_instance;
 			type AuxType = $aux_type;
@@ -201,7 +274,6 @@ macro_rules! __decl_dispatch_module {
 
 		impl<$trait_instance: $trait_name> $crate::dispatch::Callable<$aux_type>
 			for $mod_type<$trait_instance>
-			where $trait_instance: Clone + PartialEq + Eq
 		{
 			type CallType = $call_type<$trait_instance>;
 		}
