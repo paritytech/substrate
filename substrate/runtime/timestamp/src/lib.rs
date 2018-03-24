@@ -28,35 +28,33 @@ extern crate substrate_codec as codec;
 
 use runtime_support::storage::StorageValue;
 
-pub trait Trait {
-	type Timestamp: codec::Slicable + Default + serde::Serialize;
+pub trait Trait {//}: PartialEq + Eq + Clone {
+	type Value: codec::Slicable + Default + serde::Serialize + Clone + Eq;
 	type PublicAux;
 }
 
 decl_storage! {
 	trait Trait as T;
 	pub store Store for Module;
-	pub Now: b"tim:val" => required T::Timestamp;
-	pub Then: b"tim:then" => default T::Timestamp;
+	pub Now: b"tim:val" => required T::Value;
+	pub Then: b"tim:then" => default T::Value;
 }
 
 decl_module! {
 	trait Trait as T;
-	struct Module;
-	pub mod public aux T::PublicAux {
-		fn set(_, now: T::Timestamp) = 0;
+	pub struct Module;
+	pub enum Call where aux: T::PublicAux {
+		fn set(aux, now: T::Value) = 0;
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn get() -> T::Timestamp {
+	pub fn get() -> T::Value {
 		<Self as Store>::Now::get()
 	}
-}
 
-impl<T: Trait> public::Dispatch<T> for Module<T> {
 	/// Set the current time.
-	fn set(_aux: &T::PublicAux, now: T::Timestamp) {
+	fn set(_aux: &T::PublicAux, now: T::Value) {
 		<Self as Store>::Now::put(now);
 	}
 }
@@ -71,7 +69,7 @@ mod tests {
 
 	struct TraitImpl;
 	impl Trait for TraitImpl {
-		type Timestamp = u64;
+		type Value = u64;
 		type PublicAux = u64;
 	}
 	type Timestamp = Module<TraitImpl>;
@@ -85,7 +83,7 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			assert_eq!(<Timestamp as Store>::Now::get(), 42);
-			Timestamp::dispatch(public::Call::set(69), &0);
+			Timestamp::dispatch(Call::set(69), &0);
 			assert_eq!(<Timestamp as Store>::Now::get(), 69);
 		});
 	}

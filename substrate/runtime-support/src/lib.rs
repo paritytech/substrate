@@ -18,6 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")] extern crate serde;
+
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;

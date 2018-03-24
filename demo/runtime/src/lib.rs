@@ -46,5 +46,6 @@ pub mod block;
 pub mod transaction;
 pub mod runtime;
 pub mod api;
+pub mod runtime2;
 
 #[cfg(feature = "std")] pub mod genesismap;

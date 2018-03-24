@@ -32,7 +32,7 @@ use runtime_support::storage::unhashed::StorageVec;
 pub const AUTHORITY_AT: &'static[u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 
-struct AuthorityStorageVec<S: codec::Slicable + Default>(std::marker::PhantomData<S>);
+struct AuthorityStorageVec<S: codec::Slicable + Default>(rstd::marker::PhantomData<S>);
 impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
 	type Item = S;
 	const PREFIX: &'static[u8] = AUTHORITY_AT;
@@ -40,16 +40,16 @@ impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
 
 pub const CODE: &'static[u8] = b":code";
 
-pub trait Trait {
+pub trait Trait: PartialEq + Eq + Clone {
 	type SessionKey: codec::Slicable + Default;
 	type PrivAux;
 }
 
 decl_module! {
 	trait Trait as T;
-	struct Module;
-	pub mod privileged aux T::PrivAux {
-		fn set_code(_, new: Vec<u8>) = 0;
+	pub struct Module;
+	pub enum PrivCall where aux: T::PrivAux {
+		fn set_code(aux, new: Vec<u8>) = 0;
 	}
 }
 
@@ -57,6 +57,11 @@ impl<T: Trait> Module<T> {
 	/// Get the current set of authorities. These are the session keys.
 	pub fn authorities() -> Vec<T::SessionKey> {
 		AuthorityStorageVec::<T::SessionKey>::items()
+	}
+
+	/// Set the new code.
+	fn set_code(_aux: &T::PrivAux, new: Vec<u8>) {
+		Internal::<T>::set_code(new);
 	}
 }
 
@@ -78,12 +83,5 @@ impl<T: Trait> Internal<T> {
 	/// Set a single authority by index.
 	pub fn set_authority(index: u32, key: &T::SessionKey) {
 		AuthorityStorageVec::<T::SessionKey>::set_item(index, key);
-	}
-}
-
-impl<T: Trait> privileged::Dispatch<T> for Module<T> {
-	/// Set the new code.
-	fn set_code(_aux: &T::PrivAux, new: Vec<u8>) {
-		Internal::<T>::set_code(new);
 	}
 }

@@ -76,19 +76,23 @@ pub trait Dispatchable {
 	fn dispatch(self, aux: &Self::AuxType);
 }
 
+pub trait Callable<Aux> {
+	type CallType: Dispatchable + Slicable + ::serde::Serialize + Clone + PartialEq + Eq;
+}
+
 /// Declare a struct for this module, then implement dispatch logic to create a pairing of several
 /// dispatch traits and enums.
 #[macro_export]
 macro_rules! decl_module {
 	(
 		trait $trait_name:ident as $trait_instance:ident;
-		struct $mod_type:ident;
+		pub struct $mod_type:ident;
 		$($rest:tt)*
 	) => {
 		pub struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
 		decl_dispatch! {
 			trait $trait_name as $trait_instance;
-			struct $mod_type;
+			impl for $mod_type;
 			$($rest)*
 		}
 	}
@@ -99,10 +103,10 @@ macro_rules! decl_module {
 macro_rules! decl_dispatch {
 	(
 		trait $trait_name:ident as $trait_instance:ident;
-		struct $mod_type:ident;
-		pub mod $mod_name:ident aux $aux_type:ty {
+		impl for $mod_type:ident;
+		pub enum $call_type:ident where aux: $aux_type:ty {
 			$(
-				fn $fn_name:ident(_
+				fn $fn_name:ident(aux
 					$(
 						, $param_name:ident : $param:ty
 					)*
@@ -114,21 +118,21 @@ macro_rules! decl_dispatch {
 	) => {
 		__decl_dispatch_module! {
 			trait $trait_name as $trait_instance;
-			pub mod $mod_name for $mod_type;
-			aux $aux_type;
+			impl for $mod_type;
+			pub enum $call_type where aux: $aux_type;
 			$(
-				fn $fn_name(_, $($param_name: $param),*)= $id;
+				fn $fn_name(aux, $($param_name: $param),*)= $id;
 			)*
 		}
 		decl_dispatch! {
 			trait $trait_name as $trait_instance;
-			struct $mod_type;
+			impl for $mod_type;
 			$($rest)*
 		}
 	};
 	(
 		trait $trait_name:ident as $trait_instance:ident;
-		struct $mod_type:ident;
+		impl for $mod_type:ident;
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<TraitType = $trait_instance>>(d: D, aux: &D::AuxType) {
@@ -152,11 +156,10 @@ macro_rules! __decl_dispatch_fns {
 macro_rules! __decl_dispatch_module {
 	(
 		trait $trait_name:ident as $trait_instance:ident;
-		pub mod $mod_name:ident for $mod_type:ident;
-		aux $aux_type:ty;
-
+		impl for $mod_type:ident;
+		pub enum $call_type:ident where aux: $aux_type:ty;
 		$(
-			fn $fn_name:ident(_
+			fn $fn_name:ident(aux
 				$(
 					, $param_name:ident : $param:ty
 				)*
@@ -164,114 +167,159 @@ macro_rules! __decl_dispatch_module {
 			= $id:expr ;
 		)*
 	) => {
-		pub mod $mod_name {
-			use super::*;
-
-			#[derive(Clone, Copy, PartialEq, Eq)]
-			#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-			#[repr(u32)]
-			#[allow(non_camel_case_types)]
-			enum Id {
-				$(
-					#[allow(non_camel_case_types)]
-					$fn_name = $id,
-				)*
-			}
-
-			impl Id {
-				/// Derive `Some` value from a `u8`, or `None` if it's invalid.
-				fn from_u8(value: u8) -> Option<Id> {
-					match value {
-						$(
-							$id => Some(Id::$fn_name),
-						)*
-						_ => None,
-					}
-				}
-			}
-
-			#[derive(Clone, PartialEq, Eq)]
-			#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-			#[allow(missing_docs)]
-			pub enum Call<$trait_instance: $trait_name> {
-				$(
-					#[allow(non_camel_case_types)]
-					$fn_name ( $( $param ),* )
-				,)*
-				__PhantomItem($crate::dispatch::PhantomData<$trait_instance>),
-			}
-			//pub enum Callable<T: Trait> { set(T::Timestamp) }
-
-			pub trait Dispatch<$trait_instance: $trait_name>: Sized {
-				__decl_dispatch_fns!{ $aux_type => $( $fn_name ( $( $param_name $param )* ) )* }
-			}
-			//pub trait Dispatch<T: Trait> { fn set(aux: &T::PublicAux, now: T::Timestamp); }
-
-			impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
-				for Call<$trait_instance>
-				where $mod_type<$trait_instance>: Dispatch<$trait_instance>
-			//impl<T: Trait> super::Dispatchable for Callable<T> where super::Module<T>: Dispatch<T> {
-			{
-				type TraitType = $trait_instance;
-				type AuxType = $aux_type;
-				//type TraitType = T;
-				//type AuxType = T::PublicAux;
-				fn dispatch(self, aux: &Self::AuxType) {
-				//fn dispatch(self, aux: &Self::AuxType) {
-					match self {
-						$(
-							Call::$fn_name( $( $param_name ),* ) =>
-								<$mod_type<$trait_instance>>::$fn_name( aux, $( $param_name ),* ),
-							//Callable::set(a) => <super::Module<T>>::set(aux, a),
-							Call::__PhantomItem(_) => unreachable!(),
-						)*
-					}
-				}
-			}
-
-			impl<$trait_instance: $trait_name> $crate::dispatch::Slicable for Call<$trait_instance> {
-				fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
-					let id = u8::decode(input).and_then(Id::from_u8)?;
-					Some(match id {
-						$(
-							Id::$fn_name => {
-								$(
-									let $param_name = $crate::dispatch::Slicable::decode(input)?;
-								)*
-								Call :: $fn_name( $( $param_name ),* )
-							}
-						)*
-					})
-				}
-
-				fn encode(&self) -> $crate::dispatch::Vec<u8> {
-					let mut v = $crate::dispatch::Vec::new();
-					match *self {
-						$(
-							Call::$fn_name(
-								$(
-									ref $param_name
-								),*
-							) => {
-								(Id::$fn_name as u8).using_encoded(|s| v.extend(s));
-								$(
-									$param_name.using_encoded(|s| v.extend(s));
-								)*
-							}
-						)*
-						Call::__PhantomItem(_) => unreachable!(),
-					}
-					v
-				}
-
-				fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-					f(self.encode().as_slice())
-				}
-			}
-			impl<$trait_instance: $trait_name> $crate::dispatch::NonTrivialSlicable for Call<$trait_instance> {}
+		#[derive(Clone, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+		#[allow(missing_docs)]
+		pub enum $call_type<$trait_instance: $trait_name> {
+			$(
+				#[allow(non_camel_case_types)]
+				$fn_name ( $( $param ),* )
+			,)*
+			__PhantomItem($crate::dispatch::PhantomData<$trait_instance>),
 		}
+
+/*		pub trait Dispatch<$trait_instance: $trait_name>: Sized {
+			__decl_dispatch_fns!{ $aux_type => $( $fn_name ( $( $param_name $param )* ) )* }
+		}*/
+
+		impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
+			for $call_type<$trait_instance>
+//			where $mod_type<$trait_instance>: Dispatch<$trait_instance>
+		{
+			type TraitType = $trait_instance;
+			type AuxType = $aux_type;
+			fn dispatch(self, aux: &Self::AuxType) {
+				match self {
+					$(
+						$call_type::$fn_name( $( $param_name ),* ) =>
+							<$mod_type<$trait_instance>>::$fn_name( aux, $( $param_name ),* ),
+						$call_type::__PhantomItem(_) => unreachable!(),
+					)*
+				}
+			}
+		}
+
+		impl<$trait_instance: $trait_name> $crate::dispatch::Callable<$aux_type>
+			for $mod_type<$trait_instance>
+			where $trait_instance: Clone + PartialEq + Eq
+		{
+			type CallType = $call_type<$trait_instance>;
+		}
+
+		impl<$trait_instance: $trait_name> $crate::dispatch::Slicable for $call_type<$trait_instance> {
+			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
+				match u8::decode(input)? {
+					$(
+						$id => {
+							$(
+								let $param_name = $crate::dispatch::Slicable::decode(input)?;
+							)*
+							Some($call_type:: $fn_name( $( $param_name ),* ))
+						}
+					)*
+					_ => None,
+				}
+			}
+
+			fn encode(&self) -> $crate::dispatch::Vec<u8> {
+				let mut v = $crate::dispatch::Vec::new();
+				match *self {
+					$(
+						$call_type::$fn_name(
+							$(
+								ref $param_name
+							),*
+						) => {
+							($id as u8).using_encoded(|s| v.extend(s));
+							$(
+								$param_name.using_encoded(|s| v.extend(s));
+							)*
+						}
+					)*
+					$call_type::__PhantomItem(_) => unreachable!(),
+				}
+				v
+			}
+
+			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				f(self.encode().as_slice())
+			}
+		}
+		impl<$trait_instance: $trait_name> $crate::dispatch::NonTrivialSlicable for $call_type<$trait_instance> {}
 	}
 }
+
+/// Implement a meta-dispatch module to dispatch to other dispatchers.
+#[macro_export]
+macro_rules! impl_outer_dispatch {
+	(
+		pub enum $call_type:ident where aux: $aux:ty;
+		$(
+			$camelcase:ident = $id:expr ;
+		)*
+	) => {
+		#[derive(Clone, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+		#[allow(missing_docs)]
+		pub enum $call_type {
+			$(
+				$camelcase ( <$camelcase as $crate::dispatch::Callable<$aux>>::CallType )
+			,)*
+		}
+
+		impl $crate::dispatch::Dispatchable for $call_type {
+			type AuxType = $aux;
+			type TraitType = $call_type;
+			fn dispatch(self, aux: &$aux) {
+				match self {
+					$(
+						$call_type::$camelcase(call) => $camelcase::dispatch(call, &aux),
+					)*
+				}
+			}
+		}
+
+		impl $crate::dispatch::Slicable for $call_type {
+			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
+				match u8::decode(input)? {
+					$(
+						$id =>
+							Some($call_type::$camelcase( $crate::dispatch::Slicable::decode(input)? )),
+					)*
+					_ => None,
+				}
+			}
+
+			fn encode(&self) -> $crate::dispatch::Vec<u8> {
+				let mut v = $crate::dispatch::Vec::new();
+				match *self {
+					$(
+						$call_type::$camelcase( ref sub ) => {
+							($id as u8).using_encoded(|s| v.extend(s));
+							sub.using_encoded(|s| v.extend(s));
+						}
+					)*
+				}
+				v
+			}
+
+			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				f(self.encode().as_slice())
+			}
+		}
+		impl $crate::dispatch::NonTrivialSlicable for $call_type {}
+	}
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+
 
 /// Implement a dispatch module to create a pairing of a dispatch trait and enum.
 #[macro_export]

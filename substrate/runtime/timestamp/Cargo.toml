@@ -12,7 +12,7 @@ substrate-runtime-support = { path = "../../runtime-support", default_features =
 substrate-codec = { path = "../../codec", default_features = false }
 
 [dev-dependencies]
-substrate-runtime-io = { path = "../../runtime-io", default_features = false }
+substrate-runtime-io = { path = "../../runtime-io", default_features = true }
 
 [features]
 default = ["std"]
@@ -22,5 +22,4 @@ std = [
 	"serde_derive",
 	"serde/std",
 	"substrate-codec/std",
-	"substrate-runtime-io/std",
 ]
