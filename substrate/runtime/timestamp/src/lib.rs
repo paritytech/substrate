@@ -31,7 +31,6 @@ use runtime_support::storage::StorageValue;
 pub trait Trait {
 	type Timestamp: codec::Slicable + Default + serde::Serialize;
 	type PublicAux;
-	type PrivAux;
 }
 
 decl_storage! {
@@ -43,14 +42,16 @@ decl_storage! {
 
 decl_module! {
 	trait Trait as T;
-	pub mod public for Module;
-	aux T::PublicAux {
+	struct Module;
+	pub mod public aux T::PublicAux {
 		fn set(_, now: T::Timestamp) = 0;
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn get() -> T::Timestamp { <Now<T>>::get() }
+	pub fn get() -> T::Timestamp {
+		<Self as Store>::Now::get()
+	}
 }
 
 impl<T: Trait> public::Dispatch<T> for Module<T> {
@@ -72,7 +73,6 @@ mod tests {
 	impl Trait for TraitImpl {
 		type Timestamp = u64;
 		type PublicAux = u64;
-		type PrivAux = ();
 	}
 	type Timestamp = Module<TraitImpl>;
 

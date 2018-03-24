@@ -20,6 +20,7 @@
 
 #[allow(unused_imports)] #[macro_use] extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_codec as codec;
 
 #[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
 #[cfg(feature = "std")] extern crate serde;
@@ -27,41 +28,41 @@
 use rstd::prelude::*;
 use runtime_support::storage;
 use runtime_support::storage::unhashed::StorageVec;
-use runtime_support::dispatch::PrivPass;
-
-pub type SessionKey = [u8; 32];
 
 pub const AUTHORITY_AT: &'static[u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 
-struct AuthorityStorageVec {}
-impl StorageVec for AuthorityStorageVec {
-	type Item = SessionKey;
+struct AuthorityStorageVec<S: codec::Slicable + Default>(std::marker::PhantomData<S>);
+impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
+	type Item = S;
 	const PREFIX: &'static[u8] = AUTHORITY_AT;
 }
 
 pub const CODE: &'static[u8] = b":code";
 
-/// Get the current set of authorities. These are the session keys.
-pub fn authorities() -> Vec<SessionKey> {
-	AuthorityStorageVec::items()
+pub trait Trait {
+	type SessionKey: codec::Slicable + Default;
+	type PrivAux;
 }
 
-impl_dispatch! {
-	pub mod privileged;
-	fn set_code(self, new: Vec<u8>) = 0;
-}
-
-impl privileged::Dispatch for PrivPass {
-	/// Set the new code.
-	fn set_code(self, new: Vec<u8>) {
-		internal::set_code(new);
+decl_module! {
+	trait Trait as T;
+	struct Module;
+	pub mod privileged aux T::PrivAux {
+		fn set_code(_, new: Vec<u8>) = 0;
 	}
 }
 
-pub mod internal {
-	use super::*;
+impl<T: Trait> Module<T> {
+	/// Get the current set of authorities. These are the session keys.
+	pub fn authorities() -> Vec<T::SessionKey> {
+		AuthorityStorageVec::<T::SessionKey>::items()
+	}
+}
 
+pub struct Internal<T: Trait>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> Internal<T> {
 	/// Set the new code.
 	pub fn set_code(new: Vec<u8>) {
 		storage::unhashed::put_raw(CODE, &new);
@@ -70,12 +71,19 @@ pub mod internal {
 	/// Set the current set of authorities' session keys.
 	///
 	/// Called by `next_session` only.
-	pub fn set_authorities(authorities: &[SessionKey]) {
-		AuthorityStorageVec::set_items(authorities);
+	pub fn set_authorities(authorities: &[T::SessionKey]) {
+		AuthorityStorageVec::<T::SessionKey>::set_items(authorities);
 	}
 
 	/// Set a single authority by index.
-	pub fn set_authority(index: u32, key: &SessionKey) {
-		AuthorityStorageVec::set_item(index, key);
+	pub fn set_authority(index: u32, key: &T::SessionKey) {
+		AuthorityStorageVec::<T::SessionKey>::set_item(index, key);
+	}
+}
+
+impl<T: Trait> privileged::Dispatch<T> for Module<T> {
+	/// Set the new code.
+	fn set_code(_aux: &T::PrivAux, new: Vec<u8>) {
+		Internal::<T>::set_code(new);
 	}
 }

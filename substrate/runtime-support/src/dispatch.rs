@@ -17,6 +17,7 @@
 //! Dispatch system. Just dispatches calls.
 
 pub use rstd::prelude::Vec;
+pub use rstd::marker::PhantomData;
 use rstd::ops;
 pub use codec::{Slicable, Input, NonTrivialSlicable};
 
@@ -81,13 +82,13 @@ pub trait Dispatchable {
 macro_rules! decl_module {
 	(
 		trait $trait_name:ident as $trait_instance:ident;
-		pub mod $mod_name:ident for $mod_type:ident;
+		struct $mod_type:ident;
 		$($rest:tt)*
 	) => {
-		pub struct $mod_type<$trait_instance: $trait_name>(::std::marker::PhantomData<$trait_instance>);
+		pub struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
 		decl_dispatch! {
 			trait $trait_name as $trait_instance;
-			pub mod $mod_name for $mod_type;
+			struct $mod_type;
 			$($rest)*
 		}
 	}
@@ -98,9 +99,8 @@ macro_rules! decl_module {
 macro_rules! decl_dispatch {
 	(
 		trait $trait_name:ident as $trait_instance:ident;
-		pub mod $mod_name:ident for $mod_type:ident;
-
-		aux $aux_type:ty {
+		struct $mod_type:ident;
+		pub mod $mod_name:ident aux $aux_type:ty {
 			$(
 				fn $fn_name:ident(_
 					$(
@@ -122,13 +122,13 @@ macro_rules! decl_dispatch {
 		}
 		decl_dispatch! {
 			trait $trait_name as $trait_instance;
-			pub mod $mod_name for $mod_type;
+			struct $mod_type;
 			$($rest)*
 		}
 	};
 	(
 		trait $trait_name:ident as $trait_instance:ident;
-		pub mod $mod_name:ident for $mod_type:ident;
+		struct $mod_type:ident;
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<TraitType = $trait_instance>>(d: D, aux: &D::AuxType) {
@@ -198,6 +198,7 @@ macro_rules! __decl_dispatch_module {
 					#[allow(non_camel_case_types)]
 					$fn_name ( $( $param ),* )
 				,)*
+				__PhantomItem($crate::dispatch::PhantomData<$trait_instance>),
 			}
 			//pub enum Callable<T: Trait> { set(T::Timestamp) }
 
@@ -222,6 +223,7 @@ macro_rules! __decl_dispatch_module {
 							Call::$fn_name( $( $param_name ),* ) =>
 								<$mod_type<$trait_instance>>::$fn_name( aux, $( $param_name ),* ),
 							//Callable::set(a) => <super::Module<T>>::set(aux, a),
+							Call::__PhantomItem(_) => unreachable!(),
 						)*
 					}
 				}
@@ -257,6 +259,7 @@ macro_rules! __decl_dispatch_module {
 								)*
 							}
 						)*
+						Call::__PhantomItem(_) => unreachable!(),
 					}
 					v
 				}
