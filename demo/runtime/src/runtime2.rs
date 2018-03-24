@@ -59,21 +59,23 @@ type System = system::Module<Concrete>;
 
 
 impl_outer_dispatch! {
-	pub enum PubCall where aux: PublicAux;
-//	Session = 1;
-//	Staking = 2;
-	Timestamp = 3;
-//	Democracy = 5;
-//	Council = 6;
-//	CouncilVote = 7;
+	pub enum PubCall where aux: PublicAux {
+//		Session = 1,
+//		Staking = 2,
+		Timestamp = 3,
+//		Democracy = 5,
+//		Council = 6,
+//		CouncilVote = 7,
+	}
 }
 
 impl_outer_dispatch! {
-	pub enum PrivCall where aux: PrivAux;
-	Consensus = 0;
-//	Session = 1;
-//	Staking = 2;
-//	Democracy = 5;
-//	Council = 6;
-//	CouncilVote = 7;
+	pub enum PrivCall where aux: PrivAux {
+		Consensus = 0,
+//		Session = 1,
+//		Staking = 2,
+//		Democracy = 5,
+//		Council = 6,
+//		CouncilVote = 7,
+	}
 }

@@ -324,11 +324,14 @@ macro_rules! __decl_dispatch_module {
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
 #[macro_export]
 macro_rules! impl_outer_dispatch {
+	() => {};
 	(
-		pub enum $call_type:ident where aux: $aux:ty;
-		$(
-			$camelcase:ident = $id:expr ;
-		)*
+		pub enum $call_type:ident where aux: $aux:ty {
+			$(
+				$camelcase:ident = $id:expr,
+			)*
+		}
+		$( $rest:tt )*
 	) => {
 		#[derive(Clone, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Serialize, Debug))]
@@ -380,6 +383,8 @@ macro_rules! impl_outer_dispatch {
 			}
 		}
 		impl $crate::dispatch::NonTrivialSlicable for $call_type {}
+
+		impl_outer_dispatch{$($rest)*}
 	}
 }
 
