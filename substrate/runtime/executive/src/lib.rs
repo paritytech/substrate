@@ -64,9 +64,6 @@ impl<
 	>,
 	Finalisation: Executable,
 > Executive<Unchecked, Checked, System, Block, Finalisation> {
-//	type Block = generic::Block<Unchecked>;
-//	type System = system::Module<System>
-
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
 		<system::Module<System>>::initialise(header.number(), header.parent_hash(), header.extrinsics_root());
@@ -89,30 +86,28 @@ impl<
 		header.extrinsics_root().check_equal(&txs_root);
 		assert!(header.extrinsics_root() == &txs_root, "Transaction trie root must be valid.");
 	}
-/*
+
 	/// Actually execute all transitioning for `block`.
-	pub fn execute_block(mut block: Block) {
-		initialise_block(&block);
+	pub fn execute_block(block: Block) {
+		Self::initialise_block(block.header());
 
 		// any initial checks
-		initial_checks(&block);
+		Self::initial_checks(&block);
 
 		// execute transactions
-		block.transactions().cloned().for_each(execute_transaction);
+		let (header, extrinsics) = block.deconstruct();
+		extrinsics.into_iter().for_each(Self::apply_extrinsic);
 
 		// post-transactional book-keeping.
-		// TODO: some way of getting these in in a modular way.
-//		staking::internal::check_new_era();
-//		session::internal::check_rotate_session();
+		Finalisation::execute();
 
 		// any final checks
-		final_checks(&block);
+		Self::final_checks(&header);
 
 		// any stuff that we do after taking the storage root.
-		post_finalise(&block);
+		Self::post_finalise(&header);
 	}
-*/
-	// TODO fix.
+
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalise_block() -> System::Header {

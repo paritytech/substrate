@@ -41,6 +41,9 @@ impl Blocky for Block {
 	fn extrinsics(&self) -> &[Self::Extrinsic] {
 		&self.transactions[..]
 	}
+	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
+		(self.header, self.transactions)
+	}
 }
 
 impl Slicable for Block {

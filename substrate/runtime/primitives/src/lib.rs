@@ -25,6 +25,7 @@ extern crate substrate_runtime_std as rstd;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 
+use rstd::prelude::*;
 use codec::Slicable;
 pub use num_traits::identities::{Zero, One};
 use rstd::ops::{Add, Sub, AddAssign, SubAssign};
@@ -114,6 +115,7 @@ pub trait Blocky {
 	type Header: Headery;
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
+	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
