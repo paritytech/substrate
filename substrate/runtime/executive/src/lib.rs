@@ -32,7 +32,7 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use primitives::{Zero, One, Headery, Blocky, Checkable, Applyable, CheckEqual, Hashing};
+use primitives::{Zero, One, Headery, Blocky, Checkable, Applyable, CheckEqual, Hashing, Executable};
 use codec::Slicable;
 //use runtime_support::{Hashable, StorageValue, StorageMap};
 
@@ -46,7 +46,8 @@ pub struct Executive<
 	Checked,
 	System,
 	Block,
->(PhantomData<(Unchecked, Checked, System, Block)>);
+	Finalisation,
+>(PhantomData<(Unchecked, Checked, System, Block, Finalisation)>);
 
 impl<
 	Unchecked: Checkable<
@@ -57,21 +58,17 @@ impl<
 		AccountIdType = System::AccountId
 	>,
 	System: system::Trait,
-	Header: Headery<
-		Number = System::BlockNumber,
-		Hash = System::Hash,
-		Digest = System::Digest
-	>,
 	Block: Blocky<
 		Extrinsic = Unchecked,
-		Header = Header
+		Header = System::Header
 	>,
-> Executive<Unchecked, Checked, System, Block> {
+	Finalisation: Executable,
+> Executive<Unchecked, Checked, System, Block, Finalisation> {
 //	type Block = generic::Block<Unchecked>;
 //	type System = system::Module<System>
 
 	/// Start the execution of a particular block.
-	pub fn initialise_block(header: &Header) {
+	pub fn initialise_block(header: &System::Header) {
 		<system::Module<System>>::initialise(header.number(), header.parent_hash(), header.extrinsics_root());
 	}
 
@@ -81,7 +78,7 @@ impl<
 		// check parent_hash is correct.
 		let n = header.number().clone();
 		assert!(
-			n > Header::Number::zero() && <system::Module<System>>::block_hash(n - Header::Number::one()) == *header.parent_hash(),
+			n > System::BlockNumber::zero() && <system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
 			"Parent hash should be valid."
 		);
 
@@ -114,28 +111,19 @@ impl<
 		// any stuff that we do after taking the storage root.
 		post_finalise(&block);
 	}
-
+*/
 	// TODO fix.
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
-	pub fn finalise_block() -> Header {
-		staking::internal::check_new_era();
-		session::internal::check_rotate_session();
+	pub fn finalise_block() -> System::Header {
+		Finalisation::execute();
 
-		RandomSeed::kill();
-		let header = Header {
-			number: Number::take(),
-			digest: Digest::take(),
-			parent_hash: ParentHash::take(),
-			transaction_root: TransactionsRoot::take(),
-			state_root: storage_root().into(),
-		};
-
-		post_finalise(&header);
+		let header = <system::Module<System>>::finalise();
+		Self::post_finalise(&header);
 
 		header
 	}
-*/
+
 	/// Apply outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
 	pub fn apply_extrinsic(utx: Unchecked) {
@@ -158,7 +146,7 @@ impl<
 		tx.apply();
 	}
 
-	fn final_checks(header: &Header) {
+	fn final_checks(header: &System::Header) {
 		// check digest
 		assert!(header.digest() == &<system::Module<System>>::digest());
 
@@ -171,10 +159,10 @@ impl<
 		assert!(header.state_root() == &storage_root, "Storage root must match that calculated.");
 	}
 
-	fn post_finalise(block: &Block) {
+	fn post_finalise(header: &System::Header) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
-		<system::Module<System>>::record_block_hash(block.header())
+		<system::Module<System>>::record_block_hash(header)
 	}
 }
 /*

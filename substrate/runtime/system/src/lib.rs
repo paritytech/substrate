@@ -47,6 +47,7 @@ pub trait Trait {
 	type Log;
 	type Digest: Parameter + Default + Digesty<Item = Self::Log>;
 	type AccountId: Parameter;
+	type Header: Headery<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
 }
 
 decl_module! {
@@ -63,7 +64,7 @@ decl_storage! {
 	// The current block number being processed. Set by `execute_block`.
 	Number get(block_number): b"sys:num" => required T::BlockNumber;
 	ParentHash get(parent_hash): b"sys:pha" => required T::Hash;
-	TransactionsRoot get(transactions_root): b"sys:txr" => required T::Hash;
+	ExtrinsicsRoot get(extrinsics_root): b"sys:txr" => required T::Hash;
 	Digest get(digest): b"sys:dig" => default T::Digest;
 }
 
@@ -73,17 +74,20 @@ impl<T: Trait> Module<T> {
 		// populate environment.
 		<Number<T>>::put(number);
 		<ParentHash<T>>::put(parent_hash);
-		<TransactionsRoot<T>>::put(txs_root);
+		<ExtrinsicsRoot<T>>::put(txs_root);
 		<RandomSeed<T>>::put(Self::calculate_random());
 	}
 
 	/// Remove temporary "environment" entries in storage.
-	pub fn finalise() {
-		<Number<T>>::kill();
-		<ParentHash<T>>::kill();
+	pub fn finalise() -> T::Header {
 		<RandomSeed<T>>::kill();
-		<Digest<T>>::kill();
-		<TransactionsRoot<T>>::kill();
+
+		let number = <Number<T>>::take();
+		let parent_hash = <ParentHash<T>>::take();
+		let digest = <Digest<T>>::take();
+		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
+		let storage_root = T::Hashing::storage_root();
+		T::Header::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
@@ -176,7 +180,7 @@ mod tests {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
 			state_root: hex!("cc3f1f5db826013193e502c76992b5e933b12367e37a269a9822b89218323e9f").into(),
-			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
+			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
 
@@ -199,7 +203,7 @@ mod tests {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
 			state_root: [0u8; 32].into(),
-			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
+			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
 
@@ -215,14 +219,14 @@ mod tests {
 
 	#[test]
 	#[should_panic]
-	fn block_import_of_bad_transaction_root_fails() {
+	fn block_import_of_bad_extrinsics_root_fails() {
 		let mut t = new_test_ext();
 
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
 			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0").into(),
-			transaction_root: [0u8; 32].into(),
+			extrinsics_root: [0u8; 32].into(),
 			digest: Digest { logs: vec![], },
 		};
 

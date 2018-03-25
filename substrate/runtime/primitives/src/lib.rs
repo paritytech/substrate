@@ -60,6 +60,21 @@ impl<T:
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
+/// Something that can be executed.
+pub trait Executable {
+	fn execute();
+}
+
+impl Executable for () {
+	fn execute() {}
+}
+impl<A: Executable, B: Executable> Executable for (A, B) {
+	fn execute() {
+		A::execute();
+		B::execute();
+	}
+}
+
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Slicable`.
 pub trait Digesty {

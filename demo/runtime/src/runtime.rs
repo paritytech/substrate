@@ -61,6 +61,7 @@ impl system::Trait for Concrete {
 	type Log = demo_primitives::header::Log;
 	type Digest = demo_primitives::header::Digest;
 	type AccountId = demo_primitives::AccountId;
+	type Header = demo_primitives::header::Header;
 }
 pub type System = system::Module<Concrete>;
 

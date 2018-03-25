@@ -55,6 +55,10 @@ pub type Executive = executive::Executive<
 	transaction::CheckedTransaction,
 	runtime::Concrete,
 	block::Block,
+	(
+//		staking::internal::check_new_era();
+//		session::internal::check_rotate_session();
+	),
 >;
 
 //#[cfg(feature = "std")] pub mod genesismap;
