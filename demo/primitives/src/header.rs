@@ -23,7 +23,7 @@ use rstd::vec::Vec;
 use codec::{Input, Slicable};
 
 pub use primitives::block::Id;
-pub use runtime_primitives::Headery;
+pub use runtime_primitives::{Digesty, Headery};
 
 /// Used to refer to a block number.
 pub type Number = u64;
@@ -63,6 +63,13 @@ impl Slicable for Digest {
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.logs.using_encoded(f)
+	}
+}
+
+impl Digesty for Digest {
+	type Item = Log;
+	fn push(&mut self, item: Self::Item) {
+		self.logs.push(item);
 	}
 }
 

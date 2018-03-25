@@ -38,10 +38,10 @@ extern crate safe_mix;
 #[cfg(feature = "std")] extern crate rustc_hex;
 
 extern crate substrate_codec as codec;
-#[cfg(feature = "std")] #[allow(unused_imports)] #[macro_use] extern crate substrate_primitives as primitives;
+#[cfg(feature = "std")] #[allow(unused_imports)] #[macro_use] extern crate substrate_primitives;
 extern crate demo_primitives;
 
-#[cfg(test)] #[macro_use] extern crate hex_literal;
+//#[cfg(test)] #[macro_use] extern crate hex_literal;
 
 extern crate integer_sqrt;
 

@@ -17,7 +17,6 @@
 //! Block and header type definitions.
 
 use rstd::prelude::*;
-use rstd::slice::Iter;
 use codec::{Input, Slicable};
 use transaction::UncheckedTransaction;
 use runtime_primitives::Blocky;

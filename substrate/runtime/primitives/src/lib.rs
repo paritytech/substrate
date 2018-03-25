@@ -19,9 +19,41 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate num_traits;
+extern crate substrate_runtime_std as rstd;
+#[cfg(not(feature = "std"))] extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
+extern crate substrate_primitives;
 
 use codec::Slicable;
+pub use num_traits::identities::{Zero, One};
+use rstd::ops::{Add, Sub, AddAssign, SubAssign};
+
+pub trait Hashing {
+	type Output;
+	fn hash_of<S: Slicable>(s: &S) -> Self::Output;
+	fn enumerated_trie_root(items: &Vec<&[u8]>) -> Self::Output;
+}
+
+pub trait SimpleArithmetic:
+	Zero + One +
+	Add<Self, Output = Self> + AddAssign<Self> +
+	Sub<Self, Output = Self> + SubAssign<Self> +
+	PartialOrd<Self> + Ord
+{}
+impl<T:
+	Zero + One +
+	Add<Self, Output = Self> + AddAssign<Self> +
+	Sub<Self, Output = Self> + SubAssign<Self> +
+	PartialOrd<Self> + Ord
+> SimpleArithmetic for T {}
+
+/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
+/// each `Slicable`.
+pub trait Digesty {
+	type Item: Sized;
+	fn push(&mut self, item: Self::Item);
+}
 
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
@@ -76,4 +108,28 @@ pub trait Executable {
 	fn index(&self) -> &Self::IndexType;
 	fn sender(&self) -> &Self::AccountIdType;
 	fn execute(self);
+}
+
+/// Something that can be checked for equality and printed out to a debug channel if bad.
+pub trait CheckEqual {
+	fn check_equal(&self, other: &Self);
+}
+
+impl CheckEqual for substrate_primitives::H256 {
+	#[cfg(feature = "std")]
+	fn check_equal(&self, other: &Self) {
+		use substrate_primitives::hexdisplay::HexDisplay;
+		if &self.0 != &other.0 {
+			println!("Hash: given={}, expected={}", HexDisplay::from(&self.0), HexDisplay::from(&other.0));
+		}
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn check_equal(&self, other: &Self) {
+		if self != *other {
+			runtime_io::print("Hash not equal");
+			runtime_io::print(&self.0[..]);
+			runtime_io::print(&other.0[..]);
+		}
+	}
 }

@@ -23,56 +23,29 @@
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
-extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_primitives as primitives;
 
 #[cfg(feature = "std")] extern crate serde;
 
 extern crate safe_mix;
 
 use rstd::prelude::*;
+use primitives::{Digesty, CheckEqual, SimpleArithmetic, Zero, One, Hashing};
 //use runtime_io::print;
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::block;
 use safe_mix::TripletMix;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities};
 
-pub trait Hashing {
-	type Output;
-	fn hash_of<S: Slicable>(s: &S) -> Self::Output;
-}
-
-// TODO: move to a module that uses it.
-pub trait CheckEqual {
-	fn check_equal(&self, other: &Self);
-}
-impl CheckEqual for primitives::Hash {
-	#[cfg(feature = "std")]
-	fn check_equal(&self, other: &Self) {
-		use primitives::hexdisplay::HexDisplay;
-		if &self.0 != &other.0 {
-			println!("Hash: given={}, expected={}", HexDisplay::from(&self.0), HexDisplay::from(&other.0));
-		}
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn check_equal(&self, other: &Self) {
-		if self != *other {
-			print("Hash not equal");
-			print(&self.0[..]);
-			print(&other.0[..]);
-		}
-	}
-}
-
 pub trait Trait {
-	type Index: Parameter + Default + PartialOrd + Ord + rstd::ops::Add<Self::Index, Output = Self::Index> + From<u64>;
-	type BlockNumber: Parameter + PartialOrd<Self::BlockNumber> + Ord + rstd::ops::Sub<Self::BlockNumber, Output = Self::BlockNumber> + From<u64>;
+	type Index: Parameter + Default + SimpleArithmetic;
+	type BlockNumber: Parameter + SimpleArithmetic;
 	type Hash: Parameter + rstd::ops::BitOr<Self::Hash, Output = Self::Hash> + rstd::ops::BitAnd<Self::Hash, Output = Self::Hash> + Default + Copy + CheckEqual;
 	type Hashing: Hashing<Output = Self::Hash>;
-	type Digest: Parameter + Default;
+	type Log;
+	type Digest: Parameter + Default + Digesty<Item = Self::Log>;
 	type AccountId: Parameter;
 }
 
@@ -91,7 +64,7 @@ decl_storage! {
 	Number get(block_number): b"sys:num" => required T::BlockNumber;
 	ParentHash get(parent_hash): b"sys:pha" => required T::Hash;
 	TransactionsRoot get(transactions_root): b"sys:txr" => required T::Hash;
-	Digest: b"sys:dig" => default block::Digest;	// TODO: change to T::Digest (will require traitification)
+	Digest: b"sys:dig" => default T::Digest;
 }
 
 impl<T: Trait> Module<T> {
@@ -114,9 +87,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
-	pub fn deposit_log(log: block::Log) {
+	pub fn deposit_log(item: T::Log) {
 		let mut l = <Digest<T>>::get();
-		l.logs.push(log);
+		l.push(item);
 		<Digest<T>>::put(l);
 	}
 
@@ -129,10 +102,12 @@ impl<T: Trait> Module<T> {
 
 	/// Calculate the current block's random seed.
 	fn calculate_random() -> T::Hash {
-		let c = Self::block_number() - T::BlockNumber::from(1u64);
 		(0..81)
-			.map(T::BlockNumber::from)
-			.map(|i| if c >= i { Self::block_hash(c.clone() - i) } else { Default::default() })
+			.scan(
+				{ let mut n = Self::block_number().clone(); n -= T::BlockNumber::one(); n },
+				|c, _| { if *c > T::BlockNumber::zero() { *c -= T::BlockNumber::one() }; Some(c.clone())
+			})
+			.map(Self::block_hash)
 			.triplet_mix()
 	}
 
@@ -140,8 +115,8 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities {
 		map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::from(0u64))).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
-			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::from(1u64).encode(),
+			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
+			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<RandomSeed<T>>::key()).to_vec() => T::Hash::default().encode()
 		]
@@ -156,7 +131,7 @@ impl<T: Trait> Module<T> {
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_index(who: &T::AccountId) {
-		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::from(1u64));
+		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::one());
 	}
 }
 

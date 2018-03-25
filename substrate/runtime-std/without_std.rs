@@ -34,6 +34,7 @@ pub use core::intrinsics;
 pub use core::iter;
 pub use core::marker;
 pub use core::mem;
+pub use core::num;
 pub use core::ops;
 pub use core::ptr;
 pub use core::slice;

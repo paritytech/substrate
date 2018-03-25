@@ -23,6 +23,7 @@ pub use std::fmt;
 pub use std::iter;
 pub use std::marker;
 pub use std::mem;
+pub use std::num;
 pub use std::ops;
 pub use std::ptr;
 pub use std::rc;

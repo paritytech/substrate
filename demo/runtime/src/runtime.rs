@@ -18,14 +18,18 @@
 
 use codec::Slicable;
 use runtime_support::Hashable;
-use {consensus, timestamp, system, demo_primitives, primitives};
+use runtime_io::enumerated_trie_root;
+use {consensus, timestamp, system, demo_primitives, runtime_primitives};
 
 // TODO: move into runtime support.
 pub struct BlakeTwo256;
-impl system::Hashing for BlakeTwo256 {
-	type Output = primitives::H256;
+impl runtime_primitives::Hashing for BlakeTwo256 {
+	type Output = demo_primitives::Hash;
 	fn hash_of<S: Slicable>(s: &S) -> Self::Output {
 		Self::Output::from(s.blake2_256())
+	}
+	fn enumerated_trie_root(items: &Vec<&[u8]>) -> Self::Output {
+		enumerated_trie_root(items).into()
 	}
 }
 
@@ -51,6 +55,7 @@ impl system::Trait for Concrete {
 	type BlockNumber = demo_primitives::BlockNumber;
 	type Hash = demo_primitives::Hash;
 	type Hashing = BlakeTwo256;
+	type Log = demo_primitives::header::Log;
 	type Digest = demo_primitives::header::Digest;
 	type AccountId = demo_primitives::AccountId;
 }

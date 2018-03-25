@@ -181,9 +181,9 @@ impl Executable for CheckedTransaction {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives;
+	use substrate_primitives;
 	use codec::Slicable;
-	use primitives::hexdisplay::HexDisplay;
+	use substrate_primitives::hexdisplay::HexDisplay;
 	use timestamp;
 	use runtime::Call;
 
@@ -195,7 +195,7 @@ mod tests {
 				nonce: 999u64,
 				function: Call::Timestamp(timestamp::Call::set(135135)),
 			},
-			signature: primitives::hash::H512([0; 64]),
+			signature: substrate_primitives::hash::H512([0; 64]),
 		};
 		// 71000000
 		// 0101010101010101010101010101010101010101010101010101010101010101

@@ -21,7 +21,7 @@
 
 #[cfg_attr(test, macro_use)] extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
-#[cfg(test)] extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_system as system;
@@ -32,8 +32,8 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use primitives::{Headery, Blocky, Checkable, Executable};
-//use runtime_io::{print, storage_root, enumerated_trie_root};
+use primitives::{Zero, One, Headery, Blocky, Checkable, Executable, CheckEqual, Hashing};
+use runtime_io::{storage_root, enumerated_trie_root};
 use codec::Slicable;
 //use runtime_support::{Hashable, StorageValue, StorageMap};
 
@@ -75,22 +75,25 @@ impl<
 	pub fn initialise_block(header: &Header) {
 		<system::Module<System>>::initialise(header.number(), header.parent_hash(), header.extrinsics_root());
 	}
-/*
+
 	fn initial_checks(block: &Block) {
+		let header = block.header();
+
 		// check parent_hash is correct.
+		let n = header.number().clone();
 		assert!(
-			header.number() > System::Number::from(0u64) && <system::Module<System>>::block_hash(header.number - System::Number::from(1u64)) == *block.parent_hash(),
+			n > Header::Number::zero() && <system::Module<System>>::block_hash(n - Header::Number::one()) == *header.parent_hash(),
 			"Parent hash should be valid."
 		);
 
 		// check transaction trie root represents the transactions.
-		let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
+		let txs = block.extrinsics().iter().map(Slicable::encode).collect::<Vec<_>>();
 		let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-		let txs_root = enumerated_trie_root(&txs).into();
-		info_expect_equal_hash(&header.transaction_root, &txs_root);
-		assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
+		let txs_root = System::Hashing::enumerated_trie_root(&txs);
+		header.extrinsics_root().check_equal(&txs_root);
+		assert!(header.extrinsics_root() == &txs_root, "Transaction trie root must be valid.");
 	}
-
+/*
 	/// Actually execute all transitioning for `block`.
 	pub fn execute_block(mut block: Block) {
 		initialise_block(&block);
