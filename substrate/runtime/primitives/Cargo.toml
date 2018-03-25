@@ -1,0 +1,13 @@
+[package]
+name = "substrate-runtime-primitives"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+substrate-codec = { path = "../../codec", default_features = false }
+
+[features]
+default = ["std"]
+std = [
+	"substrate-codec/std",
+]

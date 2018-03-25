@@ -22,6 +22,8 @@
 #[macro_use] extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 
+extern crate substrate_runtime_primitives as runtime_primitives;
+
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_executive as executive;
 extern crate substrate_runtime_system as system;
@@ -48,8 +50,11 @@ pub mod block;
 pub mod transaction;
 pub mod api;
 
-type Executive = executive::Executive<
-	//... the type params...
+pub type Executive = executive::Executive<
+	transaction::UncheckedTransaction,
+	transaction::CheckedTransaction,
+	runtime::Concrete,
+	block::Block,
 >;
 
 //#[cfg(feature = "std")] pub mod genesismap;

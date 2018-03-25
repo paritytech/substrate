@@ -18,6 +18,7 @@ substrate-primitives = { path = "../../substrate/primitives" }
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-runtime-consensus = { path = "../../substrate/runtime/consensus" }
 substrate-runtime-executive = { path = "../../substrate/runtime/executive" }
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-runtime-system = { path = "../../substrate/runtime/system" }
 substrate-runtime-timestamp = { path = "../../substrate/runtime/timestamp" }
 demo-primitives = { path = "../primitives" }
@@ -33,6 +34,7 @@ std = [
 	"substrate-primitives/std",
 	"substrate-runtime-consensus/std",
 	"substrate-runtime-executive/std",
+	"substrate-runtime-primitives/std",
 	"substrate-runtime-system/std",
 	"substrate-runtime-timestamp/std",
 	"demo-primitives/std",

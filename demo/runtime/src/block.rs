@@ -17,13 +17,11 @@
 //! Block and header type definitions.
 
 use rstd::prelude::*;
+use rstd::slice::Iter;
 use codec::{Input, Slicable};
 use transaction::UncheckedTransaction;
-
-pub use demo_primitives::block::{Header, Digest, Log, Number, HeaderHash};
-
-/// The block "body": A bunch of transactions.
-pub type Body = Vec<UncheckedTransaction>;
+use runtime_primitives::Blocky;
+pub use demo_primitives::header::{Header, Digest, Log, Number, HeaderHash};
 
 /// A block on the chain.
 #[derive(PartialEq, Eq, Clone)]
@@ -32,7 +30,18 @@ pub struct Block {
 	/// The block header.
 	pub header: Header,
 	/// All relay-chain transactions.
-	pub transactions: Body,
+	pub transactions: Vec<UncheckedTransaction>,	// TODO: rename extrinsics.
+}
+
+impl Blocky for Block {
+	type Extrinsic = UncheckedTransaction;
+	type Header = Header;
+	fn header(&self) -> &Self::Header {
+		&self.header
+	}
+	fn extrinsics(&self) -> &[Self::Extrinsic] {
+		&self.transactions[..]
+	}
 }
 
 impl Slicable for Block {

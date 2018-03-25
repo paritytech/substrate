@@ -22,89 +22,60 @@
 #[cfg_attr(test, macro_use)] extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_runtime_io as runtime_io;
-#[cfg(test)] extern crate substrate_codec as codec;
-extern crate substrate_primitives as primitives;
+extern crate substrate_codec as codec;
+extern crate substrate_runtime_primitives as primitives;
+extern crate substrate_runtime_system as system;
 
 #[cfg(feature = "std")] extern crate serde;
 
-#[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
-extern crate safe_mix;
+//extern crate safe_mix;
 
 use rstd::prelude::*;
-use rstd::mem;
-use runtime_io::{print, storage_root, enumerated_trie_root};
+use rstd::marker::PhantomData;
+use primitives::{Headery, Blocky, Checkable, Executable};
+//use runtime_io::{print, storage_root, enumerated_trie_root};
 use codec::Slicable;
-use runtime_support::{Hashable, StorageValue, StorageMap};
+//use runtime_support::{Hashable, StorageValue, StorageMap};
 
-use primitives::{AuthorityId, Hash, BlockNumber, Header, Log};
-use primitives::block::{generic, Number as BlockNumber, Header, Log};
+//use primitives::{AuthorityId, Hash, BlockNumber, Header, Log};
+//use primitives::block::{generic, Number as BlockNumber, Header, Log};
 
-use runtime::{staking, session};
-use runtime::staking::public_pass_from_payment;
-
-use safe_mix::TripletMix;
-use consensus;
-
-pub trait Checkable {
-	type CheckedType;
-	fn check(self) -> Option<Self::CheckedType>;
-}
-
-pub trait Dispatchable {
-	type AccountIdType;
-	type TxOrderType;
-	fn nonce(&self) -> Self::TxOrderType;
-	fn sender(&self) -> &Self::AccountIdType;
-	fn dispatch(self);
-}
-
-pub trait Blocky: Sized {
-	type Number: Sized;
-	type Hash: Sized;
-	type Digest: Sized;
-	type Transaction: Sized;
-	type Header: Sized + Slicable;
-	fn number(&self) -> Self::Number;
-	fn transactions_root(&self) -> &Self::Hash;
-	fn state_root(&self) -> &Self::Hash;
-	fn parent_hash(&self) -> &Self::Hash;
-	fn digest(&self) -> &Self::Digest;
-	fn transactions(&self) -> Iterator<&Transaction>;
-	fn to_header(
-		number: Self::Number,
-		transactions_root: Self::Hash,
-		state_root: Self::Hash,
-		parent_hash: Self::Hash,
-		digest: Self::Digest
-	) -> Self::Header;
-}
+//use safe_mix::TripletMix;
 
 pub struct Executive<
-	Unchecked: Checkable<CheckedType = Checked> + PartialEq + Eq + Clone + Slicable,
-	Checked: Dispatchable,
-	System: system::Trait,
-	Block: Blocky,
+	Unchecked,
+	Checked,
+	System,
+	Block,
 >(PhantomData<(Unchecked, Checked, System, Block)>);
 
 impl<
-	Unchecked: Checkable<CheckedType = Checked> + PartialEq + Eq + Clone + Slicable,
-	Checked: Dispatchable<TxOrderType = Self::System::TxOrder>,
+	Unchecked: Checkable<
+		CheckedType = Checked
+	> + PartialEq + Eq + Clone + Slicable,
+	Checked: Executable<
+		IndexType = System::Index,
+		AccountIdType = System::AccountId
+	>,
 	System: system::Trait,
+	Header: Headery<
+		Number = System::BlockNumber,
+		Hash = System::Hash,
+		Digest = System::Digest
+	>,
 	Block: Blocky<
-		Transaction = Self::Unchecked,
-		Number = Self::System::Number,
-		Hash = Self::System::Hash,
-		Digest = Self::System::Digest
+		Extrinsic = Unchecked,
+		Header = Header
 	>,
 > Executive<Unchecked, Checked, System, Block> {
 //	type Block = generic::Block<Unchecked>;
 //	type System = system::Module<System>
 
 	/// Start the execution of a particular block.
-	pub fn initialise_block(block: &Block) {
-		system::initialise(block.number(), block.parent_hash(), block.transactions_root());
+	pub fn initialise_block(header: &Header) {
+		<system::Module<System>>::initialise(header.number(), header.parent_hash(), header.extrinsics_root());
 	}
-
+/*
 	fn initial_checks(block: &Block) {
 		// check parent_hash is correct.
 		assert!(
@@ -203,7 +174,7 @@ impl<
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
 		<system::Module<T::System>>::record_block_hash(block.number(), &block.to_header())
-	}
+	}*/
 }
 /*
 #[cfg(test)]

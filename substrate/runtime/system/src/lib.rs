@@ -68,7 +68,7 @@ impl CheckEqual for primitives::Hash {
 }
 
 pub trait Trait {
-	type TxOrder: Parameter + Default + PartialOrd + Ord + rstd::ops::Add<Self::TxOrder, Output = Self::TxOrder> + From<u64>;
+	type Index: Parameter + Default + PartialOrd + Ord + rstd::ops::Add<Self::Index, Output = Self::Index> + From<u64>;
 	type BlockNumber: Parameter + PartialOrd<Self::BlockNumber> + Ord + rstd::ops::Sub<Self::BlockNumber, Output = Self::BlockNumber> + From<u64>;
 	type Hash: Parameter + rstd::ops::BitOr<Self::Hash, Output = Self::Hash> + rstd::ops::BitAnd<Self::Hash, Output = Self::Hash> + Default + Copy + CheckEqual;
 	type Hashing: Hashing<Output = Self::Hash>;
@@ -83,8 +83,8 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait>;
 
-	pub Nonce get(nonce): b"sys:non" => default map [ T::AccountId => T::TxOrder ];
-	pub BlockHashAt get(block_hash): b"sys:old" => required map [ T::BlockNumber => T::Hash ];
+	pub AccountIndex get(account_index): b"sys:non" => default map [ T::AccountId => T::Index ];
+	pub BlockHash get(block_hash): b"sys:old" => required map [ T::BlockNumber => T::Hash ];
 
 	RandomSeed get(random_seed): b"sys:rnd" => required T::Hash;
 	// The current block number being processed. Set by `execute_block`.
@@ -96,7 +96,7 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
 	/// Start the execution of a particular block.
-	pub fn initialise(number: T::BlockNumber, parent_hash: T::Hash, txs_root: T::Hash) {
+	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
 		<Number<T>>::put(number);
 		<ParentHash<T>>::put(parent_hash);
@@ -124,7 +124,7 @@ impl<T: Trait> Module<T> {
 	pub fn record_block_hash<H: Slicable>(number: T::BlockNumber, header: &H) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
-		<BlockHashAt<T>>::insert(&number, &T::Hashing::hash_of(header));
+		<BlockHash<T>>::insert(&number, &T::Hashing::hash_of(header));
 	}
 
 	/// Calculate the current block's random seed.
@@ -140,7 +140,7 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities {
 		map![
-			twox_128(&<BlockHashAt<T>>::key_for(T::BlockNumber::from(0u64))).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
+			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::from(0u64))).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::from(1u64).encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<RandomSeed<T>>::key()).to_vec() => T::Hash::default().encode()
@@ -155,8 +155,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Increment a particular account's nonce by 1.
-	pub fn inc_nonce(who: &T::AccountId) {
-		<Number<T>>::insert(who, Self::nonce(who) + T::TxOrder::from(1u64));
+	pub fn inc_index(who: &T::AccountId) {
+		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::from(1u64));
 	}
 }
 
@@ -169,7 +169,7 @@ mod tests {
 		let mut t: TestExternalities = map![
 			twox_128(&staking::FreeBalanceOf::key_for(*One)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(staking::TransactionFee::key()).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode()
+			twox_128(&BlockHash::key_for(&0)).to_vec() => [69u8; 32].encode()
 		];
 
 		let tx = UncheckedTransaction {

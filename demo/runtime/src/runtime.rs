@@ -29,8 +29,8 @@ impl system::Hashing for BlakeTwo256 {
 	}
 }
 
-type PublicAux = demo_primitives::AccountId;
-type PrivAux = ();
+pub type PublicAux = demo_primitives::AccountId;
+pub type PrivAux = ();
 
 pub struct Concrete;
 
@@ -47,11 +47,11 @@ impl consensus::Trait for Concrete {
 pub type Consensus = consensus::Module<Concrete>;
 
 impl system::Trait for Concrete {
-	type TxOrder = demo_primitives::TxOrder;
+	type Index = demo_primitives::TxOrder;
 	type BlockNumber = demo_primitives::BlockNumber;
 	type Hash = demo_primitives::Hash;
 	type Hashing = BlakeTwo256;
-	type Digest = demo_primitives::block::Digest;
+	type Digest = demo_primitives::header::Digest;
 	type AccountId = demo_primitives::AccountId;
 }
 pub type System = system::Module<Concrete>;

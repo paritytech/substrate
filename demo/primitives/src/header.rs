@@ -23,6 +23,7 @@ use rstd::vec::Vec;
 use codec::{Input, Slicable};
 
 pub use primitives::block::Id;
+pub use runtime_primitives::Headery;
 
 /// Used to refer to a block number.
 pub type Number = u64;
@@ -92,6 +93,28 @@ impl Header {
 			state_root: Default::default(),
 			transaction_root: Default::default(),
 			digest: Default::default(),
+		}
+	}
+}
+
+impl Headery for Header {
+	type Number = Number;
+	type Hash = HeaderHash;
+	type Digest = Digest;
+	fn number(&self) -> &Self::Number { &self.number }
+	fn extrinsics_root(&self) -> &Self::Hash { &self.transaction_root }
+	fn state_root(&self) -> &Self::Hash { &self.state_root }
+	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
+	fn digest(&self) -> &Self::Digest { &self.digest }
+	fn new(
+		number: Self::Number,
+		extrinsics_root: Self::Hash,
+		state_root: Self::Hash,
+		parent_hash: Self::Hash,
+		digest: Self::Digest
+	) -> Self {
+		Header {
+			number, transaction_root: extrinsics_root, state_root, parent_hash, digest
 		}
 	}
 }

@@ -40,6 +40,7 @@ members = [
 	"substrate/runtime-support",
 	"substrate/runtime/consensus",
 	"substrate/runtime/executive",
+	"substrate/runtime/primitives",
 	"substrate/runtime/system",
 	"substrate/runtime/timestamp",
 	"substrate/serializer",

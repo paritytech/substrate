@@ -29,6 +29,7 @@ extern crate serde_derive;
 extern crate serde;
 
 extern crate substrate_runtime_std as rstd;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_primitives as primitives;
 #[cfg(test)]
 extern crate substrate_serializer;
@@ -44,10 +45,10 @@ macro_rules! try_opt {
 	}
 }
 
-pub mod block;
+pub mod header;
 
-pub use self::block::{Header, Log, Digest};
-pub use self::block::Number as BlockNumber;
+pub use self::header::{Header, Log, Digest};
+pub use self::header::Number as BlockNumber;
 
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
 /// certainly continue to be the same as the substrate's `AuthorityId`.

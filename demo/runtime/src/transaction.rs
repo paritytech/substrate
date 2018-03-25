@@ -20,8 +20,9 @@ use rstd::prelude::*;
 use rstd::ops;
 use codec::{Input, Slicable};
 use demo_primitives::{AccountId, TxOrder, Signature};
-use runtime::PubCall;
-use executive::{Checkable, Executable};
+use runtime::Call;
+use runtime_primitives::{Checkable, Executable};
+use runtime_support::Dispatchable;
 
 #[cfg(feature = "std")]
 use std::fmt;
@@ -35,7 +36,7 @@ pub struct Transaction {
 	/// The number of transactions have come before from the same signer.
 	pub nonce: TxOrder,
 	/// The function that should be called.
-	pub function: PubCall,
+	pub function: Call,
 }
 
 impl Slicable for Transaction {
@@ -159,15 +160,15 @@ impl Checkable for UncheckedTransaction {
 }
 
 impl Executable for CheckedTransaction {
-	type TxOrderType = TxOrder;
+	type IndexType = TxOrder;
 	type AccountIdType = AccountId;
 
-	fn nonce(&self) -> Self::TxOrderType {
-		self.0.nonce
+	fn index(&self) -> &Self::IndexType {
+		&self.0.transaction.nonce
 	}
 
 	fn sender(&self) -> &Self::AccountIdType {
-		self.0.signed
+		&self.0.transaction.signed
 	}
 
 	fn execute(self) {
