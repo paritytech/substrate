@@ -28,10 +28,10 @@ integer-sqrt = "0.1.0"
 default = ["std"]
 std = [
 	"substrate-codec/std",
+	"substrate-primitives/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
-	"substrate-primitives/std",
 	"substrate-runtime-consensus/std",
 	"substrate-runtime-executive/std",
 	"substrate-runtime-primitives/std",

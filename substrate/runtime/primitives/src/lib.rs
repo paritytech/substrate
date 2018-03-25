@@ -33,6 +33,7 @@ pub trait Hashing {
 	type Output;
 	fn hash_of<S: Slicable>(s: &S) -> Self::Output;
 	fn enumerated_trie_root(items: &Vec<&[u8]>) -> Self::Output;
+	fn storage_root() -> Self::Output;
 }
 
 pub trait SimpleArithmetic:
@@ -47,6 +48,17 @@ impl<T:
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	PartialOrd<Self> + Ord
 > SimpleArithmetic for T {}
+
+pub trait SimpleBitOps:
+	Sized +
+	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitAnd<Self, Output = Self>
+{}
+impl<T:
+	Sized +
+	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitAnd<Self, Output = Self>
+> SimpleBitOps for T {}
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Slicable`.

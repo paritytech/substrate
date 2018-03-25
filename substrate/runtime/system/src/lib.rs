@@ -30,7 +30,7 @@ extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
-use primitives::{Digesty, CheckEqual, SimpleArithmetic, Zero, One, Hashing};
+use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Hashing, Headery};
 //use runtime_io::print;
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
@@ -42,7 +42,7 @@ use runtime_io::{twox_128, TestExternalities};
 pub trait Trait {
 	type Index: Parameter + Default + SimpleArithmetic;
 	type BlockNumber: Parameter + SimpleArithmetic;
-	type Hash: Parameter + rstd::ops::BitOr<Self::Hash, Output = Self::Hash> + rstd::ops::BitAnd<Self::Hash, Output = Self::Hash> + Default + Copy + CheckEqual;
+	type Hash: Parameter + SimpleBitOps + Default + Copy + CheckEqual;
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Log;
 	type Digest: Parameter + Default + Digesty<Item = Self::Log>;
@@ -64,7 +64,7 @@ decl_storage! {
 	Number get(block_number): b"sys:num" => required T::BlockNumber;
 	ParentHash get(parent_hash): b"sys:pha" => required T::Hash;
 	TransactionsRoot get(transactions_root): b"sys:txr" => required T::Hash;
-	Digest: b"sys:dig" => default T::Digest;
+	Digest get(digest): b"sys:dig" => default T::Digest;
 }
 
 impl<T: Trait> Module<T> {
@@ -94,10 +94,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Records a particular block number and hash combination.
-	pub fn record_block_hash<H: Slicable>(number: T::BlockNumber, header: &H) {
+	pub fn record_block_hash<H: Headery<Number = T::BlockNumber>>(header: &H) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
-		<BlockHash<T>>::insert(&number, &T::Hashing::hash_of(header));
+		<BlockHash<T>>::insert(header.number(), &T::Hashing::hash_of(header));
 	}
 
 	/// Calculate the current block's random seed.

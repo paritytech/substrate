@@ -33,7 +33,6 @@ extern crate substrate_runtime_system as system;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use primitives::{Zero, One, Headery, Blocky, Checkable, Executable, CheckEqual, Hashing};
-use runtime_io::{storage_root, enumerated_trie_root};
 use codec::Slicable;
 //use runtime_support::{Hashable, StorageValue, StorageMap};
 
@@ -115,7 +114,7 @@ impl<
 		// any stuff that we do after taking the storage root.
 		post_finalise(&block);
 	}
-/*
+
 	// TODO fix.
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
@@ -136,7 +135,7 @@ impl<
 
 		header
 	}
-*/
+
 	/// Execute a transaction outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
 	pub fn execute_transaction(utx: UncheckedTransaction) {
@@ -159,25 +158,25 @@ impl<
 		tx.dispatch();
 	}
 
-
-	fn final_checks(block: &Block) {
+*/
+	fn final_checks(header: &Header) {
 		// check digest
-		assert!(block.digest() == &<system::Module<System>>::digest());
+		assert!(header.digest() == &<system::Module<System>>::digest());
 
 		// remove temporaries.
-		<system::Module<System>>::kill_temps();
+		<system::Module<System>>::finalise();
 
 		// check storage root.
-		let storage_root = storage_root().into();
-//		info_expect_equal_hash(block.state_root(), &storage_root);	// TODO use the check_equal trait.
-		assert!(block.state_root() == &storage_root, "Storage root must match that calculated.");
+		let storage_root = System::Hashing::storage_root();
+		header.state_root().check_equal(&storage_root);
+		assert!(header.state_root() == &storage_root, "Storage root must match that calculated.");
 	}
 
 	fn post_finalise(block: &Block) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
-		<system::Module<T::System>>::record_block_hash(block.number(), &block.to_header())
-	}*/
+		<system::Module<System>>::record_block_hash(block.header())
+	}
 }
 /*
 #[cfg(test)]

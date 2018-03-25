@@ -18,10 +18,10 @@
 
 use codec::Slicable;
 use runtime_support::Hashable;
-use runtime_io::enumerated_trie_root;
+use runtime_io::{enumerated_trie_root, storage_root};
 use {consensus, timestamp, system, demo_primitives, runtime_primitives};
 
-// TODO: move into runtime support.
+// TODO: move into runtime support/io.
 pub struct BlakeTwo256;
 impl runtime_primitives::Hashing for BlakeTwo256 {
 	type Output = demo_primitives::Hash;
@@ -30,6 +30,9 @@ impl runtime_primitives::Hashing for BlakeTwo256 {
 	}
 	fn enumerated_trie_root(items: &Vec<&[u8]>) -> Self::Output {
 		enumerated_trie_root(items).into()
+	}
+	fn storage_root() -> Self::Output {
+		storage_root().into()
 	}
 }
 
