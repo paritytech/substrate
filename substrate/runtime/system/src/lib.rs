@@ -130,7 +130,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Increment a particular account's nonce by 1.
-	pub fn inc_index(who: &T::AccountId) {
+	pub fn inc_account_index(who: &T::AccountId) {
 		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::one());
 	}
 }

@@ -19,9 +19,9 @@ use Executive;
 
 impl_stubs!(
 	authorities => |()| runtime::Consensus::authorities(),
-	initialise_block => |header| Executive::initialise_block(&header)
+	initialise_block => |header| Executive::initialise_block(&header),
+	apply_extrinsic => |utx| Executive::apply_extrinsic(utx)
 /*	execute_block => |block| system::internal::execute_block(block),
-	execute_transaction => |utx| system::internal::execute_transaction(utx),
 	finalise_block => |()| system::internal::finalise_block(),
 	validator_count => |()| session::validator_count(),
 	validators => |()| session::validators(),*/

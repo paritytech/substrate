@@ -32,7 +32,7 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use primitives::{Zero, One, Headery, Blocky, Checkable, Executable, CheckEqual, Hashing};
+use primitives::{Zero, One, Headery, Blocky, Checkable, Applyable, CheckEqual, Hashing};
 use codec::Slicable;
 //use runtime_support::{Hashable, StorageValue, StorageMap};
 
@@ -52,7 +52,7 @@ impl<
 	Unchecked: Checkable<
 		CheckedType = Checked
 	> + PartialEq + Eq + Clone + Slicable,
-	Checked: Executable<
+	Checked: Applyable<
 		IndexType = System::Index,
 		AccountIdType = System::AccountId
 	>,
@@ -135,10 +135,10 @@ impl<
 
 		header
 	}
-
-	/// Execute a transaction outside of the block execution function.
+*/
+	/// Apply outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
-	pub fn execute_transaction(utx: UncheckedTransaction) {
+	pub fn apply_extrinsic(utx: Unchecked) {
 		// Verify the signature is good.
 		let tx = match utx.check() {
 			Ok(tx) => tx,
@@ -147,18 +147,17 @@ impl<
 
 		{
 			// check nonce
-			let expected_nonce = <system::Module<System>>::nonce(tx.sender());
-			assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
+			let expected_nonce = <system::Module<System>>::account_index(tx.sender());
+			assert!(tx.index() == &expected_nonce, "All transactions should have the correct nonce");
 
 			// increment nonce in storage
-			<system::Module<System>>::inc_nonce(tx.sender());
+			<system::Module<System>>::inc_account_index(tx.sender());
 		}
 
 		// decode parameters and dispatch
-		tx.dispatch();
+		tx.apply();
 	}
 
-*/
 	fn final_checks(header: &Header) {
 		// check digest
 		assert!(header.digest() == &<system::Module<System>>::digest());

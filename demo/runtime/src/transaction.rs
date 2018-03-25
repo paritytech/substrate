@@ -21,7 +21,7 @@ use rstd::ops;
 use codec::{Input, Slicable};
 use demo_primitives::{AccountId, TxOrder, Signature};
 use runtime::Call;
-use runtime_primitives::{Checkable, Executable};
+use runtime_primitives::{Checkable, Applyable};
 use runtime_support::Dispatchable;
 
 #[cfg(feature = "std")]
@@ -159,7 +159,7 @@ impl Checkable for UncheckedTransaction {
 	}
 }
 
-impl Executable for CheckedTransaction {
+impl Applyable for CheckedTransaction {
 	type IndexType = TxOrder;
 	type AccountIdType = AccountId;
 
@@ -171,7 +171,7 @@ impl Executable for CheckedTransaction {
 		&self.0.transaction.signed
 	}
 
-	fn execute(self) {
+	fn apply(self) {
 		let tx = self.0.transaction;
 		//TODO: take payment e.g. public_pass_from_payment
 		tx.function.dispatch(&tx.signed);

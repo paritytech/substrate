@@ -114,12 +114,12 @@ pub trait Checkable: Sized {
 ///
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
-pub trait Executable {
+pub trait Applyable {
 	type AccountIdType;
 	type IndexType;
 	fn index(&self) -> &Self::IndexType;
 	fn sender(&self) -> &Self::AccountIdType;
-	fn execute(self);
+	fn apply(self);
 }
 
 /// Something that can be checked for equality and printed out to a debug channel if bad.
