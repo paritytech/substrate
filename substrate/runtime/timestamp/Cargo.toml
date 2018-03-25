@@ -8,6 +8,7 @@ hex-literal = "0.1.0"
 serde = { version = "1.0", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-support = { path = "../../runtime-support", default_features = false }
+substrate-runtime-primitives = { path = "../primitives", default_features = false }
 substrate-codec = { path = "../../codec", default_features = false }
 
 [dev-dependencies]
@@ -18,6 +19,7 @@ default = ["std"]
 std = [
 	"substrate-runtime-std/std",
 	"substrate-runtime-support/std",
+	"substrate-runtime-primitives/std",
 	"serde/std",
 	"substrate-codec/std",
 ]

@@ -28,7 +28,11 @@ extern crate substrate_primitives;
 use rstd::prelude::*;
 use codec::Slicable;
 pub use num_traits::identities::{Zero, One};
-use rstd::ops::{Add, Sub, AddAssign, SubAssign};
+use rstd::ops::{Add, Sub, Rem, AddAssign, SubAssign, RemAssign};
+
+pub trait HasPublicAux {
+	type PublicAux;
+}
 
 pub trait Hashing {
 	type Output;
@@ -37,16 +41,25 @@ pub trait Hashing {
 	fn storage_root() -> Self::Output;
 }
 
+pub trait RefInto<T> {
+	fn into(&self) -> &T;
+}
+impl<T> RefInto<T> for T {
+	fn into(&self) -> &T { &self }
+}
+
 pub trait SimpleArithmetic:
 	Zero + One +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
+	Rem<Self, Output = Self> + RemAssign<Self> +
 	PartialOrd<Self> + Ord
 {}
 impl<T:
 	Zero + One +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
+	Rem<Self, Output = Self> + RemAssign<Self> +
 	PartialOrd<Self> + Ord
 > SimpleArithmetic for T {}
 

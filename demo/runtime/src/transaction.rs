@@ -22,7 +22,7 @@ use codec::{Input, Slicable};
 use demo_primitives::{AccountId, TxOrder, Signature};
 use runtime::Call;
 use runtime_primitives::{Checkable, Applyable};
-use runtime_support::Dispatchable;
+use runtime_support::AuxDispatchable;
 
 #[cfg(feature = "std")]
 use std::fmt;

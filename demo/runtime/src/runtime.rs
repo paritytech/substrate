@@ -19,7 +19,8 @@
 use codec::Slicable;
 use runtime_support::Hashable;
 use runtime_io::{enumerated_trie_root, storage_root};
-use {consensus, timestamp, system, demo_primitives, runtime_primitives};
+use {consensus, timestamp, system, session, demo_primitives, runtime_primitives};
+use runtime_primitives::HasPublicAux;
 
 // TODO: move into runtime support/io.
 pub struct BlakeTwo256;
@@ -36,20 +37,19 @@ impl runtime_primitives::Hashing for BlakeTwo256 {
 	}
 }
 
-pub type PublicAux = demo_primitives::AccountId;
-pub type PrivAux = ();
-
 pub struct Concrete;
+
+impl HasPublicAux for Concrete {
+	type PublicAux = demo_primitives::AccountId;
+}
 
 impl timestamp::Trait for Concrete {
 	type Value = u64;
-	type PublicAux = PublicAux;
 }
 pub type Timestamp = timestamp::Module<Concrete>;
 
 impl consensus::Trait for Concrete {
 	type SessionKey = demo_primitives::AccountId;
-	type PrivAux = PrivAux;
 }
 pub type Consensus = consensus::Module<Concrete>;
 
@@ -58,16 +58,20 @@ impl system::Trait for Concrete {
 	type BlockNumber = demo_primitives::BlockNumber;
 	type Hash = demo_primitives::Hash;
 	type Hashing = BlakeTwo256;
-	type Log = demo_primitives::header::Log;
 	type Digest = demo_primitives::header::Digest;
 	type AccountId = demo_primitives::AccountId;
 	type Header = demo_primitives::header::Header;
 }
 pub type System = system::Module<Concrete>;
 
+impl session::Trait for Concrete {
+	type PublicAux = <Self as HasPublicAux>::PublicAux;
+}
+pub type Session = session::Module<Concrete>;
+
 impl_outer_dispatch! {
-	pub enum Call where aux: PublicAux {
-//		Session = 1,
+	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
+		Session = 1,
 //		Staking = 2,
 		Timestamp = 3,
 //		Democracy = 5,
@@ -75,9 +79,9 @@ impl_outer_dispatch! {
 //		CouncilVote = 7,
 	}
 
-	pub enum PrivCall where aux: PrivAux {
+	pub enum PrivCall {
 		Consensus = 0,
-//		Session = 1,
+		Session = 1,
 //		Staking = 2,
 //		Democracy = 5,
 //		Council = 6,

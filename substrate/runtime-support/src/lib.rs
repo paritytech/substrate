@@ -38,5 +38,4 @@ mod hashable;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
-pub use self::dispatch::{PrivPass, PublicPass};	// TODO: REMOVE
-pub use self::dispatch::{Parameter, Dispatchable, Callable};
+pub use self::dispatch::{Parameter, Dispatchable, Callable, AuxDispatchable, AuxCallable};

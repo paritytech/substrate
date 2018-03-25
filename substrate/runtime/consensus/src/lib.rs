@@ -23,7 +23,7 @@
 extern crate substrate_codec as codec;
 
 use rstd::prelude::*;
-use runtime_support::storage;
+use runtime_support::{storage, Parameter};
 use runtime_support::storage::unhashed::StorageVec;
 
 pub const AUTHORITY_AT: &'static[u8] = b":auth:";
@@ -38,14 +38,14 @@ impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
 pub const CODE: &'static[u8] = b":code";
 
 pub trait Trait {
-	type SessionKey: codec::Slicable + Default;
-	type PrivAux;
+	type SessionKey: Parameter + Default;
 }
 
 decl_module! {
 	pub struct Module<T: Trait>;
-	pub enum PrivCall where aux: T::PrivAux {
-		fn set_code(aux, new: Vec<u8>) = 0;
+	pub enum PrivCall {
+		fn set_code(new: Vec<u8>) = 0;
+		fn dummy() = 1;
 	}
 }
 
@@ -56,9 +56,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the new code.
-	fn set_code(_aux: &T::PrivAux, new: Vec<u8>) {
+	fn set_code(new: Vec<u8>) {
 		storage::unhashed::put_raw(CODE, &new);
 	}
+
+	fn dummy() {}
 
 	/// Set the current set of authorities' session keys.
 	///

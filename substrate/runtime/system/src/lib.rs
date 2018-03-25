@@ -31,7 +31,6 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Hashing, Headery};
-//use runtime_io::print;
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
@@ -44,8 +43,7 @@ pub trait Trait {
 	type BlockNumber: Parameter + SimpleArithmetic;
 	type Hash: Parameter + SimpleBitOps + Default + Copy + CheckEqual;
 	type Hashing: Hashing<Output = Self::Hash>;
-	type Log;
-	type Digest: Parameter + Default + Digesty<Item = Self::Log>;
+	type Digest: Parameter + Default + Digesty;
 	type AccountId: Parameter;
 	type Header: Headery<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
 }
@@ -91,7 +89,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
-	pub fn deposit_log(item: T::Log) {
+	pub fn deposit_log(item: <T::Digest as Digesty>::Item) {
 		let mut l = <Digest<T>>::get();
 		l.push(item);
 		<Digest<T>>::put(l);

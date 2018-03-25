@@ -21,14 +21,14 @@
 #[cfg_attr(test, macro_use)] extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_codec as codec;
 
-use runtime_support::StorageValue;
-use runtime_support::Parameter;
+use runtime_support::{StorageValue, Parameter};
+use runtime_primitives::HasPublicAux;
 
-pub trait Trait {
+pub trait Trait: HasPublicAux {
 	type Value: Parameter + Default;
-	type PublicAux;
 }
 
 decl_module! {
@@ -63,9 +63,11 @@ mod tests {
 	use runtime_support::storage::StorageValue;
 
 	struct TraitImpl;
+	impl HasPublicAux for TraitImpl {
+		type PublicAux = u64;
+	}
 	impl Trait for TraitImpl {
 		type Value = u64;
-		type PublicAux = u64;
 	}
 	type Timestamp = Module<TraitImpl>;
 
@@ -78,7 +80,7 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			assert_eq!(<Timestamp as Store>::Now::get(), 42);
-			Timestamp::dispatch(Call::set(69), &0);
+			Timestamp::aux_dispatch(Call::set(69), &0);
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
