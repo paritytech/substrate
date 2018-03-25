@@ -31,7 +31,7 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 //use runtime_io::{twox_128, TestExternalities};
-use primitives::{Zero, One, RefInto};
+use primitives::{Zero, One, RefInto, Executable};
 use runtime_support::{StorageValue, StorageMap};
 
 pub trait Trait: consensus::Trait + system::Trait {
@@ -138,6 +138,12 @@ impl<T: Trait> Module<T> {
 				<consensus::Module<T>>::set_authority(i as u32, &n);
 			}
 		});
+	}
+}
+
+impl<T: Trait> Executable for Module<T> {
+	fn execute() {
+		Self::check_rotate_session();
 	}
 }
 /*

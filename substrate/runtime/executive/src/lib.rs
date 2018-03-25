@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
-//! and depositing logs.
+//! Executive: Handles all of the top-level stuff; essentially just executing blocks/extrinsics.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -28,18 +27,10 @@ extern crate substrate_runtime_system as system;
 
 #[cfg(feature = "std")] extern crate serde;
 
-//extern crate safe_mix;
-
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use primitives::{Zero, One, Headery, Blocky, Checkable, Applyable, CheckEqual, Hashing, Executable};
 use codec::Slicable;
-//use runtime_support::{Hashable, StorageValue, StorageMap};
-
-//use primitives::{AuthorityId, Hash, BlockNumber, Header, Log};
-//use primitives::block::{generic, Number as BlockNumber, Header, Log};
-
-//use safe_mix::TripletMix;
 
 pub struct Executive<
 	Unchecked,
