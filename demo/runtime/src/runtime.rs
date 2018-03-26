@@ -19,7 +19,7 @@
 use codec::Slicable;
 use runtime_support::Hashable;
 use runtime_io::{enumerated_trie_root, storage_root, blake2_256};
-use {consensus, timestamp, system, session, demo_primitives, runtime_primitives};
+use {consensus, timestamp, system, session, staking, demo_primitives, runtime_primitives};
 use runtime_primitives::{Identity, HasPublicAux};
 
 // TODO: move into runtime support/io.
@@ -36,7 +36,7 @@ impl runtime_primitives::Hashing for BlakeTwo256 {
 		storage_root().into()
 	}
 }
-impl ContractAddressFor<demo_primitives::AccountId> for BlakeTwo256 {
+impl staking::ContractAddressFor<demo_primitives::AccountId> for BlakeTwo256 {
 	fn contract_address_for(code: &[u8], origin: &demo_primitives::AccountId) -> demo_primitives::AccountId {
 		let mut dest_pre = blake2_256(code).to_vec();
 		dest_pre.extend(&origin[..]);

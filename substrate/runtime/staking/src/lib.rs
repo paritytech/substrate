@@ -34,7 +34,7 @@ use rstd::cell::RefCell;
 use rstd::marker::PhantomData;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 //use runtime_io::{twox_128, TestExternalities};
-use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, Convert};
+use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 
 #[cfg(test)]
@@ -366,6 +366,8 @@ impl<T: Trait> ChangeEntry<T> {
 	}
 }
 
+// Compiler bug: https://github.com/rust-lang/rust/issues/40640. Will cause a warning and there's
+// not much we can do about it.
 type State<T: Trait> = BTreeMap<T::AccountId, ChangeEntry<T>>;
 
 trait Externalities<T: Trait> {
@@ -523,17 +525,17 @@ impl<T: Trait> Module<T> {
 						.unwrap_or_else(|| ext.get_balance(account)),
 				_unused: Default::default(),
 			};
-			let mut transfer = |inner_dest: &T::AccountId, value: T::Balance| {
+			let mut _transfer = |inner_dest: &T::AccountId, value: T::Balance| {
 				if let Some(commit_state) = Self::effect_transfer(dest, inner_dest, value, ext()) {
 					Self::merge_state(commit_state, &mut *local.borrow_mut());
 				}
 			};
-			let mut create = |code: &[u8], value: T::Balance| {
+			let mut _create = |code: &[u8], value: T::Balance| {
 				if let Some(commit_state) = Self::effect_create(dest, code, value, ext()) {
 					Self::merge_state(commit_state, &mut *local.borrow_mut());
 				}
 			};
-			let mut put_storage = |location: Vec<u8>, value: Option<Vec<u8>>| {
+			let mut _put_storage = |location: Vec<u8>, value: Option<Vec<u8>>| {
 				local.borrow_mut()
 					.entry(dest.clone())
 					.or_insert(Default::default())
