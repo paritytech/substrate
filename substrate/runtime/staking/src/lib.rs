@@ -343,11 +343,21 @@ impl<T: Trait> Executable for Module<T> {
 // - n | n > <CurrentEra<T>>::get(): deactivating: recently representing a validator and not yet
 //   ready for transfer.
 
-#[derive(Default)]
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
 	code: Option<Vec<u8>>,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+}
+
+// Cannot derive(Default) since it erroneously bounds T by Default.
+impl<T: Trait> Default for ChangeEntry<T> {
+	fn default() -> Self {
+		ChangeEntry {
+			balance: Default::default(),
+			code: Default::default(),
+			storage: Default::default(),
+		}
+	}
 }
 
 impl<T: Trait> ChangeEntry<T> {
@@ -476,12 +486,11 @@ impl<T: Trait> Module<T> {
 		value: T::Balance,
 		ext: E
 	) -> Option<State<T>> {
-		unimplemented!();
-/*		let from_balance = ext.get_balance(transactor);
+		let from_balance = ext.get_balance(transactor);
 		assert!(from_balance >= value);
 
 		let to_balance = ext.get_balance(dest);
-		assert!(<BondageOf<T>>::get(transactor) <= <BondageOf<T>>::get(dest));
+		assert!(<Bondage<T>>::get(transactor) <= <Bondage<T>>::get(dest));
 		assert!(to_balance + value > to_balance);	// no overflow
 
 		// TODO: a fee, based upon gaslimit/gasprice.
@@ -492,8 +501,8 @@ impl<T: Trait> Module<T> {
 
 		if transactor != dest {
 			let mut local = local.borrow_mut();
-			local.insert(transactor.clone(), ChangeEntry<T>::balance_changed(from_balance - value));
-			local.insert(dest.clone(), ChangeEntry<T>::balance_changed(to_balance + value));
+			local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - value));
+			local.insert(dest.clone(), ChangeEntry::balance_changed(to_balance + value));
 		}
 
 		let should_commit = {
@@ -512,6 +521,7 @@ impl<T: Trait> Module<T> {
 					local.borrow().get(account)
 						.and_then(|a| a.balance)
 						.unwrap_or_else(|| ext.get_balance(account)),
+				_unused: Default::default(),
 			};
 			let mut transfer = |inner_dest: &T::AccountId, value: T::Balance| {
 				if let Some(commit_state) = Self::effect_transfer(dest, inner_dest, value, ext()) {
@@ -540,7 +550,7 @@ impl<T: Trait> Module<T> {
 			Some(local.into_inner())
 		} else {
 			None
-		}*/
+		}
 	}
 }
 /*
@@ -795,7 +805,7 @@ mod tests {
 	fn deducting_balance_should_fail_when_bonded() {
 		let mut t: TestExternalities = map![
 			twox_128(&FreeBalance::key_for(*Alice)).to_vec() => vec![].and(&111u64),
-			twox_128(&BondageOf::key_for(*Alice)).to_vec() => vec![].and(&2u64)
+			twox_128(&Bondage::key_for(*Alice)).to_vec() => vec![].and(&2u64)
 		];
 		with_externalities(&mut t, || {
 			system::testing::set_block_number(1);
