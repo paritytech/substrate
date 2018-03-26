@@ -36,7 +36,7 @@ use runtime_support::{StorageValue, StorageMap};
 
 pub trait Trait: consensus::Trait + system::Trait {
 	type PublicAux: RefInto<Self::AccountId>;
-	type Conversion: Convert<Self::AccountId, Self::SessionKey>;
+	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
 }
 
 decl_module! {
@@ -104,7 +104,7 @@ impl<T: Trait> Module<T> {
 	pub fn set_validators(new: &[T::AccountId]) {
 		<Validators<T>>::put(&new.to_vec());			// TODO: optimise.
 		<consensus::Module<T>>::set_authorities(
-			&new.iter().cloned().map(T::Conversion::convert).collect::<Vec<_>>()
+			&new.iter().cloned().map(T::ConvertAccountIdToSessionKey::convert).collect::<Vec<_>>()
 		);
 	}
 

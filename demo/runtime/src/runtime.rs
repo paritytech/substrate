@@ -24,6 +24,7 @@ use runtime_primitives::{Identity, HasPublicAux};
 
 // TODO: move into runtime support/io.
 pub struct BlakeTwo256;
+
 impl runtime_primitives::Hashing for BlakeTwo256 {
 	type Output = demo_primitives::Hash;
 	fn hash_of<S: Slicable>(s: &S) -> Self::Output {
@@ -36,6 +37,7 @@ impl runtime_primitives::Hashing for BlakeTwo256 {
 		storage_root().into()
 	}
 }
+
 impl staking::ContractAddressFor<demo_primitives::AccountId> for BlakeTwo256 {
 	fn contract_address_for(code: &[u8], origin: &demo_primitives::AccountId) -> demo_primitives::AccountId {
 		let mut dest_pre = blake2_256(code).to_vec();
@@ -43,7 +45,6 @@ impl staking::ContractAddressFor<demo_primitives::AccountId> for BlakeTwo256 {
 		blake2_256(&dest_pre)
 	}
 }
-
 
 pub struct Concrete;
 
@@ -74,14 +75,20 @@ pub type System = system::Module<Concrete>;
 
 impl session::Trait for Concrete {
 	type PublicAux = <Self as HasPublicAux>::PublicAux;
-	type Conversion = Identity;
+	type ConvertAccountIdToSessionKey = Identity;
 }
 pub type Session = session::Module<Concrete>;
+
+impl staking::Trait for Concrete {
+	type Balance = u64;
+	type DetermineContractAddress = BlakeTwo256;
+}
+pub type Staking = staking::Module<Concrete>;
 
 impl_outer_dispatch! {
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
 		Session = 1,
-//		Staking = 2,
+		Staking = 2,
 		Timestamp = 3,
 //		Democracy = 5,
 //		Council = 6,
@@ -91,7 +98,7 @@ impl_outer_dispatch! {
 	pub enum PrivCall {
 		Consensus = 0,
 		Session = 1,
-//		Staking = 2,
+		Staking = 2,
 //		Democracy = 5,
 //		Council = 6,
 //		CouncilVote = 7,
