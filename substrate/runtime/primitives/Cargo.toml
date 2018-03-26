@@ -6,7 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 num-traits = { version = "0.2", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
-substrate-runtime-io = { path = "../../runtime-io", optional = true }
+substrate-runtime-io = { path = "../../runtime-io", default_features = false }
 substrate-codec = { path = "../../codec", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 
@@ -15,7 +15,7 @@ default = ["std"]
 std = [
 	"num-traits/std",
 	"substrate-runtime-std/std",
-	"substrate-runtime-io",
+	"substrate-runtime-io/std",
 	"substrate-codec/std",
 	"substrate-primitives/std",
 ]

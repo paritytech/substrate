@@ -177,7 +177,7 @@ impl CheckEqual for substrate_primitives::H256 {
 
 	#[cfg(not(feature = "std"))]
 	fn check_equal(&self, other: &Self) {
-		if self != *other {
+		if self != other {
 			runtime_io::print("Hash not equal");
 			runtime_io::print(&self.0[..]);
 			runtime_io::print(&other.0[..]);

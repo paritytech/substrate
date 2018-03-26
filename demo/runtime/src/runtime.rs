@@ -16,6 +16,7 @@
 
 //! Dispatch system. Just dispatches calls.
 
+use rstd::prelude::*;
 use codec::Slicable;
 use runtime_support::Hashable;
 use runtime_io::{enumerated_trie_root, storage_root, blake2_256};

@@ -11,6 +11,7 @@ substrate-runtime-io = { path = "../../runtime-io", version = "0.1", default_fea
 
 [profile.release]
 panic = "abort"
+lto = true
 
 [workspace]
 members = []

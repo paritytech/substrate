@@ -20,6 +20,7 @@ pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
 #[cfg(feature = "std")]
 pub use std::fmt;
 pub use rstd::marker::PhantomData;
+#[cfg(feature = "std")]
 use serde;
 pub use codec::{Slicable, Input, NonTrivialSlicable};
 
@@ -34,12 +35,22 @@ pub trait AuxDispatchable {
 	fn dispatch(self, aux: &Self::AuxType);
 }
 
+#[cfg(feature = "std")]
 pub trait AuxCallable {
 	type CallType: AuxDispatchable + Slicable + ::serde::Serialize + Clone + PartialEq + Eq;
 }
+#[cfg(not(feature = "std"))]
+pub trait AuxCallable {
+	type CallType: AuxDispatchable + Slicable + Clone + PartialEq + Eq;
+}
 
+#[cfg(feature = "std")]
 pub trait Callable {
 	type CallType: Dispatchable + Slicable + ::serde::Serialize + Clone + PartialEq + Eq;
+}
+#[cfg(not(feature = "std"))]
+pub trait Callable {
+	type CallType: Dispatchable + Slicable + Clone + PartialEq + Eq;
 }
 
 #[cfg(feature = "std")]
@@ -49,10 +60,10 @@ pub trait Parameter: Slicable + serde::Serialize + Clone + Eq + fmt::Debug {}
 impl<T> Parameter for T where T: Slicable + serde::Serialize + Clone + Eq + fmt::Debug {}
 
 #[cfg(not(feature = "std"))]
-pub trait Parameter: Slicable + serde::Serialize + Clone + Eq {}
+pub trait Parameter: Slicable + Clone + Eq {}
 
 #[cfg(not(feature = "std"))]
-impl<T> Parameter for T where T: Slicable + serde::Serialize + Clone + Eq {}
+impl<T> Parameter for T where T: Slicable + Clone + Eq {}
 
 
 /// Declare a struct for this module, then implement dispatch logic to create a pairing of several

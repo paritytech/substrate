@@ -31,7 +31,6 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Hashing, Headery};
-use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 

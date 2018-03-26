@@ -44,7 +44,7 @@ pub enum VoteThreshold {
 
 impl Slicable for VoteThreshold {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		u8::decode(input).and_then(|v| match v {
+		input.read_byte().and_then(|v| match v {
 			0 => Some(VoteThreshold::SuperMajorityApprove),
 			1 => Some(VoteThreshold::SuperMajorityAgainst),
 			2 => Some(VoteThreshold::SimpleMajority),
@@ -53,11 +53,11 @@ impl Slicable for VoteThreshold {
 	}
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		match *self {
+		f(&[match *self {
 			VoteThreshold::SuperMajorityApprove => 0u8,
 			VoteThreshold::SuperMajorityAgainst => 1u8,
 			VoteThreshold::SimpleMajority => 2u8,
-		}.using_encoded(f)
+		}])
 	}
 }
 impl NonTrivialSlicable for VoteThreshold {}
