@@ -87,7 +87,7 @@ decl_storage! {
 	// The current era index.
 	pub CurrentEra get(current_era): b"sta:era" => required T::BlockNumber;
 	// All the accounts with a desire to stake.
-	pub Intention: b"sta:wil:" => Vec<T::AccountId>;
+	pub Intentions: b"sta:wil:" => default Vec<T::AccountId>;
 	// The next value of sessions per era.
 	pub NextSessionsPerEra get(next_sessions_per_era): b"sta:nse" => T::BlockNumber;
 	// The block number at which the era length last changed.
@@ -161,52 +161,52 @@ impl<T: Trait> Module<T> {
 	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) {
 		// commit anything that made it this far to storage
-/*		if let Some(commit) = Self::effect_transfer(aux.into(), &dest, value, DirectExt<T>) {
+		if let Some(commit) = Self::effect_transfer(RefInto::into(aux), &dest, value, DirectExt) {
 			Self::commit_state(commit);
 		}
-*/	}
+	}
 
 	/// Declare the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
 	fn stake(aux: &T::PublicAux) {
-/*		let mut intentions = Intention::items();
+		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
-		assert!(intentions.iter().find(|&t| t == aux.into()).is_none(), "Cannot stake if already staked.");
-		intentions.push(aux.into().clone());
-		Intention::set_items(&intentions);
-		<BondageOf<T>>::insert(aux.into(), u64::max_value());
-*/	}
+		assert!(intentions.iter().find(|&t| t == RefInto::into(aux)).is_none(), "Cannot stake if already staked.");
+		intentions.push(RefInto::into(aux).clone());
+		<Intentions<T>>::put(intentions);
+		<Bondage<T>>::insert(RefInto::into(aux), T::BlockNumber::max_value());
+	}
 
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
 	fn unstake(aux: &T::PublicAux) {
-/*		let mut intentions = Intention::items();
-		if let Some(position) = intentions.iter().position(|&t| t == *self) {
+		let mut intentions = <Intentions<T>>::get();
+		if let Some(position) = intentions.iter().position(|t| t == RefInto::into(aux)) {
 			intentions.swap_remove(position);
 		} else {
 			panic!("Cannot unstake if not already staked.");
 		}
-		Intention::set_items(&intentions);
-		<BondageOf<T>>::insert(aux.into(), <CurrentEra<T>>::get() + <BondingDuration<T>>::get());
-*/	}
+		<Intentions<T>>::put(intentions);
+		<Bondage<T>>::insert(RefInto::into(aux), Self::current_era() + Self::bonding_duration());
+	}
 
 	// PRIV DISPATCH
 
 	/// Set the number of sessions in an era.
 	fn set_sessions_per_era(new: T::BlockNumber) {
-//		<NextSessionsPerEra<T>>::put(&new);
+		<NextSessionsPerEra<T>>::put(&new);
 	}
 
 	/// The length of the bonding duration in eras.
 	fn set_bonding_duration(new: T::BlockNumber) {
-//		<BondingDuration<T>>::put(&new);
+		<BondingDuration<T>>::put(&new);
 	}
 
 	/// The length of a staking era in sessions.
 	fn set_validator_count(new: u32) {
-//		<ValidatorCount<T>>::put(&new);
+		<ValidatorCount<T>>::put(&new);
 	}
 
 	/// Force there to be a new era. This also forces a new session immediately after.
