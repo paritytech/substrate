@@ -29,9 +29,12 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
-use rstd::collections::btree_map::BTreeMap;
+use rstd::cmp;
+use rstd::cell::RefCell;
+use rstd::marker::PhantomData;
+use rstd::collections::btree_map::{BTreeMap, Entry};
 //use runtime_io::{twox_128, TestExternalities};
-use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable};
+use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, Convert};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 
 #[cfg(test)]
@@ -50,9 +53,14 @@ pub enum LockStatus<BlockNumber: PartialEq + Clone> {
 	Staked,
 }
 
+pub trait ContractAddressFor<AccountId: Sized> {
+	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
+}
+
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Default;
+	type Balance: Parameter + SimpleArithmetic + Default + Copy;
+	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 }
 
 decl_module! {
@@ -216,13 +224,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
-/*
+
 	/// Deduct from an unbonded balance. true if it happened.
 	pub fn deduct_unbonded(who: &T::AccountId, value: T::Balance) -> bool {
-		if let LockStatus::Liquid<T> = Self::unlock_block(who) {
+		if let LockStatus::Liquid = Self::unlock_block(who) {
 			let b = Self::free_balance(who);
 			if b >= value {
-				<FreeBalanceOf<T>>::insert(who, &(b - value));
+				<FreeBalance<T>>::insert(who, b - value);
 				return true;
 			}
 		}
@@ -231,14 +239,14 @@ impl<T: Trait> Module<T> {
 
 	/// Refund some balance.
 	pub fn refund(who: &T::AccountId, value: T::Balance) {
-		<FreeBalanceOf<T>>::insert(who, &(Self::free_balance(who) + value))
+		<FreeBalance<T>>::insert(who, Self::free_balance(who) + value)
 	}
 
 	/// Will slash any balance, but prefer free over reserved.
 	pub fn slash(who: &T::AccountId, value: T::Balance) -> bool {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
-		<FreeBalanceOf<T>>::insert(who, &(free_balance - free_slash));
+		<FreeBalance<T>>::insert(who, &(free_balance - free_slash));
 		if free_slash < value {
 			Self::slash_reserved(who, value - free_slash)
 		} else {
@@ -250,23 +258,23 @@ impl<T: Trait> Module<T> {
 	pub fn reserve_balance(who: &T::AccountId, value: T::Balance) {
 		let b = Self::free_balance(who);
 		assert!(b >= value);
-		<FreeBalanceOf<T>>::insert(who, &(b - value));
-		<ReservedBalanceOf<T>>::insert(who, &(Self::reserved_balance(who) + value));
+		<FreeBalance<T>>::insert(who, b - value);
+		<ReservedBalance<T>>::insert(who, Self::reserved_balance(who) + value);
 	}
 
 	/// Moves `value` from reserved balance to balance.
 	pub fn unreserve_balance(who: &T::AccountId, value: T::Balance) {
 		let b = Self::reserved_balance(who);
 		let value = cmp::min(b, value);
-		<ReservedBalanceOf<T>>::insert(who, &(b - value));
-		<FreeBalanceOf<T>>::insert(who, &(Self::free_balance(who) + value));
+		<ReservedBalance<T>>::insert(who, b - value);
+		<FreeBalance<T>>::insert(who, Self::free_balance(who) + value);
 	}
 
 	/// Moves `value` from reserved balance to balance.
 	pub fn slash_reserved(who: &T::AccountId, value: T::Balance) -> bool {
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
-		<ReservedBalanceOf<T>>::insert(who, &(b - slash));
+		<ReservedBalance<T>>::insert(who, b - slash);
 		value == slash
 	}
 
@@ -274,11 +282,11 @@ impl<T: Trait> Module<T> {
 	pub fn transfer_reserved_balance(slashed: &T::AccountId, beneficiary: &T::AccountId, value: T::Balance) -> bool {
 		let b = Self::reserved_balance(slashed);
 		let slash = cmp::min(b, value);
-		<ReservedBalanceOf<T>>::insert(slashed, &(b - slash));
-		<FreeBalanceOf<T>>::insert(beneficiary, &(Self::free_balance(beneficiary) + slash));
+		<ReservedBalance<T>>::insert(slashed, b - slash);
+		<FreeBalance<T>>::insert(beneficiary, Self::free_balance(beneficiary) + slash);
 		slash == value
 	}
-*/
+
 	/// The era has changed - enact new staking set.
 	///
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
@@ -317,10 +325,10 @@ impl<T: Trait> Module<T> {
 	/// Hook to be called after to transaction processing.
 	fn check_new_era() {
 		// check block number and call new_era if necessary.
-/*		if (<system::Module<T>>::block_number() - <LastEraLengthChange<T>>::get()) % Self::era_length() == Zero::zero() {
-			new_era();
+		if (<system::Module<T>>::block_number() - <LastEraLengthChange<T>>::get()) % Self::era_length() == Zero::zero() {
+			Self::new_era();
 		}
-*/	}
+	}
 }
 
 impl<T: Trait> Executable for Module<T> {
@@ -355,7 +363,7 @@ trait Externalities<T: Trait> {
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 }
-/*
+
 struct Ext<T: Trait, F1, F3, F5> where
 	F1 : Fn(&T::AccountId, &[u8]) -> Option<Vec<u8>>,
 	F3 : Fn(&T::AccountId) -> Vec<u8>,
@@ -364,8 +372,9 @@ struct Ext<T: Trait, F1, F3, F5> where
 	do_get_storage: F1,
 	do_get_code: F3,
 	do_get_balance: F5,
+	_unused: PhantomData<T>,
 }
-*/
+
 struct DirectExt;
 impl<T: Trait> Externalities<T> for DirectExt {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
@@ -378,8 +387,8 @@ impl<T: Trait> Externalities<T> for DirectExt {
 		<FreeBalance<T>>::get(account)
 	}
 }
-/*
-impl<T: Trait, F1, F3, F5> Externalities for Ext<T, F1, F3, F5> where
+
+impl<T: Trait, F1, F3, F5> Externalities<T> for Ext<T, F1, F3, F5> where
 	F1 : Fn(&T::AccountId, &[u8]) -> Option<Vec<u8>>,
 	F3 : Fn(&T::AccountId) -> Vec<u8>,
 	F5 : Fn(&T::AccountId) -> T::Balance
@@ -394,30 +403,30 @@ impl<T: Trait, F1, F3, F5> Externalities for Ext<T, F1, F3, F5> where
 		(self.do_get_balance)(account)
 	}
 }
-*/
+
 impl<T: Trait> Module<T> {
 	fn commit_state(s: State<T>) {
-/*		for (address, changed) in s.into_iter() {
+		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
-				<FreeBalanceOf<T>>::insert(address, balance);
+				<FreeBalance<T>>::insert(&address, balance);
 			}
 			if let Some(code) = changed.code {
 				<CodeOf<T>>::insert(&address, &code);
 			}
 			for (k, v) in changed.storage.into_iter() {
 				if let Some(value) = v {
-					<StorageOf<T>>::insert(&(address, k), &value);
+					<StorageOf<T>>::insert((address.clone(), k), &value);
 				} else {
-					<StorageOf<T>>::remove(&(address, k));
+					<StorageOf<T>>::remove((address.clone(), k));
 				}
 			}
-		}*/
+		}
 	}
 
 	fn merge_state(commit_state: State<T>, local: &mut State<T>) {
-/*		for (address, changed) in commit_state.into_iter() {
+		for (address, changed) in commit_state.into_iter() {
 			match local.entry(address) {
-				Entry::Occupied<T>(e) => {
+				Entry::Occupied(e) => {
 					let mut value = e.into_mut();
 					if changed.balance.is_some() {
 						value.balance = changed.balance;
@@ -427,11 +436,11 @@ impl<T: Trait> Module<T> {
 					}
 					value.storage.extend(changed.storage.into_iter());
 				}
-				Entry::Vacant<T>(e) => {
+				Entry::Vacant(e) => {
 					e.insert(changed);
 				}
 			}
-		}*/
+		}
 	}
 
 	fn effect_create<E: Externalities<T>>(
@@ -440,14 +449,11 @@ impl<T: Trait> Module<T> {
 		value: T::Balance,
 		ext: E
 	) -> Option<State<T>> {
-		unimplemented!();
-/*		let from_balance = ext.get_balance(transactor);
+		let from_balance = ext.get_balance(transactor);
 		// TODO: a fee.
 		assert!(from_balance >= value);
 
-		let mut dest_pre = blake2_256(code).to_vec();	// TODO: blake2_256 replaced by Hashing::...
-		dest_pre.extend(&transactor[..]);
-		let dest = blake2_256(&dest_pre);
+		let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
 
 		// early-out if degenerate.
 		if &dest == transactor {
@@ -458,10 +464,10 @@ impl<T: Trait> Module<T> {
 
 		// two inserts are safe
 		assert!(&dest != transactor);
-		local.insert(dest, ChangeEntry<T> { balance: Some(value), code: Some(code.to_vec()), storage: Default::default() });
-		local.insert(transactor.clone(), ChangeEntry<T>::balance_changed(from_balance - value));
+		local.insert(dest, ChangeEntry { balance: Some(value), code: Some(code.to_vec()), storage: Default::default() });
+		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - value));
 
-		Some(local)*/
+		Some(local)
 	}
 
 	fn effect_transfer<E: Externalities<T>>(
@@ -559,7 +565,7 @@ pub mod testing {
 			twox_128(BondingDuration::key()).to_vec() => vec![].and(&0u64),
 			twox_128(TransactionFee::key()).to_vec() => vec![].and(&1u64),
 			twox_128(CurrentEra::key()).to_vec() => vec![].and(&current_era),
-			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&FreeBalance::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		];
 		session::testing::externalities(session_length).into_iter().chain(extras.into_iter()).collect()
 	}
@@ -591,10 +597,10 @@ mod tests {
 			twox_128(BondingDuration::key()).to_vec() => vec![].and(&3u64),
 			twox_128(TotalStake::key()).to_vec() => vec![].and(&100u64),
 			twox_128(TransactionFee::key()).to_vec() => vec![].and(&0u64),
-			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![].and(&10u64),
-			twox_128(&FreeBalanceOf::key_for(*Bob)).to_vec() => vec![].and(&20u64),
-			twox_128(&FreeBalanceOf::key_for(*Charlie)).to_vec() => vec![].and(&30u64),
-			twox_128(&FreeBalanceOf::key_for(*Dave)).to_vec() => vec![].and(&40u64)
+			twox_128(&FreeBalance::key_for(*Alice)).to_vec() => vec![].and(&10u64),
+			twox_128(&FreeBalance::key_for(*Bob)).to_vec() => vec![].and(&20u64),
+			twox_128(&FreeBalance::key_for(*Charlie)).to_vec() => vec![].and(&30u64),
+			twox_128(&FreeBalance::key_for(*Dave)).to_vec() => vec![].and(&40u64)
 		];
 
 		with_externalities(&mut t, || {
@@ -724,7 +730,7 @@ mod tests {
 			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
 			assert_eq!(balance(&Alice), 42);
 			assert_eq!(<FreeBalance<T>>::get(*Bob), 0);
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Bob), 0);
+			assert_eq!(<ReservedBalance<T>>::get(*Bob), 0);
 			assert_eq!(balance(&Bob), 0);
 		});
 	}
@@ -732,7 +738,7 @@ mod tests {
 	#[test]
 	fn staking_balance_transfer_works() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 112);
+			<FreeBalance<T>>::insert(*Alice, 112);
 			public_pass_from_payment(&Alice).transfer(Bob.to_raw_public(), 69);
 			assert_eq!(balance(&Alice), 42);
 			assert_eq!(balance(&Bob), 69);
@@ -743,7 +749,7 @@ mod tests {
 	#[should_panic]
 	fn staking_balance_transfer_when_bonded_panics() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 			public_pass_from_payment(&Alice).stake();
 			public_pass_from_payment(&Alice).transfer(Bob.to_raw_public(), 69);
 		});
@@ -752,17 +758,17 @@ mod tests {
 	#[test]
 	fn reserving_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 
 			assert_eq!(balance(&Alice), 111);
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 111);
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Alice), 0);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 111);
+			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
 
 			reserve_balance(&Alice, 69);
 
 			assert_eq!(balance(&Alice), 111);
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 42);
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Alice), 69);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 42);
+			assert_eq!(<ReservedBalance<T>>::get(*Alice), 69);
 		});
 	}
 
@@ -770,7 +776,7 @@ mod tests {
 	#[should_panic]
 	fn staking_balance_transfer_when_reserved_panics() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 			reserve_balance(&Alice, 69);
 			public_pass_from_payment(&Alice).transfer(Bob.to_raw_public(), 69);
 		});
@@ -779,16 +785,16 @@ mod tests {
 	#[test]
 	fn deducting_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 			assert!(deduct_unbonded(&Alice, 69));
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 42);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 42);
 		});
 	}
 
 	#[test]
 	fn deducting_balance_should_fail_when_bonded() {
 		let mut t: TestExternalities = map![
-			twox_128(&FreeBalanceOf::key_for(*Alice)).to_vec() => vec![].and(&111u64),
+			twox_128(&FreeBalance::key_for(*Alice)).to_vec() => vec![].and(&111u64),
 			twox_128(&BondageOf::key_for(*Alice)).to_vec() => vec![].and(&2u64)
 		];
 		with_externalities(&mut t, || {
@@ -801,90 +807,90 @@ mod tests {
 	#[test]
 	fn refunding_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 42);
+			<FreeBalance<T>>::insert(*Alice, 42);
 			refund(&Alice, 69);
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 111);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 111);
 		});
 	}
 
 	#[test]
 	fn slashing_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 			reserve_balance(&Alice, 69);
 			assert!(slash(&Alice, 69));
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 0);
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Alice), 42);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 0);
+			assert_eq!(<ReservedBalance<T>>::get(*Alice), 42);
 		});
 	}
 
 	#[test]
 	fn slashing_incomplete_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 42);
+			<FreeBalance<T>>::insert(*Alice, 42);
 			reserve_balance(&Alice, 21);
 			assert!(!slash(&Alice, 69));
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 0);
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Alice), 0);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 0);
+			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
 		});
 	}
 
 	#[test]
 	fn unreserving_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			unreserve_balance(&Alice, 42);
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Alice), 69);
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 42);
+			assert_eq!(<ReservedBalance<T>>::get(*Alice), 69);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 42);
 		});
 	}
 
 	#[test]
 	fn slashing_reserved_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			assert!(slash_reserved(&Alice, 42));
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Alice), 69);
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 0);
+			assert_eq!(<ReservedBalance<T>>::get(*Alice), 69);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 0);
 		});
 	}
 
 	#[test]
 	fn slashing_incomplete_reserved_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 			reserve_balance(&Alice, 42);
 			assert!(!slash_reserved(&Alice, 69));
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 69);
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Alice), 0);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 69);
+			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
 		});
 	}
 
 	#[test]
 	fn transferring_reserved_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 			reserve_balance(&Alice, 111);
 			assert!(transfer_reserved_balance(&Alice, &Bob, 42));
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Alice), 69);
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 0);
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Bob), 0);
-			assert_eq!(<FreeBalanceOf<T>>::get(*Bob), 42);
+			assert_eq!(<ReservedBalance<T>>::get(*Alice), 69);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 0);
+			assert_eq!(<ReservedBalance<T>>::get(*Bob), 0);
+			assert_eq!(<FreeBalance<T>>::get(*Bob), 42);
 		});
 	}
 
 	#[test]
 	fn transferring_incomplete_reserved_balance_should_work() {
 		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalanceOf<T>>::insert(*Alice, 111);
+			<FreeBalance<T>>::insert(*Alice, 111);
 			reserve_balance(&Alice, 42);
 			assert!(!transfer_reserved_balance(&Alice, &Bob, 69));
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Alice), 0);
-			assert_eq!(<FreeBalanceOf<T>>::get(*Alice), 69);
-			assert_eq!(<ReservedBalanceOf<T>>::get(*Bob), 0);
-			assert_eq!(<FreeBalanceOf<T>>::get(*Bob), 42);
+			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
+			assert_eq!(<FreeBalance<T>>::get(*Alice), 69);
+			assert_eq!(<ReservedBalance<T>>::get(*Bob), 0);
+			assert_eq!(<FreeBalance<T>>::get(*Bob), 42);
 		});
 	}
 }
