@@ -20,6 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate num_traits;
+extern crate integer_sqrt;
 extern crate substrate_runtime_std as rstd;
 #[cfg(not(feature = "std"))] extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
@@ -27,8 +28,9 @@ extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use codec::Slicable;
+pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
-use rstd::ops::{Add, Sub, Rem, AddAssign, SubAssign, RemAssign};
+use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 
 pub trait Convert<A, B> {
 	fn convert(a: A) -> B;
@@ -58,16 +60,20 @@ impl<T> RefInto<T> for T {
 }
 
 pub trait SimpleArithmetic:
-	Zero + One +
+	Zero + One + IntegerSquareRoot +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
+	Mul<Self, Output = Self> + MulAssign<Self> +
+	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	PartialOrd<Self> + Ord
 {}
 impl<T:
-	Zero + One +
+	Zero + One + IntegerSquareRoot +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
+	Mul<Self, Output = Self> + MulAssign<Self> +
+	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	PartialOrd<Self> + Ord
 > SimpleArithmetic for T {}

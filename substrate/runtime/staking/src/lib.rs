@@ -28,6 +28,7 @@ extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
 
+#[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
 use rstd::cmp;
 use rstd::cell::RefCell;
