@@ -58,7 +58,7 @@ use substrate_executor::NativeExecutor;
 use polkadot_executor::Executor as LocalDispatch;
 use polkadot_primitives::AccountId;
 use keystore::Store as Keystore;
-
+use polkadot_api::PolkadotApi;
 use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
 use client::{genesis, BlockchainEvents};
 use client::in_mem::Backend as InMemory;
@@ -92,7 +92,8 @@ impl network::TransactionPool for TransactionPoolAdapter {
 				return Vec::new();
 			}
 		};
-		let ready = transaction_pool::Ready::create(polkadot_api::CheckedId(BlockId::Hash(best_block)), &*self.client);
+		let id = self.client.check_id(BlockId::Hash(best_block)).expect("Best block is always valid; qed.");
+		let ready = transaction_pool::Ready::create(id, &*self.client);
 		self.pool.lock().pending(ready).map(|t| {
 			let hash = ::primitives::Hash::from(&t.hash()[..]);
 			let tx = codec::Slicable::encode(t.as_transaction());
