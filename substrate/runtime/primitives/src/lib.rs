@@ -27,7 +27,7 @@ extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use codec::Slicable;
-pub use num_traits::identities::{Zero, One};
+pub use num_traits::{Zero, One, Bounded};
 use rstd::ops::{Add, Sub, Rem, AddAssign, SubAssign, RemAssign};
 
 pub trait HasPublicAux {

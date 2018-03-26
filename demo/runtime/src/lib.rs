@@ -57,8 +57,8 @@ pub type Executive = executive::Executive<
 	runtime::Concrete,
 	block::Block,
 	(
-//		staking::internal::check_new_era();
-//		session::internal::check_rotate_session();
+		(),//runtime::Staking
+		runtime::Session
 	),
 >;
 

@@ -42,6 +42,7 @@ members = [
 	"substrate/runtime/executive",
 	"substrate/runtime/primitives",
 	"substrate/runtime/session",
+	"substrate/runtime/staking",
 	"substrate/runtime/system",
 	"substrate/runtime/timestamp",
 	"substrate/serializer",

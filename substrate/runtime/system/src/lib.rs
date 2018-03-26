@@ -30,7 +30,7 @@ extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
-use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Hashing, Headery};
+use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Hashing, Headery};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
@@ -39,8 +39,8 @@ use safe_mix::TripletMix;
 use runtime_io::{twox_128, TestExternalities};
 
 pub trait Trait {
-	type Index: Parameter + Default + SimpleArithmetic;
-	type BlockNumber: Parameter + SimpleArithmetic;
+	type Index: Parameter + Default + SimpleArithmetic + Copy;
+	type BlockNumber: Parameter + SimpleArithmetic + Default + Bounded + Copy;
 	type Hash: Parameter + SimpleBitOps + Default + Copy + CheckEqual;
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Parameter + Default + Digesty;
