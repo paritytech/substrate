@@ -343,7 +343,7 @@ impl<T: Trait> Executable for Module<T> {
 // - n | n > <CurrentEra<T>>::get(): deactivating: recently representing a validator and not yet
 //   ready for transfer.
 
-pub struct ChangeEntry<T: Trait> {
+struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
 	code: Option<Vec<u8>>,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,

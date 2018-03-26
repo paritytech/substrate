@@ -30,6 +30,7 @@ extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
+#[cfg(any(feature = "std", test))] use codec::Slicable;
 use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Hashing, Headery};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
