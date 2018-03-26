@@ -30,6 +30,15 @@ use codec::Slicable;
 pub use num_traits::{Zero, One, Bounded};
 use rstd::ops::{Add, Sub, Rem, AddAssign, SubAssign, RemAssign};
 
+pub trait Convert<A, B> {
+	fn convert(a: A) -> B;
+}
+
+pub struct Identity;
+impl<T> Convert<T, T> for Identity {
+	fn convert(a: T) -> T { a }
+}
+
 pub trait HasPublicAux {
 	type PublicAux;
 }

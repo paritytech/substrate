@@ -211,9 +211,9 @@ impl<T: Trait> Module<T> {
 
 	/// Force there to be a new era. This also forces a new session immediately after.
 	fn force_new_era() {
-/*		new_era();
-		session::internal::rotate_session();
-*/	}
+		Self::new_era();
+		<session::Module<T>>::rotate_session();
+	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
 /*
@@ -278,20 +278,20 @@ impl<T: Trait> Module<T> {
 		<FreeBalanceOf<T>>::insert(beneficiary, &(Self::free_balance(beneficiary) + slash));
 		slash == value
 	}
-
+*/
 	/// The era has changed - enact new staking set.
 	///
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
 	/// get a chance to set their session keys.
 	fn new_era() {
 		// Increment current era.
-		<CurrentEra<T>>::put(&(<CurrentEra<T>>::get() + 1));
+		<CurrentEra<T>>::put(&(<CurrentEra<T>>::get() + One::one()));
 
 		// Enact era length change.
 		if let Some(next_spe) = <NextSessionsPerEra<T>>::get() {
 			if next_spe != <SessionsPerEra<T>>::get() {
 				<SessionsPerEra<T>>::put(&next_spe);
-				<LastEraLengthChange<T>>::put(&system::block_number());
+				<LastEraLengthChange<T>>::put(&<system::Module<T>>::block_number());
 			}
 		}
 
@@ -299,19 +299,19 @@ impl<T: Trait> Module<T> {
 		// combination of validators, then use session::internal::set_validators().
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
 		// <ValidatorCount<T>>::get() of them.
-		let mut intentions = Intention::items()
+		let mut intentions = <Intentions<T>>::get()
 			.into_iter()
 			.map(|v| (Self::balance(&v), v))
 			.collect::<Vec<_>>();
-		intentions.sort_unstable_by(|&(b1, _), &(b2, _)| b2.cmp(&b1));
-		session::internal::set_validators(
+		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
+		<session::Module<T>>::set_validators(
 			&intentions.into_iter()
 				.map(|(_, v)| v)
 				.take(<ValidatorCount<T>>::get() as usize)
 				.collect::<Vec<_>>()
 		);
 	}
-*/
+
 	// NON-PUBLIC
 
 	/// Hook to be called after to transaction processing.

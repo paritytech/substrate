@@ -31,11 +31,12 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 //use runtime_io::{twox_128, TestExternalities};
-use primitives::{Zero, One, RefInto, Executable};
+use primitives::{Zero, One, RefInto, Executable, Convert};
 use runtime_support::{StorageValue, StorageMap};
 
 pub trait Trait: consensus::Trait + system::Trait {
 	type PublicAux: RefInto<Self::AccountId>;
+	type Conversion: Convert<Self::AccountId, Self::SessionKey>;
 }
 
 decl_module! {
@@ -100,12 +101,10 @@ impl<T: Trait> Module<T> {
 	///
 	/// Called by `staking::next_era()` only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
-	pub fn set_validators<'a>(new: &'a[T::AccountId])
-		where T::SessionKey: From<&'a T::AccountId>
-	{
+	pub fn set_validators(new: &[T::AccountId]) {
 		<Validators<T>>::put(&new.to_vec());			// TODO: optimise.
 		<consensus::Module<T>>::set_authorities(
-			&new.iter().map(Into::into).collect::<Vec<_>>()
+			&new.iter().cloned().map(T::Conversion::convert).collect::<Vec<_>>()
 		);
 	}
 

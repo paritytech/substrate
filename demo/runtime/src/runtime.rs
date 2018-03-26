@@ -20,7 +20,7 @@ use codec::Slicable;
 use runtime_support::Hashable;
 use runtime_io::{enumerated_trie_root, storage_root};
 use {consensus, timestamp, system, session, demo_primitives, runtime_primitives};
-use runtime_primitives::HasPublicAux;
+use runtime_primitives::{Identity, HasPublicAux};
 
 // TODO: move into runtime support/io.
 pub struct BlakeTwo256;
@@ -66,6 +66,7 @@ pub type System = system::Module<Concrete>;
 
 impl session::Trait for Concrete {
 	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type Conversion = Identity;
 }
 pub type Session = session::Module<Concrete>;
 
