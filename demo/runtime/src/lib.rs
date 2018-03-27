@@ -25,6 +25,7 @@
 extern crate substrate_runtime_primitives as runtime_primitives;
 
 extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_council as council;
 extern crate substrate_runtime_democracy as democracy;
 extern crate substrate_runtime_executive as executive;
 extern crate substrate_runtime_session as session;

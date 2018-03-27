@@ -15,6 +15,7 @@ substrate-runtime-std = { path = "../../../substrate/runtime-std", default-featu
 substrate-runtime-io = { path = "../../../substrate/runtime-io", default-features = false }
 substrate-runtime-support = { path = "../../../substrate/runtime-support", default-features = false }
 substrate-runtime-consensus = { path = "../../../substrate/runtime/consensus", default-features = false }
+substrate-runtime-council = { path = "../../../substrate/runtime/council", default-features = false }
 substrate-runtime-democracy = { path = "../../../substrate/runtime/democracy", default-features = false }
 substrate-runtime-executive = { path = "../../../substrate/runtime/executive", default-features = false }
 substrate-runtime-primitives = { path = "../../../substrate/runtime/primitives", default-features = false }
@@ -34,6 +35,7 @@ std = [
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-consensus/std",
+	"substrate-runtime-council/std",
 	"substrate-runtime-democracy/std",
 	"substrate-runtime-executive/std",
 	"substrate-runtime-primitives/std",

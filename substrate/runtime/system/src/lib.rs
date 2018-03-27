@@ -44,7 +44,7 @@ pub trait Trait {
 	type Hash: Parameter + SimpleBitOps + Default + Copy + CheckEqual;
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Parameter + Default + Digesty;
-	type AccountId: Parameter + Ord;
+	type AccountId: Parameter + Ord + Default;
 	type Header: Headery<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
 }
 
