@@ -151,7 +151,7 @@ impl<T: Trait> Module<T> {
 	/// Create a smart-contract account.
 	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_create(RefInto::into(aux), code, value, DirectExt) {
+		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, DirectExt) {
 			Self::commit_state(commit);
 		}
 	}
@@ -170,7 +170,7 @@ impl<T: Trait> Module<T> {
 	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(RefInto::into(aux), &dest, value, DirectExt) {
+		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, DirectExt) {
 			Self::commit_state(commit);
 		}
 	}
@@ -181,10 +181,10 @@ impl<T: Trait> Module<T> {
 	fn stake(aux: &T::PublicAux) {
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
-		assert!(intentions.iter().find(|&t| t == RefInto::into(aux)).is_none(), "Cannot stake if already staked.");
-		intentions.push(RefInto::into(aux).clone());
+		assert!(intentions.iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot stake if already staked.");
+		intentions.push(aux.ref_into().clone());
 		<Intentions<T>>::put(intentions);
-		<Bondage<T>>::insert(RefInto::into(aux), T::BlockNumber::max_value());
+		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
 	}
 
 	/// Retract the desire to stake for the transactor.
@@ -192,13 +192,13 @@ impl<T: Trait> Module<T> {
 	/// Effects will be felt at the beginning of the next era.
 	fn unstake(aux: &T::PublicAux) {
 		let mut intentions = <Intentions<T>>::get();
-		if let Some(position) = intentions.iter().position(|t| t == RefInto::into(aux)) {
+		if let Some(position) = intentions.iter().position(|t| t == aux.ref_into()) {
 			intentions.swap_remove(position);
 		} else {
 			panic!("Cannot unstake if not already staked.");
 		}
 		<Intentions<T>>::put(intentions);
-		<Bondage<T>>::insert(RefInto::into(aux), Self::current_era() + Self::bonding_duration());
+		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
 	}
 
 	// PRIV DISPATCH

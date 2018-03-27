@@ -253,7 +253,6 @@ version = "0.1.0"
 dependencies = [
  "demo-primitives 0.1.0",
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "integer-sqrt 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 0.1.0",
@@ -263,6 +262,7 @@ dependencies = [
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-consensus 0.1.0",
+ "substrate-runtime-democracy 0.1.0",
  "substrate-runtime-executive 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
@@ -1784,7 +1784,6 @@ name = "substrate-runtime-democracy"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "integer-sqrt 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 0.1.0",
  "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",

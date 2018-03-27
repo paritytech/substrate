@@ -51,7 +51,7 @@ impl Slicable for VoteThreshold {
 	}
 }
 
-trait Approved<Balance> {
+pub trait Approved<Balance> {
 	/// Given `approve` votes for and `against` votes against from a total electorate size of
 	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
 	/// overall outcome is in favour of approval.

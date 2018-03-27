@@ -5,7 +5,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 hex-literal = "0.1.0"
-integer-sqrt = "0.1.0"
 serde = { version = "1.0", default_features = false }
 safe-mix = { path = "../../../safe-mix", default_features = false}
 substrate-codec = { path = "../../codec", default_features = false }

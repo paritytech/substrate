@@ -17,6 +17,7 @@ substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-runtime-consensus = { path = "../../substrate/runtime/consensus" }
+substrate-runtime-democracy = { path = "../../substrate/runtime/democracy" }
 substrate-runtime-executive = { path = "../../substrate/runtime/executive" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-runtime-session = { path = "../../substrate/runtime/session" }
@@ -24,7 +25,6 @@ substrate-runtime-staking = { path = "../../substrate/runtime/staking" }
 substrate-runtime-system = { path = "../../substrate/runtime/system" }
 substrate-runtime-timestamp = { path = "../../substrate/runtime/timestamp" }
 demo-primitives = { path = "../primitives" }
-integer-sqrt = "0.1.0"
 
 [features]
 default = ["std"]
@@ -35,6 +35,7 @@ std = [
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-consensus/std",
+	"substrate-runtime-democracy/std",
 	"substrate-runtime-executive/std",
 	"substrate-runtime-primitives/std",
 	"substrate-runtime-session/std",

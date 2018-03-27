@@ -82,7 +82,7 @@ impl<T: Trait> Module<T> {
 	/// session.
 	fn set_key(aux: &T::PublicAux, key: T::SessionKey) {
 		// set new value for next session
-		<NextKeyFor<T>>::insert(RefInto::into(aux), key)
+		<NextKeyFor<T>>::insert(aux.ref_into(), key)
 	}
 
 	/// Set a new era length. Won't kick in until the next era change (at current length).

@@ -36,6 +36,29 @@ pub trait Convert<A, B> {
 	fn convert(a: A) -> B;
 }
 
+pub trait As<T> {
+	fn as_(self) -> T;
+	fn sa(T) -> Self;
+}
+
+macro_rules! impl_numerics {
+	( $( $t:ty ),* ) => {
+		$(
+			impl_numerics!($t: u8, u16, u32, u64, usize, i8, i16, i32, i64, isize,);
+		)*
+	};
+	( $f:ty : $t:ty, $( $rest:ty, )* ) => {
+		impl As<$t> for $f {
+			fn as_(self) -> $t { self as $t }
+			fn sa(t: $t) -> Self { t as Self }
+		}
+		impl_numerics!($f: $( $rest, )*);
+	};
+	( $f:ty : ) => {}
+}
+
+impl_numerics!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
+
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
@@ -53,14 +76,14 @@ pub trait Hashing {
 }
 
 pub trait RefInto<T> {
-	fn into(&self) -> &T;
+	fn ref_into(&self) -> &T;
 }
 impl<T> RefInto<T> for T {
-	fn into(&self) -> &T { &self }
+	fn ref_into(&self) -> &T { &self }
 }
 
 pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot +
+	Zero + One + IntegerSquareRoot + As<usize> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
@@ -69,7 +92,7 @@ pub trait SimpleArithmetic:
 	PartialOrd<Self> + Ord
 {}
 impl<T:
-	Zero + One + IntegerSquareRoot +
+	Zero + One + IntegerSquareRoot + As<usize> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +

@@ -15,14 +15,13 @@
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
 use runtime;
-use Executive;
 
 impl_stubs!(
 	authorities => |()| runtime::Consensus::authorities(),
-	initialise_block => |header| Executive::initialise_block(&header),
-	apply_extrinsic => |extrinsic| Executive::apply_extrinsic(extrinsic),
-	execute_block => |block| Executive::execute_block(block),
-	finalise_block => |()| Executive::finalise_block()
-	/*validator_count => |()| session::validator_count(),
-	validators => |()| session::validators(),*/
+	initialise_block => |header| runtime::Executive::initialise_block(&header),
+	apply_extrinsic => |extrinsic| runtime::Executive::apply_extrinsic(extrinsic),
+	execute_block => |block| runtime::Executive::execute_block(block),
+	finalise_block => |()| runtime::Executive::finalise_block(),
+	validator_count => |()| runtime::Session::validator_count(),
+	validators => |()| runtime::Session::validators()
 );

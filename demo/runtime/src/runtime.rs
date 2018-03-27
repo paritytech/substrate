@@ -20,7 +20,8 @@ use rstd::prelude::*;
 use codec::Slicable;
 use runtime_support::Hashable;
 use runtime_io::{enumerated_trie_root, storage_root, blake2_256};
-use {consensus, timestamp, system, session, staking, demo_primitives, runtime_primitives};
+use {block, demo_primitives, transaction};
+use {runtime_primitives, consensus, timestamp, system, session, staking, democracy, executive};
 use runtime_primitives::{Identity, HasPublicAux};
 
 // TODO: move into runtime support/io.
@@ -86,12 +87,17 @@ impl staking::Trait for Concrete {
 }
 pub type Staking = staking::Module<Concrete>;
 
+impl democracy::Trait for Concrete {
+	type Proposal = PrivCall;
+}
+pub type Democracy = democracy::Module<Concrete>;
+
 impl_outer_dispatch! {
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
 		Session = 1,
 		Staking = 2,
 		Timestamp = 3,
-//		Democracy = 5,
+		Democracy = 5,
 //		Council = 6,
 //		CouncilVote = 7,
 	}
@@ -100,8 +106,16 @@ impl_outer_dispatch! {
 		Consensus = 0,
 		Session = 1,
 		Staking = 2,
-//		Democracy = 5,
+		Democracy = 5,
 //		Council = 6,
 //		CouncilVote = 7,
 	}
 }
+
+pub type Executive = executive::Executive<
+	transaction::UncheckedTransaction,
+	transaction::CheckedTransaction,
+	Concrete,
+	block::Block,
+	((Democracy, Staking), Session),
+>;
