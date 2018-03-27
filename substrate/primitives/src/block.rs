@@ -21,7 +21,7 @@ use rstd::vec::Vec;
 #[cfg(feature = "std")]
 use bytes;
 use Hash;
-use codec::{Input, Slicable, NonTrivialSlicable};
+use codec::{Input, Slicable};
 
 /// Used to refer to a block number.
 pub type Number = u64;
@@ -47,7 +47,7 @@ impl Slicable for Transaction {
 	}
 }
 
-impl NonTrivialSlicable for Transaction { }
+
 
 
 
@@ -66,7 +66,7 @@ impl Slicable for Log {
 	}
 }
 
-impl NonTrivialSlicable for Log { }
+
 
 
 
@@ -88,11 +88,11 @@ impl Slicable for Digest {
 	}
 }
 
-impl NonTrivialSlicable for Digest { }
+
 
 /// Generic types to be specialised later.
 pub mod generic {
-	use super::{Header, Slicable, Input, NonTrivialSlicable, Vec};
+	use super::{Header, Slicable, Input, Vec};
 
 	/// A Block - this is generic for later specialisation in particular runtimes.
 	#[derive(PartialEq, Eq, Clone)]
@@ -120,7 +120,7 @@ pub mod generic {
 		}
 	}
 
-	impl<T: PartialEq + Eq + Clone> NonTrivialSlicable for Block<T> where Vec<T>: Slicable { }
+
 }
 
 /// The body of a block is just a bunch of transactions.

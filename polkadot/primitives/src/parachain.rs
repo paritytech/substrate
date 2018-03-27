@@ -19,7 +19,7 @@
 #[cfg(feature = "std")]
 use primitives::bytes;
 use primitives;
-use codec::{Input, Slicable, NonTrivialSlicable};
+use codec::{Input, Slicable};
 use rstd::cmp::{PartialOrd, Ord, Ordering};
 use rstd::vec::Vec;
 use ::Hash;
@@ -86,7 +86,7 @@ impl Slicable for Chain {
 	}
 }
 
-impl NonTrivialSlicable for Chain { }
+
 
 /// The duty roster specifying what jobs each validator must do.
 #[derive(Clone, PartialEq)]

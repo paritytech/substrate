@@ -22,7 +22,7 @@ pub use std::fmt;
 pub use rstd::marker::PhantomData;
 #[cfg(feature = "std")]
 use serde;
-pub use codec::{Slicable, Input, NonTrivialSlicable};
+pub use codec::{Slicable, Input};
 
 pub trait Dispatchable {
 	type Trait;
@@ -373,7 +373,7 @@ macro_rules! __decl_dispatch_module_common {
 				f(self.encode().as_slice())
 			}
 		}
-		impl<$trait_instance: $trait_name> $crate::dispatch::NonTrivialSlicable for $call_type<$trait_instance> {}
+
 	}
 }
 
@@ -476,7 +476,7 @@ macro_rules! impl_outer_dispatch_common {
 				f(self.encode().as_slice())
 			}
 		}
-		impl $crate::dispatch::NonTrivialSlicable for $call_type {}
+
 	}
 }
 
@@ -595,7 +595,7 @@ macro_rules! impl_dispatch {
 					f(self.encode().as_slice())
 				}
 			}
-			impl $crate::dispatch::NonTrivialSlicable for Call {}
+
 		}
 	}
 }
@@ -685,7 +685,7 @@ macro_rules! impl_meta_dispatch {
 					f(self.encode().as_slice())
 				}
 			}
-			impl $crate::dispatch::NonTrivialSlicable for Call {}
+
 		}
 	}
 }

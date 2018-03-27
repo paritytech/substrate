@@ -59,7 +59,7 @@ impl Slicable for Extrinsic {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for Extrinsic {}
+
 
 /// A transactions right from the external world. Unchecked.
 #[derive(Eq, Clone)]
@@ -104,7 +104,7 @@ impl Slicable for UncheckedExtrinsic {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for UncheckedExtrinsic {}
+
 
 impl PartialEq for UncheckedExtrinsic {
 	fn eq(&self, other: &Self) -> bool {

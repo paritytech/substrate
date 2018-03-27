@@ -365,7 +365,7 @@ impl Slicable for Transaction {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for Transaction {}
+
 
 /// A transactions right from the external world. Unchecked.
 #[derive(Eq, Clone)]
@@ -441,7 +441,7 @@ impl Slicable for UncheckedTransaction {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for UncheckedTransaction {}
+
 
 impl PartialEq for UncheckedTransaction {
 	fn eq(&self, other: &Self) -> bool {

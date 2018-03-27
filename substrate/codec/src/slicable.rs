@@ -61,10 +61,6 @@ pub trait Slicable: Sized {
 	}
 }
 
-/// Trait to mark that a type is not trivially (essentially "in place") serialisable.
-// TODO: under specialization, remove this and simply specialize in place serializable types.
-pub trait NonTrivialSlicable: Slicable {}
-
 impl Slicable for Option<bool> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
@@ -83,7 +79,7 @@ impl Slicable for Option<bool> {
 		}])
 	}
 }
-impl NonTrivialSlicable for Option<bool> {}
+
 
 impl<T: Slicable> Slicable for Box<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
@@ -147,7 +143,7 @@ impl<T: Slicable> Slicable for Vec<T> {
 	}
 }
 
-impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
+
 
 impl Slicable for () {
 	fn decode<I: Input>(_: &mut I) -> Option<()> {
@@ -178,7 +174,7 @@ macro_rules! tuple_impl {
 			}
 		}
 
-		impl<$one: NonTrivialSlicable> NonTrivialSlicable for ($one,) { }
+
 	};
 	($first:ident, $($rest:ident,)+) => {
 		impl<$first: Slicable, $($rest: Slicable),+>
@@ -214,11 +210,6 @@ macro_rules! tuple_impl {
 			}
 		}
 
-		impl<$first: Slicable, $($rest: Slicable),+>
-		NonTrivialSlicable
-		for ($first, $($rest),+)
-		{ }
-
 		tuple_impl!($($rest,)+);
 	}
 }
@@ -227,7 +218,7 @@ macro_rules! tuple_impl {
 mod inner_tuple_impl {
 	use rstd::vec::Vec;
 
-	use super::{Input, Slicable, NonTrivialSlicable};
+	use super::{Input, Slicable};
 	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 }
 
