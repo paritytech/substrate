@@ -137,10 +137,12 @@ pub type Executive = executive::Executive<
 	((((Council, CouncilVoting), Democracy), Staking), Session),
 >;
 
+pub type SessionConfig = session::TestingConfig<Concrete>;
 pub type StakingConfig = staking::TestingConfig<Concrete>;
 
 #[cfg(any(feature = "std", test))]
 pub struct TestingConfig {
+	pub session: Option<SessionConfig>,
 	pub staking: Option<StakingConfig>,
 }
 
@@ -151,6 +153,9 @@ pub use runtime_primitives::MakeTestExternalities;
 impl MakeTestExternalities for TestingConfig {
 	fn test_externalities(self) -> runtime_io::TestExternalities {
 		let mut s = runtime_io::TestExternalities::default();
+		if let Some(extra) = self.session {
+			s.extend(extra.test_externalities());
+		}
 		if let Some(extra) = self.staking {
 			s.extend(extra.test_externalities());
 		}

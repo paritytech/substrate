@@ -21,8 +21,9 @@
 
 #[cfg(feature = "std")] extern crate serde;
 
+extern crate substrate_keyring as keyring;
 extern crate substrate_codec as codec;
-extern crate substrate_runtime_std as rstd;
+#[cfg_attr(feature = "std", macro_use)] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as primitives;
@@ -145,27 +146,30 @@ impl<T: Trait> Executable for Module<T> {
 		Self::check_rotate_session();
 	}
 }
-/*
+
 #[cfg(any(feature = "std", test))]
-pub mod testing {
-	use super::*;
-	use runtime_io::{twox_128, TestExternalities};
-	use codec::{Joiner, KeyedVec};
-	use keyring::Keyring::*;
-	use runtime::system;
-
-	pub fn externalities(session_length: u64) -> TestExternalities {
-		let three = [3u8; 32];
-
-		let extras: TestExternalities = map![
-			twox_128(SessionLength::key()).to_vec() => vec![].and(&session_length),
-			twox_128(CurrentIndex::key()).to_vec() => vec![].and(&0u64),
-			twox_128(Validators::key()).to_vec() => vec![].and(&vec![One.into(), Two.into(), three])
-		];
-		system::testing::externalities().into_iter().chain(extras.into_iter()).collect()
-	}
+pub struct TestingConfig<T: Trait> {
+	pub session_length: T::BlockNumber,
 }
 
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T> where
+	T::AccountId: From<keyring::Keyring>
+{
+	fn test_externalities(self) -> runtime_io::TestExternalities {
+		use runtime_io::twox_128;
+		use codec::Slicable;
+		use keyring::Keyring::*;
+
+		let three = [3u8; 32];
+		map![
+			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
+			twox_128(<CurrentIndex<T>>::key()).to_vec() => 0u64.encode(),
+			twox_128(<Validators<T>>::key()).to_vec() => vec![One.into(), Two.into(), three].encode()
+		]
+	}
+}
+/*
 #[cfg(test)]
 mod tests {
 	use super::*;

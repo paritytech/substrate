@@ -50,7 +50,7 @@ mod tests {
 	use demo_runtime::block::Block;
 	use {staking, system};
 	use demo_runtime::runtime::{Call, Concrete, Staking};
-	use demo_runtime::runtime::{MakeTestExternalities, TestingConfig, StakingConfig};
+	use demo_runtime::runtime::{MakeTestExternalities, TestingConfig, SessionConfig, StakingConfig};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -142,11 +142,13 @@ mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		//staking::testing::externalities(2, 2, 0)
 		TestingConfig {
+			session: Some(SessionConfig {
+				session_length: 2,
+			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
-				current_era: 2,
+				current_era: 0,
 			}),
 		}.test_externalities()
 	}
