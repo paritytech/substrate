@@ -54,6 +54,9 @@ pub use self::header::Number as BlockNumber;
 /// certainly continue to be the same as the substrate's `AuthorityId`.
 pub type AccountId = primitives::AuthorityId;
 
+/// Balance of an account.
+pub type Balance = u64;
+
 /// The Ed25519 pub key of an session that belongs to an authority of the relay chain. This is
 /// exactly equivalent to what the substrate calls an "authority".
 pub type SessionKey = primitives::AuthorityId;

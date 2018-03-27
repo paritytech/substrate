@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use codec::{Input, Slicable};
-use transaction::UncheckedTransaction;
+use extrinsic::UncheckedExtrinsic;
 use runtime_primitives::Blocky;
 pub use demo_primitives::header::{Header, Digest, Log, Number, HeaderHash};
 
@@ -29,11 +29,11 @@ pub struct Block {
 	/// The block header.
 	pub header: Header,
 	/// All relay-chain transactions.
-	pub transactions: Vec<UncheckedTransaction>,	// TODO: rename extrinsics.
+	pub transactions: Vec<UncheckedExtrinsic>,	// TODO: rename extrinsics.
 }
 
 impl Blocky for Block {
-	type Extrinsic = UncheckedTransaction;
+	type Extrinsic = UncheckedExtrinsic;
 	type Header = Header;
 	fn header(&self) -> &Self::Header {
 		&self.header

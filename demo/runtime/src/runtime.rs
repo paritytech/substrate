@@ -20,7 +20,7 @@ use rstd::prelude::*;
 use codec::Slicable;
 use runtime_support::Hashable;
 use runtime_io::{enumerated_trie_root, storage_root, blake2_256};
-use {block, demo_primitives, transaction};
+use {block, demo_primitives, extrinsic};
 use runtime_primitives;
 use {consensus, council, democracy, executive, session, staking, system, timestamp};
 use runtime_primitives::{Identity, HasPublicAux};
@@ -95,7 +95,7 @@ impl session::Trait for Concrete {
 pub type Session = session::Module<Concrete>;
 
 impl staking::Trait for Concrete {
-	type Balance = u64;
+	type Balance = demo_primitives::Balance;
 	type DetermineContractAddress = BlakeTwo256;
 }
 pub type Staking = staking::Module<Concrete>;
@@ -130,8 +130,8 @@ impl_outer_dispatch! {
 }
 
 pub type Executive = executive::Executive<
-	transaction::UncheckedTransaction,
-	transaction::CheckedTransaction,
+	extrinsic::UncheckedExtrinsic,
+	extrinsic::CheckedExtrinsic,
 	Concrete,
 	block::Block,
 	((((Council, CouncilVoting), Democracy), Staking), Session),

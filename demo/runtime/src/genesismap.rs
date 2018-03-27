@@ -19,12 +19,12 @@
 use codec::{KeyedVec, Joiner};
 use std::collections::HashMap;
 use runtime_io::twox_128;
-use runtime_support::{Hashable, StorageMap, StorageList, StorageValue};
-use primitives::Block;
-use demo_primitives::{BlockNumber, AccountId};
-use runtime::staking::Balance;
-use runtime::{staking, session, system, democracy, council, council_vote};
-use consensus;
+use runtime_support::{Hashable, StorageMap, StorageValue};
+use substrate_primitives::Block;
+use demo_primitives::{AccountId, BlockNumber, Balance};
+use runtime::Concrete;
+use {consensus, council, democracy, session, staking, system};
+use council::voting as council_voting;
 
 /// Configuration of a general Substrate Demo genesis block.
 pub struct GenesisConfig {
@@ -81,33 +81,33 @@ impl GenesisConfig {
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
 		let wasm_runtime = include_bytes!("../wasm/genesis.wasm").to_vec();
 		vec![
-			(session::SessionLength::key(), vec![].and(&self.session_length)),
-			(session::Validators::key(), vec![].and(&self.validators)),
+			(<session::SessionLength<Concrete>>::key(), vec![].and(&self.session_length)),
+			(<session::Validators<Concrete>>::key(), vec![].and(&self.validators)),
 
-			(&staking::Intention::len_key()[..], vec![].and(&0u32)),
-			(&staking::SessionsPerEra::key()[..], vec![].and(&self.sessions_per_era)),
-			(&staking::CurrentEra::key()[..], vec![].and(&0u64)),
+			(&<staking::Intentions<Concrete>>::key()[..], vec![].and(&Vec::<AccountId>::new())),
+			(&<staking::SessionsPerEra<Concrete>>::key()[..], vec![].and(&self.sessions_per_era)),
+			(&<staking::CurrentEra<Concrete>>::key()[..], vec![].and(&0u64)),
 
-			(democracy::LaunchPeriod::key(), vec![].and(&self.launch_period)),
-			(democracy::VotingPeriod::key(), vec![].and(&self.voting_period)),
-			(democracy::MinimumDeposit::key(), vec![].and(&self.minimum_deposit)),
+			(<democracy::LaunchPeriod<Concrete>>::key(), vec![].and(&self.launch_period)),
+			(<democracy::VotingPeriod<Concrete>>::key(), vec![].and(&self.voting_period)),
+			(<democracy::MinimumDeposit<Concrete>>::key(), vec![].and(&self.minimum_deposit)),
 
-			(council::CandidacyBond::key(), vec![].and(&self.candidacy_bond)),
-			(council::VotingBond::key(), vec![].and(&self.voter_bond)),
-			(council::PresentSlashPerVoter::key(), vec![].and(&self.present_slash_per_voter)),
-			(council::CarryCount::key(), vec![].and(&self.carry_count)),
-			(council::PresentationDuration::key(), vec![].and(&self.presentation_duration)),
-			(council::VotingPeriod::key(), vec![].and(&self.council_election_voting_period)),
-			(council::TermDuration::key(), vec![].and(&self.council_term_duration)),
-			(council::DesiredSeats::key(), vec![].and(&self.desired_seats)),
-			(council::InactiveGracePeriod::key(), vec![].and(&self.inactive_grace_period)),
+			(<council::CandidacyBond<Concrete>>::key(), vec![].and(&self.candidacy_bond)),
+			(<council::VotingBond<Concrete>>::key(), vec![].and(&self.voter_bond)),
+			(<council::PresentSlashPerVoter<Concrete>>::key(), vec![].and(&self.present_slash_per_voter)),
+			(<council::CarryCount<Concrete>>::key(), vec![].and(&self.carry_count)),
+			(<council::PresentationDuration<Concrete>>::key(), vec![].and(&self.presentation_duration)),
+			(<council::VotingPeriod<Concrete>>::key(), vec![].and(&self.council_election_voting_period)),
+			(<council::TermDuration<Concrete>>::key(), vec![].and(&self.council_term_duration)),
+			(<council::DesiredSeats<Concrete>>::key(), vec![].and(&self.desired_seats)),
+			(<council::InactiveGracePeriod<Concrete>>::key(), vec![].and(&self.inactive_grace_period)),
 
-			(council_vote::CooloffPeriod::key(), vec![].and(&self.cooloff_period)),
-			(council_vote::VotingPeriod::key(), vec![].and(&self.council_proposal_voting_period))
+			(<council_voting::CooloffPeriod<Concrete>>::key(), vec![].and(&self.cooloff_period)),
+			(<council_voting::VotingPeriod<Concrete>>::key(), vec![].and(&self.council_proposal_voting_period))
 		].into_iter()
-			.map(|(k, v)| (k.into(), v))
+			.map(|(k, v)| (Into::<Vec<u8>>::into(k), v))
 			.chain(self.balances.iter()
-				.map(|&(account, balance)| (staking::FreeBalanceOf::key_for(&account), vec![].and(&balance)))
+				.map(|&(account, balance)| (<staking::FreeBalance<Concrete>>::key_for(&account), vec![].and(&balance)))
 			)
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
@@ -125,6 +125,6 @@ impl GenesisConfig {
 pub fn additional_storage_with_genesis(genesis_block: &Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	use codec::Slicable;
 	map![
-		system::BlockHashAt::key_for(&0) => genesis_block.header.blake2_256().encode()
+		<system::BlockHash<Concrete>>::key_for(&0) => genesis_block.header.blake2_256().encode()
 	]
 }

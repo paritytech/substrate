@@ -23,7 +23,6 @@
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 
 extern crate substrate_runtime_primitives as runtime_primitives;
-
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
 extern crate substrate_runtime_democracy as democracy;
@@ -49,7 +48,6 @@ extern crate demo_primitives;
 
 pub mod runtime;
 pub mod block;
-pub mod transaction;
+pub mod extrinsic;
 pub mod api;
-
-//#[cfg(feature = "std")] pub mod genesismap;
+#[cfg(feature = "std")] pub mod genesismap;

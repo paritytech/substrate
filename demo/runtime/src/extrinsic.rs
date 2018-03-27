@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Transaction type.
+//! Extrinsic type.
 
 use rstd::prelude::*;
 use rstd::ops;
@@ -30,7 +30,7 @@ use std::fmt;
 /// A vetted and verified transaction from the external world.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
-pub struct Transaction {
+pub struct Extrinsic {
 	/// Who signed it (note this is not a signature).
 	pub signed: AccountId,
 	/// The number of transactions have come before from the same signer.
@@ -39,9 +39,9 @@ pub struct Transaction {
 	pub function: Call,
 }
 
-impl Slicable for Transaction {
+impl Slicable for Extrinsic {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Transaction {
+		Some(Extrinsic {
 			signed: Slicable::decode(input)?,
 			nonce: Slicable::decode(input)?,
 			function: Slicable::decode(input)?,
@@ -59,19 +59,19 @@ impl Slicable for Transaction {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for Transaction {}
+impl ::codec::NonTrivialSlicable for Extrinsic {}
 
 /// A transactions right from the external world. Unchecked.
 #[derive(Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-pub struct UncheckedTransaction {
+pub struct UncheckedExtrinsic {
 	/// The actual transaction information.
-	pub transaction: Transaction,
+	pub transaction: Extrinsic,
 	/// The signature; should be an Ed25519 signature applied to the serialised `transaction` field.
 	pub signature: Signature,
 }
 
-impl Slicable for UncheckedTransaction {
+impl Slicable for UncheckedExtrinsic {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
@@ -79,7 +79,7 @@ impl Slicable for UncheckedTransaction {
 		// to use this).
 		let _length_do_not_remove_me_see_above: u32 = Slicable::decode(input)?;
 
-		Some(UncheckedTransaction {
+		Some(UncheckedExtrinsic {
 			transaction: Slicable::decode(input)?,
 			signature: Slicable::decode(input)?,
 		})
@@ -104,37 +104,37 @@ impl Slicable for UncheckedTransaction {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for UncheckedTransaction {}
+impl ::codec::NonTrivialSlicable for UncheckedExtrinsic {}
 
-impl PartialEq for UncheckedTransaction {
+impl PartialEq for UncheckedExtrinsic {
 	fn eq(&self, other: &Self) -> bool {
 		self.signature.iter().eq(other.signature.iter()) && self.transaction == other.transaction
 	}
 }
 
 #[cfg(feature = "std")]
-impl fmt::Debug for UncheckedTransaction {
+impl fmt::Debug for UncheckedExtrinsic {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedTransaction({:?})", self.transaction)
+		write!(f, "UncheckedExtrinsic({:?})", self.transaction)
 	}
 }
 
 /// A type-safe indicator that a transaction has been checked.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct CheckedTransaction(UncheckedTransaction);
+pub struct CheckedExtrinsic(UncheckedExtrinsic);
 
-impl CheckedTransaction {
+impl CheckedExtrinsic {
 	/// Get a reference to the checked signature.
 	pub fn signature(&self) -> &Signature {
 		&self.0.signature
 	}
 }
 
-impl ops::Deref for CheckedTransaction {
-	type Target = Transaction;
+impl ops::Deref for CheckedExtrinsic {
+	type Target = Extrinsic;
 
-	fn deref(&self) -> &Transaction {
+	fn deref(&self) -> &Extrinsic {
 		&self.0.transaction
 	}
 }
@@ -142,24 +142,24 @@ impl ops::Deref for CheckedTransaction {
 /// Check the signature on a transaction.
 ///
 /// On failure, return the transaction back.
-pub fn check(tx: UncheckedTransaction) -> Result<CheckedTransaction, UncheckedTransaction> {
+pub fn check(tx: UncheckedExtrinsic) -> Result<CheckedExtrinsic, UncheckedExtrinsic> {
 	let msg = ::codec::Slicable::encode(&tx.transaction);
 	if ::runtime_io::ed25519_verify(&tx.signature.0, &msg, &tx.transaction.signed) {
-		Ok(CheckedTransaction(tx))
+		Ok(CheckedExtrinsic(tx))
 	} else {
 		Err(tx)
 	}
 }
 
-impl Checkable for UncheckedTransaction {
-	type CheckedType = CheckedTransaction;
+impl Checkable for UncheckedExtrinsic {
+	type CheckedType = CheckedExtrinsic;
 
 	fn check(self) -> Result<Self::CheckedType, Self> {
 		check(self)
 	}
 }
 
-impl Applyable for CheckedTransaction {
+impl Applyable for CheckedExtrinsic {
 	type IndexType = TxOrder;
 	type AccountIdType = AccountId;
 
@@ -189,8 +189,8 @@ mod tests {
 
 	#[test]
 	fn serialize_unchecked() {
-		let tx = UncheckedTransaction {
-			transaction: Transaction {
+		let tx = UncheckedExtrinsic {
+			transaction: Extrinsic {
 				signed: [1; 32],
 				nonce: 999u64,
 				function: Call::Timestamp(timestamp::Call::set(135135)),
@@ -206,6 +206,6 @@ mod tests {
 
 		let v = Slicable::encode(&tx);
 		println!("{}", HexDisplay::from(&v));
-		assert_eq!(UncheckedTransaction::decode(&mut &v[..]).unwrap(), tx);
+		assert_eq!(UncheckedExtrinsic::decode(&mut &v[..]).unwrap(), tx);
 	}
 }
