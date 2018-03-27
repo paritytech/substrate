@@ -22,7 +22,7 @@
 extern crate num_traits;
 extern crate integer_sqrt;
 extern crate substrate_runtime_std as rstd;
-#[cfg(not(feature = "std"))] extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 
@@ -31,6 +31,11 @@ use codec::Slicable;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
+
+#[cfg(feature = "std")]
+pub trait MakeTestExternalities {
+	fn test_externalities(self) -> runtime_io::TestExternalities;
+}
 
 pub trait Convert<A, B> {
 	fn convert(a: A) -> B;

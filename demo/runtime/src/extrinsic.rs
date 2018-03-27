@@ -27,13 +27,13 @@ use runtime_support::AuxDispatchable;
 #[cfg(feature = "std")]
 use std::fmt;
 
-/// A vetted and verified transaction from the external world.
+/// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct Extrinsic {
 	/// Who signed it (note this is not a signature).
 	pub signed: AccountId,
-	/// The number of transactions have come before from the same signer.
+	/// The number of extrinsics have come before from the same signer.
 	pub nonce: TxOrder,
 	/// The function that should be called.
 	pub function: Call,
@@ -61,13 +61,13 @@ impl Slicable for Extrinsic {
 
 
 
-/// A transactions right from the external world. Unchecked.
+/// A extrinsics right from the external world. Unchecked.
 #[derive(Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize))]
 pub struct UncheckedExtrinsic {
-	/// The actual transaction information.
-	pub transaction: Extrinsic,
-	/// The signature; should be an Ed25519 signature applied to the serialised `transaction` field.
+	/// The actual extrinsic information.
+	pub extrinsic: Extrinsic,
+	/// The signature; should be an Ed25519 signature applied to the serialised `extrinsic` field.
 	pub signature: Signature,
 }
 
@@ -80,7 +80,7 @@ impl Slicable for UncheckedExtrinsic {
 		let _length_do_not_remove_me_see_above: u32 = Slicable::decode(input)?;
 
 		Some(UncheckedExtrinsic {
-			transaction: Slicable::decode(input)?,
+			extrinsic: Slicable::decode(input)?,
 			signature: Slicable::decode(input)?,
 		})
 	}
@@ -92,9 +92,9 @@ impl Slicable for UncheckedExtrinsic {
 		// Vec<u8>. we'll make room for it here, then overwrite once we know the length.
 		v.extend(&[0u8; 4]);
 
-		self.transaction.signed.using_encoded(|s| v.extend(s));
-		self.transaction.nonce.using_encoded(|s| v.extend(s));
-		self.transaction.function.using_encoded(|s| v.extend(s));
+		self.extrinsic.signed.using_encoded(|s| v.extend(s));
+		self.extrinsic.nonce.using_encoded(|s| v.extend(s));
+		self.extrinsic.function.using_encoded(|s| v.extend(s));
 		self.signature.using_encoded(|s| v.extend(s));
 
 		let length = (v.len() - 4) as u32;
@@ -108,18 +108,18 @@ impl Slicable for UncheckedExtrinsic {
 
 impl PartialEq for UncheckedExtrinsic {
 	fn eq(&self, other: &Self) -> bool {
-		self.signature.iter().eq(other.signature.iter()) && self.transaction == other.transaction
+		self.signature.iter().eq(other.signature.iter()) && self.extrinsic == other.extrinsic
 	}
 }
 
 #[cfg(feature = "std")]
 impl fmt::Debug for UncheckedExtrinsic {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedExtrinsic({:?})", self.transaction)
+		write!(f, "UncheckedExtrinsic({:?})", self.extrinsic)
 	}
 }
 
-/// A type-safe indicator that a transaction has been checked.
+/// A type-safe indicator that a extrinsic has been checked.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CheckedExtrinsic(UncheckedExtrinsic);
@@ -135,16 +135,16 @@ impl ops::Deref for CheckedExtrinsic {
 	type Target = Extrinsic;
 
 	fn deref(&self) -> &Extrinsic {
-		&self.0.transaction
+		&self.0.extrinsic
 	}
 }
 
-/// Check the signature on a transaction.
+/// Check the signature on a extrinsic.
 ///
-/// On failure, return the transaction back.
+/// On failure, return the extrinsic back.
 pub fn check(tx: UncheckedExtrinsic) -> Result<CheckedExtrinsic, UncheckedExtrinsic> {
-	let msg = ::codec::Slicable::encode(&tx.transaction);
-	if ::runtime_io::ed25519_verify(&tx.signature.0, &msg, &tx.transaction.signed) {
+	let msg = ::codec::Slicable::encode(&tx.extrinsic);
+	if ::runtime_io::ed25519_verify(&tx.signature.0, &msg, &tx.extrinsic.signed) {
 		Ok(CheckedExtrinsic(tx))
 	} else {
 		Err(tx)
@@ -164,15 +164,15 @@ impl Applyable for CheckedExtrinsic {
 	type AccountIdType = AccountId;
 
 	fn index(&self) -> &Self::IndexType {
-		&self.0.transaction.nonce
+		&self.0.extrinsic.nonce
 	}
 
 	fn sender(&self) -> &Self::AccountIdType {
-		&self.0.transaction.signed
+		&self.0.extrinsic.signed
 	}
 
 	fn apply(self) {
-		let tx = self.0.transaction;
+		let tx = self.0.extrinsic;
 		//TODO: take payment e.g. public_pass_from_payment
 		tx.function.dispatch(&tx.signed);
 	}
@@ -190,7 +190,7 @@ mod tests {
 	#[test]
 	fn serialize_unchecked() {
 		let tx = UncheckedExtrinsic {
-			transaction: Extrinsic {
+			extrinsic: Extrinsic {
 				signed: [1; 32],
 				nonce: 999u64,
 				function: Call::Timestamp(timestamp::Call::set(135135)),

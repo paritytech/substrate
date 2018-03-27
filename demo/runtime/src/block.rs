@@ -28,8 +28,8 @@ pub use demo_primitives::header::{Header, Digest, Log, Number, HeaderHash};
 pub struct Block {
 	/// The block header.
 	pub header: Header,
-	/// All relay-chain transactions.
-	pub transactions: Vec<UncheckedExtrinsic>,	// TODO: rename extrinsics.
+	/// All relay-chain extrinsics.
+	pub extrinsics: Vec<UncheckedExtrinsic>,	// TODO: rename extrinsics.
 }
 
 impl Blocky for Block {
@@ -39,24 +39,24 @@ impl Blocky for Block {
 		&self.header
 	}
 	fn extrinsics(&self) -> &[Self::Extrinsic] {
-		&self.transactions[..]
+		&self.extrinsics[..]
 	}
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
-		(self.header, self.transactions)
+		(self.header, self.extrinsics)
 	}
 }
 
 impl Slicable for Block {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let (header, transactions) = Slicable::decode(input)?;
-		Some(Block { header, transactions })
+		let (header, extrinsics) = Slicable::decode(input)?;
+		Some(Block { header, extrinsics })
 	}
 
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
 		v.extend(self.header.encode());
-		v.extend(self.transactions.encode());
+		v.extend(self.extrinsics.encode());
 
 		v
 	}

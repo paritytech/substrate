@@ -20,8 +20,10 @@
 
 #[cfg(feature = "std")] extern crate serde;
 
+extern crate substrate_keyring as keyring;
+
 extern crate substrate_codec as codec;
-extern crate substrate_runtime_std as rstd;
+#[cfg_attr(feature = "std", macro_use)] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as primitives;
@@ -34,7 +36,6 @@ use rstd::cmp;
 use rstd::cell::RefCell;
 use rstd::marker::PhantomData;
 use rstd::collections::btree_map::{BTreeMap, Entry};
-//use runtime_io::{twox_128, TestExternalities};
 use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 
@@ -556,34 +557,35 @@ impl<T: Trait> Module<T> {
 		}
 	}
 }
-/*
-#[cfg(any(feature = "std", test))]
-pub mod testing {
-	use super::*;
-	use runtime_io::{twox_128, TestExternalities};
-	use codec::{Joiner, KeyedVec};
-	use keyring::Keyring::*;
-	use runtime::session;
-	use super::public::{Call, Dispatch};
-	use super::privileged::{Dispatch as PrivDispatch, Call as PrivCall};
 
-	pub fn externalities(session_length: u64, sessions_per_era: u64, current_era: u64) -> TestExternalities {
-		let extras: TestExternalities = map![
-			twox_128(&Intention::len_key()).to_vec() => vec![].and(&3u32),
-			twox_128(&Intention::key_for(0)).to_vec() => Alice.to_raw_public_vec(),
-			twox_128(&Intention::key_for(1)).to_vec() => Bob.to_raw_public_vec(),
-			twox_128(&Intention::key_for(2)).to_vec() => Charlie.to_raw_public_vec(),
-			twox_128(SessionsPerEra::key()).to_vec() => vec![].and(&sessions_per_era),
-			twox_128(ValidatorCount::key()).to_vec() => vec![].and(&3u64),
-			twox_128(BondingDuration::key()).to_vec() => vec![].and(&0u64),
-			twox_128(TransactionFee::key()).to_vec() => vec![].and(&1u64),
-			twox_128(CurrentEra::key()).to_vec() => vec![].and(&current_era),
-			twox_128(&FreeBalance::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-		];
-		session::testing::externalities(session_length).into_iter().chain(extras.into_iter()).collect()
-	}
+#[cfg(any(feature = "std", test))]
+pub struct TestingConfig<T: Trait> {
+	pub sessions_per_era: T::BlockNumber,
+	pub current_era: T::BlockNumber,
 }
 
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T> where
+	T::AccountId: From<keyring::Keyring>
+{
+	fn test_externalities(self) -> runtime_io::TestExternalities {
+		use runtime_io::twox_128;
+		use codec::Slicable;
+		use keyring::Keyring::*;
+		use primitives::As;
+
+		map![
+			twox_128(<Intentions<T>>::key()).to_vec() => vec![Alice.to_raw_public_vec(), Bob.to_raw_public_vec(), Charlie.to_raw_public_vec()].encode(),
+			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
+			twox_128(<ValidatorCount<T>>::key()).to_vec() => 3u64.encode(),
+			twox_128(<BondingDuration<T>>::key()).to_vec() => 0u64.encode(),
+			twox_128(<TransactionFee<T>>::key()).to_vec() => 1u64.encode(),
+			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
+			twox_128(&<FreeBalance<T>>::key_for(T::AccountId::from(Alice))).to_vec() => T::Balance::sa(111).encode()
+		]
+	}
+}
+/*
 #[cfg(test)]
 mod tests {
 	use super::*;

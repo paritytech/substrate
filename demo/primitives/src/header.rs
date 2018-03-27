@@ -86,7 +86,7 @@ pub struct Header {
 	/// State root after this transition.
 	pub state_root: H256,
 	/// The root of the trie that represents this block's transactions, indexed by a 32-byte integer.
-	pub transaction_root: H256,
+	pub extrinsics_root: H256,
 	/// The digest of activity on the block.
 	pub digest: Digest,
 }
@@ -98,7 +98,7 @@ impl Header {
 			parent_hash: Default::default(),
 			number,
 			state_root: Default::default(),
-			transaction_root: Default::default(),
+			extrinsics_root: Default::default(),
 			digest: Default::default(),
 		}
 	}
@@ -109,7 +109,7 @@ impl Headery for Header {
 	type Hash = HeaderHash;
 	type Digest = Digest;
 	fn number(&self) -> &Self::Number { &self.number }
-	fn extrinsics_root(&self) -> &Self::Hash { &self.transaction_root }
+	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
 	fn state_root(&self) -> &Self::Hash { &self.state_root }
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
 	fn digest(&self) -> &Self::Digest { &self.digest }
@@ -121,7 +121,7 @@ impl Headery for Header {
 		digest: Self::Digest
 	) -> Self {
 		Header {
-			number, transaction_root: extrinsics_root, state_root, parent_hash, digest
+			number, extrinsics_root: extrinsics_root, state_root, parent_hash, digest
 		}
 	}
 }
@@ -132,7 +132,7 @@ impl Slicable for Header {
 			parent_hash: try_opt!(Slicable::decode(input)),
 			number: try_opt!(Slicable::decode(input)),
 			state_root: try_opt!(Slicable::decode(input)),
-			transaction_root: try_opt!(Slicable::decode(input)),
+			extrinsics_root: try_opt!(Slicable::decode(input)),
 			digest: try_opt!(Slicable::decode(input)),
 		})
 	}
@@ -143,7 +143,7 @@ impl Slicable for Header {
 		self.parent_hash.using_encoded(|s| v.extend(s));
 		self.number.using_encoded(|s| v.extend(s));
 		self.state_root.using_encoded(|s| v.extend(s));
-		self.transaction_root.using_encoded(|s| v.extend(s));
+		self.extrinsics_root.using_encoded(|s| v.extend(s));
 		self.digest.using_encoded(|s| v.extend(s));
 
 		v
@@ -162,7 +162,7 @@ mod tests {
 			parent_hash: 5.into(),
 			number: 67,
 			state_root: 3.into(),
-			transaction_root: 6.into(),
+			extrinsics_root: 6.into(),
 			digest: Digest { logs: vec![Log(vec![1])] },
 		};
 

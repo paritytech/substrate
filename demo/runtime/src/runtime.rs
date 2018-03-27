@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use codec::Slicable;
 use runtime_support::Hashable;
-use runtime_io::{enumerated_trie_root, storage_root, blake2_256};
+use runtime_io::{self, enumerated_trie_root, storage_root, blake2_256};
 use {block, demo_primitives, extrinsic};
 use runtime_primitives;
 use {consensus, council, democracy, executive, session, staking, system, timestamp};
@@ -136,3 +136,24 @@ pub type Executive = executive::Executive<
 	block::Block,
 	((((Council, CouncilVoting), Democracy), Staking), Session),
 >;
+
+pub type StakingConfig = staking::TestingConfig<Concrete>;
+
+#[cfg(any(feature = "std", test))]
+pub struct TestingConfig {
+	pub staking: Option<StakingConfig>,
+}
+
+#[cfg(any(feature = "std", test))]
+pub use runtime_primitives::MakeTestExternalities;
+
+#[cfg(any(feature = "std", test))]
+impl MakeTestExternalities for TestingConfig {
+	fn test_externalities(self) -> runtime_io::TestExternalities {
+		let mut s = runtime_io::TestExternalities::default();
+		if let Some(extra) = self.staking {
+			s.extend(extra.test_externalities());
+		}
+		s
+	}
+}

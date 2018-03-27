@@ -19,3 +19,5 @@ demo-runtime = { path = "../runtime" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../substrate/keyring" }
+substrate-runtime-staking = { path = "../../substrate/runtime/staking" }
+substrate-runtime-system = { path = "../../substrate/runtime/system" }
