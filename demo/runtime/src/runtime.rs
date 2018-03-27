@@ -49,6 +49,18 @@ impl staking::ContractAddressFor<demo_primitives::AccountId> for BlakeTwo256 {
 	}
 }
 
+// TODO: refactor so that each module gets to be able to attempt to extract a PrivCall into
+// Some(its own PrivCall) or None.
+impl democracy::IsCancelReferendum for PrivCall {
+	fn is_cancel_referendum(&self) -> Option<democracy::ReferendumIndex> {
+		if let &PrivCall::Democracy(democracy::PrivCall::cancel_referendum(ref ref_index)) = self {
+			Some(*ref_index)
+		} else {
+			None
+		}
+	}
+}
+
 pub struct Concrete;
 
 impl HasPublicAux for Concrete {
@@ -95,6 +107,7 @@ pub type Democracy = democracy::Module<Concrete>;
 
 impl council::Trait for Concrete {}
 pub type Council = council::Module<Concrete>;
+pub type CouncilVoting = council::voting::Module<Concrete>;
 
 impl_outer_dispatch! {
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
@@ -103,7 +116,7 @@ impl_outer_dispatch! {
 		Timestamp = 3,
 		Democracy = 5,
 		Council = 6,
-//		CouncilVote = 7,
+		CouncilVoting = 7,
 	}
 
 	pub enum PrivCall {
@@ -112,7 +125,7 @@ impl_outer_dispatch! {
 		Staking = 2,
 		Democracy = 5,
 		Council = 6,
-//		CouncilVote = 7,
+		CouncilVoting = 7,
 	}
 }
 
@@ -121,5 +134,5 @@ pub type Executive = executive::Executive<
 	transaction::CheckedTransaction,
 	Concrete,
 	block::Block,
-	((Council, Democracy), (Staking, Session)),
+	((((Council, CouncilVoting), Democracy), Staking), Session),
 >;

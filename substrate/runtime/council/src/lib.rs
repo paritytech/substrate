@@ -36,7 +36,7 @@ use rstd::prelude::*;
 use primitives::{Zero, One, Executable, RefInto, As};
 use runtime_support::{StorageValue, StorageMap};
 
-//pub mod voting;
+pub mod voting;
 
 // no polynomial attacks:
 //

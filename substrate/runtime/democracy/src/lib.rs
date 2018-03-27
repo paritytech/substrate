@@ -43,8 +43,14 @@ pub type PropIndex = u32;
 /// A referendum index.
 pub type ReferendumIndex = u32;
 
+/// Is a proposal the "cancel_referendum"?
+// &T::Proposal::Democracy(democracy::privileged::Call::cancel_referendum(ref_index))
+pub trait IsCancelReferendum {
+	fn is_cancel_referendum(&self) -> Option<ReferendumIndex>;
+}
+
 pub trait Trait: staking::Trait {
-	type Proposal: Parameter + Dispatchable;
+	type Proposal: Parameter + Dispatchable + IsCancelReferendum;
 }
 
 decl_module! {
