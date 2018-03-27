@@ -44,7 +44,6 @@ pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
 /// Is a proposal the "cancel_referendum"?
-// &T::Proposal::Democracy(democracy::privileged::Call::cancel_referendum(ref_index))
 pub trait IsCancelReferendum {
 	fn is_cancel_referendum(&self) -> Option<ReferendumIndex>;
 }

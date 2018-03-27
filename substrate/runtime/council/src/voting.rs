@@ -19,8 +19,8 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 //use runtime_io::{twox_128, TestExternalities};
-use primitives::{Zero, One, Bounded, SimpleArithmetic, Executable, RefInto, Hashing};
-use runtime_support::{StorageValue, StorageMap, Parameter};
+use primitives::{Executable, RefInto, Hashing};
+use runtime_support::{StorageValue, StorageMap};
 use super::{Trait, system, democracy, Module as Council};
 use democracy::IsCancelReferendum;
 
@@ -157,7 +157,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn take_proposal_if_expiring_at(n: T::BlockNumber) -> Option<(T::Proposal, T::Hash)> {
-		let mut proposals = Self::proposals();
+		let proposals = Self::proposals();
 		match proposals.first() {
 			Some(&(expiry, hash)) if expiry == n => {
 				// yes this is horrible, but fixing it will need substantial work in storage.
