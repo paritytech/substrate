@@ -8,6 +8,7 @@ hex-literal = "0.1.0"
 integer-sqrt = "0.1.0"
 serde = { version = "1.0", default_features = false }
 safe-mix = { path = "../../../safe-mix", default_features = false}
+substrate-keyring = { path = "../../keyring", optional = true }
 substrate-codec = { path = "../../codec", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
@@ -24,6 +25,7 @@ default = ["std"]
 std = [
 	"serde/std",
 	"safe-mix/std",
+	"substrate-keyring",
 	"substrate-codec/std",
 	"substrate-primitives/std",
 	"substrate-runtime-std/std",

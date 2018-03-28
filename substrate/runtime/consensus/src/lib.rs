@@ -19,10 +19,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[allow(unused_imports)] #[macro_use] extern crate substrate_runtime_std as rstd;
+extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_codec as codec;
 
 use rstd::prelude::*;
+#[cfg(any(feature = "std", test))] use rstd::marker::PhantomData;
 use runtime_support::{storage, Parameter};
 use runtime_support::storage::unhashed::StorageVec;
 
@@ -72,5 +75,29 @@ impl<T: Trait> Module<T> {
 	/// Set a single authority by index.
 	pub fn set_authority(index: u32, key: &T::SessionKey) {
 		AuthorityStorageVec::<T::SessionKey>::set_item(index, key);
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+pub struct TestingConfig<T: Trait>(PhantomData<T>);
+
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> Default for TestingConfig<T> {
+	fn default() -> Self {
+		TestingConfig(PhantomData)
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
+{
+	fn test_externalities(self) -> runtime_io::TestExternalities {
+		use codec::{Slicable, KeyedVec};
+
+		map![
+			b":auth:len".to_vec() => 2u32.encode(),
+			0u32.to_keyed_vec(b":auth:") => vec![11; 32],
+			1u32.to_keyed_vec(b":auth:") => vec![21; 32]
+		]
 	}
 }

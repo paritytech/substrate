@@ -18,10 +18,10 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-//use runtime_io::{twox_128, TestExternalities};
 use primitives::{Executable, RefInto, Hashing};
+use {system, democracy};
 use runtime_support::{StorageValue, StorageMap};
-use super::{Trait, system, democracy, Module as Council};
+use super::{Trait, Module as Council};
 use democracy::IsCancelReferendum;
 
 decl_module! {
@@ -189,9 +189,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
+impl<T: Trait> Executable for Council<T> {
 	fn execute() {
-		Self::end_block(<system::Module<T>>::block_number());
+		let n = <system::Module<T>>::block_number();
+		Self::end_block(n);
+		<Module<T>>::end_block(n);
 	}
 }
 

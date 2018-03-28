@@ -21,7 +21,7 @@
 #[cfg(feature = "std")] extern crate serde;
 
 extern crate substrate_codec as codec;
-#[cfg_attr(not(feature = "std"), macro_use)] extern crate substrate_runtime_std as rstd;
+#[macro_use] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as primitives;
@@ -30,8 +30,6 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
-//use rstd::cmp;
-//use runtime_io::{twox_128, TestExternalities};
 use primitives::{Zero, Executable, RefInto, As};
 use runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable};
 
@@ -269,47 +267,58 @@ impl<T: Trait> Executable for Module<T> {
 	}
 }
 
-/*
+#[cfg(any(feature = "std", test))]
+pub struct TestingConfig<T: Trait> {
+	pub launch_period: T::BlockNumber,
+	pub voting_period: T::BlockNumber,
+	pub minimum_deposit: T::Balance,
+}
 
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> TestingConfig<T> {
+	pub fn new() -> Self {
+		TestingConfig {
+			launch_period: T::BlockNumber::sa(1),
+			voting_period: T::BlockNumber::sa(1),
+			minimum_deposit: T::Balance::sa(1),
+		}
+	}
 
-#[cfg(test)]
-pub mod testing {
-	use super::*;
-	use runtime_io::{twox_128, TestExternalities};
-	use runtime_support::{StorageList, StorageValue, StorageMap};
-	use codec::Joiner;
-	use keyring::Keyring::*;
-	use runtime::{session, staking};
-
-	pub fn externalities() -> TestExternalities {
-		map![
-			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
-			twox_128(session::Validators::key()).to_vec() => vec![].and(&vec![Alice.to_raw_public(), Bob.into(), Charlie.into()]),
-			twox_128(&staking::Intention::len_key()).to_vec() => vec![].and(&3u32),
-			twox_128(&staking::Intention::key_for(0)).to_vec() => Alice.to_raw_public_vec(),
-			twox_128(&staking::Intention::key_for(1)).to_vec() => Bob.to_raw_public_vec(),
-			twox_128(&staking::Intention::key_for(2)).to_vec() => Charlie.to_raw_public_vec(),
-			twox_128(&staking::FreeBalanceOf::key_for(*Alice)).to_vec() => vec![].and(&10u64),
-			twox_128(&staking::FreeBalanceOf::key_for(*Bob)).to_vec() => vec![].and(&20u64),
-			twox_128(&staking::FreeBalanceOf::key_for(*Charlie)).to_vec() => vec![].and(&30u64),
-			twox_128(&staking::FreeBalanceOf::key_for(*Dave)).to_vec() => vec![].and(&40u64),
-			twox_128(&staking::FreeBalanceOf::key_for(*Eve)).to_vec() => vec![].and(&50u64),
-			twox_128(&staking::FreeBalanceOf::key_for(*Ferdie)).to_vec() => vec![].and(&60u64),
-			twox_128(&staking::FreeBalanceOf::key_for(*One)).to_vec() => vec![].and(&1u64),
-			twox_128(staking::TotalStake::key()).to_vec() => vec![].and(&210u64),
-			twox_128(staking::SessionsPerEra::key()).to_vec() => vec![].and(&1u64),
-			twox_128(staking::ValidatorCount::key()).to_vec() => vec![].and(&3u64),
-			twox_128(staking::CurrentEra::key()).to_vec() => vec![].and(&1u64),
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![].and(&1u64),
-			twox_128(staking::BondingDuration::key()).to_vec() => vec![].and(&0u64),
-
-			twox_128(LaunchPeriod::key()).to_vec() => vec![].and(&1u64),
-			twox_128(VotingPeriod::key()).to_vec() => vec![].and(&1u64),
-			twox_128(MinimumDeposit::key()).to_vec() => vec![].and(&1u64)
-		]
+	pub fn extended() -> Self {
+		TestingConfig {
+			launch_period: T::BlockNumber::sa(1),
+			voting_period: T::BlockNumber::sa(3),
+			minimum_deposit: T::Balance::sa(1),
+		}
 	}
 }
 
+#[cfg(any(feature = "std", test))] 
+impl<T: Trait> Default for TestingConfig<T> {
+	fn default() -> Self {
+		TestingConfig {
+			launch_period: T::BlockNumber::sa(1000),
+			voting_period: T::BlockNumber::sa(1000),
+			minimum_deposit: T::Balance::sa(0),
+		}
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
+{
+	fn test_externalities(self) -> runtime_io::TestExternalities {
+		use codec::Slicable;
+		use runtime_io::twox_128;
+
+		map![
+			twox_128(<LaunchPeriod<T>>::key()).to_vec() => self.launch_period.encode(),
+			twox_128(<VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
+			twox_128(<MinimumDeposit<T>>::key()).to_vec() => self.minimum_deposit.encode()
+		]
+	}
+}
+/*
 #[cfg(test)]
 mod tests {
 	use super::*;

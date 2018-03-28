@@ -19,7 +19,8 @@
 use rstd::prelude::*;
 use codec::Slicable;
 use runtime_support::Hashable;
-use runtime_io::{self, enumerated_trie_root, storage_root, blake2_256};
+#[cfg(any(feature = "std", test))] use runtime_io;
+use runtime_io::{enumerated_trie_root, storage_root, blake2_256};
 use {block, demo_primitives, extrinsic};
 use runtime_primitives;
 use {consensus, council, democracy, executive, session, staking, system, timestamp};
@@ -134,16 +135,24 @@ pub type Executive = executive::Executive<
 	extrinsic::CheckedExtrinsic,
 	Concrete,
 	block::Block,
-	((((Council, CouncilVoting), Democracy), Staking), Session),
+	(((((), Council), Democracy), Staking), Session),
 >;
 
-pub type SessionConfig = session::TestingConfig<Concrete>;
-pub type StakingConfig = staking::TestingConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type ConsensusConfig = consensus::TestingConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type SystemConfig = system::TestingConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type SessionConfig = session::TestingConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type StakingConfig = staking::TestingConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type DemocracyConfig = democracy::TestingConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type CouncilConfig = council::TestingConfig<Concrete>;
 
 #[cfg(any(feature = "std", test))]
 pub struct TestingConfig {
+	pub consensus: Option<ConsensusConfig>,
+	pub system: Option<SystemConfig>,
 	pub session: Option<SessionConfig>,
 	pub staking: Option<StakingConfig>,
+	pub democracy: Option<DemocracyConfig>,
+	pub council: Option<CouncilConfig>,
 }
 
 #[cfg(any(feature = "std", test))]
@@ -153,10 +162,22 @@ pub use runtime_primitives::MakeTestExternalities;
 impl MakeTestExternalities for TestingConfig {
 	fn test_externalities(self) -> runtime_io::TestExternalities {
 		let mut s = runtime_io::TestExternalities::default();
+		if let Some(extra) = self.consensus {
+			s.extend(extra.test_externalities());
+		}
+		if let Some(extra) = self.system {
+			s.extend(extra.test_externalities());
+		}
 		if let Some(extra) = self.session {
 			s.extend(extra.test_externalities());
 		}
 		if let Some(extra) = self.staking {
+			s.extend(extra.test_externalities());
+		}
+		if let Some(extra) = self.democracy {
+			s.extend(extra.test_externalities());
+		}
+		if let Some(extra) = self.council {
 			s.extend(extra.test_externalities());
 		}
 		s

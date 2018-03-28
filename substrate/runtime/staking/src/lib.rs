@@ -20,7 +20,7 @@
 
 #[cfg(feature = "std")] extern crate serde;
 
-extern crate substrate_keyring as keyring;
+#[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
 
 extern crate substrate_codec as codec;
 #[cfg_attr(feature = "std", macro_use)] extern crate substrate_runtime_std as rstd;
@@ -562,27 +562,74 @@ impl<T: Trait> Module<T> {
 pub struct TestingConfig<T: Trait> {
 	pub sessions_per_era: T::BlockNumber,
 	pub current_era: T::BlockNumber,
+	pub balances: Vec<(T::AccountId, T::Balance)>,
+	pub intentions: Vec<T::AccountId>,
+	pub validator_count: u64,
+	pub bonding_duration: T::BlockNumber,
+	pub transaction_fee: T::Balance,
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T> where
-	T::AccountId: From<keyring::Keyring>
-{
+impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
+	pub fn simple() -> Self {
+		use primitives::As;
+		use keyring::Keyring::*;
+		TestingConfig {
+			sessions_per_era: T::BlockNumber::sa(2),
+			current_era: T::BlockNumber::sa(0),
+			balances: vec![(T::AccountId::from(Alice), T::Balance::sa(111))],
+			intentions: vec![T::AccountId::from(Alice), T::AccountId::from(Bob), T::AccountId::from(Charlie)],
+			validator_count: 3u64,
+			bonding_duration: T::BlockNumber::sa(0),
+			transaction_fee: T::Balance::sa(0),
+		}
+	}
+
+	pub fn extended() -> Self {
+		use primitives::As;
+		use keyring::Keyring::*;
+		TestingConfig {
+			sessions_per_era: T::BlockNumber::sa(3),
+			current_era: T::BlockNumber::sa(1),
+			balances: vec![
+				(T::AccountId::from(Alice), T::Balance::sa(10)),
+				(T::AccountId::from(Bob), T::Balance::sa(20)),
+				(T::AccountId::from(Charlie), T::Balance::sa(30)),
+				(T::AccountId::from(Dave), T::Balance::sa(40)),
+				(T::AccountId::from(Eve), T::Balance::sa(50)),
+				(T::AccountId::from(Ferdie), T::Balance::sa(60)),
+				(T::AccountId::from(One), T::Balance::sa(1))
+			],
+			intentions: vec![T::AccountId::from(Alice), T::AccountId::from(Bob), T::AccountId::from(Charlie)],
+			validator_count: 3u64,
+			bonding_duration: T::BlockNumber::sa(0),
+			transaction_fee: T::Balance::sa(1),
+		}
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T> {
 	fn test_externalities(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
 		use codec::Slicable;
-		use keyring::Keyring::*;
-		use primitives::As;
 
-		map![
-			twox_128(<Intentions<T>>::key()).to_vec() => vec![Alice.to_raw_public_vec(), Bob.to_raw_public_vec(), Charlie.to_raw_public_vec()].encode(),
+		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
+
+		let mut r: runtime_io::TestExternalities = map![
+			twox_128(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
 			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
-			twox_128(<ValidatorCount<T>>::key()).to_vec() => 3u64.encode(),
-			twox_128(<BondingDuration<T>>::key()).to_vec() => 0u64.encode(),
-			twox_128(<TransactionFee<T>>::key()).to_vec() => 1u64.encode(),
+			twox_128(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
+			twox_128(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
+			twox_128(<TransactionFee<T>>::key()).to_vec() => self.transaction_fee.encode(),
 			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
-			twox_128(&<FreeBalance<T>>::key_for(T::AccountId::from(Alice))).to_vec() => T::Balance::sa(111).encode()
-		]
+			twox_128(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
+		];
+
+		for (who, value) in self.balances.into_iter() {
+			r.insert(twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
+		}
+		r
 	}
 }
 /*

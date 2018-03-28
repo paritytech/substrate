@@ -22,7 +22,8 @@
 
 extern crate integer_sqrt;
 extern crate substrate_codec as codec;
-#[cfg_attr(not(feature = "std"), macro_use)] extern crate substrate_runtime_std as rstd;
+#[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
+#[macro_use] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as primitives;
@@ -32,8 +33,7 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
-//use runtime_io::{twox_128, TestExternalities};
-use primitives::{Zero, One, Executable, RefInto, As};
+use primitives::{Zero, One, RefInto, As};
 use runtime_support::{StorageValue, StorageMap};
 
 pub mod voting;
@@ -496,14 +496,94 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
-		Self::end_block(<system::Module<T>>::block_number());
+#[cfg(any(feature = "std", test))]
+pub struct TestingConfig<T: Trait> {
+	// for the voting onto the  council
+	pub active_council: Vec<(T::AccountId, T::BlockNumber)>,
+	pub approval_voting_period: T::BlockNumber,
+	pub presentation_period: T::BlockNumber,
+	pub desired_seats: u32,
+	pub term_duration: T::BlockNumber,
+
+	// for the council's votes.
+	pub cooloff_period: T::BlockNumber,
+	pub voting_period: T::BlockNumber,
+}
+
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> TestingConfig<T> {
+	pub fn new() -> Self {
+		TestingConfig {
+			active_council: vec![],
+			approval_voting_period: T::BlockNumber::sa(4),
+			presentation_period: T::BlockNumber::sa(2),
+			desired_seats: 2,
+			term_duration: T::BlockNumber::sa(5),
+			cooloff_period: T::BlockNumber::sa(2),
+			voting_period: T::BlockNumber::sa(1),
+		}
+	}
+
+	pub fn with_council() -> Self where T::AccountId: From<keyring::Keyring> {
+		use keyring::Keyring::*;
+		let expiry = T::BlockNumber::sa(10);
+		TestingConfig {
+			active_council: vec![
+				(T::AccountId::from(Alice), expiry),
+				(T::AccountId::from(Bob), expiry),
+				(T::AccountId::from(Charlie), expiry)
+			],
+			approval_voting_period: T::BlockNumber::sa(4),
+			presentation_period: T::BlockNumber::sa(2),
+			desired_seats: 2,
+			term_duration: T::BlockNumber::sa(5),
+			cooloff_period: T::BlockNumber::sa(2),
+			voting_period: T::BlockNumber::sa(1),
+		}
+	}
+}
+
+#[cfg(any(feature = "std", test))] 
+impl<T: Trait> Default for TestingConfig<T> {
+	fn default() -> Self {
+		TestingConfig {
+			active_council: vec![],
+			approval_voting_period: T::BlockNumber::sa(1000),
+			presentation_period: T::BlockNumber::sa(1000),
+			desired_seats: 0,
+			term_duration: T::BlockNumber::sa(5),
+			cooloff_period: T::BlockNumber::sa(1000),
+			voting_period: T::BlockNumber::sa(1000),
+		}
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
+{
+	fn test_externalities(self) -> runtime_io::TestExternalities {
+		use codec::Slicable;
+		use runtime_io::twox_128;
+
+		map![
+			twox_128(<CandidacyBond<T>>::key()).to_vec() => T::Balance::sa(9).encode(),
+			twox_128(<VotingBond<T>>::key()).to_vec() => T::Balance::sa(3).encode(),
+			twox_128(<PresentSlashPerVoter<T>>::key()).to_vec() => T::Balance::sa(1).encode(),
+			twox_128(<CarryCount<T>>::key()).to_vec() => 2u32.encode(),
+			twox_128(<PresentationDuration<T>>::key()).to_vec() => self.presentation_period.encode(),
+			twox_128(<VotingPeriod<T>>::key()).to_vec() => self.approval_voting_period.encode(),
+			twox_128(<TermDuration<T>>::key()).to_vec() => self.term_duration.encode(),
+			twox_128(<DesiredSeats<T>>::key()).to_vec() => self.desired_seats.encode(),
+			twox_128(<InactiveGracePeriod<T>>::key()).to_vec() => T::BlockNumber::sa(1).encode(),
+			twox_128(<ActiveCouncil<T>>::key()).to_vec() => self.active_council.encode(),
+
+			twox_128(<voting::CooloffPeriod<T>>::key()).to_vec() => self.cooloff_period.encode(),
+			twox_128(<voting::VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode()
+		]
 	}
 }
 
 /*
-
 #[cfg(test)]
 pub mod testing {
 	use super::*;

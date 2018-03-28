@@ -142,14 +142,26 @@ mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
+		use keyring::Keyring::*;
+		let three = [3u8; 32];
 		TestingConfig {
+			consensus: Some(Default::default()),
+			system: Some(Default::default()),
 			session: Some(SessionConfig {
 				session_length: 2,
+				validators: vec![One.into(), Two.into(), three],
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
 				current_era: 0,
+				balances: vec![(Alice.into(), 111)],
+				intentions: vec![Alice.into(), Bob.into(), Charlie.into()],
+				validator_count: 3,
+				bonding_duration: 0,
+				transaction_fee: 1,
 			}),
+			democracy: Some(Default::default()),
+			council: Some(Default::default()),
 		}.test_externalities()
 	}
 
@@ -181,7 +193,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("7a388ce5b4eeadbb9268ae96e8822b223f4fd1841327d99f4e1c21fad81f97f2").into(),
+			hex!("d952977ca0087110958d4b66f6d9f2e41d19a252b9f6f3aab9535c4982bdb9b5").into(),
 			vec![Extrinsic {
 				signed: Alice.into(),
 				nonce: 0,
@@ -194,7 +206,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("e4eb71be8b816f2061f32f284e9b429562cdc1b82f11725e5f965ff23439f5e9").into(),
+			hex!("2a3f3499414649c3449f4f7c21574233a9c4ebd1109548acc00f2568132e5a70").into(),
 			vec![
 				Extrinsic {
 					signed: Bob.into(),

@@ -21,7 +21,7 @@
 
 #[cfg(feature = "std")] extern crate serde;
 
-extern crate substrate_keyring as keyring;
+#[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
 extern crate substrate_codec as codec;
 #[cfg_attr(feature = "std", macro_use)] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
@@ -150,6 +150,29 @@ impl<T: Trait> Executable for Module<T> {
 #[cfg(any(feature = "std", test))]
 pub struct TestingConfig<T: Trait> {
 	pub session_length: T::BlockNumber,
+	pub validators: Vec<T::AccountId>,
+}
+
+#[cfg(any(feature = "std", test))] 
+impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
+	pub fn simple() -> Self where T::AccountId: From<[u8; 32]> {
+		use primitives::As;
+		use keyring::Keyring::*;
+		let three = [3u8; 32];
+		TestingConfig {
+			session_length: T::BlockNumber::sa(2),
+			validators: vec![T::AccountId::from(One), T::AccountId::from(Two), T::AccountId::from(three)],
+		}
+	}
+
+	pub fn extended() -> Self {
+		use primitives::As;
+		use keyring::Keyring::*;
+		TestingConfig {
+			session_length: T::BlockNumber::sa(1),
+			validators: vec![T::AccountId::from(Alice), T::AccountId::from(Bob), T::AccountId::from(Charlie)],
+		}
+	}
 }
 
 #[cfg(any(feature = "std", test))]
@@ -159,16 +182,15 @@ impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T> where
 	fn test_externalities(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
 		use codec::Slicable;
-		use keyring::Keyring::*;
-
-		let three = [3u8; 32];
+		use primitives::As;
 		map![
 			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
-			twox_128(<CurrentIndex<T>>::key()).to_vec() => 0u64.encode(),
-			twox_128(<Validators<T>>::key()).to_vec() => vec![One.into(), Two.into(), three].encode()
+			twox_128(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
+			twox_128(<Validators<T>>::key()).to_vec() => self.validators.encode()
 		]
 	}
 }
+
 /*
 #[cfg(test)]
 mod tests {

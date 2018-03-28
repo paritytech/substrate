@@ -30,6 +30,7 @@ extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
+#[cfg(any(feature = "std", test))] use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))] use codec::Slicable;
 use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Hashing, Headery};
 use runtime_support::{StorageValue, StorageMap, Parameter};
@@ -134,6 +135,32 @@ impl<T: Trait> Module<T> {
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_index(who: &T::AccountId) {
 		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::one());
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+pub struct TestingConfig<T: Trait>(PhantomData<T>);
+
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> Default for TestingConfig<T> {
+	fn default() -> Self {
+		TestingConfig(PhantomData)
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
+{
+	fn test_externalities(self) -> runtime_io::TestExternalities {
+		use runtime_io::twox_128;
+		use codec::Slicable;
+
+		map![
+			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
+			twox_128(<Number<T>>::key()).to_vec() => 1u64.encode(),
+			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
+			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode()
+		]
 	}
 }
 
