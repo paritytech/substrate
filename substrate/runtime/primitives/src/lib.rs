@@ -73,13 +73,6 @@ pub trait HasPublicAux {
 	type PublicAux;
 }
 
-pub trait Hashing {
-	type Output;
-	fn hash_of<S: Slicable>(s: &S) -> Self::Output;
-	fn enumerated_trie_root(items: &Vec<&[u8]>) -> Self::Output;
-	fn storage_root() -> Self::Output;
-}
-
 pub trait RefInto<T> {
 	fn ref_into(&self) -> &T;
 }
@@ -177,8 +170,8 @@ pub trait Blocky {
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 pub trait Checkable: Sized {
-	type CheckedType: Sized;
-	fn check(self) -> Result<Self::CheckedType, Self>;
+	type Checked: Sized;
+	fn check(self) -> Result<Self::Checked, Self>;
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
@@ -188,10 +181,10 @@ pub trait Checkable: Sized {
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable {
-	type AccountIdType;
-	type IndexType;
-	fn index(&self) -> &Self::IndexType;
-	fn sender(&self) -> &Self::AccountIdType;
+	type AccountId;
+	type Index;
+	fn index(&self) -> &Self::Index;
+	fn sender(&self) -> &Self::AccountId;
 	fn apply(self);
 }
 

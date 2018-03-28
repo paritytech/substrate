@@ -152,22 +152,22 @@ pub fn check(tx: UncheckedExtrinsic) -> Result<CheckedExtrinsic, UncheckedExtrin
 }
 
 impl Checkable for UncheckedExtrinsic {
-	type CheckedType = CheckedExtrinsic;
+	type Checked = CheckedExtrinsic;
 
-	fn check(self) -> Result<Self::CheckedType, Self> {
+	fn check(self) -> Result<Self::Checked, Self> {
 		check(self)
 	}
 }
 
 impl Applyable for CheckedExtrinsic {
-	type IndexType = TxOrder;
-	type AccountIdType = AccountId;
+	type Index = TxOrder;
+	type AccountId = AccountId;
 
-	fn index(&self) -> &Self::IndexType {
+	fn index(&self) -> &Self::Index {
 		&self.0.extrinsic.nonce
 	}
 
-	fn sender(&self) -> &Self::AccountIdType {
+	fn sender(&self) -> &Self::AccountId {
 		&self.0.extrinsic.signed
 	}
 

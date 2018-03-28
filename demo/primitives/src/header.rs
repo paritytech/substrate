@@ -46,8 +46,6 @@ impl Slicable for Log {
 	}
 }
 
-
-
 /// The digest of a block, useful for light-clients.
 #[derive(Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -129,11 +127,11 @@ impl Headery for Header {
 impl Slicable for Header {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
-			parent_hash: try_opt!(Slicable::decode(input)),
-			number: try_opt!(Slicable::decode(input)),
-			state_root: try_opt!(Slicable::decode(input)),
-			extrinsics_root: try_opt!(Slicable::decode(input)),
-			digest: try_opt!(Slicable::decode(input)),
+			parent_hash: Slicable::decode(input)?,
+			number: Slicable::decode(input)?,
+			state_root: Slicable::decode(input)?,
+			extrinsics_root: Slicable::decode(input)?,
+			digest: Slicable::decode(input)?,
 		})
 	}
 

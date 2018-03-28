@@ -32,7 +32,8 @@ extern crate safe_mix;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))] use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))] use codec::Slicable;
-use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Hashing, Headery};
+use runtime_io::Hashing;
+use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Headery};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -162,107 +163,4 @@ impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
 			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode()
 		]
 	}
-}
-
-#[cfg(test)]
-mod tests {
-/*
-	use super::*;
-	#[test]
-	fn staking_balance_transfer_dispatch_works() {
-		let mut t: TestExternalities = map![
-			twox_128(&staking::FreeBalanceOf::key_for(*One)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(&BlockHash::key_for(&0)).to_vec() => [69u8; 32].encode()
-		];
-
-		let tx = UncheckedTransaction {
-			transaction: Transaction {
-				signed: One.into(),
-				nonce: 0,
-				function: PubCall::Staking(StakingCall::transfer(Two.into(), 69)),
-			},
-			signature: hex!("3a682213cb10e8e375fe0817fe4d220a4622d910088809ed7fc8b4ea3871531dbadb22acfedd28a100a0b7bd2d274e0ff873655b13c88f4640b5569db3222706").into(),
-		};
-
-		with_externalities(&mut t, || {
-			internal::initialise_block(&Header::from_block_number(1));
-			internal::execute_transaction(tx);
-			assert_eq!(staking::balance(&One), 32);
-			assert_eq!(staking::balance(&Two), 69);
-		});
-	}
-
-	fn new_test_ext() -> TestExternalities {
-		staking::testing::externalities(2, 2, 0)
-	}
-
-	#[test]
-	fn block_import_works() {
-		let mut t = new_test_ext();
-
-		let h = Header {
-			parent_hash: [69u8; 32].into(),
-			number: 1,
-			state_root: hex!("cc3f1f5db826013193e502c76992b5e933b12367e37a269a9822b89218323e9f").into(),
-			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
-			digest: Digest { logs: vec![], },
-		};
-
-		let b = Block {
-			header: h,
-			transactions: vec![],
-		};
-
-		with_externalities(&mut t, || {
-			execute_block(b);
-		});
-	}
-
-	#[test]
-	#[should_panic]
-	fn block_import_of_bad_state_root_fails() {
-		let mut t = new_test_ext();
-
-		let h = Header {
-			parent_hash: [69u8; 32].into(),
-			number: 1,
-			state_root: [0u8; 32].into(),
-			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
-			digest: Digest { logs: vec![], },
-		};
-
-		let b = Block {
-			header: h,
-			transactions: vec![],
-		};
-
-		with_externalities(&mut t, || {
-			execute_block(b);
-		});
-	}
-
-	#[test]
-	#[should_panic]
-	fn block_import_of_bad_extrinsics_root_fails() {
-		let mut t = new_test_ext();
-
-		let h = Header {
-			parent_hash: [69u8; 32].into(),
-			number: 1,
-			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0").into(),
-			extrinsics_root: [0u8; 32].into(),
-			digest: Digest { logs: vec![], },
-		};
-
-		let b = Block {
-			header: h,
-			transactions: vec![],
-		};
-
-		with_externalities(&mut t, || {
-			execute_block(b);
-		});
-	}
-	*/
 }

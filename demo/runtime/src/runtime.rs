@@ -16,39 +16,11 @@
 
 //! Dispatch system. Just dispatches calls.
 
-use rstd::prelude::*;
-use codec::Slicable;
-use runtime_support::Hashable;
 #[cfg(any(feature = "std", test))] use runtime_io;
-use runtime_io::{enumerated_trie_root, storage_root, blake2_256};
+use runtime_io::BlakeTwo256;
 use {block, demo_primitives, extrinsic};
-use runtime_primitives;
 use {consensus, council, democracy, executive, session, staking, system, timestamp};
 use runtime_primitives::{Identity, HasPublicAux};
-
-// TODO: move into runtime support/io.
-pub struct BlakeTwo256;
-
-impl runtime_primitives::Hashing for BlakeTwo256 {
-	type Output = demo_primitives::Hash;
-	fn hash_of<S: Slicable>(s: &S) -> Self::Output {
-		Self::Output::from(s.blake2_256())
-	}
-	fn enumerated_trie_root(items: &Vec<&[u8]>) -> Self::Output {
-		enumerated_trie_root(items).into()
-	}
-	fn storage_root() -> Self::Output {
-		storage_root().into()
-	}
-}
-
-impl staking::ContractAddressFor<demo_primitives::AccountId> for BlakeTwo256 {
-	fn contract_address_for(code: &[u8], origin: &demo_primitives::AccountId) -> demo_primitives::AccountId {
-		let mut dest_pre = blake2_256(code).to_vec();
-		dest_pre.extend(&origin[..]);
-		blake2_256(&dest_pre)
-	}
-}
 
 // TODO: refactor so that each module gets to be able to attempt to extract a PrivCall into
 // Some(its own PrivCall) or None.

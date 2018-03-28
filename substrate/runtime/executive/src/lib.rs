@@ -18,18 +18,24 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg_attr(test, macro_use)] extern crate substrate_runtime_std as rstd;
+extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_system as system;
+#[cfg(test)] #[macro_use] extern crate serde_derive;
+#[cfg(test)] extern crate substrate_primitives;
+#[cfg(test)] extern crate substrate_runtime_consensus as consensus;
+#[cfg(test)] extern crate substrate_runtime_session as session;
+#[cfg(test)] extern crate substrate_runtime_staking as staking;
 
 #[cfg(feature = "std")] extern crate serde;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use primitives::{Zero, One, Headery, Blocky, Checkable, Applyable, CheckEqual, Hashing, Executable};
+use runtime_io::Hashing;
+use primitives::{Zero, One, Headery, Blocky, Checkable, Applyable, CheckEqual, Executable};
 use codec::Slicable;
 
 pub struct Executive<
@@ -42,11 +48,11 @@ pub struct Executive<
 
 impl<
 	Unchecked: Checkable<
-		CheckedType = Checked
+		Checked = Checked
 	> + PartialEq + Eq + Clone + Slicable,
 	Checked: Applyable<
-		IndexType = System::Index,
-		AccountIdType = System::AccountId
+		Index = System::Index,
+		AccountId = System::AccountId
 	>,
 	System: system::Trait,
 	Block: Blocky<
@@ -151,48 +157,199 @@ impl<
 		<system::Module<System>>::record_block_hash(header)
 	}
 }
-/*
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use super::internal::*;
+	use staking::Call;
+	use codec::{Slicable, Input};
+	use runtime_io::with_externalities;
+	use runtime_support::AuxDispatchable;
+	use substrate_primitives::H256;
+	use primitives::{Checkable, Applyable, HasPublicAux, Identity, Headery, Blocky, Digesty, MakeTestExternalities};
 
-	use runtime_io::{with_externalities, twox_128, TestExternalities};
-	use runtime_support::StorageValue;
-	use codec::{Joiner, KeyedVec, Slicable};
-	use keyring::Keyring::*;
-	use primitives::hexdisplay::HexDisplay;
-	use demo_primitives::{Header, Digest};
-	use transaction::{UncheckedTransaction, Transaction};
-	use runtime::staking;
-	use dispatch::public::Call as PubCall;
-	use runtime::staking::public::Call as StakingCall;
+	#[derive(Default, PartialEq, Eq, Clone, Serialize, Debug)]
+	pub struct Digest {
+		pub logs: Vec<u64>,
+	}
+	impl Slicable for Digest {
+		fn decode<I: Input>(input: &mut I) -> Option<Self> {
+			Vec::<u64>::decode(input).map(|logs| Digest { logs })
+		}
+		fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+			self.logs.using_encoded(f)
+		}
+	}
+	impl Digesty for Digest {
+		type Item = u64;
+		fn push(&mut self, item: Self::Item) {
+			self.logs.push(item);
+		}
+	}
+
+	#[derive(PartialEq, Eq, Clone, Serialize, Debug)]
+	#[serde(rename_all = "camelCase")]
+	#[serde(deny_unknown_fields)]
+	pub struct Header {
+		pub parent_hash: H256,
+		pub number: u64,
+		pub state_root: H256,
+		pub extrinsics_root: H256,
+		pub digest: Digest,
+	}
+	impl Slicable for Header {
+		fn decode<I: Input>(input: &mut I) -> Option<Self> {
+			Some(Header {
+				parent_hash: Slicable::decode(input)?,
+				number: Slicable::decode(input)?,
+				state_root: Slicable::decode(input)?,
+				extrinsics_root: Slicable::decode(input)?,
+				digest: Slicable::decode(input)?,
+			})
+		}
+
+		fn encode(&self) -> Vec<u8> {
+			let mut v = Vec::new();
+			self.parent_hash.using_encoded(|s| v.extend(s));
+			self.number.using_encoded(|s| v.extend(s));
+			self.state_root.using_encoded(|s| v.extend(s));
+			self.extrinsics_root.using_encoded(|s| v.extend(s));
+			self.digest.using_encoded(|s| v.extend(s));
+			v
+		}
+	}
+	impl Headery for Header {
+		type Number = u64;
+		type Hash = H256;
+		type Digest = Digest;
+		fn number(&self) -> &Self::Number { &self.number }
+		fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
+		fn state_root(&self) -> &Self::Hash { &self.state_root }
+		fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
+		fn digest(&self) -> &Self::Digest { &self.digest }
+		fn new(
+			number: Self::Number,
+			extrinsics_root: Self::Hash,
+			state_root: Self::Hash,
+			parent_hash: Self::Hash,
+			digest: Self::Digest
+		) -> Self {
+			Header {
+				number, extrinsics_root: extrinsics_root, state_root, parent_hash, digest
+			}
+		}
+	}
+
+	#[derive(PartialEq, Eq, Clone, Serialize, Debug)]
+	pub struct Block {
+		pub header: Header,
+		pub extrinsics: Vec<TestXt>,
+	}
+	impl Slicable for Block {
+		fn decode<I: Input>(input: &mut I) -> Option<Self> {
+			Some(Block {
+				header: Slicable::decode(input)?,
+				extrinsics: Slicable::decode(input)?,
+			})
+		}
+		fn encode(&self) -> Vec<u8> {
+			let mut v: Vec<u8> = Vec::new();
+			v.extend(self.header.encode());
+			v.extend(self.extrinsics.encode());
+			v
+		}
+	}
+	impl Blocky for Block {
+		type Extrinsic = TestXt;
+		type Header = Header;
+		fn header(&self) -> &Self::Header {
+			&self.header
+		}
+		fn extrinsics(&self) -> &[Self::Extrinsic] {
+			&self.extrinsics[..]
+		}
+		fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
+			(self.header, self.extrinsics)
+		}
+	}
+
+	pub struct Test;
+
+	#[derive(PartialEq, Eq, Clone, Serialize, Debug)]
+	pub struct TestXt((u64, u64, Call<Test>));
+	impl Slicable for TestXt {
+		fn decode<I: Input>(input: &mut I) -> Option<Self> {
+			Some(TestXt(Slicable::decode(input)?))
+		}
+		fn encode(&self) -> Vec<u8> {
+			self.0.encode()
+		}
+	}
+	impl Checkable for TestXt {
+		type Checked = Self;
+		fn check(self) -> Result<Self, Self> { Ok(self) }
+	}
+	impl Applyable for TestXt {
+		type AccountId = u64;
+		type Index = u64;
+		fn sender(&self) -> &u64 { &(self.0).0 }
+		fn index(&self) -> &u64 { &(self.0).1 }
+		fn apply(self) { <staking::Module<Test>>::make_payment(&(self.0).0); (self.0).2.dispatch(&(self.0).0) }
+	}
+
+	impl HasPublicAux for Test {
+		type PublicAux = u64;
+	}
+	impl consensus::Trait for Test {
+		type SessionKey = u64;
+	}
+	impl system::Trait for Test {
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = substrate_primitives::H256;
+		type Hashing = runtime_io::BlakeTwo256;
+		type Digest = Digest;
+		type AccountId = u64;
+		type Header = Header;
+	}
+	impl session::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		type ConvertAccountIdToSessionKey = Identity;
+	}
+	pub struct DummyContractAddressFor;
+	impl staking::ContractAddressFor<u64> for DummyContractAddressFor {
+		fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
+			origin + 1
+		}
+	}
+	impl staking::Trait for Test {
+		type Balance = u64;
+		type DetermineContractAddress = DummyContractAddressFor;
+	}
+	type Executive = super::Executive<TestXt, TestXt, Test, Block, ()>;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
-		let mut t: TestExternalities = map![
-			twox_128(&staking::FreeBalanceOf::key_for(*One)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(staking::TransactionFee::key()).to_vec() => vec![10u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(&BlockHashAt::key_for(&0)).to_vec() => [69u8; 32].encode()
-		];
-
-		let tx = UncheckedTransaction {
-			transaction: Transaction {
-				signed: One.into(),
-				nonce: 0,
-				function: PubCall::Staking(StakingCall::transfer(Two.into(), 69)),
-			},
-			signature: hex!("3a682213cb10e8e375fe0817fe4d220a4622d910088809ed7fc8b4ea3871531dbadb22acfedd28a100a0b7bd2d274e0ff873655b13c88f4640b5569db3222706").into(),
-		};
-
+		let mut t = system::TestingConfig::<Test>::default().test_externalities();
+		t.extend(staking::TestingConfig::<Test> {
+			sessions_per_era: 0,
+			current_era: 0,
+			balances: vec![(1, 111)],
+			intentions: vec![],
+			validator_count: 0,
+			bonding_duration: 0,
+			transaction_fee: 10,
+		}.test_externalities());
+		let xt = TestXt((1, 0, Call::transfer(2, 69)));
 		with_externalities(&mut t, || {
-			internal::initialise_block(&Header::from_block_number(1));
-			internal::execute_transaction(tx);
-			assert_eq!(staking::balance(&One), 32);
-			assert_eq!(staking::balance(&Two), 69);
+			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+			Executive::apply_extrinsic(xt);
+			assert_eq!(<staking::Module<Test>>::balance(&1), 32);
+			assert_eq!(<staking::Module<Test>>::balance(&2), 69);
 		});
 	}
 
+/*
 	fn new_test_ext() -> TestExternalities {
 		staking::testing::externalities(2, 2, 0)
 	}
@@ -264,5 +421,5 @@ mod tests {
 			execute_block(b);
 		});
 	}
-}
 */
+}

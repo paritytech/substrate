@@ -29,3 +29,28 @@ include!("../with_std.rs");
 
 #[cfg(not(feature = "std"))]
 include!("../without_std.rs");
+
+pub trait Hashing {
+	type Output;
+	fn hash(s: &[u8]) -> Self::Output;
+	fn hash_of<S: codec::Slicable>(s: &S) -> Self::Output {
+		codec::Slicable::using_encoded(s, Self::hash)
+	}
+	fn enumerated_trie_root(items: &Vec<&[u8]>) -> Self::Output;
+	fn storage_root() -> Self::Output;
+}
+
+pub struct BlakeTwo256;
+
+impl Hashing for BlakeTwo256 {
+	type Output = primitives::H256;
+	fn hash(s: &[u8]) -> Self::Output {
+		blake2_256(s).into()
+	}
+	fn enumerated_trie_root(items: &Vec<&[u8]>) -> Self::Output {
+		enumerated_trie_root(items).into()
+	}
+	fn storage_root() -> Self::Output {
+		storage_root().into()
+	}
+}

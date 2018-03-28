@@ -33,17 +33,7 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_primitives as primitives;
 #[cfg(test)]
 extern crate substrate_serializer;
-
 extern crate substrate_codec as codec;
-
-macro_rules! try_opt {
-	($e: expr) => {
-		match $e {
-			Some(x) => x,
-			None => return None,
-		}
-	}
-}
 
 pub mod header;
 

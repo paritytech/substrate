@@ -36,8 +36,9 @@ use rstd::cmp;
 use rstd::cell::RefCell;
 use rstd::marker::PhantomData;
 use rstd::collections::btree_map::{BTreeMap, Entry};
-use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable};
+use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
+use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable};
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -57,6 +58,18 @@ pub enum LockStatus<BlockNumber: PartialEq + Clone> {
 
 pub trait ContractAddressFor<AccountId: Sized> {
 	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
+}
+
+impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
+	Hashing: runtime_io::Hashing,
+	AccountId: Sized + Slicable + From<Hashing::Output>,
+	Hashing::Output: Slicable
+{
+	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId {
+		let mut dest_pre = Hashing::hash(code).encode();
+		origin.using_encoded(|s| dest_pre.extend(s));
+		AccountId::from(Hashing::hash(&dest_pre))
+	}
 }
 
 pub trait Trait: system::Trait + session::Trait {

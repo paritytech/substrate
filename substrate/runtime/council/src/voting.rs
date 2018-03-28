@@ -18,9 +18,10 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::{Executable, RefInto, Hashing};
-use {system, democracy};
+use primitives::{Executable, RefInto};
+use runtime_io::Hashing;
 use runtime_support::{StorageValue, StorageMap};
+use {system, democracy};
 use super::{Trait, Module as Council};
 use democracy::IsCancelReferendum;
 
