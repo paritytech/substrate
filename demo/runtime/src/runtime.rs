@@ -107,6 +107,7 @@ pub type Executive = executive::Executive<
 	extrinsic::CheckedExtrinsic,
 	Concrete,
 	block::Block,
+	Staking,
 	(((((), Council), Democracy), Staking), Session),
 >;
 

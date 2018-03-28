@@ -19,10 +19,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")] extern crate serde;
+#[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
 extern crate num_traits;
 extern crate integer_sqrt;
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
+#[cfg(feature = "std")] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 
@@ -33,8 +36,15 @@ pub use num_traits::{Zero, One, Bounded};
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 
 #[cfg(feature = "std")]
+pub mod testing;
+
+#[cfg(feature = "std")]
 pub trait MakeTestExternalities {
 	fn test_externalities(self) -> runtime_io::TestExternalities;
+}
+
+pub trait MakePayment<AccountId> {
+	fn make_payment(who: &AccountId);
 }
 
 pub trait Convert<A, B> {

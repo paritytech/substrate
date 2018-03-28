@@ -38,7 +38,7 @@ use rstd::marker::PhantomData;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable};
+use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -168,14 +168,6 @@ impl<T: Trait> Module<T> {
 		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, DirectExt) {
 			Self::commit_state(commit);
 		}
-	}
-
-	/// New PublicPass instance through making a payment.
-	pub fn make_payment(transactor: &T::AccountId) {
-		let b = Self::free_balance(transactor);
-		let transaction_fee = Self::transaction_fee();
-		assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
-		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
 	}
 
 	// PUBLIC DISPATCH
@@ -568,6 +560,23 @@ impl<T: Trait> Module<T> {
 		} else {
 			None
 		}
+	}
+}
+
+impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
+	fn make_payment(transactor: &T::AccountId) {
+		let b = Self::free_balance(transactor);
+		let transaction_fee = Self::transaction_fee();
+		assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
+		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+pub struct DummyContractAddressFor;
+impl ContractAddressFor<u64> for DummyContractAddressFor {
+	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
+		origin + 1
 	}
 }
 
