@@ -631,6 +631,22 @@ impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
 }
 
 #[cfg(any(feature = "std", test))]
+impl<T: Trait> Default for TestingConfig<T> {
+	fn default() -> Self {
+		use primitives::As;
+		TestingConfig {
+			sessions_per_era: T::BlockNumber::sa(1000),
+			current_era: T::BlockNumber::sa(0),
+			balances: vec![],
+			intentions: vec![],
+			validator_count: 0,
+			bonding_duration: T::BlockNumber::sa(1000),
+			transaction_fee: T::Balance::sa(0),
+		}
+	}
+}
+
+#[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T> {
 	fn test_externalities(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;

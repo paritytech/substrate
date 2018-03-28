@@ -24,6 +24,7 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_system as system;
+#[cfg(test)] #[macro_use] extern crate hex_literal;
 #[cfg(test)] extern crate substrate_primitives;
 #[cfg(test)] extern crate substrate_runtime_consensus as consensus;
 #[cfg(test)] extern crate substrate_runtime_session as session;
@@ -197,7 +198,7 @@ mod tests {
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Test>>;
-	type Executive = super::Executive<TestXt, TestXt, Test, Block<TestXt>, staking::Module<Test>, ()>;
+	type Executive = super::Executive<TestXt, TestXt, Test, Block<TestXt>, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
@@ -220,77 +221,61 @@ mod tests {
 		});
 	}
 
-/*
-	fn new_test_ext() -> TestExternalities {
-		staking::testing::externalities(2, 2, 0)
+	fn new_test_ext() -> runtime_io::TestExternalities {
+		let mut t = system::TestingConfig::<Test>::default().test_externalities();
+		t.extend(consensus::TestingConfig::<Test>::default().test_externalities());
+		t.extend(session::TestingConfig::<Test>::default().test_externalities());
+		t.extend(staking::TestingConfig::<Test>::default().test_externalities());
+		t
 	}
 
 	#[test]
 	fn block_import_works() {
-		let mut t = new_test_ext();
-
-		let h = Header {
-			parent_hash: [69u8; 32].into(),
-			number: 1,
-			state_root: hex!("cc3f1f5db826013193e502c76992b5e933b12367e37a269a9822b89218323e9f").into(),
-			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
-			digest: Digest { logs: vec![], },
-		};
-
-		let b = Block {
-			header: h,
-			transactions: vec![],
-		};
-
-		with_externalities(&mut t, || {
-			execute_block(b);
+		with_externalities(&mut new_test_ext(), || {
+			Executive::execute_block(Block {
+				header: Header {
+					parent_hash: [69u8; 32].into(),
+					number: 1,
+					state_root: hex!("93dde1251278e65430baf291337ba219bacfa9ad583c52513b12cf1974109a97").into(),
+					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
+					digest: Digest { logs: vec![], },
+				},
+				extrinsics: vec![],
+			});
 		});
 	}
 
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
-		let mut t = new_test_ext();
-
-		let h = Header {
-			parent_hash: [69u8; 32].into(),
-			number: 1,
-			state_root: [0u8; 32].into(),
-			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
-			digest: Digest { logs: vec![], },
-		};
-
-		let b = Block {
-			header: h,
-			transactions: vec![],
-		};
-
-		with_externalities(&mut t, || {
-			execute_block(b);
+		with_externalities(&mut new_test_ext(), || {
+			Executive::execute_block(Block {
+				header: Header {
+					parent_hash: [69u8; 32].into(),
+					number: 1,
+					state_root: [0u8; 32].into(),
+					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
+					digest: Digest { logs: vec![], },
+				},
+				extrinsics: vec![],
+			});
 		});
 	}
 
 	#[test]
 	#[should_panic]
-	fn block_import_of_bad_transaction_root_fails() {
-		let mut t = new_test_ext();
-
-		let h = Header {
-			parent_hash: [69u8; 32].into(),
-			number: 1,
-			state_root: hex!("1ab2dbb7d4868a670b181327b0b6a58dc64b10cfb9876f737a5aa014b8da31e0").into(),
-			transaction_root: [0u8; 32].into(),
-			digest: Digest { logs: vec![], },
-		};
-
-		let b = Block {
-			header: h,
-			transactions: vec![],
-		};
-
-		with_externalities(&mut t, || {
-			execute_block(b);
+	fn block_import_of_bad_extrinsic_root_fails() {
+		with_externalities(&mut new_test_ext(), || {
+			Executive::execute_block(Block {
+				header: Header {
+					parent_hash: [69u8; 32].into(),
+					number: 1,
+					state_root: hex!("93dde1251278e65430baf291337ba219bacfa9ad583c52513b12cf1974109a97").into(),
+					extrinsics_root: [0u8; 32].into(),
+					digest: Digest { logs: vec![], },
+				},
+				extrinsics: vec![],
+			});
 		});
 	}
-*/
 }

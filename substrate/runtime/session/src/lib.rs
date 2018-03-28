@@ -153,7 +153,7 @@ pub struct TestingConfig<T: Trait> {
 	pub validators: Vec<T::AccountId>,
 }
 
-#[cfg(any(feature = "std", test))] 
+#[cfg(any(feature = "std", test))]
 impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
 	pub fn simple() -> Self where T::AccountId: From<[u8; 32]> {
 		use primitives::As;
@@ -176,8 +176,18 @@ impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T> where
-	T::AccountId: From<keyring::Keyring>
+impl<T: Trait> Default for TestingConfig<T> {
+	fn default() -> Self {
+		use primitives::As;
+		TestingConfig {
+			session_length: T::BlockNumber::sa(1000),
+			validators: vec![],
+		}
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
 {
 	fn test_externalities(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
