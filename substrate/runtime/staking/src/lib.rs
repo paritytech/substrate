@@ -20,13 +20,13 @@
 
 #[cfg(feature = "std")] extern crate serde;
 
-#[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
-
 extern crate substrate_codec as codec;
+extern crate substrate_primitives;
 #[cfg_attr(feature = "std", macro_use)] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as primitives;
+extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
 
@@ -303,8 +303,8 @@ impl<T: Trait> Module<T> {
 		<CurrentEra<T>>::put(&(<CurrentEra<T>>::get() + One::one()));
 
 		// Enact era length change.
-		if let Some(next_spe) = <NextSessionsPerEra<T>>::get() {
-			if next_spe != <SessionsPerEra<T>>::get() {
+		if let Some(next_spe) = Self::next_sessions_per_era() {
+			if next_spe != Self::sessions_per_era() {
 				<SessionsPerEra<T>>::put(&next_spe);
 				<LastEraLengthChange<T>>::put(&<system::Module<T>>::block_number());
 			}
@@ -332,7 +332,7 @@ impl<T: Trait> Module<T> {
 	/// Hook to be called after to transaction processing.
 	fn check_new_era() {
 		// check block number and call new_era if necessary.
-		if (<system::Module<T>>::block_number() - <LastEraLengthChange<T>>::get()) % Self::era_length() == Zero::zero() {
+		if (<system::Module<T>>::block_number() - Self::last_era_length_change()) % Self::era_length() == Zero::zero() {
 			Self::new_era();
 		}
 	}
@@ -592,16 +592,15 @@ pub struct TestingConfig<T: Trait> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
+impl<T: Trait> TestingConfig<T> where T::AccountId: From<u64> {
 	pub fn simple() -> Self {
 		use primitives::As;
-		use keyring::Keyring::*;
 		TestingConfig {
 			sessions_per_era: T::BlockNumber::sa(2),
 			current_era: T::BlockNumber::sa(0),
-			balances: vec![(T::AccountId::from(Alice), T::Balance::sa(111))],
-			intentions: vec![T::AccountId::from(Alice), T::AccountId::from(Bob), T::AccountId::from(Charlie)],
-			validator_count: 3u64,
+			balances: vec![(T::AccountId::from(1), T::Balance::sa(111))],
+			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
+			validator_count: 3,
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_fee: T::Balance::sa(0),
 		}
@@ -609,21 +608,20 @@ impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
 
 	pub fn extended() -> Self {
 		use primitives::As;
-		use keyring::Keyring::*;
 		TestingConfig {
 			sessions_per_era: T::BlockNumber::sa(3),
 			current_era: T::BlockNumber::sa(1),
 			balances: vec![
-				(T::AccountId::from(Alice), T::Balance::sa(10)),
-				(T::AccountId::from(Bob), T::Balance::sa(20)),
-				(T::AccountId::from(Charlie), T::Balance::sa(30)),
-				(T::AccountId::from(Dave), T::Balance::sa(40)),
-				(T::AccountId::from(Eve), T::Balance::sa(50)),
-				(T::AccountId::from(Ferdie), T::Balance::sa(60)),
-				(T::AccountId::from(One), T::Balance::sa(1))
+				(T::AccountId::from(1), T::Balance::sa(10)),
+				(T::AccountId::from(2), T::Balance::sa(20)),
+				(T::AccountId::from(3), T::Balance::sa(30)),
+				(T::AccountId::from(4), T::Balance::sa(40)),
+				(T::AccountId::from(5), T::Balance::sa(50)),
+				(T::AccountId::from(6), T::Balance::sa(60)),
+				(T::AccountId::from(7), T::Balance::sa(1))
 			],
-			intentions: vec![T::AccountId::from(Alice), T::AccountId::from(Bob), T::AccountId::from(Charlie)],
-			validator_count: 3u64,
+			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
+			validator_count: 3,
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_fee: T::Balance::sa(1),
 		}
@@ -670,328 +668,347 @@ impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T> {
 		r
 	}
 }
-/*
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use super::internal::*;
-	use super::privileged::*;
+	use runtime_io::with_externalities;
+	use substrate_primitives::H256;
+	use primitives::{HasPublicAux, Identity, MakeTestExternalities};
+	use primitives::testing::{Digest, Header};
 
-	use runtime_io::{with_externalities, twox_128, TestExternalities};
-	use codec::{KeyedVec, Joiner};
-	use keyring::Keyring::*;
-	use demo_primitives::AccountId;
-	use runtime::{staking, session};
-	use runtime_support::PrivPass;
-	use runtime::staking::public::{Call, Dispatch};
-	use runtime::staking::privileged::{Call as PCall, Dispatch as PDispatch};
+	pub struct Test;
+	impl HasPublicAux for Test {
+		type PublicAux = u64;
+	}
+	impl consensus::Trait for Test {
+		type SessionKey = u64;
+	}
+	impl system::Trait for Test {
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = runtime_io::BlakeTwo256;
+		type Digest = Digest;
+		type AccountId = u64;
+		type Header = Header;
+	}
+	impl session::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		type ConvertAccountIdToSessionKey = Identity;
+	}
+	impl Trait for Test {
+		type Balance = u64;
+		type DetermineContractAddress = DummyContractAddressFor;
+	}
+
+	fn new_test_ext(session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
+		let mut t = system::TestingConfig::<Test>::default().test_externalities();
+		t.extend(consensus::TestingConfig::<Test>{
+			authorities: vec![],
+		}.test_externalities());
+		t.extend(session::TestingConfig::<Test>{
+			session_length,
+			validators: vec![10, 20],
+		}.test_externalities());
+		t.extend(TestingConfig::<Test>{
+			sessions_per_era,
+			current_era,
+			balances: if monied { vec![(1, 10), (2, 20), (3, 30), (4, 40)] } else { vec![] },
+			intentions: vec![],
+			validator_count: 2,
+			bonding_duration: 3,
+			transaction_fee: 0,
+		}.test_externalities());
+		t
+	}
+
+	type System = system::Module<Test>;
+	type Session = session::Module<Test>;
+	type Staking = Module<Test>;
 
 	#[test]
 	fn staking_should_work() {
-		let mut t: TestExternalities = map![
-			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
-			twox_128(session::Validators::key()).to_vec() => vec![].and(&vec![[10u8; 32], [20; 32]]),
-			twox_128(CurrentEra::key()).to_vec() => vec![].and(&0u64),
-			twox_128(SessionsPerEra::key()).to_vec() => vec![].and(&2u64),
-			twox_128(ValidatorCount::key()).to_vec() => vec![].and(&2u32),
-			twox_128(BondingDuration::key()).to_vec() => vec![].and(&3u64),
-			twox_128(TotalStake::key()).to_vec() => vec![].and(&100u64),
-			twox_128(TransactionFee::key()).to_vec() => vec![].and(&0u64),
-			twox_128(&FreeBalance::key_for(*Alice)).to_vec() => vec![].and(&10u64),
-			twox_128(&FreeBalance::key_for(*Bob)).to_vec() => vec![].and(&20u64),
-			twox_128(&FreeBalance::key_for(*Charlie)).to_vec() => vec![].and(&30u64),
-			twox_128(&FreeBalance::key_for(*Dave)).to_vec() => vec![].and(&40u64)
-		];
-
-		with_externalities(&mut t, || {
-			assert_eq!(era_length(), 2u64);
-			assert_eq!(<ValidatorCount<T>>::get(), 2);
-			assert_eq!(<BondingDuration<T>>::get(), 3);
-			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
+		with_externalities(&mut new_test_ext(1, 2, 0, true), || {
+			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Staking::validator_count(), 2);
+			assert_eq!(Staking::bonding_duration(), 3);
+			assert_eq!(Session::validators(), vec![10, 20]);
 
 			// Block 1: Add three validators. No obvious change.
-			system::testing::set_block_number(1);
-			public::Call::stake().dispatch(public_pass_from_payment(&Alice));
-			public_pass_from_payment(&Bob).stake();
-			public_pass_from_payment(&Dave).stake();
-			check_new_era();
-			assert_eq!(session::validators(), vec![[10u8; 32], [20u8; 32]]);
+			System::set_block_number(1);
+			Staking::stake(&1);
+			Staking::stake(&2);
+			Staking::stake(&4);
+			Staking::check_new_era();
+			assert_eq!(Session::validators(), vec![10, 20]);
 
 			// Block 2: New validator set now.
-			system::testing::set_block_number(2);
-			check_new_era();
-			assert_eq!(session::validators(), vec![Dave.to_raw_public(), Bob.into()]);
+			System::set_block_number(2);
+			Staking::check_new_era();
+			assert_eq!(Session::validators(), vec![4, 2]);
 
 			// Block 3: Unstake highest, introduce another staker. No change yet.
-			system::testing::set_block_number(3);
-			public_pass_from_payment(&Charlie).stake();
-			public_pass_from_payment(&Dave).unstake();
-			check_new_era();
+			System::set_block_number(3);
+			Staking::stake(&3);
+			Staking::unstake(&4);
+			Staking::check_new_era();
 
 			// Block 4: New era - validators change.
-			system::testing::set_block_number(4);
-			check_new_era();
-			assert_eq!(session::validators(), vec![Charlie.to_raw_public(), Bob.into()]);
+			System::set_block_number(4);
+			Staking::check_new_era();
+			assert_eq!(Session::validators(), vec![3, 2]);
 
 			// Block 5: Transfer stake from highest to lowest. No change yet.
-			system::testing::set_block_number(5);
-			public_pass_from_payment(&Dave).transfer(Alice.to_raw_public(), 40);
-			check_new_era();
+			System::set_block_number(5);
+			Staking::transfer(&4, 1, 40);
+			Staking::check_new_era();
 
 			// Block 6: Lowest now validator.
-			system::testing::set_block_number(6);
-			check_new_era();
-			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Charlie.into()]);
+			System::set_block_number(6);
+			Staking::check_new_era();
+			assert_eq!(Session::validators(), vec![1, 3]);
 
 			// Block 7: Unstake three. No change yet.
-			system::testing::set_block_number(7);
-			public_pass_from_payment(&Charlie).unstake();
-			check_new_era();
-			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Charlie.into()]);
+			System::set_block_number(7);
+			Staking::unstake(&3);
+			Staking::check_new_era();
+			assert_eq!(Session::validators(), vec![1, 3]);
 
 			// Block 8: Back to one and two.
-			system::testing::set_block_number(8);
-			check_new_era();
-			assert_eq!(session::validators(), vec![Alice.to_raw_public(), Bob.into()]);
+			System::set_block_number(8);
+			Staking::check_new_era();
+			assert_eq!(Session::validators(), vec![1, 2]);
 		});
 	}
 
 	#[test]
 	fn staking_eras_work() {
-		let mut t: TestExternalities = map![
-			twox_128(session::SessionLength::key()).to_vec() => vec![].and(&1u64),
-			twox_128(SessionsPerEra::key()).to_vec() => vec![].and(&2u64),
-			twox_128(ValidatorCount::key()).to_vec() => vec![].and(&2u32),
-			twox_128(CurrentEra::key()).to_vec() => vec![].and(&0u64)
-		];
-		with_externalities(&mut t, || {
-			assert_eq!(era_length(), 2u64);
-			assert_eq!(<SessionsPerEra<T>>::get(), 2u64);
-			assert_eq!(<LastEraLengthChange<T>>::get(), 0u64);
-			assert_eq!(<CurrentEra<T>>::get(), 0u64);
+		with_externalities(&mut new_test_ext(1, 2, 0, true), || {
+			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Staking::sessions_per_era(), 2);
+			assert_eq!(Staking::last_era_length_change(), 0);
+			assert_eq!(Staking::current_era(), 0);
 
 			// Block 1: No change.
-			system::testing::set_block_number(1);
-			check_new_era();
-			assert_eq!(<SessionsPerEra<T>>::get(), 2u64);
-			assert_eq!(<LastEraLengthChange<T>>::get(), 0u64);
-			assert_eq!(<CurrentEra<T>>::get(), 0u64);
+			System::set_block_number(1);
+			Staking::check_new_era();
+			assert_eq!(Staking::sessions_per_era(), 2);
+			assert_eq!(Staking::last_era_length_change(), 0);
+			assert_eq!(Staking::current_era(), 0);
 
 			// Block 2: Simple era change.
-			system::testing::set_block_number(2);
-			check_new_era();
-			assert_eq!(<SessionsPerEra<T>>::get(), 2u64);
-			assert_eq!(<LastEraLengthChange<T>>::get(), 0u64);
-			assert_eq!(<CurrentEra<T>>::get(), 1u64);
+			System::set_block_number(2);
+			Staking::check_new_era();
+			assert_eq!(Staking::sessions_per_era(), 2);
+			assert_eq!(Staking::last_era_length_change(), 0);
+			assert_eq!(Staking::current_era(), 1);
 
 			// Block 3: Schedule an era length change; no visible changes.
-			system::testing::set_block_number(3);
-			PrivPass::test().set_sessions_per_era(3);
-			check_new_era();
-			assert_eq!(<SessionsPerEra<T>>::get(), 2u64);
-			assert_eq!(<LastEraLengthChange<T>>::get(), 0u64);
-			assert_eq!(<CurrentEra<T>>::get(), 1u64);
+			System::set_block_number(3);
+			Staking::set_sessions_per_era(3);
+			Staking::check_new_era();
+			assert_eq!(Staking::sessions_per_era(), 2);
+			assert_eq!(Staking::last_era_length_change(), 0);
+			assert_eq!(Staking::current_era(), 1);
 
 			// Block 4: Era change kicks in.
-			system::testing::set_block_number(4);
-			check_new_era();
-			assert_eq!(<SessionsPerEra<T>>::get(), 3u64);
-			assert_eq!(<LastEraLengthChange<T>>::get(), 4u64);
-			assert_eq!(<CurrentEra<T>>::get(), 2u64);
+			System::set_block_number(4);
+			Staking::check_new_era();
+			assert_eq!(Staking::sessions_per_era(), 3);
+			assert_eq!(Staking::last_era_length_change(), 4);
+			assert_eq!(Staking::current_era(), 2);
 
 			// Block 5: No change.
-			system::testing::set_block_number(5);
-			check_new_era();
-			assert_eq!(<SessionsPerEra<T>>::get(), 3u64);
-			assert_eq!(<LastEraLengthChange<T>>::get(), 4u64);
-			assert_eq!(<CurrentEra<T>>::get(), 2u64);
+			System::set_block_number(5);
+			Staking::check_new_era();
+			assert_eq!(Staking::sessions_per_era(), 3);
+			assert_eq!(Staking::last_era_length_change(), 4);
+			assert_eq!(Staking::current_era(), 2);
 
 			// Block 6: No change.
-			system::testing::set_block_number(6);
-			check_new_era();
-			assert_eq!(<SessionsPerEra<T>>::get(), 3u64);
-			assert_eq!(<LastEraLengthChange<T>>::get(), 4u64);
-			assert_eq!(<CurrentEra<T>>::get(), 2u64);
+			System::set_block_number(6);
+			Staking::check_new_era();
+			assert_eq!(Staking::sessions_per_era(), 3);
+			assert_eq!(Staking::last_era_length_change(), 4);
+			assert_eq!(Staking::current_era(), 2);
 
 			// Block 7: Era increment.
-			system::testing::set_block_number(7);
-			check_new_era();
-			assert_eq!(<SessionsPerEra<T>>::get(), 3u64);
-			assert_eq!(<LastEraLengthChange<T>>::get(), 4u64);
-			assert_eq!(<CurrentEra<T>>::get(), 3u64);
+			System::set_block_number(7);
+			Staking::check_new_era();
+			assert_eq!(Staking::sessions_per_era(), 3);
+			assert_eq!(Staking::last_era_length_change(), 4);
+			assert_eq!(Staking::current_era(), 3);
 		});
 	}
 
 	#[test]
 	fn staking_balance_works() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 42);
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 42);
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
-			assert_eq!(balance(&Alice), 42);
-			assert_eq!(<FreeBalance<T>>::get(*Bob), 0);
-			assert_eq!(<ReservedBalance<T>>::get(*Bob), 0);
-			assert_eq!(balance(&Bob), 0);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 42);
+			assert_eq!(Staking::free_balance(&1), 42);
+			assert_eq!(Staking::reserved_balance(&1), 0);
+			assert_eq!(Staking::balance(&1), 42);
+			assert_eq!(Staking::free_balance(&2), 0);
+			assert_eq!(Staking::reserved_balance(&2), 0);
+			assert_eq!(Staking::balance(&2), 0);
 		});
 	}
 
 	#[test]
 	fn staking_balance_transfer_works() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 112);
-			public_pass_from_payment(&Alice).transfer(Bob.to_raw_public(), 69);
-			assert_eq!(balance(&Alice), 42);
-			assert_eq!(balance(&Bob), 69);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			Staking::transfer(&1, 2, 69);
+			assert_eq!(Staking::balance(&1), 42);
+			assert_eq!(Staking::balance(&2), 69);
 		});
 	}
 
 	#[test]
 	#[should_panic]
 	fn staking_balance_transfer_when_bonded_panics() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
-			public_pass_from_payment(&Alice).stake();
-			public_pass_from_payment(&Alice).transfer(Bob.to_raw_public(), 69);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			Staking::stake(&1);
+			Staking::transfer(&1, 2, 69);
 		});
 	}
 
 	#[test]
 	fn reserving_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
 
-			assert_eq!(balance(&Alice), 111);
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 111);
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
+			assert_eq!(Staking::balance(&1), 111);
+			assert_eq!(Staking::free_balance(&1), 111);
+			assert_eq!(Staking::reserved_balance(&1), 0);
 
-			reserve_balance(&Alice, 69);
+			Staking::reserve_balance(&1, 69);
 
-			assert_eq!(balance(&Alice), 111);
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 42);
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 69);
+			assert_eq!(Staking::balance(&1), 111);
+			assert_eq!(Staking::free_balance(&1), 42);
+			assert_eq!(Staking::reserved_balance(&1), 69);
 		});
 	}
 
 	#[test]
 	#[should_panic]
 	fn staking_balance_transfer_when_reserved_panics() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
-			reserve_balance(&Alice, 69);
-			public_pass_from_payment(&Alice).transfer(Bob.to_raw_public(), 69);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			Staking::reserve_balance(&1, 69);
+			Staking::transfer(&1, 2, 69);
 		});
 	}
 
 	#[test]
 	fn deducting_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
-			assert!(deduct_unbonded(&Alice, 69));
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 42);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			assert!(Staking::deduct_unbonded(&1, 69));
+			assert_eq!(Staking::free_balance(&1), 42);
 		});
 	}
 
 	#[test]
 	fn deducting_balance_should_fail_when_bonded() {
-		let mut t: TestExternalities = map![
-			twox_128(&FreeBalance::key_for(*Alice)).to_vec() => vec![].and(&111u64),
-			twox_128(&Bondage::key_for(*Alice)).to_vec() => vec![].and(&2u64)
-		];
-		with_externalities(&mut t, || {
-			system::testing::set_block_number(1);
-			assert_eq!(unlock_block(&Alice), LockStatus::LockedUntil(2));
-			assert!(!deduct_unbonded(&Alice, 69));
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			<Bondage<Test>>::insert(1, 2);
+			System::set_block_number(1);
+			assert_eq!(Staking::unlock_block(&1), LockStatus::LockedUntil(2));
+			assert!(!Staking::deduct_unbonded(&1, 69));
 		});
 	}
 
 	#[test]
 	fn refunding_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 42);
-			refund(&Alice, 69);
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 111);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 42);
+			Staking::refund(&1, 69);
+			assert_eq!(Staking::free_balance(&1), 111);
 		});
 	}
 
 	#[test]
 	fn slashing_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
-			reserve_balance(&Alice, 69);
-			assert!(slash(&Alice, 69));
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 0);
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 42);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			Staking::reserve_balance(&1, 69);
+			assert!(Staking::slash(&1, 69));
+			assert_eq!(Staking::free_balance(&1), 0);
+			assert_eq!(Staking::reserved_balance(&1), 42);
 		});
 	}
 
 	#[test]
 	fn slashing_incomplete_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 42);
-			reserve_balance(&Alice, 21);
-			assert!(!slash(&Alice, 69));
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 0);
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 42);
+			Staking::reserve_balance(&1, 21);
+			assert!(!Staking::slash(&1, 69));
+			assert_eq!(Staking::free_balance(&1), 0);
+			assert_eq!(Staking::reserved_balance(&1), 0);
 		});
 	}
 
 	#[test]
 	fn unreserving_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
-			reserve_balance(&Alice, 111);
-			unreserve_balance(&Alice, 42);
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 69);
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 42);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			Staking::reserve_balance(&1, 111);
+			Staking::unreserve_balance(&1, 42);
+			assert_eq!(Staking::reserved_balance(&1), 69);
+			assert_eq!(Staking::free_balance(&1), 42);
 		});
 	}
 
 	#[test]
 	fn slashing_reserved_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
-			reserve_balance(&Alice, 111);
-			assert!(slash_reserved(&Alice, 42));
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 69);
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 0);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			Staking::reserve_balance(&1, 111);
+			assert!(Staking::slash_reserved(&1, 42));
+			assert_eq!(Staking::reserved_balance(&1), 69);
+			assert_eq!(Staking::free_balance(&1), 0);
 		});
 	}
 
 	#[test]
 	fn slashing_incomplete_reserved_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
-			reserve_balance(&Alice, 42);
-			assert!(!slash_reserved(&Alice, 69));
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 69);
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			Staking::reserve_balance(&1, 42);
+			assert!(!Staking::slash_reserved(&1, 69));
+			assert_eq!(Staking::free_balance(&1), 69);
+			assert_eq!(Staking::reserved_balance(&1), 0);
 		});
 	}
 
 	#[test]
 	fn transferring_reserved_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
-			reserve_balance(&Alice, 111);
-			assert!(transfer_reserved_balance(&Alice, &Bob, 42));
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 69);
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 0);
-			assert_eq!(<ReservedBalance<T>>::get(*Bob), 0);
-			assert_eq!(<FreeBalance<T>>::get(*Bob), 42);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			Staking::reserve_balance(&1, 111);
+			assert!(Staking::transfer_reserved_balance(&1, &2, 42));
+			assert_eq!(Staking::reserved_balance(&1), 69);
+			assert_eq!(Staking::free_balance(&1), 0);
+			assert_eq!(Staking::reserved_balance(&2), 0);
+			assert_eq!(Staking::free_balance(&2), 42);
 		});
 	}
 
 	#[test]
 	fn transferring_incomplete_reserved_balance_should_work() {
-		with_externalities(&mut testing::externalities(1, 3, 1), || {
-			<FreeBalance<T>>::insert(*Alice, 111);
-			reserve_balance(&Alice, 42);
-			assert!(!transfer_reserved_balance(&Alice, &Bob, 69));
-			assert_eq!(<ReservedBalance<T>>::get(*Alice), 0);
-			assert_eq!(<FreeBalance<T>>::get(*Alice), 69);
-			assert_eq!(<ReservedBalance<T>>::get(*Bob), 0);
-			assert_eq!(<FreeBalance<T>>::get(*Bob), 42);
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(1, 111);
+			Staking::reserve_balance(&1, 42);
+			assert!(!Staking::transfer_reserved_balance(&1, &2, 69));
+			assert_eq!(Staking::reserved_balance(&1), 0);
+			assert_eq!(Staking::free_balance(&1), 69);
+			assert_eq!(Staking::reserved_balance(&2), 0);
+			assert_eq!(Staking::free_balance(&2), 42);
 		});
 	}
 }
-*/

@@ -231,6 +231,10 @@ mod tests {
 		type ConvertAccountIdToSessionKey = Identity;
 	}
 
+	type System = system::Module<Test>;
+	type Consensus = consensus::Module<Test>;
+	type Session = Module<Test>;
+
 	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::TestingConfig::<Test>::default().test_externalities();
 		t.extend(consensus::TestingConfig::<Test>{
@@ -246,9 +250,9 @@ mod tests {
 	#[test]
 	fn simple_setup_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
-			assert_eq!(<Module<Test>>::length(), 2);
-			assert_eq!(<Module<Test>>::validators(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_eq!(Session::length(), 2);
+			assert_eq!(Session::validators(), vec![1, 2, 3]);
 		});
 	}
 
@@ -256,49 +260,49 @@ mod tests {
 	fn session_length_change_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: Change to length 3; no visible change.
-			<system::Module<Test>>::set_block_number(1);
-			<Module<Test>>::set_length(3);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<Module<Test>>::length(), 2);
-			assert_eq!(<Module<Test>>::current_index(), 0);
+			System::set_block_number(1);
+			Session::set_length(3);
+			Session::check_rotate_session();
+			assert_eq!(Session::length(), 2);
+			assert_eq!(Session::current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
-			<system::Module<Test>>::set_block_number(2);
-			<Module<Test>>::set_length(3);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<Module<Test>>::length(), 3);
-			assert_eq!(<Module<Test>>::current_index(), 1);
+			System::set_block_number(2);
+			Session::set_length(3);
+			Session::check_rotate_session();
+			assert_eq!(Session::length(), 3);
+			assert_eq!(Session::current_index(), 1);
 
 			// Block 3: Length now changed to 3. Index incremented.
-			<system::Module<Test>>::set_block_number(3);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<Module<Test>>::length(), 3);
-			assert_eq!(<Module<Test>>::current_index(), 1);
+			System::set_block_number(3);
+			Session::check_rotate_session();
+			assert_eq!(Session::length(), 3);
+			assert_eq!(Session::current_index(), 1);
 
 			// Block 4: Change to length 2; no visible change.
-			<system::Module<Test>>::set_block_number(4);
-			<Module<Test>>::set_length(2);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<Module<Test>>::length(), 3);
-			assert_eq!(<Module<Test>>::current_index(), 1);
+			System::set_block_number(4);
+			Session::set_length(2);
+			Session::check_rotate_session();
+			assert_eq!(Session::length(), 3);
+			assert_eq!(Session::current_index(), 1);
 
 			// Block 5: Length now changed to 2. Index incremented.
-			<system::Module<Test>>::set_block_number(5);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<Module<Test>>::length(), 2);
-			assert_eq!(<Module<Test>>::current_index(), 2);
+			System::set_block_number(5);
+			Session::check_rotate_session();
+			assert_eq!(Session::length(), 2);
+			assert_eq!(Session::current_index(), 2);
 
 			// Block 6: No change.
-			<system::Module<Test>>::set_block_number(6);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<Module<Test>>::length(), 2);
-			assert_eq!(<Module<Test>>::current_index(), 2);
+			System::set_block_number(6);
+			Session::check_rotate_session();
+			assert_eq!(Session::length(), 2);
+			assert_eq!(Session::current_index(), 2);
 
 			// Block 7: Next index.
-			<system::Module<Test>>::set_block_number(7);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<Module<Test>>::length(), 2);
-			assert_eq!(<Module<Test>>::current_index(), 3);
+			System::set_block_number(7);
+			Session::check_rotate_session();
+			assert_eq!(Session::length(), 2);
+			assert_eq!(Session::current_index(), 3);
 		});
 	}
 
@@ -306,27 +310,27 @@ mod tests {
 	fn session_change_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: No change
-			<system::Module<Test>>::set_block_number(1);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
+			System::set_block_number(1);
+			Session::check_rotate_session();
+			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			// Block 2: Session rollover, but no change.
-			<system::Module<Test>>::set_block_number(2);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
+			System::set_block_number(2);
+			Session::check_rotate_session();
+			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			// Block 3: Set new key for validator 2; no visible change.
-			<system::Module<Test>>::set_block_number(3);
-			<Module<Test>>::set_key(&2, 5);
-			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
+			System::set_block_number(3);
+			Session::set_key(&2, 5);
+			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
+			Session::check_rotate_session();
+			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			// Block 4: Session rollover, authority 2 changes.
-			<system::Module<Test>>::set_block_number(4);
-			<Module<Test>>::check_rotate_session();
-			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 5, 3]);
+			System::set_block_number(4);
+			Session::check_rotate_session();
+			assert_eq!(Consensus::authorities(), vec![1, 5, 3]);
 		});
 	}
 }
