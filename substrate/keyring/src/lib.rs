@@ -27,6 +27,7 @@ use ed25519::{Pair, Public, Signature};
 /// Set of test accounts.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Keyring {
+	None,
 	Alice,
 	Bob,
 	Charlie,
@@ -71,6 +72,7 @@ impl Keyring {
 
 	pub fn pair(self) -> Pair {
 		match self {
+			Keyring::None => { panic!(); },
 			Keyring::Alice => Pair::from_seed(b"Alice                           "),
 			Keyring::Bob => Pair::from_seed(b"Bob                             "),
 			Keyring::Charlie => Pair::from_seed(b"Charlie                         "),
@@ -86,6 +88,7 @@ impl Keyring {
 impl From<Keyring> for &'static str {
 	fn from(k: Keyring) -> Self {
 		match k {
+			Keyring::None => { panic!(); },
 			Keyring::Alice => "Alice",
 			Keyring::Bob => "Bob",
 			Keyring::Charlie => "Charlie",
@@ -94,6 +97,38 @@ impl From<Keyring> for &'static str {
 			Keyring::Ferdie => "Ferdie",
 			Keyring::One => "one",
 			Keyring::Two => "two",
+		}
+	}
+}
+
+impl From<Keyring> for u64 {
+	fn from(k: Keyring) -> Self {
+		match k {
+			Keyring::None => 0,
+			Keyring::Alice => 1,
+			Keyring::Bob => 2,
+			Keyring::Charlie => 3,
+			Keyring::Dave => 4,
+			Keyring::Eve => 5,
+			Keyring::Ferdie => 6,
+			Keyring::One => 7,
+			Keyring::Two => 8,
+		}
+	}
+}
+
+impl From<u64> for Keyring {
+	fn from(k: u64) -> Keyring {
+		match k {
+			1 => Keyring::Alice,
+			2 => Keyring::Bob,
+			3 => Keyring::Charlie,
+			4 => Keyring::Dave,
+			5 => Keyring::Eve,
+			6 => Keyring::Ferdie,
+			7 => Keyring::One,
+			8 => Keyring::Two,
+			_ => Keyring::None,
 		}
 	}
 }
@@ -113,7 +148,13 @@ lazy_static! {
 	};
 
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
-		PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect()
+		let mut m: HashMap<_, _> = PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect();
+		m.insert(Keyring::None, Public(Default::default()));
+		m
+	};
+
+	static ref U64_KEYS: HashMap<Keyring, u64> = {
+		(0u64..9).map(|n| (n.into(), n)).collect()
 	};
 }
 
@@ -147,6 +188,12 @@ impl AsRef<[u8; 32]> for Keyring {
 	}
 }
 
+impl AsRef<u64> for Keyring {
+	fn as_ref(&self) -> &u64 {
+		(*U64_KEYS).get(self).unwrap()
+	}
+}
+
 impl AsRef<Public> for Keyring {
 	fn as_ref(&self) -> &Public {
 		(*PUBLIC_KEYS).get(self).unwrap()
@@ -154,9 +201,9 @@ impl AsRef<Public> for Keyring {
 }
 
 impl Deref for Keyring {
-	type Target = [u8; 32];
-	fn deref(&self) -> &[u8; 32] {
-		(*PUBLIC_KEYS).get(self).unwrap().as_array_ref()
+	type Target = u64;
+	fn deref(&self) -> &u64 {
+		(*U64_KEYS).get(self).unwrap()
 	}
 }
 

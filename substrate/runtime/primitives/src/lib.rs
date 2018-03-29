@@ -47,6 +47,10 @@ pub trait MakePayment<AccountId> {
 	fn make_payment(who: &AccountId);
 }
 
+impl<T> MakePayment<T> for () {
+	fn make_payment(_: &T) {}
+}
+
 pub trait Convert<A, B> {
 	fn convert(a: A) -> B;
 }

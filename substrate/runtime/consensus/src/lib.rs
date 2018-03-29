@@ -25,7 +25,6 @@ extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_codec as codec;
 
 use rstd::prelude::*;
-#[cfg(any(feature = "std", test))] use rstd::marker::PhantomData;
 use runtime_support::{storage, Parameter};
 use runtime_support::storage::unhashed::StorageVec;
 
@@ -79,12 +78,16 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-pub struct TestingConfig<T: Trait>(PhantomData<T>);
+pub struct TestingConfig<T: Trait> {
+	pub authorities: Vec<T::SessionKey>,
+}
 
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for TestingConfig<T> {
 	fn default() -> Self {
-		TestingConfig(PhantomData)
+		TestingConfig {
+			authorities: vec![],
+		}
 	}
 }
 
@@ -93,11 +96,11 @@ impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
 {
 	fn test_externalities(self) -> runtime_io::TestExternalities {
 		use codec::{Slicable, KeyedVec};
-
-		map![
-			b":auth:len".to_vec() => 2u32.encode(),
-			0u32.to_keyed_vec(b":auth:") => vec![11; 32],
-			1u32.to_keyed_vec(b":auth:") => vec![21; 32]
-		]
+		let auth_count = self.authorities.len() as u32;
+		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|
+			((i as u32).to_keyed_vec(b":auth:"), v.encode())
+		).collect();
+		r.insert(b":auth:len".to_vec(), auth_count.encode());
+		r
 	}
 }

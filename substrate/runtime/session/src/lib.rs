@@ -23,6 +23,7 @@
 
 #[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
 extern crate substrate_codec as codec;
+#[cfg(any(feature = "std", test))] extern crate substrate_primitives;
 #[cfg_attr(feature = "std", macro_use)] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
@@ -201,121 +202,131 @@ impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
 	}
 }
 
-/*
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use super::public::*;
-	use super::privileged::Dispatch as PrivDispatch;
-	use super::internal::*;
-	use runtime_io::{with_externalities, twox_128, TestExternalities};
-	use codec::{KeyedVec, Joiner};
-	use keyring::Keyring;
-	use demo_primitives::AccountId;
-	use runtime::session;
-	use consensus;
+	use runtime_io::with_externalities;
+	use substrate_primitives::H256;
+	use primitives::{HasPublicAux, Identity, MakeTestExternalities};
+	use primitives::testing::{Digest, Header};
 
-	fn simple_setup() -> TestExternalities {
-		map![
-			twox_128(SessionLength::key()).to_vec() => vec![].and(&2u64),
-			twox_128(CurrentIndex::key()).to_vec() => vec![].and(&0u64),
-			// the validators (10, 20, ...)
-			twox_128(Validators::key()).to_vec() => vec![].and(&vec![[10u8; 32], [20; 32]]),
-			// initial session keys (11, 21, ...)
-			b":auth:len".to_vec() => vec![].and(&2u32),
-			0u32.to_keyed_vec(b":auth:") => vec![11; 32],
-			1u32.to_keyed_vec(b":auth:") => vec![21; 32]
-		]
+	pub struct Test;
+	impl HasPublicAux for Test {
+		type PublicAux = u64;
+	}
+	impl consensus::Trait for Test {
+		type SessionKey = u64;
+	}
+	impl system::Trait for Test {
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = runtime_io::BlakeTwo256;
+		type Digest = Digest;
+		type AccountId = u64;
+		type Header = Header;
+	}
+	impl Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		type ConvertAccountIdToSessionKey = Identity;
+	}
+
+	fn new_test_ext() -> runtime_io::TestExternalities {
+		let mut t = system::TestingConfig::<Test>::default().test_externalities();
+		t.extend(consensus::TestingConfig::<Test>{
+			authorities: vec![1, 2, 3],
+		}.test_externalities());
+		t.extend(TestingConfig::<Test>{
+			session_length: 2,
+			validators: vec![1, 2, 3],
+		}.test_externalities());
+		t
 	}
 
 	#[test]
 	fn simple_setup_should_work() {
-		let mut t = simple_setup();
-		with_externalities(&mut t, || {
-			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
-			assert_eq!(length(), 2u64);
-			assert_eq!(validators(), vec![[10u8; 32], [20u8; 32]]);
+		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
+			assert_eq!(<Module<Test>>::length(), 2);
+			assert_eq!(<Module<Test>>::validators(), vec![1, 2, 3]);
 		});
 	}
 
 	#[test]
 	fn session_length_change_should_work() {
-		let mut t = simple_setup();
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			// Block 1: Change to length 3; no visible change.
-			system::testing::set_block_number(1);
-			PrivPass::test().set_length(3);
-			check_rotate_session();
-			assert_eq!(length(), 2);
-			assert_eq!(current_index(), 0);
+			<system::Module<Test>>::set_block_number(1);
+			<Module<Test>>::set_length(3);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<Module<Test>>::length(), 2);
+			assert_eq!(<Module<Test>>::current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
-			system::testing::set_block_number(2);
-			PrivPass::test().set_length(3);
-			check_rotate_session();
-			assert_eq!(length(), 3);
-			assert_eq!(current_index(), 1);
+			<system::Module<Test>>::set_block_number(2);
+			<Module<Test>>::set_length(3);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<Module<Test>>::length(), 3);
+			assert_eq!(<Module<Test>>::current_index(), 1);
 
 			// Block 3: Length now changed to 3. Index incremented.
-			system::testing::set_block_number(3);
-			check_rotate_session();
-			assert_eq!(length(), 3);
-			assert_eq!(current_index(), 1);
+			<system::Module<Test>>::set_block_number(3);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<Module<Test>>::length(), 3);
+			assert_eq!(<Module<Test>>::current_index(), 1);
 
 			// Block 4: Change to length 2; no visible change.
-			system::testing::set_block_number(4);
-			PrivPass::test().set_length(2);
-			check_rotate_session();
-			assert_eq!(length(), 3);
-			assert_eq!(current_index(), 1);
+			<system::Module<Test>>::set_block_number(4);
+			<Module<Test>>::set_length(2);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<Module<Test>>::length(), 3);
+			assert_eq!(<Module<Test>>::current_index(), 1);
 
 			// Block 5: Length now changed to 2. Index incremented.
-			system::testing::set_block_number(5);
-			check_rotate_session();
-			assert_eq!(length(), 2);
-			assert_eq!(current_index(), 2);
+			<system::Module<Test>>::set_block_number(5);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<Module<Test>>::length(), 2);
+			assert_eq!(<Module<Test>>::current_index(), 2);
 
 			// Block 6: No change.
-			system::testing::set_block_number(6);
-			check_rotate_session();
-			assert_eq!(length(), 2);
-			assert_eq!(current_index(), 2);
+			<system::Module<Test>>::set_block_number(6);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<Module<Test>>::length(), 2);
+			assert_eq!(<Module<Test>>::current_index(), 2);
 
 			// Block 7: Next index.
-			system::testing::set_block_number(7);
-			check_rotate_session();
-			assert_eq!(length(), 2);
-			assert_eq!(current_index(), 3);
+			<system::Module<Test>>::set_block_number(7);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<Module<Test>>::length(), 2);
+			assert_eq!(<Module<Test>>::current_index(), 3);
 		});
 	}
 
 	#[test]
 	fn session_change_should_work() {
-		let mut t = simple_setup();
-		with_externalities(&mut t, || {
+		with_externalities(&mut new_test_ext(), || {
 			// Block 1: No change
-			system::testing::set_block_number(1);
-			check_rotate_session();
-			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
+			<system::Module<Test>>::set_block_number(1);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
 
 			// Block 2: Session rollover, but no change.
-			system::testing::set_block_number(2);
-			check_rotate_session();
-			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
+			<system::Module<Test>>::set_block_number(2);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
 
 			// Block 3: Set new key for validator 2; no visible change.
-			system::testing::set_block_number(3);
-			PublicPass::test(&[20; 32]).set_key([22; 32]);
-			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
+			<system::Module<Test>>::set_block_number(3);
+			<Module<Test>>::set_key(&2, 5);
+			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
 
-			check_rotate_session();
-			assert_eq!(consensus::authorities(), vec![[11u8; 32], [21u8; 32]]);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 2, 3]);
 
 			// Block 4: Session rollover, authority 2 changes.
-			system::testing::set_block_number(4);
-			check_rotate_session();
-			assert_eq!(consensus::authorities(), vec![[11u8; 32], [22u8; 32]]);
+			<system::Module<Test>>::set_block_number(4);
+			<Module<Test>>::check_rotate_session();
+			assert_eq!(<consensus::Module<Test>>::authorities(), vec![1, 5, 3]);
 		});
 	}
 }
-*/
