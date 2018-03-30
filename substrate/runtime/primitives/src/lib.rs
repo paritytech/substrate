@@ -68,7 +68,7 @@ macro_rules! impl_outer_config {
 		}
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildExternalities for $main {
-			fn build_externalities(self) -> $crate::HashMap::<Vec<u8>, Vec<u8>> {
+			fn build_externalities(self) -> $crate::HashMap<Vec<u8>, Vec<u8>> {
 				let mut s = $crate::HashMap::<Vec<u8>, Vec<u8>>::new();
 				$(
 					if let Some(extra) = self.$snake {

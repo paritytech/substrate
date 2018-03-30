@@ -46,7 +46,7 @@ impl timestamp::Trait for Concrete {
 pub type Timestamp = timestamp::Module<Concrete>;
 
 impl consensus::Trait for Concrete {
-	type SessionKey = AccountId;
+	type SessionKey = SessionKey;
 }
 pub type Consensus = consensus::Module<Concrete>;
 
@@ -107,8 +107,7 @@ pub type Header = primitives::generic::Header<
 >;
 
 pub type Block = primitives::generic::Block<
-	BlockNumber, Hash, Vec<u8>,
-	AccountId, Index, Call, Signature
+	BlockNumber, Hash, Vec<u8>, AccountId, Index, Call, Signature
 >;
 
 pub type UncheckedExtrinsic = primitives::generic::UncheckedExtrinsic<
