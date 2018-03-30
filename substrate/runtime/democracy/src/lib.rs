@@ -33,7 +33,7 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 use primitives::{Zero, Executable, RefInto, As};
-use runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable};
+use runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
@@ -43,13 +43,8 @@ pub type PropIndex = u32;
 /// A referendum index.
 pub type ReferendumIndex = u32;
 
-/// Is a proposal the "cancel_referendum"?
-pub trait IsCancelReferendum {
-	fn is_cancel_referendum(&self) -> Option<ReferendumIndex>;
-}
-
-pub trait Trait: staking::Trait {
-	type Proposal: Parameter + Dispatchable + IsCancelReferendum;
+pub trait Trait: staking::Trait + Sized {
+	type Proposal: Parameter + Dispatchable + IsSubType<Module<Self>>;
 }
 
 decl_module! {
@@ -331,17 +326,9 @@ mod tests {
 
 	impl_outer_dispatch! {
 		pub enum Proposal {
-			Staking = 0,
-			Democracy = 1,
-		}
-	}
-	impl IsCancelReferendum for Proposal {
-		fn is_cancel_referendum(&self) -> Option<ReferendumIndex> {
-			if let &Proposal::Democracy(PrivCall::cancel_referendum(ref ref_index)) = self {
-				Some(*ref_index)
-			} else {
-				None
-			}
+			Session = 0,
+			Staking = 1,
+			Democracy = 2,
 		}
 	}
 
@@ -400,6 +387,7 @@ mod tests {
 	}
 
 	type System = system::Module<Test>;
+	type Session = session::Module<Test>;
 	type Staking = staking::Module<Test>;
 	type Democracy = Module<Test>;
 

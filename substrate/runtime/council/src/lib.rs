@@ -577,15 +577,6 @@ mod tests {
 			Democracy = 1,
 		}
 	}
-	impl democracy::IsCancelReferendum for Proposal {
-		fn is_cancel_referendum(&self) -> Option<democracy::ReferendumIndex> {
-			if let &Proposal::Democracy(democracy::PrivCall::cancel_referendum(ref ref_index)) = self {
-				Some(*ref_index)
-			} else {
-				None
-			}
-		}
-	}
 
 	pub struct Test;
 	impl HasPublicAux for Test {

@@ -38,4 +38,4 @@ mod hashable;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
-pub use self::dispatch::{Parameter, Dispatchable, Callable, AuxDispatchable, AuxCallable};
+pub use self::dispatch::{Parameter, Dispatchable, Callable, AuxDispatchable, AuxCallable, IsSubType};

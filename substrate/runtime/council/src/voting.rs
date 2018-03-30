@@ -20,10 +20,9 @@ use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use primitives::{Executable, RefInto};
 use runtime_io::Hashing;
-use runtime_support::{StorageValue, StorageMap};
+use runtime_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
 use super::{Trait, Module as Council};
-use democracy::IsCancelReferendum;
 
 decl_module! {
 	pub struct Module<T: Trait>;
@@ -173,7 +172,7 @@ impl<T: Trait> Module<T> {
 	fn end_block(now: T::BlockNumber) {
 		while let Some((proposal, proposal_hash)) = Self::take_proposal_if_expiring_at(now) {
 			let tally = Self::take_tally(&proposal_hash);
-			if let Some(ref_index) = proposal.is_cancel_referendum() {
+			if let Some(&democracy::PrivCall::cancel_referendum(ref_index)) = IsSubType::<democracy::Module<T>>::is_sub_type(&proposal) {
 				if let (_, 0, 0) = tally {
 					<democracy::Module<T>>::internal_cancel_referendum(ref_index);
 				}

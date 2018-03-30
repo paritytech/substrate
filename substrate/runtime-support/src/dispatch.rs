@@ -377,6 +377,10 @@ macro_rules! __decl_dispatch_module_common {
 	}
 }
 
+pub trait IsSubType<T: Callable> {
+	fn is_sub_type(&self) -> Option<&<T as Callable>::Call>;
+}
+
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
 #[macro_export]
 macro_rules! impl_outer_dispatch {
@@ -438,6 +442,17 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		}
+		$(
+			impl $crate::dispatch::IsSubType<$camelcase> for $call_type {
+				fn is_sub_type(&self) -> Option<&<$camelcase as $crate::dispatch::Callable>::Call> {
+					if let $call_type::$camelcase ( ref r ) = *self {
+						Some(r)
+					} else {
+						None
+					}
+				}
+			}
+		)*
 		impl_outer_dispatch!{ $($rest)* }
 	}
 }

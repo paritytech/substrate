@@ -36,18 +36,6 @@ use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, 
 use runtime_primitives::{generic, Identity, HasPublicAux};
 pub use runtime_primitives::BuildExternalities;
 
-// TODO: refactor so that each module gets to be able to attempt to extract a PrivCall into
-// Some(its own PrivCall) or None.
-impl democracy::IsCancelReferendum for PrivCall {
-	fn is_cancel_referendum(&self) -> Option<democracy::ReferendumIndex> {
-		if let &PrivCall::Democracy(democracy::PrivCall::cancel_referendum(ref ref_index)) = self {
-			Some(*ref_index)
-		} else {
-			None
-		}
-	}
-}
-
 pub struct Concrete;
 
 impl HasPublicAux for Concrete {
