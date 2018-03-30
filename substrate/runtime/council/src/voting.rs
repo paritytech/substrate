@@ -198,300 +198,265 @@ impl<T: Trait> Executable for Council<T> {
 	}
 }
 
-/*
-
-#[cfg(test)]
-pub mod testing {
-	use super::*;
-	use runtime_io::{twox_128, TestExternalities};
-	use keyring::Keyring::{Alice, Bob, Charlie};
-	use codec::Joiner;
-	use runtime::{council, democracy};
-
-	pub fn externalities() -> TestExternalities {
-		let expiry: BlockNumber = 10;
-		let extras: TestExternalities = map![
-			twox_128(council::ActiveCouncil::key()).to_vec() => vec![].and(&vec![
-				(Alice.to_raw_public(), expiry),
-				(Bob.into(), expiry),
-				(Charlie.into(), expiry)
-			]),
-			twox_128(CooloffPeriod::key()).to_vec() => vec![].and(&2u64),
-			twox_128(VotingPeriod::key()).to_vec() => vec![].and(&1u64),
-			twox_128(democracy::VotingPeriod::key()).to_vec() => vec![].and(&3u64)
-		];
-		council::testing::externalities()
-			.into_iter().chain(extras.into_iter()).collect()
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::{with_externalities, twox_128, TestExternalities};
-	use codec::{KeyedVec, Joiner};
-	use keyring::Keyring::{Alice, Bob, Charlie, Dave};
-	use demo_primitives::AccountId;
-	use runtime::democracy::VoteThreshold;
-	use runtime::{staking, council, democracy};
-	use super::public::Dispatch;
-	use super::privileged::Dispatch as PrivDispatch;
+	use ::tests::*;
+	use runtime_support::Hashable;
+	use democracy::VoteThreshold;
 
-	fn new_test_ext() -> TestExternalities {
-		testing::externalities()
-	}
+	type CouncilVoting = super::Module<Test>;
 
 	#[test]
 	fn basic_environment_works() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
-			assert_eq!(staking::bonding_duration(), 0);
-			assert_eq!(cooloff_period(), 2);
-			assert_eq!(voting_period(), 1);
-			assert_eq!(will_still_be_councillor_at(&Alice, 1), true);
-			assert_eq!(will_still_be_councillor_at(&Alice, 10), false);
-			assert_eq!(will_still_be_councillor_at(&Dave, 10), false);
-			assert_eq!(is_councillor(&Alice), true);
-			assert_eq!(is_councillor(&Dave), false);
-			assert_eq!(proposals(), Vec::<(BlockNumber, ProposalHash)>::new());
-			assert_eq!(proposal_voters(ProposalHash::default()), Vec::<AccountId>::new());
-			assert_eq!(is_vetoed(&ProposalHash::default()), false);
-			assert_eq!(vote_of((*Alice, ProposalHash::default())), None);
-			assert_eq!(tally(&ProposalHash::default()), (0, 0, 3));
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			assert_eq!(Staking::bonding_duration(), 0);
+			assert_eq!(CouncilVoting::cooloff_period(), 2);
+			assert_eq!(CouncilVoting::voting_period(), 1);
+			assert_eq!(CouncilVoting::will_still_be_councillor_at(&1, 1), true);
+			assert_eq!(CouncilVoting::will_still_be_councillor_at(&1, 10), false);
+			assert_eq!(CouncilVoting::will_still_be_councillor_at(&4, 10), false);
+			assert_eq!(CouncilVoting::is_councillor(&1), true);
+			assert_eq!(CouncilVoting::is_councillor(&4), false);
+			assert_eq!(CouncilVoting::proposals(), Vec::<(u64, H256)>::new());
+			assert_eq!(CouncilVoting::proposal_voters(H256::default()), Vec::<u64>::new());
+			assert_eq!(CouncilVoting::is_vetoed(&H256::default()), false);
+			assert_eq!(CouncilVoting::vote_of((H256::default(), 1)), None);
+			assert_eq!(CouncilVoting::tally(&H256::default()), (0, 0, 3));
 		});
 	}
 
 	fn sessions_per_era_proposal(value: u64) -> Proposal {
-		Proposal::Staking(staking::privileged::Call::set_sessions_per_era(value))
+		Proposal::Staking(staking::PrivCall::set_sessions_per_era(value))
 	}
 
 	fn bonding_duration_proposal(value: u64) -> Proposal {
-		Proposal::Staking(staking::privileged::Call::set_bonding_duration(value))
+		Proposal::Staking(staking::PrivCall::set_bonding_duration(value))
 	}
 
 	fn cancel_referendum_proposal(id: u32) -> Proposal {
-		Proposal::Democracy(democracy::privileged::Call::cancel_referendum(id))
+		Proposal::Democracy(democracy::PrivCall::cancel_referendum(id))
 	}
 
 	#[test]
 	fn referendum_cancellation_should_work_when_unanimous() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			democracy::internal::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
-			assert_eq!(democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
+			Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
 
 			let cancellation = cancel_referendum_proposal(0);
-			let hash = cancellation.blake2_256();
-			staking::public_pass_from_payment(&Alice).propose(Box::new(cancellation));
-			staking::public_pass_from_payment(&Bob).vote(hash, true);
-			staking::public_pass_from_payment(&Charlie).vote(hash, true);
-			assert_eq!(proposals(), vec![(2, hash)]);
-			internal::end_block(1);
+			let hash = cancellation.blake2_256().into();
+			CouncilVoting::propose(&1, Box::new(cancellation));
+			CouncilVoting::vote(&2, hash, true);
+			CouncilVoting::vote(&3, hash, true);
+			assert_eq!(CouncilVoting::proposals(), vec![(2, hash)]);
+			CouncilVoting::end_block(System::block_number());
 
-			system::testing::set_block_number(2);
-			internal::end_block(2);
-			assert_eq!(democracy::active_referendums(), vec![]);
-			assert_eq!(staking::bonding_duration(), 0);
+			System::set_block_number(2);
+			CouncilVoting::end_block(System::block_number());
+			assert_eq!(Democracy::active_referendums(), vec![]);
+			assert_eq!(Staking::bonding_duration(), 0);
 		});
 	}
 
 	#[test]
 	fn referendum_cancellation_should_fail_when_not_unanimous() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			democracy::internal::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
+			Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
 
 			let cancellation = cancel_referendum_proposal(0);
-			let hash = cancellation.blake2_256();
-			staking::public_pass_from_payment(&Alice).propose(Box::new(cancellation));
-			staking::public_pass_from_payment(&Bob).vote(hash, true);
-			staking::public_pass_from_payment(&Charlie).vote(hash, false);
-			internal::end_block(1);
+			let hash = cancellation.blake2_256().into();
+			CouncilVoting::propose(&1, Box::new(cancellation));
+			CouncilVoting::vote(&2, hash, true);
+			CouncilVoting::vote(&3, hash, false);
+			CouncilVoting::end_block(System::block_number());
 
-			system::testing::set_block_number(2);
-			internal::end_block(2);
-			assert_eq!(democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
+			System::set_block_number(2);
+			CouncilVoting::end_block(System::block_number());
+			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
 		});
 	}
 
 	#[test]
 	fn referendum_cancellation_should_fail_when_abstentions() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			democracy::internal::start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
+			Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove);
 
 			let cancellation = cancel_referendum_proposal(0);
-			let hash = cancellation.blake2_256();
-			staking::public_pass_from_payment(&Alice).propose(Box::new(cancellation));
-			staking::public_pass_from_payment(&Bob).vote(hash, true);
-			internal::end_block(1);
+			let hash = cancellation.blake2_256().into();
+			CouncilVoting::propose(&1, Box::new(cancellation));
+			CouncilVoting::vote(&2, hash, true);
+			CouncilVoting::end_block(System::block_number());
 
-			system::testing::set_block_number(2);
-			internal::end_block(2);
-			assert_eq!(democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
+			System::set_block_number(2);
+			CouncilVoting::end_block(System::block_number());
+			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
 		});
 	}
 
 	#[test]
 	fn veto_should_work() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			let hash = proposal.blake2_256();
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Bob).veto(hash);
-			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums().len(), 0);
+			let hash = proposal.blake2_256().into();
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::veto(&2, hash);
+			assert_eq!(CouncilVoting::proposals().len(), 0);
+			assert_eq!(Democracy::active_referendums().len(), 0);
 		});
 	}
 
 	#[test]
 	#[should_panic]
 	fn double_veto_should_panic() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			let hash = proposal.blake2_256();
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Bob).veto(hash);
+			let hash = proposal.blake2_256().into();
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::veto(&2, hash);
 
-			system::testing::set_block_number(3);
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Bob).veto(hash);
+			System::set_block_number(3);
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::veto(&2, hash);
 		});
 	}
 
 	#[test]
 	#[should_panic]
 	fn retry_in_cooloff_should_panic() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			let hash = proposal.blake2_256();
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Bob).veto(hash);
+			let hash = proposal.blake2_256().into();
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::veto(&2, hash);
 
-			system::testing::set_block_number(2);
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
+			System::set_block_number(2);
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
 		});
 	}
 
 	#[test]
 	fn retry_after_cooloff_should_work() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			let hash = proposal.blake2_256();
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Bob).veto(hash);
+			let hash = proposal.blake2_256().into();
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::veto(&2, hash);
 
-			system::testing::set_block_number(3);
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Bob).vote(hash, false);
-			staking::public_pass_from_payment(&Charlie).vote(hash, true);
-			internal::end_block(3);
+			System::set_block_number(3);
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::vote(&2, hash, false);
+			CouncilVoting::vote(&3, hash, true);
+			CouncilVoting::end_block(System::block_number());
 
-			system::testing::set_block_number(4);
-			internal::end_block(4);
-			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums(), vec![(0, 7, bonding_duration_proposal(42), VoteThreshold::SimpleMajority)]);
+			System::set_block_number(4);
+			CouncilVoting::end_block(System::block_number());
+			assert_eq!(CouncilVoting::proposals().len(), 0);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 7, bonding_duration_proposal(42), VoteThreshold::SimpleMajority)]);
 		});
 	}
 
 	#[test]
 	fn alternative_double_veto_should_work() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			let hash = proposal.blake2_256();
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Bob).veto(hash);
+			let hash = proposal.blake2_256().into();
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::veto(&2, hash);
 
-			system::testing::set_block_number(3);
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Charlie).veto(hash);
-			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums().len(), 0);
+			System::set_block_number(3);
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::veto(&3, hash);
+			assert_eq!(CouncilVoting::proposals().len(), 0);
+			assert_eq!(Democracy::active_referendums().len(), 0);
 		});
 	}
 
 	#[test]
 	fn simple_propose_should_work() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			let hash = proposal.blake2_256();
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			assert_eq!(proposals().len(), 1);
-			assert_eq!(proposal_voters(&hash), vec![Alice.to_raw_public()]);
-			assert_eq!(vote_of((hash, *Alice)), Some(true));
-			assert_eq!(tally(&hash), (1, 0, 2));
+			let hash = proposal.blake2_256().into();
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			assert_eq!(CouncilVoting::proposals().len(), 1);
+			assert_eq!(CouncilVoting::proposal_voters(&hash), vec![1]);
+			assert_eq!(CouncilVoting::vote_of((hash, 1)), Some(true));
+			assert_eq!(CouncilVoting::tally(&hash), (1, 0, 2));
 		});
 	}
 
 	#[test]
 	fn unvoted_proposal_should_expire_without_action() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			assert_eq!(tally(&proposal.blake2_256()), (1, 0, 2));
-			internal::end_block(1);
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			assert_eq!(CouncilVoting::tally(&proposal.blake2_256().into()), (1, 0, 2));
+			CouncilVoting::end_block(System::block_number());
 
-			system::testing::set_block_number(2);
-			internal::end_block(2);
-			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums().len(), 0);
+			System::set_block_number(2);
+			CouncilVoting::end_block(System::block_number());
+			assert_eq!(CouncilVoting::proposals().len(), 0);
+			assert_eq!(Democracy::active_referendums().len(), 0);
 		});
 	}
 
 	#[test]
 	fn unanimous_proposal_should_expire_with_biased_referendum() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Bob).vote(proposal.blake2_256(), true);
-			staking::public_pass_from_payment(&Charlie).vote(proposal.blake2_256(), true);
-			assert_eq!(tally(&proposal.blake2_256()), (3, 0, 0));
-			internal::end_block(1);
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::vote(&2, proposal.blake2_256().into(), true);
+			CouncilVoting::vote(&3, proposal.blake2_256().into(), true);
+			assert_eq!(CouncilVoting::tally(&proposal.blake2_256().into()), (3, 0, 0));
+			CouncilVoting::end_block(System::block_number());
 
-			system::testing::set_block_number(2);
-			internal::end_block(2);
-			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SuperMajorityAgainst)]);
+			System::set_block_number(2);
+			CouncilVoting::end_block(System::block_number());
+			assert_eq!(CouncilVoting::proposals().len(), 0);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SuperMajorityAgainst)]);
 		});
 	}
 
 	#[test]
 	fn majority_proposal_should_expire_with_unbiased_referendum() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			staking::public_pass_from_payment(&Alice).propose(Box::new(proposal.clone()));
-			staking::public_pass_from_payment(&Bob).vote(proposal.blake2_256(), true);
-			staking::public_pass_from_payment(&Charlie).vote(proposal.blake2_256(), false);
-			assert_eq!(tally(&proposal.blake2_256()), (2, 1, 0));
-			internal::end_block(1);
+			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			CouncilVoting::vote(&2, proposal.blake2_256().into(), true);
+			CouncilVoting::vote(&3, proposal.blake2_256().into(), false);
+			assert_eq!(CouncilVoting::tally(&proposal.blake2_256().into()), (2, 1, 0));
+			CouncilVoting::end_block(System::block_number());
 
-			system::testing::set_block_number(2);
-			internal::end_block(2);
-			assert_eq!(proposals().len(), 0);
-			assert_eq!(democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SimpleMajority)]);
+			System::set_block_number(2);
+			CouncilVoting::end_block(System::block_number());
+			assert_eq!(CouncilVoting::proposals().len(), 0);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SimpleMajority)]);
 		});
 	}
 
 	#[test]
 	#[should_panic]
 	fn propose_by_public_should_panic() {
-		with_externalities(&mut new_test_ext(), || {
-			system::testing::set_block_number(1);
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			staking::public_pass_from_payment(&Dave).propose(Box::new(proposal));
+			CouncilVoting::propose(&4, Box::new(proposal));
 		});
 	}
 }
-*/
