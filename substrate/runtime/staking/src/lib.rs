@@ -294,6 +294,14 @@ impl<T: Trait> Module<T> {
 		slash == value
 	}
 
+	/// Hook to be called after to transaction processing.
+	pub fn check_new_era() {
+		// check block number and call new_era if necessary.
+		if (<system::Module<T>>::block_number() - Self::last_era_length_change()) % Self::era_length() == Zero::zero() {
+			Self::new_era();
+		}
+	}
+
 	/// The era has changed - enact new staking set.
 	///
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
@@ -325,16 +333,6 @@ impl<T: Trait> Module<T> {
 				.take(<ValidatorCount<T>>::get() as usize)
 				.collect::<Vec<_>>()
 		);
-	}
-
-	// NON-PUBLIC
-
-	/// Hook to be called after to transaction processing.
-	fn check_new_era() {
-		// check block number and call new_era if necessary.
-		if (<system::Module<T>>::block_number() - Self::last_era_length_change()) % Self::era_length() == Zero::zero() {
-			Self::new_era();
-		}
 	}
 }
 
