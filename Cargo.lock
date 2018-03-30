@@ -1795,6 +1795,7 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-democracy 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
