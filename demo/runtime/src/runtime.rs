@@ -102,13 +102,25 @@ impl_outer_dispatch! {
 	}
 }
 
+pub type Header = primitives::generic::Header<
+	demo_primitives::BlockNumber, demo_primitives::Hash, Vec<u8>,
+>;
+
+pub type Block = primitives::generic::Block<
+	demo_primitives::BlockNumber, demo_primitives::Hash, Vec<u8>,
+	demo_primitives::AccountId, demo_primitives::Index, Call, demo_primitives::Signature
+>;
+
+pub type UncheckedExtrinsic = primitives::generic::UncheckedExtrinsic<
+	demo_primitives::AccountId, demo_primitives::Index, Call, demo_primitives::Signature
+>;
+
+pub type Extrinsic = primitives::generic::Extrinsic<
+	demo_primitives::AccountId, demo_primitives::Index, Call
+>;
+
 pub type Executive = executive::Executive<
-	Concrete,
-	primitives::generic::Block<
-		demo_primitives::BlockNumber, demo_primitives::Hash, Vec<u8>,
-		demo_primitives::AccountId, demo_primitives::Index, Call, demo_primitives::Signature
-	>,
-	Staking,
+	Concrete, Block, Staking,
 	(((((), Council), Democracy), Staking), Session),
 >;
 

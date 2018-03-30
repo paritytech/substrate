@@ -99,6 +99,11 @@ impl Slicable for Ed25519Signature {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> { Some(Ed25519Signature(Slicable::decode(input)?,)) }
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R { self.0.using_encoded(f) }
 }
+impl From<H512> for Ed25519Signature {
+	fn from(h: H512) -> Ed25519Signature {
+		Ed25519Signature(h)
+	}
+}
 
 /// A extrinsics right from the external world. Unchecked.
 #[derive(PartialEq, Eq, Clone)]
