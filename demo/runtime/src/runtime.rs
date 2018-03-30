@@ -17,7 +17,7 @@
 //! Dispatch system. Just dispatches calls.
 
 use runtime_io::BlakeTwo256;
-use demo_primitives;
+use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use {consensus, council, democracy, executive, session, staking, system, timestamp};
 use runtime_primitives::{self as primitives, Identity, HasPublicAux};
 pub use runtime_primitives::BuildExternalities;
@@ -37,7 +37,7 @@ impl democracy::IsCancelReferendum for PrivCall {
 pub struct Concrete;
 
 impl HasPublicAux for Concrete {
-	type PublicAux = demo_primitives::AccountId;
+	type PublicAux = AccountId;
 }
 
 impl timestamp::Trait for Concrete {
@@ -46,18 +46,18 @@ impl timestamp::Trait for Concrete {
 pub type Timestamp = timestamp::Module<Concrete>;
 
 impl consensus::Trait for Concrete {
-	type SessionKey = demo_primitives::AccountId;
+	type SessionKey = AccountId;
 }
 pub type Consensus = consensus::Module<Concrete>;
 
 impl system::Trait for Concrete {
-	type Index = demo_primitives::Index;
-	type BlockNumber = demo_primitives::BlockNumber;
-	type Hash = demo_primitives::Hash;
+	type Index = Index;
+	type BlockNumber = BlockNumber;
+	type Hash = Hash;
 	type Hashing = BlakeTwo256;
 	type Digest = primitives::generic::Digest<Vec<u8>>;
-	type AccountId = demo_primitives::AccountId;
-	type Header = primitives::generic::Header<demo_primitives::BlockNumber, demo_primitives::Hash, Vec<u8>>;
+	type AccountId = AccountId;
+	type Header = primitives::generic::Header<BlockNumber, Hash, Vec<u8>>;
 }
 pub type System = system::Module<Concrete>;
 
@@ -68,7 +68,7 @@ impl session::Trait for Concrete {
 pub type Session = session::Module<Concrete>;
 
 impl staking::Trait for Concrete {
-	type Balance = demo_primitives::Balance;
+	type Balance = Balance;
 	type DetermineContractAddress = BlakeTwo256;
 }
 pub type Staking = staking::Module<Concrete>;
@@ -103,20 +103,20 @@ impl_outer_dispatch! {
 }
 
 pub type Header = primitives::generic::Header<
-	demo_primitives::BlockNumber, demo_primitives::Hash, Vec<u8>,
+	BlockNumber, Hash, Vec<u8>,
 >;
 
 pub type Block = primitives::generic::Block<
-	demo_primitives::BlockNumber, demo_primitives::Hash, Vec<u8>,
-	demo_primitives::AccountId, demo_primitives::Index, Call, demo_primitives::Signature
+	BlockNumber, Hash, Vec<u8>,
+	AccountId, Index, Call, Signature
 >;
 
 pub type UncheckedExtrinsic = primitives::generic::UncheckedExtrinsic<
-	demo_primitives::AccountId, demo_primitives::Index, Call, demo_primitives::Signature
+	AccountId, Index, Call, Signature
 >;
 
 pub type Extrinsic = primitives::generic::Extrinsic<
-	demo_primitives::AccountId, demo_primitives::Index, Call
+	AccountId, Index, Call
 >;
 
 pub type Executive = executive::Executive<
