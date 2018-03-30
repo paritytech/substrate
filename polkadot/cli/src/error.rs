@@ -22,15 +22,11 @@ error_chain! {
 	foreign_links {
 		Io(::std::io::Error) #[doc="IO error"];
 		Cli(::clap::Error) #[doc="CLI error"];
+		Service(::service::Error) #[doc="Polkadot service error"];
 	}
 	links {
 		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
     }
 	errors {
-		/// Key store errors
-		Keystore(e: ::keystore::Error) {
-			description("Keystore error"),
-			display("Keystore error: {:?}", e),
-		}
 	}
 }

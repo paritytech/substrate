@@ -42,10 +42,22 @@ error_chain! {
 			display("Unable to create block proposal."),
 		}
 
-		/// Error dispatching the agreement future onto the executor.
-		Executor(e: ::futures::future::ExecuteErrorKind) {
-			description("Unable to dispatch agreement future"),
-			display("Unable to dispatch agreement future: {:?}", e),
+		/// Error checking signature
+		InvalidSignature(s: ::ed25519::Signature, a: ::primitives::AuthorityId) {
+			description("Message signature is invalid"),
+			display("Message signature {:?} by {:?} is invalid.", s, a),
+		}
+
+		/// Account is not an authority.
+		InvalidAuthority(a: ::primitives::AuthorityId) {
+			description("Message sender is not a valid authority"),
+			display("Message sender {:?} is not a valid authority.", a),
+		}
+
+		/// Justification requirements not met.
+		InvalidJustification {
+			description("Invalid justification"),
+			display("Invalid justification."),
 		}
 
 		/// Some other error.

@@ -41,10 +41,14 @@ extern crate polkadot_transaction_pool as transaction_pool;
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
+extern crate substrate_network;
+
+extern crate tokio_core;
+extern crate substrate_keyring;
+extern crate substrate_client as client;
 
 #[macro_use]
 extern crate error_chain;
-
 #[macro_use]
 extern crate log;
 
@@ -67,8 +71,10 @@ use futures::future;
 use parking_lot::Mutex;
 
 pub use self::error::{ErrorKind, Error};
+pub use service::Service;
 
 mod error;
+mod service;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
@@ -83,7 +89,7 @@ pub trait TableRouter {
 	type FetchExtrinsic: IntoFuture<Item=Extrinsic,Error=Self::Error>;
 
 	/// Note local candidate data.
-	fn local_candidate_data(&self, block_data: BlockData, extrinsic: Extrinsic);
+	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: Extrinsic);
 
 	/// Fetch block data for a specific candidate.
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> Self::FetchCandidate;

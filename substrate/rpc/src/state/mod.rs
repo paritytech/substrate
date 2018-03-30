@@ -21,6 +21,7 @@ mod error;
 #[cfg(test)]
 mod tests;
 
+use std::sync::Arc;
 use client::{self, Client};
 use primitives::block;
 use primitives::storage::{StorageKey, StorageData};
@@ -41,16 +42,16 @@ build_rpc_trait! {
 	}
 }
 
-impl<B, E> StateApi for Client<B, E> where
+impl<B, E> StateApi for Arc<Client<B, E>> where
 	B: client::backend::Backend + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	fn storage(&self, key: StorageKey, block: block::HeaderHash) -> Result<StorageData> {
-		Ok(self.storage(&block::Id::Hash(block), &key)?)
+		Ok(self.as_ref().storage(&block::Id::Hash(block), &key)?)
 	}
 
 	fn call(&self, method: String, data: Vec<u8>, block: block::HeaderHash) -> Result<Vec<u8>> {
-		Ok(self.call(&block::Id::Hash(block), &method, &data)?.return_data)
+		Ok(self.as_ref().call(&block::Id::Hash(block), &method, &data)?.return_data)
 	}
 }

@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use service::Role;
+pub use service::Role;
 
 /// Protocol configuration
 #[derive(Clone)]
 pub struct ProtocolConfig {
+	/// Assigned roles.
 	pub roles: Role,
 }
 
