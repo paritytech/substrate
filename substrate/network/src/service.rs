@@ -17,25 +17,42 @@
 use std::sync::Arc;
 use std::collections::{BTreeMap};
 use std::io;
+use multiqueue;
+use futures::sync::oneshot;
 use network::{NetworkProtocolHandler, NetworkService, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use primitives::block::{TransactionHash, Header};
+use primitives::Hash;
 use core_io::{TimerToken};
 use io::NetSyncIo;
 use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo, TransactionStats};
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
+use message::{Statement, BftMessage};
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
 
+/// Type that represents fetch completion future.
+pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
+/// Type that represents statement stream.
+pub type StatementStream = multiqueue::BroadcastFutReceiver<Statement>;
+/// Type that represents bft messages stream.
+pub type BftMessageStream = multiqueue::BroadcastFutReceiver<BftMessage>;
+
 bitflags! {
+	/// Node roles bitmask.
 	pub struct Role: u32 {
+		/// No network.
 		const NONE = 0b00000000;
+		/// Full node, doe not participate in consensus.
 		const FULL = 0b00000001;
+		/// Light client node.
 		const LIGHT = 0b00000010;
+		/// Act as a validator.
 		const VALIDATOR = 0b00000100;
+		/// Act as a collator.
 		const COLLATOR = 0b00001000;
 	}
 }
@@ -50,6 +67,39 @@ pub trait SyncProvider: Send + Sync {
 	fn node_id(&self) -> Option<String>;
 	/// Returns propagation count for pending transactions.
 	fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats>;
+}
+
+/// Transaction pool interface
+pub trait TransactionPool: Send + Sync {
+	/// Get transactions from the pool that are ready to be propagated.
+	fn transactions(&self) -> Vec<(TransactionHash, Vec<u8>)>;
+	/// Import a transction into the pool.
+	fn import(&self, transaction: &[u8]) -> Option<TransactionHash>;
+}
+
+/// ConsensusService
+pub trait ConsensusService: Send + Sync {
+	/// Get statement stream.
+	fn statements(&self) -> multiqueue::BroadcastFutReceiver<Statement>;
+	/// Send out a statement.
+	fn send_statement(&self, statement: Statement);
+	/// Maintain connectivity to given addresses.
+	fn connect_to_authorities(&self, addresses: &[String]);
+	/// Fetch candidate.
+	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Vec<u8>>;
+	/// Note local candidate. Accepts candidate receipt hash and candidate data.
+	/// Pass `None` to clear the candidate.
+	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>);
+
+	/// Get BFT message stream.
+	fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<BftMessage>;
+	/// Send out a BFT message.
+	fn send_bft_message(&self, message: BftMessage);
+}
+
+/// devp2p Protocol handler
+struct ProtocolHandler {
+	protocol: Protocol,
 }
 
 /// Peer connection information
@@ -77,6 +127,8 @@ pub struct Params {
 	pub network_config: NetworkConfiguration,
 	/// Polkadot relay chain access point.
 	pub chain: Arc<Client>,
+	/// Transaction pool.
+	pub transaction_pool: Arc<TransactionPool>,
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
@@ -90,13 +142,11 @@ pub struct Service {
 impl Service {
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params) -> Result<Arc<Service>, Error> {
-
 		let service = NetworkService::new(params.network_config.clone(), None)?;
-
 		let sync = Arc::new(Service {
 			network: service,
 			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(params.config, params.chain.clone())?,
+				protocol: Protocol::new(params.config, params.chain.clone(), params.transaction_pool)?,
 			}),
 		});
 
@@ -109,8 +159,10 @@ impl Service {
 	}
 
 	/// Called when new transactons are imported by the client.
-	pub fn on_new_transactions(&self) {
-		self.handler.protocol.on_new_transactions()
+	pub fn on_new_transactions(&self, transactions: &[(TransactionHash, Vec<u8>)]) {
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context), transactions);
+		});
 	}
 
 	fn start(&self) {
@@ -127,6 +179,12 @@ impl Service {
 	fn stop(&self) {
 		self.handler.protocol.abort();
 		self.network.stop().unwrap_or_else(|e| warn!("Error stopping network: {:?}", e));
+	}
+}
+
+impl Drop for Service {
+	fn drop(&mut self) {
+		self.stop();
 	}
 }
 
@@ -168,9 +226,41 @@ impl SyncProvider for Service {
 	}
 }
 
-struct ProtocolHandler {
-	/// Protocol handler
-	protocol: Protocol,
+/// ConsensusService
+impl ConsensusService for Service {
+	fn statements(&self) -> multiqueue::BroadcastFutReceiver<Statement> {
+		self.handler.protocol.statements()
+	}
+
+	fn connect_to_authorities(&self, _addresses: &[String]) {
+		//TODO: implement me
+	}
+
+	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
+		self.network.with_context_eval(DOT_PROTOCOL_ID, |context| {
+			self.handler.protocol.fetch_candidate(&mut NetSyncIo::new(context), hash)
+		}).expect("DOT Service is registered")
+	}
+
+	fn send_statement(&self, statement: Statement) {
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			self.handler.protocol.send_statement(&mut NetSyncIo::new(context), statement);
+		});
+	}
+
+	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
+		self.handler.protocol.set_local_candidate(candidate)
+	}
+
+	fn bft_messages(&self) -> BftMessageStream {
+		self.handler.protocol.bft_messages()
+	}
+
+	fn send_bft_message(&self, message: BftMessage) {
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			self.handler.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
+		});
+	}
 }
 
 impl NetworkProtocolHandler for ProtocolHandler {

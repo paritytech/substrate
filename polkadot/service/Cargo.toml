@@ -1,5 +1,5 @@
 [package]
-name = "polkadot-consensus"
+name = "polkadot-service"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
@@ -10,16 +10,17 @@ tokio-timer = "0.1.2"
 ed25519 = { path = "../../substrate/ed25519" }
 error-chain = "0.11"
 log = "0.4"
-polkadot-api = { path = "../api" }
-polkadot-collator = { path = "../collator" }
+tokio-core = "0.1.12"
 polkadot-primitives = { path = "../primitives" }
-polkadot-statement-table = { path = "../statement-table" }
+polkadot-runtime = { path = "../runtime" }
+polkadot-consensus = { path = "../consensus" }
+polkadot-executor = { path = "../executor" }
+polkadot-api = { path = "../api" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
-substrate-bft = { path = "../../substrate/bft" }
-substrate-codec = { path = "../../substrate/codec" }
+polkadot-keystore = { path = "../keystore" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
-
-tokio-core = "0.1.12"
-substrate-keyring = { path = "../../substrate/keyring" }
 substrate-client = { path = "../../substrate/client" }
+substrate-keyring = { path = "../../substrate/keyring" }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-executor = { path = "../../substrate/executor" }

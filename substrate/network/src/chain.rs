@@ -16,15 +16,15 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus};
+use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin};
 use client::error::Error;
 use state_machine;
 use primitives::block::{self, Id as BlockId};
 use primitives::bft::Justification;
 
 pub trait Client: Send + Sync {
-	/// Given a hash return a header
-	fn import(&self, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error>;
+	/// Import a new block. Parent is supposed to be existing in the blockchain.
+	fn import(&self, is_best: bool, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error>;
 
 	/// Get blockchain info.
 	fn info(&self) -> Result<ClientInfo, Error>;
@@ -50,10 +50,11 @@ impl<B, E> Client for PolkadotClient<B, E> where
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>, {
 
-	fn import(&self, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error> {
+	fn import(&self, is_best: bool, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error> {
 		// TODO: defer justification check.
 		let justified_header = self.check_justification(header, justification.into())?;
-		(self as &PolkadotClient<B, E>).import_block(justified_header, body)
+		let origin = if is_best { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
+		(self as &PolkadotClient<B, E>).import_block(origin, justified_header, body)
 	}
 
 	fn info(&self) -> Result<ClientInfo, Error> {

@@ -41,8 +41,7 @@ use primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction, Ju
 use primitives::block::{Block, Id as BlockId, Header, HeaderHash};
 use primitives::AuthorityId;
 
-use futures::{stream, task, Async, Sink, Future, IntoFuture};
-use futures::future::Executor;
+use futures::{task, Async, Stream, Sink, Future, IntoFuture};
 use futures::sync::oneshot;
 use tokio_timer::Timer;
 use parking_lot::Mutex;
@@ -219,34 +218,25 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	}
 }
 
-type Input<E> = stream::Empty<Communication, E>;
-
-// "black hole" output sink.
-struct Output<E>(::std::marker::PhantomData<E>);
-
-impl<E> Sink for Output<E> {
-	type SinkItem = Communication;
-	type SinkError = E;
-
-	fn start_send(&mut self, _item: Communication) -> ::futures::StartSend<Communication, E> {
-		Ok(::futures::AsyncSink::Ready)
-	}
-
-	fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
-		Ok(Async::Ready(()))
-	}
-}
-
 /// A future that resolves either when canceled (witnessing a block from the network at same height)
 /// or when agreement completes.
-pub struct BftFuture<P: Proposer, I> {
-	inner: generic::Agreement<BftInstance<P>, Input<P::Error>, Output<P::Error>>,
+pub struct BftFuture<P, I, InStream, OutSink> where
+	P: Proposer,
+	InStream: Stream<Item=Communication, Error=P::Error>,
+	OutSink: Sink<SinkItem=Communication, SinkError=P::Error>,
+{
+	inner: generic::Agreement<BftInstance<P>, InStream, OutSink>,
 	cancel: Arc<AtomicBool>,
 	send_task: Option<oneshot::Sender<task::Task>>,
 	import: Arc<I>,
 }
 
-impl<P: Proposer, I: BlockImport> Future for BftFuture<P, I> {
+impl<P, I, InStream, OutSink> Future for BftFuture<P, I, InStream, OutSink> where
+	P: Proposer,
+	I: BlockImport,
+	InStream: Stream<Item=Communication, Error=P::Error>,
+	OutSink: Sink<SinkItem=Communication, SinkError=P::Error>,
+{
 	type Item = ();
 	type Error = ();
 
@@ -274,7 +264,11 @@ impl<P: Proposer, I: BlockImport> Future for BftFuture<P, I> {
 	}
 }
 
-impl<P: Proposer, I> Drop for BftFuture<P, I> {
+impl<P, I, InStream, OutSink> Drop for BftFuture<P, I, InStream, OutSink> where
+	P: Proposer,
+	InStream: Stream<Item=Communication, Error=P::Error>,
+	OutSink: Sink<SinkItem=Communication, SinkError=P::Error>,
+{
 	fn drop(&mut self) {
 		// TODO: have a trait member to pass misbehavior reports into.
 		let misbehavior = self.inner.drain_misbehavior().collect::<Vec<_>>();
@@ -304,9 +298,8 @@ impl Drop for AgreementHandle {
 
 /// The BftService kicks off the agreement process on top of any blocks it
 /// is notified of.
-pub struct BftService<P, E, I> {
+pub struct BftService<P, I> {
 	client: Arc<I>,
-	executor: E,
 	live_agreements: Mutex<HashMap<HeaderHash, AgreementHandle>>,
 	timer: Timer,
 	round_timeout_multiplier: u64,
@@ -314,17 +307,33 @@ pub struct BftService<P, E, I> {
 	factory: P,
 }
 
-impl<P, E, I> BftService<P, E, I>
+impl<P, I> BftService<P, I>
 	where
 		P: ProposerFactory,
-		E: Executor<BftFuture<P::Proposer, I>>,
 		I: BlockImport + Authorities,
 {
+
+	/// Create a new service instance.
+	pub fn new(client: Arc<I>, key: Arc<ed25519::Pair>, factory: P) -> BftService<P, I> {
+		BftService {
+			client: client,
+			live_agreements: Mutex::new(HashMap::new()),
+			timer: Timer::default(),
+			round_timeout_multiplier: 4,
+			key: key, // TODO: key changing over time.
+			factory: factory,
+		}
+	}
+
 	/// Signal that a valid block with the given header has been imported.
 	///
 	/// If the local signing key is an authority, this will begin the consensus process to build a
 	/// block on top of it. If the executor fails to run the future, an error will be returned.
-	pub fn build_upon(&self, header: &Header) -> Result<(), P::Error> {
+	pub fn build_upon<InStream, OutSink>(&self, header: &Header, input: InStream, output: OutSink)
+		-> Result<BftFuture<<P as ProposerFactory>::Proposer, I, InStream, OutSink>, P::Error> where
+		InStream: Stream<Item=Communication, Error=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
+		OutSink: Sink<SinkItem=Communication, SinkError=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
+	{
 		let hash = header.hash();
 		let mut _preempted_consensus = None; // defers drop of live to the end.
 
@@ -337,7 +346,7 @@ impl<P, E, I> BftService<P, E, I>
 
 		if !authorities.contains(&local_id) {
 			self.live_agreements.lock().remove(&header.parent_hash);
-			return Ok(())
+			Err(From::from(ErrorKind::InvalidAuthority(local_id)))?;
 		}
 
 		let proposer = self.factory.init(header, &authorities, self.key.clone())?;
@@ -355,25 +364,18 @@ impl<P, E, I> BftService<P, E, I>
 			bft_instance,
 			n,
 			max_faulty,
-			stream::empty(),
-			Output(Default::default()),
+			input,
+			output,
 		);
 
 		let cancel = Arc::new(AtomicBool::new(false));
 		let (tx, rx) = oneshot::channel();
 
-		self.executor.execute(BftFuture {
-			inner: agreement,
-			cancel: cancel.clone(),
-			send_task: Some(tx),
-			import: self.client.clone(),
-		}).map_err(|e| e.kind()).map_err(ErrorKind::Executor).map_err(Error::from)?;
-
 		{
 			let mut live = self.live_agreements.lock();
 			live.insert(hash, AgreementHandle {
 				task: Some(rx),
-				cancel,
+				cancel: cancel.clone(),
 			});
 
 			// cancel any agreements attempted to build upon this block's parent
@@ -381,7 +383,12 @@ impl<P, E, I> BftService<P, E, I>
 			_preempted_consensus = live.remove(&header.parent_hash);
 		}
 
-		Ok(())
+		Ok(BftFuture {
+			inner: agreement,
+			cancel: cancel,
+			send_task: Some(tx),
+			import: self.client.clone(),
+		})
 	}
 }
 
@@ -391,9 +398,16 @@ pub fn max_faulty_of(n: usize) -> usize {
 	n.saturating_sub(1) / 3
 }
 
+/// Given a total number of authorities, yield the minimum required signatures.
+/// This will always be over 2/3.
+pub fn bft_threshold(n: usize) -> usize {
+	n - max_faulty_of(n)
+}
+
 fn check_justification_signed_message(authorities: &[AuthorityId], message: &[u8], just: UncheckedJustification)
 	-> Result<Justification, UncheckedJustification>
 {
+	// TODO: return additional error information.
 	just.check(authorities.len() - max_faulty_of(authorities.len()), |_, _, sig| {
 		let auth_id = sig.signer.0;
 		if !authorities.contains(&auth_id) { return None }
@@ -434,6 +448,58 @@ pub fn check_prepare_justification(authorities: &[AuthorityId], parent: HeaderHa
 	});
 
 	check_justification_signed_message(authorities, &message[..], just)
+}
+
+/// Check proposal message signatures and authority.
+/// Provide all valid authorities.
+pub fn check_proposal(
+	authorities: &[AuthorityId],
+	parent_hash: &HeaderHash,
+	propose: &::generic::LocalizedProposal<Block, HeaderHash, AuthorityId, LocalizedSignature>)
+	-> Result<(), Error>
+{
+	if !authorities.contains(&propose.sender) {
+		return Err(ErrorKind::InvalidAuthority(propose.sender.into()).into());
+	}
+
+	let action_header = PrimitiveAction::ProposeHeader(propose.round_number as u32, propose.digest.clone());
+	let action_propose = PrimitiveAction::Propose(propose.round_number as u32, propose.proposal.clone());
+	check_action(action_header, parent_hash, &propose.digest_signature)?;
+	check_action(action_propose, parent_hash, &propose.full_signature)
+}
+
+/// Check vote message signatures and authority.
+/// Provide all valid authorities.
+pub fn check_vote(
+	authorities: &[AuthorityId],
+	parent_hash: &HeaderHash,
+	vote: &::generic::LocalizedVote<HeaderHash, AuthorityId, LocalizedSignature>)
+	-> Result<(), Error>
+{
+	if !authorities.contains(&vote.sender) {
+		return Err(ErrorKind::InvalidAuthority(vote.sender.into()).into());
+	}
+
+	let action = match vote.vote {
+		::generic::Vote::Prepare(r, h) => PrimitiveAction::Prepare(r as u32, h),
+		::generic::Vote::Commit(r, h) => PrimitiveAction::Commit(r as u32, h),
+		::generic::Vote::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
+	};
+	check_action(action, parent_hash, &vote.signature)
+}
+
+fn check_action(action: PrimitiveAction, parent_hash: &HeaderHash, sig: &LocalizedSignature) -> Result<(), Error> {
+	let primitive = PrimitiveMessage {
+		parent: parent_hash.clone(),
+		action,
+	};
+
+	let message = Slicable::encode(&primitive);
+	if ed25519::verify_strong(&sig.signature, &message, &sig.signer) {
+		Ok(())
+	} else {
+		Err(ErrorKind::InvalidSignature(sig.signature.into(), sig.signer.clone().into()).into())
+	}
 }
 
 /// Sign a BFT message with the given key.
@@ -489,8 +555,10 @@ mod tests {
 	use super::*;
 	use std::collections::HashSet;
 	use primitives::block;
-	use self::tokio_core::reactor::{Core, Handle};
+	use self::tokio_core::reactor::{Core};
 	use self::keyring::Keyring;
+	use futures::stream;
+	use futures::future::Executor;
 
 	extern crate substrate_keyring as keyring;
 	extern crate tokio_core;
@@ -509,6 +577,22 @@ mod tests {
 	impl Authorities for FakeClient {
 		fn authorities(&self, _at: &BlockId) -> Result<Vec<AuthorityId>, Error> {
 			Ok(self.authorities.clone())
+		}
+	}
+
+	// "black hole" output sink.
+	struct Output<E>(::std::marker::PhantomData<E>);
+
+	impl<E> Sink for Output<E> {
+		type SinkItem = Communication;
+		type SinkError = E;
+
+		fn start_send(&mut self, _item: Communication) -> ::futures::StartSend<Communication, E> {
+			Ok(::futures::AsyncSink::Ready)
+		}
+
+		fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
+			Ok(Async::Ready(()))
 		}
 	}
 
@@ -543,12 +627,11 @@ mod tests {
 		fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior)>) {}
 	}
 
-	fn make_service(client: FakeClient, handle: Handle)
-		-> BftService<DummyFactory, Handle, FakeClient>
+	fn make_service(client: FakeClient)
+		-> BftService<DummyFactory, FakeClient>
 	{
 		BftService {
 			client: Arc::new(client),
-			executor: handle,
 			live_agreements: Mutex::new(HashMap::new()),
 			timer: Timer::default(),
 			round_timeout_multiplier: 4,
@@ -578,7 +661,7 @@ mod tests {
 
 		let mut core = Core::new().unwrap();
 
-		let service = make_service(client, core.handle());
+		let service = make_service(client);
 
 		let first = Header::from_block_number(2);
 		let first_hash = first.hash();
@@ -587,16 +670,18 @@ mod tests {
 		second.parent_hash = first_hash;
 		let second_hash = second.hash();
 
-		service.build_upon(&first).unwrap();
+		let bft = service.build_upon(&first, stream::empty(), Output(Default::default())).unwrap();
 		assert!(service.live_agreements.lock().contains_key(&first_hash));
 
 		// turn the core so the future gets polled and sends its task to the
 		// service. otherwise it deadlocks.
+		core.handle().execute(bft).unwrap();
 		core.turn(Some(::std::time::Duration::from_millis(100)));
-		service.build_upon(&second).unwrap();
+		let bft = service.build_upon(&second, stream::empty(), Output(Default::default())).unwrap();
 		assert!(!service.live_agreements.lock().contains_key(&first_hash));
 		assert!(service.live_agreements.lock().contains_key(&second_hash));
 
+		core.handle().execute(bft).unwrap();
 		core.turn(Some(::std::time::Duration::from_millis(100)));
 	}
 
@@ -670,5 +755,70 @@ mod tests {
 		};
 
 		assert!(check_justification(&authorities, parent_hash, unchecked).is_err());
+	}
+
+	#[test]
+	fn propose_check_works() {
+		let parent_hash = Default::default();
+
+		let authorities = vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Eve.to_raw_public(),
+		];
+
+		let block = Block {
+			header: Header::from_block_number(1),
+			transactions: Default::default()
+		};
+
+		let proposal = sign_message(::generic::Message::Propose(1, block.clone()), &Keyring::Alice.pair(), parent_hash);;
+		if let ::generic::LocalizedMessage::Propose(proposal) = proposal {
+			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
+			let mut invalid_round = proposal.clone();
+			invalid_round.round_number = 0;
+			assert!(check_proposal(&authorities, &parent_hash, &invalid_round).is_err());
+			let mut invalid_digest = proposal.clone();
+			invalid_digest.digest = [0xfe; 32].into();
+			assert!(check_proposal(&authorities, &parent_hash, &invalid_digest).is_err());
+		} else {
+			assert!(false);
+		}
+
+		// Not an authority
+		let proposal = sign_message(::generic::Message::Propose(1, block), &Keyring::Bob.pair(), parent_hash);;
+		if let ::generic::LocalizedMessage::Propose(proposal) = proposal {
+			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
+		} else {
+			assert!(false);
+		}
+	}
+
+	#[test]
+	fn vote_check_works() {
+		let parent_hash = Default::default();
+		let hash = [0xff; 32].into();
+
+		let authorities = vec![
+			Keyring::Alice.to_raw_public(),
+			Keyring::Eve.to_raw_public(),
+		];
+
+		let vote = sign_message(::generic::Message::Vote(::generic::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
+		if let ::generic::LocalizedMessage::Vote(vote) = vote {
+			assert!(check_vote(&authorities, &parent_hash, &vote).is_ok());
+			let mut invalid_sender = vote.clone();
+			invalid_sender.signature.signer = Keyring::Eve.into();
+			assert!(check_vote(&authorities, &parent_hash, &invalid_sender).is_err());
+		} else {
+			assert!(false);
+		}
+
+		// Not an authority
+		let vote = sign_message(::generic::Message::Vote(::generic::Vote::Prepare(1, hash)), &Keyring::Bob.pair(), parent_hash);;
+		if let ::generic::LocalizedMessage::Vote(vote) = vote {
+			assert!(check_vote(&authorities, &parent_hash, &vote).is_err());
+		} else {
+			assert!(false);
+		}
 	}
 }

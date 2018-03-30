@@ -18,14 +18,18 @@ use std::collections::{HashMap, HashSet, BTreeMap};
 use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
+use multiqueue;
+use futures::sync::oneshot;
 use serde_json;
 use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber, Header, Id as BlockId};
+use primitives::Hash;
 use network::{PeerId, NodeId};
 
 use message::{self, Message};
-use sync::{ChainSync, Status as SyncStatus};
-use service::Role;
+use sync::{ChainSync, Status as SyncStatus, SyncState};
+use consensus::Consensus;
+use service::{Role, TransactionPool};
 use config::ProtocolConfig;
 use chain::Client;
 use io::SyncIo;
@@ -44,10 +48,12 @@ pub struct Protocol {
 	chain: Arc<Client>,
 	genesis_hash: HeaderHash,
 	sync: RwLock<ChainSync>,
-	/// All connected peers
+	consensus: Mutex<Consensus>,
+	// All connected peers
 	peers: RwLock<HashMap<PeerId, Peer>>,
-	/// Connected peers pending Status message.
+	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<PeerId, time::Instant>>,
+	transaction_pool: Arc<TransactionPool>,
 }
 
 /// Syncing status and statistics
@@ -75,8 +81,8 @@ struct Peer {
 	block_request: Option<message::BlockRequest>,
 	/// Request timestamp
 	request_timestamp: Option<time::Instant>,
-	/// Holds a set of transactions recently sent to this peer to avoid spamming.
-	_last_sent_transactions: HashSet<TransactionHash>,
+	/// Holds a set of transactions known to this peer.
+	known_transactions: HashSet<TransactionHash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
 }
@@ -104,15 +110,17 @@ pub struct TransactionStats {
 
 impl Protocol {
 	/// Create a new instance.
-	pub fn new(config: ProtocolConfig, chain: Arc<Client>) -> error::Result<Protocol>  {
+	pub fn new(config: ProtocolConfig, chain: Arc<Client>, transaction_pool: Arc<TransactionPool>) -> error::Result<Protocol>  {
 		let info = chain.info()?;
 		let protocol = Protocol {
 			config: config,
 			chain: chain,
 			genesis_hash: info.chain.genesis_hash,
 			sync: RwLock::new(ChainSync::new(&info)),
+			consensus: Mutex::new(Consensus::new()),
 			peers: RwLock::new(HashMap::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
+			transaction_pool: transaction_pool,
 		};
 		Ok(protocol)
 	}
@@ -168,7 +176,12 @@ impl Protocol {
 			},
 			Message::BlockAnnounce(announce) => {
 				self.on_block_announce(io, peer_id, announce);
-			}
+			},
+			Message::Statement(s) => self.on_statement(io, peer_id, s),
+			Message::CandidateRequest(r) => self.on_candidate_request(io, peer_id, r),
+			Message::CandidateResponse(r) => self.on_candidate_response(io, peer_id, r),
+			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m),
+			Message::Transactions(m) => self.on_transactions(io, peer_id, m),
 		}
 	}
 
@@ -209,11 +222,12 @@ impl Protocol {
 			peers.remove(&peer).is_some()
 		};
 		if removed {
+			self.consensus.lock().peer_disconnected(io, self, peer);
 			self.sync.write().peer_disconnected(io, self, peer);
 		}
 	}
 
-	pub fn on_block_request(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest) {
+	fn on_block_request(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest) {
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}", request.id, peer, request.from, request.to, request.max);
 		let mut blocks = Vec::new();
 		let mut id = match request.from {
@@ -264,12 +278,63 @@ impl Protocol {
 		self.send_message(io, peer, Message::BlockResponse(response))
 	}
 
-	pub fn on_block_response(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest, response: message::BlockResponse) {
+	fn on_block_response(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest, response: message::BlockResponse) {
 		// TODO: validate response
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks", response.id, peer, response.blocks.len());
 		self.sync.write().on_block_data(io, self, peer, request, response);
 	}
 
+	fn on_candidate_request(&self, io: &mut SyncIo, peer: PeerId, request: message::CandidateRequest) {
+		trace!(target: "sync", "CandidateRequest {} from {} for {}", request.id, peer, request.hash);
+		self.consensus.lock().on_candidate_request(io, self, peer, request);
+	}
+
+	fn on_candidate_response(&self, io: &mut SyncIo, peer: PeerId, response: message::CandidateResponse) {
+		trace!(target: "sync", "CandidateResponse {} from {} with {:?} bytes", response.id, peer, response.data.as_ref().map(|d| d.len()));
+		self.consensus.lock().on_candidate_response(io, self, peer, response);
+	}
+
+	fn on_statement(&self, _io: &mut SyncIo, peer: PeerId, statement: message::Statement) {
+		trace!(target: "sync", "Statement from {}: {:?}", peer, statement);
+		self.consensus.lock().on_statement(peer, statement);
+	}
+
+	fn on_bft_message(&self, _io: &mut SyncIo, peer: PeerId, message: message::BftMessage) {
+		trace!(target: "sync", "BFT message from {}: {:?}", peer, message);
+		self.consensus.lock().on_bft_message(peer, message);
+	}
+
+	/// See `ConsensusService` trait.
+	pub fn send_bft_message(&self, io: &mut SyncIo, message: message::BftMessage) {
+		self.consensus.lock().send_bft_message(io, self, message)
+	}
+
+	/// See `ConsensusService` trait.
+	pub fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<message::BftMessage> {
+		self.consensus.lock().bft_messages()
+	}
+
+	/// See `ConsensusService` trait.
+	pub fn statements(&self) -> multiqueue::BroadcastFutReceiver<message::Statement> {
+		self.consensus.lock().statements()
+	}
+
+	/// See `ConsensusService` trait.
+	pub fn fetch_candidate(&self, io: &mut SyncIo, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
+		self.consensus.lock().fetch_candidate(io, self, hash)
+	}
+
+	/// See `ConsensusService` trait.
+	pub fn send_statement(&self, io: &mut SyncIo, statement: message::Statement) {
+		self.consensus.lock().send_statement(io, self, statement)
+	}
+
+	/// See `ConsensusService` trait.
+	pub fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
+		self.consensus.lock().set_local_candidate(candidate)
+	}
+
+	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.maintain_peers(io);
 	}
@@ -334,12 +399,12 @@ impl Protocol {
 
 			let peer = Peer {
 				protocol_version: status.version,
-				roles: status.roles.into(),
+				roles: message::Role::as_flags(&status.roles),
 				best_hash: status.best_hash,
 				best_number: status.best_number,
 				block_request: None,
 				request_timestamp: None,
-				_last_sent_transactions: HashSet::new(),
+				known_transactions: HashSet::new(),
 				next_request_id: 0,
 			};
 			peers.insert(peer_id.clone(), peer);
@@ -347,6 +412,42 @@ impl Protocol {
 			debug!(target: "sync", "Connected {} {}", peer_id, io.peer_info(peer_id));
 		}
 		self.sync.write().new_peer(io, self, peer_id);
+		self.consensus.lock().new_peer(io, self, peer_id, &status.roles);
+	}
+
+	/// Called when peer sends us new transactions
+	fn on_transactions(&self, _io: &mut SyncIo, peer_id: PeerId, transactions: message::Transactions) {
+		// Accept transactions only when fully synced
+		if self.sync.read().status().state != SyncState::Idle {
+			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
+			return;
+		}
+		trace!(target: "sync", "Received {} transactions from {}", peer_id, transactions.len());
+		let mut peers = self.peers.write();
+		if let Some(ref mut peer) = peers.get_mut(&peer_id) {
+			for t in transactions {
+				if let Some(hash) = self.transaction_pool.import(&t) {
+					peer.known_transactions.insert(hash);
+				}
+			}
+		}
+	}
+
+	/// Called when peer sends us new transactions
+	pub fn propagate_transactions(&self, io: &mut SyncIo, transactions: &[(TransactionHash, Vec<u8>)]) {
+		// Accept transactions only when fully synced
+		if self.sync.read().status().state != SyncState::Idle {
+			return;
+		}
+		let mut peers = self.peers.write();
+		for (peer_id, ref mut peer) in peers.iter_mut() {
+			let to_send: Vec<_> = transactions.iter().filter_map(|&(hash, ref t)|
+				if peer.known_transactions.insert(hash.clone()) { Some(t.clone()) } else { None }).collect();
+			if !to_send.is_empty() {
+				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), peer_id);
+				self.send_message(io, *peer_id, Message::Transactions(to_send));
+			}
+		}
 	}
 
 	/// Send Status message
@@ -373,6 +474,7 @@ impl Protocol {
 		sync.clear();
 		peers.clear();
 		handshaking_peers.clear();
+		self.consensus.lock().restart();
 	}
 
 	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce) {
@@ -382,9 +484,6 @@ impl Protocol {
 
 	pub fn on_block_imported(&self, header: &Header) {
 		self.sync.write().update_chain_info(&header);
-	}
-
-	pub fn on_new_transactions(&self) {
 	}
 
 	pub fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats> {

@@ -12,22 +12,24 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot service possible errors.
+//! Errors that can occur during the service operation.
 
-use network::Error as NetworkError;
 use client;
+use network;
 
 error_chain! {
-	foreign_links {
-		Network(NetworkError) #[doc = "Devp2p error."];
-	}
-
 	links {
 		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
+		Network(network::error::Error, network::error::ErrorKind) #[doc="Network error"];
 	}
 
 	errors {
+		/// Key store errors
+		Keystore(e: ::keystore::Error) {
+			description("Keystore error"),
+			display("Keystore error: {:?}", e),
+		}
 	}
 }

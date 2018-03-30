@@ -14,20 +14,33 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-//! Polkadot service possible errors.
+//! Service configuration.
 
-use network::Error as NetworkError;
-use client;
+use transaction_pool;
+pub use network::Role;
+pub use network::NetworkConfiguration;
 
-error_chain! {
-	foreign_links {
-		Network(NetworkError) #[doc = "Devp2p error."];
-	}
+/// Service configuration.
+pub struct Configuration {
+	/// Node roles.
+	pub roles: Role,
+	/// Transaction pool configuration.
+	pub transaction_pool: transaction_pool::Options,
+	/// Network configuration.
+	pub network: NetworkConfiguration,
+	/// Path to key files.
+	pub keystore_path: String,
+	// TODO: add more network, client, tx pool configuration options
+}
 
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
-	}
-
-	errors {
+impl Default for Configuration {
+	fn default() -> Configuration {
+		Configuration {
+			roles: Role::FULL,
+			transaction_pool: Default::default(),
+			network: Default::default(),
+			keystore_path: Default::default(),
+		}
 	}
 }
+

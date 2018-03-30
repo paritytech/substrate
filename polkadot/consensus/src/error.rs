@@ -48,6 +48,10 @@ error_chain! {
 				::MAX_TRANSACTIONS_SIZE, ::MAX_TRANSACTIONS_SIZE.saturating_sub(*size)
 			),
 		}
+		Executor(e: ::futures::future::ExecuteErrorKind) {
+			description("Unable to dispatch agreement future"),
+			display("Unable to dispatch agreement future: {:?}", e),
+		}
 	}
 }
 
