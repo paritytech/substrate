@@ -499,13 +499,19 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-pub struct TestingConfig<T: Trait> {
+pub struct GenesisConfig<T: Trait> {
 	// for the voting onto the  council
+	pub candidacy_bond: T::Balance,
+	pub voter_bond: T::Balance,
+	pub present_slash_per_voter: T::Balance,
+	pub carry_count: u32,
 	pub active_council: Vec<(T::AccountId, T::BlockNumber)>,
 	pub approval_voting_period: T::BlockNumber,
-	pub presentation_period: T::BlockNumber,
+	pub presentation_duration: T::BlockNumber,
 	pub desired_seats: u32,
 	pub term_duration: T::BlockNumber,
+	pub inactive_grace_period: T::BlockNumber,
+
 
 	// for the council's votes.
 	pub cooloff_period: T::BlockNumber,
@@ -513,70 +519,42 @@ pub struct TestingConfig<T: Trait> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> TestingConfig<T> {
-	pub fn new() -> Self {
-		TestingConfig {
-			active_council: vec![],
-			approval_voting_period: T::BlockNumber::sa(4),
-			presentation_period: T::BlockNumber::sa(2),
-			desired_seats: 2,
-			term_duration: T::BlockNumber::sa(5),
-			cooloff_period: T::BlockNumber::sa(2),
-			voting_period: T::BlockNumber::sa(1),
-		}
-	}
-
-	pub fn with_council() -> Self where T::AccountId: From<keyring::Keyring> {
-		use keyring::Keyring::*;
-		let expiry = T::BlockNumber::sa(10);
-		TestingConfig {
-			active_council: vec![
-				(T::AccountId::from(Alice), expiry),
-				(T::AccountId::from(Bob), expiry),
-				(T::AccountId::from(Charlie), expiry)
-			],
-			approval_voting_period: T::BlockNumber::sa(4),
-			presentation_period: T::BlockNumber::sa(2),
-			desired_seats: 2,
-			term_duration: T::BlockNumber::sa(5),
-			cooloff_period: T::BlockNumber::sa(2),
-			voting_period: T::BlockNumber::sa(1),
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for TestingConfig<T> {
+impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		TestingConfig {
+		GenesisConfig {
+			candidacy_bond: T::Balance::sa(9),
+			voter_bond: T::Balance::sa(0),
+			present_slash_per_voter: T::Balance::sa(1),
+			carry_count: 2,
+			inactive_grace_period: T::BlockNumber::sa(1),
 			active_council: vec![],
 			approval_voting_period: T::BlockNumber::sa(1000),
-			presentation_period: T::BlockNumber::sa(1000),
+			presentation_duration: T::BlockNumber::sa(1000),
 			desired_seats: 0,
 			term_duration: T::BlockNumber::sa(5),
 			cooloff_period: T::BlockNumber::sa(1000),
-			voting_period: T::BlockNumber::sa(1000),
+			voting_period: T::BlockNumber::sa(3),
 		}
 	}
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
+impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 {
-	fn test_externalities(self) -> runtime_io::TestExternalities {
+	fn build_externalities(self) -> runtime_io::TestExternalities {
 		use codec::Slicable;
 		use runtime_io::twox_128;
 
 		map![
-			twox_128(<CandidacyBond<T>>::key()).to_vec() => T::Balance::sa(9).encode(),
-			twox_128(<VotingBond<T>>::key()).to_vec() => T::Balance::sa(3).encode(),
-			twox_128(<PresentSlashPerVoter<T>>::key()).to_vec() => T::Balance::sa(1).encode(),
-			twox_128(<CarryCount<T>>::key()).to_vec() => 2u32.encode(),
-			twox_128(<PresentationDuration<T>>::key()).to_vec() => self.presentation_period.encode(),
+			twox_128(<CandidacyBond<T>>::key()).to_vec() => self.candidacy_bond.encode(),
+			twox_128(<VotingBond<T>>::key()).to_vec() => self.voter_bond.encode(),
+			twox_128(<PresentSlashPerVoter<T>>::key()).to_vec() => self.present_slash_per_voter.encode(),
+			twox_128(<CarryCount<T>>::key()).to_vec() => self.carry_count.encode(),
+			twox_128(<PresentationDuration<T>>::key()).to_vec() => self.presentation_duration.encode(),
 			twox_128(<VotingPeriod<T>>::key()).to_vec() => self.approval_voting_period.encode(),
 			twox_128(<TermDuration<T>>::key()).to_vec() => self.term_duration.encode(),
 			twox_128(<DesiredSeats<T>>::key()).to_vec() => self.desired_seats.encode(),
-			twox_128(<InactiveGracePeriod<T>>::key()).to_vec() => T::BlockNumber::sa(1).encode(),
+			twox_128(<InactiveGracePeriod<T>>::key()).to_vec() => self.inactive_grace_period.encode(),
 			twox_128(<ActiveCouncil<T>>::key()).to_vec() => self.active_council.encode(),
 
 			twox_128(<voting::CooloffPeriod<T>>::key()).to_vec() => self.cooloff_period.encode(),
@@ -590,7 +568,7 @@ mod tests {
 	pub use super::*;
 	pub use runtime_io::with_externalities;
 	pub use substrate_primitives::H256;
-	use primitives::{HasPublicAux, Identity, MakeTestExternalities};
+	use primitives::{HasPublicAux, Identity, BuildExternalities};
 	use primitives::testing::{Digest, Header};
 
 	impl_outer_dispatch! {
@@ -639,15 +617,15 @@ mod tests {
 	impl Trait for Test {}
 
 	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities {
-		let mut t = system::TestingConfig::<Test>::default().test_externalities();
-		t.extend(consensus::TestingConfig::<Test>{
+		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		t.extend(consensus::GenesisConfig::<Test>{
 			authorities: vec![],
-		}.test_externalities());
-		t.extend(session::TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
-		}.test_externalities());
-		t.extend(staking::TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,
 			current_era: 0,
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
@@ -655,25 +633,30 @@ mod tests {
 			validator_count: 2,
 			bonding_duration: 0,
 			transaction_fee: 0,
-		}.test_externalities());
-		t.extend(democracy::TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 3,
 			minimum_deposit: 1,
-		}.test_externalities());
-		t.extend(TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(GenesisConfig::<Test>{
+			candidacy_bond: 9,
+			voter_bond: 0,
+			present_slash_per_voter: 1,
+			carry_count: 2,
+			inactive_grace_period: 1,
 			active_council: if with_council { vec![
 				(1, 10),
 				(2, 10),
 				(3, 10)
 			] } else { vec![] },
 			approval_voting_period: 4,
-			presentation_period: 2,
+			presentation_duration: 2,
 			desired_seats: 2,
 			term_duration: 5,
 			cooloff_period: 2,
 			voting_period: 1,
-		}.test_externalities());
+		}.build_externalities());
 		t
 	}
 

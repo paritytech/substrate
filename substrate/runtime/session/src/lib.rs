@@ -149,18 +149,18 @@ impl<T: Trait> Executable for Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-pub struct TestingConfig<T: Trait> {
+pub struct GenesisConfig<T: Trait> {
 	pub session_length: T::BlockNumber,
 	pub validators: Vec<T::AccountId>,
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
+impl<T: Trait> GenesisConfig<T> where T::AccountId: From<keyring::Keyring> {
 	pub fn simple() -> Self where T::AccountId: From<[u8; 32]> {
 		use primitives::As;
 		use keyring::Keyring::*;
 		let three = [3u8; 32];
-		TestingConfig {
+		GenesisConfig {
 			session_length: T::BlockNumber::sa(2),
 			validators: vec![T::AccountId::from(One), T::AccountId::from(Two), T::AccountId::from(three)],
 		}
@@ -169,7 +169,7 @@ impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
 	pub fn extended() -> Self {
 		use primitives::As;
 		use keyring::Keyring::*;
-		TestingConfig {
+		GenesisConfig {
 			session_length: T::BlockNumber::sa(1),
 			validators: vec![T::AccountId::from(Alice), T::AccountId::from(Bob), T::AccountId::from(Charlie)],
 		}
@@ -177,10 +177,10 @@ impl<T: Trait> TestingConfig<T> where T::AccountId: From<keyring::Keyring> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for TestingConfig<T> {
+impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		use primitives::As;
-		TestingConfig {
+		GenesisConfig {
 			session_length: T::BlockNumber::sa(1000),
 			validators: vec![],
 		}
@@ -188,9 +188,9 @@ impl<T: Trait> Default for TestingConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
+impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 {
-	fn test_externalities(self) -> runtime_io::TestExternalities {
+	fn build_externalities(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
 		use codec::Slicable;
 		use primitives::As;
@@ -207,7 +207,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::{HasPublicAux, Identity, MakeTestExternalities};
+	use primitives::{HasPublicAux, Identity, BuildExternalities};
 	use primitives::testing::{Digest, Header};
 
 	pub struct Test;
@@ -236,14 +236,14 @@ mod tests {
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::TestingConfig::<Test>::default().test_externalities();
-		t.extend(consensus::TestingConfig::<Test>{
+		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		t.extend(consensus::GenesisConfig::<Test>{
 			authorities: vec![1, 2, 3],
-		}.test_externalities());
-		t.extend(TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
-		}.test_externalities());
+		}.build_externalities());
 		t
 	}
 

@@ -50,7 +50,7 @@ mod tests {
 	use runtime_primitives::Headery;
 	use {staking, system};
 	use demo_runtime::runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking};
-	use demo_runtime::runtime::{MakeTestExternalities, TestingConfig, SessionConfig, StakingConfig};
+	use demo_runtime::runtime::{BuildExternalities, GenesisConfig, SessionConfig, StakingConfig};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -148,7 +148,7 @@ mod tests {
 	fn new_test_ext() -> TestExternalities {
 		use keyring::Keyring::*;
 		let three = [3u8; 32];
-		TestingConfig {
+		GenesisConfig {
 			consensus: Some(Default::default()),
 			system: Some(Default::default()),
 			session: Some(SessionConfig {
@@ -166,7 +166,7 @@ mod tests {
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
-		}.test_externalities()
+		}.build_externalities()
 	}
 
 	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<Extrinsic>) -> (Vec<u8>, Hash) {
@@ -197,7 +197,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("b5a1cfe8075af9f2021a6fbabf13d033e579fb90341a4524743313e3b114865e").into(),
+			hex!("4d58afeca0dec7604a0bcfb29573e6ad202efe65c8535b013c0c79b5a8c9114d").into(),
 			vec![Extrinsic {
 				signed: Alice.into(),
 				index: 0,
@@ -210,7 +210,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("b646ea6f29832a39dad9feca778a1b612dc25c79ca34dc026176fcfd8943de57").into(),
+			hex!("218ce7bdf2350713aa52dbf0a12d1e8b0a3a9f1623e7c95aa4800886e96397d1").into(),
 			vec![
 				Extrinsic {
 					signed: Bob.into(),

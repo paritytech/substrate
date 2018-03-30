@@ -579,7 +579,7 @@ impl ContractAddressFor<u64> for DummyContractAddressFor {
 }
 
 #[cfg(any(feature = "std", test))]
-pub struct TestingConfig<T: Trait> {
+pub struct GenesisConfig<T: Trait> {
 	pub sessions_per_era: T::BlockNumber,
 	pub current_era: T::BlockNumber,
 	pub balances: Vec<(T::AccountId, T::Balance)>,
@@ -590,10 +590,10 @@ pub struct TestingConfig<T: Trait> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> TestingConfig<T> where T::AccountId: From<u64> {
+impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 	pub fn simple() -> Self {
 		use primitives::As;
-		TestingConfig {
+		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(2),
 			current_era: T::BlockNumber::sa(0),
 			balances: vec![(T::AccountId::from(1), T::Balance::sa(111))],
@@ -606,7 +606,7 @@ impl<T: Trait> TestingConfig<T> where T::AccountId: From<u64> {
 
 	pub fn extended() -> Self {
 		use primitives::As;
-		TestingConfig {
+		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(3),
 			current_era: T::BlockNumber::sa(1),
 			balances: vec![
@@ -627,10 +627,10 @@ impl<T: Trait> TestingConfig<T> where T::AccountId: From<u64> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for TestingConfig<T> {
+impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		use primitives::As;
-		TestingConfig {
+		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(1000),
 			current_era: T::BlockNumber::sa(0),
 			balances: vec![],
@@ -643,8 +643,8 @@ impl<T: Trait> Default for TestingConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T> {
-	fn test_externalities(self) -> runtime_io::TestExternalities {
+impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
+	fn build_externalities(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
 		use codec::Slicable;
 
@@ -672,7 +672,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::{HasPublicAux, Identity, MakeTestExternalities};
+	use primitives::{HasPublicAux, Identity, BuildExternalities};
 	use primitives::testing::{Digest, Header};
 
 	pub struct Test;
@@ -701,15 +701,15 @@ mod tests {
 	}
 
 	fn new_test_ext(session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
-		let mut t = system::TestingConfig::<Test>::default().test_externalities();
-		t.extend(consensus::TestingConfig::<Test>{
+		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		t.extend(consensus::GenesisConfig::<Test>{
 			authorities: vec![],
-		}.test_externalities());
-		t.extend(session::TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(session::GenesisConfig::<Test>{
 			session_length,
 			validators: vec![10, 20],
-		}.test_externalities());
-		t.extend(TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(GenesisConfig::<Test>{
 			sessions_per_era,
 			current_era,
 			balances: if monied { vec![(1, 10), (2, 20), (3, 30), (4, 40)] } else { vec![] },
@@ -717,7 +717,7 @@ mod tests {
 			validator_count: 2,
 			bonding_duration: 3,
 			transaction_fee: 0,
-		}.test_externalities());
+		}.build_externalities());
 		t
 	}
 

@@ -124,15 +124,15 @@ pub type Executive = executive::Executive<
 	(((((), Council), Democracy), Staking), Session),
 >;
 
-#[cfg(any(feature = "std", test))] pub type ConsensusConfig = consensus::TestingConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type SystemConfig = system::TestingConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type SessionConfig = session::TestingConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type StakingConfig = staking::TestingConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type DemocracyConfig = democracy::TestingConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type CouncilConfig = council::TestingConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type ConsensusConfig = consensus::GenesisConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type SystemConfig = system::GenesisConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type SessionConfig = session::GenesisConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type StakingConfig = staking::GenesisConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type DemocracyConfig = democracy::GenesisConfig<Concrete>;
+#[cfg(any(feature = "std", test))] pub type CouncilConfig = council::GenesisConfig<Concrete>;
 
 #[cfg(any(feature = "std", test))]
-pub struct TestingConfig {
+pub struct GenesisConfig {
 	pub consensus: Option<ConsensusConfig>,
 	pub system: Option<SystemConfig>,
 	pub session: Option<SessionConfig>,
@@ -142,29 +142,29 @@ pub struct TestingConfig {
 }
 
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::MakeTestExternalities;
+pub use runtime_primitives::BuildExternalities;
 
 #[cfg(any(feature = "std", test))]
-impl MakeTestExternalities for TestingConfig {
-	fn test_externalities(self) -> runtime_io::TestExternalities {
+impl BuildExternalities for GenesisConfig {
+	fn build_externalities(self) -> runtime_io::TestExternalities {
 		let mut s = runtime_io::TestExternalities::default();
 		if let Some(extra) = self.consensus {
-			s.extend(extra.test_externalities());
+			s.extend(extra.build_externalities());
 		}
 		if let Some(extra) = self.system {
-			s.extend(extra.test_externalities());
+			s.extend(extra.build_externalities());
 		}
 		if let Some(extra) = self.session {
-			s.extend(extra.test_externalities());
+			s.extend(extra.build_externalities());
 		}
 		if let Some(extra) = self.staking {
-			s.extend(extra.test_externalities());
+			s.extend(extra.build_externalities());
 		}
 		if let Some(extra) = self.democracy {
-			s.extend(extra.test_externalities());
+			s.extend(extra.build_externalities());
 		}
 		if let Some(extra) = self.council {
-			s.extend(extra.test_externalities());
+			s.extend(extra.build_externalities());
 		}
 		s
 	}

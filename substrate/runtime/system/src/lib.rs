@@ -104,6 +104,11 @@ impl<T: Trait> Module<T> {
 		<BlockHash<T>>::insert(header.number(), &T::Hashing::hash_of(header));
 	}
 
+	/// Initializes the state following the determination of the genesis block.
+	pub fn initialise_genesis_state<H: Headery<Number = T::BlockNumber>>(header: &H) {
+		Self::record_block_hash(header);
+	}
+
 	/// Calculate the current block's random seed.
 	fn calculate_random() -> T::Hash {
 		(0..81)
@@ -140,19 +145,19 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-pub struct TestingConfig<T: Trait>(PhantomData<T>);
+pub struct GenesisConfig<T: Trait>(PhantomData<T>);
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for TestingConfig<T> {
+impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		TestingConfig(PhantomData)
+		GenesisConfig(PhantomData)
 	}
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
+impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 {
-	fn test_externalities(self) -> runtime_io::TestExternalities {
+	fn build_externalities(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
 		use codec::Slicable;
 

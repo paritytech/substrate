@@ -44,8 +44,5 @@ extern crate substrate_codec as codec;
 #[cfg(feature = "std")] #[allow(unused_imports)] #[macro_use] extern crate substrate_primitives;
 extern crate demo_primitives;
 
-//#[cfg(test)] #[macro_use] extern crate hex_literal;
-
 pub mod runtime;
 pub mod api;
-#[cfg(feature = "std")] pub mod genesismap;

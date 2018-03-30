@@ -160,7 +160,7 @@ mod tests {
 	use staking::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::{HasPublicAux, Identity, Headery, MakeTestExternalities};
+	use primitives::{HasPublicAux, Identity, Headery, BuildExternalities};
 	use primitives::testing::{Digest, Header, Block};
 
 	pub struct Test;
@@ -193,8 +193,8 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
-		let mut t = system::TestingConfig::<Test>::default().test_externalities();
-		t.extend(staking::TestingConfig::<Test> {
+		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		t.extend(staking::GenesisConfig::<Test> {
 			sessions_per_era: 0,
 			current_era: 0,
 			balances: vec![(1, 111)],
@@ -202,7 +202,7 @@ mod tests {
 			validator_count: 0,
 			bonding_duration: 0,
 			transaction_fee: 10,
-		}.test_externalities());
+		}.build_externalities());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2, 69)));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
@@ -213,10 +213,10 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::TestingConfig::<Test>::default().test_externalities();
-		t.extend(consensus::TestingConfig::<Test>::default().test_externalities());
-		t.extend(session::TestingConfig::<Test>::default().test_externalities());
-		t.extend(staking::TestingConfig::<Test>::default().test_externalities());
+		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		t.extend(consensus::GenesisConfig::<Test>::default().build_externalities());
+		t.extend(session::GenesisConfig::<Test>::default().build_externalities());
+		t.extend(staking::GenesisConfig::<Test>::default().build_externalities());
 		t
 	}
 

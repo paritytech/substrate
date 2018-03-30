@@ -78,23 +78,23 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-pub struct TestingConfig<T: Trait> {
+pub struct GenesisConfig<T: Trait> {
 	pub authorities: Vec<T::SessionKey>,
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for TestingConfig<T> {
+impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		TestingConfig {
+		GenesisConfig {
 			authorities: vec![],
 		}
 	}
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
+impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 {
-	fn test_externalities(self) -> runtime_io::TestExternalities {
+	fn build_externalities(self) -> runtime_io::TestExternalities {
 		use codec::{Slicable, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
 		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|

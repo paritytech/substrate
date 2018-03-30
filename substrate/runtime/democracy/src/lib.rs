@@ -270,16 +270,16 @@ impl<T: Trait> Executable for Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-pub struct TestingConfig<T: Trait> {
+pub struct GenesisConfig<T: Trait> {
 	pub launch_period: T::BlockNumber,
 	pub voting_period: T::BlockNumber,
 	pub minimum_deposit: T::Balance,
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> TestingConfig<T> {
+impl<T: Trait> GenesisConfig<T> {
 	pub fn new() -> Self {
-		TestingConfig {
+		GenesisConfig {
 			launch_period: T::BlockNumber::sa(1),
 			voting_period: T::BlockNumber::sa(1),
 			minimum_deposit: T::Balance::sa(1),
@@ -287,7 +287,7 @@ impl<T: Trait> TestingConfig<T> {
 	}
 
 	pub fn extended() -> Self {
-		TestingConfig {
+		GenesisConfig {
 			launch_period: T::BlockNumber::sa(1),
 			voting_period: T::BlockNumber::sa(3),
 			minimum_deposit: T::Balance::sa(1),
@@ -296,9 +296,9 @@ impl<T: Trait> TestingConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for TestingConfig<T> {
+impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		TestingConfig {
+		GenesisConfig {
 			launch_period: T::BlockNumber::sa(1000),
 			voting_period: T::BlockNumber::sa(1000),
 			minimum_deposit: T::Balance::sa(0),
@@ -307,9 +307,9 @@ impl<T: Trait> Default for TestingConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::MakeTestExternalities for TestingConfig<T>
+impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 {
-	fn test_externalities(self) -> runtime_io::TestExternalities {
+	fn build_externalities(self) -> runtime_io::TestExternalities {
 		use codec::Slicable;
 		use runtime_io::twox_128;
 
@@ -326,7 +326,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::{HasPublicAux, Identity, MakeTestExternalities};
+	use primitives::{HasPublicAux, Identity, BuildExternalities};
 	use primitives::testing::{Digest, Header};
 
 	impl_outer_dispatch! {
@@ -374,15 +374,15 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::TestingConfig::<Test>::default().test_externalities();
-		t.extend(consensus::TestingConfig::<Test>{
+		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		t.extend(consensus::GenesisConfig::<Test>{
 			authorities: vec![],
-		}.test_externalities());
-		t.extend(session::TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
-		}.test_externalities());
-		t.extend(staking::TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,
 			current_era: 0,
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
@@ -390,12 +390,12 @@ mod tests {
 			validator_count: 2,
 			bonding_duration: 3,
 			transaction_fee: 0,
-		}.test_externalities());
-		t.extend(TestingConfig::<Test>{
+		}.build_externalities());
+		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 1,
 			minimum_deposit: 1,
-		}.test_externalities());
+		}.build_externalities());
 		t
 	}
 

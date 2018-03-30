@@ -41,8 +41,8 @@ pub mod testing;
 pub mod generic;
 
 #[cfg(feature = "std")]
-pub trait MakeTestExternalities {
-	fn test_externalities(self) -> runtime_io::TestExternalities;
+pub trait BuildExternalities {
+	fn build_externalities(self) -> runtime_io::TestExternalities;
 }
 
 pub trait MakePayment<AccountId> {
@@ -148,6 +148,13 @@ pub trait Digesty {
 	fn push(&mut self, item: Self::Item);
 }
 
+impl Digesty for substrate_primitives::Digest {
+	type Item = substrate_primitives::block::Log;
+	fn push(&mut self, item: Self::Item) {
+		self.logs.push(item);
+	}
+}
+
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
@@ -171,6 +178,32 @@ pub trait Headery: Sized + Slicable {
 	) -> Self;
 }
 
+impl Headery for substrate_primitives::Header {
+	type Number = substrate_primitives::block::Number;
+	type Hash = substrate_primitives::block::HeaderHash;
+	type Digest = substrate_primitives::block::Digest;
+	fn number(&self) -> &Self::Number { &self.number }
+	fn extrinsics_root(&self) -> &Self::Hash { &self.transaction_root }
+	fn state_root(&self) -> &Self::Hash { &self.state_root }
+	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
+	fn digest(&self) -> &Self::Digest { &self.digest }
+	fn new(
+		number: Self::Number,
+		extrinsics_root: Self::Hash,
+		state_root: Self::Hash,
+		parent_hash: Self::Hash,
+		digest: Self::Digest
+	) -> Self {
+		substrate_primitives::Header {
+			number: number,
+			transaction_root: extrinsics_root,
+			state_root: state_root,
+			parent_hash: parent_hash,
+			digest: digest,
+		}
+	}
+}
+
 /// Something which fulfills the abstract idea of a Substrate block. It has types for an
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
@@ -181,6 +214,20 @@ pub trait Blocky {
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
+}
+
+impl Blocky for substrate_primitives::Block {
+	type Extrinsic = substrate_primitives::block::Transaction;
+	type Header = substrate_primitives::Header;
+	fn header(&self) -> &Self::Header {
+		&self.header
+	}
+	fn extrinsics(&self) -> &[Self::Extrinsic] {
+		&self.transactions[..]
+	}
+	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
+		(self.header, self.transactions)
+	}
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
