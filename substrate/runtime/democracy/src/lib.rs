@@ -400,7 +400,6 @@ mod tests {
 	}
 
 	type System = system::Module<Test>;
-	type Session = session::Module<Test>;
 	type Staking = staking::Module<Test>;
 	type Democracy = Module<Test>;
 

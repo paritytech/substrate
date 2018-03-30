@@ -20,7 +20,7 @@ use rstd::prelude::*;
 use rstd::ops;
 use codec::{Input, Slicable};
 use demo_primitives::{AccountId, TxOrder, Signature};
-use runtime::{Call, Staking};
+use runtime::Call;
 use runtime_primitives::{Checkable, Applyable};
 use runtime_support::AuxDispatchable;
 
@@ -173,7 +173,6 @@ impl Applyable for CheckedExtrinsic {
 
 	fn apply(self) {
 		let tx = self.0.extrinsic;
-		Staking::make_payment(&tx.signed);
 		tx.function.dispatch(&tx.signed);
 	}
 }
