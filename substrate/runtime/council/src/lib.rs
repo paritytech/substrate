@@ -641,7 +641,7 @@ mod tests {
 		}.build_externalities());
 		t.extend(GenesisConfig::<Test>{
 			candidacy_bond: 9,
-			voter_bond: 0,
+			voter_bond: 3,
 			present_slash_per_voter: 1,
 			carry_count: 2,
 			inactive_grace_period: 1,

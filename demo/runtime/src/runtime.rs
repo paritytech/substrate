@@ -16,11 +16,11 @@
 
 //! Dispatch system. Just dispatches calls.
 
-#[cfg(any(feature = "std", test))] use runtime_io;
 use runtime_io::BlakeTwo256;
 use demo_primitives;
 use {consensus, council, democracy, executive, session, staking, system, timestamp};
 use runtime_primitives::{self as primitives, Identity, HasPublicAux};
+pub use runtime_primitives::BuildExternalities;
 
 // TODO: refactor so that each module gets to be able to attempt to extract a PrivCall into
 // Some(its own PrivCall) or None.
@@ -124,48 +124,13 @@ pub type Executive = executive::Executive<
 	(((((), Council), Democracy), Staking), Session),
 >;
 
-#[cfg(any(feature = "std", test))] pub type ConsensusConfig = consensus::GenesisConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type SystemConfig = system::GenesisConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type SessionConfig = session::GenesisConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type StakingConfig = staking::GenesisConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type DemocracyConfig = democracy::GenesisConfig<Concrete>;
-#[cfg(any(feature = "std", test))] pub type CouncilConfig = council::GenesisConfig<Concrete>;
-
-#[cfg(any(feature = "std", test))]
-pub struct GenesisConfig {
-	pub consensus: Option<ConsensusConfig>,
-	pub system: Option<SystemConfig>,
-	pub session: Option<SessionConfig>,
-	pub staking: Option<StakingConfig>,
-	pub democracy: Option<DemocracyConfig>,
-	pub council: Option<CouncilConfig>,
-}
-
-#[cfg(any(feature = "std", test))]
-pub use runtime_primitives::BuildExternalities;
-
-#[cfg(any(feature = "std", test))]
-impl BuildExternalities for GenesisConfig {
-	fn build_externalities(self) -> runtime_io::TestExternalities {
-		let mut s = runtime_io::TestExternalities::default();
-		if let Some(extra) = self.consensus {
-			s.extend(extra.build_externalities());
-		}
-		if let Some(extra) = self.system {
-			s.extend(extra.build_externalities());
-		}
-		if let Some(extra) = self.session {
-			s.extend(extra.build_externalities());
-		}
-		if let Some(extra) = self.staking {
-			s.extend(extra.build_externalities());
-		}
-		if let Some(extra) = self.democracy {
-			s.extend(extra.build_externalities());
-		}
-		if let Some(extra) = self.council {
-			s.extend(extra.build_externalities());
-		}
-		s
+impl_outer_config! {
+	pub struct GenesisConfig for Concrete {
+		ConsensusConfig => consensus,
+		SystemConfig => system,
+		SessionConfig => session,
+		StakingConfig => staking,
+		DemocracyConfig => democracy,
+		CouncilConfig => council,
 	}
 }

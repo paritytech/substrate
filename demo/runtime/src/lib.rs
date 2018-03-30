@@ -22,7 +22,7 @@
 #[macro_use] extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 
-extern crate substrate_runtime_primitives as runtime_primitives;
+#[cfg_attr(feature = "std", macro_use)]extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
 extern crate substrate_runtime_democracy as democracy;

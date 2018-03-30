@@ -30,6 +30,7 @@ extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 
 use rstd::prelude::*;
+#[cfg(feature = "std")] pub use std::collections::HashMap;
 use codec::Slicable;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
@@ -43,6 +44,41 @@ pub mod generic;
 #[cfg(feature = "std")]
 pub trait BuildExternalities {
 	fn build_externalities(self) -> runtime_io::TestExternalities;
+}
+
+#[macro_export]
+macro_rules! __impl_outer_config_types {
+	($concrete:ident $config:ident $snake:ident $($rest:ident)*) => {
+		#[cfg(any(feature = "std", test))]
+		pub type $config = $snake::GenesisConfig<$concrete>;
+		__impl_outer_config_types! {$concrete $($rest)*}
+	};
+	($concrete:ident) => ()
+}
+
+#[macro_export]
+macro_rules! impl_outer_config {
+	( pub struct $main:ident for $concrete:ident { $( $config:ident => $snake:ident, )* } ) => {
+		__impl_outer_config_types! { $concrete $( $config $snake )* }
+		#[cfg(any(feature = "std", test))]
+		pub struct $main {
+			$(
+				pub $snake: Option<$config>,
+			)*
+		}
+		#[cfg(any(feature = "std", test))]
+		impl $crate::BuildExternalities for $main {
+			fn build_externalities(self) -> $crate::HashMap::<Vec<u8>, Vec<u8>> {
+				let mut s = $crate::HashMap::<Vec<u8>, Vec<u8>>::new();
+				$(
+					if let Some(extra) = self.$snake {
+						s.extend(extra.build_externalities());
+					}
+				)*
+				s
+			}
+		}
+	}
 }
 
 pub trait MakePayment<AccountId> {
