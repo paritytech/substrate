@@ -52,10 +52,10 @@ pub type Balance = u64;
 pub type SessionKey = primitives::AuthorityId;
 
 /// Index of a transaction in the relay chain.
-pub type TxOrder = u64;
+pub type Index = u64;
 
 /// A hash of some data used by the relay chain.
 pub type Hash = primitives::H256;
 
-/// Alias to 520-bit hash when used in the context of a signature on the relay chain.
-pub type Signature = primitives::hash::H512;
+/// Alias to 512-bit hash when used in the context of a signature on the relay chain.
+pub type Signature = runtime_primitives::generic::Ed25519Signature;

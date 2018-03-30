@@ -39,30 +39,21 @@ use primitives::{Zero, One, Headery, Blocky, Checkable, Applyable, CheckEqual, E
 use codec::Slicable;
 
 pub struct Executive<
-	Unchecked,
-	Checked,
 	System,
 	Block,
 	Payment,
 	Finalisation,
->(PhantomData<(Unchecked, Checked, System, Block, Payment, Finalisation)>);
+>(PhantomData<(System, Block, Payment, Finalisation)>);
 
 impl<
-	Unchecked: Checkable<
-		Checked = Checked
-	> + PartialEq + Eq + Clone + Slicable,
-	Checked: Applyable<
-		Index = System::Index,
-		AccountId = System::AccountId
-	>,
 	System: system::Trait,
-	Block: Blocky<
-		Extrinsic = Unchecked,
-		Header = System::Header
-	>,
+	Block: Blocky<Header = System::Header>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
-> Executive<Unchecked, Checked, System, Block, Payment, Finalisation> {
+> Executive<System, Block, Payment, Finalisation> where
+	Block::Extrinsic: Checkable + Slicable,
+	<Block::Extrinsic as Checkable>::Checked: Applyable<Index = System::Index, AccountId = System::AccountId>
+{
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
 		<system::Module<System>>::initialise(header.number(), header.parent_hash(), header.extrinsics_root());
@@ -120,7 +111,7 @@ impl<
 
 	/// Apply outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
-	pub fn apply_extrinsic(utx: Unchecked) {
+	pub fn apply_extrinsic(utx: Block::Extrinsic) {
 		// Verify the signature is good.
 		let tx = match utx.check() {
 			Ok(tx) => tx,
@@ -128,9 +119,9 @@ impl<
 		};
 
 		{
-			// check nonce
-			let expected_nonce = <system::Module<System>>::account_index(tx.sender());
-			assert!(tx.index() == &expected_nonce, "All transactions should have the correct nonce");
+			// check index
+			let expected_index = <system::Module<System>>::account_index(tx.sender());
+			assert!(tx.index() == &expected_index, "All transactions should have the correct nonce");
 
 			// increment nonce in storage
 			<system::Module<System>>::inc_account_index(tx.sender());
@@ -198,7 +189,7 @@ mod tests {
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Test>>;
-	type Executive = super::Executive<TestXt, TestXt, Test, Block<TestXt>, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
+	type Executive = super::Executive<Test, Block<TestXt>, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {

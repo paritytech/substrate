@@ -18,9 +18,9 @@
 
 #[cfg(any(feature = "std", test))] use runtime_io;
 use runtime_io::BlakeTwo256;
-use {block, demo_primitives, extrinsic};
+use demo_primitives;
 use {consensus, council, democracy, executive, session, staking, system, timestamp};
-use runtime_primitives::{Identity, HasPublicAux};
+use runtime_primitives::{self as primitives, Identity, HasPublicAux};
 
 // TODO: refactor so that each module gets to be able to attempt to extract a PrivCall into
 // Some(its own PrivCall) or None.
@@ -51,13 +51,13 @@ impl consensus::Trait for Concrete {
 pub type Consensus = consensus::Module<Concrete>;
 
 impl system::Trait for Concrete {
-	type Index = demo_primitives::TxOrder;
+	type Index = demo_primitives::Index;
 	type BlockNumber = demo_primitives::BlockNumber;
 	type Hash = demo_primitives::Hash;
 	type Hashing = BlakeTwo256;
-	type Digest = demo_primitives::header::Digest;
+	type Digest = primitives::generic::Digest<Vec<u8>>;
 	type AccountId = demo_primitives::AccountId;
-	type Header = demo_primitives::header::Header;
+	type Header = primitives::generic::Header<demo_primitives::BlockNumber, demo_primitives::Hash, Vec<u8>>;
 }
 pub type System = system::Module<Concrete>;
 
@@ -103,10 +103,11 @@ impl_outer_dispatch! {
 }
 
 pub type Executive = executive::Executive<
-	extrinsic::UncheckedExtrinsic,
-	extrinsic::CheckedExtrinsic,
 	Concrete,
-	block::Block,
+	primitives::generic::Block<
+		demo_primitives::BlockNumber, demo_primitives::Hash, Vec<u8>,
+		demo_primitives::AccountId, demo_primitives::Index, Call, demo_primitives::Signature
+	>,
 	Staking,
 	(((((), Council), Democracy), Staking), Session),
 >;

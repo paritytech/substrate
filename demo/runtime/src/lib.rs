@@ -47,7 +47,5 @@ extern crate demo_primitives;
 //#[cfg(test)] #[macro_use] extern crate hex_literal;
 
 pub mod runtime;
-pub mod block;
-pub mod extrinsic;
 pub mod api;
 #[cfg(feature = "std")] pub mod genesismap;

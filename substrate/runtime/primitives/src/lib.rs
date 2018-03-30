@@ -38,6 +38,8 @@ use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAss
 #[cfg(feature = "std")]
 pub mod testing;
 
+pub mod generic;
+
 #[cfg(feature = "std")]
 pub trait MakeTestExternalities {
 	fn test_externalities(self) -> runtime_io::TestExternalities;
