@@ -60,6 +60,11 @@ error_chain! {
 			description("Transaction had bad signature."),
 			display("Transaction had bad signature."),
 		}
+		/// Attempted to queue a transaction that is already in the pool.
+		AlreadyImported(hash: TransactionHash) {
+			description("Transaction is already in the pool."),
+			display("Transaction {:?} is already in the pool.", hash),
+		}
 		/// Import error.
 		Import(err: Box<::std::error::Error + Send>) {
 			description("Error importing transaction"),
@@ -257,8 +262,15 @@ impl TransactionPool {
 		let verified = VerifiedTransaction::create(tx, insertion_index)?;
 
 		// TODO: just use a foreign link when the error type is made public.
+		let hash = verified.hash.clone();
 		self.inner.import(verified)
-			.map_err(|e| ErrorKind::Import(Box::new(e)))
+			.map_err(|e|
+				match e {
+					// TODO: make error types public in transaction_pool. For now just treat all errors as AlradyImported
+					_ => ErrorKind::AlreadyImported(hash),
+					// transaction_pool::error::AlreadyImported(h) => ErrorKind::AlreadyImported(h),
+					// e => ErrorKind::Import(Box::new(e)),
+				})
 			.map_err(Into::into)
 	}
 

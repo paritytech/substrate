@@ -24,6 +24,7 @@ members = [
 	"polkadot/statement-table",
 	"polkadot/transaction-pool",
 	"polkadot/validator",
+	"polkadot/service",
 	"substrate/bft",
 	"substrate/client",
 	"substrate/codec",

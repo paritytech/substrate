@@ -28,8 +28,12 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_client as client;
 extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_bft;
 extern crate serde;
 extern crate serde_json;
+extern crate futures;
+extern crate multiqueue;
+extern crate ed25519;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
@@ -47,17 +51,21 @@ mod sync;
 mod protocol;
 mod io;
 mod message;
-mod error;
 mod config;
 mod chain;
 mod blocks;
+mod consensus;
+pub mod error;
 
 #[cfg(test)] mod test;
 
-pub use service::Service;
+pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream, TransactionPool, Params, ManageNetwork};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, NetworkConfiguration};
+pub use message::{Statement, BftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
+pub use error::Error;
+pub use config::{Role, ProtocolConfig};
 
 // TODO: move it elsewhere
 fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {

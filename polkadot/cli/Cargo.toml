@@ -23,4 +23,4 @@ substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-executor = { path = "../executor" }
 polkadot-runtime = { path = "../runtime" }
-polkadot-keystore = { path = "../keystore" }
+polkadot-service = { path = "../service" }

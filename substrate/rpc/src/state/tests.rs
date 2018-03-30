@@ -30,7 +30,7 @@ fn should_return_storage() {
 		digest: Default::default(),
 	};
 
-	let client = client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap();
+	let client = Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap());
 	let genesis_hash = test_genesis_block.blake2_256().into();
 
 	assert_matches!(
@@ -51,7 +51,7 @@ fn should_call_contract() {
 		digest: Default::default(),
 	};
 
-	let client = client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap();
+	let client = Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap());
 	let genesis_hash = test_genesis_block.blake2_256().into();
 
 	assert_matches!(

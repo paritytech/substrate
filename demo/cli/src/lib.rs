@@ -42,6 +42,7 @@ extern crate log;
 
 pub mod error;
 
+use std::sync::Arc;
 use codec::Slicable;
 use runtime_io::with_externalities;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
@@ -121,7 +122,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		);
 		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 	};
-	let client = client::new_in_mem(executor, prepare_genesis)?;
+	let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
 
 	let address = "127.0.0.1:9933".parse().unwrap();
 	let handler = rpc::rpc_handler(client);

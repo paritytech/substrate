@@ -16,6 +16,8 @@
 
 //! Substrate Client
 
+use multiqueue;
+use parking_lot::Mutex;
 use primitives::{self, block, AuthorityId};
 use primitives::block::Id as BlockId;
 use primitives::storage::{StorageKey, StorageData};
@@ -27,11 +29,24 @@ use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend};
 use {error, in_mem, block_builder, runtime_io, bft};
 
+/// Type that implements `futures::Stream` of block import events.
+pub type BlockchainEventStream = multiqueue::BroadcastFutReceiver<BlockImportNotification>;
+
+//TODO: The queue is preallocated in multiqueue. Make it unbounded
+const NOTIFICATION_QUEUE_SIZE: u64 = 1 << 16;
+
 /// Polkadot Client
-#[derive(Debug)]
 pub struct Client<B, E> where B: backend::Backend {
 	backend: B,
 	executor: E,
+	import_notification_sink: Mutex<multiqueue::BroadcastFutSender<BlockImportNotification>>,
+	import_notification_stream: Mutex<multiqueue::BroadcastFutReceiver<BlockImportNotification>>,
+}
+
+/// A source of blockchain evenets.
+pub trait BlockchainEvents {
+	/// Get block import event stream.
+	fn import_notification_stream(&self) -> BlockchainEventStream;
 }
 
 /// Client info
@@ -82,6 +97,34 @@ pub enum BlockStatus {
 	Unknown,
 }
 
+/// Block data origin.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum BlockOrigin {
+	/// Genesis block built into the client.
+	Genesis,
+	/// Block is part of the initial sync with the network.
+	NetworkInitialSync,
+	/// Block was broadcasted on the network.
+	NetworkBroadcast,
+	/// Block that was received from the network and validated in the consensus process.
+	ConsensusBroadcast,
+	/// Block that was collated by this node.
+	Own,
+	/// Block was imported from a file.
+	File,
+}
+
+/// Summary of an imported block
+#[derive(Clone, Debug)]
+pub struct BlockImportNotification {
+	/// Imported block origin.
+	pub origin: BlockOrigin,
+	/// Imported block header.
+	pub header: block::Header,
+	/// Is this the new best block.
+	pub is_new_best: bool,
+}
+
 /// A header paired with a justification which has already been checked.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct JustifiedHeader {
@@ -122,6 +165,7 @@ impl<B, E> Client<B, E> where
 		where
 			F: FnOnce() -> (block::Header, Vec<(Vec<u8>, Vec<u8>)>)
 	{
+		let (sink, stream) = multiqueue::broadcast_fut_queue(NOTIFICATION_QUEUE_SIZE);
 		if backend.blockchain().header(BlockId::Number(0))?.is_none() {
 			trace!("Empty database, writing genesis block");
 			let (genesis_header, genesis_store) = build_genesis();
@@ -133,6 +177,8 @@ impl<B, E> Client<B, E> where
 		Ok(Client {
 			backend,
 			executor,
+			import_notification_sink: Mutex::new(sink),
+			import_notification_stream: Mutex::new(stream),
 		})
 	}
 
@@ -162,6 +208,13 @@ impl<B, E> Client<B, E> where
 	/// Clone a new instance of Executor.
 	pub fn clone_executor(&self) -> E where E: Clone {
 		self.executor.clone()
+	}
+
+	/// Close notification streams.
+	pub fn stop_notifications(&self) {
+		let (sink, stream) = multiqueue::broadcast_fut_queue(NOTIFICATION_QUEUE_SIZE);
+		*self.import_notification_sink.lock() = sink;
+		*self.import_notification_stream.lock() = stream;
 	}
 
 	/// Get the current set of authorities from storage.
@@ -236,6 +289,7 @@ impl<B, E> Client<B, E> where
 	/// Queue a block for import.
 	pub fn import_block(
 		&self,
+		origin: BlockOrigin,
 		header: JustifiedHeader,
 		body: Option<block::Body>,
 	) -> error::Result<ImportResult> {
@@ -261,9 +315,21 @@ impl<B, E> Client<B, E> where
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
 		trace!("Imported {}, (#{}), best={}", block::HeaderHash::from(header.blake2_256()), header.number, is_new_best);
-		transaction.set_block_data(header, body, Some(justification.uncheck().into()), is_new_best)?;
+		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
 		transaction.set_storage(overlay.drain())?;
 		self.backend.commit_operation(transaction)?;
+
+		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
+			let notification = BlockImportNotification {
+				origin: origin,
+				header: header,
+				is_new_best: is_new_best,
+			};
+			if let Err(e) = self.import_notification_sink.lock().try_send(notification) {
+				warn!("Error queueing block import notification: {:?}", e);
+			}
+		}
+
 		Ok(ImportResult::Queued)
 	}
 
@@ -335,7 +401,7 @@ impl<B, E> bft::BlockImport for Client<B, E>
 			justification,
 		};
 
-		let _ = self.import_block(justified_header, Some(block.transactions));
+		let _ = self.import_block(BlockOrigin::Genesis, justified_header, Some(block.transactions));
 	}
 }
 
@@ -347,6 +413,18 @@ impl<B, E> bft::Authorities for Client<B, E>
 {
 	fn authorities(&self, at: &BlockId) -> Result<Vec<AuthorityId>, bft::Error> {
 		self.authorities_at(at).map_err(|_| bft::ErrorKind::StateUnavailable(*at).into())
+	}
+}
+
+impl<B, E> BlockchainEvents for Client<B, E>
+	where
+		B: backend::Backend,
+		E: state_machine::CodeExecutor,
+		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	/// Get block import event stream.
+	fn import_notification_stream(&self) -> BlockchainEventStream {
+		self.import_notification_stream.lock().add_stream()
 	}
 }
 
@@ -455,7 +533,7 @@ mod tests {
 
 		let justification = justify(&block.header);
 		let justified = client.check_justification(block.header, justification).unwrap();
-		client.import_block(justified, Some(block.transactions)).unwrap();
+		client.import_block(BlockOrigin::Own, justified, Some(block.transactions)).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
@@ -499,7 +577,7 @@ mod tests {
 
 		let justification = justify(&block.header);
 		let justified = client.check_justification(block.header, justification).unwrap();
-		client.import_block(justified, Some(block.transactions)).unwrap();
+		client.import_block(BlockOrigin::Own, justified, Some(block.transactions)).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
