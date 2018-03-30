@@ -18,11 +18,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[allow(unused_imports)] #[macro_use] extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
-
-#[cfg_attr(feature = "std", macro_use)]extern crate substrate_runtime_primitives as runtime_primitives;
+#[macro_use] extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
 extern crate substrate_runtime_democracy as democracy;
@@ -31,18 +29,119 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
-
-#[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
-extern crate safe_mix;
-
-#[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
-#[cfg(feature = "std")] extern crate serde;
-
-#[cfg(feature = "std")] extern crate rustc_hex;
-
-extern crate substrate_codec as codec;
-#[cfg(feature = "std")] #[allow(unused_imports)] #[macro_use] extern crate substrate_primitives;
 extern crate demo_primitives;
 
-pub mod runtime;
-pub mod api;
+use runtime_io::BlakeTwo256;
+use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
+use runtime_primitives::{generic, Identity, HasPublicAux};
+pub use runtime_primitives::BuildExternalities;
+
+// TODO: refactor so that each module gets to be able to attempt to extract a PrivCall into
+// Some(its own PrivCall) or None.
+impl democracy::IsCancelReferendum for PrivCall {
+	fn is_cancel_referendum(&self) -> Option<democracy::ReferendumIndex> {
+		if let &PrivCall::Democracy(democracy::PrivCall::cancel_referendum(ref ref_index)) = self {
+			Some(*ref_index)
+		} else {
+			None
+		}
+	}
+}
+
+pub struct Concrete;
+
+impl HasPublicAux for Concrete {
+	type PublicAux = AccountId;
+}
+
+impl timestamp::Trait for Concrete {
+	type Value = u64;
+}
+pub type Timestamp = timestamp::Module<Concrete>;
+
+impl consensus::Trait for Concrete {
+	type SessionKey = SessionKey;
+}
+pub type Consensus = consensus::Module<Concrete>;
+
+impl system::Trait for Concrete {
+	type Index = Index;
+	type BlockNumber = BlockNumber;
+	type Hash = Hash;
+	type Hashing = BlakeTwo256;
+	type Digest = generic::Digest<Vec<u8>>;
+	type AccountId = AccountId;
+	type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+}
+pub type System = system::Module<Concrete>;
+
+impl session::Trait for Concrete {
+	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type ConvertAccountIdToSessionKey = Identity;
+}
+pub type Session = session::Module<Concrete>;
+
+impl staking::Trait for Concrete {
+	type Balance = Balance;
+	type DetermineContractAddress = BlakeTwo256;
+}
+pub type Staking = staking::Module<Concrete>;
+
+impl democracy::Trait for Concrete {
+	type Proposal = PrivCall;
+}
+pub type Democracy = democracy::Module<Concrete>;
+
+impl council::Trait for Concrete {}
+pub type Council = council::Module<Concrete>;
+pub type CouncilVoting = council::voting::Module<Concrete>;
+
+impl_outer_dispatch! {
+	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
+		Session = 1,
+		Staking = 2,
+		Timestamp = 3,
+		Democracy = 5,
+		Council = 6,
+		CouncilVoting = 7,
+	}
+
+	pub enum PrivCall {
+		Consensus = 0,
+		Session = 1,
+		Staking = 2,
+		Democracy = 5,
+		Council = 6,
+		CouncilVoting = 7,
+	}
+}
+
+pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, AccountId, Index, Call, Signature>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
+pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
+pub type Executive = executive::Executive<Concrete, Block, Staking,
+	(((((), Council), Democracy), Staking), Session)>;
+
+impl_outer_config! {
+	pub struct GenesisConfig for Concrete {
+		ConsensusConfig => consensus,
+		SystemConfig => system,
+		SessionConfig => session,
+		StakingConfig => staking,
+		DemocracyConfig => democracy,
+		CouncilConfig => council,
+	}
+}
+
+pub mod api {
+	impl_stubs!(
+		authorities => |()| super::Consensus::authorities(),
+		initialise_block => |header| super::Executive::initialise_block(&header),
+		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
+		execute_block => |block| super::Executive::execute_block(block),
+		finalise_block => |()| super::Executive::finalise_block(),
+		validator_count => |()| super::Session::validator_count(),
+		validators => |()| super::Session::validators()
+	);
+}

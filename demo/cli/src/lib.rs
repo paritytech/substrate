@@ -44,7 +44,7 @@ pub mod error;
 
 use codec::Slicable;
 use runtime_io::with_externalities;
-use demo_runtime::runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
+use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
 use client::genesis;
 
@@ -117,7 +117,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		let block = genesis::construct_genesis_block(&storage);
 		with_externalities(&mut storage, ||
 			// TODO: use api.rs to dispatch instead
-			demo_runtime::runtime::System::initialise_genesis_state(&block.header)
+			demo_runtime::System::initialise_genesis_state(&block.header)
 		);
 		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 	};

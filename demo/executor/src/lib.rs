@@ -49,8 +49,8 @@ mod tests {
 	use demo_primitives::{Hash, BlockNumber};
 	use runtime_primitives::Headery;
 	use {staking, system};
-	use demo_runtime::runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking};
-	use demo_runtime::runtime::{BuildExternalities, GenesisConfig, SessionConfig, StakingConfig};
+	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
+		BuildExternalities, GenesisConfig, SessionConfig, StakingConfig};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
