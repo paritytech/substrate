@@ -227,10 +227,6 @@ mod tests {
 		});
 	}
 
-	fn sessions_per_era_proposal(value: u64) -> Proposal {
-		Proposal::Staking(staking::PrivCall::set_sessions_per_era(value))
-	}
-
 	fn bonding_duration_proposal(value: u64) -> Proposal {
 		Proposal::Staking(staking::PrivCall::set_bonding_duration(value))
 	}
