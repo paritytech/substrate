@@ -360,7 +360,7 @@ where
 	}
 }
 
-impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> traits::Blocky
+impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> traits::Block
 	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
 where
 	Number: Member + Slicable,

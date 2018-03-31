@@ -224,7 +224,7 @@ impl Header for substrate_primitives::Header {
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Blocky {
+pub trait Block {
 	type Extrinsic: Sized;
 	type Header: Header;
 	fn header(&self) -> &Self::Header;
@@ -232,7 +232,7 @@ pub trait Blocky {
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
 }
 
-impl Blocky for substrate_primitives::Block {
+impl Block for substrate_primitives::Block {
 	type Extrinsic = substrate_primitives::block::Transaction;
 	type Header = substrate_primitives::Header;
 	fn header(&self) -> &Self::Header {

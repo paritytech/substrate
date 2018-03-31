@@ -20,7 +20,7 @@ use serde;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
 use substrate_primitives::H256;
-use traits::{self, Checkable, Applyable, Header as HeaderT, Blocky as BlockT, Digest as DigestT};
+use traits::{self, Checkable, Applyable, Header as HeaderT, Block as BlockT, Digest as DigestT};
 
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug)]
 pub struct Digest {
@@ -113,7 +113,7 @@ impl<Xt: Slicable + Sized + serde::Serialize> Slicable for Block<Xt> {
 		v
 	}
 }
-impl<Xt: Slicable + Sized + serde::Serialize> traits::Blocky for Block<Xt> {
+impl<Xt: Slicable + Sized + serde::Serialize> traits::Block for Block<Xt> {
 	type Extrinsic = Xt;
 	type Header = Header;
 	fn header(&self) -> &Self::Header {

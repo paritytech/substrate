@@ -47,7 +47,7 @@ pub struct Executive<
 
 impl<
 	System: system::Trait,
-	Block: traits::Blocky<Header = System::Header>,
+	Block: traits::Block<Header = System::Header>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
 > Executive<System, Block, Payment, Finalisation> where
