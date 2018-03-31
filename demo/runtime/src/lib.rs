@@ -33,7 +33,8 @@ extern crate demo_primitives;
 
 use runtime_io::BlakeTwo256;
 use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
-use runtime_primitives::{generic, Identity, HasPublicAux};
+use runtime_primitives::generic;
+use runtime_primitives::traits::{Identity, HasPublicAux};
 pub use runtime_primitives::BuildExternalities;
 
 pub struct Concrete;

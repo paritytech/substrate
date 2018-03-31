@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::{Executable, RefInto};
+use primitives::traits::{Executable, RefInto};
 use runtime_io::Hashing;
 use runtime_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};

@@ -35,7 +35,7 @@ extern crate substrate_runtime_system as system;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use runtime_io::Hashing;
-use primitives::{Zero, One, Headery, Blocky, Checkable, Applyable, CheckEqual, Executable, MakePayment};
+use primitives::traits::{self, Headery, Zero, One, Checkable, Applyable, CheckEqual, Executable, MakePayment};
 use codec::Slicable;
 
 pub struct Executive<
@@ -47,7 +47,7 @@ pub struct Executive<
 
 impl<
 	System: system::Trait,
-	Block: Blocky<Header = System::Header>,
+	Block: traits::Blocky<Header = System::Header>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
 > Executive<System, Block, Payment, Finalisation> where
@@ -160,7 +160,8 @@ mod tests {
 	use staking::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::{HasPublicAux, Identity, Headery, BuildExternalities};
+	use primitives::BuildExternalities;
+	use primitives::traits::{self, HasPublicAux, Identity};
 	use primitives::testing::{Digest, Header, Block};
 
 	pub struct Test;

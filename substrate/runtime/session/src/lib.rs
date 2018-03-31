@@ -33,7 +33,7 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 //use runtime_io::{twox_128, TestExternalities};
-use primitives::{Zero, One, RefInto, Executable, Convert};
+use primitives::traits::{Zero, One, RefInto, Executable, Convert};
 use runtime_support::{StorageValue, StorageMap};
 
 pub trait Trait: consensus::Trait + system::Trait {
@@ -157,7 +157,7 @@ pub struct GenesisConfig<T: Trait> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> GenesisConfig<T> where T::AccountId: From<keyring::Keyring> {
 	pub fn simple() -> Self where T::AccountId: From<[u8; 32]> {
-		use primitives::As;
+		use primitives::traits::As;
 		use keyring::Keyring::*;
 		let three = [3u8; 32];
 		GenesisConfig {
@@ -167,7 +167,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<keyring::Keyring> {
 	}
 
 	pub fn extended() -> Self {
-		use primitives::As;
+		use primitives::traits::As;
 		use keyring::Keyring::*;
 		GenesisConfig {
 			session_length: T::BlockNumber::sa(1),
@@ -179,7 +179,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<keyring::Keyring> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		use primitives::As;
+		use primitives::traits::As;
 		GenesisConfig {
 			session_length: T::BlockNumber::sa(1000),
 			validators: vec![],
@@ -193,7 +193,7 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 	fn build_externalities(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
 		use codec::Slicable;
-		use primitives::As;
+		use primitives::traits::As;
 		map![
 			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
 			twox_128(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
@@ -207,7 +207,8 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::{HasPublicAux, Identity, BuildExternalities};
+	use primitives::BuildExternalities;
+	use primitives::traits::{HasPublicAux, Identity};
 	use primitives::testing::{Digest, Header};
 
 	pub struct Test;

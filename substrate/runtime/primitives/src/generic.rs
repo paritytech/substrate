@@ -18,9 +18,8 @@
 
 use serde::Serialize;
 use codec::{Slicable, Input};
-use substrate_primitives::hash::H512;
 use runtime_support::AuxDispatchable;
-use super::{Checkable, Applyable, Headery, Blocky, Digesty};
+use traits;
 use rstd::ops;
 
 #[cfg(feature = "std")]
@@ -76,32 +75,6 @@ impl<AccountId, Index, Call> Slicable for Extrinsic<AccountId, Index, Call> wher
 		self.function.using_encoded(|s| v.extend(s));
 
 		v
-	}
-}
-
-/// Means of signature verification.
-pub trait Verify {
-	type Signer;
-	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool;
-}
-
-/// Ed25519 signature verify.
-#[derive(Eq, PartialEq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-pub struct Ed25519Signature(H512);
-impl Verify for Ed25519Signature {
-	type Signer = [u8; 32];
-	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
-		::runtime_io::ed25519_verify(&(self.0).0, msg, &signer[..])
-	}
-}
-impl Slicable for Ed25519Signature {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> { Some(Ed25519Signature(Slicable::decode(input)?,)) }
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R { self.0.using_encoded(f) }
-}
-impl From<H512> for Ed25519Signature {
-	fn from(h: H512) -> Ed25519Signature {
-		Ed25519Signature(h)
 	}
 }
 
@@ -170,11 +143,11 @@ impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Accoun
 	}
 }
 
-impl<AccountId, Index, Call, Signature> Checkable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
+impl<AccountId, Index, Call, Signature> traits::Checkable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
  	AccountId: Member,
  	Index: Member,
  	Call: Member,
-	Signature: Member + Verify<Signer = AccountId>,
+	Signature: Member + traits::Verify<Signer = AccountId>,
 	Extrinsic<AccountId, Index, Call>: Slicable
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call, Signature>;
@@ -229,7 +202,7 @@ where
 	}
 }
 
-impl<AccountId, Index, Call, Signature> Applyable
+impl<AccountId, Index, Call, Signature> traits::Applyable
 	for CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
  	AccountId: Member,
@@ -269,7 +242,7 @@ impl<Item> Slicable for Digest<Item> where
 		self.logs.using_encoded(f)
 	}
 }
-impl<Item> Digesty for Digest<Item> where
+impl<Item> traits::Digest for Digest<Item> where
  	Item: Member + Slicable
 {
 	type Item = Item;
@@ -317,7 +290,7 @@ impl<Number, Hash, DigestItem> Slicable for Header<Number, Hash, DigestItem> whe
 		v
 	}
 }
-impl<Number, Hash, DigestItem> Headery for Header<Number, Hash, DigestItem> where
+impl<Number, Hash, DigestItem> traits::Headery for Header<Number, Hash, DigestItem> where
  	Number: Member + Slicable,
  	Hash: Member + Slicable,
 	DigestItem: Member + Slicable,
@@ -387,7 +360,7 @@ where
 	}
 }
 
-impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> Blocky
+impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> traits::Blocky
 	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
 where
 	Number: Member + Slicable,

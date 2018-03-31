@@ -38,7 +38,7 @@ use rstd::marker::PhantomData;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
+use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -592,7 +592,7 @@ pub struct GenesisConfig<T: Trait> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 	pub fn simple() -> Self {
-		use primitives::As;
+		use primitives::traits::As;
 		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(2),
 			current_era: T::BlockNumber::sa(0),
@@ -605,7 +605,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 	}
 
 	pub fn extended() -> Self {
-		use primitives::As;
+		use primitives::traits::As;
 		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(3),
 			current_era: T::BlockNumber::sa(1),
@@ -629,7 +629,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		use primitives::As;
+		use primitives::traits::As;
 		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(1000),
 			current_era: T::BlockNumber::sa(0),
@@ -672,7 +672,8 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::{HasPublicAux, Identity, BuildExternalities};
+	use primitives::BuildExternalities;
+	use primitives::traits::{HasPublicAux, Identity};
 	use primitives::testing::{Digest, Header};
 
 	pub struct Test;

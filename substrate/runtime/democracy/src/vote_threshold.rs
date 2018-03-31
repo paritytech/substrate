@@ -16,7 +16,7 @@
 
 //! Voting thresholds.
 
-use primitives::IntegerSquareRoot;
+use primitives::traits::IntegerSquareRoot;
 use codec::{Input, Slicable};
 use rstd::ops::{Add, Mul, Div};
 

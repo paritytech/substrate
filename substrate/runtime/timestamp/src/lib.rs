@@ -25,7 +25,7 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
-use runtime_primitives::HasPublicAux;
+use runtime_primitives::traits::HasPublicAux;
 
 pub trait Trait: HasPublicAux {
 	type Value: Parameter + Default;

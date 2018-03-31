@@ -32,7 +32,7 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
-use primitives::{Zero, Executable, RefInto, As};
+use primitives::traits::{Zero, Executable, RefInto, As};
 use runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 
 mod vote_threshold;
@@ -321,7 +321,8 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::{HasPublicAux, Identity, BuildExternalities};
+	use primitives::BuildExternalities;
+	use primitives::traits::{HasPublicAux, Identity};
 	use primitives::testing::{Digest, Header};
 
 	impl_outer_dispatch! {

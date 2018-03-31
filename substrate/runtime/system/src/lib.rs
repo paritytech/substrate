@@ -33,7 +33,7 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))] use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))] use codec::Slicable;
 use runtime_io::Hashing;
-use primitives::{Digesty, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Headery};
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -45,9 +45,9 @@ pub trait Trait {
 	type BlockNumber: Parameter + SimpleArithmetic + Default + Bounded + Copy;
 	type Hash: Parameter + SimpleBitOps + Default + Copy + CheckEqual;
 	type Hashing: Hashing<Output = Self::Hash>;
-	type Digest: Parameter + Default + Digesty;
+	type Digest: Parameter + Default + traits::Digest;
 	type AccountId: Parameter + Ord + Default;
-	type Header: Headery<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
+	type Header: traits::Headery<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
 }
 
 decl_module! {
@@ -87,25 +87,25 @@ impl<T: Trait> Module<T> {
 		let digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
-		T::Header::new(number, extrinsics_root, storage_root, parent_hash, digest)
+		<T::Header as traits::Headery>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
-	pub fn deposit_log(item: <T::Digest as Digesty>::Item) {
+	pub fn deposit_log(item: <T::Digest as traits::Digest>::Item) {
 		let mut l = <Digest<T>>::get();
-		l.push(item);
+		traits::Digest::push(&mut l, item);
 		<Digest<T>>::put(l);
 	}
 
 	/// Records a particular block number and hash combination.
-	pub fn record_block_hash<H: Headery<Number = T::BlockNumber>>(header: &H) {
+	pub fn record_block_hash<H: traits::Headery<Number = T::BlockNumber>>(header: &H) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
 		<BlockHash<T>>::insert(header.number(), &T::Hashing::hash_of(header));
 	}
 
 	/// Initializes the state following the determination of the genesis block.
-	pub fn initialise_genesis_state<H: Headery<Number = T::BlockNumber>>(header: &H) {
+	pub fn initialise_genesis_state<H: traits::Headery<Number = T::BlockNumber>>(header: &H) {
 		Self::record_block_hash(header);
 	}
 
