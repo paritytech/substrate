@@ -290,7 +290,7 @@ impl<Number, Hash, DigestItem> Slicable for Header<Number, Hash, DigestItem> whe
 		v
 	}
 }
-impl<Number, Hash, DigestItem> traits::Headery for Header<Number, Hash, DigestItem> where
+impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
  	Number: Member + Slicable,
  	Hash: Member + Slicable,
 	DigestItem: Member + Slicable,

@@ -176,7 +176,7 @@ impl Digest for substrate_primitives::Digest {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Headery: Sized + Slicable {
+pub trait Header: Sized + Slicable {
 	type Number: Sized;
 	type Hash: Sized;
 	type Digest: Sized;
@@ -194,7 +194,7 @@ pub trait Headery: Sized + Slicable {
 	) -> Self;
 }
 
-impl Headery for substrate_primitives::Header {
+impl Header for substrate_primitives::Header {
 	type Number = substrate_primitives::block::Number;
 	type Hash = substrate_primitives::block::HeaderHash;
 	type Digest = substrate_primitives::block::Digest;
@@ -226,7 +226,7 @@ impl Headery for substrate_primitives::Header {
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Blocky {
 	type Extrinsic: Sized;
-	type Header: Headery;
+	type Header: Header;
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);

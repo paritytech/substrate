@@ -35,7 +35,7 @@ extern crate substrate_runtime_system as system;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use runtime_io::Hashing;
-use primitives::traits::{self, Headery, Zero, One, Checkable, Applyable, CheckEqual, Executable, MakePayment};
+use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable, MakePayment};
 use codec::Slicable;
 
 pub struct Executive<
@@ -161,7 +161,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildExternalities;
-	use primitives::traits::{self, HasPublicAux, Identity};
+	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT};
 	use primitives::testing::{Digest, Header, Block};
 
 	pub struct Test;

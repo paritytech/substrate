@@ -47,7 +47,7 @@ mod tests {
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
 	use demo_primitives::{Hash, BlockNumber};
-	use runtime_primitives::traits::Headery;
+	use runtime_primitives::traits::Header as HeaderT;
 	use {staking, system};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
 		BuildExternalities, GenesisConfig, SessionConfig, StakingConfig};

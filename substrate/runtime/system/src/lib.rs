@@ -47,7 +47,7 @@ pub trait Trait {
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Parameter + Default + traits::Digest;
 	type AccountId: Parameter + Ord + Default;
-	type Header: traits::Headery<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
+	type Header: traits::Header<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
 }
 
 decl_module! {
@@ -87,7 +87,7 @@ impl<T: Trait> Module<T> {
 		let digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
-		<T::Header as traits::Headery>::new(number, extrinsics_root, storage_root, parent_hash, digest)
+		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
@@ -98,14 +98,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Records a particular block number and hash combination.
-	pub fn record_block_hash<H: traits::Headery<Number = T::BlockNumber>>(header: &H) {
+	pub fn record_block_hash<H: traits::Header<Number = T::BlockNumber>>(header: &H) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
 		<BlockHash<T>>::insert(header.number(), &T::Hashing::hash_of(header));
 	}
 
 	/// Initializes the state following the determination of the genesis block.
-	pub fn initialise_genesis_state<H: traits::Headery<Number = T::BlockNumber>>(header: &H) {
+	pub fn initialise_genesis_state<H: traits::Header<Number = T::BlockNumber>>(header: &H) {
 		Self::record_block_hash(header);
 	}
 

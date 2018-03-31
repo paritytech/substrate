@@ -20,7 +20,7 @@ use serde;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
 use substrate_primitives::H256;
-use traits::{self, Checkable, Applyable, Headery as HeaderT, Blocky as BlockT, Digest as DigestT};
+use traits::{self, Checkable, Applyable, Header as HeaderT, Blocky as BlockT, Digest as DigestT};
 
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug)]
 pub struct Digest {
