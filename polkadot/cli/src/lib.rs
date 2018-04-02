@@ -18,7 +18,7 @@
 
 #![warn(missing_docs)]
 
-extern crate app_dirs;
+extern crate app_dirs2 as app_dirs;
 extern crate env_logger;
 extern crate ed25519;
 extern crate triehash;

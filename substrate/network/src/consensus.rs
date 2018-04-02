@@ -17,17 +17,13 @@
 //! Consensus related bits of the network service.
 
 use std::collections::HashMap;
-use multiqueue;
-use futures::sync::oneshot;
+use futures::sync::{oneshot, mpsc};
 use io::SyncIo;
 use protocol::Protocol;
 use network::PeerId;
 use primitives::Hash;
 use message::{self, Message};
 use runtime_support::Hashable;
-
-//TODO: The queue is preallocated in multiqueue. Make it unbounded
-const QUEUE_SIZE: u64 = 1 << 16;
 
 struct CandidateRequest {
 	id: message::RequestId,
@@ -43,35 +39,25 @@ struct PeerConsensus {
 pub struct Consensus {
 	peers: HashMap<PeerId, PeerConsensus>,
 	our_candidate: Option<(Hash, Vec<u8>)>,
-	statement_sink: multiqueue::BroadcastFutSender<message::Statement>,
-	statement_stream: multiqueue::BroadcastFutReceiver<message::Statement>,
-	bft_message_sink: multiqueue::BroadcastFutSender<message::BftMessage>,
-	bft_message_stream: multiqueue::BroadcastFutReceiver<message::BftMessage>,
+	statement_sink: Option<mpsc::UnboundedSender<message::Statement>>,
+	bft_message_sink: Option<mpsc::UnboundedSender<message::BftMessage>>,
 }
 
 impl Consensus {
 	/// Create a new instance.
 	pub fn new() -> Consensus {
-		let (statement_sink, statement_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
-		let (bft_sink, bft_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
 		Consensus {
 			peers: HashMap::new(),
 			our_candidate: None,
-			statement_sink: statement_sink,
-			statement_stream: statement_stream,
-			bft_message_sink: bft_sink,
-			bft_message_stream: bft_stream,
+			statement_sink: None,
+			bft_message_sink: None,
 		}
 	}
 
 	/// Closes all notification streams.
 	pub fn restart(&mut self) {
-		let (statement_sink, statement_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
-		let (bft_sink, bft_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
-		self.statement_sink = statement_sink;
-		self.statement_stream = statement_stream;
-		self.bft_message_sink = bft_sink;
-		self.bft_message_stream = bft_stream;
+		self.statement_sink = None;
+		self.bft_message_sink = None;
 	}
 
 	/// Handle new connected peer.
@@ -93,31 +79,43 @@ impl Consensus {
 				&message::UnsignedStatement::Available(ref hash) => peer.candidate_available = Some(*hash),
 				&message::UnsignedStatement::Valid(_) | &message::UnsignedStatement::Invalid(_) => (),
 			}
-			if let Err(e) = self.statement_sink.try_send(statement) {
-				trace!(target:"sync", "Error broadcasting statement notification: {:?}", e);
+			if let Some(sink) = self.statement_sink.take() {
+				if let Err(e) = sink.unbounded_send(statement) {
+					trace!(target:"sync", "Error broadcasting statement notification: {:?}", e);
+				} else {
+					self.statement_sink = Some(sink);
+				}
 			}
 		} else {
 			trace!(target:"sync", "Ignored statement from unregistered peer {}", peer_id);
 		}
 	}
 
-	pub fn statements(&self) -> multiqueue::BroadcastFutReceiver<message::Statement>{
-		self.statement_stream.add_stream()
+	pub fn statements(&mut self) -> mpsc::UnboundedReceiver<message::Statement>{
+		let (sink, stream) = mpsc::unbounded();
+		self.statement_sink = Some(sink);
+		stream
 	}
 
 	pub fn on_bft_message(&mut self, peer_id: PeerId, message: message::BftMessage) {
 		if self.peers.contains_key(&peer_id) {
 			// TODO: validate signature?
-			if let Err(e) = self.bft_message_sink.try_send(message) {
-				trace!(target:"sync", "Error broadcasting BFT message notification: {:?}", e);
+			if let Some(sink) = self.bft_message_sink.take() {
+				if let Err(e) = sink.unbounded_send(message) {
+					trace!(target:"sync", "Error broadcasting BFT message notification: {:?}", e);
+				} else {
+					self.bft_message_sink = Some(sink);
+				}
 			}
 		} else {
 			trace!(target:"sync", "Ignored BFT statement from unregistered peer {}", peer_id);
 		}
 	}
 
-	pub fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<message::BftMessage>{
-		self.bft_message_stream.add_stream()
+	pub fn bft_messages(&mut self) -> mpsc::UnboundedReceiver<message::BftMessage>{
+		let (sink, stream) = mpsc::unbounded();
+		self.bft_message_sink = Some(sink);
+		stream
 	}
 
 	pub fn fetch_candidate(&mut self, io: &mut SyncIo, protocol: &Protocol, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {

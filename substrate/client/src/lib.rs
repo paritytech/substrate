@@ -31,7 +31,7 @@ extern crate ed25519;
 
 extern crate triehash;
 extern crate parking_lot;
-extern crate multiqueue;
+extern crate futures;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;

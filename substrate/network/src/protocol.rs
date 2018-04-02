@@ -19,7 +19,6 @@ use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
 use parking_lot::{RwLock, Mutex};
-use multiqueue;
 use futures::sync::oneshot;
 use serde_json;
 use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber, Header, Id as BlockId};
@@ -29,7 +28,7 @@ use network::{PeerId, NodeId};
 use message::{self, Message};
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use consensus::Consensus;
-use service::{Role, TransactionPool};
+use service::{Role, TransactionPool, StatementStream, BftMessageStream};
 use config::ProtocolConfig;
 use chain::Client;
 use io::SyncIo;
@@ -310,12 +309,12 @@ impl Protocol {
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<message::BftMessage> {
+	pub fn bft_messages(&self) -> BftMessageStream {
 		self.consensus.lock().bft_messages()
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn statements(&self) -> multiqueue::BroadcastFutReceiver<message::Statement> {
+	pub fn statements(&self) -> StatementStream {
 		self.consensus.lock().statements()
 	}
 
