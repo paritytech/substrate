@@ -143,7 +143,6 @@ impl Service {
 		best_header: &Header) -> Service
 		where C: BlockchainEvents + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
 	{
-
 		let best_header = best_header.clone();
 		let thread = thread::spawn(move || {
 			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
