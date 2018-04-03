@@ -16,9 +16,10 @@
 
 //! Consensus related bits of the network service.
 
-use std::collections::HashMap;
-use multiqueue;
-use futures::sync::oneshot;
+use std::collections::{HashMap, HashSet};
+use futures::sync::{oneshot, mpsc};
+use std::time::{Instant, Duration};
+use std::collections::hash_map::Entry;
 use io::SyncIo;
 use protocol::Protocol;
 use network::PeerId;
@@ -26,8 +27,8 @@ use primitives::Hash;
 use message::{self, Message};
 use runtime_support::Hashable;
 
-//TODO: The queue is preallocated in multiqueue. Make it unbounded
-const QUEUE_SIZE: u64 = 1 << 16;
+// TODO: Add additional spam/DoS attack protection.
+const MESSAGE_LIFETIME_SECONDS: u64 = 600;
 
 struct CandidateRequest {
 	id: message::RequestId,
@@ -37,41 +38,34 @@ struct CandidateRequest {
 struct PeerConsensus {
 	candidate_fetch: Option<CandidateRequest>,
 	candidate_available: Option<Hash>,
+	known_messages: HashSet<Hash>,
 }
 
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct Consensus {
 	peers: HashMap<PeerId, PeerConsensus>,
 	our_candidate: Option<(Hash, Vec<u8>)>,
-	statement_sink: multiqueue::BroadcastFutSender<message::Statement>,
-	statement_stream: multiqueue::BroadcastFutReceiver<message::Statement>,
-	bft_message_sink: multiqueue::BroadcastFutSender<message::BftMessage>,
-	bft_message_stream: multiqueue::BroadcastFutReceiver<message::BftMessage>,
+	statement_sink: Option<mpsc::UnboundedSender<message::Statement>>,
+	bft_message_sink: Option<mpsc::UnboundedSender<message::BftMessage>>,
+	message_timestamps: HashMap<Hash, Instant>,
 }
 
 impl Consensus {
 	/// Create a new instance.
 	pub fn new() -> Consensus {
-		let (statement_sink, statement_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
-		let (bft_sink, bft_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
 		Consensus {
 			peers: HashMap::new(),
 			our_candidate: None,
-			statement_sink: statement_sink,
-			statement_stream: statement_stream,
-			bft_message_sink: bft_sink,
-			bft_message_stream: bft_stream,
+			statement_sink: None,
+			bft_message_sink: None,
+			message_timestamps: Default::default(),
 		}
 	}
 
 	/// Closes all notification streams.
 	pub fn restart(&mut self) {
-		let (statement_sink, statement_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
-		let (bft_sink, bft_stream) = multiqueue::broadcast_fut_queue(QUEUE_SIZE);
-		self.statement_sink = statement_sink;
-		self.statement_stream = statement_stream;
-		self.bft_message_sink = bft_sink;
-		self.bft_message_stream = bft_stream;
+		self.statement_sink = None;
+		self.bft_message_sink = None;
 	}
 
 	/// Handle new connected peer.
@@ -81,11 +75,26 @@ impl Consensus {
 			self.peers.insert(peer_id, PeerConsensus {
 				candidate_fetch: None,
 				candidate_available: None,
+				known_messages: Default::default(),
 			});
 		}
 	}
 
-	pub fn on_statement(&mut self, peer_id: PeerId, statement: message::Statement) {
+	fn propagate(&mut self, io: &mut SyncIo, protocol: &Protocol, message: message::Message, hash: Hash) {
+		for (id, ref mut peer) in self.peers.iter_mut() {
+			if peer.known_messages.insert(hash.clone()) {
+				protocol.send_message(io, *id, message.clone());
+			}
+		}
+	}
+
+	fn register_message(&mut self, hash: Hash) {
+		if let Entry::Vacant(entry) = self.message_timestamps.entry(hash) {
+			entry.insert(Instant::now());
+		}
+	}
+
+	pub fn on_statement(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, statement: message::Statement, hash: Hash) {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			// TODO: validate signature?
 			match &statement.statement {
@@ -93,31 +102,53 @@ impl Consensus {
 				&message::UnsignedStatement::Available(ref hash) => peer.candidate_available = Some(*hash),
 				&message::UnsignedStatement::Valid(_) | &message::UnsignedStatement::Invalid(_) => (),
 			}
-			if let Err(e) = self.statement_sink.try_send(statement) {
-				trace!(target:"sync", "Error broadcasting statement notification: {:?}", e);
+			peer.known_messages.insert(hash);
+			if let Some(sink) = self.statement_sink.take() {
+				if let Err(e) = sink.unbounded_send(statement.clone()) {
+					trace!(target:"sync", "Error broadcasting statement notification: {:?}", e);
+				} else {
+					self.statement_sink = Some(sink);
+				}
 			}
 		} else {
 			trace!(target:"sync", "Ignored statement from unregistered peer {}", peer_id);
+			return;
 		}
+		self.register_message(hash.clone());
+		// Propagate to other peers.
+		self.propagate(io, protocol, Message::Statement(statement), hash);
 	}
 
-	pub fn statements(&self) -> multiqueue::BroadcastFutReceiver<message::Statement>{
-		self.statement_stream.add_stream()
+	pub fn statements(&mut self) -> mpsc::UnboundedReceiver<message::Statement>{
+		let (sink, stream) = mpsc::unbounded();
+		self.statement_sink = Some(sink);
+		stream
 	}
 
-	pub fn on_bft_message(&mut self, peer_id: PeerId, message: message::BftMessage) {
-		if self.peers.contains_key(&peer_id) {
+	pub fn on_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, message: message::BftMessage, hash: Hash) {
+		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
+			peer.known_messages.insert(hash);
 			// TODO: validate signature?
-			if let Err(e) = self.bft_message_sink.try_send(message) {
-				trace!(target:"sync", "Error broadcasting BFT message notification: {:?}", e);
+			if let Some(sink) = self.bft_message_sink.take() {
+				if let Err(e) = sink.unbounded_send(message.clone()) {
+					trace!(target:"sync", "Error broadcasting BFT message notification: {:?}", e);
+				} else {
+					self.bft_message_sink = Some(sink);
+				}
 			}
 		} else {
 			trace!(target:"sync", "Ignored BFT statement from unregistered peer {}", peer_id);
+			return;
 		}
+		self.register_message(hash.clone());
+		// Propagate to other peers.
+		self.propagate(io, protocol, Message::BftMessage(message), hash);
 	}
 
-	pub fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<message::BftMessage>{
-		self.bft_message_stream.add_stream()
+	pub fn bft_messages(&mut self) -> mpsc::UnboundedReceiver<message::BftMessage>{
+		let (sink, stream) = mpsc::unbounded();
+		self.bft_message_sink = Some(sink);
+		stream
 	}
 
 	pub fn fetch_candidate(&mut self, io: &mut SyncIo, protocol: &Protocol, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
@@ -147,17 +178,19 @@ impl Consensus {
 	pub fn send_statement(&mut self, io: &mut SyncIo, protocol: &Protocol, statement: message::Statement) {
 		// Broadcast statement to all validators.
 		trace!(target:"sync", "Broadcasting statement {:?}", statement);
-		for peer in self.peers.keys() {
-			protocol.send_message(io, *peer, Message::Statement(statement.clone()));
-		}
+		let message = Message::Statement(statement);
+		let hash = Protocol::hash_message(&message);
+		self.register_message(hash.clone());
+		self.propagate(io, protocol, message, hash);
 	}
 
 	pub fn send_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, message: message::BftMessage) {
 		// Broadcast message to all validators.
 		trace!(target:"sync", "Broadcasting BFT message {:?}", message);
-		for peer in self.peers.keys() {
-			protocol.send_message(io, *peer, Message::BftMessage(message.clone()));
-		}
+		let message = Message::BftMessage(message);
+		let hash = Protocol::hash_message(&message);
+		self.register_message(hash.clone());
+		self.propagate(io, protocol, message, hash);
 	}
 
 	pub fn set_local_candidate(&mut self, candidate: Option<(Hash, Vec<u8>)>) {
@@ -199,5 +232,15 @@ impl Consensus {
 
 	pub fn peer_disconnected(&mut self, _io: &mut SyncIo, _protocol: &Protocol, peer_id: PeerId) {
 		self.peers.remove(&peer_id);
+	}
+
+	pub fn collect_garbage(&mut self) {
+		let expiration = Duration::from_secs(MESSAGE_LIFETIME_SECONDS);
+		let now = Instant::now();
+		self.message_timestamps.retain(|_, timestamp| *timestamp + expiration < now);
+		let timestamps = &self.message_timestamps;
+		for (_, ref mut peer) in self.peers.iter_mut() {
+			peer.known_messages.retain(|h| timestamps.contains_key(h));
+		}
 	}
 }

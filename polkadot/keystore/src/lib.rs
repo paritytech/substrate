@@ -33,6 +33,7 @@ extern crate error_chain;
 #[cfg(test)]
 extern crate tempdir;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -120,16 +121,19 @@ impl EncryptedKey {
 	}
 }
 
+type Seed = [u8; 32];
+
 /// Key store.
 pub struct Store {
 	path: PathBuf,
+	additional: HashMap<Public, Seed>,
 }
 
 impl Store {
 	/// Create a new store at the given path.
 	pub fn open(path: PathBuf) -> Result<Self> {
 		fs::create_dir_all(&path)?;
-		Ok(Store { path })
+		Ok(Store { path, additional: HashMap::new() })
 	}
 
 	/// Generate a new key, placing it into the store.
@@ -145,8 +149,24 @@ impl Store {
 		Ok(pair)
 	}
 
+	/// Create a new key from seed. Do not place it into the store.
+	/// Only the first 32 bytes of the sead are used. This is meant to be used for testing only.
+	// TODO: Remove this
+	pub fn generate_from_seed(&mut self, seed: &str) -> Result<Pair> {
+		let mut s: [u8; 32] = [' ' as u8; 32];
+		let len = ::std::cmp::min(32, seed.len());
+		&mut s[..len].copy_from_slice(&seed.as_bytes()[..len]);
+		let pair = Pair::from_seed(&s);
+		self.additional.insert(pair.public(), s);
+		Ok(pair)
+	}
+
 	/// Load a key file with given public key.
 	pub fn load(&self, public: &Public, password: &str) -> Result<Pair> {
+		if let Some(ref seed) = self.additional.get(public) {
+			let pair = Pair::from_seed(seed);
+			return Ok(pair);
+		}
 		let path = self.key_file_path(public);
 		let file = File::open(path)?;
 
@@ -158,7 +178,7 @@ impl Store {
 
 	/// Get public keys of all stored keys.
 	pub fn contents(&self) -> Result<Vec<Public>> {
-		let mut public_keys = Vec::new();
+		let mut public_keys: Vec<Public> = self.additional.keys().cloned().collect();
 		for entry in fs::read_dir(&self.path)? {
 			let entry = entry?;
 			let path = entry.path();

@@ -4,15 +4,48 @@ about: Polkadot Node Rust Implementation
 args:
   - log:
       short: l
+      long: log
       value_name: LOG_PATTERN
       help: Sets a custom logging filter
       takes_value: true
-  - keystore-path:
-      value_name: KEYSTORE_PATH
-      help: specify custom keystore path
+  - base-path:
+      long: base-path
+      short: d
+      value_name: PATH
+      help: Specify custom base path
       takes_value: true
-subcommands:
+  - keystore-path:
+      long: keystore-path
+      value_name: PATH
+      help: Specify custom keystore path
+      takes_value: true
+  - key:
+      long: key
+      value_name: STRING
+      help: Specify additional key seed
+      takes_value: true
   - collator:
-      about: Run collator node
+      long: collator
+      help: Enable collator mode
+      takes_value: false
   - validator:
-      about: Run validator node
+      long: validator
+      help: Enable validator mode
+      takes_value: false
+  - port:
+      long: port
+      value_name: PORT
+      help: Specify p2p protocol TCP port
+      takes_value: true
+  - rpc-port:
+      long: rpc-port
+      value_name: PORT
+      help: Specify RPC server TCP port
+      takes_value: true
+  - bootnodes:
+      long: bootnodes
+      value_name: URL
+      help: Specify a list of bootnodes
+      takes_value: true
+      multiple: true
+subcommands:
