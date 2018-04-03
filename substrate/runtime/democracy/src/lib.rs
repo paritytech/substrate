@@ -536,7 +536,7 @@ mod tests {
 		});
 	}
 
-	fn sessions_per_era_propsal(value: u64) -> Proposal {
+	fn sessions_per_era_proposal(value: u64) -> Proposal {
 		Proposal::Staking(staking::PrivCall::set_sessions_per_era(value))
 	}
 
@@ -544,7 +544,7 @@ mod tests {
 	fn simple_passing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove);
 			Democracy::vote(&1, r, true);
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -562,7 +562,7 @@ mod tests {
 	fn cancel_referendum_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove);
 			Democracy::vote(&1, r, true);
 			Democracy::cancel_referendum(r);
 
@@ -577,7 +577,7 @@ mod tests {
 	fn simple_failing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove);
 			Democracy::vote(&1, r, false);
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -595,7 +595,7 @@ mod tests {
 	fn controversial_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove);
 			Democracy::vote(&1, r, true);
 			Democracy::vote(&2, r, false);
 			Democracy::vote(&3, r, false);
@@ -616,7 +616,7 @@ mod tests {
 	fn controversial_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove);
 			Democracy::vote(&5, r, false);
 			Democracy::vote(&6, r, true);
 
@@ -636,7 +636,7 @@ mod tests {
 			assert_eq!(Staking::total_stake(), 210);
 
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_propsal(2), VoteThreshold::SuperMajorityApprove);
+			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove);
 			Democracy::vote(&4, r, true);
 			Democracy::vote(&5, r, false);
 			Democracy::vote(&6, r, true);

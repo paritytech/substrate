@@ -252,6 +252,7 @@ impl<Item> traits::Digest for Digest<Item> where
 	}
 }
 
+/// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
@@ -261,12 +262,18 @@ pub struct Header<Number, Hash, DigestItem> where
 	Hash: Member,
 	DigestItem: Member,
 {
+	/// The parent hash.
 	pub parent_hash: Hash,
+	/// The block number.
 	pub number: Number,
+	/// The state trie merkle root
 	pub state_root: Hash,
+	/// The merkle root of the extrinsics.
 	pub extrinsics_root: Hash,
+	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest<DigestItem>,
 }
+
 impl<Number, Hash, DigestItem> Slicable for Header<Number, Hash, DigestItem> where
 	Number: Member + Slicable,
  	Hash: Member + Slicable,
@@ -319,6 +326,7 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	}
 }
 
+/// Abstraction over a substrate block.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
@@ -332,7 +340,9 @@ pub struct Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature> wh
  	Call: Member,
  	Signature: Member
 {
+	/// The block header.
 	pub header: Header<Number, Hash, DigestItem>,
+	/// The accompanying extrinsics.
 	pub extrinsics: Vec<UncheckedExtrinsic<AccountId, Index, Call, Signature>>,
 }
 

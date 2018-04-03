@@ -371,9 +371,7 @@ impl<T: Trait> ChangeEntry<T> {
 	}
 }
 
-// Compiler bug: https://github.com/rust-lang/rust/issues/40640. Will cause a warning and there's
-// not much we can do about it.
-type State<T: Trait> = BTreeMap<T::AccountId, ChangeEntry<T>>;
+type State<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
 trait Externalities<T: Trait> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;

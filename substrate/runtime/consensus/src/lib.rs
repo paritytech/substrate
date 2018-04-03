@@ -34,10 +34,10 @@ pub const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 struct AuthorityStorageVec<S: codec::Slicable + Default>(rstd::marker::PhantomData<S>);
 impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
 	type Item = S;
-	const PREFIX: &'static[u8] = AUTHORITY_AT;
+	const PREFIX: &'static [u8] = AUTHORITY_AT;
 }
 
-pub const CODE: &'static[u8] = b":code";
+pub const CODE: &'static [u8] = b":code";
 
 pub trait Trait {
 	type SessionKey: Parameter + Default;
