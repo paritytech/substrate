@@ -42,6 +42,7 @@ extern crate log;
 pub mod error;
 
 use std::path::{Path, PathBuf};
+use std::net::SocketAddr;
 
 /// Parse command line arguments and start the node.
 ///
@@ -56,7 +57,15 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	T: Into<std::ffi::OsString> + Clone,
 {
 	let yaml = load_yaml!("./cli.yml");
-	let matches = clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args)?;
+	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
+		Ok(m) => m,
+		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
+		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed || e.kind == clap::ErrorKind::VersionDisplayed => {
+			let _ = clap::App::from_yaml(yaml).print_long_help();
+			return Ok(());
+		}
+		Err(e) => return Err(e.into()),
+	};
 
 	// TODO [ToDr] Split parameters parsing from actual execution.
 	let log_pattern = matches.value_of("log").unwrap_or("");
@@ -64,38 +73,68 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let mut config = service::Configuration::default();
 
+	let base_path = matches.value_of("base-path")
+		.map(|x| Path::new(x).to_owned())
+		.unwrap_or_else(default_base_path);
+
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(default_keystore_path)
+		.unwrap_or_else(|| keystore_path(&base_path))
 		.to_string_lossy()
 		.into();
 
 	let mut role = service::Role::FULL;
-	if let Some(_) = matches.subcommand_matches("collator") {
+	if matches.is_present("collator") {
 		info!("Starting collator.");
 		role = service::Role::COLLATOR;
 	}
-	else if let Some(_) = matches.subcommand_matches("validator") {
+	else if matches.is_present("validator") {
 		info!("Starting validator.");
 		role = service::Role::VALIDATOR;
 	}
 
 	config.roles = role;
+	config.network.boot_nodes = matches
+		.values_of("bootnodes")
+		.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
+	config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
+	config.network.net_config_path = config.network.config_path.clone();
+
+	let port = match matches.value_of("port") {
+		Some(port) => port.parse().expect("Invalid p2p port value specified."),
+		None => 30333,
+	};
+	config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
+
+	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 
 	let service = service::Service::new(config)?;
 
-	let address = "127.0.0.1:9933".parse().unwrap();
+	let mut address: SocketAddr = "127.0.0.1:9933".parse().unwrap();
+	if let Some(port) = matches.value_of("rpc-port") {
+		let rpc_port: u16 = port.parse().expect("Invalid RPC port value specified.");
+		address.set_port(rpc_port);
+	}
 	let handler = rpc::rpc_handler(service.client());
 	let server = rpc::start_http(&address, handler)?;
 
 	server.wait();
-	println!("No command given.\n");
-	let _ = clap::App::from_yaml(yaml).print_long_help();
-
 	Ok(())
 }
 
-fn default_keystore_path() -> PathBuf {
+fn keystore_path(base_path: &Path) -> PathBuf {
+	let mut path = base_path.to_owned();
+	path.push("keystore");
+	path
+}
+
+fn network_path(base_path: &Path) -> PathBuf {
+	let mut path = base_path.to_owned();
+	path.push("network");
+	path
+}
+
+fn default_base_path() -> PathBuf {
 	use app_dirs::{AppInfo, AppDataType};
 
 	let app_info = AppInfo {
@@ -103,13 +142,11 @@ fn default_keystore_path() -> PathBuf {
 		author: "Parity Technologies",
 	};
 
-	app_dirs::get_app_dir(
+	app_dirs::get_app_root(
 		AppDataType::UserData,
 		&app_info,
-		"keystore",
 	).expect("app directories exist on all supported platforms; qed")
 }
-
 fn init_logger(pattern: &str) {
 	let mut builder = env_logger::LogBuilder::new();
 	// Disable info logging by default for some modules:

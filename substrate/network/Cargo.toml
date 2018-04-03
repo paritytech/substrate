@@ -17,7 +17,6 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 futures = "0.1.17"
-multiqueue = "0.3"
 ethcore-network = { git = "https://github.com/paritytech/parity.git" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ed25519 = { path = "../../substrate/ed25519" }

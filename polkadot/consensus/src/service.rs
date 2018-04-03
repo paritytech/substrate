@@ -26,7 +26,6 @@ use parking_lot::Mutex;
 use substrate_network as net;
 use tokio_core::reactor;
 use client::BlockchainEvents;
-use substrate_keyring::Keyring;
 use primitives::{Hash, AuthorityId};
 use primitives::block::{Id as BlockId, HeaderHash, Header};
 use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
@@ -136,14 +135,18 @@ struct Network(Arc<net::ConsensusService>);
 
 impl Service {
 	/// Create and start a new instance.
-	pub fn new<C>(client: Arc<C>, network: Arc<net::ConsensusService>, transaction_pool: Arc<Mutex<TransactionPool>>, best_header: &Header) -> Service
+	pub fn new<C>(
+		client: Arc<C>,
+		network: Arc<net::ConsensusService>,
+		transaction_pool: Arc<Mutex<TransactionPool>>,
+		key: ed25519::Pair,
+		best_header: &Header) -> Service
 		where C: BlockchainEvents + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
 	{
-
 		let best_header = best_header.clone();
 		let thread = thread::spawn(move || {
 			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
-			let key = Arc::new(Keyring::One.into());
+			let key = Arc::new(key);
 			let factory = ProposerFactory {
 				client: client.clone(),
 				transaction_pool: transaction_pool.clone(),

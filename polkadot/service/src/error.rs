@@ -18,18 +18,15 @@
 
 use client;
 use network;
+use keystore;
 
 error_chain! {
 	links {
 		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
 		Network(network::error::Error, network::error::ErrorKind) #[doc="Network error"];
+		Keystore(keystore::Error, keystore::ErrorKind) #[doc="Keystore error"];
 	}
 
 	errors {
-		/// Key store errors
-		Keystore(e: ::keystore::Error) {
-			description("Keystore error"),
-			display("Keystore error: {:?}", e),
-		}
 	}
 }

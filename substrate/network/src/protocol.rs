@@ -19,17 +19,16 @@ use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
 use parking_lot::{RwLock, Mutex};
-use multiqueue;
 use futures::sync::oneshot;
 use serde_json;
 use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber, Header, Id as BlockId};
-use primitives::Hash;
+use primitives::{Hash, blake2_256};
 use network::{PeerId, NodeId};
 
 use message::{self, Message};
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use consensus::Consensus;
-use service::{Role, TransactionPool};
+use service::{Role, TransactionPool, StatementStream, BftMessageStream};
 use config::ProtocolConfig;
 use chain::Client;
 use io::SyncIo;
@@ -177,10 +176,10 @@ impl Protocol {
 			Message::BlockAnnounce(announce) => {
 				self.on_block_announce(io, peer_id, announce);
 			},
-			Message::Statement(s) => self.on_statement(io, peer_id, s),
+			Message::Statement(s) => self.on_statement(io, peer_id, s, blake2_256(data).into()),
 			Message::CandidateRequest(r) => self.on_candidate_request(io, peer_id, r),
 			Message::CandidateResponse(r) => self.on_candidate_response(io, peer_id, r),
-			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m),
+			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m, blake2_256(data).into()),
 			Message::Transactions(m) => self.on_transactions(io, peer_id, m),
 		}
 	}
@@ -203,6 +202,11 @@ impl Protocol {
 			debug!(target:"sync", "Error sending message: {:?}", e);
 			io.disconnect_peer(peer_id);
 		}
+	}
+
+	pub fn hash_message(message: &Message) -> Hash {
+		let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
+		blake2_256(&data).into()
 	}
 
 	/// Called when a new peer is connected
@@ -294,14 +298,14 @@ impl Protocol {
 		self.consensus.lock().on_candidate_response(io, self, peer, response);
 	}
 
-	fn on_statement(&self, _io: &mut SyncIo, peer: PeerId, statement: message::Statement) {
+	fn on_statement(&self, io: &mut SyncIo, peer: PeerId, statement: message::Statement, hash: Hash) {
 		trace!(target: "sync", "Statement from {}: {:?}", peer, statement);
-		self.consensus.lock().on_statement(peer, statement);
+		self.consensus.lock().on_statement(io, self, peer, statement, hash);
 	}
 
-	fn on_bft_message(&self, _io: &mut SyncIo, peer: PeerId, message: message::BftMessage) {
+	fn on_bft_message(&self, io: &mut SyncIo, peer: PeerId, message: message::BftMessage, hash: Hash) {
 		trace!(target: "sync", "BFT message from {}: {:?}", peer, message);
-		self.consensus.lock().on_bft_message(peer, message);
+		self.consensus.lock().on_bft_message(io, self, peer, message, hash);
 	}
 
 	/// See `ConsensusService` trait.
@@ -310,12 +314,12 @@ impl Protocol {
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<message::BftMessage> {
+	pub fn bft_messages(&self) -> BftMessageStream {
 		self.consensus.lock().bft_messages()
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn statements(&self) -> multiqueue::BroadcastFutReceiver<message::Statement> {
+	pub fn statements(&self) -> StatementStream {
 		self.consensus.lock().statements()
 	}
 
@@ -337,6 +341,7 @@ impl Protocol {
 	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.maintain_peers(io);
+		self.consensus.lock().collect_garbage();
 	}
 
 	fn maintain_peers(&self, io: &mut SyncIo) {
