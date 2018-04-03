@@ -16,7 +16,8 @@
 
 //! Generic implementations of Extrinsic/Header/Block.
 
-use serde::Serialize;
+#[cfg(feature = "std")] use serde::Serialize;
+use rstd::prelude::*;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
 use traits;
@@ -251,9 +252,10 @@ impl<Item> traits::Digest for Digest<Item> where
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Header<Number, Hash, DigestItem> where
 	Number: Member,
 	Hash: Member,
@@ -317,9 +319,10 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature> where
 	Number: Member,
 	Hash: Member,

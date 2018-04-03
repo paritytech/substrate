@@ -25,7 +25,7 @@ extern crate num_traits;
 extern crate integer_sqrt;
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
-#[cfg(feature = "std")] extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 

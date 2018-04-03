@@ -572,6 +572,7 @@ impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 
 #[cfg(any(feature = "std", test))]
 pub struct DummyContractAddressFor;
+#[cfg(any(feature = "std", test))]
 impl ContractAddressFor<u64> for DummyContractAddressFor {
 	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
 		origin + 1

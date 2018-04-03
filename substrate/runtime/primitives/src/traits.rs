@@ -18,6 +18,7 @@
 
 use rstd::prelude::*;
 use rstd;
+#[cfg(not(feature = "std"))] use runtime_io;
 use substrate_primitives;
 use codec::{Input, Slicable};
 use substrate_primitives::hash::H512;
