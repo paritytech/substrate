@@ -166,17 +166,18 @@ impl Service {
 				let output = BftSink { network: network.clone(), _e: Default::default() };
 				Ok(bft_service.build_upon(&header, input, output)?)
 			};
-			// Kickstart BFT agreement on start.
-			if let Err(e) = build_bft(&best_header)
-				.map_err(|e| debug!("Error creating initial BFT agreement: {:?}", e))
-				.and_then(|bft| core.run(bft))
-			{
-				debug!("Error starting initial BFT agreement: {:?}", e);
-			}
-			let bft = client.import_notification_stream().and_then(|notification| {
-				build_bft(&notification.header).map_err(|e| debug!("BFT agreement error: {:?}", e))
-			}).for_each(|f| f);
-			if let Err(e) = core.run(bft) {
+			let handle = core.handle();
+			let notifications = client.import_notification_stream().for_each(|notification| {
+				if notification.is_new_best {
+					match build_bft(&notification.header) {
+						Ok(Some(bft)) => handle.spawn(bft),
+						Ok(None) => {},
+						Err(e) => debug!("BFT agreement error: {:?}", e),
+					}
+				}
+				Ok(())
+			});
+			if let Err(e) = core.run(notifications) {
 				debug!("BFT event loop error {:?}", e);
 			}
 		});

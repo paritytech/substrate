@@ -7,6 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 futures = "0.1.17"
 parking_lot = "0.4"
 tokio-timer = "0.1.2"
+tokio-core = "0.1.12"
 ed25519 = { path = "../../substrate/ed25519" }
 error-chain = "0.11"
 log = "0.4"
@@ -19,7 +20,5 @@ substrate-bft = { path = "../../substrate/bft" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
-
-tokio-core = "0.1.12"
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-client = { path = "../../substrate/client" }
