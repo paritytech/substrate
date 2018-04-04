@@ -233,6 +233,8 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 			extrinsics: extrinsics.clone(),
 		};
 
+		builder.initialise_block()?;
+
 		for inherent in extrinsics {
 			builder.apply_extrinsic(inherent)?;
 		}
@@ -255,6 +257,32 @@ pub struct ClientBlockBuilder<S> {
 impl<S: state_machine::Backend> ClientBlockBuilder<S>
 	where S::Error: Into<client::error::Error>
 {
+	// executes a extrinsic, inherent or otherwise, without appending to the list
+	fn initialise_block(&mut self) -> Result<()> {
+		let mut ext = state_machine::Ext {
+			overlay: &mut self.changes,
+			backend: &self.state,
+		};
+
+		let h = self.header.clone();
+
+		let result = ::substrate_executor::with_native_environment(
+			&mut ext,
+			|| runtime::Executive::initialise_block(&h),
+		).map_err(Into::into);
+
+		match result {
+			Ok(_) => {
+				ext.overlay.commit_prospective();
+				Ok(())
+			}
+			Err(e) => {
+				ext.overlay.discard_prospective();
+				Err(e)
+			}
+		}
+	}
+
 	// executes a extrinsic, inherent or otherwise, without appending to the list
 	fn apply_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
 		let mut ext = state_machine::Ext {
@@ -340,10 +368,10 @@ mod tests {
 				validators: validators(),
 				session_length: 100,
 			}),
-			council: None,
-			democracy: None,
-			parachains: None,
-			staking: None,
+			council: Some(Default::default()),
+			democracy: Some(Default::default()),
+			parachains: Some(Default::default()),
+			staking: Some(Default::default()),
 		};
 		::client::new_in_mem(
 			LocalDispatch::new(),

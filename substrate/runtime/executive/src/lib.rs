@@ -124,8 +124,6 @@ impl<
 	/// Apply outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) {
-		<system::ExtrinsicIndex<System>>::put(<system::ExtrinsicIndex<System>>::get() + 1u32);
-
 		// Verify the signature is good.
 		let xt = match uxt.check() {
 			Ok(xt) => xt,
@@ -146,6 +144,8 @@ impl<
 
 		// decode parameters and dispatch
 		xt.apply();
+
+		<system::ExtrinsicIndex<System>>::put(<system::ExtrinsicIndex<System>>::get() + 1u32);
 	}
 
 	fn final_checks(header: &System::Header) {

@@ -64,9 +64,9 @@ impl<T: Trait> Module<T> {
 	fn set(aux: &T::PublicAux, now: T::Value) {
 		assert!(aux.is_empty());
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
+		assert!(<system::Module<T>>::extrinsic_index() == 0, "Timestamp must be first extrinsic in the block");
 		<Self as Store>::Now::put(now);
 		<Self as Store>::DidUpdate::put(true);
-		assert!(<system::Module<T>>::extrinsic_index() == 0, "Timestamp must be first extrinsic in the block");
 	}
 }
 
