@@ -17,8 +17,7 @@
 use std::sync::Arc;
 use std::collections::{BTreeMap};
 use std::io;
-use multiqueue;
-use futures::sync::oneshot;
+use futures::sync::{oneshot, mpsc};
 use network::{NetworkProtocolHandler, NetworkService, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use primitives::block::{TransactionHash, Header};
@@ -37,9 +36,9 @@ pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 /// Type that represents statement stream.
-pub type StatementStream = multiqueue::BroadcastFutReceiver<Statement>;
+pub type StatementStream = mpsc::UnboundedReceiver<Statement>;
 /// Type that represents bft messages stream.
-pub type BftMessageStream = multiqueue::BroadcastFutReceiver<BftMessage>;
+pub type BftMessageStream = mpsc::UnboundedReceiver<BftMessage>;
 
 bitflags! {
 	/// Node roles bitmask.
@@ -80,7 +79,7 @@ pub trait TransactionPool: Send + Sync {
 /// ConsensusService
 pub trait ConsensusService: Send + Sync {
 	/// Get statement stream.
-	fn statements(&self) -> multiqueue::BroadcastFutReceiver<Statement>;
+	fn statements(&self) -> StatementStream;
 	/// Send out a statement.
 	fn send_statement(&self, statement: Statement);
 	/// Maintain connectivity to given addresses.
@@ -92,7 +91,7 @@ pub trait ConsensusService: Send + Sync {
 	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>);
 
 	/// Get BFT message stream.
-	fn bft_messages(&self) -> multiqueue::BroadcastFutReceiver<BftMessage>;
+	fn bft_messages(&self) -> BftMessageStream;
 	/// Send out a BFT message.
 	fn send_bft_message(&self, message: BftMessage);
 }
@@ -228,7 +227,7 @@ impl SyncProvider for Service {
 
 /// ConsensusService
 impl ConsensusService for Service {
-	fn statements(&self) -> multiqueue::BroadcastFutReceiver<Statement> {
+	fn statements(&self) -> StatementStream {
 		self.handler.protocol.statements()
 	}
 

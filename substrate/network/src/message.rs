@@ -26,7 +26,7 @@ pub type RequestId = u64;
 type Bytes = Vec<u8>;
 
 /// Configured node role.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum Role {
 	/// Full relay chain client with no additional responsibilities.
 	Full,
@@ -213,7 +213,7 @@ pub enum SignedConsensusMessage {
 	/// A vote.
 	Vote(SignedConsensusVote),
 }
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 /// A network message.
 pub enum Message {
 	/// Status packet.
@@ -236,7 +236,7 @@ pub enum Message {
 	BftMessage(BftMessage),
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Status {
 	/// Protocol version.
 	pub version: u32,
@@ -291,7 +291,7 @@ pub struct CandidateResponse {
 	pub data: Option<Vec<u8>>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 /// Response to `BlockRequest`
 pub struct BlockResponse {
 	/// Id of a request this response was made for.
@@ -300,7 +300,7 @@ pub struct BlockResponse {
 	pub blocks: Vec<BlockData>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 /// Announce a new complete relay chain block on the network.
 pub struct BlockAnnounce {
 	/// New block header.
