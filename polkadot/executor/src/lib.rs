@@ -27,8 +27,4 @@ extern crate polkadot_primitives as polkadot_primitives;
 extern crate ed25519;
 extern crate triehash;
 
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate substrate_runtime_support as runtime_support;
-#[cfg(test)] #[macro_use] extern crate hex_literal;
-
 native_executor_instance!(pub Executor, polkadot_runtime::api::dispatch, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm"));

@@ -16,10 +16,13 @@
 
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
-use {runtime_io, runtime_primitives, polkadot_primitives};
-use rstd::marker::PhantomData;
+use polkadot_primitives;
+#[cfg(any(feature = "std", test))] use {runtime_io, runtime_primitives};
+use rstd::prelude::*;
+#[cfg(any(feature = "std", test))] use rstd::marker::PhantomData;
 use codec::{Slicable, Joiner};
-use runtime_support::{StorageValue, Hashable};
+use runtime_support::Hashable;
+#[cfg(any(feature = "std", test))] use runtime_support::StorageValue;
 use runtime_primitives::traits::Executable;
 use polkadot_primitives::parachain::{Id, Chain, DutyRoster};
 use {system, session};

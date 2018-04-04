@@ -1,25 +1,28 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Polkadot.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Polkadot is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Polkadot is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Substrate Demo runtime. This can be compiled with ``#[no_std]`, ready for Wasm.
+//! The Polkadot runtime. This can be compiled with ``#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
+#[cfg_attr(feature = "std", macro_use)] extern crate substrate_primitives;
+extern crate substrate_codec as codec;
 #[macro_use] extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
@@ -31,27 +34,20 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 extern crate polkadot_primitives;
 
+mod parachains;
+
+use rstd::prelude::*;
 use runtime_io::BlakeTwo256;
 use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Identity, HasPublicAux};
-//#[cfg(feature = "std")] pub use runtime_primitives::BuildExternalities;
+pub use runtime_primitives::BuildExternalities;
 
 pub struct Concrete;
 
 impl HasPublicAux for Concrete {
-	type PublicAux = AccountId;
+	type PublicAux = AccountId;	// TODO: Option<AccountId>
 }
-
-impl timestamp::Trait for Concrete {
-	type Value = u64;
-}
-pub type Timestamp = timestamp::Module<Concrete>;
-
-impl consensus::Trait for Concrete {
-	type SessionKey = SessionKey;
-}
-pub type Consensus = consensus::Module<Concrete>;
 
 impl system::Trait for Concrete {
 	type Index = Index;
@@ -64,8 +60,20 @@ impl system::Trait for Concrete {
 }
 pub type System = system::Module<Concrete>;
 
-impl session::Trait for Concrete {
+impl consensus::Trait for Concrete {
 	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type SessionKey = SessionKey;
+}
+pub type Consensus = consensus::Module<Concrete>;
+pub use consensus::Call as ConsensusCall;
+
+impl timestamp::Trait for Concrete {
+	type Value = u64;
+}
+pub type Timestamp = timestamp::Module<Concrete>;
+pub use timestamp::Call as TimestampCall;
+
+impl session::Trait for Concrete {
 	type ConvertAccountIdToSessionKey = Identity;
 }
 pub type Session = session::Module<Concrete>;
@@ -85,8 +93,12 @@ impl council::Trait for Concrete {}
 pub type Council = council::Module<Concrete>;
 pub type CouncilVoting = council::voting::Module<Concrete>;
 
+impl parachains::Trait for Concrete {}
+pub type Parachains = parachains::Module<Concrete>;
+
 impl_outer_dispatch! {
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
+		Consensus = 0,
 		Session = 1,
 		Staking = 2,
 		Timestamp = 3,
@@ -110,7 +122,7 @@ pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, AccountId, Index, Ca
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
 pub type Executive = executive::Executive<Concrete, Block, Staking,
-	(((((), Council), Democracy), Staking), Session)>;
+	((((((), Parachains), Council), Democracy), Staking), Session)>;
 
 impl_outer_config! {
 	pub struct GenesisConfig for Concrete {
@@ -120,6 +132,7 @@ impl_outer_config! {
 		StakingConfig => staking,
 		DemocracyConfig => democracy,
 		CouncilConfig => council,
+		ParachainsConfig => parachains,
 	}
 }
 
@@ -134,3 +147,153 @@ pub mod api {
 		validators => |()| super::Session::validators()
 	);
 }
+/*
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use codec::Slicable;
+	use substrate_serializer as ser;
+
+	#[test]
+	fn test_header_serialization() {
+		let header = Header {
+			parent_hash: 5.into(),
+			number: 67,
+			state_root: 3.into(),
+			transaction_root: 6.into(),
+			digest: Digest { logs: vec![Log(vec![1])] },
+		};
+
+		assert_eq!(ser::to_string_pretty(&header), r#"{
+  "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000005",
+  "number": 67,
+  "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000003",
+  "transactionRoot": "0x0000000000000000000000000000000000000000000000000000000000000006",
+  "digest": {
+    "logs": [
+      "0x01"
+    ]
+  }
+}"#);
+
+		let v = header.encode();
+		assert_eq!(Header::decode(&mut &v[..]).unwrap(), header);
+	}
+
+	#[test]
+	fn block_encoding_round_trip() {
+		let mut block = Block {
+			header: Header::from_block_number(1),
+			body: Body {
+				timestamp: 100_000_000,
+				transactions: Vec::new(),
+			}
+		};
+
+		let raw = block.encode();
+		let decoded = Block::decode(&mut &raw[..]).unwrap();
+
+		assert_eq!(block, decoded);
+
+		block.body.transactions.push(UncheckedTransaction {
+			transaction: ::transaction::Transaction {
+				function: Function::StakingStake,
+				signed: Default::default(),
+				nonce: 10101,
+			},
+			signature: Default::default(),
+		});
+
+		let raw = block.encode();
+		let decoded = Block::decode(&mut &raw[..]).unwrap();
+
+		assert_eq!(block, decoded);
+	}
+
+	#[test]
+	fn block_encoding_substrate_round_trip() {
+		let mut block = Block {
+			header: Header::from_block_number(1),
+			body: Body {
+				timestamp: 100_000_000,
+				transactions: Vec::new(),
+			}
+		};
+
+		block.body.transactions.push(UncheckedTransaction {
+			transaction: ::transaction::Transaction {
+				function: Function::StakingStake,
+				signed: Default::default(),
+				nonce: 10101,
+			},
+			signature: Default::default(),
+		});
+
+		let raw = block.encode();
+		let decoded_substrate = ::primitives::block::Block::decode(&mut &raw[..]).unwrap();
+		let encoded_substrate = decoded_substrate.encode();
+		let decoded = Block::decode(&mut &encoded_substrate[..]).unwrap();
+
+		assert_eq!(block, decoded);
+	}
+
+	#[test]
+	fn decode_body_without_inherents_fails() {
+		let substrate_blank = ::primitives::block::Block {
+			header: ::primitives::block::Header::from_block_number(1),
+			transactions: Vec::new(),
+		};
+
+		let encoded_substrate = substrate_blank.encode();
+		assert!(Block::decode(&mut &encoded_substrate[..]).is_none());
+	}
+
+	#[test]
+	fn inherent_transactions_iter_contains_all_inherent() {
+		let block = Block {
+			header: Header::from_block_number(1),
+			body: Body {
+				timestamp: 10101,
+				transactions: Vec::new(),
+			}
+		};
+
+		let mut iter = block.inherent_transactions();
+
+		assert_eq!(InherentFunction::count(), 1); // following depends on this assertion.
+		assert_eq!(iter.next().unwrap(), UncheckedTransaction::inherent(InherentFunction::TimestampSet(10101)));
+		assert!(iter.next().is_none());
+	}
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use primitives;
+	use ::codec::Slicable;
+	use primitives::hexdisplay::HexDisplay;
+
+	#[test]
+	fn serialize_unchecked() {
+		let tx = UncheckedTransaction {
+			transaction: Transaction {
+				signed: [1; 32],
+				nonce: 999u64,
+				function: Function::Inherent(InherentFunction::TimestampSet(135135)),
+			},
+			signature: primitives::hash::H512([0; 64]).into(),
+		};
+		// 71000000
+		// 0101010101010101010101010101010101010101010101010101010101010101
+		// e703000000000000
+		// 00
+		// df0f0200
+		// 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+		let v = Slicable::encode(&tx);
+		println!("{}", HexDisplay::from(&v));
+		assert_eq!(UncheckedTransaction::decode(&mut &v[..]).unwrap(), tx);
+	}
+}
+*/
