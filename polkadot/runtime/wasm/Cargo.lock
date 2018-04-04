@@ -654,8 +654,9 @@ name = "substrate-runtime-support"
 version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
- "environmental 0.1.0",
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",

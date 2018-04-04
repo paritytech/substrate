@@ -94,7 +94,7 @@ pub enum Proposal {
 
 impl Slicable for Proposal {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let id = try_opt!(u8::decode(input).and_then(InternalFunctionId::from_u8));
+		let id = InternalFunctionId::from_u8(input.read_byte()?)?;
 		let function = match id {
 			InternalFunctionId::SystemSetCode =>
 				Proposal::SystemSetCode(try_opt!(Slicable::decode(input))),
@@ -119,33 +119,33 @@ impl Slicable for Proposal {
 		let mut v = Vec::new();
 		match *self {
 			Proposal::SystemSetCode(ref data) => {
-				(InternalFunctionId::SystemSetCode as u8).using_encoded(|s| v.extend(s));
+				v.push(InternalFunctionId::SystemSetCode as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 			Proposal::SessionSetLength(ref data) => {
-				(InternalFunctionId::SessionSetLength as u8).using_encoded(|s| v.extend(s));
+				v.push(InternalFunctionId::SessionSetLength as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 			Proposal::SessionForceNewSession => {
-				(InternalFunctionId::SessionForceNewSession as u8).using_encoded(|s| v.extend(s));
+				v.push(InternalFunctionId::SessionForceNewSession as u8);
 			}
 			Proposal::StakingSetSessionsPerEra(ref data) => {
-				(InternalFunctionId::StakingSetSessionsPerEra as u8).using_encoded(|s| v.extend(s));
+				v.push(InternalFunctionId::StakingSetSessionsPerEra as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 			Proposal::StakingSetBondingDuration(ref data) => {
-				(InternalFunctionId::StakingSetBondingDuration as u8).using_encoded(|s| v.extend(s));
+				v.push(InternalFunctionId::StakingSetBondingDuration as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 			Proposal::StakingSetValidatorCount(ref data) => {
-				(InternalFunctionId::StakingSetValidatorCount as u8).using_encoded(|s| v.extend(s));
+				v.push(InternalFunctionId::StakingSetValidatorCount as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 			Proposal::StakingForceNewEra => {
-				(InternalFunctionId::StakingForceNewEra as u8).using_encoded(|s| v.extend(s));
+				v.push(InternalFunctionId::StakingForceNewEra as u8);
 			}
 			Proposal::GovernanceSetApprovalPpmRequired(ref data) => {
-				(InternalFunctionId::GovernanceSetApprovalPpmRequired as u8).using_encoded(|s| v.extend(s));
+				v.push(InternalFunctionId::GovernanceSetApprovalPpmRequired as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 		}
@@ -267,7 +267,7 @@ impl Function {
 
 impl Slicable for Function {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let id = try_opt!(u8::decode(input).and_then(FunctionId::from_u8));
+		let id = FunctionId::from_u8(input.read_byte()?)?;
 		Some(match id {
 			FunctionId::TimestampSet =>
 				Function::Inherent(InherentFunction::TimestampSet(try_opt!(Slicable::decode(input)))),
@@ -293,34 +293,34 @@ impl Slicable for Function {
 		let mut v = Vec::new();
 		match *self {
 			Function::Inherent(InherentFunction::TimestampSet(ref data)) => {
-				(FunctionId::TimestampSet as u8).using_encoded(|s| v.extend(s));
+				v.push(FunctionId::TimestampSet as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 			Function::SessionSetKey(ref data) => {
-				(FunctionId::SessionSetKey as u8).using_encoded(|s| v.extend(s));
+				v.push(FunctionId::SessionSetKey as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 			Function::StakingStake => {
-				(FunctionId::StakingStake as u8).using_encoded(|s| v.extend(s));
+				v.push(FunctionId::StakingStake as u8);
 			}
 			Function::StakingUnstake => {
-				(FunctionId::StakingUnstake as u8).using_encoded(|s| v.extend(s));
+				v.push(FunctionId::StakingUnstake as u8);
 			}
 			Function::ReportMisbehavior(ref report) => {
-				(FunctionId::StakingReportMisbehavior as u8).using_encoded(|s| v.extend(s));
+				v.push(FunctionId::StakingReportMisbehavior as u8);
 				report.using_encoded(|s| v.extend(s));
 			}
 			Function::StakingTransfer(ref to, ref amount) => {
-				(FunctionId::StakingTransfer as u8).using_encoded(|s| v.extend(s));
+				v.push(FunctionId::StakingTransfer as u8);
 				to.using_encoded(|s| v.extend(s));
 				amount.using_encoded(|s| v.extend(s));
 			}
 			Function::GovernancePropose(ref data) => {
-				(FunctionId::GovernancePropose as u8).using_encoded(|s| v.extend(s));
+				v.push(FunctionId::GovernancePropose as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 			Function::GovernanceApprove(ref data) => {
-				(FunctionId::GovernanceApprove as u8).using_encoded(|s| v.extend(s));
+				v.push(FunctionId::GovernanceApprove as u8);
 				data.using_encoded(|s| v.extend(s));
 			}
 		}
@@ -365,7 +365,7 @@ impl Slicable for Transaction {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for Transaction {}
+
 
 /// A transactions right from the external world. Unchecked.
 #[derive(Eq, Clone)]
@@ -441,7 +441,7 @@ impl Slicable for UncheckedTransaction {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for UncheckedTransaction {}
+
 
 impl PartialEq for UncheckedTransaction {
 	fn eq(&self, other: &Self) -> bool {

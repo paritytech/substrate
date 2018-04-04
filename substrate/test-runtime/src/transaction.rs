@@ -53,7 +53,7 @@ impl Slicable for Transaction {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for Transaction {}
+
 
 #[cfg(test)]
 mod tests {

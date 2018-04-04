@@ -41,6 +41,7 @@ extern crate polkadot_transaction_pool as transaction_pool;
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_network;
 
 extern crate tokio_core;
@@ -58,6 +59,7 @@ use std::sync::Arc;
 use codec::Slicable;
 use table::{Table, Context as TableContextTrait};
 use table::generic::Statement as GenericStatement;
+use runtime_support::Hashable;
 use polkadot_api::{PolkadotApi, BlockBuilder};
 use polkadot_primitives::{Hash, Timestamp};
 use polkadot_primitives::block::Block as PolkadotBlock;
@@ -480,7 +482,7 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 	type Error = Error;
 
 	fn init(&self, parent_header: &SubstrateHeader, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
-		let parent_hash = parent_header.hash();
+		let parent_hash = parent_header.blake2_256().into();
 
 		let checked_id = self.client.check_id(BlockId::Hash(parent_hash))?;
 		let duty_roster = self.client.duty_roster(&checked_id)?;
