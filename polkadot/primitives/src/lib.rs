@@ -46,6 +46,9 @@ pub const EVERYBODY: AccountId = [255u8; 32];
 /// Something that identifies a block.
 pub use primitives::block::Id as BlockId;
 
+/// The type of digest item.
+pub use primitives::block::Log as Log;
+
 /// An index to a block.
 pub type BlockNumber = u64;
 

@@ -22,6 +22,7 @@ extern crate substrate_runtime_std as rstd;
 #[macro_use] extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support as runtime_support;
 #[cfg_attr(feature = "std", macro_use)] extern crate substrate_primitives;
+#[cfg(test)] extern crate substrate_serializer;
 extern crate substrate_codec as codec;
 #[macro_use] extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_consensus as consensus;
@@ -36,9 +37,8 @@ extern crate polkadot_primitives;
 
 mod parachains;
 
-use rstd::prelude::*;
 use runtime_io::BlakeTwo256;
-use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
+use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Identity, HasPublicAux};
 pub use runtime_primitives::BuildExternalities;
@@ -55,9 +55,9 @@ impl system::Trait for Concrete {
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
 	type Hashing = BlakeTwo256;
-	type Digest = generic::Digest<Vec<u8>>;
+	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
-	type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+	type Header = generic::Header<BlockNumber, Hash, Log>;
 }
 /// System module for this concrete runtime.
 pub type System = system::Module<Concrete>;
@@ -127,9 +127,9 @@ impl_outer_dispatch! {
 }
 
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+pub type Header = generic::Header<BlockNumber, Hash, Log>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, AccountId, Index, Call, Signature>;
+pub type Block = generic::Block<BlockNumber, Hash, Log, AccountId, Index, Call, Signature>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 /// Extrinsic type as expected by this runtime.
@@ -161,12 +161,16 @@ pub mod api {
 		validators => |()| super::Session::validators()
 	);
 }
-/*
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Slicable;
+	use substrate_primitives as primitives;
+	use ::codec::Slicable;
+	use substrate_primitives::hexdisplay::HexDisplay;
 	use substrate_serializer as ser;
+	use runtime_primitives::traits::{Digest as DigestT, Header as HeaderT};
+	type Digest = generic::Digest<Log>;
 
 	#[test]
 	fn test_header_serialization() {
@@ -174,15 +178,15 @@ mod tests {
 			parent_hash: 5.into(),
 			number: 67,
 			state_root: 3.into(),
-			transaction_root: 6.into(),
-			digest: Digest { logs: vec![Log(vec![1])] },
+			extrinsics_root: 6.into(),
+			digest: { let mut d = Digest::default(); d.push(Log(vec![1])); d },
 		};
 
 		assert_eq!(ser::to_string_pretty(&header), r#"{
   "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000005",
   "number": 67,
   "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000003",
-  "transactionRoot": "0x0000000000000000000000000000000000000000000000000000000000000006",
+  "extrinsicsRoot": "0x0000000000000000000000000000000000000000000000000000000000000006",
   "digest": {
     "logs": [
       "0x01"
@@ -197,11 +201,17 @@ mod tests {
 	#[test]
 	fn block_encoding_round_trip() {
 		let mut block = Block {
-			header: Header::from_block_number(1),
-			body: Body {
-				timestamp: 100_000_000,
-				transactions: Vec::new(),
-			}
+			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default()),
+			extrinsics: vec![
+				UncheckedExtrinsic {
+					extrinsic: Extrinsic {
+						function: Call::Timestamp(timestamp::Call::set(100_000_000)),
+						signed: Default::default(),
+						index: Default::default(),
+					},
+					signature: Default::default(),
+				}
+			],
 		};
 
 		let raw = block.encode();
@@ -209,11 +219,11 @@ mod tests {
 
 		assert_eq!(block, decoded);
 
-		block.body.transactions.push(UncheckedTransaction {
-			transaction: ::transaction::Transaction {
-				function: Function::StakingStake,
+		block.extrinsics.push(UncheckedExtrinsic {
+			extrinsic: Extrinsic {
+				function: Call::Staking(staking::Call::stake()),
 				signed: Default::default(),
-				nonce: 10101,
+				index: 10101,
 			},
 			signature: Default::default(),
 		});
@@ -227,24 +237,30 @@ mod tests {
 	#[test]
 	fn block_encoding_substrate_round_trip() {
 		let mut block = Block {
-			header: Header::from_block_number(1),
-			body: Body {
-				timestamp: 100_000_000,
-				transactions: Vec::new(),
-			}
+			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default()),
+			extrinsics: vec![
+				UncheckedExtrinsic {
+					extrinsic: Extrinsic {
+						function: Call::Timestamp(timestamp::Call::set(100_000_000)),
+						signed: Default::default(),
+						index: Default::default(),
+					},
+					signature: Default::default(),
+				}
+			],
 		};
 
-		block.body.transactions.push(UncheckedTransaction {
-			transaction: ::transaction::Transaction {
-				function: Function::StakingStake,
+		block.extrinsics.push(UncheckedExtrinsic {
+			extrinsic: Extrinsic {
+				function: Call::Staking(staking::Call::stake()),
 				signed: Default::default(),
-				nonce: 10101,
+				index: 10101,
 			},
 			signature: Default::default(),
 		});
 
 		let raw = block.encode();
-		let decoded_substrate = ::primitives::block::Block::decode(&mut &raw[..]).unwrap();
+		let decoded_substrate = primitives::block::Block::decode(&mut &raw[..]).unwrap();
 		let encoded_substrate = decoded_substrate.encode();
 		let decoded = Block::decode(&mut &encoded_substrate[..]).unwrap();
 
@@ -252,49 +268,12 @@ mod tests {
 	}
 
 	#[test]
-	fn decode_body_without_inherents_fails() {
-		let substrate_blank = ::primitives::block::Block {
-			header: ::primitives::block::Header::from_block_number(1),
-			transactions: Vec::new(),
-		};
-
-		let encoded_substrate = substrate_blank.encode();
-		assert!(Block::decode(&mut &encoded_substrate[..]).is_none());
-	}
-
-	#[test]
-	fn inherent_transactions_iter_contains_all_inherent() {
-		let block = Block {
-			header: Header::from_block_number(1),
-			body: Body {
-				timestamp: 10101,
-				transactions: Vec::new(),
-			}
-		};
-
-		let mut iter = block.inherent_transactions();
-
-		assert_eq!(InherentFunction::count(), 1); // following depends on this assertion.
-		assert_eq!(iter.next().unwrap(), UncheckedTransaction::inherent(InherentFunction::TimestampSet(10101)));
-		assert!(iter.next().is_none());
-	}
-}
-
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use primitives;
-	use ::codec::Slicable;
-	use primitives::hexdisplay::HexDisplay;
-
-	#[test]
 	fn serialize_unchecked() {
-		let tx = UncheckedTransaction {
-			transaction: Transaction {
+		let tx = UncheckedExtrinsic {
+			extrinsic: Extrinsic {
 				signed: [1; 32],
-				nonce: 999u64,
-				function: Function::Inherent(InherentFunction::TimestampSet(135135)),
+				index: 999u64,
+				function: Call::Timestamp(TimestampCall::set(135135)),
 			},
 			signature: primitives::hash::H512([0; 64]).into(),
 		};
@@ -307,7 +286,6 @@ mod tests {
 
 		let v = Slicable::encode(&tx);
 		println!("{}", HexDisplay::from(&v));
-		assert_eq!(UncheckedTransaction::decode(&mut &v[..]).unwrap(), tx);
+		assert_eq!(UncheckedExtrinsic::decode(&mut &v[..]).unwrap(), tx);
 	}
 }
-*/
