@@ -41,7 +41,7 @@ use runtime_io::BlakeTwo256;
 use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Identity, HasPublicAux};
-pub use runtime_primitives::BuildExternalities;
+#[cfg(feature = "std")] pub use runtime_primitives::BuildExternalities;
 
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
