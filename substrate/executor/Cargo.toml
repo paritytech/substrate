@@ -13,7 +13,7 @@ substrate-state-machine = { path = "../state-machine"  }
 ed25519 = { path = "../ed25519" }
 serde = "1.0"
 serde_derive = "1.0"
-parity-wasm = "0.15.0"
+wasmi = "0.1.0"
 byteorder = "1.1"
 rustc-hex = "1.0.0"
 triehash = "0.1.0"
