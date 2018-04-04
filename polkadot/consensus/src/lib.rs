@@ -89,7 +89,7 @@ pub trait TableRouter {
 	/// Future that resolves when extrinsic candidate data is fetched.
 	type FetchExtrinsic: IntoFuture<Item=Extrinsic,Error=Self::Error>;
 
-	/// Note local candidate data.
+	/// Note local candidate data, making it available on the network to other validators.
 	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: Extrinsic);
 
 	/// Fetch block data for a specific candidate.
@@ -107,6 +107,30 @@ pub trait Network {
 
 	/// Instantiate a table router using the given shared table.
 	fn table_router(&self, table: Arc<SharedTable>) -> Self::TableRouter;
+}
+
+/// A full collation.
+pub struct Collation {
+	/// Block data.
+	pub block_data: BlockData,
+	/// Extrinsic data.
+	pub extrinsic: Extrinsic,
+	/// The candidate receipt itself.
+	pub receipt: CandidateReceipt,
+}
+
+/// Encapsulates connections to collators and allows collation on any parachain.
+pub trait Collators {
+	/// Errors when producing collations.
+	type Error;
+	/// A full collation.
+	type Collation: IntoFuture<Item=Collation,Error=Self::Error>;
+
+	/// Collate on a specific parachain, building on a given relay chain parent hash.
+	fn collate(&self, parachain: ParaId, relay_parent: Hash) -> Self::Collation;
+
+	/// Note a bad collator.
+	fn note_bad_collator(&self, collator: Address);
 }
 
 /// Information about a specific group.
