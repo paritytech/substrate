@@ -21,6 +21,7 @@ pub mod generic;
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_support as runtime_support;
 extern crate ed25519;
 extern crate tokio_timer;
 extern crate parking_lot;
@@ -37,6 +38,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use codec::Slicable;
 use ed25519::LocalizedSignature;
+use runtime_support::Hashable;
 use primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction, Justification as PrimitiveJustification};
 use primitives::block::{Block, Id as BlockId, Header, HeaderHash};
 use primitives::AuthorityId;
@@ -176,7 +178,7 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	}
 
 	fn candidate_digest(&self, proposal: &Block) -> HeaderHash {
-		proposal.header.hash()
+		proposal.header.blake2_256().into()
 	}
 
 	fn sign_local(&self, message: Message) -> LocalizedMessage {
@@ -334,7 +336,7 @@ impl<P, I> BftService<P, I>
 		InStream: Stream<Item=Communication, Error=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
 		OutSink: Sink<SinkItem=Communication, SinkError=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
 	{
-		let hash = header.hash();
+		let hash = header.blake2_256().into();
 		let mut _preempted_consensus = None; // defers drop of live to the end.
 
 		let authorities = self.client.authorities(&BlockId::Hash(hash))?;
@@ -521,7 +523,7 @@ pub fn sign_message(message: Message, key: &ed25519::Pair, parent_hash: HeaderHa
 
 	match message {
 		::generic::Message::Propose(r, proposal) => {
-			let header_hash = proposal.header.hash();
+			let header_hash: HeaderHash = proposal.header.blake2_256().into();
 			let action_header = PrimitiveAction::ProposeHeader(r as u32, header_hash.clone());
 			let action_propose = PrimitiveAction::Propose(r as u32, proposal.clone());
 
@@ -664,11 +666,11 @@ mod tests {
 		let service = make_service(client);
 
 		let first = Header::from_block_number(2);
-		let first_hash = first.hash();
+		let first_hash = first.blake2_256().into();
 
 		let mut second = Header::from_block_number(3);
 		second.parent_hash = first_hash;
-		let second_hash = second.hash();
+		let second_hash = second.blake2_256().into();
 
 		let bft = service.build_upon(&first, stream::empty(), Output(Default::default())).unwrap();
 		assert!(service.live_agreements.lock().contains_key(&first_hash));

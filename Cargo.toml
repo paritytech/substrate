@@ -39,6 +39,15 @@ members = [
 	"substrate/runtime-io",
 	"substrate/runtime-std",
 	"substrate/runtime-support",
+	"substrate/runtime/consensus",
+	"substrate/runtime/council",
+	"substrate/runtime/democracy",
+	"substrate/runtime/executive",
+	"substrate/runtime/primitives",
+	"substrate/runtime/session",
+	"substrate/runtime/staking",
+	"substrate/runtime/system",
+	"substrate/runtime/timestamp",
 	"substrate/serializer",
 	"substrate/state-machine",
 	"substrate/test-runtime",
@@ -46,6 +55,7 @@ members = [
 	"demo/primitives",
 	"demo/executor",
 	"demo/cli",
+	"safe-mix",
 ]
 exclude = [
 	"polkadot/runtime/wasm",

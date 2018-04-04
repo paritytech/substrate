@@ -18,30 +18,150 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[allow(unused_imports)] #[macro_use] extern crate substrate_runtime_std as rstd;
-#[macro_use] extern crate substrate_runtime_io as runtime_io;
-#[macro_use] extern crate substrate_runtime_support as runtime_support;
-#[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
+#[macro_use]
+extern crate substrate_runtime_io as runtime_io;
 
-#[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
-#[cfg(feature = "std")] extern crate serde;
+#[macro_use]
+extern crate substrate_runtime_support as runtime_support;
 
-#[cfg(feature = "std")] extern crate rustc_hex;
+#[macro_use]
+extern crate substrate_runtime_primitives as runtime_primitives;
 
-extern crate substrate_codec as codec;
-#[cfg(feature = "std")] #[macro_use] extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_std as rstd;
+extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_council as council;
+extern crate substrate_runtime_democracy as democracy;
+extern crate substrate_runtime_executive as executive;
+extern crate substrate_runtime_session as session;
+extern crate substrate_runtime_staking as staking;
+extern crate substrate_runtime_system as system;
+extern crate substrate_runtime_timestamp as timestamp;
 extern crate demo_primitives;
 
-#[cfg(test)] #[macro_use] extern crate hex_literal;
+use rstd::prelude::*;
+use runtime_io::BlakeTwo256;
+use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
+use runtime_primitives::generic;
+use runtime_primitives::traits::{Identity, HasPublicAux};
 
-extern crate integer_sqrt;
+#[cfg(any(feature = "std", test))]
+pub use runtime_primitives::BuildExternalities;
 
-#[macro_use] pub mod dispatch;
+/// Concrete runtime type used to parameterize the various modules.
+pub struct Concrete;
 
-pub mod safe_mix;
-pub mod block;
-pub mod transaction;
-pub mod runtime;
-pub mod api;
+impl HasPublicAux for Concrete {
+	type PublicAux = AccountId;
+}
 
-#[cfg(feature = "std")] pub mod genesismap;
+impl timestamp::Trait for Concrete {
+	type Value = u64;
+}
+
+/// Timestamp module for this concrete runtime.
+pub type Timestamp = timestamp::Module<Concrete>;
+
+impl consensus::Trait for Concrete {
+	type SessionKey = SessionKey;
+}
+
+/// Consensus module for this concrete runtime.
+pub type Consensus = consensus::Module<Concrete>;
+
+impl system::Trait for Concrete {
+	type Index = Index;
+	type BlockNumber = BlockNumber;
+	type Hash = Hash;
+	type Hashing = BlakeTwo256;
+	type Digest = generic::Digest<Vec<u8>>;
+	type AccountId = AccountId;
+	type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+}
+
+/// System module for this concrete runtime.
+pub type System = system::Module<Concrete>;
+
+impl session::Trait for Concrete {
+	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type ConvertAccountIdToSessionKey = Identity;
+}
+
+/// Session module for this concrete runtime.
+pub type Session = session::Module<Concrete>;
+
+impl staking::Trait for Concrete {
+	type Balance = Balance;
+	type DetermineContractAddress = BlakeTwo256;
+}
+
+/// Staking module for this concrete runtime.
+pub type Staking = staking::Module<Concrete>;
+
+impl democracy::Trait for Concrete {
+	type Proposal = PrivCall;
+}
+
+/// Democracy module for this concrete runtime.
+pub type Democracy = democracy::Module<Concrete>;
+
+impl council::Trait for Concrete {}
+
+/// Council module for this concrete runtime.
+pub type Council = council::Module<Concrete>;
+/// Council voting module for this concrete runtime.
+pub type CouncilVoting = council::voting::Module<Concrete>;
+
+impl_outer_dispatch! {
+	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
+		Session = 1,
+		Staking = 2,
+		Timestamp = 3,
+		Democracy = 5,
+		Council = 6,
+		CouncilVoting = 7,
+	}
+
+	pub enum PrivCall {
+		Consensus = 0,
+		Session = 1,
+		Staking = 2,
+		Democracy = 5,
+		Council = 6,
+		CouncilVoting = 7,
+	}
+}
+
+/// Block header type as expected by this runtime.
+pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+/// Block type as expected by this runtime.
+pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, AccountId, Index, Call, Signature>;
+/// Unchecked extrinsic type as expected by this runtime.
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
+/// Extrinsic type as expected by this runtime.
+pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
+/// Executive: handles dispatch to the various modules.
+pub type Executive = executive::Executive<Concrete, Block, Staking,
+	(((((), Council), Democracy), Staking), Session)>;
+
+impl_outer_config! {
+	pub struct GenesisConfig for Concrete {
+		ConsensusConfig => consensus,
+		SystemConfig => system,
+		SessionConfig => session,
+		StakingConfig => staking,
+		DemocracyConfig => democracy,
+		CouncilConfig => council,
+	}
+}
+
+pub mod api {
+	impl_stubs!(
+		authorities => |()| super::Consensus::authorities(),
+		initialise_block => |header| super::Executive::initialise_block(&header),
+		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
+		execute_block => |block| super::Executive::execute_block(block),
+		finalise_block => |()| super::Executive::finalise_block(),
+		validator_count => |()| super::Session::validator_count(),
+		validators => |()| super::Session::validators()
+	);
+}

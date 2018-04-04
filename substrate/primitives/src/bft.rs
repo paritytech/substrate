@@ -23,7 +23,7 @@ use ::{AuthorityId, Signature};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-#[repr(u8)]
+#[repr(i8)]
 enum ActionKind {
 	Propose = 1,
 	ProposeHeader = 2,
@@ -83,27 +83,27 @@ impl Slicable for Action {
 	}
 
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		match u8::decode(value) {
-			Some(x) if x == ActionKind::Propose as u8 => {
+		match i8::decode(value) {
+			Some(x) if x == ActionKind::Propose as i8 => {
 				let (round, block) = try_opt!(Slicable::decode(value));
 				Some(Action::Propose(round, block))
 			}
-			Some(x) if x == ActionKind::ProposeHeader as u8 => {
+			Some(x) if x == ActionKind::ProposeHeader as i8 => {
 				let (round, hash) = try_opt!(Slicable::decode(value));
 
 				Some(Action::ProposeHeader(round, hash))
 			}
-			Some(x) if x == ActionKind::Prepare as u8 => {
+			Some(x) if x == ActionKind::Prepare as i8 => {
 				let (round, hash) = try_opt!(Slicable::decode(value));
 
 				Some(Action::Prepare(round, hash))
 			}
-			Some(x) if x == ActionKind::Commit as u8 => {
+			Some(x) if x == ActionKind::Commit as i8 => {
 				let (round, hash) = try_opt!(Slicable::decode(value));
 
 				Some(Action::Commit(round, hash))
 			}
-			Some(x) if x == ActionKind::AdvanceRound as u8 => {
+			Some(x) if x == ActionKind::AdvanceRound as i8 => {
 				Slicable::decode(value).map(Action::AdvanceRound)
 			}
 			_ => None,
@@ -169,7 +169,7 @@ impl Slicable for Justification {
 }
 
 // single-byte code to represent misbehavior kind.
-#[repr(u8)]
+#[repr(i8)]
 enum MisbehaviorCode {
 	/// BFT: double prepare.
 	BftDoublePrepare = 0x11,
@@ -178,7 +178,7 @@ enum MisbehaviorCode {
 }
 
 impl MisbehaviorCode {
-	fn from_u8(x: u8) -> Option<Self> {
+	fn from_i8(x: i8) -> Option<Self> {
 		match x {
 			0x11 => Some(MisbehaviorCode::BftDoublePrepare),
 			0x12 => Some(MisbehaviorCode::BftDoubleCommit),
@@ -220,7 +220,7 @@ impl Slicable for MisbehaviorReport {
 
 		match self.misbehavior {
 			MisbehaviorKind::BftDoublePrepare(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
-				(MisbehaviorCode::BftDoublePrepare as u8).using_encoded(|s| v.extend(s));
+				(MisbehaviorCode::BftDoublePrepare as i8).using_encoded(|s| v.extend(s));
 				round.using_encoded(|s| v.extend(s));
 				h_a.using_encoded(|s| v.extend(s));
 				s_a.using_encoded(|s| v.extend(s));
@@ -228,7 +228,7 @@ impl Slicable for MisbehaviorReport {
 				s_b.using_encoded(|s| v.extend(s));
 			}
 			MisbehaviorKind::BftDoubleCommit(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
-				(MisbehaviorCode::BftDoubleCommit as u8).using_encoded(|s| v.extend(s));
+				(MisbehaviorCode::BftDoubleCommit as i8).using_encoded(|s| v.extend(s));
 				round.using_encoded(|s| v.extend(s));
 				h_a.using_encoded(|s| v.extend(s));
 				s_a.using_encoded(|s| v.extend(s));
@@ -245,7 +245,7 @@ impl Slicable for MisbehaviorReport {
 		let parent_number = ::block::Number::decode(input)?;
 		let target = AuthorityId::decode(input)?;
 
-		let misbehavior = match u8::decode(input).and_then(MisbehaviorCode::from_u8)? {
+		let misbehavior = match i8::decode(input).and_then(MisbehaviorCode::from_i8)? {
 			MisbehaviorCode::BftDoublePrepare => {
 				MisbehaviorKind::BftDoublePrepare(
 					u32::decode(input)?,

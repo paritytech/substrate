@@ -21,47 +21,32 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-#[cfg(feature = "std")]
-extern crate serde;
+#[cfg(feature = "std")] extern crate serde;
 
 extern crate substrate_runtime_std as rstd;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_primitives as primitives;
-#[cfg(test)]
-extern crate substrate_serializer;
-
 extern crate substrate_codec as codec;
 
-macro_rules! try_opt {
-	($e: expr) => {
-		match $e {
-			Some(x) => x,
-			None => return None,
-		}
-	}
-}
-
-pub mod block;
-
-pub use self::block::{Header, Log, Digest};
-pub use self::block::Number as BlockNumber;
+/// An index to a block.
+pub type BlockNumber = u64;
 
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
 /// certainly continue to be the same as the substrate's `AuthorityId`.
 pub type AccountId = primitives::AuthorityId;
+
+/// Balance of an account.
+pub type Balance = u64;
 
 /// The Ed25519 pub key of an session that belongs to an authority of the relay chain. This is
 /// exactly equivalent to what the substrate calls an "authority".
 pub type SessionKey = primitives::AuthorityId;
 
 /// Index of a transaction in the relay chain.
-pub type TxOrder = u64;
+pub type Index = u64;
 
 /// A hash of some data used by the relay chain.
 pub type Hash = primitives::H256;
 
-/// Alias to 520-bit hash when used in the context of a signature on the relay chain.
-pub type Signature = primitives::hash::H512;
+/// Alias to 512-bit hash when used in the context of a signature on the relay chain.
+pub type Signature = runtime_primitives::traits::Ed25519Signature;
