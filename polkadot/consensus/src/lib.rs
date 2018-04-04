@@ -32,7 +32,6 @@
 extern crate futures;
 extern crate ed25519;
 extern crate parking_lot;
-extern crate tokio_timer;
 extern crate polkadot_api;
 extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;

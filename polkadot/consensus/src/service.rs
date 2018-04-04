@@ -20,12 +20,13 @@
 /// candidate agreement over the network.
 
 use std::thread;
+use std::time::{Duration, Instant};
 use std::sync::Arc;
 use futures::{future, Future, Stream, Sink, Async, Canceled};
 use parking_lot::Mutex;
 use substrate_network as net;
 use tokio_core::reactor;
-use client::BlockchainEvents;
+use client::{BlockchainEvents, ChainHead};
 use runtime_support::Hashable;
 use primitives::{Hash, AuthorityId};
 use primitives::block::{Id as BlockId, HeaderHash, Header};
@@ -35,7 +36,9 @@ use bft::{self, BftService};
 use transaction_pool::TransactionPool;
 use ed25519;
 use super::{TableRouter, SharedTable, ProposerFactory};
-use error::Error;
+
+const TIMER_DELAY_MS: u64 = 5000;
+const TIMER_INTERVAL_MS: u64 = 500;
 
 struct BftSink<E> {
 	network: Arc<net::ConsensusService>,
@@ -134,17 +137,44 @@ pub struct Service {
 
 struct Network(Arc<net::ConsensusService>);
 
+fn start_bft<F, C>(header: &Header, handle: reactor::Handle, client: &bft::Authorities, network: Arc<net::ConsensusService>, bft_service: &BftService<F, C>)
+	where F: bft::ProposerFactory + 'static,
+		C: bft::BlockImport + bft::Authorities + 'static,
+		<F as bft::ProposerFactory>::Error: ::std::fmt::Debug,
+{
+	let hash = header.blake2_256().into();
+	let authorities = match client.authorities(&BlockId::Hash(hash)) {
+		Ok(authorities) => authorities,
+		Err(e) => {
+			debug!("Error reading authorities: {:?}", e);
+			return;
+		}
+	};
+	let input = network.bft_messages()
+		.filter_map(move |message| {
+			process_message(message, &authorities, hash.clone())
+				.map_err(|e| debug!("Message validation failed: {:?}", e))
+				.ok()
+		})
+		.map_err(|_| bft::InputStreamConcluded.into());
+	let output = BftSink { network: network, _e: Default::default() };
+	match bft_service.build_upon(&header, input, output) {
+		Ok(Some(bft)) => handle.spawn(bft),
+		Ok(None) => {},
+		Err(e) => debug!("BFT agreement error: {:?}", e),
+	}
+}
+
 impl Service {
 	/// Create and start a new instance.
 	pub fn new<C>(
 		client: Arc<C>,
 		network: Arc<net::ConsensusService>,
 		transaction_pool: Arc<Mutex<TransactionPool>>,
-		key: ed25519::Pair,
-		best_header: &Header) -> Service
-		where C: BlockchainEvents + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
+		key: ed25519::Pair)
+		-> Service
+		where C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
 	{
-		let best_header = best_header.clone();
 		let thread = thread::spawn(move || {
 			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
 			let key = Arc::new(key);
@@ -153,31 +183,40 @@ impl Service {
 				transaction_pool: transaction_pool.clone(),
 				network: Network(network.clone()),
 			};
-			let bft_service = BftService::new(client.clone(), key, factory);
-			let build_bft = |header: &Header| -> Result<_, Error> {
-				let hash = header.blake2_256().into();
-				let authorities = client.authorities(&BlockId::Hash(hash))?;
-				let input = network.bft_messages()
-					.filter_map(move |message| {
-						process_message(message, &authorities, hash.clone())
-							.map_err(|e| debug!("Message validation failed: {:?}", e))
-							.ok()
-					})
-					.map_err(|_| bft::InputStreamConcluded.into());
-				let output = BftSink { network: network.clone(), _e: Default::default() };
-				Ok(bft_service.build_upon(&header, input, output)?)
-			};
+			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
+
 			let handle = core.handle();
 			let notifications = client.import_notification_stream().for_each(|notification| {
 				if notification.is_new_best {
-					match build_bft(&notification.header) {
-						Ok(Some(bft)) => handle.spawn(bft),
-						Ok(None) => {},
-						Err(e) => debug!("BFT agreement error: {:?}", e),
-					}
+					start_bft(&notification.header, handle.clone(), &*client, network.clone(), &*bft_service);
 				}
 				Ok(())
 			});
+
+			let interval = reactor::Interval::new_at(Instant::now() + Duration::from_millis(TIMER_DELAY_MS), Duration::from_millis(TIMER_INTERVAL_MS), &handle).unwrap();
+			let mut prev_best = match client.best_block_header() {
+				Ok(header) => header.blake2_256(),
+				Err(e) => {
+					warn!("Cant's start consensus service. Error reading best block header: {:?}", e);
+					return;
+				}
+			};
+			let c = client.clone();
+			let s = bft_service.clone();
+			let n = network.clone();
+			let handle = core.handle();
+			let timed = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
+				if let Ok(best_block) = c.best_block_header() {
+					let hash = best_block.blake2_256();
+					if hash == prev_best {
+						debug!("Starting consensus round after a timeout");
+						start_bft(&best_block, handle.clone(), &*c, n.clone(), &*s);
+					}
+					prev_best = hash;
+				}
+				Ok(())
+			});
+			core.handle().spawn(timed);
 			if let Err(e) = core.run(notifications) {
 				debug!("BFT event loop error {:?}", e);
 			}

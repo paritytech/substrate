@@ -160,7 +160,7 @@ impl Service {
 		};
 
 		let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
-		let best_header = client.header(&BlockId::Hash(client.info()?.chain.best_hash))?.expect("Best header always exists; qed");
+		let best_header = client.best_block_header()?;
 		info!("Starting Polkadot. Best block is #{}", best_header.number);
 		let transaction_pool = Arc::new(Mutex::new(TransactionPool::new(config.transaction_pool)));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -182,7 +182,7 @@ impl Service {
 			// Load the first available key. Code above makes sure it exisis.
 			let key = keystore.load(&keystore.contents()?[0], "")?;
 			info!("Using authority key {:?}", key.public());
-			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool, key, &best_header))
+			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool, key))
 		} else {
 			None
 		};
