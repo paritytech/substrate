@@ -189,7 +189,8 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => 1u64.encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
-			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode()
+			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
+			twox_128(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
 		]
 	}
 }

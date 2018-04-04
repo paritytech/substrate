@@ -125,7 +125,8 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = GenesisConfig::<Test> { now: 42 }.build_externalities();
+		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		t.extend(GenesisConfig::<Test> { now: 42 }.build_externalities());
 
 		with_externalities(&mut t, || {
 			assert_eq!(<Timestamp as Store>::Now::get(), 42);
