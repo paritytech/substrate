@@ -40,6 +40,7 @@ use runtime_primitives::traits::{Identity, HasPublicAux};
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildExternalities;
 
+/// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
 
 impl HasPublicAux for Concrete {
@@ -49,11 +50,15 @@ impl HasPublicAux for Concrete {
 impl timestamp::Trait for Concrete {
 	type Value = u64;
 }
+
+/// Timestamp module for this concrete runtime.
 pub type Timestamp = timestamp::Module<Concrete>;
 
 impl consensus::Trait for Concrete {
 	type SessionKey = SessionKey;
 }
+
+/// Consensus module for this concrete runtime.
 pub type Consensus = consensus::Module<Concrete>;
 
 impl system::Trait for Concrete {
@@ -65,27 +70,38 @@ impl system::Trait for Concrete {
 	type AccountId = AccountId;
 	type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
 }
+
+/// System module for this concrete runtime.
 pub type System = system::Module<Concrete>;
 
 impl session::Trait for Concrete {
 	type PublicAux = <Self as HasPublicAux>::PublicAux;
 	type ConvertAccountIdToSessionKey = Identity;
 }
+
+/// Session module for this concrete runtime.
 pub type Session = session::Module<Concrete>;
 
 impl staking::Trait for Concrete {
 	type Balance = Balance;
 	type DetermineContractAddress = BlakeTwo256;
 }
+
+/// Staking module for this concrete runtime.
 pub type Staking = staking::Module<Concrete>;
 
 impl democracy::Trait for Concrete {
 	type Proposal = PrivCall;
 }
+
+/// Democracy module for this concrete runtime.
 pub type Democracy = democracy::Module<Concrete>;
 
 impl council::Trait for Concrete {}
+
+/// Council module for this concrete runtime.
 pub type Council = council::Module<Concrete>;
+/// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Concrete>;
 
 impl_outer_dispatch! {
@@ -108,10 +124,15 @@ impl_outer_dispatch! {
 	}
 }
 
+/// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+/// Block type as expected by this runtime.
 pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, AccountId, Index, Call, Signature>;
+/// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
+/// Extrinsic type as expected by this runtime.
 pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
+/// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Concrete, Block, Staking,
 	(((((), Council), Democracy), Staking), Session)>;
 
