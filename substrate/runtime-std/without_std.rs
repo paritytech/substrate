@@ -25,16 +25,20 @@ extern crate pwasm_alloc;
 pub use alloc::boxed;
 pub use alloc::rc;
 pub use alloc::vec;
-pub mod collections {
-	pub use alloc::btree_map;
-}
 pub use core::borrow;
 pub use core::cell;
+pub use core::clone;
 pub use core::cmp;
+pub use core::fmt;
 pub use core::intrinsics;
 pub use core::iter;
+pub use core::marker;
 pub use core::mem;
+pub use core::num;
 pub use core::ops;
 pub use core::ptr;
 pub use core::slice;
-pub use core::fmt;
+
+pub mod collections {
+	pub use alloc::btree_map;
+}

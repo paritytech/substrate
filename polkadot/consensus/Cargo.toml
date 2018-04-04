@@ -18,8 +18,8 @@ polkadot-transaction-pool = { path = "../transaction-pool" }
 substrate-bft = { path = "../../substrate/bft" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-primitives = { path = "../../substrate/primitives" }
+substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-network = { path = "../../substrate/network" }
-
 tokio-core = "0.1.12"
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-client = { path = "../../substrate/client" }

@@ -1,0 +1,35 @@
+[package]
+name = "substrate-runtime-staking"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+hex-literal = "0.1.0"
+serde = { version = "1.0", default_features = false }
+safe-mix = { path = "../../../safe-mix", default_features = false}
+substrate-keyring = { path = "../../keyring", optional = true }
+substrate-codec = { path = "../../codec", default_features = false }
+substrate-primitives = { path = "../../primitives", default_features = false }
+substrate-runtime-std = { path = "../../runtime-std", default_features = false }
+substrate-runtime-io = { path = "../../runtime-io", default_features = false }
+substrate-runtime-support = { path = "../../runtime-support", default_features = false }
+substrate-runtime-primitives = { path = "../primitives", default_features = false }
+substrate-runtime-consensus = { path = "../consensus", default_features = false }
+substrate-runtime-system = { path = "../system", default_features = false }
+substrate-runtime-session = { path = "../session", default_features = false }
+
+[features]
+default = ["std"]
+std = [
+	"serde/std",
+	"safe-mix/std",
+	"substrate-keyring",
+	"substrate-codec/std",
+	"substrate-primitives/std",
+	"substrate-runtime-std/std",
+	"substrate-runtime-io/std",
+	"substrate-runtime-support/std",
+	"substrate-runtime-primitives/std",
+	"substrate-runtime-session/std",
+	"substrate-runtime-system/std",
+]

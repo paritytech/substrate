@@ -271,7 +271,7 @@ impl<B, E> Client<B, E> where
 	) -> error::Result<JustifiedHeader> {
 		let authorities = self.authorities_at(&BlockId::Hash(header.parent_hash))?;
 		let just = bft::check_justification(&authorities[..], header.parent_hash, justification)
-			.map_err(|_| error::ErrorKind::BadJustification(BlockId::Hash(header.hash())))?;
+			.map_err(|_| error::ErrorKind::BadJustification(BlockId::Hash(header.blake2_256().into())))?;
 		Ok(JustifiedHeader {
 			header,
 			justification: just,
@@ -453,7 +453,7 @@ mod tests {
 	// TODO: remove this in favor of custom verification pipelines for the
 	// client
 	fn justify(header: &block::Header) -> bft::UncheckedJustification {
-		let hash = header.hash();
+		let hash = header.blake2_256().into();
 		let authorities = vec![
 			Keyring::Alice.into(),
 			Keyring::Bob.into(),

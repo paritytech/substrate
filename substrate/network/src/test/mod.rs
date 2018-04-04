@@ -162,7 +162,7 @@ impl Peer {
 	}
 
 	fn justify(header: &primitives::block::Header) -> bft::UncheckedJustification {
-		let hash = header.hash();
+		let hash = header.blake2_256().into();
 		let authorities = vec![ Keyring::Alice.into() ];
 
 		bft::UncheckedJustification {

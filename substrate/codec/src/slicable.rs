@@ -24,6 +24,16 @@ use super::joiner::Joiner;
 pub trait Input {
 	/// Read into the provided input slice. Returns the number of bytes read.
 	fn read(&mut self, into: &mut [u8]) -> usize;
+
+	/// Read a single byte from the input.
+	fn read_byte(&mut self) -> Option<u8> {
+		let mut buf = [0u8];
+		match self.read(&mut buf[..]) {
+			0 => None,
+			1 => Some(buf[0]),
+			_ => unreachable!(),
+		}
+	}
 }
 
 impl<'a> Input for &'a [u8] {
@@ -51,29 +61,25 @@ pub trait Slicable: Sized {
 	}
 }
 
-/// Trait to mark that a type is not trivially (essentially "in place") serialisable.
-// TODO: under specialization, remove this and simply specialize in place serializable types.
-pub trait NonTrivialSlicable: Slicable {}
-
 impl Slicable for Option<bool> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		u8::decode(input).and_then(|v| match v {
+		match input.read_byte()? {
 			0 => Some(Some(false)),
 			1 => Some(Some(true)),
 			2 => Some(None),
 			_ => None,
-		})
+		}
 	}
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		match *self {
+		f(&[match *self {
 			Some(false) => 0u8,
 			Some(true) => 1u8,
 			None => 2u8,
-		}.using_encoded(f)
+		}])
 	}
 }
-impl NonTrivialSlicable for Option<bool> {}
+
 
 impl<T: Slicable> Slicable for Box<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
@@ -108,89 +114,7 @@ impl Slicable for Vec<u8> {
 	}
 }
 
-// TODO: implement for all primitives.
-impl Slicable for Vec<u64> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		u32::decode(input).and_then(move |len| {
-			let len = len as usize;
-			let mut vec = Vec::with_capacity(len);
-			for _ in 0..len {
-				vec.push(u64::decode(input)?);
-			}
-			Some(vec)
-		})
-	}
-
-	fn encode(&self) -> Vec<u8> {
-		let len = self.len();
-		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
-
-		// TODO: optimise - no need to create a new vec and copy - can just reserve and encode in place
-		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
-		for i in self.iter() {
-			r.extend(&i.encode());
-		}
-		r
-	}
-}
-
-// TODO: use a BitVec-like representation.
-impl Slicable for Vec<bool> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		<Vec<u8>>::decode(input).map(|a| a.into_iter().map(|b| b != 0).collect())
-	}
-
-	fn encode(&self) -> Vec<u8> {
-		<Vec<u8>>::encode(&self.iter().map(|&b| if b {1} else {0}).collect())
-	}
-}
-
-macro_rules! impl_vec_simple_array {
-	($($size:expr),*) => {
-		$(
-			impl<T> Slicable for Vec<[T; $size]>
-				where [T; $size]: Slicable
-			{
-				fn decode<I: Input>(input: &mut I) -> Option<Self> {
-					u32::decode(input).and_then(move |len| {
-						let mut r = Vec::with_capacity(len as usize);
-						for _ in 0..len {
-							r.push(match Slicable::decode(input) {
-								Some(x) => x,
-								None => return None,
-							});
-						}
-
-						Some(r)
-					})
-				}
-
-				fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-					f(&self.encode())
-				}
-
-				fn encode(&self) -> Vec<u8> {
-					use rstd::iter::Extend;
-
-					let len = self.len();
-					assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
-
-					let mut r: Vec<u8> = Vec::new().and(&(len as u32));
-					for item in self {
-						r.extend(item.encode());
-					}
-					r
-				}
-			}
-		)*
-	}
-}
-
-impl_vec_simple_array!(1, 2, 4, 8, 16, 32, 64);
-
-impl<T: Slicable> NonTrivialSlicable for Vec<T> where Vec<T>: Slicable {}
-
-impl<T: NonTrivialSlicable> Slicable for Vec<T> {
+impl<T: Slicable> Slicable for Vec<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).and_then(move |len| {
 			let mut r = Vec::with_capacity(len as usize);
@@ -218,6 +142,8 @@ impl<T: NonTrivialSlicable> Slicable for Vec<T> {
 		r
 	}
 }
+
+
 
 impl Slicable for () {
 	fn decode<I: Input>(_: &mut I) -> Option<()> {
@@ -248,7 +174,7 @@ macro_rules! tuple_impl {
 			}
 		}
 
-		impl<$one: NonTrivialSlicable> NonTrivialSlicable for ($one,) { }
+
 	};
 	($first:ident, $($rest:ident,)+) => {
 		impl<$first: Slicable, $($rest: Slicable),+>
@@ -284,11 +210,6 @@ macro_rules! tuple_impl {
 			}
 		}
 
-		impl<$first: Slicable, $($rest: Slicable),+>
-		NonTrivialSlicable
-		for ($first, $($rest),+)
-		{ }
-
 		tuple_impl!($($rest,)+);
 	}
 }
@@ -297,7 +218,7 @@ macro_rules! tuple_impl {
 mod inner_tuple_impl {
 	use rstd::vec::Vec;
 
-	use super::{Input, Slicable, NonTrivialSlicable};
+	use super::{Input, Slicable};
 	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 }
 
@@ -399,7 +320,7 @@ macro_rules! impl_non_endians {
 }
 
 impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
-impl_non_endians!(u8, i8, [u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7], [u8; 8],
+impl_non_endians!(i8, [u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7], [u8; 8],
 	[u8; 10], [u8; 12], [u8; 14], [u8; 16], [u8; 20], [u8; 24], [u8; 28], [u8; 32], [u8; 40],
 	[u8; 48], [u8; 56], [u8; 64], [u8; 80], [u8; 96], [u8; 112], [u8; 128], bool);
 
