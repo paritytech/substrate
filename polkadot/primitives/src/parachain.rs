@@ -19,7 +19,7 @@
 #[cfg(feature = "std")]
 use primitives::bytes;
 use primitives;
-use codec::{Input, Slicable, NonTrivialSlicable};
+use codec::{Input, Slicable};
 use rstd::cmp::{PartialOrd, Ord, Ordering};
 use rstd::vec::Vec;
 use ::Hash;
@@ -59,7 +59,7 @@ pub enum Chain {
 
 impl Slicable for Chain {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let disc = try_opt!(u8::decode(input));
+		let disc = input.read_byte()?;
 
 		match disc {
 			0 => Some(Chain::Relay),
@@ -71,9 +71,9 @@ impl Slicable for Chain {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		match *self {
-			Chain::Relay => { 0u8.using_encoded(|s| v.extend(s)); }
+			Chain::Relay => { v.push(0); }
 			Chain::Parachain(id) => {
-				1u8.using_encoded(|s| v.extend(s));
+				v.push(1u8);
 				id.using_encoded(|s| v.extend(s));
 			}
 		}
@@ -86,7 +86,7 @@ impl Slicable for Chain {
 	}
 }
 
-impl NonTrivialSlicable for Chain { }
+
 
 /// The duty roster specifying what jobs each validator must do.
 #[derive(Clone, PartialEq)]
@@ -317,7 +317,7 @@ impl Slicable for Statement {
 	}
 
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		match u8::decode(value) {
+		match value.read_byte() {
 			Some(x) if x == StatementKind::Candidate as u8 => {
 				Slicable::decode(value).map(Statement::Candidate)
 			}

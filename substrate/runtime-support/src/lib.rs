@@ -18,6 +18,16 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+extern crate serde;
+
+#[cfg(feature = "std")]
+#[allow(unused_imports)] #[macro_use]	// can be removed when fixed: https://github.com/rust-lang/rust/issues/43497
+extern crate serde_derive;
+
+#[cfg(feature = "std")]
+pub use serde_derive::*;
+
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
@@ -26,8 +36,10 @@ extern crate substrate_primitives as primitives;
 pub extern crate substrate_codec as codec;
 pub use self::storage::generator::Storage as GenericStorage;
 
+pub mod dispatch;
 pub mod storage;
 mod hashable;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
+pub use self::dispatch::{Parameter, Dispatchable, Callable, AuxDispatchable, AuxCallable, IsSubType, IsAuxSubType};

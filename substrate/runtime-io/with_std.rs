@@ -17,8 +17,10 @@
 #[macro_use]
 extern crate environmental;
 
-extern crate substrate_state_machine;
+#[cfg_attr(test, macro_use)]
 extern crate substrate_primitives as primitives;
+
+extern crate substrate_state_machine;
 extern crate triehash;
 extern crate ed25519;
 
@@ -155,12 +157,6 @@ macro_rules! impl_stubs {
 #[cfg(test)]
 mod std_tests {
 	use super::*;
-
-	macro_rules! map {
-		($( $name:expr => $value:expr ),*) => (
-			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-		)
-	}
 
 	#[test]
 	fn storage_works() {

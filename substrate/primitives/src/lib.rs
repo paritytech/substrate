@@ -91,7 +91,7 @@ mod tests;
 
 pub use self::hash::{H160, H256};
 pub use self::uint::{U256, U512};
-pub use block::{Block, Header};
+pub use block::{Block, Header, Digest};
 
 /// General hash type.
 pub type Hash = H256;

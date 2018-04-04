@@ -21,7 +21,7 @@ use rstd::vec::Vec;
 #[cfg(feature = "std")]
 use bytes;
 use Hash;
-use codec::{Input, Slicable, NonTrivialSlicable};
+use codec::{Input, Slicable};
 
 /// Used to refer to a block number.
 pub type Number = u64;
@@ -47,10 +47,6 @@ impl Slicable for Transaction {
 	}
 }
 
-impl NonTrivialSlicable for Transaction { }
-
-
-
 /// Execution log (event)
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -65,10 +61,6 @@ impl Slicable for Log {
 		self.0.using_encoded(f)
 	}
 }
-
-impl NonTrivialSlicable for Log { }
-
-
 
 /// The digest of a block, useful for light-clients.
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -88,11 +80,9 @@ impl Slicable for Digest {
 	}
 }
 
-impl NonTrivialSlicable for Digest { }
-
 /// Generic types to be specialised later.
 pub mod generic {
-	use super::{Header, Slicable, Input, NonTrivialSlicable, Vec};
+	use super::{Header, Slicable, Input, Vec};
 
 	/// A Block - this is generic for later specialisation in particular runtimes.
 	#[derive(PartialEq, Eq, Clone)]
@@ -107,8 +97,8 @@ pub mod generic {
 	impl<T: PartialEq + Eq + Clone> Slicable for Block<T> where Vec<T>: Slicable {
 		fn decode<I: Input>(input: &mut I) -> Option<Self> {
 			Some(Block {
-				header: try_opt!(Slicable::decode(input)),
-				transactions: try_opt!(Slicable::decode(input)),
+				header: Slicable::decode(input)?,
+				transactions: Slicable::decode(input)?,
 			})
 		}
 
@@ -119,8 +109,6 @@ pub mod generic {
 			v
 		}
 	}
-
-	impl<T: PartialEq + Eq + Clone> NonTrivialSlicable for Block<T> where Vec<T>: Slicable { }
 }
 
 /// The body of a block is just a bunch of transactions.
@@ -162,22 +150,16 @@ impl Header {
 			digest: Default::default(),
 		}
 	}
-
-	/// Get the blake2-256 hash of this header.
-	#[cfg(feature = "std")]
-	pub fn hash(&self) -> HeaderHash {
-		::hashing::blake2_256(Slicable::encode(self).as_slice()).into()
-	}
 }
 
 impl Slicable for Header {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
-			parent_hash: try_opt!(Slicable::decode(input)),
-			number: try_opt!(Slicable::decode(input)),
-			state_root: try_opt!(Slicable::decode(input)),
-			transaction_root: try_opt!(Slicable::decode(input)),
-			digest: try_opt!(Slicable::decode(input)),
+			parent_hash: Slicable::decode(input)?,
+			number: Slicable::decode(input)?,
+			state_root: Slicable::decode(input)?,
+			transaction_root: Slicable::decode(input)?,
+			digest: Slicable::decode(input)?,
 		})
 	}
 

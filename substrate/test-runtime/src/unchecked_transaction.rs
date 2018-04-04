@@ -60,7 +60,7 @@ impl Slicable for UncheckedTransaction {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for UncheckedTransaction {}
+
 
 #[cfg(test)]
 mod tests {

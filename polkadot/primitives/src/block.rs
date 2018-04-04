@@ -49,7 +49,7 @@ impl Slicable for Log {
 	}
 }
 
-impl ::codec::NonTrivialSlicable for Log { }
+
 
 /// The digest of a block, useful for light-clients.
 #[derive(Clone, Default, PartialEq, Eq)]

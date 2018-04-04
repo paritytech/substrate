@@ -18,7 +18,14 @@
 //!
 //! Described in http://www.cs.huji.ac.il/~nati/PAPERS/coll_coin_fl.pdf
 
-use rstd::ops::{BitAnd, BitOr};
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
+
+#[cfg(feature = "std")]
+use std::ops::{BitAnd, BitOr};
+
+#[cfg(not(feature = "std"))]
+use core::ops::{BitAnd, BitOr};
 
 pub const MAX_DEPTH: usize = 17;
 

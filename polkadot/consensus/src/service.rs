@@ -26,6 +26,7 @@ use parking_lot::Mutex;
 use substrate_network as net;
 use tokio_core::reactor;
 use client::BlockchainEvents;
+use runtime_support::Hashable;
 use primitives::{Hash, AuthorityId};
 use primitives::block::{Id as BlockId, HeaderHash, Header};
 use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
@@ -154,7 +155,7 @@ impl Service {
 			};
 			let bft_service = BftService::new(client.clone(), key, factory);
 			let build_bft = |header: &Header| -> Result<_, Error> {
-				let hash = header.hash();
+				let hash = header.blake2_256().into();
 				let authorities = client.authorities(&BlockId::Hash(hash))?;
 				let input = network.bft_messages()
 					.filter_map(move |message| {
