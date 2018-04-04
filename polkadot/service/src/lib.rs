@@ -139,24 +139,27 @@ impl Service {
 			info!("Generated a new keypair: {:?}", key.public());
 		}
 
-		let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
+		let god_keys = vec![
+			hex!["f09c0d1467d6952c92c343672bfb06a24560f400af8cf98b93df7d40b4efe1b6"],
+			hex!["84718cd2894bcda83beeca3a7842caf269fe93cacde0bdee0e3cbce6de253f0e"]
+		];
 
 		let genesis_config = GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),
-				authorities: vec![god_key.clone()],
+				authorities: god_keys.clone(),
 			}),
 			system: None,
 	//		block_time: 5,			// 5 second block time.
 			session: Some(SessionConfig {
-				validators: vec![god_key.clone()],
+				validators: god_keys.clone(),
 				session_length: 720,	// that's 1 hour per session.
 			}),
 			staking: Some(StakingConfig {
 				current_era: 0,
 				intentions: vec![],
 				transaction_fee: 100,
-				balances: vec![(god_key.clone(), 1u64 << 63)].into_iter().collect(),
+				balances: god_keys.iter().map(|&k|(k, 1u64 << 63)].collect(),
 				validator_count: 12,
 				sessions_per_era: 24,	// 24 hours per era.
 				bonding_duration: 90,	// 90 days per bond.
