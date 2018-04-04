@@ -16,16 +16,14 @@
 
 //! Rust implementation of Substrate contracts.
 
-use std::sync::Arc;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use parity_wasm::{deserialize_buffer, ModuleInstanceInterface, ProgramInstance};
-use parity_wasm::interpreter::{ItemIndex, DummyUserError};
-use parity_wasm::RuntimeValue::{I32, I64};
+use wasmi::{Module, ModuleInstance,  MemoryInstance, MemoryRef, ImportsBuilder};
+use wasmi::RuntimeValue::{I32, I64};
+use wasmi::memory_units::{Pages, Bytes};
 use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
-use wasm_utils::{MemoryInstance, UserDefinedElements,
-	AddModuleWithoutFullDependentInstance};
+use wasm_utils::{DummyUserError};
 use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
 use triehash::ordered_trie_root;
@@ -35,22 +33,21 @@ struct Heap {
 }
 
 impl Heap {
-	fn new(memory: &MemoryInstance) -> Result<Self> {
-		const HEAP_SIZE_IN_PAGES: u32 = 8;
-		const PAGE_SIZE_IN_BYTES: u32 = 65536;
+	/// Construct new `Heap` struct.
+	///
+	/// Returns `Err` if the heap couldn't allocate required
+	/// number of pages.
+	///
+	/// This could mean that wasm binary specifies memory
+	/// limit and we are trying to allocate beyond that limit.
+	fn new(memory: &MemoryRef) -> Result<Self> {
+		const HEAP_SIZE_IN_PAGES: usize = 8;
 
-		let prev_page_count = memory.grow(HEAP_SIZE_IN_PAGES).map_err(
-			|_: ::parity_wasm::interpreter::Error<DummyUserError>| Error::from(ErrorKind::Runtime),
-		)?;
-		if prev_page_count == 0xFFFFFFFF {
-			// Wasm vm refuses to mount the specified amount of new pages. This
-			// could mean that wasm binary specifies memory limit and we are trying
-			// to allocate beyond that limit.
-			return Err(ErrorKind::Runtime.into());
-		}
-		let allocated_area_start = prev_page_count * PAGE_SIZE_IN_BYTES;
+		let prev_page_count = memory
+			.grow(Pages(HEAP_SIZE_IN_PAGES))
+			.map_err(|_| Error::from(ErrorKind::Runtime))?;
 		Ok(Heap {
-			end: allocated_area_start as u32,
+			end: Bytes::from(prev_page_count).0 as u32,
 		})
 	}
 	fn allocate(&mut self, size: u32) -> u32 {
@@ -64,16 +61,16 @@ impl Heap {
 
 struct FunctionExecutor<'e, E: Externalities + 'e> {
 	heap: Heap,
-	memory: Arc<MemoryInstance>,
+	memory: MemoryRef,
 	ext: &'e mut E,
 	hash_lookup: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl<'e, E: Externalities> FunctionExecutor<'e, E> {
-	fn new(m: &Arc<MemoryInstance>, e: &'e mut E) -> Result<Self> {
+	fn new(m: MemoryRef, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
-			heap: Heap::new(&*m)?,
-			memory: Arc::clone(m),
+			heap: Heap::new(&m)?,
+			memory: m,
 			ext: e,
 			hash_lookup: HashMap::new(),
 		})
@@ -129,50 +126,54 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				println!("{}", message);
 			}
 		}
+		Ok(())
 	},
 	ext_print_hex(data: *const u8, len: u32) => {
 		if let Ok(hex) = this.memory.get(data, len as usize) {
 			println!("{}", HexDisplay::from(&hex));
 		}
+		Ok(())
 	},
 	ext_print_num(number: u64) => {
 		println!("{}", number);
+		Ok(())
 	},
 	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
 		let sl1 = this.memory.get(s1, n as usize).map_err(|_| DummyUserError)?;
 		let sl2 = this.memory.get(s2, n as usize).map_err(|_| DummyUserError)?;
-		match sl1.cmp(&sl2) {
+		Ok(match sl1.cmp(&sl2) {
 			Ordering::Greater => 1,
 			Ordering::Less => -1,
 			Ordering::Equal => 0,
-		}
+		})
 	},
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize)
 			.map_err(|_| DummyUserError)?;
 		trace!(target: "runtime-io", "memcpy {} from {}, {} bytes", dest, src, count);
-		dest
+		Ok(dest)
 	},
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy(src as usize, dest as usize, count as usize)
 			.map_err(|_| DummyUserError)?;
 		trace!(target: "runtime-io", "memmove {} from {}, {} bytes", dest, src, count);
-		dest
+		Ok(dest)
 	},
 	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
 		this.memory.clear(dest as usize, val as u8, count as usize)
 			.map_err(|_| DummyUserError)?;
 		trace!(target: "runtime-io", "memset {} with {}, {} bytes", dest, val, count);
-		dest
+		Ok(dest)
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
 		let r = this.heap.allocate(size);
 		trace!(target: "runtime-io", "malloc {} bytes at {}", size, r);
-		r
+		Ok(r)
 	},
 	ext_free(addr: *mut u8) => {
 		this.heap.deallocate(addr);
-		trace!(target: "runtime-io", "free {}", addr)
+		trace!(target: "runtime-io", "free {}", addr);
+		Ok(())
 	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
@@ -183,6 +184,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			info!(target: "wasm-trace", "*** Setting storage:  {} -> {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
 		}
 		this.ext.set_storage(key, value);
+		Ok(())
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
@@ -192,6 +194,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			info!(target: "wasm-trace", "*** Clearing storage:  {}   [k={}]", ascii_format(&key), HexDisplay::from(&key));
 		}
 		this.ext.clear_storage(&key);
+		Ok(())
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
@@ -208,10 +211,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			let offset = this.heap.allocate(value.len() as u32) as u32;
 			this.memory.set(offset, &value).map_err(|_| DummyUserError)?;
 			this.memory.write_primitive(written_out, value.len() as u32)?;
-			offset
+			Ok(offset)
 		} else {
 			this.memory.write_primitive(written_out, u32::max_value())?;
-			0
+			Ok(0)
 		}
 	},
 	// return u32::max_value() if no value exists for the key.
@@ -227,14 +230,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			let value = &value[value_offset as usize..];
 			let written = ::std::cmp::min(value_len as usize, value.len());
 			this.memory.set(value_data, &value[..written]).map_err(|_| DummyUserError)?;
-			written as u32
+			Ok(written as u32)
 		} else {
-			u32::max_value()
+			Ok(u32::max_value())
 		}
 	},
 	ext_storage_root(result: *mut u8) => {
 		let r = this.ext.storage_root();
 		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
+		Ok(())
 	},
 	ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
 		let values = (0..lens_len)
@@ -249,9 +253,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.collect::<::std::result::Result<Vec<_>, DummyUserError>>()?;
 		let r = ordered_trie_root(values.into_iter());
 		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
+		Ok(())
 	},
 	ext_chain_id() -> u64 => {
-		this.ext.chain_id()
+		Ok(this.ext.chain_id())
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
@@ -272,6 +277,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		};
 
 		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
+		Ok(())
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
@@ -280,6 +286,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			twox_256(&this.memory.get(data, len as usize).map_err(|_| DummyUserError)?)
 		};
 		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
+		Ok(())
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
@@ -288,6 +295,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			blake2_256(&this.memory.get(data, len as usize).map_err(|_| DummyUserError)?)
 		};
 		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
+		Ok(())
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
 		let mut sig = [0u8; 64];
@@ -296,12 +304,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| DummyUserError)?;
 		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| DummyUserError)?;
 
-		if ::ed25519::verify(&sig, &msg, &pubkey) {
+		Ok(if ::ed25519::verify(&sig, &msg, &pubkey) {
 			0
 		} else {
 			5
-		}
-	}
+		})
+	},
 	=> <'e, E: Externalities + 'e>
 );
 
@@ -324,27 +332,40 @@ impl CodeExecutor for WasmExecutor {
 		// TODO: handle all expects as errors to be returned.
 		println!("Wasm-Calling {}({})", method, HexDisplay::from(&data));
 
-		let program = ProgramInstance::new().expect("this really shouldn't be able to fail; qed");
+		let module = Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
 
-		let module = deserialize_buffer(code.to_vec()).expect("all modules compiled with rustc are valid wasm code; qed");
-		let module = program.add_module_by_sigs("test", module, map!["env" => FunctionExecutor::<E>::SIGNATURES]).expect("runtime signatures always provided; qed");
+		// start module instantiation. Don't run 'start' function yet.
+		let intermediate_instance = ModuleInstance::new(
+			&module,
+			&ImportsBuilder::new()
+				.with_resolver("env", FunctionExecutor::<E>::resolver())
+		)?;
 
-		let memory = module.memory(ItemIndex::Internal(0)).expect("all modules compiled with rustc include memory segments; qed");
-		let mut fec = FunctionExecutor::new(&memory, ext)?;
+		// extract a reference to a linear memory and initialize FunctionExecutor.
+		let memory = intermediate_instance
+			.not_started_instance()
+			.export_by_name("memory")
+			.expect("all modules compiled with rustc should have an export named 'memory'; qed")
+			.as_memory()
+			.expect("in module generated by rustc export named 'memory' should be a memory; qed")
+			.clone();
+		let mut fec = FunctionExecutor::new(memory.clone(), ext)?;
+
+		// finish instantiation by running 'start' function (if any).
+		let instance = intermediate_instance.run_start(&mut fec)?;
 
 		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
 		memory.set(offset, &data).expect("heap always gives a sensible offset to write");
 
-		let returned = program
-				.params_with_external("env", &mut fec)
-				.map(|p| p
-					.add_argument(I32(offset as i32))
-					.add_argument(I32(size as i32)))
-			.and_then(|p| module.execute_export(method, p))
-			.map_err(|_| -> Error {
-				ErrorKind::Runtime.into()
-			})?;
+		let returned = instance.invoke_export(
+			method,
+			&[
+				I32(offset as i32),
+				I32(size as i32)
+			],
+			&mut fec
+		)?;
 
 		if let Some(I64(r)) = returned {
 			let offset = r as u32;
@@ -364,6 +385,13 @@ mod tests {
 	use rustc_hex::FromHex;
 	use codec::Slicable;
 	use state_machine::TestExternalities;
+
+	// TODO: move into own crate.
+	macro_rules! map {
+		($( $name:expr => $value:expr ),*) => (
+			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
+		)
+	}
 
 	#[test]
 	fn returning_should_work() {
