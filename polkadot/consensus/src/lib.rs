@@ -73,6 +73,7 @@ use parking_lot::Mutex;
 pub use self::error::{ErrorKind, Error};
 pub use service::Service;
 
+mod dynamic_inclusion;
 mod error;
 mod service;
 
@@ -300,6 +301,8 @@ impl<D, E, Err> Future for StatementProducer<D, E>
 		}
 	}
 }
+
+
 
 /// A shared table object.
 pub struct SharedTable {
