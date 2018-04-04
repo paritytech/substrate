@@ -159,7 +159,7 @@ impl Service {
 				current_era: 0,
 				intentions: vec![],
 				transaction_fee: 100,
-				balances: god_keys.iter().map(|&k|(k, 1u64 << 63)].collect(),
+				balances: god_keys.iter().map(|&k|(k, 1u64 << 63)).collect(),
 				validator_count: 12,
 				sessions_per_era: 24,	// 24 hours per era.
 				bonding_duration: 90,	// 90 days per bond.
