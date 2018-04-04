@@ -35,7 +35,7 @@ extern crate substrate_state_machine as state_machine;
 extern crate ed25519;
 
 extern crate serde;
-extern crate parity_wasm;
+extern crate wasmi;
 extern crate byteorder;
 extern crate rustc_hex;
 extern crate triehash;
@@ -47,12 +47,6 @@ extern crate error_chain;
 #[cfg(test)]
 extern crate assert_matches;
 
-// TODO: move into own crate
-macro_rules! map {
-	($( $name:expr => $value:expr ),*) => (
-		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-	)
-}
 
 #[macro_use]
 mod wasm_utils;

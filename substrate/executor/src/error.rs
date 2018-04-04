@@ -17,10 +17,13 @@
 //! Rust executor possible errors.
 
 use serializer;
+use wasmi;
 
 error_chain! {
 	foreign_links {
 		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
+		Trap(wasmi::Trap) #[doc = "Trap occured during execution"];
+		Wasmi(wasmi::Error) #[doc = "Wasmi loading/instantiating error"];
 	}
 
 	errors {
