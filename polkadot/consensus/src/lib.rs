@@ -38,6 +38,7 @@ extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_primitives;
 extern crate polkadot_transaction_pool as transaction_pool;
+extern crate polkadot_runtime;
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
@@ -62,11 +63,11 @@ use table::generic::Statement as GenericStatement;
 use runtime_support::Hashable;
 use polkadot_api::{PolkadotApi, BlockBuilder};
 use polkadot_primitives::{Hash, Timestamp};
-use polkadot_primitives::block::Block as PolkadotBlock;
 use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_runtime::Block as PolkadotGenericBlock;
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
-use transaction_pool::{Ready, TransactionPool};
+use transaction_pool::{Ready, TransactionPool, PolkadotBlock};
 
 use futures::prelude::*;
 use futures::future;
@@ -152,7 +153,7 @@ impl TableContext {
 	}
 
 	fn sign_statement(&self, statement: table::Statement) -> table::SignedStatement {
-		let signature = sign_table_statement(&statement, &self.key, &self.parent_hash);
+		let signature = sign_table_statement(&statement, &self.key, &self.parent_hash).into();
 		let local_id = self.key.public().0;
 
 		table::SignedStatement {
@@ -552,7 +553,7 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 
 				if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
 
-				match block_builder.push_transaction(pending.as_transaction().clone()) {
+				match block_builder.push_extrinsic(pending.as_transaction().clone()) {
 					Ok(()) => {
 						pending_size += pending.encoded_size();
 					}
@@ -582,23 +583,23 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior)>) {
 		use bft::generic::Misbehavior as GenericMisbehavior;
 		use primitives::bft::{MisbehaviorKind, MisbehaviorReport};
-		use polkadot_primitives::transaction::{Function, Transaction, UncheckedTransaction};
+		use polkadot_runtime::{Call, Extrinsic, UncheckedExtrinsic, ConsensusCall};
 
 		let local_id = self.local_key.public().0;
 		let mut pool = self.transaction_pool.lock();
-		let mut next_nonce = {
+		let mut next_index = {
 			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 
-			let cur_nonce = pool.pending(readiness_evaluator)
-				.filter(|tx| tx.as_transaction().transaction.signed == local_id)
+			let cur_index = pool.pending(readiness_evaluator)
+				.filter(|tx| tx.as_ref().as_ref().signed == local_id)
 				.last()
-				.map(|tx| Ok(tx.as_transaction().transaction.nonce))
-				.unwrap_or_else(|| self.client.nonce(&self.parent_id, local_id));
+				.map(|tx| Ok(tx.as_ref().as_ref().index))
+				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id));
 
-			match cur_nonce {
-				Ok(cur_nonce) => cur_nonce + 1,
+			match cur_index {
+				Ok(cur_index) => cur_index + 1,
 				Err(e) => {
-					warn!(target: "consensus", "Error computing next transaction nonce: {}", e);
+					warn!(target: "consensus", "Error computing next transaction index: {}", e);
 					return;
 				}
 			}
@@ -618,23 +619,18 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1, s1.signature), (h2, s2.signature)),
 				}
 			};
-
-			let tx = Transaction {
+			let extrinsic = Extrinsic {
 				signed: local_id,
-				nonce: next_nonce,
-				function: Function::ReportMisbehavior(report),
+				index: next_index,
+				function: Call::Consensus(ConsensusCall::report_misbehavior(report)),
 			};
 
-			next_nonce += 1;
+			next_index += 1;
 
-			let message = tx.encode();
-			let signature = self.local_key.sign(&message);
-			let tx = UncheckedTransaction {
-				transaction: tx,
-				signature,
-			};
+			let signature = self.local_key.sign(&extrinsic.encode()).into();
+			let uxt = UncheckedExtrinsic { extrinsic, signature };
 
-			pool.import(tx).expect("locally signed transaction is valid; qed");
+			pool.import(uxt).expect("locally signed extrinsic is valid; qed");
 		}
 	}
 }
@@ -649,10 +645,11 @@ fn evaluate_proposal<C: PolkadotApi>(
 	const MAX_TIMESTAMP_DRIFT: Timestamp = 4;
 
 	let encoded = Slicable::encode(proposal);
-	let proposal = PolkadotBlock::decode(&mut &encoded[..])
+	let proposal = PolkadotGenericBlock::decode(&mut &encoded[..])
+		.and_then(|b| PolkadotBlock::from(b).ok())
 		.ok_or_else(|| ErrorKind::ProposalNotForPolkadot)?;
 
-	let transactions_size = proposal.body.transactions.iter().fold(0, |a, tx| {
+	let transactions_size = proposal.extrinsics.iter().fold(0, |a, tx| {
 		a + Slicable::encode(tx).len()
 	});
 
@@ -668,7 +665,7 @@ fn evaluate_proposal<C: PolkadotApi>(
 	// a) we assume the parent is valid.
 	// b) the runtime checks that `proposal.parent_hash` == `block_hash(proposal.number - 1)`
 
-	let block_timestamp = proposal.body.timestamp;
+	let block_timestamp = proposal.timestamp();
 
 	// TODO: just defer using `tokio_timer` to delay prepare vote.
 	if block_timestamp > now + MAX_TIMESTAMP_DRIFT {
@@ -676,6 +673,6 @@ fn evaluate_proposal<C: PolkadotApi>(
 	}
 
 	// execute the block.
-	client.evaluate_block(parent_id, proposal)?;
+	client.evaluate_block(parent_id, proposal.into())?;
 	Ok(true)
 }

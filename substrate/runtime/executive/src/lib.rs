@@ -18,6 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")] extern crate serde;
+
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_io as runtime_io;
@@ -41,11 +43,10 @@ extern crate substrate_runtime_session as session;
 #[cfg(test)]
 extern crate substrate_runtime_staking as staking;
 
-#[cfg(feature = "std")] extern crate serde;
-
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use runtime_io::Hashing;
+use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable, MakePayment};
 use codec::Slicable;
 
@@ -122,27 +123,29 @@ impl<
 
 	/// Apply outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
-	pub fn apply_extrinsic(utx: Block::Extrinsic) {
+	pub fn apply_extrinsic(uxt: Block::Extrinsic) {
+		<system::ExtrinsicIndex<System>>::put(<system::ExtrinsicIndex<System>>::get() + 1u32);
+
 		// Verify the signature is good.
-		let tx = match utx.check() {
-			Ok(tx) => tx,
+		let xt = match uxt.check() {
+			Ok(xt) => xt,
 			Err(_) => panic!("All transactions should be properly signed"),
 		};
 
-		{
+		if xt.sender() != &Default::default() {
 			// check index
-			let expected_index = <system::Module<System>>::account_index(tx.sender());
-			assert!(tx.index() == &expected_index, "All transactions should have the correct nonce");
+			let expected_index = <system::Module<System>>::account_index(xt.sender());
+			assert!(xt.index() == &expected_index, "All transactions should have the correct nonce");
 
 			// increment nonce in storage
-			<system::Module<System>>::inc_account_index(tx.sender());
+			<system::Module<System>>::inc_account_index(xt.sender());
+
+			// pay any fees.
+			Payment::make_payment(xt.sender());
 		}
 
-		// pay any fees.
-		Payment::make_payment(tx.sender());
-
 		// decode parameters and dispatch
-		tx.apply();
+		xt.apply();
 	}
 
 	fn final_checks(header: &System::Header) {
@@ -180,6 +183,7 @@ mod tests {
 		type PublicAux = u64;
 	}
 	impl consensus::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type SessionKey = u64;
 	}
 	impl system::Trait for Test {
@@ -192,7 +196,6 @@ mod tests {
 		type Header = Header;
 	}
 	impl session::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type ConvertAccountIdToSessionKey = Identity;
 	}
 	impl staking::Trait for Test {

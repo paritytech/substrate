@@ -44,8 +44,7 @@ use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, Executable, Convert};
 use runtime_support::{StorageValue, StorageMap};
 
-pub trait Trait: consensus::Trait + system::Trait {
-	type PublicAux: RefInto<Self::AccountId>;
+pub trait Trait: consensus::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
 }
 
@@ -163,28 +162,6 @@ pub struct GenesisConfig<T: Trait> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> GenesisConfig<T> where T::AccountId: From<keyring::Keyring> {
-	pub fn simple() -> Self where T::AccountId: From<[u8; 32]> {
-		use primitives::traits::As;
-		use keyring::Keyring::*;
-		let three = [3u8; 32];
-		GenesisConfig {
-			session_length: T::BlockNumber::sa(2),
-			validators: vec![T::AccountId::from(One), T::AccountId::from(Two), T::AccountId::from(three)],
-		}
-	}
-
-	pub fn extended() -> Self {
-		use primitives::traits::As;
-		use keyring::Keyring::*;
-		GenesisConfig {
-			session_length: T::BlockNumber::sa(1),
-			validators: vec![T::AccountId::from(Alice), T::AccountId::from(Bob), T::AccountId::from(Charlie)],
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		use primitives::traits::As;
@@ -224,6 +201,7 @@ mod tests {
 		type PublicAux = u64;
 	}
 	impl consensus::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type SessionKey = u64;
 	}
 	impl system::Trait for Test {
@@ -236,7 +214,6 @@ mod tests {
 		type Header = Header;
 	}
 	impl Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type ConvertAccountIdToSessionKey = Identity;
 	}
 
@@ -247,6 +224,7 @@ mod tests {
 	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
 		t.extend(consensus::GenesisConfig::<Test>{
+			code: vec![],
 			authorities: vec![1, 2, 3],
 		}.build_externalities());
 		t.extend(GenesisConfig::<Test>{

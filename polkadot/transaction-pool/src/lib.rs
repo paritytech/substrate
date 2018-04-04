@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate transaction_pool;
-extern crate polkadot_api;
-extern crate polkadot_primitives as primitives;
-extern crate substrate_primitives as substrate_primitives;
-extern crate substrate_codec as codec;
 extern crate ed25519;
 extern crate ethereum_types;
+extern crate substrate_codec as codec;
+extern crate substrate_primitives as substrate_primitives;
+extern crate substrate_runtime_primitives as substrate_runtime_primitives;
+extern crate polkadot_runtime as runtime;
+extern crate polkadot_primitives as primitives;
+extern crate polkadot_api;
+extern crate transaction_pool;
 
 #[macro_use]
 extern crate error_chain;
@@ -30,8 +32,9 @@ use std::cmp::Ordering;
 use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
-use primitives::AccountId;
-use primitives::transaction::UncheckedTransaction;
+use primitives::{AccountId, Timestamp};
+use runtime::{Block, UncheckedExtrinsic, TimestampCall, Call};
+use substrate_runtime_primitives::traits::Checkable;
 use transaction_pool::{Pool, Readiness};
 use transaction_pool::scoring::{Change, Choice};
 
@@ -44,6 +47,55 @@ pub fn truncate_id(id: &AccountId) -> TruncatedAccountId {
 	TruncatedAccountId::from_slice(&id[..20])
 }
 
+
+
+/// Useful functions for working with Polkadot blocks.
+pub struct PolkadotBlock (Block);
+
+impl PolkadotBlock {
+	/// Create a new block, checking high-level well-formedness.
+	pub fn from(unchecked: Block) -> ::std::result::Result<Self, Block> {
+		if unchecked.extrinsics.len() < 1 {
+			return Err(unchecked);
+		}
+		if unchecked.extrinsics[0].is_signed() {
+			return Err(unchecked);
+		}
+		if let Call::Timestamp(TimestampCall::set(_)) = unchecked.extrinsics[0].extrinsic.function {} else {
+			return Err(unchecked);
+		}
+		Ok(Self::from_known_good(unchecked))
+	}
+
+	/// Create a new block, skipping any high-level well-formedness checks. WARNING: This could
+	/// result in internal functions panicking if the block is, in fact, not well-formed.
+	pub fn from_known_good(known_good: Block) -> Self {
+		PolkadotBlock(known_good)
+	}
+
+	/// Retrieve the timestamp of a Polkadot block.
+	pub fn timestamp(&self) -> Timestamp {
+		if let Call::Timestamp(TimestampCall::set(t)) = self.0.extrinsics[0].extrinsic.function {
+			t
+		} else {
+			unreachable!();
+		}
+	}
+}
+
+impl ::std::ops::Deref for PolkadotBlock {
+	type Target = Block;
+	fn deref(&self) -> &Block {
+		&self.0
+	}
+}
+
+impl From<PolkadotBlock> for Block {
+	fn from(pd: PolkadotBlock) -> Self {
+		pd.0
+	}
+}
+
 /// Iterator over pending transactions.
 pub type PendingIterator<'a, C> =
 	transaction_pool::PendingIterator<'a, VerifiedTransaction, Ready<'a, C>, Scoring, NoopListener>;
@@ -51,12 +103,12 @@ pub type PendingIterator<'a, C> =
 error_chain! {
 	errors {
 		/// Attempted to queue an inherent transaction.
-		IsInherent(tx: UncheckedTransaction) {
+		IsInherent(xt: UncheckedExtrinsic) {
 			description("Inherent transactions cannot be queued."),
 			display("Inehrent transactions cannot be queued."),
 		}
 		/// Attempted to queue a transaction with bad signature.
-		BadSignature(tx: UncheckedTransaction) {
+		BadSignature(xt: UncheckedExtrinsic) {
 			description("Transaction had bad signature."),
 			display("Transaction had bad signature."),
 		}
@@ -76,7 +128,7 @@ error_chain! {
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Debug, Clone)]
 pub struct VerifiedTransaction {
-	inner: UncheckedTransaction,
+	inner: <UncheckedExtrinsic as Checkable>::Checked,
 	hash: TransactionHash,
 	address: TruncatedAccountId,
 	insertion_id: u64,
@@ -85,35 +137,36 @@ pub struct VerifiedTransaction {
 
 impl VerifiedTransaction {
 	/// Attempt to verify a transaction.
-	fn create(tx: UncheckedTransaction, insertion_id: u64) -> Result<Self> {
-		if tx.is_inherent() {
-			bail!(ErrorKind::IsInherent(tx))
+	fn create(xt: UncheckedExtrinsic, insertion_id: u64) -> Result<Self> {
+		if !xt.is_signed() {
+			bail!(ErrorKind::IsInherent(xt))
 		}
 
-		let message = codec::Slicable::encode(&tx);
-		if ed25519::verify(&*tx.signature, &message, &tx.transaction.signed[..]) {
-			// TODO: make transaction-pool use generic types.
-			let hash = substrate_primitives::hashing::blake2_256(&message);
-			let address = truncate_id(&tx.transaction.signed);
-			Ok(VerifiedTransaction {
-				inner: tx,
-				hash: hash.into(),
-				encoded_size: message.len(),
-				address,
-				insertion_id,
-			})
-		} else {
-			Err(ErrorKind::BadSignature(tx).into())
+		let message = codec::Slicable::encode(&xt);
+		match xt.check() {
+			Ok(xt) => {
+				// TODO: make transaction-pool use generic types.
+				let hash = substrate_primitives::hashing::blake2_256(&message);
+				let address = truncate_id(&xt.signed);
+				Ok(VerifiedTransaction {
+					inner: xt,
+					hash: hash.into(),
+					encoded_size: message.len(),
+					address,
+					insertion_id,
+				})
+			}
+			Err(xt) => Err(ErrorKind::BadSignature(xt).into()),
 		}
 	}
 
 	/// Access the underlying transaction.
-	pub fn as_transaction(&self) -> &UncheckedTransaction {
-		self.as_ref()
+	pub fn as_transaction(&self) -> &UncheckedExtrinsic {
+		self.as_ref().as_unchecked()
 	}
 
 	/// Consume the verified transaciton, yielding the unchecked counterpart.
-	pub fn into_inner(self) -> UncheckedTransaction {
+	pub fn into_inner(self) -> <UncheckedExtrinsic as Checkable>::Checked {
 		self.inner
 	}
 
@@ -133,8 +186,8 @@ impl VerifiedTransaction {
 	}
 }
 
-impl AsRef<UncheckedTransaction> for VerifiedTransaction {
-	fn as_ref(&self) -> &UncheckedTransaction {
+impl AsRef< <UncheckedExtrinsic as Checkable>::Checked > for VerifiedTransaction {
+	fn as_ref(&self) -> &<UncheckedExtrinsic as Checkable>::Checked {
 		&self.inner
 	}
 }
@@ -164,7 +217,7 @@ impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
 	type Score = u64;
 
 	fn compare(&self, old: &VerifiedTransaction, other: &VerifiedTransaction) -> Ordering {
-		old.inner.transaction.nonce.cmp(&other.inner.transaction.nonce)
+		old.inner.index.cmp(&other.inner.index)
 	}
 
 	fn choose(&self, _old: &VerifiedTransaction, _new: &VerifiedTransaction) -> Choice {
@@ -173,11 +226,11 @@ impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
 
 	fn update_scores(
 		&self,
-		txs: &[Arc<VerifiedTransaction>],
+		xts: &[Arc<VerifiedTransaction>],
 		scores: &mut [Self::Score],
 		_change: Change
 	) {
-		for i in 0..txs.len() {
+		for i in 0..xts.len() {
 			// all the same score since there are no fees.
 			// TODO: prioritize things like misbehavior or fishermen reports
 			scores[i] = 1;
@@ -192,7 +245,7 @@ impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
 pub struct Ready<'a, T: 'a + PolkadotApi> {
 	at_block: T::CheckedBlockId,
 	api_handle: &'a T,
-	known_nonces: HashMap<AccountId, ::primitives::TxOrder>,
+	known_indices: HashMap<AccountId, ::primitives::Index>,
 }
 
 impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
@@ -200,7 +253,7 @@ impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
 		Ready {
 			at_block: self.at_block.clone(),
 			api_handle: self.api_handle,
-			known_nonces: self.known_nonces.clone(),
+			known_indices: self.known_indices.clone(),
 		}
 	}
 }
@@ -212,24 +265,24 @@ impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 		Ready {
 			at_block: at,
 			api_handle: client,
-			known_nonces: HashMap::new(),
+			known_indices: HashMap::new(),
 		}
 	}
 }
 
 impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for Ready<'a, T> {
-	fn is_ready(&mut self, tx: &VerifiedTransaction) -> Readiness {
-		let sender = tx.inner.transaction.signed;
+	fn is_ready(&mut self, xt: &VerifiedTransaction) -> Readiness {
+		let sender = xt.inner.signed;
 
-		// TODO: find a way to handle nonce error properly -- will need changes to
+		// TODO: find a way to handle index error properly -- will need changes to
 		// transaction-pool trait.
 		let (api_handle, at_block) = (&self.api_handle, &self.at_block);
-		let next_nonce = self.known_nonces.entry(sender)
-			.or_insert_with(|| api_handle.nonce(at_block, sender).ok().unwrap_or_else(u64::max_value));
+		let next_index = self.known_indices.entry(sender)
+			.or_insert_with(|| api_handle.index(at_block, sender).ok().unwrap_or_else(u64::max_value));
 
-		*next_nonce += 1;
+		*next_index += 1;
 
-		match tx.inner.transaction.nonce.cmp(&next_nonce) {
+		match xt.inner.index.cmp(&next_index) {
 			Ordering::Greater => Readiness::Future,
 			Ordering::Equal => Readiness::Ready,
 			Ordering::Less => Readiness::Stalled,
@@ -255,11 +308,11 @@ impl TransactionPool {
 	}
 
 	/// Verify and import a transaction into the pool.
-	pub fn import(&mut self, tx: UncheckedTransaction) -> Result<Arc<VerifiedTransaction>> {
+	pub fn import(&mut self, xt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
 		let insertion_index = self.insertion_index;
 		self.insertion_index += 1;
 
-		let verified = VerifiedTransaction::create(tx, insertion_index)?;
+		let verified = VerifiedTransaction::create(xt, insertion_index)?;
 
 		// TODO: just use a foreign link when the error type is made public.
 		let hash = verified.hash.clone();

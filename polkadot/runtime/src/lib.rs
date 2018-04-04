@@ -1,97 +1,136 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate Demo.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate Demo is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate Demo is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Polkadot runtime. This can be compiled with #[no_std], ready for Wasm.
+//! The Substrate Demo runtime. This can be compiled with ``#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate substrate_runtime_std as rstd;
-extern crate substrate_runtime_support as runtime_support;
-extern crate substrate_codec as codec;
-extern crate substrate_misbehavior_check as misbehavior_check;
+#[macro_use] extern crate substrate_runtime_io as runtime_io;
+#[macro_use] extern crate substrate_runtime_support as runtime_support;
+#[macro_use] extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_council as council;
+extern crate substrate_runtime_democracy as democracy;
+extern crate substrate_runtime_executive as executive;
+extern crate substrate_runtime_session as session;
+extern crate substrate_runtime_staking as staking;
+extern crate substrate_runtime_system as system;
+extern crate substrate_runtime_timestamp as timestamp;
 extern crate polkadot_primitives;
 
-#[cfg(all(feature = "std", test))]
-extern crate substrate_keyring as keyring;
+use runtime_io::BlakeTwo256;
+use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
+use runtime_primitives::generic;
+use runtime_primitives::traits::{Identity, HasPublicAux};
+//#[cfg(feature = "std")] pub use runtime_primitives::BuildExternalities;
 
-#[cfg(feature = "std")]
-extern crate rustc_hex;
+pub struct Concrete;
 
-#[cfg_attr(any(test, feature = "std"), macro_use)]
-extern crate substrate_primitives as primitives;
+impl HasPublicAux for Concrete {
+	type PublicAux = AccountId;
+}
 
-#[macro_use]
-extern crate substrate_runtime_io as runtime_io;
+impl timestamp::Trait for Concrete {
+	type Value = u64;
+}
+pub type Timestamp = timestamp::Module<Concrete>;
 
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
+impl consensus::Trait for Concrete {
+	type SessionKey = SessionKey;
+}
+pub type Consensus = consensus::Module<Concrete>;
 
-pub mod api;
-pub mod environment;
-pub mod runtime;
+impl system::Trait for Concrete {
+	type Index = Index;
+	type BlockNumber = BlockNumber;
+	type Hash = Hash;
+	type Hashing = BlakeTwo256;
+	type Digest = generic::Digest<Vec<u8>>;
+	type AccountId = AccountId;
+	type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+}
+pub type System = system::Module<Concrete>;
 
-#[cfg(feature = "std")]
-pub mod genesismap;
+impl session::Trait for Concrete {
+	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type ConvertAccountIdToSessionKey = Identity;
+}
+pub type Session = session::Module<Concrete>;
 
-/// Type definitions and helpers for transactions.
-pub mod transaction {
-	use rstd::ops;
-	use polkadot_primitives::Signature;
-	pub use polkadot_primitives::{Transaction, Function, UncheckedTransaction};
+impl staking::Trait for Concrete {
+	type Balance = Balance;
+	type DetermineContractAddress = BlakeTwo256;
+}
+pub type Staking = staking::Module<Concrete>;
 
-	/// A type-safe indicator that a transaction has been checked.
-	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Debug))]
-	pub struct CheckedTransaction(UncheckedTransaction);
+impl democracy::Trait for Concrete {
+	type Proposal = PrivCall;
+}
+pub type Democracy = democracy::Module<Concrete>;
 
-	impl CheckedTransaction {
-		/// Get a reference to the checked signature.
-		pub fn signature(&self) -> &Signature {
-			&self.0.signature
-		}
+impl council::Trait for Concrete {}
+pub type Council = council::Module<Concrete>;
+pub type CouncilVoting = council::voting::Module<Concrete>;
+
+impl_outer_dispatch! {
+	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
+		Session = 1,
+		Staking = 2,
+		Timestamp = 3,
+		Democracy = 5,
+		Council = 6,
+		CouncilVoting = 7,
 	}
 
-	impl ops::Deref for CheckedTransaction {
-		type Target = Transaction;
-
-		fn deref(&self) -> &Transaction {
-			&self.0.transaction
-		}
+	pub enum PrivCall {
+		Consensus = 0,
+		Session = 1,
+		Staking = 2,
+		Democracy = 5,
+		Council = 6,
+		CouncilVoting = 7,
 	}
+}
 
-	/// Check the validity of a transaction: whether it can appear at the given index
-	/// and whether it is correctly authenticated.
-	pub fn check(tx: UncheckedTransaction, index: u64) -> Result<CheckedTransaction, UncheckedTransaction> {
-		match tx.transaction.function.inherent_index() {
-			Some(correct_index) => {
-				if index != correct_index || !tx.is_well_formed() { return Err(tx) }
-				return Ok(CheckedTransaction(tx));
-			}
-			None => {
-				// non-inherent functions must appear after inherent.
-				if index < Function::inherent_functions() { return Err(tx) }
-			}
-		}
+pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, AccountId, Index, Call, Signature>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
+pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
+pub type Executive = executive::Executive<Concrete, Block, Staking,
+	(((((), Council), Democracy), Staking), Session)>;
 
-		let msg = ::codec::Slicable::encode(&tx.transaction);
-		if ::runtime_io::ed25519_verify(&tx.signature.0, &msg, &tx.transaction.signed) {
-			Ok(CheckedTransaction(tx))
-		} else {
-			Err(tx)
-		}
+impl_outer_config! {
+	pub struct GenesisConfig for Concrete {
+		ConsensusConfig => consensus,
+		SystemConfig => system,
+		SessionConfig => session,
+		StakingConfig => staking,
+		DemocracyConfig => democracy,
+		CouncilConfig => council,
 	}
+}
+
+pub mod api {
+	impl_stubs!(
+		authorities => |()| super::Consensus::authorities(),
+		initialise_block => |header| super::Executive::initialise_block(&header),
+		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
+		execute_block => |block| super::Executive::execute_block(block),
+		finalise_block => |()| super::Executive::finalise_block(),
+		validator_count => |()| super::Session::validator_count(),
+		validators => |()| super::Session::validators()
+	);
 }

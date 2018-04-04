@@ -35,7 +35,7 @@ pub trait Verify {
 }
 
 /// Ed25519 signature verify.
-#[derive(Eq, PartialEq, Clone)]
+#[derive(Eq, PartialEq, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub struct Ed25519Signature(H512);
 impl Verify for Ed25519Signature {
@@ -102,8 +102,18 @@ impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
 
+pub trait MaybeEmpty {
+	fn is_empty(&self) -> bool;
+}
+
+impl<T: Default + PartialEq> MaybeEmpty for T {
+	fn is_empty(&self) -> bool {
+		*self == T::default()
+	}
+}
+
 pub trait HasPublicAux {
-	type PublicAux;
+	type PublicAux: MaybeEmpty;
 }
 
 pub trait RefInto<T> {

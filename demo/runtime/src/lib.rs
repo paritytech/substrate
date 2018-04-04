@@ -54,20 +54,6 @@ impl HasPublicAux for Concrete {
 	type PublicAux = AccountId;
 }
 
-impl timestamp::Trait for Concrete {
-	type Value = u64;
-}
-
-/// Timestamp module for this concrete runtime.
-pub type Timestamp = timestamp::Module<Concrete>;
-
-impl consensus::Trait for Concrete {
-	type SessionKey = SessionKey;
-}
-
-/// Consensus module for this concrete runtime.
-pub type Consensus = consensus::Module<Concrete>;
-
 impl system::Trait for Concrete {
 	type Index = Index;
 	type BlockNumber = BlockNumber;
@@ -81,8 +67,22 @@ impl system::Trait for Concrete {
 /// System module for this concrete runtime.
 pub type System = system::Module<Concrete>;
 
-impl session::Trait for Concrete {
+impl consensus::Trait for Concrete {
 	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type SessionKey = SessionKey;
+}
+
+/// Consensus module for this concrete runtime.
+pub type Consensus = consensus::Module<Concrete>;
+
+impl timestamp::Trait for Concrete {
+	type Value = u64;
+}
+
+/// Timestamp module for this concrete runtime.
+pub type Timestamp = timestamp::Module<Concrete>;
+
+impl session::Trait for Concrete {
 	type ConvertAccountIdToSessionKey = Identity;
 }
 
@@ -113,6 +113,7 @@ pub type CouncilVoting = council::voting::Module<Concrete>;
 
 impl_outer_dispatch! {
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
+		Consensus = 0,
 		Session = 1,
 		Staking = 2,
 		Timestamp = 3,
