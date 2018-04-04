@@ -19,8 +19,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")] extern crate serde;
-#[cfg(feature = "std")] #[macro_use] extern crate serde_derive;
+#[cfg(feature = "std")]
+extern crate serde;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
 extern crate num_traits;
 extern crate integer_sqrt;
 extern crate substrate_runtime_std as rstd;

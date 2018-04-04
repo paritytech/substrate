@@ -18,13 +18,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")] extern crate serde;
+#[cfg(feature = "std")]
+extern crate serde;
+
+#[macro_use]
+extern crate substrate_runtime_support as runtime_support;
+
+#[cfg(feature = "std")]
+extern crate substrate_primitives;
+
+#[macro_use]
+extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_codec as codec;
-#[cfg(feature = "std")] extern crate substrate_primitives;
-#[macro_use] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
-#[macro_use] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_session as session;

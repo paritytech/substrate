@@ -24,11 +24,22 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_system as system;
-#[cfg(test)] #[macro_use] extern crate hex_literal;
-#[cfg(test)] extern crate substrate_primitives;
-#[cfg(test)] extern crate substrate_runtime_consensus as consensus;
-#[cfg(test)] extern crate substrate_runtime_session as session;
-#[cfg(test)] extern crate substrate_runtime_staking as staking;
+
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
+
+#[cfg(test)]
+extern crate substrate_primitives;
+
+#[cfg(test)]
+extern crate substrate_runtime_consensus as consensus;
+
+#[cfg(test)]
+extern crate substrate_runtime_session as session;
+
+#[cfg(test)]
+extern crate substrate_runtime_staking as staking;
 
 #[cfg(feature = "std")] extern crate serde;
 

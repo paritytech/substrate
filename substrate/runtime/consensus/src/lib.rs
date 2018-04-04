@@ -18,9 +18,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[allow(unused_imports)] #[macro_use] extern crate substrate_runtime_std as rstd;
+#[allow(unused_imports)]
+#[macro_use]
+extern crate substrate_runtime_std as rstd;
+
+#[macro_use]
+extern crate substrate_runtime_support as runtime_support;
+
 extern crate substrate_runtime_io as runtime_io;
-#[macro_use] extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_codec as codec;
 

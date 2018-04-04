@@ -19,23 +19,30 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg_attr(any(feature = "std", test), macro_use)] extern crate substrate_runtime_std as rstd;
-#[macro_use] extern crate substrate_runtime_support as runtime_support;
+#[cfg_attr(any(feature = "std", test), macro_use)]
+extern crate substrate_runtime_std as rstd;
+
+#[macro_use]
+extern crate substrate_runtime_support as runtime_support;
+
+#[cfg(feature = "std")]
+extern crate serde;
+
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
-
-#[cfg(feature = "std")] extern crate serde;
-
 extern crate safe_mix;
 
 use rstd::prelude::*;
-#[cfg(any(feature = "std", test))] use rstd::marker::PhantomData;
-#[cfg(any(feature = "std", test))] use codec::Slicable;
 use runtime_io::Hashing;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
+
+#[cfg(any(feature = "std", test))]
+use rstd::marker::PhantomData;
+#[cfg(any(feature = "std", test))]
+use codec::Slicable;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities};
