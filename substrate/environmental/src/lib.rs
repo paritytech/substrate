@@ -40,12 +40,18 @@
 //! }
 //! ```
 
-use std::cell::RefCell;
-use std::thread::LocalKey;
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(const_fn))]
+
+#[cfg(feature = "std")]
+include!("../with_std.rs");
+
+#[cfg(not(feature = "std"))]
+include!("../without_std.rs");
 
 #[doc(hidden)]
 pub fn using<T: ?Sized, R, F: FnOnce() -> R>(
-	global: &'static LocalKey<RefCell<Option<*mut T>>>,
+	global: &'static imp::LocalKey<imp::RefCell<Option<*mut T>>>,
 	protected: &mut T,
 	f: F
 ) -> R {
@@ -59,13 +65,13 @@ pub fn using<T: ?Sized, R, F: FnOnce() -> R>(
 	global.with(|r| {
 		let original = {
 			let mut global = r.borrow_mut();
-			::std::mem::replace(&mut *global, Some(protected as _))
+			imp::replace(&mut *global, Some(protected as _))
 		};
 
 		// even if `f` panics the original will be replaced.
 		struct ReplaceOriginal<'a, T: 'a + ?Sized> {
 			original: Option<*mut T>,
-			global: &'a RefCell<Option<*mut T>>,
+			global: &'a imp::RefCell<Option<*mut T>>,
 		}
 
 		impl<'a, T: 'a + ?Sized> Drop for ReplaceOriginal<'a, T> {
@@ -85,7 +91,7 @@ pub fn using<T: ?Sized, R, F: FnOnce() -> R>(
 
 #[doc(hidden)]
 pub fn with<T: ?Sized, R, F: FnOnce(&mut T) -> R>(
-	global: &'static LocalKey<RefCell<Option<*mut T>>>,
+	global: &'static imp::LocalKey<imp::RefCell<Option<*mut T>>>,
 	mutator: F,
 ) -> Option<R> {
 	global.with(|r| unsafe {
@@ -163,7 +169,7 @@ macro_rules! environmental {
 		#[allow(non_camel_case_types)]
 		struct $name { __private_field: () }
 
-		thread_local!(static GLOBAL: ::std::cell::RefCell<Option<*mut $t>>
+		thread_local_impl!(static GLOBAL: ::std::cell::RefCell<Option<*mut $t>>
 			= ::std::cell::RefCell::new(None));
 
 		impl $name {
@@ -187,8 +193,8 @@ macro_rules! environmental {
 		#[allow(non_camel_case_types)]
 		struct $name { __private_field: () }
 
-		thread_local!(static GLOBAL: ::std::cell::RefCell<Option<*mut ($t + 'static)>>
-			= ::std::cell::RefCell::new(None));
+		thread_local_impl!(static GLOBAL: $crate::imp::RefCell<Option<*mut ($t + 'static)>>
+			= $crate::imp::RefCell::new(None));
 
 		impl $name {
 			#[allow(unused_imports)]
@@ -198,7 +204,7 @@ macro_rules! environmental {
 				f: F
 			) -> R {
 				let lifetime_extended = unsafe {
-					::std::mem::transmute::<&mut $t, &mut ($t + 'static)>(protected)
+					$crate::imp::transmute::<&mut $t, &mut ($t + 'static)>(protected)
 				};
 				$crate::using(&GLOBAL, lifetime_extended, f)
 			}
