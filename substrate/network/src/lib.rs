@@ -62,7 +62,7 @@ pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMe
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, NetworkConfiguration};
-pub use message::{Statement, BftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
+pub use message::{Statement, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
 

@@ -46,7 +46,7 @@ pub struct Consensus {
 	peers: HashMap<PeerId, PeerConsensus>,
 	our_candidate: Option<(Hash, Vec<u8>)>,
 	statement_sink: Option<mpsc::UnboundedSender<message::Statement>>,
-	bft_message_sink: Option<mpsc::UnboundedSender<message::BftMessage>>,
+	bft_message_sink: Option<mpsc::UnboundedSender<message::LocalizedBftMessage>>,
 	message_timestamps: HashMap<Hash, Instant>,
 }
 
@@ -125,7 +125,7 @@ impl Consensus {
 		stream
 	}
 
-	pub fn on_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, message: message::BftMessage, hash: Hash) {
+	pub fn on_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			peer.known_messages.insert(hash);
 			// TODO: validate signature?
@@ -145,7 +145,7 @@ impl Consensus {
 		self.propagate(io, protocol, Message::BftMessage(message), hash);
 	}
 
-	pub fn bft_messages(&mut self) -> mpsc::UnboundedReceiver<message::BftMessage>{
+	pub fn bft_messages(&mut self) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage>{
 		let (sink, stream) = mpsc::unbounded();
 		self.bft_message_sink = Some(sink);
 		stream
@@ -184,7 +184,7 @@ impl Consensus {
 		self.propagate(io, protocol, message, hash);
 	}
 
-	pub fn send_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, message: message::BftMessage) {
+	pub fn send_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, message: message::LocalizedBftMessage) {
 		// Broadcast message to all validators.
 		trace!(target:"sync", "Broadcasting BFT message {:?}", message);
 		let message = Message::BftMessage(message);

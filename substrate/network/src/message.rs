@@ -149,6 +149,8 @@ pub enum UnsignedStatement {
 /// A signed statement.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Statement {
+	/// Parent relay chain block header hash.
+	pub parent_hash: HeaderHash,
 	/// The statement.
 	pub statement: UnsignedStatement,
 	/// The signature.
@@ -157,6 +159,7 @@ pub struct Statement {
 	pub sender: AuthorityId,
 }
 
+
 /// Communication that can occur between participants in consensus.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum BftMessage {
@@ -164,6 +167,15 @@ pub enum BftMessage {
 	Consensus(SignedConsensusMessage),
 	/// Auxiliary communication (just proof-of-lock for now).
 	Auxiliary(Justification),
+}
+
+/// BFT Consensus message with parent header hash attached to it.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct LocalizedBftMessage {
+	/// Consensus message.
+	pub message: BftMessage,
+	/// Parent header hash.
+	pub parent_hash: HeaderHash,
 }
 
 /// A localized proposal message. Contains two signed pieces of data.
@@ -233,7 +245,7 @@ pub enum Message {
 	/// Candidate response.
 	CandidateResponse(CandidateResponse),
 	/// BFT Consensus statement.
-	BftMessage(BftMessage),
+	BftMessage(LocalizedBftMessage),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
