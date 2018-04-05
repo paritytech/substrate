@@ -34,7 +34,10 @@ extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 
-#[cfg(feature = "std")] use std::collections::HashMap;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+
+use substrate_primitives::hash::H512;
 
 #[cfg(feature = "std")]
 pub mod testing;
@@ -48,6 +51,26 @@ pub type BuiltExternalities = HashMap<Vec<u8>, Vec<u8>>;
 #[cfg(feature = "std")]
 pub trait BuildExternalities {
 	fn build_externalities(self) -> BuiltExternalities;
+}
+
+/// Ed25519 signature verify.
+#[derive(Eq, PartialEq, Clone, Default)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+pub struct Ed25519Signature(H512);
+impl traits::Verify for Ed25519Signature {
+	type Signer = [u8; 32];
+	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
+		runtime_io::ed25519_verify(&(self.0).0, msg, &signer[..])
+	}
+}
+impl codec::Slicable for Ed25519Signature {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> { Some(Ed25519Signature(codec::Slicable::decode(input)?,)) }
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R { self.0.using_encoded(f) }
+}
+impl From<H512> for Ed25519Signature {
+	fn from(h: H512) -> Ed25519Signature {
+		Ed25519Signature(h)
+	}
 }
 
 #[macro_export]
