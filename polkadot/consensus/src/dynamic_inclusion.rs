@@ -36,7 +36,7 @@ impl DynamicInclusion {
 	/// how many parachain candidates are required at the beginning, and when an empty
 	/// block will be allowed.
 	pub fn new(initial: usize, start: Instant, allow_empty: Duration) -> Self {
-		// linear function f(n_candidates) -> valid after milliseconds
+		// linear function f(n_candidates) -> valid after microseconds
 		// f(0) = allow_empty
 		// f(initial) = 0
 		let y = duration_to_micros(&allow_empty) as i64;

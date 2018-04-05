@@ -55,6 +55,7 @@ extern crate log;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 
 use codec::Slicable;
 use table::{Table, Context as TableContextTrait};
@@ -71,10 +72,13 @@ use transaction_pool::{Ready, TransactionPool};
 use futures::prelude::*;
 use futures::future;
 use parking_lot::Mutex;
+use collation::{Collation, Collators, CollationFetch};
+use dynamic_inclusion::{Instant, DynamicInclusion};
 
 pub use self::error::{ErrorKind, Error};
 pub use service::Service;
 
+mod collation;
 mod dynamic_inclusion;
 mod error;
 mod service;
@@ -109,30 +113,6 @@ pub trait Network {
 
 	/// Instantiate a table router using the given shared table.
 	fn table_router(&self, table: Arc<SharedTable>) -> Self::TableRouter;
-}
-
-/// A full collation.
-pub struct Collation {
-	/// Block data.
-	pub block_data: BlockData,
-	/// Extrinsic data.
-	pub extrinsic: Extrinsic,
-	/// The candidate receipt itself.
-	pub receipt: CandidateReceipt,
-}
-
-/// Encapsulates connections to collators and allows collation on any parachain.
-pub trait Collators {
-	/// Errors when producing collations.
-	type Error;
-	/// A full collation.
-	type Collation: IntoFuture<Item=Collation,Error=Self::Error>;
-
-	/// Collate on a specific parachain, building on a given relay chain parent hash.
-	fn collate(&self, parachain: ParaId, relay_parent: Hash) -> Self::Collation;
-
-	/// Note a bad collator.
-	fn note_bad_collator(&self, collator: Address);
 }
 
 /// Information about a specific group.
@@ -495,17 +475,26 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<Ha
 }
 
 /// Polkadot proposer factory.
-pub struct ProposerFactory<C, N> {
+pub struct ProposerFactory<C, N, P> {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The transaction pool.
 	pub transaction_pool: Arc<Mutex<TransactionPool>>,
 	/// The backing network handle.
 	pub network: N,
+	/// Parachain collators.
+	pub collators: Arc<P>,
+	/// The duration after which parachain-empty blocks will be allowed.
+	pub parachain_empty_duration: Duration,
 }
 
-impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> {
-	type Proposer = Proposer<C, N::TableRouter>;
+impl<C, N P> bft::ProposerFactory for ProposerFactory<C, N>
+	where
+		C: PolkadotApi,
+		N: Network,
+		P: Collators,
+{
+	type Proposer = Proposer<C, N::TableRouter, P>;
 	type Error = Error;
 
 	fn init(&self, parent_header: &SubstrateHeader, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
@@ -515,10 +504,15 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 		let duty_roster = self.client.duty_roster(&checked_id)?;
 
 		let group_info = make_group_info(duty_roster, authorities)?;
+		let n_parachains = group_info.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
 		let router = self.network.table_router(table.clone());
+		let dynamic_inclusion = DynamicInclusion::new(
+			n_parachains,
+			Instant::now(),
+			self.parachain_empty_duration.clone(),
+		);
 
-		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
 			parent_hash,
 			parent_number: parent_header.number,
@@ -526,8 +520,10 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 			local_key: sign_with,
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
-			_table: table,
-			_router: router,
+			collators: self.collators.clone(),
+			dynamic_inclusion,
+			table,
+			router,
 		})
 	}
 }
@@ -541,64 +537,31 @@ fn current_timestamp() -> Timestamp {
 }
 
 /// The Polkadot proposer logic.
-pub struct Proposer<C: PolkadotApi, R> {
+pub struct Proposer<C: PolkadotApi, R, P> {
 	parent_hash: HeaderHash,
 	parent_number: BlockNumber,
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
 	local_key: Arc<ed25519::Pair>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
-	_table: Arc<SharedTable>,
-	_router: R,
+	collators: P,
+	dynamic_inclusion: DynamicInclusion,
+	table: Arc<SharedTable>,
+	router: R,
 }
 
-impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
+impl<C, R, P> bft::Proposer for Proposer<C, R>
+	where
+		C: PolkadotApi,
+		R: TableRouter,
+		P: Collators,
+{
 	type Error = Error;
 	type Create = Result<SubstrateBlock, Error>;
 	type Evaluate = Result<bool, Error>;
 
 	fn propose(&self) -> Result<SubstrateBlock, Error> {
-		// TODO: handle case when current timestamp behind that in state.
-		let mut block_builder = self.client.build_block(
-			&self.parent_id,
-			current_timestamp()
-		)?;
-
-		let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
-
-		{
-			let mut pool = self.transaction_pool.lock();
-			let mut unqueue_invalid = Vec::new();
-			let mut pending_size = 0;
-			for pending in pool.pending(readiness_evaluator.clone()) {
-				// skip and cull transactions which are too large.
-				if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
-					unqueue_invalid.push(pending.hash().clone());
-					continue
-				}
-
-				if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
-
-				match block_builder.push_transaction(pending.as_transaction().clone()) {
-					Ok(()) => {
-						pending_size += pending.encoded_size();
-					}
-					Err(_) => {
-						unqueue_invalid.push(pending.hash().clone());
-					}
-				}
-			}
-
-			for tx_hash in unqueue_invalid {
-				pool.remove(&tx_hash, false);
-			}
-		}
-
-		let polkadot_block = block_builder.bake();
-		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
-			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
-
-		Ok(substrate_block)
+		unimplemented!()
 	}
 
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
@@ -662,6 +625,88 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 			};
 
 			pool.import(tx).expect("locally signed transaction is valid; qed");
+		}
+	}
+}
+
+struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
+	parent_hash: HeaderHash,
+	parent_number: BlockNumber,
+	parent_id: C::CheckedBlockId,
+	client: Arc<C>,
+	local_key: Arc<ed25519::Pair>,
+	transaction_pool: Arc<Mutex<TransactionPool>>,
+	dynamic_inclusion: DynamicInclusion,
+	collation: CollationFetch<P>,
+	_table: Arc<SharedTable>,
+	_router: R,
+}
+
+impl CreateProposal<C, R, P>
+	where
+		C: PolkadotApi,
+		R: TableRouter,
+		P: Collators,
+{
+	fn propose(&self) -> Result<SubstrateBlock, Error> {
+		// TODO: handle case when current timestamp behind that in state.
+		let mut block_builder = self.client.build_block(
+			&self.parent_id,
+			current_timestamp()
+		)?;
+
+		let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
+
+		{
+			let mut pool = self.transaction_pool.lock();
+			let mut unqueue_invalid = Vec::new();
+			let mut pending_size = 0;
+			for pending in pool.pending(readiness_evaluator.clone()) {
+				// skip and cull transactions which are too large.
+				if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
+					unqueue_invalid.push(pending.hash().clone());
+					continue
+				}
+
+				if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
+
+				match block_builder.push_transaction(pending.as_transaction().clone()) {
+					Ok(()) => {
+						pending_size += pending.encoded_size();
+					}
+					Err(_) => {
+						unqueue_invalid.push(pending.hash().clone());
+					}
+				}
+			}
+
+			for tx_hash in unqueue_invalid {
+				pool.remove(&tx_hash, false);
+			}
+		}
+
+		let polkadot_block = block_builder.bake();
+		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
+			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
+
+		Ok(substrate_block)
+	}
+}
+
+impl Future for CreateProposal<C, R, P>
+	where
+		C: PolkadotApi,
+		R: TableRouter,
+		P: Collators,
+{
+	type Item = SubstrateBlock;
+	type Error = Error;
+
+	fn poll(&mut self) -> Poll<SubstrateBlock, Error> {
+		// 1. poll local collation future.
+		if let Async::Ready(collation) = self.collation.poll()? {
+			self.router.local_candidate_data(collation.block_data, collation.extrinsic);
+			// TODO: import statement.
 		}
 	}
 }
