@@ -54,7 +54,7 @@ impl<T: Trait> Module<T> {
 		let mut roles_gua = roles_val.clone();
 
 		let h = <system::Module<T>>::random_seed();
-		let mut seed = Vec::<u8>::new().and(&h).and(b"validator_role_pairs").blake2_256();
+		let mut seed = h.to_vec().and(b"validator_role_pairs").blake2_256();
 
 		// shuffle
 		for i in 0..(validator_count - 1) {

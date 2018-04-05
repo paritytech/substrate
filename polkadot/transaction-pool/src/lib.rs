@@ -48,7 +48,10 @@ pub fn truncate_id(id: &AccountId) -> TruncatedAccountId {
 }
 
 /// Useful functions for working with Polkadot blocks.
-pub struct PolkadotBlock (Block);
+pub struct PolkadotBlock {
+	block: Block,
+	location: Option<(&'static str, usize)>,
+}
 
 impl PolkadotBlock {
 	/// Create a new block, checking high-level well-formedness.
@@ -62,35 +65,44 @@ impl PolkadotBlock {
 		if let Call::Timestamp(TimestampCall::set(_)) = unchecked.extrinsics[0].extrinsic.function {} else {
 			return Err(unchecked);
 		}
-		Ok(Self::force_from(unchecked))
+		Ok(PolkadotBlock { block: unchecked, location: None })
 	}
 
 	/// Create a new block, skipping any high-level well-formedness checks. WARNING: This could
 	/// result in internal functions panicking if the block is, in fact, not well-formed.
-	pub fn force_from(known_good: Block) -> Self {
-		PolkadotBlock(known_good)
+	pub fn force_from(known_good: Block, file: &'static str, line: usize) -> Self {
+		PolkadotBlock { block: known_good, location: Some((file, line)) }
 	}
 
 	/// Retrieve the timestamp of a Polkadot block.
 	pub fn timestamp(&self) -> Timestamp {
-		if let Call::Timestamp(TimestampCall::set(t)) = self.0.extrinsics[0].extrinsic.function {
+		if let Call::Timestamp(TimestampCall::set(t)) = self.block.extrinsics[0].extrinsic.function {
 			t
 		} else {
-			unreachable!();
+			if let Some((file, line)) = self.location {
+				panic!("Invalid block used in `PolkadotBlock::force_from` at {}:{}", file, line);
+			} else {
+				panic!("Invalid block made it through the PolkadotBlock verification!?");
+			}
 		}
 	}
+}
+
+#[macro_export]
+macro_rules! assert_polkadot_block {
+	($known_good:expr) => ( PolkadotBlock::force_from(known_good, file!(), line!()) )
 }
 
 impl ::std::ops::Deref for PolkadotBlock {
 	type Target = Block;
 	fn deref(&self) -> &Block {
-		&self.0
+		&self.block
 	}
 }
 
 impl From<PolkadotBlock> for Block {
 	fn from(pd: PolkadotBlock) -> Self {
-		pd.0
+		pd.block
 	}
 }
 
