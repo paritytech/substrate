@@ -62,7 +62,7 @@ impl PolkadotBlock {
 		if let Call::Timestamp(TimestampCall::set(_)) = unchecked.extrinsics[0].extrinsic.function {} else {
 			return Err(unchecked);
 		}
-		Ok(Self::from_known_good(unchecked))
+		Ok(Self::force_from(unchecked))
 	}
 
 	/// Create a new block, skipping any high-level well-formedness checks. WARNING: This could
