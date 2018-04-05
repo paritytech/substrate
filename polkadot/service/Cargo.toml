@@ -7,10 +7,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 futures = "0.1.17"
 parking_lot = "0.4"
 tokio-timer = "0.1.2"
-ed25519 = { path = "../../substrate/ed25519" }
+hex-literal = "0.1"
 error-chain = "0.11"
 log = "0.4"
 tokio-core = "0.1.12"
+ed25519 = { path = "../../substrate/ed25519" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
 polkadot-consensus = { path = "../consensus" }
@@ -18,9 +19,9 @@ polkadot-executor = { path = "../executor" }
 polkadot-api = { path = "../api" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
 polkadot-keystore = { path = "../keystore" }
+substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
 substrate-client = { path = "../../substrate/client" }
-substrate-keyring = { path = "../../substrate/keyring" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-executor = { path = "../../substrate/executor" }

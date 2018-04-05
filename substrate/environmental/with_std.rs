@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
 // Polkadot is free software: you can redistribute it and/or modify
@@ -14,21 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Polkadot runtime.
+#[doc(hidden)]
+pub mod imp {
+	pub use std::cell::RefCell;
+	pub use std::thread::LocalKey;
+	pub use std::mem::transmute;
+	pub use std::mem::replace;
+}
 
-#[allow(unused)]
-pub mod system;
-#[allow(unused)]
-pub mod consensus;
-#[allow(unused)]
-pub mod staking;
-#[allow(unused)]
-pub mod timestamp;
-#[allow(unused)]
-pub mod session;
-#[allow(unused)]
-pub mod governance;
-#[allow(unused)]
-pub mod parachains;
-
-// TODO: polkadao
+#[doc(hidden)]
+#[macro_export]
+macro_rules! thread_local_impl {
+	($(#[$attr:meta])* static $name:ident: $t:ty = $init:expr) => (
+		thread_local!($(#[$attr])* static $name: $t = $init);
+	);
+}

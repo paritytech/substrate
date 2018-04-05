@@ -20,8 +20,7 @@ use rstd::prelude::*;
 use rstd;
 #[cfg(not(feature = "std"))] use runtime_io;
 use substrate_primitives;
-use codec::{Input, Slicable};
-use substrate_primitives::hash::H512;
+use codec::Slicable;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
@@ -32,26 +31,6 @@ pub trait Verify {
 	type Signer;
 	/// Verify a signature.
 	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool;
-}
-
-/// Ed25519 signature verify.
-#[derive(Eq, PartialEq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-pub struct Ed25519Signature(H512);
-impl Verify for Ed25519Signature {
-	type Signer = [u8; 32];
-	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
-		::runtime_io::ed25519_verify(&(self.0).0, msg, &signer[..])
-	}
-}
-impl Slicable for Ed25519Signature {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> { Some(Ed25519Signature(Slicable::decode(input)?,)) }
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R { self.0.using_encoded(f) }
-}
-impl From<H512> for Ed25519Signature {
-	fn from(h: H512) -> Ed25519Signature {
-		Ed25519Signature(h)
-	}
 }
 
 /// Simple payment making trait, operating on a single generic `AccountId` type.
@@ -102,8 +81,18 @@ impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
 
+pub trait MaybeEmpty {
+	fn is_empty(&self) -> bool;
+}
+
+impl<T: Default + PartialEq> MaybeEmpty for T {
+	fn is_empty(&self) -> bool {
+		*self == T::default()
+	}
+}
+
 pub trait HasPublicAux {
-	type PublicAux;
+	type PublicAux: MaybeEmpty;
 }
 
 pub trait RefInto<T> {

@@ -7,26 +7,47 @@ authors = ["Parity Technologies <admin@parity.io>"]
 rustc-hex = "1.0"
 hex-literal = "0.1.0"
 log = { version = "0.3", optional = true }
+serde = { version = "1.0", default_features = false }
+serde_derive = { version = "1.0", optional = true }
+safe-mix = { path = "../../safe-mix", default_features = false}
 substrate-codec = { path = "../../substrate/codec" }
+substrate-serializer = { path = "../../substrate/serializer" }
 substrate-runtime-std = { path = "../../substrate/runtime-std" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-primitives = { path = "../../substrate/primitives" }
-substrate-misbehavior-check = { path = "../../substrate/misbehavior-check" }
-polkadot-primitives = { path = "../primitives" }
-
-[dev-dependencies]
 substrate-keyring = { path = "../../substrate/keyring" }
+substrate-runtime-consensus = { path = "../../substrate/runtime/consensus" }
+substrate-runtime-council = { path = "../../substrate/runtime/council" }
+substrate-runtime-democracy = { path = "../../substrate/runtime/democracy" }
+substrate-runtime-executive = { path = "../../substrate/runtime/executive" }
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
+substrate-runtime-session = { path = "../../substrate/runtime/session" }
+substrate-runtime-staking = { path = "../../substrate/runtime/staking" }
+substrate-runtime-system = { path = "../../substrate/runtime/system" }
+substrate-runtime-timestamp = { path = "../../substrate/runtime/timestamp" }
+polkadot-primitives = { path = "../primitives" }
 
 [features]
 default = ["std"]
 std = [
 	"substrate-codec/std",
+	"substrate-primitives/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
-	"substrate-primitives/std",
-	"substrate-misbehavior-check/std",
+	"substrate-runtime-consensus/std",
+	"substrate-runtime-council/std",
+	"substrate-runtime-democracy/std",
+	"substrate-runtime-executive/std",
+	"substrate-runtime-primitives/std",
+	"substrate-runtime-session/std",
+	"substrate-runtime-staking/std",
+	"substrate-runtime-system/std",
+	"substrate-runtime-timestamp/std",
 	"polkadot-primitives/std",
-	"log"
+	"serde_derive",
+	"serde/std",
+	"log",
+	"safe-mix/std"
 ]

@@ -18,10 +18,13 @@
 //! runtime.
 
 extern crate polkadot_executor;
-extern crate polkadot_runtime;
+extern crate polkadot_runtime as runtime;
 extern crate polkadot_primitives as primitives;
+extern crate substrate_codec as codec;
+extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_client as client;
 extern crate substrate_executor as substrate_executor;
+extern crate substrate_primitives;
 extern crate substrate_state_machine as state_machine;
 
 #[macro_use]
@@ -32,14 +35,12 @@ extern crate substrate_keyring as keyring;
 
 use client::backend::Backend;
 use client::Client;
-use polkadot_runtime::runtime;
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine::OverlayedChanges;
-use primitives::{AccountId, SessionKey, Timestamp, TxOrder};
-use primitives::block::{Id as BlockId, Block, Header, Body};
-use primitives::transaction::UncheckedTransaction;
+use primitives::{AccountId, BlockId, Index, SessionKey, Timestamp};
 use primitives::parachain::DutyRoster;
+use runtime::{Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall};
 
 error_chain! {
 	errors {
@@ -53,15 +54,15 @@ error_chain! {
 			description("Unknown block")
 			display("Unknown block")
 		}
-		/// Attempted to push an inherent transaction manually.
-		PushedInherentTransaction(tx: UncheckedTransaction) {
-			description("Attempted to push an inherent transaction to a block."),
-			display("Pushed inherent transaction to a block: {:?}", tx),
+		/// Attempted to push an inherent extrinsic manually.
+		PushedInherentTransaction(xt: UncheckedExtrinsic) {
+			description("Attempted to push an inherent extrinsic to a block."),
+			display("Pushed inherent extrinsic to a block: {:?}", xt),
 		}
-		/// Badly-formed transaction.
-		BadlyFormedTransaction(tx: UncheckedTransaction) {
-			description("Attempted to push a badly-formed transaction to a block."),
-			display("Pushed badly-formed transaction to a block: {:?}", tx),
+		/// Badly-formed extrinsic.
+		BadlyFormedTransaction(xt: UncheckedExtrinsic) {
+			description("Attempted to push a badly-formed extrinsic to a block."),
+			display("Pushed badly-formed extrinsic to a block: {:?}", xt),
 		}
 		/// Some other error.
 		// TODO: allow to be specified as associated type of PolkadotApi
@@ -87,8 +88,8 @@ impl From<client::error::Error> for Error {
 
 /// A builder for blocks.
 pub trait BlockBuilder: Sized {
-	/// Push a non-inherent transaction.
-	fn push_transaction(&mut self, transaction: UncheckedTransaction) -> Result<()>;
+	/// Push a non-inherent extrinsic.
+	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()>;
 
 	/// Finalise the block.
 	fn bake(self) -> Block;
@@ -127,8 +128,8 @@ pub trait PolkadotApi {
 	/// Get the timestamp registered at a block.
 	fn timestamp(&self, at: &Self::CheckedBlockId) -> Result<Timestamp>;
 
-	/// Get the nonce of an account at a block.
-	fn nonce(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<TxOrder>;
+	/// Get the index of an account at a block.
+	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index>;
 
 
 	/// Evaluate a block and see if it gives an error.
@@ -179,27 +180,27 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	}
 
 	fn session_keys(&self, at: &CheckedId) -> Result<Vec<SessionKey>> {
-		with_runtime!(self, at, ::runtime::consensus::authorities)
+		with_runtime!(self, at, ::runtime::Consensus::authorities)
 	}
 
 	fn validators(&self, at: &CheckedId) -> Result<Vec<AccountId>> {
-		with_runtime!(self, at, ::runtime::session::validators)
+		with_runtime!(self, at, ::runtime::Session::validators)
 	}
 
 	fn duty_roster(&self, at: &CheckedId) -> Result<DutyRoster> {
-		with_runtime!(self, at, ::runtime::parachains::calculate_duty_roster)
+		with_runtime!(self, at, ::runtime::Parachains::calculate_duty_roster)
 	}
 
 	fn timestamp(&self, at: &CheckedId) -> Result<Timestamp> {
-		with_runtime!(self, at, ::runtime::timestamp::get)
+		with_runtime!(self, at, ::runtime::Timestamp::now)
 	}
 
 	fn evaluate_block(&self, at: &CheckedId, block: Block) -> Result<()> {
-		with_runtime!(self, at, || ::runtime::system::internal::execute_block(block))
+		with_runtime!(self, at, || ::runtime::Executive::execute_block(block))
 	}
 
-	fn nonce(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<TxOrder> {
-		with_runtime!(self, at, || ::runtime::system::nonce(account))
+	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index> {
+		with_runtime!(self, at, || ::runtime::System::account_index(account))
 	}
 
 	fn build_block(&self, parent: &CheckedId, timestamp: Timestamp) -> Result<Self::BlockBuilder> {
@@ -208,14 +209,20 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 			parent_hash: self.block_hash_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))?,
 			number: self.block_number_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))? + 1,
 			state_root: Default::default(),
-			transaction_root: Default::default(),
+			extrinsics_root: Default::default(),
 			digest: Default::default(),
 		};
 
-		let body = Body {
-			timestamp: timestamp,
-			transactions: Vec::new(),
-		};
+		let extrinsics = vec![
+			UncheckedExtrinsic {
+				extrinsic: Extrinsic {
+					signed: Default::default(),
+					index: Default::default(),
+					function: Call::Timestamp(TimestampCall::set(timestamp)),
+				},
+				signature: Default::default(),
+			}
+		];
 
 		let mut builder = ClientBlockBuilder {
 			parent: *parent,
@@ -223,11 +230,13 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 			state: self.state_at(parent)?,
 			header,
 			timestamp,
-			transactions: Vec::new(),
+			extrinsics: extrinsics.clone(),
 		};
 
-		for inherent in body.inherent_transactions() {
-			builder.execute_transaction(inherent)?;
+		builder.initialise_block()?;
+
+		for inherent in extrinsics {
+			builder.apply_extrinsic(inherent)?;
 		}
 
 		Ok(builder)
@@ -242,34 +251,53 @@ pub struct ClientBlockBuilder<S> {
 	state: S,
 	header: Header,
 	timestamp: Timestamp,
-	transactions: Vec<UncheckedTransaction>,
+	extrinsics: Vec<UncheckedExtrinsic>,
 }
 
 impl<S: state_machine::Backend> ClientBlockBuilder<S>
 	where S::Error: Into<client::error::Error>
 {
-	// executes a transaction, inherent or otherwise, without appending to the list
-	fn execute_transaction(&mut self, transaction: UncheckedTransaction) -> Result<()> {
-		if !transaction.is_well_formed() {
-			bail!(ErrorKind::BadlyFormedTransaction(transaction));
-		}
-
+	// executes a extrinsic, inherent or otherwise, without appending to the list
+	fn initialise_block(&mut self) -> Result<()> {
 		let mut ext = state_machine::Ext {
 			overlay: &mut self.changes,
 			backend: &self.state,
 		};
 
-		// TODO: avoid clone
-		let header = self.header.clone();
+		let h = self.header.clone();
+
 		let result = ::substrate_executor::with_native_environment(
 			&mut ext,
-			move || runtime::system::internal::execute_transaction(transaction, header),
+			|| runtime::Executive::initialise_block(&h),
 		).map_err(Into::into);
 
 		match result {
-			Ok(header) => {
+			Ok(_) => {
 				ext.overlay.commit_prospective();
-				self.header = header;
+				Ok(())
+			}
+			Err(e) => {
+				ext.overlay.discard_prospective();
+				Err(e)
+			}
+		}
+	}
+
+	// executes a extrinsic, inherent or otherwise, without appending to the list
+	fn apply_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
+		let mut ext = state_machine::Ext {
+			overlay: &mut self.changes,
+			backend: &self.state,
+		};
+
+		let result = ::substrate_executor::with_native_environment(
+			&mut ext,
+			move || runtime::Executive::apply_extrinsic(extrinsic),
+		).map_err(Into::into);
+
+		match result {
+			Ok(_) => {
+				ext.overlay.commit_prospective();
 				Ok(())
 			}
 			Err(e) => {
@@ -283,12 +311,13 @@ impl<S: state_machine::Backend> ClientBlockBuilder<S>
 impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 	where S::Error: Into<client::error::Error>
 {
-	fn push_transaction(&mut self, transaction: UncheckedTransaction) -> Result<()> {
-		if transaction.transaction.function.is_inherent() {
-			bail!(ErrorKind::PushedInherentTransaction(transaction));
+	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
+		// Check that this is not an "inherent" extrinsic.
+		if extrinsic.signature == Default::default() {
+			bail!(ErrorKind::PushedInherentTransaction(extrinsic));
 		} else {
-			self.execute_transaction(transaction.clone())?;
-			self.transactions.push(transaction);
+			self.apply_extrinsic(extrinsic.clone())?;
+			self.extrinsics.push(extrinsic);
 			Ok(())
 		}
 	}
@@ -299,18 +328,14 @@ impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 			backend: &self.state,
 		};
 
-		let old_header = self.header;
 		let final_header = ::substrate_executor::with_native_environment(
 			&mut ext,
-			move || runtime::system::internal::finalise_block(old_header)
-		).expect("all inherent transactions pushed; all other transactions executed correctly; qed");
+			move || runtime::Executive::finalise_block()
+		).expect("all inherent extrinsics pushed; all other extrinsics executed correctly; qed");
 
 		Block {
 			header: final_header,
-			body: Body {
-				timestamp: self.timestamp,
-				transactions: self.transactions,
-			}
+			extrinsics: self.extrinsics,
 		}
 	}
 }
@@ -318,10 +343,12 @@ impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use client::in_mem::Backend as InMemory;
-	use polkadot_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
-	use substrate_executor::NativeExecutionDispatch;
+	use runtime_io::with_externalities;
 	use keyring::Keyring;
+	use codec::Slicable;
+	use client::in_mem::Backend as InMemory;
+	use substrate_executor::NativeExecutionDispatch;
+	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildExternalities};
 
 	fn validators() -> Vec<AccountId> {
 		vec![
@@ -331,20 +358,31 @@ mod tests {
 	}
 
 	fn client() -> Client<InMemory, NativeExecutor<LocalDispatch>> {
+		let genesis_config = GenesisConfig {
+			consensus: Some(ConsensusConfig {
+				code: LocalDispatch::native_equivalent().to_vec(),
+				authorities: validators(),
+			}),
+			system: None,
+			session: Some(SessionConfig {
+				validators: validators(),
+				session_length: 100,
+			}),
+			council: Some(Default::default()),
+			democracy: Some(Default::default()),
+			parachains: Some(Default::default()),
+			staking: Some(Default::default()),
+		};
 		::client::new_in_mem(
 			LocalDispatch::new(),
 			|| {
-				let config = GenesisConfig::new_simple(validators(), 100);
-
-				// override code entry.
-				let mut storage = config.genesis_map();
-				storage.insert(b":code".to_vec(), LocalDispatch::native_equivalent().to_vec());
-
-				let block = ::client::genesis::construct_genesis_block(
-					&config.genesis_map()
+				let mut storage = genesis_config.build_externalities();
+				let block = ::client::genesis::construct_genesis_block(&storage);
+				with_externalities(&mut storage, ||
+					// TODO: use api.rs to dispatch instead
+					runtime::System::initialise_genesis_state(&block.header)
 				);
-				storage.extend(additional_storage_with_genesis(&block));
-				(block.header, storage.into_iter().collect())
+				(substrate_primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 			}
 		).unwrap()
 	}
