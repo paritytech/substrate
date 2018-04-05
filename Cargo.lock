@@ -1126,8 +1126,11 @@ dependencies = [
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "substrate-client 0.1.0",
+ "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-runtime-io 0.1.0",
  "substrate-state-machine 0.1.0",
 ]
 
@@ -1177,6 +1180,7 @@ dependencies = [
  "polkadot-api 0.1.0",
  "polkadot-collator 0.1.0",
  "polkadot-primitives 0.1.0",
+ "polkadot-runtime 0.1.0",
  "polkadot-statement-table 0.1.0",
  "polkadot-transaction-pool 0.1.0",
  "substrate-bft 0.1.0",
@@ -1233,6 +1237,7 @@ dependencies = [
  "serde_derive 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-serializer 0.1.0",
 ]
@@ -1245,13 +1250,25 @@ dependencies = [
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-primitives 0.1.0",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-mix 0.1.0",
+ "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-keyring 0.1.0",
- "substrate-misbehavior-check 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-consensus 0.1.0",
+ "substrate-runtime-council 0.1.0",
+ "substrate-runtime-democracy 0.1.0",
+ "substrate-runtime-executive 0.1.0",
  "substrate-runtime-io 0.1.0",
+ "substrate-runtime-primitives 0.1.0",
+ "substrate-runtime-session 0.1.0",
+ "substrate-runtime-staking 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
+ "substrate-runtime-system 0.1.0",
+ "substrate-runtime-timestamp 0.1.0",
+ "substrate-serializer 0.1.0",
 ]
 
 [[package]]
@@ -1261,6 +1278,7 @@ dependencies = [
  "ed25519 0.1.0",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
@@ -1273,9 +1291,9 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
- "substrate-keyring 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-io 0.1.0",
  "tokio-core 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-timer 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1297,8 +1315,10 @@ dependencies = [
  "ethereum-types 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
  "polkadot-primitives 0.1.0",
+ "polkadot-runtime 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-primitives 0.1.0",
  "transaction-pool 1.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1819,10 +1839,12 @@ dependencies = [
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
+ "substrate-runtime-system 0.1.0",
 ]
 
 [[package]]
@@ -1995,10 +2017,12 @@ dependencies = [
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
+ "substrate-runtime-system 0.1.0",
 ]
 
 [[package]]

@@ -18,6 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")] extern crate serde;
+
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_io as runtime_io;
@@ -41,11 +43,10 @@ extern crate substrate_runtime_session as session;
 #[cfg(test)]
 extern crate substrate_runtime_staking as staking;
 
-#[cfg(feature = "std")] extern crate serde;
-
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use runtime_io::Hashing;
+use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable, MakePayment};
 use codec::Slicable;
 
@@ -122,27 +123,29 @@ impl<
 
 	/// Apply outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block.
-	pub fn apply_extrinsic(utx: Block::Extrinsic) {
+	pub fn apply_extrinsic(uxt: Block::Extrinsic) {
 		// Verify the signature is good.
-		let tx = match utx.check() {
-			Ok(tx) => tx,
+		let xt = match uxt.check() {
+			Ok(xt) => xt,
 			Err(_) => panic!("All transactions should be properly signed"),
 		};
 
-		{
+		if xt.sender() != &Default::default() {
 			// check index
-			let expected_index = <system::Module<System>>::account_index(tx.sender());
-			assert!(tx.index() == &expected_index, "All transactions should have the correct nonce");
+			let expected_index = <system::Module<System>>::account_index(xt.sender());
+			assert!(xt.index() == &expected_index, "All transactions should have the correct nonce");
 
 			// increment nonce in storage
-			<system::Module<System>>::inc_account_index(tx.sender());
+			<system::Module<System>>::inc_account_index(xt.sender());
+
+			// pay any fees.
+			Payment::make_payment(xt.sender());
 		}
 
-		// pay any fees.
-		Payment::make_payment(tx.sender());
-
 		// decode parameters and dispatch
-		tx.apply();
+		xt.apply();
+
+		<system::ExtrinsicIndex<System>>::put(<system::ExtrinsicIndex<System>>::get() + 1u32);
 	}
 
 	fn final_checks(header: &System::Header) {
@@ -180,6 +183,7 @@ mod tests {
 		type PublicAux = u64;
 	}
 	impl consensus::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type SessionKey = u64;
 	}
 	impl system::Trait for Test {
@@ -192,7 +196,6 @@ mod tests {
 		type Header = Header;
 	}
 	impl session::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type ConvertAccountIdToSessionKey = Identity;
 	}
 	impl staking::Trait for Test {
@@ -239,7 +242,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("9228e363883f4f5a01981985b5598d1a767e987eb3ccea017a0e14cac7acc79d").into(),
+					state_root: hex!("aa0cff04242e55fc780861b890aa8deba555f6ed95bd8fa575dfd80864f3b93e").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -273,7 +276,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("93dde1251278e65430baf291337ba219bacfa9ad583c52513b12cf1974109a97").into(),
+					state_root: hex!("aa0cff04242e55fc780861b890aa8deba555f6ed95bd8fa575dfd80864f3b93e").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
