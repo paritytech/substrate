@@ -18,13 +18,23 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[macro_use]
+extern crate substrate_runtime_io as runtime_io;
+
+#[macro_use]
+extern crate substrate_runtime_support as runtime_support;
+
+#[macro_use]
+extern crate substrate_runtime_primitives as runtime_primitives;
+
+#[cfg(test)]
+extern crate substrate_serializer;
+
+#[cfg_attr(feature = "std", macro_use)]
+extern crate substrate_primitives;
+
 extern crate substrate_runtime_std as rstd;
-#[macro_use] extern crate substrate_runtime_io as runtime_io;
-#[macro_use] extern crate substrate_runtime_support as runtime_support;
-#[cfg_attr(feature = "std", macro_use)] extern crate substrate_primitives;
-#[cfg(test)] extern crate substrate_serializer;
 extern crate substrate_codec as codec;
-#[macro_use] extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
 extern crate substrate_runtime_democracy as democracy;
