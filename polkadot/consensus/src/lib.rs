@@ -67,7 +67,7 @@ use table::generic::Statement as GenericStatement;
 use runtime_support::Hashable;
 use polkadot_api::{PolkadotApi, BlockBuilder};
 use polkadot_primitives::{Hash, Timestamp};
-use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
 use polkadot_runtime::Block as PolkadotGenericBlock;
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
@@ -91,7 +91,9 @@ mod service;
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 
 /// A handle to a statement table router.
-pub trait TableRouter {
+///
+/// This is expected to be a lightweight, shared type like an `Arc`.
+pub trait TableRouter: Clone {
 	/// Errors when fetching data from the network.
 	type Error;
 	/// Future that resolves when candidate data is fetched.
@@ -476,7 +478,7 @@ impl SharedTable {
 	}
 }
 
-fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<HashMap<ParaId, GroupInfo>, Error> {
+fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: AuthorityId) -> Result<(HashMap<ParaId, GroupInfo>, LocalDuty), Error> {
 	if roster.validator_duty.len() != authorities.len() {
 		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), roster.validator_duty.len()))
 	}
@@ -485,11 +487,20 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<Ha
 		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), roster.guarantor_duty.len()))
 	}
 
+	let mut local_validation = None;
+	let mut local_availability = Vec::new();
+
 	let mut map = HashMap::new();
 
 	let duty_iter = authorities.iter().zip(&roster.validator_duty).zip(&roster.guarantor_duty);
 	for ((authority, v_duty), a_duty) in duty_iter {
-		use polkadot_primitives::parachain::Chain;
+		if authority == &local_id {
+			local_validation = Some(v_duty.clone());
+
+			if let Chain::Parachain(ref id) = *a_duty {
+				local_availability.push(id.clone());
+			}
+		}
 
 		match *v_duty {
 			Chain::Relay => {}, // does nothing for now.
@@ -518,7 +529,17 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<Ha
 		live_group.needed_availability = availability_len / 2 + availability_len % 2;
 	}
 
-	Ok(map)
+	match local_validation {
+		Some(local_validation) => {
+			let local_duty = LocalDuty {
+				validation: local_validation,
+				availability: local_availability,
+			};
+
+			Ok((map, local_duty))
+		}
+		None => bail!(ErrorKind::NotValidator(local_id)),
+	}
 }
 
 /// Polkadot proposer factory.
@@ -530,7 +551,7 @@ pub struct ProposerFactory<C, N, P> {
 	/// The backing network handle.
 	pub network: N,
 	/// Parachain collators.
-	pub collators: Arc<P>,
+	pub collators: P,
 	/// The duration after which parachain-empty blocks will be allowed.
 	pub parachain_empty_duration: Duration,
 }
@@ -550,7 +571,12 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 		let checked_id = self.client.check_id(BlockId::Hash(parent_hash))?;
 		let duty_roster = self.client.duty_roster(&checked_id)?;
 
-		let group_info = make_group_info(duty_roster, authorities)?;
+		let (group_info, local_duty) = make_group_info(
+			duty_roster,
+			authorities,
+			sign_with.public().0,
+		)?;
+
 		let n_parachains = group_info.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
 		let router = self.network.table_router(table.clone());
@@ -568,6 +594,7 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
 			collators: self.collators.clone(),
+			local_duty,
 			dynamic_inclusion,
 			table,
 			router,
@@ -583,6 +610,11 @@ fn current_timestamp() -> Timestamp {
 		.as_secs()
 }
 
+struct LocalDuty {
+	validation: Chain,
+	availability: Vec<ParaId>,
+}
+
 /// The Polkadot proposer logic.
 pub struct Proposer<C: PolkadotApi, R, P> {
 	parent_hash: HeaderHash,
@@ -591,7 +623,8 @@ pub struct Proposer<C: PolkadotApi, R, P> {
 	client: Arc<C>,
 	local_key: Arc<ed25519::Pair>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
-	collators: Arc<P>,
+	local_duty: LocalDuty,
+	collators: P,
 	dynamic_inclusion: DynamicInclusion,
 	table: Arc<SharedTable>,
 	router: R,
@@ -608,7 +641,22 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 	type Evaluate = Result<bool, Error>;
 
 	fn propose(&self) -> CreateProposal<C, R, P> {
-		unimplemented!();
+		CreateProposal {
+			parent_hash: self.parent_hash.clone(),
+			parent_number: self.parent_number.clone(),
+			parent_id: self.parent_id.clone(),
+			client: self.client.clone(),
+			transaction_pool: self.transaction_pool.clone(),
+			collation: CollationFetch::new(
+				self.local_duty.validation,
+				self.parent_hash.clone(),
+				self.collators.clone(),
+				self.client.clone()
+			),
+			dynamic_inclusion: self.dynamic_inclusion.clone(),
+			table: self.table.clone(),
+			router: self.router.clone(),
+		}
 	}
 
 	// TODO: certain kinds of errors here should lead to a misbehavior report.

@@ -155,7 +155,7 @@ impl Service {
 				client: client.clone(),
 				transaction_pool: transaction_pool.clone(),
 				network: Network(network.clone()),
-				collators: Arc::new(NoCollators),
+				collators: NoCollators,
 				parachain_empty_duration: Duration::from_millis(10_000), // TODO
 			};
 			let bft_service = BftService::new(client.clone(), key, factory);
@@ -202,6 +202,7 @@ impl Drop for Service {
 
 // Collators implementation which never collates anything.
 // TODO: do a real implementation.
+#[derive(Clone, Copy)]
 struct NoCollators;
 
 impl ::collation::Collators for NoCollators {
@@ -228,6 +229,7 @@ impl super::Network for Network {
 
 type FetchCandidateAdapter = future::Map<net::FetchFuture, fn(Vec<u8>) -> BlockData>;
 
+#[derive(Clone)]
 struct Router {
 	network: Arc<net::ConsensusService>,
 }

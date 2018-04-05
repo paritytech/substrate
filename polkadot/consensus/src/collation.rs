@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, Timestamp, AccountId};
-use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
 
@@ -40,7 +40,9 @@ pub struct Collation {
 }
 
 /// Encapsulates connections to collators and allows collation on any parachain.
-pub trait Collators {
+///
+/// This is expected to be a lightweight, shared type like an `Arc`.
+pub trait Collators: Clone {
 	/// Errors when producing collations.
 	type Error;
 	/// A full collation.
@@ -57,24 +59,25 @@ pub trait Collators {
 ///
 /// This future is fused.
 pub struct CollationFetch<C: Collators, P: PolkadotApi> {
-	parachain: ParaId,
+	parachain: Option<ParaId>,
 	relay_parent: Hash,
-	collators: Arc<C>,
+	collators: C,
 	live_fetch: Option<<C::Collation as IntoFuture>::Future>,
 	client: Arc<P>,
-	done: bool,
 }
 
 impl<C: Collators, P: PolkadotApi> CollationFetch<C, P> {
-	/// Create a new collation fetcher.
-	pub fn new(parachain: ParaId, relay_parent: Hash, collators: Arc<C>, client: Arc<P>) -> Self {
+	/// Create a new collation fetcher for the given chain.
+	pub fn new(parachain: Chain, relay_parent: Hash, collators: C, client: Arc<P>) -> Self {
 		CollationFetch {
-			parachain,
 			relay_parent,
 			collators,
 			client,
+			parachain: match parachain {
+				Chain::Parachain(id) => Some(id),
+				Chain::Relay => None,
+			},
 			live_fetch: None,
-			done: false,
 		}
 	}
 }
@@ -84,20 +87,24 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 	type Error = C::Error;
 
 	fn poll(&mut self) -> Poll<Collation, C::Error> {
-		if self.done { return Ok(Async::NotReady) }
+		let parachain = match self.parachain.as_ref() {
+			Some(p) => p.clone(),
+			None => return Ok(Async::NotReady),
+		};
+
 		loop {
 			let x = {
-				let (p, r, c)  = (self.parachain, self.relay_parent, &self.collators);
+				let (r, c)  = (self.relay_parent, &self.collators);
 				let poll = self.live_fetch
-					.get_or_insert_with(|| c.collate(p, r).into_future())
+					.get_or_insert_with(move || c.collate(parachain, r).into_future())
 					.poll();
 
-				if let Err(_) = poll { self.done = true }
+				if let Err(_) = poll { self.parachain = None }
 				try_ready!(poll)
 			};
 
 			if verify_collation(&*self.client, self.relay_parent, &x) {
-				self.done = true;
+				self.parachain = None;
 				return Ok(Async::Ready(x));
 			} else {
 				self.live_fetch = None;

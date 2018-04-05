@@ -17,6 +17,7 @@
 //! Errors that can occur during the consensus process.
 
 use primitives::block::HeaderHash;
+use polkadot_primitives::AccountId;
 
 error_chain! {
 	links {
@@ -36,6 +37,10 @@ error_chain! {
 		TimestampInFuture {
 			description("Proposal had timestamp too far in the future."),
 			display("Proposal had timestamp too far in the future."),
+		}
+		NotValidator(id: AccountId) {
+			description("Local account ID not a validator at this block."),
+			display("Local account ID ({:?}) not a validator at this block.", id),
 		}
 		WrongParentHash(expected: HeaderHash, got: HeaderHash) {
 			description("Proposal had wrong parent hash."),
