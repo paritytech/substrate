@@ -2,3 +2,7 @@
 name = "environmental"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+
+[features]
+default = ["std"]
+std = []
