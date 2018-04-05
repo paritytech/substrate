@@ -62,9 +62,12 @@ impl PolkadotBlock {
 		if unchecked.extrinsics[0].is_signed() {
 			return Err(unchecked);
 		}
-		if let Call::Timestamp(TimestampCall::set(_)) = unchecked.extrinsics[0].extrinsic.function {} else {
-			return Err(unchecked);
+		match unchecked.extrinsics[0].extrinsic.function {
+			Call::Timestamp(TimestampCall::set(_)) => return Err(unchecked),
+			_ => {}
 		}
+		
+		// any further checks...
 		Ok(PolkadotBlock { block: unchecked, location: None })
 	}
 
