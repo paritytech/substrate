@@ -142,7 +142,13 @@ impl Service {
 
 		let god_keys = vec![
 			hex!["f09c0d1467d6952c92c343672bfb06a24560f400af8cf98b93df7d40b4efe1b6"],
-			hex!["84718cd2894bcda83beeca3a7842caf269fe93cacde0bdee0e3cbce6de253f0e"]
+			hex!["84718cd2894bcda83beeca3a7842caf269fe93cacde0bdee0e3cbce6de253f0e"],
+			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+			ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+			ed25519::Pair::from_seed(b"Charlie                         ").public().into(),
+			ed25519::Pair::from_seed(b"Dave                            ").public().into(),
+			ed25519::Pair::from_seed(b"Eve                             ").public().into(),
+			ed25519::Pair::from_seed(b"Ferdie                          ").public().into(),
 		];
 
 		let genesis_config = GenesisConfig {

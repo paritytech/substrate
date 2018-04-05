@@ -44,7 +44,7 @@ impl<T: Trait> Module<T> {
 	pub fn calculate_duty_roster() -> DutyRoster {
 		let parachain_count = Self::count();
 		let validator_count = <session::Module<T>>::validator_count();
-		let validators_per_parachain = (validator_count - 1) / parachain_count;
+		let validators_per_parachain = if parachain_count != 0 { (validator_count - 1) / parachain_count } else { 0 };
 
 		let mut roles_val = (0..validator_count).map(|i| match i {
 			i if i < parachain_count * validators_per_parachain =>
