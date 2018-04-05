@@ -26,6 +26,7 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
+extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate demo_primitives;
 extern crate demo_executor;
@@ -48,6 +49,13 @@ use runtime_io::with_externalities;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
 use client::genesis;
+
+struct DummyPool;
+impl substrate_rpc::author::AuthorApi for DummyPool {
+	fn submit_extrinsic(&self, _: primitives::block::Extrinsic) -> substrate_rpc::author::error::Result<()> {
+		Err(substrate_rpc::author::error::ErrorKind::Unimplemented.into())
+	}
+}
 
 /// Parse command line arguments and start the node.
 ///
@@ -126,7 +134,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
 
 	let address = "127.0.0.1:9933".parse().unwrap();
-	let handler = rpc::rpc_handler(client);
+	let handler = rpc::rpc_handler(client, DummyPool);
 	let server = rpc::start_http(&address, handler)?;
 
 	if let Some(_) = matches.subcommand_matches("validator") {

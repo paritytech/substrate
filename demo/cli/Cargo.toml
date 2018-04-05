@@ -19,6 +19,7 @@ substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
+substrate-rpc = { path = "../../substrate/rpc" }
 demo-primitives = { path = "../primitives" }
 demo-executor = { path = "../executor" }
 demo-runtime = { path = "../runtime" }
