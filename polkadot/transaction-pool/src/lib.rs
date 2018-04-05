@@ -47,8 +47,6 @@ pub fn truncate_id(id: &AccountId) -> TruncatedAccountId {
 	TruncatedAccountId::from_slice(&id[..20])
 }
 
-
-
 /// Useful functions for working with Polkadot blocks.
 pub struct PolkadotBlock (Block);
 
@@ -69,7 +67,7 @@ impl PolkadotBlock {
 
 	/// Create a new block, skipping any high-level well-formedness checks. WARNING: This could
 	/// result in internal functions panicking if the block is, in fact, not well-formed.
-	pub fn from_known_good(known_good: Block) -> Self {
+	pub fn force_from(known_good: Block) -> Self {
 		PolkadotBlock(known_good)
 	}
 
