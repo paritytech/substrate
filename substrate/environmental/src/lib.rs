@@ -110,6 +110,7 @@ pub fn with<T: ?Sized, R, F: FnOnce(&mut T) -> R>(
 /// Declare a new global reference module whose underlying value does not contain references.
 ///
 /// Will create a module of a given name that contains two functions:
+///
 /// * `pub fn using<R, F: FnOnce() -> R>(protected: &mut $t, f: F) -> R`
 ///   This executes `f`, returning its value. During the call, the module's reference is set to
 ///   be equal to `protected`.
