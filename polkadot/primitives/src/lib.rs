@@ -21,7 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
@@ -30,33 +29,28 @@ extern crate serde;
 
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_primitives as runtime_primitives;
 #[cfg(test)]
 extern crate substrate_serializer;
 
 extern crate substrate_codec as codec;
 
-macro_rules! try_opt {
-	($e: expr) => {
-		match $e {
-			Some(x) => x,
-			None => return None,
-		}
-	}
-}
-
 pub mod parachain;
 pub mod validator;
-pub mod block;
-pub mod transaction;
-
-pub use self::block::{Header, Body, Block, Log, Digest};
-pub use self::block::Number as BlockNumber;
-pub use self::transaction::{Transaction, UncheckedTransaction, Function, InherentFunction, Proposal};
 
 /// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
 /// (who matters). Essentially this means that a majority of validators have decided it is
 /// "correct".
 pub const EVERYBODY: AccountId = [255u8; 32];
+
+/// Something that identifies a block.
+pub use primitives::block::Id as BlockId;
+
+/// The type of digest item.
+pub use primitives::block::Log as Log;
+
+/// An index to a block.
+pub type BlockNumber = u64;
 
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
 /// certainly continue to be the same as the substrate's `AuthorityId`.
@@ -67,22 +61,19 @@ pub type AccountId = primitives::AuthorityId;
 pub type SessionKey = primitives::AuthorityId;
 
 /// Indentifier for a chain.
-pub type ChainID = u64;
+pub type ChainId = u64;
 
 /// Index of a transaction in the relay chain.
-pub type TxOrder = u64;
+pub type Index = u64;
 
 /// A hash of some data used by the relay chain.
 pub type Hash = primitives::H256;
 
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
-pub type Signature = primitives::hash::H512;
+pub type Signature = runtime_primitives::Ed25519Signature;
 
 /// A timestamp: seconds since the unix epoch.
 pub type Timestamp = u64;
 
 /// The balance of an account.
 pub type Balance = u64;
-
-/// The amount of bonding period left in an account. Measured in eras.
-pub type Bondage = u64;

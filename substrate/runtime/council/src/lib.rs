@@ -584,6 +584,7 @@ mod tests {
 		type PublicAux = u64;
 	}
 	impl consensus::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type SessionKey = u64;
 	}
 	impl system::Trait for Test {
@@ -596,7 +597,6 @@ mod tests {
 		type Header = Header;
 	}
 	impl session::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type ConvertAccountIdToSessionKey = Identity;
 	}
 	impl staking::Trait for Test {
@@ -611,6 +611,7 @@ mod tests {
 	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
 		t.extend(consensus::GenesisConfig::<Test>{
+			code: vec![],
 			authorities: vec![],
 		}.build_externalities());
 		t.extend(session::GenesisConfig::<Test>{

@@ -67,6 +67,7 @@ decl_storage! {
 	pub AccountIndex get(account_index): b"sys:non" => default map [ T::AccountId => T::Index ];
 	pub BlockHash get(block_hash): b"sys:old" => required map [ T::BlockNumber => T::Hash ];
 
+	pub ExtrinsicIndex get(extrinsic_index): b"sys:xti" => required u32;
 	RandomSeed get(random_seed): b"sys:rnd" => required T::Hash;
 	// The current block number being processed. Set by `execute_block`.
 	Number get(block_number): b"sys:num" => required T::BlockNumber;
@@ -83,11 +84,13 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<RandomSeed<T>>::put(Self::calculate_random());
+		<ExtrinsicIndex<T>>::put(0);
 	}
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalise() -> T::Header {
 		<RandomSeed<T>>::kill();
+		<ExtrinsicIndex<T>>::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -145,6 +148,20 @@ impl<T: Trait> Module<T> {
 		<Number<T>>::put(n);
 	}
 
+	/// Set the parent hash number to something in particular. Can be used as an alternative to
+	/// `initialise` for tests that don't need to bother with the other environment entries.
+	#[cfg(any(feature = "std", test))]
+	pub fn set_parent_hash(n: T::Hash) {
+		<ParentHash<T>>::put(n);
+	}
+
+	/// Set the random seed to something in particular. Can be used as an alternative to
+	/// `initialise` for tests that don't need to bother with the other environment entries.
+	#[cfg(any(feature = "std", test))]
+	pub fn set_random_seed(n: T::Hash) {
+		<RandomSeed<T>>::put(n);
+	}
+
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_index(who: &T::AccountId) {
 		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::one());
@@ -172,7 +189,8 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => 1u64.encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
-			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode()
+			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
+			twox_128(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
 		]
 	}
 }

@@ -28,10 +28,15 @@ extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_codec as codec;
+extern crate substrate_runtime_system as system;
+extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::storage::unhashed::StorageVec;
+use primitives::traits::RefInto;
+use substrate_primitives::bft::MisbehaviorReport;
+
 
 pub const AUTHORITY_AT: &'static[u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
@@ -44,15 +49,18 @@ impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
 
 pub const CODE: &'static [u8] = b":code";
 
-pub trait Trait {
-	type SessionKey: Parameter + Default;
+pub trait Trait: system::Trait {
+	type PublicAux: RefInto<Self::AccountId>;
+ 	type SessionKey: Parameter + Default;
 }
 
 decl_module! {
 	pub struct Module<T: Trait>;
+	pub enum Call where aux: T::PublicAux {
+		fn report_misbehavior(aux, report: MisbehaviorReport) = 0;
+	}
 	pub enum PrivCall {
 		fn set_code(new: Vec<u8>) = 0;
-		fn dummy() = 1;
 	}
 }
 
@@ -67,7 +75,10 @@ impl<T: Trait> Module<T> {
 		storage::unhashed::put_raw(CODE, &new);
 	}
 
-	fn dummy() {}
+	/// Report some misbehaviour.
+	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport) {
+		// TODO.
+	}
 
 	/// Set the current set of authorities' session keys.
 	///
@@ -85,6 +96,7 @@ impl<T: Trait> Module<T> {
 #[cfg(any(feature = "std", test))]
 pub struct GenesisConfig<T: Trait> {
 	pub authorities: Vec<T::SessionKey>,
+	pub code: Vec<u8>,
 }
 
 #[cfg(any(feature = "std", test))]
@@ -92,6 +104,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
 			authorities: vec![],
+			code: vec![],
 		}
 	}
 }
@@ -103,9 +116,10 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 		use codec::{Slicable, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
 		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|
-			((i as u32).to_keyed_vec(b":auth:"), v.encode())
+			((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode())
 		).collect();
-		r.insert(b":auth:len".to_vec(), auth_count.encode());
+		r.insert(AUTHORITY_COUNT.to_vec(), auth_count.encode());
+		r.insert(CODE.to_vec(), self.code);
 		r
 	}
 }

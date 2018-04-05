@@ -86,12 +86,25 @@ pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> where
  	AccountId: Member,
  	Index: Member,
  	Call: Member,
- 	Signature: Member
+ 	Signature: Member,			// TODO: should be Option<Signature>
 {
 	/// The actual extrinsic information.
 	pub extrinsic: Extrinsic<AccountId, Index, Call>,
 	/// The signature; should be an Ed25519 signature applied to the serialised `extrinsic` field.
 	pub signature: Signature,
+}
+
+impl<AccountId, Index, Call, Signature> UncheckedExtrinsic<AccountId, Index, Call, Signature> where
+ 	AccountId: Member + Default,
+ 	Index: Member,
+ 	Call: Member,
+	Signature: Member + Default,
+{
+	/// Is this extrinsic signed?
+	pub fn is_signed(&self) -> bool {
+		// TODO: should be Option<Signature> and Option<AccountId>
+		self.signature != Signature::default() || self.extrinsic.signed != AccountId::default()
+	}
 }
 
 impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
@@ -145,21 +158,25 @@ impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Accoun
 }
 
 impl<AccountId, Index, Call, Signature> traits::Checkable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member,
+ 	AccountId: Member + Default,
  	Index: Member,
  	Call: Member,
-	Signature: Member + traits::Verify<Signer = AccountId>,
+	Signature: Member + Default + traits::Verify<Signer = AccountId>,
 	Extrinsic<AccountId, Index, Call>: Slicable
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call, Signature>;
 
 	fn check(self) -> Result<Self::Checked, Self> {
-		if ::codec::Slicable::using_encoded(&self.extrinsic, |msg|
-			self.signature.verify(msg, &self.extrinsic.signed)
-		) {
+		if !self.is_signed() {
 			Ok(CheckedExtrinsic(self))
 		} else {
-			Err(self)
+			if ::codec::Slicable::using_encoded(&self.extrinsic, |msg|
+				self.signature.verify(msg, &self.extrinsic.signed)
+			) {
+				Ok(CheckedExtrinsic(self))
+			} else {
+				Err(self)
+			}
 		}
 	}
 }
@@ -185,6 +202,16 @@ where
 	/// Get a reference to the checked signature.
 	pub fn signature(&self) -> &Signature {
 		&self.0.signature
+	}
+
+	/// Get a reference to the checked signature.
+	pub fn as_unchecked(&self) -> &UncheckedExtrinsic<AccountId, Index, Call, Signature> {
+		&self.0
+	}
+
+	/// Get a reference to the checked signature.
+	pub fn into_unchecked(self) -> UncheckedExtrinsic<AccountId, Index, Call, Signature> {
+		self.0
 	}
 }
 
