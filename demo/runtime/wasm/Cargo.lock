@@ -666,10 +666,12 @@ dependencies = [
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
+ "substrate-runtime-system 0.1.0",
 ]
 
 [[package]]
@@ -838,9 +840,12 @@ dependencies = [
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
+ "substrate-runtime-system 0.1.0",
 ]
 
 [[package]]

@@ -75,6 +75,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let genesis_config = GenesisConfig {
 		consensus: Some(ConsensusConfig {
+			code: vec![],	// TODO
 			authorities: vec![god_key.clone()],
 		}),
 		system: None,
