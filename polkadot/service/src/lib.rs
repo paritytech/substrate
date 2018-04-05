@@ -77,6 +77,7 @@ pub struct Service {
 	thread: Option<thread::JoinHandle<()>>,
 	client: Arc<Client>,
 	network: Arc<network::Service>,
+	transaction_pool: Arc<Mutex<TransactionPool>>,
 	_consensus: Option<consensus::Service>,
 }
 
@@ -219,7 +220,7 @@ impl Service {
 			// Load the first available key. Code above makes sure it exisis.
 			let key = keystore.load(&keystore.contents()?[0], "")?;
 			info!("Using authority key {:?}", key.public());
-			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool, key, &best_header))
+			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool.clone(), key, &best_header))
 		} else {
 			None
 		};
@@ -240,8 +241,9 @@ impl Service {
 		});
 		Ok(Service {
 			thread: Some(thread),
-			client: client.clone(),
-			network: network.clone(),
+			client: client,
+			network: network,
+			transaction_pool: transaction_pool,
 			_consensus: consensus_service,
 		})
 	}
@@ -254,6 +256,11 @@ impl Service {
 	/// Get shared network instance.
 	pub fn network(&self) -> Arc<network::Service> {
 		self.network.clone()
+	}
+
+	/// Get shared transaction pool instance.
+	pub fn transaction_pool(&self) -> Arc<Mutex<TransactionPool>> {
+		self.transaction_pool.clone()
 	}
 }
 
