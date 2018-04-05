@@ -69,7 +69,7 @@ impl PolkadotBlock {
 			Call::Timestamp(TimestampCall::set(_)) => return Err(unchecked),
 			_ => {}
 		}
-		
+
 		// any further checks...
 		Ok(PolkadotBlock { block: unchecked, location: None })
 	}
@@ -378,8 +378,8 @@ impl substrate_rpc::author::AsyncAuthorApi for TransactionPool {
 	fn submit_extrinsic(&mut self, xt: Extrinsic) -> substrate_rpc::author::error::Result<()> {
 		self.import(xt
 			.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
-			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?
-		).map(|_| ())
+			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?)
+		.map(|_| ())
 		.map_err(|_| substrate_rpc::author::error::ErrorKind::PoolError.into())
 	}
 }
