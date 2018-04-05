@@ -21,21 +21,25 @@
 
 use std::thread;
 use std::sync::Arc;
+use std::time::Duration;
+
+use bft::{self, BftService};
+use client::BlockchainEvents;
+use ed25519;
+use error::Error;
 use futures::{future, Future, Stream, Sink, Async, Canceled};
 use parking_lot::Mutex;
-use substrate_network as net;
-use tokio_core::reactor;
-use client::BlockchainEvents;
-use runtime_support::Hashable;
+use polkadot_api::PolkadotApi;
+use polkadot_primitives::AccountId;
+use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
 use primitives::{Hash, AuthorityId};
 use primitives::block::{Id as BlockId, HeaderHash, Header};
-use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
-use polkadot_api::PolkadotApi;
-use bft::{self, BftService};
+use runtime_support::Hashable;
+use substrate_network as net;
+use tokio_core::reactor;
 use transaction_pool::TransactionPool;
-use ed25519;
+
 use super::{TableRouter, SharedTable, ProposerFactory};
-use error::Error;
 
 struct BftSink<E> {
 	network: Arc<net::ConsensusService>,
@@ -132,8 +136,6 @@ pub struct Service {
 	thread: Option<thread::JoinHandle<()>>,
 }
 
-struct Network(Arc<net::ConsensusService>);
-
 impl Service {
 	/// Create and start a new instance.
 	pub fn new<C>(
@@ -141,7 +143,8 @@ impl Service {
 		network: Arc<net::ConsensusService>,
 		transaction_pool: Arc<Mutex<TransactionPool>>,
 		key: ed25519::Pair,
-		best_header: &Header) -> Service
+		best_header: &Header
+	) -> Service
 		where C: BlockchainEvents + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
 	{
 		let best_header = best_header.clone();
@@ -152,6 +155,8 @@ impl Service {
 				client: client.clone(),
 				transaction_pool: transaction_pool.clone(),
 				network: Network(network.clone()),
+				collators: Arc::new(NoCollators),
+				parachain_empty_duration: Duration::from_millis(10_000), // TODO
 			};
 			let bft_service = BftService::new(client.clone(), key, factory);
 			let build_bft = |header: &Header| -> Result<_, Error> {
@@ -194,6 +199,23 @@ impl Drop for Service {
 		}
 	}
 }
+
+// Collators implementation which never collates anything.
+// TODO: do a real implementation.
+struct NoCollators;
+
+impl ::collation::Collators for NoCollators {
+	type Error = ();
+	type Collation = future::Empty<::collation::Collation, ()>;
+
+	fn collate(&self, _parachain: ParaId, _relay_parent: Hash) -> Self::Collation {
+		future::empty()
+	}
+
+	fn note_bad_collator(&self, _collator: AccountId) { }
+}
+
+struct Network(Arc<net::ConsensusService>);
 
 impl super::Network for Network {
 	type TableRouter = Router;

@@ -25,6 +25,7 @@ fn duration_to_micros(duration: &Duration) -> u64 {
 ///
 /// The acceptable proportion of parachains which must have parachain candidates
 /// reduces over time (eventually going to zero).
+#[derive(Debug, Clone)]
 pub struct DynamicInclusion {
 	start: Instant,
 	y: i64,

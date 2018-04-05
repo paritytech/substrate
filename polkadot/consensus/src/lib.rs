@@ -29,7 +29,6 @@
 //!
 //! Groups themselves may be compromised by malicious authorities.
 
-extern crate futures;
 extern crate ed25519;
 extern crate parking_lot;
 extern crate tokio_timer;
@@ -50,12 +49,16 @@ extern crate substrate_client as client;
 
 #[macro_use]
 extern crate error_chain;
+
+#[macro_use]
+extern crate futures;
+
 #[macro_use]
 extern crate log;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use codec::Slicable;
 use table::{Table, Context as TableContextTrait};
@@ -73,7 +76,7 @@ use futures::prelude::*;
 use futures::future;
 use parking_lot::Mutex;
 use collation::{Collation, Collators, CollationFetch};
-use dynamic_inclusion::{Instant, DynamicInclusion};
+use dynamic_inclusion::DynamicInclusion;
 
 pub use self::error::{ErrorKind, Error};
 pub use service::Service;
@@ -187,6 +190,14 @@ pub fn sign_table_statement(statement: &table::Statement, key: &ed25519::Pair, p
 	key.sign(&encoded)
 }
 
+/// Source of statements
+pub enum StatementSource {
+	/// Locally produced statement.
+	Local,
+	/// Received statement from remote source, with optional sender.
+	Remote(Option<AuthorityId>),
+}
+
 // A shared table object.
 struct SharedTableInner {
 	table: Table<TableContext>,
@@ -202,13 +213,15 @@ impl SharedTableInner {
 		context: &TableContext,
 		router: &R,
 		statement: table::SignedStatement,
-		received_from: Option<AuthorityId>,
+		statement_source: StatementSource,
 	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future> {
-		let mut producer = StatementProducer {
-			fetch_block_data: None,
-			fetch_extrinsic: None,
-			produced_statements: Default::default(),
-			_key: context.key.clone(),
+		// this blank producer does nothing until we attach some futures
+		// and set a candidate digest.
+		let mut producer = Default::default();
+
+		let received_from = match statement_source {
+			StatementSource::Local => return producer,
+			StatementSource::Remote(from) => from,
 		};
 
 		let summary = match self.table.import_statement(context, statement, received_from) {
@@ -216,7 +229,10 @@ impl SharedTableInner {
 			None => return producer,
 		};
 
+		producer.candidate_digest = Some(summary.candidate);
+
 		let local_id = context.local_id();
+
 		let is_validity_member = context.is_member_of(&local_id, &summary.group_id);
 		let is_availability_member =
 			context.is_availability_guarantor_of(&local_id, &summary.group_id);
@@ -229,18 +245,23 @@ impl SharedTableInner {
 			&& self.proposed_digest.as_ref().map_or(true, |d| d != digest)
 			&& self.checked_validity.insert(digest.clone());
 
-		let checking_availability = is_availability_member && self.checked_availability.insert(digest.clone());
+		let checking_availability = is_availability_member
+			&& self.checked_availability.insert(digest.clone());
 
 		if checking_validity || checking_availability {
 			match self.table.get_candidate(&digest) {
 				None => {} // TODO: handle table inconsistency somehow?
 				Some(candidate) => {
 					if checking_validity {
-						producer.fetch_block_data = Some(router.fetch_block_data(candidate).into_future().fuse());
+						producer.fetch_block_data = Some(
+							router.fetch_block_data(candidate).into_future().fuse()
+						);
 					}
 
 					if checking_availability {
-						producer.fetch_extrinsic = Some(router.fetch_extrinsic_data(candidate).into_future().fuse());
+						producer.fetch_extrinsic = Some(
+							router.fetch_extrinsic_data(candidate).into_future().fuse()
+						);
 					}
 				}
 			}
@@ -256,8 +277,13 @@ impl SharedTableInner {
 pub struct ProducedStatements {
 	/// A statement about the validity of the candidate.
 	pub validity: Option<table::Statement>,
-	/// A statement about the availability of the candidate.
+	/// A statement about availability of data. If this is `Some`,
+	/// then `block_data` and `extrinsic` should be `Some` as well.
 	pub availability: Option<table::Statement>,
+	/// Block data to ensure availability of.
+	pub block_data: Option<BlockData>,
+	/// Extrinsic data to ensure availability of.
+	pub extrinsic: Option<Extrinsic>,
 }
 
 /// Future that produces statements about a specific candidate.
@@ -265,7 +291,18 @@ pub struct StatementProducer<D: Future, E: Future> {
 	fetch_block_data: Option<future::Fuse<D>>,
 	fetch_extrinsic: Option<future::Fuse<E>>,
 	produced_statements: ProducedStatements,
-	_key: Arc<ed25519::Pair>,
+	candidate_digest: Option<Hash>,
+}
+
+impl<D: Future, E: Future> Default for StatementProducer<D, E> {
+	fn default() -> Self {
+		StatementProducer {
+			fetch_block_data: None,
+			fetch_extrinsic: None,
+			produced_statements: Default::default(),
+			candidate_digest: Default::default(),
+		}
+	}
 }
 
 impl<D, E, Err> Future for StatementProducer<D, E>
@@ -277,11 +314,17 @@ impl<D, E, Err> Future for StatementProducer<D, E>
 	type Error = Err;
 
 	fn poll(&mut self) -> Poll<ProducedStatements, Err> {
+		let candidate_digest = match self.candidate_digest.as_ref() {
+			Some(x) => x,
+			None => return Ok(Async::Ready(::std::mem::replace(&mut self.produced_statements, Default::default()))),
+		};
+
 		let mut done = true;
 		if let Some(ref mut fetch_block_data) = self.fetch_block_data {
 			match fetch_block_data.poll()? {
-				Async::Ready(_block_data) => {
-					// TODO [PoC-2] : validate block data here and make statement.
+				Async::Ready(block_data) => {
+					// TODO [PoC-2]: validate block data here and make statement.
+					self.produced_statements.block_data = Some(block_data);
 				},
 				Async::NotReady => {
 					done = false;
@@ -291,8 +334,8 @@ impl<D, E, Err> Future for StatementProducer<D, E>
 
 		if let Some(ref mut fetch_extrinsic) = self.fetch_extrinsic {
 			match fetch_extrinsic.poll()? {
-				Async::Ready(_extrinsic) => {
-					// TODO [PoC-2]: guarantee availability of data and make statment.
+				Async::Ready(extrinsic) => {
+					self.produced_statements.extrinsic = Some(extrinsic);
 				}
 				Async::NotReady => {
 					done = false;
@@ -301,14 +344,17 @@ impl<D, E, Err> Future for StatementProducer<D, E>
 		}
 
 		if done {
-			Ok(Async::Ready(::std::mem::replace(&mut self.produced_statements, Default::default())))
+			let mut produced = ::std::mem::replace(&mut self.produced_statements, Default::default());
+			if produced.block_data.is_some() && produced.extrinsic.is_some() {
+				// produce a statement about availability.
+				produced.availability = Some(GenericStatement::Available(candidate_digest.clone()));
+			}
+			Ok(Async::Ready(produced))
 		} else {
 			Ok(Async::NotReady)
 		}
 	}
 }
-
-
 
 /// A shared table object.
 pub struct SharedTable {
@@ -353,7 +399,7 @@ impl SharedTable {
 		&self,
 		router: &R,
 		statement: table::SignedStatement,
-		received_from: Option<AuthorityId>,
+		received_from: StatementSource,
 	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future> {
 		self.inner.lock().import_statement(&*self.context, router, statement, received_from)
 	}
@@ -363,7 +409,7 @@ impl SharedTable {
 		&self,
 		router: &R,
 		statement: table::Statement,
-	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future> {
+	) {
 		let proposed_digest = match statement {
 			GenericStatement::Candidate(ref c) => Some(c.hash()),
 			_ => None,
@@ -376,16 +422,16 @@ impl SharedTable {
 			inner.proposed_digest = proposed_digest;
 		}
 
-		inner.import_statement(&*self.context, router, signed_statement, None)
+		inner.import_statement(&*self.context, router, signed_statement, StatementSource::Local);
 	}
 
 	/// Import many statements at once.
 	///
-	/// Provide an iterator yielding pairs of (statement, received_from).
+	/// Provide an iterator yielding pairs of (statement, statement_source).
 	pub fn import_statements<R, I, U>(&self, router: &R, iterable: I) -> U
 		where
 			R: TableRouter,
-			I: IntoIterator<Item=(table::SignedStatement, Option<AuthorityId>)>,
+			I: IntoIterator<Item=(table::SignedStatement, StatementSource)>,
 			U: ::std::iter::FromIterator<StatementProducer<
 				<R::FetchCandidate as IntoFuture>::Future,
 				<R::FetchExtrinsic as IntoFuture>::Future>
@@ -393,8 +439,8 @@ impl SharedTable {
 	{
 		let mut inner = self.inner.lock();
 
-		iterable.into_iter().map(move |(statement, received_from)| {
-			inner.import_statement(&*self.context, router, statement, received_from)
+		iterable.into_iter().map(move |(statement, statement_source)| {
+			inner.import_statement(&*self.context, router, statement, statement_source)
 		}).collect()
 	}
 
@@ -488,7 +534,7 @@ pub struct ProposerFactory<C, N, P> {
 	pub parachain_empty_duration: Duration,
 }
 
-impl<C, N P> bft::ProposerFactory for ProposerFactory<C, N>
+impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 	where
 		C: PolkadotApi,
 		N: Network,
@@ -544,23 +590,23 @@ pub struct Proposer<C: PolkadotApi, R, P> {
 	client: Arc<C>,
 	local_key: Arc<ed25519::Pair>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
-	collators: P,
+	collators: Arc<P>,
 	dynamic_inclusion: DynamicInclusion,
 	table: Arc<SharedTable>,
 	router: R,
 }
 
-impl<C, R, P> bft::Proposer for Proposer<C, R>
+impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 	where
 		C: PolkadotApi,
 		R: TableRouter,
 		P: Collators,
 {
 	type Error = Error;
-	type Create = Result<SubstrateBlock, Error>;
+	type Create = CreateProposal<C, R, P>;
 	type Evaluate = Result<bool, Error>;
 
-	fn propose(&self) -> Result<SubstrateBlock, Error> {
+	fn propose(&self) -> CreateProposal<C, R, P> {
 		unimplemented!()
 	}
 
@@ -629,20 +675,20 @@ impl<C, R, P> bft::Proposer for Proposer<C, R>
 	}
 }
 
-struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
+/// Future which resolves upon the creation of a proposal.
+pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
 	parent_hash: HeaderHash,
 	parent_number: BlockNumber,
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
-	local_key: Arc<ed25519::Pair>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
 	dynamic_inclusion: DynamicInclusion,
-	collation: CollationFetch<P>,
-	_table: Arc<SharedTable>,
-	_router: R,
+	collation: CollationFetch<P, C>,
+	router: R,
+	table: Arc<SharedTable>,
 }
 
-impl CreateProposal<C, R, P>
+impl<C, R, P> CreateProposal<C, R, P>
 	where
 		C: PolkadotApi,
 		R: TableRouter,
@@ -693,7 +739,7 @@ impl CreateProposal<C, R, P>
 	}
 }
 
-impl Future for CreateProposal<C, R, P>
+impl<C, R, P> Future for CreateProposal<C, R, P>
 	where
 		C: PolkadotApi,
 		R: TableRouter,
@@ -704,10 +750,20 @@ impl Future for CreateProposal<C, R, P>
 
 	fn poll(&mut self) -> Poll<SubstrateBlock, Error> {
 		// 1. poll local collation future.
-		if let Async::Ready(collation) = self.collation.poll()? {
-			self.router.local_candidate_data(collation.block_data, collation.extrinsic);
-			// TODO: import statement.
+		match self.collation.poll() {
+			Ok(Async::Ready(collation)) => {
+				let hash = collation.receipt.hash();
+				self.router.local_candidate_data(hash, collation.block_data, collation.extrinsic);
+				self.table.sign_and_import(&self.router, GenericStatement::Valid(hash));
+			}
+			Ok(Async::NotReady) => {},
+			Err(_) => {}, // TODO: handle this failure to collate.
 		}
+
+		// 2. check readiness timer
+
+		// 3. check reseal interval
+		unimplemented!()
 	}
 }
 

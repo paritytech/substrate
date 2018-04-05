@@ -22,7 +22,7 @@
 use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Hash, Timestamp};
+use polkadot_primitives::{Hash, Timestamp, AccountId};
 use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
@@ -50,7 +50,7 @@ pub trait Collators {
 	fn collate(&self, parachain: ParaId, relay_parent: Hash) -> Self::Collation;
 
 	/// Note a bad collator. TODO: take proof
-	fn note_bad_collator(&self, collator: Address);
+	fn note_bad_collator(&self, collator: AccountId);
 }
 
 /// A future which resolves when a collation is available.
@@ -60,7 +60,7 @@ pub struct CollationFetch<C: Collators, P: PolkadotApi> {
 	parachain: ParaId,
 	relay_parent: Hash,
 	collators: Arc<C>,
-	live_fetch: Option<C::Collation>,
+	live_fetch: Option<<C::Collation as IntoFuture>::Future>,
 	client: Arc<P>,
 	done: bool,
 }
@@ -87,11 +87,16 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 		if self.done { return Ok(Async::NotReady) }
 		loop {
 			let x = {
-				let (p, r, c)  = (&self.parachain, &self.relay_parent, &self.collators);
-				try_ready!(self.live_fetch.get_or_insert_with(|| c.collate(p, r)).poll())
+				let (p, r, c)  = (self.parachain, self.relay_parent, &self.collators);
+				let poll = self.live_fetch
+					.get_or_insert_with(|| c.collate(p, r).into_future())
+					.poll();
+
+				if let Err(_) = poll { self.done = true }
+				try_ready!(poll)
 			};
 
-			if verify_collation(&self.client, &self.relay_parent, &x) {
+			if verify_collation(&*self.client, self.relay_parent, &x) {
 				self.done = true;
 				return Ok(Async::Ready(x));
 			} else {
@@ -103,6 +108,6 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 }
 
 /// Check whether a given collation is valid.
-pub fn verify_collation<P: PolkadotApi>(_client: P, _relay_parent: Hash, collation: &Collation) -> bool {
+pub fn verify_collation<P: PolkadotApi>(_client: &P, _relay_parent: Hash, collation: &Collation) -> bool {
 	true // TODO: actually check this.
 }
