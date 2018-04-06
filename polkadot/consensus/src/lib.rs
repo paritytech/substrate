@@ -72,6 +72,7 @@ use polkadot_runtime::Block as PolkadotGenericBlock;
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
 use transaction_pool::{Ready, TransactionPool, PolkadotBlock};
+use tokio_timer::{Timer, Interval, Sleep, TimerError};
 
 use futures::prelude::*;
 use futures::future;
@@ -447,11 +448,6 @@ impl SharedTable {
 		}).collect()
 	}
 
-	/// Check if a proposal is valid.
-	pub fn proposal_valid(&self, _proposal: &SubstrateBlock) -> bool {
-		false // TODO
-	}
-
 	/// Execute a closure using a specific candidate.
 	///
 	/// Deadlocks if called recursively.
@@ -460,6 +456,16 @@ impl SharedTable {
 	{
 		let inner = self.inner.lock();
 		f(inner.table.get_candidate(digest))
+	}
+
+	/// Execute a closure using the current proposed set.
+	///
+	/// Deadlocks if called recursively.
+	pub fn with_proposal<F, U>(&self, digest: &Hash, f: F) -> U
+		where F: FnOnce(Vec<&CandidateReceipt>) -> U
+	{
+		let inner = self.inner.lock();
+		f(inner.table.proposed_candidates(&*self.context))
 	}
 
 	/// Get all witnessed misbehavior.
@@ -545,6 +551,8 @@ pub struct ProposerFactory<C, N, P> {
 	pub network: N,
 	/// Parachain collators.
 	pub collators: P,
+	/// The timer used to schedule proposal intervals.
+	pub Timer,
 	/// The duration after which parachain-empty blocks will be allowed.
 	pub parachain_empty_duration: Duration,
 }
@@ -711,6 +719,33 @@ fn current_timestamp() -> Timestamp {
 		.as_secs()
 }
 
+struct ProposalTiming {
+	timer: Timer,
+	attempt_propose: Interval,
+	enough_candidates: Sleep,
+}
+
+impl ProposalTiming {
+	// whether it's time to attempt a proposal.
+	// should only be called within the context of a task.
+	fn attempt_propose(&mut self) -> Result<bool, TimerError> {
+		match self.attempt_propose.poll()? {
+			Async::Ready(x) => { x.expect("timer still alive; intervals never end; qed"); Ok(true) }
+			Async::NotReady => Ok({
+				match self.enough_candidates.poll()? {
+					Async::Ready(()) => true
+					Async::NotReady => false,
+				}
+			})
+		}
+	}
+
+	// schedule the time when enough candidates are ready.
+	fn enough_candidates_at(&mut self, duration: Duration){
+		self.enough_candidates = self.timer.sleep(duration);
+	}
+}
+
 /// Future which resolves upon the creation of a proposal.
 pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
 	parent_hash: HeaderHash,
@@ -722,6 +757,7 @@ pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
 	collation: CollationFetch<P, C>,
 	router: R,
 	table: Arc<SharedTable>,
+	timing: ProposalTiming,
 }
 
 impl<C, R, P> CreateProposal<C, R, P>
@@ -797,9 +833,9 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 		}
 
 		// 2. check readiness timer
+		if self.timing.attempt_propose()? {
 
-		// 3. check reseal interval
-		unimplemented!()
+		}
 	}
 }
 

@@ -25,6 +25,10 @@ error_chain! {
 		Bft(::bft::Error, ::bft::ErrorKind);
 	}
 
+	foreign_links {
+		Timer(::tokio_timer::TimerError);
+	}
+
 	errors {
 		InvalidDutyRosterLength(expected: usize, got: usize) {
 			description("Duty Roster had invalid length"),
