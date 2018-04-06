@@ -488,18 +488,12 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: Au
 	}
 
 	let mut local_validation = None;
-	let mut local_availability = Vec::new();
-
 	let mut map = HashMap::new();
 
 	let duty_iter = authorities.iter().zip(&roster.validator_duty).zip(&roster.guarantor_duty);
 	for ((authority, v_duty), a_duty) in duty_iter {
 		if authority == &local_id {
 			local_validation = Some(v_duty.clone());
-
-			if let Chain::Parachain(ref id) = *a_duty {
-				local_availability.push(id.clone());
-			}
 		}
 
 		match *v_duty {
@@ -533,7 +527,6 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: Au
 		Some(local_validation) => {
 			let local_duty = LocalDuty {
 				validation: local_validation,
-				availability: local_availability,
 			};
 
 			Ok((map, local_duty))
@@ -602,17 +595,8 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 	}
 }
 
-fn current_timestamp() -> Timestamp {
-	use std::time;
-
-	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
-		.expect("now always later than unix epoch; qed")
-		.as_secs()
-}
-
 struct LocalDuty {
 	validation: Chain,
-	availability: Vec<ParaId>,
 }
 
 /// The Polkadot proposer logic.
@@ -717,6 +701,14 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			pool.import(uxt).expect("locally signed extrinsic is valid; qed");
 		}
 	}
+}
+
+fn current_timestamp() -> Timestamp {
+	use std::time;
+
+	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
+		.expect("now always later than unix epoch; qed")
+		.as_secs()
 }
 
 /// Future which resolves upon the creation of a proposal.
