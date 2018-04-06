@@ -27,6 +27,9 @@ extern crate tokio_timer;
 extern crate parking_lot;
 
 #[macro_use]
+extern crate log;
+
+#[macro_use]
 extern crate futures;
 
 #[macro_use]
@@ -255,11 +258,16 @@ impl<P, I, InStream, OutSink> Future for BftFuture<P, I, InStream, OutSink> wher
 		}
 
 		// TODO: handle this error, at least by logging.
-		let committed = try_ready!(self.inner.poll().map_err(|e| println!("Error in BFT: {}", e)));
+		let committed = try_ready!(self.inner.poll().map_err(|e| {
+			warn!(target: "bft", "Error in BFT agreement: {}", e);
+		}));
 
 		// If we didn't see the proposal (very unlikely),
 		// we will get the block from the network later.
 		if let Some(justified_block) = committed.candidate {
+			info!(target: "bft", "Importing block #{} ({}) directly from BFT consensus",
+				justified_block.header.number, HeaderHash::from(justified_block.header.blake2_256()));
+
 			self.import.import_block(justified_block, committed.justification)
 		}
 

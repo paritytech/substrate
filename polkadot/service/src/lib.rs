@@ -38,8 +38,6 @@ extern crate tokio_core;
 extern crate substrate_client as client;
 
 #[macro_use]
-extern crate hex_literal;
-#[macro_use]
 extern crate error_chain;
 #[macro_use]
 extern crate log;
