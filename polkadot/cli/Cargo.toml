@@ -12,7 +12,7 @@ log = "0.3"
 hex-literal = "0.1"
 triehash = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
-app_dirs = "1.2.1"
+app_dirs = "1.2"
 substrate-client = { path = "../../substrate/client" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }

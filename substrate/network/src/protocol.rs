@@ -303,13 +303,13 @@ impl Protocol {
 		self.consensus.lock().on_statement(io, self, peer, statement, hash);
 	}
 
-	fn on_bft_message(&self, io: &mut SyncIo, peer: PeerId, message: message::BftMessage, hash: Hash) {
+	fn on_bft_message(&self, io: &mut SyncIo, peer: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
 		trace!(target: "sync", "BFT message from {}: {:?}", peer, message);
 		self.consensus.lock().on_bft_message(io, self, peer, message, hash);
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn send_bft_message(&self, io: &mut SyncIo, message: message::BftMessage) {
+	pub fn send_bft_message(&self, io: &mut SyncIo, message: message::LocalizedBftMessage) {
 		self.consensus.lock().send_bft_message(io, self, message)
 	}
 
