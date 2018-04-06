@@ -235,6 +235,7 @@ pub struct BftFuture<P, I, InStream, OutSink> where
 
 impl<P, I, InStream, OutSink> Future for BftFuture<P, I, InStream, OutSink> where
 	P: Proposer,
+	P::Error: ::std::fmt::Display,
 	I: BlockImport,
 	InStream: Stream<Item=Communication, Error=P::Error>,
 	OutSink: Sink<SinkItem=Communication, SinkError=P::Error>,
@@ -254,7 +255,7 @@ impl<P, I, InStream, OutSink> Future for BftFuture<P, I, InStream, OutSink> wher
 		}
 
 		// TODO: handle this error, at least by logging.
-		let committed = try_ready!(self.inner.poll().map_err(|_| ()));
+		let committed = try_ready!(self.inner.poll().map_err(|e| println!("Error in BFT: {}", e)));
 
 		// If we didn't see the proposal (very unlikely),
 		// we will get the block from the network later.
@@ -312,6 +313,7 @@ pub struct BftService<P, I> {
 impl<P, I> BftService<P, I>
 	where
 		P: ProposerFactory,
+		<P::Proposer as Proposer>::Error: ::std::fmt::Display,
 		I: BlockImport + Authorities,
 {
 

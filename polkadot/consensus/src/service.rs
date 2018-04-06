@@ -231,11 +231,12 @@ fn start_bft<F, C>(
 	client: &bft::Authorities,
 	network: Arc<net::ConsensusService>,
 	bft_service: &BftService<F, C>,
-	messages: SharedMessageCollection)
-	where F: bft::ProposerFactory + 'static,
-		C: bft::BlockImport + bft::Authorities + 'static,
-		<F as bft::ProposerFactory>::Error: ::std::fmt::Debug,
-		<<F as bft::ProposerFactory>::Proposer as bft::Proposer>::Error: Into<error::Error>,
+	messages: SharedMessageCollection
+) where
+	F: bft::ProposerFactory + 'static,
+	C: bft::BlockImport + bft::Authorities + 'static,
+	<F as bft::ProposerFactory>::Error: ::std::fmt::Debug,
+	<F::Proposer as bft::Proposer>::Error: ::std::fmt::Display + Into<error::Error>,
 {
 	let hash = header.blake2_256().into();
 	let authorities = match client.authorities(&BlockId::Hash(hash)) {
@@ -260,8 +261,8 @@ impl Service {
 		client: Arc<C>,
 		network: Arc<net::ConsensusService>,
 		transaction_pool: Arc<Mutex<TransactionPool>>,
-		key: ed25519::Pair)
-		-> Service
+		key: ed25519::Pair
+	) -> Service
 		where C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
 	{
 		let thread = thread::spawn(move || {
