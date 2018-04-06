@@ -39,7 +39,7 @@ use ed25519;
 use super::{TableRouter, SharedTable, ProposerFactory};
 use error;
 
-const TIMER_DELAY_MS: u64 = 5000;
+const TIMER_DELAY_MS: u64 = 15000;
 const TIMER_INTERVAL_MS: u64 = 500;
 const MESSAGE_LIFETIME_SEC: u64 = 10;
 
@@ -111,7 +111,7 @@ impl Stream for Messages {
 		match self.network_stream.poll() {
 			Err(_) => Err(bft::InputStreamConcluded.into()),
 			Ok(Async::NotReady) => Ok(Async::NotReady),
-			Ok(Async::Ready(None)) => Ok(Async::Ready(None)),
+			Ok(Async::Ready(None)) => Ok(Async::NotReady),
 			Ok(Async::Ready(Some(message))) => {
 				if message.parent_hash == self.parent_hash {
 					match process_message(message, &self.authorities) {
@@ -238,6 +238,9 @@ fn start_bft<F, C>(
 		<<F as bft::ProposerFactory>::Proposer as bft::Proposer>::Error: Into<error::Error>,
 {
 	let hash = header.blake2_256().into();
+	if bft_service.live_agreement().map_or(false, |h| h == hash) {
+		return;
+	}
 	let authorities = match client.authorities(&BlockId::Hash(hash)) {
 		Ok(authorities) => authorities,
 		Err(e) => {

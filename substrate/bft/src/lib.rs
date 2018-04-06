@@ -398,6 +398,12 @@ impl<P, I> BftService<P, I>
 	pub fn cancel_agreement(&self) {
 		self.live_agreement.lock().take();
 	}
+
+	/// Get current agreement parent hash if any.
+	pub fn live_agreement(&self) -> Option<HeaderHash> {
+		self.live_agreement.lock().as_ref().map(|&(h, _)| h.clone())
+	}
+
 }
 
 /// Given a total number of authorities, yield the maximum faulty that would be allowed.
