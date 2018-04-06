@@ -141,14 +141,12 @@ impl Service {
 		}
 
 		let god_keys = vec![
-			hex!["f09c0d1467d6952c92c343672bfb06a24560f400af8cf98b93df7d40b4efe1b6"],
-			hex!["84718cd2894bcda83beeca3a7842caf269fe93cacde0bdee0e3cbce6de253f0e"],
 			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
 			ed25519::Pair::from_seed(b"Bob                             ").public().into(),
-			ed25519::Pair::from_seed(b"Charlie                         ").public().into(),
-			ed25519::Pair::from_seed(b"Dave                            ").public().into(),
-			ed25519::Pair::from_seed(b"Eve                             ").public().into(),
-			ed25519::Pair::from_seed(b"Ferdie                          ").public().into(),
+//			ed25519::Pair::from_seed(b"Charlie                         ").public().into(),
+//			ed25519::Pair::from_seed(b"Dave                            ").public().into(),
+//			ed25519::Pair::from_seed(b"Eve                             ").public().into(),
+//			ed25519::Pair::from_seed(b"Ferdie                          ").public().into(),
 		];
 
 		let genesis_config = GenesisConfig {
@@ -196,10 +194,11 @@ impl Service {
 		let prepare_genesis = || {
 			storage = genesis_config.build_externalities();
 			let block = genesis::construct_genesis_block(&storage);
-			with_externalities(&mut storage, ||
+			with_externalities(&mut storage, || {
 				// TODO: use api.rs to dispatch instead
-				polkadot_runtime::System::initialise_genesis_state(&block.header)
-			);
+				polkadot_runtime::System::initialise_genesis_state(&block.header);
+				info!("Genesis header hash: {}", polkadot_runtime::System::block_hash(0));
+			});
 			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 		};
 

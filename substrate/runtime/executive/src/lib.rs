@@ -164,7 +164,7 @@ impl<
 	fn post_finalise(header: &System::Header) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
-		<system::Module<System>>::record_block_hash(header)
+		<system::Module<System>>::record_block_hash(header);
 	}
 }
 
