@@ -576,7 +576,18 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
-		evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id)
+		match evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id) {
+			Ok(true) => Ok(true),
+			Err(e) => match e.kind() {
+				ErrorKind::PolkadotApi(polkadot_api::ErrorKind::Executor(_)) => Ok(false),
+				ErrorKind::ProposalNotForPolkadot => Ok(false),
+				ErrorKind::TimestampInFuture => Ok(false),
+				ErrorKind::WrongParentHash => Ok(false),
+				ErrorKind::ProposalTooLarge => Ok(false),
+				ErrorKind::PolkadotApi(_) => Err(e),
+				ErrorKind::Bft(_) => Err(e),
+			}
+		}
 	}
 
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior)>) {
