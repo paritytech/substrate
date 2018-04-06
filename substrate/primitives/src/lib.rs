@@ -42,6 +42,8 @@ extern crate blake2_rfc;
 extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate core;
+#[cfg(feature = "std")]
+extern crate wasmi;
 
 extern crate substrate_runtime_std as rstd;
 
@@ -83,6 +85,7 @@ pub mod hexdisplay;
 pub mod bft;
 pub mod block;
 pub mod hash;
+pub mod sandbox;
 pub mod storage;
 pub mod uint;
 

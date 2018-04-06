@@ -61,6 +61,31 @@ pub trait Slicable: Sized {
 	}
 }
 
+impl<T: Slicable, E: Slicable> Slicable for Result<T, E> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			0 => Some(Ok(T::decode(input)?)),
+			1 => Some(Err(E::decode(input)?)),
+			_ => None,
+		}
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		match *self {
+			Ok(ref t) => {
+				v.push(0);
+				t.using_encoded(|s| v.extend(s));
+			}
+			Err(ref e) => {
+				v.push(1);
+				e.using_encoded(|s| v.extend(s));
+			}
+		}
+		v
+	}
+}
+
 impl Slicable for Option<bool> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
