@@ -39,7 +39,7 @@ use ed25519;
 use super::{TableRouter, SharedTable, ProposerFactory};
 use error;
 
-const TIMER_DELAY_MS: u64 = 15000;
+const TIMER_DELAY_MS: u64 = 5000;
 const TIMER_INTERVAL_MS: u64 = 500;
 const MESSAGE_LIFETIME_SEC: u64 = 10;
 
@@ -82,7 +82,7 @@ impl SharedMessageCollection {
 	fn collect_garbage(&self) {
 		let expiration = Duration::from_secs(MESSAGE_LIFETIME_SEC);
 		let now = Instant::now();
-		self.messages.lock().retain(|_, &mut (timestamp, _)| timestamp + expiration < now);
+		self.messages.lock().retain(|_, &mut (timestamp, _)| timestamp < now + expiration);
 	}
 }
 
