@@ -44,12 +44,6 @@ pub mod genesis;
 pub mod block_builder;
 mod client;
 
-/// Something to which extrinsics may be submitted.
-pub trait TransactionPool {
-	/// Submit an extrinsic into the pool.
-	fn submit(&self, e: primitives::block::Extrinsic);
-}
-
-pub use client::{Client, ClientInfo, CallResult, ImportResult,
+pub use client::{Client, ClientInfo, CallResult, ImportResult, ChainHead,
 	BlockStatus, BlockOrigin, new_in_mem, BlockchainEventStream, BlockchainEvents};
 pub use blockchain::Info as ChainInfo;

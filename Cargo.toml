@@ -10,6 +10,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 error-chain = "0.11"
 polkadot-cli = { path = "polkadot/cli" }
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 
 [workspace]
 members = [

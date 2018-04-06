@@ -10,6 +10,7 @@ polkadot-runtime = { path = "../runtime" }
 polkadot-primitives = { path = "../primitives" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-runtime-executive = { path  = "../../substrate/runtime/executive" }
 substrate-client = { path = "../../substrate/client" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-executor = { path = "../../substrate/executor" }

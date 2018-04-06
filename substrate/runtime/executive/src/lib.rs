@@ -50,6 +50,13 @@ use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable, MakePayment};
 use codec::Slicable;
 
+/// Compute the extrinsics root of a list of extrinsics.
+pub fn extrinsics_root<H: Hashing, E: Slicable>(extrinsics: &[E]) -> H::Output {
+	let xts = extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
+	let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
+	H::enumerated_trie_root(&xts)
+}
+
 pub struct Executive<
 	System,
 	Block,
@@ -82,11 +89,9 @@ impl<
 		);
 
 		// check transaction trie root represents the transactions.
-		let txs = block.extrinsics().iter().map(Slicable::encode).collect::<Vec<_>>();
-		let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-		let txs_root = System::Hashing::enumerated_trie_root(&txs);
-		header.extrinsics_root().check_equal(&txs_root);
-		assert!(header.extrinsics_root() == &txs_root, "Transaction trie root must be valid.");
+		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
+		header.extrinsics_root().check_equal(&xts_root);
+		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitioning for `block`.
@@ -164,7 +169,7 @@ impl<
 	fn post_finalise(header: &System::Header) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
-		<system::Module<System>>::record_block_hash(header)
+		<system::Module<System>>::record_block_hash(header);
 	}
 }
 

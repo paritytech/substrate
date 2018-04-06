@@ -32,7 +32,6 @@
 extern crate futures;
 extern crate ed25519;
 extern crate parking_lot;
-extern crate tokio_timer;
 extern crate polkadot_api;
 extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
@@ -532,6 +531,8 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	type Evaluate = Result<bool, Error>;
 
 	fn propose(&self) -> Result<SubstrateBlock, Error> {
+		debug!(target: "bft", "proposing block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
+
 		// TODO: handle case when current timestamp behind that in state.
 		let mut block_builder = self.client.build_block(
 			&self.parent_id,
@@ -577,7 +578,18 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
-		evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id)
+		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
+		match evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id) {
+			Ok(x) => Ok(x),
+			Err(e) => match *e.kind() {
+				ErrorKind::PolkadotApi(polkadot_api::ErrorKind::Executor(_)) => Ok(false),
+				ErrorKind::ProposalNotForPolkadot => Ok(false),
+				ErrorKind::TimestampInFuture => Ok(false),
+				ErrorKind::WrongParentHash(_, _) => Ok(false),
+				ErrorKind::ProposalTooLarge(_) => Ok(false),
+				_ => Err(e),
+			}
+		}
 	}
 
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior)>) {
