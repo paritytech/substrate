@@ -45,6 +45,12 @@ pub trait BlockchainEvents {
 	fn import_notification_stream(&self) -> BlockchainEventStream;
 }
 
+/// Chain head information.
+pub trait ChainHead {
+	/// Get best block header.
+	fn best_block_header(&self) -> Result<block::Header, error::Error>;
+}
+
 /// Client info
 // TODO: split queue info from chain info and amalgamate into single struct.
 #[derive(Debug)]
@@ -377,6 +383,12 @@ impl<B, E> Client<B, E> where
 	pub fn justification(&self, id: &BlockId) -> error::Result<Option<primitives::bft::Justification>> {
 		self.backend.blockchain().justification(*id)
 	}
+
+	/// Get best block header.
+	pub fn best_block_header(&self) -> error::Result<block::Header> {
+		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
+		Ok(self.header(&BlockId::Hash(info.best_hash))?.expect("Best block header must always exist"))
+	}
 }
 
 impl<B, E> bft::BlockImport for Client<B, E>
@@ -417,6 +429,17 @@ impl<B, E> BlockchainEvents for Client<B, E>
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
+	}
+}
+
+impl<B, E> ChainHead for Client<B, E>
+	where
+		B: backend::Backend,
+		E: state_machine::CodeExecutor,
+		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	fn best_block_header(&self) -> error::Result<block::Header> {
+		Client::best_block_header(self)
 	}
 }
 

@@ -7,7 +7,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 futures = "0.1.17"
 parking_lot = "0.4"
 tokio-timer = "0.1.2"
-hex-literal = "0.1"
 error-chain = "0.11"
 log = "0.4"
 tokio-core = "0.1.12"

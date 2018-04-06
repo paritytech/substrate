@@ -146,7 +146,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call
 pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Concrete, Block, Staking,
-	((((((), Parachains), Council), Democracy), Staking), Session)>;
+	(((((((), Parachains), Council), Democracy), Staking), Session), Timestamp)>;
 
 impl_outer_config! {
 	pub struct GenesisConfig for Concrete {

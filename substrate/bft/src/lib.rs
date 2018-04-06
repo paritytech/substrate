@@ -27,12 +27,15 @@ extern crate tokio_timer;
 extern crate parking_lot;
 
 #[macro_use]
+extern crate log;
+
+#[macro_use]
 extern crate futures;
 
 #[macro_use]
 extern crate error_chain;
 
-use std::collections::HashMap;
+use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -235,6 +238,7 @@ pub struct BftFuture<P, I, InStream, OutSink> where
 
 impl<P, I, InStream, OutSink> Future for BftFuture<P, I, InStream, OutSink> where
 	P: Proposer,
+	P::Error: ::std::fmt::Display,
 	I: BlockImport,
 	InStream: Stream<Item=Communication, Error=P::Error>,
 	OutSink: Sink<SinkItem=Communication, SinkError=P::Error>,
@@ -254,11 +258,16 @@ impl<P, I, InStream, OutSink> Future for BftFuture<P, I, InStream, OutSink> wher
 		}
 
 		// TODO: handle this error, at least by logging.
-		let committed = try_ready!(self.inner.poll().map_err(|_| ()));
+		let committed = try_ready!(self.inner.poll().map_err(|e| {
+			warn!(target: "bft", "Error in BFT agreement: {}", e);
+		}));
 
 		// If we didn't see the proposal (very unlikely),
 		// we will get the block from the network later.
 		if let Some(justified_block) = committed.candidate {
+			info!(target: "bft", "Importing block #{} ({}) directly from BFT consensus",
+				justified_block.header.number, HeaderHash::from(justified_block.header.blake2_256()));
+
 			self.import.import_block(justified_block, committed.justification)
 		}
 
@@ -302,7 +311,7 @@ impl Drop for AgreementHandle {
 /// is notified of.
 pub struct BftService<P, I> {
 	client: Arc<I>,
-	live_agreements: Mutex<HashMap<HeaderHash, AgreementHandle>>,
+	live_agreement: Mutex<Option<(HeaderHash, AgreementHandle)>>,
 	timer: Timer,
 	round_timeout_multiplier: u64,
 	key: Arc<ed25519::Pair>, // TODO: key changing over time.
@@ -312,6 +321,7 @@ pub struct BftService<P, I> {
 impl<P, I> BftService<P, I>
 	where
 		P: ProposerFactory,
+		<P::Proposer as Proposer>::Error: ::std::fmt::Display,
 		I: BlockImport + Authorities,
 {
 
@@ -319,7 +329,7 @@ impl<P, I> BftService<P, I>
 	pub fn new(client: Arc<I>, key: Arc<ed25519::Pair>, factory: P) -> BftService<P, I> {
 		BftService {
 			client: client,
-			live_agreements: Mutex::new(HashMap::new()),
+			live_agreement: Mutex::new(None),
 			timer: Timer::default(),
 			round_timeout_multiplier: 4,
 			key: key, // TODO: key changing over time.
@@ -331,13 +341,16 @@ impl<P, I> BftService<P, I>
 	///
 	/// If the local signing key is an authority, this will begin the consensus process to build a
 	/// block on top of it. If the executor fails to run the future, an error will be returned.
+	/// Returns `None` if the agreement on the block with given parent is already in progress.
 	pub fn build_upon<InStream, OutSink>(&self, header: &Header, input: InStream, output: OutSink)
-		-> Result<BftFuture<<P as ProposerFactory>::Proposer, I, InStream, OutSink>, P::Error> where
+		-> Result<Option<BftFuture<<P as ProposerFactory>::Proposer, I, InStream, OutSink>>, P::Error> where
 		InStream: Stream<Item=Communication, Error=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
 		OutSink: Sink<SinkItem=Communication, SinkError=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
 	{
 		let hash = header.blake2_256().into();
-		let mut _preempted_consensus = None; // defers drop of live to the end.
+		if self.live_agreement.lock().as_ref().map_or(false, |&(h, _)| h == hash) {
+			return Ok(None);
+		}
 
 		let authorities = self.client.authorities(&BlockId::Hash(hash))?;
 
@@ -347,7 +360,8 @@ impl<P, I> BftService<P, I>
 		let local_id = self.key.public().0;
 
 		if !authorities.contains(&local_id) {
-			self.live_agreements.lock().remove(&header.parent_hash);
+			// cancel current agreement
+			self.live_agreement.lock().take();
 			Err(From::from(ErrorKind::InvalidAuthority(local_id)))?;
 		}
 
@@ -373,25 +387,33 @@ impl<P, I> BftService<P, I>
 		let cancel = Arc::new(AtomicBool::new(false));
 		let (tx, rx) = oneshot::channel();
 
-		{
-			let mut live = self.live_agreements.lock();
-			live.insert(hash, AgreementHandle {
+		// cancel current agreement.
+		// defers drop of live to the end.
+		let _preempted_consensus = {
+			mem::replace(&mut *self.live_agreement.lock(), Some((hash, AgreementHandle {
 				task: Some(rx),
 				cancel: cancel.clone(),
-			});
+			})))
+		};
 
-			// cancel any agreements attempted to build upon this block's parent
-			// as clearly agreement has already been reached.
-			_preempted_consensus = live.remove(&header.parent_hash);
-		}
-
-		Ok(BftFuture {
+		Ok(Some(BftFuture {
 			inner: agreement,
 			cancel: cancel,
 			send_task: Some(tx),
 			import: self.client.clone(),
-		})
+		}))
 	}
+
+	/// Cancel current agreement if any.
+	pub fn cancel_agreement(&self) {
+		self.live_agreement.lock().take();
+	}
+
+	/// Get current agreement parent hash if any.
+	pub fn live_agreement(&self) -> Option<HeaderHash> {
+		self.live_agreement.lock().as_ref().map(|&(h, _)| h.clone())
+	}
+
 }
 
 /// Given a total number of authorities, yield the maximum faulty that would be allowed.
@@ -634,7 +656,7 @@ mod tests {
 	{
 		BftService {
 			client: Arc::new(client),
-			live_agreements: Mutex::new(HashMap::new()),
+			live_agreement: Mutex::new(None),
 			timer: Timer::default(),
 			round_timeout_multiplier: 4,
 			key: Arc::new(Keyring::One.into()),
@@ -673,17 +695,17 @@ mod tests {
 		let second_hash = second.blake2_256().into();
 
 		let bft = service.build_upon(&first, stream::empty(), Output(Default::default())).unwrap();
-		assert!(service.live_agreements.lock().contains_key(&first_hash));
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first_hash);
 
 		// turn the core so the future gets polled and sends its task to the
 		// service. otherwise it deadlocks.
-		core.handle().execute(bft).unwrap();
+		core.handle().execute(bft.unwrap()).unwrap();
 		core.turn(Some(::std::time::Duration::from_millis(100)));
 		let bft = service.build_upon(&second, stream::empty(), Output(Default::default())).unwrap();
-		assert!(!service.live_agreements.lock().contains_key(&first_hash));
-		assert!(service.live_agreements.lock().contains_key(&second_hash));
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 != first_hash);
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 == second_hash);
 
-		core.handle().execute(bft).unwrap();
+		core.handle().execute(bft.unwrap()).unwrap();
 		core.turn(Some(::std::time::Duration::from_millis(100)));
 	}
 

@@ -63,10 +63,10 @@ impl PolkadotBlock {
 			return Err(unchecked);
 		}
 		match unchecked.extrinsics[0].extrinsic.function {
-			Call::Timestamp(TimestampCall::set(_)) => return Err(unchecked),
-			_ => {}
+			Call::Timestamp(TimestampCall::set(_)) => {},
+			_ => return Err(unchecked),
 		}
-		
+
 		// any further checks...
 		Ok(PolkadotBlock { block: unchecked, location: None })
 	}

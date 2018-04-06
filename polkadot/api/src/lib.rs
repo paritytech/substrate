@@ -24,6 +24,7 @@ extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_client as client;
 extern crate substrate_executor as substrate_executor;
+extern crate substrate_runtime_executive;
 extern crate substrate_primitives;
 extern crate substrate_state_machine as state_machine;
 
@@ -323,16 +324,19 @@ impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 	}
 
 	fn bake(mut self) -> Block {
+		use substrate_runtime_executive::extrinsics_root;
+
 		let mut ext = state_machine::Ext {
 			overlay: &mut self.changes,
 			backend: &self.state,
 		};
 
-		let final_header = ::substrate_executor::with_native_environment(
+		let mut final_header = ::substrate_executor::with_native_environment(
 			&mut ext,
 			move || runtime::Executive::finalise_block()
 		).expect("all inherent extrinsics pushed; all other extrinsics executed correctly; qed");
 
+		final_header.extrinsics_root = extrinsics_root::<runtime_io::BlakeTwo256, _>(&self.extrinsics);
 		Block {
 			header: final_header,
 			extrinsics: self.extrinsics,
@@ -404,6 +408,7 @@ mod tests {
 		let block = block_builder.bake();
 
 		assert_eq!(block.header.number, 1);
+		assert!(block.header.extrinsics_root != Default::default());
 	}
 
 	#[test]
