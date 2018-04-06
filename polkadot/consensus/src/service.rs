@@ -111,7 +111,7 @@ impl Stream for Messages {
 		match self.network_stream.poll() {
 			Err(_) => Err(bft::InputStreamConcluded.into()),
 			Ok(Async::NotReady) => Ok(Async::NotReady),
-			Ok(Async::Ready(None)) => Ok(Async::Ready(None)),
+			Ok(Async::Ready(None)) => Ok(Async::NotReady), // the input stream for agreements is never meant to logically end.
 			Ok(Async::Ready(Some(message))) => {
 				if message.parent_hash == self.parent_hash {
 					match process_message(message, &self.authorities) {
