@@ -531,6 +531,8 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	type Evaluate = Result<bool, Error>;
 
 	fn propose(&self) -> Result<SubstrateBlock, Error> {
+		debug!(target: "bft", "proposing block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
+
 		// TODO: handle case when current timestamp behind that in state.
 		let mut block_builder = self.client.build_block(
 			&self.parent_id,
@@ -576,6 +578,7 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
+		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 		match evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id) {
 			Ok(x) => Ok(x),
 			Err(e) => match *e.kind() {
