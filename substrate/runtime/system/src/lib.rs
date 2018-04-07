@@ -108,23 +108,27 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Records a particular block number and hash combination.
-	pub fn record_block_hash<H: traits::Header<Number = T::BlockNumber>>(header: &H) {
+	pub fn record_block_hash<H: traits::Header<Number = T::BlockNumber, Hash = T::Hash>>(header: &H) {
 		// store the header hash in storage; we can't do it before otherwise there would be a
 		// cyclic dependency.
-		<BlockHash<T>>::insert(header.number(), &T::Hashing::hash_of(header));
+		let h = T::Hashing::hash_of(header);
+		<BlockHash<T>>::insert(header.number(), &h);
+
+		Self::initialise(&(*header.number() + One::one()), &h, &Default::default());
 	}
 
 	/// Initializes the state following the determination of the genesis block.
-	pub fn initialise_genesis_state<H: traits::Header<Number = T::BlockNumber>>(header: &H) {
+	pub fn initialise_genesis_state<H: traits::Header<Number = T::BlockNumber, Hash = T::Hash>>(header: &H) {
 		Self::record_block_hash(header);
 	}
 
 	/// Calculate the current block's random seed.
 	fn calculate_random() -> T::Hash {
+		assert!(Self::block_number() > Zero::zero(), "Block number may never be zero");
 		(0..81)
 			.scan(
-				{ let mut n = Self::block_number().clone(); n -= T::BlockNumber::one(); n },
-				|c, _| { if *c > T::BlockNumber::zero() { *c -= T::BlockNumber::one() }; Some(c.clone())
+				Self::block_number() - One::one(),
+				|c, _| { if *c > Zero::zero() { *c -= One::one() }; Some(*c)
 			})
 			.map(Self::block_hash)
 			.triplet_mix()

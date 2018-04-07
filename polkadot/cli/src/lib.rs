@@ -43,6 +43,7 @@ pub mod error;
 
 use std::path::{Path, PathBuf};
 use std::net::SocketAddr;
+use std::sync::mpsc;
 
 /// Parse command line arguments and start the node.
 ///
@@ -52,7 +53,7 @@ use std::net::SocketAddr;
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T>(args: I) -> error::Result<()> where
+pub fn run<I, T>(args: I, exit: mpsc::Receiver<()>) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
@@ -105,6 +106,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		None => 30333,
 	};
 	config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
+	config.network.public_address = None;
+	config.network.client_version = format!("parity-polkadot/{}", crate_version!());
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 
@@ -116,9 +119,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		address.set_port(rpc_port);
 	}
 	let handler = rpc::rpc_handler(service.client());
-	let server = rpc::start_http(&address, handler)?;
+	let _server = rpc::start_http(&address, handler)?;
 
-	server.wait();
+	exit.recv().ok();
 	Ok(())
 }
 

@@ -18,8 +18,9 @@ use std::sync::Arc;
 use std::collections::{BTreeMap};
 use std::io;
 use futures::sync::{oneshot, mpsc};
-use network::{NetworkProtocolHandler, NetworkService, NetworkContext, HostInfo, PeerId, ProtocolId,
+use network::{NetworkProtocolHandler, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
+use network_devp2p::{NetworkService};
 use primitives::block::{TransactionHash, Header};
 use primitives::Hash;
 use core_io::{TimerToken};
@@ -28,7 +29,7 @@ use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo, Transacti
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
-use message::{Statement, BftMessage};
+use message::{Statement, LocalizedBftMessage};
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
@@ -38,7 +39,7 @@ pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 /// Type that represents statement stream.
 pub type StatementStream = mpsc::UnboundedReceiver<Statement>;
 /// Type that represents bft messages stream.
-pub type BftMessageStream = mpsc::UnboundedReceiver<BftMessage>;
+pub type BftMessageStream = mpsc::UnboundedReceiver<LocalizedBftMessage>;
 
 bitflags! {
 	/// Node roles bitmask.
@@ -93,7 +94,7 @@ pub trait ConsensusService: Send + Sync {
 	/// Get BFT message stream.
 	fn bft_messages(&self) -> BftMessageStream;
 	/// Send out a BFT message.
-	fn send_bft_message(&self, message: BftMessage);
+	fn send_bft_message(&self, message: LocalizedBftMessage);
 }
 
 /// devp2p Protocol handler
@@ -255,7 +256,7 @@ impl ConsensusService for Service {
 		self.handler.protocol.bft_messages()
 	}
 
-	fn send_bft_message(&self, message: BftMessage) {
+	fn send_bft_message(&self, message: LocalizedBftMessage) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
 			self.handler.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
 		});

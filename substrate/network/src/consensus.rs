@@ -46,8 +46,8 @@ pub struct Consensus {
 	peers: HashMap<PeerId, PeerConsensus>,
 	our_candidate: Option<(Hash, Vec<u8>)>,
 	statement_sink: Option<mpsc::UnboundedSender<message::Statement>>,
-	bft_message_sink: Option<mpsc::UnboundedSender<message::BftMessage>>,
-	message_timestamps: HashMap<Hash, Instant>,
+	bft_message_sink: Option<mpsc::UnboundedSender<message::LocalizedBftMessage>>,
+	messages: HashMap<Hash, (Instant, message::Message)>,
 }
 
 impl Consensus {
@@ -58,7 +58,7 @@ impl Consensus {
 			our_candidate: None,
 			statement_sink: None,
 			bft_message_sink: None,
-			message_timestamps: Default::default(),
+			messages: Default::default(),
 		}
 	}
 
@@ -69,13 +69,20 @@ impl Consensus {
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, _io: &mut SyncIo, _protocol: &Protocol, peer_id: PeerId, roles: &[message::Role]) {
+	pub fn new_peer(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, roles: &[message::Role]) {
 		if roles.iter().any(|r| *r == message::Role::Validator) {
 			trace!(target:"sync", "Registering validator {}", peer_id);
+			// Send out all known messages.
+			// TODO: limit by size
+			let mut known_messages = HashSet::new();
+			for (hash, &(_, ref m)) in self.messages.iter() {
+				known_messages.insert(hash.clone());
+				protocol.send_message(io, peer_id, m.clone());
+			}
 			self.peers.insert(peer_id, PeerConsensus {
 				candidate_fetch: None,
 				candidate_available: None,
-				known_messages: Default::default(),
+				known_messages,
 			});
 		}
 	}
@@ -88,13 +95,16 @@ impl Consensus {
 		}
 	}
 
-	fn register_message(&mut self, hash: Hash) {
-		if let Entry::Vacant(entry) = self.message_timestamps.entry(hash) {
-			entry.insert(Instant::now());
+	fn register_message(&mut self, hash: Hash, message: message::Message) {
+		if let Entry::Vacant(entry) = self.messages.entry(hash) {
+			entry.insert((Instant::now(), message));
 		}
 	}
 
 	pub fn on_statement(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, statement: message::Statement, hash: Hash) {
+		if self.messages.contains_key(&hash) {
+			trace!(target:"sync", "Ignored already known statement from {}", peer_id);
+		}
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			// TODO: validate signature?
 			match &statement.statement {
@@ -114,9 +124,10 @@ impl Consensus {
 			trace!(target:"sync", "Ignored statement from unregistered peer {}", peer_id);
 			return;
 		}
-		self.register_message(hash.clone());
+		let message = Message::Statement(statement);
+		self.register_message(hash.clone(), message.clone());
 		// Propagate to other peers.
-		self.propagate(io, protocol, Message::Statement(statement), hash);
+		self.propagate(io, protocol, message, hash);
 	}
 
 	pub fn statements(&mut self) -> mpsc::UnboundedReceiver<message::Statement>{
@@ -125,7 +136,10 @@ impl Consensus {
 		stream
 	}
 
-	pub fn on_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, message: message::BftMessage, hash: Hash) {
+	pub fn on_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
+		if self.messages.contains_key(&hash) {
+			trace!(target:"sync", "Ignored already known BFT message from {}", peer_id);
+		}
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			peer.known_messages.insert(hash);
 			// TODO: validate signature?
@@ -140,12 +154,13 @@ impl Consensus {
 			trace!(target:"sync", "Ignored BFT statement from unregistered peer {}", peer_id);
 			return;
 		}
-		self.register_message(hash.clone());
+		let message = Message::BftMessage(message);
+		self.register_message(hash.clone(), message.clone());
 		// Propagate to other peers.
-		self.propagate(io, protocol, Message::BftMessage(message), hash);
+		self.propagate(io, protocol, message, hash);
 	}
 
-	pub fn bft_messages(&mut self) -> mpsc::UnboundedReceiver<message::BftMessage>{
+	pub fn bft_messages(&mut self) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage>{
 		let (sink, stream) = mpsc::unbounded();
 		self.bft_message_sink = Some(sink);
 		stream
@@ -180,16 +195,16 @@ impl Consensus {
 		trace!(target:"sync", "Broadcasting statement {:?}", statement);
 		let message = Message::Statement(statement);
 		let hash = Protocol::hash_message(&message);
-		self.register_message(hash.clone());
+		self.register_message(hash.clone(), message.clone());
 		self.propagate(io, protocol, message, hash);
 	}
 
-	pub fn send_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, message: message::BftMessage) {
+	pub fn send_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, message: message::LocalizedBftMessage) {
 		// Broadcast message to all validators.
 		trace!(target:"sync", "Broadcasting BFT message {:?}", message);
 		let message = Message::BftMessage(message);
 		let hash = Protocol::hash_message(&message);
-		self.register_message(hash.clone());
+		self.register_message(hash.clone(), message.clone());
 		self.propagate(io, protocol, message, hash);
 	}
 
@@ -237,10 +252,14 @@ impl Consensus {
 	pub fn collect_garbage(&mut self) {
 		let expiration = Duration::from_secs(MESSAGE_LIFETIME_SECONDS);
 		let now = Instant::now();
-		self.message_timestamps.retain(|_, timestamp| *timestamp + expiration < now);
-		let timestamps = &self.message_timestamps;
+		let before = self.messages.len();
+		self.messages.retain(|_, &mut (timestamp, _)| timestamp < now + expiration);
+		if self.messages.len() != before {
+			trace!(target:"sync", "Cleaned up {} stale messages", before - self.messages.len());
+		}
+		let messages = &self.messages;
 		for (_, ref mut peer) in self.peers.iter_mut() {
-			peer.known_messages.retain(|h| timestamps.contains_key(h));
+			peer.known_messages.retain(|h| messages.contains_key(h));
 		}
 	}
 }
