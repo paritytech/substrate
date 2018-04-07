@@ -106,6 +106,8 @@ pub fn run<I, T>(args: I, exit: mpsc::Receiver<()>) -> error::Result<()> where
 		None => 30333,
 	};
 	config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
+	config.network.public_address = None;
+	config.network.client_version = format!("parity-polkadot/{}", crate_version!());
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 

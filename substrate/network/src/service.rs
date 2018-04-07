@@ -18,8 +18,9 @@ use std::sync::Arc;
 use std::collections::{BTreeMap};
 use std::io;
 use futures::sync::{oneshot, mpsc};
-use network::{NetworkProtocolHandler, NetworkService, NetworkContext, HostInfo, PeerId, ProtocolId,
+use network::{NetworkProtocolHandler, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
+use network_devp2p::{NetworkService};
 use primitives::block::{TransactionHash, Header};
 use primitives::Hash;
 use core_io::{TimerToken};
