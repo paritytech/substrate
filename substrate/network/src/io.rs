@@ -36,20 +36,20 @@ pub trait SyncIo {
 }
 
 /// Wraps `NetworkContext` and the blockchain client
-pub struct NetSyncIo<'s, 'h> where 'h: 's {
-	network: &'s NetworkContext<'h>,
+pub struct NetSyncIo<'s> {
+	network: &'s NetworkContext,
 }
 
-impl<'s, 'h> NetSyncIo<'s, 'h> {
+impl<'s> NetSyncIo<'s> {
 	/// Creates a new instance from the `NetworkContext` and the blockchain client reference.
-	pub fn new(network: &'s NetworkContext<'h>) -> NetSyncIo<'s, 'h> {
+	pub fn new(network: &'s NetworkContext) -> NetSyncIo<'s> {
 		NetSyncIo {
 			network: network,
 		}
 	}
 }
 
-impl<'s, 'h> SyncIo for NetSyncIo<'s, 'h> {
+impl<'s> SyncIo for NetSyncIo<'s> {
 	fn disable_peer(&mut self, peer_id: PeerId) {
 		self.network.disable_peer(peer_id);
 	}

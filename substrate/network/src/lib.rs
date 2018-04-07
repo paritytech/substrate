@@ -19,6 +19,7 @@
 //! Implements polkadot protocol version as specified here:
 //! https://github.com/paritytech/polkadot/wiki/Network-protocol
 
+extern crate ethcore_network_devp2p as network_devp2p;
 extern crate ethcore_network as network;
 extern crate ethcore_io as core_io;
 extern crate rand;
@@ -61,7 +62,8 @@ pub mod error;
 pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream, TransactionPool, Params, ManageNetwork};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
-pub use network::{NonReservedPeerMode, ConnectionFilter, ConnectionDirection, NetworkConfiguration};
+pub use network::{NonReservedPeerMode, NetworkConfiguration};
+pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
 pub use message::{Statement, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
