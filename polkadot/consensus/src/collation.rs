@@ -22,10 +22,8 @@
 use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Hash, Timestamp, AccountId};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
-use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
-use primitives::AuthorityId;
+use polkadot_primitives::{Hash, AccountId};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, BlockData, Extrinsic, CandidateReceipt};
 
 use futures::prelude::*;
 
