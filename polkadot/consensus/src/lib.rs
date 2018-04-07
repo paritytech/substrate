@@ -570,8 +570,12 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 		}
 
 		let polkadot_block = block_builder.bake();
+		info!("Proposing block [number: {}; extrinsics: [{}], parent_hash: {}]", polkadot_block.header.number, polkadot_block.extrinsics.len(), polkadot_block.header.parent_hash);
+
 		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
 			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
+
+		assert!(evaluate_proposal(&substrate_block, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id).is_ok());
 
 		Ok(substrate_block)
 	}

@@ -182,13 +182,6 @@ impl<B, E> Client<B, E> where
 		})
 	}
 
-	/// Submit a transaction to this for potential inclusion in a block.
-	pub fn submit_transaction(&self, _tx: block::Transaction) -> error::Result<()> {
-		// TODO: introduce a tx queue and place the transaction in there. tx queue or some of its
-		// logic will need to be generic.
-		unimplemented!();
-	}
-
 	/// Get a reference to the state at a given block.
 	pub fn state_at(&self, block: &BlockId) -> error::Result<B::State> {
 		self.backend.state_at(*block)
