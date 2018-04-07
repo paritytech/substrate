@@ -461,11 +461,16 @@ impl SharedTable {
 	/// Execute a closure using the current proposed set.
 	///
 	/// Deadlocks if called recursively.
-	pub fn with_proposal<F, U>(&self, digest: &Hash, f: F) -> U
+	pub fn with_proposal<F, U>(&self, f: F) -> U
 		where F: FnOnce(Vec<&CandidateReceipt>) -> U
 	{
 		let inner = self.inner.lock();
 		f(inner.table.proposed_candidates(&*self.context))
+	}
+
+	/// Get the number of parachains which have available candidates.
+	pub fn includable_count(&self) -> usize {
+		self.inner.lock().table.includable_count()
 	}
 
 	/// Get all witnessed misbehavior.
@@ -753,7 +758,7 @@ impl ProposalTiming {
 	}
 
 	// schedule the time when enough candidates are ready.
-	fn enough_candidates_at(&mut self, duration: Duration){
+	fn enough_candidates_at(&mut self, duration: Duration) {
 		self.enough_candidates = self.timer.sleep(duration);
 	}
 }
@@ -778,7 +783,7 @@ impl<C, R, P> CreateProposal<C, R, P>
 		R: TableRouter,
 		P: Collators,
 {
-	fn propose(&self) -> Result<SubstrateBlock, Error> {
+	fn propose_with(&self, _candidates: Vec<CandidateReceipt>) -> Result<SubstrateBlock, Error> {
 		debug!(target: "bft", "proposing block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
 		// TODO: handle case when current timestamp behind that in state.
@@ -846,12 +851,28 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 			Err(_) => {}, // TODO: handle this failure to collate.
 		}
 
-		// 2. check readiness timer
-		if self.timing.attempt_propose()? {
+		// 2. try to propose if our interval or previous timer has gone off.
+		let proposal = if self.timing.attempt_propose()? {
+			let included = self.table.includable_count();
+			match self.dynamic_inclusion.acceptable_in(Instant::now(), included) {
+				Some(sleep_for) => {
+					self.timing.enough_candidates_at(sleep_for);
+					None
+				}
+				None => {
+					self.table.with_proposal(|proposed_set| {
+							Some(proposed_set.into_iter().cloned().collect())
+					})
+				}
+			}
+		} else {
+			None
+		};
 
-		}
-
-		unimplemented!()
+		Ok(match proposal {
+			Some(p) => Async::Ready(self.propose_with(p)?),
+			None => Async::NotReady,
+		})
 	}
 }
 
