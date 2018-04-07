@@ -232,10 +232,6 @@ impl<C: Context> CandidateData<C> {
 	// if it has enough validity and availability votes
 	// and no authorities have called it bad.
 	fn can_be_included(&self, validity_threshold: usize, availability_threshold: usize) -> bool {
-		println!("can be included? v = {:?}, a = {:?}",
-			(validity_threshold, self.validity_votes.len()),
-			(availability_threshold, self.availability_votes.len()),
-		);
 		self.indicated_bad_by.is_empty()
 			&& self.validity_votes.len() >= validity_threshold
 			&& self.availability_votes.len() >= availability_threshold
