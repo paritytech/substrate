@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 hex-literal = "0.1.0"
-integer-sqrt = "0.1.0"
+integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
 serde = { version = "1.0", default_features = false }
 safe-mix = { path = "../../../safe-mix", default_features = false}
 substrate-keyring = { path = "../../keyring", optional = true }
