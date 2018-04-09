@@ -30,6 +30,11 @@ use parking_lot::Mutex;
 use futures::{future, prelude::*};
 
 use super::{GroupInfo, TableRouter};
+use self::includable::IncludabilitySender;
+
+mod includable;
+
+pub use self::includable::Includable;
 
 struct TableContext {
 	parent_hash: Hash,
@@ -85,6 +90,7 @@ struct SharedTableInner {
 	proposed_digest: Option<Hash>,
 	checked_validity: HashSet<Hash>,
 	checked_availability: HashSet<Hash>,
+	trackers: Vec<IncludabilitySender>,
 }
 
 impl SharedTableInner {
@@ -109,6 +115,8 @@ impl SharedTableInner {
 			Some(summary) => summary,
 			None => return producer,
 		};
+
+		self.update_trackers(&summary.candidate, context);
 
 		producer.candidate_digest = Some(summary.candidate);
 
@@ -149,6 +157,15 @@ impl SharedTableInner {
 		}
 
 		producer
+	}
+
+	fn update_trackers(&mut self, candidate: &Hash, context: &TableContext) {
+		let includable = self.table.candidate_includable(candidate, context);
+		for i in (0..self.trackers.len()).rev() {
+			if self.trackers[i].update_candidate(candidate.clone(), includable) {
+				self.trackers.swap_remove(i);
+			}
+		}
 	}
 }
 
@@ -265,6 +282,7 @@ impl SharedTable {
 				proposed_digest: None,
 				checked_validity: HashSet::new(),
 				checked_availability: HashSet::new(),
+				trackers: Vec::new(),
 			}))
 		}
 	}
@@ -363,5 +381,23 @@ impl SharedTable {
 	/// Get the local proposed block's hash.
 	pub fn proposed_hash(&self) -> Option<Hash> {
 		self.inner.lock().proposed_digest.clone()
+	}
+
+	/// Track includability  of a given set of candidate hashes.
+	pub fn track_includability<I>(&self, iterable: I) -> Includable
+		where I: IntoIterator<Item=Hash>
+	{
+		let mut inner = self.inner.lock();
+
+		let (tx, rx) = includable::track(iterable.into_iter().map(|x| {
+			let includable = inner.table.candidate_includable(&x, &*self.context);
+			(x, includable)
+		}));
+
+		if !tx.is_complete() {
+			inner.trackers.push(tx);
+		}
+
+		rx
 	}
 }
