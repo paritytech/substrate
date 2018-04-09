@@ -258,7 +258,7 @@ pub struct ClientBlockBuilder<S> {
 impl<S: state_machine::Backend> ClientBlockBuilder<S>
 	where S::Error: Into<client::error::Error>
 {
-	// executes a extrinsic, inherent or otherwise, without appending to the list
+	// initialises the block.
 	fn initialise_block(&mut self) -> Result<()> {
 		let mut ext = state_machine::Ext {
 			overlay: &mut self.changes,
