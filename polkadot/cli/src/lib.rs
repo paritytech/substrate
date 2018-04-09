@@ -118,7 +118,7 @@ pub fn run<I, T>(args: I, exit: mpsc::Receiver<()>) -> error::Result<()> where
 		let rpc_port: u16 = port.parse().expect("Invalid RPC port value specified.");
 		address.set_port(rpc_port);
 	}
-	let handler = rpc::rpc_handler(service.client());
+	let handler = rpc::rpc_handler(service.client(), service.transaction_pool());
 	let _server = rpc::start_http(&address, handler)?;
 
 	exit.recv().ok();
@@ -150,6 +150,7 @@ fn default_base_path() -> PathBuf {
 		&app_info,
 	).expect("app directories exist on all supported platforms; qed")
 }
+
 fn init_logger(pattern: &str) {
 	let mut builder = env_logger::LogBuilder::new();
 	// Disable info logging by default for some modules:
