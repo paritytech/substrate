@@ -47,6 +47,21 @@ impl Slicable for Transaction {
 	}
 }
 
+/// Simple generic extrinsic type.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct Extrinsic(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+impl Slicable for Extrinsic {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<u8>::decode(input).map(Extrinsic)
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
+	}
+}
+
 /// Execution log (event)
 #[derive(PartialEq, Eq, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]

@@ -18,6 +18,7 @@
 
 #![warn(missing_docs)]
 
+extern crate parking_lot;
 extern crate jsonrpc_core as rpc;
 extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
@@ -38,3 +39,4 @@ extern crate substrate_runtime_support as runtime_support;
 
 pub mod chain;
 pub mod state;
+pub mod author;
