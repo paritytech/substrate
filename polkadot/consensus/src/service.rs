@@ -290,8 +290,8 @@ impl Service {
 				transaction_pool: transaction_pool.clone(),
 				network: Network(network.clone()),
 				collators: NoCollators,
-				timer: unimplemented!(),
 				parachain_empty_duration: Duration::from_millis(10_000), // TODO
+				timer: unimplemented!(),
 			};
 			let messages = SharedMessageCollection::new();
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
