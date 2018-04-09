@@ -324,19 +324,15 @@ impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 	}
 
 	fn bake(mut self) -> Block {
-		use substrate_runtime_executive::extrinsics_root;
-
 		let mut ext = state_machine::Ext {
 			overlay: &mut self.changes,
 			backend: &self.state,
 		};
 
-		let mut final_header = ::substrate_executor::with_native_environment(
+		let final_header = ::substrate_executor::with_native_environment(
 			&mut ext,
 			move || runtime::Executive::finalise_block()
 		).expect("all inherent extrinsics pushed; all other extrinsics executed correctly; qed");
-
-		final_header.extrinsics_root = extrinsics_root::<runtime_io::BlakeTwo256, _>(&self.extrinsics);
 		Block {
 			header: final_header,
 			extrinsics: self.extrinsics,
