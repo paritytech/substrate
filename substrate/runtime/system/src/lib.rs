@@ -49,7 +49,11 @@ use runtime_io::{twox_128, TestExternalities};
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hashing, E: codec::Slicable>(extrinsics: &[E]) -> H::Output {
-	let xts = extrinsics.iter().map(codec::Slicable::encode).collect::<Vec<_>>();
+	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Slicable::encode).collect())
+}
+
+/// Compute the extrinsics root of a list of extrinsics.
+pub fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
 	let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	H::enumerated_trie_root(&xts)
 }
@@ -187,8 +191,8 @@ impl<T: Trait> Module<T> {
 
 	/// Remove all extrinsics data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..Self::extrinsic_index()).map(<ExtrinsicData<T>>::take).collect::<Vec<_>>();
-		let xts_root = extrinsics_root::<T::Hashing, _>(&extrinsics);
+		let extrinsics = (0..Self::extrinsic_index()).map(<ExtrinsicData<T>>::take).collect();
+		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
 }

@@ -31,6 +31,9 @@ extern crate substrate_state_machine as state_machine;
 #[macro_use]
 extern crate error_chain;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
@@ -174,7 +177,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
 		// bail if the code is not the same as the natively linked.
 		if self.code_at(&id)? != LocalDispatch::native_equivalent() {
-			bail!(ErrorKind::UnknownRuntime);
+			warn!("This node is out of date. Block authoring may not work correctly.")
 		}
 
 		Ok(CheckedId(id))
