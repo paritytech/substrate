@@ -28,8 +28,8 @@ use client::BlockchainEvents;
 const TIMER_INTERVAL_MS: u64 = 5000;
 
 /// Spawn informant on the event loop
-pub fn start(service: &Service, core: &reactor::Core) {
-	let interval = reactor::Interval::new_at(Instant::now(), Duration::from_millis(TIMER_INTERVAL_MS), &core.handle())
+pub fn start(service: &Service, handle: reactor::Handle) {
+	let interval = reactor::Interval::new_at(Instant::now(), Duration::from_millis(TIMER_INTERVAL_MS), &handle)
 		.expect("Error creating informant timer");
 
 	let network = service.network();
@@ -58,8 +58,8 @@ pub fn start(service: &Service, core: &reactor::Core) {
 		Ok(())
 	});
 
-	core.handle().spawn(display_notifications);
-	core.handle().spawn(display_block_import);
+	handle.spawn(display_notifications);
+	handle.spawn(display_block_import);
 }
 
 

@@ -132,7 +132,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let handler = rpc::rpc_handler(service.client(), service.transaction_pool());
 	let _server = rpc::start_http(&address, handler)?;
 
-	informant::start(&service, &core);
+	informant::start(&service, core.handle());
 
 	let (exit_send, exit) = mpsc::channel(1);
 	ctrlc::CtrlC::set_handler(move || {
