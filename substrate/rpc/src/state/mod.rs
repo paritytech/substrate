@@ -33,12 +33,20 @@ build_rpc_trait! {
 	/// Polkadot state API
 	pub trait StateApi {
 		/// Returns a storage entry.
+		#[rpc(name = "state_getStorageAt")]
+		fn storage_at(&self, StorageKey, block::HeaderHash) -> Result<StorageData>;
+
+		/// Call a contract.
+		#[rpc(name = "state_callAt")]
+		fn call_at(&self, String, Vec<u8>, block::HeaderHash) -> Result<Vec<u8>>;
+
+		/// Returns a storage entry.
 		#[rpc(name = "state_getStorage")]
-		fn storage(&self, StorageKey, block::HeaderHash) -> Result<StorageData>;
+		fn storage(&self, StorageKey) -> Result<StorageData>;
 
 		/// Call a contract.
 		#[rpc(name = "state_call")]
-		fn call(&self, String, Vec<u8>, block::HeaderHash) -> Result<Vec<u8>>;
+		fn call(&self, String, Vec<u8>) -> Result<Vec<u8>>;
 	}
 }
 
@@ -47,11 +55,22 @@ impl<B, E> StateApi for Arc<Client<B, E>> where
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
-	fn storage(&self, key: StorageKey, block: block::HeaderHash) -> Result<StorageData> {
+	fn storage_at(&self, key: StorageKey, block: block::HeaderHash) -> Result<StorageData> {
 		Ok(self.as_ref().storage(&block::Id::Hash(block), &key)?)
 	}
 
-	fn call(&self, method: String, data: Vec<u8>, block: block::HeaderHash) -> Result<Vec<u8>> {
+	fn call_at(&self, method: String, data: Vec<u8>, block: block::HeaderHash) -> Result<Vec<u8>> {
 		Ok(self.as_ref().call(&block::Id::Hash(block), &method, &data)?.return_data)
+	}
+
+	fn storage(&self, key: StorageKey) -> Result<StorageData> {
+		let at = block::Id::Hash(self.as_ref().info()?.chain.best_hash);
+		use primitives::hexdisplay::HexDisplay;
+		info!("Querying storage at {:?} for key {}", at, HexDisplay::from(&key.0));
+		Ok(self.as_ref().storage(&at, &key)?)
+	}
+
+	fn call(&self, method: String, data: Vec<u8>) -> Result<Vec<u8>> {
+		Ok(self.as_ref().call(&block::Id::Hash(self.as_ref().info()?.chain.best_hash), &method, &data)?.return_data)
 	}
 }
