@@ -133,11 +133,16 @@ pub trait Proposer {
 
 	/// Create a proposal.
 	fn propose(&self) -> Self::Create;
+
 	/// Evaluate proposal. True means valid.
-	// TODO: change this to a future.
 	fn evaluate(&self, proposal: &Block) -> Self::Evaluate;
+
 	/// Import witnessed misbehavior.
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, Misbehavior)>);
+
+	/// Determine the proposer for a given round. This should be a deterministic function
+	/// with consistent results across all authorities.
+	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId;
 }
 
 /// Block import trait.
@@ -649,6 +654,10 @@ mod tests {
 		}
 
 		fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior)>) {}
+
+		fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId {
+			authorities[round_number % authorities.len()].clone()
+		}
 	}
 
 	fn make_service(client: FakeClient)

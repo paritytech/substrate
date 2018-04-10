@@ -125,7 +125,7 @@ pub trait PolkadotApi {
 	fn validators(&self, at: &Self::CheckedBlockId) -> Result<Vec<AccountId>>;
 
 	/// Get the value of the randomness beacon at a given block.
-	fn randomness(&self, at: &Self::CheckedBlockId) -> Result<Hash>;
+	fn random_seed(&self, at: &Self::CheckedBlockId) -> Result<Hash>;
 
 	/// Get the authority duty roster at a block.
 	fn duty_roster(&self, at: &Self::CheckedBlockId) -> Result<DutyRoster>;
@@ -205,7 +205,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 		with_runtime!(self, at, ::runtime::Session::validators)
 	}
 
-	fn randomness(&self, at: &CheckedId) -> Result<Hash> {
+	fn random_seed(&self, at: &CheckedId) -> Result<Hash> {
 		with_runtime!(self, at, ::runtime::System::random_seed)
 	}
 
