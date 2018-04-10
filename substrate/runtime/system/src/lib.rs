@@ -122,8 +122,8 @@ impl<T: Trait> Module<T> {
 		Self::record_block_hash(header);
 	}
 
-	/// Calculate the current block's random seed.
-	pub fn calculate_random() -> T::Hash {
+	// Calculate the current block's random seed.
+	fn calculate_random() -> T::Hash {
 		assert!(Self::block_number() > Zero::zero(), "Block number may never be zero");
 		(0..81)
 			.scan(
@@ -157,13 +157,6 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn set_parent_hash(n: T::Hash) {
 		<ParentHash<T>>::put(n);
-	}
-
-	/// Set the random seed to something in particular. Can be used as an alternative to
-	/// `initialise` for tests that don't need to bother with the other environment entries.
-	#[cfg(any(feature = "std", test))]
-	pub fn set_random_seed(n: T::Hash) {
-		<RandomSeed<T>>::put(n);
 	}
 
 	/// Increment a particular account's nonce by 1.

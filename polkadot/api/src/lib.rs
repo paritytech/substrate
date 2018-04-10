@@ -41,6 +41,7 @@ use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine::OverlayedChanges;
 use primitives::{AccountId, BlockId, Index, SessionKey, Timestamp};
 use primitives::parachain::DutyRoster;
+use primitives::Hash;
 use runtime::{Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall};
 
 error_chain! {
@@ -123,6 +124,9 @@ pub trait PolkadotApi {
 	/// Get validators at a given block.
 	fn validators(&self, at: &Self::CheckedBlockId) -> Result<Vec<AccountId>>;
 
+	/// Get the value of the randomness beacon at a given block.
+	fn randomness(&self, at: &Self::CheckedBlockId) -> Result<Hash>;
+
 	/// Get the authority duty roster at a block.
 	fn duty_roster(&self, at: &Self::CheckedBlockId) -> Result<DutyRoster>;
 
@@ -150,17 +154,30 @@ impl CheckedBlockId for CheckedId {
 	}
 }
 
-// set up the necessary scaffolding to execute the runtime.
+// set up the necessary scaffolding to execute a set of calls to the runtime.
+// this creates a new block on top of the given ID and initialises it.
 macro_rules! with_runtime {
 	($client: ident, $at: expr, $exec: expr) => {{
-		$client.state_at($at.block_id()).map_err(Error::from).and_then(|state| {
+		let parent = $at.block_id();
+		let header = Header {
+			parent_hash: $client.block_hash_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))?,
+			number: $client.block_number_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))? + 1,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: Default::default(),
+		};
+
+		$client.state_at(parent).map_err(Error::from).and_then(|state| {
 			let mut changes = Default::default();
 			let mut ext = state_machine::Ext {
 				overlay: &mut changes,
 				backend: &state,
 			};
 
-			::substrate_executor::with_native_environment(&mut ext, $exec).map_err(Into::into)
+			::substrate_executor::with_native_environment(&mut ext, || {
+				::runtime::Executive::initialise_block(&header);
+				($exec)()
+			}).map_err(Into::into)
 		})
 	}}
 }
@@ -188,11 +205,14 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 		with_runtime!(self, at, ::runtime::Session::validators)
 	}
 
+	fn randomness(&self, at: &CheckedId) -> Result<Hash> {
+		with_runtime!(self, at, ::runtime::System::random_seed)
+	}
+
 	fn duty_roster(&self, at: &CheckedId) -> Result<DutyRoster> {
 		with_runtime!(self, at, || {
-			let
-			let randomness = ::runtime::System::calculate_random();
-			::runtime::Parachains::calculate_duty_roster(randomness)
+			let random_seed = ::runtime::System::random_seed();
+			::runtime::Parachains::calculate_duty_roster(random_seed)
 		})
 	}
 

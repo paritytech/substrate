@@ -43,6 +43,7 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
 	/// Calculate the current block's with given random seed.
+	/// In normal operation, this will be called with `System::random_seed()`.
 	pub fn calculate_duty_roster(random_seed: T::Hash) -> DutyRoster {
 		let parachain_count = Self::count();
 		let validator_count = <session::Module<T>>::validator_count();
