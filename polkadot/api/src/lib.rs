@@ -153,17 +153,30 @@ impl CheckedBlockId for CheckedId {
 	}
 }
 
-// set up the necessary scaffolding to execute the runtime.
+// set up the necessary scaffolding to execute a set of calls to the runtime.
+// this creates a new block on top of the given ID and initialises it.
 macro_rules! with_runtime {
 	($client: ident, $at: expr, $exec: expr) => {{
-		$client.state_at($at.block_id()).map_err(Error::from).and_then(|state| {
+		let parent = $at.block_id();
+		let header = Header {
+			parent_hash: $client.block_hash_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))?,
+			number: $client.block_number_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))? + 1,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: Default::default(),
+		};
+
+		$client.state_at(parent).map_err(Error::from).and_then(|state| {
 			let mut changes = Default::default();
 			let mut ext = state_machine::Ext {
 				overlay: &mut changes,
 				backend: &state,
 			};
 
-			::substrate_executor::with_native_environment(&mut ext, $exec).map_err(Into::into)
+			::substrate_executor::with_native_environment(&mut ext, || {
+				::runtime::Executive::initialise_block(&header);
+				($exec)()
+			}).map_err(Into::into)
 		})
 	}}
 }
@@ -204,7 +217,8 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 
 		with_runtime!(self, at, || {
 			::runtime::System::initialise(&number, &parent_hash, &Default::default());
-			::runtime::Parachains::calculate_duty_roster()
+			let random_seed = ::runtime::System::random_seed();
+			::runtime::Parachains::calculate_duty_roster(random_seed)
 		})
 	}
 

@@ -40,8 +40,9 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Calculate the current block's duty roster.
-	pub fn calculate_duty_roster() -> DutyRoster {
+	/// Calculate the current block's with given random seed.
+	/// In normal operation, this will be called with `System::random_seed()`.
+	pub fn calculate_duty_roster(random_seed: T::Hash) -> DutyRoster {
 		let parachain_count = Self::count();
 		let validator_count = <session::Module<T>>::validator_count();
 		let validators_per_parachain = if parachain_count != 0 { (validator_count - 1) / parachain_count } else { 0 };
@@ -53,8 +54,7 @@ impl<T: Trait> Module<T> {
 		}).collect::<Vec<_>>();
 		let mut roles_gua = roles_val.clone();
 
-		let h = <system::Module<T>>::random_seed();
-		let mut seed = h.to_vec().and(b"validator_role_pairs").blake2_256();
+		let mut seed = random_seed.to_vec().and(b"validator_role_pairs").blake2_256();
 
 		// shuffle
 		for i in 0..(validator_count - 1) {
@@ -191,17 +191,14 @@ mod tests {
 				assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
 			};
 
-			System::set_random_seed([0u8; 32].into());
-			let duty_roster_0 = Parachains::calculate_duty_roster();
+			let duty_roster_0 = Parachains::calculate_duty_roster([0u8; 32].into());
 			check_roster(&duty_roster_0);
 
-			System::set_random_seed([1u8; 32].into());
-			let duty_roster_1 = Parachains::calculate_duty_roster();
+			let duty_roster_1 = Parachains::calculate_duty_roster([1u8; 32].into());
 			check_roster(&duty_roster_1);
 			assert!(duty_roster_0 != duty_roster_1);
 
-			System::set_random_seed([2u8; 32].into());
-			let duty_roster_2 = Parachains::calculate_duty_roster();
+			let duty_roster_2 = Parachains::calculate_duty_roster([2u8; 32].into());
 			check_roster(&duty_roster_2);
 			assert!(duty_roster_0 != duty_roster_2);
 			assert!(duty_roster_1 != duty_roster_2);
