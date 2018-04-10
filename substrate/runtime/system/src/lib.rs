@@ -123,7 +123,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Calculate the current block's random seed.
-	fn calculate_random() -> T::Hash {
+	pub fn calculate_random() -> T::Hash {
 		assert!(Self::block_number() > Zero::zero(), "Block number may never be zero");
 		(0..81)
 			.scan(

@@ -189,7 +189,11 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	}
 
 	fn duty_roster(&self, at: &CheckedId) -> Result<DutyRoster> {
-		with_runtime!(self, at, ::runtime::Parachains::calculate_duty_roster)
+		with_runtime!(self, at, || {
+			let
+			let randomness = ::runtime::System::calculate_random();
+			::runtime::Parachains::calculate_duty_roster(randomness)
+		})
 	}
 
 	fn timestamp(&self, at: &CheckedId) -> Result<Timestamp> {

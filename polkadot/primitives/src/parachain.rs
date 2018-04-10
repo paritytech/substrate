@@ -86,8 +86,6 @@ impl Slicable for Chain {
 	}
 }
 
-
-
 /// The duty roster specifying what jobs each validator must do.
 #[derive(Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Default, Debug))]
