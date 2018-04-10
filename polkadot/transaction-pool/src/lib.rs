@@ -28,6 +28,9 @@ extern crate transaction_pool;
 #[macro_use]
 extern crate error_chain;
 
+#[macro_use]
+extern crate log;
+
 use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -296,12 +299,10 @@ impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for R
 		let next_index = self.known_indices.entry(sender)
 			.or_insert_with(|| api_handle.index(at_block, sender).ok().unwrap_or_else(u64::max_value));
 
-		*next_index += 1;
-
 		match xt.inner.index.cmp(&next_index) {
 			Ordering::Greater => Readiness::Future,
 			Ordering::Equal => Readiness::Ready,
-			Ordering::Less => Readiness::Stalled,
+			Ordering::Less => Readiness::Stalled,	// TODO: this is not "stalled" but rather stale and can be discarded.
 		}
 	}
 }
@@ -330,12 +331,14 @@ impl TransactionPool {
 
 		let verified = VerifiedTransaction::create(xt, insertion_index)?;
 
+		info!("Extrinsic verified {:?}. Importing...", verified);
+
 		// TODO: just use a foreign link when the error type is made public.
 		let hash = verified.hash.clone();
 		self.inner.import(verified)
 			.map_err(|e|
 				match e {
-					// TODO: make error types public in transaction_pool. For now just treat all errors as AlradyImported
+					// TODO: make error types public in transaction_pool. For now just treat all errors as AlreadyImported
 					_ => ErrorKind::AlreadyImported(hash),
 					// transaction_pool::error::AlreadyImported(h) => ErrorKind::AlreadyImported(h),
 					// e => ErrorKind::Import(Box::new(e)),
@@ -376,11 +379,14 @@ impl TransactionPool {
 
 impl substrate_rpc::author::AsyncAuthorApi for TransactionPool {
 	fn submit_extrinsic(&mut self, xt: Extrinsic) -> substrate_rpc::author::error::Result<()> {
-		self.import(xt
-			.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
-			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?)
-		.map(|_| ())
-		.map_err(|_| substrate_rpc::author::error::ErrorKind::PoolError.into())
+		use substrate_primitives::hexdisplay::HexDisplay;
+		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
+		let xt = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
+			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?;
+		info!("Correctly formatted: {:?}", xt);
+		self.import(xt)
+			.map(|_| ())
+			.map_err(|_| substrate_rpc::author::error::ErrorKind::PoolError.into())
 	}
 }
 
