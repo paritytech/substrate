@@ -575,7 +575,7 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
 			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
 
-		assert!(evaluate_proposal(&substrate_block, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id).is_ok());
+		assert!(evaluate_proposal(&substrate_block, &*self.client, current_timestamp(), &self.parent_hash, self.parent_number, &self.parent_id).is_ok());
 
 		Ok(substrate_block)
 	}
@@ -583,7 +583,7 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
-		match evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id) {
+		match evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, self.parent_number, &self.parent_id) {
 			Ok(x) => Ok(x),
 			Err(e) => match *e.kind() {
 				ErrorKind::PolkadotApi(polkadot_api::ErrorKind::Executor(_)) => Ok(false),
@@ -656,6 +656,7 @@ fn evaluate_proposal<C: PolkadotApi>(
 	client: &C,
 	now: Timestamp,
 	parent_hash: &HeaderHash,
+	parent_number: BlockNumber,
 	parent_id: &C::CheckedBlockId,
 ) -> Result<bool, Error> {
 	const MAX_TIMESTAMP_DRIFT: Timestamp = 4;
@@ -677,9 +678,9 @@ fn evaluate_proposal<C: PolkadotApi>(
 		bail!(ErrorKind::WrongParentHash(*parent_hash, proposal.header.parent_hash));
 	}
 
-	// no need to check number because
-	// a) we assume the parent is valid.
-	// b) the runtime checks that `proposal.parent_hash` == `block_hash(proposal.number - 1)`
+	if proposal.header.number != parent_number + 1 {
+		bail!(ErrorKind::WrongNumber(parent_number + 1, proposal.header.number))
+	}
 
 	let block_timestamp = proposal.timestamp();
 
