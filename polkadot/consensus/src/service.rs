@@ -284,15 +284,21 @@ impl Service {
 	{
 		let thread = thread::spawn(move || {
 			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
+			let timer = ::tokio_timer::wheel()
+				.thread_name("bft service timer")
+				.build();
+
 			let key = Arc::new(key);
+
 			let factory = ProposerFactory {
 				client: client.clone(),
 				transaction_pool: transaction_pool.clone(),
 				network: Network(network.clone()),
 				collators: NoCollators,
 				parachain_empty_duration: Duration::from_millis(4_000), // TODO
-				timer: unimplemented!(),
+				timer: timer,
 			};
+
 			let messages = SharedMessageCollection::new();
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
 

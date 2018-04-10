@@ -265,6 +265,7 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 			random_seed,
 			local_key: sign_with,
 			client: self.client.clone(),
+			timer: self.timer.clone(),
 			transaction_pool: self.transaction_pool.clone(),
 			collators: self.collators.clone(),
 			local_duty,
@@ -290,6 +291,7 @@ pub struct Proposer<C: PolkadotApi, R, P> {
 	transaction_pool: Arc<Mutex<TransactionPool>>,
 	local_duty: LocalDuty,
 	collators: P,
+	timer: Timer,
 	dynamic_inclusion: DynamicInclusion,
 	table: Arc<SharedTable>,
 	router: R,
@@ -306,6 +308,13 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 	type Evaluate = Result<bool, Error>;
 
 	fn propose(&self) -> CreateProposal<C, R, P> {
+		const ATTEMPT_PROPOSE_EVERY: Duration = Duration::from_millis(100);
+
+		let enough_candidates = self.dynamic_inclusion.acceptable_in(
+			Instant::now(),
+			self.table.includable_count(),
+		).unwrap_or_default();
+
 		CreateProposal {
 			parent_hash: self.parent_hash.clone(),
 			parent_number: self.parent_number.clone(),
@@ -321,7 +330,11 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			dynamic_inclusion: self.dynamic_inclusion.clone(),
 			table: self.table.clone(),
 			router: self.router.clone(),
-			timing: unimplemented!(),
+			timing: ProposalTiming {
+				timer: self.timer.clone(),
+				attempt_propose: self.timer.interval(ATTEMPT_PROPOSE_EVERY),
+				enough_candidates: self.timer.sleep(enough_candidates),
+			}
 		}
 	}
 
