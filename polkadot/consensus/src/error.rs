@@ -16,7 +16,6 @@
 
 //! Errors that can occur during the consensus process.
 
-use primitives::block::HeaderHash;
 use polkadot_primitives::AccountId;
 
 error_chain! {
@@ -34,28 +33,9 @@ error_chain! {
 			description("Duty Roster had invalid length"),
 			display("Invalid duty roster length: expected {}, got {}", expected, got),
 		}
-		ProposalNotForPolkadot {
-			description("Proposal provided not a Polkadot block."),
-			display("Proposal provided not a Polkadot block."),
-		}
-		TimestampInFuture {
-			description("Proposal had timestamp too far in the future."),
-			display("Proposal had timestamp too far in the future."),
-		}
 		NotValidator(id: AccountId) {
 			description("Local account ID not a validator at this block."),
 			display("Local account ID ({:?}) not a validator at this block.", id),
-		}
-		WrongParentHash(expected: HeaderHash, got: HeaderHash) {
-			description("Proposal had wrong parent hash."),
-			display("Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
-		}
-		ProposalTooLarge(size: usize) {
-			description("Proposal exceeded the maximum size."),
-			display(
-				"Proposal exceeded the maximum size of {} by {} bytes.",
-				::MAX_TRANSACTIONS_SIZE, ::MAX_TRANSACTIONS_SIZE.saturating_sub(*size)
-			),
 		}
 		Executor(e: ::futures::future::ExecuteErrorKind) {
 			description("Unable to dispatch agreement future"),

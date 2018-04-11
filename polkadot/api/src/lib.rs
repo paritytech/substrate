@@ -136,9 +136,9 @@ pub trait PolkadotApi {
 	/// Get the index of an account at a block.
 	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index>;
 
-
-	/// Evaluate a block and see if it gives an error.
-	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<()>;
+	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
+	/// and an error if we can't evaluate for some reason.
+	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<bool>;
 
 	/// Create a block builder on top of the parent block.
 	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: u64, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
@@ -220,8 +220,17 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 		with_runtime!(self, at, ::runtime::Timestamp::now)
 	}
 
-	fn evaluate_block(&self, at: &CheckedId, block: Block) -> Result<()> {
-		with_runtime!(self, at, || ::runtime::Executive::execute_block(block))
+	fn evaluate_block(&self, at: &CheckedId, block: Block) -> Result<bool> {
+		use substrate_executor::error::ErrorKind as ExecErrorKind;
+
+		let res = with_runtime!(self, at, || ::runtime::Executive::execute_block(block));
+		match res {
+			Ok(()) => Ok(true),
+			Err(err) => match err.kind() {
+				&ErrorKind::Executor(ExecErrorKind::Runtime) => Ok(false),
+				_ => Err(err)
+			}
+		}
 	}
 
 	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index> {

@@ -27,7 +27,6 @@ use std::sync::Arc;
 use bft::{self, BftService};
 use client::{BlockchainEvents, ChainHead};
 use ed25519;
-use error::Error;
 use futures::prelude::*;
 use futures::{future, Canceled};
 use parking_lot::Mutex;

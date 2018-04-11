@@ -113,6 +113,6 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 }
 
 /// Check whether a given collation is valid.
-pub fn verify_collation<P: PolkadotApi>(_client: &P, _relay_parent: Hash, collation: &Collation) -> bool {
+pub fn verify_collation<P: PolkadotApi>(_client: &P, _relay_parent: Hash, _collation: &Collation) -> bool {
 	true // TODO: actually check this.
 }

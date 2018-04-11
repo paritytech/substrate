@@ -67,10 +67,9 @@ use runtime_support::Hashable;
 use polkadot_api::{PolkadotApi, BlockBuilder};
 use polkadot_primitives::{Hash, Timestamp};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
-use polkadot_runtime::Block as PolkadotGenericBlock;
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
-use transaction_pool::{Ready, TransactionPool, PolkadotBlock};
+use transaction_pool::{Ready, TransactionPool};
 use tokio_timer::{Timer, Interval, Sleep, TimerError};
 
 use futures::prelude::*;
@@ -84,6 +83,7 @@ pub use service::Service;
 
 mod collation;
 mod dynamic_inclusion;
+mod evaluation;
 mod error;
 mod service;
 mod shared_table;
@@ -341,15 +341,20 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
-		match evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id) {
-			Ok(x) => Ok(x),
-			Err(e) => match *e.kind() {
-				ErrorKind::PolkadotApi(polkadot_api::ErrorKind::Executor(_)) => Ok(false),
-				ErrorKind::ProposalNotForPolkadot => Ok(false),
-				ErrorKind::TimestampInFuture => Ok(false),
-				ErrorKind::WrongParentHash(_, _) => Ok(false),
-				ErrorKind::ProposalTooLarge(_) => Ok(false),
-				_ => Err(e),
+
+		let maybe_evaluated = evaluation::evaluate_initial(
+			proposal,
+			current_timestamp(),
+			&self.parent_hash,
+			self.parent_number,
+			999, // TODO: n_parachains.
+		);
+
+		match maybe_evaluated {
+			Ok(proposal) => self.client.evaluate_block(&self.parent_id, proposal.into()).map_err(Into::into),
+			Err(e) => {
+				debug!(target: "bft", "Invalid proposal: {:?}", e);
+				return Ok(false)
 			}
 		}
 	}
@@ -474,13 +479,15 @@ impl<C, R, P> CreateProposal<C, R, P>
 		R: TableRouter,
 		P: Collators,
 {
-	fn propose_with(&self, _candidates: Vec<CandidateReceipt>) -> Result<SubstrateBlock, Error> {
+	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<SubstrateBlock, Error> {
 		debug!(target: "bft", "proposing block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
 		// TODO: handle case when current timestamp behind that in state.
+		let timestamp = current_timestamp();
 		let mut block_builder = self.client.build_block(
 			&self.parent_id,
-			current_timestamp()
+			timestamp,
+			candidates,
 		)?;
 
 		let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
@@ -519,7 +526,13 @@ impl<C, R, P> CreateProposal<C, R, P>
 		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
 			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
 
-		assert!(evaluate_proposal(&substrate_block, &*self.client, current_timestamp(), &self.parent_hash, &self.parent_id).is_ok());
+		assert!(evaluation::evaluate_initial(
+			&substrate_block,
+			timestamp,
+			&self.parent_hash,
+			self.parent_number,
+			999, // TODO: n_parachains
+		).is_ok());
 
 		Ok(substrate_block)
 	}
@@ -569,46 +582,4 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 			None => Async::NotReady,
 		})
 	}
-}
-
-fn evaluate_proposal<C: PolkadotApi>(
-	proposal: &SubstrateBlock,
-	client: &C,
-	now: Timestamp,
-	parent_hash: &HeaderHash,
-	parent_id: &C::CheckedBlockId,
-) -> Result<bool, Error> {
-	const MAX_TIMESTAMP_DRIFT: Timestamp = 4;
-
-	let encoded = Slicable::encode(proposal);
-	let proposal = PolkadotGenericBlock::decode(&mut &encoded[..])
-		.and_then(|b| PolkadotBlock::from(b).ok())
-		.ok_or_else(|| ErrorKind::ProposalNotForPolkadot)?;
-
-	let transactions_size = proposal.extrinsics.iter().fold(0, |a, tx| {
-		a + Slicable::encode(tx).len()
-	});
-
-	if transactions_size > MAX_TRANSACTIONS_SIZE {
-		bail!(ErrorKind::ProposalTooLarge(transactions_size))
-	}
-
-	if proposal.header.parent_hash != *parent_hash {
-		bail!(ErrorKind::WrongParentHash(*parent_hash, proposal.header.parent_hash));
-	}
-
-	// no need to check number because
-	// a) we assume the parent is valid.
-	// b) the runtime checks that `proposal.parent_hash` == `block_hash(proposal.number - 1)`
-
-	let block_timestamp = proposal.timestamp();
-
-	// TODO: just defer using `tokio_timer` to delay prepare vote.
-	if block_timestamp > now + MAX_TIMESTAMP_DRIFT {
-		bail!(ErrorKind::TimestampInFuture)
-	}
-
-	// execute the block.
-	client.evaluate_block(parent_id, proposal.into())?;
-	Ok(true)
 }
