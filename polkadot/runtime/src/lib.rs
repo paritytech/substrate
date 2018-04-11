@@ -51,7 +51,14 @@ use runtime_io::BlakeTwo256;
 use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Identity, HasPublicAux};
-#[cfg(feature = "std")] pub use runtime_primitives::BuildExternalities;
+
+#[cfg(feature = "std")]
+pub use runtime_primitives::BuildExternalities;
+
+pub use consensus::Call as ConsensusCall;
+pub use timestamp::Call as TimestampCall;
+pub use parachains::Call as ParachainsCall;
+
 
 /// The position of the timestamp set extrinsic.
 pub const TIMESTAMP_SET_POSITION: u32 = 0;
@@ -83,7 +90,6 @@ impl consensus::Trait for Concrete {
 }
 /// Consensus module for this concrete runtime.
 pub type Consensus = consensus::Module<Concrete>;
-pub use consensus::Call as ConsensusCall;
 
 impl timestamp::Trait for Concrete {
 	const SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
@@ -91,7 +97,6 @@ impl timestamp::Trait for Concrete {
 }
 /// Timestamp module for this concrete runtime.
 pub type Timestamp = timestamp::Module<Concrete>;
-pub use timestamp::Call as TimestampCall;
 
 impl session::Trait for Concrete {
 	type ConvertAccountIdToSessionKey = Identity;

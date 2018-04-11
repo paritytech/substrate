@@ -137,7 +137,7 @@ impl<T: Trait> Module<T> {
 
 	fn set_heads(aux: &<T as Trait>::PublicAux, heads: Vec<CandidateReceipt>) {
 		assert!(aux.is_empty());
-		assert!(!<Self as Store>::DidUpdate::exists(), "Parachain heads must be updated only once in the block");
+		assert!(!<DidUpdate<T>>::exists(), "Parachain heads must be updated only once in the block");
 		assert!(
 			<system::Module<T>>::extrinsic_index() == T::SET_POSITION,
 			"Parachain heads update extrinsic must be at position {} in the block",
@@ -160,6 +160,8 @@ impl<T: Trait> Module<T> {
 			let id = head.parachain_index.clone();
 			<Heads<T>>::insert(id, head);
 		}
+
+		<DidUpdate<T>>::put(true);
 	}
 }
 

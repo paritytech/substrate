@@ -40,9 +40,9 @@ use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine::OverlayedChanges;
 use primitives::{AccountId, BlockId, Index, SessionKey, Timestamp};
-use primitives::parachain::DutyRoster;
+use primitives::parachain::{CandidateReceipt, DutyRoster};
 use primitives::Hash;
-use runtime::{Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall};
+use runtime::{Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall, ParachainsCall};
 
 error_chain! {
 	errors {
@@ -141,7 +141,7 @@ pub trait PolkadotApi {
 	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<()>;
 
 	/// Create a block builder on top of the parent block.
-	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: u64) -> Result<Self::BlockBuilder>;
+	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: u64, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
 }
 
 /// A checked block ID used for the substrate-client implementation of CheckedBlockId;
@@ -228,7 +228,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 		with_runtime!(self, at, || ::runtime::System::account_index(account))
 	}
 
-	fn build_block(&self, parent: &CheckedId, timestamp: Timestamp) -> Result<Self::BlockBuilder> {
+	fn build_block(&self, parent: &CheckedId, timestamp: Timestamp, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
 		let parent = parent.block_id();
 		let header = Header {
 			parent_hash: self.block_hash_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))?,
@@ -244,6 +244,14 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 					signed: Default::default(),
 					index: Default::default(),
 					function: Call::Timestamp(TimestampCall::set(timestamp)),
+				},
+				signature: Default::default(),
+			},
+			UncheckedExtrinsic {
+				extrinsic: Extrinsic {
+					signed: Default::default(),
+					index: Default::default(),
+					function: Call::Parachains(ParachainsCall::set_heads(parachains)),
 				},
 				signature: Default::default(),
 			}
@@ -428,7 +436,7 @@ mod tests {
 		let client = client();
 
 		let id = client.check_id(BlockId::Number(0)).unwrap();
-		let block_builder = client.build_block(&id, 1_000_000).unwrap();
+		let block_builder = client.build_block(&id, 1_000_000, Vec::new()).unwrap();
 		let block = block_builder.bake();
 
 		assert_eq!(block.header.number, 1);
