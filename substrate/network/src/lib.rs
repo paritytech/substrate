@@ -59,7 +59,8 @@ pub mod error;
 
 #[cfg(test)] mod test;
 
-pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream, TransactionPool, Params, ManageNetwork};
+pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream,
+	TransactionPool, Params, ManageNetwork, SyncProvider};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, NetworkConfiguration};

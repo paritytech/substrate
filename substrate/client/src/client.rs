@@ -119,6 +119,8 @@ pub enum BlockOrigin {
 /// Summary of an imported block
 #[derive(Clone, Debug)]
 pub struct BlockImportNotification {
+	/// Imported block header hash.
+	pub hash: block::HeaderHash,
 	/// Imported block origin.
 	pub origin: BlockOrigin,
 	/// Imported block header.
@@ -312,13 +314,15 @@ impl<B, E> Client<B, E> where
 		)?;
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
-		trace!("Imported {}, (#{}), best={}", block::HeaderHash::from(header.blake2_256()), header.number, is_new_best);
+		let hash: block::HeaderHash = header.blake2_256().into();
+		trace!("Imported {}, (#{}), best={}", hash, header.number, is_new_best);
 		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
 		transaction.set_storage(overlay.drain())?;
 		self.backend.commit_operation(transaction)?;
 
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
 			let notification = BlockImportNotification {
+				hash: hash,
 				origin: origin,
 				header: header,
 				is_new_best: is_new_best,
