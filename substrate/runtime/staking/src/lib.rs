@@ -39,7 +39,6 @@ extern crate substrate_runtime_system as system;
 use rstd::prelude::*;
 use rstd::cmp;
 use rstd::cell::RefCell;
-use rstd::marker::PhantomData;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
@@ -170,8 +169,8 @@ impl<T: Trait> Module<T> {
 	/// Create a smart-contract account.
 	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, DirectExt) {
-			Self::commit_state(commit);
+		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, DirectAccountDb) {
+			<AccountDb<T>>::merge(&DirectAccountDb, commit);
 		}
 	}
 
@@ -181,8 +180,8 @@ impl<T: Trait> Module<T> {
 	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, DirectExt) {
-			Self::commit_state(commit);
+		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, DirectAccountDb) {
+			<AccountDb<T>>::merge(&DirectAccountDb, commit);
 		}
 	}
 
@@ -378,25 +377,20 @@ impl<T: Trait> ChangeEntry<T> {
 
 type State<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
-trait Externalities<T: Trait> {
+trait AccountDb<T: Trait> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
+
+	fn set_storage(&self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>);
+	fn set_code(&self, account: &T::AccountId, code: Vec<u8>);
+	fn set_balance(&self, account: &T::AccountId, balance: T::Balance);
+
+	fn merge(&self, state: State<T>);
 }
 
-struct Ext<T: Trait, F1, F3, F5> where
-	F1 : Fn(&T::AccountId, &[u8]) -> Option<Vec<u8>>,
-	F3 : Fn(&T::AccountId) -> Vec<u8>,
-	F5 : Fn(&T::AccountId) -> T::Balance
-{
-	do_get_storage: F1,
-	do_get_code: F3,
-	do_get_balance: F5,
-	_unused: PhantomData<T>,
-}
-
-struct DirectExt;
-impl<T: Trait> Externalities<T> for DirectExt {
+struct DirectAccountDb;
+impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
 		<StorageOf<T>>::get(&(account.clone(), location.to_vec()))
 	}
@@ -406,26 +400,20 @@ impl<T: Trait> Externalities<T> for DirectExt {
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		<FreeBalance<T>>::get(account)
 	}
-}
-
-impl<T: Trait, F1, F3, F5> Externalities<T> for Ext<T, F1, F3, F5> where
-	F1 : Fn(&T::AccountId, &[u8]) -> Option<Vec<u8>>,
-	F3 : Fn(&T::AccountId) -> Vec<u8>,
-	F5 : Fn(&T::AccountId) -> T::Balance
-{
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		(self.do_get_storage)(account, location)
+	fn set_storage(&self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
+		if let Some(value) = value {
+			<StorageOf<T>>::insert(&(account.clone(), location), &value);
+		} else {
+			<StorageOf<T>>::remove(&(account.clone(), location));
+		}
 	}
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		(self.do_get_code)(account)
+	fn set_code(&self, account: &T::AccountId, code: Vec<u8>) {
+		<CodeOf<T>>::insert(account, &code);
 	}
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
-		(self.do_get_balance)(account)
+	fn set_balance(&self, account: &T::AccountId, balance: T::Balance) {
+		<FreeBalance<T>>::insert(account, balance);
 	}
-}
-
-impl<T: Trait> Module<T> {
-	fn commit_state(s: State<T>) {
+	fn merge(&self, s: State<T>) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
 				<FreeBalance<T>>::insert(&address, balance);
@@ -442,9 +430,63 @@ impl<T: Trait> Module<T> {
 			}
 		}
 	}
+}
 
-	fn merge_state(commit_state: State<T>, local: &mut State<T>) {
-		for (address, changed) in commit_state.into_iter() {
+struct OverlayAccountDb<'a, T: Trait + 'a> {
+	local: RefCell<State<T>>,
+	underlying: &'a AccountDb<T>,
+}
+impl<'a, T: Trait> OverlayAccountDb<'a, T> {
+	fn new(underlying: &'a AccountDb<T>) -> OverlayAccountDb<'a, T> {
+		OverlayAccountDb {
+			local: RefCell::new(State::new()),
+			underlying,
+		}
+	}
+
+	fn into_state(self) -> State<T> {
+		self.local.into_inner()
+	}
+}
+impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
+	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
+		self.local.borrow().get(account)
+			.and_then(|a| a.storage.get(location))
+			.cloned()
+			.unwrap_or_else(|| self.underlying.get_storage(account, location))
+	}
+	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
+		self.local.borrow().get(account)
+			.and_then(|a| a.code.clone())
+			.unwrap_or_else(|| self.underlying.get_code(account))
+	}
+	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
+		self.local.borrow().get(account)
+			.and_then(|a| a.balance)
+			.unwrap_or_else(|| self.underlying.get_balance(account))
+	}
+	fn set_storage(&self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
+		self.local.borrow_mut()
+			.entry(account.clone())
+			.or_insert(Default::default())
+			.storage.insert(location, value);
+	}
+	fn set_code(&self, account: &T::AccountId, code: Vec<u8>) {
+		self.local.borrow_mut()
+			.entry(account.clone())
+			.or_insert(Default::default())
+			.code = Some(code);
+	}
+	fn set_balance(&self, account: &T::AccountId, balance: T::Balance) {
+		self.local.borrow_mut()
+			.entry(account.clone())
+			.or_insert(Default::default())
+			.balance = Some(balance);
+	}
+	fn merge(&self, s: State<T>) {
+		let mut local = self.local.borrow_mut();
+
+		for (address, changed) in s.into_iter() {
 			match local.entry(address) {
 				Entry::Occupied(e) => {
 					let mut value = e.into_mut();
@@ -462,14 +504,16 @@ impl<T: Trait> Module<T> {
 			}
 		}
 	}
+}
 
-	fn effect_create<E: Externalities<T>>(
+impl<T: Trait> Module<T> {
+	fn effect_create<DB: AccountDb<T>>(
 		transactor: &T::AccountId,
 		code: &[u8],
 		value: T::Balance,
-		ext: E
+		account_db: DB
 	) -> Option<State<T>> {
-		let from_balance = ext.get_balance(transactor);
+		let from_balance = account_db.get_balance(transactor);
 		// TODO: a fee.
 		assert!(from_balance >= value);
 
@@ -490,16 +534,16 @@ impl<T: Trait> Module<T> {
 		Some(local)
 	}
 
-	fn effect_transfer<E: Externalities<T>>(
+	fn effect_transfer<DB: AccountDb<T>>(
 		transactor: &T::AccountId,
 		dest: &T::AccountId,
 		value: T::Balance,
-		ext: E
+		account_db: DB
 	) -> Option<State<T>> {
-		let from_balance = ext.get_balance(transactor);
+		let from_balance = account_db.get_balance(transactor);
 		assert!(from_balance >= value);
 
-		let to_balance = ext.get_balance(dest);
+		let to_balance = account_db.get_balance(dest);
 		assert!(<Bondage<T>>::get(transactor) <= <Bondage<T>>::get(dest));
 		assert!(to_balance + value > to_balance);	// no overflow
 
@@ -507,57 +551,23 @@ impl<T: Trait> Module<T> {
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
 
-		let local: RefCell<State<T>> = RefCell::new(BTreeMap::new());
+		// Our local overlay: Should be used for any transfers and creates that happen internally.
+		let overlay = OverlayAccountDb::new(&account_db);
 
 		if transactor != dest {
-			let mut local = local.borrow_mut();
-			local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - value));
-			local.insert(dest.clone(), ChangeEntry::balance_changed(to_balance + value));
+			overlay.set_balance(transactor, from_balance - value);
+			overlay.set_balance(dest, to_balance + value);
 		}
 
 		let should_commit = {
-			// Our local ext: Should be used for any transfers and creates that happen internally.
-			let ext = || Ext {
-				do_get_storage: |account: &T::AccountId, location: &[u8]|
-					local.borrow().get(account)
-						.and_then(|a| a.storage.get(location))
-						.cloned()
-						.unwrap_or_else(|| ext.get_storage(account, location)),
-				do_get_code: |account: &T::AccountId|
-					local.borrow().get(account)
-						.and_then(|a| a.code.clone())
-						.unwrap_or_else(|| ext.get_code(account)),
-				do_get_balance: |account: &T::AccountId|
-					local.borrow().get(account)
-						.and_then(|a| a.balance)
-						.unwrap_or_else(|| ext.get_balance(account)),
-				_unused: Default::default(),
-			};
-			let mut _transfer = |inner_dest: &T::AccountId, value: T::Balance| {
-				if let Some(commit_state) = Self::effect_transfer(dest, inner_dest, value, ext()) {
-					Self::merge_state(commit_state, &mut *local.borrow_mut());
-				}
-			};
-			let mut _create = |code: &[u8], value: T::Balance| {
-				if let Some(commit_state) = Self::effect_create(dest, code, value, ext()) {
-					Self::merge_state(commit_state, &mut *local.borrow_mut());
-				}
-			};
-			let mut _put_storage = |location: Vec<u8>, value: Option<Vec<u8>>| {
-				local.borrow_mut()
-					.entry(dest.clone())
-					.or_insert(Default::default())
-					.storage.insert(location, value);
-			};
-
 			// TODO: logging (logs are just appended into a notable storage-based vector and cleared every
 			// block).
-			// TODO: execute code with ext(), put_storage, create and transfer as externalities.
+			// TODO: if `overlay.get_code(dest)` isn't empty then execute code with `overlay`.
 			true
 		};
 
 		if should_commit {
-			Some(local.into_inner())
+			Some(overlay.into_state())
 		} else {
 			None
 		}
