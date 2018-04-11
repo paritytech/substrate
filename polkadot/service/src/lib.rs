@@ -234,7 +234,7 @@ impl Service {
 			thread_network.start_network();
 			let mut core = Core::new().expect("tokio::Core could not be created");
 			let events = thread_client.import_notification_stream().for_each(|notification| {
-				thread_network.on_block_imported(&notification.header);
+				thread_network.on_block_imported(notification.hash, &notification.header);
 				Ok(())
 			});
 			if let Err(e) = core.run(events) {

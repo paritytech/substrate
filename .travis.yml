@@ -12,6 +12,5 @@ matrix:
     - rust: stable
 
 script:
-  - cargo check --all
   - cargo test --all
   - ./publish-wasm.sh

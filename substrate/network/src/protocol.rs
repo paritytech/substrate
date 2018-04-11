@@ -23,6 +23,7 @@ use futures::sync::oneshot;
 use serde_json;
 use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber, Header, Id as BlockId};
 use primitives::{Hash, blake2_256};
+use runtime_support::Hashable;
 use network::{PeerId, NodeId};
 
 use message::{self, Message};
@@ -82,6 +83,8 @@ struct Peer {
 	request_timestamp: Option<time::Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_transactions: HashSet<TransactionHash>,
+	/// Holds a set of blocks known to this peer.
+	known_blocks: HashSet<HeaderHash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
 }
@@ -185,17 +188,17 @@ impl Protocol {
 	}
 
 	pub fn send_message(&self, io: &mut SyncIo, peer_id: PeerId, mut message: Message) {
-		let mut peers = self.peers.write();
-		if let Some(ref mut peer) = peers.get_mut(&peer_id) {
-			match &mut message {
-				&mut Message::BlockRequest(ref mut r) => {
+		match &mut message {
+			&mut Message::BlockRequest(ref mut r) => {
+				let mut peers = self.peers.write();
+				if let Some(ref mut peer) = peers.get_mut(&peer_id) {
 					r.id = peer.next_request_id;
 					peer.next_request_id = peer.next_request_id + 1;
 					peer.block_request = Some(r.clone());
 					peer.request_timestamp = Some(time::Instant::now());
-				},
-				_ => (),
-			}
+				}
+			},
+			_ => (),
 		}
 		let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
 		if let Err(e) = io.send(peer_id, data) {
@@ -410,6 +413,7 @@ impl Protocol {
 				block_request: None,
 				request_timestamp: None,
 				known_transactions: HashSet::new(),
+				known_blocks: HashSet::new(),
 				next_request_id: 0,
 			};
 			peers.insert(peer_id.clone(), peer);
@@ -484,11 +488,29 @@ impl Protocol {
 
 	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce) {
 		let header = announce.header;
-		self.sync.write().on_block_announce(io, self, peer_id, &header);
+		let hash: HeaderHash = header.blake2_256().into();
+		{
+			let mut peers = self.peers.write();
+			if let Some(ref mut peer) = peers.get_mut(&peer_id) {
+				peer.known_blocks.insert(hash.clone());
+			}
+		}
+		self.sync.write().on_block_announce(io, self, peer_id, hash, &header);
 	}
 
-	pub fn on_block_imported(&self, header: &Header) {
+	pub fn on_block_imported(&self, io: &mut SyncIo, hash: HeaderHash, header: &Header) {
 		self.sync.write().update_chain_info(&header);
+		// send out block announcements
+		let mut peers = self.peers.write();
+
+		for (peer_id, ref mut peer) in peers.iter_mut() {
+			if peer.known_blocks.insert(hash.clone()) {
+				trace!(target: "sync", "Announcing block {:?} to {}", hash, peer_id);
+				self.send_message(io, *peer_id, Message::BlockAnnounce(message::BlockAnnounce {
+					header: header.clone()
+				}));
+			}
+		}
 	}
 
 	pub fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats> {

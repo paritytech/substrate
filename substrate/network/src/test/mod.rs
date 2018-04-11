@@ -114,7 +114,7 @@ impl Peer {
 		// Update the sync state to the latest chain state.
 		let info = self.client.info().expect("In-mem client does not fail");
 		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
-		self.sync.on_block_imported(&header);
+		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
 	}
 
 	/// Called on connection to other indicated peer.
