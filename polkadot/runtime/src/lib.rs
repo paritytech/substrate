@@ -134,6 +134,7 @@ impl_outer_dispatch! {
 		Democracy = 5,
 		Council = 6,
 		CouncilVoting = 7,
+		Parachains = 8,
 	}
 
 	pub enum PrivCall {
