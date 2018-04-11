@@ -38,8 +38,8 @@ use primitives::traits::RefInto;
 use substrate_primitives::bft::MisbehaviorReport;
 
 
-pub const AUTHORITY_AT: &'static[u8] = b":auth:";
-pub const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
+pub const AUTHORITY_AT: &'static [u8] = b":auth:";
+pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
 
 struct AuthorityStorageVec<S: codec::Slicable + Default>(rstd::marker::PhantomData<S>);
 impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {

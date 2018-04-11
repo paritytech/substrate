@@ -21,8 +21,8 @@ use rstd::prelude::*;
 use codec::{Slicable, Joiner};
 use runtime_support::Hashable;
 
-use runtime_primitives::traits::Executable;
-use polkadot_primitives::parachain::{Id, Chain, DutyRoster};
+use runtime_primitives::traits::{Executable, RefInto, MaybeEmpty};
+use polkadot_primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
 use {system, session};
 
 use runtime_support::{StorageValue, StorageMap};
@@ -33,18 +33,32 @@ use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))]
 use {runtime_io, runtime_primitives};
 
-pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trait {}
+pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trait {
+	/// The position of the set_heads call in the block.
+	const SET_POSITION: u32;
+
+	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;
+}
 
 decl_module! {
 	pub struct Module<T: Trait>;
+	pub enum Call where aux: <T as Trait>::PublicAux {
+		// provide candidate receipts for parachains, in ascending order by id.
+		fn set_heads(aux, heads: Vec<CandidateReceipt>) = 0;
+	}
 }
 
 decl_storage! {
-	pub trait Store for Module<T: Trait>;
+	trait Store for Module<T: Trait>;
+	// Vector of all parachain IDs.
+	pub Parachains get(active_parachains): b"para:chains" => default Vec<Id>;
 	// The parachains registered at present.
 	pub Code get(parachain_code): b"para:code" => map [ Id => Vec<u8> ];
-	// Vector of all parachain IDs.
-	pub Parachains get(active_parachains): b"para:head" => default Vec<Id>;
+	// The heads of the parachains registered at present. these are kept sorted.
+	pub Heads get(parachain_head): b"para:head" => map [ Id => CandidateReceipt ];
+
+	// Did the parachain heads get updated in this block?
+	DidUpdate: b"para:did" => default bool;
 }
 
 impl<T: Trait> Module<T> {
@@ -120,10 +134,38 @@ impl<T: Trait> Module<T> {
 		<Code<T>>::remove(id);
 		<Parachains<T>>::put(parachains);
 	}
+
+	fn set_heads(aux: &<T as Trait>::PublicAux, heads: Vec<CandidateReceipt>) {
+		assert!(aux.is_empty());
+		assert!(!<Self as Store>::DidUpdate::exists(), "Parachain heads must be updated only once in the block");
+		assert!(
+			<system::Module<T>>::extrinsic_index() == T::SET_POSITION,
+			"Parachain heads update extrinsic must be at position {} in the block",
+			T::SET_POSITION
+		);
+
+		let active_parachains = Self::active_parachains();
+		let mut iter = active_parachains.iter();
+
+		// perform this check before writing to storage.
+		for head in &heads {
+			assert!(
+				iter.find(|&p| p == &head.parachain_index).is_some(),
+				"Submitted candidate for unregistered or out-of-order parachain {:?}",
+				head.parachain_index
+			);
+		}
+
+		for head in heads {
+			let id = head.parachain_index.clone();
+			<Heads<T>>::insert(id, head);
+		}
+	}
 }
 
 impl<T: Trait> Executable for Module<T> {
 	fn execute() {
+		assert!(<Self as Store>::DidUpdate::take(), "Parachain heads must be updated once in the block");
 	}
 }
 
@@ -202,7 +244,11 @@ mod tests {
 	impl session::Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
 	}
-	impl Trait for Test {}
+	impl Trait for Test {
+		const SET_POSITION: u32 = 0;
+
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
+	}
 
 	type Parachains = Module<Test>;
 
