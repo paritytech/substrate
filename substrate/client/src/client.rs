@@ -315,7 +315,7 @@ impl<B, E> Client<B, E> where
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
 		let hash: block::HeaderHash = header.blake2_256().into();
-		trace!("Imported {}, (#{}), best={}", hash, header.number, is_new_best);
+		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number, is_new_best, origin);
 		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
 		transaction.set_storage(overlay.drain())?;
 		self.backend.commit_operation(transaction)?;
@@ -407,7 +407,7 @@ impl<B, E> bft::BlockImport for Client<B, E>
 			justification,
 		};
 
-		let _ = self.import_block(BlockOrigin::Genesis, justified_header, Some(block.transactions));
+		let _ = self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(block.transactions));
 	}
 }
 
