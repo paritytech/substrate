@@ -17,15 +17,21 @@
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
 use polkadot_primitives;
-#[cfg(any(feature = "std", test))] use {runtime_io, runtime_primitives};
 use rstd::prelude::*;
-#[cfg(any(feature = "std", test))] use rstd::marker::PhantomData;
 use codec::{Slicable, Joiner};
 use runtime_support::Hashable;
-#[cfg(any(feature = "std", test))] use runtime_support::StorageValue;
+
 use runtime_primitives::traits::Executable;
 use polkadot_primitives::parachain::{Id, Chain, DutyRoster};
 use {system, session};
+
+use runtime_support::{StorageValue, StorageMap};
+
+#[cfg(any(feature = "std", test))]
+use rstd::marker::PhantomData;
+
+#[cfg(any(feature = "std", test))]
+use {runtime_io, runtime_primitives};
 
 pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trait {}
 
@@ -35,25 +41,29 @@ decl_module! {
 
 decl_storage! {
 	pub trait Store for Module<T: Trait>;
-	// The number of parachains registered at present.
-	pub Count get(count): b"para:count" => default u32;
 	// The parachains registered at present.
-	pub Parachains get(candidate_reg_info): b"para:live" => map [ Id => Vec<u8> ];
+	pub Code get(parachain_code): b"para:code" => map [ Id => Vec<u8> ];
+	// Vector of all parachain IDs.
+	pub Parachains get(active_parachains): b"para:head" => default Vec<Id>;
 }
 
 impl<T: Trait> Module<T> {
 	/// Calculate the current block's with given random seed.
 	/// In normal operation, this will be called with `System::random_seed()`.
 	pub fn calculate_duty_roster(random_seed: T::Hash) -> DutyRoster {
-		let parachain_count = Self::count();
-		let validator_count = <session::Module<T>>::validator_count();
+		let parachains = Self::active_parachains();
+		let parachain_count = parachains.len();
+		let validator_count = <session::Module<T>>::validator_count() as usize;
 		let validators_per_parachain = if parachain_count != 0 { (validator_count - 1) / parachain_count } else { 0 };
 
 		let mut roles_val = (0..validator_count).map(|i| match i {
-			i if i < parachain_count * validators_per_parachain =>
-				Chain::Parachain(Id::from(i / validators_per_parachain as u32)),
+			i if i < parachain_count * validators_per_parachain => {
+				let idx = i / validators_per_parachain;
+				Chain::Parachain(parachains[idx].clone())
+			}
 			_ => Chain::Relay,
 		}).collect::<Vec<_>>();
+
 		let mut roles_gua = roles_val.clone();
 
 		let mut seed = random_seed.to_vec().and(b"validator_role_pairs").blake2_256();
@@ -85,6 +95,31 @@ impl<T: Trait> Module<T> {
 			guarantor_duty: roles_gua,
 		}
 	}
+
+	/// Register a parachain with given code.
+	/// Fails if given ID is already used.
+	pub fn register_parachain(id: Id, code: Vec<u8>) {
+		let mut parachains = Self::active_parachains();
+		match parachains.binary_search(&id) {
+			Ok(_) => panic!("Parachain with id {:?} already exists", id),
+			Err(idx) => parachains.insert(idx, id),
+		}
+
+		<Code<T>>::insert(id, code);
+		<Parachains<T>>::put(parachains);
+	}
+
+	/// Deregister a parachain with given id
+	pub fn deregister_parachain(id: Id) {
+		let mut parachains = Self::active_parachains();
+		match parachains.binary_search(&id) {
+			Ok(idx) => { parachains.remove(idx); }
+			Err(_) => {}
+		}
+
+		<Code<T>>::remove(id);
+		<Parachains<T>>::put(parachains);
+	}
 }
 
 impl<T: Trait> Executable for Module<T> {
@@ -92,9 +127,12 @@ impl<T: Trait> Executable for Module<T> {
 	}
 }
 
+/// Parachains module genesis configuration.
 #[cfg(any(feature = "std", test))]
 pub struct GenesisConfig<T: Trait> {
-	pub count: u32,
+	/// The initial parachains, mapped to code.
+	pub parachains: Vec<(Id, Vec<u8>)>,
+	/// Phantom data.
 	pub phantom: PhantomData<T>,
 }
 
@@ -102,7 +140,7 @@ pub struct GenesisConfig<T: Trait> {
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
-			count: 0,
+			parachains: Vec::new(),
 			phantom: PhantomData,
 		}
 	}
@@ -111,12 +149,26 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> runtime_primitives::BuildExternalities for GenesisConfig<T>
 {
-	fn build_externalities(self) -> runtime_io::TestExternalities {
+	fn build_externalities(mut self) -> runtime_io::TestExternalities {
+		use std::collections::HashMap;
 		use runtime_io::twox_128;
 		use codec::Slicable;
-		map![
-			twox_128(<Count<T>>::key()).to_vec() => self.count.encode()
-		]
+
+		self.parachains.sort_unstable_by_key(|&(ref id, _)| id.clone());
+		self.parachains.dedup_by_key(|&mut (ref id, _)| id.clone());
+
+		let only_ids: Vec<_> = self.parachains.iter().map(|&(ref id, _)| id).cloned().collect();
+
+		let mut map: HashMap<_, _> = map![
+			twox_128(<Parachains<T>>::key()).to_vec() => only_ids.encode()
+		];
+
+		for (id, code) in self.parachains {
+			let key = twox_128(&<Code<T>>::key_for(&id)).to_vec();
+			map.insert(key, code.encode());
+		}
+
+		map.into()
 	}
 }
 
@@ -152,10 +204,9 @@ mod tests {
 	}
 	impl Trait for Test {}
 
-	type System = system::Module<Test>;
 	type Parachains = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext(parachains: Vec<(Id, Vec<u8>)>) -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -166,22 +217,59 @@ mod tests {
 			validators: vec![1, 2, 3, 4, 5, 6, 7, 8],
 		}.build_externalities());
 		t.extend(GenesisConfig::<Test>{
-			count: 2,
+			parachains: parachains,
 			phantom: PhantomData,
 		}.build_externalities());
 		t
 	}
 
 	#[test]
-	fn simple_setup_should_work() {
-		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Parachains::count(), 2);
+	fn active_parachains_should_work() {
+		let parachains = vec![
+			(5u32.into(), vec![1,2,3]),
+			(100u32.into(), vec![4,5,6]),
+		];
+
+		with_externalities(&mut new_test_ext(parachains), || {
+			assert_eq!(Parachains::active_parachains(), vec![5u32.into(), 100u32.into()]);
+			assert_eq!(Parachains::parachain_code(&5u32.into()), Some(vec![1,2,3]));
+			assert_eq!(Parachains::parachain_code(&100u32.into()), Some(vec![4,5,6]));
 		});
 	}
 
 	#[test]
-	fn should_work() {
-		with_externalities(&mut new_test_ext(), || {
+	fn register_deregister() {
+		let parachains = vec![
+			(5u32.into(), vec![1,2,3]),
+			(100u32.into(), vec![4,5,6]),
+		];
+
+		with_externalities(&mut new_test_ext(parachains), || {
+			assert_eq!(Parachains::active_parachains(), vec![5u32.into(), 100u32.into()]);
+
+			assert_eq!(Parachains::parachain_code(&5u32.into()), Some(vec![1,2,3]));
+			assert_eq!(Parachains::parachain_code(&100u32.into()), Some(vec![4,5,6]));
+
+			Parachains::register_parachain(99u32.into(), vec![7,8,9]);
+
+			assert_eq!(Parachains::active_parachains(), vec![5u32.into(), 99u32.into(), 100u32.into()]);
+			assert_eq!(Parachains::parachain_code(&99u32.into()), Some(vec![7,8,9]));
+
+			Parachains::deregister_parachain(5u32.into());
+
+			assert_eq!(Parachains::active_parachains(), vec![99u32.into(), 100u32.into()]);
+			assert_eq!(Parachains::parachain_code(&5u32.into()), None);
+		});
+	}
+
+	#[test]
+	fn duty_roster_works() {
+		let parachains = vec![
+			(0u32.into(), vec![]),
+			(1u32.into(), vec![]),
+		];
+
+		with_externalities(&mut new_test_ext(parachains), || {
 			let check_roster = |duty_roster: &DutyRoster| {
 				assert_eq!(duty_roster.validator_duty.len(), 8);
 				assert_eq!(duty_roster.guarantor_duty.len(), 8);
