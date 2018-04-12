@@ -20,6 +20,15 @@ use transaction_pool;
 pub use network::Role;
 pub use network::NetworkConfiguration;
 
+/// The chain specification (this should eventually be replaced by a more general JSON-based chain
+/// specification).
+pub enum ChainSpec {
+	/// Whatever the current runtime is, with simple Alice/Bob auths.
+	Development,
+	/// The PoC-1 testnet.
+	PoC1Testnet,
+}
+
 /// Service configuration.
 pub struct Configuration {
 	/// Node roles.
@@ -32,6 +41,8 @@ pub struct Configuration {
 	pub keystore_path: String,
 	/// Additional key seeds.
 	pub keys: Vec<String>,
+	/// Chain specification.
+	pub chain_spec: ChainSpec,
 }
 
 impl Default for Configuration {
@@ -42,7 +53,7 @@ impl Default for Configuration {
 			network: Default::default(),
 			keystore_path: Default::default(),
 			keys: Default::default(),
+			chain_spec: ChainSpec::Development,
 		}
 	}
 }
-

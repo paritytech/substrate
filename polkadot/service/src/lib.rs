@@ -41,6 +41,8 @@ extern crate substrate_client as client;
 extern crate error_chain;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate hex_literal;
 
 mod error;
 mod config;
@@ -65,7 +67,7 @@ use client::in_mem::Backend as InMemory;
 use network::ManageNetwork;
 
 pub use self::error::{ErrorKind, Error};
-pub use config::{Configuration, Role};
+pub use config::{Configuration, Role, ChainSpec};
 
 type Client = client::Client<InMemory, NativeExecutor<LocalDispatch>>;
 
@@ -121,6 +123,116 @@ impl network::TransactionPool for TransactionPoolAdapter {
 	}
 }
 
+fn poc_1_testnet_config() -> GenesisConfig {
+	let initial_authorities = vec![
+		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
+		hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
+		hex!["063d7787ebca768b7445dfebe7d62cbb1625ff4dba288ea34488da266dd6dca5"].into(),
+	];
+	let endowed_accounts = vec![
+		hex!["24d132eb1a4cbf8e46de22652019f1e07fadd5037a6a057c75dbbfd4641ba85d"].into(),
+	];
+	GenesisConfig {
+		consensus: Some(ConsensusConfig {
+			code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),	// TODO change
+			authorities: initial_authorities.clone(),
+		}),
+		system: None,
+//		block_time: 5,			// 5 second block time.
+		session: Some(SessionConfig {
+			validators: initial_authorities.clone(),
+			session_length: 720,	// that's 1 hour per session.
+		}),
+		staking: Some(StakingConfig {
+			current_era: 0,
+			intentions: vec![],
+			transaction_fee: 100,
+			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
+			validator_count: 12,
+			sessions_per_era: 24,	// 24 hours per era.
+			bonding_duration: 90,	// 90 days per bond.
+		}),
+		democracy: Some(DemocracyConfig {
+			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
+			voting_period: 120 * 24 * 28,	// 4 weeks to discuss & vote on an active referendum
+			minimum_deposit: 1000,	// 1000 as the minimum deposit for a referendum
+		}),
+		council: Some(CouncilConfig {
+			active_council: vec![],
+			candidacy_bond: 1000,	// 1000 to become a council candidate
+			voter_bond: 100,		// 100 down to vote for a candidate
+			present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
+			carry_count: 24,		// carry over the 24 runners-up to the next council election
+			presentation_duration: 120 * 24,	// one day for presenting winners.
+			approval_voting_period: 7 * 120 * 24,	// one week period between possible council elections.
+			term_duration: 180 * 120 * 24,	// 180 day term duration for the council.
+			desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
+			inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
+
+			cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
+			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
+		}),
+		parachains: Some(Default::default()),
+	}
+}
+
+fn local_testnet_config() -> GenesisConfig {
+	let initial_authorities = vec![
+		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+	];
+	let endowed_accounts = vec![
+		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+		ed25519::Pair::from_seed(b"Charlie                         ").public().into(),
+		ed25519::Pair::from_seed(b"Dave                            ").public().into(),
+		ed25519::Pair::from_seed(b"Eve                             ").public().into(),
+		ed25519::Pair::from_seed(b"Ferdie                          ").public().into(),
+	];
+	GenesisConfig {
+		consensus: Some(ConsensusConfig {
+			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm").to_vec(),
+			authorities: initial_authorities.clone(),
+		}),
+		system: None,
+//		block_time: 5,			// 5 second block time.
+		session: Some(SessionConfig {
+			validators: initial_authorities.clone(),
+			session_length: 720,	// that's 1 hour per session.
+		}),
+		staking: Some(StakingConfig {
+			current_era: 0,
+			intentions: vec![],
+			transaction_fee: 100,
+			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
+			validator_count: 12,
+			sessions_per_era: 24,	// 24 hours per era.
+			bonding_duration: 90,	// 90 days per bond.
+		}),
+		democracy: Some(DemocracyConfig {
+			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
+			voting_period: 120 * 24 * 28,	// 4 weeks to discuss & vote on an active referendum
+			minimum_deposit: 1000,	// 1000 as the minimum deposit for a referendum
+		}),
+		council: Some(CouncilConfig {
+			active_council: vec![],
+			candidacy_bond: 1000,	// 1000 to become a council candidate
+			voter_bond: 100,		// 100 down to vote for a candidate
+			present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
+			carry_count: 24,		// carry over the 24 runners-up to the next council election
+			presentation_duration: 120 * 24,	// one day for presenting winners.
+			approval_voting_period: 7 * 120 * 24,	// one week period between possible council elections.
+			term_duration: 180 * 120 * 24,	// 180 day term duration for the council.
+			desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
+			inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
+
+			cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
+			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
+		}),
+		parachains: Some(Default::default()),
+	}
+}
+
 impl Service {
 	/// Creates and register protocol with the network service
 	pub fn new(config: Configuration) -> Result<Service, error::Error> {
@@ -138,57 +250,11 @@ impl Service {
 			info!("Generated a new keypair: {:?}", key.public());
 		}
 
-		let god_keys = vec![
-			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-			ed25519::Pair::from_seed(b"Bob                             ").public().into(),
-//			ed25519::Pair::from_seed(b"Charlie                         ").public().into(),
-//			ed25519::Pair::from_seed(b"Dave                            ").public().into(),
-//			ed25519::Pair::from_seed(b"Eve                             ").public().into(),
-//			ed25519::Pair::from_seed(b"Ferdie                          ").public().into(),
-		];
-
-		let genesis_config = GenesisConfig {
-			consensus: Some(ConsensusConfig {
-				code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),
-				authorities: god_keys.clone(),
-			}),
-			system: None,
-	//		block_time: 5,			// 5 second block time.
-			session: Some(SessionConfig {
-				validators: god_keys.clone(),
-				session_length: 720,	// that's 1 hour per session.
-			}),
-			staking: Some(StakingConfig {
-				current_era: 0,
-				intentions: vec![],
-				transaction_fee: 100,
-				balances: god_keys.iter().map(|&k|(k, 1u64 << 60)).collect(),
-				validator_count: 12,
-				sessions_per_era: 24,	// 24 hours per era.
-				bonding_duration: 90,	// 90 days per bond.
-			}),
-			democracy: Some(DemocracyConfig {
-				launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
-				voting_period: 120 * 24 * 28,	// 4 weeks to discuss & vote on an active referendum
-				minimum_deposit: 1000,	// 1000 as the minimum deposit for a referendum
-			}),
-			council: Some(CouncilConfig {
-				active_council: vec![],
-				candidacy_bond: 1000,	// 1000 to become a council candidate
-				voter_bond: 100,		// 100 down to vote for a candidate
-				present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
-				carry_count: 24,		// carry over the 24 runners-up to the next council election
-				presentation_duration: 120 * 24,	// one day for presenting winners.
-				approval_voting_period: 7 * 120 * 24,	// one week period between possible council elections.
-				term_duration: 180 * 120 * 24,	// 180 day term duration for the council.
-				desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
-				inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
-
-				cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
-				voting_period: 7 * 120 * 24, // 7 day voting period for council members.
-			}),
-			parachains: Some(Default::default()),
+		let genesis_config = match config.chain_spec {
+			ChainSpec::Development => local_testnet_config(),
+			ChainSpec::PoC1Testnet => poc_1_testnet_config(),
 		};
+
 		let prepare_genesis = || {
 			storage = genesis_config.build_externalities();
 			let block = genesis::construct_genesis_block(&storage);
