@@ -52,6 +52,7 @@ use std::net::SocketAddr;
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
+use service::ChainSpec;
 
 /// Parse command line arguments and start the node.
 ///
@@ -103,6 +104,17 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		info!("Starting validator.");
 		role = service::Role::VALIDATOR;
 	}
+
+	match matches.value_of("chain") {
+		Some("poc-1") => config.chain_spec = ChainSpec::PoC1Testnet,
+		Some("dev") => config.chain_spec = ChainSpec::Development,
+		None => (),
+		Some(unknown) => panic!("Invalid chain name: {}", unknown),
+	}
+	info!("Chain specification: {}", match config.chain_spec {
+		ChainSpec::Development => "Local Development",
+		ChainSpec::PoC1Testnet => "PoC-1 Testnet",
+	});
 
 	config.roles = role;
 	config.network.boot_nodes = matches

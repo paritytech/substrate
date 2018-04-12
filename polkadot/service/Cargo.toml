@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
+hex-literal = "0.1"
 futures = "0.1.17"
 parking_lot = "0.4"
 tokio-timer = "0.1.2"
