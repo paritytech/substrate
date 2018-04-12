@@ -16,8 +16,7 @@
 
 //! Errors that can occur during the consensus process.
 
-use primitives::block::HeaderHash;
-
+use primitives::block::{HeaderHash, Number};
 error_chain! {
 	links {
 		PolkadotApi(::polkadot_api::Error, ::polkadot_api::ErrorKind);
@@ -40,6 +39,10 @@ error_chain! {
 		WrongParentHash(expected: HeaderHash, got: HeaderHash) {
 			description("Proposal had wrong parent hash."),
 			display("Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
+		}
+		WrongNumber(expected: Number, got: Number) {
+			description("Proposal had wrong number."),
+			display("Proposal had wrong number. Expected {:?}, got {:?}", expected, got),
 		}
 		ProposalTooLarge(size: usize) {
 			description("Proposal exceeded the maximum size."),

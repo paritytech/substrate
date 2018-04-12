@@ -125,10 +125,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let prepare_genesis = || {
 		storage = genesis_config.build_externalities();
 		let block = genesis::construct_genesis_block(&storage);
-		with_externalities(&mut storage, ||
-			// TODO: use api.rs to dispatch instead
-			demo_runtime::System::initialise_genesis_state(&block.header)
-		);
 		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 	};
 	let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
