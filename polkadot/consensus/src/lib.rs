@@ -70,7 +70,9 @@ use transaction_pool::{Ready, TransactionPool, PolkadotBlock};
 
 use futures::prelude::*;
 use futures::future;
+use future::Shared;
 use parking_lot::Mutex;
+use tokio_core::reactor::{Handle, Timeout};
 
 pub use self::error::{ErrorKind, Error};
 pub use service::Service;
@@ -475,6 +477,8 @@ pub struct ProposerFactory<C, N> {
 	pub transaction_pool: Arc<Mutex<TransactionPool>>,
 	/// The backing network handle.
 	pub network: N,
+	/// Handle to the underlying tokio-core.
+	pub handle: Handle,
 }
 
 impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> {
@@ -482,6 +486,10 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 	type Error = Error;
 
 	fn init(&self, parent_header: &SubstrateHeader, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
+		use std::time::Duration;
+
+		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
+
 		let parent_hash = parent_header.blake2_256().into();
 
 		let checked_id = self.client.check_id(BlockId::Hash(parent_hash))?;
@@ -491,6 +499,11 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
 		let router = self.network.table_router(table.clone());
 
+		let timeout = Timeout::new(DELAY_UNTIL, &self.handle)?;
+
+		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
+			DELAY_UNTIL);
+
 		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
 			parent_hash,
@@ -499,6 +512,7 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 			local_key: sign_with,
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
+			delay: timeout.shared(),
 			_table: table,
 			_router: router,
 		})
@@ -521,6 +535,7 @@ pub struct Proposer<C: PolkadotApi, R> {
 	client: Arc<C>,
 	local_key: Arc<ed25519::Pair>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
+	delay: Shared<Timeout>,
 	_table: Arc<SharedTable>,
 	_router: R,
 }
@@ -528,9 +543,9 @@ pub struct Proposer<C: PolkadotApi, R> {
 impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	type Error = Error;
 	type Create = Result<SubstrateBlock, Error>;
-	type Evaluate = Result<bool, Error>;
+	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
-	fn propose(&self) -> Result<SubstrateBlock, Error> {
+	fn propose(&self) -> Self::Create {
 		debug!(target: "bft", "proposing block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
 		// TODO: handle case when current timestamp behind that in state.
@@ -581,9 +596,10 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	}
 
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
-	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
+	fn evaluate(&self, proposal: &SubstrateBlock) -> Self::Evaluate {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
-		match evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, self.parent_number, &self.parent_id) {
+
+		let evaluated = match evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, self.parent_number, &self.parent_id) {
 			Ok(x) => Ok(x),
 			Err(e) => match *e.kind() {
 				ErrorKind::PolkadotApi(polkadot_api::ErrorKind::Executor(_)) => Ok(false),
@@ -593,7 +609,10 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 				ErrorKind::ProposalTooLarge(_) => Ok(false),
 				_ => Err(e),
 			}
-		}
+		};
+
+		// delay casting vote until able.
+		Box::new(self.delay.clone().map_err(Error::from).and_then(move |_| evaluated))
 	}
 
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior)>) {

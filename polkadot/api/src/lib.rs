@@ -100,7 +100,7 @@ pub trait BlockBuilder: Sized {
 }
 
 /// A checked block identifier.
-pub trait CheckedBlockId: Clone {
+pub trait CheckedBlockId: Clone + 'static {
 	/// Yield the underlying block ID.
 	fn block_id(&self) -> &BlockId;
 }

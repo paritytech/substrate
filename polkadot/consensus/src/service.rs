@@ -276,6 +276,7 @@ impl Service {
 				client: client.clone(),
 				transaction_pool: transaction_pool.clone(),
 				network: Network(network.clone()),
+				handle: core.handle(),
 			};
 			let messages = SharedMessageCollection::new();
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
