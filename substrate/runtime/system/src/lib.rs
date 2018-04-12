@@ -94,6 +94,7 @@ impl<T: Trait> Module<T> {
 		// populate environment.
 		<Number<T>>::put(number);
 		<ParentHash<T>>::put(parent_hash);
+		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<RandomSeed<T>>::put(Self::calculate_random());
 		<ExtrinsicIndex<T>>::put(0);
@@ -117,21 +118,6 @@ impl<T: Trait> Module<T> {
 		let mut l = <Digest<T>>::get();
 		traits::Digest::push(&mut l, item);
 		<Digest<T>>::put(l);
-	}
-
-	/// Records a particular block number and hash combination.
-	pub fn record_block_hash<H: traits::Header<Number = T::BlockNumber, Hash = T::Hash>>(header: &H) {
-		// store the header hash in storage; we can't do it before otherwise there would be a
-		// cyclic dependency.
-		let h = T::Hashing::hash_of(header);
-		<BlockHash<T>>::insert(header.number(), &h);
-
-		Self::initialise(&(*header.number() + One::one()), &h, &Default::default());
-	}
-
-	/// Initializes the state following the determination of the genesis block.
-	pub fn initialise_genesis_state<H: traits::Header<Number = T::BlockNumber, Hash = T::Hash>>(header: &H) {
-		Self::record_block_hash(header);
 	}
 
 	/// Calculate the current block's random seed.

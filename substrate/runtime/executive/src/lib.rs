@@ -104,9 +104,6 @@ impl<
 
 		// any final checks
 		Self::final_checks(&header);
-
-		// any stuff that we do after taking the storage root.
-		Self::post_finalise(&header);
 	}
 
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
@@ -116,11 +113,7 @@ impl<
 
 		// setup extrinsics
 		<system::Module<System>>::derive_extrinsics();
-
-		let header = <system::Module<System>>::finalise();
-		Self::post_finalise(&header);
-
-		header
+		<system::Module<System>>::finalise()
 	}
 
 	/// Apply outside of the block execution function.
@@ -169,12 +162,6 @@ impl<
 		let storage_root = System::Hashing::storage_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == &storage_root, "Storage root must match that calculated.");
-	}
-
-	fn post_finalise(header: &System::Header) {
-		// store the header hash in storage; we can't do it before otherwise there would be a
-		// cyclic dependency.
-		<system::Module<System>>::record_block_hash(header);
 	}
 }
 

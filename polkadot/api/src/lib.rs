@@ -192,7 +192,16 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	}
 
 	fn duty_roster(&self, at: &CheckedId) -> Result<DutyRoster> {
-		with_runtime!(self, at, ::runtime::Parachains::calculate_duty_roster)
+		// duty roster can only be queried at the start of a block,
+		// so we create a dummy.
+		let id = at.block_id();
+		let parent_hash = self.block_hash_from_id(id)?.ok_or(ErrorKind::UnknownBlock(*id))?;
+		let number = self.block_number_from_id(id)?.ok_or(ErrorKind::UnknownBlock(*id))? + 1;
+
+		with_runtime!(self, at, || {
+			::runtime::System::initialise(&number, &parent_hash, &Default::default());
+			::runtime::Parachains::calculate_duty_roster()
+		})
 	}
 
 	fn timestamp(&self, at: &CheckedId) -> Result<Timestamp> {
@@ -203,7 +212,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 		with_runtime!(self, at, || ::runtime::Executive::execute_block(block))
 	}
 
-	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index> {
+	fn index(&self, at: &CheckedId, account: AccountId) -> Result<Index> {
 		with_runtime!(self, at, || ::runtime::System::account_index(account))
 	}
 
@@ -381,10 +390,6 @@ mod tests {
 			|| {
 				let mut storage = genesis_config.build_externalities();
 				let block = ::client::genesis::construct_genesis_block(&storage);
-				with_externalities(&mut storage, ||
-					// TODO: use api.rs to dispatch instead
-					runtime::System::initialise_genesis_state(&block.header)
-				);
 				(substrate_primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 			}
 		).unwrap()
