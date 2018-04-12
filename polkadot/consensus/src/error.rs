@@ -24,6 +24,11 @@ error_chain! {
 		Bft(::bft::Error, ::bft::ErrorKind);
 	}
 
+	foreign_links {
+		Io(::std::io::Error);
+		SharedIo(::futures::future::SharedError<::std::io::Error>);
+	}
+
 	errors {
 		InvalidDutyRosterLength(expected: usize, got: usize) {
 			description("Duty Roster had invalid length"),
