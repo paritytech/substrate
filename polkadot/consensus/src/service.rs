@@ -249,12 +249,13 @@ fn start_bft<F, C>(
 			return;
 		}
 	};
+
 	let input = messages.select(hash, network.bft_messages(), authorities).map_err(|e| e.into());
 	let output = BftSink { network: network, parent_hash: hash.clone(), _e: Default::default() };
 	match bft_service.build_upon(&header, input, output) {
 		Ok(Some(bft)) => handle.spawn(bft),
 		Ok(None) => {},
-		Err(e) => debug!("BFT agreement error: {:?}", e),
+		Err(e) => debug!(target: "bft","BFT agreement error: {:?}", e),
 	}
 }
 
