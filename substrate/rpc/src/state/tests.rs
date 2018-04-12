@@ -34,7 +34,7 @@ fn should_return_storage() {
 	let genesis_hash = test_genesis_block.blake2_256().into();
 
 	assert_matches!(
-		StateApi::storage(&client, StorageKey(vec![10]), genesis_hash),
+		StateApi::storage_at(&client, StorageKey(vec![10]), genesis_hash),
 		Err(Error(ErrorKind::Client(client::error::ErrorKind::NoValueForKey(ref k)), _)) if *k == vec![10]
 	)
 }
@@ -55,7 +55,7 @@ fn should_call_contract() {
 	let genesis_hash = test_genesis_block.blake2_256().into();
 
 	assert_matches!(
-		StateApi::call(&client, "balanceOf".into(), vec![1,2,3], genesis_hash),
+		StateApi::call_at(&client, "balanceOf".into(), vec![1,2,3], genesis_hash),
 		Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
 	)
 }

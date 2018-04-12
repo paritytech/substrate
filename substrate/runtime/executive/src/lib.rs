@@ -49,13 +49,7 @@ use runtime_io::Hashing;
 use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable, MakePayment};
 use codec::Slicable;
-
-/// Compute the extrinsics root of a list of extrinsics.
-pub fn extrinsics_root<H: Hashing, E: Slicable>(extrinsics: &[E]) -> H::Output {
-	let xts = extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
-	let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	H::enumerated_trie_root(&xts)
-}
+use system::extrinsics_root;
 
 pub struct Executive<
 	System,
@@ -103,7 +97,7 @@ impl<
 
 		// execute transactions
 		let (header, extrinsics) = block.deconstruct();
-		extrinsics.into_iter().for_each(Self::apply_extrinsic);
+		extrinsics.into_iter().for_each(Self::apply_extrinsic_inner);
 
 		// post-transactional book-keeping.
 		Finalisation::execute();
@@ -120,6 +114,9 @@ impl<
 	pub fn finalise_block() -> System::Header {
 		Finalisation::execute();
 
+		// setup extrinsics
+		<system::Module<System>>::derive_extrinsics();
+
 		let header = <system::Module<System>>::finalise();
 		Self::post_finalise(&header);
 
@@ -127,8 +124,16 @@ impl<
 	}
 
 	/// Apply outside of the block execution function.
-	/// This doesn't attempt to validate anything regarding the block.
+	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
+	/// hashes.
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) {
+		<system::Module<System>>::note_extrinsic(uxt.encode());
+		Self::apply_extrinsic_inner(uxt);
+	}
+
+	/// Apply outside of the block execution function.
+	/// This doesn't attempt to validate anything regarding the block.
+	fn apply_extrinsic_inner(uxt: Block::Extrinsic) {
 		// Verify the signature is good.
 		let xt = match uxt.check() {
 			Ok(xt) => xt,

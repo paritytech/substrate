@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 parking_lot = "0.4"
+log = "0.3"
 error-chain = "0.11"
 jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }

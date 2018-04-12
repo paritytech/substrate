@@ -9,7 +9,7 @@ parking_lot = "0.4"
 tokio-core = "0.1.12"
 ed25519 = { path = "../../substrate/ed25519" }
 error-chain = "0.11"
-log = "0.4"
+log = "0.3"
 polkadot-api = { path = "../api" }
 polkadot-collator = { path = "../collator" }
 polkadot-primitives = { path = "../primitives" }

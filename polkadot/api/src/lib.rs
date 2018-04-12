@@ -31,6 +31,9 @@ extern crate substrate_state_machine as state_machine;
 #[macro_use]
 extern crate error_chain;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
@@ -174,7 +177,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
 		// bail if the code is not the same as the natively linked.
 		if self.code_at(&id)? != LocalDispatch::native_equivalent() {
-			bail!(ErrorKind::UnknownRuntime);
+			warn!("This node is out of date. Block authoring may not work correctly.")
 		}
 
 		Ok(CheckedId(id))
@@ -324,19 +327,15 @@ impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 	}
 
 	fn bake(mut self) -> Block {
-		use substrate_runtime_executive::extrinsics_root;
-
 		let mut ext = state_machine::Ext {
 			overlay: &mut self.changes,
 			backend: &self.state,
 		};
 
-		let mut final_header = ::substrate_executor::with_native_environment(
+		let final_header = ::substrate_executor::with_native_environment(
 			&mut ext,
 			move || runtime::Executive::finalise_block()
 		).expect("all inherent extrinsics pushed; all other extrinsics executed correctly; qed");
-
-		final_header.extrinsics_root = extrinsics_root::<runtime_io::BlakeTwo256, _>(&self.extrinsics);
 		Block {
 			header: final_header,
 			extrinsics: self.extrinsics,
