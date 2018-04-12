@@ -307,8 +307,7 @@ impl ChainSync {
 		self.block_imported(&hash, best_header.number)
 	}
 
-	pub fn on_block_announce(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, header: &Header) {
-		let hash = header_hash(&header);
+	pub fn on_block_announce(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, hash: HeaderHash, header: &Header) {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			if header.number > peer.best_number {
 				peer.best_number = header.number;

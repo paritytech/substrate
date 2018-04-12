@@ -13,9 +13,13 @@ hex-literal = "0.1"
 triehash = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
 app_dirs = "1.2"
+tokio-core = "0.1.12"
+futures = "0.1.17"
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 substrate-client = { path = "../../substrate/client" }
+substrate-network = { path = "../../substrate/network" }
 substrate-codec = { path = "../../substrate/codec" }
-substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-primitives = { path = "../../substrate/primitives" }

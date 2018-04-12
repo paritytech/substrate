@@ -8,7 +8,7 @@ futures = "0.1.17"
 parking_lot = "0.4"
 tokio-timer = "0.1.2"
 error-chain = "0.11"
-log = "0.4"
+log = "0.3"
 tokio-core = "0.1.12"
 ed25519 = { path = "../../substrate/ed25519" }
 polkadot-primitives = { path = "../primitives" }
