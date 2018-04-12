@@ -115,7 +115,7 @@ impl<T: Trait> Module<T> {
 	pub fn register_parachain(id: Id, code: Vec<u8>) {
 		let mut parachains = Self::active_parachains();
 		match parachains.binary_search(&id) {
-			Ok(_) => panic!("Parachain with id {:?} already exists", id),
+			Ok(_) => panic!("Parachain with id {} already exists", id.into_inner()),
 			Err(idx) => parachains.insert(idx, id),
 		}
 
@@ -151,8 +151,8 @@ impl<T: Trait> Module<T> {
 		for head in &heads {
 			assert!(
 				iter.find(|&p| p == &head.parachain_index).is_some(),
-				"Submitted candidate for unregistered or out-of-order parachain {:?}",
-				head.parachain_index
+				"Submitted candidate for unregistered or out-of-order parachain {}",
+				head.parachain_index.into_inner()
 			);
 		}
 
