@@ -31,6 +31,9 @@ extern crate substrate_state_machine as state_machine;
 #[macro_use]
 extern crate error_chain;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
@@ -191,7 +194,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
 		// bail if the code is not the same as the natively linked.
 		if self.code_at(&id)? != LocalDispatch::native_equivalent() {
-			bail!(ErrorKind::UnknownRuntime);
+			bail!("This node is out of date. Block authoring may not work correctly. Bailing.")
 		}
 
 		Ok(CheckedId(id))
@@ -233,7 +236,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 		}
 	}
 
-	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index> {
+	fn index(&self, at: &CheckedId, account: AccountId) -> Result<Index> {
 		with_runtime!(self, at, || ::runtime::System::account_index(account))
 	}
 
@@ -365,19 +368,15 @@ impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 	}
 
 	fn bake(mut self) -> Block {
-		use substrate_runtime_executive::extrinsics_root;
-
 		let mut ext = state_machine::Ext {
 			overlay: &mut self.changes,
 			backend: &self.state,
 		};
 
-		let mut final_header = ::substrate_executor::with_native_environment(
+		let final_header = ::substrate_executor::with_native_environment(
 			&mut ext,
 			move || runtime::Executive::finalise_block()
 		).expect("all inherent extrinsics pushed; all other extrinsics executed correctly; qed");
-
-		final_header.extrinsics_root = extrinsics_root::<runtime_io::BlakeTwo256, _>(&self.extrinsics);
 		Block {
 			header: final_header,
 			extrinsics: self.extrinsics,
@@ -423,10 +422,6 @@ mod tests {
 			|| {
 				let mut storage = genesis_config.build_externalities();
 				let block = ::client::genesis::construct_genesis_block(&storage);
-				with_externalities(&mut storage, ||
-					// TODO: use api.rs to dispatch instead
-					runtime::System::initialise_genesis_state(&block.header)
-				);
 				(substrate_primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 			}
 		).unwrap()

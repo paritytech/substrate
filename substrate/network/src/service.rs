@@ -21,7 +21,7 @@ use futures::sync::{oneshot, mpsc};
 use network::{NetworkProtocolHandler, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_devp2p::{NetworkService};
-use primitives::block::{TransactionHash, Header};
+use primitives::block::{TransactionHash, Header, HeaderHash};
 use primitives::Hash;
 use core_io::{TimerToken};
 use io::NetSyncIo;
@@ -154,8 +154,10 @@ impl Service {
 	}
 
 	/// Called when a new block is imported by the client.
-	pub fn on_block_imported(&self, header: &Header) {
-		self.handler.protocol.on_block_imported(header)
+	pub fn on_block_imported(&self, hash: HeaderHash, header: &Header) {
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			self.handler.protocol.on_block_imported(&mut NetSyncIo::new(context), hash, header)
+		});
 	}
 
 	/// Called when new transactons are imported by the client.

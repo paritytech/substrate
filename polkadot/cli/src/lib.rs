@@ -20,13 +20,18 @@
 
 extern crate app_dirs;
 extern crate env_logger;
+extern crate futures;
+extern crate tokio_core;
+extern crate ctrlc;
 extern crate ed25519;
 extern crate triehash;
 extern crate substrate_codec as codec;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
+extern crate substrate_network as network;
 extern crate substrate_rpc_servers as rpc;
+extern crate substrate_runtime_support as runtime_support;
 extern crate polkadot_primitives;
 extern crate polkadot_executor;
 extern crate polkadot_runtime;
@@ -40,10 +45,14 @@ extern crate error_chain;
 extern crate log;
 
 pub mod error;
+mod informant;
 
 use std::path::{Path, PathBuf};
 use std::net::SocketAddr;
-use std::sync::mpsc;
+use futures::sync::mpsc;
+use futures::{Sink, Future, Stream};
+use tokio_core::reactor;
+use service::ChainSpec;
 
 /// Parse command line arguments and start the node.
 ///
@@ -53,10 +62,12 @@ use std::sync::mpsc;
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T>(args: I, exit: mpsc::Receiver<()>) -> error::Result<()> where
+pub fn run<I, T>(args: I) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
+	let mut core = reactor::Core::new().expect("tokio::Core could not be created");
+
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
 		Ok(m) => m,
@@ -94,6 +105,17 @@ pub fn run<I, T>(args: I, exit: mpsc::Receiver<()>) -> error::Result<()> where
 		role = service::Role::VALIDATOR;
 	}
 
+	match matches.value_of("chain") {
+		Some("poc-1") => config.chain_spec = ChainSpec::PoC1Testnet,
+		Some("dev") => config.chain_spec = ChainSpec::Development,
+		None => (),
+		Some(unknown) => panic!("Invalid chain name: {}", unknown),
+	}
+	info!("Chain specification: {}", match config.chain_spec {
+		ChainSpec::Development => "Local Development",
+		ChainSpec::PoC1Testnet => "PoC-1 Testnet",
+	});
+
 	config.roles = role;
 	config.network.boot_nodes = matches
 		.values_of("bootnodes")
@@ -118,10 +140,17 @@ pub fn run<I, T>(args: I, exit: mpsc::Receiver<()>) -> error::Result<()> where
 		let rpc_port: u16 = port.parse().expect("Invalid RPC port value specified.");
 		address.set_port(rpc_port);
 	}
+
 	let handler = rpc::rpc_handler(service.client(), service.transaction_pool());
 	let _server = rpc::start_http(&address, handler)?;
 
-	exit.recv().ok();
+	informant::start(&service, core.handle());
+
+	let (exit_send, exit) = mpsc::channel(1);
+	ctrlc::CtrlC::set_handler(move || {
+		exit_send.clone().send(()).wait().expect("Error sending exit notification");
+	});
+	core.run(exit.into_future()).expect("Error running informant event loop");
 	Ok(())
 }
 

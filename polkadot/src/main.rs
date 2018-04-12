@@ -22,16 +22,9 @@ extern crate polkadot_cli as cli;
 
 #[macro_use]
 extern crate error_chain;
-extern crate ctrlc;
-
-use std::sync::mpsc;
 
 quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
-	let (exit_send, exit_receive) = mpsc::channel();
-	ctrlc::CtrlC::set_handler(move || {
-		exit_send.send(()).expect("Error sending exit notification");
-	});
-	cli::run(::std::env::args(), exit_receive)
+	cli::run(::std::env::args())
 }
