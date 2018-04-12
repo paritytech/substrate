@@ -177,7 +177,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
 		// bail if the code is not the same as the natively linked.
 		if self.code_at(&id)? != LocalDispatch::native_equivalent() {
-			warn!("This node is out of date. Block authoring may not work correctly.")
+			bail!("This node is out of date. Block authoring may not work correctly. Bailing.")
 		}
 
 		Ok(CheckedId(id))
