@@ -47,6 +47,17 @@ use codec::Slicable;
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities};
 
+/// Compute the extrinsics root of a list of extrinsics.
+pub fn extrinsics_root<H: Hashing, E: codec::Slicable>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Slicable::encode).collect())
+}
+
+/// Compute the extrinsics root of a list of extrinsics.
+pub fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
+	let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
+	H::enumerated_trie_root(&xts)
+}
+
 pub trait Trait {
 	type Index: Parameter + Default + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + SimpleArithmetic + Default + Bounded + Copy;
@@ -68,6 +79,7 @@ decl_storage! {
 	pub BlockHash get(block_hash): b"sys:old" => required map [ T::BlockNumber => T::Hash ];
 
 	pub ExtrinsicIndex get(extrinsic_index): b"sys:xti" => required u32;
+	pub ExtrinsicData get(extrinsic_data): b"sys:xtd" => required map [ u32 => Vec<u8> ];
 	RandomSeed get(random_seed): b"sys:rnd" => required T::Hash;
 	// The current block number being processed. Set by `execute_block`.
 	Number get(block_number): b"sys:num" => required T::BlockNumber;
@@ -169,6 +181,19 @@ impl<T: Trait> Module<T> {
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_index(who: &T::AccountId) {
 		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::one());
+	}
+
+	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
+	/// ensure `derive_extrinsics` is also called before block-building is completed.
+	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
+		<ExtrinsicData<T>>::insert(Self::extrinsic_index(), encoded_xt);
+	}
+
+	/// Remove all extrinsics data and save the extrinsics trie root.
+	pub fn derive_extrinsics() {
+		let extrinsics = (0..Self::extrinsic_index()).map(<ExtrinsicData<T>>::take).collect();
+		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
+		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
 }
 
