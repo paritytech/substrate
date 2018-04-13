@@ -117,7 +117,7 @@ pub fn evaluate_initial(
 		let mut last_id = None;
 		let mut iter = active_parachains.iter();
 		for head in proposal.parachain_heads() {
-			// proposed heads must be ascending order by parachain ID.
+			// proposed heads must be ascending order by parachain ID without duplicate.
 			if last_id.as_ref().map_or(false, |x| x >= &head.parachain_index) {
 				bail!(ErrorKind::ParachainOutOfOrder);
 			}

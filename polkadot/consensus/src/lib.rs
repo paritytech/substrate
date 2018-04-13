@@ -356,7 +356,6 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 		}
 	}
 
-	// TODO: certain kinds of errors here should lead to a misbehavior report.
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Self::Evaluate {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
@@ -379,6 +378,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 		let proposal = match maybe_proposal {
 			Ok(p) => p,
 			Err(e) => {
+				// TODO: these errors are easily re-checked in runtime.
 				debug!(target: "bft", "Invalid proposal: {:?}", e);
 				return Box::new(future::ok(false));
 			}
@@ -414,6 +414,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 		};
 
 		// evaluate whether the block is actually valid.
+		// TODO: is it better to delay this until the delays are finished?
 		let evaluated = self.client.evaluate_block(&self.parent_id, proposal.into()).map_err(Into::into);
 		let future = future::result(evaluated).and_then(move |good| {
 			let end_result = future::ok(good);
