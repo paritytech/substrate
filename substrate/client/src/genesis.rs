@@ -27,7 +27,7 @@ pub fn construct_genesis_block(storage: &HashMap<Vec<u8>, Vec<u8>>) -> Block {
 		parent_hash: Default::default(),
 		number: 0,
 		state_root,
-		transaction_root: trie_root(vec![].into_iter()).0.into(),
+		extrinsics_root: trie_root(vec![].into_iter()).0.into(),
 		digest: Default::default(),
 	};
 	Block {
@@ -62,13 +62,13 @@ mod tests {
 			UncheckedTransaction { tx, signature }
 		}).collect::<Vec<_>>();
 
-		let transaction_root = ordered_trie_root(transactions.iter().map(Slicable::encode)).0.into();
+		let extrinsics_root = ordered_trie_root(transactions.iter().map(Slicable::encode)).0.into();
 
 		let mut header = Header {
 			parent_hash,
 			number,
 			state_root,
-			transaction_root,
+			extrinsics_root,
 			digest: Digest { logs: vec![], },
 		};
 		let hash = header.blake2_256();

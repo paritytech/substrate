@@ -26,7 +26,7 @@ fn should_return_storage() {
 		parent_hash: 0.into(),
 		number: 0,
 		state_root: 0.into(),
-		transaction_root: Default::default(),
+		extrinsics_root: Default::default(),
 		digest: Default::default(),
 	};
 
@@ -47,7 +47,7 @@ fn should_call_contract() {
 		parent_hash: 0.into(),
 		number: 0,
 		state_root: 0.into(),
-		transaction_root: Default::default(),
+		extrinsics_root: Default::default(),
 		digest: Default::default(),
 	};
 

@@ -141,7 +141,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		address.set_port(rpc_port);
 	}
 
-	let handler = rpc::rpc_handler(service.client(), service.transaction_pool());
+	let handler = rpc::rpc_handler(service.client(), service.transaction_pool(), service.client());
 	let _server = rpc::start_http(&address, handler)?;
 
 	informant::start(&service, core.handle());

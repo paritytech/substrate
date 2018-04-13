@@ -26,13 +26,15 @@ extern crate jsonrpc_http_server as http;
 use std::io;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<S, T>(state: S, transaction_pool: T) -> rpc::IoHandler where
+pub fn rpc_handler<S, T, C>(state: S, transaction_pool: T, chain: C) -> rpc::IoHandler where
 	S: apis::state::StateApi,
 	T: apis::author::AuthorApi,
+	C: apis::chain::ChainApi,
 {
 	let mut io = rpc::IoHandler::new();
 	io.extend_with(state.to_delegate());
 	io.extend_with(transaction_pool.to_delegate());
+	io.extend_with(chain.to_delegate());
 	io
 }
 

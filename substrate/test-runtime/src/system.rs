@@ -53,8 +53,8 @@ pub fn execute_block(block: Block) {
 	let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
-	info_expect_equal_hash(&header.transaction_root, &txs_root);
-	assert!(header.transaction_root == txs_root, "Transaction trie root must be valid.");
+	info_expect_equal_hash(&header.extrinsics_root, &txs_root);
+	assert!(header.extrinsics_root == txs_root, "Transaction trie root must be valid.");
 
 	// execute transactions
 	block.transactions.iter().for_each(execute_transaction_backend);
@@ -159,7 +159,7 @@ mod tests {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
 			state_root: hex!("97dfcd1f8cbf8845fcb544f89332f1a94c1137f7d1b199ef0b0a6ed217015c3e").into(),
-			transaction_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
+			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
 
@@ -187,7 +187,7 @@ mod tests {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
 				state_root: hex!("0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1").into(),
-				transaction_root: hex!("5e44188712452f900acfa1b4bf4084753122ea1856d58187dd33374a2ca653b1").into(),
+				extrinsics_root: hex!("5e44188712452f900acfa1b4bf4084753122ea1856d58187dd33374a2ca653b1").into(),
 				digest: Digest { logs: vec![], },
 			},
 			transactions: vec![
@@ -212,7 +212,7 @@ mod tests {
 				parent_hash: b.header.blake2_256().into(),
 				number: 2,
 				state_root: hex!("aea7c370a9fa4075b703742c22cc4fb12759bdd7d5aa5cdd85895447f838b81b").into(),
-				transaction_root: hex!("9ac45fbcc93fa6a8b5a3c44f04d936d53569c72a53fbc12eb58bf884f6dbfae5").into(),
+				extrinsics_root: hex!("9ac45fbcc93fa6a8b5a3c44f04d936d53569c72a53fbc12eb58bf884f6dbfae5").into(),
 				digest: Digest { logs: vec![], },
 			},
 			transactions: vec![
