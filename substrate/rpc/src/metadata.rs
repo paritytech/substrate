@@ -14,10 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! RPC Metadata
 use std::sync::Arc;
 
 use jsonrpc_pubsub::{Session, PubSubMetadata};
 
+/// RPC Metadata.
+///
+/// Manages peristent session for transports that support it
+/// and may contain some additional info extracted from specific transports
+/// (like remote client IP address, request headers, etc)
 #[derive(Default, Clone)]
 pub struct Metadata {
 	session: Option<Arc<Session>>,
@@ -31,6 +37,7 @@ impl PubSubMetadata for Metadata {
 }
 
 impl Metadata {
+	/// Create new `Metadata` with session (Pub/Sub) support.
 	pub fn new(transport: ::rpc::futures::sync::mpsc::Sender<String>) -> Self {
 		Metadata {
 			session: Some(Arc::new(Session::new(transport))),

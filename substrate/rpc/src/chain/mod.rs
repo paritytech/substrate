@@ -19,20 +19,21 @@
 use std::sync::Arc;
 
 use primitives::block;
-use client::{self, Client};
+use client::{self, Client, BlockchainEvents};
 use state_machine;
 
-use jsonrpc_pubsub::SubscriptionId;
 use jsonrpc_macros::pubsub;
-use rpc::futures::Future;
+use jsonrpc_pubsub::SubscriptionId;
+use rpc::Result as RpcResult;
+use rpc::futures::{Future, Sink, Stream};
+
+use subscriptions::Subscriptions;
 
 mod error;
-
 #[cfg(test)]
 mod tests;
 
 use self::error::{Result, ResultExt};
-use rpc::Result as RpcResult;
 
 build_rpc_trait! {
 	/// Polkadot blockchain API
@@ -59,7 +60,15 @@ build_rpc_trait! {
 	}
 }
 
-impl<B, E> ChainApi for Arc<Client<B, E>> where
+/// Chain API with subscriptions support.
+pub struct Chain<B, E> {
+	/// Substrate client.
+	pub client: Arc<Client<B, E>>,
+	/// Current subscriptions.
+	pub subscriptions: Subscriptions,
+}
+
+impl<B, E> ChainApi for Chain<B, E> where
 	B: client::backend::Backend + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
@@ -67,35 +76,27 @@ impl<B, E> ChainApi for Arc<Client<B, E>> where
 	type Metadata = ::metadata::Metadata;
 
 	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
-		client::Client::header(self, &block::Id::Hash(hash)).chain_err(|| "Blockchain error")
+		self.client.header(&block::Id::Hash(hash)).chain_err(|| "Blockchain error")
 	}
 
 	fn head(&self) -> Result<block::HeaderHash> {
-		Ok(self.info().chain_err(|| "Blockchain error")?.chain.best_hash)
+		Ok(self.client.info().chain_err(|| "Blockchain error")?.chain.best_hash)
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<block::Header>) {
-		let (tx, rx) = ::std::sync::mpsc::sync_channel(1);
-		let client = self.clone();
-		let handle = ::std::thread::spawn(move || {
-			let sink = subscriber.assign_id(1.into()).unwrap();
-			let mut last_value = None;
-			loop {
-				if let Ok(()) = rx.recv_timeout(::std::time::Duration::from_millis(100)) {
-					return;
-				}
-				let head = client.head().and_then(|h| client.header(h)).ok();
-				if last_value != head {
-					last_value = head.clone();
-					if let Some(Some(head)) = head {
-						sink.notify(Ok(head)).wait().unwrap();
-					}
-				}
-			}
+		self.subscriptions.add(subscriber, |sink| {
+			let stream = self.client.import_notification_stream()
+				.map(|notification| Ok(notification.header))
+				.map_err(|e| warn!("Block notification stream error: {:?}", e));
+			sink
+				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+				.send_all(stream)
+				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
+				.map(|_| ())
 		});
 	}
 
 	fn unsubscribe_new_head(&self, id: SubscriptionId) -> RpcResult<bool> {
-		unimplemented!()
+		Ok(self.subscriptions.cancel(id))
 	}
 }

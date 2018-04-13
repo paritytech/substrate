@@ -141,6 +141,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		let http_address = parse_address("127.0.0.1:9933", "rpc-port", &matches);
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", &matches);
 
+		let chain = rpc::apis::chain::Chain::new()
 		let handler = || rpc::rpc_handler(service.client(), service.client(), service.transaction_pool());
 		(
 			rpc::start_http(&http_address, handler())?,
@@ -161,7 +162,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> SocketAddr {
 	let mut address: SocketAddr = default.parse().unwrap();
 	if let Some(port) = matches.value_of(port_param) {
-		let port: u16 = port.parse().expect(&format!("Invalid RPC port for --{} specified.", port_param));
+		let port: u16 = port.parse().expect(&format!("Invalid port for --{} specified.", port_param));
 		address.set_port(port);
 	}
 

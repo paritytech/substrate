@@ -53,7 +53,6 @@ use futures::prelude::*;
 use parking_lot::Mutex;
 use tokio_core::reactor::Core;
 use codec::Slicable;
-use runtime_io::with_externalities;
 use primitives::block::{Id as BlockId, TransactionHash};
 use transaction_pool::TransactionPool;
 use substrate_executor::NativeExecutor;
