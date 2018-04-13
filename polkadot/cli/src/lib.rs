@@ -200,6 +200,7 @@ fn default_base_path() -> PathBuf {
 fn init_logger(pattern: &str) {
 	let mut builder = env_logger::LogBuilder::new();
 	// Disable info logging by default for some modules:
+	builder.filter(Some("ws"), log::LogLevelFilter::Warn);
 	builder.filter(Some("hyper"), log::LogLevelFilter::Warn);
 	// Enable info for others.
 	builder.filter(None, log::LogLevelFilter::Info);
