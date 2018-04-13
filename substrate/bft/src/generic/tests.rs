@@ -18,6 +18,7 @@
 
 use super::*;
 
+use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -117,6 +118,7 @@ struct TestContext {
 	node_count: usize,
 	current_round: Arc<AtomicUsize>,
 	timer: Timer,
+	evaluated: Mutex<BTreeSet<usize>>,
 }
 
 impl Context for TestContext {
@@ -137,7 +139,7 @@ impl Context for TestContext {
 		let proposal = {
 			let mut p = self.proposal.lock().unwrap();
 			let x = *p;
-			*p = (*p * 2) + 1;
+			*p += self.node_count;
 			x
 		};
 
@@ -175,6 +177,10 @@ impl Context for TestContext {
 	}
 
 	fn proposal_valid(&self, proposal: &Candidate) -> FutureResult<bool, Error> {
+		if !self.evaluated.lock().unwrap().insert(proposal.0) {
+			panic!("Evaluated proposal {:?} twice", proposal.0);
+		}
+
 		Ok(proposal.0 % 3 != 0).into_future()
 	}
 
@@ -230,6 +236,7 @@ fn consensus_completes_with_minimum_good() {
 				proposal: Mutex::new(i),
 				current_round: Arc::new(AtomicUsize::new(0)),
 				timer: timer.clone(),
+				evaluated: Mutex::new(BTreeSet::new()),
 				node_count,
 			};
 
@@ -279,6 +286,7 @@ fn consensus_does_not_complete_without_enough_nodes() {
 				proposal: Mutex::new(i),
 				current_round: Arc::new(AtomicUsize::new(0)),
 				timer: timer.clone(),
+				evaluated: Mutex::new(BTreeSet::new()),
 				node_count,
 			};
 
@@ -335,6 +343,7 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 				proposal: Mutex::new(i),
 				current_round: Arc::new(AtomicUsize::new(locked_round + 1)),
 				timer: timer.clone(),
+				evaluated: Mutex::new(BTreeSet::new()),
 				node_count,
 			};
 			let mut agreement = agree(
@@ -367,7 +376,7 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 		})
 		.collect::<Vec<_>>();
 
-	let timeout = timeout_in(Duration::from_millis(500)).map_err(|_| Error);
+	let timeout = timeout_in(Duration::from_millis(1000)).map_err(|_| Error);
 	let results = ::futures::future::join_all(nodes)
 		.map(Some)
 		.select(timeout.map(|_| None))
@@ -404,6 +413,7 @@ fn consensus_completes_even_when_nodes_start_with_a_delay() {
 				proposal: Mutex::new(i),
 				current_round: Arc::new(AtomicUsize::new(0)),
 				timer: timer.clone(),
+				evaluated: Mutex::new(BTreeSet::new()),
 				node_count,
 			};
 

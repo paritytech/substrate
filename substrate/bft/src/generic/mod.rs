@@ -293,7 +293,7 @@ impl<D, S> Locked<D, S> {
 enum LocalState {
 	Start,
 	Proposed,
-	Prepared,
+	Prepared(bool), // whether we thought it valid.
 	Committed,
 	VoteAdvance,
 }
@@ -582,6 +582,7 @@ impl<C: Context> Strategy<C> {
 				Some(_) => {
 					// don't check validity if we are locked.
 					// this is necessary to preserve the liveness property.
+					self.local_state = LocalState::Prepared(true);
 					prepare_for = Some(digest);
 				}
 				None => {
@@ -591,6 +592,8 @@ impl<C: Context> Strategy<C> {
 
 					if let Async::Ready(valid) = res {
 						self.evaluating_proposal = None;
+						self.local_state = LocalState::Prepared(valid);
+
 						if valid {
 							prepare_for = Some(digest);
 						}
@@ -606,7 +609,6 @@ impl<C: Context> Strategy<C> {
 			).into();
 
 			self.import_and_send_message(message, context, sending);
-			self.local_state = LocalState::Prepared;
 		}
 
 		Ok(())
