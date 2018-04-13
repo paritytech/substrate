@@ -189,7 +189,7 @@ impl Header for substrate_primitives::Header {
 	type Hash = substrate_primitives::block::HeaderHash;
 	type Digest = substrate_primitives::block::Digest;
 	fn number(&self) -> &Self::Number { &self.number }
-	fn extrinsics_root(&self) -> &Self::Hash { &self.transaction_root }
+	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
 	fn state_root(&self) -> &Self::Hash { &self.state_root }
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
 	fn digest(&self) -> &Self::Digest { &self.digest }
@@ -202,7 +202,7 @@ impl Header for substrate_primitives::Header {
 	) -> Self {
 		substrate_primitives::Header {
 			number: number,
-			transaction_root: extrinsics_root,
+			extrinsics_root: extrinsics_root,
 			state_root: state_root,
 			parent_hash: parent_hash,
 			digest: digest,

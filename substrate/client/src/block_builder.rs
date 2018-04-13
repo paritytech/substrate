@@ -55,7 +55,7 @@ impl<B, E> BlockBuilder<B, E> where
 				number: client.block_number_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(*block_id))? + 1,
 				parent_hash: client.block_hash_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(*block_id))?,
 				state_root: Default::default(),
-				transaction_root: Default::default(),
+				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			},
 			transactions: Default::default(),
@@ -78,7 +78,7 @@ impl<B, E> BlockBuilder<B, E> where
 
 	/// Consume the builder to return a valid `Block` containing all pushed transactions.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header.transaction_root = ordered_trie_root(self.transactions.iter().map(Slicable::encode)).0.into();
+		self.header.extrinsics_root = ordered_trie_root(self.transactions.iter().map(Slicable::encode)).0.into();
 		let output = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
 			&self.header.encode())?;
 		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");

@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use primitives::block;
-use client;
+use client::{self, Client};
 use state_machine;
 
 use jsonrpc_pubsub::SubscriptionId;
@@ -42,19 +42,23 @@ build_rpc_trait! {
 		#[rpc(name = "chain_getHeader")]
 		fn header(&self, block::HeaderHash) -> Result<Option<block::Header>>;
 
-		#[pubsub(name = "chain_newHeader")] {
+		/// Get hash of the head.
+		#[rpc(name = "chain_getHead")]
+		fn head(&self) -> Result<block::HeaderHash>;
+
+		#[pubsub(name = "chain_newHead")] {
 			/// Hello subscription
-			#[rpc(name = "subscribe_newHeader")]
-			fn subscribe(&self, Self::Metadata, pubsub::Subscriber<block::Header>);
+			#[rpc(name = "subscribe_newHead")]
+			fn subscribe_new_head(&self, Self::Metadata, pubsub::Subscriber<block::Header>);
 
 			/// Unsubscribe from hello subscription.
-			#[rpc(name = "unsubscribe_newHeader")]
-			fn unsubscribe(&self, SubscriptionId) -> RpcResult<bool>;
+			#[rpc(name = "unsubscribe_newHead")]
+			fn unsubscribe_new_head(&self, SubscriptionId) -> RpcResult<bool>;
 		}
 	}
 }
 
-impl<B, E> ChainApi for Arc<client::Client<B, E>> where
+impl<B, E> ChainApi for Arc<Client<B, E>> where
 	B: client::backend::Backend + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
@@ -65,11 +69,15 @@ impl<B, E> ChainApi for Arc<client::Client<B, E>> where
 		client::Client::header(self, &block::Id::Hash(hash)).chain_err(|| "Blockchain error")
 	}
 
-	fn subscribe(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<block::Header>) {
+	fn head(&self) -> Result<block::HeaderHash> {
+		Ok(client::Client::info(self).chain_err(|| "Blockchain error")?.chain.best_hash)
+	}
+
+	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<block::Header>) {
 
 	}
 
-	fn unsubscribe(&self, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_new_head(&self, id: SubscriptionId) -> RpcResult<bool> {
 		unimplemented!()
 	}
 }
