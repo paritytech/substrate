@@ -143,7 +143,6 @@ fn poc_1_testnet_config() -> ChainConfig {
 			authorities: initial_authorities.clone(),
 		}),
 		system: None,
-//		block_time: 5,			// 5 second block time.
 		session: Some(SessionConfig {
 			validators: initial_authorities.clone(),
 			session_length: 720,	// that's 1 hour per session.
@@ -202,7 +201,6 @@ fn local_testnet_config() -> ChainConfig {
 			authorities: initial_authorities.clone(),
 		}),
 		system: None,
-//		block_time: 5,			// 5 second block time.
 		session: Some(SessionConfig {
 			validators: initial_authorities.clone(),
 			session_length: 10,
@@ -213,28 +211,28 @@ fn local_testnet_config() -> ChainConfig {
 			transaction_fee: 1,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
 			validator_count: 2,
-			sessions_per_era: 5,	// 24 hours per era.
-			bonding_duration: 2,	// 90 days per bond.
+			sessions_per_era: 5,
+			bonding_duration: 2,
 		}),
 		democracy: Some(DemocracyConfig {
-			launch_period: 9,	// 2 weeks per public referendum
-			voting_period: 18,	// 4 weeks to discuss & vote on an active referendum
-			minimum_deposit: 10,	// 1000 as the minimum deposit for a referendum
+			launch_period: 9,
+			voting_period: 18,
+			minimum_deposit: 10,
 		}),
 		council: Some(CouncilConfig {
 			active_council: vec![],
-			candidacy_bond: 10,	// 1000 to become a council candidate
-			voter_bond: 2,		// 100 down to vote for a candidate
-			present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
-			carry_count: 4,		// carry over the 24 runners-up to the next council election
-			presentation_duration: 10,	// one day for presenting winners.
-			approval_voting_period: 20,	// one week period between possible council elections.
-			term_duration: 40,	// 180 day term duration for the council.
-			desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
-			inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
+			candidacy_bond: 10,
+			voter_bond: 2,
+			present_slash_per_voter: 1,
+			carry_count: 4,
+			presentation_duration: 10,
+			approval_voting_period: 20,
+			term_duration: 40,
+			desired_seats: 0,
+			inactive_grace_period: 1,
 
-			cooloff_period: 75, // 90 day cooling off period if council member vetoes a proposal.
-			voting_period: 20, // 7 day voting period for council members.
+			cooloff_period: 75,
+			voting_period: 20,
 		}),
 		parachains: Some(Default::default()),
 	};
