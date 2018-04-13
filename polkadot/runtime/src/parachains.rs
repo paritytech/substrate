@@ -132,6 +132,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		<Code<T>>::remove(id);
+		<Heads<T>>::remove(id);
 		<Parachains<T>>::put(parachains);
 	}
 
