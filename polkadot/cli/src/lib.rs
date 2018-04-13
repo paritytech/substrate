@@ -117,32 +117,36 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	});
 
 	config.roles = role;
-	config.network.boot_nodes = matches
-		.values_of("bootnodes")
-		.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
-	config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
-	config.network.net_config_path = config.network.config_path.clone();
+	{
+		config.network.boot_nodes = matches
+			.values_of("bootnodes")
+			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
+		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
+		config.network.net_config_path = config.network.config_path.clone();
 
-	let port = match matches.value_of("port") {
-		Some(port) => port.parse().expect("Invalid p2p port value specified."),
-		None => 30333,
-	};
-	config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
-	config.network.public_address = None;
-	config.network.client_version = format!("parity-polkadot/{}", crate_version!());
+		let port = match matches.value_of("port") {
+			Some(port) => port.parse().expect("Invalid p2p port value specified."),
+			None => 30333,
+		};
+		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
+		config.network.public_address = None;
+		config.network.client_version = format!("parity-polkadot/{}", crate_version!());
+	}
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 
 	let service = service::Service::new(config)?;
 
-	let mut address: SocketAddr = "127.0.0.1:9933".parse().unwrap();
-	if let Some(port) = matches.value_of("rpc-port") {
-		let rpc_port: u16 = port.parse().expect("Invalid RPC port value specified.");
-		address.set_port(rpc_port);
-	}
+	let _rpc_servers = {
+		let http_address = parse_address("127.0.0.1:9933", "rpc-port", &matches);
+		let ws_address = parse_address("127.0.0.1:9944", "ws-port", &matches);
 
-	let handler = rpc::rpc_handler(service.client(), service.transaction_pool());
-	let _server = rpc::start_http(&address, handler)?;
+		let handler = || rpc::rpc_handler(service.client(), service.client(), service.transaction_pool());
+		(
+			rpc::start_http(&http_address, handler())?,
+			rpc::start_ws(&ws_address, handler())?,
+		)
+	};
 
 	informant::start(&service, core.handle());
 
@@ -152,6 +156,16 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	});
 	core.run(exit.into_future()).expect("Error running informant event loop");
 	Ok(())
+}
+
+fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> SocketAddr {
+	let mut address: SocketAddr = default.parse().unwrap();
+	if let Some(port) = matches.value_of(port_param) {
+		let port: u16 = port.parse().expect(&format!("Invalid RPC port for --{} specified.", port_param));
+		address.set_port(port);
+	}
+
+	address
 }
 
 fn keystore_path(base_path: &Path) -> PathBuf {

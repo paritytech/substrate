@@ -16,6 +16,7 @@
 
 //! Substrate blockchain API.
 
+use std::sync::Arc;
 use primitives::block;
 use client;
 use state_machine;
@@ -36,7 +37,7 @@ build_rpc_trait! {
 	}
 }
 
-impl<B, E> ChainApi for client::Client<B, E> where
+impl<B, E> ChainApi for Arc<client::Client<B, E>> where
 	B: client::backend::Backend + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,

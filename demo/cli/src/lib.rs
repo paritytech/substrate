@@ -129,13 +129,16 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	};
 	let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
 
-	let address = "127.0.0.1:9933".parse().unwrap();
-	let handler = rpc::rpc_handler(client, DummyPool);
-	let server = rpc::start_http(&address, handler)?;
+	let handler = rpc::rpc_handler(client, client, DummyPool);
+	let http_address = "127.0.0.1:9933".parse().unwrap();
+	let http_server = rpc::start_http(&http_address, handler)?;
+	let ws_address = "127.0.0.1:9944".parse().unwrap();
+	let ws_server = rpc::start_ws(&ws_address, handler)?;
 
 	if let Some(_) = matches.subcommand_matches("validator") {
 		info!("Starting validator.");
-		server.wait();
+		http_server.wait();
+		ws_server.wait();
 		return Ok(());
 	}
 

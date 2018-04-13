@@ -22,17 +22,27 @@ extern crate substrate_rpc as apis;
 
 extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_http_server as http;
+extern crate jsonrpc_ws_server as ws;
+
+#[macro_use]
+extern crate log;
 
 use std::io;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<S, T>(state: S, transaction_pool: T) -> rpc::IoHandler where
+pub fn rpc_handler<S, C, A>(
+	state: S,
+	chain: C,
+	author: A,
+) -> rpc::IoHandler where
 	S: apis::state::StateApi,
-	T: apis::author::AuthorApi,
+	C: apis::chain::ChainApi,
+	A: apis::author::AuthorApi,
 {
 	let mut io = rpc::IoHandler::new();
 	io.extend_with(state.to_delegate());
-	io.extend_with(transaction_pool.to_delegate());
+	io.extend_with(chain.to_delegate());
+	io.extend_with(author.to_delegate());
 	io
 }
 
@@ -45,4 +55,21 @@ pub fn start_http(
 		.threads(4)
 		.rest_api(http::RestApi::Unsecure)
 		.start_http(addr)
+}
+
+/// Start WS server listening on given address.
+pub fn start_ws(
+	addr: &std::net::SocketAddr,
+	io: rpc::IoHandler,
+) -> io::Result<ws::Server> {
+	ws::ServerBuilder::new(io)
+		.start(addr)
+		.map_err(|err| match err {
+			ws::Error(ws::ErrorKind::Io(io), _) => io,
+			ws::Error(ws::ErrorKind::ConnectionClosed, _) => io::ErrorKind::BrokenPipe.into(),
+			ws::Error(e, _) => {
+				error!("{}", e);
+				io::ErrorKind::Other.into()
+			}
+		})
 }
