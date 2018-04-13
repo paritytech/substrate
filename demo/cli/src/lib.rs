@@ -130,7 +130,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
 
 	let address = "127.0.0.1:9933".parse().unwrap();
-	let handler = rpc::rpc_handler(client, DummyPool);
+	let handler = rpc::rpc_handler(client.clone(), DummyPool, client);
 	let server = rpc::start_http(&address, handler)?;
 
 	if let Some(_) = matches.subcommand_matches("validator") {

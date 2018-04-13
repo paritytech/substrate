@@ -76,6 +76,7 @@ use futures::prelude::*;
 use parking_lot::Mutex;
 use collation::{Collators, CollationFetch};
 use dynamic_inclusion::DynamicInclusion;
+use futures::future::Shared;
 
 pub use self::error::{ErrorKind, Error};
 pub use self::shared_table::{SharedTable, StatementSource, StatementProducer, ProducedStatements};
@@ -237,6 +238,10 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 	type Error = Error;
 
 	fn init(&self, parent_header: &SubstrateHeader, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
+		use std::time::Duration;
+
+		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
+
 		let parent_hash = parent_header.blake2_256().into();
 
 		let checked_id = self.client.check_id(BlockId::Hash(parent_hash))?;
@@ -258,20 +263,27 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 			self.parachain_empty_duration.clone(),
 		);
 
+		let timeout = self.timer.sleep(DELAY_UNTIL);
+
+		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
+			DELAY_UNTIL);
+
+		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
-			parent_hash,
-			parent_number: parent_header.number,
-			parent_id: checked_id,
-			random_seed,
-			local_key: sign_with,
 			client: self.client.clone(),
+			collators: self.collators.clone(),
+			delay: timeout.shared(),
+			dynamic_inclusion,
+			local_duty,
+			local_key: sign_with,
+			parent_hash,
+			parent_id: checked_id,
+			parent_number: parent_header.number,
+			random_seed,
+			router,
+			table,
 			timer: self.timer.clone(),
 			transaction_pool: self.transaction_pool.clone(),
-			collators: self.collators.clone(),
-			local_duty,
-			dynamic_inclusion,
-			table,
-			router,
 		})
 	}
 }
@@ -282,19 +294,20 @@ struct LocalDuty {
 
 /// The Polkadot proposer logic.
 pub struct Proposer<C: PolkadotApi, R, P> {
-	parent_hash: HeaderHash,
-	parent_number: BlockNumber,
-	parent_id: C::CheckedBlockId,
-	random_seed: Hash,
 	client: Arc<C>,
-	local_key: Arc<ed25519::Pair>,
-	transaction_pool: Arc<Mutex<TransactionPool>>,
-	local_duty: LocalDuty,
 	collators: P,
-	timer: Timer,
+	delay: Shared<Sleep>,
 	dynamic_inclusion: DynamicInclusion,
-	table: Arc<SharedTable>,
+	local_duty: LocalDuty,
+	local_key: Arc<ed25519::Pair>,
+	parent_hash: HeaderHash,
+	parent_id: C::CheckedBlockId,
+	parent_number: BlockNumber,
+	random_seed: Hash,
 	router: R,
+	table: Arc<SharedTable>,
+	timer: Timer,
+	transaction_pool: Arc<Mutex<TransactionPool>>,
 }
 
 impl<C, R, P> bft::Proposer for Proposer<C, R, P>
@@ -305,10 +318,12 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 {
 	type Error = Error;
 	type Create = CreateProposal<C, R, P>;
-	type Evaluate = Result<bool, Error>;
+	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
-	fn propose(&self) -> CreateProposal<C, R, P> {
+	fn propose(&self) -> Self::Create {
 		const ATTEMPT_PROPOSE_EVERY: Duration = Duration::from_millis(100);
+
+		debug!(target: "bft", "proposing block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
 		let enough_candidates = self.dynamic_inclusion.acceptable_in(
 			Instant::now(),
@@ -339,7 +354,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 	}
 
 	// TODO: certain kinds of errors here should lead to a misbehavior report.
-	fn evaluate(&self, proposal: &SubstrateBlock) -> Result<bool, Error> {
+	fn evaluate(&self, proposal: &SubstrateBlock) -> Self::Evaluate {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
 		let maybe_evaluated = evaluation::evaluate_initial(
@@ -350,13 +365,18 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			999, // TODO: n_parachains.
 		);
 
-		match maybe_evaluated {
+		let evaluated = match maybe_evaluated {
 			Ok(proposal) => self.client.evaluate_block(&self.parent_id, proposal.into()).map_err(Into::into),
 			Err(e) => {
 				debug!(target: "bft", "Invalid proposal: {:?}", e);
-				return Ok(false)
+				Ok(false)
 			}
-		}
+		};
+
+		// delay casting vote until able.
+		Box::new(self.delay.clone()
+			.map_err(|e| Error::from(::tokio_timer::TimerError::clone(&*e)))
+			.and_then(move |_| evaluated))
 	}
 
 	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId {

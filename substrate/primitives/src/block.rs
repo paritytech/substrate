@@ -146,7 +146,7 @@ pub struct Header {
 	/// State root after this transition.
 	pub state_root: Hash,
 	/// The root of the trie that represents this block's transactions, indexed by a 32-byte integer.
-	pub transaction_root: Hash,
+	pub extrinsics_root: Hash,
 	// TODO...
 //	/// The root of the trie that represents the receipts from this block's transactions
 //	pub receipts_root: Hash,
@@ -161,7 +161,7 @@ impl Header {
 			parent_hash: Default::default(),
 			number,
 			state_root: Default::default(),
-			transaction_root: Default::default(),
+			extrinsics_root: Default::default(),
 			digest: Default::default(),
 		}
 	}
@@ -173,7 +173,7 @@ impl Slicable for Header {
 			parent_hash: Slicable::decode(input)?,
 			number: Slicable::decode(input)?,
 			state_root: Slicable::decode(input)?,
-			transaction_root: Slicable::decode(input)?,
+			extrinsics_root: Slicable::decode(input)?,
 			digest: Slicable::decode(input)?,
 		})
 	}
@@ -184,7 +184,7 @@ impl Slicable for Header {
 		self.parent_hash.using_encoded(|s| v.extend(s));
 		self.number.using_encoded(|s| v.extend(s));
 		self.state_root.using_encoded(|s| v.extend(s));
-		self.transaction_root.using_encoded(|s| v.extend(s));
+		self.extrinsics_root.using_encoded(|s| v.extend(s));
 		self.digest.using_encoded(|s| v.extend(s));
 
 		v
@@ -222,7 +222,7 @@ mod tests {
 			parent_hash: 5.into(),
 			number: 67,
 			state_root: 3.into(),
-			transaction_root: 6.into(),
+			extrinsics_root: 6.into(),
 			digest: Digest { logs: vec![Log(vec![1]), Log(vec![2])] },
 		};
 
@@ -233,7 +233,7 @@ mod tests {
 			67, 0, 0, 0, 0, 0, 0, 0,
 			// state_root
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3,
-			// transaction_root
+			// extrinsics_root
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6,
 			// digest (length, log1, log2)
 			2, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 2
@@ -246,7 +246,7 @@ mod tests {
 			parent_hash: 5.into(),
 			number: 67,
 			state_root: 3.into(),
-			transaction_root: 6.into(),
+			extrinsics_root: 6.into(),
 			digest: Digest { logs: vec![Log(vec![1])] },
 		};
 
@@ -254,7 +254,7 @@ mod tests {
   "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000005",
   "number": 67,
   "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000003",
-  "transactionRoot": "0x0000000000000000000000000000000000000000000000000000000000000006",
+  "extrinsicsRoot": "0x0000000000000000000000000000000000000000000000000000000000000006",
   "digest": {
     "logs": [
       "0x01"
@@ -280,7 +280,7 @@ mod tests {
 			12, 0, 0, 0, 0, 0, 0, 0,
 			// state_root
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			// transaction_root
+			// extrinsics_root
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 			// digest
 			0, 0, 0, 0,
