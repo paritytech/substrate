@@ -141,8 +141,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		let http_address = parse_address("127.0.0.1:9933", "rpc-port", &matches);
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", &matches);
 
-		let chain = rpc::apis::chain::Chain::new()
-		let handler = || rpc::rpc_handler(service.client(), service.client(), service.transaction_pool());
+		let handler = || {
+			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
+			rpc::rpc_handler(service.client(), chain, service.transaction_pool())
+		};
 		(
 			rpc::start_http(&http_address, handler())?,
 			rpc::start_ws(&ws_address, handler())?,

@@ -18,18 +18,21 @@
 
 #![warn(missing_docs)]
 
-extern crate env_logger;
+extern crate ctrlc;
 extern crate ed25519;
+extern crate env_logger;
+extern crate futures;
+extern crate tokio_core;
 extern crate triehash;
-extern crate substrate_codec as codec;
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
+extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
-extern crate demo_primitives;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_state_machine as state_machine;
 extern crate demo_executor;
+extern crate demo_primitives;
 extern crate demo_runtime;
 
 #[macro_use]
@@ -44,10 +47,12 @@ extern crate log;
 pub mod error;
 
 use std::sync::Arc;
+use client::genesis;
 use codec::Slicable;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
-use client::genesis;
+use futures::{Future, Sink, Stream};
+
 
 struct DummyPool;
 impl substrate_rpc::author::AuthorApi for DummyPool {
@@ -127,17 +132,30 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 	};
 	let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
+	let mut core = ::tokio_core::reactor::Core::new().expect("Unable to spawn event loop.");
 
-	let handler = || rpc::rpc_handler(client.clone(), client.clone(), DummyPool);
-	let http_address = "127.0.0.1:9933".parse().unwrap();
-	let http_server = rpc::start_http(&http_address, handler())?;
-	let ws_address = "127.0.0.1:9944".parse().unwrap();
-	let ws_server = rpc::start_ws(&ws_address, handler())?;
+	let _rpc_servers = {
+		let handler = || {
+			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
+			rpc::rpc_handler(client.clone(), chain, DummyPool)
+		};
+		let http_address = "127.0.0.1:9933".parse().unwrap();
+		let ws_address = "127.0.0.1:9944".parse().unwrap();
+
+		(
+			rpc::start_http(&http_address, handler())?,
+			rpc::start_ws(&ws_address, handler())?
+		)
+	};
 
 	if let Some(_) = matches.subcommand_matches("validator") {
 		info!("Starting validator.");
-		http_server.wait();
-		return ws_server.wait().map_err(|e| format!("{}", e).into());
+		let (exit_send, exit) = futures::sync::mpsc::channel(1);
+		ctrlc::CtrlC::set_handler(move || {
+			exit_send.clone().send(()).wait().expect("Error sending exit notification");
+		});
+		core.run(exit.into_future()).expect("Error running informant event loop");
+		return Ok(())
 	}
 
 	println!("No command given.\n");

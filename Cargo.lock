@@ -207,12 +207,14 @@ name = "demo-cli"
 version = "0.1.0"
 dependencies = [
  "clap 2.29.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ctrlc 1.1.1 (git+https://github.com/paritytech/rust-ctrlc.git)",
  "demo-executor 0.1.0",
  "demo-primitives 0.1.0",
  "demo-runtime 0.1.0",
  "ed25519 0.1.0",
  "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
@@ -223,6 +225,7 @@ dependencies = [
  "substrate-rpc-servers 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-state-machine 0.1.0",
+ "tokio-core 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

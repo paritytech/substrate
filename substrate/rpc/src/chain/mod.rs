@@ -26,6 +26,7 @@ use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use rpc::Result as RpcResult;
 use rpc::futures::{Future, Sink, Stream};
+use tokio_core::reactor::Remote;
 
 use subscriptions::Subscriptions;
 
@@ -63,9 +64,19 @@ build_rpc_trait! {
 /// Chain API with subscriptions support.
 pub struct Chain<B, E> {
 	/// Substrate client.
-	pub client: Arc<Client<B, E>>,
+	client: Arc<Client<B, E>>,
 	/// Current subscriptions.
-	pub subscriptions: Subscriptions,
+	subscriptions: Subscriptions,
+}
+
+impl<B, E> Chain<B, E> {
+	/// Create new Chain API RPC handler.
+	pub fn new(client: Arc<Client<B, E>>, remote: Remote) -> Self {
+		Chain {
+			client,
+			subscriptions: Subscriptions::new(remote),
+		}
+	}
 }
 
 impl<B, E> ChainApi for Chain<B, E> where
