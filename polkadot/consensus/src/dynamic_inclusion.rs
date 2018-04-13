@@ -41,8 +41,13 @@ impl DynamicInclusion {
 		// linear function f(n_candidates) -> valid after microseconds
 		// f(0) = allow_empty
 		// f(initial) = 0
-		let y = duration_to_micros(&allow_empty) as i64;
-		let m = -y / initial as i64;
+		let (y, m) = if initial != 0 {
+			let y = duration_to_micros(&allow_empty) as i64;
+
+			(y, -y / initial as i64)
+		} else {
+			(0, 0)
+		};
 
 		DynamicInclusion {
 			start,
@@ -57,14 +62,14 @@ impl DynamicInclusion {
 	/// Panics if `now` is earlier than the `start`.
 	pub fn acceptable_in(&self, now: Instant, included: usize) -> Option<Duration> {
 		let elapsed = now.duration_since(self.start);
-		let elapsed_millis = duration_to_micros(&elapsed) as i64;
+		let elapsed = duration_to_micros(&elapsed) as i64;
 
-		let valid_after_millis = self.y + self.m * included as i64;
+		let valid_after = self.y + self.m * included as i64;
 
-		if elapsed_millis >= valid_after_millis {
+		if elapsed >= valid_after {
 			None
 		} else {
-			Some(Duration::from_millis((valid_after_millis - elapsed_millis) as u64 / 1000))
+			Some(Duration::from_millis((valid_after - elapsed) as u64 / 1000))
 		}
 	}
 }
@@ -102,5 +107,23 @@ mod tests {
 		assert!(dynamic.acceptable_in(now + Duration::from_millis(2000), 5).is_none());
 		assert!(dynamic.acceptable_in(now + Duration::from_millis(3000), 5).is_none());
 		assert!(dynamic.acceptable_in(now + Duration::from_millis(4000), 5).is_none());
+	}
+
+	#[test]
+	fn zero_initial_is_flat() {
+		let now = Instant::now();
+
+		let dynamic = DynamicInclusion::new(
+			0,
+			now,
+			Duration::from_secs(10_000),
+		);
+
+		for i in 0..10_001 {
+			let now = now + Duration::from_secs(i);
+			assert!(dynamic.acceptable_in(now, 0).is_none());
+			assert!(dynamic.acceptable_in(now, 1).is_none());
+			assert!(dynamic.acceptable_in(now, 10).is_none());
+		}
 	}
 }
