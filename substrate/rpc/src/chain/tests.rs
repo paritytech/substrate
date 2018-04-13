@@ -29,7 +29,7 @@ fn should_return_header() {
 		digest: Default::default(),
 	};
 
-	let client = client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap();
+	let client = Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap());
 
 	assert_matches!(
 		ChainApi::header(&client, test_genesis_block.blake2_256().into()),
