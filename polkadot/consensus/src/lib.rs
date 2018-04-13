@@ -73,10 +73,10 @@ use transaction_pool::{Ready, TransactionPool};
 use tokio_timer::{Timer, Interval, Sleep, TimerError};
 
 use futures::prelude::*;
+use futures::future::{self, Shared};
 use parking_lot::Mutex;
 use collation::{Collators, CollationFetch};
 use dynamic_inclusion::DynamicInclusion;
-use futures::future::Shared;
 
 pub use self::error::{ErrorKind, Error};
 pub use self::shared_table::{SharedTable, StatementSource, StatementProducer, ProducedStatements};
@@ -254,7 +254,9 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 			sign_with.public().0,
 		)?;
 
-		let n_parachains = group_info.len();
+		let active_parachains = self.client.active_parachains(&checked_id)?;
+
+		let n_parachains = active_parachains.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
 		let router = self.network.table_router(table.clone());
 		let dynamic_inclusion = DynamicInclusion::new(
@@ -323,11 +325,10 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 	fn propose(&self) -> Self::Create {
 		const ATTEMPT_PROPOSE_EVERY: Duration = Duration::from_millis(100);
 
-		debug!(target: "bft", "proposing block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
-
+		let initial_included = self.table.includable_count();
 		let enough_candidates = self.dynamic_inclusion.acceptable_in(
 			Instant::now(),
-			self.table.includable_count(),
+			initial_included,
 		).unwrap_or_default();
 
 		CreateProposal {
@@ -342,13 +343,15 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 				self.collators.clone(),
 				self.client.clone()
 			),
-			dynamic_inclusion: self.dynamic_inclusion.clone(),
 			table: self.table.clone(),
 			router: self.router.clone(),
 			timing: ProposalTiming {
 				timer: self.timer.clone(),
 				attempt_propose: self.timer.interval(ATTEMPT_PROPOSE_EVERY),
 				enough_candidates: self.timer.sleep(enough_candidates),
+				dynamic_inclusion: self.dynamic_inclusion.clone(),
+				minimum_delay: Some(self.delay.clone()),
+				last_included: initial_included,
 			}
 		}
 	}
@@ -357,26 +360,73 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Self::Evaluate {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
-		let maybe_evaluated = evaluation::evaluate_initial(
+		let active_parachains = match self.client.active_parachains(&self.parent_id) {
+			Ok(x) => x,
+			Err(e) => return Box::new(future::err(e.into())) as Box<_>,
+		};
+
+		let current_timestamp = current_timestamp();
+
+		// do initial serialization and structural integrity checks.
+		let maybe_proposal = evaluation::evaluate_initial(
 			proposal,
-			current_timestamp(),
+			current_timestamp,
 			&self.parent_hash,
 			self.parent_number,
-			999, // TODO: n_parachains.
+			&active_parachains,
 		);
 
-		let evaluated = match maybe_evaluated {
-			Ok(proposal) => self.client.evaluate_block(&self.parent_id, proposal.into()).map_err(Into::into),
+		let proposal = match maybe_proposal {
+			Ok(p) => p,
 			Err(e) => {
 				debug!(target: "bft", "Invalid proposal: {:?}", e);
-				Ok(false)
+				return Box::new(future::ok(false));
 			}
 		};
 
-		// delay casting vote until able.
-		Box::new(self.delay.clone()
-			.map_err(|e| Error::from(::tokio_timer::TimerError::clone(&*e)))
-			.and_then(move |_| evaluated))
+		let vote_delays = {
+			// delay casting vote until able (according to minimum block time)
+			let minimum_delay = self.delay.clone()
+				.map_err(|e| Error::from(::tokio_timer::TimerError::clone(&*e)));
+
+			let included_candidate_hashes = proposal
+				.parachain_heads()
+				.iter()
+				.map(|candidate| candidate.hash());
+
+			// delay casting vote until we have proof that all candidates are
+			// includable.
+			let includability_tracker = self.table.track_includability(included_candidate_hashes)
+				.map_err(|_| ErrorKind::PrematureDestruction.into());
+
+			// delay casting vote until the timestamp of the block is current.
+			let proposed_timestamp = proposal.timestamp();
+			let timestamp_delay = if proposed_timestamp > current_timestamp {
+				let f = self.timer.sleep(Duration::from_secs(proposed_timestamp - current_timestamp))
+					.map_err(Error::from);
+
+				future::Either::A(f)
+			} else {
+				future::Either::B(future::ok(()))
+			};
+
+			minimum_delay.join3(includability_tracker, timestamp_delay)
+		};
+
+		// evaluate whether the block is actually valid.
+		let evaluated = self.client.evaluate_block(&self.parent_id, proposal.into()).map_err(Into::into);
+		let future = future::result(evaluated).and_then(move |good| {
+			let end_result = future::ok(good);
+			if good {
+				// delay a "good" vote.
+				future::Either::A(vote_delays.and_then(|_| end_result))
+			} else {
+				// don't delay a "bad" evaluation.
+				future::Either::B(end_result)
+			}
+		});
+
+		Box::new(future) as Box<_>
 	}
 
 	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId {
@@ -455,27 +505,47 @@ fn current_timestamp() -> Timestamp {
 struct ProposalTiming {
 	timer: Timer,
 	attempt_propose: Interval,
+	dynamic_inclusion: DynamicInclusion,
 	enough_candidates: Sleep,
+	minimum_delay: Option<Shared<Sleep>>,
+	last_included: usize,
 }
 
 impl ProposalTiming {
 	// whether it's time to attempt a proposal.
-	// should only be called within the context of a task.
-	fn attempt_propose(&mut self) -> Result<bool, TimerError> {
-		match self.attempt_propose.poll()? {
-			Async::Ready(x) => { x.expect("timer still alive; intervals never end; qed"); Ok(true) }
-			Async::NotReady => Ok({
-				match self.enough_candidates.poll()? {
-					Async::Ready(()) => true,
-					Async::NotReady => false,
-				}
-			})
-		}
-	}
+	// shouldn't be called outside of the context of a task.
+	fn poll(&mut self, included: usize) -> Poll<(), TimerError> {
 
-	// schedule the time when enough candidates are ready.
-	fn enough_candidates_at(&mut self, duration: Duration) {
-		self.enough_candidates = self.timer.sleep(duration);
+		// first drain from the interval so when the minimum delay is up
+		// we don't have any notifications built up.
+		//
+		// this interval is just meant to produce periodic task wakeups
+		// that lead to the `dynamic_inclusion` getting updated as necessary.
+		if let Async::Ready(x) = self.attempt_propose.poll()? {
+			x.expect("timer still alive; intervals never end; qed");
+		}
+
+		if let Some(ref mut min) = self.minimum_delay {
+			try_ready!(min.poll().map_err(|e| TimerError::clone(&*e)));
+		}
+		self.minimum_delay = None; // after this point, the future must have completed.
+
+		if included == self.last_included {
+			return self.enough_candidates.poll();
+		}
+
+		// the amount of includable candidates has changed. schedule a wakeup
+		// if it's not sufficient anymore.
+		match self.dynamic_inclusion.acceptable_in(Instant::now(), included) {
+			Some(duration) => {
+				self.last_included = included;
+				self.enough_candidates = self.timer.sleep(duration);
+				self.enough_candidates.poll()
+			}
+			None => {
+				Ok(Async::Ready(()))
+			}
+		}
 	}
 }
 
@@ -486,7 +556,6 @@ pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
-	dynamic_inclusion: DynamicInclusion,
 	collation: CollationFetch<P, C>,
 	router: R,
 	table: Arc<SharedTable>,
@@ -546,12 +615,15 @@ impl<C, R, P> CreateProposal<C, R, P>
 		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
 			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
 
+
+		// TODO: full re-evaluation
+		let active_parachains = self.client.active_parachains(&self.parent_id)?;
 		assert!(evaluation::evaluate_initial(
 			&substrate_block,
 			timestamp,
 			&self.parent_hash,
 			self.parent_number,
-			999, // TODO: n_parachains
+			&active_parachains,
 		).is_ok());
 
 		Ok(substrate_block)
@@ -579,27 +651,17 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 			Err(_) => {}, // TODO: handle this failure to collate.
 		}
 
-		// 2. try to propose if our interval or previous timer has gone off.
-		let proposal = if self.timing.attempt_propose()? {
-			let included = self.table.includable_count();
-			match self.dynamic_inclusion.acceptable_in(Instant::now(), included) {
-				Some(sleep_for) => {
-					self.timing.enough_candidates_at(sleep_for);
-					None
-				}
-				None => {
-					self.table.with_proposal(|proposed_set| {
-							Some(proposed_set.into_iter().cloned().collect())
-					})
-				}
-			}
-		} else {
-			None
-		};
+		// 2. try to propose if we have enough includable candidates and other
+		// delays have concluded.
+		let included = self.table.includable_count();
+		try_ready!(self.timing.poll(included));
 
-		Ok(match proposal {
-			Some(p) => Async::Ready(self.propose_with(p)?),
-			None => Async::NotReady,
-		})
+
+		// 3. propose
+		let proposed_candidates = self.table.with_proposal(|proposed_set| {
+				proposed_set.into_iter().cloned().collect()
+		});
+
+		self.propose_with(proposed_candidates).map(Async::Ready)
 	}
 }

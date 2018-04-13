@@ -21,6 +21,7 @@ use super::MAX_TRANSACTIONS_SIZE;
 use codec::Slicable;
 use polkadot_runtime::Block as PolkadotGenericBlock;
 use polkadot_primitives::Timestamp;
+use polkadot_primitives::parachain::Id as ParaId;
 use primitives::block::{Block as SubstrateBlock, HeaderHash, Number as BlockNumber};
 use transaction_pool::PolkadotBlock;
 
@@ -42,9 +43,13 @@ error_chain! {
 			description("Proposal included more candidates than is possible."),
 			display("Proposal included {} candidates for {} parachains", got, expected),
 		}
-		InvalidParachainHeads {
-			description("Proposal had invalid parachains extrinsic."),
-			display("Proposal had invalid parachains extrinsic."),
+		ParachainOutOfOrder {
+			description("Proposal included parachains out of order."),
+			display("Proposal included parachains out of order."),
+		}
+		UnknownParachain(id: ParaId) {
+			description("Proposal included unregistered parachain."),
+			display("Proposal included unregistered parachain {:?}", id),
 		}
 		WrongParentHash(expected: HeaderHash, got: HeaderHash) {
 			description("Proposal had wrong parent hash."),
@@ -71,7 +76,7 @@ pub fn evaluate_initial(
 	now: Timestamp,
 	parent_hash: &HeaderHash,
 	parent_number: BlockNumber,
-	n_parachains: usize,
+	active_parachains: &[ParaId],
 ) -> Result<PolkadotBlock> {
 	const MAX_TIMESTAMP_DRIFT: Timestamp = 60;
 
@@ -104,18 +109,25 @@ pub fn evaluate_initial(
 	}
 
 	{
+		let n_parachains = active_parachains.len();
 		if proposal.parachain_heads().len() > n_parachains {
 			bail!(ErrorKind::TooManyCandidates(n_parachains, proposal.parachain_heads().len()));
 		}
 
 		let mut last_id = None;
+		let mut iter = active_parachains.iter();
 		for head in proposal.parachain_heads() {
 			// proposed heads must be ascending order by parachain ID.
 			if last_id.as_ref().map_or(false, |x| x >= &head.parachain_index) {
-				bail!(ErrorKind::InvalidParachainHeads);
+				bail!(ErrorKind::ParachainOutOfOrder);
 			}
 
-			last_id = Some(head.parachain_index.clone());
+			if iter.position(|x| x == &head.parachain_index).is_none() {
+				// must be unknown since active parachains are always sorted.
+				bail!(ErrorKind::UnknownParachain(head.parachain_index))
+			}
+
+			last_id = Some(head.parachain_index);
 		}
 	}
 

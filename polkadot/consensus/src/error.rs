@@ -37,6 +37,10 @@ error_chain! {
 			description("Local account ID not a validator at this block."),
 			display("Local account ID ({:?}) not a validator at this block.", id),
 		}
+		PrematureDestruction {
+			description("Proposer destroyed before finishing proposing or evaluating"),
+			display("Proposer destroyed before finishing proposing or evaluating"),
+		}
 		Executor(e: ::futures::future::ExecuteErrorKind) {
 			description("Unable to dispatch agreement future"),
 			display("Unable to dispatch agreement future: {:?}", e),
