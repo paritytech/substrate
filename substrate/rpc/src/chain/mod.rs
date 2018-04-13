@@ -17,9 +17,13 @@
 //! Substrate blockchain API.
 
 use std::sync::Arc;
+
 use primitives::block;
 use client;
 use state_machine;
+
+use jsonrpc_pubsub::SubscriptionId;
+use jsonrpc_macros::pubsub;
 
 mod error;
 
@@ -27,13 +31,26 @@ mod error;
 mod tests;
 
 use self::error::{Result, ResultExt};
+use rpc::Result as RpcResult;
 
 build_rpc_trait! {
 	/// Polkadot blockchain API
 	pub trait ChainApi {
+		type Metadata;
+
 		/// Get header of a relay chain block.
 		#[rpc(name = "chain_getHeader")]
 		fn header(&self, block::HeaderHash) -> Result<Option<block::Header>>;
+
+		#[pubsub(name = "chain_newHeader")] {
+			/// Hello subscription
+			#[rpc(name = "subscribe_newHeader")]
+			fn subscribe(&self, Self::Metadata, pubsub::Subscriber<block::Header>);
+
+			/// Unsubscribe from hello subscription.
+			#[rpc(name = "unsubscribe_newHeader")]
+			fn unsubscribe(&self, SubscriptionId) -> RpcResult<bool>;
+		}
 	}
 }
 
@@ -42,7 +59,17 @@ impl<B, E> ChainApi for Arc<client::Client<B, E>> where
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
+	type Metadata = ::metadata::Metadata;
+
 	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
 		client::Client::header(self, &block::Id::Hash(hash)).chain_err(|| "Blockchain error")
+	}
+
+	fn subscribe(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<block::Header>) {
+
+	}
+
+	fn unsubscribe(&self, id: SubscriptionId) -> RpcResult<bool> {
+		unimplemented!()
 	}
 }

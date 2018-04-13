@@ -20,6 +20,7 @@
 
 extern crate parking_lot;
 extern crate jsonrpc_core as rpc;
+extern crate jsonrpc_pubsub;
 extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
@@ -38,6 +39,8 @@ extern crate substrate_executor;
 extern crate assert_matches;
 #[cfg(test)]
 extern crate substrate_runtime_support as runtime_support;
+
+mod metadata;
 
 pub mod chain;
 pub mod state;
