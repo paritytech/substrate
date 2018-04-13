@@ -25,11 +25,11 @@ fn should_return_header() {
 		parent_hash: 0.into(),
 		number: 0,
 		state_root: 0.into(),
-		transaction_root: Default::default(),
+		extrinsics_root: Default::default(),
 		digest: Default::default(),
 	};
 
-	let client = client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap();
+	let client = Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap());
 
 	assert_matches!(
 		ChainApi::header(&client, test_genesis_block.blake2_256().into()),
@@ -37,7 +37,7 @@ fn should_return_header() {
 			parent_hash: 0.into(),
 			number: 0,
 			state_root: 0.into(),
-			transaction_root: Default::default(),
+			extrinsics_root: Default::default(),
 			digest: Default::default(),
 		}
 	);

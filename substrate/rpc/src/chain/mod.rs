@@ -16,8 +16,9 @@
 
 //! Substrate blockchain API.
 
+use std::sync::Arc;
 use primitives::block;
-use client;
+use client::{self, Client};
 use state_machine;
 
 mod error;
@@ -33,15 +34,23 @@ build_rpc_trait! {
 		/// Get header of a relay chain block.
 		#[rpc(name = "chain_getHeader")]
 		fn header(&self, block::HeaderHash) -> Result<Option<block::Header>>;
+
+		/// Get hash of the head.
+		#[rpc(name = "chain_getHead")]
+		fn head(&self) -> Result<block::HeaderHash>;
 	}
 }
 
-impl<B, E> ChainApi for client::Client<B, E> where
+impl<B, E> ChainApi for Arc<Client<B, E>> where
 	B: client::backend::Backend + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
 		client::Client::header(self, &block::Id::Hash(hash)).chain_err(|| "Blockchain error")
+	}
+
+	fn head(&self) -> Result<block::HeaderHash> {
+		Ok(client::Client::info(self).chain_err(|| "Blockchain error")?.chain.best_hash)
 	}
 }
