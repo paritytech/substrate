@@ -1,4 +1,4 @@
-# name: polkadot
+name: polkadot
 author: "Parity Team <admin@parity.io>"
 about: Polkadot Node Rust Implementation
 args:
