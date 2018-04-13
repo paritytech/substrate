@@ -22,6 +22,7 @@ extern crate substrate_rpc as apis;
 
 extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_http_server as http;
+extern crate jsonrpc_pubsub as pubsub;
 extern crate jsonrpc_ws_server as ws;
 
 #[macro_use]
@@ -29,17 +30,20 @@ extern crate log;
 
 use std::io;
 
+type Metadata = apis::metadata::Metadata;
+type RpcHandler = pubsub::PubSubHandler<Metadata>;
+
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<S, C, A>(
 	state: S,
 	chain: C,
 	author: A,
-) -> rpc::IoHandler where
+) -> RpcHandler where
 	S: apis::state::StateApi,
-	C: apis::chain::ChainApi,
+	C: apis::chain::ChainApi<Metadata=Metadata>,
 	A: apis::author::AuthorApi,
 {
-	let mut io = rpc::IoHandler::new();
+	let mut io = pubsub::PubSubHandler::default();
 	io.extend_with(state.to_delegate());
 	io.extend_with(chain.to_delegate());
 	io.extend_with(author.to_delegate());
@@ -49,7 +53,7 @@ pub fn rpc_handler<S, C, A>(
 /// Start HTTP server listening on given address.
 pub fn start_http(
 	addr: &std::net::SocketAddr,
-	io: rpc::IoHandler,
+	io: RpcHandler,
 ) -> io::Result<http::Server> {
 	http::ServerBuilder::new(io)
 		.threads(4)
@@ -60,9 +64,9 @@ pub fn start_http(
 /// Start WS server listening on given address.
 pub fn start_ws(
 	addr: &std::net::SocketAddr,
-	io: rpc::IoHandler,
+	io: RpcHandler,
 ) -> io::Result<ws::Server> {
-	ws::ServerBuilder::new(io)
+	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
 		.start(addr)
 		.map_err(|err| match err {
 			ws::Error(ws::ErrorKind::Io(io), _) => io,

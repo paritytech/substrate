@@ -24,6 +24,7 @@ use state_machine;
 
 use jsonrpc_pubsub::SubscriptionId;
 use jsonrpc_macros::pubsub;
+use rpc::futures::Future;
 
 mod error;
 
@@ -70,11 +71,28 @@ impl<B, E> ChainApi for Arc<Client<B, E>> where
 	}
 
 	fn head(&self) -> Result<block::HeaderHash> {
-		Ok(client::Client::info(self).chain_err(|| "Blockchain error")?.chain.best_hash)
+		Ok(self.info().chain_err(|| "Blockchain error")?.chain.best_hash)
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<block::Header>) {
-
+		let (tx, rx) = ::std::sync::mpsc::sync_channel(1);
+		let client = self.clone();
+		let handle = ::std::thread::spawn(move || {
+			let sink = subscriber.assign_id(1.into()).unwrap();
+			let mut last_value = None;
+			loop {
+				if let Ok(()) = rx.recv_timeout(::std::time::Duration::from_millis(100)) {
+					return;
+				}
+				let head = client.head().and_then(|h| client.header(h)).ok();
+				if last_value != head {
+					last_value = head.clone();
+					if let Some(Some(head)) = head {
+						sink.notify(Ok(head)).wait().unwrap();
+					}
+				}
+			}
+		});
 	}
 
 	fn unsubscribe_new_head(&self, id: SubscriptionId) -> RpcResult<bool> {

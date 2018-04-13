@@ -40,8 +40,7 @@ extern crate assert_matches;
 #[cfg(test)]
 extern crate substrate_runtime_support as runtime_support;
 
-mod metadata;
-
-pub mod chain;
-pub mod state;
 pub mod author;
+pub mod chain;
+pub mod metadata;
+pub mod state;

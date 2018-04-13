@@ -45,7 +45,6 @@ pub mod error;
 
 use std::sync::Arc;
 use codec::Slicable;
-use runtime_io::with_externalities;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
 use client::genesis;
@@ -138,8 +137,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	if let Some(_) = matches.subcommand_matches("validator") {
 		info!("Starting validator.");
 		http_server.wait();
-		ws_server.wait();
-		return Ok(());
+		return ws_server.wait().map_err(|e| format!("{}", e).into());
 	}
 
 	println!("No command given.\n");
