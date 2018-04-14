@@ -659,6 +659,12 @@ impl<C: Context> Strategy<C> {
 		// sent an AdvanceRound message yet, do so.
 		let mut attempt_advance = self.current_accumulator.advance_votes() > self.max_faulty;
 
+		// if we evaluated the proposal and it was bad, vote to advance round.
+		if let LocalState::Prepared(false) = self.local_state {
+			attempt_advance = true;
+		}
+
+		// if the timeout has fired, vote to advance round.
 		if let Async::Ready(_) = self.round_timeout.poll()? {
 			attempt_advance = true;
 		}

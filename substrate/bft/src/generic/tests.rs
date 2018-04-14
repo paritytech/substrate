@@ -177,6 +177,8 @@ impl Context for TestContext {
 	}
 
 	fn proposal_valid(&self, proposal: &Candidate) -> FutureResult<bool, Error> {
+		println!("Evaluating proposal {} on authority {:?}", proposal.0, self.local_id);
+
 		if !self.evaluated.lock().unwrap().insert(proposal.0) {
 			panic!("Evaluated proposal {:?} twice", proposal.0);
 		}
@@ -234,6 +236,63 @@ fn consensus_completes_with_minimum_good() {
 			let ctx = TestContext {
 				local_id: AuthorityId(i),
 				proposal: Mutex::new(i),
+				current_round: Arc::new(AtomicUsize::new(0)),
+				timer: timer.clone(),
+				evaluated: Mutex::new(BTreeSet::new()),
+				node_count,
+			};
+
+			agree(
+				ctx,
+				node_count,
+				max_faulty,
+				rx.map_err(|_| Error),
+				tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
+			)
+		})
+		.collect::<Vec<_>>();
+
+	let timeout = timeout_in(Duration::from_millis(500)).map_err(|_| Error);
+	let results = ::futures::future::join_all(nodes)
+		.map(Some)
+		.select(timeout.map(|_| None))
+		.wait()
+		.map(|(i, _)| i)
+		.map_err(|(e, _)| e)
+		.expect("to complete")
+		.expect("to not time out");
+
+	for result in &results {
+		assert_eq!(&result.justification.digest, &results[0].justification.digest);
+	}
+}
+
+#[test]
+fn consensus_completes_with_minimum_good_all_initial_proposals_bad() {
+	let node_count = 10;
+	let max_faulty = 3;
+
+	let timer = tokio_timer::wheel().tick_duration(ROUND_DURATION).build();
+
+	let (network, net_send, net_recv) = Network::new(node_count);
+	network.route_on_thread();
+
+	let nodes = net_send
+		.into_iter()
+		.zip(net_recv)
+		.take(node_count - max_faulty)
+		.enumerate()
+		.map(|(i, (tx, rx))| {
+			// the first 5 proposals are going to be bad.
+			let proposal = if i < 5 {
+				i * 3 // proposals considered bad in the tests if they are % 3
+			} else {
+				(i * 3) + 1
+			};
+
+			let ctx = TestContext {
+				local_id: AuthorityId(i),
+				proposal: Mutex::new(proposal),
 				current_round: Arc::new(AtomicUsize::new(0)),
 				timer: timer.clone(),
 				evaluated: Mutex::new(BTreeSet::new()),
