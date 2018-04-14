@@ -20,7 +20,7 @@ use std::vec::Vec;
 use codec::{Joiner, Slicable};
 use state_machine::{self, CodeExecutor};
 use primitives::{Header, Block};
-use primitives::block::{Id as BlockId, Transaction};
+use primitives::block::{Id as BlockId, Extrinsic};
 use {backend, error, Client};
 use triehash::ordered_trie_root;
 
@@ -31,7 +31,7 @@ pub struct BlockBuilder<B, E> where
 	error::Error: From<<<B as backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	header: Header,
-	transactions: Vec<Transaction>,
+	transactions: Vec<Extrinsic>,
 	executor: E,
 	state: B::State,
 	changes: state_machine::OverlayedChanges,
@@ -68,7 +68,7 @@ impl<B, E> BlockBuilder<B, E> where
 	/// Push a transaction onto the block's list of transactions. This will ensure the transaction
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
-	pub fn push(&mut self, tx: Transaction) -> error::Result<()> {
+	pub fn push(&mut self, tx: Extrinsic) -> error::Result<()> {
 		let output = state_machine::execute(&self.state, &mut self.changes, &self.executor, "execute_transaction",
 			&vec![].and(&self.header).and(&tx))?;
 		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");

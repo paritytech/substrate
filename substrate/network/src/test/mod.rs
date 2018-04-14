@@ -21,7 +21,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client::{self, genesis, BlockOrigin};
 use client::block_builder::BlockBuilder;
-use primitives::block::{Id as BlockId, TransactionHash};
+use primitives::block::{Id as BlockId, ExtrinsicHash};
 use primitives;
 use executor;
 use io::SyncIo;
@@ -206,7 +206,7 @@ impl Peer {
 					nonce: nonce,
 				};
 				let signature = Keyring::from_raw_public(tx.from.clone()).unwrap().sign(&tx.encode());
-				let tx = primitives::block::Transaction::decode(&mut test_runtime::UncheckedTransaction { signature, tx: tx }.encode().as_ref()).unwrap();
+				let tx = primitives::block::Extrinsic::decode(&mut test_runtime::UncheckedTransaction { signature, tx: tx }.encode().as_ref()).unwrap();
 				builder.push(tx).unwrap();
 				nonce = nonce + 1;
 			});
@@ -219,11 +219,11 @@ impl Peer {
 struct EmptyTransactionPool;
 
 impl TransactionPool for EmptyTransactionPool {
-	fn transactions(&self) -> Vec<(TransactionHash, Vec<u8>)> {
+	fn transactions(&self) -> Vec<(ExtrinsicHash, Vec<u8>)> {
 		Vec::new()
 	}
 
-	fn import(&self, _transaction: &[u8]) -> Option<TransactionHash> {
+	fn import(&self, _transaction: &[u8]) -> Option<ExtrinsicHash> {
 		None
 	}
 }
