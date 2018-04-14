@@ -177,8 +177,6 @@ impl Context for TestContext {
 	}
 
 	fn proposal_valid(&self, proposal: &Candidate) -> FutureResult<bool, Error> {
-		println!("Evaluating proposal {} on authority {:?}", proposal.0, self.local_id);
-
 		if !self.evaluated.lock().unwrap().insert(proposal.0) {
 			panic!("Evaluated proposal {:?} twice", proposal.0);
 		}
