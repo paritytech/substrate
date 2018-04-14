@@ -223,7 +223,7 @@ pub trait Block {
 }
 
 impl Block for substrate_primitives::Block {
-	type Extrinsic = substrate_primitives::block::Transaction;
+	type Extrinsic = substrate_primitives::block::Extrinsic;
 	type Header = substrate_primitives::Header;
 	fn header(&self) -> &Self::Header {
 		&self.header

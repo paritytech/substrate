@@ -21,7 +21,7 @@ use futures::sync::{oneshot, mpsc};
 use network::{NetworkProtocolHandler, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_devp2p::{NetworkService};
-use primitives::block::{TransactionHash, Header, HeaderHash};
+use primitives::block::{ExtrinsicHash, Header, HeaderHash};
 use primitives::Hash;
 use core_io::{TimerToken};
 use io::NetSyncIo;
@@ -66,15 +66,15 @@ pub trait SyncProvider: Send + Sync {
 	/// Get this node id if available.
 	fn node_id(&self) -> Option<String>;
 	/// Returns propagation count for pending transactions.
-	fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats>;
+	fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats>;
 }
 
 /// Transaction pool interface
 pub trait TransactionPool: Send + Sync {
 	/// Get transactions from the pool that are ready to be propagated.
-	fn transactions(&self) -> Vec<(TransactionHash, Vec<u8>)>;
+	fn transactions(&self) -> Vec<(ExtrinsicHash, Vec<u8>)>;
 	/// Import a transction into the pool.
-	fn import(&self, transaction: &[u8]) -> Option<TransactionHash>;
+	fn import(&self, transaction: &[u8]) -> Option<ExtrinsicHash>;
 }
 
 /// ConsensusService
@@ -161,7 +161,7 @@ impl Service {
 	}
 
 	/// Called when new transactons are imported by the client.
-	pub fn on_new_transactions(&self, transactions: &[(TransactionHash, Vec<u8>)]) {
+	pub fn on_new_transactions(&self, transactions: &[(ExtrinsicHash, Vec<u8>)]) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
 			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context), transactions);
 		});
@@ -223,7 +223,7 @@ impl SyncProvider for Service {
 		self.network.external_url()
 	}
 
-	fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats> {
+	fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats> {
 		self.handler.protocol.transactions_stats()
 	}
 }
