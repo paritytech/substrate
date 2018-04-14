@@ -29,23 +29,8 @@ pub type Number = u64;
 /// Hash used to refer to a block hash.
 pub type HeaderHash = Hash;
 
-/// Hash used to refer to a transaction hash.
-pub type TransactionHash = Hash;
-
-/// Simple generic transaction type.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Transaction(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
-
-impl Slicable for Transaction {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Vec::<u8>::decode(input).map(Transaction)
-	}
-
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.using_encoded(f)
-	}
-}
+/// Hash used to refer to an extrinsic.
+pub type ExtrinsicHash = Hash;
 
 /// Simple generic extrinsic type.
 #[derive(PartialEq, Eq, Clone)]
@@ -126,11 +111,11 @@ pub mod generic {
 	}
 }
 
-/// The body of a block is just a bunch of transactions.
-pub type Body = Vec<Transaction>;
+/// The body of a block is just a bunch of extrinsics.
+pub type Body = Vec<Extrinsic>;
 /// The header and body of a concrete, but unspecialised, block. Used by substrate to represent a
 /// block some fields of which the runtime alone knows how to interpret (e.g. the transactions).
-pub type Block = generic::Block<Transaction>;
+pub type Block = generic::Block<Extrinsic>;
 
 /// A substrate chain block header.
 // TODO: split out into light-client-specific fields and runtime-specific fields.
@@ -270,7 +255,7 @@ mod tests {
 	fn test_block_encoding() {
 		let block = Block {
 			header: Header::from_block_number(12),
-			transactions: vec![Transaction(vec!(4))],
+			transactions: vec![Extrinsic(vec!(4))],
 		};
 
 		assert_eq!(block.encode(), vec![

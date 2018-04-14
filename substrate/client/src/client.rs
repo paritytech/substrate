@@ -453,7 +453,7 @@ mod tests {
 	use codec::Slicable;
 	use keyring::Keyring;
 	use {primitives, genesis};
-	use primitives::block::Transaction as PrimitiveTransaction;
+	use primitives::block::Extrinsic as PrimitiveExtrinsic;
 	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use test_runtime::{UncheckedTransaction, Transaction};
 	use test_runtime;
@@ -559,12 +559,12 @@ mod tests {
 	}
 
 	trait Signable {
-		fn signed(self) -> PrimitiveTransaction;
+		fn signed(self) -> PrimitiveExtrinsic;
 	}
 	impl Signable for Transaction {
-		fn signed(self) -> PrimitiveTransaction {
+		fn signed(self) -> PrimitiveExtrinsic {
 			let signature = Keyring::from_raw_public(self.from.clone()).unwrap().sign(&self.encode());
-			PrimitiveTransaction::decode(&mut UncheckedTransaction { signature, tx: self }.encode().as_ref()).unwrap()
+			PrimitiveExtrinsic::decode(&mut UncheckedTransaction { signature, tx: self }.encode().as_ref()).unwrap()
 		}
 	}
 
