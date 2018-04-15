@@ -20,17 +20,17 @@ mod __impl {
 	extern crate alloc;
 	extern crate pwasm_libc;
 
-	use self::alloc::heap::{Alloc, Layout, AllocErr};
+	use self::alloc::heap::{GlobalAlloc, Layout, Opaque};
 
 	use super::WasmAllocator;
 
-	unsafe impl<'a> Alloc for &'a WasmAllocator {
-		unsafe fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr> {
-			Ok(pwasm_libc::malloc(layout.size()))
+	unsafe impl GlobalAlloc for WasmAllocator {
+		unsafe fn alloc(&self, layout: Layout) -> *mut Opaque {
+			pwasm_libc::malloc(layout.size()) as *mut Opaque
 		}
 
-		unsafe fn dealloc(&mut self, ptr: *mut u8, _layout: Layout) {
-			pwasm_libc::free(ptr)
+		unsafe fn dealloc(&self, ptr: *mut Opaque, _layout: Layout) {
+			pwasm_libc::free(ptr as *mut u8)
 		}
 	}
 }
