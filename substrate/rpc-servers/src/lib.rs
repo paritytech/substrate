@@ -46,5 +46,6 @@ pub fn start_http(
 	http::ServerBuilder::new(io)
 		.threads(4)
 		.rest_api(http::RestApi::Unsecure)
+		.cors(http::DomainsValidation::Disabled)
 		.start_http(addr)
 }
