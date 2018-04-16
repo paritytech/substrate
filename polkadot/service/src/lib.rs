@@ -242,6 +242,8 @@ fn local_testnet_config() -> ChainConfig {
 impl Service {
 	/// Creates and register protocol with the network service
 	pub fn new(mut config: Configuration) -> Result<Service, error::Error> {
+		use std::sync::Barrier;
+
 		// Create client
 		let executor = polkadot_executor::Executor::new();
 		let mut storage = Default::default();
@@ -299,8 +301,13 @@ impl Service {
 		let thread_client = client.clone();
 		let thread_network = network.clone();
 		let thread_txpool = transaction_pool.clone();
+
+		let barrier = ::std::sync::Arc::new(Barrier::new(2));
+		let thread_barrier = barrier.clone();
 		let thread = thread::spawn(move || {
 			thread_network.start_network();
+
+			thread_barrier.wait();
 			let mut core = Core::new().expect("tokio::Core could not be created");
 			let events = thread_client.import_notification_stream().for_each(|notification| {
 				thread_network.on_block_imported(notification.hash, &notification.header);
@@ -313,6 +320,11 @@ impl Service {
 			}
 			debug!("Polkadot service shutdown");
 		});
+
+		// before returning, make sure the network is started. avoids a race
+		// between the drop killing notification listeners and the new notification
+		// stream being stsarted.
+		barrier.wait();
 		Ok(Service {
 			thread: Some(thread),
 			client: client,
@@ -359,6 +371,7 @@ impl Drop for Service {
 	fn drop(&mut self) {
 		self.client.stop_notifications();
 		self.network.stop_network();
+
 		if let Some(thread) = self.thread.take() {
 			thread.join().expect("The service thread has panicked");
 		}
