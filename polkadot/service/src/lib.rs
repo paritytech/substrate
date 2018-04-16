@@ -321,9 +321,8 @@ impl Service {
 			})
 		};
 
-		// before returning, make sure the network is started. avoids a race
-		// between the drop killing notification listeners and the new notification
-		// stream being started.
+		// wait for the network to start up before starting the consensus
+		// service.
 		barrier.wait();
 
 		// Spin consensus service if configured
