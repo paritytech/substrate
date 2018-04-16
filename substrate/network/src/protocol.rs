@@ -21,7 +21,7 @@ use std::time;
 use parking_lot::{RwLock, Mutex};
 use futures::sync::oneshot;
 use serde_json;
-use primitives::block::{HeaderHash, TransactionHash, Number as BlockNumber, Header, Id as BlockId};
+use primitives::block::{HeaderHash, ExtrinsicHash, Number as BlockNumber, Header, Id as BlockId};
 use primitives::{Hash, blake2_256};
 use runtime_support::Hashable;
 use network::{PeerId, NodeId};
@@ -82,7 +82,7 @@ struct Peer {
 	/// Request timestamp
 	request_timestamp: Option<time::Instant>,
 	/// Holds a set of transactions known to this peer.
-	known_transactions: HashSet<TransactionHash>,
+	known_transactions: HashSet<ExtrinsicHash>,
 	/// Holds a set of blocks known to this peer.
 	known_blocks: HashSet<HeaderHash>,
 	/// Request counter,
@@ -443,7 +443,7 @@ impl Protocol {
 	}
 
 	/// Called when peer sends us new transactions
-	pub fn propagate_transactions(&self, io: &mut SyncIo, transactions: &[(TransactionHash, Vec<u8>)]) {
+	pub fn propagate_transactions(&self, io: &mut SyncIo, transactions: &[(ExtrinsicHash, Vec<u8>)]) {
 		// Accept transactions only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
 			return;
@@ -513,7 +513,7 @@ impl Protocol {
 		}
 	}
 
-	pub fn transactions_stats(&self) -> BTreeMap<TransactionHash, TransactionStats> {
+	pub fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats> {
 		BTreeMap::new()
 	}
 

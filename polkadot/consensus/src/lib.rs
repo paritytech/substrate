@@ -570,8 +570,6 @@ impl<C, R, P> CreateProposal<C, R, P>
 		P: Collators,
 {
 	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<SubstrateBlock, Error> {
-		debug!(target: "bft", "proposing block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
-
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();
 		let mut block_builder = self.client.build_block(
@@ -612,6 +610,16 @@ impl<C, R, P> CreateProposal<C, R, P>
 
 		let polkadot_block = block_builder.bake();
 		info!("Proposing block [number: {}; extrinsics: [{}], parent_hash: {}]", polkadot_block.header.number, polkadot_block.extrinsics.len(), polkadot_block.header.parent_hash);
+
+		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
+			polkadot_block.header.number,
+			Hash::from(polkadot_block.header.blake2_256()),
+			polkadot_block.header.parent_hash,
+			polkadot_block.extrinsics.iter()
+				.map(|xt| format!("{}", Hash::from(xt.blake2_256())))
+				.collect::<Vec<_>>()
+				.join(", ")
+		);
 
 		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
 			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
