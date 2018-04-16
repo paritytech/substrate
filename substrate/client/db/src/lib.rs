@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Client backend that uses RocksDB database as storage.
+//! Client backend that uses RocksDB database as storage. State is still kept in memory.
 
 extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
@@ -26,9 +26,9 @@ extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 #[macro_use] extern crate log;
 
-use std::fmt;
 use std::sync::Arc;
 use std::path::PathBuf;
+use std::collections::HashMap;
 use parking_lot::RwLock;
 use runtime_support::Hashable;
 use primitives::blake2_256;
@@ -39,8 +39,13 @@ use state_machine::backend::Backend as StateBackend;
 use state_machine::CodeExecutor;
 use codec::Slicable;
 
+const STATE_HISTORY: block::Number = 64;
+
+/// Database settings.
 pub struct DatabaseSettings {
+	/// Cache size in bytes. If `None` default is used.
 	pub cache_size: Option<usize>,
+	/// Path to the database.
 	pub path: PathBuf,
 }
 
@@ -120,25 +125,6 @@ fn db_err(err: kvdb::Error) -> client::error::Error {
 	}
 }
 
-pub struct DbErr(kvdb::Error);
-
-impl From<DbErr> for client::error::Error {
-	fn from(e: DbErr) -> client::error::Error {
-		db_err(e.0)
-	}
-}
-
-impl fmt::Debug for DbErr {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		self.0.fmt(f)
-	}
-}
-impl fmt::Display for DbErr {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		self.0.fmt(f)
-	}
-}
-
 impl BlockchainDb {
 	fn id(&self, id: BlockId) -> Result<Option<BlockKey>, client::error::Error> {
 		match id {
@@ -167,7 +153,7 @@ impl BlockchainDb {
 			}).map_err(db_err)?
 		{
 			let hash = header.blake2_256().into();
-			info!("DB Opened blockchain db, best {:?} ({})", hash, header.number);
+			debug!("DB Opened blockchain db, best {:?} ({})", hash, header.number);
 			(hash, header.number)
 		} else {
 			(Default::default(), Default::default())
@@ -287,73 +273,32 @@ impl client::backend::BlockImportOperation for BlockImportOperation {
 	}
 
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> Result<(), client::error::Error> {
-		self.pending_state.transaction = DBTransaction::new();
-		for (key, val) in iter {
-			self.pending_state.transaction.put(columns::STATE, &key, &val);
-		}
+		self.pending_state.commit(iter.into_iter().map(|(k, v)| (k, Some(v))));
 		Ok(())
 	}
 }
 
-/// Append-only state database.
 pub struct DbState {
-	db: Arc<Database>,
-	transaction: DBTransaction,
+	mem: state_machine::backend::InMemory,
+	changes: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 }
 
 impl state_machine::Backend for DbState {
-	type Error = DbErr;
+	type Error = state_machine::backend::Void;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.db.get(columns::STATE, key).map_err(|e|DbErr(e))?.map(|v| v.to_vec()))
+		self.mem.storage(key)
 	}
 
 	fn commit<I>(&mut self, changes: I)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		for (key, val) in changes {
-			match val {
-				Some(v) => { self.transaction.put(columns::STATE, &key, &v); },
-				None => { self.transaction.delete(columns::STATE, &key); },
-			}
-		}
+		self.changes = changes.into_iter().collect();
+		self.mem.commit(self.changes.clone());
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.db.iter(columns::STATE).map(|iter| iter.map(|(k, v)| (k.to_vec(), v.to_vec())).collect()).unwrap_or_default()
-	}
-}
-
-
-pub enum State {
-	Db(DbState),
-	Mem(state_machine::backend::InMemory),
-}
-
-impl state_machine::Backend for State {
-	type Error = DbErr;
-
-	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		match *self {
-			State::Db(ref s) => s.storage(key),
-			State::Mem(ref s) => Ok(s.storage(key).expect("In-mem backedn does not fail")),
-		}
-	}
-
-	fn commit<I>(&mut self, changes: I)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		match *self {
-			State::Db(ref mut s) => s.commit(changes),
-			State::Mem(_) => panic!("Attempted to commit in-memory state"),
-		}
-	}
-
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		match *self {
-			State::Db(ref s) => s.pairs(),
-			State::Mem(ref s) => s.pairs(),
-		}
+		self.mem.pairs()
 	}
 }
 
@@ -361,7 +306,7 @@ impl state_machine::Backend for State {
 pub struct Backend {
 	db: Arc<Database>,
 	blockchain: BlockchainDb,
-	old_states: RwLock<HashMap<block::Number, state_machine::backend::InMemory>>,
+	old_states: RwLock<HashMap<BlockKey, state_machine::backend::InMemory>>,
 }
 
 impl Backend {
@@ -373,15 +318,28 @@ impl Backend {
 		let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
 		let db = Arc::new(Database::open(&db_config, &path).map_err(db_err)?);
 		let blockchain = BlockchainDb::new(db.clone())?;
-		info!("DB Opened at {}", path);
-		Ok(Backend { db, blockchain })
+
+		//load latest state
+		let mut state = state_machine::backend::InMemory::new();
+		let mut old_states = HashMap::new();
+	 	if let Some(iter) = db.iter(columns::STATE).map(|iter| iter.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))) {
+			state.commit(iter);
+			old_states.insert(number_to_db_key(blockchain.meta.read().best_number), state);
+		}
+
+		debug!("DB Opened at {}", path);
+		Ok(Backend {
+			db,
+			blockchain,
+			old_states: RwLock::new(old_states)
+		})
 	}
 }
 
 impl client::backend::Backend for Backend {
 	type BlockImportOperation = BlockImportOperation;
 	type Blockchain = BlockchainDb;
-	type State = State;
+	type State = DbState;
 
 	fn begin_operation(&self, block: BlockId) -> Result<Self::BlockImportOperation, client::error::Error> {
 		let state = self.state_at(block)?;
@@ -392,7 +350,7 @@ impl client::backend::Backend for Backend {
 	}
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> Result<(), client::error::Error> {
-		let mut transaction = operation.pending_state.transaction;
+		let mut transaction = DBTransaction::new();
 		if let Some(pending_block) = operation.pending_block {
 			let hash: block::HeaderHash = pending_block.header.blake2_256().into();
 			let number = pending_block.header.number;;
@@ -408,7 +366,18 @@ impl client::backend::Backend for Backend {
 			if pending_block.is_best {
 				transaction.put(columns::META, meta::BEST_BLOCK, &key);
 			}
-			info!("DB Commit {:?} ({})", hash, number);
+			for (key, val) in operation.pending_state.changes.into_iter() {
+				match val {
+					Some(v) => { transaction.put(columns::STATE, &key, &v); },
+					None => { transaction.delete(columns::STATE, &key); },
+				}
+			}
+			let mut states = self.old_states.write();
+			states.insert(key, operation.pending_state.mem);
+			if number >= STATE_HISTORY {
+				states.remove(&number_to_db_key(number - STATE_HISTORY));
+			}
+			debug!("DB Commit {:?} ({})", hash, number);
 			self.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
 		}
@@ -420,16 +389,11 @@ impl client::backend::Backend for Backend {
 	}
 
 	fn state_at(&self, block: BlockId) -> Result<Self::State, client::error::Error> {
-		let info = self.blockchain.meta.read();
-		let latest = match block {
-			BlockId::Hash(h) => h == info.best_hash,
-			BlockId::Number(n) => n == info.best_number,
-		};
-		if !latest {
-			info!("DB Requested old {:?}", block);
-			return Err(client::error::ErrorKind::UnknownBlock(block).into());
+		if let Some(state) = self.blockchain.id(block)?.and_then(|id| self.old_states.read().get(&id).cloned()) {
+			Ok(DbState { mem: state, changes: Vec::new() })
+		} else {
+			Err(client::error::ErrorKind::UnknownBlock(block).into())
 		}
-		Ok(State::Db(DbState { db: self.db.clone(), transaction: DBTransaction::new() }))
 	}
 }
 
