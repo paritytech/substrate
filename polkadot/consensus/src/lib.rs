@@ -609,7 +609,6 @@ impl<C, R, P> CreateProposal<C, R, P>
 		}
 
 		let polkadot_block = block_builder.bake();
-		info!("Proposing block [number: {}; extrinsics: [{}], parent_hash: {}]", polkadot_block.header.number, polkadot_block.extrinsics.len(), polkadot_block.header.parent_hash);
 
 		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
 			polkadot_block.header.number,
@@ -623,7 +622,6 @@ impl<C, R, P> CreateProposal<C, R, P>
 
 		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
 			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
-
 
 		// TODO: full re-evaluation
 		let active_parachains = self.client.active_parachains(&self.parent_id)?;

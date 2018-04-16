@@ -102,3 +102,36 @@ impl Future for Includable {
 		self.0.poll()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn it_works() {
+		let hash1 = [1; 32].into();
+		let hash2 = [2; 32].into();
+		let hash3 = [3; 32].into();
+
+		let (mut sender, recv) = track([
+			(hash1, true),
+			(hash2, true),
+			(hash2, false), // overwrite should favor latter.
+			(hash3, true),
+		].iter().cloned());
+
+		assert!(!sender.is_complete());
+
+		// true -> false transition is possible and should be handled.
+		sender.update_candidate(hash1, false);
+		assert!(!sender.is_complete());
+
+		sender.update_candidate(hash2, true);
+		assert!(!sender.is_complete());
+
+		sender.update_candidate(hash1, true);
+		assert!(sender.is_complete());
+
+		recv.wait().unwrap();
+	}
+}
