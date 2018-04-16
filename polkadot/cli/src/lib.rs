@@ -47,8 +47,9 @@ extern crate log;
 pub mod error;
 mod informant;
 
-use std::path::{Path, PathBuf};
+use std::io;
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
@@ -153,13 +154,28 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			rpc::rpc_handler(service.client(), chain, service.transaction_pool())
 		};
 		(
-			rpc::start_http(&http_address, handler())?,
-			rpc::start_ws(&ws_address, handler())?,
+			start_server(http_address, |address| rpc::start_http(address, handler())),
+			start_server(ws_address, |address| rpc::start_ws(address, handler())),
 		)
 	};
 
 	core.run(exit.into_future()).expect("Error running informant event loop");
 	Ok(())
+}
+
+fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error> where
+	F: Fn(&SocketAddr) -> Result<T, io::Error>,
+{
+	start(&address)
+		.or_else(|e| match e.kind() {
+			io::ErrorKind::AddrInUse |
+			io::ErrorKind::PermissionDenied => {
+				warn!("Unable to bind server to {}. Trying random port.", address);
+				address.set_port(0);
+				start(&address)
+			},
+			_ => Err(e),
+		})
 }
 
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
