@@ -16,7 +16,7 @@
 
 //! Keystore (and session key management) for polkadot.
 
-extern crate ethcrypto as crypto;
+extern crate ethcore_crypto as crypto;
 extern crate subtle;
 extern crate ed25519;
 extern crate rand;
