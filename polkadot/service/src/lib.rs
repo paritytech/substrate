@@ -206,7 +206,7 @@ fn local_testnet_config() -> ChainConfig {
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			intentions: vec![],
+			intentions: initial_authorities.clone(),
 			transaction_fee: 1,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
 			validator_count: 2,

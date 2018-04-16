@@ -292,12 +292,15 @@ impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for Ready<'a, T> {
 	fn is_ready(&mut self, xt: &VerifiedTransaction) -> Readiness {
 		let sender = xt.inner.signed;
+		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.hash, TransactionHash::from(sender));
 
 		// TODO: find a way to handle index error properly -- will need changes to
 		// transaction-pool trait.
 		let (api_handle, at_block) = (&self.api_handle, &self.at_block);
 		let next_index = self.known_indices.entry(sender)
 			.or_insert_with(|| api_handle.index(at_block, sender).ok().unwrap_or_else(u64::max_value));
+
+		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.inner.index);
 
 		match xt.inner.index.cmp(&next_index) {
 			Ordering::Greater => Readiness::Future,
