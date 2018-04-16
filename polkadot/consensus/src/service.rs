@@ -218,11 +218,6 @@ impl<E> Sink for BftSink<E> {
 	}
 }
 
-/// Consensus service. Starts working when created.
-pub struct Service {
-	thread: Option<thread::JoinHandle<()>>,
-}
-
 struct Network(Arc<net::ConsensusService>);
 
 fn start_bft<F, C>(
@@ -259,6 +254,12 @@ fn start_bft<F, C>(
 	}
 }
 
+/// Consensus service. Starts working when created.
+pub struct Service {
+	thread: Option<thread::JoinHandle<()>>,
+	exit_signal: Option<::exit_future::Signal>,
+}
+
 impl Service {
 	/// Create and start a new instance.
 	pub fn new<C>(
@@ -266,11 +267,11 @@ impl Service {
 		network: Arc<net::ConsensusService>,
 		transaction_pool: Arc<Mutex<TransactionPool>>,
 		key: ed25519::Pair,
-		exit: ::exit_future::Exit,
 	) -> Service
 		where
 			C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static,
 	{
+		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {
 			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
 			let key = Arc::new(key);
@@ -339,13 +340,18 @@ impl Service {
 			}
 		});
 		Service {
-			thread: Some(thread)
+			thread: Some(thread),
+			exit_signal: Some(signal),
 		}
 	}
 }
 
 impl Drop for Service {
 	fn drop(&mut self) {
+		if let Some(signal) = self.exit_signal.take() {
+			signal.fire();
+		}
+
 		if let Some(thread) = self.thread.take() {
 			thread.join().expect("The service thread has panicked");
 		}

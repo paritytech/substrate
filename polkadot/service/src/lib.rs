@@ -299,7 +299,6 @@ impl Service {
 			let client = client.clone();
 			let network = network.clone();
 			let txpool = transaction_pool.clone();
-			let exit = exit.clone();
 
 			let thread_barrier = barrier.clone();
 			thread::spawn(move || {
@@ -332,7 +331,7 @@ impl Service {
 			// Load the first available key. Code above makes sure it exisis.
 			let key = keystore.load(&keystore.contents()?[0], "")?;
 			info!("Using authority key {:?}", key.public());
-			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool.clone(), key, exit))
+			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool.clone(), key))
 		} else {
 			None
 		};
