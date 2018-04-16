@@ -39,7 +39,7 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Path to key files.
 	pub keystore_path: String,
-	/// Additional key seeds.
+	/// Path to the database.
 	pub database_path: String,
 	/// Additional key seeds.
 	pub keys: Vec<String>,
