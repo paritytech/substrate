@@ -1,0 +1,17 @@
+[package]
+name = "substrate-client-db"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+parking_lot = "0.4"
+log = "0.3"
+kvdb = { git = "https://github.com/paritytech/parity.git" }
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity.git" }
+substrate-primitives = { path = "../../../substrate/primitives" }
+substrate-client = { path = "../../../substrate/client" }
+substrate-state-machine = { path = "../../../substrate/state-machine" }
+substrate-runtime-support = { path = "../../../substrate/runtime-support" }
+substrate-codec = { path = "../../../substrate/codec" }
+
+[dev-dependencies]
