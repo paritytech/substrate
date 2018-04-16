@@ -146,11 +146,15 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	informant::start(&service, core.handle());
 
-	let (exit_send, exit) = mpsc::channel(1);
-	ctrlc::CtrlC::set_handler(move || {
-		exit_send.clone().send(()).wait().expect("Error sending exit notification");
-	});
-	core.run(exit.into_future()).expect("Error running informant event loop");
+	{
+		// can't use signal directly here because CtrlC takes only `Fn`.
+		let (exit_send, exit) = mpsc::channel(1);
+		ctrlc::CtrlC::set_handler(move || {
+			exit_send.clone().send(()).wait().expect("Error sending exit notification");
+		});
+		core.run(exit.into_future()).expect("Error running informant event loop");
+	}
+
 	Ok(())
 }
 
