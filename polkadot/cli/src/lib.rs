@@ -137,9 +137,16 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let service = service::Service::new(config)?;
 
+	informant::start(&service, core.handle());
+
+	let (exit_send, exit) = mpsc::channel(1);
+	ctrlc::CtrlC::set_handler(move || {
+		exit_send.clone().send(()).wait().expect("Error sending exit notification");
+	});
+
 	let _rpc_servers = {
-		let http_address = parse_address("127.0.0.1:9933", "rpc-port", &matches);
-		let ws_address = parse_address("127.0.0.1:9944", "ws-port", &matches);
+		let http_address = parse_address("127.0.0.1:9933", "rpc-port", &matches)?;
+		let ws_address = parse_address("127.0.0.1:9944", "ws-port", &matches)?;
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
@@ -151,24 +158,18 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		)
 	};
 
-	informant::start(&service, core.handle());
-
-	let (exit_send, exit) = mpsc::channel(1);
-	ctrlc::CtrlC::set_handler(move || {
-		exit_send.clone().send(()).wait().expect("Error sending exit notification");
-	});
 	core.run(exit.into_future()).expect("Error running informant event loop");
 	Ok(())
 }
 
-fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> SocketAddr {
+fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
 	let mut address: SocketAddr = default.parse().unwrap();
 	if let Some(port) = matches.value_of(port_param) {
-		let port: u16 = port.parse().expect(&format!("Invalid port for --{} specified.", port_param));
+		let port: u16 = port.parse().ok().ok_or(format!("Invalid port for --{} specified.", port_param))?;
 		address.set_port(port);
 	}
 
-	address
+	Ok(address)
 }
 
 fn keystore_path(base_path: &Path) -> PathBuf {
