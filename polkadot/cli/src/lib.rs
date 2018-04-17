@@ -47,8 +47,9 @@ extern crate log;
 pub mod error;
 mod informant;
 
-use std::path::{Path, PathBuf};
+use std::io;
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
@@ -117,32 +118,25 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	});
 
 	config.roles = role;
-	config.network.boot_nodes = matches
-		.values_of("bootnodes")
-		.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
-	config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
-	config.network.net_config_path = config.network.config_path.clone();
+	{
+		config.network.boot_nodes = matches
+			.values_of("bootnodes")
+			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
+		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
+		config.network.net_config_path = config.network.config_path.clone();
 
-	let port = match matches.value_of("port") {
-		Some(port) => port.parse().expect("Invalid p2p port value specified."),
-		None => 30333,
-	};
-	config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
-	config.network.public_address = None;
-	config.network.client_version = format!("parity-polkadot/{}", crate_version!());
+		let port = match matches.value_of("port") {
+			Some(port) => port.parse().expect("Invalid p2p port value specified."),
+			None => 30333,
+		};
+		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
+		config.network.public_address = None;
+		config.network.client_version = format!("parity-polkadot/{}", crate_version!());
+	}
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 
 	let service = service::Service::new(config)?;
-
-	let mut address: SocketAddr = "127.0.0.1:9933".parse().unwrap();
-	if let Some(port) = matches.value_of("rpc-port") {
-		let rpc_port: u16 = port.parse().expect("Invalid RPC port value specified.");
-		address.set_port(rpc_port);
-	}
-
-	let handler = rpc::rpc_handler(service.client(), service.transaction_pool(), service.client());
-	let _server = rpc::start_http(&address, handler)?;
 
 	informant::start(&service, core.handle());
 
@@ -150,8 +144,48 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	ctrlc::CtrlC::set_handler(move || {
 		exit_send.clone().send(()).wait().expect("Error sending exit notification");
 	});
+
+	let _rpc_servers = {
+		let http_address = parse_address("127.0.0.1:9933", "rpc-port", &matches)?;
+		let ws_address = parse_address("127.0.0.1:9944", "ws-port", &matches)?;
+
+		let handler = || {
+			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
+			rpc::rpc_handler(service.client(), chain, service.transaction_pool())
+		};
+		(
+			start_server(http_address, |address| rpc::start_http(address, handler())),
+			start_server(ws_address, |address| rpc::start_ws(address, handler())),
+		)
+	};
+
 	core.run(exit.into_future()).expect("Error running informant event loop");
 	Ok(())
+}
+
+fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error> where
+	F: Fn(&SocketAddr) -> Result<T, io::Error>,
+{
+	start(&address)
+		.or_else(|e| match e.kind() {
+			io::ErrorKind::AddrInUse |
+			io::ErrorKind::PermissionDenied => {
+				warn!("Unable to bind server to {}. Trying random port.", address);
+				address.set_port(0);
+				start(&address)
+			},
+			_ => Err(e),
+		})
+}
+
+fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
+	let mut address: SocketAddr = default.parse().unwrap();
+	if let Some(port) = matches.value_of(port_param) {
+		let port: u16 = port.parse().ok().ok_or(format!("Invalid port for --{} specified.", port_param))?;
+		address.set_port(port);
+	}
+
+	Ok(address)
 }
 
 fn keystore_path(base_path: &Path) -> PathBuf {
@@ -183,6 +217,7 @@ fn default_base_path() -> PathBuf {
 fn init_logger(pattern: &str) {
 	let mut builder = env_logger::LogBuilder::new();
 	// Disable info logging by default for some modules:
+	builder.filter(Some("ws"), log::LogLevelFilter::Warn);
 	builder.filter(Some("hyper"), log::LogLevelFilter::Warn);
 	// Enable info for others.
 	builder.filter(None, log::LogLevelFilter::Info);
