@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implements the serialization and deserialization codec for polkadot runtime
-//! values.
+//! Implements a serialization and deserialization codec, usable from WebAssembly.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
