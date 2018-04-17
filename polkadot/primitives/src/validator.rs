@@ -20,6 +20,7 @@
 use primitives::bytes;
 use rstd::vec::Vec;
 use parachain;
+use codec::Slicable;
 
 /// Parachain outgoing message.
 #[derive(PartialEq, Eq)]
@@ -36,7 +37,39 @@ pub struct BalanceUpload(#[cfg_attr(feature = "std", serde(with="bytes"))] pub V
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct BalanceDownload(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
+/// Validation parameters for evaluating the parachain validity function.
+// TODO: consolidated ingress and balance downloads
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub struct ValidationParams {
+	/// The collation body.
+	pub block_data: parachain::BlockData,
+	/// Previous head-data.
+	pub parent_head: parachain::HeadData,
+}
+
+impl Slicable for ValidationParams {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		self.block_data.0.using_encoded(|s| v.extend(s));
+		self.parent_head.0.using_encoded(|s| v.extend(s));
+
+		v
+	}
+
+	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+		Some(ValidationParams {
+			block_data: Slicable::decode(input).map(parachain::BlockData)?,
+			parent_head: Slicable::decode(input).map(parachain::HeadData)?,
+		})
+	}
+}
+
 /// The result of parachain validation.
+// TODO: egress and balance uploads
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
@@ -44,33 +77,16 @@ pub struct BalanceDownload(#[cfg_attr(feature = "std", serde(with="bytes"))] pub
 pub struct ValidationResult {
 	/// New head data that should be included in the relay chain state.
 	pub head_data: parachain::HeadData,
-	/// Outgoing messages (a vec for each parachain).
-	pub egress_queues: Vec<Vec<EgressPost>>,
-	/// Balance uploads
-	pub balance_uploads: Vec<BalanceUpload>,
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use substrate_serializer as ser;
+impl Slicable for ValidationResult {
+	fn encode(&self) -> Vec<u8> {
+		self.head_data.0.encode()
+	}
 
-	#[test]
-	fn test_validation_result() {
-		assert_eq!(ser::to_string_pretty(&ValidationResult {
-	head_data: parachain::HeadData(vec![1]),
-	egress_queues: vec![vec![EgressPost(vec![1])]],
-	balance_uploads: vec![BalanceUpload(vec![2])],
-			}), r#"{
-  "headData": "0x01",
-  "egressQueues": [
-    [
-      "0x01"
-    ]
-  ],
-  "balanceUploads": [
-    "0x02"
-  ]
-}"#);
+	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+		Some(ValidationResult {
+			head_data: Slicable::decode(input).map(parachain::HeadData)?,
+		})
 	}
 }

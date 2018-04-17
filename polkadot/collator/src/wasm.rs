@@ -42,6 +42,8 @@ use wasmi::{self, Module, ModuleInstance,  MemoryInstance, MemoryDescriptor, Mem
 use wasmi::{memory_units, RuntimeValue};
 use wasmi::Error as WasmError;
 
+use polkadot_primitives::validator::{ValidationParams, ValidationResult};
+
 use std::cell::RefCell;
 
 error_chain! {
@@ -60,52 +62,6 @@ error_chain! {
 			description("Validation function returned invalid data."),
 			display("Validation function returned invalid data."),
 		}
-	}
-}
-
-/// Validation parameters for evaluating the parachain validity function.
-// TODO: consolidated ingress and balance downloads
-pub struct ValidationParams {
-	/// The collation body.
-	pub block_data: Vec<u8>,
-	/// Previous head-data.
-	pub parent_head: Vec<u8>,
-}
-
-impl Slicable for ValidationParams {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.block_data.using_encoded(|s| v.extend(s));
-		self.parent_head.using_encoded(|s| v.extend(s));
-
-		v
-	}
-
-	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Some(ValidationParams {
-			block_data: Slicable::decode(input)?,
-			parent_head: Slicable::decode(input)?,
-		})
-	}
-}
-
-/// The post-validation data.
-// TODO: egress and balance uploads
-pub struct PostValidation {
-	/// New head data.
-	pub head_data: Vec<u8>
-}
-
-impl Slicable for PostValidation {
-	fn encode(&self) -> Vec<u8> {
-		self.head_data.encode()
-	}
-
-	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Some(PostValidation {
-			head_data: Slicable::decode(input)?,
-		})
 	}
 }
 
@@ -141,7 +97,7 @@ impl ModuleImportResolver for Resolver {
 /// Validate a candidate under the given validation code.
 ///
 /// This will fail if the validation code is not a proper parachain validation module.
-pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> Result<PostValidation, Error> {
+pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> Result<ValidationResult, Error> {
 	use wasmi::LINEAR_MEMORY_PAGE_SIZE;
 
 	// maximum memory in bytes
@@ -217,7 +173,7 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 
 			// TODO: optimize when `wasmi` lets you inspect memory with a closure.
 			let raw_return = memory.get(return_offset, len as usize)?;
-			PostValidation::decode(&mut &raw_return[..])
+			ValidationResult::decode(&mut &raw_return[..])
 				.ok_or_else(|| ErrorKind::BadReturn)
 				.map_err(Into::into)
 		}
