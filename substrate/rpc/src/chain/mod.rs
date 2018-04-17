@@ -97,6 +97,7 @@ impl<B, E> ChainApi for Chain<B, E> where
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<block::Header>) {
 		self.subscriptions.add(subscriber, |sink| {
 			let stream = self.client.import_notification_stream()
+				.filter(|notification| notification.is_new_best)
 				.map(|notification| Ok(notification.header))
 				.map_err(|e| warn!("Block notification stream error: {:?}", e));
 			sink
