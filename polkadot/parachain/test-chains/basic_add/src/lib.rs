@@ -105,7 +105,7 @@ mod tests {
 	use super::*;
 	use parachain::ValidationParams;
 
-	const TEST_CODE: &[u8] = include_bytes!("../test.wasm");
+	const TEST_CODE: &[u8] = include_bytes!("../wasm/test.wasm");
 
 	fn hash_state(state: u64) -> [u8; 32] {
 		::tiny_keccak::keccak256(state.encode().as_slice())

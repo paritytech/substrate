@@ -25,6 +25,9 @@ members = [
 	"polkadot/statement-table",
 	"polkadot/transaction-pool",
 	"polkadot/service",
+
+	"polkadot/parachain/test-chains/basic_add",
+
 	"substrate/bft",
 	"substrate/client",
 	"substrate/codec",
@@ -51,6 +54,7 @@ members = [
 	"substrate/serializer",
 	"substrate/state-machine",
 	"substrate/test-runtime",
+
 	"demo/runtime",
 	"demo/primitives",
 	"demo/executor",

@@ -52,9 +52,6 @@ extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate polkadot_primitives;
 
-#[macro_use]
-extern crate error_chain;
-
 use std::collections::{BTreeSet, BTreeMap};
 
 use futures::{stream, Stream, Future, IntoFuture};

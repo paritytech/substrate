@@ -99,7 +99,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "basic-add"
+name = "basic_add"
 version = "0.1.0"
 dependencies = [
  "polkadot-parachain 0.1.0",
@@ -1331,7 +1331,6 @@ dependencies = [
 name = "polkadot-parachain"
 version = "0.1.0"
 dependencies = [
- "basic-add 0.1.0",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "wasmi 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
