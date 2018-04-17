@@ -355,7 +355,6 @@ impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
 	use keyring::Keyring;
 	use codec::Slicable;
 	use client::in_mem::Backend as InMemory;
@@ -388,7 +387,7 @@ mod tests {
 		::client::new_in_mem(
 			LocalDispatch::new(),
 			|| {
-				let mut storage = genesis_config.build_externalities();
+				let storage = genesis_config.build_externalities();
 				let block = ::client::genesis::construct_genesis_block(&storage);
 				(substrate_primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 			}

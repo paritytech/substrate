@@ -18,11 +18,13 @@
 
 #![warn(missing_docs)]
 
-extern crate parking_lot;
 extern crate jsonrpc_core as rpc;
+extern crate jsonrpc_pubsub;
+extern crate parking_lot;
 extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
+extern crate tokio_core;
 
 #[macro_use]
 extern crate error_chain;
@@ -39,6 +41,9 @@ extern crate assert_matches;
 #[cfg(test)]
 extern crate substrate_runtime_support as runtime_support;
 
-pub mod chain;
-pub mod state;
+mod subscriptions;
+
 pub mod author;
+pub mod chain;
+pub mod metadata;
+pub mod state;

@@ -4,15 +4,17 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-parking_lot = "0.4"
-log = "0.3"
 error-chain = "0.11"
 jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
+jsonrpc-pubsub = { git="https://github.com/paritytech/jsonrpc.git" }
+log = "0.3"
+parking_lot = "0.4"
 substrate-client = { path = "../client" }
+substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
 substrate-state-machine = { path = "../state-machine" }
-substrate-executor = { path = "../executor" }
+tokio-core = "0.1.12"
 
 [dev-dependencies]
 assert_matches = "1.1"
