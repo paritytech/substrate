@@ -45,7 +45,7 @@ pub fn start(service: &Service, handle: reactor::Handle) {
 				(SyncState::Downloading, None) => "Syncing".into(),
 				(SyncState::Downloading, Some(n)) => format!("Syncing, target=#{}", n),
 			};
-			println!("{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_block.number, hash)
+			info!(target: "polkadot", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_block.number, hash)
 		} else {
 			warn!("Error getting best block information");
 		}
@@ -61,6 +61,4 @@ pub fn start(service: &Service, handle: reactor::Handle) {
 	handle.spawn(display_notifications);
 	handle.spawn(display_block_import);
 }
-
-
 
