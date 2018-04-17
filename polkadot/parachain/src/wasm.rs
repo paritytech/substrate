@@ -15,26 +15,10 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 //! WASM re-execution of a parachain candidate.
-//!
 //! In the context of relay-chain candidate evaluation, there are some additional
 //! steps to ensure that the provided input parameters are correct.
 //! Assuming the parameters are correct, this module provides a wrapper around
 //! a WASM VM for re-execution of a parachain candidate.
-//!
-//! Polkadot parachain WASM is in the form of a module which imports a memory
-//! instance and exports a function `validate`.
-//!
-//! `validate` accepts as input two `i32` values, representing a pointer/length pair
-//! respectively, that encodes `ValidationParams`.
-//!
-//! `validate` returns an `i32` which is a pointer to a little-endian 32-bit integer denoting a length.
-//! Subtracting the length from the initial pointer will give a new pointer to the actual return data,
-//!
-//! ASCII-diagram demonstrating the return data format:
-//! ```
-//! [return data][len (LE-u32)]
-//!              ^~~returned pointer
-//! ```
 
 use codec::Slicable;
 
@@ -42,7 +26,7 @@ use wasmi::{self, Module, ModuleInstance,  MemoryInstance, MemoryDescriptor, Mem
 use wasmi::{memory_units, RuntimeValue};
 use wasmi::Error as WasmError;
 
-use para_primitives::{ValidationParams, ValidationResult};
+use super::{ValidationParams, ValidationResult};
 
 use std::cell::RefCell;
 
