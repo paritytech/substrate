@@ -20,8 +20,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg_attr(not(feature = "std"), macro_use)]
-extern crate substrate_runtime_std as rstd;
+#![cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+extern crate core;
+
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub mod alloc {
+	pub use std::boxed;
+	pub use std::vec;
+}
+
 
 mod slicable;
 mod joiner;

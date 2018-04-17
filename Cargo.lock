@@ -1775,9 +1775,6 @@ dependencies = [
 [[package]]
 name = "substrate-codec"
 version = "0.1.0"
-dependencies = [
- "substrate-runtime-std 0.1.0",
-]
 
 [[package]]
 name = "substrate-executor"
