@@ -12,10 +12,6 @@ polkadot-parachain = { path = "../../", default-features = false }
 wee_alloc = "0.2.0"
 tiny-keccak = "1.4"
 
-[profile.release]
-panic = "abort"
-lto = true
-
 [features]
 default = ["std"]
 std = ["polkadot-parachain/std"]

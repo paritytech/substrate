@@ -2,3 +2,7 @@
 members = [
 	"basic_add"
 ]
+
+[profile.release]
+panic = "abort"
+lto = true
