@@ -51,6 +51,7 @@ extern crate futures;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate polkadot_primitives;
+extern crate polkadot_parachain_primitives as para_primitives;
 extern crate wasmi;
 
 #[macro_use]

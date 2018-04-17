@@ -1220,6 +1220,7 @@ version = "0.1.0"
 dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-parachain-primitives 0.1.0",
  "polkadot-primitives 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
@@ -1284,6 +1285,13 @@ dependencies = [
  "serde_json 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "subtle 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "polkadot-parachain-primitives"
+version = "0.1.0"
+dependencies = [
+ "substrate-codec 0.1.0",
 ]
 
 [[package]]

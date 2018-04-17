@@ -9,5 +9,6 @@ futures = "0.1.17"
 substrate-codec = { path = "../../substrate/codec", version = "0.1" }
 substrate-primitives = { path = "../../substrate/primitives", version = "0.1" }
 polkadot-primitives = { path = "../primitives", version = "0.1" }
+polkadot-parachain-primitives = { path = "../parachain-primitives", version = "0.1" }
 error-chain = "0.11"
 wasmi = "0.1"

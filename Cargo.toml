@@ -19,6 +19,7 @@ members = [
 	"polkadot/consensus",
 	"polkadot/executor",
 	"polkadot/keystore",
+	"polkadot/parachain-primitives",
 	"polkadot/primitives",
 	"polkadot/runtime",
 	"polkadot/statement-table",

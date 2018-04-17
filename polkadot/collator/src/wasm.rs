@@ -42,7 +42,7 @@ use wasmi::{self, Module, ModuleInstance,  MemoryInstance, MemoryDescriptor, Mem
 use wasmi::{memory_units, RuntimeValue};
 use wasmi::Error as WasmError;
 
-use polkadot_primitives::validator::{ValidationParams, ValidationResult};
+use para_primitives::{ValidationParams, ValidationResult};
 
 use std::cell::RefCell;
 

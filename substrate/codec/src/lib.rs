@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implements a serialization and deserialization codec, usable from WebAssembly.
+//! Implements a serialization and deserialization codec for simple marshalling.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#![cfg(not(feature = "std"))]
+#[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
 
@@ -27,12 +27,10 @@ extern crate alloc;
 extern crate core;
 
 #[cfg(feature = "std")]
-#[doc(hidden)]
 pub mod alloc {
 	pub use std::boxed;
 	pub use std::vec;
 }
-
 
 mod slicable;
 mod joiner;

@@ -1,0 +1,11 @@
+[package]
+name = "polkadot-parachain-primitives"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+substrate-codec = { path = "../../substrate/codec", default_features = false }
+
+[features]
+default = ["std"]
+std = ["substrate-codec/std"]
