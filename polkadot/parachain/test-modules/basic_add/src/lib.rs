@@ -42,15 +42,15 @@ use alloc::vec::Vec;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-/// Head data for this parachain.
-#[derive(Default)]
-pub struct HeadData {
-	/// Block number
-	pub number: u64,
-	/// parent block keccak256
-	pub parent_hash: [u8; 32],
-	/// hash of post-execution state.
-	pub post_state: [u8; 32],
+// Head data for this parachain.
+#[derive(Default, Clone)]
+struct HeadData {
+	// Block number
+	number: u64,
+	// parent block keccak256
+	parent_hash: [u8; 32],
+	// hash of post-execution state.
+	post_state: [u8; 32],
 }
 
 impl Slicable for HeadData {
@@ -73,13 +73,13 @@ impl Slicable for HeadData {
 	}
 }
 
-/// Block data for this parachain.
-#[derive(Default)]
-pub struct BlockData {
-	/// State to begin from.
-	pub state: u64,
-	/// Amount to add (overflowing)
-	pub add: u64,
+// Block data for this parachain.
+#[derive(Default, Clone)]
+struct BlockData {
+	// State to begin from.
+	state: u64,
+	// Amount to add (overflowing)
+	add: u64,
 }
 
 impl Slicable for BlockData {
@@ -97,5 +97,46 @@ impl Slicable for BlockData {
 			state: Slicable::decode(input)?,
 			add: Slicable::decode(input)?,
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use parachain::ValidationParams;
+
+	const TEST_CODE: &[u8] = include_bytes!("../test.wasm");
+
+	fn hash_state(state: u64) -> [u8; 32] {
+		::tiny_keccak::keccak256(state.encode().as_slice())
+	}
+
+	fn hash_head(head: &HeadData) -> [u8; 32] {
+		::tiny_keccak::keccak256(head.encode().as_slice())
+	}
+
+	#[test]
+	fn execute_good_on_parent() {
+		let parent_head = HeadData {
+			number: 0,
+			parent_hash: [0; 32],
+			post_state: hash_state(0),
+		};
+
+		let block_data = BlockData {
+			state: 0,
+			add: 512,
+		};
+
+		let ret = parachain::wasm::validate_candidate(TEST_CODE, ValidationParams {
+			parent_head: parent_head.encode(),
+			block_data: block_data.encode(),
+		}).unwrap();
+
+		let new_head = HeadData::decode(&mut &ret.head_data[..]).unwrap();
+
+		assert_eq!(new_head.number, 1);
+		assert_eq!(new_head.parent_hash, hash_head(&parent_head));
+		assert_eq!(new_head.post_state, hash_state(512));
 	}
 }

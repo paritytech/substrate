@@ -1,5 +1,5 @@
 [package]
-name = "basic-add"
+name = "basic_add"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Test parachain which adds to a number as its state transition"
@@ -18,7 +18,4 @@ lto = true
 
 [features]
 default = ["std"]
-std = []
-
-[workspace]
-members = []
+std = ["polkadot-parachain/std"]
