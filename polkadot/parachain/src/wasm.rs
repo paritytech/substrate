@@ -61,7 +61,7 @@ impl ModuleImportResolver for Resolver {
 		descriptor: &MemoryDescriptor,
 	) -> Result<MemoryRef, WasmError> {
 		if field_name == "memory" {
-			let effective_max = descriptor.maximum().unwrap_or(self.max_memory + 1);
+			let effective_max = descriptor.maximum().unwrap_or(self.max_memory);
 			if descriptor.initial() > self.max_memory || effective_max > self.max_memory {
 				Err(WasmError::Instantiation("Module requested too much memory".to_owned()))
 			} else {
