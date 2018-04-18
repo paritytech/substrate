@@ -212,11 +212,6 @@ impl<B, E> Client<B, E> where
 		self.executor.clone()
 	}
 
-	/// Close notification streams.
-	pub fn stop_notifications(&self) {
-		self.import_notification_sinks.lock().clear();
-	}
-
 	/// Get the current set of authorities from storage.
 	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
 		let state = self.state_at(id)?;
