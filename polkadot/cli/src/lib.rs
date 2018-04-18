@@ -68,6 +68,15 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	T: Into<std::ffi::OsString> + Clone,
 {
 	let mut core = reactor::Core::new().expect("tokio::Core could not be created");
+	let exit = {
+		// can't use signal directly here because CtrlC takes only `Fn`.
+		let (exit_send, exit) = mpsc::channel(1);
+		ctrlc::CtrlC::set_handler(move || {
+			exit_send.clone().send(()).wait().expect("Error sending exit notification");
+		});
+
+		exit
+	};
 
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
@@ -139,11 +148,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let service = service::Service::new(config)?;
 
 	informant::start(&service, core.handle());
-
-	let (exit_send, exit) = mpsc::channel(1);
-	ctrlc::CtrlC::set_handler(move || {
-		exit_send.clone().send(()).wait().expect("Error sending exit notification");
-	});
 
 	let _rpc_servers = {
 		let http_address = parse_address("127.0.0.1:9933", "rpc-port", &matches)?;

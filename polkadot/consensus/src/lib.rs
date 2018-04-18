@@ -44,6 +44,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_network;
 
+extern crate exit_future;
 extern crate tokio_core;
 extern crate substrate_keyring;
 extern crate substrate_client as client;
