@@ -25,7 +25,6 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_state_machine as state_machine;
 #[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate substrate_test_runtime as test_runtime;
 #[cfg(test)] extern crate substrate_test_client as test_client;
 
 extern crate ed25519;

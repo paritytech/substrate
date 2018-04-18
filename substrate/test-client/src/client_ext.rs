@@ -21,7 +21,7 @@ use client::{self, Client};
 use client::block_builder::BlockBuilder;
 use keyring::Keyring;
 use runtime_support::Hashable;
-use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use primitives::block;
 use bft;
 use {Backend, Executor, NativeExecutor};
@@ -33,6 +33,9 @@ pub trait TestClient {
 
 	/// Bakes the block from the builder, fake-justifies it and imports to the chain.
 	fn import_own_block(&self, builder: BlockBuilder<Backend, Executor>) -> client::error::Result<()>;
+
+	/// Imports pre-baked block with `BlockOrigin::File`
+	fn import_file_block(&self, block: block::Block) -> client::error::Result<()>;
 
 	/// Returns hash of the genesis block.
 	fn genesis_hash(&self) -> block::HeaderHash;
@@ -49,6 +52,14 @@ impl TestClient for Client<Backend, Executor> {
 		let justification = fake_justify(&block.header);
 		let justified = self.check_justification(block.header, justification)?;
 		self.import_block(client::BlockOrigin::Own, justified, Some(block.transactions))?;
+
+		Ok(())
+	}
+
+	fn import_file_block(&self, block: block::Block) -> client::error::Result<()> {
+		let justification = fake_justify(&block.header);
+		let justified = self.check_justification(block.header, justification)?;
+		self.import_block(client::BlockOrigin::File, justified, Some(block.transactions))?;
 
 		Ok(())
 	}

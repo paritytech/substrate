@@ -24,15 +24,23 @@ extern crate substrate_codec as codec;
 extern crate substrate_keyring as keyring;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
-extern crate substrate_test_runtime as test_runtime;
 #[macro_use] extern crate substrate_executor as executor;
+
+pub extern crate substrate_test_runtime as runtime;
 
 mod client_ext;
 
 pub use client_ext::TestClient;
 
+mod native_executor {
+	#![allow(missing_docs)]
+	use super::runtime;
+
+	native_executor_instance!(pub NativeExecutor, runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+}
+
 /// Native executor used for tests.
-native_executor_instance!(pub NativeExecutor, test_runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+pub use self::native_executor::NativeExecutor;
 
 /// Test client database backend.
 pub type Backend = client::in_mem::Backend;

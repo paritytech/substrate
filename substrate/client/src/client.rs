@@ -453,9 +453,9 @@ mod tests {
 	use codec::Slicable;
 	use keyring::Keyring;
 	use primitives::block::Extrinsic as PrimitiveExtrinsic;
-	use test_runtime::{UncheckedTransaction, Transaction};
-	use test_runtime;
 	use test_client::{self, TestClient};
+	use test_client::runtime as test_runtime;
+	use test_client::runtime::{UncheckedTransaction, Transaction};
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
