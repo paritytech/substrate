@@ -33,7 +33,7 @@ use {error, in_mem, block_builder, runtime_io, bft};
 pub type BlockchainEventStream = mpsc::UnboundedReceiver<BlockImportNotification>;
 
 /// Polkadot Client
-pub struct Client<B, E> where B: backend::Backend {
+pub struct Client<B, E> {
 	backend: B,
 	executor: E,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification>>>,

@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use primitives::block;
-use substrate_executor as executor;
 use super::*;
 use super::error::*;
 
@@ -38,7 +37,7 @@ impl AsyncAuthorApi for DummyTxPool {
 
 #[test]
 fn submit_transaction_should_not_cause_error() {
-	let mut p = Arc::new(Mutex::new(DummyTxPool::default()));
+	let p = Arc::new(Mutex::new(DummyTxPool::default()));
 
 	assert_matches!(
 		AuthorApi::submit_extrinsic(&p, block::Extrinsic(vec![])),

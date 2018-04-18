@@ -29,7 +29,13 @@ fn should_return_header() {
 		digest: Default::default(),
 	};
 
-	let client = Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap());
+	let core = ::tokio_core::reactor::Core::new().unwrap();
+	let remote = core.remote();
+
+	let client = Chain {
+		client: Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap()),
+		subscriptions: Subscriptions::new(remote),
+	};
 
 	assert_matches!(
 		ChainApi::header(&client, test_genesis_block.blake2_256().into()),

@@ -18,34 +18,63 @@
 
 #[warn(missing_docs)]
 
-extern crate substrate_rpc as apis;
+pub extern crate substrate_rpc as apis;
 
 extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_http_server as http;
+extern crate jsonrpc_pubsub as pubsub;
+extern crate jsonrpc_ws_server as ws;
+
+#[macro_use]
+extern crate log;
 
 use std::io;
 
+type Metadata = apis::metadata::Metadata;
+type RpcHandler = pubsub::PubSubHandler<Metadata>;
+
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<S, T, C>(state: S, transaction_pool: T, chain: C) -> rpc::IoHandler where
+pub fn rpc_handler<S, C, A>(
+	state: S,
+	chain: C,
+	author: A,
+) -> RpcHandler where
 	S: apis::state::StateApi,
-	T: apis::author::AuthorApi,
-	C: apis::chain::ChainApi,
+	C: apis::chain::ChainApi<Metadata=Metadata>,
+	A: apis::author::AuthorApi,
 {
-	let mut io = rpc::IoHandler::new();
+	let mut io = pubsub::PubSubHandler::default();
 	io.extend_with(state.to_delegate());
-	io.extend_with(transaction_pool.to_delegate());
 	io.extend_with(chain.to_delegate());
+	io.extend_with(author.to_delegate());
 	io
 }
 
 /// Start HTTP server listening on given address.
 pub fn start_http(
 	addr: &std::net::SocketAddr,
-	io: rpc::IoHandler,
+	io: RpcHandler,
 ) -> io::Result<http::Server> {
 	http::ServerBuilder::new(io)
 		.threads(4)
 		.rest_api(http::RestApi::Unsecure)
 		.cors(http::DomainsValidation::Disabled)
 		.start_http(addr)
+}
+
+/// Start WS server listening on given address.
+pub fn start_ws(
+	addr: &std::net::SocketAddr,
+	io: RpcHandler,
+) -> io::Result<ws::Server> {
+	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
+		.start(addr)
+		.map_err(|err| match err {
+			ws::Error(ws::ErrorKind::Io(io), _) => io,
+			ws::Error(ws::ErrorKind::ConnectionClosed, _) => io::ErrorKind::BrokenPipe.into(),
+			ws::Error(e, _) => {
+				error!("{}", e);
+				io::ErrorKind::Other.into()
+			}
+		})
 }
