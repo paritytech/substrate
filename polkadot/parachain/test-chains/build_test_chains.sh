@@ -6,8 +6,7 @@ for i in */
 do
   i=${i%/}
   cd $i
-  cargo build --target=wasm32-unknown-unknown --release --no-default-features
-  wasm-build --target wasm32-unknown-unknown ./target $i
-  mv ./target/$i.wasm ../../tests/res/$i.wasm
+  RUSTFLAGS="-C link-arg=--import-memory" cargo +nightly-2018-03-07 build --target=wasm32-unknown-unknown --release --no-default-features
+  wasm-gc target/wasm32-unknown-unknown/release/$i.wasm ../../tests/res/$i.wasm
   cd ..
 done
