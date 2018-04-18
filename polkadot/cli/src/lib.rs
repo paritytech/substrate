@@ -74,6 +74,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		ctrlc::CtrlC::set_handler(move || {
 			exit_send.clone().send(()).wait().expect("Error sending exit notification");
 		});
+
+		exit
 	};
 
 	let yaml = load_yaml!("./cli.yml");
@@ -161,7 +163,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		)
 	};
 
-  core.run(exit.into_future()).expect("Error running informant event loop");
+	core.run(exit.into_future()).expect("Error running informant event loop");
 	Ok(())
 }
 

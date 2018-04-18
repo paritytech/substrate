@@ -380,7 +380,6 @@ pub fn prune_imported(client: &Client, pool: &Mutex<TransactionPool>, hash: Head
 
 impl Drop for Service {
 	fn drop(&mut self) {
-		self.client.stop_notifications();
 		self.network.stop_network();
 
 		if let Some(signal) = self.signal.take() {
