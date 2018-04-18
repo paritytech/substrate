@@ -28,14 +28,15 @@ extern crate polkadot_api;
 extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_keystore as keystore;
+extern crate substrate_client as client;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
 extern crate substrate_executor;
 
+extern crate exit_future;
 extern crate tokio_core;
-extern crate substrate_client as client;
 
 #[macro_use]
 extern crate error_chain;
@@ -65,6 +66,7 @@ use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyC
 use client::{genesis, BlockchainEvents};
 use client::in_mem::Backend as InMemory;
 use network::ManageNetwork;
+use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Role, ChainSpec};
@@ -77,6 +79,7 @@ pub struct Service {
 	client: Arc<Client>,
 	network: Arc<network::Service>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
+	signal: Option<Signal>,
 	_consensus: Option<consensus::Service>,
 }
 
@@ -242,6 +245,10 @@ fn local_testnet_config() -> ChainConfig {
 impl Service {
 	/// Creates and register protocol with the network service
 	pub fn new(mut config: Configuration) -> Result<Service, error::Error> {
+		use std::sync::Barrier;
+
+		let (signal, exit) = ::exit_future::signal();
+
 		// Create client
 		let executor = polkadot_executor::Executor::new();
 		let mut storage = Default::default();
@@ -284,7 +291,39 @@ impl Service {
 			chain: client.clone(),
 			transaction_pool: transaction_pool_adapter,
 		};
+
 		let network = network::Service::new(network_params)?;
+		let barrier = ::std::sync::Arc::new(Barrier::new(2));
+
+		let thread = {
+			let client = client.clone();
+			let network = network.clone();
+			let txpool = transaction_pool.clone();
+
+			let thread_barrier = barrier.clone();
+			thread::spawn(move || {
+				network.start_network();
+
+				thread_barrier.wait();
+				let mut core = Core::new().expect("tokio::Core could not be created");
+				let events = client.import_notification_stream().for_each(move |notification| {
+					network.on_block_imported(notification.hash, &notification.header);
+					prune_imported(&*client, &*txpool, notification.hash);
+
+					Ok(())
+				});
+
+				core.handle().spawn(events);
+				if let Err(e) = core.run(exit) {
+					debug!("Polkadot service event loop shutdown with {:?}", e);
+				}
+				debug!("Polkadot service shutdown");
+			})
+		};
+
+		// wait for the network to start up before starting the consensus
+		// service.
+		barrier.wait();
 
 		// Spin consensus service if configured
 		let consensus_service = if config.roles & Role::VALIDATOR == Role::VALIDATOR {
@@ -296,28 +335,12 @@ impl Service {
 			None
 		};
 
-		let thread_client = client.clone();
-		let thread_network = network.clone();
-		let thread_txpool = transaction_pool.clone();
-		let thread = thread::spawn(move || {
-			thread_network.start_network();
-			let mut core = Core::new().expect("tokio::Core could not be created");
-			let events = thread_client.import_notification_stream().for_each(|notification| {
-				thread_network.on_block_imported(notification.hash, &notification.header);
-				prune_imported(&*thread_client, &*thread_txpool, notification.hash);
-
-				Ok(())
-			});
-			if let Err(e) = core.run(events) {
-				debug!("Polkadot service event loop shutdown with {:?}", e);
-			}
-			debug!("Polkadot service shutdown");
-		});
 		Ok(Service {
 			thread: Some(thread),
 			client: client,
 			network: network,
 			transaction_pool: transaction_pool,
+			signal: Some(signal),
 			_consensus: consensus_service,
 		})
 	}
@@ -357,8 +380,12 @@ pub fn prune_imported(client: &Client, pool: &Mutex<TransactionPool>, hash: Head
 
 impl Drop for Service {
 	fn drop(&mut self) {
-		self.client.stop_notifications();
 		self.network.stop_network();
+
+		if let Some(signal) = self.signal.take() {
+			signal.fire();
+		}
+
 		if let Some(thread) = self.thread.take() {
 			thread.join().expect("The service thread has panicked");
 		}

@@ -40,7 +40,12 @@ args:
   - rpc-port:
       long: rpc-port
       value_name: PORT
-      help: Specify RPC server TCP port
+      help: Specify HTTP RPC server TCP port
+      takes_value: true
+  - ws-port:
+      long: ws-port
+      value_name: PORT
+      help: Specify WebSockets RPC server TCP port
       takes_value: true
   - bootnodes:
       long: bootnodes
