@@ -218,11 +218,6 @@ impl<E> Sink for BftSink<E> {
 	}
 }
 
-/// Consensus service. Starts working when created.
-pub struct Service {
-	thread: Option<thread::JoinHandle<()>>,
-}
-
 struct Network(Arc<net::ConsensusService>);
 
 fn start_bft<F, C>(
@@ -259,16 +254,24 @@ fn start_bft<F, C>(
 	}
 }
 
+/// Consensus service. Starts working when created.
+pub struct Service {
+	thread: Option<thread::JoinHandle<()>>,
+	exit_signal: Option<::exit_future::Signal>,
+}
+
 impl Service {
 	/// Create and start a new instance.
 	pub fn new<C>(
 		client: Arc<C>,
 		network: Arc<net::ConsensusService>,
 		transaction_pool: Arc<Mutex<TransactionPool>>,
-		key: ed25519::Pair
+		key: ed25519::Pair,
 	) -> Service
-		where C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static
+		where
+			C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static,
 	{
+		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {
 			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
 			let key = Arc::new(key);
@@ -281,15 +284,26 @@ impl Service {
 			let messages = SharedMessageCollection::new();
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
 
-			let handle = core.handle();
-			let notifications = client.import_notification_stream().for_each(|notification| {
-				if notification.is_new_best {
-					start_bft(&notification.header, handle.clone(), &*client, network.clone(), &*bft_service, messages.clone());
-				}
-				Ok(())
-			});
+			let notifications = {
+				let handle = core.handle();
+				let network = network.clone();
+				let client = client.clone();
+				let bft_service = bft_service.clone();
+				let messages = messages.clone();
 
-			let interval = reactor::Interval::new_at(Instant::now() + Duration::from_millis(TIMER_DELAY_MS), Duration::from_millis(TIMER_INTERVAL_MS), &handle).unwrap();
+				client.import_notification_stream().for_each(move |notification| {
+					if notification.is_new_best {
+						start_bft(&notification.header, handle.clone(), &*client, network.clone(), &*bft_service, messages.clone());
+					}
+					Ok(())
+				})
+			};
+
+			let interval = reactor::Interval::new_at(
+				Instant::now() + Duration::from_millis(TIMER_DELAY_MS),
+				Duration::from_millis(TIMER_INTERVAL_MS),
+				&core.handle(),
+			).expect("it is always possible to create an interval with valid params");
 			let mut prev_best = match client.best_block_header() {
 				Ok(header) => header.blake2_256(),
 				Err(e) => {
@@ -297,36 +311,47 @@ impl Service {
 					return;
 				}
 			};
-			let c = client.clone();
-			let s = bft_service.clone();
-			let n = network.clone();
-			let m = messages.clone();
-			let handle = core.handle();
-			let timed = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
-				if let Ok(best_block) = c.best_block_header() {
-					let hash = best_block.blake2_256();
-					m.collect_garbage();
-					if hash == prev_best {
-						debug!("Starting consensus round after a timeout");
-						start_bft(&best_block, handle.clone(), &*c, n.clone(), &*s, m.clone());
+
+			let timed = {
+				let c = client.clone();
+				let s = bft_service.clone();
+				let n = network.clone();
+				let m = messages.clone();
+				let handle = core.handle();
+
+				interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
+					if let Ok(best_block) = c.best_block_header() {
+						let hash = best_block.blake2_256();
+						m.collect_garbage();
+						if hash == prev_best {
+							debug!("Starting consensus round after a timeout");
+							start_bft(&best_block, handle.clone(), &*c, n.clone(), &*s, m.clone());
+						}
+						prev_best = hash;
 					}
-					prev_best = hash;
-				}
-				Ok(())
-			});
+					Ok(())
+				})
+			};
+
+			core.handle().spawn(notifications);
 			core.handle().spawn(timed);
-			if let Err(e) = core.run(notifications) {
+			if let Err(e) = core.run(exit) {
 				debug!("BFT event loop error {:?}", e);
 			}
 		});
 		Service {
-			thread: Some(thread)
+			thread: Some(thread),
+			exit_signal: Some(signal),
 		}
 	}
 }
 
 impl Drop for Service {
 	fn drop(&mut self) {
+		if let Some(signal) = self.exit_signal.take() {
+			signal.fire();
+		}
+
 		if let Some(thread) = self.thread.take() {
 			thread.join().expect("The service thread has panicked");
 		}

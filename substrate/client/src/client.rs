@@ -33,7 +33,7 @@ use {error, in_mem, block_builder, runtime_io, bft};
 pub type BlockchainEventStream = mpsc::UnboundedReceiver<BlockImportNotification>;
 
 /// Polkadot Client
-pub struct Client<B, E> where B: backend::Backend {
+pub struct Client<B, E> {
 	backend: B,
 	executor: E,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification>>>,
@@ -210,11 +210,6 @@ impl<B, E> Client<B, E> where
 	/// Clone a new instance of Executor.
 	pub fn clone_executor(&self) -> E where E: Clone {
 		self.executor.clone()
-	}
-
-	/// Close notification streams.
-	pub fn stop_notifications(&self) {
-		self.import_notification_sinks.lock().clear();
 	}
 
 	/// Get the current set of authorities from storage.

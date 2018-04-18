@@ -11,6 +11,7 @@ tokio-timer = "0.1.2"
 error-chain = "0.11"
 log = "0.3"
 tokio-core = "0.1.12"
+exit-future = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }

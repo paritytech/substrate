@@ -6,12 +6,15 @@ description = "Substrate Demo node implementation in Rust."
 
 [dependencies]
 clap = { version = "2.27", features = ["yaml"] }
-env_logger = "0.4"
-error-chain = "0.11"
-log = "0.3"
-hex-literal = "0.1"
-triehash = "0.1"
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 ed25519 = { path = "../../substrate/ed25519" }
+env_logger = "0.4"
+futures = "0.1.17"
+error-chain = "0.11"
+hex-literal = "0.1"
+log = "0.3"
+tokio-core = "0.1.12"
+triehash = "0.1"
 substrate-client = { path = "../../substrate/client" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }

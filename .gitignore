@@ -5,5 +5,9 @@
 polkadot/runtime/wasm/target/
 substrate/executor/wasm/target/
 substrate/test-runtime/wasm/target/
+substrate/pwasm-alloc/target/
+substrate/pwasm-libc/target/
+substrate/pwasm-alloc/Cargo.lock
+substrate/pwasm-libc/Cargo.lock
 demo/runtime/wasm/target/
 **/._*
