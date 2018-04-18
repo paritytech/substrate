@@ -20,6 +20,10 @@
 
 extern crate app_dirs;
 extern crate env_logger;
+extern crate atty;
+extern crate ansi_term;
+extern crate regex;
+extern crate time;
 extern crate futures;
 extern crate tokio_core;
 extern crate ctrlc;
@@ -37,6 +41,8 @@ extern crate polkadot_executor;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
 
+#[macro_use]
+extern crate lazy_static;
 #[macro_use]
 extern crate clap;
 #[macro_use]
@@ -183,7 +189,7 @@ fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error>
 }
 
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = default.parse().unwrap();
+	let mut address: SocketAddr = default.parse().ok().ok_or(format!("Invalid address specified for --{}.", port_param))?;
 	if let Some(port) = matches.value_of(port_param) {
 		let port: u16 = port.parse().ok().ok_or(format!("Invalid port for --{} specified.", port_param))?;
 		address.set_port(port);
@@ -219,6 +225,8 @@ fn default_base_path() -> PathBuf {
 }
 
 fn init_logger(pattern: &str) {
+	use ansi_term::Colour;
+
 	let mut builder = env_logger::LogBuilder::new();
 	// Disable info logging by default for some modules:
 	builder.filter(Some("ws"), log::LogLevelFilter::Warn);
@@ -231,7 +239,37 @@ fn init_logger(pattern: &str) {
 	}
 
 	builder.parse(pattern);
+	let isatty = atty::is(atty::Stream::Stderr);
+	let enable_color = isatty;
 
+	let format = move |record: &log::LogRecord| {
+		let timestamp = time::strftime("%Y-%m-%d %H:%M:%S", &time::now()).expect("Error formatting log timestamp");
+
+		let mut output = if log::max_log_level() <= log::LogLevelFilter::Info {
+			format!("{} {}", Colour::Black.bold().paint(timestamp), record.args())
+		} else {
+			let name = ::std::thread::current().name().map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
+			format!("{} {} {} {}  {}", Colour::Black.bold().paint(timestamp), name, record.level(), record.target(), record.args())
+		};
+
+		if !enable_color {
+			output = kill_color(output.as_ref());
+		}
+
+		if !isatty && record.level() <= log::LogLevel::Info && atty::is(atty::Stream::Stdout) {
+			// duplicate INFO/WARN output to console
+			println!("{}", output);
+		}
+		output
+	};
+	builder.format(format);
 
 	builder.init().expect("Logger initialized only once.");
+}
+
+fn kill_color(s: &str) -> String {
+	lazy_static! {
+		static ref RE: regex::Regex = regex::Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
+	}
+	RE.replace_all(s, "").to_string()
 }
