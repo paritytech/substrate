@@ -20,7 +20,6 @@ use primitives::block::{self, Id as BlockId};
 use primitives;
 use error::Result;
 
-
 /// Blockchain database backend. Does not perform any validation.
 pub trait Backend: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.

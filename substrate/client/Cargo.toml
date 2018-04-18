@@ -22,3 +22,4 @@ substrate-keyring = { path = "../../substrate/keyring" }
 
 [dev-dependencies]
 substrate-test-runtime = { path = "../test-runtime" }
+substrate-test-client = { path = "../test-client" }
