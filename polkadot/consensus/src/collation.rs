@@ -58,7 +58,8 @@ pub trait Collators: Clone {
 /// This future is fused.
 pub struct CollationFetch<C: Collators, P: PolkadotApi> {
 	parachain: Option<ParaId>,
-	relay_parent: Hash,
+	relay_parent_hash: Hash,
+	relay_parent: P::CheckedBlockId,
 	collators: C,
 	live_fetch: Option<<C::Collation as IntoFuture>::Future>,
 	client: Arc<P>,
@@ -66,8 +67,9 @@ pub struct CollationFetch<C: Collators, P: PolkadotApi> {
 
 impl<C: Collators, P: PolkadotApi> CollationFetch<C, P> {
 	/// Create a new collation fetcher for the given chain.
-	pub fn new(parachain: Chain, relay_parent: Hash, collators: C, client: Arc<P>) -> Self {
+	pub fn new(parachain: Chain, relay_parent: P::CheckedBlockId, relay_parent_hash: Hash, collators: C, client: Arc<P>) -> Self {
 		CollationFetch {
+			relay_parent_hash,
 			relay_parent,
 			collators,
 			client,
@@ -92,7 +94,7 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 
 		loop {
 			let x = {
-				let (r, c)  = (self.relay_parent, &self.collators);
+				let (r, c)  = (self.relay_parent_hash, &self.collators);
 				let poll = self.live_fetch
 					.get_or_insert_with(move || c.collate(parachain, r).into_future())
 					.poll();
@@ -101,18 +103,71 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 				try_ready!(poll)
 			};
 
-			if verify_collation(&*self.client, self.relay_parent, &x) {
-				self.parachain = None;
-				return Ok(Async::Ready(x));
-			} else {
-				self.live_fetch = None;
-				self.collators.note_bad_collator(x.receipt.collator);
+			match verify_collation(&*self.client, &self.relay_parent, &x) {
+				Ok(()) => {
+					self.parachain = None;
+					return Ok(Async::Ready(x));
+				}
+				Err(e) => {
+					debug!("Failed to validate parachain due to API error: {}", e);
+
+					// just continue if we got a bad collation or failed to validate
+					self.live_fetch = None;
+					self.collators.note_bad_collator(x.receipt.collator)
+				}
 			}
 		}
 	}
 }
 
-/// Check whether a given collation is valid.
-pub fn verify_collation<P: PolkadotApi>(_client: &P, _relay_parent: Hash, _collation: &Collation) -> bool {
-	true // TODO: actually check this.
+// Errors that can occur when validating a parachain.
+error_chain! {
+	types { Error, ErrorKind, ResultExt; }
+
+	errors {
+		InactiveParachain(id: ParaId) {
+			description("Collated for inactive parachain"),
+			display("Collated for inactive parachain: {:?}", id),
+		}
+		ValidationFailure {
+			description("Parachain candidate failed validation."),
+			display("Parachain candidate failed validation."),
+		}
+		WrongHeadData {
+			description("Parachain validation produced wrong head data."),
+			display("Parachain validation produced wrong head data."),
+		}
+	}
+
+	links {
+		PolkadotApi(::polkadot_api::Error, ::polkadot_api::ErrorKind);
+	}
+}
+
+// Check whether a given collation is valid. Returns `Ok`  on success, error otherwise.
+fn verify_collation<P: PolkadotApi>(client: &P, relay_parent: &P::CheckedBlockId, collation: &Collation) -> Result<(), Error> {
+	use parachain::{self, ValidationParams};
+
+	let para_id = collation.receipt.parachain_index;
+	let validation_code = client.parachain_code(relay_parent, para_id)?
+		.ok_or_else(|| ErrorKind::InactiveParachain(para_id))?;
+
+	let chain_head = client.parachain_head(relay_parent, para_id)?
+		.ok_or_else(|| ErrorKind::InactiveParachain(para_id))?;
+
+	let params = ValidationParams {
+		parent_head: chain_head,
+		block_data: collation.block_data.0.clone(),
+	};
+
+	match parachain::wasm::validate_candidate(&validation_code, params) {
+		Ok(result) => {
+			if result.head_data == collation.receipt.head_data.0 {
+				Ok(())
+			} else {
+				Err(ErrorKind::WrongHeadData.into())
+			}
+		}
+		Err(_) => Err(ErrorKind::ValidationFailure.into())
+	}
 }

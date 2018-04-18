@@ -1171,7 +1171,6 @@ name = "polkadot-api"
 version = "0.1.0"
 dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-executor 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
@@ -1236,6 +1235,7 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
  "polkadot-collator 0.1.0",
+ "polkadot-parachain 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "polkadot-statement-table 0.1.0",

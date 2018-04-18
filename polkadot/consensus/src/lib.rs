@@ -34,9 +34,11 @@ extern crate parking_lot;
 extern crate polkadot_api;
 extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
+extern crate polkadot_parachain as parachain;
 extern crate polkadot_primitives;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_runtime;
+
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
@@ -339,6 +341,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			transaction_pool: self.transaction_pool.clone(),
 			collation: CollationFetch::new(
 				self.local_duty.validation,
+				self.parent_id.clone(),
 				self.parent_hash.clone(),
 				self.collators.clone(),
 				self.client.clone()

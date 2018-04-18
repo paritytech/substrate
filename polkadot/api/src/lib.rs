@@ -31,9 +31,6 @@ extern crate substrate_state_machine as state_machine;
 #[macro_use]
 extern crate error_chain;
 
-#[macro_use]
-extern crate log;
-
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
@@ -145,8 +142,8 @@ pub trait PolkadotApi {
 	/// Get the validation code of a parachain at a block. If the parachain is active, this will always return `Some`.
 	fn parachain_code(&self, at: &Self::CheckedBlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
 
-	/// Get the chain head of a parachain.
-	fn parachain_head(&self, at: &Self::CheckedBlockId, parachain: ParaId) -> Result<Option<CandidateReceipt>>;
+	/// Get the chain head of a parachain. If the parachain is active, this will always return `Some`.
+	fn parachain_head(&self, at: &Self::CheckedBlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
 
 	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
 	/// and an error if we can't evaluate for some reason.
@@ -257,7 +254,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 		with_runtime!(self, at, || ::runtime::Parachains::parachain_code(parachain))
 	}
 
-	fn parachain_head(&self, at: &CheckedId, parachain: ParaId) -> Result<Option<CandidateReceipt>> {
+	fn parachain_head(&self, at: &CheckedId, parachain: ParaId) -> Result<Option<Vec<u8>>> {
 		with_runtime!(self, at, || ::runtime::Parachains::parachain_head(parachain))
 	}
 

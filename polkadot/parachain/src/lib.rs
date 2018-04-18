@@ -31,7 +31,8 @@
 //! Subtracting the length from the initial pointer will give a new pointer to the actual return data,
 //!
 //! ASCII-diagram demonstrating the return data format:
-//! ```
+//!
+//! ```ignore
 //! [return data][len (LE-u32)]
 //!              ^~~returned pointer
 //! ```

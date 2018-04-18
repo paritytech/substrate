@@ -55,7 +55,7 @@ decl_storage! {
 	// The parachains registered at present.
 	pub Code get(parachain_code): b"para:code" => map [ Id => Vec<u8> ];
 	// The heads of the parachains registered at present. these are kept sorted.
-	pub Heads get(parachain_head): b"para:head" => map [ Id => CandidateReceipt ];
+	pub Heads get(parachain_head): b"para:head" => map [ Id => Vec<u8> ];
 
 	// Did the parachain heads get updated in this block?
 	DidUpdate: b"para:did" => default bool;
@@ -112,7 +112,7 @@ impl<T: Trait> Module<T> {
 
 	/// Register a parachain with given code.
 	/// Fails if given ID is already used.
-	pub fn register_parachain(id: Id, code: Vec<u8>) {
+	pub fn register_parachain(id: Id, code: Vec<u8>, initial_head_data: Vec<u8>) {
 		let mut parachains = Self::active_parachains();
 		match parachains.binary_search(&id) {
 			Ok(_) => panic!("Parachain with id {} already exists", id.into_inner()),
@@ -121,6 +121,7 @@ impl<T: Trait> Module<T> {
 
 		<Code<T>>::insert(id, code);
 		<Parachains<T>>::put(parachains);
+		<Heads<T>>::insert(id, initial_head_data);
 	}
 
 	/// Deregister a parachain with given id
@@ -159,7 +160,7 @@ impl<T: Trait> Module<T> {
 
 		for head in heads {
 			let id = head.parachain_index.clone();
-			<Heads<T>>::insert(id, head);
+			<Heads<T>>::insert(id, head.head_data.0);
 		}
 
 		<DidUpdate<T>>::put(true);
