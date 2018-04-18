@@ -16,32 +16,11 @@
 
 //! Basic parachain that adds a number as part of its state.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc, core_intrinsics, global_allocator, lang_items))]
-
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
 extern crate polkadot_parachain as parachain;
-extern crate wee_alloc;
 extern crate tiny_keccak;
-extern crate pwasm_libc;
 
+use parachain::ValidationParams;
 use parachain::codec::{Slicable, Input};
-
-#[cfg(not(feature = "std"))]
-mod wasm;
-
-#[cfg(not(feature = "std"))]
-pub use wasm::*;
-
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
-
-// Define global allocator.
-#[cfg(not(feature = "std"))]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 // Head data for this parachain.
 #[derive(Default, Clone)]
@@ -101,43 +80,37 @@ impl Slicable for BlockData {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use parachain::ValidationParams;
+const TEST_CODE: &[u8] = include_bytes!("res/basic_add.wasm");
 
-	const TEST_CODE: &[u8] = include_bytes!("../wasm/test.wasm");
+fn hash_state(state: u64) -> [u8; 32] {
+	::tiny_keccak::keccak256(state.encode().as_slice())
+}
 
-	fn hash_state(state: u64) -> [u8; 32] {
-		::tiny_keccak::keccak256(state.encode().as_slice())
-	}
+fn hash_head(head: &HeadData) -> [u8; 32] {
+	::tiny_keccak::keccak256(head.encode().as_slice())
+}
 
-	fn hash_head(head: &HeadData) -> [u8; 32] {
-		::tiny_keccak::keccak256(head.encode().as_slice())
-	}
+#[test]
+fn execute_good_on_parent() {
+	let parent_head = HeadData {
+		number: 0,
+		parent_hash: [0; 32],
+		post_state: hash_state(0),
+	};
 
-	#[test]
-	fn execute_good_on_parent() {
-		let parent_head = HeadData {
-			number: 0,
-			parent_hash: [0; 32],
-			post_state: hash_state(0),
-		};
+	let block_data = BlockData {
+		state: 0,
+		add: 512,
+	};
 
-		let block_data = BlockData {
-			state: 0,
-			add: 512,
-		};
+	let ret = parachain::wasm::validate_candidate(TEST_CODE, ValidationParams {
+		parent_head: parent_head.encode(),
+		block_data: block_data.encode(),
+	}).unwrap();
 
-		let ret = parachain::wasm::validate_candidate(TEST_CODE, ValidationParams {
-			parent_head: parent_head.encode(),
-			block_data: block_data.encode(),
-		}).unwrap();
+	let new_head = HeadData::decode(&mut &ret.head_data[..]).unwrap();
 
-		let new_head = HeadData::decode(&mut &ret.head_data[..]).unwrap();
-
-		assert_eq!(new_head.number, 1);
-		assert_eq!(new_head.parent_hash, hash_head(&parent_head));
-		assert_eq!(new_head.post_state, hash_state(512));
-	}
+	assert_eq!(new_head.number, 1);
+	assert_eq!(new_head.parent_hash, hash_head(&parent_head));
+	assert_eq!(new_head.post_state, hash_state(512));
 }

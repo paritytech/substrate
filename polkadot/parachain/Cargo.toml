@@ -9,6 +9,9 @@ substrate-codec = { path = "../../substrate/codec", default-features = false }
 wasmi = { version = "0.1", optional = true }
 error-chain = { version = "0.11", optional = true }
 
+[dev-dependencies]
+tiny-keccak = "1.4"
+
 [features]
 default = ["std"]
 std = ["substrate-codec/std", "wasmi", "error-chain"]

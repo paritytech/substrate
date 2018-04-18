@@ -21,7 +21,8 @@ use parachain::codec::Slicable;
 use super::{HeadData, BlockData};
 
 #[lang = "panic_fmt"]
-extern "C" fn panic_fmt(
+#[no_mangle]
+pub extern "C" fn panic_fmt(
     _args: ::core::fmt::Arguments,
     _file: &'static str,
     _line: u32

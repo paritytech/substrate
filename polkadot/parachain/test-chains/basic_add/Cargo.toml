@@ -11,7 +11,15 @@ crate-type = ["cdylib"]
 polkadot-parachain = { path = "../../", default-features = false }
 wee_alloc = "0.2.0"
 tiny-keccak = "1.4"
+pwasm-libc = "0.2"
 
 [features]
 default = ["std"]
 std = ["polkadot-parachain/std"]
+
+[profile.release]
+panic = "abort"
+lto = true
+
+[workspace]
+members = []
