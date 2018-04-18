@@ -185,7 +185,7 @@ fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error>
 }
 
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = default.parse().unwrap();
+	let mut address: SocketAddr = default.parse().ok().ok_or(format!("Invalid address specified for --{}.", port_param))?;
 	if let Some(port) = matches.value_of(port_param) {
 		let port: u16 = port.parse().ok().ok_or(format!("Invalid port for --{} specified.", port_param))?;
 		address.set_port(port);
@@ -239,7 +239,7 @@ fn init_logger(pattern: &str) {
 	let enable_color = isatty;
 
 	let format = move |record: &log::LogRecord| {
-		let timestamp = time::strftime("%Y-%m-%d %H:%M:%S", &time::now()).unwrap();
+		let timestamp = time::strftime("%Y-%m-%d %H:%M:%S", &time::now()).expect("Error formatting log timestamp");
 
 		let mut output = if log::max_log_level() <= log::LogLevelFilter::Info {
 			format!("{} {}", Colour::Black.bold().paint(timestamp), record.args())
@@ -265,7 +265,7 @@ fn init_logger(pattern: &str) {
 
 fn kill_color(s: &str) -> String {
 	lazy_static! {
-		static ref RE: regex::Regex = regex::Regex::new("\x1b\\[[^m]+m").unwrap();
+		static ref RE: regex::Regex = regex::Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
 	}
 	RE.replace_all(s, "").to_string()
 }
