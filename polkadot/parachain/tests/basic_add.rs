@@ -114,3 +114,57 @@ fn execute_good_on_parent() {
 	assert_eq!(new_head.parent_hash, hash_head(&parent_head));
 	assert_eq!(new_head.post_state, hash_state(512));
 }
+
+#[test]
+fn execute_good_chain_on_parent() {
+	let mut number = 0;
+	let mut parent_hash = [0; 32];
+	let mut last_state = 0;
+
+	for add in 0..10 {
+		let parent_head = HeadData {
+			number,
+			parent_hash,
+			post_state: hash_state(last_state),
+		};
+
+		let block_data = BlockData {
+			state: last_state,
+			add,
+		};
+
+		let ret = parachain::wasm::validate_candidate(TEST_CODE, ValidationParams {
+			parent_head: parent_head.encode(),
+			block_data: block_data.encode(),
+		}).unwrap();
+
+		let new_head = HeadData::decode(&mut &ret.head_data[..]).unwrap();
+
+		assert_eq!(new_head.number, number + 1);
+		assert_eq!(new_head.parent_hash, hash_head(&parent_head));
+		assert_eq!(new_head.post_state, hash_state(last_state + add));
+
+		number += 1;
+		parent_hash = hash_head(&new_head);
+		last_state += add;
+	}
+}
+
+#[test]
+fn execute_bad_on_parent() {
+		let parent_head = HeadData {
+		number: 0,
+		parent_hash: [0; 32],
+		post_state: hash_state(0),
+	};
+
+	let block_data = BlockData {
+		state: 256, // start state is wrong.
+		add: 256,
+	};
+
+	let _ret = parachain::wasm::validate_candidate(TEST_CODE, ValidationParams {
+		parent_head: parent_head.encode(),
+		block_data: block_data.encode(),
+	}).unwrap_err();
+}

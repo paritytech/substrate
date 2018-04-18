@@ -23,15 +23,15 @@ use super::{HeadData, BlockData};
 #[lang = "panic_fmt"]
 #[no_mangle]
 pub extern fn panic_fmt(
-    _args: ::core::fmt::Arguments,
-    _file: &'static str,
-    _line: u32,
-    _col: u32,
+	_args: ::core::fmt::Arguments,
+	_file: &'static str,
+	_line: u32,
+	_col: u32,
 ) -> ! {
-    use core::intrinsics;
-    unsafe {
-        intrinsics::abort();
-    }
+	use core::intrinsics;
+	unsafe {
+		intrinsics::abort();
+	}
 }
 
 #[no_mangle]

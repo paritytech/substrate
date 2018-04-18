@@ -87,7 +87,6 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 	// maximum memory in bytes
 	const MAX_MEM: u32 = 1024 * 1024 * 1024; // 1 GiB
 
-	println!("instantiating");
 	// instantiate the module.
 	let (module, memory) = {
 		let module = Module::from_buffer(validation_code)?;
@@ -110,7 +109,6 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 		(module, memory)
 	};
 
-	println!("allocating call data");
 	// allocate call data in memory.
 	let (offset, len) = {
 		let encoded_call_data = params.encode();
@@ -135,14 +133,12 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 		(0, encoded_call_data.len() as i32)
 	};
 
-	println!("invoking");
 	let output = module.invoke_export(
 		"validate",
 		&[RuntimeValue::I32(offset), RuntimeValue::I32(len)],
 		&mut wasmi::NopExternals,
 	)?;
 
-	println!("reading data");
 	match output {
 		Some(RuntimeValue::I32(len_offset)) => {
 			let len_offset = len_offset as u32;
