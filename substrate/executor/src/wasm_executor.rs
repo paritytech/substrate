@@ -359,7 +359,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 					.map_err(|_| DummyUserError)
 			)?;
 
-		let instance = this.sandbox_store.instance(instance_idx).ok_or_else(|| DummyUserError)?;
+		let instance = this.sandbox_store.instance(instance_idx)?;
 
 		let mut guest_externals = sandbox::GuestExternals::new(this, instance_idx, state);
 
@@ -372,11 +372,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 	},
 	ext_sandbox_memory_new(initial: u32, maximum: u32) -> u32 => {
-		let mem_idx = this.sandbox_store.new_memory(initial, maximum).ok_or_else(|| DummyUserError)?;
+		let mem_idx = this.sandbox_store.new_memory(initial, maximum)?;
 		Ok(mem_idx)
 	},
 	ext_sandbox_memory_get(memory_idx: u32, offset: u32, buf_ptr: *mut u8, buf_len: usize) -> u32 => {
-		let dst_memory = this.sandbox_store.memory(memory_idx).ok_or_else(|| DummyUserError)?;
+		let dst_memory = this.sandbox_store.memory(memory_idx)?;
 
 		let data: Vec<u8> = match dst_memory.get(offset, buf_len as usize) {
 			Ok(data) => data,
@@ -390,7 +390,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(sandbox_primitives::ERR_OK)
 	},
 	ext_sandbox_memory_set(memory_idx: u32, offset: u32, val_ptr: *const u8, val_len: usize) -> u32 => {
-		let dst_memory = this.sandbox_store.memory(memory_idx).ok_or_else(|| DummyUserError)?;
+		let dst_memory = this.sandbox_store.memory(memory_idx)?;
 
 		let data = match this.memory.get(offset, val_len as usize) {
 			Ok(data) => data,

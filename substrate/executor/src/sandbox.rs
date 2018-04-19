@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! This module implements sandboxing support in the runtime.
+
 use codec::Slicable;
 use primitives::sandbox as sandbox_primitives;
 use std::collections::HashMap;
@@ -45,9 +47,9 @@ impl GuestToSuperviserFunctionMapping {
 		GuestToSuperviserFunctionMapping { funcs: Vec::new() }
 	}
 
-	fn define(&mut self, host_func: SupervisorFuncIndex) -> GuestFuncIndex {
+	fn define(&mut self, supervisor_func: SupervisorFuncIndex) -> GuestFuncIndex {
 		let idx = self.funcs.len();
-		self.funcs.push(host_func);
+		self.funcs.push(supervisor_func);
 		GuestFuncIndex(idx)
 	}
 
@@ -124,26 +126,60 @@ impl ImportResolver for Imports {
 	}
 }
 
+/// This trait encapsulates sandboxing capabilities.
+///
+/// Note that this functions are only called in the `supervisor` context.
 pub trait SandboxCapabilities {
-	/// Returns associated `Store`.
+	/// Returns associated sandbox `Store`.
 	fn store(&self) -> &Store;
 
+	/// Allocate space of the specified length in the supervisor memory.
+	///
+	/// Returns pointer to the allocated block.
 	fn allocate(&mut self, len: u32) -> u32;
+
+	/// Deallocate space specified by the pointer that was previously returned by [`allocate`].
+	///
+	/// [`allocate`]: #tymethod.allocate
 	fn deallocate(&mut self, ptr: u32);
+
+	/// Write `data` into the supervisor memory at offset specified by `ptr`.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` if `ptr + data.len()` is out of bounds.
 	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> Result<(), DummyUserError>;
+
+	/// Read `len` bytes from the supervisor memory.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` if `ptr + len` is out of bounds.
 	fn read_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>, DummyUserError>;
 }
 
+/// Implementation of [`Externals`] that allows execution of guest module with
+/// [externals][`Externals`] that might refer functions defined by supervisor.
+///
+/// [`Externals`]: ../../wasmi/trait.Externals.html
 pub struct GuestExternals<'a, FE: SandboxCapabilities + Externals + 'a> {
-	original_externals: &'a mut FE,
+	supervisor_externals: &'a mut FE,
 	instance_idx: u32,
 	state: u32,
 }
 
 impl<'a, FE: SandboxCapabilities + Externals + 'a> GuestExternals<'a, FE> {
-	pub fn new(original_externals: &mut FE, instance_idx: u32, state: u32) -> GuestExternals<FE> {
+	/// Create a new instance of `GuestExternals`.
+	///
+	/// It will use `supervisor_externals` to execute calls from guest to supervisor.
+	/// `instance_idx` required to fetch settings for this particular instance, e.g
+	/// associated dispatch thunk funtion and mapping between externals function ids to
+	/// functions in supervisor module.
+	/// `state` is just an integer that allows supervisor to have arbitrary state associated with the call,
+	/// typically used for implementing runtime functions.
+	pub fn new(supervisor_externals: &mut FE, instance_idx: u32, state: u32) -> GuestExternals<FE> {
 		GuestExternals {
-			original_externals,
+			supervisor_externals,
 			instance_idx,
 			state,
 		}
@@ -175,7 +211,7 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		args: RuntimeArgs,
 	) -> Result<Option<RuntimeValue>, Trap> {
 		let (func_idx, dispatch_thunk) = {
-			let instance = &self.original_externals.store().instances[self.instance_idx as usize];
+			let instance = &self.supervisor_externals.store().instances[self.instance_idx as usize];
 			let dispatch_thunk = instance.dispatch_thunk.clone();
 			let func_idx = instance
 				.guest_to_supervisor_mapping
@@ -203,9 +239,9 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 
 		// Move serialized arguments inside the memory and invoke dispatch thunk and
 		// then free allocated memory.
-		let invoke_args_ptr = self.original_externals
+		let invoke_args_ptr = self.supervisor_externals
 			.allocate(invoke_args_data.len() as u32);
-		self.original_externals
+		self.supervisor_externals
 			.write_memory(invoke_args_ptr, &invoke_args_data)?;
 		let result = ::wasmi::FuncInstance::invoke(
 			&dispatch_thunk,
@@ -215,9 +251,9 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 				RuntimeValue::I32(state as i32),
 				RuntimeValue::I32(func_idx.0 as i32),
 			],
-			self.original_externals,
+			self.supervisor_externals,
 		);
-		self.original_externals.deallocate(invoke_args_ptr);
+		self.supervisor_externals.deallocate(invoke_args_ptr);
 
 		// dispatch_thunk returns pointer to serialized arguments.
 		let (serialized_result_val_ptr, serialized_result_val_len) = match result {
@@ -232,9 +268,9 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 			_ => return Err(trap()),
 		};
 
-		let serialized_result_val = self.original_externals
+		let serialized_result_val = self.supervisor_externals
 			.read_memory(serialized_result_val_ptr, serialized_result_val_len)?;
-		self.original_externals
+		self.supervisor_externals
 			.deallocate(serialized_result_val_ptr);
 
 		// TODO: check the signature?
@@ -294,6 +330,7 @@ pub struct Store {
 }
 
 impl Store {
+	/// Create new empty sandbox store.
 	pub fn new() -> Store {
 		Store {
 			instances: Vec::new(),
@@ -301,6 +338,20 @@ impl Store {
 		}
 	}
 
+	/// Instantiate a guest module and return it's index in the store.
+	///
+	/// The guest module's code is specified in `wasm`. Environment that will be available to
+	/// guest module is specified in `raw_env_def` (serialized version of [`EnvironmentDefinition`]).
+	/// `dispatch_thunk` is used as function that handle calls from guests.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` if any of the following conditions happens:
+	///
+	/// - `raw_env_def` can't be deserialized as a [`EnvironmentDefinition`].
+	/// - Module in `wasm` is invalid or couldn't be instantiated.
+	///
+	/// [`EnvironmentDefinition`]: ../../sandbox/struct.EnvironmentDefinition.html
 	pub fn instantiate(
 		&mut self,
 		dispatch_thunk: FuncRef,
@@ -328,27 +379,46 @@ impl Store {
 		Ok(instance_idx as u32)
 	}
 
-	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Option<u32> {
+	/// Create a new memory instance and return it's index.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` if the memory couldn't be created.
+	/// Typically happens if `initial` is more than `maximum`.
+	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32, DummyUserError> {
 		let maximum = match maximum {
 			sandbox_primitives::MEM_UNLIMITED => None,
 			specified_limit => Some(Pages(specified_limit as usize)),
 		};
 
-		let mem =
-			MemoryInstance::alloc(Pages(initial as usize), maximum).ok()?;
+		let mem = MemoryInstance::alloc(Pages(initial as usize), maximum).map_err(|_| DummyUserError)?;
 		self.memories.push(mem);
 		let mem_idx = self.memories.len() - 1;
-		Some(mem_idx as u32)
+		Ok(mem_idx as u32)
 	}
 
-	pub fn instance(&self, instance_idx: u32) -> Option<ModuleRef> {
+	/// Returns `ModuleRef` by `instance_idx`.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` If `instance_idx` isn't a valid index of an instance.
+	pub fn instance(&self, instance_idx: u32) -> Result<ModuleRef, DummyUserError> {
 		self.instances
 			.get(instance_idx as usize)
 			.map(|i| i.instance.clone())
+			.ok_or_else(|| DummyUserError)
 	}
 
-	pub fn memory(&self, memory_idx: u32) -> Option<MemoryRef> {
-		self.memories.get(memory_idx as usize).cloned()
+	/// Returns reference to a memory instance by `memory_idx`.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` If `memory_idx` isn't a valid index of an instance.
+	pub fn memory(&self, memory_idx: u32) -> Result<MemoryRef, DummyUserError> {
+		self.memories
+			.get(memory_idx as usize)
+			.cloned()
+			.ok_or_else(|| DummyUserError)
 	}
 }
 

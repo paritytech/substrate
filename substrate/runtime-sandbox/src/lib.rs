@@ -14,11 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! This crate provides means for sandboxed execution of wasm modules.
+//! This crate provides means of instantiation and execution of wasm modules.
 //!
-//! In case this crate is used within wasm execution environment
-//! then same VM will be used for execution of sandboxed code without
-//! comrpomising the security of the sandbox owner.
+//! It works even when the user of this library is itself executes
+//! inside the wasm VM. In this case same VM is used for execution
+//! of both the sandbox owner and the sandboxed module, without compromising security
+//! and without performance penalty of full wasm emulation inside wasm.
+//!
+//! This is achieved by using bindings to wasm VM which are published by the host API.
+//! This API is thin and consists of only handful functions. It contains functions for instantiating
+//! modules and executing them and for example doesn't contain functions for inspecting the module
+//! structure. The user of this library is supposed to read wasm module by it's own means.
+//!
+//! When this crate is used in `std` environment all these functions are implemented by directly
+//! calling wasm VM.
+//!
+//! Typical use-case for this library might be used for implementing smart-contract runtimes
+//! which uses wasm for contract code.
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -65,10 +77,20 @@ impl From<Error> for HostError {
 	}
 }
 
-/// Callable function pointer.
+/// Function pointer for specifying functions by the
+/// supervisor in [`EnvironmentDefinitionBuilder`].
+///
+/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
 pub type HostFuncType<T> = fn(&mut T, &[TypedValue]) -> Result<ReturnValue, HostError>;
 
-/// Reference to a sandboxed linear memory.
+/// Reference to a sandboxed linear memory, that
+/// will be used by the guest module.
+///
+/// The memory can't be directly accessed by supervisor, but only
+/// through designated functions [`get`] and [`set`].
+///
+/// [`get`]: #method.get
+/// [`set`]: #method.set
 #[derive(Clone)]
 pub struct Memory {
 	inner: imp::Memory,
@@ -76,6 +98,15 @@ pub struct Memory {
 
 impl Memory {
 	/// Construct a new linear memory instance.
+	///
+	/// The memory allocated with initial number of pages specified by `initial`.
+	/// Minimal possible value for `initial` is 0 and maximum possible is `65536`.
+	/// (Since maximum addressible memory is 2<sup>32</sup> = 4GiB = 65536 * 64KiB).
+	///
+	/// It is possible to limit maximum number of pages this memory instance can have by specifying
+	/// `maximum`. If not specified, this memory instance would be able to allocate up to 4GiB.
+	///
+	/// Allocated memory is always zeroed.
 	pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
 		Ok(Memory {
 			inner: imp::Memory::new(initial, maximum)?,
@@ -83,11 +114,15 @@ impl Memory {
 	}
 
 	/// Read a memory area at the address `ptr` with the size of the provided slice `buf`.
+	///
+	/// Returns `Err` if the range is out-of-bounds.
 	pub fn get(&self, ptr: u32, buf: &mut [u8]) -> Result<(), Error> {
 		self.inner.get(ptr, buf)
 	}
 
 	/// Write a memory area at the address `ptr` with contents of the provided slice `buf`.
+	///
+	/// Returns `Err` if the range is out-of-bounds.
 	pub fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error> {
 		self.inner.set(ptr, value)
 	}
