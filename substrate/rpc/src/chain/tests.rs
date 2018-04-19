@@ -16,6 +16,7 @@
 
 use super::*;
 use jsonrpc_macros::pubsub;
+use client::BlockOrigin;
 use test_client::{self, TestClient};
 
 #[test]
@@ -63,7 +64,7 @@ fn should_notify_about_latest_block() {
 		assert_eq!(core.run(id), Ok(Ok(SubscriptionId::Number(0))));
 
 		let builder = api.client.new_block().unwrap();
-		api.client.import_own_block(builder).unwrap();
+		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
 	// assert notification send to transport

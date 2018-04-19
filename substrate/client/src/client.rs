@@ -454,6 +454,7 @@ mod tests {
 	use keyring::Keyring;
 	use primitives::block::Extrinsic as PrimitiveExtrinsic;
 	use test_client::{self, TestClient};
+	use test_client::client::BlockOrigin;
 	use test_client::runtime as test_runtime;
 	use test_client::runtime::{UncheckedTransaction, Transaction};
 
@@ -485,7 +486,7 @@ mod tests {
 
 		let builder = client.new_block().unwrap();
 
-		client.import_own_block(builder).unwrap();
+		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
@@ -514,7 +515,7 @@ mod tests {
 			nonce: 0
 		}.signed()).unwrap();
 
-		client.import_own_block(builder).unwrap();
+		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());

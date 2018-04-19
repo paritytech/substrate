@@ -19,7 +19,6 @@
 #![warn(missing_docs)]
 
 extern crate substrate_bft as bft;
-extern crate substrate_client as client;
 extern crate substrate_codec as codec;
 extern crate substrate_keyring as keyring;
 extern crate substrate_primitives as primitives;
@@ -27,6 +26,7 @@ extern crate substrate_runtime_support as runtime_support;
 #[macro_use] extern crate substrate_executor as executor;
 
 pub extern crate substrate_test_runtime as runtime;
+pub extern crate substrate_client as client;
 
 mod client_ext;
 

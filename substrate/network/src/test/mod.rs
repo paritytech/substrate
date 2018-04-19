@@ -163,7 +163,7 @@ impl Peer {
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
 			trace!("Generating {}, (#{})", primitives::block::HeaderHash::from(block.header.blake2_256()), block.header.number);
-			self.client.import_file_block(block).unwrap();
+			self.client.justify_and_import(client::BlockOrigin::File, block).unwrap();
 		}
 	}
 
