@@ -17,10 +17,10 @@
 //! Blockchain access trait
 
 use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin};
-use client::error::Error;
 use state_machine;
 use primitives::block::{self, Id as BlockId};
 use primitives::bft::Justification;
+use error::Error;
 
 pub trait Client: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
@@ -48,36 +48,35 @@ pub trait Client: Send + Sync {
 impl<B, E> Client for PolkadotClient<B, E> where
 	B: client::backend::Backend + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
-	Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>, {
-
+	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>, {
 	fn import(&self, is_best: bool, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error> {
 		// TODO: defer justification check.
-		let justified_header = self.check_justification(header, justification.into())?;
+		let justified_header = self.check_justification(header, justification.into());
 		let origin = if is_best { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
-		(self as &PolkadotClient<B, E>).import_block(origin, justified_header, body)
+		(self as &PolkadotClient<B, E>).import_block(origin, justified_header?, body).map_err(Into::into)
 	}
 
 	fn info(&self) -> Result<ClientInfo, Error> {
-		(self as &PolkadotClient<B, E>).info()
+		(self as &PolkadotClient<B, E>).info().map_err(Into::into)
 	}
 
 	fn block_status(&self, id: &BlockId) -> Result<BlockStatus, Error> {
-		(self as &PolkadotClient<B, E>).block_status(id)
+		(self as &PolkadotClient<B, E>).block_status(id).map_err(Into::into)
 	}
 
 	fn block_hash(&self, block_number: block::Number) -> Result<Option<block::HeaderHash>, Error> {
-		(self as &PolkadotClient<B, E>).block_hash(block_number)
+		(self as &PolkadotClient<B, E>).block_hash(block_number).map_err(Into::into)
 	}
 
 	fn header(&self, id: &BlockId) -> Result<Option<block::Header>, Error> {
-		(self as &PolkadotClient<B, E>).header(id)
+		(self as &PolkadotClient<B, E>).header(id).map_err(Into::into)
 	}
 
 	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error> {
-		(self as &PolkadotClient<B, E>).body(id)
+		(self as &PolkadotClient<B, E>).body(id).map_err(Into::into)
 	}
 
 	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error> {
-		(self as &PolkadotClient<B, E>).justification(id)
+		(self as &PolkadotClient<B, E>).justification(id).map_err(Into::into)
 	}
 }

@@ -28,6 +28,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_client as client;
+extern crate substrate_light as light_client;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_bft;
 extern crate serde;
@@ -46,28 +47,26 @@ extern crate ed25519;
 #[cfg(test)] extern crate substrate_codec as codec;
 #[cfg(test)] extern crate substrate_bft as bft;
 
-mod service;
-mod sync;
-mod protocol;
-mod io;
-mod message;
 mod config;
-mod chain;
-mod blocks;
-mod consensus;
+mod full;
+mod handler;
+mod io;
+mod service;
+mod sync_provider;
 pub mod error;
 
 #[cfg(test)] mod test;
 
-pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream,
-	TransactionPool, Params, ManageNetwork, SyncProvider};
-pub use protocol::{ProtocolStatus};
-pub use sync::{Status as SyncStatus, SyncState};
+pub use service::{Service, FetchFuture, TransactionPool, Params, ManageNetwork};
+pub use full::{ConsensusService, StatementStream, BftMessageStream};
 pub use network::{NonReservedPeerMode, NetworkConfiguration};
 pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
-pub use message::{Statement, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
+pub use full::message::{Statement, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote,
+	SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
+pub use sync_provider::{SyncProvider, ProtocolPeerInfo, PeerInfo, TransactionStats, ProtocolStatus,
+	SyncStatus, SyncState};
 
 // TODO: move it elsewhere
 fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {

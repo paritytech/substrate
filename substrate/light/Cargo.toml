@@ -1,0 +1,10 @@
+[package]
+name = "substrate-light"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+futures = "0.1.17"
+parking_lot = "0.4"
+substrate-client = { path = "../client" }
+substrate-primitives = { path = "../primitives" }

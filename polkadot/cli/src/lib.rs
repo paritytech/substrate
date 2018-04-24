@@ -120,6 +120,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		info!("Starting validator.");
 		role = service::Role::VALIDATOR;
 	}
+	else if matches.is_present("light") {
+		info!("Starting light.");
+		role = service::Role::LIGHT;
+	}
 
 	match matches.value_of("chain") {
 		Some("poc-1") => config.chain_spec = ChainSpec::PoC1Testnet,
@@ -160,8 +164,16 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", &matches)?;
 
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
-			rpc::rpc_handler(service.client(), chain, service.transaction_pool())
+			let chain = rpc::apis::chain::Chain::new(
+				service.chain_head(),
+				service.chain_data(),
+				service.chain_events(),
+				core.remote());
+			let state = rpc::apis::state::State::new(
+				service.chain_head(),
+				service.state_data(),
+				service.contract_caller());
+			rpc::rpc_handler(state, chain, service.transaction_pool())
 		};
 		(
 			start_server(http_address, |address| rpc::start_http(address, handler())),

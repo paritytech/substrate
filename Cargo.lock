@@ -1386,6 +1386,7 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
+ "substrate-light 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
@@ -1853,6 +1854,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-light"
+version = "0.1.0"
+dependencies = [
+ "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-client 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "substrate-misbehavior-check"
 version = "0.1.0"
 dependencies = [
@@ -1886,6 +1897,7 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-light 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-serializer 0.1.0",

@@ -24,17 +24,20 @@ use serde_json;
 use primitives::block::{HeaderHash, ExtrinsicHash, Number as BlockNumber, Header, Id as BlockId};
 use primitives::{Hash, blake2_256};
 use runtime_support::Hashable;
-use network::{PeerId, NodeId};
+use network::PeerId;
 
-use message::{self, Message};
-use sync::{ChainSync, Status as SyncStatus, SyncState};
-use consensus::Consensus;
-use service::{Role, TransactionPool, StatementStream, BftMessageStream};
+use full::{StatementStream, BftMessageStream};
+use full::chain::Client;
+use full::consensus::Consensus;
+use full::message::{self, Message};
+use full::sync::ChainSync;
+use config::Role;
+use sync_provider::{SyncState, ProtocolStatus, ProtocolPeerInfo, TransactionStats};
+use service::TransactionPool;
 use config::ProtocolConfig;
-use chain::Client;
-use io::SyncIo;
 use error;
-use super::header_hash;
+use io::SyncIo;
+use header_hash;
 
 const REQUEST_TIMEOUT_SEC: u64 = 15;
 const PROTOCOL_VERSION: u32 = 0;
@@ -54,17 +57,6 @@ pub struct Protocol {
 	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<PeerId, time::Instant>>,
 	transaction_pool: Arc<TransactionPool>,
-}
-
-/// Syncing status and statistics
-#[derive(Clone)]
-pub struct ProtocolStatus {
-	/// Sync status.
-	pub sync: SyncStatus,
-	/// Total number of connected peers
-	pub num_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
 }
 
 /// Peer information
@@ -87,27 +79,6 @@ struct Peer {
 	known_blocks: HashSet<HeaderHash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
-}
-
-#[derive(Debug)]
-pub struct PeerInfo {
-	/// Roles
-	pub roles: Role,
-	/// Protocol version
-	pub protocol_version: u32,
-	/// Peer best block hash
-	pub best_hash: HeaderHash,
-	/// Peer best block number
-	pub best_number: BlockNumber,
-}
-
-/// Transaction stats
-#[derive(Debug)]
-pub struct TransactionStats {
-	/// Block number where this TX was first seen.
-	pub first_seen: u64,
-	/// Peers it was propagated to.
-	pub propagated_to: BTreeMap<NodeId, usize>,
 }
 
 impl Protocol {
@@ -368,9 +339,9 @@ impl Protocol {
 		}
 	}
 
-	pub fn peer_info(&self, peer: PeerId) -> Option<PeerInfo> {
+	pub fn peer_info(&self, peer: PeerId) -> Option<ProtocolPeerInfo> {
 		self.peers.read().get(&peer).map(|p| {
-			PeerInfo {
+			ProtocolPeerInfo {
 				roles: p.roles,
 				protocol_version: p.protocol_version,
 				best_hash: p.best_hash,

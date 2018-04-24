@@ -23,7 +23,6 @@ use tokio_core::reactor;
 use network::{SyncState, SyncProvider};
 use runtime_support::Hashable;
 use primitives::block::HeaderHash;
-use client::BlockchainEvents;
 
 const TIMER_INTERVAL_MS: u64 = 5000;
 
@@ -33,12 +32,12 @@ pub fn start(service: &Service, handle: reactor::Handle) {
 		.expect("Error creating informant timer");
 
 	let network = service.network();
-	let client = service.client();
+	let chain_head = service.chain_head();
 
 	let display_notifications = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 		let sync_status = network.status();
 
-		if let Ok(best_block) = client.best_block_header() {
+		if let Ok(best_block) = chain_head.best_block_header() {
 			let hash: HeaderHash = best_block.blake2_256().into();
 			let status = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
 				(SyncState::Idle, _) => "Idle".into(),
@@ -52,8 +51,8 @@ pub fn start(service: &Service, handle: reactor::Handle) {
 		Ok(())
 	});
 
-	let client = service.client();
-	let display_block_import = client.import_notification_stream().for_each(|n| {
+	let chain_events = service.chain_events();
+	let display_block_import = chain_events.import_notification_stream().for_each(|n| {
 		info!(target: "polkadot", "Imported #{} ({})", n.header.number, n.hash);
 		Ok(())
 	});

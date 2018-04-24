@@ -19,8 +19,7 @@
 use std::sync::Arc;
 
 use primitives::block;
-use client::{self, Client, BlockchainEvents};
-use state_machine;
+use client::{BlockchainEvents, ChainHead, ChainData};
 
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
@@ -62,41 +61,43 @@ build_rpc_trait! {
 }
 
 /// Chain API with subscriptions support.
-pub struct Chain<B, E> {
-	/// Substrate client.
-	client: Arc<Client<B, E>>,
+pub struct Chain {
+	/// Chain head shared instance.
+	chain_head: Arc<ChainHead>,
+	/// Chain data shared instance.
+	chain_data: Arc<ChainData>,
+	/// Blockchain events shared instance.
+	chain_events: Arc<BlockchainEvents>,
 	/// Current subscriptions.
 	subscriptions: Subscriptions,
 }
 
-impl<B, E> Chain<B, E> {
+impl Chain {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client<B, E>>, remote: Remote) -> Self {
+	pub fn new(chain_head: Arc<ChainHead>, chain_data: Arc<ChainData>, chain_events: Arc<BlockchainEvents>, remote: Remote) -> Self {
 		Chain {
-			client,
+			chain_head,
+			chain_data,
+			chain_events,
 			subscriptions: Subscriptions::new(remote),
 		}
 	}
 }
 
-impl<B, E> ChainApi for Chain<B, E> where
-	B: client::backend::Backend + Send + Sync + 'static,
-	E: state_machine::CodeExecutor + Send + Sync + 'static,
-	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
-{
+impl ChainApi for Chain {
 	type Metadata = ::metadata::Metadata;
 
 	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
-		self.client.header(&block::Id::Hash(hash)).chain_err(|| "Blockchain error")
+		self.chain_data.header(&block::Id::Hash(hash)).chain_err(|| "Blockchain error")
 	}
 
 	fn head(&self) -> Result<block::HeaderHash> {
-		Ok(self.client.info().chain_err(|| "Blockchain error")?.chain.best_hash)
+		self.chain_head.best_block_hash().chain_err(|| "Blockchain error")
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<block::Header>) {
 		self.subscriptions.add(subscriber, |sink| {
-			let stream = self.client.import_notification_stream()
+			let stream = self.chain_events.import_notification_stream()
 				.filter(|notification| notification.is_new_best)
 				.map(|notification| Ok(notification.header))
 				.map_err(|e| warn!("Block notification stream error: {:?}", e));

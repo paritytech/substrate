@@ -14,7 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-pub use service::Role;
+bitflags! {
+	/// Node roles bitmask.
+	pub struct Role: u32 {
+		/// No network.
+		const NONE = 0b00000000;
+		/// Full node, doe not participate in consensus.
+		const FULL = 0b00000001;
+		/// Light client node.
+		const LIGHT = 0b00000010;
+		/// Act as a validator.
+		const VALIDATOR = 0b00000100;
+		/// Act as a collator.
+		const COLLATOR = 0b00001000;
+	}
+}
 
 /// Protocol configuration
 #[derive(Clone)]

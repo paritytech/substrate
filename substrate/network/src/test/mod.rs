@@ -25,7 +25,7 @@ use primitives::block::{Id as BlockId, ExtrinsicHash};
 use primitives;
 use executor;
 use io::SyncIo;
-use protocol::Protocol;
+use full::protocol::Protocol;
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network::{PeerId, SessionInfo, Error as NetworkError};

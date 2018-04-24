@@ -15,7 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use client::backend::Backend;
-use sync::SyncState;
+use sync_provider::SyncState;
 use super::*;
 
 #[test]

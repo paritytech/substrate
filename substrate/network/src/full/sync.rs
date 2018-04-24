@@ -16,13 +16,14 @@
 
 use std::collections::HashMap;
 use io::SyncIo;
-use protocol::Protocol;
 use network::PeerId;
 use client::{ImportResult, BlockStatus, ClientInfo};
 use primitives::block::{HeaderHash, Number as BlockNumber, Header, Id as BlockId};
-use blocks::{self, BlockCollection};
-use message::{self, Message};
-use super::header_hash;
+use full::protocol::Protocol;
+use full::blocks::{self, BlockCollection};
+use full::message::{self, Message};
+use sync_provider::{SyncState, SyncStatus};
+use header_hash;
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -37,10 +38,10 @@ struct PeerSync {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 enum PeerSyncState {
-    AncestorSearch(BlockNumber),
-    Available,
-    DownloadingNew(BlockNumber),
-    DownloadingStale(HeaderHash),
+	AncestorSearch(BlockNumber),
+	Available,
+	DownloadingNew(BlockNumber),
+	DownloadingStale(HeaderHash),
 }
 
 /// Relay chain sync strategy.
@@ -51,24 +52,6 @@ pub struct ChainSync {
 	best_queued_number: BlockNumber,
 	best_queued_hash: HeaderHash,
 	required_block_attributes: Vec<message::BlockAttribute>,
-}
-
-/// Reported sync state.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub enum SyncState {
-	/// Initial sync is complete, keep-up sync is active.
-	Idle,
-	/// Actively catching up with the chain.
-	Downloading
-}
-
-/// Syncing status and statistics
-#[derive(Clone)]
-pub struct Status {
-	/// Current global sync state.
-	pub state: SyncState,
-	/// Target sync block number.
-	pub best_seen_block: Option<BlockNumber>,
 }
 
 impl ChainSync {
@@ -89,13 +72,13 @@ impl ChainSync {
 	}
 
 	/// Returns sync status
-	pub fn status(&self) -> Status {
+	pub fn status(&self) -> SyncStatus {
 		let best_seen = self.best_seen_block();
 		let state = match &best_seen {
 			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > 5 => SyncState::Downloading,
 			_ => SyncState::Idle,
 		};
-		Status {
+		SyncStatus {
 			state: state,
 			best_seen_block: best_seen,
 		}

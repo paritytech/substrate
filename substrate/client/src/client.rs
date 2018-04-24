@@ -40,15 +40,40 @@ pub struct Client<B, E> {
 }
 
 /// A source of blockchain evenets.
-pub trait BlockchainEvents {
+pub trait BlockchainEvents: Send + Sync {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> BlockchainEventStream;
 }
 
 /// Chain head information.
-pub trait ChainHead {
+pub trait ChainHead: Send + Sync {
 	/// Get best block header.
 	fn best_block_header(&self) -> Result<block::Header, error::Error>;
+	/// Get best block hash.
+	fn best_block_hash(&self) -> Result<block::HeaderHash, error::Error>;
+}
+
+/// Chain data information.
+pub trait ChainData: Send + Sync {
+	/// Get block header by id.
+	fn header(&self, id: &BlockId) -> Result<Option<block::Header>, error::Error>;
+}
+
+/// State data information.
+pub trait StateData: Send + Sync {
+	/// Get the code at a given block.
+	fn code_at(&self, id: &BlockId) -> Result<Vec<u8>, error::Error>;
+
+	/// Return single storage entry of contract under given address in state in a block of given hash.
+	fn storage(&self, id: &BlockId, key: &StorageKey) -> Result<StorageData, error::Error>;
+}
+
+/// Contract caller.
+pub trait ContractCaller: Send + Sync {
+	/// Execute a call to a contract on top of state in a block of given hash.
+	///
+	/// No changes are made.
+	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error>;
 }
 
 /// Client info
@@ -419,8 +444,8 @@ impl<B, E> bft::Authorities for Client<B, E>
 
 impl<B, E> BlockchainEvents for Client<B, E>
 	where
-		B: backend::Backend,
-		E: state_machine::CodeExecutor,
+		B: backend::Backend + Send + Sync,
+		E: state_machine::CodeExecutor + Send + Sync,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	/// Get block import event stream.
@@ -433,12 +458,53 @@ impl<B, E> BlockchainEvents for Client<B, E>
 
 impl<B, E> ChainHead for Client<B, E>
 	where
-		B: backend::Backend,
-		E: state_machine::CodeExecutor,
+		B: backend::Backend + Send + Sync,
+		E: state_machine::CodeExecutor + Send + Sync,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	fn best_block_header(&self) -> error::Result<block::Header> {
 		Client::best_block_header(self)
+	}
+
+	fn best_block_hash(&self) -> error::Result<block::HeaderHash> {
+		Client::info(self).map(|i| i.chain.best_hash)
+	}
+}
+
+impl<B, E> ChainData for Client<B, E>
+	where
+		B: backend::Backend + Send + Sync,
+		E: state_machine::CodeExecutor + Send + Sync,
+		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	fn header(&self, id: &BlockId) -> error::Result<Option<block::Header>> {
+		Client::header(self, id)
+	}
+}
+
+impl<B, E> StateData for Client<B, E>
+	where
+		B: backend::Backend + Send + Sync,
+		E: state_machine::CodeExecutor + Send + Sync,
+		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	fn code_at(&self, id: &BlockId) -> error::Result<Vec<u8>> {
+		Client::code_at(self, id)
+	}
+
+	fn storage(&self, id: &BlockId, key: &StorageKey) -> error::Result<StorageData> {
+		Client::storage(self, id, key)
+	}
+}
+
+impl<B, E> ContractCaller for Client<B, E>
+	where
+		B: backend::Backend + Send + Sync,
+		E: state_machine::CodeExecutor + Send + Sync,
+		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+{
+	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error> {
+		Client::call(self, id, method, call_data)
 	}
 }
 

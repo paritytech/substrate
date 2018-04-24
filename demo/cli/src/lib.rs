@@ -136,8 +136,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let _rpc_servers = {
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
-			rpc::rpc_handler(client.clone(), chain, DummyPool)
+			let chain = rpc::apis::chain::Chain::new(client.clone(), client.clone(), client.clone(), core.remote());
+			let state = rpc::apis::state::State::new(client.clone(), client.clone(), client.clone());
+			rpc::rpc_handler(state, chain, DummyPool)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();
