@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
 // Polkadot is free software: you can redistribute it and/or modify
@@ -15,9 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate ed25519;
-extern crate ethereum_types;
 extern crate substrate_codec as codec;
-extern crate substrate_rpc;
 extern crate substrate_primitives as substrate_primitives;
 extern crate substrate_runtime_primitives as substrate_runtime_primitives;
 extern crate polkadot_runtime as runtime;
@@ -31,27 +29,23 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
+mod error;
+
 use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use codec::Slicable;
 use polkadot_api::PolkadotApi;
-use primitives::{AccountId, Timestamp};
-use substrate_primitives::block::Extrinsic;
+use primitives::{Hash, AccountId, Timestamp};
+use substrate_primitives::block::{Extrinsic, ExtrinsicHash};
+use substrate_primitives::hexdisplay::HexDisplay;
 use runtime::{Block, UncheckedExtrinsic, TimestampCall, Call};
 use substrate_runtime_primitives::traits::Checkable;
 use transaction_pool::{Pool, Readiness};
 use transaction_pool::scoring::{Change, Choice};
 
-// TODO: make queue generic over hash and sender so we don't need ethereum-types
-pub use ethereum_types::{Address as TruncatedAccountId, H256 as TransactionHash};
 pub use transaction_pool::{Options, Status, LightStatus, NoopListener, VerifiedTransaction as VerifiedTransactionOps};
-
-/// Truncate an account ID to 160 bits.
-pub fn truncate_id(id: &AccountId) -> TruncatedAccountId {
-	TruncatedAccountId::from_slice(&id[..20])
-}
+pub use error::{Error, ErrorKind, Result};
 
 /// Useful functions for working with Polkadot blocks.
 pub struct PolkadotBlock {
@@ -119,44 +113,17 @@ impl From<PolkadotBlock> for Block {
 pub type PendingIterator<'a, C> =
 	transaction_pool::PendingIterator<'a, VerifiedTransaction, Ready<'a, C>, Scoring, NoopListener>;
 
-error_chain! {
-	errors {
-		/// Attempted to queue an inherent transaction.
-		IsInherent(xt: UncheckedExtrinsic) {
-			description("Inherent transactions cannot be queued."),
-			display("Inehrent transactions cannot be queued."),
-		}
-		/// Attempted to queue a transaction with bad signature.
-		BadSignature(xt: UncheckedExtrinsic) {
-			description("Transaction had bad signature."),
-			display("Transaction had bad signature."),
-		}
-		/// Attempted to queue a transaction that is already in the pool.
-		AlreadyImported(hash: TransactionHash) {
-			description("Transaction is already in the pool."),
-			display("Transaction {:?} is already in the pool.", hash),
-		}
-		/// Import error.
-		Import(err: Box<::std::error::Error + Send>) {
-			description("Error importing transaction"),
-			display("Error importing transaction: {}", err.description()),
-		}
-	}
-}
-
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Debug, Clone)]
 pub struct VerifiedTransaction {
 	inner: <UncheckedExtrinsic as Checkable>::Checked,
-	hash: TransactionHash,
-	address: TruncatedAccountId,
-	insertion_id: u64,
+	hash: ExtrinsicHash,
 	encoded_size: usize,
 }
 
 impl VerifiedTransaction {
 	/// Attempt to verify a transaction.
-	fn create(xt: UncheckedExtrinsic, insertion_id: u64) -> Result<Self> {
+	fn create(xt: UncheckedExtrinsic) -> Result<Self> {
 		if !xt.is_signed() {
 			bail!(ErrorKind::IsInherent(xt))
 		}
@@ -164,15 +131,11 @@ impl VerifiedTransaction {
 		let message = codec::Slicable::encode(&xt);
 		match xt.check() {
 			Ok(xt) => {
-				// TODO: make transaction-pool use generic types.
 				let hash = substrate_primitives::hashing::blake2_256(&message);
-				let address = truncate_id(&xt.signed);
 				Ok(VerifiedTransaction {
 					inner: xt,
 					hash: hash.into(),
 					encoded_size: message.len(),
-					address,
-					insertion_id,
 				})
 			}
 			Err(xt) => Err(ErrorKind::BadSignature(xt).into()),
@@ -190,13 +153,13 @@ impl VerifiedTransaction {
 	}
 
 	/// Get the 256-bit hash of this transaction.
-	pub fn hash(&self) -> &TransactionHash {
+	pub fn hash(&self) -> &Hash {
 		&self.hash
 	}
 
-	/// Get the truncated account ID of the sender of this transaction.
-	pub fn sender(&self) -> &TruncatedAccountId {
-		&self.address
+	/// Get the account ID of the sender of this transaction.
+	pub fn sender(&self) -> &AccountId {
+		&self.inner.signed
 	}
 
 	/// Get encoded size of the transaction.
@@ -212,28 +175,29 @@ impl AsRef< <UncheckedExtrinsic as Checkable>::Checked > for VerifiedTransaction
 }
 
 impl transaction_pool::VerifiedTransaction for VerifiedTransaction {
-	fn hash(&self) -> &TransactionHash {
+	type Hash = Hash;
+	type Sender = AccountId;
+
+	fn hash(&self) -> &Self::Hash {
 		&self.hash
 	}
 
-	fn sender(&self) -> &TruncatedAccountId {
-		&self.address
+	fn sender(&self) -> &Self::Sender {
+		&self.inner.signed
 	}
 
 	fn mem_usage(&self) -> usize {
 		1 // TODO
 	}
-
-	fn insertion_id(&self) -> u64 {
-		self.insertion_id
-	}
 }
 
 /// Scoring implementation for polkadot transactions.
+#[derive(Debug)]
 pub struct Scoring;
 
 impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
 	type Score = u64;
+	type Event = ();
 
 	fn compare(&self, old: &VerifiedTransaction, other: &VerifiedTransaction) -> Ordering {
 		old.inner.index.cmp(&other.inner.index)
@@ -245,7 +209,7 @@ impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
 
 	fn update_scores(
 		&self,
-		xts: &[Arc<VerifiedTransaction>],
+		xts: &[transaction_pool::Transaction<VerifiedTransaction>],
 		scores: &mut [Self::Score],
 		_change: Change
 	) {
@@ -292,7 +256,7 @@ impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for Ready<'a, T> {
 	fn is_ready(&mut self, xt: &VerifiedTransaction) -> Readiness {
 		let sender = xt.inner.signed;
-		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.hash, TransactionHash::from(sender));
+		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.hash, Hash::from(sender));
 
 		// TODO: find a way to handle index error properly -- will need changes to
 		// transaction-pool trait.
@@ -305,7 +269,7 @@ impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for R
 		match xt.inner.index.cmp(&next_index) {
 			Ordering::Greater => Readiness::Future,
 			Ordering::Equal => Readiness::Ready,
-			Ordering::Less => Readiness::Stalled,	// TODO: this is not "stalled" but rather stale and can be discarded.
+			Ordering::Less => Readiness::Stale,
 		}
 	}
 }
@@ -315,7 +279,6 @@ impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for R
 /// Wraps a `transaction-pool::Pool`.
 pub struct TransactionPool {
 	inner: transaction_pool::Pool<VerifiedTransaction, Scoring>,
-	insertion_index: u64, // TODO: use AtomicU64 when it stabilizes
 }
 
 impl TransactionPool {
@@ -323,16 +286,12 @@ impl TransactionPool {
 	pub fn new(options: Options) -> Self {
 		TransactionPool {
 			inner: Pool::new(NoopListener, Scoring, options),
-			insertion_index: 0,
 		}
 	}
 
 	/// Verify and import a transaction into the pool.
 	pub fn import(&mut self, xt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
-		let insertion_index = self.insertion_index;
-		self.insertion_index += 1;
-
-		let verified = VerifiedTransaction::create(xt, insertion_index)?;
+		let verified = VerifiedTransaction::create(xt)?;
 
 		info!("Extrinsic verified {:?}. Importing...", verified);
 
@@ -355,12 +314,12 @@ impl TransactionPool {
 	}
 
 	/// Remove from the pool.
-	pub fn remove(&mut self, hash: &TransactionHash, is_valid: bool) -> Option<Arc<VerifiedTransaction>> {
+	pub fn remove(&mut self, hash: &Hash, is_valid: bool) -> Option<Arc<VerifiedTransaction>> {
 		self.inner.remove(hash, is_valid)
 	}
 
 	/// Cull transactions from the queue.
-	pub fn cull<T: PolkadotApi>(&mut self, senders: Option<&[TruncatedAccountId]>, ready: Ready<T>) -> usize {
+	pub fn cull<T: PolkadotApi>(&mut self, senders: Option<&[AccountId]>, ready: Ready<T>) -> usize {
 		self.inner.cull(senders, ready)
 	}
 
@@ -378,18 +337,18 @@ impl TransactionPool {
 	pub fn light_status(&self) -> LightStatus {
 		self.inner.light_status()
 	}
-}
 
-impl substrate_rpc::author::AsyncAuthorApi for TransactionPool {
-	fn submit_extrinsic(&mut self, xt: Extrinsic) -> substrate_rpc::author::error::Result<()> {
-		use substrate_primitives::hexdisplay::HexDisplay;
+	/// Submit an extrinsic to the pool.
+	pub fn submit_extrinsic(&mut self, xt: Extrinsic) -> Result<ExtrinsicHash> {
 		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
-		let xt = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
-			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?;
-		info!("Correctly formatted: {:?}", xt);
-		self.import(xt)
-			.map(|_| ())
-			.map_err(|_| substrate_rpc::author::error::ErrorKind::PoolError.into())
+
+		unimplemented!()
+		// let xt = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
+		// 	.ok_or_else(|| ErrorKind::InvalidExtrinsicFormat)?;
+        //
+		// info!("Correctly formatted: {:?}", xt);
+		// self.import(xt)
+		// 	.map(|vxt| vxt.extrinsic_hash)
 	}
 }
 

@@ -1407,7 +1407,6 @@ version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ethereum-types 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
  "polkadot-primitives 0.1.0",
@@ -1415,9 +1414,8 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-rpc 0.1.0",
  "substrate-runtime-primitives 0.1.0",
- "transaction-pool 1.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "transaction-pool 1.11.0 (git+https://github.com/paritytech/parity?branch=td-txpool-improvements)",
 ]
 
 [[package]]
@@ -1841,6 +1839,15 @@ dependencies = [
  "substrate-state-machine 0.1.0",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-extrinsic-pool"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "transaction-pool 1.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2311,6 +2318,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "trace-time"
+version = "0.1.0"
+source = "git+https://github.com/paritytech/parity?branch=td-txpool-improvements#3cbdc2232cfa02fa04845bfae5e7d599e4a3c357"
+dependencies = [
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "traitobject"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2324,6 +2339,17 @@ dependencies = [
  "ethereum-types 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "transaction-pool"
+version = "1.11.0"
+source = "git+https://github.com/paritytech/parity?branch=td-txpool-improvements#3cbdc2232cfa02fa04845bfae5e7d599e4a3c357"
+dependencies = [
+ "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "smallvec 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trace-time 0.1.0 (git+https://github.com/paritytech/parity?branch=td-txpool-improvements)",
 ]
 
 [[package]]
@@ -2732,7 +2758,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum tokio-proto 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8fbb47ae81353c63c487030659494b295f6cb6576242f907f203473b191b0389"
 "checksum tokio-service 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "24da22d077e0f15f55162bdbdc661228c1581892f52074fb242678d015b45162"
 "checksum tokio-timer 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6131e780037787ff1b3f8aad9da83bca02438b72277850dd6ad0d455e0e20efc"
+"checksum trace-time 0.1.0 (git+https://github.com/paritytech/parity?branch=td-txpool-improvements)" = "<none>"
 "checksum traitobject 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
+"checksum transaction-pool 1.11.0 (git+https://github.com/paritytech/parity?branch=td-txpool-improvements)" = "<none>"
 "checksum transaction-pool 1.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "23303835df389f9c34ad45cacf392304193f974faaf48c30a4ece2b03da0ed57"
 "checksum triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9291c7f0fae44858b5e087dd462afb382354120003778f1695b44aab98c7abd7"
 "checksum twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "475352206e7a290c5fccc27624a163e8d0d115f7bb60ca18a64fc9ce056d7435"
