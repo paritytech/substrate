@@ -20,12 +20,12 @@ use std::collections::{HashMap, HashSet};
 use futures::sync::{oneshot, mpsc};
 use std::time::{Instant, Duration};
 use std::collections::hash_map::Entry;
-use io::SyncIo;
-use protocol::Protocol;
 use network::PeerId;
 use primitives::Hash;
-use message::{self, Message};
 use runtime_support::Hashable;
+use full::message::{self, Message};
+use full::protocol::Protocol;
+use io::SyncIo;
 
 // TODO: Add additional spam/DoS attack protection.
 const MESSAGE_LIFETIME_SECONDS: u64 = 600;

@@ -21,7 +21,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use network::PeerId;
 use primitives::block::Number as BlockNumber;
-use message;
+use full::message;
 
 const MAX_PARALLEL_DOWNLOADS: u32 = 1;
 
@@ -190,7 +190,7 @@ impl BlockCollection {
 #[cfg(test)]
 mod test {
 	use super::{BlockCollection, BlockData};
-	use message;
+	use full::message;
 	use primitives::block::HeaderHash;
 
 	fn is_empty(bc: &BlockCollection) -> bool {

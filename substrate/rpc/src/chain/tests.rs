@@ -32,13 +32,16 @@ fn should_return_header() {
 	let core = ::tokio_core::reactor::Core::new().unwrap();
 	let remote = core.remote();
 
-	let client = Chain {
-		client: Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap()),
+	let client = Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap());
+	let chain = Chain {
+		chain_head: client.clone(),
+		chain_data: client.clone(),
+		chain_events: client.clone(),
 		subscriptions: Subscriptions::new(remote),
 	};
 
 	assert_matches!(
-		ChainApi::header(&client, test_genesis_block.blake2_256().into()),
+		ChainApi::header(&chain, test_genesis_block.blake2_256().into()),
 		Ok(Some(ref x)) if x == &block::Header {
 			parent_hash: 0.into(),
 			number: 0,
@@ -49,7 +52,7 @@ fn should_return_header() {
 	);
 
 	assert_matches!(
-		ChainApi::header(&client, 5.into()),
+		ChainApi::header(&chain, 5.into()),
 		Ok(None)
 	);
 }

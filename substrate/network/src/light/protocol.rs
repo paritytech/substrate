@@ -14,33 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-bitflags! {
-	/// Node roles bitmask.
-	pub struct Role: u32 {
-		/// No network.
-		const NONE = 0b00000000;
-		/// Full node, doe not participate in consensus.
-		const FULL = 0b00000001;
-		/// Light client node.
-		const LIGHT = 0b00000010;
-		/// Act as a validator.
-		const VALIDATOR = 0b00000100;
-		/// Act as a collator.
-		const COLLATOR = 0b00001000;
+use io::SyncIo;
+use network::PeerId;
+use handler::Protocol as ProtocolApi;
+
+/// Light protocol implementation.
+pub struct Protocol;
+
+impl ProtocolApi for Protocol {
+	fn handle_packet(&self, _io: &mut SyncIo, _peer_id: PeerId, _data: &[u8]) {
 	}
-}
 
-/// Protocol configuration
-#[derive(Clone)]
-pub struct ProtocolConfig {
-	/// Assigned roles.
-	pub roles: Role,
-}
+	fn on_peer_connected(&self, _io: &mut SyncIo, _peer_id: PeerId) {
+	}
 
-impl Default for ProtocolConfig {
-	fn default() -> ProtocolConfig {
-		ProtocolConfig {
-			roles: Role::FULL,
-		}
+	fn on_peer_disconnected(&self, _io: &mut SyncIo, _peer: PeerId) {
+	}
+
+	fn tick(&self, _io: &mut SyncIo) {
 	}
 }

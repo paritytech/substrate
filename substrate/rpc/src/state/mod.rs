@@ -22,10 +22,9 @@ mod error;
 mod tests;
 
 use std::sync::Arc;
-use client::{self, Client};
+use client::{ChainHead, StateData, ContractCaller};
 use primitives::block;
 use primitives::storage::{StorageKey, StorageData};
-use state_machine;
 
 use self::error::Result;
 
@@ -50,27 +49,45 @@ build_rpc_trait! {
 	}
 }
 
-impl<B, E> StateApi for Arc<Client<B, E>> where
-	B: client::backend::Backend + Send + Sync + 'static,
-	E: state_machine::CodeExecutor + Send + Sync + 'static,
-	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
-{
+/// State API.
+pub struct State {
+	/// Chain head shared instance.
+	chain_head: Arc<ChainHead>,
+	/// State data shared instance.
+	state_data: Arc<StateData>,
+	/// Contract caller shared instance.
+	contract_caller: Arc<ContractCaller>,
+}
+
+impl State {
+	/// Create new State API RPC handler.
+	pub fn new(chain_head: Arc<ChainHead>, state_data: Arc<StateData>, contract_caller: Arc<ContractCaller>) -> Self {
+		State {
+			chain_head,
+			state_data,
+			contract_caller,
+		}
+	}
+}
+
+impl StateApi for State {
 	fn storage_at(&self, key: StorageKey, block: block::HeaderHash) -> Result<StorageData> {
-		Ok(self.as_ref().storage(&block::Id::Hash(block), &key)?)
+		Ok(self.state_data.storage(&block::Id::Hash(block), &key)?)
 	}
 
 	fn call_at(&self, method: String, data: Vec<u8>, block: block::HeaderHash) -> Result<Vec<u8>> {
-		Ok(self.as_ref().call(&block::Id::Hash(block), &method, &data)?.return_data)
+		Ok(self.contract_caller.call(&block::Id::Hash(block), &method, &data)?.return_data)
 	}
 
 	fn storage(&self, key: StorageKey) -> Result<StorageData> {
-		let at = block::Id::Hash(self.as_ref().info()?.chain.best_hash);
+		let at = block::Id::Hash(self.chain_head.best_block_hash()?);
 		use primitives::hexdisplay::HexDisplay;
 		info!("Querying storage at {:?} for key {}", at, HexDisplay::from(&key.0));
-		Ok(self.as_ref().storage(&at, &key)?)
+		Ok(self.state_data.storage(&at, &key)?)
 	}
 
 	fn call(&self, method: String, data: Vec<u8>) -> Result<Vec<u8>> {
-		Ok(self.as_ref().call(&block::Id::Hash(self.as_ref().info()?.chain.best_hash), &method, &data)?.return_data)
+		let at = block::Id::Hash(self.chain_head.best_block_hash()?);
+		Ok(self.contract_caller.call(&at, &method, &data)?.return_data)
 	}
 }

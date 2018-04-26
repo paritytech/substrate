@@ -17,6 +17,7 @@
 //! Substrate Client and associated logic.
 
 #![warn(missing_docs)]
+#![recursion_limit="128"]
 
 extern crate substrate_bft as bft;
 extern crate substrate_runtime_support as runtime_support;
@@ -44,6 +45,7 @@ pub mod genesis;
 pub mod block_builder;
 mod client;
 
-pub use client::{Client, ClientInfo, CallResult, ImportResult, ChainHead,
-	BlockStatus, BlockOrigin, new_in_mem, BlockchainEventStream, BlockchainEvents};
+pub use client::{Client, ClientInfo, CallResult, ImportResult, ChainHead, ChainData,
+	BlockStatus, BlockOrigin, new_in_mem, BlockchainEventStream, BlockchainEvents,
+	StateData, ContractCaller, BlockImportNotification};
 pub use blockchain::Info as ChainInfo;

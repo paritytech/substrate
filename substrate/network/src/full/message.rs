@@ -19,8 +19,8 @@
 use primitives::{AuthorityId, Hash};
 use primitives::block::{Number as BlockNumber, HeaderHash, Header, Body, Block};
 use primitives::bft::Justification;
-use service::Role as RoleFlags;
 use ed25519;
+use config::Role as RoleFlags;
 
 pub type RequestId = u64;
 type Bytes = Vec<u8>;

@@ -24,17 +24,21 @@ use serde_json;
 use primitives::block::{HeaderHash, ExtrinsicHash, Number as BlockNumber, Header, Id as BlockId};
 use primitives::{Hash, blake2_256};
 use runtime_support::Hashable;
-use network::{PeerId, NodeId};
+use network::PeerId;
 
-use message::{self, Message};
-use sync::{ChainSync, Status as SyncStatus, SyncState};
-use consensus::Consensus;
-use service::{Role, TransactionPool, StatementStream, BftMessageStream};
+use handler::Protocol as ProtocolApi;
+use full::{StatementStream, BftMessageStream};
+use full::chain::Client;
+use full::consensus::Consensus;
+use full::message::{self, Message};
+use full::sync::ChainSync;
+use config::Role;
+use sync_provider::{SyncState, ProtocolStatus, ProtocolPeerInfo, TransactionStats};
+use service::TransactionPool;
 use config::ProtocolConfig;
-use chain::Client;
-use io::SyncIo;
 use error;
-use super::header_hash;
+use io::SyncIo;
+use header_hash;
 
 const REQUEST_TIMEOUT_SEC: u64 = 15;
 const PROTOCOL_VERSION: u32 = 0;
@@ -54,17 +58,6 @@ pub struct Protocol {
 	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<PeerId, time::Instant>>,
 	transaction_pool: Arc<TransactionPool>,
-}
-
-/// Syncing status and statistics
-#[derive(Clone)]
-pub struct ProtocolStatus {
-	/// Sync status.
-	pub sync: SyncStatus,
-	/// Total number of connected peers
-	pub num_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
 }
 
 /// Peer information
@@ -87,27 +80,6 @@ struct Peer {
 	known_blocks: HashSet<HeaderHash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
-}
-
-#[derive(Debug)]
-pub struct PeerInfo {
-	/// Roles
-	pub roles: Role,
-	/// Protocol version
-	pub protocol_version: u32,
-	/// Peer best block hash
-	pub best_hash: HeaderHash,
-	/// Peer best block number
-	pub best_number: BlockNumber,
-}
-
-/// Transaction stats
-#[derive(Debug)]
-pub struct TransactionStats {
-	/// Block number where this TX was first seen.
-	pub first_seen: u64,
-	/// Peers it was propagated to.
-	pub propagated_to: BTreeMap<NodeId, usize>,
 }
 
 impl Protocol {
@@ -138,55 +110,6 @@ impl Protocol {
 		}
 	}
 
-	pub fn handle_packet(&self, io: &mut SyncIo, peer_id: PeerId, data: &[u8]) {
-		let message: Message = match serde_json::from_slice(data) {
-			Ok(m) => m,
-			Err(e) => {
-				debug!("Invalid packet from {}: {}", peer_id, e);
-				io.disable_peer(peer_id);
-				return;
-			}
-		};
-
-		match message {
-			Message::Status(s) => self.on_status_message(io, peer_id, s),
-			Message::BlockRequest(r) => self.on_block_request(io, peer_id, r),
-			Message::BlockResponse(r) => {
-				let request = {
-					let mut peers = self.peers.write();
-					if let Some(ref mut peer) = peers.get_mut(&peer_id) {
-						peer.request_timestamp = None;
-						match mem::replace(&mut peer.block_request, None) {
-							Some(r) => r,
-							None => {
-								debug!("Unexpected response packet from {}", peer_id);
-								io.disable_peer(peer_id);
-								return;
-							}
-						}
-					} else {
-						debug!("Unexpected packet from {}", peer_id);
-						io.disable_peer(peer_id);
-						return;
-					}
-				};
-				if request.id != r.id {
-					trace!(target: "sync", "Ignoring mismatched response packet from {} (expected {} got {})", peer_id, request.id, r.id);
-					return;
-				}
-				self.on_block_response(io, peer_id, request, r);
-			},
-			Message::BlockAnnounce(announce) => {
-				self.on_block_announce(io, peer_id, announce);
-			},
-			Message::Statement(s) => self.on_statement(io, peer_id, s, blake2_256(data).into()),
-			Message::CandidateRequest(r) => self.on_candidate_request(io, peer_id, r),
-			Message::CandidateResponse(r) => self.on_candidate_response(io, peer_id, r),
-			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m, blake2_256(data).into()),
-			Message::Transactions(m) => self.on_transactions(io, peer_id, m),
-		}
-	}
-
 	pub fn send_message(&self, io: &mut SyncIo, peer_id: PeerId, mut message: Message) {
 		match &mut message {
 			&mut Message::BlockRequest(ref mut r) => {
@@ -210,28 +133,6 @@ impl Protocol {
 	pub fn hash_message(message: &Message) -> Hash {
 		let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
 		blake2_256(&data).into()
-	}
-
-	/// Called when a new peer is connected
-	pub fn on_peer_connected(&self, io: &mut SyncIo, peer_id: PeerId) {
-		trace!(target: "sync", "Connected {}: {}", peer_id, io.peer_info(peer_id));
-		self.handshaking_peers.write().insert(peer_id, time::Instant::now());
-		self.send_status(io, peer_id);
-	}
-
-	/// Called by peer when it is disconnecting
-	pub fn on_peer_disconnected(&self, io: &mut SyncIo, peer: PeerId) {
-		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_info(peer));
-		let removed = {
-			let mut peers = self.peers.write();
-			let mut handshaking_peers = self.handshaking_peers.write();
-			handshaking_peers.remove(&peer);
-			peers.remove(&peer).is_some()
-		};
-		if removed {
-			self.consensus.lock().peer_disconnected(io, self, peer);
-			self.sync.write().peer_disconnected(io, self, peer);
-		}
 	}
 
 	fn on_block_request(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest) {
@@ -341,12 +242,6 @@ impl Protocol {
 		self.consensus.lock().set_local_candidate(candidate)
 	}
 
-	/// Perform time based maintenance.
-	pub fn tick(&self, io: &mut SyncIo) {
-		self.maintain_peers(io);
-		self.consensus.lock().collect_garbage();
-	}
-
 	fn maintain_peers(&self, io: &mut SyncIo) {
 		let tick = time::Instant::now();
 		let mut aborting = Vec::new();
@@ -368,9 +263,9 @@ impl Protocol {
 		}
 	}
 
-	pub fn peer_info(&self, peer: PeerId) -> Option<PeerInfo> {
+	pub fn peer_info(&self, peer: PeerId) -> Option<ProtocolPeerInfo> {
 		self.peers.read().get(&peer).map(|p| {
-			PeerInfo {
+			ProtocolPeerInfo {
 				roles: p.roles,
 				protocol_version: p.protocol_version,
 				best_hash: p.best_hash,
@@ -519,5 +414,81 @@ impl Protocol {
 
 	pub fn chain(&self) -> &Client {
 		&*self.chain
+	}
+}
+
+impl ProtocolApi for Protocol {
+	fn handle_packet(&self, io: &mut SyncIo, peer_id: PeerId, data: &[u8]) {
+		let message: Message = match serde_json::from_slice(data) {
+			Ok(m) => m,
+			Err(e) => {
+				debug!("Invalid packet from {}: {}", peer_id, e);
+				io.disable_peer(peer_id);
+				return;
+			}
+		};
+
+		match message {
+			Message::Status(s) => self.on_status_message(io, peer_id, s),
+			Message::BlockRequest(r) => self.on_block_request(io, peer_id, r),
+			Message::BlockResponse(r) => {
+				let request = {
+					let mut peers = self.peers.write();
+					if let Some(ref mut peer) = peers.get_mut(&peer_id) {
+						peer.request_timestamp = None;
+						match mem::replace(&mut peer.block_request, None) {
+							Some(r) => r,
+							None => {
+								debug!("Unexpected response packet from {}", peer_id);
+								io.disable_peer(peer_id);
+								return;
+							}
+						}
+					} else {
+						debug!("Unexpected packet from {}", peer_id);
+						io.disable_peer(peer_id);
+						return;
+					}
+				};
+				if request.id != r.id {
+					trace!(target: "sync", "Ignoring mismatched response packet from {} (expected {} got {})", peer_id, request.id, r.id);
+					return;
+				}
+				self.on_block_response(io, peer_id, request, r);
+			},
+			Message::BlockAnnounce(announce) => {
+				self.on_block_announce(io, peer_id, announce);
+			},
+			Message::Statement(s) => self.on_statement(io, peer_id, s, blake2_256(data).into()),
+			Message::CandidateRequest(r) => self.on_candidate_request(io, peer_id, r),
+			Message::CandidateResponse(r) => self.on_candidate_response(io, peer_id, r),
+			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m, blake2_256(data).into()),
+			Message::Transactions(m) => self.on_transactions(io, peer_id, m),
+		}
+	}
+
+	fn on_peer_connected(&self, io: &mut SyncIo, peer_id: PeerId) {
+		trace!(target: "sync", "Connected {}: {}", peer_id, io.peer_info(peer_id));
+		self.handshaking_peers.write().insert(peer_id, time::Instant::now());
+		self.send_status(io, peer_id);
+	}
+
+	fn on_peer_disconnected(&self, io: &mut SyncIo, peer: PeerId) {
+		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_info(peer));
+		let removed = {
+			let mut peers = self.peers.write();
+			let mut handshaking_peers = self.handshaking_peers.write();
+			handshaking_peers.remove(&peer);
+			peers.remove(&peer).is_some()
+		};
+		if removed {
+			self.consensus.lock().peer_disconnected(io, self, peer);
+			self.sync.write().peer_disconnected(io, self, peer);
+		}
+	}
+
+	fn tick(&self, io: &mut SyncIo) {
+		self.maintain_peers(io);
+		self.consensus.lock().collect_garbage();
 	}
 }

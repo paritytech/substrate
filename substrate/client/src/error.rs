@@ -22,6 +22,12 @@ use primitives::hexdisplay::HexDisplay;
 
 error_chain! {
 	errors {
+		/// Not implemented error.
+		NotImplemented {
+			description("Method not implemented error"),
+			display("Not implemented error"),
+		}
+
 		/// Backend error.
 		Backend {
 			description("Unrecoverable backend error"),

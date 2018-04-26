@@ -29,6 +29,7 @@ extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_keystore as keystore;
 extern crate substrate_client as client;
+extern crate substrate_light as light_client;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
@@ -46,6 +47,8 @@ extern crate log;
 extern crate hex_literal;
 
 mod error;
+mod chain_config;
+mod client_adapter;
 mod config;
 
 use std::sync::Arc;
@@ -54,192 +57,26 @@ use futures::prelude::*;
 use parking_lot::Mutex;
 use tokio_core::reactor::Core;
 use codec::Slicable;
-use primitives::block::{Id as BlockId, Extrinsic, ExtrinsicHash, HeaderHash};
-use primitives::hashing;
 use transaction_pool::TransactionPool;
-use substrate_executor::NativeExecutor;
-use polkadot_executor::Executor as LocalDispatch;
 use keystore::Store as Keystore;
-use polkadot_api::PolkadotApi;
-use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, BuildExternalities};
-use client::{genesis, BlockchainEvents};
-use client::in_mem::Backend as InMemory;
+use polkadot_runtime::BuildExternalities;
+use client_adapter::Client;
+use client::{genesis, BlockchainEvents, ChainHead, ChainData, StateData, ContractCaller};
 use network::ManageNetwork;
 use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
+pub use chain_config::ChainConfig;
 pub use config::{Configuration, Role, ChainSpec};
-
-type Client = client::Client<InMemory, NativeExecutor<LocalDispatch>>;
 
 /// Polkadot service.
 pub struct Service {
 	thread: Option<thread::JoinHandle<()>>,
-	client: Arc<Client>,
+	client: Client,
 	network: Arc<network::Service>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
 	signal: Option<Signal>,
 	_consensus: Option<consensus::Service>,
-}
-
-struct TransactionPoolAdapter {
-	pool: Arc<Mutex<TransactionPool>>,
-	client: Arc<Client>,
-}
-
-impl network::TransactionPool for TransactionPoolAdapter {
-	fn transactions(&self) -> Vec<(ExtrinsicHash, Vec<u8>)> {
-		let best_block = match self.client.info() {
-			Ok(info) => info.chain.best_hash,
-			Err(e) => {
-				debug!("Error getting best block: {:?}", e);
-				return Vec::new();
-			}
-		};
-		let id = self.client.check_id(BlockId::Hash(best_block)).expect("Best block is always valid; qed.");
-		let ready = transaction_pool::Ready::create(id, &*self.client);
-		self.pool.lock().pending(ready).map(|t| {
-			let hash = ::primitives::Hash::from(&t.hash()[..]);
-			let tx = codec::Slicable::encode(t.as_transaction());
-			(hash, tx)
-		}).collect()
-	}
-
-	fn import(&self, transaction: &[u8]) -> Option<ExtrinsicHash> {
-		if let Some(tx) = codec::Slicable::decode(&mut &transaction[..]) {
-			match self.pool.lock().import(tx) {
-				Ok(t) => Some(t.hash()[..].into()),
-				Err(e) => match *e.kind() {
-					transaction_pool::ErrorKind::AlreadyImported(hash) => Some(hash[..].into()),
-					_ => {
-						debug!("Error adding transaction to the pool: {:?}", e);
-						None
-					},
-				}
-			}
-		} else {
-			debug!("Error decoding transaction");
-			None
-		}
-	}
-}
-
-pub struct ChainConfig {
-	genesis_config: GenesisConfig,
-	boot_nodes: Vec<String>,
-}
-
-fn poc_1_testnet_config() -> ChainConfig {
-	let initial_authorities = vec![
-		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
-		hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
-		hex!["063d7787ebca768b7445dfebe7d62cbb1625ff4dba288ea34488da266dd6dca5"].into(),
-	];
-	let endowed_accounts = vec![
-		hex!["24d132eb1a4cbf8e46de22652019f1e07fadd5037a6a057c75dbbfd4641ba85d"].into(),
-	];
-	let genesis_config = GenesisConfig {
-		consensus: Some(ConsensusConfig {
-			code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),	// TODO change
-			authorities: initial_authorities.clone(),
-		}),
-		system: None,
-		session: Some(SessionConfig {
-			validators: initial_authorities.clone(),
-			session_length: 720,	// that's 1 hour per session.
-		}),
-		staking: Some(StakingConfig {
-			current_era: 0,
-			intentions: vec![],
-			transaction_fee: 100,
-			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
-			validator_count: 12,
-			sessions_per_era: 24,	// 24 hours per era.
-			bonding_duration: 90,	// 90 days per bond.
-		}),
-		democracy: Some(DemocracyConfig {
-			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
-			voting_period: 120 * 24 * 28,	// 4 weeks to discuss & vote on an active referendum
-			minimum_deposit: 1000,	// 1000 as the minimum deposit for a referendum
-		}),
-		council: Some(CouncilConfig {
-			active_council: vec![],
-			candidacy_bond: 1000,	// 1000 to become a council candidate
-			voter_bond: 100,		// 100 down to vote for a candidate
-			present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
-			carry_count: 24,		// carry over the 24 runners-up to the next council election
-			presentation_duration: 120 * 24,	// one day for presenting winners.
-			approval_voting_period: 7 * 120 * 24,	// one week period between possible council elections.
-			term_duration: 180 * 120 * 24,	// 180 day term duration for the council.
-			desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
-			inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
-
-			cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
-			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
-		}),
-		parachains: Some(Default::default()),
-	};
-	let boot_nodes = Vec::new();
-	ChainConfig { genesis_config, boot_nodes }
-}
-
-fn local_testnet_config() -> ChainConfig {
-	let initial_authorities = vec![
-		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
-	];
-	let endowed_accounts = vec![
-		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
-		ed25519::Pair::from_seed(b"Charlie                         ").public().into(),
-		ed25519::Pair::from_seed(b"Dave                            ").public().into(),
-		ed25519::Pair::from_seed(b"Eve                             ").public().into(),
-		ed25519::Pair::from_seed(b"Ferdie                          ").public().into(),
-	];
-	let genesis_config = GenesisConfig {
-		consensus: Some(ConsensusConfig {
-			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm").to_vec(),
-			authorities: initial_authorities.clone(),
-		}),
-		system: None,
-		session: Some(SessionConfig {
-			validators: initial_authorities.clone(),
-			session_length: 10,
-		}),
-		staking: Some(StakingConfig {
-			current_era: 0,
-			intentions: initial_authorities.clone(),
-			transaction_fee: 1,
-			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
-			validator_count: 2,
-			sessions_per_era: 5,
-			bonding_duration: 2,
-		}),
-		democracy: Some(DemocracyConfig {
-			launch_period: 9,
-			voting_period: 18,
-			minimum_deposit: 10,
-		}),
-		council: Some(CouncilConfig {
-			active_council: vec![],
-			candidacy_bond: 10,
-			voter_bond: 2,
-			present_slash_per_voter: 1,
-			carry_count: 4,
-			presentation_duration: 10,
-			approval_voting_period: 20,
-			term_duration: 40,
-			desired_seats: 0,
-			inactive_grace_period: 1,
-
-			cooloff_period: 75,
-			voting_period: 20,
-		}),
-		parachains: Some(Default::default()),
-	};
-	let boot_nodes = Vec::new();
-	ChainConfig { genesis_config, boot_nodes }
 }
 
 impl Service {
@@ -264,8 +101,8 @@ impl Service {
 		}
 
 		let ChainConfig { genesis_config, boot_nodes } = match config.chain_spec {
-			ChainSpec::Development => local_testnet_config(),
-			ChainSpec::PoC1Testnet => poc_1_testnet_config(),
+			ChainSpec::Development => chain_config::local_testnet_config(),
+			ChainSpec::PoC1Testnet => chain_config::poc_1_testnet_config(),
 		};
 		config.network.boot_nodes.extend(boot_nodes);
 
@@ -275,24 +112,25 @@ impl Service {
 			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 		};
 
-		let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
-		let best_header = client.best_block_header()?;
+		let client = if config.roles & Role::LIGHT == Role::LIGHT {
+			Client::Light(Arc::new(light_client::new_in_mem()?))
+		} else {
+			Client::Full(Arc::new(client::new_in_mem(executor, prepare_genesis)?))
+		};
+		let best_header = client.chain_head().best_block_header()?;
 		info!("Starting Polkadot. Best block is #{}", best_header.number);
 		let transaction_pool = Arc::new(Mutex::new(TransactionPool::new(config.transaction_pool)));
-		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			pool: transaction_pool.clone(),
-			client: client.clone(),
-		});
+		let transaction_pool_adapter = client.create_transaction_pool_adapter(transaction_pool.clone());
+
 		let network_params = network::Params {
 			config: network::ProtocolConfig {
 				roles: config.roles,
 			},
 			network_config: config.network,
-			chain: client.clone(),
 			transaction_pool: transaction_pool_adapter,
 		};
+		let (network, network_consensus) = client.create_network_service(network_params)?;
 
-		let network = network::Service::new(network_params)?;
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
 
 		let thread = {
@@ -306,9 +144,9 @@ impl Service {
 
 				thread_barrier.wait();
 				let mut core = Core::new().expect("tokio::Core could not be created");
-				let events = client.import_notification_stream().for_each(move |notification| {
+				let events = client.chain_events().import_notification_stream().for_each(move |notification| {
 					network.on_block_imported(notification.hash, &notification.header);
-					prune_imported(&*client, &*txpool, notification.hash);
+					client.prune_imported(&*txpool, notification.hash);
 
 					Ok(())
 				});
@@ -326,13 +164,14 @@ impl Service {
 		barrier.wait();
 
 		// Spin consensus service if configured
-		let consensus_service = if config.roles & Role::VALIDATOR == Role::VALIDATOR {
-			// Load the first available key. Code above makes sure it exisis.
-			let key = keystore.load(&keystore.contents()?[0], "")?;
-			info!("Using authority key {:?}", key.public());
-			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool.clone(), key))
-		} else {
-			None
+		let consensus_service = match (client.clone(), network_consensus) {
+			(Client::Full(ref client), Some(ref network_consensus)) if config.roles & Role::VALIDATOR == Role::VALIDATOR => {
+				// Load the first available key. Code above makes sure it exisis.
+				let key = keystore.load(&keystore.contents()?[0], "")?;
+				info!("Using authority key {:?}", key.public());
+				Some(consensus::Service::new(client.clone(), network_consensus.clone(), transaction_pool.clone(), key))
+			},
+			_ => None,
 		};
 
 		Ok(Service {
@@ -345,9 +184,29 @@ impl Service {
 		})
 	}
 
-	/// Get shared client instance.
-	pub fn client(&self) -> Arc<Client> {
-		self.client.clone()
+	/// Get shared blockchain events instance.
+	pub fn chain_events(&self) -> Arc<BlockchainEvents> {
+		self.client.chain_events()
+	}
+
+	/// Get shared chain head instance.
+	pub fn chain_head(&self) -> Arc<ChainHead> {
+		self.client.chain_head()
+	}
+
+	/// Get shared chain data instance.
+	pub fn chain_data(&self) -> Arc<ChainData> {
+		self.client.chain_data()
+	}
+
+	/// Get shared state data instance.
+	pub fn state_data(&self) -> Arc<StateData> {
+		self.client.state_data()
+	}
+
+	/// Get shared contract caller instance.
+	pub fn contract_caller(&self) -> Arc<ContractCaller> {
+		self.client.contract_caller()
 	}
 
 	/// Get shared network instance.
@@ -358,23 +217,6 @@ impl Service {
 	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<Mutex<TransactionPool>> {
 		self.transaction_pool.clone()
-	}
-}
-
-fn prune_transactions(pool: &mut TransactionPool, extrinsics: &[Extrinsic]) {
-	for extrinsic in extrinsics {
-		let hash: _ = hashing::blake2_256(&extrinsic.encode()).into();
-		pool.remove(&hash, true);
-	}
-}
-
-/// Produce a task which prunes any finalized transactions from the pool.
-pub fn prune_imported(client: &Client, pool: &Mutex<TransactionPool>, hash: HeaderHash) {
-	let id = BlockId::Hash(hash);
-	match client.body(&id) {
-		Ok(Some(body)) => prune_transactions(&mut *pool.lock(), &body[..]),
-		Ok(None) => warn!("Missing imported block {:?}", hash),
-		Err(e) => warn!("Failed to fetch block: {:?}", e),
 	}
 }
 
