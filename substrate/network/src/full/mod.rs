@@ -20,7 +20,6 @@ use primitives::Hash;
 pub mod blocks;
 pub mod chain;
 pub mod consensus;
-pub mod handler;
 pub mod message;
 pub mod protocol;
 pub mod sync;

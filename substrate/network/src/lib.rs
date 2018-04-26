@@ -51,6 +51,7 @@ mod config;
 mod full;
 mod handler;
 mod io;
+mod light;
 mod service;
 mod sync_provider;
 pub mod error;

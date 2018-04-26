@@ -24,10 +24,10 @@ use primitives::block::{ExtrinsicHash, Header, HeaderHash};
 use primitives::Hash;
 use light_client::LightClient;
 use full::{ConsensusService, StatementStream, BftMessageStream};
-use full::handler::ProtocolHandler as FullProtocolHandler;
 use full::chain::Client;
 use full::message::{Statement, LocalizedBftMessage};
-use full::protocol::Protocol;
+use full::protocol::Protocol as FullProtocol;
+use light::protocol::Protocol as LightProtocol;
 use handler::ProtocolHandler;
 use sync_provider::{SyncProvider, ProtocolStatus, TransactionStats, PeerInfo};
 use io::NetSyncIo;
@@ -64,7 +64,7 @@ struct ServiceData {
 	/// Network service
 	network: NetworkService,
 	/// Devp2p protocol handler
-	handler: ProtocolHandler,
+	handler: Arc<ProtocolHandler>,
 }
 
 impl Service {
@@ -73,9 +73,9 @@ impl Service {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
 		let data = Arc::new(ServiceData {
 			network: service,
-			handler: ProtocolHandler::Full(Arc::new(FullProtocolHandler {
-				protocol: Protocol::new(params.config, chain, params.transaction_pool)?,
-			})),
+			handler: Arc::new(ProtocolHandler::Full(FullProtocol::new(
+				params.config, chain, params.transaction_pool)?,
+			)),
 		});
 		let sync = Arc::new(Service { data: data.clone(), });
 
@@ -87,7 +87,7 @@ impl Service {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
 		let data = Arc::new(ServiceData {
 			network: service,
-			handler: ProtocolHandler::Light(()),
+			handler: Arc::new(ProtocolHandler::Light(LightProtocol)),
 		});
 		let sync = Arc::new(Service { data, });
 
@@ -117,7 +117,12 @@ impl Service {
 			_ => {},
 		};
 
-		self.data.handler.register(&self.data.network);
+		self.data.network.register_protocol(
+			self.data.handler.clone(),
+			self.data.handler.protocol_id(),
+			1,
+			&[0u8])
+		.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}
 
 	fn stop(&self) {
@@ -177,7 +182,7 @@ impl ConsensusService for ServiceData {
 	fn statements(&self) -> StatementStream {
 		self.handler.full()
 			.expect(CONSENSUS_SERVICE_PROOF)
-			.protocol.statements()
+			.statements()
 	}
 
 	fn connect_to_authorities(&self, _addresses: &[String]) {
@@ -188,7 +193,7 @@ impl ConsensusService for ServiceData {
 		self.network.with_context_eval(self.handler.protocol_id(), |context| {
 			self.handler.full()
 				.expect(CONSENSUS_SERVICE_PROOF)
-				.protocol.fetch_candidate(&mut NetSyncIo::new(context), hash)
+				.fetch_candidate(&mut NetSyncIo::new(context), hash)
 		}).expect("DOT Service is registered")
 	}
 
@@ -196,27 +201,27 @@ impl ConsensusService for ServiceData {
 		self.network.with_context(self.handler.protocol_id(), |context| {
 			self.handler.full()
 				.expect(CONSENSUS_SERVICE_PROOF)
-				.protocol.send_statement(&mut NetSyncIo::new(context), statement);
+				.send_statement(&mut NetSyncIo::new(context), statement);
 		});
 	}
 
 	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
 		self.handler.full()
 			.expect(CONSENSUS_SERVICE_PROOF)
-			.protocol.set_local_candidate(candidate)
+			.set_local_candidate(candidate)
 	}
 
 	fn bft_messages(&self) -> BftMessageStream {
 		self.handler.full()
 			.expect(CONSENSUS_SERVICE_PROOF)
-			.protocol.bft_messages()
+			.bft_messages()
 	}
 
 	fn send_bft_message(&self, message: LocalizedBftMessage) {
 		self.network.with_context(self.handler.protocol_id(), |context| {
 			self.handler.full()
 				.expect(CONSENSUS_SERVICE_PROOF)
-				.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
+				.send_bft_message(&mut NetSyncIo::new(context), message);
 		});
 	}
 }
