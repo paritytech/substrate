@@ -279,6 +279,7 @@ impl Service {
 		client: Arc<C>,
 		network: Arc<net::ConsensusService>,
 		transaction_pool: Arc<Mutex<TransactionPool>>,
+		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
 	) -> Service
 		where
@@ -298,7 +299,7 @@ impl Service {
 				transaction_pool: transaction_pool.clone(),
 				network: Network(network.clone()),
 				collators: NoCollators,
-				parachain_empty_duration: Duration::from_millis(4_000), // TODO
+				parachain_empty_duration,
 				timer: timer,
 			};
 

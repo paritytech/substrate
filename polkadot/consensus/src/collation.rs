@@ -31,8 +31,6 @@ use futures::prelude::*;
 pub struct Collation {
 	/// Block data.
 	pub block_data: BlockData,
-	/// Extrinsic data.
-	pub extrinsic: Extrinsic,
 	/// The candidate receipt itself.
 	pub receipt: CandidateReceipt,
 }
@@ -83,10 +81,10 @@ impl<C: Collators, P: PolkadotApi> CollationFetch<C, P> {
 }
 
 impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
-	type Item = Collation;
+	type Item = (Collation, Extrinsic);
 	type Error = C::Error;
 
-	fn poll(&mut self) -> Poll<Collation, C::Error> {
+	fn poll(&mut self) -> Poll<(Collation, Extrinsic), C::Error> {
 		let parachain = match self.parachain.as_ref() {
 			Some(p) => p.clone(),
 			None => return Ok(Async::NotReady),
@@ -106,7 +104,9 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 			match verify_collation(&*self.client, &self.relay_parent, &x) {
 				Ok(()) => {
 					self.parachain = None;
-					return Ok(Async::Ready(x));
+
+					// TODO: generate extrinsic while verifying.
+					return Ok(Async::Ready((x, Extrinsic)));
 				}
 				Err(e) => {
 					debug!("Failed to validate parachain due to API error: {}", e);
@@ -144,8 +144,8 @@ error_chain! {
 	}
 }
 
-// Check whether a given collation is valid. Returns `Ok`  on success, error otherwise.
-fn verify_collation<P: PolkadotApi>(client: &P, relay_parent: &P::CheckedBlockId, collation: &Collation) -> Result<(), Error> {
+/// Check whether a given collation is valid. Returns `Ok`  on success, error otherwise.
+pub fn verify_collation<P: PolkadotApi>(client: &P, relay_parent: &P::CheckedBlockId, collation: &Collation) -> Result<(), Error> {
 	use parachain::{self, ValidationParams};
 
 	let para_id = collation.receipt.parachain_index;

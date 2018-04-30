@@ -78,9 +78,10 @@ use tokio_timer::{Timer, Interval, Sleep, TimerError};
 use futures::prelude::*;
 use futures::future::{self, Shared};
 use parking_lot::Mutex;
-use collation::{Collators, CollationFetch};
+use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
 
+pub use self::collation::{Collators, Collation};
 pub use self::error::{ErrorKind, Error};
 pub use self::shared_table::{SharedTable, StatementSource, StatementProducer, ProducedStatements};
 pub use service::Service;
@@ -653,10 +654,12 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 	fn poll(&mut self) -> Poll<SubstrateBlock, Error> {
 		// 1. poll local collation future.
 		match self.collation.poll() {
-			Ok(Async::Ready(collation)) => {
+			Ok(Async::Ready((collation, extrinsic))) => {
 				let hash = collation.receipt.hash();
-				self.router.local_candidate_data(hash, collation.block_data, collation.extrinsic);
-				self.table.sign_and_import(&self.router, GenericStatement::Valid(hash));
+				self.router.local_candidate_data(hash, collation.block_data, extrinsic);
+
+				// TODO: if we are an availability guarantor also, we should produce an availability statement.
+				self.table.sign_and_import(&self.router, GenericStatement::Candidate(collation.receipt));
 			}
 			Ok(Async::NotReady) => {},
 			Err(_) => {}, // TODO: handle this failure to collate.
