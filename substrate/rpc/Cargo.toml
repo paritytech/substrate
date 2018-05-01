@@ -18,5 +18,4 @@ tokio-core = "0.1.12"
 
 [dev-dependencies]
 assert_matches = "1.1"
-substrate-executor = { path = "../executor" }
-substrate-runtime-support = { path = "../runtime-support" }
+substrate-test-client = { path = "../test-client" }

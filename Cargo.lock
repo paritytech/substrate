@@ -834,7 +834,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "jsonrpc-core"
 version = "8.0.2"
-source = "git+https://github.com/paritytech/jsonrpc.git#9cfa451b0534281d83f7564bf41fda465a6e18c8"
+source = "git+https://github.com/paritytech/jsonrpc.git#0fd13be062625c6d4c89859c8686d4da3bbb552c"
 dependencies = [
  "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -846,7 +846,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-http-server"
 version = "8.0.1"
-source = "git+https://github.com/paritytech/jsonrpc.git#9cfa451b0534281d83f7564bf41fda465a6e18c8"
+source = "git+https://github.com/paritytech/jsonrpc.git#0fd13be062625c6d4c89859c8686d4da3bbb552c"
 dependencies = [
  "hyper 0.11.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git)",
@@ -859,7 +859,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-macros"
 version = "8.0.1"
-source = "git+https://github.com/paritytech/jsonrpc.git#9cfa451b0534281d83f7564bf41fda465a6e18c8"
+source = "git+https://github.com/paritytech/jsonrpc.git#0fd13be062625c6d4c89859c8686d4da3bbb552c"
 dependencies = [
  "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git)",
  "jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git)",
@@ -869,7 +869,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-pubsub"
 version = "8.0.1"
-source = "git+https://github.com/paritytech/jsonrpc.git#9cfa451b0534281d83f7564bf41fda465a6e18c8"
+source = "git+https://github.com/paritytech/jsonrpc.git#0fd13be062625c6d4c89859c8686d4da3bbb552c"
 dependencies = [
  "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -879,7 +879,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-server-utils"
 version = "8.0.1"
-source = "git+https://github.com/paritytech/jsonrpc.git#9cfa451b0534281d83f7564bf41fda465a6e18c8"
+source = "git+https://github.com/paritytech/jsonrpc.git#0fd13be062625c6d4c89859c8686d4da3bbb552c"
 dependencies = [
  "bytes 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "globset 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -892,7 +892,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-ws-server"
 version = "8.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git#9cfa451b0534281d83f7564bf41fda465a6e18c8"
+source = "git+https://github.com/paritytech/jsonrpc.git#0fd13be062625c6d4c89859c8686d4da3bbb552c"
 dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git)",
@@ -1810,7 +1810,7 @@ dependencies = [
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-state-machine 0.1.0",
- "substrate-test-runtime 0.1.0",
+ "substrate-test-client 0.1.0",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1884,13 +1884,12 @@ dependencies = [
  "substrate-bft 0.1.0",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
- "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-serializer 0.1.0",
  "substrate-state-machine 0.1.0",
- "substrate-test-runtime 0.1.0",
+ "substrate-test-client 0.1.0",
 ]
 
 [[package]]
@@ -1926,8 +1925,8 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
  "substrate-state-machine 0.1.0",
+ "substrate-test-client 0.1.0",
  "tokio-core 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2155,6 +2154,20 @@ dependencies = [
  "patricia-trie 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 0.1.0",
  "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-test-client"
+version = "0.1.0"
+dependencies = [
+ "substrate-bft 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-codec 0.1.0",
+ "substrate-executor 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-runtime-support 0.1.0",
+ "substrate-test-runtime 0.1.0",
 ]
 
 [[package]]
