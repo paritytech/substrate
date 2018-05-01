@@ -406,18 +406,30 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			let includability_tracker = self.table.track_includability(included_candidate_hashes)
 				.map_err(|_| ErrorKind::PrematureDestruction.into());
 
-			// delay casting vote until the timestamp of the block is current.
+			// the duration at which the given number of parachains is acceptable.
+			let count_delay = self.dynamic_inclusion.acceptable_in(
+				Instant::now(),
+				proposal.parachain_heads().len(),
+			);
+
+			// the duration until the given timestamp is current
 			let proposed_timestamp = proposal.timestamp();
 			let timestamp_delay = if proposed_timestamp > current_timestamp {
-				let f = self.timer.sleep(Duration::from_secs(proposed_timestamp - current_timestamp))
-					.map_err(Error::from);
-
-				future::Either::A(f)
+				Some(Duration::from_secs(proposed_timestamp - current_timestamp))
 			} else {
-				future::Either::B(future::ok(()))
+				None
 			};
 
-			minimum_delay.join3(includability_tracker, timestamp_delay)
+			// construct a future from the maximum of the two durations.
+			let temporary_delay = match ::std::cmp::max(timestamp_delay, count_delay) {
+				Some(duration) => {
+					let f = self.timer.sleep(duration).map_err(Error::from);
+					future::Either::A(f)
+				}
+				None => future::Either::B(future::ok(())),
+			};
+
+			minimum_delay.join3(includability_tracker, temporary_delay)
 		};
 
 		// evaluate whether the block is actually valid.

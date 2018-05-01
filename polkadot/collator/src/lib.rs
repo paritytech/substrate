@@ -43,9 +43,6 @@
 //!
 //! This crate defines traits which provide context necessary for collation logic
 //! to be performed, as the collation logic itself.
-//!
-//! This crate also defines a WASM API and execution environment for evaluating
-//! collations.
 
 extern crate futures;
 extern crate substrate_codec as codec;
