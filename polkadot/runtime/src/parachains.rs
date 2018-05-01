@@ -300,7 +300,7 @@ mod tests {
 			assert_eq!(Parachains::parachain_code(&5u32.into()), Some(vec![1,2,3]));
 			assert_eq!(Parachains::parachain_code(&100u32.into()), Some(vec![4,5,6]));
 
-			Parachains::register_parachain(99u32.into(), vec![7,8,9]);
+			Parachains::register_parachain(99u32.into(), vec![7,8,9], vec![1, 1, 1]);
 
 			assert_eq!(Parachains::active_parachains(), vec![5u32.into(), 99u32.into(), 100u32.into()]);
 			assert_eq!(Parachains::parachain_code(&99u32.into()), Some(vec![7,8,9]));
