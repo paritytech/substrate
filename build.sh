@@ -1,6 +1,7 @@
 #!/bin/sh
 
 # NOTE `cargo install wasm-gc` before running this script.
+# NOTE `cargo install --git https://github.com/pepyakin/wasm-export-table.git`
 
 set -e
 export CARGO_INCREMENTAL=0

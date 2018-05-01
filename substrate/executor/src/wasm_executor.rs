@@ -18,7 +18,9 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use wasmi::{Module, ModuleInstance,  MemoryInstance, MemoryRef, ImportsBuilder};
+use wasmi::{
+	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder,
+};
 use wasmi::RuntimeValue::{I32, I64};
 use wasmi::memory_units::{Pages, Bytes};
 use state_machine::{Externalities, CodeExecutor};
@@ -26,7 +28,9 @@ use error::{Error, ErrorKind, Result};
 use wasm_utils::{DummyUserError};
 use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
+use primitives::sandbox as sandbox_primitives;
 use triehash::ordered_trie_root;
+use sandbox;
 
 struct Heap {
 	end: u32,
@@ -60,20 +64,42 @@ impl Heap {
 }
 
 struct FunctionExecutor<'e, E: Externalities + 'e> {
+	sandbox_store: sandbox::Store,
 	heap: Heap,
 	memory: MemoryRef,
+	table: Option<TableRef>,
 	ext: &'e mut E,
 	hash_lookup: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl<'e, E: Externalities> FunctionExecutor<'e, E> {
-	fn new(m: MemoryRef, e: &'e mut E) -> Result<Self> {
+	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
+			sandbox_store: sandbox::Store::new(),
 			heap: Heap::new(&m)?,
 			memory: m,
+			table: t,
 			ext: e,
 			hash_lookup: HashMap::new(),
 		})
+	}
+}
+
+impl<'e, E: Externalities> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
+	fn store(&self) -> &sandbox::Store {
+		&self.sandbox_store
+	}
+	fn allocate(&mut self, len: u32) -> u32 {
+		self.heap.allocate(len)
+	}
+	fn deallocate(&mut self, ptr: u32) {
+		self.heap.deallocate(ptr)
+	}
+	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> ::std::result::Result<(), DummyUserError> {
+		self.memory.set(ptr, data).map_err(|_| DummyUserError)
+	}
+	fn read_memory(&self, ptr: u32, len: u32) -> ::std::result::Result<Vec<u8>, DummyUserError> {
+		self.memory.get(ptr, len as usize).map_err(|_| DummyUserError)
 	}
 }
 
@@ -310,6 +336,73 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			5
 		})
 	},
+	ext_sandbox_instantiate(dispatch_thunk_idx: usize, wasm_ptr: *const u8, wasm_len: usize, imports_ptr: *const u8, imports_len: usize, state: usize) -> u32 => {
+		let wasm = this.memory.get(wasm_ptr, wasm_len as usize).map_err(|_| DummyUserError)?;
+		let raw_env_def = this.memory.get(imports_ptr, imports_len as usize).map_err(|_| DummyUserError)?;
+
+		let table = this.table.as_ref().ok_or_else(|| DummyUserError)?;
+		let dispatch_thunk = table.get(dispatch_thunk_idx)
+			.map_err(|_| DummyUserError)?
+			.ok_or_else(|| DummyUserError)?
+			.clone();
+
+		let instance_idx = this.sandbox_store.instantiate(dispatch_thunk, &wasm, &raw_env_def, state)?;
+
+		Ok(instance_idx as u32)
+	},
+	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, state: usize) -> u32 => {
+		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
+		let export = this.memory.get(export_ptr, export_len as usize)
+			.map_err(|_| DummyUserError)
+			.and_then(|b|
+				String::from_utf8(b)
+					.map_err(|_| DummyUserError)
+			)?;
+
+		let instance = this.sandbox_store.instance(instance_idx)?;
+
+		let mut guest_externals = sandbox::GuestExternals::new(this, instance_idx, state);
+
+		let result = instance.invoke_export(&export, &[], &mut guest_externals);
+		match result {
+			Ok(None) => Ok(sandbox_primitives::ERR_OK),
+			// TODO: Return value
+			Ok(_) => unimplemented!(),
+			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
+		}
+	},
+	ext_sandbox_memory_new(initial: u32, maximum: u32) -> u32 => {
+		let mem_idx = this.sandbox_store.new_memory(initial, maximum)?;
+		Ok(mem_idx)
+	},
+	ext_sandbox_memory_get(memory_idx: u32, offset: u32, buf_ptr: *mut u8, buf_len: usize) -> u32 => {
+		let dst_memory = this.sandbox_store.memory(memory_idx)?;
+
+		let data: Vec<u8> = match dst_memory.get(offset, buf_len as usize) {
+			Ok(data) => data,
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+		};
+		match this.memory.set(buf_ptr, &data) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			_ => {},
+		}
+
+		Ok(sandbox_primitives::ERR_OK)
+	},
+	ext_sandbox_memory_set(memory_idx: u32, offset: u32, val_ptr: *const u8, val_len: usize) -> u32 => {
+		let dst_memory = this.sandbox_store.memory(memory_idx)?;
+
+		let data = match this.memory.get(offset, val_len as usize) {
+			Ok(data) => data,
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+		};
+		match dst_memory.set(val_ptr, &data) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			_ => {},
+		}
+
+		Ok(sandbox_primitives::ERR_OK)
+	},
 	=> <'e, E: Externalities + 'e>
 );
 
@@ -341,7 +434,8 @@ impl CodeExecutor for WasmExecutor {
 				.with_resolver("env", FunctionExecutor::<E>::resolver())
 		)?;
 
-		// extract a reference to a linear memory and initialize FunctionExecutor.
+		// extract a reference to a linear memory, optional reference to a table
+		// and then initialize FunctionExecutor.
 		let memory = intermediate_instance
 			.not_started_instance()
 			.export_by_name("memory")
@@ -349,7 +443,11 @@ impl CodeExecutor for WasmExecutor {
 			.as_memory()
 			.expect("in module generated by rustc export named 'memory' should be a memory; qed")
 			.clone();
-		let mut fec = FunctionExecutor::new(memory.clone(), ext)?;
+		let table: Option<TableRef> = intermediate_instance
+			.not_started_instance()
+			.export_by_name("table")
+			.and_then(|e| e.as_table().cloned());
+		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 
 		// finish instantiation by running 'start' function (if any).
 		let instance = intermediate_instance.run_start(&mut fec)?;
