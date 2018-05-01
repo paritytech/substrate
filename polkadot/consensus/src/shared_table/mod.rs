@@ -438,14 +438,129 @@ impl SharedTable {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use substrate_keyring::Keyring;
+
+	#[derive(Clone)]
+	struct DummyRouter;
+	impl TableRouter for DummyRouter {
+		type Error = ();
+		type FetchCandidate = ::futures::future::Empty<BlockData,()>;
+		type FetchExtrinsic = ::futures::future::Empty<Extrinsic,()>;
+
+		/// Note local candidate data, making it available on the network to other validators.
+		fn local_candidate_data(&self, _hash: Hash, _block_data: BlockData, _extrinsic: Extrinsic) {
+
+		}
+
+		/// Fetch block data for a specific candidate.
+		fn fetch_block_data(&self, _candidate: &CandidateReceipt) -> Self::FetchCandidate {
+			::futures::future::empty()
+		}
+
+		/// Fetch extrinsic data for a specific candidate.
+		fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
+			::futures::future::empty()
+		}
+	}
 
 	#[test]
 	fn statement_triggers_fetch_and_evaluate() {
+		let mut groups = HashMap::new();
 
+		let para_id = ParaId::from(1);
+		let local_id = Keyring::Alice.to_raw_public();
+		let local_key = Arc::new(Keyring::Alice.pair());
+
+		let validity_other = Keyring::Bob.to_raw_public();
+		let validity_other_key = Keyring::Bob.pair();
+		let parent_hash = Default::default();
+
+		groups.insert(para_id, GroupInfo {
+			validity_guarantors: [local_id, validity_other].iter().cloned().collect(),
+			availability_guarantors: Default::default(),
+			needed_validity: 2,
+			needed_availability: 0,
+		});
+
+		let shared_table = SharedTable::new(groups, local_key.clone(), parent_hash);
+
+		let candidate = CandidateReceipt {
+			parachain_index: para_id,
+			collator: [1; 32],
+			head_data: ::polkadot_primitives::parachain::HeadData(vec![1, 2, 3, 4]),
+			balance_uploads: Vec::new(),
+			egress_queue_roots: Vec::new(),
+			fees: 1_000_000,
+		};
+
+		let candidate_statement = GenericStatement::Candidate(candidate);
+
+		let signature = ::sign_table_statement(&candidate_statement, &validity_other_key, &parent_hash);
+		let signed_statement = ::table::generic::SignedStatement {
+			statement: candidate_statement,
+			signature: signature.into(),
+			sender: validity_other,
+		};
+
+		let producer = shared_table.import_statement(
+			&DummyRouter,
+			signed_statement,
+			StatementSource::Remote(None),
+			|_| true,
+		);
+
+		assert!(producer.work.is_some(), "candidate and local validity group are same");
+		assert!(producer.work.as_ref().unwrap().evaluate, "should evaluate validity");
 	}
 
 	#[test]
 	fn statement_triggers_fetch_and_availability() {
+		let mut groups = HashMap::new();
 
+		let para_id = ParaId::from(1);
+		let local_id = Keyring::Alice.to_raw_public();
+		let local_key = Arc::new(Keyring::Alice.pair());
+
+		let validity_other = Keyring::Bob.to_raw_public();
+		let validity_other_key = Keyring::Bob.pair();
+		let parent_hash = Default::default();
+
+		groups.insert(para_id, GroupInfo {
+			validity_guarantors: [validity_other].iter().cloned().collect(),
+			availability_guarantors: [local_id].iter().cloned().collect(),
+			needed_validity: 1,
+			needed_availability: 1,
+		});
+
+		let shared_table = SharedTable::new(groups, local_key.clone(), parent_hash);
+
+		let candidate = CandidateReceipt {
+			parachain_index: para_id,
+			collator: [1; 32],
+			head_data: ::polkadot_primitives::parachain::HeadData(vec![1, 2, 3, 4]),
+			balance_uploads: Vec::new(),
+			egress_queue_roots: Vec::new(),
+			fees: 1_000_000,
+		};
+
+		let candidate_statement = GenericStatement::Candidate(candidate);
+
+		let signature = ::sign_table_statement(&candidate_statement, &validity_other_key, &parent_hash);
+		let signed_statement = ::table::generic::SignedStatement {
+			statement: candidate_statement,
+			signature: signature.into(),
+			sender: validity_other,
+		};
+
+		let producer = shared_table.import_statement(
+			&DummyRouter,
+			signed_statement,
+			StatementSource::Remote(None),
+			|_| true,
+		);
+
+		assert!(producer.work.is_some(), "candidate and local availability group are same");
+		assert!(producer.work.as_ref().unwrap().fetch_extrinsic.is_some(), "should fetch extrinsic when guaranteeing availability");
+		assert!(!producer.work.as_ref().unwrap().evaluate, "should not evaluate validity");
 	}
 }

@@ -48,7 +48,6 @@ extern crate substrate_network;
 extern crate exit_future;
 extern crate tokio_core;
 extern crate tokio_timer;
-extern crate substrate_keyring;
 extern crate substrate_client as client;
 
 #[macro_use]
@@ -59,6 +58,9 @@ extern crate futures;
 
 #[macro_use]
 extern crate log;
+
+#[cfg(test)]
+extern crate substrate_keyring;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
