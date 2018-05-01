@@ -1,0 +1,27 @@
+[package]
+name = "substrate-runtime-sandbox"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+build = "build.rs"
+
+[build-dependencies]
+rustc_version = "0.2"
+
+[dependencies]
+wasmi = { version = "0.1", optional = true }
+substrate-primitives = { path = "../primitives", default_features = false }
+substrate-runtime-std = { path = "../runtime-std", default_features = false }
+substrate-runtime-io = { path = "../runtime-io", default_features = false }
+substrate-codec = { path = "../codec", default_features = false }
+
+[features]
+default = ["std"]
+std = [
+	"wasmi",
+	"substrate-primitives/std",
+	"substrate-runtime-std/std",
+	"substrate-codec/std",
+	"substrate-runtime-io/std",
+]
+nightly = []
+strict = []
