@@ -40,11 +40,9 @@ extern crate ed25519;
 #[macro_use] extern crate error_chain;
 
 #[cfg(test)] extern crate env_logger;
-#[cfg(test)] extern crate substrate_test_runtime as test_runtime;
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] #[macro_use] extern crate substrate_executor as executor;
 #[cfg(test)] extern crate substrate_codec as codec;
-#[cfg(test)] extern crate substrate_bft as bft;
+#[cfg(test)] extern crate substrate_keyring as keyring;
+#[cfg(test)] extern crate substrate_test_client as test_client;
 
 mod service;
 mod sync;
