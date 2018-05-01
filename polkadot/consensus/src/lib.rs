@@ -672,7 +672,6 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 		let included = self.table.includable_count();
 		try_ready!(self.timing.poll(included));
 
-
 		// 3. propose
 		let proposed_candidates = self.table.with_proposal(|proposed_set| {
 				proposed_set.into_iter().cloned().collect()
