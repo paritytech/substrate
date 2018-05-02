@@ -295,6 +295,7 @@ impl ChainSync {
 		}
 		// Update common blocks
 		for (_, peer) in self.peers.iter_mut() {
+			trace!("Updating peer info ours={}, theirs={}", number, peer.best_number);
 			if peer.best_number >= number {
 				peer.common_number = number;
 				peer.common_hash = *hash;
@@ -312,6 +313,9 @@ impl ChainSync {
 			if header.number > peer.best_number {
 				peer.best_number = header.number;
 				peer.best_hash = hash;
+			}
+			if header.number <= self.best_queued_number && header.number > peer.common_number {
+				peer.common_number = header.number;
 			}
 		} else {
 			return;

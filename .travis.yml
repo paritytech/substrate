@@ -13,4 +13,5 @@ matrix:
 
 script:
   - cargo test --all
+  - cargo clean
   - ./publish-wasm.sh
