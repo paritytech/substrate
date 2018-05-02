@@ -85,9 +85,9 @@ decl_storage! {
 	pub VotingPeriod get(voting_period): b"dem:per" => required T::BlockNumber;
 
 	// The next free referendum index, aka the number of referendums started so far.
-	pub ReferendumCount get(referendum_count): b"dem:rco" => default ReferendumIndex;
+	pub ReferendumCount get(referendum_count): b"dem:rco" => required ReferendumIndex;
 	// The next referendum index that should be tallied.
-	pub NextTally get(next_tally): b"dem:nxt" => default ReferendumIndex;
+	pub NextTally get(next_tally): b"dem:nxt" => required ReferendumIndex;
 	// Information concerning any given referendum.
 	pub ReferendumInfoOf get(referendum_info): b"dem:pro:" => map [ ReferendumIndex => (T::BlockNumber, T::Proposal, VoteThreshold) ];
 
@@ -318,7 +318,10 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 		map![
 			twox_128(<LaunchPeriod<T>>::key()).to_vec() => self.launch_period.encode(),
 			twox_128(<VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
-			twox_128(<MinimumDeposit<T>>::key()).to_vec() => self.minimum_deposit.encode()
+			twox_128(<MinimumDeposit<T>>::key()).to_vec() => self.minimum_deposit.encode(),
+			twox_128(<ReferendumCount<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
+			twox_128(<NextTally<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
+			twox_128(<PublicPropCount<T>>::key()).to_vec() => (0 as PropIndex).encode()
 		]
 	}
 }

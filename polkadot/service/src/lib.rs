@@ -222,15 +222,15 @@ fn local_testnet_config() -> ChainConfig {
 			minimum_deposit: 10,
 		}),
 		council: Some(CouncilConfig {
-			active_council: vec![],
+			active_council: endowed_accounts.iter().filter(|a| initial_authorities.iter().find(|b| a == b).is_none()).map(|a| (a.clone(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
 			present_slash_per_voter: 1,
 			carry_count: 4,
 			presentation_duration: 10,
 			approval_voting_period: 20,
-			term_duration: 40,
-			desired_seats: 0,
+			term_duration: 1000000,
+			desired_seats: (endowed_accounts.len() - initial_authorities.len()) as u32,
 			inactive_grace_period: 1,
 
 			cooloff_period: 75,
