@@ -27,3 +27,4 @@ substrate-client = { path = "../../substrate/client" }
 substrate-client-db = { path = "../../substrate/client/db" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-executor = { path = "../../substrate/executor" }
+substrate-state-machine = { path = "../../substrate/state-machine" }

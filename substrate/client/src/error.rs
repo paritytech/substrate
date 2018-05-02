@@ -81,6 +81,18 @@ error_chain! {
 			description("bad justification for header"),
 			display("bad justification for header: {}", h),
 		}
+
+		/// Not available on light client.
+		NotAvailableOnLightClient {
+			description("not available on light client"),
+			display("This method is not currently available when running in light client mode"),
+		}
+
+		/// Invalid remote proof.
+		InvalidExecutionProof {
+			description("invalid execution proof"),
+			display("Remote node has responded with invalid execution proof"),
+		}
 	}
 }
 

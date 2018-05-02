@@ -31,6 +31,7 @@ use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
 use message::{Statement, LocalizedBftMessage};
+use on_demand::OnDemandService;
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
@@ -107,6 +108,12 @@ pub trait ConsensusService: Send + Sync {
 	fn send_bft_message(&self, message: LocalizedBftMessage);
 }
 
+/// Service able to execute closure in the network context.
+pub trait ExecuteInContext: Send + Sync {
+	/// Execute closure in network context.
+	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol)>(&self, closure: F);
+}
+
 /// devp2p Protocol handler
 struct ProtocolHandler {
 	protocol: Protocol,
@@ -137,6 +144,8 @@ pub struct Params {
 	pub network_config: NetworkConfiguration,
 	/// Polkadot relay chain access point.
 	pub chain: Arc<Client>,
+	/// On-demand service reference.
+	pub on_demand: Option<Arc<OnDemandService>>,
 	/// Transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
 }
@@ -156,7 +165,7 @@ impl Service {
 		let sync = Arc::new(Service {
 			network: service,
 			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(params.config, params.chain.clone(), params.transaction_pool)?,
+				protocol: Protocol::new(params.config, params.chain, params.on_demand, params.transaction_pool)?,
 			}),
 		});
 
@@ -197,6 +206,14 @@ impl Service {
 impl Drop for Service {
 	fn drop(&mut self) {
 		self.stop();
+	}
+}
+
+impl ExecuteInContext for Service {
+	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol)>(&self, closure: F) {
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			closure(&mut NetSyncIo::new(context), &self.handler.protocol)
+		});
 	}
 }
 

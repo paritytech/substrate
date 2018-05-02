@@ -26,7 +26,8 @@ use primitives::block::{self, Id as BlockId, HeaderHash};
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 
-fn header_hash(header: &block::Header) -> block::HeaderHash {
+/// Compute block header hash.
+pub fn header_hash(header: &block::Header) -> block::HeaderHash {
 	header.blake2_256().into()
 }
 
@@ -65,14 +66,8 @@ impl Clone for Blockchain {
 }
 
 impl Blockchain {
-	fn id(&self, id: BlockId) -> Option<HeaderHash> {
-		match id {
-			BlockId::Hash(h) => Some(h),
-			BlockId::Number(n) => self.storage.read().hashes.get(&n).cloned(),
-		}
-	}
-
-	fn new() -> Blockchain {
+	/// Create new in-memory blockchain storage.
+	pub fn new() -> Blockchain {
 		Blockchain {
 			storage: RwLock::new(
 				BlockchainStorage {
@@ -85,7 +80,16 @@ impl Blockchain {
 		}
 	}
 
-	fn insert(&self, hash: HeaderHash, header: block::Header, justification: Option<primitives::bft::Justification>, body: Option<block::Body>, is_new_best: bool) {
+	/// Get header hash of given block.
+	pub fn id(&self, id: BlockId) -> Option<HeaderHash> {
+		match id {
+			BlockId::Hash(h) => Some(h),
+			BlockId::Number(n) => self.storage.read().hashes.get(&n).cloned(),
+		}
+	}
+
+	/// Insert block.
+	pub fn insert(&self, hash: HeaderHash, header: block::Header, justification: Option<primitives::bft::Justification>, body: Option<block::Body>, is_new_best: bool) {
 		let number = header.number;
 		let mut storage = self.storage.write();
 		storage.blocks.insert(hash, Block {
@@ -113,7 +117,7 @@ impl Blockchain {
 		let this = self.storage.read();
 		let other = other.storage.read();
 			this.hashes == other.hashes
-		    && this.best_hash == other.best_hash
+			&& this.best_hash == other.best_hash
 			&& this.best_number == other.best_number
 			&& this.genesis_hash == other.genesis_hash
 	}
@@ -163,8 +167,8 @@ pub struct BlockImportOperation {
 impl backend::BlockImportOperation for BlockImportOperation {
 	type State = InMemory;
 
-	fn state(&self) -> error::Result<&Self::State> {
-		Ok(&self.old_state)
+	fn state(&self) -> error::Result<Option<&Self::State>> {
+		Ok(Some(&self.old_state))
 	}
 
 	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()> {

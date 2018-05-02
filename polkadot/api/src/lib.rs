@@ -34,8 +34,10 @@ extern crate error_chain;
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
+pub mod light;
+
 use client::backend::Backend;
-use client::Client;
+use client::{Client, LocalCallExecutor};
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine::OverlayedChanges;
@@ -178,7 +180,7 @@ macro_rules! with_runtime {
 	}}
 }
 
-impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
+impl<B: Backend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>>
 	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
 {
 	type CheckedBlockId = CheckedId;
@@ -356,8 +358,10 @@ mod tests {
 	use super::*;
 	use keyring::Keyring;
 	use codec::Slicable;
+	use client::{self, LocalCallExecutor};
 	use client::in_mem::Backend as InMemory;
 	use substrate_executor::NativeExecutionDispatch;
+	use substrate_primitives::Header;
 	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildExternalities};
 
 	fn validators() -> Vec<AccountId> {
@@ -367,30 +371,34 @@ mod tests {
 		]
 	}
 
-	fn client() -> Client<InMemory, NativeExecutor<LocalDispatch>> {
-		let genesis_config = GenesisConfig {
-			consensus: Some(ConsensusConfig {
-				code: LocalDispatch::native_equivalent().to_vec(),
-				authorities: validators(),
-			}),
-			system: None,
-			session: Some(SessionConfig {
-				validators: validators(),
-				session_length: 100,
-			}),
-			council: Some(Default::default()),
-			democracy: Some(Default::default()),
-			parachains: Some(Default::default()),
-			staking: Some(Default::default()),
-		};
-		::client::new_in_mem(
-			LocalDispatch::new(),
-			|| {
+	fn client() -> Client<InMemory, LocalCallExecutor<InMemory, NativeExecutor<LocalDispatch>>> {
+		struct GenesisBuilder;
+
+		impl client::GenesisBuilder for GenesisBuilder {
+			fn build(self) -> (Header, Vec<(Vec<u8>, Vec<u8>)>) {
+				let genesis_config = GenesisConfig {
+					consensus: Some(ConsensusConfig {
+						code: LocalDispatch::native_equivalent().to_vec(),
+						authorities: validators(),
+					}),
+					system: None,
+					session: Some(SessionConfig {
+						validators: validators(),
+						session_length: 100,
+					}),
+					council: Some(Default::default()),
+					democracy: Some(Default::default()),
+					parachains: Some(Default::default()),
+					staking: Some(Default::default()),
+				};
+
 				let storage = genesis_config.build_externalities();
 				let block = ::client::genesis::construct_genesis_block(&storage);
 				(substrate_primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 			}
-		).unwrap()
+		}
+
+		::client::new_in_mem(LocalDispatch::new(), GenesisBuilder).unwrap()
 	}
 
 	#[test]

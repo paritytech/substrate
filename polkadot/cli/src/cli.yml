@@ -37,6 +37,10 @@ args:
       long: validator
       help: Enable validator mode
       takes_value: false
+  - light:
+      long: light
+      help: Run in light client mode
+      takes_value: false
   - port:
       long: port
       value_name: PORT

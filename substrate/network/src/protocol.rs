@@ -32,6 +32,7 @@ use consensus::Consensus;
 use service::{Role, TransactionPool, StatementStream, BftMessageStream};
 use config::ProtocolConfig;
 use chain::Client;
+use on_demand::OnDemandService;
 use io::SyncIo;
 use error;
 use super::header_hash;
@@ -46,6 +47,7 @@ const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 pub struct Protocol {
 	config: ProtocolConfig,
 	chain: Arc<Client>,
+	on_demand: Option<Arc<OnDemandService>>,
 	genesis_hash: HeaderHash,
 	sync: RwLock<ChainSync>,
 	consensus: Mutex<Consensus>,
@@ -112,14 +114,16 @@ pub struct TransactionStats {
 
 impl Protocol {
 	/// Create a new instance.
-	pub fn new(config: ProtocolConfig, chain: Arc<Client>, transaction_pool: Arc<TransactionPool>) -> error::Result<Protocol>  {
+	pub fn new(config: ProtocolConfig, chain: Arc<Client>, on_demand: Option<Arc<OnDemandService>>, transaction_pool: Arc<TransactionPool>) -> error::Result<Protocol>  {
 		let info = chain.info()?;
 		let best_hash = info.chain.best_hash;
+		let sync = ChainSync::new(config.roles, &info);
 		let protocol = Protocol {
 			config: config,
 			chain: chain,
+			on_demand: on_demand,
 			genesis_hash: info.chain.genesis_hash,
-			sync: RwLock::new(ChainSync::new(&info)),
+			sync: RwLock::new(sync),
 			consensus: Mutex::new(Consensus::new(best_hash)),
 			peers: RwLock::new(HashMap::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
@@ -185,6 +189,8 @@ impl Protocol {
 			Message::CandidateResponse(r) => self.on_candidate_response(io, peer_id, r),
 			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m, blake2_256(data).into()),
 			Message::Transactions(m) => self.on_transactions(io, peer_id, m),
+			Message::RemoteCallRequest(request) => self.on_remote_call_request(io, peer_id, request),
+			Message::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response)
 		}
 	}
 
@@ -232,6 +238,7 @@ impl Protocol {
 		if removed {
 			self.consensus.lock().peer_disconnected(io, self, peer);
 			self.sync.write().peer_disconnected(io, self, peer);
+			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
 		}
 	}
 
@@ -345,6 +352,7 @@ impl Protocol {
 	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.maintain_peers(io);
+		self.on_demand.as_ref().map(|s| s.maintain_peers(io));
 		self.consensus.lock().collect_garbage(None);
 	}
 
@@ -388,8 +396,6 @@ impl Protocol {
 			return;
 		}
 
-		let mut sync = self.sync.write();
-		let mut consensus = self.consensus.lock();
 		{
 			let mut peers = self.peers.write();
 			let mut handshaking_peers = self.handshaking_peers.write();
@@ -423,8 +429,10 @@ impl Protocol {
 			handshaking_peers.remove(&peer_id);
 			debug!(target: "sync", "Connected {} {}", peer_id, io.peer_info(peer_id));
 		}
-		sync.new_peer(io, self, peer_id);
-		consensus.new_peer(io, self, peer_id, &status.roles);
+
+		self.sync.write().new_peer(io, self, peer_id);
+		self.consensus.lock().new_peer(io, self, peer_id, &status.roles);
+		self.on_demand.as_ref().map(|s| s.on_connect(peer_id, message::Role::as_flags(&status.roles)));
 	}
 
 	/// Called when peer sends us new transactions
@@ -521,6 +529,27 @@ impl Protocol {
 		}
 
 		self.consensus.lock().collect_garbage(Some((hash, &header)));
+	}
+
+	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest) {
+		trace!(target: "sync", "Remote request {} from {} ({} at {})", request.id, peer_id, request.method, request.block);
+		let (value, proof) = match self.chain.execution_proof(&request.block, &request.method, &request.data) {
+			Ok((value, proof)) => (value, proof),
+			Err(error) => {
+				trace!(target: "sync", "Remote request {} from {} ({} at {}) failed with: {}",
+					request.id, peer_id, request.method, request.block, error);
+				(Default::default(), Default::default())
+			},
+		};
+
+		self.send_message(io, peer_id, message::Message::RemoteCallResponse(message::RemoteCallResponse {
+			id: request.id, value, proof,
+		}));
+	}
+
+	fn on_remote_call_response(&self, io: &mut SyncIo, peer_id: PeerId, response: message::RemoteCallResponse) {
+		trace!(target: "sync", "Remote response {} from {}", response.id, peer_id);
+		self.on_demand.as_ref().map(|s| s.on_remote_response(io, peer_id, response));
 	}
 
 	pub fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats> {
