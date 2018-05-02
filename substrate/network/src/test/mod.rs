@@ -18,25 +18,21 @@ mod sync;
 
 use std::collections::{VecDeque, HashSet, HashMap};
 use std::sync::Arc;
+
 use parking_lot::RwLock;
-use client::{self, genesis, BlockOrigin};
+use client;
 use client::block_builder::BlockBuilder;
 use primitives::block::{Id as BlockId, ExtrinsicHash};
 use primitives;
-use executor;
 use io::SyncIo;
 use protocol::Protocol;
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network::{PeerId, SessionInfo, Error as NetworkError};
-use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use runtime_support::Hashable;
-use test_runtime;
 use keyring::Keyring;
 use codec::Slicable;
-use bft;
-
-native_executor_instance!(Executor, test_runtime::api::dispatch, include_bytes!("../../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+use test_client::{self, TestClient};
 
 pub struct TestIo<'p> {
 	pub queue: &'p RwLock<VecDeque<TestPacket>>,
@@ -103,7 +99,7 @@ pub struct TestPacket {
 }
 
 pub struct Peer {
-	client: Arc<client::Client<client::in_mem::Backend, executor::NativeExecutor<Executor>>>,
+	client: Arc<client::Client<test_client::Backend, test_client::Executor>>,
 	pub sync: Protocol,
 	pub queue: RwLock<VecDeque<TestPacket>>,
 }
@@ -161,37 +157,13 @@ impl Peer {
 	fn flush(&self) {
 	}
 
-	fn justify(header: &primitives::block::Header) -> bft::UncheckedJustification {
-		let hash = header.blake2_256().into();
-		let authorities = vec![ Keyring::Alice.into() ];
-
-		bft::UncheckedJustification {
-			digest: hash,
-			signatures: authorities.iter().map(|key| {
-				let msg = bft::sign_message(
-					bft::generic::Vote::Commit(1, hash).into(),
-					key,
-					header.parent_hash
-				);
-
-				match msg {
-					bft::generic::LocalizedMessage::Vote(vote) => vote.signature,
-					_ => panic!("signing vote leads to signed vote"),
-				}
-			}).collect(),
-			round_number: 1,
-		}
-	}
-
-	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) where F: FnMut(&mut BlockBuilder<client::in_mem::Backend, executor::NativeExecutor<Executor>>) {
+	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor>) {
 		for _ in 0 .. count {
 			let mut builder = self.client.new_block().unwrap();
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
 			trace!("Generating {}, (#{})", primitives::block::HeaderHash::from(block.header.blake2_256()), block.header.number);
-			let justification = Self::justify(&block.header);
-			let justified = self.client.check_justification(block.header, justification).unwrap();
-			self.client.import_block(BlockOrigin::File, justified, Some(block.transactions)).unwrap();
+			self.client.justify_and_import(client::BlockOrigin::File, block).unwrap();
 		}
 	}
 
@@ -199,14 +171,14 @@ impl Peer {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks(count, |builder| {
-				let tx = test_runtime::Transaction {
+				let tx = test_client::runtime::Transaction {
 					from: Keyring::Alice.to_raw_public(),
 					to: Keyring::Alice.to_raw_public(),
 					amount: 1,
 					nonce: nonce,
 				};
 				let signature = Keyring::from_raw_public(tx.from.clone()).unwrap().sign(&tx.encode());
-				let tx = primitives::block::Extrinsic::decode(&mut test_runtime::UncheckedTransaction { signature, tx: tx }.encode().as_ref()).unwrap();
+				let tx = primitives::block::Extrinsic::decode(&mut test_client::runtime::UncheckedTransaction { signature, tx: tx }.encode().as_ref()).unwrap();
 				builder.push(tx).unwrap();
 				nonce = nonce + 1;
 			});
@@ -235,19 +207,6 @@ pub struct TestNet {
 }
 
 impl TestNet {
-	fn genesis_config() -> GenesisConfig {
-		GenesisConfig::new_simple(vec![
-			Keyring::Alice.to_raw_public(),
-		], 1000)
-	}
-
-	fn prepare_genesis() -> (primitives::block::Header, Vec<(Vec<u8>, Vec<u8>)>) {
-		let mut storage = Self::genesis_config().genesis_map();
-		let block = genesis::construct_genesis_block(&storage);
-		storage.extend(additional_storage_with_genesis(&block));
-		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
-	}
-
 	pub fn new(n: usize) -> Self {
 		Self::new_with_config(n, ProtocolConfig::default())
 	}
@@ -260,7 +219,7 @@ impl TestNet {
 		};
 
 		for _ in 0..n {
-			let client = Arc::new(client::new_in_mem(Executor::new(), Self::prepare_genesis).unwrap());
+			let client = Arc::new(test_client::new());
 			let tx_pool = Arc::new(EmptyTransactionPool);
 			let sync = Protocol::new(config.clone(), client.clone(), tx_pool).unwrap();
 			net.peers.push(Arc::new(Peer {

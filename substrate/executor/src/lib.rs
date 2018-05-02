@@ -47,12 +47,15 @@ extern crate error_chain;
 #[cfg(test)]
 extern crate assert_matches;
 
+#[cfg(test)]
+extern crate wabt;
 
 #[macro_use]
 mod wasm_utils;
 mod wasm_executor;
 #[macro_use]
 mod native_executor;
+mod sandbox;
 
 pub mod error;
 pub use wasm_executor::WasmExecutor;

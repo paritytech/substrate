@@ -34,12 +34,10 @@ extern crate jsonrpc_macros;
 extern crate log;
 
 #[cfg(test)]
-extern crate substrate_executor;
-#[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
 #[cfg(test)]
-extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_test_client as test_client;
 
 mod subscriptions;
 

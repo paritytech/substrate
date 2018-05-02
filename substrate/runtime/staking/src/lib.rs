@@ -21,6 +21,9 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
+#[cfg(test)]
+extern crate wabt;
+
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -32,6 +35,7 @@ extern crate substrate_primitives;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
 
@@ -43,6 +47,8 @@ use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
+
+mod contract;
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -169,8 +175,8 @@ impl<T: Trait> Module<T> {
 	/// Create a smart-contract account.
 	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, DirectAccountDb) {
-			<AccountDb<T>>::merge(&DirectAccountDb, commit);
+		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb) {
+			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
 	}
 
@@ -180,8 +186,8 @@ impl<T: Trait> Module<T> {
 	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, DirectAccountDb) {
-			<AccountDb<T>>::merge(&DirectAccountDb, commit);
+		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb) {
+			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
 	}
 
@@ -382,11 +388,11 @@ trait AccountDb<T: Trait> {
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 
-	fn set_storage(&self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>);
-	fn set_code(&self, account: &T::AccountId, code: Vec<u8>);
-	fn set_balance(&self, account: &T::AccountId, balance: T::Balance);
+	fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>);
+	fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>);
+	fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance);
 
-	fn merge(&self, state: State<T>);
+	fn merge(&mut self, state: State<T>);
 }
 
 struct DirectAccountDb;
@@ -400,20 +406,20 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		<FreeBalance<T>>::get(account)
 	}
-	fn set_storage(&self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
+	fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
 		if let Some(value) = value {
 			<StorageOf<T>>::insert(&(account.clone(), location), &value);
 		} else {
 			<StorageOf<T>>::remove(&(account.clone(), location));
 		}
 	}
-	fn set_code(&self, account: &T::AccountId, code: Vec<u8>) {
+	fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>) {
 		<CodeOf<T>>::insert(account, &code);
 	}
-	fn set_balance(&self, account: &T::AccountId, balance: T::Balance) {
+	fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
 		<FreeBalance<T>>::insert(account, balance);
 	}
-	fn merge(&self, s: State<T>) {
+	fn merge(&mut self, s: State<T>) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
 				<FreeBalance<T>>::insert(&address, balance);
@@ -450,40 +456,50 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		self.local.borrow().get(account)
+		self.local
+			.borrow()
+			.get(account)
 			.and_then(|a| a.storage.get(location))
 			.cloned()
 			.unwrap_or_else(|| self.underlying.get_storage(account, location))
 	}
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		self.local.borrow().get(account)
+		self.local
+			.borrow()
+			.get(account)
 			.and_then(|a| a.code.clone())
 			.unwrap_or_else(|| self.underlying.get_code(account))
 	}
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
-		self.local.borrow().get(account)
+		self.local
+			.borrow()
+			.get(account)
 			.and_then(|a| a.balance)
 			.unwrap_or_else(|| self.underlying.get_balance(account))
 	}
-	fn set_storage(&self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
-		self.local.borrow_mut()
+	fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
+		self.local
+			.borrow_mut()
 			.entry(account.clone())
 			.or_insert(Default::default())
-			.storage.insert(location, value);
+			.storage
+			.insert(location, value);
 	}
-	fn set_code(&self, account: &T::AccountId, code: Vec<u8>) {
-		self.local.borrow_mut()
+	fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>) {
+		self.local
+			.borrow_mut()
 			.entry(account.clone())
 			.or_insert(Default::default())
 			.code = Some(code);
 	}
-	fn set_balance(&self, account: &T::AccountId, balance: T::Balance) {
-		self.local.borrow_mut()
+	fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
+		self.local
+			.borrow_mut()
 			.entry(account.clone())
 			.or_insert(Default::default())
 			.balance = Some(balance);
 	}
-	fn merge(&self, s: State<T>) {
+	fn merge(&mut self, s: State<T>) {
 		let mut local = self.local.borrow_mut();
 
 		for (address, changed) in s.into_iter() {
@@ -511,7 +527,7 @@ impl<T: Trait> Module<T> {
 		transactor: &T::AccountId,
 		code: &[u8],
 		value: T::Balance,
-		account_db: DB
+		account_db: &DB,
 	) -> Option<State<T>> {
 		let from_balance = account_db.get_balance(transactor);
 		// TODO: a fee.
@@ -538,32 +554,34 @@ impl<T: Trait> Module<T> {
 		transactor: &T::AccountId,
 		dest: &T::AccountId,
 		value: T::Balance,
-		account_db: DB
+		account_db: &DB,
 	) -> Option<State<T>> {
 		let from_balance = account_db.get_balance(transactor);
 		assert!(from_balance >= value);
 
 		let to_balance = account_db.get_balance(dest);
 		assert!(<Bondage<T>>::get(transactor) <= <Bondage<T>>::get(dest));
-		assert!(to_balance + value > to_balance);	// no overflow
+		assert!(to_balance + value > to_balance); // no overflow
 
 		// TODO: a fee, based upon gaslimit/gasprice.
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
 
 		// Our local overlay: Should be used for any transfers and creates that happen internally.
-		let overlay = OverlayAccountDb::new(&account_db);
+		let mut overlay = OverlayAccountDb::new(account_db);
 
 		if transactor != dest {
 			overlay.set_balance(transactor, from_balance - value);
 			overlay.set_balance(dest, to_balance + value);
 		}
 
-		let should_commit = {
+		let dest_code = overlay.get_code(dest);
+		let should_commit = if dest_code.is_empty() {
+			true
+		} else {
 			// TODO: logging (logs are just appended into a notable storage-based vector and cleared every
 			// block).
-			// TODO: if `overlay.get_code(dest)` isn't empty then execute code with `overlay`.
-			true
+			contract::execute(&dest_code, dest, &mut overlay)
 		};
 
 		if should_commit {
@@ -1023,6 +1041,181 @@ mod tests {
 			assert_eq!(Staking::free_balance(&1), 69);
 			assert_eq!(Staking::reserved_balance(&2), 0);
 			assert_eq!(Staking::free_balance(&2), 42);
+		});
+	}
+
+	#[test]
+	fn contract_transfer() {
+		let code_transfer = wabt::wat2wasm(
+			r#"
+(module
+    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value: u32)
+    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32)))
+
+    (import "env" "memory" (memory 1))
+
+    (func (export "call")
+        (call $ext_transfer
+            (i32.const 4)  ;; Pointer to "Transfer to" address.
+            (i32.const 8)  ;; Length of "Transfer to" address.
+            (i32.const 6)  ;; value to transfer
+        )
+    )
+
+    ;; Destination AccountId to transfer the funds.
+    ;; Represented by u64 (8 bytes long) in little endian.
+    (data (i32.const 4) "\02\00\00\00\00\00\00\00")
+)
+		"#,
+		).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+			<FreeBalance<Test>>::insert(2, 30);
+
+			<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+			Staking::transfer(&0, 1, 11);
+
+			assert_eq!(Staking::balance(&0), 100);
+			assert_eq!(Staking::balance(&1), 5);
+			assert_eq!(Staking::balance(&2), 36);
+		});
+	}
+
+	fn escaped_bytestring(bytes: &[u8]) -> String {
+		use std::fmt::Write;
+		let mut result = String::new();
+		for b in bytes {
+			write!(result, "\\{:02x}", b).unwrap();
+		}
+		result
+	}
+
+	#[test]
+	fn contract_create() {
+		let code_transfer = wabt::wat2wasm(
+			r#"
+(module
+    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value: u32)
+    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32)))
+
+    (import "env" "memory" (memory 1))
+
+    (func (export "call")
+        (call $ext_transfer
+            (i32.const 4)  ;; Pointer to "Transfer to" address.
+            (i32.const 8)  ;; Length of "Transfer to" address.
+            (i32.const 6)  ;; value to transfer
+        )
+    )
+
+    ;; Destination AccountId to transfer the funds.
+    ;; Represented by u64 (8 bytes long) in little endian.
+    (data (i32.const 4) "\02\00\00\00\00\00\00\00")
+)
+		"#,
+		).unwrap();
+
+		let code_create = wabt::wat2wasm(format!(
+			r#"
+(module
+    ;; ext_create(code_ptr: u32, code_len: u32, value: u32)
+    (import "env" "ext_create" (func $ext_create (param i32 i32 i32)))
+
+    (import "env" "memory" (memory 1))
+
+    (func (export "call")
+        (call $ext_create
+            (i32.const 4)   ;; Pointer to `code`
+            (i32.const {code_length}) ;; Length of `code`
+            (i32.const 3)   ;; Value to transfer
+        )
+    )
+    (data (i32.const 4) "{escaped_code_transfer}")
+)
+			"#,
+			escaped_code_transfer = escaped_bytestring(&code_transfer),
+			code_length = code_transfer.len(),
+		)).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+
+			<CodeOf<Test>>::insert(1, code_create.to_vec());
+
+			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
+			Staking::transfer(&0, 1, 11);
+
+			let derived_address =
+				<Test as Trait>::DetermineContractAddress::contract_address_for(&code_transfer, &1);
+
+			assert_eq!(Staking::balance(&0), 100);
+			assert_eq!(Staking::balance(&1), 8);
+			assert_eq!(Staking::balance(&derived_address), 3);
+		});
+	}
+
+	#[test]
+	fn contract_adder() {
+		let code_adder = wabt::wat2wasm(r#"
+(module
+    ;; ext_set_storage(location_ptr: i32, value_non_null: bool, value_ptr: i32)
+    (import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
+    ;; ext_get_storage(location_ptr: i32, value_ptr: i32)
+    (import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32)))
+    (import "env" "memory" (memory 1))
+
+    (func (export "call")
+        (call $ext_get_storage
+            (i32.const 4)  ;; Point to a location of the storage.
+            (i32.const 36) ;; The result will be written at this address.
+        )
+        (i32.store
+            (i32.const 36)
+            (i32.add
+                (i32.load
+                    (i32.const 36)
+                )
+                (i32.const 1)
+            )
+        )
+
+        (call $ext_set_storage
+            (i32.const 4)  ;; Pointer to a location of the storage.
+            (i32.const 1)  ;; Value is not null.
+            (i32.const 36) ;; Pointer to a data we want to put in the storage.
+        )
+    )
+
+    ;; Location of storage to put the data. 32 bytes.
+    (data (i32.const 4) "\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01")
+)
+		"#).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+			<CodeOf<Test>>::insert(1, code_adder);
+
+			Staking::transfer(&0, 1, 1);
+			Staking::transfer(&0, 1, 1);
+
+			let storage_addr = [0x01u8; 32];
+			let value =
+				AccountDb::<Test>::get_storage(&DirectAccountDb, &1, &storage_addr).unwrap();
+
+			assert_eq!(
+				&value,
+				&[
+					2, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0,
+				]
+			);
 		});
 	}
 }
