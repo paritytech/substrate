@@ -27,6 +27,7 @@ extern crate time;
 extern crate futures;
 extern crate tokio_core;
 extern crate ctrlc;
+extern crate fdlimit;
 extern crate ed25519;
 extern crate triehash;
 extern crate substrate_codec as codec;
@@ -98,6 +99,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	// TODO [ToDr] Split parameters parsing from actual execution.
 	let log_pattern = matches.value_of("log").unwrap_or("");
 	init_logger(log_pattern);
+	fdlimit::raise_fd_limit();
 
 	let mut config = service::Configuration::default();
 
@@ -110,6 +112,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.unwrap_or_else(|| keystore_path(&base_path))
 		.to_string_lossy()
 		.into();
+
+	config.database_path = db_path(&base_path).to_string_lossy().into();
 
 	let mut role = service::Role::FULL;
 	if matches.is_present("collator") {
@@ -201,6 +205,12 @@ fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) ->
 fn keystore_path(base_path: &Path) -> PathBuf {
 	let mut path = base_path.to_owned();
 	path.push("keystore");
+	path
+}
+
+fn db_path(base_path: &Path) -> PathBuf {
+	let mut path = base_path.to_owned();
+	path.push("db");
 	path
 }
 

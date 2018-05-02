@@ -38,6 +38,16 @@ pub extern fn panic_fmt(_fmt: ::core::fmt::Arguments, _file: &'static str, _line
 	}
 }
 
+#[lang = "oom"]
+pub extern fn oom() -> ! {
+    static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
+
+	unsafe {
+		ext_print_utf8(OOM_MSG.as_ptr(), OOM_MSG.len() as u32);
+		intrinsics::abort();
+	}
+}
+
 extern "C" {
 	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
 	fn ext_print_hex(data: *const u8, len: u32);

@@ -33,6 +33,7 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
+extern crate substrate_client_db as client_db;
 extern crate substrate_executor;
 
 extern crate exit_future;
@@ -64,14 +65,13 @@ use polkadot_api::PolkadotApi;
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
 use client::{genesis, BlockchainEvents};
-use client::in_mem::Backend as InMemory;
 use network::ManageNetwork;
 use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Role, ChainSpec};
 
-type Client = client::Client<InMemory, NativeExecutor<LocalDispatch>>;
+type Client = client::Client<client_db::Backend, NativeExecutor<LocalDispatch>>;
 
 /// Polkadot service.
 pub struct Service {
@@ -275,7 +275,12 @@ impl Service {
 			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
 		};
 
-		let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
+		let db_settings = client_db::DatabaseSettings {
+			cache_size: None,
+			path: config.database_path.into(),
+		};
+
+		let client = Arc::new(client_db::new_client(db_settings, executor, prepare_genesis)?);
 		let best_header = client.best_block_header()?;
 		info!("Starting Polkadot. Best block is #{}", best_header.number);
 		let transaction_pool = Arc::new(Mutex::new(TransactionPool::new(config.transaction_pool)));

@@ -24,8 +24,8 @@ use triehash::trie_root;
 pub type TestExternalities = HashMap<Vec<u8>, Vec<u8>>;
 
 impl Externalities for TestExternalities {
-	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
-		self.get(key).map(AsRef::as_ref)
+	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.get(key).map(|x| x.to_vec())
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {

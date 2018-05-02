@@ -26,14 +26,14 @@ pub trait Backend {
 	type Error: super::Error;
 
 	/// Get keyed storage associated with specific address, or None if there is nothing associated.
-	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, Self::Error>;
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
 	/// Commit updates to the backend and get new state.
 	fn commit<I>(&mut self, changes: I)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 
 	/// Get all key/value pairs into a Vec.
-	fn pairs(&self) -> Vec<(&[u8], &[u8])>;
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 }
 
 /// Error impossible.
@@ -58,8 +58,8 @@ pub type InMemory = HashMap<Vec<u8>, Vec<u8>>;
 impl Backend for InMemory {
 	type Error = Void;
 
-	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, Self::Error> {
-		Ok(self.get(key).map(AsRef::as_ref))
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		Ok(self.get(key).map(Clone::clone))
 	}
 
 	fn commit<I>(&mut self, changes: I)
@@ -73,9 +73,8 @@ impl Backend for InMemory {
 		}
 	}
 
-	fn pairs(&self) -> Vec<(&[u8], &[u8])> {
-		self.iter().map(|(k, v)| (&k[..], &v[..])).collect()
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
 }
 
-// TODO: DB-based backend

@@ -215,11 +215,11 @@ impl<B, E> Client<B, E> where
 	/// Get the current set of authorities from storage.
 	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
 		let state = self.state_at(id)?;
-		(0..u32::decode(&mut state.storage(b":auth:len")?.ok_or(error::ErrorKind::AuthLenEmpty)?).ok_or(error::ErrorKind::AuthLenInvalid)?)
+		(0..u32::decode(&mut state.storage(b":auth:len")?.ok_or(error::ErrorKind::AuthLenEmpty)?.as_slice()).ok_or(error::ErrorKind::AuthLenInvalid)?)
 			.map(|i| state.storage(&i.to_keyed_vec(b":auth:"))
-				.map_err(|_| error::ErrorKind::Backend)
+				.map_err(|e| error::Error::from(e).into())
 				.and_then(|v| v.ok_or(error::ErrorKind::AuthEmpty(i)))
-				.and_then(|mut s| AuthorityId::decode(&mut s).ok_or(error::ErrorKind::AuthInvalid(i)))
+				.and_then(|s| AuthorityId::decode(&mut s.as_slice()).ok_or(error::ErrorKind::AuthInvalid(i)))
 				.map_err(Into::into)
 			).collect()
 	}

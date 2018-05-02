@@ -111,7 +111,7 @@ impl fmt::Display for ExecutionError {
 /// Externalities: pinned to specific active address.
 pub trait Externalities {
 	/// Read storage of current contract being called.
-	fn storage(&self, key: &[u8]) -> Option<&[u8]>;
+	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
