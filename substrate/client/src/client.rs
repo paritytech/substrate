@@ -447,62 +447,15 @@ mod tests {
 	use super::*;
 	use codec::Slicable;
 	use keyring::Keyring;
-	use {primitives, genesis};
 	use primitives::block::Extrinsic as PrimitiveExtrinsic;
-	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-	use test_runtime::{UncheckedTransaction, Transaction};
-	use test_runtime;
-
-	native_executor_instance!(Executor, test_runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
-
-	fn genesis_config() -> GenesisConfig {
-		GenesisConfig::new_simple(vec![
-			Keyring::Alice.to_raw_public(),
-			Keyring::Bob.to_raw_public(),
-			Keyring::Charlie.to_raw_public()
-		], 1000)
-	}
-
-	fn prepare_genesis() -> (primitives::block::Header, Vec<(Vec<u8>, Vec<u8>)>) {
-		let mut storage = genesis_config().genesis_map();
-		let block = genesis::construct_genesis_block(&storage);
-		storage.extend(additional_storage_with_genesis(&block));
-		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
-	}
-
-	// since we are in the client module we can create falsely justified
-	// headers.
-	// TODO: remove this in favor of custom verification pipelines for the
-	// client
-	fn justify(header: &block::Header) -> bft::UncheckedJustification {
-		let hash = header.blake2_256().into();
-		let authorities = vec![
-			Keyring::Alice.into(),
-			Keyring::Bob.into(),
-			Keyring::Charlie.into(),
-		];
-
-		bft::UncheckedJustification {
-			digest: hash,
-			signatures: authorities.iter().map(|key| {
-				let msg = bft::sign_message(
-					bft::generic::Vote::Commit(1, hash).into(),
-					key,
-					header.parent_hash
-				);
-
-				match msg {
-					bft::generic::LocalizedMessage::Vote(vote) => vote.signature,
-					_ => panic!("signing vote leads to signed vote"),
-				}
-			}).collect(),
-			round_number: 1,
-		}
-	}
+	use test_client::{self, TestClient};
+	use test_client::client::BlockOrigin;
+	use test_client::runtime as test_runtime;
+	use test_client::runtime::{UncheckedTransaction, Transaction};
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
-		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+		let client = test_client::new();
 		let genesis_hash = client.block_hash(0).unwrap().unwrap();
 
 		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), genesis_hash);
@@ -512,15 +465,7 @@ mod tests {
 
 	#[test]
 	fn authorities_call_works() {
-		let genesis_config = genesis_config();
-
-		let prepare_genesis = || {
-			let mut storage = genesis_config.genesis_map();
-			let block = genesis::construct_genesis_block(&storage);
-			storage.extend(additional_storage_with_genesis(&block));
-			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
-		};
-		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+		let client = test_client::new();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 0);
 		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
@@ -532,22 +477,11 @@ mod tests {
 
 	#[test]
 	fn block_builder_works_with_no_transactions() {
-		let genesis_config = genesis_config();
-
-		let prepare_genesis = || {
-			let mut storage = genesis_config.genesis_map();
-			let block = genesis::construct_genesis_block(&storage);
-			storage.extend(additional_storage_with_genesis(&block));
-			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
-		};
-		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+		let client = test_client::new();
 
 		let builder = client.new_block().unwrap();
-		let block = builder.bake().unwrap();
 
-		let justification = justify(&block.header);
-		let justified = client.check_justification(block.header, justification).unwrap();
-		client.import_block(BlockOrigin::Own, justified, Some(block.transactions)).unwrap();
+		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
@@ -565,19 +499,7 @@ mod tests {
 
 	#[test]
 	fn block_builder_works_with_transactions() {
-		let genesis_config = GenesisConfig::new_simple(vec![
-			Keyring::Alice.to_raw_public(),
-			Keyring::Bob.to_raw_public(),
-			Keyring::Charlie.to_raw_public()
-		], 1000);
-
-		let prepare_genesis = || {
-			let mut storage = genesis_config.genesis_map();
-			let block = genesis::construct_genesis_block(&storage);
-			storage.extend(additional_storage_with_genesis(&block));
-			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
-		};
-		let client = new_in_mem(Executor::new(), prepare_genesis).unwrap();
+		let client = test_client::new();
 
 		let mut builder = client.new_block().unwrap();
 
@@ -587,11 +509,8 @@ mod tests {
 			amount: 42,
 			nonce: 0
 		}.signed()).unwrap();
-		let block = builder.bake().unwrap();
 
-		let justification = justify(&block.header);
-		let justified = client.check_justification(block.header, justification).unwrap();
-		client.import_block(BlockOrigin::Own, justified, Some(block.transactions)).unwrap();
+		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
