@@ -76,8 +76,8 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 impl<'a, B: 'a> Externalities for Ext<'a, B>
 	where B: Backend
 {
-	fn storage(&self, key: &[u8]) -> Option<&[u8]> {
-		self.overlay.storage(key).unwrap_or_else(||
+	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect("Externalities not allowed to fail within runtime"))
 	}
 
@@ -90,8 +90,8 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 	}
 
 	fn storage_root(&self) -> [u8; 32] {
-		trie_root(self.backend.pairs().iter()
-			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
+		trie_root(self.backend.pairs().into_iter()
+			.map(|(k, v)| (k, Some(v)))
 			.chain(self.overlay.committed.clone().into_iter())
 			.chain(self.overlay.prospective.clone().into_iter())
 			.collect::<HashMap<_, _>>()

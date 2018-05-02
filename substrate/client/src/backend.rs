@@ -32,7 +32,7 @@ pub trait BlockImportOperation {
 	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()>;
 	/// Inject storage data into the database.
 	fn set_storage<I: Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>>(&mut self, changes: I) -> error::Result<()>;
-	/// Inject storage data into the database.
+	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 }
 

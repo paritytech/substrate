@@ -28,6 +28,7 @@ members = [
 
 	"substrate/bft",
 	"substrate/client",
+	"substrate/client/db",
 	"substrate/codec",
 	"substrate/environmental",
 	"substrate/executor",

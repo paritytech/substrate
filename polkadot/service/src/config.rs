@@ -39,6 +39,8 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Path to key files.
 	pub keystore_path: String,
+	/// Path to the database.
+	pub database_path: String,
 	/// Additional key seeds.
 	pub keys: Vec<String>,
 	/// Chain specification.
@@ -52,6 +54,7 @@ impl Default for Configuration {
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
+			database_path: Default::default(),
 			keys: Default::default(),
 			chain_spec: ChainSpec::Development,
 		}

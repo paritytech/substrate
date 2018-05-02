@@ -23,9 +23,9 @@ use primitives::hexdisplay::HexDisplay;
 error_chain! {
 	errors {
 		/// Backend error.
-		Backend {
+		Backend(s: String) {
 			description("Unrecoverable backend error"),
-			display("Backend error"),
+			display("Backend error: {}", s),
 		}
 
 		/// Unknown block.

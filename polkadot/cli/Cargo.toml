@@ -21,6 +21,7 @@ app_dirs = "1.2"
 tokio-core = "0.1.12"
 futures = "0.1.17"
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
+fdlimit = "0.1"
 substrate-client = { path = "../../substrate/client" }
 substrate-network = { path = "../../substrate/network" }
 substrate-codec = { path = "../../substrate/codec" }
