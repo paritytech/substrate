@@ -16,7 +16,7 @@
 
 //! Voting thresholds.
 
-use primitives::traits::IntegerSquareRoot;
+use primitives::traits::{Zero, IntegerSquareRoot};
 use codec::{Input, Slicable};
 use rstd::ops::{Add, Mul, Div};
 
@@ -58,17 +58,19 @@ pub trait Approved<Balance> {
 	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool;
 }
 
-impl<Balance: IntegerSquareRoot + Ord + Add<Balance, Output = Balance> + Mul<Balance, Output = Balance> + Div<Balance, Output = Balance> + Copy> Approved<Balance> for VoteThreshold {
+impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + Mul<Balance, Output = Balance> + Div<Balance, Output = Balance> + Copy> Approved<Balance> for VoteThreshold {
 	/// Given `approve` votes for and `against` votes against from a total electorate size of
 	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
 	/// overall outcome is in favour of approval.
 	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool {
 		let voters = approve + against;
+		let sqrt_voters = voters.integer_sqrt();
+		if sqrt_voters.is_zero() { return false; }
 		match *self {
 			VoteThreshold::SuperMajorityApprove =>
-				voters.integer_sqrt() * approve / electorate.integer_sqrt() > against,
+				approve / electorate.integer_sqrt() > against / sqrt_voters,
 			VoteThreshold::SuperMajorityAgainst =>
-				approve > voters.integer_sqrt() * against / electorate.integer_sqrt(),
+				approve / sqrt_voters > against / electorate.integer_sqrt(),
 			VoteThreshold::SimpleMajority => approve > against,
 		}
 	}
