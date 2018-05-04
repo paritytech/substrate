@@ -746,8 +746,6 @@ impl<C: Context> Table<C> {
 }
 
 fn update_includable_count<G: Hash + Eq + Clone>(map: &mut HashMap<G, usize>, group_id: &G, was_includable: bool, is_includable: bool) {
-	println!("updating includability count: was {}, is {}", was_includable, is_includable);
-
 	if was_includable && !is_includable {
 		if let Entry::Occupied(mut entry) = map.entry(group_id.clone()) {
 			*entry.get_mut() -= 1;
@@ -758,7 +756,7 @@ fn update_includable_count<G: Hash + Eq + Clone>(map: &mut HashMap<G, usize>, gr
 	}
 
 	if !was_includable && is_includable {
-		map.entry(group_id.clone()).or_insert(1);
+		*map.entry(group_id.clone()).or_insert(0) += 1;
 	}
 }
 
