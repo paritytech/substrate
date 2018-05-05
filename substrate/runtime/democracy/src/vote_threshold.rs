@@ -18,7 +18,7 @@
 
 use primitives::traits::{Zero, IntegerSquareRoot};
 use codec::{Input, Slicable};
-use rstd::ops::{Add, Mul, Div};
+use rstd::ops::{Add, Mul, Div, Rem};
 
 /// A means of determining if a vote is past pass threshold.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -58,20 +58,62 @@ pub trait Approved<Balance> {
 	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool;
 }
 
-impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + Mul<Balance, Output = Balance> + Div<Balance, Output = Balance> + Copy> Approved<Balance> for VoteThreshold {
+/// Compare two fractions.
+pub trait CompareRationals {
+	/// Return `true` iff `n1 / d1 < n2 / d2`. `d1` and `d2` may not be zero.
+	fn compare_rationals(n1: Self, d1: Self, n2: Self, d2: Self) -> bool;
+}
+
+impl<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Ord + Copy> CompareRationals for T {
+	fn compare_rationals(n1: Self, d1: Self, n2: Self, d2: Self) -> bool {
+		// Uses a continued fractional representation for a non-overflowing compare.
+		// Detailed at https://janmr.com/blog/2014/05/comparing-rational-numbers-without-overflow/.
+		let q1 = n1 / d1;
+		let q2 = n2 / d2;
+		if q1 < q2 {
+			return true;
+		}
+		if q2 < q1 {
+			return false;
+		}
+		let r1 = n1 % d1;
+		let r2 = n2 % d2;
+		if r2.is_zero() {
+			return false;
+		}
+		if r1.is_zero() {
+			return true;
+		}
+		Self::compare_rationals(d2, r2, d1, r1)
+	}
+}
+
+impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + Mul<Balance, Output = Balance> + Div<Balance, Output = Balance> + Rem<Balance, Output = Balance> + Copy> Approved<Balance> for VoteThreshold {
 	/// Given `approve` votes for and `against` votes against from a total electorate size of
 	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
 	/// overall outcome is in favour of approval.
 	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool {
 		let voters = approve + against;
 		let sqrt_voters = voters.integer_sqrt();
+		let sqrt_electorate = electorate.integer_sqrt();
 		if sqrt_voters.is_zero() { return false; }
 		match *self {
 			VoteThreshold::SuperMajorityApprove =>
-				approve / electorate.integer_sqrt() > against / sqrt_voters,
+				Balance::compare_rationals(against, sqrt_voters, approve, sqrt_electorate),
 			VoteThreshold::SuperMajorityAgainst =>
-				approve / sqrt_voters > against / electorate.integer_sqrt(),
+				Balance::compare_rationals(against, sqrt_electorate, approve, sqrt_voters),
 			VoteThreshold::SimpleMajority => approve > against,
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_work() {
+		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(60, 50, 210), false);
+		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(100, 50, 210), true);
 	}
 }
