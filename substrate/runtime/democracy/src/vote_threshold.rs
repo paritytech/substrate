@@ -84,6 +84,8 @@ impl<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Or
 		if r1.is_zero() {
 			return true;
 		}
+		// AUDIT: could be dangerous if no tail recursion optimisation as votes could be crafted
+		// to overflow the stack.
 		Self::compare_rationals(d2, r2, d1, r1)
 	}
 }
