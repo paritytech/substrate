@@ -136,6 +136,7 @@ fn poc_1_testnet_config() -> ChainConfig {
 		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
 		hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
 		hex!["063d7787ebca768b7445dfebe7d62cbb1625ff4dba288ea34488da266dd6dca5"].into(),
+		hex!["8101764f45778d4980dadaceee6e8af2517d3ab91ac9bec9cd1714fa5994081c"].into(),
 	];
 	let endowed_accounts = vec![
 		hex!["24d132eb1a4cbf8e46de22652019f1e07fadd5037a6a057c75dbbfd4641ba85d"].into(),
@@ -152,7 +153,7 @@ fn poc_1_testnet_config() -> ChainConfig {
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			intentions: vec![],
+			intentions: initial_authorities.clone(),
 			transaction_fee: 100,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
 			validator_count: 12,

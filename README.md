@@ -9,6 +9,9 @@ one. First, get rust if you don't already have it:
 
    curl https://sh.rustup.rs -sSf | sh
 
+You'll need `make` and `cc`; if you don't have them then install them. On Debian
+that would be `sudo apt install make clang`.
+
 Then, install Polkadot PoC-1:
 
    cargo install --git https://github.com/paritytech/polkadot.git --branch v0.1.0
@@ -48,3 +51,34 @@ and in the other, run:
 
 Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of
 the first terminal.
+
+## Hacking on Polkadot
+
+If you'd actually like hack on Polkadot, you can just grab the source code and
+build it. Ensure you have Rust and the support software installed:
+
+   curl https://sh.rustup.rs -sSf | sh
+   rustup update nightly
+   rustup target add wasm32-unknown-unknown --toolchain nightly
+   rustup update stable
+   cargo install --git https://github.com/alexcrichton/wasm-gc
+   cargo install --git https://github.com/pepyakin/wasm-export-table.git
+   sudo apt install make clang
+
+Then, grab the Polkadot source code:
+
+   git clone https://github.com/paritytech/polkadot.git
+   cd polkadot
+
+Then build the code:
+
+   ./build.sh  # Builds the WebAssembly binaries
+   cargo build # Builds all native code
+
+You can run the tests if you like:
+
+   cargo test --all
+
+You can start a development chain with:
+
+   cargo run -- --chain=dev --validator --key Alice
