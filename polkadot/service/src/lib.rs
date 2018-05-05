@@ -182,7 +182,11 @@ fn poc_1_testnet_config() -> ChainConfig {
 		}),
 		parachains: Some(Default::default()),
 	};
-	let boot_nodes = Vec::new();
+	let boot_nodes = vec![
+		"enode://ce29df27adace5c2a08efc2fd58ce1a2587f2157061e7788861dfef3c0cbf275af8476f93b5f10ecbcd7d6c2fdac109b581502dd7a67a361f9efa7593308bedd@104.211.54.233:30333".into(),
+		"enode://db86cdf0d653c774cb9f357ba99ee035b2dc3ae4313e93a79a38d9e0089dc5eacdf01a5cab7d41b6a44c83bc78599b76318bc59501f9d62cc6b08cfb74777032@104.211.48.51:30333".into(),
+		"enode://a9458a01ccc278eab98ee329f529ca3bcb88e13e4e0cda7318a63c6ae704b74eca7c5a05cff106d531cdc41facfbe63540de5f733108fbbbb7d0235131ca39a0@104.211.48.247:30333".into(),
+	];
 	ChainConfig { genesis_config, boot_nodes }
 }
 
