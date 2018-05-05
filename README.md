@@ -9,11 +9,13 @@ one. First, get rust if you don't already have it:
 
    curl https://sh.rustup.rs -sSf | sh
 
-Then, install Polkadot:
+Then, install Polkadot PoC-1:
 
-   cargo install --git https://github.com/paritytech/polkadot.git --branch gav-init-fixes
+   cargo install --git https://github.com/paritytech/polkadot.git --branch v0.1.0
 
-You'll now have a `polkadot` binary installed to your `PATH`.
+You'll now have a `polkadot` binary installed to your `PATH`. You can drop the
+`--branch v0.1.0` to get the very latest version of Polkadot, but these
+instructions might not work in that case.
 
 ### Development
 
