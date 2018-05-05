@@ -56,7 +56,7 @@ use parking_lot::Mutex;
 use tokio_core::reactor::Core;
 use codec::Slicable;
 use primitives::block::{Id as BlockId, Extrinsic, ExtrinsicHash, HeaderHash};
-use primitives::hashing;
+use primitives::{AuthorityId, hashing};
 use transaction_pool::TransactionPool;
 use substrate_executor::NativeExecutor;
 use polkadot_executor::Executor as LocalDispatch;
@@ -185,11 +185,7 @@ fn poc_1_testnet_config() -> ChainConfig {
 	ChainConfig { genesis_config, boot_nodes }
 }
 
-fn local_testnet_config() -> ChainConfig {
-	let initial_authorities = vec![
-		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
-	];
+fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 	let endowed_accounts = vec![
 		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
 		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
@@ -243,6 +239,19 @@ fn local_testnet_config() -> ChainConfig {
 	ChainConfig { genesis_config, boot_nodes }
 }
 
+fn development_config() -> ChainConfig {
+	testnet_config(vec![
+		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+	])
+}
+
+fn local_testnet_config() -> ChainConfig {
+	testnet_config(vec![
+		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+	])
+}
+
 impl Service {
 	/// Creates and register protocol with the network service
 	pub fn new(mut config: Configuration) -> Result<Service, error::Error> {
@@ -265,7 +274,8 @@ impl Service {
 		}
 
 		let ChainConfig { genesis_config, boot_nodes } = match config.chain_spec {
-			ChainSpec::Development => local_testnet_config(),
+			ChainSpec::Development => development_config(),
+			ChainSpec::LocalTestnet => local_testnet_config(),
 			ChainSpec::PoC1Testnet => poc_1_testnet_config(),
 		};
 		config.network.boot_nodes.extend(boot_nodes);

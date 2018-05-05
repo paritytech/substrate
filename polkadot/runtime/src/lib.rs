@@ -27,6 +27,7 @@ extern crate substrate_runtime_support as runtime_support;
 #[macro_use]
 extern crate substrate_runtime_primitives as runtime_primitives;
 
+#[cfg(feature = "std")]
 #[macro_use]
 extern crate hex_literal;
 
