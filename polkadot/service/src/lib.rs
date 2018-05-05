@@ -98,8 +98,9 @@ impl network::TransactionPool for TransactionPoolAdapter {
 			}
 		};
 		let id = self.client.check_id(BlockId::Hash(best_block)).expect("Best block is always valid; qed.");
-		let ready = transaction_pool::Ready::create(id, &*self.client);
-		self.pool.lock().pending(ready).map(|t| {
+		let mut pool = self.pool.lock();
+		pool.cull(None, transaction_pool::Ready::create(id, &*self.client));
+		pool.pending(transaction_pool::Ready::create(id, &*self.client)).map(|t| {
 			let hash = ::primitives::Hash::from(&t.hash()[..]);
 			let tx = codec::Slicable::encode(t.as_transaction());
 			(hash, tx)
