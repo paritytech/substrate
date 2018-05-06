@@ -108,22 +108,22 @@ impl Stream for Messages {
 		}
 
 		// check the network
-		match self.network_stream.poll() {
-			Err(_) => Err(bft::InputStreamConcluded.into()),
-			Ok(Async::NotReady) => Ok(Async::NotReady),
-			Ok(Async::Ready(None)) => Ok(Async::NotReady), // the input stream for agreements is never meant to logically end.
-			Ok(Async::Ready(Some(message))) => {
-				if message.parent_hash == self.parent_hash {
-					match process_message(message, &self.authorities) {
-						Ok(message) => Ok(Async::Ready(Some(message))),
-						Err(e) => {
-							debug!("Message validation failed: {:?}", e);
-							Ok(Async::NotReady)
+		loop {
+			match self.network_stream.poll() {
+				Err(_) => return Err(bft::InputStreamConcluded.into()),
+				Ok(Async::NotReady) => return Ok(Async::NotReady),
+				Ok(Async::Ready(None)) => return Ok(Async::NotReady), // the input stream for agreements is never meant to logically end.
+				Ok(Async::Ready(Some(message))) => {
+					if message.parent_hash == self.parent_hash {
+						match process_message(message, &self.authorities) {
+							Ok(message) => return Ok(Async::Ready(Some(message))),
+							Err(e) => {
+								debug!("Message validation failed: {:?}", e);
+							}
 						}
+					} else {
+						self.collection.push(message);
 					}
-				} else {
-					self.collection.push(message);
-					Ok(Async::NotReady)
 				}
 			}
 		}
