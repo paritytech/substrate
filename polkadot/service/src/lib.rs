@@ -139,7 +139,7 @@ fn poc_1_testnet_config() -> ChainConfig {
 		hex!["8101764f45778d4980dadaceee6e8af2517d3ab91ac9bec9cd1714fa5994081c"].into(),
 	];
 	let endowed_accounts = vec![
-		hex!["24d132eb1a4cbf8e46de22652019f1e07fadd5037a6a057c75dbbfd4641ba85d"].into(),
+		hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),
 	];
 	let genesis_config = GenesisConfig {
 		consensus: Some(ConsensusConfig {
