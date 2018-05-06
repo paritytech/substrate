@@ -256,7 +256,7 @@ impl<D, E, C, Err> Future for StatementProducer<D, E, C>
 
 		if let Some(ref mut fetch_extrinsic) = work.fetch_extrinsic {
 			if let Async::Ready(extrinsic) = fetch_extrinsic.poll()? {
-				self.produced_statements.extrinsic  = Some(extrinsic);
+				self.produced_statements.extrinsic = Some(extrinsic);
 			}
 		}
 

@@ -29,8 +29,8 @@ fn duration_to_micros(duration: &Duration) -> u64 {
 #[derive(Debug, Clone)]
 pub struct DynamicInclusion {
 	start: Instant,
-	y: i64,
-	m: i64,
+	y: u64,
+	m: u64,
 }
 
 impl DynamicInclusion {
@@ -41,10 +41,11 @@ impl DynamicInclusion {
 		// linear function f(n_candidates) -> valid after microseconds
 		// f(0) = allow_empty
 		// f(initial) = 0
+		// m is actually the negative slope to avoid using signed arithmetic.
 		let (y, m) = if initial != 0 {
-			let y = duration_to_micros(&allow_empty) as i64;
+			let y = duration_to_micros(&allow_empty);
 
-			(y, -y / initial as i64)
+			(y, y / initial as u64)
 		} else {
 			(0, 0)
 		};
@@ -62,9 +63,9 @@ impl DynamicInclusion {
 	/// Panics if `now` is earlier than the `start`.
 	pub fn acceptable_in(&self, now: Instant, included: usize) -> Option<Duration> {
 		let elapsed = now.duration_since(self.start);
-		let elapsed = duration_to_micros(&elapsed) as i64;
+		let elapsed = duration_to_micros(&elapsed);
 
-		let valid_after = self.y + self.m * included as i64;
+		let valid_after = self.y.saturating_sub(self.m * included as u64);
 
 		if elapsed >= valid_after {
 			None
