@@ -558,7 +558,8 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 			twox_128(<ActiveCouncil<T>>::key()).to_vec() => self.active_council.encode(),
 
 			twox_128(<voting::CooloffPeriod<T>>::key()).to_vec() => self.cooloff_period.encode(),
-			twox_128(<voting::VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode()
+			twox_128(<voting::VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
+			twox_128(<voting::Proposals<T>>::key()).to_vec() => vec![0u8; 0].encode()
 		]
 	}
 }

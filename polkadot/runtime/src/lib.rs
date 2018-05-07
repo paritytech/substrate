@@ -27,6 +27,10 @@ extern crate substrate_runtime_support as runtime_support;
 #[macro_use]
 extern crate substrate_runtime_primitives as runtime_primitives;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate hex_literal;
+
 #[cfg(test)]
 extern crate substrate_serializer;
 
@@ -297,5 +301,25 @@ mod tests {
 		let v = Slicable::encode(&tx);
 		println!("{}", HexDisplay::from(&v));
 		assert_eq!(UncheckedExtrinsic::decode(&mut &v[..]).unwrap(), tx);
+	}
+
+	#[test]
+	fn serialize_checked() {
+		let xt = Extrinsic {
+			signed: hex!["0d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e"],
+			index: 0u64,
+			function: Call::CouncilVoting(council::voting::Call::propose(Box::new(
+				PrivCall::Consensus(consensus::PrivCall::set_code(
+					vec![]
+				))
+			))),
+		};
+		let v = Slicable::encode(&xt);
+
+		let data = hex!["e00000000d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e000000000000000007000000000000006369D39D892B7B87A6769F90E14C618C2B84EBB293E2CC46640136E112C078C75619AC2E0815F2511568736623C055156C8FC427CE2AEE4AE2838F86EFE80208"];
+		let uxt: UncheckedExtrinsic = Slicable::decode(&mut &data[..]).unwrap();
+		assert_eq!(uxt.extrinsic, xt);
+
+		assert_eq!(Extrinsic::decode(&mut &v[..]).unwrap(), xt);
 	}
 }
