@@ -58,16 +58,11 @@ pub trait Approved<Balance> {
 	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool;
 }
 
-/// Compare two fractions.
-pub trait CompareRationals {
-	/// Return `true` iff `n1 / d1 < n2 / d2`. `d1` and `d2` may not be zero.
-	fn compare_rationals(n1: Self, d1: Self, n2: Self, d2: Self) -> bool;
-}
-
-impl<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Ord + Copy> CompareRationals for T {
-	fn compare_rationals(n1: Self, d1: Self, n2: Self, d2: Self) -> bool {
-		// Uses a continued fractional representation for a non-overflowing compare.
-		// Detailed at https://janmr.com/blog/2014/05/comparing-rational-numbers-without-overflow/.
+/// Return `true` iff `n1 / d1 < n2 / d2`. `d1` and `d2` may not be zero.
+fn compare_rationals<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Ord + Copy>(mut n1: T, mut d1: T, mut n2: T, mut d2: T) -> bool {
+	// Uses a continued fractional representation for a non-overflowing compare.
+	// Detailed at https://janmr.com/blog/2014/05/comparing-rational-numbers-without-overflow/.
+	loop {
 		let q1 = n1 / d1;
 		let q2 = n2 / d2;
 		if q1 < q2 {
@@ -84,9 +79,10 @@ impl<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Or
 		if r1.is_zero() {
 			return true;
 		}
-		// AUDIT: could be dangerous if no tail recursion optimisation as votes could be crafted
-		// to overflow the stack.
-		Self::compare_rationals(d2, r2, d1, r1)
+		n1 = d2;
+		n2 = d1;
+		d1 = r2;
+		d2 = r1;
 	}
 }
 
@@ -101,9 +97,9 @@ impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + 
 		if sqrt_voters.is_zero() { return false; }
 		match *self {
 			VoteThreshold::SuperMajorityApprove =>
-				Balance::compare_rationals(against, sqrt_voters, approve, sqrt_electorate),
+				compare_rationals(against, sqrt_voters, approve, sqrt_electorate),
 			VoteThreshold::SuperMajorityAgainst =>
-				Balance::compare_rationals(against, sqrt_electorate, approve, sqrt_voters),
+				compare_rationals(against, sqrt_electorate, approve, sqrt_voters),
 			VoteThreshold::SimpleMajority => approve > against,
 		}
 	}
