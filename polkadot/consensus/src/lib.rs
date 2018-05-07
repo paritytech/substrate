@@ -495,6 +495,7 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 
 		let checked_id = self.client.check_id(BlockId::Hash(parent_hash))?;
 		let duty_roster = self.client.duty_roster(&checked_id)?;
+		let random_seed = self.client.random_seed(&checked_id)?;
 
 		let group_info = make_group_info(duty_roster, authorities)?;
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
@@ -510,6 +511,7 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 			parent_hash,
 			parent_number: parent_header.number,
 			parent_id: checked_id,
+			random_seed,
 			local_key: sign_with,
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
@@ -533,6 +535,7 @@ pub struct Proposer<C: PolkadotApi, R> {
 	parent_hash: HeaderHash,
 	parent_number: BlockNumber,
 	parent_id: C::CheckedBlockId,
+	random_seed: Hash,
 	client: Arc<C>,
 	local_key: Arc<ed25519::Pair>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
@@ -623,6 +626,16 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 
 		// delay casting vote until able.
 		Box::new(self.delay.clone().map_err(Error::from).and_then(move |_| evaluated))
+	}
+
+	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId {
+		use primitives::uint::U256;
+
+		let len: U256 = authorities.len().into();
+		let offset = U256::from_big_endian(&self.random_seed.0) % len;
+		let offset = offset.low_u64() as usize + round_number;
+
+		authorities[offset % authorities.len()].clone()
 	}
 
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior)>) {

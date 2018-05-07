@@ -31,9 +31,6 @@ extern crate substrate_state_machine as state_machine;
 #[macro_use]
 extern crate error_chain;
 
-#[macro_use]
-extern crate log;
-
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
@@ -42,7 +39,7 @@ use client::Client;
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine::OverlayedChanges;
-use primitives::{AccountId, BlockId, Index, SessionKey, Timestamp};
+use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
 use primitives::parachain::DutyRoster;
 use runtime::{Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall};
 
@@ -126,6 +123,9 @@ pub trait PolkadotApi {
 	/// Get validators at a given block.
 	fn validators(&self, at: &Self::CheckedBlockId) -> Result<Vec<AccountId>>;
 
+	/// Get the value of the randomness beacon at a given block.
+	fn random_seed(&self, at: &Self::CheckedBlockId) -> Result<Hash>;
+
 	/// Get the authority duty roster at a block.
 	fn duty_roster(&self, at: &Self::CheckedBlockId) -> Result<DutyRoster>;
 
@@ -189,6 +189,10 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 
 	fn validators(&self, at: &CheckedId) -> Result<Vec<AccountId>> {
 		with_runtime!(self, at, ::runtime::Session::validators)
+	}
+
+	fn random_seed(&self, at: &CheckedId) -> Result<Hash> {
+		with_runtime!(self, at, ::runtime::System::random_seed)
 	}
 
 	fn duty_roster(&self, at: &CheckedId) -> Result<DutyRoster> {

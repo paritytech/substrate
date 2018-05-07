@@ -133,11 +133,16 @@ pub trait Proposer {
 
 	/// Create a proposal.
 	fn propose(&self) -> Self::Create;
+
 	/// Evaluate proposal. True means valid.
-	// TODO: change this to a future.
 	fn evaluate(&self, proposal: &Block) -> Self::Evaluate;
+
 	/// Import witnessed misbehavior.
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, Misbehavior)>);
+
+	/// Determine the proposer for a given round. This should be a deterministic function
+	/// with consistent results across all authorities.
+	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId;
 }
 
 /// Block import trait.
@@ -189,20 +194,7 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	}
 
 	fn round_proposer(&self, round: usize) -> AuthorityId {
-		use primitives::hashing::blake2_256;
-
-		// repeat blake2_256 on parent hash round + 1 times.
-		// use as index into authorities vec.
-		// TODO: parent hash is really insecure as a randomness beacon as
-		// the prior can easily influence the block hash.
-		let hashed = (0..round + 1).fold(self.parent_hash.0, |a, _| {
-			blake2_256(&a[..])
-		});
-
-		let index = u32::decode(&mut &hashed[..])
-			.expect("there are more than 4 bytes in a 32 byte hash; qed");
-
-		self.authorities[(index as usize) % self.authorities.len()]
+		self.proposer.round_proposer(round, &self.authorities[..])
 	}
 
 	fn proposal_valid(&self, proposal: &Block) -> Self::EvaluateProposal {
@@ -649,6 +641,10 @@ mod tests {
 		}
 
 		fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior)>) {}
+
+		fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId {
+			authorities[round_number % authorities.len()].clone()
+		}
 	}
 
 	fn make_service(client: FakeClient)
