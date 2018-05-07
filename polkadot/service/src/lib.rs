@@ -62,8 +62,8 @@ use substrate_executor::NativeExecutor;
 use polkadot_executor::Executor as LocalDispatch;
 use keystore::Store as Keystore;
 use polkadot_api::PolkadotApi;
-use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, BuildExternalities};
+use polkadot_runtime::{GenesisConfig, ConsensusConfig, SystemConfig, CouncilConfig,
+	DemocracyConfig, SessionConfig, StakingConfig, BuildExternalities};
 use client::{genesis, BlockchainEvents};
 use network::ManageNetwork;
 use exit_future::Signal;
@@ -204,7 +204,9 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm").to_vec(),
 			authorities: initial_authorities.clone(),
 		}),
-		system: None,
+		system: Some(SystemConfig {
+			number: 0,
+		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.clone(),
 			session_length: 10,

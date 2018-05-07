@@ -49,10 +49,9 @@ pub mod error;
 use std::sync::Arc;
 use client::genesis;
 use codec::Slicable;
-use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
+use demo_runtime::{GenesisConfig, SystemConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
 use futures::{Future, Sink, Stream};
-
 
 struct DummyPool;
 impl substrate_rpc::author::AuthorApi for DummyPool {
@@ -90,7 +89,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			code: vec![],	// TODO
 			authorities: vec![god_key.clone()],
 		}),
-		system: None,
+		system: Some(SystemConfig {
+			number: 0,
+		}),
 //		block_time: 5,			// 5 second block time.
 		session: Some(SessionConfig {
 			validators: vec![god_key.clone()],
