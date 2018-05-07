@@ -102,11 +102,8 @@ impl<T: Trait> Module<T> {
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalise() -> T::Header {
-		<RandomSeed<T>>::kill();
-		<ExtrinsicIndex<T>>::kill();
-
-		let number = <Number<T>>::take();
-		let parent_hash = <ParentHash<T>>::take();
+		let number = <Number<T>>::get();
+		let parent_hash = <ParentHash<T>>::get();
 		let digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
@@ -184,12 +181,15 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-pub struct GenesisConfig<T: Trait>(PhantomData<T>);
+pub struct GenesisConfig<T: Trait> {
+	pub number: T::BlockNumber,
+}
 
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		GenesisConfig(PhantomData)
+		use primitives::traits::As;
+		GenesisConfig { number: T::BlockNumber::sa(1), }
 	}
 }
 
@@ -199,13 +199,21 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
 	fn build_externalities(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
 		use codec::Slicable;
+		use primitives::traits::As;
 
-		map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
-			twox_128(<Number<T>>::key()).to_vec() => 1u64.encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
-			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
-			twox_128(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
-		]
+		if self.number == T::BlockNumber::sa(0) {
+			map![
+				twox_128(<Number<T>>::key()).to_vec() => self.number.encode(),
+				twox_128(<RandomSeed<T>>::key()).to_vec() => T::Hash::default().encode()
+			]
+		} else {
+			map![
+				twox_128(<Number<T>>::key()).to_vec() => self.number.encode(),
+				twox_128(<RandomSeed<T>>::key()).to_vec() => T::Hash::default().encode(),
+				twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
+				twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
+				twox_128(<ExtrinsicIndex<T>>::key()).to_vec() => 0u32.encode()
+			]
+		}
 	}
 }
