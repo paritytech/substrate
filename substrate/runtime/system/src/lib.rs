@@ -102,9 +102,6 @@ impl<T: Trait> Module<T> {
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalise() -> T::Header {
-//		<RandomSeed<T>>::kill();
-//		<ExtrinsicIndex<T>>::kill();
-
 		let number = <Number<T>>::get();
 		let parent_hash = <ParentHash<T>>::get();
 		let digest = <Digest<T>>::take();
