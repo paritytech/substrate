@@ -194,20 +194,7 @@ impl<P: Proposer> generic::Context for BftInstance<P> {
 	}
 
 	fn round_proposer(&self, round: usize) -> AuthorityId {
-		use primitives::hashing::blake2_256;
-
-		// repeat blake2_256 on parent hash round + 1 times.
-		// use as index into authorities vec.
-		// TODO: parent hash is really insecure as a randomness beacon as
-		// the prior can easily influence the block hash.
-		let hashed = (0..round + 1).fold(self.parent_hash.0, |a, _| {
-			blake2_256(&a[..])
-		});
-
-		let index = u32::decode(&mut &hashed[..])
-			.expect("there are more than 4 bytes in a 32 byte hash; qed");
-
-		self.authorities[(index as usize) % self.authorities.len()]
+		self.proposer.round_proposer(round, &self.authorities[..])
 	}
 
 	fn proposal_valid(&self, proposal: &Block) -> Self::EvaluateProposal {
