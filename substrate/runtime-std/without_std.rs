@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(feature = "nightly")]
-#[macro_reexport(vec)]
 extern crate alloc;
 #[cfg(feature = "nightly")]
 extern crate pwasm_libc;

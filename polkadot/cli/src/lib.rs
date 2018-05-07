@@ -126,13 +126,15 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}
 
 	match matches.value_of("chain") {
-		Some("poc-1") => config.chain_spec = ChainSpec::PoC1Testnet,
 		Some("dev") => config.chain_spec = ChainSpec::Development,
+		Some("local") => config.chain_spec = ChainSpec::LocalTestnet,
+		Some("poc-1") => config.chain_spec = ChainSpec::PoC1Testnet,
 		None => (),
 		Some(unknown) => panic!("Invalid chain name: {}", unknown),
 	}
 	info!("Chain specification: {}", match config.chain_spec {
-		ChainSpec::Development => "Local Development",
+		ChainSpec::Development => "Development",
+		ChainSpec::LocalTestnet => "Local Testnet",
 		ChainSpec::PoC1Testnet => "PoC-1 Testnet",
 	});
 
