@@ -792,7 +792,6 @@ impl<C, I, O> Future for Agreement<C, I, O>
 				self.poll()
 			}
 			Async::NotReady => {
-
 				Ok(Async::NotReady)
 			}
 		}

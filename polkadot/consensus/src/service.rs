@@ -98,6 +98,8 @@ fn process_message(msg: net::LocalizedBftMessage, local_id: &AuthorityId, author
 					}
 				};
 				bft::check_proposal(authorities, &msg.parent_hash, &proposal)?;
+
+				trace!(target: "bft", "importing proposal message for round {} from {}", proposal.round_number, Hash::from(proposal.sender));
 				proposal
 			}),
 			net::SignedConsensusMessage::Vote(vote) => bft::generic::LocalizedMessage::Vote({
@@ -115,6 +117,8 @@ fn process_message(msg: net::LocalizedBftMessage, local_id: &AuthorityId, author
 					}
 				};
 				bft::check_vote(authorities, &msg.parent_hash, &vote)?;
+
+				trace!(target: "bft", "importing vote {:?} from {}", vote.vote, Hash::from(vote.sender));
 				vote
 			}),
 		}),
