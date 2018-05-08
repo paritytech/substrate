@@ -209,17 +209,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	}
 
 	fn duty_roster(&self, at: &CheckedId) -> Result<DutyRoster> {
-		// duty roster can only be queried at the start of a block,
-		// so we create a dummy.
-		let id = at.block_id();
-		let parent_hash = self.block_hash_from_id(id)?.ok_or(ErrorKind::UnknownBlock(*id))?;
-		let number = self.block_number_from_id(id)?.ok_or(ErrorKind::UnknownBlock(*id))? + 1;
-
-		with_runtime!(self, at, || {
-			::runtime::System::initialise(&number, &parent_hash, &Default::default());
-			let random_seed = ::runtime::System::random_seed();
-			::runtime::Parachains::calculate_duty_roster(random_seed)
-		})
+		with_runtime!(self, at, ::runtime::Parachains::calculate_duty_roster)
 	}
 
 	fn timestamp(&self, at: &CheckedId) -> Result<Timestamp> {
