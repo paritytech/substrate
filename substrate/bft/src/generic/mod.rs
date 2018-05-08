@@ -418,6 +418,7 @@ impl<C: Context> Strategy<C> {
 
 		// poll until either completion or state doesn't change.
 		loop {
+			trace!(target: "bft", "Polling BFT logic. State={:?}", last_watermark);
 			match self.poll_once(context, sending)? {
 				Async::Ready(x) => return Ok(Async::Ready(x)),
 				Async::NotReady => {
