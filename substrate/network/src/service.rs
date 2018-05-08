@@ -91,8 +91,9 @@ pub trait ConsensusService: Send + Sync {
 	/// Pass `None` to clear the candidate.
 	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>);
 
-	/// Get BFT message stream.
-	fn bft_messages(&self) -> BftMessageStream;
+	/// Get BFT message stream for messages corresponding to consensus on given
+	/// parent hash.
+	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream;
 	/// Send out a BFT message.
 	fn send_bft_message(&self, message: LocalizedBftMessage);
 }
@@ -254,8 +255,8 @@ impl ConsensusService for Service {
 		self.handler.protocol.set_local_candidate(candidate)
 	}
 
-	fn bft_messages(&self) -> BftMessageStream {
-		self.handler.protocol.bft_messages()
+	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
+		self.handler.protocol.bft_messages(parent_hash)
 	}
 
 	fn send_bft_message(&self, message: LocalizedBftMessage) {
