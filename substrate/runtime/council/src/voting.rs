@@ -42,7 +42,7 @@ decl_storage! {
 
 	pub CooloffPeriod get(cooloff_period): b"cov:cooloff" => required T::BlockNumber;
 	pub VotingPeriod get(voting_period): b"cov:period" => required T::BlockNumber;
-	pub Proposals get(proposals): b"cov:prs" => default Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
+	pub Proposals get(proposals): b"cov:prs" => required Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
 	pub ProposalOf get(proposal_of): b"cov:pro" => map [ T::Hash => T::Proposal ];
 	pub ProposalVoters get(proposal_voters): b"cov:voters:" => default map [ T::Hash => Vec<T::AccountId> ];
 	pub CouncilVoteOf get(vote_of): b"cov:vote:" => map [ (T::Hash, T::AccountId) => bool ];
@@ -79,6 +79,7 @@ impl<T: Trait> Module<T> {
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
+		assert!(!<ProposalOf<T>>::exists(proposal_hash), "No duplicate proposals allowed");
 		assert!(!Self::is_vetoed(&proposal_hash));
 
 		let mut proposals = Self::proposals();

@@ -56,7 +56,7 @@ use parking_lot::Mutex;
 use tokio_core::reactor::Core;
 use codec::Slicable;
 use primitives::block::{Id as BlockId, Extrinsic, ExtrinsicHash, HeaderHash};
-use primitives::hashing;
+use primitives::{AuthorityId, hashing};
 use transaction_pool::TransactionPool;
 use substrate_executor::NativeExecutor;
 use polkadot_executor::Executor as LocalDispatch;
@@ -98,8 +98,9 @@ impl network::TransactionPool for TransactionPoolAdapter {
 			}
 		};
 		let id = self.client.check_id(BlockId::Hash(best_block)).expect("Best block is always valid; qed.");
-		let ready = transaction_pool::Ready::create(id, &*self.client);
-		self.pool.lock().pending(ready).map(|t| {
+		let mut pool = self.pool.lock();
+		pool.cull(None, transaction_pool::Ready::create(id, &*self.client));
+		pool.pending(transaction_pool::Ready::create(id, &*self.client)).map(|t| {
 			let hash = ::primitives::Hash::from(&t.hash()[..]);
 			let tx = codec::Slicable::encode(t.as_transaction());
 			(hash, tx)
@@ -135,9 +136,10 @@ fn poc_1_testnet_config() -> ChainConfig {
 		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
 		hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
 		hex!["063d7787ebca768b7445dfebe7d62cbb1625ff4dba288ea34488da266dd6dca5"].into(),
+		hex!["8101764f45778d4980dadaceee6e8af2517d3ab91ac9bec9cd1714fa5994081c"].into(),
 	];
 	let endowed_accounts = vec![
-		hex!["24d132eb1a4cbf8e46de22652019f1e07fadd5037a6a057c75dbbfd4641ba85d"].into(),
+		hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),
 	];
 	let genesis_config = GenesisConfig {
 		consensus: Some(ConsensusConfig {
@@ -151,7 +153,7 @@ fn poc_1_testnet_config() -> ChainConfig {
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			intentions: vec![],
+			intentions: initial_authorities.clone(),
 			transaction_fee: 100,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
 			validator_count: 12,
@@ -180,15 +182,15 @@ fn poc_1_testnet_config() -> ChainConfig {
 		}),
 		parachains: Some(Default::default()),
 	};
-	let boot_nodes = Vec::new();
+	let boot_nodes = vec![
+		"enode://ce29df27adace5c2a08efc2fd58ce1a2587f2157061e7788861dfef3c0cbf275af8476f93b5f10ecbcd7d6c2fdac109b581502dd7a67a361f9efa7593308bedd@104.211.54.233:30333".into(),
+		"enode://db86cdf0d653c774cb9f357ba99ee035b2dc3ae4313e93a79a38d9e0089dc5eacdf01a5cab7d41b6a44c83bc78599b76318bc59501f9d62cc6b08cfb74777032@104.211.48.51:30333".into(),
+		"enode://a9458a01ccc278eab98ee329f529ca3bcb88e13e4e0cda7318a63c6ae704b74eca7c5a05cff106d531cdc41facfbe63540de5f733108fbbbb7d0235131ca39a0@104.211.48.247:30333".into(),
+	];
 	ChainConfig { genesis_config, boot_nodes }
 }
 
-fn local_testnet_config() -> ChainConfig {
-	let initial_authorities = vec![
-		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
-	];
+fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 	let endowed_accounts = vec![
 		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
 		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
@@ -222,15 +224,15 @@ fn local_testnet_config() -> ChainConfig {
 			minimum_deposit: 10,
 		}),
 		council: Some(CouncilConfig {
-			active_council: vec![],
+			active_council: endowed_accounts.iter().filter(|a| initial_authorities.iter().find(|b| a == b).is_none()).map(|a| (a.clone(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
 			present_slash_per_voter: 1,
 			carry_count: 4,
 			presentation_duration: 10,
 			approval_voting_period: 20,
-			term_duration: 40,
-			desired_seats: 0,
+			term_duration: 1000000,
+			desired_seats: (endowed_accounts.len() - initial_authorities.len()) as u32,
 			inactive_grace_period: 1,
 
 			cooloff_period: 75,
@@ -240,6 +242,19 @@ fn local_testnet_config() -> ChainConfig {
 	};
 	let boot_nodes = Vec::new();
 	ChainConfig { genesis_config, boot_nodes }
+}
+
+fn development_config() -> ChainConfig {
+	testnet_config(vec![
+		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+	])
+}
+
+fn local_testnet_config() -> ChainConfig {
+	testnet_config(vec![
+		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+	])
 }
 
 impl Service {
@@ -264,7 +279,8 @@ impl Service {
 		}
 
 		let ChainConfig { genesis_config, boot_nodes } = match config.chain_spec {
-			ChainSpec::Development => local_testnet_config(),
+			ChainSpec::Development => development_config(),
+			ChainSpec::LocalTestnet => local_testnet_config(),
 			ChainSpec::PoC1Testnet => poc_1_testnet_config(),
 		};
 		config.network.boot_nodes.extend(boot_nodes);

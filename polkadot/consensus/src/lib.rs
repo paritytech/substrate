@@ -469,6 +469,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 		let mut next_index = {
 			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 
+			pool.cull(None, readiness_evaluator.clone());
 			let cur_index = pool.pending(readiness_evaluator)
 				.filter(|tx| tx.as_ref().as_ref().signed == local_id)
 				.last()
@@ -603,6 +604,8 @@ impl<C, R, P> CreateProposal<C, R, P>
 			let mut pool = self.transaction_pool.lock();
 			let mut unqueue_invalid = Vec::new();
 			let mut pending_size = 0;
+
+			pool.cull(None, readiness_evaluator.clone());
 			for pending in pool.pending(readiness_evaluator.clone()) {
 				// skip and cull transactions which are too large.
 				if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {

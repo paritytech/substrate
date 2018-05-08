@@ -49,6 +49,8 @@ impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
 
 pub const CODE: &'static [u8] = b":code";
 
+pub type KeyValue = (Vec<u8>, Vec<u8>);
+
 pub trait Trait: system::Trait {
 	type PublicAux: RefInto<Self::AccountId>;
  	type SessionKey: Parameter + Default;
@@ -61,6 +63,7 @@ decl_module! {
 	}
 	pub enum PrivCall {
 		fn set_code(new: Vec<u8>) = 0;
+		fn set_storage(items: Vec<KeyValue>) = 1;
 	}
 }
 
@@ -73,6 +76,13 @@ impl<T: Trait> Module<T> {
 	/// Set the new code.
 	fn set_code(new: Vec<u8>) {
 		storage::unhashed::put_raw(CODE, &new);
+	}
+
+	/// Set some items of storage.
+	fn set_storage(items: Vec<KeyValue>) {
+		for i in &items {
+			storage::unhashed::put_raw(&i.0, &i.1);
+		}
 	}
 
 	/// Report some misbehaviour.

@@ -23,8 +23,10 @@ pub use network::NetworkConfiguration;
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
 pub enum ChainSpec {
-	/// Whatever the current runtime is, with simple Alice/Bob auths.
+	/// Whatever the current runtime is, with just Alice as an auth.
 	Development,
+	/// Whatever the current runtime is, with simple Alice/Bob auths.
+	LocalTestnet,
 	/// The PoC-1 testnet.
 	PoC1Testnet,
 }

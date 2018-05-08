@@ -39,9 +39,8 @@ use client::Client;
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine::OverlayedChanges;
-use primitives::{AccountId, BlockId, Index, SessionKey, Timestamp};
-use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
-use primitives::Hash;
+use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
+use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
 use runtime::{Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall, ParachainsCall};
 
 error_chain! {
