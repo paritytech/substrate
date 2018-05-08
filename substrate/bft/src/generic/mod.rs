@@ -683,6 +683,7 @@ impl<C: Context> Strategy<C> {
 
 	fn advance_to_round(&mut self, context: &C, round: usize) {
 		assert!(round > self.current_accumulator.round_number());
+		trace!(target: "bft", "advancing to round {}", round);
 
 		let threshold = self.nodes - self.max_faulty;
 

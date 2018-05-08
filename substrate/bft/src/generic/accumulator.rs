@@ -259,13 +259,18 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 			_ => {},
 		}
 
+		debug!(target: "bft", "Importing proposal for round {}", self.round_number);
+
 		self.proposal = Some(Proposal {
 			proposal: proposal.proposal.clone(),
 			digest: proposal.digest,
 			digest_signature: proposal.digest_signature,
 		});
 
-		self.state = State::Proposed(proposal.proposal);
+		if let State::Begin = self.state {
+			self.state = State::Proposed(proposal.proposal);
+		}
+
 		Ok(())
 	}
 
@@ -315,6 +320,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 				.map(|&(_, ref s)| s.clone())
 				.collect();
 
+			trace!(target: "bft", "observed threshold-prepare for round {}", self.round_number);
 			self.state = State::Prepared(Justification(UncheckedJustification {
 				round_number: self.round_number,
 				digest: threshold_prepared,
@@ -339,7 +345,6 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 				count.committed += 1;
 
 				if count.committed >= self.threshold {
-					trace!(target: "bft", "observed threshold-commit for round {} with {} commits", self.round_number, count.committed);
 					Some(digest)
 				} else {
 					None
@@ -370,6 +375,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 				.map(|&(_, ref s)| s.clone())
 				.collect();
 
+			trace!(target: "bft", "observed threshold-commit for round {}", self.round_number);
 			self.state = State::Committed(Justification(UncheckedJustification {
 				round_number: self.round_number,
 				digest: threshold_committed,
@@ -387,6 +393,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 		self.advance_round.insert(sender);
 
 		if self.advance_round.len() < self.threshold { return Ok(()) }
+		trace!(target: "bft", "Witnessed threshold advance-round messages for round {}", self.round_number);
 
 		// allow transition to new round only if we haven't produced a justification
 		// yet.
@@ -661,6 +668,105 @@ mod tests {
 
 		match accumulator.state() {
 			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
+			s => panic!("wrong state: {:?}", s),
+		}
+	}
+
+	#[test]
+	fn propose_after_prepared_does_not_clobber_state() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		for i in 0..7 {
+			accumulator.import_message(LocalizedVote {
+				sender: AuthorityId(i),
+				signature: Signature(999, i),
+				vote: Vote::Prepare(1, Digest(999)),
+			}.into()).unwrap();
+		}
+
+		match accumulator.state() {
+			&State::Prepared(ref j) => assert_eq!(j.digest, Digest(999)),
+			s => panic!("wrong state: {:?}", s),
+		}
+
+		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
+			sender: AuthorityId(8),
+			full_signature: Signature(999, 8),
+			digest_signature: Signature(999, 8),
+			round_number: 1,
+			proposal: Candidate(999),
+			digest: Digest(999),
+		})).unwrap();
+
+		match accumulator.state() {
+			&State::Prepared(ref j) => assert_eq!(j.digest, Digest(999)),
+			s => panic!("wrong state: {:?}", s),
+		}
+	}
+
+	#[test]
+	fn propose_after_committed_does_not_clobber_state() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		for i in 0..7 {
+			accumulator.import_message(LocalizedVote {
+				sender: AuthorityId(i),
+				signature: Signature(999, i),
+				vote: Vote::Commit(1, Digest(999)),
+			}.into()).unwrap();
+		}
+
+		match accumulator.state() {
+			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
+			s => panic!("wrong state: {:?}", s),
+		}
+
+		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
+			sender: AuthorityId(8),
+			full_signature: Signature(999, 8),
+			digest_signature: Signature(999, 8),
+			round_number: 1,
+			proposal: Candidate(999),
+			digest: Digest(999),
+		})).unwrap();
+
+		match accumulator.state() {
+			&State::Committed(ref j) => assert_eq!(j.digest, Digest(999)),
+			s => panic!("wrong state: {:?}", s),
+		}
+	}
+
+	#[test]
+	fn propose_after_advance_does_not_clobber_state() {
+		let mut accumulator = Accumulator::<Candidate, _, _, _>::new(1, 7, AuthorityId(8));
+		assert_eq!(accumulator.state(), &State::Begin);
+
+		for i in 0..7 {
+			accumulator.import_message(LocalizedVote {
+				sender: AuthorityId(i),
+				signature: Signature(1, i),
+				vote: Vote::AdvanceRound(1),
+			}.into()).unwrap();
+		}
+
+		match accumulator.state() {
+			&State::Advanced(_) => {}
+			s => panic!("wrong state: {:?}", s),
+		}
+
+		accumulator.import_message(LocalizedMessage::Propose(LocalizedProposal {
+			sender: AuthorityId(8),
+			full_signature: Signature(999, 8),
+			digest_signature: Signature(999, 8),
+			round_number: 1,
+			proposal: Candidate(999),
+			digest: Digest(999),
+		})).unwrap();
+
+		match accumulator.state() {
+			&State::Advanced(_) => {}
 			s => panic!("wrong state: {:?}", s),
 		}
 	}

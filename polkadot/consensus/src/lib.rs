@@ -635,7 +635,10 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 		let offset = U256::from_big_endian(&self.random_seed.0) % len;
 		let offset = offset.low_u64() as usize + round_number;
 
-		authorities[offset % authorities.len()].clone()
+		let proposer = authorities[offset % authorities.len()].clone();
+		trace!(target: "bft", "proposer for round {} is {}", round_number, Hash::from(proposer));
+
+		proposer
 	}
 
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior)>) {
