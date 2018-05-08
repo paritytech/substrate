@@ -436,4 +436,12 @@ mod tests {
 	fn fails_to_check_id_for_unknown_block() {
 		assert!(client().check_id(BlockId::Number(100)).is_err());
 	}
+
+	#[test]
+	fn gets_random_seed_with_genesis() {
+		let client = client();
+
+		let id = client.check_id(BlockId::Number(0)).unwrap();
+		assert!(client.random_seed(&id).is_ok());
+	}
 }
