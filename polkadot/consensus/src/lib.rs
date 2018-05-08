@@ -619,7 +619,8 @@ impl<C, R, P> CreateProposal<C, R, P>
 					Ok(()) => {
 						pending_size += pending.encoded_size();
 					}
-					Err(_) => {
+					Err(e) => {
+						trace!(target: "transaction-pool", "Invalid transaction: {}", e);
 						unqueue_invalid.push(pending.hash().clone());
 					}
 				}

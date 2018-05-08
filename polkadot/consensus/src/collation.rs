@@ -133,9 +133,9 @@ error_chain! {
 			description("Parachain candidate failed validation."),
 			display("Parachain candidate failed validation."),
 		}
-		WrongHeadData {
+		WrongHeadData(expected: Vec<u8>, got: Vec<u8>) {
 			description("Parachain validation produced wrong head data."),
-			display("Parachain validation produced wrong head data."),
+			display("Parachain validation produced wrong head data (expected: {:?}, got {:?}", expected, got),
 		}
 	}
 
@@ -165,7 +165,10 @@ pub fn verify_collation<P: PolkadotApi>(client: &P, relay_parent: &P::CheckedBlo
 			if result.head_data == collation.receipt.head_data.0 {
 				Ok(())
 			} else {
-				Err(ErrorKind::WrongHeadData.into())
+				Err(ErrorKind::WrongHeadData(
+					collation.receipt.head_data.0.clone(),
+					result.head_data
+				).into())
 			}
 		}
 		Err(_) => Err(ErrorKind::ValidationFailure.into())
