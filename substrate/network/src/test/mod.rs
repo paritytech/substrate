@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+mod consensus;
 mod sync;
 
 use std::collections::{VecDeque, HashSet, HashMap};
