@@ -317,8 +317,8 @@ impl Protocol {
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn bft_messages(&self) -> BftMessageStream {
-		self.consensus.lock().bft_messages()
+	pub fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
+		self.consensus.lock().bft_messages(parent_hash)
 	}
 
 	/// See `ConsensusService` trait.

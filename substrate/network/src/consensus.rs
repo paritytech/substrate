@@ -46,7 +46,7 @@ pub struct Consensus {
 	peers: HashMap<PeerId, PeerConsensus>,
 	our_candidate: Option<(Hash, Vec<u8>)>,
 	statement_sink: Option<mpsc::UnboundedSender<message::Statement>>,
-	bft_message_sink: Option<mpsc::UnboundedSender<message::LocalizedBftMessage>>,
+	bft_message_sink: Option<(mpsc::UnboundedSender<message::LocalizedBftMessage>, Hash)>,
 	messages: HashMap<Hash, (Instant, message::Message)>,
 }
 
@@ -143,26 +143,41 @@ impl Consensus {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			peer.known_messages.insert(hash);
 			// TODO: validate signature?
-			if let Some(sink) = self.bft_message_sink.take() {
-				if let Err(e) = sink.unbounded_send(message.clone()) {
-					trace!(target:"sync", "Error broadcasting BFT message notification: {:?}", e);
-				} else {
-					self.bft_message_sink = Some(sink);
+			if let Some((sink, parent_hash)) = self.bft_message_sink.take() {
+				if message.parent_hash == parent_hash {
+					if let Err(e) = sink.unbounded_send(message.clone()) {
+						trace!(target:"sync", "Error broadcasting BFT message notification: {:?}", e);
+					} else {
+						self.bft_message_sink = Some((sink, parent_hash));
+					}
 				}
 			}
 		} else {
 			trace!(target:"sync", "Ignored BFT statement from unregistered peer {}", peer_id);
 			return;
 		}
+
 		let message = Message::BftMessage(message);
 		self.register_message(hash.clone(), message.clone());
 		// Propagate to other peers.
 		self.propagate(io, protocol, message, hash);
 	}
 
-	pub fn bft_messages(&mut self) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage>{
+	pub fn bft_messages(&mut self, parent_hash: Hash) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage>{
 		let (sink, stream) = mpsc::unbounded();
-		self.bft_message_sink = Some(sink);
+
+		for (_, message) in self.messages.iter() {
+			let bft_message = match *message {
+				(_, Message::BftMessage(ref msg)) => msg,
+				_ => continue,
+			};
+
+			if bft_message.parent_hash == parent_hash {
+				sink.unbounded_send(bft_message.clone()).expect("receiving end known to be open; qed");
+			}
+		}
+
+		self.bft_message_sink = Some((sink, parent_hash));
 		stream
 	}
 

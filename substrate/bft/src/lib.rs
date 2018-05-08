@@ -348,6 +348,7 @@ impl<P, I> BftService<P, I>
 
 		let n = authorities.len();
 		let max_faulty = max_faulty_of(n);
+		trace!(target: "bft", "max_faulty_of({})={}", n, max_faulty);
 
 		let local_id = self.key.public().0;
 

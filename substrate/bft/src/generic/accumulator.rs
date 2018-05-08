@@ -339,6 +339,7 @@ impl<Candidate, Digest, AuthorityId, Signature> Accumulator<Candidate, Digest, A
 				count.committed += 1;
 
 				if count.committed >= self.threshold {
+					trace!(target: "bft", "observed threshold-commit for round {} with {} commits", self.round_number, count.committed);
 					Some(digest)
 				} else {
 					None
