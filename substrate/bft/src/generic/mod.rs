@@ -418,6 +418,7 @@ impl<C: Context> Strategy<C> {
 
 		// poll until either completion or state doesn't change.
 		loop {
+			trace!(target: "bft", "Polling BFT logic. State={:?}", last_watermark);
 			match self.poll_once(context, sending)? {
 				Async::Ready(x) => return Ok(Async::Ready(x)),
 				Async::NotReady => {
@@ -683,6 +684,7 @@ impl<C: Context> Strategy<C> {
 
 	fn advance_to_round(&mut self, context: &C, round: usize) {
 		assert!(round > self.current_accumulator.round_number());
+		trace!(target: "bft", "advancing to round {}", round);
 
 		let threshold = self.nodes - self.max_faulty;
 
@@ -790,7 +792,6 @@ impl<C, I, O> Future for Agreement<C, I, O>
 				self.poll()
 			}
 			Async::NotReady => {
-
 				Ok(Async::NotReady)
 			}
 		}
