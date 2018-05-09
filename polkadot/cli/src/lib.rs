@@ -153,6 +153,11 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
 		config.network.public_address = None;
 		config.network.client_version = format!("parity-polkadot/{}", crate_version!());
+		config.network.use_secret = match matches.value_of("node-key").map(|s| s.parse()) {
+			Some(Ok(secret)) => Some(secret),
+			Some(Err(err)) => return Err(format!("Error parsing node key: {}", err).into()),
+			None => None,
+		};
 	}
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
