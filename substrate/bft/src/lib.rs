@@ -329,6 +329,12 @@ impl<P, I> BftService<P, I>
 		}
 	}
 
+	/// Get the local Authority ID.
+	pub fn local_id(&self) -> AuthorityId {
+		// TODO: based on a header and some keystore.
+		self.key.public().0
+	}
+
 	/// Signal that a valid block with the given header has been imported.
 	///
 	/// If the local signing key is an authority, this will begin the consensus process to build a
@@ -350,7 +356,7 @@ impl<P, I> BftService<P, I>
 		let max_faulty = max_faulty_of(n);
 		trace!(target: "bft", "max_faulty_of({})={}", n, max_faulty);
 
-		let local_id = self.key.public().0;
+		let local_id = self.local_id();
 
 		if !authorities.contains(&local_id) {
 			// cancel current agreement

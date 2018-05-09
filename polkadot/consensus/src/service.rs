@@ -49,6 +49,7 @@ struct BftSink<E> {
 
 struct Messages {
 	network_stream: net::BftMessageStream,
+	local_id: AuthorityId,
 	authorities: Vec<AuthorityId>,
 }
 
@@ -64,8 +65,9 @@ impl Stream for Messages {
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
 				Ok(Async::Ready(None)) => return Ok(Async::NotReady), // the input stream for agreements is never meant to logically end.
 				Ok(Async::Ready(Some(message))) => {
-					match process_message(message, &self.authorities) {
-						Ok(message) => return Ok(Async::Ready(Some(message))),
+					match process_message(message, &self.local_id, &self.authorities) {
+						Ok(Some(message)) => return Ok(Async::Ready(Some(message))),
+						Ok(None) => {} // ignored local message.
 						Err(e) => {
 							debug!("Message validation failed: {:?}", e);
 						}
@@ -76,10 +78,11 @@ impl Stream for Messages {
 	}
 }
 
-fn process_message(msg: net::LocalizedBftMessage, authorities: &[AuthorityId]) -> Result<bft::Communication, bft::Error> {
-	Ok(match msg.message {
+fn process_message(msg: net::LocalizedBftMessage, local_id: &AuthorityId, authorities: &[AuthorityId]) -> Result<Option<bft::Communication>, bft::Error> {
+	Ok(Some(match msg.message {
 		net::BftMessage::Consensus(c) => bft::generic::Communication::Consensus(match c {
 			net::SignedConsensusMessage::Propose(proposal) => bft::generic::LocalizedMessage::Propose({
+				if &proposal.sender == local_id { return Ok(None) }
 				let proposal = bft::generic::LocalizedProposal {
 					round_number: proposal.round_number as usize,
 					proposal: proposal.proposal,
@@ -95,9 +98,12 @@ fn process_message(msg: net::LocalizedBftMessage, authorities: &[AuthorityId]) -
 					}
 				};
 				bft::check_proposal(authorities, &msg.parent_hash, &proposal)?;
+
+				trace!(target: "bft", "importing proposal message for round {} from {}", proposal.round_number, Hash::from(proposal.sender));
 				proposal
 			}),
 			net::SignedConsensusMessage::Vote(vote) => bft::generic::LocalizedMessage::Vote({
+				if &vote.sender == local_id { return Ok(None) }
 				let vote = bft::generic::LocalizedVote {
 					sender: vote.sender,
 					signature: ed25519::LocalizedSignature {
@@ -111,6 +117,8 @@ fn process_message(msg: net::LocalizedBftMessage, authorities: &[AuthorityId]) -
 					}
 				};
 				bft::check_vote(authorities, &msg.parent_hash, &vote)?;
+
+				trace!(target: "bft", "importing vote {:?} from {}", vote.vote, Hash::from(vote.sender));
 				vote
 			}),
 		}),
@@ -121,7 +129,7 @@ fn process_message(msg: net::LocalizedBftMessage, authorities: &[AuthorityId]) -
 				.map_err(|_| bft::ErrorKind::InvalidJustification.into());
 			bft::generic::Communication::Auxiliary(justification?)
 		},
-	})
+	}))
 }
 
 impl<E> Sink for BftSink<E> {
@@ -190,8 +198,10 @@ fn start_bft<F, C>(
 		}
 	};
 
+
 	let input = Messages {
 		network_stream: network.bft_messages(parent_hash),
+		local_id: bft_service.local_id(),
 		authorities,
 	};
 

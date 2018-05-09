@@ -139,7 +139,9 @@ impl Consensus {
 	pub fn on_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
 		if self.messages.contains_key(&hash) {
 			trace!(target:"sync", "Ignored already known BFT message from {}", peer_id);
+			return;
 		}
+
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			peer.known_messages.insert(hash);
 			// TODO: validate signature?
