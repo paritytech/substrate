@@ -265,7 +265,7 @@ impl Service {
 	pub fn new<C>(
 		client: Arc<C>,
 		network: Arc<net::ConsensusService>,
-		transaction_pool: Arc<Mutex<TransactionPool>>,
+		transaction_pool: Arc<TransactionPool>,
 		key: ed25519::Pair,
 	) -> Service
 		where

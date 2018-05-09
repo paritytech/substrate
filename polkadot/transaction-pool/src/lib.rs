@@ -16,12 +16,12 @@
 
 extern crate ed25519;
 extern crate substrate_codec as codec;
+extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_primitives as substrate_primitives;
-extern crate substrate_runtime_primitives as substrate_runtime_primitives;
+extern crate substrate_runtime_primitives;
 extern crate polkadot_runtime as runtime;
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_api;
-extern crate transaction_pool;
 
 #[macro_use]
 extern crate error_chain;
@@ -31,20 +31,22 @@ extern crate log;
 
 mod error;
 
-use std::collections::HashMap;
-use std::cmp::Ordering;
-use std::sync::Arc;
+use std::{
+	cmp::Ordering,
+	collections::HashMap,
+	ops::Deref,
+	sync::Arc,
+};
 
+use codec::Slicable;
 use polkadot_api::PolkadotApi;
 use primitives::{Hash, AccountId, Timestamp};
 use substrate_primitives::block::{Extrinsic, ExtrinsicHash};
 use substrate_primitives::hexdisplay::HexDisplay;
 use runtime::{Block, UncheckedExtrinsic, TimestampCall, Call};
 use substrate_runtime_primitives::traits::Checkable;
-use transaction_pool::{Pool, Readiness};
-use transaction_pool::scoring::{Change, Choice};
-
-pub use transaction_pool::{Options, Status, LightStatus, NoopListener, VerifiedTransaction as VerifiedTransactionOps};
+use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
+pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
 
 /// Useful functions for working with Polkadot blocks.
@@ -109,9 +111,9 @@ impl From<PolkadotBlock> for Block {
 	}
 }
 
-/// Iterator over pending transactions.
-pub type PendingIterator<'a, C> =
-	transaction_pool::PendingIterator<'a, VerifiedTransaction, Ready<'a, C>, Scoring, NoopListener>;
+// /// Iterator over pending transactions.
+// pub type PendingIterator<'a, C> =
+// 	txpool::PendingIterator<'a, VerifiedTransaction, Ready<'a, C>, Scoring, NoopListener>;
 
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Debug, Clone)]
@@ -174,7 +176,7 @@ impl AsRef< <UncheckedExtrinsic as Checkable>::Checked > for VerifiedTransaction
 	}
 }
 
-impl transaction_pool::VerifiedTransaction for VerifiedTransaction {
+impl txpool::VerifiedTransaction for VerifiedTransaction {
 	type Hash = Hash;
 	type Sender = AccountId;
 
@@ -195,7 +197,7 @@ impl transaction_pool::VerifiedTransaction for VerifiedTransaction {
 #[derive(Debug)]
 pub struct Scoring;
 
-impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
+impl txpool::Scoring<VerifiedTransaction> for Scoring {
 	type Score = u64;
 	type Event = ();
 
@@ -209,7 +211,7 @@ impl transaction_pool::Scoring<VerifiedTransaction> for Scoring {
 
 	fn update_scores(
 		&self,
-		xts: &[transaction_pool::Transaction<VerifiedTransaction>],
+		xts: &[txpool::Transaction<VerifiedTransaction>],
 		scores: &mut [Self::Score],
 		_change: Change
 	) {
@@ -253,7 +255,7 @@ impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 	}
 }
 
-impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for Ready<'a, T> {
+impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T> {
 	fn is_ready(&mut self, xt: &VerifiedTransaction) -> Readiness {
 		let sender = xt.inner.signed;
 		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.hash, Hash::from(sender));
@@ -266,92 +268,63 @@ impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for R
 
 		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.inner.index);
 
-		match xt.inner.index.cmp(&next_index) {
+		let result = match xt.inner.index.cmp(&next_index) {
 			Ordering::Greater => Readiness::Future,
 			Ordering::Equal => Readiness::Ready,
 			Ordering::Less => Readiness::Stale,
-		}
+		};
+
+		// remember to increment `next_index`
+		*next_index = next_index.saturating_add(1);
+
+		result
+	}
+}
+
+pub struct Verifier;
+
+impl txpool::Verifier<Extrinsic> for Verifier {
+	type VerifiedTransaction = VerifiedTransaction;
+	type Error = Error;
+
+	fn verify_transaction(&self, xt: Extrinsic) -> Result<Self::VerifiedTransaction> {
+		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
+		let uxt = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
+			.ok_or_else(|| ErrorKind::InvalidExtrinsicFormat)?;
+		info!("Correctly formatted: {:?}", uxt);
+		VerifiedTransaction::create(uxt)
 	}
 }
 
 /// The polkadot transaction pool.
 ///
-/// Wraps a `transaction-pool::Pool`.
+/// Wraps a `extrinsic_pool::Pool`.
 pub struct TransactionPool {
-	inner: transaction_pool::Pool<VerifiedTransaction, Scoring>,
+	inner: Pool<Verifier, Scoring, Error>,
 }
 
 impl TransactionPool {
 	/// Create a new transaction pool.
 	pub fn new(options: Options) -> Self {
 		TransactionPool {
-			inner: Pool::new(NoopListener, Scoring, options),
+			inner: Pool::new(options, Verifier, Scoring),
 		}
 	}
 
-	/// Verify and import a transaction into the pool.
-	pub fn import(&mut self, xt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
-		let verified = VerifiedTransaction::create(xt)?;
-
-		info!("Extrinsic verified {:?}. Importing...", verified);
-
-		// TODO: just use a foreign link when the error type is made public.
-		let hash = verified.hash.clone();
-		self.inner.import(verified)
-			.map_err(|e|
-				match e {
-					// TODO: make error types public in transaction_pool. For now just treat all errors as AlreadyImported
-					_ => ErrorKind::AlreadyImported(hash),
-					// transaction_pool::error::AlreadyImported(h) => ErrorKind::AlreadyImported(h),
-					// e => ErrorKind::Import(Box::new(e)),
-				})
-			.map_err(Into::into)
+	pub fn import_unchecked_extrinsic(&self, uxt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
+		Ok(self.inner.import(VerifiedTransaction::create(uxt)?)?)
 	}
+}
 
-	/// Clear the pool.
-	pub fn clear(&mut self) {
-		self.inner.clear();
-	}
+impl Deref for TransactionPool {
+	type Target = Pool<Verifier, Scoring, Error>;
 
-	/// Remove from the pool.
-	pub fn remove(&mut self, hash: &Hash, is_valid: bool) -> Option<Arc<VerifiedTransaction>> {
-		self.inner.remove(hash, is_valid)
-	}
-
-	/// Cull transactions from the queue.
-	pub fn cull<T: PolkadotApi>(&mut self, senders: Option<&[AccountId]>, ready: Ready<T>) -> usize {
-		self.inner.cull(senders, ready)
-	}
-
-	/// Get an iterator of pending transactions.
-	pub fn pending<'a, T: 'a + PolkadotApi>(&'a self, ready: Ready<'a, T>) -> PendingIterator<'a, T> {
-		self.inner.pending(ready)
-	}
-
-	/// Get the full status of the queue (including readiness)
-	pub fn status<T: PolkadotApi>(&self, ready: Ready<T>) -> Status {
-		self.inner.status(ready)
-	}
-
-	/// Returns light status of the pool.
-	pub fn light_status(&self) -> LightStatus {
-		self.inner.light_status()
-	}
-
-	/// Submit an extrinsic to the pool.
-	pub fn submit_extrinsic(&mut self, xt: Extrinsic) -> Result<ExtrinsicHash> {
-		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
-
-		unimplemented!()
-		// let xt = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
-		// 	.ok_or_else(|| ErrorKind::InvalidExtrinsicFormat)?;
-        //
-		// info!("Correctly formatted: {:?}", xt);
-		// self.import(xt)
-		// 	.map(|vxt| vxt.extrinsic_hash)
+	fn deref(&self) -> &Self::Target {
+		&self.inner
 	}
 }
 
 #[cfg(test)]
 mod tests {
 }
+

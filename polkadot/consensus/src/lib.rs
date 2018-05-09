@@ -475,7 +475,7 @@ pub struct ProposerFactory<C, N> {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The transaction pool.
-	pub transaction_pool: Arc<Mutex<TransactionPool>>,
+	pub transaction_pool: Arc<TransactionPool>,
 	/// The backing network handle.
 	pub network: N,
 	/// Handle to the underlying tokio-core.
@@ -535,7 +535,7 @@ pub struct Proposer<C: PolkadotApi, R> {
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
 	local_key: Arc<ed25519::Pair>,
-	transaction_pool: Arc<Mutex<TransactionPool>>,
+	transaction_pool: Arc<TransactionPool>,
 	delay: Shared<Timeout>,
 	_table: Arc<SharedTable>,
 	_router: R,
@@ -555,34 +555,33 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 			current_timestamp()
 		)?;
 
-		let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 
 		{
-			let mut pool = self.transaction_pool.lock();
+			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 			let mut unqueue_invalid = Vec::new();
-			let mut pending_size = 0;
-			for pending in pool.pending(readiness_evaluator.clone()) {
-				// skip and cull transactions which are too large.
-				if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
-					unqueue_invalid.push(pending.hash().clone());
-					continue
-				}
-
-				if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
-
-				match block_builder.push_extrinsic(pending.as_transaction().clone()) {
-					Ok(()) => {
-						pending_size += pending.encoded_size();
-					}
-					Err(_) => {
+			self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending_iterator| {
+				let mut pending_size = 0;
+				for pending in pending_iterator {
+					// skip and cull transactions which are too large.
+					if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
 						unqueue_invalid.push(pending.hash().clone());
+						continue
+					}
+
+					if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
+
+					match block_builder.push_extrinsic(pending.as_transaction().clone()) {
+						Ok(()) => {
+							pending_size += pending.encoded_size();
+						}
+						Err(_) => {
+							unqueue_invalid.push(pending.hash().clone());
+						}
 					}
 				}
-			}
+			});
 
-			for tx_hash in unqueue_invalid {
-				pool.remove(&tx_hash, false);
-			}
+			self.transaction_pool.remove(&unqueue_invalid, false);
 		}
 
 		let polkadot_block = block_builder.bake();
@@ -630,15 +629,16 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 		use polkadot_runtime::{Call, Extrinsic, UncheckedExtrinsic, ConsensusCall};
 
 		let local_id = self.local_key.public().0;
-		let mut pool = self.transaction_pool.lock();
 		let mut next_index = {
 			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 
-			let cur_index = pool.pending(readiness_evaluator)
-				.filter(|tx| tx.as_ref().as_ref().signed == local_id)
-				.last()
-				.map(|tx| Ok(tx.as_ref().as_ref().index))
-				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id));
+			let cur_index = self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending| {
+				pending
+					.filter(|tx| tx.as_ref().as_ref().signed == local_id)
+					.last()
+					.map(|tx| Ok(tx.as_ref().as_ref().index))
+					.unwrap_or_else(|| self.client.index(&self.parent_id, local_id))
+			});
 
 			match cur_index {
 				Ok(cur_index) => cur_index + 1,
@@ -674,7 +674,7 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 			let signature = self.local_key.sign(&extrinsic.encode()).into();
 			let uxt = UncheckedExtrinsic { extrinsic, signature };
 
-			pool.import(uxt).expect("locally signed extrinsic is valid; qed");
+			self.transaction_pool.import_unchecked_extrinsic(uxt).expect("locally signed extrinsic is valid; qed");
 		}
 	}
 }

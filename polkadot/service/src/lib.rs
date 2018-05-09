@@ -51,11 +51,9 @@ mod config;
 use std::sync::Arc;
 use std::thread;
 use futures::prelude::*;
-use parking_lot::Mutex;
 use tokio_core::reactor::Core;
 use codec::Slicable;
-use primitives::block::{Id as BlockId, Extrinsic, ExtrinsicHash, HeaderHash};
-use primitives::hashing;
+use primitives::block::{Id as BlockId, ExtrinsicHash, HeaderHash};
 use transaction_pool::TransactionPool;
 use substrate_executor::NativeExecutor;
 use polkadot_executor::Executor as LocalDispatch;
@@ -78,13 +76,13 @@ pub struct Service {
 	thread: Option<thread::JoinHandle<()>>,
 	client: Arc<Client>,
 	network: Arc<network::Service>,
-	transaction_pool: Arc<Mutex<TransactionPool>>,
+	transaction_pool: Arc<TransactionPool>,
 	signal: Option<Signal>,
 	_consensus: Option<consensus::Service>,
 }
 
 struct TransactionPoolAdapter {
-	pool: Arc<Mutex<TransactionPool>>,
+	pool: Arc<TransactionPool>,
 	client: Arc<Client>,
 }
 
@@ -99,17 +97,21 @@ impl network::TransactionPool for TransactionPoolAdapter {
 		};
 		let id = self.client.check_id(BlockId::Hash(best_block)).expect("Best block is always valid; qed.");
 		let ready = transaction_pool::Ready::create(id, &*self.client);
-		self.pool.lock().pending(ready).map(|t| {
-			let hash = ::primitives::Hash::from(&t.hash()[..]);
-			let tx = codec::Slicable::encode(t.as_transaction());
-			(hash, tx)
-		}).collect()
+
+		self.pool.cull_and_get_pending(ready, |pending| pending
+			.map(|t| {
+				let hash = ::primitives::Hash::from(&t.hash()[..]);
+				let tx = codec::Slicable::encode(t.as_transaction());
+				(hash, tx)
+			})
+			.collect()
+		)
 	}
 
 	fn import(&self, transaction: &[u8]) -> Option<ExtrinsicHash> {
-		if let Some(tx) = codec::Slicable::decode(&mut &transaction[..]) {
-			match self.pool.lock().import(tx) {
-				Ok(t) => Some(t.hash()[..].into()),
+		if let Some(uxt) = codec::Slicable::decode(&mut &transaction[..]) {
+			match self.pool.import_unchecked_extrinsic(uxt) {
+				Ok(xt) => Some(*xt.hash()),
 				Err(e) => match *e.kind() {
 					transaction_pool::ErrorKind::AlreadyImported(hash) => Some(hash[..].into()),
 					_ => {
@@ -278,7 +280,7 @@ impl Service {
 		let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
 		let best_header = client.best_block_header()?;
 		info!("Starting Polkadot. Best block is #{}", best_header.number);
-		let transaction_pool = Arc::new(Mutex::new(TransactionPool::new(config.transaction_pool)));
+		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			pool: transaction_pool.clone(),
 			client: client.clone(),
@@ -356,26 +358,16 @@ impl Service {
 	}
 
 	/// Get shared transaction pool instance.
-	pub fn transaction_pool(&self) -> Arc<Mutex<TransactionPool>> {
+	pub fn transaction_pool(&self) -> Arc<TransactionPool> {
 		self.transaction_pool.clone()
 	}
 }
 
-fn prune_transactions(pool: &mut TransactionPool, extrinsics: &[Extrinsic]) {
-	for extrinsic in extrinsics {
-		let hash: _ = hashing::blake2_256(&extrinsic.encode()).into();
-		pool.remove(&hash, true);
-	}
-}
-
 /// Produce a task which prunes any finalized transactions from the pool.
-pub fn prune_imported(client: &Client, pool: &Mutex<TransactionPool>, hash: HeaderHash) {
-	let id = BlockId::Hash(hash);
-	match client.body(&id) {
-		Ok(Some(body)) => prune_transactions(&mut *pool.lock(), &body[..]),
-		Ok(None) => warn!("Missing imported block {:?}", hash),
-		Err(e) => warn!("Failed to fetch block: {:?}", e),
-	}
+pub fn prune_imported(client: &Client, pool: &TransactionPool, hash: HeaderHash) {
+	let id = client.check_id(BlockId::Hash(hash)).expect("Best block is always valid; qed.");
+	let ready = transaction_pool::Ready::create(id, client);
+	pool.cull(None, ready);
 }
 
 impl Drop for Service {

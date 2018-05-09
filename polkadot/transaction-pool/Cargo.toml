@@ -5,14 +5,13 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 log = "0.4.0"
-# transaction-pool = "1.9.0"
-transaction-pool = { git = "https://github.com/paritytech/parity", branch = "td-txpool-improvements" }
 error-chain = "0.11"
 polkadot-api = { path = "../api" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
 substrate-client = { path = "../../substrate/client" }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
-substrate-codec = { path = "../../substrate/codec" }
 ed25519 = { path = "../../substrate/ed25519" }

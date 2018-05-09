@@ -16,9 +16,9 @@
 
 //! Substrate block-author/full-node API.
 
-use std::sync::Arc;
-use parking_lot::Mutex;
-use primitives::block::Extrinsic;
+use std::ops::Deref;
+use primitives::{Hash, block::Extrinsic};
+use extrinsic_pool::{Pool, txpool};
 
 pub mod error;
 
@@ -36,14 +36,15 @@ build_rpc_trait! {
 	}
 }
 
-/// Variant of the AuthorApi that doesn't need to be Sync + Send + 'static.
-pub trait AsyncAuthorApi: Send + 'static {
-	/// Submit extrinsic for inclusion in block.
-	fn submit_extrinsic(&mut self, Extrinsic) -> Result<()>;
-}
-
-impl<T: AsyncAuthorApi> AuthorApi for Arc<Mutex<T>> {
+impl<V, S, E, T> AuthorApi for T where
+	T: Deref<Target=Pool<V, S, E>> + Send + Sync + 'static,
+	V: txpool::Verifier<Extrinsic>,
+	S: txpool::Scoring<V::VerifiedTransaction>,
+	V::VerifiedTransaction: txpool::VerifiedTransaction<Hash=Hash>,
+	E: From<V::Error>,
+	E: From<txpool::Error>,
+{
 	fn submit_extrinsic(&self, xt: Extrinsic) -> Result<()> {
-		self.as_ref().lock().submit_extrinsic(xt)
+		self.deref().submit(vec![xt]).map(|_| ()).map_err(|_| unimplemented!())
 	}
 }

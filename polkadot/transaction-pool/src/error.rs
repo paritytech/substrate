@@ -14,11 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime::UncheckedExtrinsic;
+use extrinsic_pool::txpool;
 use primitives::Hash;
+use runtime::UncheckedExtrinsic;
 
 error_chain! {
+	links {
+		Pool(txpool::Error, txpool::ErrorKind);
+	}
 	errors {
+		/// Unexpected extrinsic format submitted
+		InvalidExtrinsicFormat {
+			description("Invalid extrinsic format."),
+			display("Invalid extrinsic format."),
+		}
 		/// Attempted to queue an inherent transaction.
 		IsInherent(xt: UncheckedExtrinsic) {
 			description("Inherent transactions cannot be queued."),
