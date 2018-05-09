@@ -24,7 +24,12 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
-#[macro_use] extern crate log;
+
+#[macro_use]
+extern crate log;
+
+#[cfg(test)]
+extern crate kvdb_memorydb;
 
 use std::sync::Arc;
 use std::path::PathBuf;
@@ -33,7 +38,7 @@ use parking_lot::RwLock;
 use runtime_support::Hashable;
 use primitives::blake2_256;
 use kvdb_rocksdb::{Database, DatabaseConfig};
-use kvdb::DBTransaction;
+use kvdb::{KeyValueDB, DBTransaction};
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::CodeExecutor;
@@ -99,7 +104,7 @@ struct Meta {
 
 /// Block database
 pub struct BlockchainDb {
-	db: Arc<Database>,
+	db: Arc<KeyValueDB>,
 	meta: RwLock<Meta>,
 }
 
@@ -145,7 +150,7 @@ impl BlockchainDb {
 		}
 	}
 
-	fn new(db: Arc<Database>) -> Result<BlockchainDb, client::error::Error> {
+	fn new(db: Arc<KeyValueDB>) -> Result<BlockchainDb, client::error::Error> {
 		let (best_hash, best_number) = if let Some(Some(header)) = db.get(columns::META, meta::BEST_BLOCK).and_then(|id|
 			match id {
 				Some(id) => db.get(columns::HEADER, &id).map(|h| h.map(|b| block::Header::decode(&mut &b[..]))),
@@ -243,9 +248,9 @@ impl client::blockchain::Backend for BlockchainDb {
 	}
 
 	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>, client::error::Error> {
-		Ok(self.db.get(columns::BLOCK_INDEX, &number_to_db_key(number))
-		   .map_err(db_err)?
-		   .map(|hash| block::HeaderHash::from_slice(&hash)))
+		self.read_db(BlockId::Number(number), columns::HEADER).map(|x|
+			x.map(|raw| blake2_256(&raw[..])).map(Into::into)
+		)
 	}
 }
 
@@ -304,13 +309,13 @@ impl state_machine::Backend for DbState {
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
 pub struct Backend {
-	db: Arc<Database>,
+	db: Arc<KeyValueDB>,
 	blockchain: BlockchainDb,
 	old_states: RwLock<HashMap<BlockKey, state_machine::backend::InMemory>>,
 }
 
 impl Backend {
-	/// Create a new instance of in-mem backend.
+	/// Create a new instance of database backend.
 	pub fn new(config: &DatabaseSettings) -> Result<Backend, client::error::Error> {
 		let mut db_config = DatabaseConfig::with_columns(columns::NUM_COLUMNS);
 		db_config.memory_budget = config.cache_size;
@@ -334,6 +339,7 @@ impl Backend {
 			old_states: RwLock::new(old_states)
 		})
 	}
+
 }
 
 impl client::backend::Backend for Backend {
@@ -397,3 +403,7 @@ impl client::backend::Backend for Backend {
 	}
 }
 
+#[cfg(test)]
+mod tests {
+
+}

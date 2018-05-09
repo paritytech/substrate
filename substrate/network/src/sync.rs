@@ -178,6 +178,7 @@ impl ChainSync {
 				PeerSyncState::AncestorSearch(n) => {
 					match response.blocks.get(0) {
 						Some(ref block) => {
+							trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", n, block.hash, peer_id);
 							match protocol.chain().block_hash(n) {
 								Ok(Some(block_hash)) if block_hash == block.hash => {
 									peer.common_hash = block.hash;
@@ -423,6 +424,7 @@ impl ChainSync {
 	}
 
 	fn request_ancestry(io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, block: BlockNumber) {
+		trace!(target: "sync", "Requesting ancestry block #{} from {}", block, peer_id);
 		let request = message::BlockRequest {
 			id: 0,
 			fields: vec![message::BlockAttribute::Header, message::BlockAttribute::Justification],
