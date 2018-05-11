@@ -243,7 +243,9 @@ impl client::blockchain::Backend for BlockchainDb {
 	}
 
 	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>, client::error::Error> {
-		Ok(self.header(BlockId::Number(number))?.map(|hdr| hdr.blake2_256().into()))
+		Ok(self.db.get(columns::BLOCK_INDEX, &number_to_db_key(number))
+		   .map_err(db_err)?
+		   .map(|hash| block::HeaderHash::from_slice(&hash)))
 	}
 }
 
@@ -360,7 +362,7 @@ impl client::backend::Backend for Backend {
 			if let Some(justification) = pending_block.justification {
 				transaction.put(columns::JUSTIFICATION, &key, &justification.encode());
 			}
-			transaction.put(columns::BLOCK_INDEX, &hash, &key);
+			transaction.put(columns::BLOCK_INDEX, &key, &hash);
 			if pending_block.is_best {
 				transaction.put(columns::META, meta::BEST_BLOCK, &key);
 			}

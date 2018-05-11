@@ -425,7 +425,6 @@ impl ChainSync {
 	}
 
 	fn request_ancestry(io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, block: BlockNumber) {
-		trace!(target: "sync", "Requesting potential common ancestor {} from {}", block, peer_id);
 		let request = message::BlockRequest {
 			id: 0,
 			fields: vec![message::BlockAttribute::Header, message::BlockAttribute::Justification],
