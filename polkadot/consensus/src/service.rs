@@ -31,7 +31,7 @@ use runtime_support::Hashable;
 use primitives::{Hash, AuthorityId};
 use primitives::block::{Id as BlockId, HeaderHash, Header};
 use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
-use polkadot_api::PolkadotApi;
+use polkadot_api::LocalPolkadotApi;
 use bft::{self, BftService};
 use transaction_pool::TransactionPool;
 use ed25519;
@@ -228,7 +228,7 @@ impl Service {
 		key: ed25519::Pair,
 	) -> Service
 		where
-			A: PolkadotApi + Send + Sync + 'static,
+			A: LocalPolkadotApi + Send + Sync + 'static,
 			C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + Send + Sync + 'static,
 	{
 		let (signal, exit) = ::exit_future::signal();

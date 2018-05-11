@@ -36,7 +36,7 @@ extern crate substrate_keyring as keyring;
 
 pub mod light;
 
-use client::backend::Backend;
+use client::backend::{Backend, LocalBackend};
 use client::{Client, LocalCallExecutor};
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
@@ -145,6 +145,12 @@ pub trait PolkadotApi {
 	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: u64) -> Result<Self::BlockBuilder>;
 }
 
+/// Mark for all Polkadot API implementations, that are making use of state data, stored locally.
+pub trait LocalPolkadotApi: PolkadotApi {}
+
+/// Mark for all Polkadot API implementations, that are fetching required state data from remote nodes.
+pub trait RemotePolkadotApi: PolkadotApi {}
+
 /// A checked block ID used for the substrate-client implementation of CheckedBlockId;
 #[derive(Debug, Clone, Copy)]
 pub struct CheckedId(BlockId);
@@ -180,7 +186,7 @@ macro_rules! with_runtime {
 	}}
 }
 
-impl<B: Backend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>>
+impl<B: LocalBackend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>>
 	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
 {
 	type CheckedBlockId = CheckedId;
@@ -262,6 +268,10 @@ impl<B: Backend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<L
 		Ok(builder)
 	}
 }
+
+impl<B: LocalBackend> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>>
+	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+{}
 
 /// A polkadot block builder.
 #[derive(Debug, Clone)]

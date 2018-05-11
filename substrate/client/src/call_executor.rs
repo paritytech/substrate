@@ -83,7 +83,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 
 impl<B, E> CallExecutor for LocalCallExecutor<B, E>
 	where
-		B: backend::Backend,
+		B: backend::LocalBackend,
 		E: CodeExecutor,
 		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
 {
@@ -115,7 +115,7 @@ impl<B, E> RemoteCallExecutor<B, E> {
 
 impl<B, E> CallExecutor for RemoteCallExecutor<B, E>
 	where
-		B: backend::Backend,
+		B: backend::RemoteBackend,
 		E: CodeExecutor,
 		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
 {

@@ -286,7 +286,8 @@ pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend
 			let client = client::light::new_light(fetcher.clone(), executor, genesis_builder)?;
 			Ok((Arc::new(client), Some(fetcher)))
 		},
-		|client| Arc::new(polkadot_api::light::RemotePolkadotApi(client.clone())),
+		|client| Arc::new(polkadot_api::light::RemotePolkadotApiWrapper(client.clone())),
+		|_client, _network, _tx_pool, _keystore| Ok(None),
 		config)
 }
 
@@ -294,7 +295,13 @@ pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend
 pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend, client::LocalCallExecutor<client_db::Backend, CodeExecutor>>, error::Error> {
 	Service::new(|db_settings, executor, genesis_builder: GenesisBuilder|
 		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_builder)?), None)),
-		|client| client.clone(),
+		|client| client,
+		|client, network, tx_pool, keystore| {
+			// Load the first available key. Code above makes sure it exisis.
+			let key = keystore.load(&keystore.contents()?[0], "")?;
+			info!("Using authority key {:?}", key.public());
+			Ok(Some(consensus::Service::new(client.clone(), client.clone(), network, tx_pool, key)))
+		},
 		config)
 }
 
@@ -305,7 +312,7 @@ impl<B, E> Service<B, E>
 		client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
 {
 	/// Creates and register protocol with the network service
-	fn new<F, G, A>(client_creator: F, api_creator: G, mut config: Configuration) -> Result<Self, error::Error>
+	fn new<F, G, C, A>(client_creator: F, api_creator: G, consensus_creator: C, mut config: Configuration) -> Result<Self, error::Error>
 		where
 			F: FnOnce(
 					client_db::DatabaseSettings,
@@ -315,6 +322,12 @@ impl<B, E> Service<B, E>
 			G: Fn(
 					Arc<Client<B, E>>,
 				) -> Arc<A>,
+			C: Fn(
+					Arc<Client<B, E>>,
+					Arc<network::Service>,
+					Arc<Mutex<TransactionPool>>,
+					&Keystore
+				) -> Result<Option<consensus::Service>, error::Error>,
 			A: PolkadotApi + Send + Sync + 'static,
 	{
 		use std::sync::Barrier;
@@ -405,14 +418,7 @@ impl<B, E> Service<B, E>
 		barrier.wait();
 
 		// Spin consensus service if configured
-		let consensus_service = if config.roles & Role::VALIDATOR == Role::VALIDATOR {
-			// Load the first available key. Code above makes sure it exisis.
-			let key = keystore.load(&keystore.contents()?[0], "")?;
-			info!("Using authority key {:?}", key.public());
-			Some(consensus::Service::new(client.clone(), api, network.clone(), transaction_pool.clone(), key))
-		} else {
-			None
-		};
+		let consensus_service = consensus_creator(client.clone(), network.clone(), transaction_pool.clone(), &keystore)?;
 
 		Ok(Service {
 			thread: Some(thread),

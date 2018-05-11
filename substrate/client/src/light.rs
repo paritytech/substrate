@@ -93,6 +93,8 @@ impl backend::Backend for Backend {
 	}
 }
 
+impl backend::RemoteBackend for Backend {}
+
 impl backend::BlockImportOperation for BlockImportOperation {
 	type State = OnDemandState;
 

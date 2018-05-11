@@ -250,3 +250,5 @@ impl backend::Backend for Backend {
 		}
 	}
 }
+
+impl backend::LocalBackend for Backend {}

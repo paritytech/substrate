@@ -17,22 +17,22 @@
 //! Strongly typed API for light Polkadot client.
 
 use std::sync::Arc;
-use client::backend::Backend;
+use client::backend::{Backend, RemoteBackend};
 use client::{Client, CallExecutor};
 use codec::Slicable;
 use state_machine;
 use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
 use primitives::parachain::DutyRoster;
 use runtime::{Block, UncheckedExtrinsic};
-use {PolkadotApi, BlockBuilder, CheckedBlockId, CheckedId, Result, ErrorKind};
+use {PolkadotApi, RemotePolkadotApi, BlockBuilder, CheckedBlockId, CheckedId, Result, ErrorKind};
 
 /// Remote polkadot API implementation.
-pub struct RemotePolkadotApi<B: Backend, E: CallExecutor>(pub Arc<Client<B, E>>);
+pub struct RemotePolkadotApiWrapper<B: Backend, E: CallExecutor>(pub Arc<Client<B, E>>);
 
 /// Block builder for light client.
 pub struct LightBlockBuilder;
 
-impl<B: Backend, E: CallExecutor> PolkadotApi for RemotePolkadotApi<B, E>
+impl<B: Backend, E: CallExecutor> PolkadotApi for RemotePolkadotApiWrapper<B, E>
 	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
 {
 	type CheckedBlockId = CheckedId;
@@ -77,6 +77,10 @@ impl<B: Backend, E: CallExecutor> PolkadotApi for RemotePolkadotApi<B, E>
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 }
+
+impl<B: RemoteBackend, E: CallExecutor> RemotePolkadotApi for RemotePolkadotApiWrapper<B, E>
+	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+{}
 
 impl BlockBuilder for LightBlockBuilder {
 	fn push_extrinsic(&mut self, _extrinsic: UncheckedExtrinsic) -> Result<()> {
