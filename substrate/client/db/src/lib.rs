@@ -305,6 +305,12 @@ impl state_machine::Backend for DbState {
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.mem.pairs()
 	}
+
+	fn storage_root<I>(&self, delta: I) -> [u8; 32]
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		self.mem.storage_root(delta)
+	}
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.

@@ -34,6 +34,10 @@ pub trait Backend {
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+
+	/// Calculate the storage root, with given delta.
+	fn storage_root<I>(&self, delta: I) -> [u8; 32]
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 }
 
 /// Error impossible.
@@ -75,6 +79,18 @@ impl Backend for InMemory {
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+	}
+
+	fn storage_root<I>(&self, delta: I) -> [u8; 32]
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		let existing_pairs = self.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
+
+		::triehash::trie_root(existing_pairs.chain(delta)
+			.collect::<HashMap<_, _>>()
+			.into_iter()
+			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+		).0
 	}
 }
 

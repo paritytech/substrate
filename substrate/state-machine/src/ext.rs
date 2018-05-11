@@ -17,8 +17,6 @@
 //! Conrete externalities implementation.
 
 use std::{error, fmt};
-use std::collections::HashMap;
-use triehash::trie_root;
 use backend::Backend;
 use {Externalities, OverlayedChanges};
 
@@ -90,12 +88,10 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 	}
 
 	fn storage_root(&self) -> [u8; 32] {
-		trie_root(self.backend.pairs().into_iter()
-			.map(|(k, v)| (k, Some(v)))
-			.chain(self.overlay.committed.clone().into_iter())
-			.chain(self.overlay.prospective.clone().into_iter())
-			.collect::<HashMap<_, _>>()
-			.into_iter()
-			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))).0
+		let delta = self.overlay.committed.iter()
+			.chain(self.overlay.prospective.iter())
+			.map(|(k, v)| (k.clone(), v.clone()));
+
+		self.backend.storage_root(delta)
 	}
 }
