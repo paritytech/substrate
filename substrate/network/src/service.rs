@@ -268,7 +268,7 @@ impl ConsensusService for Service {
 
 impl NetworkProtocolHandler for ProtocolHandler {
 	fn initialize(&self, io: &NetworkContext, _host_info: &HostInfo) {
-		io.register_timer(0, 1000).expect("Error registering sync timer");
+		io.register_timer(0, ::std::time::Duration::from_millis(1000)).expect("Error registering sync timer");
 	}
 
 	fn read(&self, io: &NetworkContext, peer: &PeerId, _packet_id: u8, data: &[u8]) {
