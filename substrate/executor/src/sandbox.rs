@@ -42,13 +42,13 @@ struct SupervisorFuncIndex(usize);
 struct GuestFuncIndex(usize);
 
 /// This struct holds a mapping from guest index space to supervisor.
-struct GuestToSuperviserFunctionMapping {
+struct GuestToSupervisorFunctionMapping {
 	funcs: Vec<SupervisorFuncIndex>,
 }
 
-impl GuestToSuperviserFunctionMapping {
-	fn new() -> GuestToSuperviserFunctionMapping {
-		GuestToSuperviserFunctionMapping { funcs: Vec::new() }
+impl GuestToSupervisorFunctionMapping {
+	fn new() -> GuestToSupervisorFunctionMapping {
+		GuestToSupervisorFunctionMapping { funcs: Vec::new() }
 	}
 
 	fn define(&mut self, supervisor_func: SupervisorFuncIndex) -> GuestFuncIndex {
@@ -298,7 +298,7 @@ where
 pub struct SandboxInstance {
 	instance: ModuleRef,
 	dispatch_thunk: FuncRef,
-	guest_to_supervisor_mapping: GuestToSuperviserFunctionMapping,
+	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
 }
 
 impl SandboxInstance {
@@ -331,12 +331,12 @@ impl SandboxInstance {
 fn decode_environment_definition(
 	raw_env_def: &[u8],
 	memories: &[MemoryRef],
-) -> Result<(Imports, GuestToSuperviserFunctionMapping), DummyUserError> {
+) -> Result<(Imports, GuestToSupervisorFunctionMapping), DummyUserError> {
 	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..]).ok_or_else(|| DummyUserError)?;
 
 	let mut func_map = HashMap::new();
 	let mut memories_map = HashMap::new();
-	let mut guest_to_supervisor_mapping = GuestToSuperviserFunctionMapping::new();
+	let mut guest_to_supervisor_mapping = GuestToSupervisorFunctionMapping::new();
 
 	for entry in &env_def.entries {
 		let module = entry.module_name.clone();
