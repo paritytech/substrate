@@ -243,9 +243,7 @@ impl client::blockchain::Backend for BlockchainDb {
 	}
 
 	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>, client::error::Error> {
-		Ok(self.db.get(columns::BLOCK_INDEX, &number_to_db_key(number))
-		   .map_err(db_err)?
-		   .map(|hash| block::HeaderHash::from_slice(&hash)))
+		Ok(self.header(BlockId::Number(number))?.map(|hdr| hdr.blake2_256().into()))
 	}
 }
 

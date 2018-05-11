@@ -225,6 +225,7 @@ pub enum SignedConsensusMessage {
 	/// A vote.
 	Vote(SignedConsensusVote),
 }
+
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 /// A network message.
 pub enum Message {
