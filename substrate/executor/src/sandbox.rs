@@ -281,6 +281,18 @@ where
 	f(&mut guest_externals)
 }
 
+/// Sandboxed instance of a wasm module.
+///
+/// It's primary purpose is to [`invoke`] exported functions on it.
+///
+/// All imports of this instance are specified at the creation time and
+/// imports are implemented by the supervisor.
+///
+/// Hence, in order to invoke an exported function on a sandboxed module instance,
+/// it's required to provide supervisor externals: it will be used to execute
+/// code in the supervisor context.
+///
+/// [`invoke`]: #method.invoke
 pub struct SandboxInstance {
 	instance: ModuleRef,
 	dispatch_thunk: FuncRef,
@@ -288,11 +300,18 @@ pub struct SandboxInstance {
 }
 
 impl SandboxInstance {
+	/// Invoke an exported function by a name.
+	///
+	/// `supervisor_externals` is required to execute the implementations
+	/// of the syscalls that published to a sandboxed module instance.
+	///
+	/// The `state` parameter can be used to provide custom data for
+	/// these syscall implementations.
 	pub fn invoke<FE: SandboxCapabilities + Externals>(
 		&self,
-		supervisor_externals: &mut FE,
 		export_name: &str,
 		args: &[RuntimeValue],
+		supervisor_externals: &mut FE,
 		state: u32,
 	) -> Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
 		with_guest_externals(
@@ -406,7 +425,7 @@ pub struct Store {
 }
 
 impl Store {
-	/// Create new empty sandbox store.
+	/// Create a new empty sandbox store.
 	pub fn new() -> Store {
 		Store {
 			instances: Vec::new(),

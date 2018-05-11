@@ -366,7 +366,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			)?;
 
 		let instance = this.sandbox_store.instance(instance_idx)?;
-		let result = instance.invoke(this, &export, &[], state);
+		let result = instance.invoke(&export, &[], this, state);
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
 			// TODO: Return value
