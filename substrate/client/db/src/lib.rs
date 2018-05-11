@@ -362,7 +362,7 @@ impl client::backend::Backend for Backend {
 			if let Some(justification) = pending_block.justification {
 				transaction.put(columns::JUSTIFICATION, &key, &justification.encode());
 			}
-			transaction.put(columns::BLOCK_INDEX, &key, &hash);
+			transaction.put(columns::BLOCK_INDEX, &hash, &key);
 			if pending_block.is_best {
 				transaction.put(columns::META, meta::BEST_BLOCK, &key);
 			}
