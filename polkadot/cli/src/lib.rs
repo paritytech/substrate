@@ -143,12 +143,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	if matches.is_present("collator") {
 		info!("Starting collator.");
 		role = service::Role::COLLATOR;
-	}
-	else if matches.is_present("validator") {
+	} else if matches.is_present("validator") {
 		info!("Starting validator.");
 		role = service::Role::VALIDATOR;
-	}
-	else if matches.is_present("light") {
+	} else if matches.is_present("light") {
 		info!("Starting light.");
 		role = service::Role::LIGHT;
 	}
