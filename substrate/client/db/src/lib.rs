@@ -24,7 +24,12 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
-#[macro_use] extern crate log;
+
+#[macro_use]
+extern crate log;
+
+#[cfg(test)]
+extern crate kvdb_memorydb;
 
 use std::sync::Arc;
 use std::path::PathBuf;
@@ -33,7 +38,7 @@ use parking_lot::RwLock;
 use runtime_support::Hashable;
 use primitives::blake2_256;
 use kvdb_rocksdb::{Database, DatabaseConfig};
-use kvdb::DBTransaction;
+use kvdb::{KeyValueDB, DBTransaction};
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::CodeExecutor;
@@ -70,7 +75,7 @@ mod columns {
 	pub const HEADER: Option<u32> = Some(3);
 	pub const BODY: Option<u32> = Some(4);
 	pub const JUSTIFICATION: Option<u32> = Some(5);
-	pub const NUM_COLUMNS: Option<u32> = Some(6);
+	pub const NUM_COLUMNS: u32 = 6;
 }
 
 mod meta {
@@ -97,12 +102,6 @@ struct Meta {
 	genesis_hash: HeaderHash,
 }
 
-/// Block database
-pub struct BlockchainDb {
-	db: Arc<Database>,
-	meta: RwLock<Meta>,
-}
-
 type BlockKey = [u8; 4];
 
 // Little endian
@@ -125,6 +124,12 @@ fn db_err(err: kvdb::Error) -> client::error::Error {
 	}
 }
 
+/// Block database
+pub struct BlockchainDb {
+	db: Arc<KeyValueDB>,
+	meta: RwLock<Meta>,
+}
+
 impl BlockchainDb {
 	fn id(&self, id: BlockId) -> Result<Option<BlockKey>, client::error::Error> {
 		match id {
@@ -145,7 +150,7 @@ impl BlockchainDb {
 		}
 	}
 
-	fn new(db: Arc<Database>) -> Result<BlockchainDb, client::error::Error> {
+	fn new(db: Arc<KeyValueDB>) -> Result<BlockchainDb, client::error::Error> {
 		let (best_hash, best_number) = if let Some(Some(header)) = db.get(columns::META, meta::BEST_BLOCK).and_then(|id|
 			match id {
 				Some(id) => db.get(columns::HEADER, &id).map(|h| h.map(|b| block::Header::decode(&mut &b[..]))),
@@ -243,9 +248,9 @@ impl client::blockchain::Backend for BlockchainDb {
 	}
 
 	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>, client::error::Error> {
-		Ok(self.db.get(columns::BLOCK_INDEX, &number_to_db_key(number))
-		   .map_err(db_err)?
-		   .map(|hash| block::HeaderHash::from_slice(&hash)))
+		self.read_db(BlockId::Number(number), columns::HEADER).map(|x|
+			x.map(|raw| blake2_256(&raw[..])).map(Into::into)
+		)
 	}
 }
 
@@ -304,30 +309,43 @@ impl state_machine::Backend for DbState {
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
 pub struct Backend {
-	db: Arc<Database>,
+	db: Arc<KeyValueDB>,
 	blockchain: BlockchainDb,
 	old_states: RwLock<HashMap<BlockKey, state_machine::backend::InMemory>>,
 }
 
 impl Backend {
-	/// Create a new instance of in-mem backend.
+	/// Create a new instance of database backend.
 	pub fn new(config: &DatabaseSettings) -> Result<Backend, client::error::Error> {
-		let mut db_config = DatabaseConfig::with_columns(columns::NUM_COLUMNS);
+		let mut db_config = DatabaseConfig::with_columns(Some(columns::NUM_COLUMNS));
 		db_config.memory_budget = config.cache_size;
 		db_config.wal = true;
 		let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
 		let db = Arc::new(Database::open(&db_config, &path).map_err(db_err)?);
+
+		Backend::from_kvdb(db as Arc<_>)
+	}
+
+	#[cfg(test)]
+	fn new_test() -> Backend {
+		let db = Arc::new(::kvdb_memorydb::create(columns::NUM_COLUMNS));
+
+		Backend::from_kvdb(db as Arc<_>).expect("failed to create test-db")
+	}
+
+	fn from_kvdb(db: Arc<KeyValueDB>) -> Result<Backend, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
 
 		//load latest state
 		let mut state = state_machine::backend::InMemory::new();
 		let mut old_states = HashMap::new();
-	 	if let Some(iter) = db.iter(columns::STATE).map(|iter| iter.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))) {
+
+		{
+	 		let iter = db.iter(columns::STATE).map(|(k, v)| (k.to_vec(), Some(v.to_vec())));
 			state.commit(iter);
 			old_states.insert(number_to_db_key(blockchain.meta.read().best_number), state);
 		}
 
-		debug!("DB Opened at {}", path);
 		Ok(Backend {
 			db,
 			blockchain,
@@ -397,3 +415,40 @@ impl client::backend::Backend for Backend {
 	}
 }
 
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use client::backend::Backend as BTrait;
+	use client::backend::BlockImportOperation as Op;
+	use client::blockchain::Backend as BCTrait;
+
+	#[test]
+	fn block_hash_inserted_correctly() {
+		let db = Backend::new_test();
+		for i in 1..10 {
+			assert!(db.blockchain().hash(i).unwrap().is_none());
+
+			{
+				let mut op = db.begin_operation(BlockId::Number(i - 1)).unwrap();
+				let header = block::Header {
+					number: i,
+					parent_hash: Default::default(),
+					state_root: Default::default(),
+					digest: Default::default(),
+					extrinsics_root: Default::default(),
+				};
+
+				op.set_block_data(
+					header,
+					Some(vec![]),
+					None,
+					true,
+				).unwrap();
+				op.set_storage(vec![].into_iter()).unwrap();
+				db.commit_operation(op).unwrap();
+			}
+
+			assert!(db.blockchain().hash(i).unwrap().is_some())
+		}
+	}
+}
