@@ -50,13 +50,13 @@ If you want to see the multi-node consensus algorithm in action locally, then
 you can create a local testnet. You'll need two terminals open. In one, run:
 
 ```
-polkadot --chain=dev --validator --key Alice -d /tmp/alice
+polkadot --chain=local --validator --key Alice -d /tmp/alice
 ```
 
 and in the other, run:
 
 ```
-polkadot --chain=dev --validator --key Bob -d /tmp/bob --port 30334 --bootnodes 'enode://ALICE_BOOTNODE_ID_HERE@127.0.0.1:30333'
+polkadot --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes 'enode://ALICE_BOOTNODE_ID_HERE@127.0.0.1:30333'
 ```
 
 Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of
