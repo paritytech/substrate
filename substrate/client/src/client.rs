@@ -300,7 +300,7 @@ impl<B, E> Client<B, E> where
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(header.parent_hash))?;
 		let mut overlay = OverlayedChanges::default();
 
-		state_machine::execute(
+		let (_out, storage_update) = state_machine::execute(
 			transaction.state()?,
 			&mut overlay,
 			&self.executor,
@@ -312,7 +312,7 @@ impl<B, E> Client<B, E> where
 		let hash: block::HeaderHash = header.blake2_256().into();
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number, is_new_best, origin);
 		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
-		transaction.set_storage(overlay.drain())?;
+		transaction.update_storage(storage_update)?;
 		self.backend.commit_operation(transaction)?;
 
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {

@@ -8,6 +8,10 @@ parking_lot = "0.4"
 log = "0.3"
 kvdb = { git = "https://github.com/paritytech/parity.git" }
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity.git" }
+ethereum-types = "0.3"
+hashdb = { git = "https://github.com/paritytech/parity.git" }
+patricia-trie = { git = "https://github.com/paritytech/parity.git" }
+memorydb = { git = "https://github.com/paritytech/parity.git" }
 substrate-primitives = { path = "../../../substrate/primitives" }
 substrate-client = { path = "../../../substrate/client" }
 substrate-state-machine = { path = "../../../substrate/state-machine" }

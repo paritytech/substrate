@@ -19,7 +19,10 @@
 extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
 extern crate kvdb;
+extern crate hashdb;
+extern crate memorydb;
 extern crate parking_lot;
+extern crate patricia_trie;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
@@ -34,15 +37,20 @@ extern crate kvdb_memorydb;
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::collections::HashMap;
-use parking_lot::RwLock;
-use runtime_support::Hashable;
-use primitives::blake2_256;
+
+use codec::Slicable;
+use ethereum_types::H256 as TrieH256;
+use hashdb::{DBValue, HashDB};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use kvdb::{KeyValueDB, DBTransaction};
+use memorydb::MemoryDB;
+use parking_lot::RwLock;
+use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut};
+use primitives::blake2_256;
 use primitives::block::{self, Id as BlockId, HeaderHash};
+use runtime_support::Hashable;
 use state_machine::backend::Backend as StateBackend;
 use state_machine::CodeExecutor;
-use codec::Slicable;
 
 const STATE_HISTORY: block::Number = 64;
 
@@ -176,7 +184,7 @@ impl BlockchainDb {
 		})
 	}
 
-	fn read_db(&self, id: BlockId, column: Option<u32>) -> Result<Option<kvdb::DBValue>, client::error::Error> {
+	fn read_db(&self, id: BlockId, column: Option<u32>) -> Result<Option<DBValue>, client::error::Error> {
 		self.id(id).and_then(|key|
 		 match key {
 			 Some(key) => self.db.get(column, &key).map_err(db_err),
@@ -283,27 +291,104 @@ impl client::backend::BlockImportOperation for BlockImportOperation {
 	}
 }
 
+struct Ephemeral<'a> {
+	backing: &'a KeyValueDB,
+	overlay: &'a mut MemoryDB,
+}
+
+impl HashDB for Ephemeral {
+	fn keys(&self) -> HashMap<H256, i32> {
+		self.overlay.keys() // TODO: iterate backing
+	}
+
+	fn get(&self, key: &TrieH256) -> Option<DBValue> {
+		match self.overlay.raw(key) {
+			Some((val, i)) => {
+				if i <= 0 {
+					None
+				} else {
+					Some(val)
+				}
+			}
+			None => {
+				match self.backing.get(::columns::STATE, &key.0[..]) {
+					Ok(x) => x,
+					Err(e) => {
+						warn!("Failed to read from DB: {}", e);
+						None
+					}
+				}
+			}
+		}
+	}
+
+	fn contains(&self, key: &TrieH256) -> bool {
+		self.get(key).is_some()
+	}
+
+	fn insert(&mut self, value: &[u8]) -> TrieH256 {
+		self.overlay.insert(value)
+	}
+
+	fn emplace(&mut self, key: TrieH256, value: DBValue) {
+		self.overlay.emplace(key, value)
+	}
+
+	fn remove(&mut self, key: &TrieH256) {
+		self.overlay.remove(key)
+	}
+}
+
 pub struct DbState {
-	mem: state_machine::backend::InMemory,
-	changes: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	db: Arc<KeyValueDB>,
+	root: TrieH256,
 }
 
 impl state_machine::Backend for DbState {
-	type Error = state_machine::backend::Void;
+	type Error = TrieError;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.mem.storage(key)
+		let mut read_overlay = MemoryDB::default();
+		let eph = Ephemeral {
+			backing: &*self.db,
+			overlay: &mut read_overlay,
+		};
+
+		TrieDB::new(&eph, &self.root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 	}
 
 	fn commit<I>(&mut self, changes: I)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.changes = changes.into_iter().collect();
-		self.mem.commit(self.changes.clone());
+		let mut write_overlay = MemoryDB::default();
+		let eph = Ephemeral {
+			backing: &*self.db,
+			overlay: &mut write_overlay,
+		};
+
+		let mut trie = TrieDBMut::from_existing(&mut eph, &mut self.root).expect("prior state root to exist"); // TODO: handle gracefully
+		for (key, change) in changes {
+			let result = match change {
+				Some(val) => trie.insert(&key, &val),
+				None => trie.remove(&key),
+			};
+
+			if let Err(e) = result {
+				warn!("Failed to write to trie: {}", e);
+			}
+		}
+
+		trie.commit();
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.mem.pairs()
+		let mut read_overlay = MemoryDB::default();
+		let eph = Ephemeral {
+			backing: &*self.db,
+			overlay: &mut read_overlay,
+		};
+
+		TrieDB::new(&eph, &self.root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 	}
 
 	fn storage_root<I>(&self, delta: I) -> [u8; 32]

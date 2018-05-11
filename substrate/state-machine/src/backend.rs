@@ -25,19 +25,22 @@ pub trait Backend {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
+	/// Changes to be applied if committing
+	type Transaction;
+
 	/// Get keyed storage associated with specific address, or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-	/// Commit updates to the backend and get new state.
-	fn commit<I>(&mut self, changes: I)
+	/// Calculate the storage root, with given delta over what is already stored in
+	/// the backend, and produce a "transaction" that can be used to commit.
+	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
+
+	/// Commit updates to the backend and get new state.
+	fn commit(&mut self, tx: Self::Transaction);
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
-
-	/// Calculate the storage root, with given delta.
-	fn storage_root<I>(&self, delta: I) -> [u8; 32]
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 }
 
 /// Error impossible.
@@ -61,14 +64,28 @@ pub type InMemory = HashMap<Vec<u8>, Vec<u8>>;
 
 impl Backend for InMemory {
 	type Error = Void;
+	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.get(key).map(Clone::clone))
 	}
 
-	fn commit<I>(&mut self, changes: I)
+	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
+		let existing_pairs = self.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
+
+		let transaction: Vec<_> = delta.into_iter().collect();
+		let root = ::triehash::trie_root(existing_pairs.chain(transaction.iter().cloned())
+			.collect::<HashMap<_, _>>()
+			.into_iter()
+			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+		).0;
+
+		(root, transaction)
+	}
+
+	fn commit(&mut self, changes: Self::Transaction) {
 		for (key, val) in changes {
 			match val {
 				Some(v) => { self.insert(key, v); },
@@ -79,18 +96,6 @@ impl Backend for InMemory {
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-	}
-
-	fn storage_root<I>(&self, delta: I) -> [u8; 32]
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		let existing_pairs = self.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
-
-		::triehash::trie_root(existing_pairs.chain(delta)
-			.collect::<HashMap<_, _>>()
-			.into_iter()
-			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
-		).0
 	}
 }
 
