@@ -16,7 +16,6 @@
 
 //! Polkadot Client data backend
 
-use state_machine;
 use state_machine::backend::Backend as StateBackend;
 use error;
 use primitives::block::{self, Id as BlockId};
@@ -32,7 +31,7 @@ pub trait BlockImportOperation {
 	/// Append block data to the transaction.
 	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()>;
 	/// Inject storage data into the database.
-	fn storage_update(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
+	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 }
@@ -47,6 +46,7 @@ pub trait Backend {
 	type State: StateBackend;
 
 	/// Begin a new block insertion transaction with given parent block id.
+	/// When constructing the genesis, this is called with all-zero hash.
 	fn begin_operation(&self, block: BlockId) -> error::Result<Self::BlockImportOperation>;
 	/// Commit block insertion.
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;

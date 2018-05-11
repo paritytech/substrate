@@ -229,7 +229,7 @@ impl<B, E> Client<B, E> where
 	/// No changes are made.
 	pub fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let mut changes = OverlayedChanges::default();
-		let return_data = state_machine::execute(
+		let (return_data, _) = state_machine::execute(
 			&self.state_at(id)?,
 			&mut changes,
 			&self.executor,
@@ -253,7 +253,7 @@ impl<B, E> Client<B, E> where
 		overlay: &mut OverlayedChanges,
 		f: F
 	) -> error::Result<T> {
-		Ok(runtime_io::with_externalities(&mut Ext { backend: &self.state_at(id)?, overlay }, f))
+		Ok(runtime_io::with_externalities(&mut Ext::new(overlay, &self.state_at(id)?), f))
 	}
 
 	/// Create a new block, built on the head of the chain.

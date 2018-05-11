@@ -17,6 +17,7 @@
 //! Client backend that uses RocksDB database as storage. State is still kept in memory.
 
 extern crate substrate_client as client;
+extern crate ethereum_types;
 extern crate kvdb_rocksdb;
 extern crate kvdb;
 extern crate hashdb;
@@ -51,8 +52,6 @@ use primitives::block::{self, Id as BlockId, HeaderHash};
 use runtime_support::Hashable;
 use state_machine::backend::Backend as StateBackend;
 use state_machine::CodeExecutor;
-
-const STATE_HISTORY: block::Number = 64;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -280,13 +279,15 @@ impl client::backend::BlockImportOperation for BlockImportOperation {
 		Ok(())
 	}
 
-	fn set_storage<I: Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>>(&mut self, changes: I) -> Result<(), client::error::Error> {
-		self.pending_state.commit(changes);
+	fn update_storage(&mut self, update: MemoryDB) -> Result<(), client::error::Error> {
+		self.pending_state.commit(update);
 		Ok(())
 	}
 
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> Result<(), client::error::Error> {
-		self.pending_state.commit(iter.into_iter().map(|(k, v)| (k, Some(v))));
+		// TODO: wipe out existing trie.
+		let (_, update) = self.pending_state.storage_root(iter.into_iter().map(|(k, v)| (k, Some(v))));
+		self.pending_state.commit(update);
 		Ok(())
 	}
 }
@@ -296,8 +297,8 @@ struct Ephemeral<'a> {
 	overlay: &'a mut MemoryDB,
 }
 
-impl HashDB for Ephemeral {
-	fn keys(&self) -> HashMap<H256, i32> {
+impl<'a> HashDB for Ephemeral<'a> {
+	fn keys(&self) -> HashMap<TrieH256, i32> {
 		self.overlay.keys() // TODO: iterate backing
 	}
 
@@ -339,13 +340,16 @@ impl HashDB for Ephemeral {
 	}
 }
 
+/// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub struct DbState {
 	db: Arc<KeyValueDB>,
 	root: TrieH256,
+	updates: MemoryDB,
 }
 
 impl state_machine::Backend for DbState {
-	type Error = TrieError;
+	type Error = client::error::Error;
+	type Transaction = MemoryDB;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let mut read_overlay = MemoryDB::default();
@@ -354,31 +358,14 @@ impl state_machine::Backend for DbState {
 			overlay: &mut read_overlay,
 		};
 
-		TrieDB::new(&eph, &self.root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+		let map_e = |e: Box<TrieError>| ::client::error::Error::from(format!("Trie lookup error: {}", e));
+
+		TrieDB::new(&eph, &self.root).map_err(map_e)?
+			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
 
-	fn commit<I>(&mut self, changes: I)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		let mut write_overlay = MemoryDB::default();
-		let eph = Ephemeral {
-			backing: &*self.db,
-			overlay: &mut write_overlay,
-		};
-
-		let mut trie = TrieDBMut::from_existing(&mut eph, &mut self.root).expect("prior state root to exist"); // TODO: handle gracefully
-		for (key, change) in changes {
-			let result = match change {
-				Some(val) => trie.insert(&key, &val),
-				None => trie.remove(&key),
-			};
-
-			if let Err(e) = result {
-				warn!("Failed to write to trie: {}", e);
-			}
-		}
-
-		trie.commit();
+	fn commit(&mut self, transaction: MemoryDB) {
+		self.updates = transaction;
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -388,13 +375,51 @@ impl state_machine::Backend for DbState {
 			overlay: &mut read_overlay,
 		};
 
-		TrieDB::new(&eph, &self.root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+		let collect_all = || -> Result<_, Box<TrieError>> {
+			let trie = TrieDB::new(&eph, &self.root)?;
+			let mut v = Vec::new();
+			for x in trie.iter()? {
+				let (key, value) = x?;
+				v.push((key.to_vec(), value.to_vec()));
+			}
+
+			Ok(v)
+		};
+
+		match collect_all() {
+			Ok(v) => v,
+			Err(e) => {
+				debug!("Error extracting trie values: {}", e);
+				Vec::new()
+			}
+		}
 	}
 
-	fn storage_root<I>(&self, delta: I) -> [u8; 32]
+	fn storage_root<I>(&self, delta: I) -> ([u8; 32], MemoryDB)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.mem.storage_root(delta)
+		let mut write_overlay = MemoryDB::default();
+		let mut root = self.root;
+		{
+			let mut eph = Ephemeral {
+				backing: &*self.db,
+				overlay: &mut write_overlay,
+			};
+
+			let mut trie = TrieDBMut::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
+			for (key, change) in delta {
+				let result = match change {
+					Some(val) => trie.insert(&key, &val),
+					None => trie.remove(&key), // TODO: archive mode
+				};
+
+				if let Err(e) = result {
+					warn!("Failed to write to trie: {}", e);
+				}
+			}
+		}
+
+		(root.0.into(), write_overlay)
 	}
 }
 
@@ -402,7 +427,6 @@ impl state_machine::Backend for DbState {
 pub struct Backend {
 	db: Arc<KeyValueDB>,
 	blockchain: BlockchainDb,
-	old_states: RwLock<HashMap<BlockKey, state_machine::backend::InMemory>>,
 }
 
 impl Backend {
@@ -427,20 +451,9 @@ impl Backend {
 	fn from_kvdb(db: Arc<KeyValueDB>) -> Result<Backend, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
 
-		//load latest state
-		let mut state = state_machine::backend::InMemory::new();
-		let mut old_states = HashMap::new();
-
-		{
-	 		let iter = db.iter(columns::STATE).map(|(k, v)| (k.to_vec(), Some(v.to_vec())));
-			state.commit(iter);
-			old_states.insert(number_to_db_key(blockchain.meta.read().best_number), state);
-		}
-
 		Ok(Backend {
 			db,
 			blockchain,
-			old_states: RwLock::new(old_states)
 		})
 	}
 }
@@ -458,7 +471,7 @@ impl client::backend::Backend for Backend {
 		})
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> Result<(), client::error::Error> {
+	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> Result<(), client::error::Error> {
 		let mut transaction = DBTransaction::new();
 		if let Some(pending_block) = operation.pending_block {
 			let hash: block::HeaderHash = pending_block.header.blake2_256().into();
@@ -475,16 +488,13 @@ impl client::backend::Backend for Backend {
 			if pending_block.is_best {
 				transaction.put(columns::META, meta::BEST_BLOCK, &key);
 			}
-			for (key, val) in operation.pending_state.changes.into_iter() {
-				match val {
-					Some(v) => { transaction.put(columns::STATE, &key, &v); },
-					None => { transaction.delete(columns::STATE, &key); },
+			for (key, (val, rc)) in operation.pending_state.updates.drain() {
+				if rc > 0 {
+					transaction.put(columns::STATE, &key.0[..], &val);
+
+				} else {
+					transaction.delete(columns::STATE, &key.0[..]);
 				}
-			}
-			let mut states = self.old_states.write();
-			states.insert(key, operation.pending_state.mem);
-			if number >= STATE_HISTORY {
-				states.remove(&number_to_db_key(number - STATE_HISTORY));
 			}
 			debug!("DB Commit {:?} ({})", hash, number);
 			self.db.write(transaction).map_err(db_err)?;
@@ -498,11 +508,31 @@ impl client::backend::Backend for Backend {
 	}
 
 	fn state_at(&self, block: BlockId) -> Result<Self::State, client::error::Error> {
-		if let Some(state) = self.blockchain.id(block)?.and_then(|id| self.old_states.read().get(&id).cloned()) {
-			Ok(DbState { mem: state, changes: Vec::new() })
-		} else {
-			Err(client::error::ErrorKind::UnknownBlock(block).into())
+		use client::blockchain::Backend as BcBackend;
+
+		// special case for genesis initialization
+		match block {
+			BlockId::Hash(h) if h == Default::default() => {
+				let mut root = TrieH256::default();
+				let mut db = MemoryDB::default();
+				TrieDBMut::new(&mut db, &mut root);
+
+				return Ok(DbState {
+					db: self.db.clone(),
+					updates: Default::default(),
+					root,
+				})
+			}
+			_ => {}
 		}
+
+		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
+			DbState {
+				db: self.db.clone(),
+				updates: Default::default(),
+				root: hdr.state_root.0.into(),
+			}
+		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(block).into()))
 	}
 }
 
@@ -516,11 +546,17 @@ mod tests {
 	#[test]
 	fn block_hash_inserted_correctly() {
 		let db = Backend::new_test();
-		for i in 1..10 {
+		for i in 0..10 {
 			assert!(db.blockchain().hash(i).unwrap().is_none());
 
 			{
-				let mut op = db.begin_operation(BlockId::Number(i - 1)).unwrap();
+				let id = if i == 0 {
+					BlockId::Hash(Default::default())
+				} else {
+					BlockId::Number(i - 1)
+				};
+
+				let mut op = db.begin_operation(id).unwrap();
 				let header = block::Header {
 					number: i,
 					parent_hash: Default::default(),
@@ -535,7 +571,6 @@ mod tests {
 					None,
 					true,
 				).unwrap();
-				op.set_storage(vec![].into_iter()).unwrap();
 				db.commit_operation(op).unwrap();
 			}
 
