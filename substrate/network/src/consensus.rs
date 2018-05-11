@@ -18,13 +18,16 @@
 
 use std::collections::{HashMap, HashSet};
 use futures::sync::{oneshot, mpsc};
+use std::time::{Instant, Duration};
 use io::SyncIo;
 use protocol::Protocol;
 use network::PeerId;
-use primitives::{Hash, block::HeaderHash, block::Id as BlockId};
-use client::BlockStatus;
+use primitives::{Hash, block::HeaderHash, block::Id as BlockId, block::Header};
 use message::{self, Message};
 use runtime_support::Hashable;
+
+// TODO: Add additional spam/DoS attack protection.
+const MESSAGE_LIFETIME_SECONDS: u64 = 600;
 
 struct CandidateRequest {
 	id: message::RequestId,
@@ -43,13 +46,14 @@ pub struct Consensus {
 	our_candidate: Option<(Hash, Vec<u8>)>,
 	statement_sink: Option<mpsc::UnboundedSender<message::Statement>>,
 	bft_message_sink: Option<(mpsc::UnboundedSender<message::LocalizedBftMessage>, Hash)>,
-	messages: Vec<(Hash, message::Message)>,
+	messages: Vec<(Hash, Instant, message::Message)>,
 	message_hashes: HashSet<Hash>,
+	last_block_hash: HeaderHash,
 }
 
 impl Consensus {
 	/// Create a new instance.
-	pub fn new() -> Consensus {
+	pub fn new(best_hash: HeaderHash) -> Consensus {
 		Consensus {
 			peers: HashMap::new(),
 			our_candidate: None,
@@ -57,6 +61,7 @@ impl Consensus {
 			bft_message_sink: None,
 			messages: Default::default(),
 			message_hashes: Default::default(),
+			last_block_hash: best_hash,
 		}
 	}
 
@@ -73,7 +78,7 @@ impl Consensus {
 			// Send out all known messages.
 			// TODO: limit by size
 			let mut known_messages = HashSet::new();
-			for &(ref hash, ref message) in self.messages.iter() {
+			for &(ref hash, _, ref message) in self.messages.iter() {
 				known_messages.insert(hash.clone());
 				protocol.send_message(io, peer_id, message.clone());
 			}
@@ -95,7 +100,7 @@ impl Consensus {
 
 	fn register_message(&mut self, hash: Hash, message: message::Message) {
 		if self.message_hashes.insert(hash) {
-			self.messages.push((hash, message));
+			self.messages.push((hash, Instant::now(), message));
 		}
 	}
 
@@ -140,17 +145,18 @@ impl Consensus {
 			return;
 		}
 
-		match protocol.chain().block_status(&BlockId::Hash(message.parent_hash)) {
-			Err(e) => {
+		match (protocol.chain().info(), protocol.chain().header(&BlockId::Hash(message.parent_hash))) {
+			(_, Err(e)) | (Err(e), _) => {
 				debug!(target:"sync", "Error reading blockchain: {:?}", e);
 				return;
 			},
-			Ok(status) => {
-				if status != BlockStatus::InChain {
-					trace!(target:"sync", "Ignored unknown parent BFT message from {}, hash={}", peer_id, message.parent_hash);
+			(Ok(info), Ok(Some(header))) => {
+				if header.number < info.chain.best_number {
+					trace!(target:"sync", "Ignored ancient BFT message from {}, hash={}", peer_id, message.parent_hash);
 					return;
 				}
 			},
+			(Ok(_), Ok(None)) => {},
 		}
 
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
@@ -179,7 +185,7 @@ impl Consensus {
 	pub fn bft_messages(&mut self, parent_hash: Hash) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage>{
 		let (sink, stream) = mpsc::unbounded();
 
-		for &(_, ref message) in self.messages.iter() {
+		for &(_, _, ref message) in self.messages.iter() {
 			let bft_message = match *message {
 				Message::BftMessage(ref msg) => msg,
 				_ => continue,
@@ -277,23 +283,37 @@ impl Consensus {
 		self.peers.remove(&peer_id);
 	}
 
-	pub fn collect_garbage(&mut self, best_block_parent: Option<HeaderHash>) {
-		let before = self.messages.len();
+	pub fn collect_garbage(&mut self, best_hash_and_header: Option<(HeaderHash, &Header)>) {
 		let hashes = &mut self.message_hashes;
-		self.messages.retain(|&(ref hash, ref message)| {
-				best_block_parent.map_or(true, |parent_hash| {
-					if match *message {
-						Message::BftMessage(ref msg) => msg.parent_hash != parent_hash,
-						Message::Statement(ref msg) => msg.parent_hash != parent_hash,
-						_ => true,
-					} {
-						hashes.remove(hash);
-						true
-					} else {
-						false
-					}
-				})
-		});
+		let last_block_hash = &mut self.last_block_hash;
+		let before = self.messages.len();
+		let (best_hash, best_header) = best_hash_and_header.map(|(h, header)| (Some(h), Some(header))).unwrap_or((None, None));
+		if best_header.as_ref().map_or(false, |header| header.parent_hash != *last_block_hash) {
+			trace!(target:"sync", "Clearing conensus message cache");
+			self.messages.clear();
+			hashes.clear();
+		} else {
+			let expiration = Duration::from_secs(MESSAGE_LIFETIME_SECONDS);
+			let now = Instant::now();
+			if let Some(hash) = best_hash {
+				*last_block_hash = hash;
+			}
+			self.messages.retain(|&(ref hash, timestamp, ref message)| {
+					timestamp < now + expiration ||
+					best_header.map_or(true, |header| {
+						if match *message {
+							Message::BftMessage(ref msg) => msg.parent_hash != header.parent_hash,
+							Message::Statement(ref msg) => msg.parent_hash != header.parent_hash,
+							_ => true,
+						} {
+							hashes.remove(hash);
+							true
+						} else {
+							false
+						}
+					})
+			});
+		}
 		if self.messages.len() != before {
 			trace!(target:"sync", "Cleaned up {} stale messages", before - self.messages.len());
 		}
