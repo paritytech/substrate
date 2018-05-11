@@ -23,7 +23,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client;
 use client::block_builder::BlockBuilder;
-use primitives::block::{Id as BlockId, ExtrinsicHash};
+use primitives::block::{Id as BlockId, ExtrinsicHash, HeaderHash};
 use primitives;
 use io::SyncIo;
 use protocol::Protocol;
@@ -186,6 +186,11 @@ impl Peer {
 		} else {
 			self.generate_blocks(count, |_| ());
 		}
+	}
+
+	pub fn genesis_hash(&self) -> HeaderHash {
+		let info = self.client.info().expect("In-mem client does not fail");
+		info.chain.genesis_hash
 	}
 }
 
