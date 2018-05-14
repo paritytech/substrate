@@ -445,8 +445,10 @@ impl Protocol {
 		}
 	}
 
-	/// Called when peer sends us new transactions
+	/// Called when we propagate ready transactions to peers.
 	pub fn propagate_transactions(&self, io: &mut SyncIo) {
+		debug!(target: "sync", "Propagating transactions");
+
 		// Accept transactions only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
 			return;
