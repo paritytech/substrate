@@ -114,13 +114,13 @@ impl ChainSync {
 					io.disable_peer(peer_id);
 				},
 				(Ok(BlockStatus::Unknown), 0) => {
-					debug!(target:"sync", "New peer with unkown genesis hash {} ({}).", info.best_hash, info.best_number);
+					debug!(target:"sync", "New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
 					io.disable_peer(peer_id);
 				},
 				(Ok(BlockStatus::Unknown), _) => {
 					let our_best = self.best_queued_number;
 					if our_best > 0 {
-						debug!(target:"sync", "New peer with unkown best hash {} ({}), searching for common ancestor.", info.best_hash, info.best_number);
+						debug!(target:"sync", "New peer with unknown best hash {} ({}), searching for common ancestor.", info.best_hash, info.best_number);
 						self.peers.insert(peer_id, PeerSync {
 							common_hash: self.genesis_hash,
 							common_number: 0,
@@ -187,13 +187,15 @@ impl ChainSync {
 									trace!(target:"sync", "Found common ancestor for peer {}: {} ({})", peer_id, block.hash, n);
 									vec![]
 								},
-								Ok(_) if n > 0 => {
+								Ok(our_best) if n > 0 => {
+									trace!(target:"sync", "Ancestry block mismatch for peer {}: theirs: {} ({}), ours: {:?}", peer_id, block.hash, n, our_best);
 									let n = n - 1;
 									peer.state = PeerSyncState::AncestorSearch(n);
 									Self::request_ancestry(io, protocol, peer_id, n);
 									return;
 								},
 								Ok(_) => { // genesis mismatch
+									trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", peer_id);
 									io.disable_peer(peer_id);
 									return;
 								},
@@ -326,7 +328,7 @@ impl ChainSync {
 			let stale = header.number <= self.best_queued_number;
 			if stale {
 				if !self.is_known_or_already_downloading(protocol, &header.parent_hash) {
-					trace!(target: "sync", "Ignoring unkown stale block announce from {}: {} {:?}", peer_id, hash, header);
+					trace!(target: "sync", "Ignoring unknown stale block announce from {}: {} {:?}", peer_id, hash, header);
 				} else {
 					trace!(target: "sync", "Downloading new stale block announced from {}: {} {:?}", peer_id, hash, header);
 					self.download_stale(io, protocol, peer_id, &hash);
