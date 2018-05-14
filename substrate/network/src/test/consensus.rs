@@ -34,16 +34,18 @@ fn bft_messages_include_those_sent_before_asking_for_stream() {
 		signature: Default::default(),
 	}));
 
+	let parent_hash = peer.genesis_hash();
+
 	let localized = LocalizedBftMessage {
 		message: bft_message,
-		parent_hash: [1; 32].into(),
+		parent_hash: parent_hash,
 	};
 
 
 	let as_bytes = ::serde_json::to_vec(&Message::BftMessage(localized.clone())).unwrap();
 	peer.sync.handle_packet(&mut io, 1, &as_bytes[..]);
 
-	let stream = peer.sync.bft_messages([1; 32].into());
+	let stream = peer.sync.bft_messages(parent_hash);
 
 	assert_eq!(stream.wait().next(), Some(Ok(localized)));
 }
