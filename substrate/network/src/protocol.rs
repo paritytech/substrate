@@ -434,7 +434,7 @@ impl Protocol {
 			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
 			return;
 		}
-		trace!(target: "sync", "Received {} transactions from {}", peer_id, transactions.len());
+		trace!(target: "sync", "Received {} transactions from {}", transactions.len(), peer_id);
 		let mut peers = self.peers.write();
 		if let Some(ref mut peer) = peers.get_mut(&peer_id) {
 			for t in transactions {
