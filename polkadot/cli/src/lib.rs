@@ -82,17 +82,15 @@ impl substrate_rpc::author::AuthorApi for RpcTransactionPool {
 		use codec::Slicable;
 
 		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
-		let (decoded, encoded_bytes) = xt.using_encoded(|s| {
-				UncheckedExtrinsic::decode(&mut &s[..]).map(|d| (d, s.to_vec()))
-			})
+		let decoded = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
 			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?;
+
 		info!("Correctly formatted: {:?}", decoded);
 
-		let hash = self.inner.lock().import(decoded)
-			.map(|v| v.hash().0.into())
+		self.inner.lock().import(decoded)
 			.map_err(|_| substrate_rpc::author::error::ErrorKind::PoolError)?;
 
-		self.network.on_new_transactions(&[(hash, encoded_bytes)]);
+		self.network.trigger_repropagate();
 		Ok(())
 	}
 }

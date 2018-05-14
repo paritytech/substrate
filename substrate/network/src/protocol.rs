@@ -446,11 +446,14 @@ impl Protocol {
 	}
 
 	/// Called when peer sends us new transactions
-	pub fn propagate_transactions(&self, io: &mut SyncIo, transactions: &[(ExtrinsicHash, Vec<u8>)]) {
+	pub fn propagate_transactions(&self, io: &mut SyncIo) {
 		// Accept transactions only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
 			return;
 		}
+
+		let transactions = self.transaction_pool.transactions();
+
 		let mut peers = self.peers.write();
 		for (peer_id, ref mut peer) in peers.iter_mut() {
 			let to_send: Vec<_> = transactions.iter().filter_map(|&(hash, ref t)|
