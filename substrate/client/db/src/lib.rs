@@ -491,7 +491,6 @@ impl client::backend::Backend for Backend {
 			for (key, (val, rc)) in operation.pending_state.updates.drain() {
 				if rc > 0 {
 					transaction.put(columns::STATE, &key.0[..], &val);
-
 				} else {
 					transaction.delete(columns::STATE, &key.0[..]);
 				}
