@@ -34,10 +34,8 @@ use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use codec::Slicable;
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, Timestamp};
-use substrate_primitives::block::Extrinsic;
 use runtime::{Block, UncheckedExtrinsic, TimestampCall, Call};
 use substrate_runtime_primitives::traits::Checkable;
 use transaction_pool::{Pool, Readiness};

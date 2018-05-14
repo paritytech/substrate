@@ -16,8 +16,6 @@
 
 //! Substrate block-author/full-node API.
 
-use std::sync::Arc;
-use parking_lot::Mutex;
 use primitives::block::Extrinsic;
 
 pub mod error;
