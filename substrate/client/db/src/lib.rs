@@ -576,4 +576,82 @@ mod tests {
 			assert!(db.blockchain().hash(i).unwrap().is_some())
 		}
 	}
+
+	#[test]
+	fn set_state_data() {
+		let db = Backend::new_test();
+		{
+			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
+			let mut header = block::Header {
+				number: 0,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage = vec![
+				(vec![1, 3, 5], vec![2, 4, 6]),
+				(vec![1, 2, 3], vec![9, 9, 9]),
+			];
+
+			header.state_root = op.pending_state.storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y)))
+			).0.into();
+
+			op.reset_storage(storage.iter().cloned()).unwrap();
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				true
+			).unwrap();
+
+			db.commit_operation(op).unwrap();
+
+			let state = db.state_at(BlockId::Number(0)).unwrap();
+
+			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), Some(vec![2, 4, 6]));
+			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
+			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), None);
+
+		}
+
+		{
+			let mut op = db.begin_operation(BlockId::Number(0)).unwrap();
+			let mut header = block::Header {
+				number: 1,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage = vec![
+				(vec![1, 3, 5], None),
+				(vec![5, 5, 5], Some(vec![4, 5, 6])),
+			];
+
+			let (root, overlay) = op.pending_state.storage_root(storage.iter().cloned());
+			op.update_storage(overlay).unwrap();
+			header.state_root = root.into();
+
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				true
+			).unwrap();
+
+			db.commit_operation(op).unwrap();
+
+			let state = db.state_at(BlockId::Number(1)).unwrap();
+
+			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
+			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
+			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
+		}
+	}
 }
