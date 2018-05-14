@@ -275,7 +275,7 @@ pub struct ClientBlockBuilder<S> {
 impl<S: state_machine::Backend> ClientBlockBuilder<S>
 	where S::Error: Into<client::error::Error>
 {
-	// executes a extrinsic, inherent or otherwise, without appending to the list
+	// initialises a block ready to allow extrinsics to be applied.
 	fn initialise_block(&mut self) -> Result<()> {
 		let result = {
 			let mut ext = state_machine::Ext::new(&mut self.changes, &self.state);
@@ -299,7 +299,7 @@ impl<S: state_machine::Backend> ClientBlockBuilder<S>
 		}
 	}
 
-	// executes a extrinsic, inherent or otherwise, without appending to the list
+	// executes a extrinsic, inherent or otherwise, without appending to the list.
 	fn apply_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
 		let result = {
 			let mut ext = state_machine::Ext::new(&mut self.changes, &self.state);
