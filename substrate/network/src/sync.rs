@@ -230,6 +230,18 @@ impl ChainSync {
 					let hash = header_hash(&header);
 					let parent = header.parent_hash;
 					let is_best = best_seen.as_ref().map_or(false, |n| number >= *n);
+
+					// check whether the block is known before importing.
+					match protocol.chain().block_status(&BlockId::Hash(hash)) {
+						Ok(BlockStatus::InChain) => continue,
+						Ok(_) => {},
+						Err(e) => {
+							debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
+							self.restart(io, protocol);
+							return;
+						}
+					}
+
 					let result = protocol.chain().import(
 						is_best,
 						header,
