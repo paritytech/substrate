@@ -17,7 +17,6 @@
 extern crate ed25519;
 extern crate ethereum_types;
 extern crate substrate_codec as codec;
-extern crate substrate_rpc;
 extern crate substrate_primitives as substrate_primitives;
 extern crate substrate_runtime_primitives as substrate_runtime_primitives;
 extern crate polkadot_runtime as runtime;
@@ -35,10 +34,8 @@ use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use codec::Slicable;
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, Timestamp};
-use substrate_primitives::block::Extrinsic;
 use runtime::{Block, UncheckedExtrinsic, TimestampCall, Call};
 use substrate_runtime_primitives::traits::Checkable;
 use transaction_pool::{Pool, Readiness};
@@ -377,19 +374,6 @@ impl TransactionPool {
 	/// Returns light status of the pool.
 	pub fn light_status(&self) -> LightStatus {
 		self.inner.light_status()
-	}
-}
-
-impl substrate_rpc::author::AsyncAuthorApi for TransactionPool {
-	fn submit_extrinsic(&mut self, xt: Extrinsic) -> substrate_rpc::author::error::Result<()> {
-		use substrate_primitives::hexdisplay::HexDisplay;
-		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
-		let xt = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
-			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?;
-		info!("Correctly formatted: {:?}", xt);
-		self.import(xt)
-			.map(|_| ())
-			.map_err(|_| substrate_rpc::author::error::ErrorKind::PoolError.into())
 	}
 }
 
