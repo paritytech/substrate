@@ -289,7 +289,6 @@ impl<B, E> Client<B, E> where
 		body: Option<block::Body>,
 	) -> error::Result<ImportResult> {
 		// TODO: import lock
-		// TODO: validate block
 		// TODO: import justification.
 		let (header, justification) = header.into_inner();
 		match self.backend.blockchain().status(BlockId::Hash(header.parent_hash))? {
