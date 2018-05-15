@@ -154,8 +154,8 @@ fn poc_1_testnet_config() -> ChainConfig {
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: initial_authorities.clone(),
-			transaction_fee: 100,
-			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
+			transaction_fee: 100.into(),
+			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60).into())).collect(),
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
 			bonding_duration: 90,	// 90 days per bond.
@@ -163,13 +163,13 @@ fn poc_1_testnet_config() -> ChainConfig {
 		democracy: Some(DemocracyConfig {
 			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
 			voting_period: 120 * 24 * 28,	// 4 weeks to discuss & vote on an active referendum
-			minimum_deposit: 1000,	// 1000 as the minimum deposit for a referendum
+			minimum_deposit: 1000.into(),	// 1000 as the minimum deposit for a referendum
 		}),
 		council: Some(CouncilConfig {
 			active_council: vec![],
-			candidacy_bond: 1000,	// 1000 to become a council candidate
-			voter_bond: 100,		// 100 down to vote for a candidate
-			present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
+			candidacy_bond: 1000.into(),	// 1000 to become a council candidate
+			voter_bond: 100.into(),		// 100 down to vote for a candidate
+			present_slash_per_voter: 1.into(),	// slash by 1 per voter for an invalid presentation.
 			carry_count: 24,		// carry over the 24 runners-up to the next council election
 			presentation_duration: 120 * 24,	// one day for presenting winners.
 			approval_voting_period: 7 * 120 * 24,	// one week period between possible council elections.
@@ -212,8 +212,8 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: initial_authorities.clone(),
-			transaction_fee: 1,
-			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
+			transaction_fee: 1.into(),
+			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60).into())).collect(),
 			validator_count: 2,
 			sessions_per_era: 5,
 			bonding_duration: 2,
@@ -221,13 +221,13 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 		democracy: Some(DemocracyConfig {
 			launch_period: 9,
 			voting_period: 18,
-			minimum_deposit: 10,
+			minimum_deposit: 10.into(),
 		}),
 		council: Some(CouncilConfig {
 			active_council: endowed_accounts.iter().filter(|a| initial_authorities.iter().find(|b| a == b).is_none()).map(|a| (a.clone(), 1000000)).collect(),
-			candidacy_bond: 10,
-			voter_bond: 2,
-			present_slash_per_voter: 1,
+			candidacy_bond: 10.into(),
+			voter_bond: 2.into(),
+			present_slash_per_voter: 1.into(),
 			carry_count: 4,
 			presentation_duration: 10,
 			approval_voting_period: 20,

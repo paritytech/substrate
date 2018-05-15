@@ -76,4 +76,4 @@ pub type Signature = runtime_primitives::Ed25519Signature;
 pub type Timestamp = u64;
 
 /// The balance of an account.
-pub type Balance = u64;
+pub type Balance = runtime_primitives::U128;
