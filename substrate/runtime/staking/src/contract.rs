@@ -22,10 +22,16 @@ use rstd::prelude::*;
 use sandbox;
 use {AccountDb, Module, OverlayAccountDb, Trait};
 
+use parity_wasm::elements::{self, External, MemoryType};
+use pwasm_utils;
+use pwasm_utils::rules;
+
 struct ExecutionExt<'a, 'b: 'a, T: Trait + 'b> {
 	account_db: &'a mut OverlayAccountDb<'b, T>,
 	account: T::AccountId,
 	memory: sandbox::Memory,
+	gas_used: u64,
+	gas_limit: u64,
 }
 impl<'a, 'b: 'a, T: Trait> ExecutionExt<'a, 'b, T> {
 	fn account(&self) -> &T::AccountId {
@@ -40,12 +46,29 @@ impl<'a, 'b: 'a, T: Trait> ExecutionExt<'a, 'b, T> {
 	fn memory(&self) -> &sandbox::Memory {
 		&self.memory
 	}
+	/// Account for used gas.
+	///
+	/// Returns `false` if there is not enough gas or addition of the specified
+	/// amount of gas has lead to overflow. On success returns `true`.
+	///
+	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
+	fn charge_gas(&mut self, amount: u64) -> bool {
+		match self.gas_used.checked_add(amount) {
+			None => false,
+			Some(val) if val > self.gas_limit => false,
+			Some(val) => {
+				self.gas_used = val;
+				true
+			}
+		}
+	}
 }
 
 pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 	code: &[u8],
 	account: &T::AccountId,
 	account_db: &'a mut OverlayAccountDb<'b, T>,
+	gas_limit: u64,
 ) -> bool {
 	// ext_put_storage(location_ptr: u32, value_non_null: u32, value_ptr: u32);
 	//
@@ -130,6 +153,16 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		Ok(sandbox::ReturnValue::Unit)
 	}
 
+	// ext_gas(gas: u32)
+	fn ext_gas<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+		let amount = args[0].as_i32().unwrap() as u32;
+		if e.charge_gas(amount as u64) {
+			Ok(sandbox::ReturnValue::Unit)
+		} else {
+			Err(sandbox::HostError)
+		}
+	}
+
 	// ext_create(code_ptr: u32, code_len: u32, value: u32)
 	fn ext_create<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let code_ptr = args[0].as_i32().unwrap() as u32;
@@ -153,9 +186,67 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		Ok(sandbox::ReturnValue::Unit)
 	}
 
-	// TODO: Inspect the binary to extract the initial page count.
-	let memory = match sandbox::Memory::new(1, None) {
-		Ok(memory) => memory,
+	// Deserialize module into a parity-wasm model.
+	let deserialized_module: elements::Module = match elements::deserialize_buffer(code) {
+		Ok(m) => m,
+		Err(_) => return false,
+	};
+
+	// In this runtime we only allow wasm module to import memory from the environment.
+	// Memory section contains declarations of internal linear memories, so if we find one
+	// we reject such a module.
+	if deserialized_module.memory_section().map_or(false, |ms| ms.entries().len() > 0) {
+		return false;
+	}
+
+	// config
+	let max_stack_height = 64*1024;
+	let grow_mem_cost: u32 = 1;
+	let regular_op_cost: u32 = 1;
+
+	let gas_rules = rules::Set::new(
+			regular_op_cost,
+			Default::default()
+		)
+		.with_grow_cost(grow_mem_cost)
+		.with_forbidden_floats();
+
+	let contract_module = match pwasm_utils::inject_gas_counter(
+		deserialized_module,
+		&gas_rules,
+	) {
+		Ok(m) => m,
+		Err(_) => return false,
+	};
+
+	let contract_module = match pwasm_utils::stack_height::inject_limiter(
+		contract_module,
+		max_stack_height,
+	) {
+		Ok(m) => m,
+		Err(_) => return false,
+	};
+
+	// Inspect the module to extract the initial and maximum page count.
+	let memory = {
+		let mem = match find_mem_import(&contract_module) {
+			Some(memory_type) => {
+				// TODO: Check whether requested memory size is reasonable
+				sandbox::Memory::new(
+					memory_type.limits().initial(),
+					memory_type.limits().maximum(),
+				)
+			}
+			None => sandbox::Memory::new(0, Some(0)),
+		};
+		match mem {
+			Ok(mem) => mem,
+			Err(_) => return false,
+		}
+	};
+
+	let instrumented_code = match elements::serialize(contract_module) {
+		Ok(m) => m,
 		Err(_) => return false,
 	};
 
@@ -167,15 +258,33 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 	// TODO: ext_balance, ext_address, ext_callvalue, etc.
 	imports.add_memory("env", "memory", memory.clone());
 
+	// TODO:
+	imports.add_host_func("env", "gas", ext_gas::<T>);
+
 	let mut exec_ext = ExecutionExt {
 		account: account.clone(),
 		account_db,
 		memory,
+		gas_limit,
+		gas_used: 0,
 	};
 
-	let mut instance = match sandbox::Instance::new(code, &imports, &mut exec_ext) {
+	let mut instance = match sandbox::Instance::new(&instrumented_code, &imports, &mut exec_ext) {
 		Ok(instance) => instance,
 		Err(_err) => return false,
 	};
 	instance.invoke(b"call", &[], &mut exec_ext).is_ok()
+}
+
+/// Find the memory import entry and return it's descriptor.
+fn find_mem_import(m: &elements::Module) -> Option<&MemoryType> {
+	let import_section = m.import_section()?;
+	for import in import_section.entries() {
+		if let ("env", "memory", &External::Memory(ref memory_type)) =
+			(import.module(), import.field(), import.external())
+		{
+			return Some(memory_type);
+		}
+	}
+	None
 }

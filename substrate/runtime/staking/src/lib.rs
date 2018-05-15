@@ -38,6 +38,8 @@ extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
+extern crate pwasm_utils;
+extern crate parity_wasm;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
@@ -566,6 +568,8 @@ impl<T: Trait> Module<T> {
 		assert!(to_balance + value > to_balance); // no overflow
 
 		// TODO: a fee, based upon gaslimit/gasprice.
+		let gas_limit = 100_000;
+
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
 
@@ -583,7 +587,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			// TODO: logging (logs are just appended into a notable storage-based vector and cleared every
 			// block).
-			contract::execute(&dest_code, dest, &mut overlay)
+			contract::execute(&dest_code, dest, &mut overlay, gas_limit)
 		};
 
 		if should_commit {
@@ -1164,6 +1168,86 @@ mod tests {
 					0, 0, 0, 0, 0, 0, 0, 0,
 				]
 			);
+		});
+	}
+
+	#[test]
+	fn contract_out_of_gas() {
+		// This code should make 100_000 iterations so it should
+		// consume more than 100_000 units of gas.
+		let code_loop = wabt::wat2wasm(
+			r#"
+(module
+	(func (export "call")
+		(local $i i32)
+
+		loop $l
+			;; $i = $i + 1
+			(set_local $i
+				(i32.add
+					(get_local $i)
+					(i32.const 1)
+				)
+			)
+
+			;; if $i < 100_000u32: goto $l
+			(br_if $l
+				(i32.lt_u
+					(get_local $i)
+					(i32.const 100000)
+				)
+			)
+		end
+	)
+)
+		"#,
+		).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			// Set initial balances.
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+
+			<CodeOf<Test>>::insert(1, code_loop.to_vec());
+
+			// Transfer some balance from 0 to 1. This will trigger execution
+			// of the smart-contract code at address 1.
+			Staking::transfer(&0, 1, 11);
+
+			// The balance should remain unchanged since we are expecting
+			// out-of-gas error which will revert transfer.
+			assert_eq!(Staking::balance(&0), 111);
+		});
+	}
+
+	#[test]
+	fn contract_internal_mem() {
+		let code_mem = wabt::wat2wasm(
+			r#"
+(module
+	;; Internal memory is not allowed.
+	(memory 1 1)
+
+	(func (export "call")
+		nop
+	)
+)
+		"#,
+		).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			// Set initial balances.
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+
+			<CodeOf<Test>>::insert(1, code_mem.to_vec());
+
+			// Transfer some balance from 0 to 1.
+			Staking::transfer(&0, 1, 11);
+
+			// The balance should remain unchanged since we are expecting
+			// validation error caused by internal memory declaration.
+			assert_eq!(Staking::balance(&0), 111);
 		});
 	}
 }
