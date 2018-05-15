@@ -23,10 +23,6 @@ extern crate substrate_primitives as primitives;
 #[cfg_attr(test, macro_use)]
 extern crate hex_literal;
 
-extern crate hashdb;
-extern crate memorydb;
-
-extern crate patricia_trie;
 extern crate triehash;
 
 extern crate byteorder;
