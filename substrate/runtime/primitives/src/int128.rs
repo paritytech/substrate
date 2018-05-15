@@ -17,8 +17,8 @@
 //! 128-bit shims so that we can make it `serde::Serialize`-able, since Serde is borked for
 //! the new 128-bit datatypes.
 
-use serde::{Serialize, Serializer};
-use serde::ser::SerializeTuple;
+#[cfg(feature = "std")]
+use serde::ser::{Serialize, Serializer, SerializeTuple};
 use codec::{Slicable, Input};
 use integer_sqrt::IntegerSquareRoot;
 use num_traits::{Zero, One, Bounded};
@@ -111,6 +111,7 @@ macro_rules! impl_for {
 			}
 		}
 
+		#[cfg(feature = "std")]
 		impl Serialize for $type {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 			where
