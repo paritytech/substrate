@@ -125,7 +125,7 @@ impl BlockCollection {
 		};
 
 		// crop to peers best
-		if range.start >= peer_best {
+		if range.start > peer_best {
 			trace!(target: "sync", "Out of range for peer {} ({} vs {})", peer_id, range.start, peer_best);
 			return None;
 		}

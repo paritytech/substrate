@@ -157,6 +157,13 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(n);
 	}
 
+	/// Set the random seed to something in particular. Can be used as an alternative to
+	/// `initialise` for tests that don't need to bother with the other environment entries.
+	#[cfg(any(feature = "std", test))]
+	pub fn set_random_seed(seed: T::Hash) {
+		<RandomSeed<T>>::put(seed);
+	}
+
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_index(who: &T::AccountId) {
 		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::one());

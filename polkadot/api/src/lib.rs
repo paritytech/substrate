@@ -218,10 +218,7 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 	}
 
 	fn duty_roster(&self, at: &CheckedId) -> Result<DutyRoster> {
-		with_runtime!(self, at, || {
-			let random_seed = ::runtime::System::random_seed();
-			::runtime::Parachains::calculate_duty_roster(random_seed)
-		})
+		with_runtime!(self, at, ::runtime::Parachains::calculate_duty_roster)
 	}
 
 	fn timestamp(&self, at: &CheckedId) -> Result<Timestamp> {
@@ -466,5 +463,13 @@ mod tests {
 	#[test]
 	fn fails_to_check_id_for_unknown_block() {
 		assert!(client().check_id(BlockId::Number(100)).is_err());
+	}
+
+	#[test]
+	fn gets_random_seed_with_genesis() {
+		let client = client();
+
+		let id = client.check_id(BlockId::Number(0)).unwrap();
+		assert!(client.random_seed(&id).is_ok());
 	}
 }

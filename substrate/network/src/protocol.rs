@@ -36,7 +36,7 @@ use io::SyncIo;
 use error;
 use super::header_hash;
 
-const REQUEST_TIMEOUT_SEC: u64 = 15;
+const REQUEST_TIMEOUT_SEC: u64 = 40;
 const PROTOCOL_VERSION: u32 = 0;
 
 // Maximum allowed entries in `BlockResponse`
@@ -114,12 +114,13 @@ impl Protocol {
 	/// Create a new instance.
 	pub fn new(config: ProtocolConfig, chain: Arc<Client>, transaction_pool: Arc<TransactionPool>) -> error::Result<Protocol>  {
 		let info = chain.info()?;
+		let best_hash = info.chain.best_hash;
 		let protocol = Protocol {
 			config: config,
 			chain: chain,
 			genesis_hash: info.chain.genesis_hash,
 			sync: RwLock::new(ChainSync::new(&info)),
-			consensus: Mutex::new(Consensus::new()),
+			consensus: Mutex::new(Consensus::new(best_hash)),
 			peers: RwLock::new(HashMap::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
 			transaction_pool: transaction_pool,
@@ -317,8 +318,8 @@ impl Protocol {
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn bft_messages(&self) -> BftMessageStream {
-		self.consensus.lock().bft_messages()
+	pub fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
+		self.consensus.lock().bft_messages(parent_hash)
 	}
 
 	/// See `ConsensusService` trait.
@@ -344,7 +345,7 @@ impl Protocol {
 	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.maintain_peers(io);
-		self.consensus.lock().collect_garbage();
+		self.consensus.lock().collect_garbage(None);
 	}
 
 	fn maintain_peers(&self, io: &mut SyncIo) {
@@ -387,6 +388,8 @@ impl Protocol {
 			return;
 		}
 
+		let mut sync = self.sync.write();
+		let mut consensus = self.consensus.lock();
 		{
 			let mut peers = self.peers.write();
 			let mut handshaking_peers = self.handshaking_peers.write();
@@ -420,8 +423,8 @@ impl Protocol {
 			handshaking_peers.remove(&peer_id);
 			debug!(target: "sync", "Connected {} {}", peer_id, io.peer_info(peer_id));
 		}
-		self.sync.write().new_peer(io, self, peer_id);
-		self.consensus.lock().new_peer(io, self, peer_id, &status.roles);
+		sync.new_peer(io, self, peer_id);
+		consensus.new_peer(io, self, peer_id, &status.roles);
 	}
 
 	/// Called when peer sends us new transactions
@@ -431,7 +434,7 @@ impl Protocol {
 			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
 			return;
 		}
-		trace!(target: "sync", "Received {} transactions from {}", peer_id, transactions.len());
+		trace!(target: "sync", "Received {} transactions from {}", transactions.len(), peer_id);
 		let mut peers = self.peers.write();
 		if let Some(ref mut peer) = peers.get_mut(&peer_id) {
 			for t in transactions {
@@ -442,12 +445,17 @@ impl Protocol {
 		}
 	}
 
-	/// Called when peer sends us new transactions
-	pub fn propagate_transactions(&self, io: &mut SyncIo, transactions: &[(ExtrinsicHash, Vec<u8>)]) {
+	/// Called when we propagate ready transactions to peers.
+	pub fn propagate_transactions(&self, io: &mut SyncIo) {
+		debug!(target: "sync", "Propagating transactions");
+
 		// Accept transactions only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
 			return;
 		}
+
+		let transactions = self.transaction_pool.transactions();
+
 		let mut peers = self.peers.write();
 		for (peer_id, ref mut peer) in peers.iter_mut() {
 			let to_send: Vec<_> = transactions.iter().filter_map(|&(hash, ref t)|
@@ -511,6 +519,8 @@ impl Protocol {
 				}));
 			}
 		}
+
+		self.consensus.lock().collect_garbage(Some((hash, &header)));
 	}
 
 	pub fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats> {
