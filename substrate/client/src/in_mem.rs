@@ -180,8 +180,8 @@ impl backend::BlockImportOperation for BlockImportOperation {
 		Ok(())
 	}
 
-	fn set_storage<I: Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>>(&mut self, changes: I) -> error::Result<()> {
-		self.pending_state.commit(changes);
+	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()> {
+		self.pending_state.commit(update);
 		Ok(())
 	}
 

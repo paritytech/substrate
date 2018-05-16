@@ -69,7 +69,7 @@ impl<B, E> BlockBuilder<B, E> where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, tx: Extrinsic) -> error::Result<()> {
-		let output = state_machine::execute(&self.state, &mut self.changes, &self.executor, "execute_transaction",
+		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "execute_transaction",
 			&vec![].and(&self.header).and(&tx))?;
 		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		self.transactions.push(tx);
@@ -79,7 +79,7 @@ impl<B, E> BlockBuilder<B, E> where
 	/// Consume the builder to return a valid `Block` containing all pushed transactions.
 	pub fn bake(mut self) -> error::Result<Block> {
 		self.header.extrinsics_root = ordered_trie_root(self.transactions.iter().map(Slicable::encode)).0.into();
-		let output = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
+		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
 			&self.header.encode())?;
 		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		Ok(Block {
