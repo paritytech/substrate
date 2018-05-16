@@ -49,6 +49,8 @@ use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
 
 mod contract;
+#[cfg(test)]
+mod mock;
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -703,61 +705,7 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
-	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity};
-	use primitives::testing::{Digest, Header};
-
-	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
-	impl consensus::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
-		type SessionKey = u64;
-	}
-	impl system::Trait for Test {
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
-		type Digest = Digest;
-		type AccountId = u64;
-		type Header = Header;
-	}
-	impl session::Trait for Test {
-		type ConvertAccountIdToSessionKey = Identity;
-	}
-	impl Trait for Test {
-		type Balance = u64;
-		type DetermineContractAddress = DummyContractAddressFor;
-	}
-
-	fn new_test_ext(session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
-		t.extend(consensus::GenesisConfig::<Test>{
-			code: vec![],
-			authorities: vec![],
-		}.build_externalities());
-		t.extend(session::GenesisConfig::<Test>{
-			session_length,
-			validators: vec![10, 20],
-		}.build_externalities());
-		t.extend(GenesisConfig::<Test>{
-			sessions_per_era,
-			current_era,
-			balances: if monied { vec![(1, 10), (2, 20), (3, 30), (4, 40)] } else { vec![] },
-			intentions: vec![],
-			validator_count: 2,
-			bonding_duration: 3,
-			transaction_fee: 0,
-		}.build_externalities());
-		t
-	}
-
-	type System = system::Module<Test>;
-	type Session = session::Module<Test>;
-	type Staking = Module<Test>;
+	use mock::*;
 
 	#[test]
 	fn staking_should_work() {
