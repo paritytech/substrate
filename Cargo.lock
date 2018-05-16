@@ -2197,6 +2197,7 @@ dependencies = [
 name = "substrate-runtime-staking"
 version = "0.1.0"
 dependencies = [
+ "assert_matches 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -23,6 +23,7 @@ pwasm-utils = { version = "0.2", default_features = false }
 
 [dev-dependencies]
 wabt = "0.1.7"
+assert_matches = "1.1"
 
 [features]
 default = ["std"]
