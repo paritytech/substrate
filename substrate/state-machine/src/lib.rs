@@ -23,10 +23,6 @@ extern crate substrate_primitives as primitives;
 #[cfg_attr(test, macro_use)]
 extern crate hex_literal;
 
-extern crate hashdb;
-extern crate memorydb;
-
-extern crate patricia_trie;
 extern crate triehash;
 
 extern crate byteorder;
@@ -130,7 +126,7 @@ pub trait Externalities {
 	fn chain_id(&self) -> u64;
 
 	/// Get the trie root of the current storage map.
-	fn storage_root(&self) -> [u8; 32];
+	fn storage_root(&mut self) -> [u8; 32];
 }
 
 /// Code execution engine.
@@ -160,14 +156,11 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<Vec<u8>, Box<Error>>
+) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
 {
 
 	let result = {
-		let mut externalities = ext::Ext {
-			backend,
-			overlay: &mut *overlay
-		};
+		let mut externalities = ext::Ext::new(overlay, backend);
 		// make a copy.
 		let code = externalities.storage(b":code")
 			.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
@@ -178,13 +171,13 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			&code,
 			method,
 			call_data,
-		)
+		).map(move |out| (out, externalities.transaction()))
 	};
 
 	match result {
-		Ok(out) => {
+		Ok(x) => {
 			overlay.commit_prospective();
-			Ok(out)
+			Ok(x)
 		}
 		Err(e) => {
 			overlay.discard_prospective();
@@ -235,7 +228,7 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
-		let mut backend = InMemory::from(map![
+		let backend = InMemory::from(map![
 			b"doe".to_vec() => b"reindeer".to_vec(),
 			b"dog".to_vec() => b"puppyXXX".to_vec(),
 			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
@@ -252,10 +245,7 @@ mod tests {
 				b"doug".to_vec() => None
 			],
 		};
-		let ext = Ext {
-			backend: &mut backend,
-			overlay: &mut overlay,
-		};
+		let mut ext = Ext::new(&mut overlay, &backend);
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
 		assert_eq!(ext.storage_root(), ROOT);
 	}

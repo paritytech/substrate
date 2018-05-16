@@ -17,8 +17,6 @@
 //! Conrete externalities implementation.
 
 use std::{error, fmt};
-use std::collections::HashMap;
-use triehash::trie_root;
 use backend::Backend;
 use {Externalities, OverlayedChanges};
 
@@ -52,16 +50,37 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, B: 'a> {
-	/// The overlayed changes to write to.
-	pub overlay: &'a mut OverlayedChanges,
-	/// The storage backend to read from.
-	pub backend: &'a B,
+pub struct Ext<'a, B: 'a + Backend> {
+	// The overlayed changes to write to.
+	overlay: &'a mut OverlayedChanges,
+	// The storage backend to read from.
+	backend: &'a B,
+	// The transaction necessary to commit to the backend.
+	transaction: Option<(B::Transaction, [u8; 32])>,
+}
+
+impl<'a, B: 'a + Backend> Ext<'a, B> {
+	/// Create a new `Ext` from overlayed changes and read-only backend
+	pub fn new(overlay: &'a mut OverlayedChanges, backend: &'a B) -> Self {
+		Ext {
+			overlay,
+			backend,
+			transaction: None,
+		}
+	}
+
+	/// Get the transaction necessary to update the backend.
+	pub fn transaction(mut self) -> B::Transaction {
+		let _ = self.storage_root();
+		self.transaction.expect("transaction always set after calling storage root; qed").0
+	}
 }
 
 #[cfg(test)]
 impl<'a, B: 'a + Backend> Ext<'a, B> {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		use std::collections::HashMap;
+
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
 			.chain(self.overlay.committed.clone().into_iter())
@@ -82,6 +101,7 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
+		self.transaction = None; // wipe out the transaction since root will no longer be the same.
 		self.overlay.set_storage(key, value);
 	}
 
@@ -89,13 +109,18 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		42
 	}
 
-	fn storage_root(&self) -> [u8; 32] {
-		trie_root(self.backend.pairs().into_iter()
-			.map(|(k, v)| (k, Some(v)))
-			.chain(self.overlay.committed.clone().into_iter())
-			.chain(self.overlay.prospective.clone().into_iter())
-			.collect::<HashMap<_, _>>()
-			.into_iter()
-			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))).0
+	fn storage_root(&mut self) -> [u8; 32] {
+		if let Some((_, ref root)) =  self.transaction {
+			return root.clone();
+		}
+
+		// compute and memoize
+		let delta = self.overlay.committed.iter()
+			.chain(self.overlay.prospective.iter())
+			.map(|(k, v)| (k.clone(), v.clone()));
+
+		let (root, transaction) = self.backend.storage_root(delta);
+		self.transaction = Some((transaction, root));
+		root
 	}
 }
