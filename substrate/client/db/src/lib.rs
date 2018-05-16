@@ -491,7 +491,7 @@ impl client::backend::Backend for Backend {
 			for (key, (val, rc)) in operation.pending_state.updates.drain() {
 				if rc > 0 {
 					transaction.put(columns::STATE, &key.0[..], &val);
-				} else {
+				} else if rc < 0 {
 					transaction.delete(columns::STATE, &key.0[..]);
 				}
 			}
@@ -652,6 +652,108 @@ mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
+		}
+	}
+
+	#[test]
+	fn delete_only_when_negative_rc() {
+		let key;
+		let db = Backend::new_test();
+
+		{
+			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
+			let mut header = block::Header {
+				number: 0,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage: Vec<(_, _)> = vec![];
+
+			header.state_root = op.pending_state.storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y)))
+			).0.into();
+
+			op.reset_storage(storage.iter().cloned()).unwrap();
+
+			key = op.pending_state.updates.insert(b"hello");
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				true
+			).unwrap();
+
+			db.commit_operation(op).unwrap();
+
+			assert_eq!(db.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
+		}
+
+		{
+			let mut op = db.begin_operation(BlockId::Number(0)).unwrap();
+			let mut header = block::Header {
+				number: 1,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage: Vec<(_, _)> = vec![];
+
+			header.state_root = op.pending_state.storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y)))
+			).0.into();
+
+			op.pending_state.updates.insert(b"hello");
+			op.pending_state.updates.remove(&key);
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				true
+			).unwrap();
+
+			db.commit_operation(op).unwrap();
+
+			assert_eq!(db.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
+		}
+
+		{
+			let mut op = db.begin_operation(BlockId::Number(1)).unwrap();
+			let mut header = block::Header {
+				number: 1,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage: Vec<(_, _)> = vec![];
+
+			header.state_root = op.pending_state.storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y)))
+			).0.into();
+
+			op.pending_state.updates.remove(&key);
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				true
+			).unwrap();
+
+			db.commit_operation(op).unwrap();
+
+			assert!(db.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
 		}
 	}
 }
