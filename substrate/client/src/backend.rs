@@ -18,18 +18,21 @@
 
 use state_machine::backend::Backend as StateBackend;
 use error;
-use primitives::block::{self, Id as BlockId};
-use primitives;
+use primitives::bft::Justification;
+use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::generic::BlockId;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation {
 	/// Associated state backend type.
 	type State: StateBackend;
+	/// The type of block that the blockchain has.
+	type Block: BlockT;
 
 	/// Returns pending state.
 	fn state(&self) -> error::Result<&Self::State>;
 	/// Append block data to the transaction.
-	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()>;
+	fn set_block_data(&mut self, header: Self::Block::Header, body: Option<Vec<Self::Block::Extrinsic>>, justification: Option<Justification>, is_new_best: bool) -> error::Result<()>;
 	/// Inject storage data into the database.
 	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
@@ -46,19 +49,21 @@ pub trait BlockImportOperation {
 /// is alive, the state for `P` should not be pruned.
 pub trait Backend {
 	/// Associated block insertion operation type.
-	type BlockImportOperation: BlockImportOperation;
+	type BlockImportOperation: BlockImportOperation<Block = Block>;
 	/// Associated blockchain backend type.
-	type Blockchain: ::blockchain::Backend;
+	type Blockchain: ::blockchain::Backend<Block = Block>;
 	/// Associated state backend type.
 	type State: StateBackend;
+	/// The type of block this back-end is managing a chain of.
+	type Block: BlockT;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
-	fn begin_operation(&self, block: BlockId) -> error::Result<Self::BlockImportOperation>;
+	fn begin_operation(&self, block: BlockId<Self::Block>) -> error::Result<Self::BlockImportOperation>;
 	/// Commit block insertion.
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns state backend with post-state of given block.
-	fn state_at(&self, block: BlockId) -> error::Result<Self::State>;
+	fn state_at(&self, block: BlockId<Self::Block>) -> error::Result<Self::State>;
 }

@@ -40,10 +40,11 @@ build_rpc_trait! {
 	/// Polkadot blockchain API
 	pub trait ChainApi {
 		type Metadata;
+		ASSOCIATED type Header;
 
 		/// Get header of a relay chain block.
 		#[rpc(name = "chain_getHeader")]
-		fn header(&self, block::HeaderHash) -> Result<Option<block::Header>>;
+		fn header(&self, block::HeaderHash) -> Result<Option<Self::Header>>;
 
 		/// Get hash of the head.
 		#[rpc(name = "chain_getHead")]
@@ -52,7 +53,7 @@ build_rpc_trait! {
 		#[pubsub(name = "chain_newHead")] {
 			/// Hello subscription
 			#[rpc(name = "subscribe_newHead")]
-			fn subscribe_new_head(&self, Self::Metadata, pubsub::Subscriber<block::Header>);
+			fn subscribe_new_head(&self, Self::Metadata, pubsub::Subscriber<Self::Header>);
 
 			/// Unsubscribe from hello subscription.
 			#[rpc(name = "unsubscribe_newHead")]
@@ -85,6 +86,7 @@ impl<B, E> ChainApi for Chain<B, E> where
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	type Metadata = ::metadata::Metadata;
+	type Header = block::Header;
 
 	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
 		self.client.header(&block::Id::Hash(hash)).chain_err(|| "Blockchain error")

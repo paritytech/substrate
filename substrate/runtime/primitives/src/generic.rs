@@ -353,6 +353,21 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	}
 }
 
+/// Something to identify a block.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub enum BlockId<Block: BlockT> where
+	Number: Block::Header::Number,
+	Hash: Block::Header::Hash,
+{
+	/// Identify by block header hash.
+	Hash(Hash),
+	/// Identify by block number.
+	Number(Number),
+}
+
 /// Abstraction over a substrate block.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]

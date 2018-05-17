@@ -16,24 +16,28 @@
 
 //! Polkadot blockchain trait
 
-use primitives::block::{self, Id as BlockId};
-use primitives;
+use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::generic::BlockId;
+use primitives::bft::Justification;
+
 use error::Result;
 
 /// Blockchain database backend. Does not perform any validation.
 pub trait Backend: Send + Sync {
+	type Block: BlockT;
+
 	/// Get block header. Returns `None` if block is not found.
-	fn header(&self, id: BlockId) -> Result<Option<block::Header>>;
+	fn header(&self, id: BlockId<Self::Block>) -> Result<Option<Self::Block::Header>>;
 	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, id: BlockId) -> Result<Option<block::Body>>;
+	fn body(&self, id: BlockId<Self::Block>) -> Result<Option<Vec<Self::Block::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
-	fn justification(&self, id: BlockId) -> Result<Option<primitives::bft::Justification>>;
+	fn justification(&self, id: BlockId<Self::Block>) -> Result<Option<Justification>>;
 	/// Get blockchain info.
-	fn info(&self) -> Result<Info>;
+	fn info(&self) -> Result<Info<Self::Block>>;
 	/// Get block status.
-	fn status(&self, id: BlockId) -> Result<BlockStatus>;
+	fn status(&self, id: BlockId<Self::Block>) -> Result<BlockStatus>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
-	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>>;
+	fn hash(&self, number: Self::Block::Header::Number) -> Result<Option<Self::Block::Header::Hash>>;
 }
 
 /// Block import outcome
@@ -50,13 +54,13 @@ pub enum ImportResult<E> {
 
 /// Blockchain info
 #[derive(Debug)]
-pub struct Info {
+pub struct Info<Hash, Number> {
 	/// Best block hash.
-	pub best_hash: block::HeaderHash,
+	pub best_hash: Hash,
 	/// Best block number.
-	pub best_number: block::Number,
+	pub best_number: Number,
 	/// Genesis block hash.
-	pub genesis_hash: block::HeaderHash,
+	pub genesis_hash: HeaderHash,
 }
 
 /// Block status.
