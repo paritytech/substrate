@@ -37,6 +37,13 @@ pub trait BlockImportOperation {
 }
 
 /// Client backend. Manages the data layer.
+///
+/// Note on state pruning: while an object from `state_at` is alive, the state
+/// should not be pruned. The backend should internally reference-count
+/// its state objects.
+///
+/// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
+/// is alive, the state for `P` should not be pruned.
 pub trait Backend {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation;
@@ -52,6 +59,6 @@ pub trait Backend {
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
-	/// Returns state backend for specified block.
+	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId) -> error::Result<Self::State>;
 }

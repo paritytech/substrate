@@ -145,11 +145,13 @@ pub trait CodeExecutor: Sized + Send + Sync {
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
+/// Produces a state-backend-specific "transaction" which can be used to apply the changes
+/// to the backing store, such as the disk.
 ///
 /// On an error, no prospective changes are written to the overlay.
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
-/// blocks (e.g. a transaction at a time), ensure a differrent method is used.
+/// blocks (e.g. a transaction at a time), ensure a different method is used.
 pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	backend: &B,
 	overlay: &mut OverlayedChanges,
@@ -228,12 +230,13 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
-		let backend = InMemory::from(map![
+		let initial: HashMap<_, _> = map![
 			b"doe".to_vec() => b"reindeer".to_vec(),
 			b"dog".to_vec() => b"puppyXXX".to_vec(),
 			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
 			b"doug".to_vec() => b"notadog".to_vec()
-		]);
+		];
+		let backend = InMemory::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"dog".to_vec() => Some(b"puppy".to_vec()),

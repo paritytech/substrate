@@ -18,14 +18,13 @@
 
 use std::collections::HashMap;
 use parking_lot::RwLock;
-use state_machine;
 use error;
 use backend;
 use runtime_support::Hashable;
 use primitives;
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use blockchain::{self, BlockStatus};
-use state_machine::backend::Backend as StateBackend;
+use state_machine::backend::{Backend as StateBackend, InMemory};
 
 fn header_hash(header: &block::Header) -> block::HeaderHash {
 	header.blake2_256().into()
@@ -41,12 +40,6 @@ struct Block {
 	header: block::Header,
 	justification: Option<primitives::bft::Justification>,
 	body: Option<block::Body>,
-}
-
-/// In-memory operation.
-pub struct BlockImportOperation {
-	pending_block: Option<PendingBlock>,
-	pending_state: state_machine::backend::InMemory,
 }
 
 #[derive(Clone)]
@@ -160,11 +153,18 @@ impl blockchain::Backend for Blockchain {
 	}
 }
 
+/// In-memory operation.
+pub struct BlockImportOperation {
+	pending_block: Option<PendingBlock>,
+	old_state: InMemory,
+	new_state: Option<InMemory>,
+}
+
 impl backend::BlockImportOperation for BlockImportOperation {
-	type State = state_machine::backend::InMemory;
+	type State = InMemory;
 
 	fn state(&self) -> error::Result<&Self::State> {
-		Ok(&self.pending_state)
+		Ok(&self.old_state)
 	}
 
 	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()> {
@@ -180,20 +180,20 @@ impl backend::BlockImportOperation for BlockImportOperation {
 		Ok(())
 	}
 
-	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()> {
-		self.pending_state.commit(update);
+	fn update_storage(&mut self, update: <InMemory as StateBackend>::Transaction) -> error::Result<()> {
+		self.new_state = Some(self.old_state.update(update));
 		Ok(())
 	}
 
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()> {
-		self.pending_state = state_machine::backend::InMemory::from(iter.collect());
+		self.new_state = Some(InMemory::from(iter.collect::<HashMap<_, _>>()));
 		Ok(())
 	}
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
 pub struct Backend {
-	states: RwLock<HashMap<block::HeaderHash, state_machine::backend::InMemory>>,
+	states: RwLock<HashMap<block::HeaderHash, InMemory>>,
 	blockchain: Blockchain,
 }
 
@@ -210,7 +210,7 @@ impl Backend {
 impl backend::Backend for Backend {
 	type BlockImportOperation = BlockImportOperation;
 	type Blockchain = Blockchain;
-	type State = state_machine::backend::InMemory;
+	type State = InMemory;
 
 	fn begin_operation(&self, block: BlockId) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
@@ -220,14 +220,16 @@ impl backend::Backend for Backend {
 
 		Ok(BlockImportOperation {
 			pending_block: None,
-			pending_state: state,
+			old_state: state,
+			new_state: None,
 		})
 	}
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
 		if let Some(pending_block) = operation.pending_block {
 			let hash = header_hash(&pending_block.block.header);
-			self.states.write().insert(hash, operation.pending_state);
+			let old_state = &operation.old_state;
+			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.justification, pending_block.block.body, pending_block.is_best);
 		}
 		Ok(())
