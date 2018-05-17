@@ -37,7 +37,7 @@ impl Externalities for TestExternalities {
 
 	fn chain_id(&self) -> u64 { 42 }
 
-	fn storage_root(&self) -> [u8; 32] {
+	fn storage_root(&mut self) -> [u8; 32] {
 		trie_root(self.clone()).0
 	}
 }
