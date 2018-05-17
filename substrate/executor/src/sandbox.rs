@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(missing_docs)]
+
 //! This module implements sandboxing support in the runtime.
 
+use std::collections::HashMap;
+use std::rc::Rc;
 use codec::Slicable;
 use primitives::sandbox as sandbox_primitives;
-use std::collections::HashMap;
 use wasm_utils::DummyUserError;
+use wasmi;
 use wasmi::memory_units::Pages;
 use wasmi::{Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
             ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind};
@@ -38,13 +42,13 @@ struct SupervisorFuncIndex(usize);
 struct GuestFuncIndex(usize);
 
 /// This struct holds a mapping from guest index space to supervisor.
-struct GuestToSuperviserFunctionMapping {
+struct GuestToSupervisorFunctionMapping {
 	funcs: Vec<SupervisorFuncIndex>,
 }
 
-impl GuestToSuperviserFunctionMapping {
-	fn new() -> GuestToSuperviserFunctionMapping {
-		GuestToSuperviserFunctionMapping { funcs: Vec::new() }
+impl GuestToSupervisorFunctionMapping {
+	fn new() -> GuestToSupervisorFunctionMapping {
+		GuestToSupervisorFunctionMapping { funcs: Vec::new() }
 	}
 
 	fn define(&mut self, supervisor_func: SupervisorFuncIndex) -> GuestFuncIndex {
@@ -130,8 +134,11 @@ impl ImportResolver for Imports {
 ///
 /// Note that this functions are only called in the `supervisor` context.
 pub trait SandboxCapabilities {
-	/// Returns associated sandbox `Store`.
+	/// Returns a reference to an associated sandbox `Store`.
 	fn store(&self) -> &Store;
+
+	/// Returns a mutable reference to an associated sandbox `Store`.
+	fn store_mut(&mut self) -> &mut Store;
 
 	/// Allocate space of the specified length in the supervisor memory.
 	///
@@ -164,26 +171,8 @@ pub trait SandboxCapabilities {
 /// [`Externals`]: ../../wasmi/trait.Externals.html
 pub struct GuestExternals<'a, FE: SandboxCapabilities + Externals + 'a> {
 	supervisor_externals: &'a mut FE,
-	instance_idx: u32,
+	sandbox_instance: &'a SandboxInstance,
 	state: u32,
-}
-
-impl<'a, FE: SandboxCapabilities + Externals + 'a> GuestExternals<'a, FE> {
-	/// Create a new instance of `GuestExternals`.
-	///
-	/// It will use `supervisor_externals` to execute calls from guest to supervisor.
-	/// `instance_idx` required to fetch settings for this particular instance, e.g
-	/// associated dispatch thunk funtion and mapping between externals function ids to
-	/// functions in supervisor module.
-	/// `state` is just an integer that allows supervisor to have arbitrary state associated with the call,
-	/// typically used for implementing runtime functions.
-	pub fn new(supervisor_externals: &mut FE, instance_idx: u32, state: u32) -> GuestExternals<FE> {
-		GuestExternals {
-			supervisor_externals,
-			instance_idx,
-			state,
-		}
-	}
 }
 
 fn trap() -> Trap {
@@ -210,22 +199,19 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		index: usize,
 		args: RuntimeArgs,
 	) -> Result<Option<RuntimeValue>, Trap> {
-		let (func_idx, dispatch_thunk) = {
-			let instance = &self.supervisor_externals.store().instances[self.instance_idx as usize];
-			let dispatch_thunk = instance.dispatch_thunk.clone();
-			let func_idx = instance
-				.guest_to_supervisor_mapping
-				.func_by_guest_index(
-					GuestFuncIndex(index)
-				)
-				.expect(
-					"`invoke_index` is called with indexes registered via `FuncInstance::alloc_host`;
-						`FuncInstance::alloc_host` is called with indexes that was obtained from `guest_to_supervisor_mapping`;
-						`func_by_guest_index` called with `index` can't return `None`;
-						qed"
-				);
-			(func_idx, dispatch_thunk)
-		};
+		// Make `index` typesafe again.
+		let index = GuestFuncIndex(index);
+
+		let dispatch_thunk = self.sandbox_instance.dispatch_thunk.clone();
+		let func_idx = self.sandbox_instance
+			.guest_to_supervisor_mapping
+			.func_by_guest_index(index)
+			.expect(
+				"`invoke_index` is called with indexes registered via `FuncInstance::alloc_host`;
+					`FuncInstance::alloc_host` is called with indexes that was obtained from `guest_to_supervisor_mapping`;
+					`func_by_guest_index` called with `index` can't return `None`;
+					qed"
+			);
 
 		// Serialize arguments into a byte vector.
 		let invoke_args_data: Vec<u8> = args.as_ref()
@@ -279,21 +265,78 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 	}
 }
 
-struct SandboxInstance {
+fn with_guest_externals<FE, R, F>(
+	supervisor_externals: &mut FE,
+	sandbox_instance: &SandboxInstance,
+	state: u32,
+	f: F,
+) -> R
+where
+	FE: SandboxCapabilities + Externals,
+	F: FnOnce(&mut GuestExternals<FE>) -> R,
+{
+	let mut guest_externals = GuestExternals {
+		supervisor_externals,
+		sandbox_instance,
+		state,
+	};
+	f(&mut guest_externals)
+}
+
+/// Sandboxed instance of a wasm module.
+///
+/// It's primary purpose is to [`invoke`] exported functions on it.
+///
+/// All imports of this instance are specified at the creation time and
+/// imports are implemented by the supervisor.
+///
+/// Hence, in order to invoke an exported function on a sandboxed module instance,
+/// it's required to provide supervisor externals: it will be used to execute
+/// code in the supervisor context.
+///
+/// [`invoke`]: #method.invoke
+pub struct SandboxInstance {
 	instance: ModuleRef,
 	dispatch_thunk: FuncRef,
-	guest_to_supervisor_mapping: GuestToSuperviserFunctionMapping,
+	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
+}
+
+impl SandboxInstance {
+	/// Invoke an exported function by a name.
+	///
+	/// `supervisor_externals` is required to execute the implementations
+	/// of the syscalls that published to a sandboxed module instance.
+	///
+	/// The `state` parameter can be used to provide custom data for
+	/// these syscall implementations.
+	pub fn invoke<FE: SandboxCapabilities + Externals>(
+		&self,
+		export_name: &str,
+		args: &[RuntimeValue],
+		supervisor_externals: &mut FE,
+		state: u32,
+	) -> Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
+		with_guest_externals(
+			supervisor_externals,
+			self,
+			state,
+			|guest_externals| {
+				self.instance
+					.invoke_export(export_name, args, guest_externals)
+			},
+		)
+	}
 }
 
 fn decode_environment_definition(
 	raw_env_def: &[u8],
 	memories: &[MemoryRef],
-) -> Result<(Imports, GuestToSuperviserFunctionMapping), DummyUserError> {
+) -> Result<(Imports, GuestToSupervisorFunctionMapping), DummyUserError> {
 	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..]).ok_or_else(|| DummyUserError)?;
 
 	let mut func_map = HashMap::new();
 	let mut memories_map = HashMap::new();
-	let mut guest_to_supervisor_mapping = GuestToSuperviserFunctionMapping::new();
+	let mut guest_to_supervisor_mapping = GuestToSupervisorFunctionMapping::new();
 
 	for entry in &env_def.entries {
 		let module = entry.module_name.clone();
@@ -323,60 +366,73 @@ fn decode_environment_definition(
 	))
 }
 
+/// Instantiate a guest module and return it's index in the store.
+///
+/// The guest module's code is specified in `wasm`. Environment that will be available to
+/// guest module is specified in `raw_env_def` (serialized version of [`EnvironmentDefinition`]).
+/// `dispatch_thunk` is used as function that handle calls from guests.
+///
+/// # Errors
+///
+/// Returns `Err` if any of the following conditions happens:
+///
+/// - `raw_env_def` can't be deserialized as a [`EnvironmentDefinition`].
+/// - Module in `wasm` is invalid or couldn't be instantiated.
+///
+/// [`EnvironmentDefinition`]: ../../sandbox/struct.EnvironmentDefinition.html
+pub fn instantiate<FE: SandboxCapabilities + Externals>(
+	supervisor_externals: &mut FE,
+	dispatch_thunk: FuncRef,
+	wasm: &[u8],
+	raw_env_def: &[u8],
+	state: u32,
+) -> Result<u32, DummyUserError> {
+	let (imports, guest_to_supervisor_mapping) =
+		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
+
+	let module = Module::from_buffer(wasm).map_err(|_| DummyUserError)?;
+	let instance = ModuleInstance::new(&module, &imports).map_err(|_| DummyUserError)?;
+
+	let sandbox_instance = Rc::new(SandboxInstance {
+		// In general, it's not a very good idea to use `.not_started_instance()` for anything
+		// but for extracting memory and tables. But in this particular case, we are extracting
+		// for the purpose of running `start` function which should be ok.
+		instance: instance.not_started_instance().clone(),
+		dispatch_thunk,
+		guest_to_supervisor_mapping,
+	});
+
+	with_guest_externals(
+		supervisor_externals,
+		&sandbox_instance,
+		state,
+		|guest_externals| {
+			instance
+				.run_start(guest_externals)
+				.map_err(|_| DummyUserError)
+		},
+	)?;
+
+	let instance_idx = supervisor_externals
+		.store_mut()
+		.register_sandbox_instance(sandbox_instance);
+
+	Ok(instance_idx)
+}
+
 /// This struct keeps track of all sandboxed components.
 pub struct Store {
-	instances: Vec<SandboxInstance>,
+	instances: Vec<Rc<SandboxInstance>>,
 	memories: Vec<MemoryRef>,
 }
 
 impl Store {
-	/// Create new empty sandbox store.
+	/// Create a new empty sandbox store.
 	pub fn new() -> Store {
 		Store {
 			instances: Vec::new(),
 			memories: Vec::new(),
 		}
-	}
-
-	/// Instantiate a guest module and return it's index in the store.
-	///
-	/// The guest module's code is specified in `wasm`. Environment that will be available to
-	/// guest module is specified in `raw_env_def` (serialized version of [`EnvironmentDefinition`]).
-	/// `dispatch_thunk` is used as function that handle calls from guests.
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if any of the following conditions happens:
-	///
-	/// - `raw_env_def` can't be deserialized as a [`EnvironmentDefinition`].
-	/// - Module in `wasm` is invalid or couldn't be instantiated.
-	///
-	/// [`EnvironmentDefinition`]: ../../sandbox/struct.EnvironmentDefinition.html
-	pub fn instantiate(
-		&mut self,
-		dispatch_thunk: FuncRef,
-		wasm: &[u8],
-		raw_env_def: &[u8],
-		_state: u32,
-	) -> Result<u32, DummyUserError> {
-		let (imports, guest_to_supervisor_mapping) =
-			decode_environment_definition(raw_env_def, &self.memories)?;
-
-		// TODO: Run `start`.
-		let module = Module::from_buffer(wasm).map_err(|_| DummyUserError)?;
-		let instance = ModuleInstance::new(&module, &imports)
-			.map_err(|_| DummyUserError)?
-			.assert_no_start();
-
-		let instance_idx = self.instances.len();
-
-		self.instances.push(SandboxInstance {
-			instance,
-			dispatch_thunk,
-			guest_to_supervisor_mapping,
-		});
-
-		Ok(instance_idx as u32)
 	}
 
 	/// Create a new memory instance and return it's index.
@@ -391,21 +447,22 @@ impl Store {
 			specified_limit => Some(Pages(specified_limit as usize)),
 		};
 
-		let mem = MemoryInstance::alloc(Pages(initial as usize), maximum).map_err(|_| DummyUserError)?;
+		let mem =
+			MemoryInstance::alloc(Pages(initial as usize), maximum).map_err(|_| DummyUserError)?;
+		let mem_idx = self.memories.len();
 		self.memories.push(mem);
-		let mem_idx = self.memories.len() - 1;
 		Ok(mem_idx as u32)
 	}
 
-	/// Returns `ModuleRef` by `instance_idx`.
+	/// Returns `SandboxInstance` by `instance_idx`.
 	///
 	/// # Errors
 	///
 	/// Returns `Err` If `instance_idx` isn't a valid index of an instance.
-	pub fn instance(&self, instance_idx: u32) -> Result<ModuleRef, DummyUserError> {
+	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance>, DummyUserError> {
 		self.instances
 			.get(instance_idx as usize)
-			.map(|i| i.instance.clone())
+			.cloned()
 			.ok_or_else(|| DummyUserError)
 	}
 
@@ -419,6 +476,12 @@ impl Store {
 			.get(memory_idx as usize)
 			.cloned()
 			.ok_or_else(|| DummyUserError)
+	}
+
+	fn register_sandbox_instance(&mut self, sandbox_instance: Rc<SandboxInstance>) -> u32 {
+		let instance_idx = self.instances.len();
+		self.instances.push(sandbox_instance);
+		instance_idx as u32
 	}
 }
 
@@ -478,6 +541,44 @@ mod tests {
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox", &code).unwrap(),
 			vec![0],
+		);
+	}
+
+	#[test]
+	fn start_called() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(import "env" "assert" (func $assert (param i32)))
+			(import "env" "inc_counter" (func $inc_counter (param i32) (result i32)))
+
+			;; Start function
+			(start $start)
+			(func $start
+				;; Increment counter by 1
+				(drop
+					(call $inc_counter (i32.const 1))
+				)
+			)
+
+			(func (export "call")
+				;; Increment counter by 1. The current value is placed on the stack.
+				(call $inc_counter (i32.const 1))
+
+				;; Counter is incremented twice by 1, once there and once in `start` func.
+				;; So check the returned value is equal to 2.
+				i32.const 2
+				i32.eq
+				call $assert
+			)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox", &code).unwrap(),
+			vec![1],
 		);
 	}
 }
