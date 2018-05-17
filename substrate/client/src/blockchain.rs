@@ -23,21 +23,19 @@ use primitives::bft::Justification;
 use error::Result;
 
 /// Blockchain database backend. Does not perform any validation.
-pub trait Backend: Send + Sync {
-	type Block: BlockT;
-
+pub trait Backend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
-	fn header(&self, id: BlockId<Self::Block>) -> Result<Option<Self::Block::Header>>;
+	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>>;
 	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, id: BlockId<Self::Block>) -> Result<Option<Vec<Self::Block::Extrinsic>>>;
+	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
-	fn justification(&self, id: BlockId<Self::Block>) -> Result<Option<Justification>>;
+	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>>;
 	/// Get blockchain info.
-	fn info(&self) -> Result<Info<Self::Block>>;
+	fn info(&self) -> Result<Info<Block>>;
 	/// Get block status.
-	fn status(&self, id: BlockId<Self::Block>) -> Result<BlockStatus>;
+	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
-	fn hash(&self, number: Self::Block::Header::Number) -> Result<Option<Self::Block::Header::Hash>>;
+	fn hash(&self, number: Block::Header::Number) -> Result<Option<Block::Header::Hash>>;
 }
 
 /// Block import outcome
@@ -54,13 +52,13 @@ pub enum ImportResult<E> {
 
 /// Blockchain info
 #[derive(Debug)]
-pub struct Info<Hash, Number> {
+pub struct Info<Block: BlockT> {
 	/// Best block hash.
-	pub best_hash: Hash,
+	pub best_hash: Block::Header::Hash,
 	/// Best block number.
-	pub best_number: Number,
+	pub best_number: Block::Header::Number,
 	/// Genesis block hash.
-	pub genesis_hash: HeaderHash,
+	pub genesis_hash: Block::Header::Hash,
 }
 
 /// Block status.

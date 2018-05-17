@@ -23,11 +23,9 @@ use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
-pub trait BlockImportOperation {
+pub trait BlockImportOperation<Block: BlockT> {
 	/// Associated state backend type.
 	type State: StateBackend;
-	/// The type of block that the blockchain has.
-	type Block: BlockT;
 
 	/// Returns pending state.
 	fn state(&self) -> error::Result<&Self::State>;
@@ -47,15 +45,13 @@ pub trait BlockImportOperation {
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
 /// is alive, the state for `P` should not be pruned.
-pub trait Backend {
+pub trait Backend<Block: BlockT> {
 	/// Associated block insertion operation type.
-	type BlockImportOperation: BlockImportOperation<Block = Block>;
+	type BlockImportOperation: BlockImportOperation<Block>;
 	/// Associated blockchain backend type.
-	type Blockchain: ::blockchain::Backend<Block = Block>;
+	type Blockchain: ::blockchain::Backend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend;
-	/// The type of block this back-end is managing a chain of.
-	type Block: BlockT;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
