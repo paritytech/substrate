@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 futures = "0.1.17"
+futures-cpupool = "0.1"
 parking_lot = "0.4"
 tokio-core = "0.1.12"
 tokio-timer = "0.1"
