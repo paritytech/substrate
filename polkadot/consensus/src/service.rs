@@ -180,6 +180,12 @@ struct Network(Arc<net::ConsensusService>);
 
 impl super::Network for Network {
 	type TableRouter = Router;
+
+	fn execute<F>(&self, future: F) where F: Future<Item=(),Error=()> + Send + 'static {
+		// TODO: CpuPool.
+		::std::thread::spawn(move || { let _ = future.wait(); });
+	}
+
 	fn table_router(&self, _table: Arc<SharedTable>) -> Self::TableRouter {
 		Router {
 			network: self.0.clone()
@@ -242,6 +248,7 @@ impl Service {
 	) -> Service
 		where
 			C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static,
+			C::CheckedBlockId: Send + 'static,
 	{
 		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {

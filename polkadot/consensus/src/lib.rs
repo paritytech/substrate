@@ -125,6 +125,10 @@ pub trait Network {
 	/// routing statements to peers, and driving completion of any `StatementProducers`.
 	type TableRouter: TableRouter;
 
+	/// Execute a future in the background. Typically used for fairly heavy computations,
+	/// so it is recommended to have this use a thread pool.
+	fn execute<F>(&self, future: F) where F: Future<Item=(),Error=()> + Send + 'static;
+
 	/// Instantiate a table router using the given shared table.
 	fn table_router(&self, table: Arc<SharedTable>) -> Self::TableRouter;
 }
@@ -221,13 +225,13 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: Au
 /// Polkadot proposer factory.
 pub struct ProposerFactory<C, N, P> {
 	/// The client instance.
-	pub client: Arc<C>,
+	pub client: Arc<P>,
 	/// The transaction pool.
 	pub transaction_pool: Arc<Mutex<TransactionPool>>,
 	/// The backing network handle.
 	pub network: N,
 	/// Parachain collators.
-	pub collators: P,
+	pub collators: C,
 	/// The timer used to schedule proposal intervals.
 	pub timer: Timer,
 	/// The duration after which parachain-empty blocks will be allowed.
@@ -236,14 +240,21 @@ pub struct ProposerFactory<C, N, P> {
 
 impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 	where
-		C: PolkadotApi,
+		C: Collators + Send + 'static,
 		N: Network,
-		P: Collators,
+		P: PolkadotApi + Send + Sync + 'static,
+		<C::Collation as IntoFuture>::Future: Send + 'static,
+		N::TableRouter: Send + 'static,
+		P::CheckedBlockId: Send + 'static,
 {
-	type Proposer = Proposer<C, N::TableRouter, P>;
+	type Proposer = Proposer<P>;
 	type Error = Error;
 
-	fn init(&self, parent_header: &SubstrateHeader, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
+	fn init(&self,
+		parent_header: &SubstrateHeader,
+		authorities: &[AuthorityId],
+		sign_with: Arc<ed25519::Pair>
+	) -> Result<Self::Proposer, Error> {
 		use std::time::Duration;
 
 		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
@@ -276,24 +287,72 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
 			DELAY_UNTIL);
 
+
+		let drop_signal = dispatch_collation_work(
+			&self.network,
+			router.clone(),
+			table.clone(),
+			CollationFetch::new(
+				local_duty.validation,
+				checked_id.clone(),
+				parent_hash.clone(),
+				self.collators.clone(),
+				self.client.clone()
+			)
+		);
+
 		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
 			client: self.client.clone(),
-			collators: self.collators.clone(),
 			delay: timeout.shared(),
 			dynamic_inclusion,
-			local_duty,
 			local_key: sign_with,
 			parent_hash,
 			parent_id: checked_id,
 			parent_number: parent_header.number,
 			random_seed,
-			router,
 			table,
 			timer: self.timer.clone(),
 			transaction_pool: self.transaction_pool.clone(),
+			_drop_signal: drop_signal,
 		})
 	}
+}
+
+// dispatch collation work onto the network's thread pool. returns a signal object
+// that should fire when the collation work is no longer necessary (e.g. when the proposer object is dropped)
+fn dispatch_collation_work<N, C, P>(
+	network: &N,
+	router: N::TableRouter,
+	table: Arc<SharedTable>,
+	work: CollationFetch<C, P>,
+) -> exit_future::Signal where
+	C: Collators + Send + 'static,
+	N: Network,
+	P: PolkadotApi + Send + Sync + 'static,
+	<C::Collation as IntoFuture>::Future: Send + 'static,
+	N::TableRouter: Send + 'static,
+	P::CheckedBlockId: Send + 'static,
+{
+	let (signal, exit) = exit_future::signal();
+	let handled_work = work.then(move |result| match result {
+		Ok((collation, extrinsic)) => {
+			let hash = collation.receipt.hash();
+			router.local_candidate_data(hash, collation.block_data, extrinsic);
+
+			// TODO: if we are an availability guarantor also, we should produce an availability statement.
+			table.sign_and_import(&router, GenericStatement::Candidate(collation.receipt));
+			Ok(())
+		}
+		Err(_e) => {
+			warn!(target: "consensus", "Failed to collate candidate");
+			Ok(())
+		}
+	});
+
+	let cancellable_work = handled_work.select(exit).map(|_| ()).map_err(|_| ());
+	network.execute(cancellable_work);
+	signal
 }
 
 struct LocalDuty {
@@ -301,31 +360,27 @@ struct LocalDuty {
 }
 
 /// The Polkadot proposer logic.
-pub struct Proposer<C: PolkadotApi, R, P> {
+pub struct Proposer<C: PolkadotApi> {
 	client: Arc<C>,
-	collators: P,
 	delay: Shared<Sleep>,
 	dynamic_inclusion: DynamicInclusion,
-	local_duty: LocalDuty,
 	local_key: Arc<ed25519::Pair>,
 	parent_hash: HeaderHash,
 	parent_id: C::CheckedBlockId,
 	parent_number: BlockNumber,
 	random_seed: Hash,
-	router: R,
 	table: Arc<SharedTable>,
 	timer: Timer,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
+	_drop_signal: exit_future::Signal,
 }
 
-impl<C, R, P> bft::Proposer for Proposer<C, R, P>
+impl<C> bft::Proposer for Proposer<C>
 	where
 		C: PolkadotApi,
-		R: TableRouter,
-		P: Collators,
 {
 	type Error = Error;
-	type Create = CreateProposal<C, R, P>;
+	type Create = CreateProposal<C>;
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
 	fn propose(&self) -> Self::Create {
@@ -343,15 +398,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			parent_id: self.parent_id.clone(),
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
-			collation: CollationFetch::new(
-				self.local_duty.validation,
-				self.parent_id.clone(),
-				self.parent_hash.clone(),
-				self.collators.clone(),
-				self.client.clone()
-			),
 			table: self.table.clone(),
-			router: self.router.clone(),
 			timing: ProposalTiming {
 				timer: self.timer.clone(),
 				attempt_propose: self.timer.interval(ATTEMPT_PROPOSE_EVERY),
@@ -574,23 +621,19 @@ impl ProposalTiming {
 }
 
 /// Future which resolves upon the creation of a proposal.
-pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
+pub struct CreateProposal<C: PolkadotApi>  {
 	parent_hash: HeaderHash,
 	parent_number: BlockNumber,
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
-	collation: CollationFetch<P, C>,
-	router: R,
 	table: Arc<SharedTable>,
 	timing: ProposalTiming,
 }
 
-impl<C, R, P> CreateProposal<C, R, P>
+impl<C> CreateProposal<C>
 	where
 		C: PolkadotApi,
-		R: TableRouter,
-		P: Collators,
 {
 	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<SubstrateBlock, Error> {
 		// TODO: handle case when current timestamp behind that in state.
@@ -663,29 +706,14 @@ impl<C, R, P> CreateProposal<C, R, P>
 	}
 }
 
-impl<C, R, P> Future for CreateProposal<C, R, P>
+impl<C> Future for CreateProposal<C>
 	where
 		C: PolkadotApi,
-		R: TableRouter,
-		P: Collators,
 {
 	type Item = SubstrateBlock;
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<SubstrateBlock, Error> {
-		// 1. poll local collation future.
-		match self.collation.poll() {
-			Ok(Async::Ready((collation, extrinsic))) => {
-				let hash = collation.receipt.hash();
-				self.router.local_candidate_data(hash, collation.block_data, extrinsic);
-
-				// TODO: if we are an availability guarantor also, we should produce an availability statement.
-				self.table.sign_and_import(&self.router, GenericStatement::Candidate(collation.receipt));
-			}
-			Ok(Async::NotReady) => {},
-			Err(_) => {}, // TODO: handle this failure to collate.
-		}
-
 		// 2. try to propose if we have enough includable candidates and other
 		// delays have concluded.
 		let included = self.table.includable_count();
