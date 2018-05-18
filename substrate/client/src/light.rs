@@ -20,6 +20,7 @@
 use std::sync::Arc;
 use primitives;
 use primitives::block::{self, Id as BlockId, HeaderHash};
+use runtime_support::Hashable;
 use state_machine::CodeExecutor;
 use state_machine::backend::Backend as StateBackend;
 use blockchain::{self, BlockStatus};
@@ -27,7 +28,7 @@ use backend;
 use call_executor::RemoteCallExecutor;
 use client::{Client, GenesisBuilder};
 use error;
-use in_mem::{header_hash, Blockchain as InMemBlockchain};
+use in_mem::Blockchain as InMemBlockchain;
 
 /// Light client data fetcher.
 pub trait Fetcher: Send + Sync {
@@ -76,7 +77,7 @@ impl backend::Backend for Backend {
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
 		if let Some(pending_block) = operation.pending_block {
-			let hash = header_hash(&pending_block.header);
+			let hash = pending_block.header.blake2_256().into();
 			self.blockchain.storage.insert(hash, pending_block.header, pending_block.justification, None, pending_block.is_best);
 		}
 		Ok(())

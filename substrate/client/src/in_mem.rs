@@ -26,11 +26,6 @@ use primitives::block::{self, Id as BlockId, HeaderHash};
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 
-/// Compute block header hash.
-pub fn header_hash(header: &block::Header) -> block::HeaderHash {
-	header.blake2_256().into()
-}
-
 struct PendingBlock {
 	block: Block,
 	is_best: bool,
@@ -231,7 +226,7 @@ impl backend::Backend for Backend {
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
 		if let Some(pending_block) = operation.pending_block {
-			let hash = header_hash(&pending_block.block.header);
+			let hash = pending_block.block.header.blake2_256().into();
 			let old_state = &operation.old_state;
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.justification, pending_block.block.body, pending_block.is_best);
