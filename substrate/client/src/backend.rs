@@ -30,7 +30,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Returns pending state.
 	fn state(&self) -> error::Result<&Self::State>;
 	/// Append block data to the transaction.
-	fn set_block_data(&mut self, header: Self::Block::Header, body: Option<Vec<Self::Block::Extrinsic>>, justification: Option<Justification>, is_new_best: bool) -> error::Result<()>;
+	fn set_block_data(&mut self, header: Block::Header, body: Option<Vec<Block::Extrinsic>>, justification: Option<Justification>, is_new_best: bool) -> error::Result<()>;
 	/// Inject storage data into the database.
 	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
@@ -55,11 +55,11 @@ pub trait Backend<Block: BlockT> {
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
-	fn begin_operation(&self, block: BlockId<Self::Block>) -> error::Result<Self::BlockImportOperation>;
+	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation>;
 	/// Commit block insertion.
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns state backend with post-state of given block.
-	fn state_at(&self, block: BlockId<Self::Block>) -> error::Result<Self::State>;
+	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
 }

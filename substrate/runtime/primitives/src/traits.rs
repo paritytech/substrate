@@ -18,7 +18,9 @@
 
 use rstd::prelude::*;
 use rstd;
-#[cfg(not(feature = "std"))] use runtime_io;
+use runtime_io;
+#[cfg(feature = "std")] use std::fmt::Debug;
+#[cfg(feature = "std")] use serde::Serialize;
 use substrate_primitives;
 use codec::Slicable;
 pub use integer_sqrt::IntegerSquareRoot;
@@ -147,10 +149,86 @@ impl<A: Executable, B: Executable> Executable for (A, B) {
 	}
 }
 
+/// Abstraction around hashing
+pub trait Hashing {
+	/// The hash type produced.
+	type Output;
+
+	/// Produce the hash of some byte-slice.
+	fn hash(s: &[u8]) -> Self::Output;
+
+	/// Produce the hash of some codec-encodable value.
+	fn hash_of<S: codec::Slicable>(s: &S) -> Self::Output {
+		codec::Slicable::using_encoded(s, Self::hash)
+	}
+
+	/// Produce the patricia-trie root of a mapping from indices to byte slices.
+	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output;
+
+	/// Iterator-based version of `enumerated_trie_root`.
+	fn ordered_trie_root<
+		I: IntoIterator<Item = A>,
+		A: AsRef<[u8]>
+	>(input: I) -> Self::Output;
+
+	/// The Patricia tree root of the given mapping as an iterator.
+	fn trie_root<
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>
+	>(input: I) -> Self::Output;
+
+	/// Acquire the global storage root.
+	fn storage_root() -> Self::Output;
+}
+
+/// Blake2-256 Hashing implementation.
+pub struct BlakeTwo256;
+
+impl Hashing for BlakeTwo256 {
+	type Output = primitives::H256;
+	fn hash(s: &[u8]) -> Self::Output {
+		runtime_io::blake2_256(s).into()
+	}
+	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output {
+		runtime_io::enumerated_trie_root(items).into()
+	}
+	fn trie_root<
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>
+	>(input: I) -> Self::Output {
+		runtime_io::trie_root(items).into()
+	}
+	fn ordered_trie_root<
+		I: IntoIterator<Item = A>,
+		A: AsRef<[u8]>
+	>(input: I) -> Self::Output {
+		runtime_io::ordered_trie_root(items).into()
+	}
+	fn storage_root() -> Self::Output {
+		runtime_io::storage_root().into()
+	}
+}
+
+
+#[cfg(feature = "std")]
+pub trait MaybeSerializeDebug: Serialize + Debug {}
+#[cfg(feature = "std")]
+impl<T: Serialize + Debug> MaybeSerializeDebug for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeSerializeDebug {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeSerializeDebug for T {}
+
+pub trait Member: Sized + MaybeSerializeDebug + Eq + PartialEq + Clone {}
+impl<T: Sized + MaybeSerializeDebug + Eq + PartialEq + Clone> Member for T {}
+
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Slicable`.
 pub trait Digest {
-	type Item: Sized;
+	type Item: Member;
 	fn push(&mut self, item: Self::Item);
 }
 
@@ -167,9 +245,9 @@ impl Digest for substrate_primitives::Digest {
 ///
 /// You can also create a `new` one from those fields.
 pub trait Header: Sized + Slicable {
-	type Number: Sized;
-	type Hash: Sized;
-	type Digest: Sized;
+	type Number: Member + SimpleArithmetic;
+	type Hash: Member + Default + SimpleBitOps;
+	type Digest: Member + Default;
 	fn number(&self) -> &Self::Number;
 	fn extrinsics_root(&self) -> &Self::Hash;
 	fn state_root(&self) -> &Self::Hash;
@@ -215,11 +293,12 @@ impl Header for substrate_primitives::Header {
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block {
-	type Extrinsic: Sized;
+	type Extrinsic: Member + Slicable;
 	type Header: Header;
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
+	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
 }
 
 impl Block for substrate_primitives::Block {
@@ -234,12 +313,15 @@ impl Block for substrate_primitives::Block {
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
 		(self.header, self.transactions)
 	}
+	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
+		substrate_primitives::Block { header, transactions: extrinsics }
+	}
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 pub trait Checkable: Sized {
-	type Checked: Sized;
+	type Checked: Member;
 	fn check(self) -> Result<Self::Checked, Self>;
 }
 
@@ -250,8 +332,8 @@ pub trait Checkable: Sized {
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable {
-	type AccountId;
-	type Index;
+	type AccountId: Member;
+	type Index: Member + SimpleArithmetic;
 	fn index(&self) -> &Self::Index;
 	fn sender(&self) -> &Self::AccountId;
 	fn apply(self);

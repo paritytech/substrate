@@ -16,28 +16,12 @@
 
 //! Generic implementations of Extrinsic/Header/Block.
 
-#[cfg(feature = "std")] use serde::Serialize;
+#[cfg(feature = "std")] use std::fmt;
 use rstd::prelude::*;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
-use traits;
+use traits::{self, Member};
 use rstd::ops;
-
-#[cfg(feature = "std")]
-use std::fmt::{self, Debug};
-
-#[cfg(feature = "std")]
-pub trait MaybeSerializeDebug: Serialize + Debug {}
-#[cfg(feature = "std")]
-impl<T: Serialize + Debug> MaybeSerializeDebug for T {}
-
-#[cfg(not(feature = "std"))]
-pub trait MaybeSerializeDebug {}
-#[cfg(not(feature = "std"))]
-impl<T> MaybeSerializeDebug for T {}
-
-pub trait Member: MaybeSerializeDebug + Eq + PartialEq + Clone {}
-impl<T: MaybeSerializeDebug + Eq + PartialEq + Clone> Member for T {}
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
@@ -366,6 +350,13 @@ pub enum BlockId<Block: BlockT> where
 	Hash(Hash),
 	/// Identify by block number.
 	Number(Number),
+}
+
+#[cfg(feature = "std")]
+impl<Block: BlockT> fmt::Display for Id<Block> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		format!("{:?}", self)
+	}
 }
 
 /// Abstraction over a substrate block.

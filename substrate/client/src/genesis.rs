@@ -17,23 +17,24 @@
 //! Tool for creating the genesis block.
 
 use std::collections::HashMap;
-use primitives::{Block, Header};
+use primitives::traits::{Block as BlockT, Hashing as HashingT, Zero};
 use triehash::trie_root;
 
 /// Create a genesis block, given the initial storage.
-pub fn construct_genesis_block(storage: &HashMap<Vec<u8>, Vec<u8>>) -> Block {
+pub fn construct_genesis_block<Block: BlockT, Hashing: HashingT<Output = Block::Header::Hash>(storage: &HashMap<Vec<u8>, Vec<u8>>) -> Block {
+	// TODO gav don't use `trie_root`!
 	let state_root = trie_root(storage.clone().into_iter()).0.into();
-	let header = Header {
-		parent_hash: Default::default(),
-		number: 0,
-		state_root,
-		extrinsics_root: trie_root(vec![].into_iter()).0.into(),
-		digest: Default::default(),
-	};
-	Block {
-		header,
-		transactions: vec![],
-	}
+	let extrinsics_root = trie_root(vec![].into_iter()).0.into();
+	Block::new(
+		Block::Header::new(
+			Zero::zero(),
+			extrinsics_root,
+			state_root,
+			Default::default(),
+			Default::default()
+		),
+		Default::default()
+	)
 }
 
 #[cfg(test)]

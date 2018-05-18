@@ -29,7 +29,7 @@ error_chain! {
 		}
 
 		/// Unknown block.
-		UnknownBlock(h: ::primitives::block::Id) {
+		UnknownBlock(h: Box<Display>) {
 			description("unknown block"),
 			display("UnknownBlock: {}", h),
 		}
@@ -77,7 +77,7 @@ error_chain! {
 		}
 
 		/// Bad justification for header.
-		BadJustification(h: ::primitives::block::Id) {
+		BadJustification(h: Box<Display>) {
 			description("bad justification for header"),
 			display("bad justification for header: {}", h),
 		}

@@ -19,72 +19,74 @@
 use std::vec::Vec;
 use codec::{Joiner, Slicable};
 use state_machine::{self, CodeExecutor};
-use primitives::{Header, Block};
-use primitives::block::{Id as BlockId, Extrinsic};
+use runtime_primitives::traits::{Header as HeaderT, Hashing as HashingT, Block as BlockT};
+use runtime_primitives::generic::BlockId;
 use {backend, error, Client};
 use triehash::ordered_trie_root;
 
-/// Utility for building new (valid) blocks from a stream of transactions.
-pub struct BlockBuilder<B, E> where
-	B: backend::Backend,
+/// Utility for building new (valid) blocks from a stream of extrinsics.
+pub struct BlockBuilder<B, E, Block, Hashing> where
+	B: backend::Backend<Block>,
 	E: CodeExecutor + Clone,
-	error::Error: From<<<B as backend::Backend>::State as state_machine::backend::Backend>::Error>,
+	Block: BlockT,
+	Hashing: HashingT<Output = Block::Header::Hash>,
+	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	header: Header,
-	transactions: Vec<Extrinsic>,
+	extrinsics: Vec<Block::Extrinsic>,
 	executor: E,
 	state: B::State,
 	changes: state_machine::OverlayedChanges,
+	// will probably need PhantomData<Hashing> here...
 }
 
-impl<B, E> BlockBuilder<B, E> where
-	B: backend::Backend,
+impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
+	B: backend::Backend<Block>,
 	E: CodeExecutor + Clone,
-	error::Error: From<<<B as backend::Backend>::State as state_machine::backend::Backend>::Error>,
+	Block: BlockT,
+	Hashing: HashingT<Output = Block::Header::Hash>,
+	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
-	pub fn new(client: &Client<B, E>) -> error::Result<Self> {
-		client.info().and_then(|i| Self::at_block(&BlockId::Hash(i.chain.best_hash), client))
+	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {
+		client.info().and_then(|i| Self::at_block(&BlockId<Block>::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
 	/// build upon.
-	pub fn at_block(block_id: &BlockId, client: &Client<B, E>) -> error::Result<Self> {
+	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block>) -> error::Result<Self> {
 		Ok(BlockBuilder {
 			header: Header {
-				number: client.block_number_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(*block_id))? + 1,
-				parent_hash: client.block_hash_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(*block_id))?,
+				number: client.block_number_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(Box::new(block_id.clone())))? + 1,
+				parent_hash: client.block_hash_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(Box::new(block_id.clone())))?,
 				state_root: Default::default(),
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			},
-			transactions: Default::default(),
+			extrinsics: Default::default(),
 			executor: client.clone_executor(),
 			state: client.state_at(block_id)?,
 			changes: Default::default(),
 		})
 	}
 
-	/// Push a transaction onto the block's list of transactions. This will ensure the transaction
+	/// Push a transaction onto the block's list of extrinsics. This will ensure the transaction
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
-	pub fn push(&mut self, tx: Extrinsic) -> error::Result<()> {
+	pub fn push(&mut self, xt: Block::Extrinsic) -> error::Result<()> {
 		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "execute_transaction",
-			&vec![].and(&self.header).and(&tx))?;
-		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
-		self.transactions.push(tx);
+			&vec![].and(&self.header).and(&xt))?;
+		self.header = Block::Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
+		self.extrinsics.push(xt);
 		Ok(())
 	}
 
-	/// Consume the builder to return a valid `Block` containing all pushed transactions.
+	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header.extrinsics_root = ordered_trie_root(self.transactions.iter().map(Slicable::encode)).0.into();
+		self.header.extrinsics_root = Hashing::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode));
 		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
 			&self.header.encode())?;
-		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
-		Ok(Block {
-			header: self.header,
-			transactions: self.transactions,
-		})
+		self.header = Block::Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
+		Ok(Block::new(self.header, self.extrinsics))
 	}
 }
