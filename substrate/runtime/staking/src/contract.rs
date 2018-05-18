@@ -19,7 +19,6 @@
 // TODO: Extract to it's own crate?
 
 use codec::Slicable;
-use primitives::traits::As;
 use rstd::prelude::*;
 use sandbox;
 use {AccountDb, Module, OverlayAccountDb, Trait};
@@ -190,14 +189,18 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 	fn ext_transfer<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let transfer_to_ptr = args[0].as_i32().unwrap() as u32;
 		let transfer_to_len = args[1].as_i32().unwrap() as u32;
-		let value = args[2].as_i32().unwrap() as u64;
+		let value_ptr = args[2].as_i32().unwrap() as u32;
+		let value_len = args[3].as_i32().unwrap() as u32;
 
-		// TODO: slicable
 		let mut transfer_to = Vec::new();
 		transfer_to.resize(transfer_to_len as usize, 0);
 		e.memory().get(transfer_to_ptr, &mut transfer_to)?;
-		let value = T::Balance::sa(value as usize);
 		let transfer_to = T::AccountId::decode(&mut &transfer_to[..]).unwrap();
+
+		let mut value_buf = Vec::new();
+		value_buf.resize(value_len as usize, 0);
+		e.memory().get(value_ptr, &mut value_buf)?;
+		let value = T::Balance::decode(&mut &value_buf[..]).unwrap();
 
 		let account = e.account().clone();
 		if let Some(commit_state) =
@@ -213,10 +216,13 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 	fn ext_create<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let code_ptr = args[0].as_i32().unwrap() as u32;
 		let code_len = args[1].as_i32().unwrap() as u32;
-		let value = args[2].as_i32().unwrap() as u32;
+		let value_ptr = args[2].as_i32().unwrap() as u32;
+		let value_len = args[3].as_i32().unwrap() as u32;
 
-		// TODO: slicable
-		let value = T::Balance::sa(value as usize);
+		let mut value_buf = Vec::new();
+		value_buf.resize(value_len as usize, 0);
+		e.memory().get(value_ptr, &mut value_buf)?;
+		let value = T::Balance::decode(&mut &value_buf[..]).unwrap();
 
 		let mut code = Vec::new();
 		code.resize(code_len as usize, 0u8);
@@ -506,13 +512,10 @@ mod tests {
 		assert_matches!(r, Err(Error::Memory));
 	}
 
-	#[test]
-	fn contract_transfer() {
-		let code_transfer = wabt::wat2wasm(
-			r#"
+	const CODE_TRANSFER: &str = r#"
 (module
-    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value: u32)
-    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32)))
+    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
+    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
 
     (import "env" "memory" (memory 1 1))
 
@@ -520,16 +523,24 @@ mod tests {
         (call $ext_transfer
             (i32.const 4)  ;; Pointer to "Transfer to" address.
             (i32.const 8)  ;; Length of "Transfer to" address.
-            (i32.const 6)  ;; value to transfer
+            (i32.const 12)  ;; Pointer to the buffer with value to transfer
+			(i32.const 8)   ;; Length of the buffer with value to transfer.
         )
     )
 
     ;; Destination AccountId to transfer the funds.
     ;; Represented by u64 (8 bytes long) in little endian.
     (data (i32.const 4) "\02\00\00\00\00\00\00\00")
+
+    ;; Amount of value to transfer.
+	;; Represented by u64 (8 bytes long) in little endian.
+    (data (i32.const 12) "\06\00\00\00\00\00\00\00")
 )
-		"#,
-		).unwrap();
+"#;
+
+	#[test]
+	fn contract_transfer() {
+		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(0, 111);
@@ -546,61 +557,55 @@ mod tests {
 		});
 	}
 
-	fn escaped_bytestring(bytes: &[u8]) -> String {
-		use std::fmt::Write;
-		let mut result = String::new();
-		for b in bytes {
-			write!(result, "\\{:02x}", b).unwrap();
+	/// Returns code that uses `ext_create` runtime call.
+	///
+	/// Takes bytecode of the contract that needs to be deployed.
+	fn code_create(child_bytecode: &[u8]) -> String {
+		/// Convert a byte slice to a string with hex values.
+		///
+		/// Each value is preceeded with a `\` character.
+		fn escaped_bytestring(bytes: &[u8]) -> String {
+			use std::fmt::Write;
+			let mut result = String::new();
+			for b in bytes {
+				write!(result, "\\{:02x}", b).unwrap();
+			}
+			result
 		}
-		result
-	}
 
-	#[test]
-	fn contract_create() {
-		let code_transfer = wabt::wat2wasm(
-			r#"
+		format!(
+r#"
 (module
-    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value: u32)
-    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32)))
-
-    (import "env" "memory" (memory 1 1))
-
-    (func (export "call")
-        (call $ext_transfer
-            (i32.const 4)  ;; Pointer to "Transfer to" address.
-            (i32.const 8)  ;; Length of "Transfer to" address.
-            (i32.const 6)  ;; value to transfer
-        )
-    )
-
-    ;; Destination AccountId to transfer the funds.
-    ;; Represented by u64 (8 bytes long) in little endian.
-    (data (i32.const 4) "\02\00\00\00\00\00\00\00")
-)
-		"#,
-		).unwrap();
-
-		let code_create = wabt::wat2wasm(format!(
-			r#"
-(module
-    ;; ext_create(code_ptr: u32, code_len: u32, value: u32)
-    (import "env" "ext_create" (func $ext_create (param i32 i32 i32)))
+    ;; ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
+    (import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32)))
 
     (import "env" "memory" (memory 1 1))
 
     (func (export "call")
         (call $ext_create
-            (i32.const 4)   ;; Pointer to `code`
-            (i32.const {code_length}) ;; Length of `code`
-            (i32.const 3)   ;; Value to transfer
+            (i32.const 12)   ;; Pointer to `code`
+            (i32.const {code_len}) ;; Length of `code`
+            (i32.const 4)   ;; Pointer to the buffer with value to transfer
+			(i32.const 8)   ;; Length of the buffer with value to transfer
         )
     )
-    (data (i32.const 4) "{escaped_code_transfer}")
+	;; Amount of value to transfer.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
+
+	;; Embedded wasm code.
+    (data (i32.const 12) "{escaped_bytecode}")
 )
-			"#,
-			escaped_code_transfer = escaped_bytestring(&code_transfer),
-			code_length = code_transfer.len(),
-		)).unwrap();
+"#,
+			escaped_bytecode = escaped_bytestring(&child_bytecode),
+			code_len = child_bytecode.len(),
+		)
+	}
+
+	#[test]
+	fn contract_create() {
+		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+		let code_create = wabt::wat2wasm(&code_create(&code_transfer)).unwrap();
 
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(0, 111);
@@ -620,9 +625,10 @@ mod tests {
 		});
 	}
 
-	#[test]
-	fn contract_adder() {
-		let code_adder = wabt::wat2wasm(r#"
+	/// This code a value from the storage, increment it's first byte
+	/// and then stores it back in the storage.
+	const CODE_ADDER: &str =
+r#"
 (module
     ;; ext_set_storage(location_ptr: i32, value_non_null: bool, value_ptr: i32)
     (import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
@@ -652,10 +658,14 @@ mod tests {
         )
     )
 
-    ;; Location of storage to put the data. 32 bytes.
+    ;; Location of storage to load/store the data. 32 bytes.
     (data (i32.const 4) "\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01")
 )
-		"#).unwrap();
+"#;
+
+	#[test]
+	fn contract_adder() {
+		let code_adder = wabt::wat2wasm(CODE_ADDER).unwrap();
 
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(0, 111);
@@ -681,12 +691,10 @@ mod tests {
 		});
 	}
 
-	#[test]
-	fn contract_out_of_gas() {
-		// This code should make 100_000 iterations so it should
-		// consume more than 100_000 units of gas.
-		let code_loop = wabt::wat2wasm(
-			r#"
+	// This code should make 100_000 iterations so it should
+	// consume more than 100_000 units of gas.
+	const CODE_LOOP: &str =
+r#"
 (module
 	(func (export "call")
 		(local $i i32)
@@ -710,8 +718,11 @@ mod tests {
 		end
 	)
 )
-		"#,
-		).unwrap();
+"#;
+
+	#[test]
+	fn contract_out_of_gas() {
+		let code_loop = wabt::wat2wasm(CODE_LOOP).unwrap();
 
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			// Set initial balances.
@@ -730,10 +741,8 @@ mod tests {
 		});
 	}
 
-	#[test]
-	fn contract_internal_mem() {
-		let code_mem = wabt::wat2wasm(
-			r#"
+	const CODE_MEM: &str =
+r#"
 (module
 	;; Internal memory is not allowed.
 	(memory 1 1)
@@ -742,8 +751,11 @@ mod tests {
 		nop
 	)
 )
-		"#,
-		).unwrap();
+"#;
+
+	#[test]
+	fn contract_internal_mem() {
+		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
 
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			// Set initial balances.
