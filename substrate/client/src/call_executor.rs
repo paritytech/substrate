@@ -23,7 +23,7 @@ use triehash::trie_root;
 use backend;
 use blockchain::Backend as ChainBackend;
 use error;
-use light::Fetcher;
+use light::{Fetcher, RemoteCallRequest};
 
 /// Information regarding the result of a call.
 #[derive(Debug)]
@@ -59,9 +59,8 @@ pub struct LocalCallExecutor<B, E> {
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
-pub struct RemoteCallExecutor<B, E> {
+pub struct RemoteCallExecutor<B> {
 	backend: Arc<B>,
-	executor: E,
 	fetcher: Arc<Fetcher>,
 }
 
@@ -106,20 +105,19 @@ impl<B, E> CallExecutor for LocalCallExecutor<B, E>
 	}
 }
 
-impl<B, E> RemoteCallExecutor<B, E> {
+impl<B> RemoteCallExecutor<B> {
 	/// Creates new instance of remote call executor.
-	pub fn new(backend: Arc<B>, executor: E, fetcher: Arc<Fetcher>) -> Self {
-		RemoteCallExecutor { backend, executor, fetcher }
+	pub fn new(backend: Arc<B>, fetcher: Arc<Fetcher>) -> Self {
+		RemoteCallExecutor { backend, fetcher }
 	}
 }
 
-impl<B, E> CallExecutor for RemoteCallExecutor<B, E>
+impl<B> CallExecutor for RemoteCallExecutor<B>
 	where
 		B: backend::RemoteBackend,
-		E: CodeExecutor,
 		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
 {
-	type Error = E::Error;
+	type Error = error::Error;
 
 	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let block_hash = match *id {
@@ -128,40 +126,52 @@ impl<B, E> CallExecutor for RemoteCallExecutor<B, E>
 				.ok_or_else(|| error::ErrorKind::UnknownBlock(BlockId::Number(number)))?,
 		};
 
-		let (remote_result, remote_proof) = self.fetcher.execution_proof(block_hash, method, call_data)?;
-
-		// code below will be replaced with proper proof check once trie-based proofs will be possible
-
-		let remote_state = state_from_execution_proof(remote_proof);
-		let remote_state_root = trie_root(remote_state.pairs().into_iter()).0;
-
-		let local_header = self.backend.blockchain().header(BlockId::Hash(block_hash))?;
-		let local_header = local_header.ok_or_else(|| error::ErrorKind::UnknownBlock(BlockId::Hash(block_hash)))?;
-		let local_state_root = local_header.state_root;
-
-		if remote_state_root != *local_state_root {
-			return Err(error::ErrorKind::InvalidExecutionProof.into());
-		}
-
-		let mut changes = OverlayedChanges::default();
-		let (local_result, _) = state_machine::execute(
-			&remote_state,
-			&mut changes,
-			&self.executor,
-			method,
-			call_data,
-		)?;
-
-		if local_result != remote_result {
-			return Err(error::ErrorKind::InvalidExecutionProof.into());
-		}
-
-		Ok(CallResult { return_data: local_result, changes })
+		self.fetcher.remote_call(RemoteCallRequest {
+			block: block_hash,
+			method: method.into(),
+			call_data: call_data.to_vec(),
+		})
 	}
 
 	fn call_at_state<S: state_machine::Backend>(&self, _state: &S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> error::Result<(Vec<u8>, S::Transaction)> {
 		Err(error::ErrorKind::NotAvailableOnLightClient.into())
 	}
+}
+
+/// Check remote execution proof.
+pub fn check_execution_proof<B, E>(backend: &B, executor: &E, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> Result<CallResult, error::Error>
+	where
+		B: backend::RemoteBackend,
+		E: CodeExecutor,
+		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
+{
+	let (remote_result, remote_proof) = remote_proof;
+
+	let remote_state = state_from_execution_proof(remote_proof);
+	let remote_state_root = trie_root(remote_state.pairs().into_iter()).0;
+
+	let local_header = backend.blockchain().header(BlockId::Hash(request.block))?;
+	let local_header = local_header.ok_or_else(|| error::ErrorKind::UnknownBlock(BlockId::Hash(request.block)))?;
+	let local_state_root = local_header.state_root;
+
+	if remote_state_root != *local_state_root {
+		return Err(error::ErrorKind::InvalidExecutionProof.into());
+	}
+
+	let mut changes = OverlayedChanges::default();
+	let (local_result, _) = state_machine::execute(
+		&remote_state,
+		&mut changes,
+		executor,
+		&request.method,
+		&request.call_data,
+	)?;
+
+	if local_result != remote_result {
+		return Err(error::ErrorKind::InvalidExecutionProof.into());
+	}
+
+	Ok(CallResult { return_data: local_result, changes })
 }
 
 /// Convert state to execution proof. Proof is simple the whole state (temporary).

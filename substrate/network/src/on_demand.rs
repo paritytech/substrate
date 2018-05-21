@@ -17,15 +17,14 @@
 //! On-demand requests service.
 
 use std::collections::VecDeque;
-use std::sync::Weak;
+use std::sync::{Arc, Weak};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::{Instant, Duration};
 use linked_hash_map::LinkedHashMap;
 use linked_hash_map::Entry;
 use parking_lot::Mutex;
-use primitives::block::HeaderHash;
 use client;
-use client::light::Fetcher;
+use client::light::{Fetcher, FetchChecker, RemoteCallRequest};
 use io::SyncIo;
 use message;
 use network::PeerId;
@@ -52,11 +51,12 @@ pub trait OnDemandService: Send + Sync {
 /// On-demand requests service. Dispatches requests to appropriate peers.
 pub struct OnDemand<E: service::ExecuteInContext> {
 	core: Mutex<OnDemandCore<E>>,
+	checker: Arc<FetchChecker>,
 }
 
 /// On-demand response.
 pub struct Response {
-	receiver: Receiver<message::RemoteCallResponse>,
+	receiver: Receiver<client::CallResult>,
 }
 
 #[derive(Default)]
@@ -71,20 +71,22 @@ struct OnDemandCore<E: service::ExecuteInContext> {
 struct Request {
 	id: u64,
 	timestamp: Instant,
-	sender: Sender<message::RemoteCallResponse>,
-	message: message::RemoteCallRequest,
+	sender: Sender<client::CallResult>,
+	request: RemoteCallRequest,
 }
 
 impl Response {
-	fn wait(&mut self) -> client::error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
-		self.receiver.recv().map(|r| (r.value, r.proof)).map_err(|_| unimplemented!())
+	fn wait(&mut self) -> client::error::Result<client::CallResult> {
+		self.receiver.recv()
+			.map_err(|_| client::error::ErrorKind::Backend("OnDemand serivice has gone".into()).into())
 	}
 }
 
 impl<E> OnDemand<E> where E: service::ExecuteInContext {
 	/// Creates new on-demand service.
-	pub fn new() -> Self {
+	pub fn new(checker: Arc<FetchChecker>) -> Self {
 		OnDemand {
+			checker,
 			core: Mutex::new(OnDemandCore {
 				service: Weak::new(),
 				next_request_id: 0,
@@ -101,7 +103,7 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 	}
 
 	/// Execute method call on remote node, returning execution result and proof.
-	pub fn remote_call(&self, block: HeaderHash, method: &str, data: &[u8]) -> Response {
+	pub fn remote_call(&self, request: RemoteCallRequest) -> Response {
 		let (sender, receiver) = channel();
 		let result = Response {
 			receiver: receiver,
@@ -109,12 +111,7 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 
 		{
 			let mut core = self.core.lock();
-			core.insert(sender, message::RemoteCallRequest {
-				id: 0,
-				block: block,
-				method: method.into(),
-				data: data.to_vec(),
-			});
+			core.insert(sender, request);
 			core.dispatch();
 		}
 
@@ -151,9 +148,17 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 	fn on_remote_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteCallResponse) {
 		let mut core = self.core.lock();
 		match core.remove(peer, response.id) {
-			Some(request) => {
-				// we do not bother if receiver has been dropped already
-				let _ = request.sender.send(response);
+			Some(request) => match self.checker.check_execution_proof(&request.request, (response.value, response.proof)) {
+				Ok(response) => {
+					// we do not bother if receiver has been dropped already
+					let _ = request.sender.send(response);
+				},
+				Err(error) => {
+					trace!(target: "sync", "Failed to check remote response from peer {}: {}", peer, error);
+					io.disconnect_peer(peer);
+					core.remove_peer(peer);
+					core.insert(request.sender, request.request);
+				},
 			},
 			None => {
 				trace!(target: "sync", "Invalid remote response from peer {}", peer);
@@ -167,8 +172,8 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 }
 
 impl<E> Fetcher for OnDemand<E> where E: service::ExecuteInContext {
-	fn execution_proof(&self, block: HeaderHash, method: &str, call_data: &[u8]) -> client::error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
-		self.remote_call(block, method, call_data).wait().map_err(|_| unimplemented!())
+	fn remote_call(&self, request: RemoteCallRequest) -> client::error::Result<client::CallResult> {
+		self.remote_call(request).wait()
 	}
 }
 
@@ -203,14 +208,15 @@ impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
 		}
 	}
 
-	pub fn insert(&mut self, sender: Sender<message::RemoteCallResponse>, mut message: message::RemoteCallRequest) {
-		message.id = self.next_request_id;
+	pub fn insert(&mut self, sender: Sender<client::CallResult>, request: RemoteCallRequest) {
+		let request_id = self.next_request_id;
 		self.next_request_id += 1;
+
 		self.pending_requests.push_back(Request {
-			id: message.id,
+			id: request_id,
 			timestamp: Instant::now(),
 			sender,
-			message,
+			request,
 		});
 	}
 
@@ -243,8 +249,16 @@ impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
 			request.timestamp = Instant::now();
 			trace!(target: "sync", "Dispatching remote request {} to peer {}", request.id, peer);
 
-			service.execute_in_context(|ctx, protocol|
-				protocol.send_message(ctx, peer, message::Message::RemoteCallRequest(request.message.clone())));
+			service.execute_in_context(|ctx, protocol| {
+				let message = message::RemoteCallRequest {
+					id: request.id,
+					block: request.request.block,
+					method: request.request.method.clone(),
+					data: request.request.call_data.clone(),
+				};
+
+				protocol.send_message(ctx, peer, message::Message::RemoteCallRequest(message))
+			});
 			self.active_peers.insert(peer, request);
 		}
 	}
@@ -256,6 +270,8 @@ mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use parking_lot::RwLock;
+	use client;
+	use client::light::{FetchChecker, RemoteCallRequest};
 	use io::NetSyncIo;
 	use message;
 	use network::PeerId;
@@ -265,14 +281,27 @@ mod tests {
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 
 	struct DummyExecutor;
+	struct DummyFetchChecker { ok: bool }
 
 	impl ExecuteInContext for DummyExecutor {
 		fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol)>(&self, _closure: F) {}
 	}
 
-	fn dummy() -> (Arc<DummyExecutor>, Arc<OnDemand<DummyExecutor>>) {
+	impl FetchChecker for DummyFetchChecker {
+		fn check_execution_proof(&self, _request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> client::error::Result<client::CallResult> {
+			match self.ok {
+				true => Ok(client::CallResult {
+					return_data: remote_proof.0,
+					changes: Default::default(),
+				}),
+				false => Err(client::error::ErrorKind::Backend("Test error".into()).into()),
+			}
+		}
+	}
+
+	fn dummy(ok: bool) -> (Arc<DummyExecutor>, Arc<OnDemand<DummyExecutor>>) {
 		let executor = Arc::new(DummyExecutor);
-		let service = Arc::new(OnDemand::new());
+		let service = Arc::new(OnDemand::new(Arc::new(DummyFetchChecker { ok })));
 		service.set_service_link(Arc::downgrade(&executor));
 		(executor, service)
 	}
@@ -292,7 +321,7 @@ mod tests {
 
 	#[test]
 	fn knows_about_peers_roles() {
-		let (_, on_demand) = dummy();
+		let (_, on_demand) = dummy(true);
 		on_demand.on_connect(0, Role::LIGHT);
 		on_demand.on_connect(1, Role::FULL);
 		on_demand.on_connect(2, Role::COLLATOR);
@@ -302,7 +331,7 @@ mod tests {
 
 	#[test]
 	fn disconnects_from_idle_peer() {
-		let (_, on_demand) = dummy();
+		let (_, on_demand) = dummy(true);
 		on_demand.on_connect(0, Role::FULL);
 		assert_eq!(1, total_peers(&*on_demand));
 		on_demand.on_disconnect(0);
@@ -311,7 +340,7 @@ mod tests {
 
 	#[test]
 	fn disconnects_from_timeouted_peer() {
-		let (_x, on_demand) = dummy();
+		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
 
@@ -320,7 +349,7 @@ mod tests {
 		assert_eq!(vec![0, 1], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
 		assert!(on_demand.core.lock().active_peers.is_empty());
 
-		on_demand.remote_call(Default::default(), "test", &[]);
+		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
 		assert_eq!(vec![1], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
 		assert_eq!(vec![0], on_demand.core.lock().active_peers.keys().cloned().collect::<Vec<_>>());
 
@@ -332,20 +361,34 @@ mod tests {
 	}
 
 	#[test]
-	fn disconnects_from_peer_on_incorrect_response() {
-		let (_x, on_demand) = dummy();
+	fn disconnects_from_peer_on_response_with_wrong_id() {
+		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
 		on_demand.on_connect(0, Role::FULL);
 
-		on_demand.remote_call(Default::default(), "test", &[]);
+		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
 		receive_response(&*on_demand, &mut network, 0, 1);
 		assert!(network.to_disconnect.contains(&0));
+		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+	}
+
+	#[test]
+	fn disconnects_from_peer_on_incorrect_response() {
+		let (_x, on_demand) = dummy(false);
+		let queue = RwLock::new(VecDeque::new());
+		let mut network = TestIo::new(&queue, None);
+		on_demand.on_connect(0, Role::FULL);
+
+		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
+		receive_response(&*on_demand, &mut network, 0, 0);
+		assert!(network.to_disconnect.contains(&0));
+		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 	}
 
 	#[test]
 	fn disconnects_from_peer_on_unexpected_response() {
-		let (_x, on_demand) = dummy();
+		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
 		on_demand.on_connect(0, Role::FULL);
@@ -356,16 +399,15 @@ mod tests {
 
 	#[test]
 	fn receives_remote_response() {
-		let (_x, on_demand) = dummy();
+		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
 		on_demand.on_connect(0, Role::FULL);
 
-		let mut response = on_demand.remote_call(Default::default(), "test", &[]);
+		let mut response = on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
 		let thread = ::std::thread::spawn(move || {
-			let (result, proof) = response.wait().unwrap();
-			assert_eq!(result, vec![1]);
-			assert_eq!(proof, vec![vec![2]]);
+			let result = response.wait().unwrap();
+			assert_eq!(result.return_data, vec![1]);
 		});
 
 		receive_response(&*on_demand, &mut network, 0, 0);

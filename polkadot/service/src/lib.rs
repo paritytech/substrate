@@ -280,10 +280,12 @@ impl client::GenesisBuilder for GenesisBuilder {
 }
 
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend, client::RemoteCallExecutor<client::light::Backend, CodeExecutor>>, error::Error> { // TODO: light
+pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend, client::RemoteCallExecutor<client::light::Backend>>, error::Error> {
 	Service::new(move |_, executor, genesis_builder: GenesisBuilder| {
-			let fetcher = Arc::new(network::OnDemand::new());
-			let client = client::light::new_light(fetcher.clone(), executor, genesis_builder)?;
+			let client_backend = client::light::new_light_backend();
+			let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));
+			let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
+			let client = client::light::new_light(client_backend, fetcher.clone(), genesis_builder)?;
 			Ok((Arc::new(client), Some(fetcher)))
 		},
 		|client| Arc::new(polkadot_api::light::RemotePolkadotApiWrapper(client.clone())),

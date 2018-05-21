@@ -192,7 +192,7 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Expose backend reference. To be used in tests only
-	pub fn backend(&self) -> &B {
+	pub fn backend(&self) -> &Arc<B> {
 		&self.backend
 	}
 

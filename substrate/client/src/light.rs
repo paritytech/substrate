@@ -25,15 +25,32 @@ use state_machine::CodeExecutor;
 use state_machine::backend::Backend as StateBackend;
 use blockchain::{self, BlockStatus};
 use backend;
-use call_executor::RemoteCallExecutor;
+use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
 use client::{Client, GenesisBuilder};
 use error;
 use in_mem::Blockchain as InMemBlockchain;
 
-/// Light client data fetcher.
+/// Remote call request.
+pub struct RemoteCallRequest {
+	/// Call at state of given block.
+	pub block: HeaderHash,
+	/// Method to call.
+	pub method: String,
+	/// Call data.
+	pub call_data: Vec<u8>,
+}
+
+/// Light client data fetcher. Implementations of this trait must check if remote data
+/// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher: Send + Sync {
-	/// Fetch method execution proof.
-	fn execution_proof(&self, block: HeaderHash, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)>;
+	/// Fetch remote call result.
+	fn remote_call(&self, request: RemoteCallRequest) -> error::Result<CallResult>;
+}
+
+/// Light client remote data checker.
+pub trait FetchChecker: Send + Sync {
+	/// Check remote method execution proof.
+	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult>;
 }
 
 /// Light client backend.
@@ -56,6 +73,14 @@ pub struct BlockImportOperation {
 pub struct OnDemandState {
 	/// Hash of the block, state is valid for.
 	_block: HeaderHash,
+}
+
+/// Remote data checker.
+pub struct LightDataChecker<E> {
+	/// Backend reference.
+	backend: Arc<Backend>,
+	/// Executor.
+	executor: E,
 }
 
 struct PendingBlock {
@@ -172,19 +197,42 @@ impl StateBackend for OnDemandState {
 	}
 }
 
-/// Create an instance of in-memory client.
-pub fn new_light<E, F>(
-	fetcher: Arc<Fetcher>,
-	executor: E,
-	genesis_builder: F
-) -> error::Result<Client<Backend, RemoteCallExecutor<Backend, E>>>
+impl<E> FetchChecker for LightDataChecker<E>
 	where
 		E: CodeExecutor,
-		F: GenesisBuilder,
 {
+	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult> {
+		check_execution_proof(&*self.backend, &self.executor, request, remote_proof)
+	}
+}
+
+/// Create an instance of light client backend.
+pub fn new_light_backend() -> Arc<Backend> {
 	let storage = InMemBlockchain::new();
 	let blockchain = Blockchain { storage };
-	let backend = Arc::new(Backend { blockchain });
-	let executor = RemoteCallExecutor::new(backend.clone(), executor, fetcher);
+	Arc::new(Backend { blockchain })
+}
+
+/// Create an instance of light client.
+pub fn new_light<F>(
+	backend: Arc<Backend>,
+	fetcher: Arc<Fetcher>,
+	genesis_builder: F
+) -> error::Result<Client<Backend, RemoteCallExecutor<Backend>>>
+	where
+		F: GenesisBuilder,
+{
+	let executor = RemoteCallExecutor::new(backend.clone(), fetcher);
 	Client::new(backend, executor, genesis_builder)
+}
+
+/// Create an instance of fetch data checker.
+pub fn new_fetch_checker<E>(
+	backend: Arc<Backend>,
+	executor: E,
+) -> LightDataChecker<E>
+	where
+		E: CodeExecutor,
+{
+	LightDataChecker { backend, executor }
 }
