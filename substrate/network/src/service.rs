@@ -35,8 +35,6 @@ use message::{Statement, LocalizedBftMessage};
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
 
-const V0_PACKET_COUNT: u8 = 1;
-
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 /// Type that represents statement stream.
@@ -184,7 +182,7 @@ impl Service {
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, &[(0, V0_PACKET_COUNT)])
+		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, &[(::protocol::CURRENT_VERSION, ::protocol::CURRENT_PACKET_COUNT)])
 			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}
 

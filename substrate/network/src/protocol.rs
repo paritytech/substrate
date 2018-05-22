@@ -37,7 +37,12 @@ use error;
 use super::header_hash;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
-const PROTOCOL_VERSION: u32 = 0;
+
+/// Current protocol version.
+pub (crate) const CURRENT_VERSION: u32 = 1;
+/// Current packet count.
+pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
+
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
@@ -402,7 +407,7 @@ impl Protocol {
 				trace!(target: "sync", "Peer {} genesis hash mismatch (ours: {}, theirs: {})", peer_id, self.genesis_hash, status.genesis_hash);
 				return;
 			}
-			if status.version != PROTOCOL_VERSION {
+			if status.version != CURRENT_VERSION {
 				io.disable_peer(peer_id);
 				trace!(target: "sync", "Peer {} unsupported eth protocol ({})", peer_id, status.version);
 				return;
@@ -471,7 +476,7 @@ impl Protocol {
 	fn send_status(&self, io: &mut SyncIo, peer_id: PeerId) {
 		if let Ok(info) = self.chain.info() {
 			let status = message::Status {
-				version: PROTOCOL_VERSION,
+				version: CURRENT_VERSION,
 				genesis_hash: info.chain.genesis_hash,
 				roles: self.config.roles.into(),
 				best_number: info.chain.best_number,
