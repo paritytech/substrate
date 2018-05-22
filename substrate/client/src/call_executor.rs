@@ -15,6 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use futures::{IntoFuture, Future};
 use primitives::block::Id as BlockId;
 use state_machine::{self, OverlayedChanges, Backend as StateBackend, CodeExecutor};
 use state_machine::backend::InMemory as InMemoryStateBackend;
@@ -59,9 +60,9 @@ pub struct LocalCallExecutor<B, E> {
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
-pub struct RemoteCallExecutor<B> {
+pub struct RemoteCallExecutor<B, F> {
 	backend: Arc<B>,
-	fetcher: Arc<Fetcher>,
+	fetcher: Arc<F>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
@@ -105,16 +106,17 @@ impl<B, E> CallExecutor for LocalCallExecutor<B, E>
 	}
 }
 
-impl<B> RemoteCallExecutor<B> {
+impl<B, F> RemoteCallExecutor<B, F> {
 	/// Creates new instance of remote call executor.
-	pub fn new(backend: Arc<B>, fetcher: Arc<Fetcher>) -> Self {
+	pub fn new(backend: Arc<B>, fetcher: Arc<F>) -> Self {
 		RemoteCallExecutor { backend, fetcher }
 	}
 }
 
-impl<B> CallExecutor for RemoteCallExecutor<B>
+impl<B, F> CallExecutor for RemoteCallExecutor<B, F>
 	where
 		B: backend::RemoteBackend,
+		F: Fetcher,
 		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
 {
 	type Error = error::Error;
@@ -130,7 +132,7 @@ impl<B> CallExecutor for RemoteCallExecutor<B>
 			block: block_hash,
 			method: method.into(),
 			call_data: call_data.to_vec(),
-		})
+		}).into_future().wait()
 	}
 
 	fn call_at_state<S: state_machine::Backend>(&self, _state: &S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> error::Result<(Vec<u8>, S::Transaction)> {

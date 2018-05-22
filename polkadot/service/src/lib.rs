@@ -280,7 +280,7 @@ impl client::GenesisBuilder for GenesisBuilder {
 }
 
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend, client::RemoteCallExecutor<client::light::Backend>>, error::Error> {
+pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend, client::RemoteCallExecutor<client::light::Backend, network::OnDemand<network::Service>>>, error::Error> {
 	Service::new(move |_, executor, genesis_builder: GenesisBuilder| {
 			let client_backend = client::light::new_light_backend();
 			let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));

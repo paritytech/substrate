@@ -18,6 +18,7 @@
 //! Everything else is requested from full nodes on demand.
 
 use std::sync::Arc;
+use futures::future::IntoFuture;
 use primitives;
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use runtime_support::Hashable;
@@ -43,8 +44,11 @@ pub struct RemoteCallRequest {
 /// Light client data fetcher. Implementations of this trait must check if remote data
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher: Send + Sync {
+	/// Remote call result future.
+	type RemoteCallResult: IntoFuture<Item=CallResult, Error=error::Error>;
+
 	/// Fetch remote call result.
-	fn remote_call(&self, request: RemoteCallRequest) -> error::Result<CallResult>;
+	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult;
 }
 
 /// Light client remote data checker.
@@ -214,13 +218,14 @@ pub fn new_light_backend() -> Arc<Backend> {
 }
 
 /// Create an instance of light client.
-pub fn new_light<F>(
+pub fn new_light<F, B>(
 	backend: Arc<Backend>,
-	fetcher: Arc<Fetcher>,
-	genesis_builder: F
-) -> error::Result<Client<Backend, RemoteCallExecutor<Backend>>>
+	fetcher: Arc<F>,
+	genesis_builder: B,
+) -> error::Result<Client<Backend, RemoteCallExecutor<Backend, F>>>
 	where
-		F: GenesisBuilder,
+		F: Fetcher,
+		B: GenesisBuilder,
 {
 	let executor = RemoteCallExecutor::new(backend.clone(), fetcher);
 	Client::new(backend, executor, genesis_builder)

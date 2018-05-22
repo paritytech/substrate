@@ -18,8 +18,9 @@
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Weak};
-use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::{Instant, Duration};
+use futures::{Future, Poll};
+use futures::sync::oneshot::{channel, Receiver, Sender};
 use linked_hash_map::LinkedHashMap;
 use linked_hash_map::Entry;
 use parking_lot::Mutex;
@@ -75,10 +76,13 @@ struct Request {
 	request: RemoteCallRequest,
 }
 
-impl Response {
-	fn wait(&mut self) -> client::error::Result<client::CallResult> {
-		self.receiver.recv()
-			.map_err(|_| client::error::ErrorKind::Backend("OnDemand serivice has gone".into()).into())
+impl Future for Response {
+	type Item = client::CallResult;
+	type Error = client::error::Error;
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		self.receiver.poll()
+			.map_err(|_| client::error::ErrorKind::RemoteFetchCancelled.into())
 	}
 }
 
@@ -172,8 +176,10 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 }
 
 impl<E> Fetcher for OnDemand<E> where E: service::ExecuteInContext {
-	fn remote_call(&self, request: RemoteCallRequest) -> client::error::Result<client::CallResult> {
-		self.remote_call(request).wait()
+	type RemoteCallResult = Response;
+
+	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult {
+		self.remote_call(request)
 	}
 }
 
