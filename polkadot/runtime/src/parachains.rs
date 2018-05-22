@@ -46,6 +46,10 @@ decl_module! {
 		// provide candidate receipts for parachains, in ascending order by id.
 		fn set_heads(aux, heads: Vec<CandidateReceipt>) = 0;
 	}
+	pub enum PrivCall {
+		fn register_parachain(id: Id, code: Vec<u8>, initial_head_data: Vec<u8>) = 0;
+		fn deregister_parachain(id: Id) = 1;
+	}
 }
 
 decl_storage! {
