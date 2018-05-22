@@ -1352,6 +1352,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "polkadot-network"
+version = "0.1.0"
+dependencies = [
+ "substrate-network 0.1.0",
+]
+
+[[package]]
 name = "polkadot-parachain"
 version = "0.1.0"
 dependencies = [

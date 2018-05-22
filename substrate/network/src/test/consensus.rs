@@ -21,7 +21,7 @@ use futures::Stream;
 #[test]
 fn bft_messages_include_those_sent_before_asking_for_stream() {
 	let mut config = ::config::ProtocolConfig::default();
-	config.roles = ::service::Role::VALIDATOR | ::service::Role::FULL;
+	config.roles = ::service::Role::AUTHORITY | ::service::Role::FULL;
 
 	let mut net = TestNet::new_with_config(2, config);
 	net.sync(); // necessary for handshaking
@@ -40,7 +40,6 @@ fn bft_messages_include_those_sent_before_asking_for_stream() {
 		message: bft_message,
 		parent_hash: parent_hash,
 	};
-
 
 	let as_bytes = ::serde_json::to_vec(&Message::BftMessage(localized.clone())).unwrap();
 	peer.sync.handle_packet(&mut io, 1, &as_bytes[..]);

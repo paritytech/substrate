@@ -342,7 +342,7 @@ mod tests {
 
 	#[test]
 	fn parachain_calls_are_privcall() {
-		let register = PrivCall::Parachains(parachains::PrivCall::register_parachain(0.into(), vec![1, 2, 3], vec![]));
-		let deregister = PrivCall::Parachains(parachains::PrivCall::deregister_parachain(0.into()));
+		let _register = PrivCall::Parachains(parachains::PrivCall::register_parachain(0.into(), vec![1, 2, 3], vec![]));
+		let _deregister = PrivCall::Parachains(parachains::PrivCall::deregister_parachain(0.into()));
 	}
 }

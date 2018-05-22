@@ -30,15 +30,13 @@ use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo, Transacti
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
-use message::{Statement, LocalizedBftMessage};
+use message::LocalizedBftMessage;
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
-/// Type that represents statement stream.
-pub type StatementStream = mpsc::UnboundedReceiver<Statement>;
 /// Type that represents bft messages stream.
 pub type BftMessageStream = mpsc::UnboundedReceiver<LocalizedBftMessage>;
 
@@ -57,10 +55,8 @@ bitflags! {
 		const FULL = 0b00000001;
 		/// Light client node.
 		const LIGHT = 0b00000010;
-		/// Act as a validator.
-		const VALIDATOR = 0b00000100;
-		/// Act as a collator.
-		const COLLATOR = 0b00001000;
+		/// Act as an authority
+		const AUTHORITY = 0b00000100;
 	}
 }
 
@@ -86,18 +82,8 @@ pub trait TransactionPool: Send + Sync {
 
 /// ConsensusService
 pub trait ConsensusService: Send + Sync {
-	/// Get statement stream.
-	fn statements(&self) -> StatementStream;
-	/// Send out a statement.
-	fn send_statement(&self, statement: Statement);
 	/// Maintain connectivity to given addresses.
 	fn connect_to_authorities(&self, addresses: &[String]);
-	/// Fetch candidate.
-	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Vec<u8>>;
-	/// Note local candidate. Accepts candidate receipt hash and candidate data.
-	/// Pass `None` to clear the candidate.
-	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>);
-
 	/// Get BFT message stream for messages corresponding to consensus on given
 	/// parent hash.
 	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream;
@@ -171,7 +157,7 @@ impl Service {
 	/// Called when new transactons are imported by the client.
 	pub fn trigger_repropagate(&self) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context));
+			self.handler.protocol.propagate_extrinsics(&mut NetSyncIo::new(context));
 		});
 	}
 
@@ -182,7 +168,7 @@ impl Service {
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, &[(::protocol::CURRENT_VERSION, ::protocol::CURRENT_PACKET_COUNT)])
+		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, &[(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)])
 			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}
 
@@ -238,28 +224,8 @@ impl SyncProvider for Service {
 
 /// ConsensusService
 impl ConsensusService for Service {
-	fn statements(&self) -> StatementStream {
-		self.handler.protocol.statements()
-	}
-
 	fn connect_to_authorities(&self, _addresses: &[String]) {
 		//TODO: implement me
-	}
-
-	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
-		self.network.with_context_eval(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.fetch_candidate(&mut NetSyncIo::new(context), hash)
-		}).expect("DOT Service is registered")
-	}
-
-	fn send_statement(&self, statement: Statement) {
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.send_statement(&mut NetSyncIo::new(context), statement);
-		});
-	}
-
-	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
-		self.handler.protocol.set_local_candidate(candidate)
 	}
 
 	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
@@ -297,7 +263,7 @@ impl NetworkProtocolHandler for ProtocolHandler {
 	fn timeout(&self, io: &NetworkContext, timer: TimerToken) {
 		match timer {
 			TICK_TOKEN => self.protocol.tick(&mut NetSyncIo::new(io)),
-			PROPAGATE_TOKEN => self.protocol.propagate_transactions(&mut NetSyncIo::new(io)),
+			PROPAGATE_TOKEN => self.protocol.propagate_extrinsics(&mut NetSyncIo::new(io)),
 			_ => {}
 		}
 	}
@@ -318,7 +284,6 @@ pub trait ManageNetwork : Send + Sync {
 	/// Stop network
 	fn stop_network(&self);
 }
-
 
 impl ManageNetwork for Service {
 	fn accept_unreserved_peers(&self) {

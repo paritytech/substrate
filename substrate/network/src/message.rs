@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
@@ -28,14 +28,12 @@ type Bytes = Vec<u8>;
 /// Configured node role.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum Role {
-	/// Full relay chain client with no additional responsibilities.
+	/// Full node with no additional responsibilities.
 	Full,
-	/// Relay chain light client.
+	/// Light client.
 	Light,
 	/// Parachain validator.
-	Validator,
-	/// Parachain collator.
-	Collator,
+	Authority,
 }
 
 impl Role {
@@ -46,8 +44,7 @@ impl Role {
 			match *r {
 				Role::Full => flags = flags | RoleFlags::FULL,
 				Role::Light => flags = flags | RoleFlags::LIGHT,
-				Role::Validator => flags = flags | RoleFlags::VALIDATOR,
-				Role::Collator => flags = flags | RoleFlags::COLLATOR,
+				Role::Authority => flags = flags | RoleFlags::AUTHORITY,
 			}
 		}
 		flags
@@ -63,11 +60,8 @@ impl From<RoleFlags> for Vec<Role> where {
 		if !(flags & RoleFlags::LIGHT).is_empty() {
 			roles.push(Role::Light);
 		}
-		if !(flags & RoleFlags::VALIDATOR).is_empty() {
-			roles.push(Role::Validator);
-		}
-		if !(flags & RoleFlags::COLLATOR).is_empty() {
-			roles.push(Role::Collator);
+		if !(flags & RoleFlags::AUTHORITY).is_empty() {
+			roles.push(Role::Authority);
 		}
 		roles
 	}
@@ -125,39 +119,7 @@ pub enum Direction {
 }
 
 /// A set of transactions.
-pub type Transactions = Vec<Vec<u8>>;
-
-/// Statements circulated among peers.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum UnsignedStatement {
-	/// Broadcast by a authority to indicate that this is his candidate for
-	/// inclusion.
-	///
-	/// Broadcasting two different candidate messages per round is not allowed.
-	Candidate(Vec<u8>),
-	/// Broadcast by a authority to attest that the candidate with given digest
-	/// is valid.
-	Valid(Hash),
-	/// Broadcast by a authority to attest that the auxiliary data for a candidate
-	/// with given digest is available.
-	Available(Hash),
-	/// Broadcast by a authority to attest that the candidate with given digest
-	/// is invalid.
-	Invalid(Hash),
-}
-
-/// A signed statement.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Statement {
-	/// Parent relay chain block header hash.
-	pub parent_hash: HeaderHash,
-	/// The statement.
-	pub statement: UnsignedStatement,
-	/// The signature.
-	pub signature: ed25519::Signature,
-	/// The sender.
-	pub sender: AuthorityId,
-}
+pub type Extrinsics = Vec<Vec<u8>>;
 
 
 /// Communication that can occur between participants in consensus.
@@ -237,14 +199,8 @@ pub enum Message {
 	BlockResponse(BlockResponse),
 	/// Block announce.
 	BlockAnnounce(BlockAnnounce),
-	/// Transactions.
-	Transactions(Transactions),
-	/// Consensus statement.
-	Statement(Statement),
-	/// Candidate data request.
-	CandidateRequest(CandidateRequest),
-	/// Candidate response.
-	CandidateResponse(CandidateResponse),
+	/// Extrinsics.
+	Extrinsics(Extrinsics),
 	/// BFT Consensus statement.
 	BftMessage(LocalizedBftMessage),
 }
@@ -261,16 +217,14 @@ pub struct Status {
 	pub best_hash: HeaderHash,
 	/// Genesis block hash.
 	pub genesis_hash: HeaderHash,
-	/// Signatue of `best_hash` made with validator address. Required for the validator role.
-	pub validator_signature: Option<ed25519::Signature>,
-	/// Validator address. Required for the validator role.
-	pub validator_id: Option<AuthorityId>,
-	/// Parachain id. Required for the collator role.
-	pub parachain_id: Option<u64>,
+	/// Signatue of `best_hash` made with authority address. Required for the authority role.
+	pub authority_signature: Option<ed25519::Signature>,
+	/// Authority address. Required for the authority role.
+	pub authority_id: Option<AuthorityId>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 /// Request block data from a peer.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct BlockRequest {
 	/// Unique request id.
 	pub id: RequestId,
@@ -286,26 +240,8 @@ pub struct BlockRequest {
 	pub max: Option<u32>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Request candidate block data from a peer.
-pub struct CandidateRequest {
-	/// Unique request id.
-	pub id: RequestId,
-	/// Candidate receipt hash.
-	pub hash: Hash,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Candidate block data response.
-pub struct CandidateResponse {
-	/// Unique request id.
-	pub id: RequestId,
-	/// Candidate data. Empty if the peer does not have the candidate anymore.
-	pub data: Option<Vec<u8>>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 /// Response to `BlockRequest`
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct BlockResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,

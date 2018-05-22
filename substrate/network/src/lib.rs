@@ -16,8 +16,8 @@
 
 #![warn(missing_docs)]
 
-//! Implements polkadot protocol version as specified here:
-//! https://github.com/paritytech/polkadot/wiki/Network-protocol
+//! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
+//! Allows attachment of an optional subprotocol for chain-specific requests.
 
 extern crate ethcore_network_devp2p as network_devp2p;
 extern crate ethcore_network as network;
@@ -57,13 +57,13 @@ pub mod error;
 
 #[cfg(test)] mod test;
 
-pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream,
+pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 	TransactionPool, Params, ManageNetwork, SyncProvider};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, NetworkConfiguration};
 pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
-pub use message::{Statement, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
+pub use message::{BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
 

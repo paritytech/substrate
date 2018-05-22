@@ -19,7 +19,6 @@ use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
 use parking_lot::{RwLock, Mutex};
-use futures::sync::oneshot;
 use serde_json;
 use primitives::block::{HeaderHash, ExtrinsicHash, Number as BlockNumber, Header, Id as BlockId};
 use primitives::{Hash, blake2_256};
@@ -29,7 +28,7 @@ use network::{PeerId, NodeId};
 use message::{self, Message};
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use consensus::Consensus;
-use service::{Role, TransactionPool, StatementStream, BftMessageStream};
+use service::{Role, TransactionPool, BftMessageStream};
 use config::ProtocolConfig;
 use chain::Client;
 use io::SyncIo;
@@ -87,7 +86,7 @@ struct Peer {
 	/// Request timestamp
 	request_timestamp: Option<time::Instant>,
 	/// Holds a set of transactions known to this peer.
-	known_transactions: HashSet<ExtrinsicHash>,
+	known_extrinsics: HashSet<ExtrinsicHash>,
 	/// Holds a set of blocks known to this peer.
 	known_blocks: HashSet<HeaderHash>,
 	/// Request counter,
@@ -185,11 +184,8 @@ impl Protocol {
 			Message::BlockAnnounce(announce) => {
 				self.on_block_announce(io, peer_id, announce);
 			},
-			Message::Statement(s) => self.on_statement(io, peer_id, s, blake2_256(data).into()),
-			Message::CandidateRequest(r) => self.on_candidate_request(io, peer_id, r),
-			Message::CandidateResponse(r) => self.on_candidate_response(io, peer_id, r),
 			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m, blake2_256(data).into()),
-			Message::Transactions(m) => self.on_transactions(io, peer_id, m),
+			Message::Extrinsics(m) => self.on_extrinsics(io, peer_id, m),
 		}
 	}
 
@@ -297,21 +293,6 @@ impl Protocol {
 		self.sync.write().on_block_data(io, self, peer, request, response);
 	}
 
-	fn on_candidate_request(&self, io: &mut SyncIo, peer: PeerId, request: message::CandidateRequest) {
-		trace!(target: "sync", "CandidateRequest {} from {} for {}", request.id, peer, request.hash);
-		self.consensus.lock().on_candidate_request(io, self, peer, request);
-	}
-
-	fn on_candidate_response(&self, io: &mut SyncIo, peer: PeerId, response: message::CandidateResponse) {
-		trace!(target: "sync", "CandidateResponse {} from {} with {:?} bytes", response.id, peer, response.data.as_ref().map(|d| d.len()));
-		self.consensus.lock().on_candidate_response(io, self, peer, response);
-	}
-
-	fn on_statement(&self, io: &mut SyncIo, peer: PeerId, statement: message::Statement, hash: Hash) {
-		trace!(target: "sync", "Statement from {}: {:?}", peer, statement);
-		self.consensus.lock().on_statement(io, self, peer, statement, hash);
-	}
-
 	fn on_bft_message(&self, io: &mut SyncIo, peer: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
 		trace!(target: "sync", "BFT message from {}: {:?}", peer, message);
 		self.consensus.lock().on_bft_message(io, self, peer, message, hash);
@@ -325,26 +306,6 @@ impl Protocol {
 	/// See `ConsensusService` trait.
 	pub fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
 		self.consensus.lock().bft_messages(parent_hash)
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn statements(&self) -> StatementStream {
-		self.consensus.lock().statements()
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn fetch_candidate(&self, io: &mut SyncIo, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
-		self.consensus.lock().fetch_candidate(io, self, hash)
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn send_statement(&self, io: &mut SyncIo, statement: message::Statement) {
-		self.consensus.lock().send_statement(io, self, statement)
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
-		self.consensus.lock().set_local_candidate(candidate)
 	}
 
 	/// Perform time based maintenance.
@@ -420,7 +381,7 @@ impl Protocol {
 				best_number: status.best_number,
 				block_request: None,
 				request_timestamp: None,
-				known_transactions: HashSet::new(),
+				known_extrinsics: HashSet::new(),
 				known_blocks: HashSet::new(),
 				next_request_id: 0,
 			};
@@ -432,42 +393,42 @@ impl Protocol {
 		consensus.new_peer(io, self, peer_id, &status.roles);
 	}
 
-	/// Called when peer sends us new transactions
-	fn on_transactions(&self, _io: &mut SyncIo, peer_id: PeerId, transactions: message::Transactions) {
-		// Accept transactions only when fully synced
+	/// Called when peer sends us new extrinsics
+	fn on_extrinsics(&self, _io: &mut SyncIo, peer_id: PeerId, extrinsics: message::Extrinsics) {
+		// Accept extrinsics only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
-			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
+			trace!(target: "sync", "{} Ignoring extrinsics while syncing", peer_id);
 			return;
 		}
-		trace!(target: "sync", "Received {} transactions from {}", transactions.len(), peer_id);
+		trace!(target: "sync", "Received {} extrinsics from {}", extrinsics.len(), peer_id);
 		let mut peers = self.peers.write();
 		if let Some(ref mut peer) = peers.get_mut(&peer_id) {
-			for t in transactions {
+			for t in extrinsics {
 				if let Some(hash) = self.transaction_pool.import(&t) {
-					peer.known_transactions.insert(hash);
+					peer.known_extrinsics.insert(hash);
 				}
 			}
 		}
 	}
 
-	/// Called when we propagate ready transactions to peers.
-	pub fn propagate_transactions(&self, io: &mut SyncIo) {
-		debug!(target: "sync", "Propagating transactions");
+	/// Called when we propagate ready extrinsics to peers.
+	pub fn propagate_extrinsics(&self, io: &mut SyncIo) {
+		debug!(target: "sync", "Propagating extrinsics");
 
 		// Accept transactions only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
 			return;
 		}
 
-		let transactions = self.transaction_pool.transactions();
+		let extrinsics = self.transaction_pool.transactions();
 
 		let mut peers = self.peers.write();
 		for (peer_id, ref mut peer) in peers.iter_mut() {
-			let to_send: Vec<_> = transactions.iter().filter_map(|&(hash, ref t)|
-				if peer.known_transactions.insert(hash.clone()) { Some(t.clone()) } else { None }).collect();
+			let to_send: Vec<_> = extrinsics.iter().filter_map(|&(hash, ref t)|
+				if peer.known_extrinsics.insert(hash.clone()) { Some(t.clone()) } else { None }).collect();
 			if !to_send.is_empty() {
-				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), peer_id);
-				self.send_message(io, *peer_id, Message::Transactions(to_send));
+				trace!(target: "sync", "Sending {} extrinsics to {}", to_send.len(), peer_id);
+				self.send_message(io, *peer_id, Message::Extrinsics(to_send));
 			}
 		}
 	}
@@ -481,9 +442,8 @@ impl Protocol {
 				roles: self.config.roles.into(),
 				best_number: info.chain.best_number,
 				best_hash: info.chain.best_hash,
-				validator_signature: None,
-				validator_id: None,
-				parachain_id: None,
+				authority_signature: None,
+				authority_id: None,
 			};
 			self.send_message(io, peer_id, Message::Status(status))
 		}
