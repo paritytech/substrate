@@ -714,12 +714,12 @@ impl<C> Future for CreateProposal<C>
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<SubstrateBlock, Error> {
-		// 2. try to propose if we have enough includable candidates and other
+		// 1. try to propose if we have enough includable candidates and other
 		// delays have concluded.
 		let included = self.table.includable_count();
 		try_ready!(self.timing.poll(included));
 
-		// 3. propose
+		// 2. propose
 		let proposed_candidates = self.table.with_proposal(|proposed_set| {
 				proposed_set.into_iter().cloned().collect()
 		});
