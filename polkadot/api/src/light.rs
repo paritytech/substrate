@@ -24,7 +24,8 @@ use state_machine;
 use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
 use primitives::parachain::DutyRoster;
 use runtime::{Block, UncheckedExtrinsic};
-use {PolkadotApi, RemotePolkadotApi, BlockBuilder, CheckedBlockId, CheckedId, Result, ErrorKind};
+use full::CheckedId;
+use {PolkadotApi, RemotePolkadotApi, BlockBuilder, CheckedBlockId, Result, ErrorKind};
 
 /// Remote polkadot API implementation.
 pub struct RemotePolkadotApiWrapper<B: Backend, E: CallExecutor>(pub Arc<Client<B, E>>);
