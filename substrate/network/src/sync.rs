@@ -15,8 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
 use std::collections::HashMap;
-use io::SyncIo;
-use protocol::Protocol;
+use protocol::Context;
 use network::PeerId;
 use client::{ImportResult, BlockStatus, ClientInfo};
 use primitives::block::{HeaderHash, Number as BlockNumber, Header, Id as BlockId};
@@ -73,7 +72,7 @@ pub struct Status {
 
 impl ChainSync {
 	/// Create a new instance.
-	pub fn new(info: &ClientInfo) -> ChainSync {
+	pub(crate) fn new(info: &ClientInfo) -> ChainSync {
 		ChainSync {
 			genesis_hash: info.chain.genesis_hash,
 			peers: HashMap::new(),
@@ -89,7 +88,7 @@ impl ChainSync {
 	}
 
 	/// Returns sync status
-	pub fn status(&self) -> Status {
+	pub(crate) fn status(&self) -> Status {
 		let best_seen = self.best_seen_block();
 		let state = match &best_seen {
 			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > 5 => SyncState::Downloading,
@@ -102,20 +101,20 @@ impl ChainSync {
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId) {
+	pub(crate) fn new_peer(&mut self, protocol: &mut Context, peer_id: PeerId) {
 		if let Some(info) = protocol.peer_info(peer_id) {
 			match (protocol.chain().block_status(&BlockId::Hash(info.best_hash)), info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
-					io.disconnect_peer(peer_id);
+					protocol.disconnect_peer(peer_id);
 				},
 				(Ok(BlockStatus::KnownBad), _) => {
 					debug!(target:"sync", "New peer with known bad best block {} ({}).", info.best_hash, info.best_number);
-					io.disable_peer(peer_id);
+					protocol.disable_peer(peer_id);
 				},
 				(Ok(BlockStatus::Unknown), 0) => {
 					debug!(target:"sync", "New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
-					io.disable_peer(peer_id);
+					protocol.disable_peer(peer_id);
 				},
 				(Ok(BlockStatus::Unknown), _) => {
 					let our_best = self.best_queued_number;
@@ -128,7 +127,7 @@ impl ChainSync {
 							best_number: info.best_number,
 							state: PeerSyncState::AncestorSearch(our_best),
 						});
-						Self::request_ancestry(io, protocol, peer_id, our_best)
+						Self::request_ancestry(protocol, peer_id, our_best)
 					} else {
 						// We are at genesis, just start downloading
 						debug!(target:"sync", "New peer with best hash {} ({}).", info.best_hash, info.best_number);
@@ -139,7 +138,7 @@ impl ChainSync {
 							best_number: info.best_number,
 							state: PeerSyncState::Available,
 						});
-						self.download_new(io, protocol, peer_id)
+						self.download_new(protocol, peer_id)
 					}
 				},
 				(Ok(BlockStatus::Queued), _) | (Ok(BlockStatus::InChain), _) => {
@@ -156,7 +155,7 @@ impl ChainSync {
 		}
 	}
 
-	pub fn on_block_data(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, _request: message::BlockRequest, response: message::BlockResponse) {
+	pub(crate) fn on_block_data(&mut self, protocol: &mut Context, peer_id: PeerId, _request: message::BlockRequest, response: message::BlockResponse) {
 		let count = response.blocks.len();
 		let mut imported: usize = 0;
 		let new_blocks = if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
@@ -191,24 +190,24 @@ impl ChainSync {
 									trace!(target:"sync", "Ancestry block mismatch for peer {}: theirs: {} ({}), ours: {:?}", peer_id, block.hash, n, our_best);
 									let n = n - 1;
 									peer.state = PeerSyncState::AncestorSearch(n);
-									Self::request_ancestry(io, protocol, peer_id, n);
+									Self::request_ancestry(protocol, peer_id, n);
 									return;
 								},
 								Ok(_) => { // genesis mismatch
 									trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", peer_id);
-									io.disable_peer(peer_id);
+									protocol.disable_peer(peer_id);
 									return;
 								},
 								Err(e) => {
 									debug!(target:"sync", "Error reading blockchain: {:?}", e);
-									io.disconnect_peer(peer_id);
+									protocol.disconnect_peer(peer_id);
 									return;
 								}
 							}
 						},
 						None => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", peer_id);
-							io.disconnect_peer(peer_id);
+							protocol.disconnect_peer(peer_id);
 							return;
 						}
 					}
@@ -237,7 +236,7 @@ impl ChainSync {
 						Ok(_) => {},
 						Err(e) => {
 							debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-							self.restart(io, protocol);
+							self.restart(protocol);
 							return;
 						}
 					}
@@ -264,42 +263,42 @@ impl ChainSync {
 						},
 						Ok(ImportResult::UnknownParent) => {
 							debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
-							self.restart(io, protocol);
+							self.restart(protocol);
 							return;
 						},
 						Ok(ImportResult::KnownBad) => {
 							debug!(target: "sync", "Bad block {}: {:?}", number, hash);
-							io.disable_peer(origin); //TODO: use persistent ID
-							self.restart(io, protocol);
+							protocol.disable_peer(origin); //TODO: use persistent ID
+							self.restart(protocol);
 							return;
 						}
 						Err(e) => {
 							debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-							self.restart(io, protocol);
+							self.restart(protocol);
 							return;
 						}
 					}
 				},
 				(None, _) => {
 					debug!(target: "sync", "Header {} was not provided by {} ", block.hash, origin);
-					io.disable_peer(origin); //TODO: use persistent ID
+					protocol.disable_peer(origin); //TODO: use persistent ID
 					return;
 				},
 				(_, None) => {
 					debug!(target: "sync", "Justification set for block {} was not provided by {} ", block.hash, origin);
-					io.disable_peer(origin); //TODO: use persistent ID
+					protocol.disable_peer(origin); //TODO: use persistent ID
 					return;
 				}
 			}
 		}
 		trace!(target: "sync", "Imported {} of {}", imported, count);
-		self.maintain_sync(io, protocol);
+		self.maintain_sync(protocol);
 	}
 
-	fn maintain_sync(&mut self, io: &mut SyncIo, protocol: &Protocol) {
+	fn maintain_sync(&mut self, protocol: &mut Context) {
 		let peers: Vec<PeerId> = self.peers.keys().map(|p| *p).collect();
 		for peer in peers {
-			self.download_new(io, protocol, peer);
+			self.download_new(protocol, peer);
 		}
 	}
 
@@ -318,12 +317,12 @@ impl ChainSync {
 		}
 	}
 
-	pub fn update_chain_info(&mut self, best_header: &Header ) {
+	pub(crate) fn update_chain_info(&mut self, best_header: &Header ) {
 		let hash = header_hash(&best_header);
 		self.block_imported(&hash, best_header.number)
 	}
 
-	pub fn on_block_announce(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, hash: HeaderHash, header: &Header) {
+	pub(crate) fn on_block_announce(&mut self, protocol: &mut Context, peer_id: PeerId, hash: HeaderHash, header: &Header) {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			if header.number > peer.best_number {
 				peer.best_number = header.number;
@@ -343,33 +342,33 @@ impl ChainSync {
 					trace!(target: "sync", "Ignoring unknown stale block announce from {}: {} {:?}", peer_id, hash, header);
 				} else {
 					trace!(target: "sync", "Downloading new stale block announced from {}: {} {:?}", peer_id, hash, header);
-					self.download_stale(io, protocol, peer_id, &hash);
+					self.download_stale(protocol, peer_id, &hash);
 				}
 			} else {
 				trace!(target: "sync", "Downloading new block announced from {}: {} {:?}", peer_id, hash, header);
-				self.download_new(io, protocol, peer_id);
+				self.download_new(protocol, peer_id);
 			}
 		} else {
 			trace!(target: "sync", "Known block announce from {}: {}", peer_id, hash);
 		}
 	}
 
-	fn is_known_or_already_downloading(&self, protocol: &Protocol, hash: &HeaderHash) -> bool {
+	fn is_known_or_already_downloading(&self, protocol: &mut Context, hash: &HeaderHash) -> bool {
 		self.peers.iter().any(|(_, p)| p.state == PeerSyncState::DownloadingStale(*hash))
 			|| protocol.chain().block_status(&BlockId::Hash(*hash)).ok().map_or(false, |s| s != BlockStatus::Unknown)
 	}
 
-	pub fn peer_disconnected(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId) {
+	pub(crate) fn peer_disconnected(&mut self, protocol: &mut Context, peer_id: PeerId) {
 		self.blocks.clear_peer_download(peer_id);
 		self.peers.remove(&peer_id);
-		self.maintain_sync(io, protocol);
+		self.maintain_sync(protocol);
 	}
 
-	pub fn restart(&mut self, io: &mut SyncIo, protocol: &Protocol) {
+	pub(crate) fn restart(&mut self, protocol: &mut Context) {
 		self.blocks.clear();
 		let ids: Vec<PeerId> = self.peers.keys().map(|p| *p).collect();
 		for id in ids {
-			self.new_peer(io, protocol, id);
+			self.new_peer(protocol, id);
 		}
 		match protocol.chain().info() {
 			Ok(info) => {
@@ -384,13 +383,13 @@ impl ChainSync {
 		}
 	}
 
-	pub fn clear(&mut self) {
+	pub(crate) fn clear(&mut self) {
 		self.blocks.clear();
 		self.peers.clear();
 	}
 
 	// Download old block.
-	fn download_stale(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, hash: &HeaderHash) {
+	fn download_stale(&mut self, protocol: &mut Context, peer_id: PeerId, hash: &HeaderHash) {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			match peer.state {
 				PeerSyncState::Available => {
@@ -403,7 +402,7 @@ impl ChainSync {
 						max: Some(1),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
-					protocol.send_message(io, peer_id, Message::BlockRequest(request));
+					protocol.send_message(peer_id, Message::BlockRequest(request));
 				},
 				_ => (),
 			}
@@ -411,7 +410,7 @@ impl ChainSync {
 	}
 
 	// Issue a request for a peer to download new blocks, if any are available
-	fn download_new(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId) {
+	fn download_new(&mut self, protocol: &mut Context, peer_id: PeerId) {
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			trace!(target: "sync", "Considering new block download from {}, common block is {}, best is {:?}", peer_id, peer.common_number, peer.best_number);
 			match peer.state {
@@ -427,7 +426,7 @@ impl ChainSync {
 							max: Some((range.end - range.start) as u32),
 						};
 						peer.state = PeerSyncState::DownloadingNew(range.start);
-						protocol.send_message(io, peer_id, Message::BlockRequest(request));
+						protocol.send_message(peer_id, Message::BlockRequest(request));
 					} else {
 						trace!(target: "sync", "Nothing to request");
 					}
@@ -437,7 +436,7 @@ impl ChainSync {
 		}
 	}
 
-	fn request_ancestry(io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, block: BlockNumber) {
+	fn request_ancestry(protocol: &mut Context, peer_id: PeerId, block: BlockNumber) {
 		trace!(target: "sync", "Requesting ancestry block #{} from {}", block, peer_id);
 		let request = message::BlockRequest {
 			id: 0,
@@ -447,6 +446,6 @@ impl ChainSync {
 			direction: message::Direction::Ascending,
 			max: Some(1),
 		};
-		protocol.send_message(io, peer_id, Message::BlockRequest(request));
+		protocol.send_message(peer_id, Message::BlockRequest(request));
 	}
 }

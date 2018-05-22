@@ -54,6 +54,7 @@ mod chain;
 mod blocks;
 mod consensus;
 pub mod error;
+pub mod specialization;
 
 #[cfg(test)] mod test;
 
@@ -61,7 +62,7 @@ pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 	TransactionPool, Params, ManageNetwork, SyncProvider};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
-pub use network::{NonReservedPeerMode, NetworkConfiguration};
+pub use network::{NonReservedPeerMode, NetworkConfiguration, PeerId};
 pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
 pub use message::{BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;

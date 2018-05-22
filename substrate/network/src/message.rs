@@ -188,8 +188,8 @@ pub enum SignedConsensusMessage {
 	Vote(SignedConsensusVote),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 /// A network message.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum Message {
 	/// Status packet.
 	Status(Status),
@@ -203,8 +203,11 @@ pub enum Message {
 	Extrinsics(Extrinsics),
 	/// BFT Consensus statement.
 	BftMessage(LocalizedBftMessage),
+	/// Chain-specific message.
+	ChainSpecific(Vec<u8>),
 }
 
+/// Status of a peer who has just connected.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Status {
 	/// Protocol version.
@@ -221,6 +224,8 @@ pub struct Status {
 	pub authority_signature: Option<ed25519::Signature>,
 	/// Authority address. Required for the authority role.
 	pub authority_id: Option<AuthorityId>,
+	/// Chain-specific status, extending beyond capabilities of substrate.
+	pub chain_status: Vec<u8>,
 }
 
 /// Request block data from a peer.

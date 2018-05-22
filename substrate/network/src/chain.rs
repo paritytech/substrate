@@ -1,22 +1,22 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Blockchain access trait
 
-use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin};
+use client::{self, Client as SubstrateClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin};
 use client::error::Error;
 use state_machine;
 use primitives::block::{self, Id as BlockId};
@@ -45,7 +45,7 @@ pub trait Client: Send + Sync {
 	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error>;
 }
 
-impl<B, E> Client for PolkadotClient<B, E> where
+impl<B, E> Client for SubstrateClient<B, E> where
 	B: client::backend::Backend + Send + Sync + 'static,
 	E: state_machine::CodeExecutor + Send + Sync + 'static,
 	Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>, {
@@ -54,30 +54,30 @@ impl<B, E> Client for PolkadotClient<B, E> where
 		// TODO: defer justification check.
 		let justified_header = self.check_justification(header, justification.into())?;
 		let origin = if is_best { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
-		(self as &PolkadotClient<B, E>).import_block(origin, justified_header, body)
+		(self as &SubstrateClient<B, E>).import_block(origin, justified_header, body)
 	}
 
 	fn info(&self) -> Result<ClientInfo, Error> {
-		(self as &PolkadotClient<B, E>).info()
+		(self as &SubstrateClient<B, E>).info()
 	}
 
 	fn block_status(&self, id: &BlockId) -> Result<BlockStatus, Error> {
-		(self as &PolkadotClient<B, E>).block_status(id)
+		(self as &SubstrateClient<B, E>).block_status(id)
 	}
 
 	fn block_hash(&self, block_number: block::Number) -> Result<Option<block::HeaderHash>, Error> {
-		(self as &PolkadotClient<B, E>).block_hash(block_number)
+		(self as &SubstrateClient<B, E>).block_hash(block_number)
 	}
 
 	fn header(&self, id: &BlockId) -> Result<Option<block::Header>, Error> {
-		(self as &PolkadotClient<B, E>).header(id)
+		(self as &SubstrateClient<B, E>).header(id)
 	}
 
 	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error> {
-		(self as &PolkadotClient<B, E>).body(id)
+		(self as &SubstrateClient<B, E>).body(id)
 	}
 
 	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error> {
-		(self as &PolkadotClient<B, E>).justification(id)
+		(self as &SubstrateClient<B, E>).justification(id)
 	}
 }

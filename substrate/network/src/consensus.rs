@@ -19,11 +19,10 @@
 use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use std::time::{Instant, Duration};
-use io::SyncIo;
-use protocol::Protocol;
 use network::PeerId;
 use primitives::{Hash, block::HeaderHash, block::Id as BlockId, block::Header};
 use message::{self, Message};
+use protocol::Context;
 
 // TODO: Add additional spam/DoS attack protection.
 const MESSAGE_LIFETIME_SECONDS: u64 = 600;
@@ -43,7 +42,7 @@ pub struct Consensus {
 
 impl Consensus {
 	/// Create a new instance.
-	pub fn new(best_hash: HeaderHash) -> Consensus {
+	pub(crate) fn new(best_hash: HeaderHash) -> Consensus {
 		Consensus {
 			peers: HashMap::new(),
 			bft_message_sink: None,
@@ -54,12 +53,12 @@ impl Consensus {
 	}
 
 	/// Closes all notification streams.
-	pub fn restart(&mut self) {
+	pub(crate) fn restart(&mut self) {
 		self.bft_message_sink = None;
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, roles: &[message::Role]) {
+	pub(crate) fn new_peer(&mut self, protocol: &mut Context, peer_id: PeerId, roles: &[message::Role]) {
 		if roles.iter().any(|r| *r == message::Role::Authority) {
 			trace!(target:"sync", "Registering authority {}", peer_id);
 			// Send out all known messages.
@@ -67,7 +66,7 @@ impl Consensus {
 			let mut known_messages = HashSet::new();
 			for &(ref hash, _, ref message) in self.messages.iter() {
 				known_messages.insert(hash.clone());
-				protocol.send_message(io, peer_id, message.clone());
+				protocol.send_message(peer_id, message.clone());
 			}
 			self.peers.insert(peer_id, PeerConsensus {
 				known_messages,
@@ -75,10 +74,10 @@ impl Consensus {
 		}
 	}
 
-	fn propagate(&mut self, io: &mut SyncIo, protocol: &Protocol, message: message::Message, hash: Hash) {
+	fn propagate(&mut self, protocol: &mut Context, message: message::Message, hash: Hash) {
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.known_messages.insert(hash.clone()) {
-				protocol.send_message(io, *id, message.clone());
+				protocol.send_message(*id, message.clone());
 			}
 		}
 	}
@@ -89,7 +88,7 @@ impl Consensus {
 		}
 	}
 
-	pub fn on_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
+	pub(crate) fn on_bft_message(&mut self, protocol: &mut Context, peer_id: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
 		if self.message_hashes.contains(&hash) {
 			trace!(target:"sync", "Ignored already known BFT message from {}", peer_id);
 			return;
@@ -129,10 +128,10 @@ impl Consensus {
 		let message = Message::BftMessage(message);
 		self.register_message(hash.clone(), message.clone());
 		// Propagate to other peers.
-		self.propagate(io, protocol, message, hash);
+		self.propagate(protocol, message, hash);
 	}
 
-	pub fn bft_messages(&mut self, parent_hash: Hash) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage>{
+	pub(crate) fn bft_messages(&mut self, parent_hash: Hash) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage>{
 		let (sink, stream) = mpsc::unbounded();
 
 		for &(_, _, ref message) in self.messages.iter() {
@@ -150,20 +149,20 @@ impl Consensus {
 		stream
 	}
 
-	pub fn send_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol, message: message::LocalizedBftMessage) {
+	pub(crate) fn send_bft_message(&mut self, protocol: &mut Context, message: message::LocalizedBftMessage) {
 		// Broadcast message to all validators.
 		trace!(target:"sync", "Broadcasting BFT message {:?}", message);
 		let message = Message::BftMessage(message);
-		let hash = Protocol::hash_message(&message);
+		let hash = ::protocol::hash_message(&message);
 		self.register_message(hash.clone(), message.clone());
-		self.propagate(io, protocol, message, hash);
+		self.propagate(protocol, message, hash);
 	}
 
-	pub fn peer_disconnected(&mut self, _io: &mut SyncIo, _protocol: &Protocol, peer_id: PeerId) {
+	pub(crate) fn peer_disconnected(&mut self, _protocol: &mut Context, peer_id: PeerId) {
 		self.peers.remove(&peer_id);
 	}
 
-	pub fn collect_garbage(&mut self, best_hash_and_header: Option<(HeaderHash, &Header)>) {
+	pub(crate) fn collect_garbage(&mut self, best_hash_and_header: Option<(HeaderHash, &Header)>) {
 		let hashes = &mut self.message_hashes;
 		let last_block_hash = &mut self.last_block_hash;
 		let before = self.messages.len();

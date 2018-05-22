@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
 use std::collections::{BTreeMap};
@@ -31,6 +31,7 @@ use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
 use message::LocalizedBftMessage;
+use specialization::Specialization;
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
@@ -92,8 +93,8 @@ pub trait ConsensusService: Send + Sync {
 }
 
 /// devp2p Protocol handler
-struct ProtocolHandler {
-	protocol: Protocol,
+struct ProtocolHandler<S: Specialization> {
+	protocol: Protocol<S>,
 }
 
 /// Peer connection information
@@ -114,7 +115,7 @@ pub struct PeerInfo {
 }
 
 /// Service initialization parameters.
-pub struct Params {
+pub struct Params<S> {
 	/// Configuration.
 	pub config: ProtocolConfig,
 	/// Network layer configuration.
@@ -123,24 +124,31 @@ pub struct Params {
 	pub chain: Arc<Client>,
 	/// Transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
+	/// Protocol specialization.
+	pub specialization: S,
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
-pub struct Service {
+pub struct Service<S: Specialization> {
 	/// Network service
 	network: NetworkService,
 	/// Devp2p protocol handler
-	handler: Arc<ProtocolHandler>,
+	handler: Arc<ProtocolHandler<S>>,
 }
 
-impl Service {
+impl<S: Specialization> Service<S> {
 	/// Creates and register protocol with the network service
-	pub fn new(params: Params) -> Result<Arc<Service>, Error> {
+	pub fn new(params: Params<S>) -> Result<Arc<Service<S>>, Error> {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
 		let sync = Arc::new(Service {
 			network: service,
 			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(params.config, params.chain.clone(), params.transaction_pool)?,
+				protocol: Protocol::new(
+					params.config,
+					params.chain.clone(),
+					params.transaction_pool,
+					params.specialization
+				)?,
 			}),
 		});
 
@@ -178,13 +186,13 @@ impl Service {
 	}
 }
 
-impl Drop for Service {
+impl<S: Specialization> Drop for Service<S> {
 	fn drop(&mut self) {
 		self.stop();
 	}
 }
 
-impl SyncProvider for Service {
+impl<S: Specialization> SyncProvider for Service<S> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus {
 		self.handler.protocol.status()
@@ -223,7 +231,7 @@ impl SyncProvider for Service {
 }
 
 /// ConsensusService
-impl ConsensusService for Service {
+impl<S: Specialization> ConsensusService for Service<S> {
 	fn connect_to_authorities(&self, _addresses: &[String]) {
 		//TODO: implement me
 	}
@@ -239,7 +247,7 @@ impl ConsensusService for Service {
 	}
 }
 
-impl NetworkProtocolHandler for ProtocolHandler {
+impl<S: Specialization> NetworkProtocolHandler for ProtocolHandler<S> {
 	fn initialize(&self, io: &NetworkContext, _host_info: &HostInfo) {
 		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
 			.expect("Error registering sync timer");
@@ -285,7 +293,7 @@ pub trait ManageNetwork : Send + Sync {
 	fn stop_network(&self);
 }
 
-impl ManageNetwork for Service {
+impl<S: Specialization> ManageNetwork for Service<S> {
 	fn accept_unreserved_peers(&self) {
 		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}
