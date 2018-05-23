@@ -16,16 +16,64 @@
 
 //! Smart-contract execution module.
 
+// TODO: Extract to it's own crate?
+
 use codec::Slicable;
 use primitives::traits::As;
 use rstd::prelude::*;
 use sandbox;
 use {AccountDb, Module, OverlayAccountDb, Trait};
 
+use parity_wasm::elements::{self, External, MemoryType};
+use pwasm_utils;
+use pwasm_utils::rules;
+
+/// Error that can occur while preparing or executing wasm smart-contract.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Error {
+	/// Error happened while serializing the module.
+	Serialization,
+
+	/// Error happened while deserializing the module.
+	Deserialization,
+
+	/// Internal memory declaration has been found in the module.
+	InternalMemoryDeclared,
+
+	/// Gas instrumentation failed.
+	///
+	/// This most likely indicates the module isn't valid.
+	GasInstrumentation,
+
+	/// Stack instrumentation failed.
+	///
+	/// This  most likely indicates the module isn't valid.
+	StackHeightInstrumentation,
+
+	/// Error happened during invocation of the contract's entrypoint.
+	///
+	/// Most likely because of trap.
+	Invoke,
+
+	/// Error happened during instantiation.
+	///
+	/// This might indicate that `start` function trapped, or module isn't
+	/// instantiable and/or unlinkable.
+	Instantiate,
+
+	/// Memory creation error.
+	///
+	/// This might happen when the memory import has invalid descriptor or
+	/// requested too much resources.
+	Memory,
+}
+
 struct ExecutionExt<'a, 'b: 'a, T: Trait + 'b> {
 	account_db: &'a mut OverlayAccountDb<'b, T>,
 	account: T::AccountId,
 	memory: sandbox::Memory,
+	gas_used: u64,
+	gas_limit: u64,
 }
 impl<'a, 'b: 'a, T: Trait> ExecutionExt<'a, 'b, T> {
 	fn account(&self) -> &T::AccountId {
@@ -40,13 +88,44 @@ impl<'a, 'b: 'a, T: Trait> ExecutionExt<'a, 'b, T> {
 	fn memory(&self) -> &sandbox::Memory {
 		&self.memory
 	}
+	/// Account for used gas.
+	///
+	/// Returns `false` if there is not enough gas or addition of the specified
+	/// amount of gas has lead to overflow. On success returns `true`.
+	///
+	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
+	fn charge_gas(&mut self, amount: u64) -> bool {
+		match self.gas_used.checked_add(amount) {
+			None => false,
+			Some(val) if val > self.gas_limit => false,
+			Some(val) => {
+				self.gas_used = val;
+				true
+			}
+		}
+	}
 }
 
 pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 	code: &[u8],
 	account: &T::AccountId,
 	account_db: &'a mut OverlayAccountDb<'b, T>,
-) -> bool {
+	gas_limit: u64,
+) -> Result<(), Error> {
+	// ext_gas(amount: u32)
+	//
+	// Account for used gas. Traps if gas used is greater than gas limit.
+	//
+	// - amount: How much gas is used.
+	fn ext_gas<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+		let amount = args[0].as_i32().unwrap() as u32;
+		if e.charge_gas(amount as u64) {
+			Ok(sandbox::ReturnValue::Unit)
+		} else {
+			Err(sandbox::HostError)
+		}
+	}
+
 	// ext_put_storage(location_ptr: u32, value_non_null: u32, value_ptr: u32);
 	//
 	// Change the value at the given location in storage or remove it.
@@ -153,13 +232,13 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		Ok(sandbox::ReturnValue::Unit)
 	}
 
-	// TODO: Inspect the binary to extract the initial page count.
-	let memory = match sandbox::Memory::new(1, None) {
-		Ok(memory) => memory,
-		Err(_) => return false,
-	};
+	let PreparedContract {
+		instrumented_code,
+		memory,
+	} = prepare_contract(code)?;
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
+	imports.add_host_func("env", "gas", ext_gas::<T>);
 	imports.add_host_func("env", "ext_set_storage", ext_set_storage::<T>);
 	imports.add_host_func("env", "ext_get_storage", ext_get_storage::<T>);
 	imports.add_host_func("env", "ext_transfer", ext_transfer::<T>);
@@ -171,11 +250,514 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		account: account.clone(),
 		account_db,
 		memory,
+		gas_limit,
+		gas_used: 0,
 	};
 
-	let mut instance = match sandbox::Instance::new(code, &imports, &mut exec_ext) {
-		Ok(instance) => instance,
-		Err(_err) => return false,
-	};
-	instance.invoke(b"call", &[], &mut exec_ext).is_ok()
+	let mut instance =
+		sandbox::Instance::new(&instrumented_code, &imports, &mut exec_ext)
+			.map_err(|_| Error::Instantiate)?;
+	instance
+		.invoke(b"call", &[], &mut exec_ext)
+		.map(|_| ())
+		.map_err(|_| Error::Invoke)
+}
+
+#[derive(Clone)]
+struct Config {
+	/// Gas cost of a growing memory by single page.
+	grow_mem_cost: u32,
+
+	/// Gas cost of a regular operation.
+	regular_op_cost: u32,
+
+	/// How tall the stack is allowed to grow?
+	///
+	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
+	/// how the stack frame cost is calculated.
+	max_stack_height: u32,
+
+	//// What is the maximal memory pages amount is allowed to have for
+	/// a contract.
+	max_memory_pages: u32,
+}
+
+impl Default for Config {
+	fn default() -> Config {
+		Config {
+			grow_mem_cost: 1,
+			regular_op_cost: 1,
+			max_stack_height: 64 * 1024,
+			max_memory_pages: 16,
+		}
+	}
+}
+
+struct ContractModule {
+	// An `Option` is used here for loaning (`take()`-ing) the module.
+	// Invariant: Can't be `None` (i.e. on enter and on exit from the function
+	// the value *must* be `Some`).
+	module: Option<elements::Module>,
+	config: Config,
+}
+
+impl ContractModule {
+	fn new(original_code: &[u8], config: Config) -> Result<ContractModule, Error> {
+		let module =
+			elements::deserialize_buffer(original_code).map_err(|_| Error::Deserialization)?;
+		Ok(ContractModule {
+			module: Some(module),
+			config,
+		})
+	}
+
+	/// Ensures that module doesn't declare internal memories.
+	///
+	/// In this runtime we only allow wasm module to import memory from the environment.
+	/// Memory section contains declarations of internal linear memories, so if we find one
+	/// we reject such a module.
+	fn ensure_no_internal_memory(&self) -> Result<(), Error> {
+		let module = self.module
+			.as_ref()
+			.expect("On entry to the function `module` can't be None; qed");
+		if module
+			.memory_section()
+			.map_or(false, |ms| ms.entries().len() > 0)
+		{
+			return Err(Error::InternalMemoryDeclared);
+		}
+		Ok(())
+	}
+
+	fn inject_gas_metering(&mut self) -> Result<(), Error> {
+		let gas_rules = rules::Set::new(self.config.regular_op_cost, Default::default())
+			.with_grow_cost(self.config.grow_mem_cost)
+			.with_forbidden_floats();
+
+		let module = self.module
+			.take()
+			.expect("On entry to the function `module` can't be `None`; qed");
+
+		let contract_module = pwasm_utils::inject_gas_counter(module, &gas_rules)
+			.map_err(|_| Error::GasInstrumentation)?;
+
+		self.module = Some(contract_module);
+		Ok(())
+	}
+
+	fn inject_stack_height_metering(&mut self) -> Result<(), Error> {
+		let module = self.module
+			.take()
+			.expect("On entry to the function `module` can't be `None`; qed");
+
+		let contract_module =
+			pwasm_utils::stack_height::inject_limiter(module, self.config.max_stack_height)
+				.map_err(|_| Error::StackHeightInstrumentation)?;
+
+		self.module = Some(contract_module);
+		Ok(())
+	}
+
+	/// Find the memory import entry and return it's descriptor.
+	fn find_mem_import(&self) -> Option<&MemoryType> {
+		let import_section = self.module
+			.as_ref()
+			.expect("On entry to the function `module` can't be `None`; qed")
+			.import_section()?;
+		for import in import_section.entries() {
+			if let ("env", "memory", &External::Memory(ref memory_type)) =
+				(import.module(), import.field(), import.external())
+			{
+				return Some(memory_type);
+			}
+		}
+		None
+	}
+
+	fn into_wasm_code(mut self) -> Result<Vec<u8>, Error> {
+		elements::serialize(
+			self.module
+				.take()
+				.expect("On entry to the function `module` can't be `None`; qed"),
+		).map_err(|_| Error::Serialization)
+	}
+}
+
+struct PreparedContract {
+	instrumented_code: Vec<u8>,
+	memory: sandbox::Memory,
+}
+
+fn prepare_contract(original_code: &[u8]) -> Result<PreparedContract, Error> {
+	let config = Config::default();
+
+	let mut contract_module = ContractModule::new(original_code, config.clone())?;
+	contract_module.ensure_no_internal_memory()?;
+	contract_module.inject_gas_metering()?;
+	contract_module.inject_stack_height_metering()?;
+
+	// Inspect the module to extract the initial and maximum page count.
+	let memory = match contract_module.find_mem_import() {
+		Some(memory_type) => {
+			let limits = memory_type.limits();
+			match (limits.initial(), limits.maximum()) {
+				(initial, Some(maximum)) if initial > maximum => {
+					// Requested initial number of pages should not exceed the requested maximum.
+					return Err(Error::Memory);
+				}
+				(_, Some(maximum)) if maximum > config.max_memory_pages => {
+					// Maximum number of pages should not exceed the configured maximum.
+					return Err(Error::Memory);
+				}
+				(_, None) => {
+					// Maximum number of pages should be always declared.
+					// This isn't a hard requirement and can be treated as a maxiumum set
+					// to configured maximum.
+					return Err(Error::Memory)
+				}
+				(initial, maximum) => sandbox::Memory::new(
+					initial,
+					maximum,
+				)
+			}
+		},
+
+		// If none memory imported then just crate an empty placeholder.
+		// Any access to it will lead to out of bounds trap.
+		None => sandbox::Memory::new(0, Some(0)),
+	}.map_err(|_| Error::Memory)?;
+
+	Ok(PreparedContract {
+		instrumented_code: contract_module.into_wasm_code()?,
+		memory,
+	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::fmt;
+	use wabt;
+	use runtime_io::with_externalities;
+	use mock::{Staking, Test, new_test_ext};
+	use ::{CodeOf, ContractAddressFor, DirectAccountDb, FreeBalance, StorageMap};
+
+	impl fmt::Debug for PreparedContract {
+		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+			write!(f, "PreparedContract {{ .. }}")
+		}
+	}
+
+	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
+		let wasm = wabt::Wat2Wasm::new()
+			.validate(false)
+			.convert(wat)
+			.unwrap();
+		prepare_contract(wasm.as_ref())
+	}
+
+	#[test]
+	fn internal_memory_declaration() {
+		let r = parse_and_prepare_wat(
+			r#"(module (memory 1 1))"#,
+		);
+		assert_matches!(r, Err(Error::InternalMemoryDeclared));
+	}
+
+	#[test]
+	fn memory() {
+		// This test assumes that maximum page number is configured to a certain number.
+		assert_eq!(Config::default().max_memory_pages, 16);
+
+		let r = parse_and_prepare_wat(
+			r#"(module (import "env" "memory" (memory 1 1)))"#,
+		);
+		assert_matches!(r, Ok(_));
+
+		// No memory import
+		let r = parse_and_prepare_wat(
+			r#"(module)"#,
+		);
+		assert_matches!(r, Ok(_));
+
+		// incorrect import name. That's kinda ok, since this will fail
+		// at later stage when imports will be resolved.
+		let r = parse_and_prepare_wat(
+			r#"(module (import "vne" "memory" (memory 1 1)))"#,
+		);
+		assert_matches!(r, Ok(_));
+
+		// initial exceed maximum
+		let r = parse_and_prepare_wat(
+			r#"(module (import "env" "memory" (memory 16 1)))"#,
+		);
+		assert_matches!(r, Err(Error::Memory));
+
+		// no maximum
+		let r = parse_and_prepare_wat(
+			r#"(module (import "env" "memory" (memory 1)))"#,
+		);
+		assert_matches!(r, Err(Error::Memory));
+
+		// requested maximum exceed configured maximum
+		let r = parse_and_prepare_wat(
+			r#"(module (import "env" "memory" (memory 1 17)))"#,
+		);
+		assert_matches!(r, Err(Error::Memory));
+	}
+
+	#[test]
+	fn contract_transfer() {
+		let code_transfer = wabt::wat2wasm(
+			r#"
+(module
+    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value: u32)
+    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32)))
+
+    (import "env" "memory" (memory 1 1))
+
+    (func (export "call")
+        (call $ext_transfer
+            (i32.const 4)  ;; Pointer to "Transfer to" address.
+            (i32.const 8)  ;; Length of "Transfer to" address.
+            (i32.const 6)  ;; value to transfer
+        )
+    )
+
+    ;; Destination AccountId to transfer the funds.
+    ;; Represented by u64 (8 bytes long) in little endian.
+    (data (i32.const 4) "\02\00\00\00\00\00\00\00")
+)
+		"#,
+		).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+			<FreeBalance<Test>>::insert(2, 30);
+
+			<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+			Staking::transfer(&0, 1, 11);
+
+			assert_eq!(Staking::balance(&0), 100);
+			assert_eq!(Staking::balance(&1), 5);
+			assert_eq!(Staking::balance(&2), 36);
+		});
+	}
+
+	fn escaped_bytestring(bytes: &[u8]) -> String {
+		use std::fmt::Write;
+		let mut result = String::new();
+		for b in bytes {
+			write!(result, "\\{:02x}", b).unwrap();
+		}
+		result
+	}
+
+	#[test]
+	fn contract_create() {
+		let code_transfer = wabt::wat2wasm(
+			r#"
+(module
+    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value: u32)
+    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32)))
+
+    (import "env" "memory" (memory 1 1))
+
+    (func (export "call")
+        (call $ext_transfer
+            (i32.const 4)  ;; Pointer to "Transfer to" address.
+            (i32.const 8)  ;; Length of "Transfer to" address.
+            (i32.const 6)  ;; value to transfer
+        )
+    )
+
+    ;; Destination AccountId to transfer the funds.
+    ;; Represented by u64 (8 bytes long) in little endian.
+    (data (i32.const 4) "\02\00\00\00\00\00\00\00")
+)
+		"#,
+		).unwrap();
+
+		let code_create = wabt::wat2wasm(format!(
+			r#"
+(module
+    ;; ext_create(code_ptr: u32, code_len: u32, value: u32)
+    (import "env" "ext_create" (func $ext_create (param i32 i32 i32)))
+
+    (import "env" "memory" (memory 1 1))
+
+    (func (export "call")
+        (call $ext_create
+            (i32.const 4)   ;; Pointer to `code`
+            (i32.const {code_length}) ;; Length of `code`
+            (i32.const 3)   ;; Value to transfer
+        )
+    )
+    (data (i32.const 4) "{escaped_code_transfer}")
+)
+			"#,
+			escaped_code_transfer = escaped_bytestring(&code_transfer),
+			code_length = code_transfer.len(),
+		)).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+
+			<CodeOf<Test>>::insert(1, code_create.to_vec());
+
+			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
+			Staking::transfer(&0, 1, 11);
+
+			let derived_address =
+				<Test as Trait>::DetermineContractAddress::contract_address_for(&code_transfer, &1);
+
+			assert_eq!(Staking::balance(&0), 100);
+			assert_eq!(Staking::balance(&1), 8);
+			assert_eq!(Staking::balance(&derived_address), 3);
+		});
+	}
+
+	#[test]
+	fn contract_adder() {
+		let code_adder = wabt::wat2wasm(r#"
+(module
+    ;; ext_set_storage(location_ptr: i32, value_non_null: bool, value_ptr: i32)
+    (import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
+    ;; ext_get_storage(location_ptr: i32, value_ptr: i32)
+    (import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32)))
+    (import "env" "memory" (memory 1 1))
+
+    (func (export "call")
+        (call $ext_get_storage
+            (i32.const 4)  ;; Point to a location of the storage.
+            (i32.const 36) ;; The result will be written at this address.
+        )
+        (i32.store
+            (i32.const 36)
+            (i32.add
+                (i32.load
+                    (i32.const 36)
+                )
+                (i32.const 1)
+            )
+        )
+
+        (call $ext_set_storage
+            (i32.const 4)  ;; Pointer to a location of the storage.
+            (i32.const 1)  ;; Value is not null.
+            (i32.const 36) ;; Pointer to a data we want to put in the storage.
+        )
+    )
+
+    ;; Location of storage to put the data. 32 bytes.
+    (data (i32.const 4) "\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01")
+)
+		"#).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+			<CodeOf<Test>>::insert(1, code_adder);
+
+			Staking::transfer(&0, 1, 1);
+			Staking::transfer(&0, 1, 1);
+
+			let storage_addr = [0x01u8; 32];
+			let value =
+				AccountDb::<Test>::get_storage(&DirectAccountDb, &1, &storage_addr).unwrap();
+
+			assert_eq!(
+				&value,
+				&[
+					2, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0,
+				]
+			);
+		});
+	}
+
+	#[test]
+	fn contract_out_of_gas() {
+		// This code should make 100_000 iterations so it should
+		// consume more than 100_000 units of gas.
+		let code_loop = wabt::wat2wasm(
+			r#"
+(module
+	(func (export "call")
+		(local $i i32)
+
+		loop $l
+			;; $i = $i + 1
+			(set_local $i
+				(i32.add
+					(get_local $i)
+					(i32.const 1)
+				)
+			)
+
+			;; if $i < 100_000u32: goto $l
+			(br_if $l
+				(i32.lt_u
+					(get_local $i)
+					(i32.const 100000)
+				)
+			)
+		end
+	)
+)
+		"#,
+		).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			// Set initial balances.
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+
+			<CodeOf<Test>>::insert(1, code_loop.to_vec());
+
+			// Transfer some balance from 0 to 1. This will trigger execution
+			// of the smart-contract code at address 1.
+			Staking::transfer(&0, 1, 11);
+
+			// The balance should remain unchanged since we are expecting
+			// out-of-gas error which will revert transfer.
+			assert_eq!(Staking::balance(&0), 111);
+		});
+	}
+
+	#[test]
+	fn contract_internal_mem() {
+		let code_mem = wabt::wat2wasm(
+			r#"
+(module
+	;; Internal memory is not allowed.
+	(memory 1 1)
+
+	(func (export "call")
+		nop
+	)
+)
+		"#,
+		).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			// Set initial balances.
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+
+			<CodeOf<Test>>::insert(1, code_mem.to_vec());
+
+			// Transfer some balance from 0 to 1.
+			Staking::transfer(&0, 1, 11);
+
+			// The balance should remain unchanged since we are expecting
+			// validation error caused by internal memory declaration.
+			assert_eq!(Staking::balance(&0), 111);
+		});
+	}
 }
