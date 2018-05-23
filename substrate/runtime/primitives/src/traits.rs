@@ -124,12 +124,12 @@ impl<T:
 > SimpleArithmetic for T {}
 
 pub trait SimpleBitOps:
-	Sized +
+	Sized + Zero +
 	rstd::ops::BitOr<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
-	Sized +
+	Sized + Zero + 
 	rstd::ops::BitOr<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}

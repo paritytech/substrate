@@ -17,82 +17,83 @@
 //! In memory client backend
 
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use parking_lot::RwLock;
 use error;
 use backend;
-use runtime_support::Hashable;
+use codec::Slicable;
 use primitives;
-use primitives::block::{self, Id as BlockId, HeaderHash};
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing as HashingT, Zero};
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 
-fn header_hash(header: &block::Header) -> block::HeaderHash {
-	header.blake2_256().into()
-}
-
-struct PendingBlock {
+struct PendingBlock<Block: BlockT> {
 	block: Block,
 	is_best: bool,
 }
 
 #[derive(PartialEq, Eq, Clone)]
-struct Block {
-	header: block::Header,
+struct Block<Block: BlockT> {
+	header: Block::Header,
 	justification: Option<primitives::bft::Justification>,
-	body: Option<block::Body>,
+	body: Option<Vec<Block::Extrinsic>>,
 }
 
 #[derive(Clone)]
-struct BlockchainStorage {
-	blocks: HashMap<HeaderHash, Block>,
-	hashes: HashMap<block::Number, HeaderHash>,
-	best_hash: HeaderHash,
-	best_number: block::Number,
-	genesis_hash: HeaderHash,
+struct BlockchainStorage<Block: BlockT> {
+	blocks: HashMap<Block::Header::Hash, Block>,
+	hashes: HashMap<Block::Header::Number, Block::Header::Hash>,
+	best_hash: Block::Header::Hash,
+	best_number: Block::Header::Number,
+	genesis_hash: Block::Header::Hash,
 }
 
 /// In-memory blockchain. Supports concurrent reads.
-pub struct Blockchain {
-	storage: RwLock<BlockchainStorage>,
+pub struct Blockchain<BlockT: Block> {
+	storage: RwLock<BlockchainStorage<Block>>,
 }
 
-impl Clone for Blockchain {
-	fn clone(&self) -> Blockchain {
+impl<BlockT: Block> Clone for Blockchain<Block> {
+	fn clone(&self) -> Self {
 		Blockchain {
 			storage: RwLock::new(self.storage.read().clone()),
 		}
 	}
 }
 
-impl Blockchain {
-	fn id(&self, id: BlockId) -> Option<HeaderHash> {
+impl<Block: BlockT> Blockchain<Block> {
+	fn id(&self, id: BlockId<Block>) -> Option<Block::Header::Hash> {
 		match id {
 			BlockId::Hash(h) => Some(h),
 			BlockId::Number(n) => self.storage.read().hashes.get(&n).cloned(),
 		}
 	}
 
-	fn new() -> Blockchain {
+	fn new() -> Self {
 		Blockchain {
 			storage: RwLock::new(
 				BlockchainStorage {
 					blocks: HashMap::new(),
 					hashes: HashMap::new(),
-					best_hash: HeaderHash::default(),
-					best_number: 0,
-					genesis_hash: HeaderHash::default(),
+					best_hash: Default::default(),
+					best_number: Zero::zero(),
+					genesis_hash: Default::default(),
 				})
 		}
 	}
 
-	fn insert(&self, hash: HeaderHash, header: block::Header, justification: Option<primitives::bft::Justification>, body: Option<block::Body>, is_new_best: bool) {
+	fn insert(
+		&self,
+		hash: Block::Header::Hash,
+		header: Block::Header,
+		justification: Option<primitives::bft::Justification>,
+		body: Option<Vec<Block::Extrinsic>>,
+		is_new_best: bool
+	) {
 		let number = header.number;
 		let mut storage = self.storage.write();
-		storage.blocks.insert(hash, Block {
-			header: header,
-			body: body,
-			justification: justification,
-		});
+		storage.blocks.insert(hash, Block::new(header, body, justification));
 		storage.hashes.insert(number, hash);
 		if is_new_best {
 			storage.best_hash = hash;
@@ -104,12 +105,12 @@ impl Blockchain {
 	}
 
 	/// Compare this blockchain with another in-mem blockchain
-	pub fn equals_to(&self, other: &Blockchain) -> bool {
+	pub fn equals_to(&self, other: &Self) -> bool {
 		self.canon_equals_to(other) && self.storage.read().blocks == other.storage.read().blocks
 	}
 
 	/// Compare canonical chain to other canonical chain.
-	pub fn canon_equals_to(&self, other: &Blockchain) -> bool {
+	pub fn canon_equals_to(&self, other: &Self) -> bool {
 		let this = self.storage.read();
 		let other = other.storage.read();
 			this.hashes == other.hashes
@@ -119,20 +120,20 @@ impl Blockchain {
 	}
 }
 
-impl blockchain::Backend for Blockchain {
-	fn header(&self, id: BlockId) -> error::Result<Option<block::Header>> {
+impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
+	fn header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).map(|b| b.header.clone())))
 	}
 
-	fn body(&self, id: BlockId) -> error::Result<Option<block::Body>> {
+	fn body(&self, id: BlockId<Block>) -> error::Result<Option<Vec<Block::Extrinsic>>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.body.clone())))
 	}
 
-	fn justification(&self, id: BlockId) -> error::Result<Option<primitives::bft::Justification>> {
+	fn justification(&self, id: BlockId<Block>) -> error::Result<Option<primitives::bft::Justification>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.justification.clone())))
 	}
 
-	fn info(&self) -> error::Result<blockchain::Info> {
+	fn info(&self) -> error::Result<blockchain::Info<Block>> {
 		let storage = self.storage.read();
 		Ok(blockchain::Info {
 			best_hash: storage.best_hash,
@@ -148,33 +149,35 @@ impl blockchain::Backend for Blockchain {
 		}
 	}
 
-	fn hash(&self, number: block::Number) -> error::Result<Option<block::HeaderHash>> {
+	fn hash(&self, number: Block::Header::Number) -> error::Result<Option<Block::Header::Hash>> {
 		Ok(self.id(BlockId::Number(number)))
 	}
 }
 
 /// In-memory operation.
-pub struct BlockImportOperation {
-	pending_block: Option<PendingBlock>,
+pub struct<Block: BlockT> BlockImportOperation {
+	pending_block: Option<PendingBlock<Block>>,
 	old_state: InMemory,
 	new_state: Option<InMemory>,
 }
 
-impl backend::BlockImportOperation for BlockImportOperation {
+impl<Block: BlockT> backend::BlockImportOperation for BlockImportOperation<Block> {
 	type State = InMemory;
 
 	fn state(&self) -> error::Result<&Self::State> {
 		Ok(&self.old_state)
 	}
 
-	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()> {
+	fn set_block_data(
+		&mut self,
+		header: Block::Header,
+		body: Option<Vec<Block::Extrinsic>>,
+		justification: Option<primitives::bft::Justification>,
+		is_new_best: bool
+	) -> error::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
-			block: Block {
-				header: header,
-				body: body,
-				justification: justification,
-			},
+			block: Block::new(header, body, justification),
 			is_best: is_new_best,
 		});
 		Ok(())
@@ -192,27 +195,32 @@ impl backend::BlockImportOperation for BlockImportOperation {
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
-pub struct Backend {
-	states: RwLock<HashMap<block::HeaderHash, InMemory>>,
-	blockchain: Blockchain,
+pub struct Backend<Block: BlockT, Hashing: HashingT + Hash> {
+	states: RwLock<HashMap<Block::Header::Hash, InMemory>>,
+	blockchain: Blockchain<Block>,
+	dummy: PhantomData<Hashing>,
 }
 
-impl Backend {
+impl<Block: BlockT, Hashing: HashingT + Hash> Backend<Block, Hashing> {
 	/// Create a new instance of in-mem backend.
 	pub fn new() -> Backend {
 		Backend {
 			states: RwLock::new(HashMap::new()),
 			blockchain: Blockchain::new(),
+			dummy: PhantomData::new(),
 		}
 	}
 }
 
-impl backend::Backend for Backend {
-	type BlockImportOperation = BlockImportOperation;
-	type Blockchain = Blockchain;
+impl<
+	Block: BlockT,
+	Hashing: HashingT + Hash
+> Backend<Block, Hashing> backend::Backend<Block> for Backend<Block, Hashing> {
+	type BlockImportOperation = BlockImportOperation<Block>;
+	type Blockchain = Blockchain<Block>;
 	type State = InMemory;
 
-	fn begin_operation(&self, block: BlockId) -> error::Result<Self::BlockImportOperation> {
+	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
 			BlockId::Hash(h) if h.is_zero() => Self::State::default(),
 			_ => self.state_at(block)?,
@@ -227,7 +235,7 @@ impl backend::Backend for Backend {
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
 		if let Some(pending_block) = operation.pending_block {
-			let hash = header_hash(&pending_block.block.header);
+			let hash = Hashing::hash_of(&pending_block.block.header);
 			let old_state = &operation.old_state;
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.justification, pending_block.block.body, pending_block.is_best);
@@ -235,14 +243,14 @@ impl backend::Backend for Backend {
 		Ok(())
 	}
 
-	fn blockchain(&self) -> &Blockchain {
+	fn blockchain(&self) -> &Self::Blockchain {
 		&self.blockchain
 	}
 
 	fn state_at(&self, block: BlockId) -> error::Result<Self::State> {
 		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
 			Some(state) => Ok(state),
-			None => Err(error::ErrorKind::UnknownBlock(block).into()),
+			None => Err(error::ErrorKind::UnknownBlock(Box::new(block)).into()),
 		}
 	}
 }

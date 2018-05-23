@@ -355,7 +355,7 @@ pub enum BlockId<Block: BlockT> where
 #[cfg(feature = "std")]
 impl<Block: BlockT> fmt::Display for Id<Block> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		format!("{:?}", self)
+		write!(f, "{:?}", self)
 	}
 }
 

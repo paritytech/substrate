@@ -18,13 +18,17 @@
 
 use std::collections::HashMap;
 use primitives::traits::{Block as BlockT, Hashing as HashingT, Zero};
-use triehash::trie_root;
 
 /// Create a genesis block, given the initial storage.
-pub fn construct_genesis_block<Block: BlockT, Hashing: HashingT<Output = Block::Header::Hash>(storage: &HashMap<Vec<u8>, Vec<u8>>) -> Block {
+pub fn construct_genesis_block<
+	Block: BlockT,
+	Hashing: HashingT<Output = Block::Header::Hash>
+(
+	storage: &HashMap<Vec<u8>, Vec<u8>>
+) -> Block {
 	// TODO gav don't use `trie_root`!
-	let state_root = trie_root(storage.clone().into_iter()).0.into();
-	let extrinsics_root = trie_root(vec![].into_iter()).0.into();
+	let state_root = Hashing::trie_root(storage.clone().into_iter());
+	let extrinsics_root = Hashing::trie_root(vec![].into_iter());
 	Block::new(
 		Block::Header::new(
 			Zero::zero(),
