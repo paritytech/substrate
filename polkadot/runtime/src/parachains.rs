@@ -66,7 +66,7 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Calculate the current block's with system's random seed.
+	/// Calculate the current block's duty roster using system's random seed.
 	pub fn calculate_duty_roster() -> DutyRoster {
 		let parachains = Self::active_parachains();
 		let parachain_count = parachains.len();
