@@ -237,3 +237,85 @@ impl<B: LocalBackend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecu
 impl<B: LocalBackend> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>>
 	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
 {}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use keyring::Keyring;
+	use codec::Slicable;
+	use client::{self, LocalCallExecutor};
+	use client::in_mem::Backend as InMemory;
+	use substrate_executor::NativeExecutionDispatch;
+	use substrate_primitives::{self, Header};
+	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildExternalities};
+
+	fn validators() -> Vec<AccountId> {
+		vec![
+			Keyring::One.to_raw_public(),
+			Keyring::Two.to_raw_public(),
+		]
+	}
+
+	fn client() -> Client<InMemory, LocalCallExecutor<InMemory, NativeExecutor<LocalDispatch>>> {
+		struct GenesisBuilder;
+
+		impl client::GenesisBuilder for GenesisBuilder {
+			fn build(self) -> (Header, Vec<(Vec<u8>, Vec<u8>)>) {
+				let genesis_config = GenesisConfig {
+					consensus: Some(ConsensusConfig {
+						code: LocalDispatch::native_equivalent().to_vec(),
+						authorities: validators(),
+					}),
+					system: None,
+					session: Some(SessionConfig {
+						validators: validators(),
+						session_length: 100,
+					}),
+					council: Some(Default::default()),
+					democracy: Some(Default::default()),
+					parachains: Some(Default::default()),
+					staking: Some(Default::default()),
+				};
+
+				let storage = genesis_config.build_externalities();
+				let block = ::client::genesis::construct_genesis_block(&storage);
+				(substrate_primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+			}
+		}
+
+		::client::new_in_mem(LocalDispatch::new(), GenesisBuilder).unwrap()
+	}
+
+	#[test]
+	fn gets_session_and_validator_keys() {
+		let client = client();
+		let id = client.check_id(BlockId::Number(0)).unwrap();
+		assert_eq!(client.session_keys(&id).unwrap(), validators());
+		assert_eq!(client.validators(&id).unwrap(), validators());
+	}
+
+	#[test]
+	fn build_block() {
+		let client = client();
+
+		let id = client.check_id(BlockId::Number(0)).unwrap();
+		let block_builder = client.build_block(&id, 1_000_000).unwrap();
+		let block = block_builder.bake();
+
+		assert_eq!(block.header.number, 1);
+		assert!(block.header.extrinsics_root != Default::default());
+	}
+
+	#[test]
+	fn fails_to_check_id_for_unknown_block() {
+		assert!(client().check_id(BlockId::Number(100)).is_err());
+	}
+
+	#[test]
+	fn gets_random_seed_with_genesis() {
+		let client = client();
+
+		let id = client.check_id(BlockId::Number(0)).unwrap();
+		assert!(client.random_seed(&id).is_ok());
+	}
+}

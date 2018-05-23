@@ -275,6 +275,7 @@ mod tests {
 	use std::collections::VecDeque;
 	use std::sync::Arc;
 	use std::time::Instant;
+	use futures::Future;
 	use parking_lot::RwLock;
 	use client;
 	use client::light::{FetchChecker, RemoteCallRequest};
@@ -410,7 +411,7 @@ mod tests {
 		let mut network = TestIo::new(&queue, None);
 		on_demand.on_connect(0, Role::FULL);
 
-		let mut response = on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
+		let response = on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
 		let thread = ::std::thread::spawn(move || {
 			let result = response.wait().unwrap();
 			assert_eq!(result.return_data, vec![1]);
