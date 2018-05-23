@@ -24,6 +24,10 @@ extern crate serde;
 #[cfg(test)]
 extern crate wabt;
 
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
+
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -38,6 +42,8 @@ extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
+extern crate pwasm_utils;
+extern crate parity_wasm;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
@@ -49,6 +55,8 @@ use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
 
 mod contract;
+#[cfg(test)]
+mod mock;
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -564,6 +572,8 @@ impl<T: Trait> Module<T> {
 		assert!(to_balance + value > to_balance); // no overflow
 
 		// TODO: a fee, based upon gaslimit/gasprice.
+		let gas_limit = 100_000;
+
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
 
@@ -581,7 +591,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			// TODO: logging (logs are just appended into a notable storage-based vector and cleared every
 			// block).
-			contract::execute(&dest_code, dest, &mut overlay)
+			contract::execute(&dest_code, dest, &mut overlay, gas_limit).is_ok()
 		};
 
 		if should_commit {
@@ -703,61 +713,7 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
-	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity};
-	use primitives::testing::{Digest, Header};
-
-	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
-	impl consensus::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
-		type SessionKey = u64;
-	}
-	impl system::Trait for Test {
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
-		type Digest = Digest;
-		type AccountId = u64;
-		type Header = Header;
-	}
-	impl session::Trait for Test {
-		type ConvertAccountIdToSessionKey = Identity;
-	}
-	impl Trait for Test {
-		type Balance = u64;
-		type DetermineContractAddress = DummyContractAddressFor;
-	}
-
-	fn new_test_ext(session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
-		t.extend(consensus::GenesisConfig::<Test>{
-			code: vec![],
-			authorities: vec![],
-		}.build_externalities());
-		t.extend(session::GenesisConfig::<Test>{
-			session_length,
-			validators: vec![10, 20],
-		}.build_externalities());
-		t.extend(GenesisConfig::<Test>{
-			sessions_per_era,
-			current_era,
-			balances: if monied { vec![(1, 10), (2, 20), (3, 30), (4, 40)] } else { vec![] },
-			intentions: vec![],
-			validator_count: 2,
-			bonding_duration: 3,
-			transaction_fee: 0,
-		}.build_externalities());
-		t
-	}
-
-	type System = system::Module<Test>;
-	type Session = session::Module<Test>;
-	type Staking = Module<Test>;
+	use mock::*;
 
 	#[test]
 	fn staking_should_work() {
@@ -1041,181 +997,6 @@ mod tests {
 			assert_eq!(Staking::free_balance(&1), 69);
 			assert_eq!(Staking::reserved_balance(&2), 0);
 			assert_eq!(Staking::free_balance(&2), 42);
-		});
-	}
-
-	#[test]
-	fn contract_transfer() {
-		let code_transfer = wabt::wat2wasm(
-			r#"
-(module
-    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value: u32)
-    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32)))
-
-    (import "env" "memory" (memory 1))
-
-    (func (export "call")
-        (call $ext_transfer
-            (i32.const 4)  ;; Pointer to "Transfer to" address.
-            (i32.const 8)  ;; Length of "Transfer to" address.
-            (i32.const 6)  ;; value to transfer
-        )
-    )
-
-    ;; Destination AccountId to transfer the funds.
-    ;; Represented by u64 (8 bytes long) in little endian.
-    (data (i32.const 4) "\02\00\00\00\00\00\00\00")
-)
-		"#,
-		).unwrap();
-
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
-			<FreeBalance<Test>>::insert(0, 111);
-			<FreeBalance<Test>>::insert(1, 0);
-			<FreeBalance<Test>>::insert(2, 30);
-
-			<CodeOf<Test>>::insert(1, code_transfer.to_vec());
-
-			Staking::transfer(&0, 1, 11);
-
-			assert_eq!(Staking::balance(&0), 100);
-			assert_eq!(Staking::balance(&1), 5);
-			assert_eq!(Staking::balance(&2), 36);
-		});
-	}
-
-	fn escaped_bytestring(bytes: &[u8]) -> String {
-		use std::fmt::Write;
-		let mut result = String::new();
-		for b in bytes {
-			write!(result, "\\{:02x}", b).unwrap();
-		}
-		result
-	}
-
-	#[test]
-	fn contract_create() {
-		let code_transfer = wabt::wat2wasm(
-			r#"
-(module
-    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value: u32)
-    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32)))
-
-    (import "env" "memory" (memory 1))
-
-    (func (export "call")
-        (call $ext_transfer
-            (i32.const 4)  ;; Pointer to "Transfer to" address.
-            (i32.const 8)  ;; Length of "Transfer to" address.
-            (i32.const 6)  ;; value to transfer
-        )
-    )
-
-    ;; Destination AccountId to transfer the funds.
-    ;; Represented by u64 (8 bytes long) in little endian.
-    (data (i32.const 4) "\02\00\00\00\00\00\00\00")
-)
-		"#,
-		).unwrap();
-
-		let code_create = wabt::wat2wasm(format!(
-			r#"
-(module
-    ;; ext_create(code_ptr: u32, code_len: u32, value: u32)
-    (import "env" "ext_create" (func $ext_create (param i32 i32 i32)))
-
-    (import "env" "memory" (memory 1))
-
-    (func (export "call")
-        (call $ext_create
-            (i32.const 4)   ;; Pointer to `code`
-            (i32.const {code_length}) ;; Length of `code`
-            (i32.const 3)   ;; Value to transfer
-        )
-    )
-    (data (i32.const 4) "{escaped_code_transfer}")
-)
-			"#,
-			escaped_code_transfer = escaped_bytestring(&code_transfer),
-			code_length = code_transfer.len(),
-		)).unwrap();
-
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
-			<FreeBalance<Test>>::insert(0, 111);
-			<FreeBalance<Test>>::insert(1, 0);
-
-			<CodeOf<Test>>::insert(1, code_create.to_vec());
-
-			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
-			Staking::transfer(&0, 1, 11);
-
-			let derived_address =
-				<Test as Trait>::DetermineContractAddress::contract_address_for(&code_transfer, &1);
-
-			assert_eq!(Staking::balance(&0), 100);
-			assert_eq!(Staking::balance(&1), 8);
-			assert_eq!(Staking::balance(&derived_address), 3);
-		});
-	}
-
-	#[test]
-	fn contract_adder() {
-		let code_adder = wabt::wat2wasm(r#"
-(module
-    ;; ext_set_storage(location_ptr: i32, value_non_null: bool, value_ptr: i32)
-    (import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
-    ;; ext_get_storage(location_ptr: i32, value_ptr: i32)
-    (import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32)))
-    (import "env" "memory" (memory 1))
-
-    (func (export "call")
-        (call $ext_get_storage
-            (i32.const 4)  ;; Point to a location of the storage.
-            (i32.const 36) ;; The result will be written at this address.
-        )
-        (i32.store
-            (i32.const 36)
-            (i32.add
-                (i32.load
-                    (i32.const 36)
-                )
-                (i32.const 1)
-            )
-        )
-
-        (call $ext_set_storage
-            (i32.const 4)  ;; Pointer to a location of the storage.
-            (i32.const 1)  ;; Value is not null.
-            (i32.const 36) ;; Pointer to a data we want to put in the storage.
-        )
-    )
-
-    ;; Location of storage to put the data. 32 bytes.
-    (data (i32.const 4) "\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01")
-)
-		"#).unwrap();
-
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
-			<FreeBalance<Test>>::insert(0, 111);
-			<FreeBalance<Test>>::insert(1, 0);
-			<CodeOf<Test>>::insert(1, code_adder);
-
-			Staking::transfer(&0, 1, 1);
-			Staking::transfer(&0, 1, 1);
-
-			let storage_addr = [0x01u8; 32];
-			let value =
-				AccountDb::<Test>::get_storage(&DirectAccountDb, &1, &storage_addr).unwrap();
-
-			assert_eq!(
-				&value,
-				&[
-					2, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0,
-				]
-			);
 		});
 	}
 }
