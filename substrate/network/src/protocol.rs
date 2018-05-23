@@ -101,17 +101,10 @@ pub struct TransactionStats {
 	pub propagated_to: BTreeMap<NodeId, usize>,
 }
 
-enum Action {
-	Message(PeerId, Message),
-	Disconnect(PeerId),
-	Disable(PeerId),
-}
-
 /// Protocol context.
 pub(crate) struct Context<'a> {
 	io: &'a mut SyncIo,
 	context_data: &'a ContextData,
-	actions: Vec<Action>,
 }
 
 impl<'a> Context<'a> {
@@ -119,25 +112,20 @@ impl<'a> Context<'a> {
 		Context {
 			io,
 			context_data,
-			actions: Vec::new(),
 		}
-	}
-
-	fn push(&mut self, action: Action) {
-		self.actions.push(action);
 	}
 
 	/// Send a message to a peer.
 	pub(crate) fn send_message(&mut self, peer_id: PeerId, message: Message) {
-		self.push(Action::Message(peer_id, message));
+		send_message(&self.context_data.peers, self.io, peer_id, message)
 	}
 
 	pub(crate) fn disable_peer(&mut self, peer_id: PeerId) {
-		self.push(Action::Disable(peer_id))
+		self.io.disable_peer(peer_id);
 	}
 
 	pub(crate) fn disconnect_peer(&mut self, peer_id: PeerId) {
-		self.push(Action::Disconnect(peer_id))
+		self.io.disconnect_peer(peer_id)
 	}
 
 	/// Get peer info.
@@ -152,7 +140,7 @@ impl<'a> Context<'a> {
 		})
 	}
 
-	/// Get chain handle.
+	/// Get a handle to the chain.
 	pub(crate) fn chain(&self) -> &Client {
 		&*self.context_data.chain
 	}
@@ -160,31 +148,19 @@ impl<'a> Context<'a> {
 
 impl<'a> ::specialization::HandlerContext for Context<'a> {
 	fn send(&mut self, peer_id: PeerId, message: Vec<u8>) {
-		self.push(Action::Message(peer_id, Message::ChainSpecific(message)));
+		self.send_message(peer_id, Message::ChainSpecific(message));
 	}
 
 	fn disable_peer(&mut self, peer_id: PeerId) {
-		self.push(Action::Disable(peer_id))
+		Context::disable_peer(self, peer_id);
 	}
 
 	fn disconnect_peer(&mut self, peer_id: PeerId) {
-		self.push(Action::Disconnect(peer_id))
+		Context::disable_peer(self, peer_id);
 	}
 
 	fn client(&self) -> &Client {
-		self.chain()
-	}
-}
-
-impl<'a> Drop for Context<'a> {
-	fn drop(&mut self) {
-		for action in self.actions.drain(..) {
-			match action {
-				Action::Message(id, message) => send_message(&self.context_data.peers, self.io, id, message),
-				Action::Disconnect(id) => self.io.disconnect_peer(id),
-				Action::Disable(id) => self.io.disable_peer(id),
-			}
-		}
+		&*self.context_data.chain
 	}
 }
 
@@ -583,6 +559,13 @@ impl<S: Specialization> Protocol<S> {
 
 	pub fn chain(&self) -> &Client {
 		&*self.context_data.chain
+	}
+
+	/// Execute a closure with access to a network context and specialization.
+	pub fn with_spec<F, U>(&self, io: &mut SyncIo, f: F) -> U
+		where F: FnOnce(&mut S, &mut ::specialization::HandlerContext) -> U
+	{
+		f(&mut* self.specialization.write(), &mut Context::new(&self.context_data, io))
 	}
 }
 

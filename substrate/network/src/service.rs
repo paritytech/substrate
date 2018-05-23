@@ -169,6 +169,19 @@ impl<S: Specialization> Service<S> {
 		});
 	}
 
+	/// Execute a closure with the chain-specific network specialization.
+	/// If the network is unavailable, this will return `None`.
+	pub fn with_spec<F, U>(&self, f: F) -> Option<U>
+		where F: FnOnce(&mut S, &mut ::specialization::HandlerContext) -> U
+	{
+		let mut res = None;
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			res = Some(self.handler.protocol.with_spec(&mut NetSyncIo::new(context), f))
+		});
+
+		res
+	}
+
 	fn start(&self) {
 		match self.network.start().map_err(Into::into) {
 			Err(ErrorKind::Io(ref e)) if  e.kind() == io::ErrorKind::AddrInUse =>
