@@ -64,7 +64,7 @@ pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, NetworkConfiguration, PeerId};
 pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
-pub use message::{BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
+pub use message::{BftMessage, RequestId, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
 

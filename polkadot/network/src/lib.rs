@@ -14,6 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+extern crate substrate_network;
+extern crate substrate_primitives;
+extern crate polkadot_primitives;
+extern crate ed25519;
+
+use substrate_primitives::Hash;
+use substrate_network::{PeerId, RequestId};
+use substrate_network::specialization::{Specialization, HandlerContext};
+
+use polkadot_primitives::parachain::Id as ParaId;
+
+use std::collections::HashMap;
+
+/// Status of a Polkadot node.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct Status {
+	collating_for: Option<ParaId>,
+}
+
 /// Request candidate block data from a peer.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct CandidateRequest {
@@ -55,7 +74,7 @@ pub enum UnsignedStatement {
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Statement {
 	/// Parent relay chain block header hash.
-	pub parent_hash: HeaderHash,
+	pub parent_hash: Hash,
 	/// The statement.
 	pub statement: UnsignedStatement,
 	/// The signature.
@@ -64,11 +83,23 @@ pub struct Statement {
 	pub sender: AuthorityId,
 }
 
+struct PeerInfo;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
+/// Polkadot protocol attachment for substrate.
+pub struct PolkadotProtocol {
+	peers: HashMap<PeerId, PeerInfo>,
+	collators: HashMap<ParaId, PeerId>,
+	collating_for: Option<ParaId>,
+}
+
+impl Specialization for PolkadotProtocol {
+	fn status(&self) -> Vec<u8> {
+
+	}
+
+	fn on_peer_connected(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, status: ::message::Status);
+
+	fn on_peer_disconnected(&mut self, ctx: &mut HandlerContext, peer_id: PeerId);
+
+	fn on_message(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, message: Vec<u8>);
 }

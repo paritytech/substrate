@@ -6,3 +6,6 @@ description = "Polkadot-specific networking protocol"
 
 [dependencies]
 substrate-network = { path = "../../substrate/network" }
+substrate-primitives = { path = "../../substrate/primitives" }
+polkadot-primitives = { path = "../primitives" }
+ed25519 = { path = "../../substrate/ed25519" }
