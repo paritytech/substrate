@@ -14,27 +14,55 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+extern crate substrate_codec as codec;
 extern crate substrate_network;
 extern crate substrate_primitives;
 extern crate polkadot_primitives;
 extern crate ed25519;
 
-use substrate_primitives::Hash;
+use codec::Slicable;
+use substrate_primitives::{AuthorityId, Hash};
 use substrate_network::{PeerId, RequestId};
 use substrate_network::specialization::{Specialization, HandlerContext};
+use substrate_network::StatusMessage as FullStatus;
 
 use polkadot_primitives::parachain::Id as ParaId;
 
 use std::collections::HashMap;
 
 /// Status of a Polkadot node.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Status {
 	collating_for: Option<ParaId>,
 }
 
+impl Slicable for Status {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		match self.collating_for {
+			Some(ref id) => {
+				v.push(1);
+				id.using_encoded(|s| v.extend(s));
+			}
+			None => {
+				v.push(0);
+			}
+		}
+		v
+	}
+
+	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+		let collating_for = match input.read_byte()? {
+			0 => None,
+			1 => Some(ParaId::decode(input)?),
+			_ => return None,
+		};
+		Some(Status { collating_for })
+	}
+}
+
 /// Request candidate block data from a peer.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CandidateRequest {
 	/// Unique request id.
 	pub id: RequestId,
@@ -43,7 +71,7 @@ pub struct CandidateRequest {
 }
 
 /// Candidate block data response.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CandidateResponse {
 	/// Unique request id.
 	pub id: RequestId,
@@ -52,7 +80,7 @@ pub struct CandidateResponse {
 }
 
 /// Statements circulated among peers.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum UnsignedStatement {
 	/// Broadcast by a authority to indicate that this is his candidate for
 	/// inclusion.
@@ -71,7 +99,7 @@ pub enum UnsignedStatement {
 }
 
 /// A signed statement.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Statement {
 	/// Parent relay chain block header hash.
 	pub parent_hash: Hash,
@@ -83,23 +111,51 @@ pub struct Statement {
 	pub sender: AuthorityId,
 }
 
-struct PeerInfo;
+struct PeerInfo {
+	status: Status,
+}
 
 /// Polkadot protocol attachment for substrate.
 pub struct PolkadotProtocol {
 	peers: HashMap<PeerId, PeerInfo>,
-	collators: HashMap<ParaId, PeerId>,
+	collators: HashMap<ParaId, Vec<PeerId>>,
 	collating_for: Option<ParaId>,
 }
 
 impl Specialization for PolkadotProtocol {
 	fn status(&self) -> Vec<u8> {
-
+		Status { collating_for: self.collating_for.clone() }.encode()
 	}
 
-	fn on_peer_connected(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, status: ::message::Status);
+	fn on_peer_connected(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, status: FullStatus) {
+		let status = match Status::decode(&mut &status.chain_status[..]) {
+			Some(status) => status,
+			None => {
+				ctx.disable_peer(peer_id);
+				return;
+			}
+		};
 
-	fn on_peer_disconnected(&mut self, ctx: &mut HandlerContext, peer_id: PeerId);
+		if let Some(ref para_id) = status.collating_for {
+			self.collators.entry(para_id.clone())
+				.or_insert_with(Vec::new)
+				.push(peer_id);
+		}
 
-	fn on_message(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, message: Vec<u8>);
+		self.peers.insert(peer_id, PeerInfo { status });
+	}
+
+	fn on_peer_disconnected(&mut self, _ctx: &mut HandlerContext, peer_id: PeerId) {
+		if let Some(info) = self.peers.remove(&peer_id) {
+			if let Some(collators) = info.status.collating_for.and_then(|id| self.collators.get_mut(&id)) {
+				if let Some(pos) = collators.iter().position(|x| x == &peer_id) {
+					collators.swap_remove(pos);
+				}
+			}
+		}
+	}
+
+	fn on_message(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, message: Vec<u8>) {
+
+	}
 }

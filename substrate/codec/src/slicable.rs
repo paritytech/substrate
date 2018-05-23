@@ -106,7 +106,6 @@ impl Slicable for Option<bool> {
 	}
 }
 
-
 impl<T: Slicable> Slicable for Box<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Box::new(T::decode(input)?))

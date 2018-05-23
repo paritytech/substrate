@@ -22,6 +22,7 @@ use primitives::bft::Justification;
 use service::Role as RoleFlags;
 use ed25519;
 
+/// A unique ID of a request.
 pub type RequestId = u64;
 type Bytes = Vec<u8>;
 

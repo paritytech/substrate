@@ -78,8 +78,6 @@ struct Peer {
 	known_blocks: HashSet<HeaderHash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
-	/// Data from the protocol specialization.
-	chain_status: Vec<u8>,
 }
 
 #[derive(Debug)]
@@ -199,7 +197,7 @@ struct ContextData {
 // Lock must always be taken in order declared here.
 pub struct Protocol<S: Specialization> {
 	config: ProtocolConfig,
-	specialization: S,
+	specialization: RwLock<S>,
 	genesis_hash: HeaderHash,
 	sync: RwLock<ChainSync>,
 	consensus: Mutex<Consensus>,
@@ -221,7 +219,7 @@ impl<S: Specialization> Protocol<S> {
 		let best_hash = info.chain.best_hash;
 		let protocol = Protocol {
 			config: config,
-			specialization,
+			specialization: RwLock::new(specialization),
 			context_data: ContextData {
 				peers: RwLock::new(HashMap::new()),
 				chain,
@@ -383,7 +381,7 @@ impl<S: Specialization> Protocol<S> {
 	}
 
 	fn on_chain_specific(&self, io: &mut SyncIo, peer: PeerId, message: Vec<u8>) {
-		unimplemented!()
+		self.specialization.write().on_message(&mut Context::new(&self.context_data, io), peer, message);
 	}
 
 	/// See `ConsensusService` trait.
@@ -472,7 +470,6 @@ impl<S: Specialization> Protocol<S> {
 				known_extrinsics: HashSet::new(),
 				known_blocks: HashSet::new(),
 				next_request_id: 0,
-				chain_status: status.chain_status,
 			};
 			peers.insert(peer_id.clone(), peer);
 			handshaking_peers.remove(&peer_id);
@@ -535,7 +532,7 @@ impl<S: Specialization> Protocol<S> {
 				best_hash: info.chain.best_hash,
 				authority_signature: None,
 				authority_id: None,
-				chain_status: self.specialization.status(),
+				chain_status: self.specialization.read().status(),
 			};
 			self.send_message(io, peer_id, Message::Status(status))
 		}
