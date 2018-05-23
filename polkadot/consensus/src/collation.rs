@@ -101,7 +101,7 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 				try_ready!(poll)
 			};
 
-			match verify_collation(&*self.client, &self.relay_parent, &x) {
+			match validate_collation(&*self.client, &self.relay_parent, &x) {
 				Ok(()) => {
 					self.parachain = None;
 
@@ -145,7 +145,7 @@ error_chain! {
 }
 
 /// Check whether a given collation is valid. Returns `Ok`  on success, error otherwise.
-pub fn verify_collation<P: PolkadotApi>(client: &P, relay_parent: &P::CheckedBlockId, collation: &Collation) -> Result<(), Error> {
+pub fn validate_collation<P: PolkadotApi>(client: &P, relay_parent: &P::CheckedBlockId, collation: &Collation) -> Result<(), Error> {
 	use parachain::{self, ValidationParams};
 
 	let para_id = collation.receipt.parachain_index;
