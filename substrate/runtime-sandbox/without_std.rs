@@ -76,9 +76,12 @@ mod ffi {
 			val_ptr: *const u8,
 			val_len: usize,
 		) -> u32;
-
-	// TODO: ext_instance_teardown
-	// TODO: ext_memory_teardown
+		pub fn ext_sandbox_memory_teardown(
+			memory_idx: u32,
+		);
+		pub fn ext_sandbox_instance_teardown(
+			instance_idx: u32,
+		);
 	}
 }
 
@@ -118,6 +121,14 @@ impl Memory {
 			sandbox_primitives::ERR_OK => Ok(()),
 			sandbox_primitives::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
 			_ => unreachable!(),
+		}
+	}
+}
+
+impl Drop for Memory {
+	fn drop(&mut self) {
+		unsafe {
+			ffi::ext_sandbox_memory_teardown(self.memory_idx);
 		}
 	}
 }
@@ -262,6 +273,14 @@ impl<T> Instance<T> {
 			}
 			sandbox_primitives::ERR_EXECUTION => Err(Error::Execution),
 			_ => unreachable!(),
+		}
+	}
+}
+
+impl<T> Drop for Instance<T> {
+	fn drop(&mut self) {
+		unsafe {
+			ffi::ext_sandbox_instance_teardown(self.instance_idx);
 		}
 	}
 }
