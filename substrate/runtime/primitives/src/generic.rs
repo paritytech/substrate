@@ -272,8 +272,8 @@ impl<Item> traits::Digest for Digest<Item> where
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Header<Number, Hash, DigestItem> where
-	Number: Member + MaybeDisplay + SimpleArithmetic,
-	Hash: Default + Member + MaybeDisplay + SimpleBitOps,
+	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
+	Hash: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
 	DigestItem: Member + Default,
 {
 	/// The parent hash.
@@ -289,8 +289,8 @@ pub struct Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> Slicable for Header<Number, Hash, DigestItem> where
-	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic,
- 	Hash: Default + Member + Slicable + MaybeDisplay + SimpleBitOps,
+	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
+ 	Hash: Default + Member + Slicable + MaybeDisplay + SimpleBitOps + Slicable,
 	DigestItem: Member + Default + Slicable,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
@@ -314,8 +314,8 @@ impl<Number, Hash, DigestItem> Slicable for Header<Number, Hash, DigestItem> whe
 	}
 }
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
- 	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic,
- 	Hash: Default + Member + Slicable + MaybeDisplay + SimpleBitOps,
+ 	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
+ 	Hash: Default + Member + Slicable + MaybeDisplay + SimpleBitOps + Slicable,
 	DigestItem: Member + Default + Slicable,
  {
 	type Number = Number;
@@ -365,8 +365,8 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature> where
-	Number: Member + MaybeDisplay + SimpleArithmetic,
-	Hash: Default + Member + MaybeDisplay + SimpleBitOps,
+	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
+	Hash: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
 	DigestItem: Member + Default,
  	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
@@ -382,8 +382,8 @@ pub struct Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature> wh
 impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> Slicable
 	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
 where
-	Number: Member + MaybeDisplay + SimpleArithmetic,
-	Hash: Default + Member + MaybeDisplay + SimpleBitOps,
+	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
+	Hash: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
 	DigestItem: Member + Default,
  	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
@@ -409,8 +409,8 @@ where
 impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> traits::Block
 	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
 where
-	Number: Member + MaybeDisplay + SimpleArithmetic,
-	Hash: Default + Member + MaybeDisplay + SimpleBitOps,
+	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
+	Hash: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
 	DigestItem: Member + Default,
  	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,

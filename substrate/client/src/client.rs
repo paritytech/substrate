@@ -417,13 +417,12 @@ impl<B, E, Block, Hashing> bft::BlockImport for Client<B, E, Block, Hashing>
 	}
 }
 
-impl<B, E, Block, Hashing> bft::Authorities for Client<B, E, Block, Hashing>
-	where
-		B: backend::Backend<Block>,
-		E: state_machine::CodeExecutor,
-		Block: BlockT,
-		Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+impl<B, E, Block, Hashing> bft::Authorities for Client<B, E, Block, Hashing> where
+	B: backend::Backend<Block>,
+	E: state_machine::CodeExecutor,
+	Block: BlockT,
+	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
+	error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
 		self.authorities_at(at).map_err(|_| bft::ErrorKind::StateUnavailable(*at).into())

@@ -305,8 +305,8 @@ impl Digest for substrate_primitives::Digest {
 ///
 /// You can also create a `new` one from those fields.
 pub trait Header: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
-	type Number: Member + MaybeDisplay + SimpleArithmetic;
-	type Hash: Member + MaybeDisplay + Default + SimpleBitOps;
+	type Number: Member + MaybeDisplay + SimpleArithmetic + Slicable;
+	type Hash: Member + MaybeDisplay + Default + SimpleBitOps + Slicable;
 	type Digest: Member + Default;
 	fn number(&self) -> &Self::Number;
 	fn extrinsics_root(&self) -> &Self::Hash;
