@@ -107,21 +107,22 @@ pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, 
 /// Misbehavior observed from BFT participants.
 pub type Misbehavior = generic::Misbehavior<HeaderHash, LocalizedSignature>;
 
-/// Proposer factory. Creates proposer instance and communication streams.
-pub trait ProposerFactory {
+/// Environment producer for a BFT instance. Creates proposer instance and communication streams.
+pub trait Environment {
 	/// The proposer type this creates.
 	type Proposer: Proposer;
 	/// The input stream type.
-	type Input: Stream<Item=Communication, Error=<Self::Proposer>::Error>;
+	type Input: Stream<Item=Communication, Error=<Self::Proposer as Proposer>::Error>;
 	/// The output stream type.
-	type Output: Sink<Item=Communication, Error=<Self::Proposer>::Error>;
+	type Output: Sink<SinkItem=Communication, SinkError=<Self::Proposer as Proposer>::Error>;
 	/// Error which can occur upon creation.
 	type Error: From<Error>;
 
 	/// Initialize the proposal logic on top of a specific header.
 	/// Produces the proposer and message streams for this instance of BFT agreement.
 	// TODO: provide state context explicitly?
-	fn init(&self, parent_header: &Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Self::Error>;
+	fn init(&self, parent_header: &Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>)
+		-> Result<(Self::Proposer, Self::Input, Self::Output), Self::Error>;
 }
 
 /// Logic for a proposer.
@@ -317,7 +318,7 @@ pub struct BftService<P, I> {
 
 impl<P, I> BftService<P, I>
 	where
-		P: ProposerFactory,
+		P: Environment,
 		<P::Proposer as Proposer>::Error: ::std::fmt::Display,
 		I: BlockImport + Authorities,
 {
@@ -345,8 +346,15 @@ impl<P, I> BftService<P, I>
 	/// If the local signing key is an authority, this will begin the consensus process to build a
 	/// block on top of it. If the executor fails to run the future, an error will be returned.
 	/// Returns `None` if the agreement on the block with given parent is already in progress.
-	pub fn build_upon<InStream, OutSink>(&self, header: &Header)
-		-> Result<Option<BftFuture<<P as ProposerFactory>::Proposer, I, InStream, OutSink>>, P::Error> where
+	pub fn build_upon(&self, header: &Header)
+		-> Result<Option<
+			BftFuture<
+				<P as Environment>::Proposer,
+				I,
+				<P as Environment>::Input,
+				<P as Environment>::Output,
+			>>, P::Error>
+		where
 	{
 		let hash = header.blake2_256().into();
 		if self.live_agreement.lock().as_ref().map_or(false, |&(h, _)| h == hash) {
@@ -625,12 +633,16 @@ mod tests {
 	struct DummyFactory;
 	struct DummyProposer(block::Number);
 
-	impl ProposerFactory for DummyFactory {
+	impl Environment for DummyFactory {
 		type Proposer = DummyProposer;
+		type Input = stream::Empty<Communication, Error>;
+		type Output = Output<Error>;
 		type Error = Error;
 
-		fn init(&self, parent_header: &Header, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>) -> Result<DummyProposer, Error> {
-			Ok(DummyProposer(parent_header.number + 1))
+		fn init(&self, parent_header: &Header, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
+			-> Result<(DummyProposer, Self::Input, Self::Output), Error>
+		{
+			Ok((DummyProposer(parent_header.number + 1), stream::empty(), Output(::std::marker::PhantomData)))
 		}
 	}
 
@@ -700,14 +712,14 @@ mod tests {
 		second.parent_hash = first_hash;
 		let second_hash = second.blake2_256().into();
 
-		let bft = service.build_upon(&first, stream::empty(), Output(Default::default())).unwrap();
+		let bft = service.build_upon(&first).unwrap();
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first_hash);
 
 		// turn the core so the future gets polled and sends its task to the
 		// service. otherwise it deadlocks.
 		core.handle().execute(bft.unwrap()).unwrap();
 		core.turn(Some(::std::time::Duration::from_millis(100)));
-		let bft = service.build_upon(&second, stream::empty(), Output(Default::default())).unwrap();
+		let bft = service.build_upon(&second).unwrap();
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 != first_hash);
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 == second_hash);
 

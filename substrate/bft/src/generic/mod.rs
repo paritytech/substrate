@@ -361,7 +361,8 @@ impl<C: Context> Strategy<C> {
 
 	fn import_message(
 		&mut self,
-		msg: LocalizedMessage<C::Candidate, C::Digest, C::AuthorityId, C::Signature>
+		msg: LocalizedMessage<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
+		allow_local: bool
 	) {
 		let round_number = msg.round_number();
 
@@ -369,7 +370,7 @@ impl<C: Context> Strategy<C> {
 
 		// sanity check to avoid importing our own messages. this should already
 		// be guarded against by the network.
-		if sender == self.local_id {
+		if !allow_local && sender == self.local_id {
 			return;
 		}
 
@@ -736,7 +737,7 @@ impl<C: Context> Strategy<C> {
 		sending: &mut Sending<<C as TypeResolve>::Communication>
 	) {
 		let signed_message = context.sign_local(message);
-		self.import_message(signed_message.clone());
+		self.import_message(signed_message.clone(), true);
 		sending.push(Communication::Consensus(signed_message));
 	}
 }
@@ -781,7 +782,7 @@ impl<C, I, O> Future for Agreement<C, I, O>
 			};
 
 			match message {
-				Communication::Consensus(message) => self.strategy.import_message(message),
+				Communication::Consensus(message) => self.strategy.import_message(message, false),
 				Communication::Auxiliary(lock_proof)
 					=> self.strategy.import_lock_proof(&self.context, lock_proof),
 			}
