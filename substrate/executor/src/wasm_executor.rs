@@ -356,6 +356,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(instance_idx as u32)
 	},
+	ext_sandbox_instance_teardown(instance_idx: u32) => {
+		this.sandbox_store.instance_teardown(instance_idx)?;
+		Ok(())
+	},
 	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, state: usize) -> u32 => {
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
@@ -405,6 +409,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 
 		Ok(sandbox_primitives::ERR_OK)
+	},
+	ext_sandbox_memory_teardown(memory_idx: u32) => {
+		this.sandbox_store.memory_teardown(memory_idx)?;
+		Ok(())
 	},
 	=> <'e, E: Externalities + 'e>
 );
