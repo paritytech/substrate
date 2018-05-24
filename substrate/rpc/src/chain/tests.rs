@@ -33,7 +33,7 @@ fn should_return_header() {
 		Ok(Some(ref x)) if x == &block::Header {
 			parent_hash: 0.into(),
 			number: 0,
-			state_root: "ed0758a19e0f35e95de93046def6a8a6da7c816b7c3d15342743dd5e464a87fc".into(),
+			state_root: "19b81ebb006ad7af92577b26c9604e80406e85b86c4486859836aebc89c22f33".into(),
 			extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
 			digest: Default::default(),
 		}
@@ -68,9 +68,8 @@ fn should_notify_about_latest_block() {
 
 	// assert notification send to transport
 	let (notification, next) = core.run(transport.into_future()).unwrap();
-
 	assert_eq!(notification, Some(
-		r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"digest":{"logs":[]},"extrinsicsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","number":1,"parentHash":"0xfc47a48119e6e11992c9aba9d0084398f8789bb79a9390b4b60d6760575bee20","stateRoot":"0x59b17ea618f09dd634e6e0bde2becc8a10348fb35df2163f136b829b28f3751f"},"subscription":0}}"#.to_owned()
+		r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"digest":{"logs":[]},"extrinsicsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","number":1,"parentHash":"0x26229bcc75fe587469f5e4c7a0f0966fd2878e6b1c3dbfdcd4bb139b6da655e2","stateRoot":"0xb0eb728eb2944a84c2d9d4509bb5b324709ec73cc7140b522d2d297a2ca9fd2b"},"subscription":0}}"#.to_owned()
 	));
 	// no more notifications on this channel
 	assert_eq!(core.run(next.into_future()).unwrap().0, None);
