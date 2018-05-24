@@ -47,7 +47,6 @@ extern crate substrate_network;
 
 extern crate exit_future;
 extern crate tokio_core;
-extern crate tokio_timer;
 extern crate substrate_client as client;
 
 #[macro_use]
@@ -75,7 +74,7 @@ use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData,
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
 use transaction_pool::{Ready, TransactionPool};
-use tokio_timer::{Timer, Interval, Sleep, TimerError};
+use tokio_core::reactor::{Handle, Timeout, Interval};
 
 use futures::prelude::*;
 use futures::future::{self, Shared};
@@ -218,6 +217,10 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: Au
 	}
 }
 
+fn timer_error(e: &::std::io::Error) -> Error {
+	ErrorKind::Timer(format!("{}", e)).into()
+}
+
 /// Polkadot proposer factory.
 pub struct ProposerFactory<C, N, P> {
 	/// The client instance.
@@ -229,7 +232,7 @@ pub struct ProposerFactory<C, N, P> {
 	/// Parachain collators.
 	pub collators: P,
 	/// The timer used to schedule proposal intervals.
-	pub timer: Timer,
+	pub handle: Handle,
 	/// The duration after which parachain-empty blocks will be allowed.
 	pub parachain_empty_duration: Duration,
 }
@@ -271,7 +274,8 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 			self.parachain_empty_duration.clone(),
 		);
 
-		let timeout = self.timer.sleep(DELAY_UNTIL);
+		let timeout = Timeout::new(DELAY_UNTIL, &self.handle)
+			.map_err(|e| timer_error(&e))?;
 
 		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
 			DELAY_UNTIL);
@@ -281,6 +285,7 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 			client: self.client.clone(),
 			collators: self.collators.clone(),
 			delay: timeout.shared(),
+			handle: self.handle.clone(),
 			dynamic_inclusion,
 			local_duty,
 			local_key: sign_with,
@@ -290,7 +295,6 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 			random_seed,
 			router,
 			table,
-			timer: self.timer.clone(),
 			transaction_pool: self.transaction_pool.clone(),
 		})
 	}
@@ -304,8 +308,9 @@ struct LocalDuty {
 pub struct Proposer<C: PolkadotApi, R, P> {
 	client: Arc<C>,
 	collators: P,
-	delay: Shared<Sleep>,
+	delay: Shared<Timeout>,
 	dynamic_inclusion: DynamicInclusion,
+	handle: Handle,
 	local_duty: LocalDuty,
 	local_key: Arc<ed25519::Pair>,
 	parent_hash: HeaderHash,
@@ -314,7 +319,6 @@ pub struct Proposer<C: PolkadotApi, R, P> {
 	random_seed: Hash,
 	router: R,
 	table: Arc<SharedTable>,
-	timer: Timer,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
 }
 
@@ -325,7 +329,10 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 		P: Collators,
 {
 	type Error = Error;
-	type Create = CreateProposal<C, R, P>;
+	type Create = future::Either<
+		CreateProposal<C, R, P>,
+		future::FutureResult<SubstrateBlock, Error>,
+	>;
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
 	fn propose(&self) -> Self::Create {
@@ -337,7 +344,30 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			initial_included,
 		).unwrap_or_default();
 
-		CreateProposal {
+		let timing = {
+			let delay = self.delay.clone();
+			let dynamic_inclusion = self.dynamic_inclusion.clone();
+			let make_timing = move |handle| -> Result<ProposalTiming, ::std::io::Error> {
+				let attempt_propose = Interval::new(ATTEMPT_PROPOSE_EVERY, handle)?;
+				let enough_candidates = Timeout::new(enough_candidates, handle)?;
+				Ok(ProposalTiming {
+					attempt_propose,
+					enough_candidates,
+					dynamic_inclusion,
+					minimum_delay: Some(delay),
+					last_included: initial_included,
+				})
+			};
+
+			match make_timing(&self.handle) {
+				Ok(timing) => timing,
+				Err(e) => {
+					return future::Either::B(future::err(timer_error(&e)));
+				}
+			}
+		};
+
+		future::Either::A(CreateProposal {
 			parent_hash: self.parent_hash.clone(),
 			parent_number: self.parent_number.clone(),
 			parent_id: self.parent_id.clone(),
@@ -352,15 +382,8 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			),
 			table: self.table.clone(),
 			router: self.router.clone(),
-			timing: ProposalTiming {
-				timer: self.timer.clone(),
-				attempt_propose: self.timer.interval(ATTEMPT_PROPOSE_EVERY),
-				enough_candidates: self.timer.sleep(enough_candidates),
-				dynamic_inclusion: self.dynamic_inclusion.clone(),
-				minimum_delay: Some(self.delay.clone()),
-				last_included: initial_included,
-			}
-		}
+			timing,
+		})
 	}
 
 	fn evaluate(&self, proposal: &SubstrateBlock) -> Self::Evaluate {
@@ -394,7 +417,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 		let vote_delays = {
 			// delay casting vote until able (according to minimum block time)
 			let minimum_delay = self.delay.clone()
-				.map_err(|e| Error::from(::tokio_timer::TimerError::clone(&*e)));
+				.map_err(|e| timer_error(&*e));
 
 			let included_candidate_hashes = proposal
 				.parachain_heads()
@@ -423,7 +446,12 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			// construct a future from the maximum of the two durations.
 			let temporary_delay = match ::std::cmp::max(timestamp_delay, count_delay) {
 				Some(duration) => {
-					let f = self.timer.sleep(duration).map_err(Error::from);
+					let maybe_timeout = Timeout::new(duration, &self.handle);
+
+					let f = future::result(maybe_timeout)
+						.and_then(|timeout| timeout)
+						.map_err(|e| timer_error(&e));
+
 					future::Either::A(f)
 				}
 				None => future::Either::B(future::ok(())),
@@ -527,44 +555,46 @@ fn current_timestamp() -> Timestamp {
 }
 
 struct ProposalTiming {
-	timer: Timer,
 	attempt_propose: Interval,
 	dynamic_inclusion: DynamicInclusion,
-	enough_candidates: Sleep,
-	minimum_delay: Option<Shared<Sleep>>,
+	enough_candidates: Timeout,
+	minimum_delay: Option<Shared<Timeout>>,
 	last_included: usize,
 }
 
 impl ProposalTiming {
 	// whether it's time to attempt a proposal.
 	// shouldn't be called outside of the context of a task.
-	fn poll(&mut self, included: usize) -> Poll<(), TimerError> {
-
+	fn poll(&mut self, included: usize) -> Poll<(), Error> {
 		// first drain from the interval so when the minimum delay is up
 		// we don't have any notifications built up.
 		//
 		// this interval is just meant to produce periodic task wakeups
 		// that lead to the `dynamic_inclusion` getting updated as necessary.
-		if let Async::Ready(x) = self.attempt_propose.poll()? {
+		if let Async::Ready(x) = self.attempt_propose.poll()
+			.map_err(|e| timer_error(&e))?
+		{
 			x.expect("timer still alive; intervals never end; qed");
 		}
 
 		if let Some(ref mut min) = self.minimum_delay {
-			try_ready!(min.poll().map_err(|e| TimerError::clone(&*e)));
+			try_ready!(min.poll().map_err(|e| timer_error(&*e)));
 		}
+
 		self.minimum_delay = None; // after this point, the future must have completed.
 
 		if included == self.last_included {
-			return self.enough_candidates.poll();
+			return self.enough_candidates.poll().map_err(|e| timer_error(&e));
 		}
 
 		// the amount of includable candidates has changed. schedule a wakeup
 		// if it's not sufficient anymore.
-		match self.dynamic_inclusion.acceptable_in(Instant::now(), included) {
+		let now = Instant::now();
+		match self.dynamic_inclusion.acceptable_in(now, included) {
 			Some(duration) => {
 				self.last_included = included;
-				self.enough_candidates = self.timer.sleep(duration);
-				self.enough_candidates.poll()
+				self.enough_candidates.reset(now + duration);
+				self.enough_candidates.poll().map_err(|e| timer_error(&e))
 			}
 			None => {
 				Ok(Async::Ready(()))
@@ -693,7 +723,7 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 
 		// 3. propose
 		let proposed_candidates = self.table.with_proposal(|proposed_set| {
-				proposed_set.into_iter().cloned().collect()
+			proposed_set.into_iter().cloned().collect()
 		});
 
 		self.propose_with(proposed_candidates).map(Async::Ready)

@@ -1321,7 +1321,6 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-runtime-support 0.1.0",
  "tokio-core 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio-timer 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

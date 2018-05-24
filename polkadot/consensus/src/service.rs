@@ -246,10 +246,6 @@ impl Service {
 		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {
 			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
-			let timer = ::tokio_timer::wheel()
-				.thread_name("bft service timer")
-				.build();
-
 			let key = Arc::new(key);
 
 			let factory = ProposerFactory {
@@ -258,7 +254,7 @@ impl Service {
 				network: Network(network.clone()),
 				collators: NoCollators,
 				parachain_empty_duration,
-				timer: timer,
+				handle: core.handle(),
 			};
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
 
