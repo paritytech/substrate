@@ -37,7 +37,7 @@ use std::sync::Arc;
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, Timestamp};
 use runtime::{Block, UncheckedExtrinsic, TimestampCall, Call};
-use substrate_runtime_primitives::traits::Checkable;
+use substrate_runtime_primitives::traits::{Bounded, Checkable};
 use transaction_pool::{Pool, Readiness};
 use transaction_pool::scoring::{Change, Choice};
 
@@ -295,7 +295,7 @@ impl<'a, T: 'a + PolkadotApi> transaction_pool::Ready<VerifiedTransaction> for R
 		// transaction-pool trait.
 		let (api_handle, at_block) = (&self.api_handle, &self.at_block);
 		let next_index = self.known_indices.entry(sender)
-			.or_insert_with(|| api_handle.index(at_block, sender).ok().unwrap_or_else(u64::max_value));
+			.or_insert_with(|| api_handle.index(at_block, sender).ok().unwrap_or_else(Bounded::max_value));
 
 		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.inner.index);
 
