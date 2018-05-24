@@ -23,10 +23,6 @@ extern crate substrate_primitives as primitives;
 #[cfg_attr(test, macro_use)]
 extern crate hex_literal;
 
-extern crate hashdb;
-extern crate memorydb;
-
-extern crate patricia_trie;
 extern crate triehash;
 
 extern crate byteorder;
@@ -130,7 +126,7 @@ pub trait Externalities {
 	fn chain_id(&self) -> u64;
 
 	/// Get the trie root of the current storage map.
-	fn storage_root(&self) -> [u8; 32];
+	fn storage_root(&mut self) -> [u8; 32];
 }
 
 /// Code execution engine.
@@ -149,25 +145,24 @@ pub trait CodeExecutor: Sized + Send + Sync {
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
+/// Produces a state-backend-specific "transaction" which can be used to apply the changes
+/// to the backing store, such as the disk.
 ///
 /// On an error, no prospective changes are written to the overlay.
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
-/// blocks (e.g. a transaction at a time), ensure a differrent method is used.
+/// blocks (e.g. a transaction at a time), ensure a different method is used.
 pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	backend: &B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<Vec<u8>, Box<Error>>
+) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
 {
 
 	let result = {
-		let mut externalities = ext::Ext {
-			backend,
-			overlay: &mut *overlay
-		};
+		let mut externalities = ext::Ext::new(overlay, backend);
 		// make a copy.
 		let code = externalities.storage(b":code")
 			.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
@@ -178,13 +173,13 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			&code,
 			method,
 			call_data,
-		)
+		).map(move |out| (out, externalities.transaction()))
 	};
 
 	match result {
-		Ok(out) => {
+		Ok(x) => {
 			overlay.commit_prospective();
-			Ok(out)
+			Ok(x)
 		}
 		Err(e) => {
 			overlay.discard_prospective();
@@ -235,12 +230,13 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
-		let mut backend = InMemory::from(map![
+		let initial: HashMap<_, _> = map![
 			b"doe".to_vec() => b"reindeer".to_vec(),
 			b"dog".to_vec() => b"puppyXXX".to_vec(),
 			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
 			b"doug".to_vec() => b"notadog".to_vec()
-		]);
+		];
+		let backend = InMemory::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"dog".to_vec() => Some(b"puppy".to_vec()),
@@ -252,10 +248,7 @@ mod tests {
 				b"doug".to_vec() => None
 			],
 		};
-		let ext = Ext {
-			backend: &mut backend,
-			overlay: &mut overlay,
-		};
+		let mut ext = Ext::new(&mut overlay, &backend);
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
 		assert_eq!(ext.storage_root(), ROOT);
 	}

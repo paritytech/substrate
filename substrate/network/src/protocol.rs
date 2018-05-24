@@ -434,7 +434,7 @@ impl Protocol {
 			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
 			return;
 		}
-		trace!(target: "sync", "Received {} transactions from {}", peer_id, transactions.len());
+		trace!(target: "sync", "Received {} transactions from {}", transactions.len(), peer_id);
 		let mut peers = self.peers.write();
 		if let Some(ref mut peer) = peers.get_mut(&peer_id) {
 			for t in transactions {
@@ -445,12 +445,17 @@ impl Protocol {
 		}
 	}
 
-	/// Called when peer sends us new transactions
-	pub fn propagate_transactions(&self, io: &mut SyncIo, transactions: &[(ExtrinsicHash, Vec<u8>)]) {
+	/// Called when we propagate ready transactions to peers.
+	pub fn propagate_transactions(&self, io: &mut SyncIo) {
+		debug!(target: "sync", "Propagating transactions");
+
 		// Accept transactions only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
 			return;
 		}
+
+		let transactions = self.transaction_pool.transactions();
+
 		let mut peers = self.peers.write();
 		for (peer_id, ref mut peer) in peers.iter_mut() {
 			let to_send: Vec<_> = transactions.iter().filter_map(|&(hash, ref t)|

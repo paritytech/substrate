@@ -89,6 +89,9 @@ impl<'e, E: Externalities> sandbox::SandboxCapabilities for FunctionExecutor<'e,
 	fn store(&self) -> &sandbox::Store {
 		&self.sandbox_store
 	}
+	fn store_mut(&mut self) -> &mut sandbox::Store {
+		&mut self.sandbox_store
+	}
 	fn allocate(&mut self, len: u32) -> u32 {
 		self.heap.allocate(len)
 	}
@@ -340,15 +343,22 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let wasm = this.memory.get(wasm_ptr, wasm_len as usize).map_err(|_| DummyUserError)?;
 		let raw_env_def = this.memory.get(imports_ptr, imports_len as usize).map_err(|_| DummyUserError)?;
 
-		let table = this.table.as_ref().ok_or_else(|| DummyUserError)?;
-		let dispatch_thunk = table.get(dispatch_thunk_idx)
-			.map_err(|_| DummyUserError)?
-			.ok_or_else(|| DummyUserError)?
-			.clone();
+		// Extract a dispatch thunk from instance's table by the specified index.
+		let dispatch_thunk = {
+			let table = this.table.as_ref().ok_or_else(|| DummyUserError)?;
+			table.get(dispatch_thunk_idx)
+				.map_err(|_| DummyUserError)?
+				.ok_or_else(|| DummyUserError)?
+				.clone()
+		};
 
-		let instance_idx = this.sandbox_store.instantiate(dispatch_thunk, &wasm, &raw_env_def, state)?;
+		let instance_idx = sandbox::instantiate(this, dispatch_thunk, &wasm, &raw_env_def, state)?;
 
 		Ok(instance_idx as u32)
+	},
+	ext_sandbox_instance_teardown(instance_idx: u32) => {
+		this.sandbox_store.instance_teardown(instance_idx)?;
+		Ok(())
 	},
 	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, state: usize) -> u32 => {
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
@@ -360,10 +370,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			)?;
 
 		let instance = this.sandbox_store.instance(instance_idx)?;
-
-		let mut guest_externals = sandbox::GuestExternals::new(this, instance_idx, state);
-
-		let result = instance.invoke_export(&export, &[], &mut guest_externals);
+		let result = instance.invoke(&export, &[], this, state);
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
 			// TODO: Return value
@@ -402,6 +409,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 
 		Ok(sandbox_primitives::ERR_OK)
+	},
+	ext_sandbox_memory_teardown(memory_idx: u32) => {
+		this.sandbox_store.memory_teardown(memory_idx)?;
+		Ok(())
 	},
 	=> <'e, E: Externalities + 'e>
 );

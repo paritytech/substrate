@@ -30,17 +30,21 @@ extern crate ctrlc;
 extern crate fdlimit;
 extern crate ed25519;
 extern crate triehash;
+extern crate parking_lot;
+
 extern crate substrate_codec as codec;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
+extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_support as runtime_support;
 extern crate polkadot_primitives;
 extern crate polkadot_executor;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
+extern crate polkadot_transaction_pool as txpool;
 
 #[macro_use]
 extern crate lazy_static;
@@ -57,10 +61,39 @@ mod informant;
 use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
+use parking_lot::Mutex;
 use service::ChainSpec;
+use primitives::block::Extrinsic;
+
+struct RpcTransactionPool {
+	inner: Arc<Mutex<txpool::TransactionPool>>,
+	network: Arc<network::Service>,
+}
+
+impl substrate_rpc::author::AuthorApi for RpcTransactionPool {
+	fn submit_extrinsic(&self, xt: Extrinsic) -> substrate_rpc::author::error::Result<()> {
+		use primitives::hexdisplay::HexDisplay;
+		use polkadot_runtime::UncheckedExtrinsic;
+		use codec::Slicable;
+
+		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
+		let decoded = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
+			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?;
+
+		info!("Correctly formatted: {:?}", decoded);
+
+		self.inner.lock().import(decoded)
+			.map_err(|_| substrate_rpc::author::error::ErrorKind::PoolError)?;
+
+		self.network.trigger_repropagate();
+		Ok(())
+	}
+}
 
 /// Parse command line arguments and start the node.
 ///
@@ -172,7 +205,11 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
-			rpc::rpc_handler(service.client(), chain, service.transaction_pool())
+			let pool = RpcTransactionPool {
+				inner: service.transaction_pool(),
+				network: service.network(),
+			};
+			rpc::rpc_handler(service.client(), chain, pool)
 		};
 		(
 			start_server(http_address, |address| rpc::start_http(address, handler())),

@@ -14,20 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::block;
 use super::*;
 use super::error::*;
+
+use std::sync::Arc;
+use parking_lot::Mutex;
+use primitives::block;
 
 #[derive(Default)]
 struct DummyTxPool {
 	submitted: Vec<block::Extrinsic>,
 }
 
-impl AsyncAuthorApi for DummyTxPool {
+impl AuthorApi for Arc<Mutex<DummyTxPool>> {
 	/// Submit extrinsic for inclusion in block.
-	fn submit_extrinsic(&mut self, xt: Extrinsic) -> Result<()> {
-		if self.submitted.len() < 1 {
-			self.submitted.push(xt);
+	fn submit_extrinsic(&self, xt: Extrinsic) -> Result<()> {
+		let mut s = self.lock();
+		if s.submitted.len() < 1 {
+			s.submitted.push(xt);
 			Ok(())
 		} else {
 			Err(ErrorKind::PoolError.into())

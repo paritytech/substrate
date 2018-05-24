@@ -77,7 +77,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 
 		for tx in transactions.iter() {
-			let ret_data = execute(
+			let (ret_data, _) = execute(
 				backend,
 				&mut overlay,
 				&Executor::new(),
@@ -87,7 +87,7 @@ mod tests {
 			header = Header::decode(&mut &ret_data[..]).unwrap();
 		}
 
-		let ret_data = execute(
+		let (ret_data, _) = execute(
 			backend,
 			&mut overlay,
 			&Executor::new(),

@@ -198,7 +198,6 @@ fn start_bft<F, C>(
 		}
 	};
 
-
 	let input = Messages {
 		network_stream: network.bft_messages(parent_hash),
 		local_id: bft_service.local_id(),

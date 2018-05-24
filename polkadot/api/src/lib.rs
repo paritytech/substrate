@@ -168,10 +168,7 @@ macro_rules! with_runtime {
 
 		$client.state_at(parent).map_err(Error::from).and_then(|state| {
 			let mut changes = Default::default();
-			let mut ext = state_machine::Ext {
-				overlay: &mut changes,
-				backend: &state,
-			};
+			let mut ext = state_machine::Ext::new(&mut changes, &state);
 
 			::substrate_executor::with_native_environment(&mut ext, || {
 				::runtime::Executive::initialise_block(&header);
@@ -278,51 +275,48 @@ pub struct ClientBlockBuilder<S> {
 impl<S: state_machine::Backend> ClientBlockBuilder<S>
 	where S::Error: Into<client::error::Error>
 {
-	// executes a extrinsic, inherent or otherwise, without appending to the list
+	// initialises a block ready to allow extrinsics to be applied.
 	fn initialise_block(&mut self) -> Result<()> {
-		let mut ext = state_machine::Ext {
-			overlay: &mut self.changes,
-			backend: &self.state,
+		let result = {
+			let mut ext = state_machine::Ext::new(&mut self.changes, &self.state);
+			let h = self.header.clone();
+
+			::substrate_executor::with_native_environment(
+				&mut ext,
+				|| runtime::Executive::initialise_block(&h),
+			).map_err(Into::into)
 		};
-
-		let h = self.header.clone();
-
-		let result = ::substrate_executor::with_native_environment(
-			&mut ext,
-			|| runtime::Executive::initialise_block(&h),
-		).map_err(Into::into);
 
 		match result {
 			Ok(_) => {
-				ext.overlay.commit_prospective();
+				self.changes.commit_prospective();
 				Ok(())
 			}
 			Err(e) => {
-				ext.overlay.discard_prospective();
+				self.changes.discard_prospective();
 				Err(e)
 			}
 		}
 	}
 
-	// executes a extrinsic, inherent or otherwise, without appending to the list
+	// executes a extrinsic, inherent or otherwise, without appending to the list.
 	fn apply_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
-		let mut ext = state_machine::Ext {
-			overlay: &mut self.changes,
-			backend: &self.state,
-		};
+		let result = {
+			let mut ext = state_machine::Ext::new(&mut self.changes, &self.state);
 
-		let result = ::substrate_executor::with_native_environment(
-			&mut ext,
-			move || runtime::Executive::apply_extrinsic(extrinsic),
-		).map_err(Into::into);
+			::substrate_executor::with_native_environment(
+				&mut ext,
+				move || runtime::Executive::apply_extrinsic(extrinsic),
+			).map_err(Into::into)
+		};
 
 		match result {
 			Ok(_) => {
-				ext.overlay.commit_prospective();
+				self.changes.commit_prospective();
 				Ok(())
 			}
 			Err(e) => {
-				ext.overlay.discard_prospective();
+				self.changes.discard_prospective();
 				Err(e)
 			}
 		}
@@ -344,10 +338,7 @@ impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
 	}
 
 	fn bake(mut self) -> Block {
-		let mut ext = state_machine::Ext {
-			overlay: &mut self.changes,
-			backend: &self.state,
-		};
+		let mut ext = state_machine::Ext::new(&mut self.changes, &self.state);
 
 		let final_header = ::substrate_executor::with_native_environment(
 			&mut ext,

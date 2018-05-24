@@ -17,6 +17,7 @@
 use std::sync::Arc;
 use std::collections::{BTreeMap};
 use std::io;
+use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
 use network::{NetworkProtocolHandler, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
@@ -34,12 +35,20 @@ use message::{Statement, LocalizedBftMessage};
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
 
+const V0_PACKET_COUNT: u8 = 1;
+
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 /// Type that represents statement stream.
 pub type StatementStream = mpsc::UnboundedReceiver<Statement>;
 /// Type that represents bft messages stream.
 pub type BftMessageStream = mpsc::UnboundedReceiver<LocalizedBftMessage>;
+
+const TICK_TOKEN: TimerToken = 0;
+const TICK_TIMEOUT: Duration = Duration::from_millis(1000);
+
+const PROPAGATE_TOKEN: TimerToken = 1;
+const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 
 bitflags! {
 	/// Node roles bitmask.
@@ -162,9 +171,9 @@ impl Service {
 	}
 
 	/// Called when new transactons are imported by the client.
-	pub fn on_new_transactions(&self, transactions: &[(ExtrinsicHash, Vec<u8>)]) {
+	pub fn trigger_repropagate(&self) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context), transactions);
+			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context));
 		});
 	}
 
@@ -175,7 +184,7 @@ impl Service {
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, 1, &[0u8])
+		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, &[(0, V0_PACKET_COUNT)])
 			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}
 
@@ -268,7 +277,11 @@ impl ConsensusService for Service {
 
 impl NetworkProtocolHandler for ProtocolHandler {
 	fn initialize(&self, io: &NetworkContext, _host_info: &HostInfo) {
-		io.register_timer(0, ::std::time::Duration::from_millis(1000)).expect("Error registering sync timer");
+		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
+			.expect("Error registering sync timer");
+
+		io.register_timer(PROPAGATE_TOKEN, PROPAGATE_TIMEOUT)
+			.expect("Error registering transaction propagation timer");
 	}
 
 	fn read(&self, io: &NetworkContext, peer: &PeerId, _packet_id: u8, data: &[u8]) {
@@ -283,8 +296,12 @@ impl NetworkProtocolHandler for ProtocolHandler {
 		self.protocol.on_peer_disconnected(&mut NetSyncIo::new(io), *peer);
 	}
 
-	fn timeout(&self, io: &NetworkContext, _timer: TimerToken) {
-		self.protocol.tick(&mut NetSyncIo::new(io));
+	fn timeout(&self, io: &NetworkContext, timer: TimerToken) {
+		match timer {
+			TICK_TOKEN => self.protocol.tick(&mut NetSyncIo::new(io)),
+			PROPAGATE_TOKEN => self.protocol.propagate_transactions(&mut NetSyncIo::new(io)),
+			_ => {}
+		}
 	}
 }
 
