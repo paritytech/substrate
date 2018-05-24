@@ -136,16 +136,16 @@ impl<Block: BlockT> Slicable for Message<Block> {
 /// Justification of a block.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Justification<Block: BlockT> {
+pub struct Justification<Header: HeaderT> {
 	/// The round consensus was reached in.
 	pub round_number: u32,
 	/// The hash of the header justified.
-	pub hash: <<Block as BlockT>::Header as HeaderT>::Hash,
+	pub hash: <Header as HeaderT>::Hash,
 	/// The signatures and signers of the hash.
 	pub signatures: Vec<(AuthorityId, Signature)>
 }
 
-impl<Block: BlockT> Slicable for Justification<Block> {
+impl<Header: HeaderT> Slicable for Justification<Header> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
@@ -187,28 +187,28 @@ impl MisbehaviorCode {
 /// Misbehavior kinds.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub enum MisbehaviorKind<Block: BlockT> {
+pub enum MisbehaviorKind<Header: HeaderT> {
 	/// BFT: double prepare.
-	BftDoublePrepare(u32, (<<Block as BlockT>::Header as HeaderT>::Hash, Signature), (<<Block as BlockT>::Header as HeaderT>::Hash, Signature)),
+	BftDoublePrepare(u32, (<Header as HeaderT>::Hash, Signature), (<Header as HeaderT>::Hash, Signature)),
 	/// BFT: double commit.
-	BftDoubleCommit(u32, (<<Block as BlockT>::Header as HeaderT>::Hash, Signature), (<<Block as BlockT>::Header as HeaderT>::Hash, Signature)),
+	BftDoubleCommit(u32, (<Header as HeaderT>::Hash, Signature), (<Header as HeaderT>::Hash, Signature)),
 }
 
 /// A report of misbehavior by an authority.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct MisbehaviorReport<Block: BlockT> {
+pub struct MisbehaviorReport<Header: HeaderT> {
 	/// The parent hash of the block where the misbehavior occurred.
-	pub parent_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
+	pub parent_hash: <Header as HeaderT>::Hash,
 	/// The parent number of the block where the misbehavior occurred.
-	pub parent_number: <<Block as BlockT>::Header as HeaderT>::Hash,
+	pub parent_number: <Header as HeaderT>::Hash,
 	/// The authority who misbehavior.
 	pub target: AuthorityId,
 	/// The misbehavior kind.
-	pub misbehavior: MisbehaviorKind<Block>,
+	pub misbehavior: MisbehaviorKind<Header>,
 }
 
-impl<Block: BlockT> Slicable for MisbehaviorReport<Block> {
+impl<Header: HeaderT> Slicable for MisbehaviorReport<Header> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		self.parent_hash.using_encoded(|s| v.extend(s));
@@ -238,23 +238,23 @@ impl<Block: BlockT> Slicable for MisbehaviorReport<Block> {
 	}
 
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let parent_hash = <<Block as BlockT>::Header as HeaderT>::Hash::decode(input)?;
-		let parent_number = <<Block as BlockT>::Header as HeaderT>::Hash::decode(input)?;
+		let parent_hash = <Header as HeaderT>::Hash::decode(input)?;
+		let parent_number = <Header as HeaderT>::Hash::decode(input)?;
 		let target = AuthorityId::decode(input)?;
 
 		let misbehavior = match i8::decode(input).and_then(MisbehaviorCode::from_i8)? {
 			MisbehaviorCode::BftDoublePrepare => {
 				MisbehaviorKind::BftDoublePrepare(
 					u32::decode(input)?,
-					(<<Block as BlockT>::Header as HeaderT>::Hash::decode(input)?, Signature::decode(input)?),
-					(<<Block as BlockT>::Header as HeaderT>::Hash::decode(input)?, Signature::decode(input)?),
+					(<Header as HeaderT>::Hash::decode(input)?, Signature::decode(input)?),
+					(<Header as HeaderT>::Hash::decode(input)?, Signature::decode(input)?),
 				)
 			}
 			MisbehaviorCode::BftDoubleCommit => {
 				MisbehaviorKind::BftDoubleCommit(
 					u32::decode(input)?,
-					(<<Block as BlockT>::Header as HeaderT>::Hash::decode(input)?, Signature::decode(input)?),
-					(<<Block as BlockT>::Header as HeaderT>::Hash::decode(input)?, Signature::decode(input)?),
+					(<Header as HeaderT>::Hash::decode(input)?, Signature::decode(input)?),
+					(<Header as HeaderT>::Hash::decode(input)?, Signature::decode(input)?),
 				)
 			}
 		};

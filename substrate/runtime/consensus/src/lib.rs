@@ -35,8 +35,7 @@ use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::RefInto;
-use substrate_primitives::bft::MisbehaviorReport;
-
+use substrate_bft::generic::MisbehaviorReport;
 
 pub const AUTHORITY_AT: &'static[u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
@@ -59,7 +58,7 @@ pub trait Trait: system::Trait {
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn report_misbehavior(aux, report: MisbehaviorReport) = 0;
+		fn report_misbehavior(aux, report: MisbehaviorReport<T::Header>) = 0;
 	}
 	pub enum PrivCall {
 		fn set_code(new: Vec<u8>) = 0;
@@ -86,7 +85,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport) {
+	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Header>) {
 		// TODO.
 	}
 
