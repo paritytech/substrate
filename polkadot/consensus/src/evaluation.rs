@@ -122,7 +122,7 @@ pub fn evaluate_initial(
 				bail!(ErrorKind::ParachainOutOfOrder);
 			}
 
-			if iter.position(|x| x == &head.parachain_index).is_none() {
+			if !iter.any(|x| x == &head.parachain_index) {
 				// must be unknown since active parachains are always sorted.
 				bail!(ErrorKind::UnknownParachain(head.parachain_index))
 			}

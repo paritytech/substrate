@@ -92,7 +92,7 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Default + Copy;
+	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy;
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 }
 

@@ -24,10 +24,6 @@ error_chain! {
 		Bft(::bft::Error, ::bft::ErrorKind);
 	}
 
-	foreign_links {
-		Timer(::tokio_timer::TimerError);
-	}
-
 	errors {
 		InvalidDutyRosterLength(expected: usize, got: usize) {
 			description("Duty Roster had invalid length"),
@@ -40,6 +36,10 @@ error_chain! {
 		PrematureDestruction {
 			description("Proposer destroyed before finishing proposing or evaluating"),
 			display("Proposer destroyed before finishing proposing or evaluating"),
+		}
+		Timer(e: String) {
+			description("Failed to register or resolve async timer."),
+			display("Timer failed: {}", e),
 		}
 		Executor(e: ::futures::future::ExecuteErrorKind) {
 			description("Unable to dispatch agreement future"),
