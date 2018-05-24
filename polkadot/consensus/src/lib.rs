@@ -287,7 +287,6 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
 			DELAY_UNTIL);
 
-
 		let drop_signal = dispatch_collation_work(
 			&self.network,
 			router.clone(),

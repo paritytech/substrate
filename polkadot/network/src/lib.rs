@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_network;
+
 extern crate substrate_primitives;
+extern crate polkadot_consensus as consensus;;
 extern crate polkadot_primitives;
 extern crate ed25519;
+extern crate futures;
 
 use codec::Slicable;
 use substrate_primitives::{AuthorityId, Hash};
@@ -29,6 +33,12 @@ use substrate_network::StatusMessage as FullStatus;
 use polkadot_primitives::parachain::Id as ParaId;
 
 use std::collections::HashMap;
+
+/// Polkadot protocol id.
+pub const DOT_PROTOCOL_ID: ::network::ProtocolId = *b"dot";
+
+/// Specialization of the network service for the polkadot protocol.
+pub type NetworkService = ::substrate_network::Service<PolkadotProtocol>;
 
 /// Status of a Polkadot node.
 #[derive(Debug, PartialEq, Eq, Clone)]

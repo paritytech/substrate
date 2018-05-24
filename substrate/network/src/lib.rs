@@ -62,7 +62,7 @@ pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 	TransactionPool, Params, ManageNetwork, SyncProvider};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
-pub use network::{NonReservedPeerMode, NetworkConfiguration, PeerId};
+pub use network::{NonReservedPeerMode, NetworkConfiguration, PeerId, ProtocolId};
 pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
 pub use message::{BftMessage, RequestId, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal, Status as StatusMessage};
 pub use error::Error;

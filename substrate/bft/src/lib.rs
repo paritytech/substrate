@@ -107,14 +107,19 @@ pub type Communication = generic::Communication<Block, HeaderHash, AuthorityId, 
 /// Misbehavior observed from BFT participants.
 pub type Misbehavior = generic::Misbehavior<HeaderHash, LocalizedSignature>;
 
-/// Proposer factory. Can be used to create a proposer instance.
+/// Proposer factory. Creates proposer instance and communication streams.
 pub trait ProposerFactory {
 	/// The proposer type this creates.
 	type Proposer: Proposer;
+	/// The input stream type.
+	type Input: Stream<Item=Communication, Error=<Self::Proposer>::Error>;
+	/// The output stream type.
+	type Output: Sink<Item=Communication, Error=<Self::Proposer>::Error>;
 	/// Error which can occur upon creation.
 	type Error: From<Error>;
 
 	/// Initialize the proposal logic on top of a specific header.
+	/// Produces the proposer and message streams for this instance of BFT agreement.
 	// TODO: provide state context explicitly?
 	fn init(&self, parent_header: &Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Self::Error>;
 }
@@ -340,10 +345,8 @@ impl<P, I> BftService<P, I>
 	/// If the local signing key is an authority, this will begin the consensus process to build a
 	/// block on top of it. If the executor fails to run the future, an error will be returned.
 	/// Returns `None` if the agreement on the block with given parent is already in progress.
-	pub fn build_upon<InStream, OutSink>(&self, header: &Header, input: InStream, output: OutSink)
+	pub fn build_upon<InStream, OutSink>(&self, header: &Header)
 		-> Result<Option<BftFuture<<P as ProposerFactory>::Proposer, I, InStream, OutSink>>, P::Error> where
-		InStream: Stream<Item=Communication, Error=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
-		OutSink: Sink<SinkItem=Communication, SinkError=<<P as ProposerFactory>::Proposer as Proposer>::Error>,
 	{
 		let hash = header.blake2_256().into();
 		if self.live_agreement.lock().as_ref().map_or(false, |&(h, _)| h == hash) {
@@ -364,7 +367,7 @@ impl<P, I> BftService<P, I>
 			Err(From::from(ErrorKind::InvalidAuthority(local_id)))?;
 		}
 
-		let proposer = self.factory.init(header, &authorities, self.key.clone())?;
+		let (proposer, input, output) = self.factory.init(header, &authorities, self.key.clone())?;
 
 		let bft_instance = BftInstance {
 			proposer,

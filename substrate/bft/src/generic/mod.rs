@@ -366,6 +366,13 @@ impl<C: Context> Strategy<C> {
 		let round_number = msg.round_number();
 
 		let sender = msg.sender().clone();
+
+		// sanity check to avoid importing our own messages. this should already
+		// be guarded against by the network.
+		if sender == self.local_id {
+			return;
+		}
+
 		let misbehavior = if round_number == self.current_accumulator.round_number() {
 			self.current_accumulator.import_message(msg)
 		} else if round_number == self.future_accumulator.round_number() {
@@ -817,7 +824,8 @@ impl<C: Context, I, O> Agreement<C, I, O> {
 /// 1/3 of `nodes`, otherwise agreement may never be reached.
 ///
 /// The input stream should never logically conclude. The logic here assumes
-/// that messages flushed to the output stream will eventually reach other nodes.
+/// that messages flushed to the output stream will eventually reach other nodes and
+/// that our own messages are not included in the input stream.
 ///
 /// Note that it is possible to witness agreement being reached without ever
 /// seeing the candidate. Any candidates seen will be checked for validity.

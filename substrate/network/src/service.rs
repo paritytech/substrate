@@ -33,9 +33,6 @@ use chain::Client;
 use message::LocalizedBftMessage;
 use specialization::Specialization;
 
-/// Polkadot devp2p protocol id
-pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
-
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 /// Type that represents bft messages stream.
@@ -134,14 +131,17 @@ pub struct Service<S: Specialization> {
 	network: NetworkService,
 	/// Devp2p protocol handler
 	handler: Arc<ProtocolHandler<S>>,
+	/// Devp2p protocol ID.
+	protocol_id: ProtocolId,
 }
 
 impl<S: Specialization> Service<S> {
 	/// Creates and register protocol with the network service
-	pub fn new(params: Params<S>) -> Result<Arc<Service<S>>, Error> {
+	pub fn new(params: Params<S>, protocol_id: ProtocolId) -> Result<Arc<Service<S>>, Error> {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
 		let sync = Arc::new(Service {
 			network: service,
+			protocol_id,
 			handler: Arc::new(ProtocolHandler {
 				protocol: Protocol::new(
 					params.config,
@@ -157,14 +157,14 @@ impl<S: Specialization> Service<S> {
 
 	/// Called when a new block is imported by the client.
 	pub fn on_block_imported(&self, hash: HeaderHash, header: &Header) {
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+		self.network.with_context(self.protocol_id, |context| {
 			self.handler.protocol.on_block_imported(&mut NetSyncIo::new(context), hash, header)
 		});
 	}
 
 	/// Called when new transactons are imported by the client.
 	pub fn trigger_repropagate(&self) {
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+		self.network.with_context(self.protocol_id, |context| {
 			self.handler.protocol.propagate_extrinsics(&mut NetSyncIo::new(context));
 		});
 	}
@@ -175,7 +175,7 @@ impl<S: Specialization> Service<S> {
 		where F: FnOnce(&mut S, &mut ::specialization::HandlerContext) -> U
 	{
 		let mut res = None;
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+		self.network.with_context(self.protocol_id, |context| {
 			res = Some(self.handler.protocol.with_spec(&mut NetSyncIo::new(context), f))
 		});
 
@@ -189,7 +189,7 @@ impl<S: Specialization> Service<S> {
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, &[(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)])
+		self.network.register_protocol(self.handler.clone(), self.protocol_id, &[(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)])
 			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}
 
@@ -213,7 +213,7 @@ impl<S: Specialization> SyncProvider for Service<S> {
 
 	/// Get sync peers
 	fn peers(&self) -> Vec<PeerInfo> {
-		self.network.with_context_eval(DOT_PROTOCOL_ID, |ctx| {
+		self.network.with_context_eval(self.protocol_id, |ctx| {
 			let peer_ids = self.network.connected_peers();
 
 			peer_ids.into_iter().filter_map(|peer_id| {
@@ -254,7 +254,7 @@ impl<S: Specialization> ConsensusService for Service<S> {
 	}
 
 	fn send_bft_message(&self, message: LocalizedBftMessage) {
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+		self.network.with_context(self.protocol_id, |context| {
 			self.handler.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
 		});
 	}
