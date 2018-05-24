@@ -17,6 +17,7 @@
 //! Utility struct to build a block.
 
 use std::vec::Vec;
+use std::marker::PhantomData;
 use codec::{Joiner, Slicable};
 use state_machine::{self, CodeExecutor};
 use runtime_primitives::traits::{Header as HeaderT, Hashing as HashingT, Block as BlockT};
@@ -36,7 +37,7 @@ pub struct BlockBuilder<B, E, Block, Hashing> where
 	executor: E,
 	state: B::State,
 	changes: state_machine::OverlayedChanges,
-	// will probably need PhantomData<Hashing> here...
+	dummy: PhantomData<Hashing>,
 }
 
 impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
@@ -66,6 +67,7 @@ impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
 			executor: client.clone_executor(),
 			state: client.state_at(block_id)?,
 			changes: Default::default(),
+			dummy: Default::default(),
 		})
 	}
 

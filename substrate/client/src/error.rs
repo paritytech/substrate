@@ -29,7 +29,7 @@ error_chain! {
 		}
 
 		/// Unknown block.
-		UnknownBlock(h: Box<fmt::Display>) {
+		UnknownBlock(h: Box<fmt::Display + Send>) {
 			description("unknown block"),
 			display("UnknownBlock: {}", h),
 		}
@@ -77,7 +77,7 @@ error_chain! {
 		}
 
 		/// Bad justification for header.
-		BadJustification(h: Box<fmt::Display>) {
+		BadJustification(h: Box<fmt::Display + Send>) {
 			description("bad justification for header"),
 			display("bad justification for header: {}", h),
 		}

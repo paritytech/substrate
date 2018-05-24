@@ -236,6 +236,32 @@ impl Hashing for BlakeTwo256 {
 }
 
 
+/// Something that can be checked for equality and printed out to a debug channel if bad.
+pub trait CheckEqual {
+	fn check_equal(&self, other: &Self);
+}
+
+impl CheckEqual for substrate_primitives::H256 {
+	#[cfg(feature = "std")]
+	fn check_equal(&self, other: &Self) {
+		use substrate_primitives::hexdisplay::HexDisplay;
+		if &self.0 != &other.0 {
+			println!("Hash: given={}, expected={}", HexDisplay::from(&self.0), HexDisplay::from(&other.0));
+		}
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn check_equal(&self, other: &Self) {
+		if self != other {
+			runtime_io::print("Hash not equal");
+			runtime_io::print(&self.0[..]);
+			runtime_io::print(&other.0[..]);
+		}
+	}
+}
+
+
+
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + Debug {}
 #[cfg(feature = "std")]
@@ -256,8 +282,8 @@ pub trait MaybeDisplay {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDisplay for T {}
 
-pub trait Member: Sized + MaybeSerializeDebug + Eq + PartialEq + Clone {}
-impl<T: Sized + MaybeSerializeDebug + Eq + PartialEq + Clone> Member for T {}
+pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone {}
+impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone> Member for T {}
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Slicable`.
@@ -278,7 +304,7 @@ impl Digest for substrate_primitives::Digest {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Sized + Slicable + MaybeSerializeDebug {
+pub trait Header: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 	type Number: Member + MaybeDisplay + SimpleArithmetic;
 	type Hash: Member + MaybeDisplay + Default + SimpleBitOps;
 	type Digest: Member + Default;
@@ -326,7 +352,7 @@ impl Header for substrate_primitives::Header {
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Sized + Slicable + MaybeSerializeDebug {
+pub trait Block: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 	type Extrinsic: Member + Slicable;
 	type Header: Header;
 	fn header(&self) -> &Self::Header;
@@ -354,7 +380,7 @@ impl Block for substrate_primitives::Block {
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-pub trait Checkable: Sized {
+pub trait Checkable: Sized + Send + Sync {
 	type Checked: Member;
 	fn check(self) -> Result<Self::Checked, Self>;
 }
@@ -365,34 +391,10 @@ pub trait Checkable: Sized {
 ///
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
-pub trait Applyable {
+pub trait Applyable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
 	fn index(&self) -> &Self::Index;
 	fn sender(&self) -> &Self::AccountId;
 	fn apply(self);
-}
-
-/// Something that can be checked for equality and printed out to a debug channel if bad.
-pub trait CheckEqual {
-	fn check_equal(&self, other: &Self);
-}
-
-impl CheckEqual for substrate_primitives::H256 {
-	#[cfg(feature = "std")]
-	fn check_equal(&self, other: &Self) {
-		use substrate_primitives::hexdisplay::HexDisplay;
-		if &self.0 != &other.0 {
-			println!("Hash: given={}, expected={}", HexDisplay::from(&self.0), HexDisplay::from(&other.0));
-		}
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn check_equal(&self, other: &Self) {
-		if self != other {
-			runtime_io::print("Hash not equal");
-			runtime_io::print(&self.0[..]);
-			runtime_io::print(&other.0[..]);
-		}
-	}
 }

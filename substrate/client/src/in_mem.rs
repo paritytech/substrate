@@ -195,13 +195,21 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
-pub struct Backend<Block: BlockT, Hashing: HashingT + hash::Hash> {
+pub struct Backend<Block, Hashing> where
+	Block: BlockT,
+	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
+	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
+{
 	states: RwLock<HashMap<<<Block as BlockT>::Header as HeaderT>::Hash, InMemory>>,
 	blockchain: Blockchain<Block>,
 	dummy: PhantomData<Hashing>,
 }
 
-impl<Block: BlockT, Hashing: HashingT + hash::Hash> Backend<Block, Hashing> {
+impl<Block, Hashing> Backend<Block, Hashing> where
+	Block: BlockT,
+	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
+	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
+{
 	/// Create a new instance of in-mem backend.
 	pub fn new() -> Backend<Block, Hashing> {
 		Backend {
@@ -212,10 +220,11 @@ impl<Block: BlockT, Hashing: HashingT + hash::Hash> Backend<Block, Hashing> {
 	}
 }
 
-impl<
+impl<Block, Hashing> backend::Backend<Block> for Backend<Block, Hashing> where
 	Block: BlockT,
-	Hashing: HashingT + hash::Hash
-> backend::Backend<Block> for Backend<Block, Hashing> {
+	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
+	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
+{
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemory;
