@@ -22,18 +22,17 @@ use state_machine::{self, CodeExecutor};
 use runtime_primitives::traits::{Header as HeaderT, Hashing as HashingT, Block as BlockT};
 use runtime_primitives::generic::BlockId;
 use {backend, error, Client};
-use triehash::ordered_trie_root;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<B, E, Block, Hashing> where
 	B: backend::Backend<Block>,
 	E: CodeExecutor + Clone,
 	Block: BlockT,
-	Hashing: HashingT<Output = Block::Header::Hash>,
+	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
-	header: Header,
-	extrinsics: Vec<Block::Extrinsic>,
+	header: <Block as BlockT>::Header,
+	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
 	executor: E,
 	state: B::State,
 	changes: state_machine::OverlayedChanges,
@@ -44,25 +43,25 @@ impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
 	B: backend::Backend<Block>,
 	E: CodeExecutor + Clone,
 	Block: BlockT,
-	Hashing: HashingT<Output = Block::Header::Hash>,
+	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
-	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {
+	pub fn new(client: &Client<B, E, Block, Hashing>) -> error::Result<Self> {
 		client.info().and_then(|i| Self::at_block(&BlockId::<Block>::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
 	/// build upon.
-	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block>) -> error::Result<Self> {
+	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block, Hashing>) -> error::Result<Self> {
 		Ok(BlockBuilder {
-			header: Header {
-				number: client.block_number_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(Box::new(block_id.clone())))? + 1,
-				parent_hash: client.block_hash_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(Box::new(block_id.clone())))?,
-				state_root: Default::default(),
-				extrinsics_root: Default::default(),
-				digest: Default::default(),
-			},
+			header: <<Block as BlockT>::Header as HeaderT>::new(
+				client.block_number_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(Box::new(block_id.clone())))? + 1,
+				Default::default(),
+				Default::default(),
+				client.block_hash_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(Box::new(block_id.clone())))?,
+				Default::default()
+			),
 			extrinsics: Default::default(),
 			executor: client.clone_executor(),
 			state: client.state_at(block_id)?,
@@ -73,10 +72,10 @@ impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
 	/// Push a transaction onto the block's list of extrinsics. This will ensure the transaction
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
-	pub fn push(&mut self, xt: Block::Extrinsic) -> error::Result<()> {
+	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
 		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "execute_transaction",
 			&vec![].and(&self.header).and(&xt))?;
-		self.header = Block::Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
+		self.header = <<Block as BlockT>::Header as Slicable>::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		self.extrinsics.push(xt);
 		Ok(())
 	}
@@ -86,7 +85,7 @@ impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
 		self.header.extrinsics_root = Hashing::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode));
 		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
 			&self.header.encode())?;
-		self.header = Block::Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
-		Ok(Block::new(self.header, self.extrinsics))
+		self.header = <<Block as BlockT>::Header as Slicable>::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
+		Ok(<Block as BlockT>::new(self.header, self.extrinsics))
 	}
 }

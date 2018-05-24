@@ -16,7 +16,7 @@
 
 //! Polkadot blockchain trait
 
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use primitives::bft::Justification;
 
@@ -25,9 +25,9 @@ use error::Result;
 /// Blockchain database backend. Does not perform any validation.
 pub trait Backend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
-	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>>;
+	fn header(&self, id: BlockId<Block>) -> Result<Option<<Block as BlockT>::Header>>;
 	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>>;
+	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
 	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>>;
 	/// Get blockchain info.
@@ -35,7 +35,7 @@ pub trait Backend<Block: BlockT>: Send + Sync {
 	/// Get block status.
 	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
-	fn hash(&self, number: Block::Header::Number) -> Result<Option<Block::Header::Hash>>;
+	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Hash>>;
 }
 
 /// Block import outcome
@@ -54,11 +54,11 @@ pub enum ImportResult<E> {
 #[derive(Debug)]
 pub struct Info<Block: BlockT> {
 	/// Best block hash.
-	pub best_hash: Block::Header::Hash,
+	pub best_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
 	/// Best block number.
-	pub best_number: Block::Header::Number,
+	pub best_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	/// Genesis block hash.
-	pub genesis_hash: Block::Header::Hash,
+	pub genesis_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
 }
 
 /// Block status.

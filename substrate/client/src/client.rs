@@ -21,7 +21,7 @@ use parking_lot::Mutex;
 use std::marker::PhantomData;
 use primitives::{self, AuthorityId};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Hashing as HashingT, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing as HashingT, Zero};
 use primitives::storage::{StorageKey, StorageData};
 use codec::{KeyedVec, Slicable};
 use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
@@ -47,7 +47,7 @@ pub trait BlockchainEvents<Block: BlockT> {
 /// Chain head information.
 pub trait ChainHead<Block: BlockT> {
 	/// Get best block header.
-	fn best_block_header(&self) -> Result<Block::Header, error::Error>;
+	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, error::Error>;
 }
 
 /// Client info
@@ -57,9 +57,9 @@ pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
 	pub chain: ChainInfo<Block>,
 	/// Best block number in the queue.
-	pub best_queued_number: Option<Block::Header::Number>,
+	pub best_queued_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>,
 	/// Best queued block hash.
-	pub best_queued_hash: Option<Block::Header::Hash>,
+	pub best_queued_hash: Option<<<Block as BlockT>::Header as HeaderT>::Hash>,
 }
 
 /// Information regarding the result of a call.
@@ -119,11 +119,11 @@ pub enum BlockOrigin {
 #[derive(Clone, Debug)]
 pub struct BlockImportNotification<Block: BlockT> {
 	/// Imported block header hash.
-	pub hash: Block::Header::Hash,
+	pub hash: <<Block as BlockT>::Header as HeaderT>::Hash,
 	/// Imported block origin.
 	pub origin: BlockOrigin,
 	/// Imported block header.
-	pub header: Block::Header,
+	pub header: <Block as BlockT>::Header,
 	/// Is this the new best block.
 	pub is_new_best: bool,
 }
@@ -131,13 +131,13 @@ pub struct BlockImportNotification<Block: BlockT> {
 /// A header paired with a justification which has already been checked.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct JustifiedHeader<Block: BlockT> {
-	header: Block::Header,
+	header: <Block as BlockT>::Header,
 	justification: bft::Justification,
 }
 
 impl<Block: BlockT> JustifiedHeader<Block> {
 	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self) -> (Block::Header, bft::Justification) {
+	pub fn into_inner(self) -> (<Block as BlockT>::Header, bft::Justification) {
 		(self.header, self.justification)
 	}
 }
@@ -146,18 +146,18 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 pub fn new_in_mem<E, F, Block: BlockT, Hashing: HashingT>(
 	executor: E,
 	build_genesis: F
-) -> error::Result<Client<in_mem::Backend, E, Block, Hashing>>
+) -> error::Result<Client<in_mem::Backend<Block, Hashing>, E, Block, Hashing>>
 	where
 		E: CodeExecutor,
-		F: FnOnce() -> (Block::Header, Vec<(Vec<u8>, Vec<u8>)>)
+		F: FnOnce() -> (<Block as BlockT>::Header, Vec<(Vec<u8>, Vec<u8>)>)
 {
 	Client::new(in_mem::Backend::new(), executor, build_genesis)
 }
 
 impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
-	B: backend::Backend,
+	B: backend::Backend<Block>,
 	E: CodeExecutor,
-	error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
+	error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	/// Creates new Polkadot Client with given blockchain and code executor.
 	pub fn new<F>(
@@ -166,7 +166,7 @@ impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
 		build_genesis: F
 	) -> error::Result<Self>
 		where
-			F: FnOnce() -> (Block::Header, Vec<(Vec<u8>, Vec<u8>)>)
+			F: FnOnce() -> (<Block as BlockT>::Header, Vec<(Vec<u8>, Vec<u8>)>)
 	{
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			trace!("Empty database, writing genesis block");
@@ -269,9 +269,9 @@ impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
 	/// Check a header's justification.
 	pub fn check_justification(
 		&self,
-		header: Block::Header,
+		header: <Block as BlockT>::Header,
 		justification: bft::UncheckedJustification,
-	) -> error::Result<JustifiedHeader> {
+	) -> error::Result<JustifiedHeader<Block>> {
 		let authorities = self.authorities_at(&BlockId::Hash(header.parent_hash))?;
 		let just = bft::check_justification(&authorities[..], header.parent_hash, justification)
 			.map_err(|_| error::ErrorKind::BadJustification(Box::new(BlockId::Hash(Hashing::hash_of(header)))))?;
@@ -285,8 +285,8 @@ impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
 	pub fn import_block(
 		&self,
 		origin: BlockOrigin,
-		header: JustifiedHeader,
-		body: Option<Vec<Block::Extrinsic>>,
+		header: JustifiedHeader<Block>,
+		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 	) -> error::Result<ImportResult> {
 		// TODO: import lock
 		// TODO: import justification.
@@ -304,7 +304,7 @@ impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
 			&mut overlay,
 			&self.executor,
 			"execute_block",
-			&Block::new(header.clone(), body.clone().unwrap_or_default()).encode()
+			&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode()
 		)?;
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
@@ -347,12 +347,12 @@ impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
 	}
 
 	/// Get block hash by number.
-	pub fn block_hash(&self, block_number: Block::Header::Number) -> error::Result<Option<Block::Header::Hash>> {
+	pub fn block_hash(&self, block_number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Hash>> {
 		self.backend.blockchain().hash(block_number)
 	}
 
 	/// Convert an arbitrary block ID into a block hash.
-	pub fn block_hash_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<Block::Header::Hash>> {
+	pub fn block_hash_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Hash>> {
 		match *id {
 			BlockId::Hash(h) => Ok(Some(h)),
 			BlockId::Number(n) => self.block_hash(n),
@@ -360,7 +360,7 @@ impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
 	}
 
 	/// Convert an arbitrary block ID into a block hash.
-	pub fn block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<Block::Header::Number>> {
+	pub fn block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
 		match *id {
 			BlockId::Hash(_) => Ok(self.header(id)?.map(|h| h.number)),
 			BlockId::Number(n) => Ok(Some(n)),
@@ -368,12 +368,12 @@ impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
 	}
 
 	/// Get block header by id.
-	pub fn header(&self, id: &BlockId<Block>) -> error::Result<Option<Block::Header>> {
+	pub fn header(&self, id: &BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
 		self.backend.blockchain().header(*id)
 	}
 
 	/// Get block body by id.
-	pub fn body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<Block::Extrinsic>>> {
+	pub fn body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.backend.blockchain().body(*id)
 	}
 
@@ -383,7 +383,7 @@ impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
 	}
 
 	/// Get best block header.
-	pub fn best_block_header(&self) -> error::Result<Block::Header> {
+	pub fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
 		Ok(self.header(&BlockId::Hash(info.best_hash))?.expect("Best block header must always exist"))
 	}
@@ -391,7 +391,7 @@ impl<B, E, Block: BlockT, Hashing: HashingT> Client<B, E, Block, Hashing> where
 
 impl<B, E, Block, Hashing> bft::BlockImport for Client<B, E, Block, Hashing>
 	where
-		B: backend::Backend,
+		B: backend::Backend<Block>,
 		E: state_machine::CodeExecutor,
 		Block: BlockT,
 		Hashing: HashingT,
@@ -409,7 +409,7 @@ impl<B, E, Block, Hashing> bft::BlockImport for Client<B, E, Block, Hashing>
 
 impl<B, E, Block, Hashing> bft::Authorities for Client<B, E, Block, Hashing>
 	where
-		B: backend::Backend,
+		B: backend::Backend<Block>,
 		E: state_machine::CodeExecutor,
 		Block: BlockT,
 		Hashing: HashingT,
@@ -420,31 +420,31 @@ impl<B, E, Block, Hashing> bft::Authorities for Client<B, E, Block, Hashing>
 	}
 }
 
-impl<B, E, Block, Hashing> BlockchainEvents for Client<B, E, Block, Hashing>
+impl<B, E, Block, Hashing> BlockchainEvents<Block> for Client<B, E, Block, Hashing>
 	where
-		B: backend::Backend,
+		B: backend::Backend<Block>,
 		E: state_machine::CodeExecutor,
 		Block: BlockT,
 		Hashing: HashingT,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification> {
+	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}
 }
 
-impl<B, E, Block, Hashing> ChainHead for Client<B, E, Block, Hashing>
+impl<B, E, Block, Hashing> ChainHead<Block> for Client<B, E, Block, Hashing>
 	where
-		B: backend::Backend,
+		B: backend::Backend<Block>,
 		E: state_machine::CodeExecutor,
 		Block: BlockT,
 		Hashing: HashingT,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
-	fn best_block_header(&self) -> error::Result<Block::Header> {
+	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
 	}
 }
