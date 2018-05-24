@@ -30,6 +30,46 @@ struct BftSink<E> {
 	_e: ::std::marker::PhantomData<E>,
 }
 
+impl<E> Sink for BftSink<E> {
+	type SinkItem = bft::Communication;
+	// TODO: replace this with the ! type when that's stabilized
+	type SinkError = E;
+
+	fn start_send(&mut self, message: bft::Communication) -> ::futures::StartSend<bft::Communication, E> {
+		let network_message = net::LocalizedBftMessage {
+			message: match message {
+				bft::generic::Communication::Consensus(c) => net::BftMessage::Consensus(match c {
+					bft::generic::LocalizedMessage::Propose(proposal) => net::SignedConsensusMessage::Propose(net::SignedConsensusProposal {
+						round_number: proposal.round_number as u32,
+						proposal: proposal.proposal,
+						digest: proposal.digest,
+						sender: proposal.sender,
+						digest_signature: proposal.digest_signature.signature,
+						full_signature: proposal.full_signature.signature,
+					}),
+					bft::generic::LocalizedMessage::Vote(vote) => net::SignedConsensusMessage::Vote(net::SignedConsensusVote {
+						sender: vote.sender,
+						signature: vote.signature.signature,
+						vote: match vote.vote {
+							bft::generic::Vote::Prepare(r, h) => net::ConsensusVote::Prepare(r as u32, h),
+							bft::generic::Vote::Commit(r, h) => net::ConsensusVote::Commit(r as u32, h),
+							bft::generic::Vote::AdvanceRound(r) => net::ConsensusVote::AdvanceRound(r as u32),
+						}
+					}),
+				}),
+				bft::generic::Communication::Auxiliary(justification) => net::BftMessage::Auxiliary(justification.uncheck().into()),
+			},
+			parent_hash: self.parent_hash,
+		};
+		self.network.send_bft_message(network_message);
+		Ok(::futures::AsyncSink::Ready)
+	}
+
+	fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
+		Ok(Async::Ready(()))
+	}
+}
+
 struct Messages {
 	network_stream: net::BftMessageStream,
 	local_id: AuthorityId,

@@ -43,7 +43,6 @@ extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
-extern crate substrate_network;
 
 extern crate exit_future;
 extern crate tokio_core;
@@ -118,18 +117,22 @@ pub trait TableRouter: Clone {
 	fn fetch_extrinsic_data(&self, candidate: &CandidateReceipt) -> Self::FetchExtrinsic;
 }
 
-/// A long-lived network which can create statement table routing instances.
+/// A long-lived network which can create parachain statement and BFT message routing processes on demand.
 pub trait Network {
 	/// The table router type. This should handle importing of any statements,
 	/// routing statements to peers, and driving completion of any `StatementProducers`.
 	type TableRouter: TableRouter;
+	/// The input stream of BFT messages. Should never logi
+	type Input: Stream<Item=bft::Communication,Error=Error>;
+	/// The output sink of BFT messages. This
+	type Output: Sink<SinkItem=bft::Communication,SinkError=Error>;
 
 	/// Execute a future in the background. Typically used for fairly heavy computations,
 	/// so it is recommended to have this use a thread pool.
 	fn execute<F>(&self, future: F) where F: Future<Item=(),Error=()> + Send + 'static;
 
 	/// Instantiate a table router using the given shared table.
-	fn table_router(&self, table: Arc<SharedTable>) -> Self::TableRouter;
+	fn communication_for(&self, table: Arc<SharedTable>) -> (Self::TableRouter, Self::Input, Self::Output);
 }
 
 /// Information about a specific group.
@@ -241,7 +244,7 @@ pub struct ProposerFactory<C, N, P> {
 	pub parachain_empty_duration: Duration,
 }
 
-impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
+impl<C, N, P> bft::Environment for ProposerFactory<C, N, P>
 	where
 		C: Collators + Send + 'static,
 		N: Network,
@@ -251,13 +254,15 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 		P::CheckedBlockId: Send + 'static,
 {
 	type Proposer = Proposer<P>;
+	type Input = N::Input;
+	type Output = N::Output;
 	type Error = Error;
 
 	fn init(&self,
 		parent_header: &SubstrateHeader,
 		authorities: &[AuthorityId],
 		sign_with: Arc<ed25519::Pair>
-	) -> Result<Self::Proposer, Error> {
+	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
 		use std::time::Duration;
 
 		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
@@ -278,7 +283,7 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 
 		let n_parachains = active_parachains.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
-		let router = self.network.table_router(table.clone());
+		let (router, input, output) = self.network.communication_for(table.clone());
 		let dynamic_inclusion = DynamicInclusion::new(
 			n_parachains,
 			Instant::now(),
@@ -304,8 +309,7 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 			)
 		);
 
-		// TODO [PoC-2]: kick off collation process.
-		Ok(Proposer {
+		let proposer = Proposer {
 			client: self.client.clone(),
 			delay: timeout.shared(),
 			handle: self.handle.clone(),
@@ -318,7 +322,9 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 			table,
 			transaction_pool: self.transaction_pool.clone(),
 			_drop_signal: drop_signal,
-		})
+		};
+
+		Ok((proposer, input, output))
 	}
 }
 

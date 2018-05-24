@@ -15,6 +15,20 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! BFT Agreement based on a rotating proposer in different rounds.
+//!
+//! Where this crate refers to input stream, should never logically conclude. The logic in this crate
+//! assumes
+//! that messages flushed to the output stream will eventually reach other nodes and
+//! that our own messages are not included in the input stream.
+//!
+//! Note that it is possible to witness agreement being reached without ever
+//! seeing the candidate. Any candidates seen will be checked for validity.
+//!
+//! Although technically the agreement will always complete (given the eventual
+//! delivery of messages), in practice it is possible for this future to
+//! conclude without having witnessed the conclusion.
+//! In general, this future should be pre-empted by the import of a justification
+//! set for this block height.
 
 pub mod error;
 pub mod generic;

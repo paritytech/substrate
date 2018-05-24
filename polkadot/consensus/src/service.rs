@@ -27,119 +27,30 @@ use bft::{self, BftService};
 use client::{BlockchainEvents, ChainHead};
 use ed25519;
 use futures::prelude::*;
-use futures::{future, Canceled};
 use parking_lot::Mutex;
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::AccountId;
-use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
-use primitives::{Hash, AuthorityId};
-use primitives::block::{Id as BlockId, HeaderHash, Header};
+use primitives::block::Header;
 use runtime_support::Hashable;
-use substrate_network as net;
 use tokio_core::reactor;
 use transaction_pool::TransactionPool;
 
-use super::{TableRouter, SharedTable, ProposerFactory};
+use super::{Network, Collators, ProposerFactory};
 use error;
 
 const TIMER_DELAY_MS: u64 = 5000;
 const TIMER_INTERVAL_MS: u64 = 500;
 
-struct BftSink<E> {
-	network: Arc<net::ConsensusService>,
-	parent_hash: HeaderHash,
-	_e: ::std::marker::PhantomData<E>,
-}
-
-impl<E> Sink for BftSink<E> {
-	type SinkItem = bft::Communication;
-	// TODO: replace this with the ! type when that's stabilized
-	type SinkError = E;
-
-	fn start_send(&mut self, message: bft::Communication) -> ::futures::StartSend<bft::Communication, E> {
-		let network_message = net::LocalizedBftMessage {
-			message: match message {
-				bft::generic::Communication::Consensus(c) => net::BftMessage::Consensus(match c {
-					bft::generic::LocalizedMessage::Propose(proposal) => net::SignedConsensusMessage::Propose(net::SignedConsensusProposal {
-						round_number: proposal.round_number as u32,
-						proposal: proposal.proposal,
-						digest: proposal.digest,
-						sender: proposal.sender,
-						digest_signature: proposal.digest_signature.signature,
-						full_signature: proposal.full_signature.signature,
-					}),
-					bft::generic::LocalizedMessage::Vote(vote) => net::SignedConsensusMessage::Vote(net::SignedConsensusVote {
-						sender: vote.sender,
-						signature: vote.signature.signature,
-						vote: match vote.vote {
-							bft::generic::Vote::Prepare(r, h) => net::ConsensusVote::Prepare(r as u32, h),
-							bft::generic::Vote::Commit(r, h) => net::ConsensusVote::Commit(r as u32, h),
-							bft::generic::Vote::AdvanceRound(r) => net::ConsensusVote::AdvanceRound(r as u32),
-						}
-					}),
-				}),
-				bft::generic::Communication::Auxiliary(justification) => net::BftMessage::Auxiliary(justification.uncheck().into()),
-			},
-			parent_hash: self.parent_hash,
-		};
-		self.network.send_bft_message(network_message);
-		Ok(::futures::AsyncSink::Ready)
-	}
-
-	fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
-		Ok(Async::Ready(()))
-	}
-}
-
-struct Network(Arc<net::ConsensusService>);
-
-impl super::Network for Network {
-	type TableRouter = Router;
-
-	fn execute<F>(&self, future: F) where F: Future<Item=(),Error=()> + Send + 'static {
-		// TODO: CpuPool.
-		::std::thread::spawn(move || { let _ = future.wait(); });
-	}
-
-	fn table_router(&self, _table: Arc<SharedTable>) -> Self::TableRouter {
-		Router {
-			network: self.0.clone()
-		}
-	}
-}
-
 fn start_bft<F, C>(
 	header: &Header,
 	handle: reactor::Handle,
-	client: &bft::Authorities,
-	network: Arc<net::ConsensusService>,
 	bft_service: &BftService<F, C>,
 ) where
-	F: bft::ProposerFactory + 'static,
+	F: bft::Environment + 'static,
 	C: bft::BlockImport + bft::Authorities + 'static,
-	<F as bft::ProposerFactory>::Error: ::std::fmt::Debug,
+	<F as bft::Environment>::Error: ::std::fmt::Debug,
 	<F::Proposer as bft::Proposer>::Error: ::std::fmt::Display + Into<error::Error>,
 {
-	let parent_hash = header.blake2_256().into();
-	if bft_service.live_agreement().map_or(false, |h| h == parent_hash) {
-		return;
-	}
-	let authorities = match client.authorities(&BlockId::Hash(parent_hash)) {
-		Ok(authorities) => authorities,
-		Err(e) => {
-			debug!("Error reading authorities: {:?}", e);
-			return;
-		}
-	};
-
-	let input = Messages {
-		network_stream: network.bft_messages(parent_hash),
-		local_id: bft_service.local_id(),
-		authorities,
-	};
-
-	let output = BftSink { network: network, parent_hash: parent_hash, _e: Default::default() };
-	match bft_service.build_upon(&header, input.map_err(Into::into), output) {
+	match bft_service.build_upon(&header) {
 		Ok(Some(bft)) => handle.spawn(bft),
 		Ok(None) => {},
 		Err(e) => debug!(target: "bft", "BFT agreement error: {:?}", e),
@@ -154,9 +65,9 @@ pub struct Service {
 
 impl Service {
 	/// Create and start a new instance.
-	pub fn new<C>(
+	pub fn new<C, N: Network + Collators + Send + 'static>(
 		client: Arc<C>,
-		network: Arc<net::ConsensusService>,
+		network: N,
 		transaction_pool: Arc<Mutex<TransactionPool>>,
 		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
@@ -164,6 +75,8 @@ impl Service {
 		where
 			C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static,
 			C::CheckedBlockId: Send + 'static,
+			N::TableRouter: Send + 'static,
+			<N::Collation as IntoFuture>::Future: Send + 'static,
 	{
 		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {
@@ -173,8 +86,8 @@ impl Service {
 			let factory = ProposerFactory {
 				client: client.clone(),
 				transaction_pool: transaction_pool.clone(),
-				network: Network(network.clone()),
-				collators: NoCollators,
+				collators: network.clone(),
+				network,
 				parachain_empty_duration,
 				handle: core.handle(),
 			};
@@ -182,13 +95,12 @@ impl Service {
 
 			let notifications = {
 				let handle = core.handle();
-				let network = network.clone();
 				let client = client.clone();
 				let bft_service = bft_service.clone();
 
 				client.import_notification_stream().for_each(move |notification| {
 					if notification.is_new_best {
-						start_bft(&notification.header, handle.clone(), &*client, network.clone(), &*bft_service);
+						start_bft(&notification.header, handle.clone(), &*bft_service);
 					}
 					Ok(())
 				})
@@ -210,7 +122,6 @@ impl Service {
 			let timed = {
 				let c = client.clone();
 				let s = bft_service.clone();
-				let n = network.clone();
 				let handle = core.handle();
 
 				interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
@@ -218,7 +129,7 @@ impl Service {
 						let hash = best_block.blake2_256();
 						if hash == prev_best {
 							debug!("Starting consensus round after a timeout");
-							start_bft(&best_block, handle.clone(), &*c, n.clone(), &*s);
+							start_bft(&best_block, handle.clone(), &*s);
 						}
 						prev_best = hash;
 					}
@@ -250,53 +161,3 @@ impl Drop for Service {
 		}
 	}
 }
-
-// Collators implementation which never collates anything.
-// TODO: do a real implementation.
-#[derive(Clone, Copy)]
-struct NoCollators;
-
-impl ::collation::Collators for NoCollators {
-	type Error = ();
-	type Collation = future::Empty<::collation::Collation, ()>;
-
-	fn collate(&self, _parachain: ParaId, _relay_parent: Hash) -> Self::Collation {
-		future::empty()
-	}
-
-	fn note_bad_collator(&self, _collator: AccountId) { }
-}
-
-type FetchCandidateAdapter = future::Map<net::FetchFuture, fn(Vec<u8>) -> BlockData>;
-
-#[derive(Clone)]
-struct Router {
-	network: Arc<net::ConsensusService>,
-}
-
-impl Router {
-	fn fetch_candidate_adapter(data: Vec<u8>) -> BlockData {
-		BlockData(data)
-	}
-}
-
-impl TableRouter for Router {
-	type Error = Canceled;
-	type FetchCandidate =  FetchCandidateAdapter;
-	type FetchExtrinsic = future::FutureResult<Extrinsic, Self::Error>;
-
-	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, _extrinsic: Extrinsic) {
-		let data = block_data.0;
-		self.network.set_local_candidate(Some((hash, data)))
-	}
-
-	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> Self::FetchCandidate {
-		let hash = candidate.hash();
-		self.network.fetch_candidate(&hash).map(Self::fetch_candidate_adapter)
-	}
-
-	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
-		future::ok(Extrinsic)
-	}
-}
-
