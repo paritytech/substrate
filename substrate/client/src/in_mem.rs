@@ -155,13 +155,13 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 }
 
 /// In-memory operation.
-pub struct<Block: BlockT> BlockImportOperation {
+pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
 	old_state: InMemory,
 	new_state: Option<InMemory>,
 }
 
-impl<Block: BlockT> backend::BlockImportOperation for BlockImportOperation<Block> {
+impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
 	type State = InMemory;
 
 	fn state(&self) -> error::Result<&Self::State> {
@@ -215,7 +215,7 @@ impl<Block: BlockT, Hashing: HashingT + Hash> Backend<Block, Hashing> {
 impl<
 	Block: BlockT,
 	Hashing: HashingT + Hash
-> Backend<Block, Hashing> backend::Backend<Block> for Backend<Block, Hashing> {
+> Backend<Block, Hashing> for backend::Backend<Block, Hashing> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemory;

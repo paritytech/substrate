@@ -49,7 +49,7 @@ impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {
-		client.info().and_then(|i| Self::at_block(&BlockId<Block>::Hash(i.chain.best_hash), client))
+		client.info().and_then(|i| Self::at_block(&BlockId::<Block>::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to

@@ -20,15 +20,15 @@
 use rstd::prelude::*;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
-use traits::{self, Member};
+use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Block as BlockT, Header as HeaderT};
 use rstd::ops;
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct Extrinsic<AccountId, Index, Call> where
- 	AccountId: Member,
- 	Index: Member,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 {
 	/// Who signed it (note this is not a signature).
@@ -40,8 +40,8 @@ pub struct Extrinsic<AccountId, Index, Call> where
 }
 
 impl<AccountId, Index, Call> Slicable for Extrinsic<AccountId, Index, Call> where
- 	AccountId: Member + Slicable,
- 	Index: Member + Slicable,
+ 	AccountId: Member + Slicable + MaybeDisplay,
+ 	Index: Member + Slicable + MaybeDisplay + SimpleArithmetic,
  	Call: Member + Slicable
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
@@ -67,8 +67,8 @@ impl<AccountId, Index, Call> Slicable for Extrinsic<AccountId, Index, Call> wher
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize))]
 pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member,
- 	Index: Member,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
  	Signature: Member,			// TODO: should be Option<Signature>
 {
@@ -79,8 +79,8 @@ pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> where
 }
 
 impl<AccountId, Index, Call, Signature> UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Default,
- 	Index: Member,
+ 	AccountId: Member + Default + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member + Default,
 {
@@ -92,10 +92,11 @@ impl<AccountId, Index, Call, Signature> UncheckedExtrinsic<AccountId, Index, Cal
 }
 
 impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Slicable,
- 	Index: Member + Slicable,
- 	Call: Member + Slicable,
-	Signature: Member + Slicable
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
+ 	Call: Member,
+	Signature: Member + Slicable,
+	Extrinsic<AccountId, Index, Call>: Slicable,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
@@ -117,9 +118,11 @@ impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountI
 		// Vec<u8>. we'll make room for it here, then overwrite once we know the length.
 		v.extend(&[0u8; 4]);
 
-		self.extrinsic.signed.using_encoded(|s| v.extend(s));
+/*		self.extrinsic.signed.using_encoded(|s| v.extend(s));
 		self.extrinsic.index.using_encoded(|s| v.extend(s));
-		self.extrinsic.function.using_encoded(|s| v.extend(s));
+		self.extrinsic.function.using_encoded(|s| v.extend(s));*/
+		self.extrinsic.using_encoded(|s| v.extend(s));
+
 		self.signature.using_encoded(|s| v.extend(s));
 
 		let length = (v.len() - 4) as u32;
@@ -131,8 +134,8 @@ impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountI
 
 #[cfg(feature = "std")]
 impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member,
- 	Index: Member,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member,
 {
@@ -142,11 +145,11 @@ impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Accoun
 }
 
 impl<AccountId, Index, Call, Signature> traits::Checkable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Default,
- 	Index: Member,
+ 	AccountId: Member + Default + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
-	Signature: Member + Default + traits::Verify<Signer = AccountId>,
-	Extrinsic<AccountId, Index, Call>: Slicable
+	Signature: Member + Default + traits::Verify<Signer = AccountId> + Slicable,
+	Extrinsic<AccountId, Index, Call>: Slicable,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call, Signature>;
 
@@ -167,19 +170,19 @@ impl<AccountId, Index, Call, Signature> traits::Checkable for UncheckedExtrinsic
 
 /// A type-safe indicator that a extrinsic has been checked.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct CheckedExtrinsic<AccountId, Index, Call, Signature>
 	(UncheckedExtrinsic<AccountId, Index, Call, Signature>)
 where
- 	AccountId: Member,
- 	Index: Member,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member;
 
 impl<AccountId, Index, Call, Signature> CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
- 	AccountId: Member,
- 	Index: Member,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member
 {
@@ -202,8 +205,8 @@ where
 impl<AccountId, Index, Call, Signature> ops::Deref
 	for CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
- 	AccountId: Member,
- 	Index: Member,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member
 {
@@ -217,8 +220,8 @@ where
 impl<AccountId, Index, Call, Signature> traits::Applyable
 	for CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
- 	AccountId: Member,
- 	Index: Member,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member + AuxDispatchable<Aux = AccountId>,
 	Signature: Member
 {
@@ -241,11 +244,11 @@ where
 
 #[derive(Default, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-pub struct Digest<Item: Member> {
+pub struct Digest<Item: Member + Default> {
 	pub logs: Vec<Item>,
 }
 impl<Item> Slicable for Digest<Item> where
- 	Item: Member + Slicable
+ 	Item: Member + Default + Slicable
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Digest { logs: Slicable::decode(input)? })
@@ -255,7 +258,7 @@ impl<Item> Slicable for Digest<Item> where
 	}
 }
 impl<Item> traits::Digest for Digest<Item> where
- 	Item: Member + Slicable
+ 	Item: Member + Default + Slicable
 {
 	type Item = Item;
 	fn push(&mut self, item: Self::Item) {
@@ -269,9 +272,9 @@ impl<Item> traits::Digest for Digest<Item> where
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Header<Number, Hash, DigestItem> where
-	Number: Member,
-	Hash: Member,
-	DigestItem: Member,
+	Number: Member + MaybeDisplay + SimpleArithmetic,
+	Hash: Default + Member + MaybeDisplay + SimpleBitOps,
+	DigestItem: Member + Default,
 {
 	/// The parent hash.
 	pub parent_hash: Hash,
@@ -286,9 +289,9 @@ pub struct Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> Slicable for Header<Number, Hash, DigestItem> where
-	Number: Member + Slicable,
- 	Hash: Member + Slicable,
-	DigestItem: Member + Slicable,
+	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic,
+ 	Hash: Default + Member + Slicable + MaybeDisplay + SimpleBitOps,
+	DigestItem: Member + Default + Slicable,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
@@ -311,9 +314,9 @@ impl<Number, Hash, DigestItem> Slicable for Header<Number, Hash, DigestItem> whe
 	}
 }
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
- 	Number: Member + Slicable,
- 	Hash: Member + Slicable,
-	DigestItem: Member + Slicable,
+ 	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic,
+ 	Hash: Default + Member + Slicable + MaybeDisplay + SimpleBitOps,
+	DigestItem: Member + Default + Slicable,
  {
 	type Number = Number;
 	type Hash = Hash;
@@ -342,18 +345,15 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub enum BlockId<Block: BlockT> where
-	Number: Block::Header::Number,
-	Hash: Block::Header::Hash,
-{
+pub enum BlockId<Block: BlockT> where {
 	/// Identify by block header hash.
-	Hash(Hash),
+	Hash(<<Block as BlockT>::Header as HeaderT>::Hash),
 	/// Identify by block number.
-	Number(Number),
+	Number(<<Block as BlockT>::Header as HeaderT>::Number),
 }
 
 #[cfg(feature = "std")]
-impl<Block: BlockT> fmt::Display for Id<Block> {
+impl<Block: BlockT> fmt::Display for BlockId<Block> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		write!(f, "{:?}", self)
 	}
@@ -365,11 +365,11 @@ impl<Block: BlockT> fmt::Display for Id<Block> {
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature> where
-	Number: Member,
-	Hash: Member,
-	DigestItem: Member,
- 	AccountId: Member,
- 	Index: Member,
+	Number: Member + MaybeDisplay + SimpleArithmetic,
+	Hash: Default + Member + MaybeDisplay + SimpleBitOps,
+	DigestItem: Member + Default,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
  	Signature: Member
 {
@@ -382,11 +382,11 @@ pub struct Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature> wh
 impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> Slicable
 	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
 where
-	Number: Member,
-	Hash: Member,
-	DigestItem: Member,
- 	AccountId: Member,
- 	Index: Member,
+	Number: Member + MaybeDisplay + SimpleArithmetic,
+	Hash: Default + Member + MaybeDisplay + SimpleBitOps,
+	DigestItem: Member + Default,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
  	Signature: Member,
 	Header<Number, Hash, DigestItem>: Slicable,
@@ -409,13 +409,15 @@ where
 impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> traits::Block
 	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
 where
-	Number: Member + Slicable,
-	Hash: Member + Slicable,
-	DigestItem: Member + Slicable,
- 	AccountId: Member,
- 	Index: Member,
+	Number: Member + MaybeDisplay + SimpleArithmetic,
+	Hash: Default + Member + MaybeDisplay + SimpleBitOps,
+	DigestItem: Member + Default,
+ 	AccountId: Member + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
- 	Signature: Member
+ 	Signature: Member,
+	Header<Number, Hash, DigestItem>: traits::Header,
+	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
 {
 	type Extrinsic = UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 	type Header = Header<Number, Hash, DigestItem>;
@@ -427,5 +429,8 @@ where
 	}
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
 		(self.header, self.extrinsics)
+	}
+	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
+		Block { header, extrinsics }
 	}
 }

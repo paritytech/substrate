@@ -22,8 +22,8 @@ use primitives::traits::{Block as BlockT, Hashing as HashingT, Zero};
 /// Create a genesis block, given the initial storage.
 pub fn construct_genesis_block<
 	Block: BlockT,
-	Hashing: HashingT<Output = Block::Header::Hash>
-(
+	Hashing: HashingT<Output = Block::Header::Hash>,
+> (
 	storage: &HashMap<Vec<u8>, Vec<u8>>
 ) -> Block {
 	// TODO gav don't use `trie_root`!

@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use rstd;
 use runtime_io;
-#[cfg(feature = "std")] use std::fmt::Debug;
+#[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::Serialize;
 use substrate_primitives;
 use codec::Slicable;
@@ -123,13 +123,37 @@ impl<T:
 	PartialOrd<Self> + Ord
 > SimpleArithmetic for T {}
 
+/// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
+/// as `Zero`.
+pub trait Clear {
+	/// True iff no bits are set.
+	fn is_clear(&self) -> bool;
+
+	/// Return the value of Self that is clear.
+	fn clear() -> Self;
+}
+
+impl<T: Default + Eq + PartialEq> Clear for T {
+	fn is_clear(&self) -> bool { *self == Self::clear() }
+	fn clear() -> Self { Default::default() }
+}
+
+/*impl<T: Zero> Clear for T {
+	fn is_clear(&self) -> bool { self.is_zero() }
+	fn clear() -> Self { Self::zero() }
+}
+
+impl Clear for substrate_primitives::H256 {
+	fn clear() -> Self { substrate_primitives::H256::new() }
+}*/
+
 pub trait SimpleBitOps:
-	Sized + Zero +
+	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
-	Sized + Zero +
+	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
@@ -158,8 +182,8 @@ pub trait Hashing {
 	fn hash(s: &[u8]) -> Self::Output;
 
 	/// Produce the hash of some codec-encodable value.
-	fn hash_of<S: codec::Slicable>(s: &S) -> Self::Output {
-		codec::Slicable::using_encoded(s, Self::hash)
+	fn hash_of<S: Slicable>(s: &S) -> Self::Output {
+		Slicable::using_encoded(s, Self::hash)
 	}
 
 	/// Produce the patricia-trie root of a mapping from indices to byte slices.
@@ -186,7 +210,7 @@ pub trait Hashing {
 pub struct BlakeTwo256;
 
 impl Hashing for BlakeTwo256 {
-	type Output = primitives::H256;
+	type Output = substrate_primitives::H256;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
 	}
@@ -198,13 +222,13 @@ impl Hashing for BlakeTwo256 {
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>
 	>(input: I) -> Self::Output {
-		runtime_io::trie_root(items).into()
+		runtime_io::trie_root(input).into()
 	}
 	fn ordered_trie_root<
 		I: IntoIterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output {
-		runtime_io::ordered_trie_root(items).into()
+		runtime_io::ordered_trie_root(input).into()
 	}
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
@@ -213,14 +237,24 @@ impl Hashing for BlakeTwo256 {
 
 
 #[cfg(feature = "std")]
-pub trait MaybeSerializeDebug: Serialize + Debug + Display {}
+pub trait MaybeSerializeDebug: Serialize + Debug {}
 #[cfg(feature = "std")]
-impl<T: Serialize + Debug + Display> MaybeSerializeDebug for T {}
+impl<T: Serialize + Debug> MaybeSerializeDebug for T {}
 
 #[cfg(not(feature = "std"))]
 pub trait MaybeSerializeDebug {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerializeDebug for T {}
+
+#[cfg(feature = "std")]
+pub trait MaybeDisplay: Display {}
+#[cfg(feature = "std")]
+impl<T: Display> MaybeDisplay for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeDisplay {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeDisplay for T {}
 
 pub trait Member: Sized + MaybeSerializeDebug + Eq + PartialEq + Clone {}
 impl<T: Sized + MaybeSerializeDebug + Eq + PartialEq + Clone> Member for T {}
@@ -244,9 +278,9 @@ impl Digest for substrate_primitives::Digest {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Sized + Slicable {
-	type Number: Member + SimpleArithmetic;
-	type Hash: Member + Default + SimpleBitOps;
+pub trait Header: Sized + Slicable + MaybeSerializeDebug {
+	type Number: Member + MaybeDisplay + SimpleArithmetic;
+	type Hash: Member + MaybeDisplay + Default + SimpleBitOps;
 	type Digest: Member + Default;
 	fn number(&self) -> &Self::Number;
 	fn extrinsics_root(&self) -> &Self::Hash;
@@ -292,7 +326,7 @@ impl Header for substrate_primitives::Header {
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block {
+pub trait Block: Sized + Slicable + MaybeSerializeDebug {
 	type Extrinsic: Member + Slicable;
 	type Header: Header;
 	fn header(&self) -> &Self::Header;
@@ -332,8 +366,8 @@ pub trait Checkable: Sized {
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable {
-	type AccountId: Member;
-	type Index: Member + SimpleArithmetic;
+	type AccountId: Member + MaybeDisplay;
+	type Index: Member + MaybeDisplay + SimpleArithmetic;
 	fn index(&self) -> &Self::Index;
 	fn sender(&self) -> &Self::AccountId;
 	fn apply(self);
