@@ -138,7 +138,7 @@ pub trait PolkadotApi {
 	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<()>;
 
 	/// Create a block builder on top of the parent block.
-	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: u64) -> Result<Self::BlockBuilder>;
+	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: Timestamp) -> Result<Self::BlockBuilder>;
 }
 
 /// Mark for all Polkadot API implementations, that are making use of state data, stored locally.

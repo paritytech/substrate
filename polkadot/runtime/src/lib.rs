@@ -286,7 +286,7 @@ mod tests {
 		let tx = UncheckedExtrinsic {
 			extrinsic: Extrinsic {
 				signed: [1; 32],
-				index: 999u64,
+				index: 999,
 				function: Call::Timestamp(TimestampCall::set(135135)),
 			},
 			signature: primitives::hash::H512([0; 64]).into(),
@@ -307,7 +307,7 @@ mod tests {
 	fn serialize_checked() {
 		let xt = Extrinsic {
 			signed: hex!["0d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e"],
-			index: 0u64,
+			index: 0,
 			function: Call::CouncilVoting(council::voting::Call::propose(Box::new(
 				PrivCall::Consensus(consensus::PrivCall::set_code(
 					vec![]
@@ -316,7 +316,7 @@ mod tests {
 		};
 		let v = Slicable::encode(&xt);
 
-		let data = hex!["e00000000d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e000000000000000007000000000000006369D39D892B7B87A6769F90E14C618C2B84EBB293E2CC46640136E112C078C75619AC2E0815F2511568736623C055156C8FC427CE2AEE4AE2838F86EFE80208"];
+		let data = hex!["e00000000d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e0000000007000000000000006369D39D892B7B87A6769F90E14C618C2B84EBB293E2CC46640136E112C078C75619AC2E0815F2511568736623C055156C8FC427CE2AEE4AE2838F86EFE80208"];
 		let uxt: UncheckedExtrinsic = Slicable::decode(&mut &data[..]).unwrap();
 		assert_eq!(uxt.extrinsic, xt);
 

@@ -61,7 +61,7 @@ pub trait As<T> {
 macro_rules! impl_numerics {
 	( $( $t:ty ),* ) => {
 		$(
-			impl_numerics!($t: u8, u16, u32, u64, usize, i8, i16, i32, i64, isize,);
+			impl_numerics!($t: u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize,);
 		)*
 	};
 	( $f:ty : $t:ty, $( $rest:ty, )* ) => {
@@ -74,7 +74,7 @@ macro_rules! impl_numerics {
 	( $f:ty : ) => {}
 }
 
-impl_numerics!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
+impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {

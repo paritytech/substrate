@@ -50,6 +50,8 @@ pub use primitives::block::Id as BlockId;
 pub use primitives::block::Log as Log;
 
 /// An index to a block.
+/// 32-bits will allow for 136 years of blocks assuming 1 block per second.
+/// TODO: switch to u32
 pub type BlockNumber = u64;
 
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
@@ -60,11 +62,11 @@ pub type AccountId = primitives::AuthorityId;
 /// exactly equivalent to what the substrate calls an "authority".
 pub type SessionKey = primitives::AuthorityId;
 
-/// Indentifier for a chain.
-pub type ChainId = u64;
+/// Indentifier for a chain. 32-bit should be plenty.
+pub type ChainId = u32;
 
-/// Index of a transaction in the relay chain.
-pub type Index = u64;
+/// Index of a transaction in the relay chain. 32-bit should be plenty.
+pub type Index = u32;
 
 /// A hash of some data used by the relay chain.
 pub type Hash = primitives::H256;
@@ -76,4 +78,10 @@ pub type Signature = runtime_primitives::Ed25519Signature;
 pub type Timestamp = u64;
 
 /// The balance of an account.
-pub type Balance = u64;
+/// 128-bits (or 38 significant decimal figures) will allow for 10m currency (10^7) at a resolution
+/// to all for one second's worth of an annualised 50% reward be paid to a unit holder (10^11 unit
+/// denomination), or 10^18 total atomic units, to grow at 50%/year for 51 years (10^9 multiplier)
+/// for an eventual total of 10^27 units (27 significant decimal figures).
+/// We round denomination to 10^12 (12 sdf), and leave the other redundancy at the upper end so
+/// that 32 bits may be multiplied with a balance in 128 bits without worrying about overflow.
+pub type Balance = runtime_primitives::U128;

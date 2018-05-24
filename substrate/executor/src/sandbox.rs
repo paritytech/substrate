@@ -330,7 +330,7 @@ impl SandboxInstance {
 
 fn decode_environment_definition(
 	raw_env_def: &[u8],
-	memories: &[MemoryRef],
+	memories: &[Option<MemoryRef>],
 ) -> Result<(Imports, GuestToSupervisorFunctionMapping), DummyUserError> {
 	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..]).ok_or_else(|| DummyUserError)?;
 
@@ -351,8 +351,10 @@ fn decode_environment_definition(
 			sandbox_primitives::ExternEntity::Memory(memory_idx) => {
 				let memory_ref = memories
 					.get(memory_idx as usize)
+					.cloned()
+					.ok_or_else(|| DummyUserError)?
 					.ok_or_else(|| DummyUserError)?;
-				memories_map.insert((module, field), memory_ref.clone());
+				memories_map.insert((module, field), memory_ref);
 			}
 		}
 	}
@@ -422,8 +424,9 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 
 /// This struct keeps track of all sandboxed components.
 pub struct Store {
-	instances: Vec<Rc<SandboxInstance>>,
-	memories: Vec<MemoryRef>,
+	// Memories and instances are `Some` untill torndown.
+	instances: Vec<Option<Rc<SandboxInstance>>>,
+	memories: Vec<Option<MemoryRef>>,
 }
 
 impl Store {
@@ -450,7 +453,7 @@ impl Store {
 		let mem =
 			MemoryInstance::alloc(Pages(initial as usize), maximum).map_err(|_| DummyUserError)?;
 		let mem_idx = self.memories.len();
-		self.memories.push(mem);
+		self.memories.push(Some(mem));
 		Ok(mem_idx as u32)
 	}
 
@@ -458,11 +461,13 @@ impl Store {
 	///
 	/// # Errors
 	///
-	/// Returns `Err` If `instance_idx` isn't a valid index of an instance.
+	/// Returns `Err` If `instance_idx` isn't a valid index of an instance or
+	/// instance is already torndown.
 	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance>, DummyUserError> {
 		self.instances
 			.get(instance_idx as usize)
 			.cloned()
+			.ok_or_else(|| DummyUserError)?
 			.ok_or_else(|| DummyUserError)
 	}
 
@@ -470,17 +475,41 @@ impl Store {
 	///
 	/// # Errors
 	///
-	/// Returns `Err` If `memory_idx` isn't a valid index of an instance.
+	/// Returns `Err` If `memory_idx` isn't a valid index of an memory or
+	/// memory is already torndown.
 	pub fn memory(&self, memory_idx: u32) -> Result<MemoryRef, DummyUserError> {
 		self.memories
 			.get(memory_idx as usize)
 			.cloned()
+			.ok_or_else(|| DummyUserError)?
 			.ok_or_else(|| DummyUserError)
+	}
+
+	/// Teardown the memory at the specified index.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` if `memory_idx` isn't a valid index of an memory.
+	pub fn memory_teardown(&mut self, memory_idx: u32) -> Result<(), DummyUserError> {
+		if memory_idx as usize >= self.memories.len() {
+			return Err(DummyUserError);
+		}
+		self.memories[memory_idx as usize] = None;
+		Ok(())
+	}
+
+	/// Teardown the instance at the specified index.
+	pub fn instance_teardown(&mut self, instance_idx: u32) -> Result<(), DummyUserError> {
+		if instance_idx as usize >= self.instances.len() {
+			return Err(DummyUserError);
+		}
+		self.instances[instance_idx as usize] = None;
+		Ok(())
 	}
 
 	fn register_sandbox_instance(&mut self, sandbox_instance: Rc<SandboxInstance>) -> u32 {
 		let instance_idx = self.instances.len();
-		self.instances.push(sandbox_instance);
+		self.instances.push(Some(sandbox_instance));
 		instance_idx as u32
 	}
 }
