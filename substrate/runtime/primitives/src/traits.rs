@@ -129,7 +129,7 @@ pub trait SimpleBitOps:
 	rstd::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
-	Sized + Zero + 
+	Sized + Zero +
 	rstd::ops::BitOr<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
@@ -213,9 +213,9 @@ impl Hashing for BlakeTwo256 {
 
 
 #[cfg(feature = "std")]
-pub trait MaybeSerializeDebug: Serialize + Debug {}
+pub trait MaybeSerializeDebug: Serialize + Debug + Display {}
 #[cfg(feature = "std")]
-impl<T: Serialize + Debug> MaybeSerializeDebug for T {}
+impl<T: Serialize + Debug + Display> MaybeSerializeDebug for T {}
 
 #[cfg(not(feature = "std"))]
 pub trait MaybeSerializeDebug {}

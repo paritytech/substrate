@@ -48,7 +48,7 @@ mod client;
 
 pub use client::{
 	new_in_mem,
-	BlockStatus, BlockOrigin, BlockchainEventStream, BlockchainEvents,
+	BlockStatus, BlockOrigin, BlockchainEvents,
 	Client, ClientInfo, CallResult, ChainHead,
 	ImportResult,
 };
