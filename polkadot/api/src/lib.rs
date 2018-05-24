@@ -149,7 +149,7 @@ pub trait PolkadotApi {
 	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<bool>;
 
 	/// Create a block builder on top of the parent block.
-	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: u64, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
+	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: Timestamp, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
 }
 
 /// A checked block ID used for the substrate-client implementation of CheckedBlockId;

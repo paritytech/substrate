@@ -45,6 +45,9 @@ pub mod testing;
 pub mod traits;
 pub mod generic;
 
+mod int128;
+pub use int128::{I128, U128};
+
 #[cfg(feature = "std")]
 pub type BuiltExternalities = HashMap<Vec<u8>, Vec<u8>>;
 
