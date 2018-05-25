@@ -16,10 +16,10 @@
 
 //! Message formats for the BFT consensus layer.
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use rstd::prelude::*;
+use traits::{Block as BlockT, Header as HeaderT};
 use codec::{Slicable, Input};
-use std::vec::Vec;
-use primitives::{AuthorityId, Signature};
+use substrate_primitives::{AuthorityId, Signature};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -135,8 +135,9 @@ impl<Block: BlockT> Slicable for Message<Block> {
 
 /// Justification of a block.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Justification<Header: HeaderT> {
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+pub struct Justification<Header: HeaderT>
+{
 	/// The round consensus was reached in.
 	pub round_number: u32,
 	/// The hash of the header justified.
@@ -186,7 +187,7 @@ impl MisbehaviorCode {
 
 /// Misbehavior kinds.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub enum MisbehaviorKind<Header: HeaderT> {
 	/// BFT: double prepare.
 	BftDoublePrepare(u32, (<Header as HeaderT>::Hash, Signature), (<Header as HeaderT>::Hash, Signature)),
@@ -196,7 +197,7 @@ pub enum MisbehaviorKind<Header: HeaderT> {
 
 /// A report of misbehavior by an authority.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub struct MisbehaviorReport<Header: HeaderT> {
 	/// The parent hash of the block where the misbehavior occurred.
 	pub parent_hash: <Header as HeaderT>::Hash,

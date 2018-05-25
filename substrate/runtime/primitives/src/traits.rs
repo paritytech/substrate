@@ -174,8 +174,8 @@ impl<A: Executable, B: Executable> Executable for (A, B) {
 }
 
 /// Abstraction around hashing
-pub trait Hashing: MaybeSerializeDebug {	// Stupid bug in the Rust compiler believes derived
-											// traits must be fulfilled by all type parameters.
+pub trait Hashing: MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
+																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
 	type Output;
 

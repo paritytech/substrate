@@ -46,7 +46,8 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
+use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
+	Hashing};
 
 mod contract;
 
@@ -71,7 +72,7 @@ pub trait ContractAddressFor<AccountId: Sized> {
 }
 
 impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
-	Hashing: runtime_io::Hashing,
+	Hashing: Hashing,
 	AccountId: Sized + Slicable + From<Hashing::Output>,
 	Hashing::Output: Slicable
 {

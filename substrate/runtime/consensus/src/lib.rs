@@ -35,7 +35,7 @@ use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::RefInto;
-use substrate_bft::generic::MisbehaviorReport;
+use primitives::bft::MisbehaviorReport;
 
 pub const AUTHORITY_AT: &'static[u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static[u8] = b":auth:len";

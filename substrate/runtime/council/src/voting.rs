@@ -18,8 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::traits::{Executable, RefInto};
-use runtime_io::Hashing;
+use primitives::traits::{Executable, RefInto, Hashing};
 use runtime_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
 use super::{Trait, Module as Council};

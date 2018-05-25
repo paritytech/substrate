@@ -45,9 +45,9 @@ extern crate substrate_runtime_staking as staking;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use runtime_io::Hashing;
 use runtime_support::StorageValue;
-use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable, MakePayment};
+use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
+	MakePayment, Hashing};
 use codec::Slicable;
 use system::extrinsics_root;
 

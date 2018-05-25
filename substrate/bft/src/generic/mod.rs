@@ -29,9 +29,6 @@ use self::accumulator::State;
 pub use self::accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification, Misbehavior};
 
 mod accumulator;
-mod primitives;
-
-pub use self::primitives::MisbehaviorReport;
 
 #[cfg(test)]
 mod tests;
