@@ -423,9 +423,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "substrate-codec"
 version = "0.1.0"
-dependencies = [
- "substrate-runtime-std 0.1.0",
-]
 
 [[package]]
 name = "substrate-primitives"

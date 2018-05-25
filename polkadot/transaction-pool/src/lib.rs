@@ -36,7 +36,8 @@ use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, Timestamp};
-use runtime::{Block, UncheckedExtrinsic, TimestampCall, Call};
+use primitives::parachain::CandidateReceipt;
+use runtime::{Block, UncheckedExtrinsic, TimestampCall, ParachainsCall, Call};
 use substrate_runtime_primitives::traits::{Bounded, Checkable};
 use transaction_pool::{Pool, Readiness};
 use transaction_pool::scoring::{Change, Choice};
@@ -59,14 +60,23 @@ pub struct PolkadotBlock {
 impl PolkadotBlock {
 	/// Create a new block, checking high-level well-formedness.
 	pub fn from(unchecked: Block) -> ::std::result::Result<Self, Block> {
-		if unchecked.extrinsics.len() < 1 {
+		if unchecked.extrinsics.len() < 2 {
 			return Err(unchecked);
 		}
 		if unchecked.extrinsics[0].is_signed() {
 			return Err(unchecked);
 		}
+		if unchecked.extrinsics[1].is_signed() {
+			return Err(unchecked);
+		}
+
 		match unchecked.extrinsics[0].extrinsic.function {
 			Call::Timestamp(TimestampCall::set(_)) => {},
+			_ => return Err(unchecked),
+		}
+
+		match unchecked.extrinsics[1].extrinsic.function {
+			Call::Parachains(ParachainsCall::set_heads(_)) => {},
 			_ => return Err(unchecked),
 		}
 
@@ -84,6 +94,19 @@ impl PolkadotBlock {
 	pub fn timestamp(&self) -> Timestamp {
 		if let Call::Timestamp(TimestampCall::set(t)) = self.block.extrinsics[0].extrinsic.function {
 			t
+		} else {
+			if let Some((file, line)) = self.location {
+				panic!("Invalid block used in `PolkadotBlock::force_from` at {}:{}", file, line);
+			} else {
+				panic!("Invalid block made it through the PolkadotBlock verification!?");
+			}
+		}
+	}
+
+	/// Retrieve the parachain candidates proposed for this block.
+	pub fn parachain_heads(&self) -> &[CandidateReceipt] {
+		if let Call::Parachains(ParachainsCall::set_heads(ref t)) = self.block.extrinsics[1].extrinsic.function {
+			&t[..]
 		} else {
 			if let Some((file, line)) = self.location {
 				panic!("Invalid block used in `PolkadotBlock::force_from` at {}:{}", file, line);

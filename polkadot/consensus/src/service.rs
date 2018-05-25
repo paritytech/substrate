@@ -22,19 +22,23 @@
 use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
-use futures::{future, Future, Stream, Sink, Async, Canceled, Poll};
-use parking_lot::Mutex;
-use substrate_network as net;
-use tokio_core::reactor;
+
+use bft::{self, BftService};
 use client::{BlockchainEvents, ChainHead};
-use runtime_support::Hashable;
+use ed25519;
+use futures::prelude::*;
+use futures::{future, Canceled};
+use parking_lot::Mutex;
+use polkadot_api::PolkadotApi;
+use polkadot_primitives::AccountId;
+use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
 use primitives::{Hash, AuthorityId};
 use primitives::block::{Id as BlockId, HeaderHash, Header};
-use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
-use polkadot_api::PolkadotApi;
-use bft::{self, BftService};
+use runtime_support::Hashable;
+use substrate_network as net;
+use tokio_core::reactor;
 use transaction_pool::TransactionPool;
-use ed25519;
+
 use super::{TableRouter, SharedTable, ProposerFactory};
 use error;
 
@@ -174,6 +178,15 @@ impl<E> Sink for BftSink<E> {
 
 struct Network(Arc<net::ConsensusService>);
 
+impl super::Network for Network {
+	type TableRouter = Router;
+	fn table_router(&self, _table: Arc<SharedTable>) -> Self::TableRouter {
+		Router {
+			network: self.0.clone()
+		}
+	}
+}
+
 fn start_bft<F, C>(
 	header: &Header,
 	handle: reactor::Handle,
@@ -224,6 +237,7 @@ impl Service {
 		client: Arc<C>,
 		network: Arc<net::ConsensusService>,
 		transaction_pool: Arc<Mutex<TransactionPool>>,
+		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
 	) -> Service
 		where
@@ -233,10 +247,13 @@ impl Service {
 		let thread = thread::spawn(move || {
 			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
 			let key = Arc::new(key);
+
 			let factory = ProposerFactory {
 				client: client.clone(),
 				transaction_pool: transaction_pool.clone(),
 				network: Network(network.clone()),
+				collators: NoCollators,
+				parachain_empty_duration,
 				handle: core.handle(),
 			};
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
@@ -312,17 +329,25 @@ impl Drop for Service {
 	}
 }
 
-impl super::Network for Network {
-	type TableRouter = Router;
-	fn table_router(&self, _table: Arc<SharedTable>) -> Self::TableRouter {
-		Router {
-			network: self.0.clone()
-		}
+// Collators implementation which never collates anything.
+// TODO: do a real implementation.
+#[derive(Clone, Copy)]
+struct NoCollators;
+
+impl ::collation::Collators for NoCollators {
+	type Error = ();
+	type Collation = future::Empty<::collation::Collation, ()>;
+
+	fn collate(&self, _parachain: ParaId, _relay_parent: Hash) -> Self::Collation {
+		future::empty()
 	}
+
+	fn note_bad_collator(&self, _collator: AccountId) { }
 }
 
 type FetchCandidateAdapter = future::Map<net::FetchFuture, fn(Vec<u8>) -> BlockData>;
 
+#[derive(Clone)]
 struct Router {
 	network: Arc<net::ConsensusService>,
 }

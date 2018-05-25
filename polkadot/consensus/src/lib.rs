@@ -29,15 +29,16 @@
 //!
 //! Groups themselves may be compromised by malicious authorities.
 
-extern crate futures;
 extern crate ed25519;
 extern crate parking_lot;
 extern crate polkadot_api;
 extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
+extern crate polkadot_parachain as parachain;
 extern crate polkadot_primitives;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_runtime;
+
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
@@ -46,46 +47,60 @@ extern crate substrate_network;
 
 extern crate exit_future;
 extern crate tokio_core;
-extern crate substrate_keyring;
 extern crate substrate_client as client;
 
 #[macro_use]
 extern crate error_chain;
+
+#[macro_use]
+extern crate futures;
+
 #[macro_use]
 extern crate log;
 
+#[cfg(test)]
+extern crate substrate_keyring;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use codec::Slicable;
-use table::{Table, Context as TableContextTrait};
 use table::generic::Statement as GenericStatement;
 use runtime_support::Hashable;
 use polkadot_api::{PolkadotApi, BlockBuilder};
 use polkadot_primitives::{Hash, Timestamp};
-use polkadot_primitives::parachain::{Id as ParaId, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
-use polkadot_runtime::Block as PolkadotGenericBlock;
+use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
-use transaction_pool::{Ready, TransactionPool, PolkadotBlock};
+use transaction_pool::{Ready, TransactionPool};
+use tokio_core::reactor::{Handle, Timeout, Interval};
 
 use futures::prelude::*;
-use futures::future;
-use future::Shared;
+use futures::future::{self, Shared};
 use parking_lot::Mutex;
-use tokio_core::reactor::{Handle, Timeout};
+use collation::CollationFetch;
+use dynamic_inclusion::DynamicInclusion;
 
+pub use self::collation::{Collators, Collation};
 pub use self::error::{ErrorKind, Error};
+pub use self::shared_table::{SharedTable, StatementSource, StatementProducer, ProducedStatements};
 pub use service::Service;
 
+mod collation;
+mod dynamic_inclusion;
+mod evaluation;
 mod error;
 mod service;
+mod shared_table;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 
 /// A handle to a statement table router.
-pub trait TableRouter {
+///
+/// This is expected to be a lightweight, shared type like an `Arc`.
+pub trait TableRouter: Clone {
 	/// Errors when fetching data from the network.
 	type Error;
 	/// Future that resolves when candidate data is fetched.
@@ -93,7 +108,7 @@ pub trait TableRouter {
 	/// Future that resolves when extrinsic candidate data is fetched.
 	type FetchExtrinsic: IntoFuture<Item=Extrinsic,Error=Self::Error>;
 
-	/// Note local candidate data.
+	/// Note local candidate data, making it available on the network to other validators.
 	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: Extrinsic);
 
 	/// Fetch block data for a specific candidate.
@@ -126,46 +141,6 @@ pub struct GroupInfo {
 	pub needed_availability: usize,
 }
 
-struct TableContext {
-	parent_hash: Hash,
-	key: Arc<ed25519::Pair>,
-	groups: HashMap<ParaId, GroupInfo>,
-}
-
-impl table::Context for TableContext {
-	fn is_member_of(&self, authority: &AuthorityId, group: &ParaId) -> bool {
-		self.groups.get(group).map_or(false, |g| g.validity_guarantors.contains(authority))
-	}
-
-	fn is_availability_guarantor_of(&self, authority: &AuthorityId, group: &ParaId) -> bool {
-		self.groups.get(group).map_or(false, |g| g.availability_guarantors.contains(authority))
-	}
-
-	fn requisite_votes(&self, group: &ParaId) -> (usize, usize) {
-		self.groups.get(group).map_or(
-			(usize::max_value(), usize::max_value()),
-			|g| (g.needed_validity, g.needed_availability),
-		)
-	}
-}
-
-impl TableContext {
-	fn local_id(&self) -> AuthorityId {
-		self.key.public().0
-	}
-
-	fn sign_statement(&self, statement: table::Statement) -> table::SignedStatement {
-		let signature = sign_table_statement(&statement, &self.key, &self.parent_hash).into();
-		let local_id = self.key.public().0;
-
-		table::SignedStatement {
-			statement,
-			signature,
-			sender: local_id,
-		}
-	}
-}
-
 /// Sign a table statement against a parent hash.
 /// The actual message signed is the encoded statement concatenated with the
 /// parent hash.
@@ -185,247 +160,7 @@ pub fn sign_table_statement(statement: &table::Statement, key: &ed25519::Pair, p
 	key.sign(&encoded)
 }
 
-// A shared table object.
-struct SharedTableInner {
-	table: Table<TableContext>,
-	proposed_digest: Option<Hash>,
-	checked_validity: HashSet<Hash>,
-	checked_availability: HashSet<Hash>,
-}
-
-impl SharedTableInner {
-	// Import a single statement. Provide a handle to a table router.
-	fn import_statement<R: TableRouter>(
-		&mut self,
-		context: &TableContext,
-		router: &R,
-		statement: table::SignedStatement,
-		received_from: Option<AuthorityId>,
-	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future> {
-		let mut producer = StatementProducer {
-			fetch_block_data: None,
-			fetch_extrinsic: None,
-			produced_statements: Default::default(),
-			_key: context.key.clone(),
-		};
-
-		let summary = match self.table.import_statement(context, statement, received_from) {
-			Some(summary) => summary,
-			None => return producer,
-		};
-
-		let local_id = context.local_id();
-		let is_validity_member = context.is_member_of(&local_id, &summary.group_id);
-		let is_availability_member =
-			context.is_availability_guarantor_of(&local_id, &summary.group_id);
-
-		let digest = &summary.candidate;
-
-		// TODO: consider a strategy based on the number of candidate votes as well.
-		// only check validity if this wasn't locally proposed.
-		let checking_validity = is_validity_member
-			&& self.proposed_digest.as_ref().map_or(true, |d| d != digest)
-			&& self.checked_validity.insert(digest.clone());
-
-		let checking_availability = is_availability_member && self.checked_availability.insert(digest.clone());
-
-		if checking_validity || checking_availability {
-			match self.table.get_candidate(&digest) {
-				None => {} // TODO: handle table inconsistency somehow?
-				Some(candidate) => {
-					if checking_validity {
-						producer.fetch_block_data = Some(router.fetch_block_data(candidate).into_future().fuse());
-					}
-
-					if checking_availability {
-						producer.fetch_extrinsic = Some(router.fetch_extrinsic_data(candidate).into_future().fuse());
-					}
-				}
-			}
-		}
-
-		producer
-	}
-}
-
-/// Produced statements about a specific candidate.
-/// Both may be `None`.
-#[derive(Default)]
-pub struct ProducedStatements {
-	/// A statement about the validity of the candidate.
-	pub validity: Option<table::Statement>,
-	/// A statement about the availability of the candidate.
-	pub availability: Option<table::Statement>,
-}
-
-/// Future that produces statements about a specific candidate.
-pub struct StatementProducer<D: Future, E: Future> {
-	fetch_block_data: Option<future::Fuse<D>>,
-	fetch_extrinsic: Option<future::Fuse<E>>,
-	produced_statements: ProducedStatements,
-	_key: Arc<ed25519::Pair>,
-}
-
-impl<D, E, Err> Future for StatementProducer<D, E>
-	where
-		D: Future<Item=BlockData,Error=Err>,
-		E: Future<Item=Extrinsic,Error=Err>,
-{
-	type Item = ProducedStatements;
-	type Error = Err;
-
-	fn poll(&mut self) -> Poll<ProducedStatements, Err> {
-		let mut done = true;
-		if let Some(ref mut fetch_block_data) = self.fetch_block_data {
-			match fetch_block_data.poll()? {
-				Async::Ready(_block_data) => {
-					// TODO [PoC-2] : validate block data here and make statement.
-				},
-				Async::NotReady => {
-					done = false;
-				}
-			}
-		}
-
-		if let Some(ref mut fetch_extrinsic) = self.fetch_extrinsic {
-			match fetch_extrinsic.poll()? {
-				Async::Ready(_extrinsic) => {
-					// TODO [PoC-2]: guarantee availability of data and make statment.
-				}
-				Async::NotReady => {
-					done = false;
-				}
-			}
-		}
-
-		if done {
-			Ok(Async::Ready(::std::mem::replace(&mut self.produced_statements, Default::default())))
-		} else {
-			Ok(Async::NotReady)
-		}
-	}
-}
-
-/// A shared table object.
-pub struct SharedTable {
-	context: Arc<TableContext>,
-	inner: Arc<Mutex<SharedTableInner>>,
-}
-
-impl Clone for SharedTable {
-	fn clone(&self) -> Self {
-		SharedTable {
-			context: self.context.clone(),
-			inner: self.inner.clone(),
-		}
-	}
-}
-
-impl SharedTable {
-	/// Create a new shared table.
-	///
-	/// Provide the key to sign with, and the parent hash of the relay chain
-	/// block being built.
-	pub fn new(groups: HashMap<ParaId, GroupInfo>, key: Arc<ed25519::Pair>, parent_hash: Hash) -> Self {
-		SharedTable {
-			context: Arc::new(TableContext { groups, key, parent_hash }),
-			inner: Arc::new(Mutex::new(SharedTableInner {
-				table: Table::default(),
-				proposed_digest: None,
-				checked_validity: HashSet::new(),
-				checked_availability: HashSet::new(),
-			}))
-		}
-	}
-
-	/// Get group info.
-	pub fn group_info(&self) -> &HashMap<ParaId, GroupInfo> {
-		&self.context.groups
-	}
-
-	/// Import a single statement. Provide a handle to a table router
-	/// for dispatching any other requests which come up.
-	pub fn import_statement<R: TableRouter>(
-		&self,
-		router: &R,
-		statement: table::SignedStatement,
-		received_from: Option<AuthorityId>,
-	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future> {
-		self.inner.lock().import_statement(&*self.context, router, statement, received_from)
-	}
-
-	/// Sign and import a local statement.
-	pub fn sign_and_import<R: TableRouter>(
-		&self,
-		router: &R,
-		statement: table::Statement,
-	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future> {
-		let proposed_digest = match statement {
-			GenericStatement::Candidate(ref c) => Some(c.hash()),
-			_ => None,
-		};
-
-		let signed_statement = self.context.sign_statement(statement);
-
-		let mut inner = self.inner.lock();
-		if proposed_digest.is_some() {
-			inner.proposed_digest = proposed_digest;
-		}
-
-		inner.import_statement(&*self.context, router, signed_statement, None)
-	}
-
-	/// Import many statements at once.
-	///
-	/// Provide an iterator yielding pairs of (statement, received_from).
-	pub fn import_statements<R, I, U>(&self, router: &R, iterable: I) -> U
-		where
-			R: TableRouter,
-			I: IntoIterator<Item=(table::SignedStatement, Option<AuthorityId>)>,
-			U: ::std::iter::FromIterator<StatementProducer<
-				<R::FetchCandidate as IntoFuture>::Future,
-				<R::FetchExtrinsic as IntoFuture>::Future>
-			>,
-	{
-		let mut inner = self.inner.lock();
-
-		iterable.into_iter().map(move |(statement, received_from)| {
-			inner.import_statement(&*self.context, router, statement, received_from)
-		}).collect()
-	}
-
-	/// Check if a proposal is valid.
-	pub fn proposal_valid(&self, _proposal: &SubstrateBlock) -> bool {
-		false // TODO
-	}
-
-	/// Execute a closure using a specific candidate.
-	///
-	/// Deadlocks if called recursively.
-	pub fn with_candidate<F, U>(&self, digest: &Hash, f: F) -> U
-		where F: FnOnce(Option<&CandidateReceipt>) -> U
-	{
-		let inner = self.inner.lock();
-		f(inner.table.get_candidate(digest))
-	}
-
-	/// Get all witnessed misbehavior.
-	pub fn get_misbehavior(&self) -> HashMap<AuthorityId, table::Misbehavior> {
-		self.inner.lock().table.get_misbehavior().clone()
-	}
-
-	/// Fill a statement batch.
-	pub fn fill_batch<B: table::StatementBatch>(&self, batch: &mut B) {
-		self.inner.lock().table.fill_batch(batch);
-	}
-
-	/// Get the local proposed block's hash.
-	pub fn proposed_hash(&self) -> Option<Hash> {
-		self.inner.lock().proposed_digest.clone()
-	}
-}
-
-fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<HashMap<ParaId, GroupInfo>, Error> {
+fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: AuthorityId) -> Result<(HashMap<ParaId, GroupInfo>, LocalDuty), Error> {
 	if roster.validator_duty.len() != authorities.len() {
 		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), roster.validator_duty.len()))
 	}
@@ -434,11 +169,14 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<Ha
 		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), roster.guarantor_duty.len()))
 	}
 
+	let mut local_validation = None;
 	let mut map = HashMap::new();
 
 	let duty_iter = authorities.iter().zip(&roster.validator_duty).zip(&roster.guarantor_duty);
 	for ((authority, v_duty), a_duty) in duty_iter {
-		use polkadot_primitives::parachain::Chain;
+		if authority == &local_id {
+			local_validation = Some(v_duty.clone());
+		}
 
 		match *v_duty {
 			Chain::Relay => {}, // does nothing for now.
@@ -467,23 +205,45 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId]) -> Result<Ha
 		live_group.needed_availability = availability_len / 2 + availability_len % 2;
 	}
 
-	Ok(map)
+	match local_validation {
+		Some(local_validation) => {
+			let local_duty = LocalDuty {
+				validation: local_validation,
+			};
+
+			Ok((map, local_duty))
+		}
+		None => bail!(ErrorKind::NotValidator(local_id)),
+	}
+}
+
+fn timer_error(e: &::std::io::Error) -> Error {
+	ErrorKind::Timer(format!("{}", e)).into()
 }
 
 /// Polkadot proposer factory.
-pub struct ProposerFactory<C, N> {
+pub struct ProposerFactory<C, N, P> {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The transaction pool.
 	pub transaction_pool: Arc<Mutex<TransactionPool>>,
 	/// The backing network handle.
 	pub network: N,
-	/// Handle to the underlying tokio-core.
+	/// Parachain collators.
+	pub collators: P,
+	/// The timer used to schedule proposal intervals.
 	pub handle: Handle,
+	/// The duration after which parachain-empty blocks will be allowed.
+	pub parachain_empty_duration: Duration,
 }
 
-impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> {
-	type Proposer = Proposer<C, N::TableRouter>;
+impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
+	where
+		C: PolkadotApi,
+		N: Network,
+		P: Collators,
+{
+	type Proposer = Proposer<C, N::TableRouter, P>;
 	type Error = Error;
 
 	fn init(&self, parent_header: &SubstrateHeader, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
@@ -497,135 +257,224 @@ impl<C: PolkadotApi, N: Network> bft::ProposerFactory for ProposerFactory<C, N> 
 		let duty_roster = self.client.duty_roster(&checked_id)?;
 		let random_seed = self.client.random_seed(&checked_id)?;
 
-		let group_info = make_group_info(duty_roster, authorities)?;
+		let (group_info, local_duty) = make_group_info(
+			duty_roster,
+			authorities,
+			sign_with.public().0,
+		)?;
+
+		let active_parachains = self.client.active_parachains(&checked_id)?;
+
+		let n_parachains = active_parachains.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
 		let router = self.network.table_router(table.clone());
+		let dynamic_inclusion = DynamicInclusion::new(
+			n_parachains,
+			Instant::now(),
+			self.parachain_empty_duration.clone(),
+		);
 
-		let timeout = Timeout::new(DELAY_UNTIL, &self.handle)?;
+		let timeout = Timeout::new(DELAY_UNTIL, &self.handle)
+			.map_err(|e| timer_error(&e))?;
 
 		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
 			DELAY_UNTIL);
 
 		// TODO [PoC-2]: kick off collation process.
 		Ok(Proposer {
-			parent_hash,
-			parent_number: parent_header.number,
-			parent_id: checked_id,
-			random_seed,
-			local_key: sign_with,
 			client: self.client.clone(),
-			transaction_pool: self.transaction_pool.clone(),
+			collators: self.collators.clone(),
 			delay: timeout.shared(),
-			_table: table,
-			_router: router,
+			handle: self.handle.clone(),
+			dynamic_inclusion,
+			local_duty,
+			local_key: sign_with,
+			parent_hash,
+			parent_id: checked_id,
+			parent_number: parent_header.number,
+			random_seed,
+			router,
+			table,
+			transaction_pool: self.transaction_pool.clone(),
 		})
 	}
 }
 
-fn current_timestamp() -> Timestamp {
-	use std::time;
-
-	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
-		.expect("now always later than unix epoch; qed")
-		.as_secs()
+struct LocalDuty {
+	validation: Chain,
 }
 
 /// The Polkadot proposer logic.
-pub struct Proposer<C: PolkadotApi, R> {
-	parent_hash: HeaderHash,
-	parent_number: BlockNumber,
-	parent_id: C::CheckedBlockId,
-	random_seed: Hash,
+pub struct Proposer<C: PolkadotApi, R, P> {
 	client: Arc<C>,
-	local_key: Arc<ed25519::Pair>,
-	transaction_pool: Arc<Mutex<TransactionPool>>,
+	collators: P,
 	delay: Shared<Timeout>,
-	_table: Arc<SharedTable>,
-	_router: R,
+	dynamic_inclusion: DynamicInclusion,
+	handle: Handle,
+	local_duty: LocalDuty,
+	local_key: Arc<ed25519::Pair>,
+	parent_hash: HeaderHash,
+	parent_id: C::CheckedBlockId,
+	parent_number: BlockNumber,
+	random_seed: Hash,
+	router: R,
+	table: Arc<SharedTable>,
+	transaction_pool: Arc<Mutex<TransactionPool>>,
 }
 
-impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
+impl<C, R, P> bft::Proposer for Proposer<C, R, P>
+	where
+		C: PolkadotApi,
+		R: TableRouter,
+		P: Collators,
+{
 	type Error = Error;
-	type Create = Result<SubstrateBlock, Error>;
+	type Create = future::Either<
+		CreateProposal<C, R, P>,
+		future::FutureResult<SubstrateBlock, Error>,
+	>;
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
 	fn propose(&self) -> Self::Create {
-		debug!(target: "bft", "proposing block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
+		const ATTEMPT_PROPOSE_EVERY: Duration = Duration::from_millis(100);
 
-		// TODO: handle case when current timestamp behind that in state.
-		let mut block_builder = self.client.build_block(
-			&self.parent_id,
-			current_timestamp()
-		)?;
+		let initial_included = self.table.includable_count();
+		let enough_candidates = self.dynamic_inclusion.acceptable_in(
+			Instant::now(),
+			initial_included,
+		).unwrap_or_default();
 
-		let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
+		let timing = {
+			let delay = self.delay.clone();
+			let dynamic_inclusion = self.dynamic_inclusion.clone();
+			let make_timing = move |handle| -> Result<ProposalTiming, ::std::io::Error> {
+				let attempt_propose = Interval::new(ATTEMPT_PROPOSE_EVERY, handle)?;
+				let enough_candidates = Timeout::new(enough_candidates, handle)?;
+				Ok(ProposalTiming {
+					attempt_propose,
+					enough_candidates,
+					dynamic_inclusion,
+					minimum_delay: Some(delay),
+					last_included: initial_included,
+				})
+			};
 
-		{
-			let mut pool = self.transaction_pool.lock();
-			let mut unqueue_invalid = Vec::new();
-			let mut pending_size = 0;
-			pool.cull(None, readiness_evaluator.clone());
-			for pending in pool.pending(readiness_evaluator.clone()) {
-				// skip and cull transactions which are too large.
-				if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
-					unqueue_invalid.push(pending.hash().clone());
-					continue
+			match make_timing(&self.handle) {
+				Ok(timing) => timing,
+				Err(e) => {
+					return future::Either::B(future::err(timer_error(&e)));
 				}
-
-				if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
-
-				match block_builder.push_extrinsic(pending.as_transaction().clone()) {
-					Ok(()) => {
-						pending_size += pending.encoded_size();
-					}
-					Err(_) => {
-						unqueue_invalid.push(pending.hash().clone());
-					}
-				}
-			}
-
-			for tx_hash in unqueue_invalid {
-				pool.remove(&tx_hash, false);
-			}
-		}
-
-		let polkadot_block = block_builder.bake();
-		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
-			polkadot_block.header.number,
-			Hash::from(polkadot_block.header.blake2_256()),
-			polkadot_block.header.parent_hash,
-			polkadot_block.extrinsics.iter()
-				.map(|xt| format!("{}", Hash::from(xt.blake2_256())))
-				.collect::<Vec<_>>()
-				.join(", ")
-		);
-
-		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
-			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
-
-		assert!(evaluate_proposal(&substrate_block, &*self.client, current_timestamp(), &self.parent_hash, self.parent_number, &self.parent_id).is_ok());
-
-		Ok(substrate_block)
-	}
-
-	// TODO: certain kinds of errors here should lead to a misbehavior report.
-	fn evaluate(&self, proposal: &SubstrateBlock) -> Self::Evaluate {
-		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
-
-		let evaluated = match evaluate_proposal(proposal, &*self.client, current_timestamp(), &self.parent_hash, self.parent_number, &self.parent_id) {
-			Ok(x) => Ok(x),
-			Err(e) => match *e.kind() {
-				ErrorKind::PolkadotApi(polkadot_api::ErrorKind::Executor(_)) => Ok(false),
-				ErrorKind::ProposalNotForPolkadot => Ok(false),
-				ErrorKind::TimestampInFuture => Ok(false),
-				ErrorKind::WrongParentHash(_, _) => Ok(false),
-				ErrorKind::ProposalTooLarge(_) => Ok(false),
-				_ => Err(e),
 			}
 		};
 
-		// delay casting vote until able.
-		Box::new(self.delay.clone().map_err(Error::from).and_then(move |_| evaluated))
+		future::Either::A(CreateProposal {
+			parent_hash: self.parent_hash.clone(),
+			parent_number: self.parent_number.clone(),
+			parent_id: self.parent_id.clone(),
+			client: self.client.clone(),
+			transaction_pool: self.transaction_pool.clone(),
+			collation: CollationFetch::new(
+				self.local_duty.validation,
+				self.parent_id.clone(),
+				self.parent_hash.clone(),
+				self.collators.clone(),
+				self.client.clone()
+			),
+			table: self.table.clone(),
+			router: self.router.clone(),
+			timing,
+		})
+	}
+
+	fn evaluate(&self, proposal: &SubstrateBlock) -> Self::Evaluate {
+		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
+
+		let active_parachains = match self.client.active_parachains(&self.parent_id) {
+			Ok(x) => x,
+			Err(e) => return Box::new(future::err(e.into())) as Box<_>,
+		};
+
+		let current_timestamp = current_timestamp();
+
+		// do initial serialization and structural integrity checks.
+		let maybe_proposal = evaluation::evaluate_initial(
+			proposal,
+			current_timestamp,
+			&self.parent_hash,
+			self.parent_number,
+			&active_parachains,
+		);
+
+		let proposal = match maybe_proposal {
+			Ok(p) => p,
+			Err(e) => {
+				// TODO: these errors are easily re-checked in runtime.
+				debug!(target: "bft", "Invalid proposal: {:?}", e);
+				return Box::new(future::ok(false));
+			}
+		};
+
+		let vote_delays = {
+			// delay casting vote until able (according to minimum block time)
+			let minimum_delay = self.delay.clone()
+				.map_err(|e| timer_error(&*e));
+
+			let included_candidate_hashes = proposal
+				.parachain_heads()
+				.iter()
+				.map(|candidate| candidate.hash());
+
+			// delay casting vote until we have proof that all candidates are
+			// includable.
+			let includability_tracker = self.table.track_includability(included_candidate_hashes)
+				.map_err(|_| ErrorKind::PrematureDestruction.into());
+
+			// the duration at which the given number of parachains is acceptable.
+			let count_delay = self.dynamic_inclusion.acceptable_in(
+				Instant::now(),
+				proposal.parachain_heads().len(),
+			);
+
+			// the duration until the given timestamp is current
+			let proposed_timestamp = proposal.timestamp();
+			let timestamp_delay = if proposed_timestamp > current_timestamp {
+				Some(Duration::from_secs(proposed_timestamp - current_timestamp))
+			} else {
+				None
+			};
+
+			// construct a future from the maximum of the two durations.
+			let temporary_delay = match ::std::cmp::max(timestamp_delay, count_delay) {
+				Some(duration) => {
+					let maybe_timeout = Timeout::new(duration, &self.handle);
+
+					let f = future::result(maybe_timeout)
+						.and_then(|timeout| timeout)
+						.map_err(|e| timer_error(&e));
+
+					future::Either::A(f)
+				}
+				None => future::Either::B(future::ok(())),
+			};
+
+			minimum_delay.join3(includability_tracker, temporary_delay)
+		};
+
+		// evaluate whether the block is actually valid.
+		// TODO: is it better to delay this until the delays are finished?
+		let evaluated = self.client.evaluate_block(&self.parent_id, proposal.into()).map_err(Into::into);
+		let future = future::result(evaluated).and_then(move |good| {
+			let end_result = future::ok(good);
+			if good {
+				// delay a "good" vote.
+				future::Either::A(vote_delays.and_then(|_| end_result))
+			} else {
+				// don't delay a "bad" evaluation.
+				future::Either::B(end_result)
+			}
+		});
+
+		Box::new(future) as Box<_>
 	}
 
 	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId {
@@ -697,45 +546,186 @@ impl<C: PolkadotApi, R: TableRouter> bft::Proposer for Proposer<C, R> {
 	}
 }
 
-fn evaluate_proposal<C: PolkadotApi>(
-	proposal: &SubstrateBlock,
-	client: &C,
-	now: Timestamp,
-	parent_hash: &HeaderHash,
+fn current_timestamp() -> Timestamp {
+	use std::time;
+
+	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
+		.expect("now always later than unix epoch; qed")
+		.as_secs()
+}
+
+struct ProposalTiming {
+	attempt_propose: Interval,
+	dynamic_inclusion: DynamicInclusion,
+	enough_candidates: Timeout,
+	minimum_delay: Option<Shared<Timeout>>,
+	last_included: usize,
+}
+
+impl ProposalTiming {
+	// whether it's time to attempt a proposal.
+	// shouldn't be called outside of the context of a task.
+	fn poll(&mut self, included: usize) -> Poll<(), Error> {
+		// first drain from the interval so when the minimum delay is up
+		// we don't have any notifications built up.
+		//
+		// this interval is just meant to produce periodic task wakeups
+		// that lead to the `dynamic_inclusion` getting updated as necessary.
+		if let Async::Ready(x) = self.attempt_propose.poll()
+			.map_err(|e| timer_error(&e))?
+		{
+			x.expect("timer still alive; intervals never end; qed");
+		}
+
+		if let Some(ref mut min) = self.minimum_delay {
+			try_ready!(min.poll().map_err(|e| timer_error(&*e)));
+		}
+
+		self.minimum_delay = None; // after this point, the future must have completed.
+
+		if included == self.last_included {
+			return self.enough_candidates.poll().map_err(|e| timer_error(&e));
+		}
+
+		// the amount of includable candidates has changed. schedule a wakeup
+		// if it's not sufficient anymore.
+		let now = Instant::now();
+		match self.dynamic_inclusion.acceptable_in(now, included) {
+			Some(duration) => {
+				self.last_included = included;
+				self.enough_candidates.reset(now + duration);
+				self.enough_candidates.poll().map_err(|e| timer_error(&e))
+			}
+			None => {
+				Ok(Async::Ready(()))
+			}
+		}
+	}
+}
+
+/// Future which resolves upon the creation of a proposal.
+pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
+	parent_hash: HeaderHash,
 	parent_number: BlockNumber,
-	parent_id: &C::CheckedBlockId,
-) -> Result<bool, Error> {
-	const MAX_TIMESTAMP_DRIFT: Timestamp = 4;
+	parent_id: C::CheckedBlockId,
+	client: Arc<C>,
+	transaction_pool: Arc<Mutex<TransactionPool>>,
+	collation: CollationFetch<P, C>,
+	router: R,
+	table: Arc<SharedTable>,
+	timing: ProposalTiming,
+}
 
-	let encoded = Slicable::encode(proposal);
-	let proposal = PolkadotGenericBlock::decode(&mut &encoded[..])
-		.and_then(|b| PolkadotBlock::from(b).ok())
-		.ok_or_else(|| ErrorKind::ProposalNotForPolkadot)?;
+impl<C, R, P> CreateProposal<C, R, P>
+	where
+		C: PolkadotApi,
+		R: TableRouter,
+		P: Collators,
+{
+	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<SubstrateBlock, Error> {
+		// TODO: handle case when current timestamp behind that in state.
+		let timestamp = current_timestamp();
+		let mut block_builder = self.client.build_block(
+			&self.parent_id,
+			timestamp,
+			candidates,
+		)?;
 
-	let transactions_size = proposal.extrinsics.iter().fold(0, |a, tx| {
-		a + Slicable::encode(tx).len()
-	});
+		let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 
-	if transactions_size > MAX_TRANSACTIONS_SIZE {
-		bail!(ErrorKind::ProposalTooLarge(transactions_size))
+		{
+			let mut pool = self.transaction_pool.lock();
+			let mut unqueue_invalid = Vec::new();
+			let mut pending_size = 0;
+
+			pool.cull(None, readiness_evaluator.clone());
+			for pending in pool.pending(readiness_evaluator.clone()) {
+				// skip and cull transactions which are too large.
+				if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
+					unqueue_invalid.push(pending.hash().clone());
+					continue
+				}
+
+				if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
+
+				match block_builder.push_extrinsic(pending.as_transaction().clone()) {
+					Ok(()) => {
+						pending_size += pending.encoded_size();
+					}
+					Err(e) => {
+						trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+						unqueue_invalid.push(pending.hash().clone());
+					}
+				}
+			}
+
+			for tx_hash in unqueue_invalid {
+				pool.remove(&tx_hash, false);
+			}
+		}
+
+		let polkadot_block = block_builder.bake();
+
+		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
+			polkadot_block.header.number,
+			Hash::from(polkadot_block.header.blake2_256()),
+			polkadot_block.header.parent_hash,
+			polkadot_block.extrinsics.iter()
+				.map(|xt| format!("{}", Hash::from(xt.blake2_256())))
+				.collect::<Vec<_>>()
+				.join(", ")
+		);
+
+		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
+			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
+
+		// TODO: full re-evaluation
+		let active_parachains = self.client.active_parachains(&self.parent_id)?;
+		assert!(evaluation::evaluate_initial(
+			&substrate_block,
+			timestamp,
+			&self.parent_hash,
+			self.parent_number,
+			&active_parachains,
+		).is_ok());
+
+		Ok(substrate_block)
 	}
+}
 
-	if proposal.header.parent_hash != *parent_hash {
-		bail!(ErrorKind::WrongParentHash(*parent_hash, proposal.header.parent_hash));
+impl<C, R, P> Future for CreateProposal<C, R, P>
+	where
+		C: PolkadotApi,
+		R: TableRouter,
+		P: Collators,
+{
+	type Item = SubstrateBlock;
+	type Error = Error;
+
+	fn poll(&mut self) -> Poll<SubstrateBlock, Error> {
+		// 1. poll local collation future.
+		match self.collation.poll() {
+			Ok(Async::Ready((collation, extrinsic))) => {
+				let hash = collation.receipt.hash();
+				self.router.local_candidate_data(hash, collation.block_data, extrinsic);
+
+				// TODO: if we are an availability guarantor also, we should produce an availability statement.
+				self.table.sign_and_import(&self.router, GenericStatement::Candidate(collation.receipt));
+			}
+			Ok(Async::NotReady) => {},
+			Err(_) => {}, // TODO: handle this failure to collate.
+		}
+
+		// 2. try to propose if we have enough includable candidates and other
+		// delays have concluded.
+		let included = self.table.includable_count();
+		try_ready!(self.timing.poll(included));
+
+		// 3. propose
+		let proposed_candidates = self.table.with_proposal(|proposed_set| {
+			proposed_set.into_iter().cloned().collect()
+		});
+
+		self.propose_with(proposed_candidates).map(Async::Ready)
 	}
-
-	if proposal.header.number != parent_number + 1 {
-		bail!(ErrorKind::WrongNumber(parent_number + 1, proposal.header.number))
-	}
-
-	let block_timestamp = proposal.timestamp();
-
-	// TODO: just defer using `tokio_timer` to delay prepare vote.
-	if block_timestamp > now + MAX_TIMESTAMP_DRIFT {
-		bail!(ErrorKind::TimestampInFuture)
-	}
-
-	// execute the block.
-	client.evaluate_block(parent_id, proposal.into())?;
-	Ok(true)
 }

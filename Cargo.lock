@@ -1234,7 +1234,6 @@ name = "polkadot-api"
 version = "0.1.0"
 dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-executor 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
@@ -1291,7 +1290,9 @@ name = "polkadot-collator"
 version = "0.1.0"
 dependencies = [
  "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-parachain 0.1.0",
  "polkadot-primitives 0.1.0",
+ "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1307,6 +1308,7 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
  "polkadot-collator 0.1.0",
+ "polkadot-parachain 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "polkadot-statement-table 0.1.0",
@@ -1353,6 +1355,16 @@ dependencies = [
  "serde_json 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "subtle 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "polkadot-parachain"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "tiny-keccak 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1452,17 +1464,6 @@ dependencies = [
  "substrate-rpc 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "transaction-pool 1.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "polkadot-validator"
-version = "0.1.0"
-dependencies = [
- "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-primitives 0.1.0",
- "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-primitives 0.1.0",
- "substrate-serializer 0.1.0",
 ]
 
 [[package]]
@@ -1933,9 +1934,6 @@ dependencies = [
 [[package]]
 name = "substrate-codec"
 version = "0.1.0"
-dependencies = [
- "substrate-runtime-std 0.1.0",
-]
 
 [[package]]
 name = "substrate-executor"

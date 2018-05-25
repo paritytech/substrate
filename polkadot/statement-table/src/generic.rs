@@ -268,6 +268,7 @@ pub struct Table<C: Context> {
 	authority_data: HashMap<C::AuthorityId, AuthorityData<C>>,
 	detected_misbehavior: HashMap<C::AuthorityId, <C as ResolveMisbehavior>::Misbehavior>,
 	candidate_votes: HashMap<C::Digest, CandidateData<C>>,
+	includable_count: HashMap<C::GroupId, usize>,
 }
 
 impl<C: Context> Default for Table<C> {
@@ -276,6 +277,7 @@ impl<C: Context> Default for Table<C> {
 			authority_data: HashMap::new(),
 			detected_misbehavior: HashMap::new(),
 			candidate_votes: HashMap::new(),
+			includable_count: HashMap::new(),
 		}
 	}
 }
@@ -294,6 +296,11 @@ impl<C: Context> Table<C> {
 		let mut best_candidates = BTreeMap::new();
 		for candidate_data in self.candidate_votes.values() {
 			let group_id = &candidate_data.group_id;
+
+			if !self.includable_count.contains_key(group_id) {
+				continue
+			}
+
 			let (validity_t, availability_t) = context.requisite_votes(group_id);
 
 			if !candidate_data.can_be_included(validity_t, availability_t) { continue }
@@ -392,6 +399,11 @@ impl<C: Context> Table<C> {
 		-> &HashMap<C::AuthorityId, <C as ResolveMisbehavior>::Misbehavior>
 	{
 		&self.detected_misbehavior
+	}
+
+	/// Get the current number of parachains with includable candidates.
+	pub fn includable_count(&self) -> usize {
+		self.includable_count.len()
 	}
 
 	/// Fill a statement batch and note messages as seen by the targets.
@@ -622,6 +634,9 @@ impl<C: Context> Table<C> {
 			Some(votes) => votes,
 		};
 
+		let (v_threshold, a_threshold) = context.requisite_votes(&votes.group_id);
+		let was_includable = votes.can_be_included(v_threshold, a_threshold);
+
 		// check that this authority actually can vote in this group.
 		if !context.is_member_of(&from, &votes.group_id) {
 			let (sig, valid) = match vote {
@@ -686,6 +701,9 @@ impl<C: Context> Table<C> {
 			}
 		}
 
+		let is_includable = votes.can_be_included(v_threshold, a_threshold);
+		update_includable_count(&mut self.includable_count, &votes.group_id, was_includable, is_includable);
+
 		(None, Some(votes.summary(digest)))
 	}
 
@@ -700,6 +718,9 @@ impl<C: Context> Table<C> {
 			None => return (None, None), // TODO: queue up but don't get DoS'ed
 			Some(votes) => votes,
 		};
+
+		let (v_threshold, a_threshold) = context.requisite_votes(&votes.group_id);
+		let was_includable = votes.can_be_included(v_threshold, a_threshold);
 
 		// check that this authority actually can vote in this group.
 		if !context.is_availability_guarantor_of(&from, &votes.group_id) {
@@ -716,7 +737,26 @@ impl<C: Context> Table<C> {
 		}
 
 		votes.availability_votes.insert(from, signature);
+
+		let is_includable = votes.can_be_included(v_threshold, a_threshold);
+		update_includable_count(&mut self.includable_count, &votes.group_id, was_includable, is_includable);
+
 		(None, Some(votes.summary(digest)))
+	}
+}
+
+fn update_includable_count<G: Hash + Eq + Clone>(map: &mut HashMap<G, usize>, group_id: &G, was_includable: bool, is_includable: bool) {
+	if was_includable && !is_includable {
+		if let Entry::Occupied(mut entry) = map.entry(group_id.clone()) {
+			*entry.get_mut() -= 1;
+			if *entry.get() == 0 {
+				entry.remove();
+			}
+		}
+	}
+
+	if !was_includable && is_includable {
+		*map.entry(group_id.clone()).or_insert(0) += 1;
 	}
 }
 
@@ -746,11 +786,7 @@ mod tests {
 	}
 
 	fn create<C: Context>() -> Table<C> {
-		Table {
-			authority_data: HashMap::default(),
-			detected_misbehavior: HashMap::default(),
-			candidate_votes: HashMap::default(),
-		}
+		Table::default()
 	}
 
 	#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -806,8 +842,16 @@ mod tests {
 			self.authorities.get(authority).map(|v| &v.1 == group).unwrap_or(false)
 		}
 
-		fn requisite_votes(&self, _id: &GroupId) -> (usize, usize) {
-			(6, 34)
+		fn requisite_votes(&self, id: &GroupId) -> (usize, usize) {
+			let mut total_validity = 0;
+			let mut total_availability = 0;
+
+			for &(ref validity, ref availability) in self.authorities.values() {
+				if validity == id { total_validity += 1 }
+				if availability == id { total_availability += 1 }
+			}
+
+			(total_validity / 2 + 1, total_availability / 2 + 1)
 		}
 	}
 
@@ -1065,6 +1109,69 @@ mod tests {
 		candidate.indicated_bad_by.push(AuthorityId(1024));
 
 		assert!(!candidate.can_be_included(validity_threshold, availability_threshold));
+	}
+
+	#[test]
+	fn includability_counter() {
+		let context = TestContext {
+			authorities: {
+				let mut map = HashMap::new();
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(2), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(3), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(4), (GroupId(455), GroupId(2)));
+				map
+			}
+		};
+
+		// have 2/3 validity guarantors note validity.
+		let mut table = create();
+		let statement = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(1),
+			sender: AuthorityId(1),
+		};
+		let candidate_digest = Digest(100);
+
+		table.import_statement(&context, statement, None);
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(1)));
+		assert!(!table.candidate_includable(&candidate_digest, &context));
+		assert!(table.includable_count.is_empty());
+
+		let vote = SignedStatement {
+			statement: Statement::Valid(candidate_digest.clone()),
+			signature: Signature(2),
+			sender: AuthorityId(2),
+		};
+
+		table.import_statement(&context, vote, None);
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(2)));
+		assert!(!table.candidate_includable(&candidate_digest, &context));
+		assert!(table.includable_count.is_empty());
+
+		// have the availability guarantor note validity.
+		let vote = SignedStatement {
+			statement: Statement::Available(candidate_digest.clone()),
+			signature: Signature(4),
+			sender: AuthorityId(4),
+		};
+
+		table.import_statement(&context, vote, None);
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(4)));
+		assert!(table.candidate_includable(&candidate_digest, &context));
+		assert!(table.includable_count.get(&GroupId(2)).is_some());
+
+		// have the last validity guarantor note invalidity. now it is unincludable.
+		let vote = SignedStatement {
+			statement: Statement::Invalid(candidate_digest.clone()),
+			signature: Signature(3),
+			sender: AuthorityId(3),
+		};
+
+		table.import_statement(&context, vote, None);
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(2)));
+		assert!(!table.candidate_includable(&candidate_digest, &context));
+		assert!(table.includable_count.is_empty());
 	}
 
 	#[test]
