@@ -27,7 +27,7 @@ extern crate substrate_runtime_support as runtime_support;
 #[macro_use]
 extern crate substrate_runtime_primitives as runtime_primitives;
 
-#[cfg(feature = "std")]
+#[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
 
@@ -55,7 +55,19 @@ use runtime_io::BlakeTwo256;
 use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Identity, HasPublicAux};
-#[cfg(feature = "std")] pub use runtime_primitives::BuildExternalities;
+
+#[cfg(feature = "std")]
+pub use runtime_primitives::BuildExternalities;
+
+pub use consensus::Call as ConsensusCall;
+pub use timestamp::Call as TimestampCall;
+pub use parachains::Call as ParachainsCall;
+
+
+/// The position of the timestamp set extrinsic.
+pub const TIMESTAMP_SET_POSITION: u32 = 0;
+/// The position of the parachains set extrinsic.
+pub const PARACHAINS_SET_POSITION: u32 = 1;
 
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
@@ -77,19 +89,18 @@ impl system::Trait for Concrete {
 pub type System = system::Module<Concrete>;
 
 impl consensus::Trait for Concrete {
-	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type PublicAux = <Concrete as HasPublicAux>::PublicAux;
 	type SessionKey = SessionKey;
 }
 /// Consensus module for this concrete runtime.
 pub type Consensus = consensus::Module<Concrete>;
-pub use consensus::Call as ConsensusCall;
 
 impl timestamp::Trait for Concrete {
+	const SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
 	type Value = u64;
 }
 /// Timestamp module for this concrete runtime.
 pub type Timestamp = timestamp::Module<Concrete>;
-pub use timestamp::Call as TimestampCall;
 
 impl session::Trait for Concrete {
 	type ConvertAccountIdToSessionKey = Identity;
@@ -116,7 +127,11 @@ pub type Council = council::Module<Concrete>;
 /// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Concrete>;
 
-impl parachains::Trait for Concrete {}
+impl parachains::Trait for Concrete {
+	const SET_POSITION: u32 = PARACHAINS_SET_POSITION;
+
+	type PublicAux = <Concrete as HasPublicAux>::PublicAux;
+}
 pub type Parachains = parachains::Module<Concrete>;
 
 impl_outer_dispatch! {
@@ -128,6 +143,7 @@ impl_outer_dispatch! {
 		Democracy = 5,
 		Council = 6,
 		CouncilVoting = 7,
+		Parachains = 8,
 	}
 
 	pub enum PrivCall {
