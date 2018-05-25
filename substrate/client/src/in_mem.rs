@@ -17,36 +17,72 @@
 //! In memory client backend
 
 use std::collections::HashMap;
-use std::hash;
-use std::marker::PhantomData;
 use parking_lot::RwLock;
 use error;
 use backend;
-use primitives;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing as HashingT, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero};
+use runtime_primitives::bft::Justification;
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 
 struct PendingBlock<B: BlockT> {
-	block: B,
+	block: StoredBlock<B>,
 	is_best: bool,
 }
 
 #[derive(PartialEq, Eq, Clone)]
-struct Block<B: BlockT> {
-	header: B::Header,
-	justification: Option<primitives::bft::Justification>,
-	body: Option<Vec<B::Extrinsic>>,
+enum StoredBlock<B: BlockT> {
+	Header(B::Header, Option<Justification<B::Hash>>),
+	Full(B, Option<Justification<B::Hash>>),
+}
+
+impl<B: BlockT> StoredBlock<B> {
+	fn new(header: B::Header, body: Option<Vec<B::Extrinsic>>, just: Option<Justification<B::Hash>>) -> Self {
+		match body {
+			Some(body) => StoredBlock::Full(B::new(header, body), just),
+			None => StoredBlock::Header(header, just),
+		}
+	}
+
+	fn header(&self) -> &B::Header {
+		match *self {
+			StoredBlock::Header(ref h, _) => h,
+			StoredBlock::Full(ref b, _) => b.header(),
+		}
+	}
+
+	fn justification(&self) -> Option<&Justification<B::Hash>> {
+		match *self {
+			StoredBlock::Header(_, ref j) | StoredBlock::Full(_, ref j) => j.as_ref()
+		}
+	}
+
+	fn extrinsics(&self) -> Option<&[B::Extrinsic]> {
+		match *self {
+			StoredBlock::Header(_, _) => None,
+			StoredBlock::Full(ref b, _) => Some(b.extrinsics())
+		}
+	}
+
+	fn into_inner(self) -> (B::Header, Option<Vec<B::Extrinsic>>, Option<Justification<B::Hash>>) {
+		match self {
+			StoredBlock::Header(header, just) => (header, None, just),
+			StoredBlock::Full(block, just) => {
+				let (header, body) = block.deconstruct();
+				(header, Some(body), just)
+			}
+		}
+	}
 }
 
 #[derive(Clone)]
 struct BlockchainStorage<Block: BlockT> {
-	blocks: HashMap<<<Block as BlockT>::Header as HeaderT>::Hash, Block>,
-	hashes: HashMap<<<Block as BlockT>::Header as HeaderT>::Number, <<Block as BlockT>::Header as HeaderT>::Hash>,
-	best_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
+	blocks: HashMap<Block::Hash, StoredBlock<Block>>,
+	hashes: HashMap<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
+	best_hash: Block::Hash,
 	best_number: <<Block as BlockT>::Header as HeaderT>::Number,
-	genesis_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
+	genesis_hash: Block::Hash,
 }
 
 /// In-memory blockchain. Supports concurrent reads.
@@ -54,7 +90,7 @@ pub struct Blockchain<Block: BlockT> {
 	storage: RwLock<BlockchainStorage<Block>>,
 }
 
-impl<Block: BlockT> Clone for Blockchain<Block> {
+impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 	fn clone(&self) -> Self {
 		Blockchain {
 			storage: RwLock::new(self.storage.read().clone()),
@@ -63,7 +99,7 @@ impl<Block: BlockT> Clone for Blockchain<Block> {
 }
 
 impl<Block: BlockT> Blockchain<Block> {
-	fn id(&self, id: BlockId<Block>) -> Option<<<Block as BlockT>::Header as HeaderT>::Hash> {
+	fn id(&self, id: BlockId<Block>) -> Option<Block::Hash> {
 		match id {
 			BlockId::Hash(h) => Some(h),
 			BlockId::Number(n) => self.storage.read().hashes.get(&n).cloned(),
@@ -85,21 +121,21 @@ impl<Block: BlockT> Blockchain<Block> {
 
 	fn insert(
 		&self,
-		hash: <<Block as BlockT>::Header as HeaderT>::Hash,
+		hash: Block::Hash,
 		header: <Block as BlockT>::Header,
-		justification: Option<primitives::bft::Justification>,
+		justification: Option<Justification<Block::Hash>>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		is_new_best: bool
 	) {
-		let number = header.number;
+		let number = header.number().clone();
 		let mut storage = self.storage.write();
-		storage.blocks.insert(hash, <Block as BlockT>::new(header, body, justification));
-		storage.hashes.insert(number, hash);
+		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
+		storage.hashes.insert(number, hash.clone());
 		if is_new_best {
-			storage.best_hash = hash;
-			storage.best_number = number;
+			storage.best_hash = hash.clone();
+			storage.best_number = number.clone();
 		}
-		if number == 0 {
+		if number == Zero::zero() {
 			storage.genesis_hash = hash;
 		}
 	}
@@ -122,15 +158,22 @@ impl<Block: BlockT> Blockchain<Block> {
 
 impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
-		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).map(|b| b.header.clone())))
+		Ok(self.id(id).and_then(|hash| {
+			self.storage.read().blocks.get(&hash).map(|b| b.header().clone())
+		}))
 	}
 
 	fn body(&self, id: BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
-		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.body.clone())))
+		Ok(self.id(id).and_then(|hash| {
+			self.storage.read().blocks.get(&hash)
+				.and_then(|b| b.extrinsics().map(|x| x.to_vec()))
+		}))
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> error::Result<Option<primitives::bft::Justification>> {
-		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.justification.clone())))
+	fn justification(&self, id: BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
+		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
+			b.justification().map(|x| x.clone()))
+		))
 	}
 
 	fn info(&self) -> error::Result<blockchain::Info<Block>> {
@@ -149,7 +192,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		}
 	}
 
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Hash>> {
+	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
 		Ok(self.id(BlockId::Number(number)))
 	}
 }
@@ -172,12 +215,12 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		&mut self,
 		header: <Block as BlockT>::Header,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
-		justification: Option<primitives::bft::Justification>,
+		justification: Option<Justification<Block::Hash>>,
 		is_new_best: bool
 	) -> error::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
-			block: <Block as BlockT>::new(header, body, justification),
+			block: StoredBlock::new(header, body, justification),
 			is_best: is_new_best,
 		});
 		Ok(())
@@ -197,29 +240,25 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
 pub struct Backend<Block> where
 	Block: BlockT,
-	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
 {
-	states: RwLock<HashMap<<<Block as BlockT>::Header as HeaderT>::Hash, InMemory>>,
+	states: RwLock<HashMap<Block::Hash, InMemory>>,
 	blockchain: Blockchain<Block>,
 }
 
 impl<Block> Backend<Block> where
 	Block: BlockT,
-	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
 {
 	/// Create a new instance of in-mem backend.
 	pub fn new() -> Backend<Block> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
 			blockchain: Blockchain::new(),
-			dummy: PhantomData::new(),
 		}
 	}
 }
 
 impl<Block> backend::Backend<Block> for Backend<Block> where
 	Block: BlockT,
-	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
 {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
@@ -227,7 +266,7 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 
 	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
-			BlockId::Hash(h) if h.is_zero() => Self::State::default(),
+			BlockId::Hash(ref h) if h.clone() == Default::default() => Self::State::default(),
 			_ => self.state_at(block)?,
 		};
 
@@ -240,10 +279,12 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
 		if let Some(pending_block) = operation.pending_block {
-			let hash = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::hash_of(&pending_block.block.header);
 			let old_state = &operation.old_state;
+			let (header, body, justification) = pending_block.block.into_inner();
+			let hash = header.hash();
+
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
-			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.justification, pending_block.block.body, pending_block.is_best);
+			self.blockchain.insert(hash, header, justification, body, pending_block.is_best);
 		}
 		Ok(())
 	}
@@ -255,7 +296,7 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {
 		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
 			Some(state) => Ok(state),
-			None => Err(error::ErrorKind::UnknownBlock(Box::new(block)).into()),
+			None => Err(error::ErrorKind::UnknownBlock(format!("{}", block)).into()),
 		}
 	}
 }

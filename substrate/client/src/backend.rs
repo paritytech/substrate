@@ -18,7 +18,7 @@
 
 use state_machine::backend::Backend as StateBackend;
 use error;
-use primitives::bft::Justification;
+use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 
@@ -30,7 +30,14 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Returns pending state.
 	fn state(&self) -> error::Result<&Self::State>;
 	/// Append block data to the transaction.
-	fn set_block_data(&mut self, header: Block::Header, body: Option<Vec<Block::Extrinsic>>, justification: Option<Justification>, is_new_best: bool) -> error::Result<()>;
+	fn set_block_data(
+		&mut self,
+		header: Block::Header,
+		body: Option<Vec<Block::Extrinsic>>,
+		justification: Option<Justification<Block::Hash>>,
+		is_new_best: bool
+	) -> error::Result<()>;
+
 	/// Inject storage data into the database.
 	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.

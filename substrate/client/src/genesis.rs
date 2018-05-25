@@ -26,7 +26,7 @@ pub fn construct_genesis_block<
 	storage: &HashMap<Vec<u8>, Vec<u8>>
 ) -> Block {
 	let state_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(storage.clone().into_iter());
-	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(vec![].into_iter());
+	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(::std::iter::empty::<(&[u8], &[u8])>());
 	Block::new(
 		<<Block as BlockT>::Header as HeaderT>::new(
 			Zero::zero(),

@@ -19,7 +19,7 @@
 use std::vec::Vec;
 use codec::{Joiner, Slicable};
 use state_machine::{self, CodeExecutor};
-use runtime_primitives::traits::{Header as HeaderT, Hashing as HashingT, Block as BlockT};
+use runtime_primitives::traits::{Header as HeaderT, Hashing as HashingT, Block as BlockT, One, HashingFor};
 use runtime_primitives::generic::BlockId;
 use {backend, error, Client};
 
@@ -45,18 +45,25 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {
-		client.info().and_then(|i| Self::at_block(&BlockId::<Block>::Hash(i.chain.best_hash), client))
+		client.info().and_then(|i| Self::at_block(&BlockId::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
 	/// build upon.
 	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block>) -> error::Result<Self> {
+		let number = client.block_number_from_id(block_id)?
+			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?
+			+ One::one();
+
+		let parent_hash = client.block_hash_from_id(block_id)?
+			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?;
+
 		Ok(BlockBuilder {
 			header: <<Block as BlockT>::Header as HeaderT>::new(
-				client.block_number_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(Box::new(block_id.clone())))? + 1,
+				number,
 				Default::default(),
 				Default::default(),
-				client.block_hash_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(Box::new(block_id.clone())))?,
+				parent_hash,
 				Default::default()
 			),
 			extrinsics: Default::default(),
@@ -79,7 +86,9 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header.extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode));
+		let new_extrinsics_root = HashingFor::<Block>::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode));
+		self.header.set_extrinsics_root(new_extrinsics_root);
+
 		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
 			&self.header.encode())?;
 		self.header = <<Block as BlockT>::Header as Slicable>::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");

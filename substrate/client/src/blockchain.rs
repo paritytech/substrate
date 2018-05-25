@@ -18,7 +18,7 @@
 
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
-use primitives::bft::Justification;
+use runtime_primitives::bft::Justification;
 
 use error::Result;
 
@@ -29,7 +29,7 @@ pub trait Backend<Block: BlockT>: Send + Sync {
 	/// Get block body. Returns `None` if block is not found.
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>>;
+	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>>;
 	/// Get blockchain info.
 	fn info(&self) -> Result<Info<Block>>;
 	/// Get block status.

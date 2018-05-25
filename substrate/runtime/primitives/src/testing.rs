@@ -78,11 +78,22 @@ impl traits::Header for Header {
 	type Hashing = BlakeTwo256;
 	type Hash = H256;
 	type Digest = Digest;
+
 	fn number(&self) -> &Self::Number { &self.number }
+	fn set_number(&mut self, num: Self::Number) { self.number = num }
+
 	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
+	fn set_extrinsics_root(&mut self, root: Self::Hash) { self.extrinsics_root = root }
+
 	fn state_root(&self) -> &Self::Hash { &self.state_root }
+	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
+
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
+	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
+
 	fn digest(&self) -> &Self::Digest { &self.digest }
+	fn set_digest(&mut self, digest: Self::Digest) { self.digest = digest }
+
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,

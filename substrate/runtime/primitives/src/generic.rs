@@ -294,7 +294,7 @@ impl<Number, Hashing, DigestItem> Slicable for Header<Number, Hashing, DigestIte
 	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
 	Hashing: HashingT,
 	DigestItem: Member + Default + Slicable,
-	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
+	Hashing::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
@@ -317,10 +317,10 @@ impl<Number, Hashing, DigestItem> Slicable for Header<Number, Hashing, DigestIte
 	}
 }
 impl<Number, Hashing, DigestItem> traits::Header for Header<Number, Hashing, DigestItem> where
- 	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
+ 	Number: Member + ::rstd::hash::Hash + Copy + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
 	Hashing: HashingT,
 	DigestItem: Member + Default + Slicable,
-	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
+	Hashing::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Slicable,
  {
 	type Number = Number;
 	type Hash = <Hashing as HashingT>::Output;
@@ -328,10 +328,20 @@ impl<Number, Hashing, DigestItem> traits::Header for Header<Number, Hashing, Dig
 	type Digest = Digest<DigestItem>;
 
 	fn number(&self) -> &Self::Number { &self.number }
+	fn set_number(&mut self, num: Self::Number) { self.number = num }
+
 	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
+	fn set_extrinsics_root(&mut self, root: Self::Hash) { self.extrinsics_root = root }
+
 	fn state_root(&self) -> &Self::Hash { &self.state_root }
+	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
+
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
+	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
+
 	fn digest(&self) -> &Self::Digest { &self.digest }
+	fn set_digest(&mut self, digest: Self::Digest) { self.digest = digest }
+
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
@@ -356,6 +366,9 @@ pub enum BlockId<Block: BlockT> where {
 	/// Identify by block number.
 	Number(<<Block as BlockT>::Header as HeaderT>::Number),
 }
+
+impl<Block: BlockT> Copy for BlockId<Block> {}
+
 
 #[cfg(feature = "std")]
 impl<Block: BlockT> fmt::Display for BlockId<Block> {
@@ -418,6 +431,7 @@ impl<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> traits::Blo
 where
 	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
 	Hashing: HashingT,
+	Hashing::Output: ::rstd::hash::Hash,
 	DigestItem: Member + Default,
 	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
  	AccountId: Member + MaybeDisplay,

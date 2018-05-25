@@ -16,7 +16,7 @@
 
 //! Polkadot client possible errors.
 
-use std::{self, fmt};
+use std;
 use state_machine;
 use primitives::hexdisplay::HexDisplay;
 
@@ -29,9 +29,9 @@ error_chain! {
 		}
 
 		/// Unknown block.
-		UnknownBlock(h: Box<fmt::Display + Send>) {
+		UnknownBlock(h: String) {
 			description("unknown block"),
-			display("UnknownBlock: {}", h),
+			display("UnknownBlock: {}", &*h),
 		}
 
 		/// Execution error.
@@ -77,9 +77,9 @@ error_chain! {
 		}
 
 		/// Bad justification for header.
-		BadJustification(h: Box<fmt::Display + Send>) {
+		BadJustification(h: String) {
 			description("bad justification for header"),
-			display("bad justification for header: {}", h),
+			display("bad justification for header: {}", &*h),
 		}
 	}
 }
@@ -92,8 +92,8 @@ impl From<Box<state_machine::Error>> for Error {
 }
 
 impl From<state_machine::backend::Void> for Error {
-	fn from(_e: state_machine::backend::Void) -> Self {
-		unreachable!()
+	fn from(e: state_machine::backend::Void) -> Self {
+		match e {}
 	}
 }
 

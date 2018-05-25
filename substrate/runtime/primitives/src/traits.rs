@@ -300,16 +300,12 @@ pub trait Digest {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
-	type Number: Member + MaybeDisplay + SimpleArithmetic + Slicable;
-	type Hash: Member + MaybeDisplay + Default + SimpleBitOps + Slicable;
+pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
+	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Slicable;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable;
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Member + Default;
-	fn number(&self) -> &Self::Number;
-	fn extrinsics_root(&self) -> &Self::Hash;
-	fn state_root(&self) -> &Self::Hash;
-	fn parent_hash(&self) -> &Self::Hash;
-	fn digest(&self) -> &Self::Digest;
+
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
@@ -317,6 +313,22 @@ pub trait Header: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 		parent_hash: Self::Hash,
 		digest: Self::Digest
 	) -> Self;
+
+	fn number(&self) -> &Self::Number;
+	fn set_number(&mut self, Self::Number);
+
+	fn extrinsics_root(&self) -> &Self::Hash;
+	fn set_extrinsics_root(&mut self, Self::Hash);
+
+	fn state_root(&self) -> &Self::Hash;
+	fn set_state_root(&mut self, Self::Hash);
+
+	fn parent_hash(&self) -> &Self::Hash;
+	fn set_parent_hash(&mut self, Self::Hash);
+
+	fn digest(&self) -> &Self::Digest;
+	fn set_digest(&mut self, Self::Digest);
+
 	fn hash(&self) -> Self::Hash {
 		<Self::Hashing as Hashing>::hash_of(self)
 	}
@@ -326,10 +338,10 @@ pub trait Header: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
+pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
 	type Extrinsic: Member + Slicable;
 	type Header: Header<Hash=Self::Hash>;
-	type Hash: Member + MaybeDisplay + Default + SimpleBitOps + Slicable;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable;
 
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
@@ -339,6 +351,9 @@ pub trait Block: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 		<<Self::Header as Header>::Hashing as Hashing>::hash_of(self)
 	}
 }
+
+/// Extract the hashing type for a block.
+pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
