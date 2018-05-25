@@ -21,14 +21,12 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing as 
 
 /// Create a genesis block, given the initial storage.
 pub fn construct_genesis_block<
-	Block: BlockT,
-	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
+	Block: BlockT
 > (
 	storage: &HashMap<Vec<u8>, Vec<u8>>
 ) -> Block {
-	// TODO gav don't use `trie_root`!
-	let state_root = Hashing::trie_root(storage.clone().into_iter());
-	let extrinsics_root = Hashing::trie_root(vec![].into_iter());
+	let state_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(storage.clone().into_iter());
+	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(vec![].into_iter());
 	Block::new(
 		<<Block as BlockT>::Header as HeaderT>::new(
 			Zero::zero(),

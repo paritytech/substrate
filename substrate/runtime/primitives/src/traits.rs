@@ -174,7 +174,8 @@ impl<A: Executable, B: Executable> Executable for (A, B) {
 }
 
 /// Abstraction around hashing
-pub trait Hashing {
+pub trait Hashing: MaybeSerializeDebug {	// Stupid bug in the Rust compiler believes derived
+											// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
 	type Output;
 
@@ -207,6 +208,8 @@ pub trait Hashing {
 }
 
 /// Blake2-256 Hashing implementation.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub struct BlakeTwo256;
 
 impl Hashing for BlakeTwo256 {
@@ -307,6 +310,7 @@ impl Digest for substrate_primitives::Digest {
 pub trait Header: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 	type Number: Member + MaybeDisplay + SimpleArithmetic + Slicable;
 	type Hash: Member + MaybeDisplay + Default + SimpleBitOps + Slicable;
+	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Member + Default;
 	fn number(&self) -> &Self::Number;
 	fn extrinsics_root(&self) -> &Self::Hash;
@@ -320,11 +324,15 @@ pub trait Header: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 		parent_hash: Self::Hash,
 		digest: Self::Digest
 	) -> Self;
+	fn hash(&self) -> Self::Hash {
+		<Self::Hashing as Hashing>::hash_of(self)
+	}
 }
 
 impl Header for substrate_primitives::Header {
 	type Number = substrate_primitives::block::Number;
 	type Hash = substrate_primitives::block::HeaderHash;
+	type Hashing = BlakeTwo256;
 	type Digest = substrate_primitives::block::Digest;
 	fn number(&self) -> &Self::Number { &self.number }
 	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
@@ -359,6 +367,9 @@ pub trait Block: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 	fn extrinsics(&self) -> &[Self::Extrinsic];
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
+	fn hash(&self) -> <Self::Header as Header>::Hash {
+		<<Self::Header as Header>::Hashing as Hashing>::hash_of(self)
+	}
 }
 
 impl Block for substrate_primitives::Block {

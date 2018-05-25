@@ -17,7 +17,6 @@
 //! Utility struct to build a block.
 
 use std::vec::Vec;
-use std::marker::PhantomData;
 use codec::{Joiner, Slicable};
 use state_machine::{self, CodeExecutor};
 use runtime_primitives::traits::{Header as HeaderT, Hashing as HashingT, Block as BlockT};
@@ -25,11 +24,10 @@ use runtime_primitives::generic::BlockId;
 use {backend, error, Client};
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<B, E, Block, Hashing> where
+pub struct BlockBuilder<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: CodeExecutor + Clone,
 	Block: BlockT,
-	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	header: <Block as BlockT>::Header,
@@ -37,24 +35,22 @@ pub struct BlockBuilder<B, E, Block, Hashing> where
 	executor: E,
 	state: B::State,
 	changes: state_machine::OverlayedChanges,
-	dummy: PhantomData<Hashing>,
 }
 
-impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
+impl<B, E, Block> BlockBuilder<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: CodeExecutor + Clone,
 	Block: BlockT,
-	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
-	pub fn new(client: &Client<B, E, Block, Hashing>) -> error::Result<Self> {
+	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {
 		client.info().and_then(|i| Self::at_block(&BlockId::<Block>::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
 	/// build upon.
-	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block, Hashing>) -> error::Result<Self> {
+	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block>) -> error::Result<Self> {
 		Ok(BlockBuilder {
 			header: <<Block as BlockT>::Header as HeaderT>::new(
 				client.block_number_from_id(block_id)?.ok_or(error::ErrorKind::UnknownBlock(Box::new(block_id.clone())))? + 1,
@@ -67,7 +63,6 @@ impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
 			executor: client.clone_executor(),
 			state: client.state_at(block_id)?,
 			changes: Default::default(),
-			dummy: Default::default(),
 		})
 	}
 
@@ -84,7 +79,7 @@ impl<B, E, Block, Hashing> BlockBuilder<B, E, Block, Hashing> where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header.extrinsics_root = Hashing::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode));
+		self.header.extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode));
 		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
 			&self.header.encode())?;
 		self.header = <<Block as BlockT>::Header as Slicable>::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");

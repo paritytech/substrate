@@ -31,7 +31,7 @@ pub use self::accumulator::{Accumulator, Justification, PrepareJustification, Un
 mod accumulator;
 mod primitives;
 
-pub use primitives::MisbehaviorReport;
+pub use self::primitives::MisbehaviorReport;
 
 #[cfg(test)]
 mod tests;

@@ -195,23 +195,20 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
-pub struct Backend<Block, Hashing> where
+pub struct Backend<Block> where
 	Block: BlockT,
-	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
 {
 	states: RwLock<HashMap<<<Block as BlockT>::Header as HeaderT>::Hash, InMemory>>,
 	blockchain: Blockchain<Block>,
-	dummy: PhantomData<Hashing>,
 }
 
-impl<Block, Hashing> Backend<Block, Hashing> where
+impl<Block> Backend<Block> where
 	Block: BlockT,
-	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
 {
 	/// Create a new instance of in-mem backend.
-	pub fn new() -> Backend<Block, Hashing> {
+	pub fn new() -> Backend<Block> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
 			blockchain: Blockchain::new(),
@@ -220,9 +217,8 @@ impl<Block, Hashing> Backend<Block, Hashing> where
 	}
 }
 
-impl<Block, Hashing> backend::Backend<Block> for Backend<Block, Hashing> where
+impl<Block> backend::Backend<Block> for Backend<Block> where
 	Block: BlockT,
-	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
 {
 	type BlockImportOperation = BlockImportOperation<Block>;
@@ -244,7 +240,7 @@ impl<Block, Hashing> backend::Backend<Block> for Backend<Block, Hashing> where
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
 		if let Some(pending_block) = operation.pending_block {
-			let hash = Hashing::hash_of(&pending_block.block.header);
+			let hash = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::hash_of(&pending_block.block.header);
 			let old_state = &operation.old_state;
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.justification, pending_block.block.body, pending_block.is_best);

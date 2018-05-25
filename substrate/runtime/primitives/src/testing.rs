@@ -21,7 +21,7 @@ use std::fmt::Debug;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
 use substrate_primitives::H256;
-use traits::{self, Checkable, Applyable};
+use traits::{self, Checkable, Applyable, BlakeTwo256};
 
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug)]
 pub struct Digest {
@@ -75,6 +75,7 @@ impl Slicable for Header {
 }
 impl traits::Header for Header {
 	type Number = u64;
+	type Hashing = BlakeTwo256;
 	type Hash = H256;
 	type Digest = Digest;
 	fn number(&self) -> &Self::Number { &self.number }

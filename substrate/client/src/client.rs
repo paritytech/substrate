@@ -19,7 +19,6 @@
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 use std::hash;
-use std::marker::PhantomData;
 use primitives::{self, AuthorityId};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing as HashingT, Zero};
@@ -32,14 +31,12 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend};
 use {error, in_mem, block_builder, runtime_io, bft};
 
 /// Polkadot Client
-pub struct Client<B, E, Block, Hashing> where
+pub struct Client<B, E, Block> where
 	Block: BlockT,
-	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 {
 	backend: B,
 	executor: E,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
-	dummy: PhantomData<Hashing>,
 }
 
 /// A source of blockchain evenets.
@@ -147,25 +144,23 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 }
 
 /// Create an instance of in-memory client.
-pub fn new_in_mem<E, F, Block, Hashing>(
+pub fn new_in_mem<E, F, Block>(
 	executor: E,
 	build_genesis: F
-) -> error::Result<Client<in_mem::Backend<Block, Hashing>, E, Block, Hashing>>
+) -> error::Result<Client<in_mem::Backend<Block>, E, Block>>
 	where
 		E: CodeExecutor,
 		F: FnOnce() -> (<Block as BlockT>::Header, Vec<(Vec<u8>, Vec<u8>)>),
 		Block: BlockT,
-		Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 		<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
 {
 	Client::new(in_mem::Backend::new(), executor, build_genesis)
 }
 
-impl<B, E, Block: BlockT, Hashing> Client<B, E, Block, Hashing> where
+impl<B, E, Block: BlockT> Client<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: CodeExecutor,
 	Block: BlockT,
-	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 	error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 	<<Block as BlockT>::Header as HeaderT>::Hash: hash::Hash,
 {
@@ -190,7 +185,6 @@ impl<B, E, Block: BlockT, Hashing> Client<B, E, Block, Hashing> where
 			backend,
 			executor,
 			import_notification_sinks: Mutex::new(Vec::new()),
-			dummy: Default::default(),
 		})
 	}
 
@@ -267,12 +261,12 @@ impl<B, E, Block: BlockT, Hashing> Client<B, E, Block, Hashing> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, Hashing>> where E: Clone {
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, Hashing>> where E: Clone {
+	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
@@ -284,7 +278,7 @@ impl<B, E, Block: BlockT, Hashing> Client<B, E, Block, Hashing> where
 	) -> error::Result<JustifiedHeader<Block>> {
 		let authorities = self.authorities_at(&BlockId::Hash(header.parent_hash))?;
 		let just = bft::check_justification(&authorities[..], header.parent_hash, justification)
-			.map_err(|_| error::ErrorKind::BadJustification(Box::new(BlockId::Hash(Hashing::hash_of(header)))))?;
+			.map_err(|_| error::ErrorKind::BadJustification(Box::new(BlockId::Hash(<<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::hash_of(header)))))?;
 		Ok(JustifiedHeader {
 			header,
 			justification: just,
@@ -318,7 +312,7 @@ impl<B, E, Block: BlockT, Hashing> Client<B, E, Block, Hashing> where
 		)?;
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
-		let hash = Hashing::hash_of(header);
+		let hash = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::hash_of(header);
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number, is_new_best, origin);
 		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
 		transaction.update_storage(storage_update)?;
@@ -399,12 +393,11 @@ impl<B, E, Block: BlockT, Hashing> Client<B, E, Block, Hashing> where
 	}
 }
 
-impl<B, E, Block, Hashing> bft::BlockImport for Client<B, E, Block, Hashing>
+impl<B, E, Block> bft::BlockImport for Client<B, E, Block>
 	where
 		B: backend::Backend<Block>,
 		E: state_machine::CodeExecutor,
 		Block: BlockT,
-		Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	fn import_block(&self, block: Block, justification: bft::Justification) {
@@ -417,11 +410,10 @@ impl<B, E, Block, Hashing> bft::BlockImport for Client<B, E, Block, Hashing>
 	}
 }
 
-impl<B, E, Block, Hashing> bft::Authorities for Client<B, E, Block, Hashing> where
+impl<B, E, Block> bft::Authorities for Client<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: state_machine::CodeExecutor,
 	Block: BlockT,
-	Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 	error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
@@ -429,12 +421,11 @@ impl<B, E, Block, Hashing> bft::Authorities for Client<B, E, Block, Hashing> whe
 	}
 }
 
-impl<B, E, Block, Hashing> BlockchainEvents<Block> for Client<B, E, Block, Hashing>
+impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 	where
 		B: backend::Backend<Block>,
 		E: state_machine::CodeExecutor,
 		Block: BlockT,
-		Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	/// Get block import event stream.
@@ -445,12 +436,11 @@ impl<B, E, Block, Hashing> BlockchainEvents<Block> for Client<B, E, Block, Hashi
 	}
 }
 
-impl<B, E, Block, Hashing> ChainHead<Block> for Client<B, E, Block, Hashing>
+impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 	where
 		B: backend::Backend<Block>,
 		E: state_machine::CodeExecutor,
 		Block: BlockT,
-		Hashing: HashingT<Output = <<Block as BlockT>::Header as HeaderT>::Hash>,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {

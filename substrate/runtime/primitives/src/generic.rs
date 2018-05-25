@@ -20,7 +20,8 @@
 use rstd::prelude::*;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
-use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Block as BlockT, Header as HeaderT};
+use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Block as BlockT,
+	Header as HeaderT, Hashing as HashingT};
 use rstd::ops;
 
 /// A vetted and verified extrinsic from the external world.
@@ -271,27 +272,29 @@ impl<Item> traits::Digest for Digest<Item> where
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Header<Number, Hash, DigestItem> where
+pub struct Header<Number, Hashing, DigestItem> where
 	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
-	Hash: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
+	Hashing: HashingT,
 	DigestItem: Member + Default,
+	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
 {
 	/// The parent hash.
-	pub parent_hash: Hash,
+	pub parent_hash: <Hashing as HashingT>::Output,
 	/// The block number.
 	pub number: Number,
 	/// The state trie merkle root
-	pub state_root: Hash,
+	pub state_root: <Hashing as HashingT>::Output,
 	/// The merkle root of the extrinsics.
-	pub extrinsics_root: Hash,
+	pub extrinsics_root: <Hashing as HashingT>::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest<DigestItem>,
 }
 
-impl<Number, Hash, DigestItem> Slicable for Header<Number, Hash, DigestItem> where
+impl<Number, Hashing, DigestItem> Slicable for Header<Number, Hashing, DigestItem> where
 	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
- 	Hash: Default + Member + Slicable + MaybeDisplay + SimpleBitOps + Slicable,
+	Hashing: HashingT,
 	DigestItem: Member + Default + Slicable,
+	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
@@ -313,13 +316,15 @@ impl<Number, Hash, DigestItem> Slicable for Header<Number, Hash, DigestItem> whe
 		v
 	}
 }
-impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
+impl<Number, Hashing, DigestItem> traits::Header for Header<Number, Hashing, DigestItem> where
  	Number: Member + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
- 	Hash: Default + Member + Slicable + MaybeDisplay + SimpleBitOps + Slicable,
+	Hashing: HashingT,
 	DigestItem: Member + Default + Slicable,
+	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
  {
 	type Number = Number;
-	type Hash = Hash;
+	type Hash = <Hashing as HashingT>::Output;
+	type Hashing = Hashing;
 	type Digest = Digest<DigestItem>;
 
 	fn number(&self) -> &Self::Number { &self.number }
@@ -364,32 +369,34 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature> where
+pub struct Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> where
 	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
-	Hash: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
+	Hashing: HashingT,
 	DigestItem: Member + Default,
+	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
  	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
  	Signature: Member
 {
 	/// The block header.
-	pub header: Header<Number, Hash, DigestItem>,
+	pub header: Header<Number, Hashing, DigestItem>,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<UncheckedExtrinsic<AccountId, Index, Call, Signature>>,
 }
 
-impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> Slicable
-	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
+impl<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> Slicable
+	for Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature>
 where
 	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
-	Hash: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
+	Hashing: HashingT,
 	DigestItem: Member + Default,
+	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
  	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
  	Signature: Member,
-	Header<Number, Hash, DigestItem>: Slicable,
+	Header<Number, Hashing, DigestItem>: Slicable,
 	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
@@ -406,21 +413,22 @@ where
 	}
 }
 
-impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> traits::Block
-	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
+impl<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> traits::Block
+	for Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature>
 where
 	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
-	Hash: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
+	Hashing: HashingT,
 	DigestItem: Member + Default,
+	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
  	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
  	Signature: Member,
-	Header<Number, Hash, DigestItem>: traits::Header,
+	Header<Number, Hashing, DigestItem>: traits::Header,
 	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
 {
 	type Extrinsic = UncheckedExtrinsic<AccountId, Index, Call, Signature>;
-	type Header = Header<Number, Hash, DigestItem>;
+	type Header = Header<Number, Hashing, DigestItem>;
 	fn header(&self) -> &Self::Header {
 		&self.header
 	}
