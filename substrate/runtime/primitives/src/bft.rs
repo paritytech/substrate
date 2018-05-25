@@ -40,11 +40,11 @@ pub enum Action<Block: BlockT> {
 	Propose(u32, Block),
 	/// Proposal header of a block candidate. Accompanies any proposal,
 	/// but is used for misbehavior reporting since blocks themselves are big.
-	ProposeHeader(u32, <<Block as BlockT>::Header as HeaderT>::Hash),
+	ProposeHeader(u32, Block::Hash),
 	/// Preparation to commit for a candidate.
-	Prepare(u32, <<Block as BlockT>::Header as HeaderT>::Hash),
+	Prepare(u32, Block::Hash),
 	/// Vote to commit to a candidate.
-	Commit(u32, <<Block as BlockT>::Header as HeaderT>::Hash),
+	Commit(u32, Block::Hash),
 	/// Vote to advance round after inactive primary.
 	AdvanceRound(u32),
 }
@@ -113,7 +113,7 @@ impl<Block: BlockT> Slicable for Action<Block> {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Message<Block: BlockT> {
 	/// The parent header hash this action is relative to.
-	pub parent: <<Block as BlockT>::Header as HeaderT>::Hash,
+	pub parent: Block::Hash,
 	/// The action being broadcasted.
 	pub action: Action<Block>,
 }
@@ -136,17 +136,17 @@ impl<Block: BlockT> Slicable for Message<Block> {
 /// Justification of a block.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-pub struct Justification<Header: HeaderT>
+pub struct Justification<H>
 {
 	/// The round consensus was reached in.
 	pub round_number: u32,
 	/// The hash of the header justified.
-	pub hash: <Header as HeaderT>::Hash,
+	pub hash: H,
 	/// The signatures and signers of the hash.
 	pub signatures: Vec<(AuthorityId, Signature)>
 }
 
-impl<Header: HeaderT> Slicable for Justification<Header> {
+impl<H: Slicable> Slicable for Justification<H> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 

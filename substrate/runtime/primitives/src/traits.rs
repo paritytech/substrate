@@ -328,12 +328,14 @@ pub trait Header: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Sized + Send + Sync + Slicable + MaybeSerializeDebug {
 	type Extrinsic: Member + Slicable;
-	type Header: Header;
+	type Header: Header<Hash=Self::Hash>;
+	type Hash: Member + MaybeDisplay + Default + SimpleBitOps + Slicable;
+
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
-	fn hash(&self) -> <Self::Header as Header>::Hash {
+	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hashing>::hash_of(self)
 	}
 }

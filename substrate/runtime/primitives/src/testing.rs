@@ -118,6 +118,8 @@ impl<Xt: Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug>
 impl<Xt: Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug> traits::Block for Block<Xt> {
 	type Extrinsic = Xt;
 	type Header = Header;
+	type Hash = <Header as traits::Header>::Hash;
+
 	fn header(&self) -> &Self::Header {
 		&self.header
 	}

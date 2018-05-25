@@ -393,14 +393,14 @@ impl<B, E, Block: BlockT> Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> bft::BlockImport for Client<B, E, Block>
+impl<B, E, Block> bft::BlockImport<B> for Client<B, E, Block>
 	where
 		B: backend::Backend<Block>,
 		E: state_machine::CodeExecutor,
 		Block: BlockT,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
-	fn import_block(&self, block: Block, justification: bft::Justification) {
+	fn import_block(&self, block: Block, justification: bft::Justification<Block::Hash>) {
 		let justified_header = JustifiedHeader {
 			header: block.header(),
 			justification,
@@ -410,14 +410,17 @@ impl<B, E, Block> bft::BlockImport for Client<B, E, Block>
 	}
 }
 
-impl<B, E, Block> bft::Authorities for Client<B, E, Block> where
+impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: state_machine::CodeExecutor,
 	Block: BlockT,
 	error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
-		self.authorities_at(at).map_err(|_| bft::ErrorKind::StateUnavailable(*at).into())
+		self.authorities_at(at).map_err(|_| {
+			let descriptor = format!("{:?}", at);
+			bft::ErrorKind::StateUnavailable(descriptor).into()
+		})
 	}
 }
 

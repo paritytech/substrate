@@ -429,6 +429,8 @@ where
 {
 	type Extrinsic = UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 	type Header = Header<Number, Hashing, DigestItem>;
+	type Hash = <Self::Header as traits::Header>::Hash;
+
 	fn header(&self) -> &Self::Header {
 		&self.header
 	}
