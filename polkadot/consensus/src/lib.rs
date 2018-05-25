@@ -122,9 +122,10 @@ pub trait Network {
 	/// The table router type. This should handle importing of any statements,
 	/// routing statements to peers, and driving completion of any `StatementProducers`.
 	type TableRouter: TableRouter;
-	/// The input stream of BFT messages. Should never logi
+	/// The input stream of BFT messages. Should never logically conclude.
 	type Input: Stream<Item=bft::Communication,Error=Error>;
-	/// The output sink of BFT messages. This
+	/// The output sink of BFT messages. Messages sent here should eventually pass to all
+	/// current authorities.
 	type Output: Sink<SinkItem=bft::Communication,SinkError=Error>;
 
 	/// Execute a future in the background. Typically used for fairly heavy computations,
