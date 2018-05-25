@@ -39,10 +39,9 @@ extern crate substrate_runtime_timestamp as timestamp;
 extern crate demo_primitives;
 
 use rstd::prelude::*;
-use runtime_io::BlakeTwo256;
 use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Identity, HasPublicAux};
+use runtime_primitives::traits::{Identity, HasPublicAux, BlakeTwo256};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildExternalities;
@@ -61,7 +60,7 @@ impl system::Trait for Concrete {
 	type Hashing = BlakeTwo256;
 	type Digest = generic::Digest<Vec<u8>>;
 	type AccountId = AccountId;
-	type Header = generic::Header<BlockNumber, Hash, BlakeTwo256, Vec<u8>>;
+	type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 }
 
 /// System module for this concrete runtime.
@@ -133,9 +132,9 @@ impl_outer_dispatch! {
 }
 
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, Hash, BlakeTwo256, Vec<u8>>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, Hash, BlakeTwo256, Vec<u8>, AccountId, Index, Call, Signature>;
+pub type Block = generic::Block<BlockNumber, BlakeTwo256, Vec<u8>, AccountId, Index, Call, Signature>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 /// Extrinsic type as expected by this runtime.

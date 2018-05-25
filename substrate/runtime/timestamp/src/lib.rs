@@ -102,7 +102,7 @@ mod tests {
 	use runtime_support::storage::StorageValue;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildExternalities;
-	use runtime_primitives::traits::{HasPublicAux};
+	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 
 	pub struct Test;
@@ -113,7 +113,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

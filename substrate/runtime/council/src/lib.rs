@@ -570,7 +570,7 @@ mod tests {
 	pub use runtime_io::with_externalities;
 	pub use substrate_primitives::H256;
 	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity};
+	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
 	impl_outer_dispatch! {
@@ -592,7 +592,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

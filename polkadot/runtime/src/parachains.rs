@@ -124,7 +124,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildExternalities;
-	use runtime_primitives::traits::{HasPublicAux, Identity};
+	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 	use consensus;
 
@@ -140,7 +140,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

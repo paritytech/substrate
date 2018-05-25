@@ -141,7 +141,7 @@ pub fn trie_root<
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
->(input: I) -> [u8; 32] {
+>(_input: I) -> [u8; 32] {
 	unimplemented!()
 	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
 	// implemneted natively and compile the trie logic as wasm).
@@ -151,7 +151,7 @@ pub fn trie_root<
 pub fn ordered_trie_root<
 	I: IntoIterator<Item = A>,
 	A: AsRef<[u8]>
->(input: I) -> [u8; 32] {
+>(_input: I) -> [u8; 32] {
 	unimplemented!()
 	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
 	// implemneted natively and compile the trie logic as wasm).

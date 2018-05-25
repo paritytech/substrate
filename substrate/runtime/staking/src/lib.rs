@@ -47,7 +47,7 @@ use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	Hashing};
+	Hashing as HashingT};
 
 mod contract;
 
@@ -72,7 +72,7 @@ pub trait ContractAddressFor<AccountId: Sized> {
 }
 
 impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
-	Hashing: Hashing,
+	Hashing: HashingT,
 	AccountId: Sized + Slicable + From<Hashing::Output>,
 	Hashing::Output: Slicable
 {
@@ -706,7 +706,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity};
+	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
 	pub struct Test;
@@ -721,7 +721,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

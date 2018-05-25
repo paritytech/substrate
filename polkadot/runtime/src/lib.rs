@@ -51,14 +51,13 @@ extern crate polkadot_primitives;
 
 mod parachains;
 
-use runtime_io::BlakeTwo256;
 use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Identity, HasPublicAux};
+use runtime_primitives::traits::{Identity, HasPublicAux, BlakeTwo256};
 #[cfg(feature = "std")] pub use runtime_primitives::BuildExternalities;
 
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, Hash, BlakeTwo256, Log>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
@@ -144,7 +143,7 @@ impl_outer_dispatch! {
 }
 
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, Hash, BlakeTwo256, Log, AccountId, Index, Call, Signature>;
+pub type Block = generic::Block<BlockNumber, BlakeTwo256, Log, AccountId, Index, Call, Signature>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 /// Extrinsic type as expected by this runtime.
