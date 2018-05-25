@@ -36,7 +36,6 @@ extern crate substrate_serializer;
 extern crate substrate_codec as codec;
 
 pub mod parachain;
-pub mod validator;
 
 /// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
 /// (who matters). Essentially this means that a majority of validators have decided it is

@@ -351,7 +351,13 @@ impl Service {
 			// Load the first available key. Code above makes sure it exisis.
 			let key = keystore.load(&keystore.contents()?[0], "")?;
 			info!("Using authority key {:?}", key.public());
-			Some(consensus::Service::new(client.clone(), network.clone(), transaction_pool.clone(), key))
+			Some(consensus::Service::new(
+				client.clone(),
+				network.clone(),
+				transaction_pool.clone(),
+				::std::time::Duration::from_millis(4000), // TODO: dynamic
+				key,
+			))
 		} else {
 			None
 		};

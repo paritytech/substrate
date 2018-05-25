@@ -160,8 +160,8 @@ impl<T: Trait> Module<T> {
 	/// Set the random seed to something in particular. Can be used as an alternative to
 	/// `initialise` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_random_seed(n: T::Hash) {
-		<RandomSeed<T>>::put(n);
+	pub fn set_random_seed(seed: T::Hash) {
+		<RandomSeed<T>>::put(seed);
 	}
 
 	/// Increment a particular account's nonce by 1.

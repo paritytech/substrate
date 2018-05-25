@@ -433,9 +433,6 @@ impl CodeExecutor for WasmExecutor {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		// TODO: handle all expects as errors to be returned.
-		println!("Wasm-Calling {}({})", method, HexDisplay::from(&data));
-
 		let module = Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
 
 		// start module instantiation. Don't run 'start' function yet.
@@ -481,7 +478,6 @@ impl CodeExecutor for WasmExecutor {
 			let length = (r >> 32) as u32 as usize;
 			memory.get(offset, length)
 				.map_err(|_| ErrorKind::Runtime.into())
-				.map(|v| { println!("Returned {}", HexDisplay::from(&v)); v })
 		} else {
 			Err(ErrorKind::InvalidReturn.into())
 		}

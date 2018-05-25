@@ -40,8 +40,8 @@ use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine::OverlayedChanges;
 use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::DutyRoster;
-use runtime::{Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall};
+use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
+use runtime::{Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall, ParachainsCall};
 
 error_chain! {
 	errors {
@@ -135,12 +135,21 @@ pub trait PolkadotApi {
 	/// Get the index of an account at a block.
 	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index>;
 
+	/// Get the active parachains at a block.
+	fn active_parachains(&self, at: &Self::CheckedBlockId) -> Result<Vec<ParaId>>;
 
-	/// Evaluate a block and see if it gives an error.
-	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<()>;
+	/// Get the validation code of a parachain at a block. If the parachain is active, this will always return `Some`.
+	fn parachain_code(&self, at: &Self::CheckedBlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
+
+	/// Get the chain head of a parachain. If the parachain is active, this will always return `Some`.
+	fn parachain_head(&self, at: &Self::CheckedBlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
+
+	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
+	/// and an error if we can't evaluate for some reason.
+	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<bool>;
 
 	/// Create a block builder on top of the parent block.
-	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: Timestamp) -> Result<Self::BlockBuilder>;
+	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: Timestamp, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
 }
 
 /// A checked block ID used for the substrate-client implementation of CheckedBlockId;
@@ -213,15 +222,36 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 		with_runtime!(self, at, ::runtime::Timestamp::now)
 	}
 
-	fn evaluate_block(&self, at: &CheckedId, block: Block) -> Result<()> {
-		with_runtime!(self, at, || ::runtime::Executive::execute_block(block))
+	fn evaluate_block(&self, at: &CheckedId, block: Block) -> Result<bool> {
+		use substrate_executor::error::ErrorKind as ExecErrorKind;
+
+		let res = with_runtime!(self, at, || ::runtime::Executive::execute_block(block));
+		match res {
+			Ok(()) => Ok(true),
+			Err(err) => match err.kind() {
+				&ErrorKind::Executor(ExecErrorKind::Runtime) => Ok(false),
+				_ => Err(err)
+			}
+		}
 	}
 
 	fn index(&self, at: &CheckedId, account: AccountId) -> Result<Index> {
 		with_runtime!(self, at, || ::runtime::System::account_index(account))
 	}
 
-	fn build_block(&self, parent: &CheckedId, timestamp: Timestamp) -> Result<Self::BlockBuilder> {
+	fn active_parachains(&self, at: &CheckedId) -> Result<Vec<ParaId>> {
+		with_runtime!(self, at, ::runtime::Parachains::active_parachains)
+	}
+
+	fn parachain_code(&self, at: &CheckedId, parachain: ParaId) -> Result<Option<Vec<u8>>> {
+		with_runtime!(self, at, || ::runtime::Parachains::parachain_code(parachain))
+	}
+
+	fn parachain_head(&self, at: &CheckedId, parachain: ParaId) -> Result<Option<Vec<u8>>> {
+		with_runtime!(self, at, || ::runtime::Parachains::parachain_head(parachain))
+	}
+
+	fn build_block(&self, parent: &CheckedId, timestamp: Timestamp, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
 		let parent = parent.block_id();
 		let header = Header {
 			parent_hash: self.block_hash_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))?,
@@ -237,6 +267,14 @@ impl<B: Backend> PolkadotApi for Client<B, NativeExecutor<LocalDispatch>>
 					signed: Default::default(),
 					index: Default::default(),
 					function: Call::Timestamp(TimestampCall::set(timestamp)),
+				},
+				signature: Default::default(),
+			},
+			UncheckedExtrinsic {
+				extrinsic: Extrinsic {
+					signed: Default::default(),
+					index: Default::default(),
+					function: Call::Parachains(ParachainsCall::set_heads(parachains)),
 				},
 				signature: Default::default(),
 			}
@@ -275,7 +313,7 @@ pub struct ClientBlockBuilder<S> {
 impl<S: state_machine::Backend> ClientBlockBuilder<S>
 	where S::Error: Into<client::error::Error>
 {
-	// initialises a block ready to allow extrinsics to be applied.
+	// initialises a block, ready to allow extrinsics to be applied.
 	fn initialise_block(&mut self) -> Result<()> {
 		let result = {
 			let mut ext = state_machine::Ext::new(&mut self.changes, &self.state);
@@ -406,7 +444,7 @@ mod tests {
 		let client = client();
 
 		let id = client.check_id(BlockId::Number(0)).unwrap();
-		let block_builder = client.build_block(&id, 1_000_000).unwrap();
+		let block_builder = client.build_block(&id, 1_000_000, Vec::new()).unwrap();
 		let block = block_builder.bake();
 
 		assert_eq!(block.header.number, 1);
