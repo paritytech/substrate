@@ -61,7 +61,7 @@ impl system::Trait for Concrete {
 	type Hashing = BlakeTwo256;
 	type Digest = generic::Digest<Vec<u8>>;
 	type AccountId = AccountId;
-	type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+	type Header = generic::Header<BlockNumber, Hash, BlakeTwo256, Vec<u8>>;
 }
 
 /// System module for this concrete runtime.
@@ -133,9 +133,9 @@ impl_outer_dispatch! {
 }
 
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+pub type Header = generic::Header<BlockNumber, Hash, BlakeTwo256, Vec<u8>>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, AccountId, Index, Call, Signature>;
+pub type Block = generic::Block<BlockNumber, Hash, BlakeTwo256, Vec<u8>, AccountId, Index, Call, Signature>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 /// Extrinsic type as expected by this runtime.
