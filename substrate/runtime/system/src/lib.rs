@@ -65,7 +65,12 @@ pub trait Trait {
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Parameter + Default + traits::Digest;
 	type AccountId: Parameter + Ord + Default;
-	type Header: traits::Header<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
+	type Header: traits::Header<
+		Number = Self::BlockNumber,
+		Hashing = Self::Hashing,
+		Hash = Self::Hash,
+		Digest = Self::Digest
+	>;
 }
 
 decl_module! {

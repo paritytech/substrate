@@ -57,6 +57,9 @@ use runtime_primitives::generic;
 use runtime_primitives::traits::{Identity, HasPublicAux};
 #[cfg(feature = "std")] pub use runtime_primitives::BuildExternalities;
 
+/// Block header type as expected by this runtime.
+pub type Header = generic::Header<BlockNumber, Hash, BlakeTwo256, Log>;
+
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
 
@@ -71,7 +74,7 @@ impl system::Trait for Concrete {
 	type Hashing = BlakeTwo256;
 	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
-	type Header = generic::Header<BlockNumber, Hash, Log>;
+	type Header = Header;
 }
 /// System module for this concrete runtime.
 pub type System = system::Module<Concrete>;
@@ -140,10 +143,8 @@ impl_outer_dispatch! {
 	}
 }
 
-/// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, Hash, Log>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, Hash, Log, AccountId, Index, Call, Signature>;
+pub type Block = generic::Block<BlockNumber, Hash, BlakeTwo256, Log, AccountId, Index, Call, Signature>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 /// Extrinsic type as expected by this runtime.
