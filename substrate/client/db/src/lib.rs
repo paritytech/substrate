@@ -17,13 +17,11 @@
 //! Client backend that uses RocksDB database as storage. State is still kept in memory.
 
 extern crate substrate_client as client;
-extern crate ethereum_types;
 extern crate kvdb_rocksdb;
 extern crate kvdb;
 extern crate hashdb;
 extern crate memorydb;
 extern crate parking_lot;
-extern crate patricia_trie;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
@@ -37,21 +35,20 @@ extern crate kvdb_memorydb;
 
 use std::sync::Arc;
 use std::path::PathBuf;
-use std::collections::HashMap;
 
 use codec::Slicable;
-use ethereum_types::H256 as TrieH256;
-use hashdb::{DBValue, HashDB};
+use hashdb::DBValue;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
-use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut};
 use primitives::blake2_256;
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use runtime_support::Hashable;
-use state_machine::backend::Backend as StateBackend;
-use state_machine::CodeExecutor;
+use state_machine::{CodeExecutor, Backend as StateBackend};
+
+/// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
+pub type DbState = state_machine::TrieBackend;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -294,133 +291,6 @@ impl client::backend::BlockImportOperation for BlockImportOperation {
 	}
 }
 
-struct Ephemeral<'a> {
-	backing: &'a KeyValueDB,
-	overlay: &'a mut MemoryDB,
-}
-
-impl<'a> HashDB for Ephemeral<'a> {
-	fn keys(&self) -> HashMap<TrieH256, i32> {
-		self.overlay.keys() // TODO: iterate backing
-	}
-
-	fn get(&self, key: &TrieH256) -> Option<DBValue> {
-		match self.overlay.raw(key) {
-			Some((val, i)) => {
-				if i <= 0 {
-					None
-				} else {
-					Some(val)
-				}
-			}
-			None => {
-				match self.backing.get(::columns::STATE, &key.0[..]) {
-					Ok(x) => x,
-					Err(e) => {
-						warn!("Failed to read from DB: {}", e);
-						None
-					}
-				}
-			}
-		}
-	}
-
-	fn contains(&self, key: &TrieH256) -> bool {
-		self.get(key).is_some()
-	}
-
-	fn insert(&mut self, value: &[u8]) -> TrieH256 {
-		self.overlay.insert(value)
-	}
-
-	fn emplace(&mut self, key: TrieH256, value: DBValue) {
-		self.overlay.emplace(key, value)
-	}
-
-	fn remove(&mut self, key: &TrieH256) {
-		self.overlay.remove(key)
-	}
-}
-
-/// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-#[derive(Clone)]
-pub struct DbState {
-	db: Arc<KeyValueDB>,
-	root: TrieH256,
-}
-
-impl state_machine::Backend for DbState {
-	type Error = client::error::Error;
-	type Transaction = MemoryDB;
-
-	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		let mut read_overlay = MemoryDB::default();
-		let eph = Ephemeral {
-			backing: &*self.db,
-			overlay: &mut read_overlay,
-		};
-
-		let map_e = |e: Box<TrieError>| ::client::error::Error::from(format!("Trie lookup error: {}", e));
-
-		TrieDB::new(&eph, &self.root).map_err(map_e)?
-			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
-	}
-
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		let mut read_overlay = MemoryDB::default();
-		let eph = Ephemeral {
-			backing: &*self.db,
-			overlay: &mut read_overlay,
-		};
-
-		let collect_all = || -> Result<_, Box<TrieError>> {
-			let trie = TrieDB::new(&eph, &self.root)?;
-			let mut v = Vec::new();
-			for x in trie.iter()? {
-				let (key, value) = x?;
-				v.push((key.to_vec(), value.to_vec()));
-			}
-
-			Ok(v)
-		};
-
-		match collect_all() {
-			Ok(v) => v,
-			Err(e) => {
-				debug!("Error extracting trie values: {}", e);
-				Vec::new()
-			}
-		}
-	}
-
-	fn storage_root<I>(&self, delta: I) -> ([u8; 32], MemoryDB)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		let mut write_overlay = MemoryDB::default();
-		let mut root = self.root;
-		{
-			let mut eph = Ephemeral {
-				backing: &*self.db,
-				overlay: &mut write_overlay,
-			};
-
-			let mut trie = TrieDBMut::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
-			for (key, change) in delta {
-				let result = match change {
-					Some(val) => trie.insert(&key, &val),
-					None => trie.remove(&key), // TODO: archive mode
-				};
-
-				if let Err(e) = result {
-					warn!("Failed to write to trie: {}", e);
-				}
-			}
-		}
-
-		(root.0.into(), write_overlay)
-	}
-}
-
 /// Disk backend. Keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
 /// Otherwise, trie nodes are kept only from the most recent block.
 pub struct Backend {
@@ -513,24 +383,13 @@ impl client::backend::Backend for Backend {
 
 		// special case for genesis initialization
 		match block {
-			BlockId::Hash(h) if h == Default::default() => {
-				let mut root = TrieH256::default();
-				let mut db = MemoryDB::default();
-				TrieDBMut::new(&mut db, &mut root);
-
-				return Ok(DbState {
-					db: self.db.clone(),
-					root,
-				})
-			}
+			BlockId::Hash(h) if h == Default::default() =>
+				return Ok(DbState::with_kvdb_for_genesis(self.db.clone(), ::columns::STATE)),
 			_ => {}
 		}
 
 		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
-			DbState {
-				db: self.db.clone(),
-				root: hdr.state_root.0.into(),
-			}
+			DbState::with_kvdb(self.db.clone(), ::columns::STATE, hdr.state_root.0.into())
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(block).into()))
 	}
 }
@@ -539,6 +398,7 @@ impl client::backend::LocalBackend for Backend {}
 
 #[cfg(test)]
 mod tests {
+	use hashdb::HashDB;
 	use super::*;
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;

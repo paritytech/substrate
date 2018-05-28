@@ -5,7 +5,16 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
 
 [dependencies]
-substrate-primitives = { path = "../primitives", version = "0.1.0" }
-triehash = "0.1"
 byteorder = "1.1"
+ethereum-types = "0.3"
 hex-literal = "0.1.0"
+log = "0.3"
+parking_lot = "0.4"
+triehash = "0.1"
+
+substrate-primitives = { path = "../primitives", version = "0.1.0" }
+
+hashdb = { git = "https://github.com/paritytech/parity.git" }
+kvdb = { git = "https://github.com/paritytech/parity.git" }
+memorydb = { git = "https://github.com/paritytech/parity.git" }
+patricia-trie = { git = "https://github.com/paritytech/parity.git" }

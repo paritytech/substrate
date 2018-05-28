@@ -22,8 +22,8 @@ use futures::future::IntoFuture;
 use primitives;
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use runtime_support::Hashable;
-use state_machine::CodeExecutor;
-use state_machine::backend::Backend as StateBackend;
+use state_machine::{CodeExecutor, Backend as StateBackend, TrieBackend as StateTrieBackend,
+	TryIntoTrieBackend as TryIntoStateTrieBackend};
 use blockchain::{self, BlockStatus};
 use backend;
 use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
@@ -198,6 +198,12 @@ impl StateBackend for OnDemandState {
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		// whole state is not available on light node
 		Vec::new()
+	}
+}
+
+impl TryIntoStateTrieBackend for OnDemandState {
+	fn try_into_trie_backend(self) -> Option<StateTrieBackend> {
+		None
 	}
 }
 
