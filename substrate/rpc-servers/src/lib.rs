@@ -34,19 +34,22 @@ type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<S, C, A>(
+pub fn rpc_handler<S, C, A, Y>(
 	state: S,
 	chain: C,
 	author: A,
+	system: Y,
 ) -> RpcHandler where
 	S: apis::state::StateApi,
 	C: apis::chain::ChainApi<Metadata=Metadata>,
 	A: apis::author::AuthorApi,
+	Y: apis::system::SystemApi,
 {
 	let mut io = pubsub::PubSubHandler::default();
 	io.extend_with(state.to_delegate());
 	io.extend_with(chain.to_delegate());
 	io.extend_with(author.to_delegate());
+	io.extend_with(system.to_delegate());
 	io
 }
 

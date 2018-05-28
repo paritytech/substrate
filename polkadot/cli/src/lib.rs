@@ -95,6 +95,22 @@ impl substrate_rpc::author::AuthorApi for RpcTransactionPool {
 	}
 }
 
+struct Configuration(service::Configuration);
+
+impl substrate_rpc::system::SystemApi for Configuration {
+	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(crate_version!().into())
+	}
+
+	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(match self.0.chain_spec {
+			ChainSpec::Development => "dev",
+			ChainSpec::LocalTestnet => "local",
+			ChainSpec::PoC1Testnet => "poc-1",
+		}.into())
+	}
+}
+
 /// Parse command line arguments and start the node.
 ///
 /// IANA unassigned port ranges that we could use:
@@ -195,7 +211,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 
-	let service = service::Service::new(config)?;
+	let service = service::Service::new(config.clone())?;
 
 	informant::start(&service, core.handle());
 
@@ -209,7 +225,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 				inner: service.transaction_pool(),
 				network: service.network(),
 			};
-			rpc::rpc_handler(service.client(), chain, pool)
+			rpc::rpc_handler(service.client(), chain, pool, Configuration(config.clone()))
 		};
 		(
 			start_server(http_address, |address| rpc::start_http(address, handler())),
