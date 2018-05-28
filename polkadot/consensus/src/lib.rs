@@ -78,7 +78,6 @@ use tokio_core::reactor::{Handle, Timeout, Interval};
 
 use futures::prelude::*;
 use futures::future::{self, Shared};
-use parking_lot::Mutex;
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
 
@@ -499,11 +498,12 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 		let local_id = self.local_key.public().0;
 		let mut next_index = {
 			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
-			let cur_index = self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending| {
+			let cur_index = self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending| pending
 				.filter(|tx| tx.as_ref().as_ref().signed == local_id)
 				.last()
 				.map(|tx| Ok(tx.as_ref().as_ref().index))
-				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id));
+				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id))
+			);
 
 			match cur_index {
 				Ok(cur_index) => cur_index + 1,
@@ -607,7 +607,7 @@ pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
 	parent_number: BlockNumber,
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
-	transaction_pool: Arc<Mutex<TransactionPool>>,
+	transaction_pool: Arc<TransactionPool>,
 	collation: CollationFetch<P, C>,
 	router: R,
 	table: Arc<SharedTable>,
@@ -647,7 +647,7 @@ impl<C, R, P> CreateProposal<C, R, P>
 						Ok(()) => {
 							pending_size += pending.encoded_size();
 						}
-						Err(_) => {
+						Err(e) => {
 							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
 							unqueue_invalid.push(pending.hash().clone());
 						}

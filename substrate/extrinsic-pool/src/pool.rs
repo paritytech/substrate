@@ -16,9 +16,10 @@
 
 use std::{
 	marker::PhantomData,
-	sync::Arc,
+	sync::{Arc, Weak},
 };
 
+use futures::sync::mpsc;
 use parking_lot::{RwLock, Mutex};
 use txpool::{self, Verifier};
 use primitives::{Hash, block::Extrinsic};
@@ -38,6 +39,7 @@ pub struct Pool<V, S, E> where
 		Listener<V::VerifiedTransaction>,
 	>>,
 	verifier: V,
+	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<Weak<V::VerifiedTransaction>>>>,
 }
 
 impl<V, S, E> Pool<V, S, E> where
@@ -53,13 +55,27 @@ impl<V, S, E> Pool<V, S, E> where
 			_error: Default::default(),
 			pool: RwLock::new(txpool::Pool::new(Listener::default(), scoring, options)),
 			verifier,
+			import_notification_sinks: Default::default(),
 		}
 	}
 
 	/// Imports a pre-verified extrinsic to the pool.
 	pub fn import(&self, xt: V::VerifiedTransaction) -> Result<Arc<V::VerifiedTransaction>, E> {
-		Ok(self.pool.write().import(xt)?)
+		let result = self.pool.write().import(xt)?;
+
+		let weak = Arc::downgrade(&result);
+		self.import_notification_sinks.lock()
+			.retain(|sink| sink.unbounded_send(weak.clone()).is_ok());
+
+		Ok(result)
 	}
+
+	pub fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<Weak<V::VerifiedTransaction>> {
+		let (sink, stream) = mpsc::unbounded();
+		self.import_notification_sinks.lock().push(sink);
+		stream
+	}
+
 
 	/// Imports a bunch of extrinsics to the pool
 	pub fn submit(&self, xts: Vec<Extrinsic>) -> Result<Vec<Arc<V::VerifiedTransaction>>, E> {

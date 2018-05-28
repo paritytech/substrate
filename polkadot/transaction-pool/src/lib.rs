@@ -38,15 +38,15 @@ use std::{
 	sync::Arc,
 };
 
+use codec::Slicable;
+use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
 use polkadot_api::PolkadotApi;
-use primitives::{AccountId, Timestamp, Hash};
-use primitives::{Hash, AccountId, Timestamp};
 use primitives::parachain::CandidateReceipt;
+use primitives::{AccountId, Timestamp, Hash};
+use runtime::{Block, UncheckedExtrinsic, TimestampCall, ParachainsCall, Call};
 use substrate_primitives::block::{Extrinsic, ExtrinsicHash};
 use substrate_primitives::hexdisplay::HexDisplay;
-use runtime::{Block, UncheckedExtrinsic, TimestampCall, ParachainsCall, Call};
 use substrate_runtime_primitives::traits::{Bounded, Checkable};
-use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
 
 pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
@@ -253,7 +253,7 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 /// Readiness evaluator for polkadot transactions.
 pub struct Ready<'a, T: 'a + PolkadotApi> {
 	at_block: T::CheckedBlockId,
-	api_handle: &'a T,
+	api: &'a T,
 	known_indices: HashMap<AccountId, ::primitives::Index>,
 }
 
@@ -261,7 +261,7 @@ impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
 	fn clone(&self) -> Self {
 		Ready {
 			at_block: self.at_block.clone(),
-			api_handle: self.api_handle,
+			api: self.api,
 			known_indices: self.known_indices.clone(),
 		}
 	}
@@ -270,10 +270,10 @@ impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
 impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 	/// Create a new readiness evaluator at the given block. Requires that
 	/// the ID has already been checked for local corresponding and available state.
-	pub fn create(at: T::CheckedBlockId, client: &'a T) -> Self {
+	pub fn create(at: T::CheckedBlockId, api: &'a T) -> Self {
 		Ready {
 			at_block: at,
-			api_handle: client,
+			api,
 			known_indices: HashMap::new(),
 		}
 	}
@@ -286,9 +286,9 @@ impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T
 
 		// TODO: find a way to handle index error properly -- will need changes to
 		// transaction-pool trait.
-		let (api_handle, at_block) = (&self.api_handle, &self.at_block);
+		let (api, at_block) = (&self.api, &self.at_block);
 		let next_index = self.known_indices.entry(sender)
-			.or_insert_with(|| api_handle.index(at_block, sender).ok().unwrap_or_else(Bounded::max_value));
+			.or_insert_with(|| api.index(at_block, sender).ok().unwrap_or_else(Bounded::max_value));
 
 		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.inner.index);
 

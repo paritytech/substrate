@@ -28,7 +28,6 @@ use client::{BlockchainEvents, ChainHead};
 use ed25519;
 use futures::prelude::*;
 use futures::{future, Canceled};
-use parking_lot::Mutex;
 use polkadot_api::LocalPolkadotApi;
 use polkadot_primitives::AccountId;
 use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};

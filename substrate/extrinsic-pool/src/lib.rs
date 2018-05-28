@@ -18,10 +18,13 @@
 
 //! Generic extrinsic pool.
 
+extern crate futures;
 extern crate parking_lot;
 extern crate substrate_primitives as primitives;
 
 pub extern crate transaction_pool as txpool;
+
+pub mod api;
 
 mod listener;
 mod pool;

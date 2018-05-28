@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use extrinsic_pool::txpool;
+use extrinsic_pool::{self, txpool};
 use primitives::Hash;
 use runtime::UncheckedExtrinsic;
 
@@ -47,6 +47,15 @@ error_chain! {
 		Import(err: Box<::std::error::Error + Send>) {
 			description("Error importing transaction"),
 			display("Error importing transaction: {}", err.description()),
+		}
+	}
+}
+
+impl extrinsic_pool::api::Error for Error {
+	fn into_pool_error(self) -> ::std::result::Result<txpool::Error, Self> {
+		match self {
+			Error(ErrorKind::Pool(e), c) => Ok(txpool::Error(e, c)),
+			e => Err(e),
 		}
 	}
 }

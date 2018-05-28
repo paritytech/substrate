@@ -5,7 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 error-chain = "0.11"
-log = "0.4.0"
+futures = "0.1"
+log = "0.4"
 parking_lot = "0.4"
 substrate-primitives = { path = "../primitives" }
-transaction-pool = "1.12.0"
+transaction-pool = "1.12"

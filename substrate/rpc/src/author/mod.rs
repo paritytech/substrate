@@ -16,9 +16,9 @@
 
 //! Substrate block-author/full-node API.
 
-use std::ops::Deref;
-use primitives::{Hash, block::Extrinsic};
-use extrinsic_pool::{Pool, txpool};
+use std::sync::Arc;
+use primitives::block::Extrinsic;
+use extrinsic_pool::api::{Error, ExtrinsicPool};
 
 pub mod error;
 
@@ -36,15 +36,16 @@ build_rpc_trait! {
 	}
 }
 
-impl<V, S, E, T> AuthorApi for T where
-	T: Deref<Target=Pool<V, S, E>> + Send + Sync + 'static,
-	V: txpool::Verifier<Extrinsic>,
-	S: txpool::Scoring<V::VerifiedTransaction>,
-	V::VerifiedTransaction: txpool::VerifiedTransaction<Hash=Hash>,
-	E: From<V::Error>,
-	E: From<txpool::Error>,
+impl<T> AuthorApi for Arc<T> where
+	T: ExtrinsicPool,
 {
 	fn submit_extrinsic(&self, xt: Extrinsic) -> Result<()> {
-		self.deref().submit(vec![xt]).map(|_| ()).map_err(|_| unimplemented!())
+		self
+			.submit(vec![xt])
+			.map(|_| ())
+			.map_err(|e| e.into_pool_error()
+				.map(Into::into)
+				.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
+			)
 	}
 }
