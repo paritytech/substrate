@@ -26,8 +26,8 @@ pub trait BlockImportOperation {
 	/// Associated state backend type.
 	type State: StateBackend;
 
-	/// Returns pending state.
-	fn state(&self) -> error::Result<&Self::State>;
+	/// Returns pending state. Returns None for backends with locally-unavailable state data.
+	fn state(&self) -> error::Result<Option<&Self::State>>;
 	/// Append block data to the transaction.
 	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()>;
 	/// Inject storage data into the database.
@@ -44,7 +44,7 @@ pub trait BlockImportOperation {
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
 /// is alive, the state for `P` should not be pruned.
-pub trait Backend {
+pub trait Backend: Send + Sync {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation;
 	/// Associated blockchain backend type.
@@ -62,3 +62,9 @@ pub trait Backend {
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId) -> error::Result<Self::State>;
 }
+
+/// Mark for all Backend implementations, that are making use of state data, stored locally.
+pub trait LocalBackend: Backend {}
+
+/// Mark for all Backend implementations, that are fetching required state data from remote nodes.
+pub trait RemoteBackend: Backend {}

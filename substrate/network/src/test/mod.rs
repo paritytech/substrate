@@ -227,7 +227,7 @@ impl TestNet {
 		for _ in 0..n {
 			let client = Arc::new(test_client::new());
 			let tx_pool = Arc::new(EmptyTransactionPool);
-			let sync = Protocol::new(config.clone(), client.clone(), tx_pool).unwrap();
+			let sync = Protocol::new(config.clone(), client.clone(), None, tx_pool).unwrap();
 			net.peers.push(Arc::new(Peer {
 				sync: sync,
 				client: client,

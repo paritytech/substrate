@@ -18,16 +18,16 @@
 
 use std::vec::Vec;
 use codec::{Joiner, Slicable};
-use state_machine::{self, CodeExecutor};
+use state_machine;
 use primitives::{Header, Block};
 use primitives::block::{Id as BlockId, Extrinsic};
-use {backend, error, Client};
+use {backend, error, Client, CallExecutor};
 use triehash::ordered_trie_root;
 
 /// Utility for building new (valid) blocks from a stream of transactions.
 pub struct BlockBuilder<B, E> where
 	B: backend::Backend,
-	E: CodeExecutor + Clone,
+	E: CallExecutor + Clone,
 	error::Error: From<<<B as backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	header: Header,
@@ -39,7 +39,7 @@ pub struct BlockBuilder<B, E> where
 
 impl<B, E> BlockBuilder<B, E> where
 	B: backend::Backend,
-	E: CodeExecutor + Clone,
+	E: CallExecutor + Clone,
 	error::Error: From<<<B as backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
@@ -59,7 +59,7 @@ impl<B, E> BlockBuilder<B, E> where
 				digest: Default::default(),
 			},
 			transactions: Default::default(),
-			executor: client.clone_executor(),
+			executor: client.executor().clone(),
 			state: client.state_at(block_id)?,
 			changes: Default::default(),
 		})
@@ -69,7 +69,10 @@ impl<B, E> BlockBuilder<B, E> where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, tx: Extrinsic) -> error::Result<()> {
-		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "execute_transaction",
+		let (output, _) = self.executor.call_at_state(
+			&self.state,
+			&mut self.changes,
+			"execute_transaction",
 			&vec![].and(&self.header).and(&tx))?;
 		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		self.transactions.push(tx);
@@ -79,7 +82,10 @@ impl<B, E> BlockBuilder<B, E> where
 	/// Consume the builder to return a valid `Block` containing all pushed transactions.
 	pub fn bake(mut self) -> error::Result<Block> {
 		self.header.extrinsics_root = ordered_trie_root(self.transactions.iter().map(Slicable::encode)).0.into();
-		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
+		let (output, _) = self.executor.call_at_state(
+			&self.state,
+			&mut self.changes,
+			"finalise_block",
 			&self.header.encode())?;
 		self.header = Header::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		Ok(Block {
