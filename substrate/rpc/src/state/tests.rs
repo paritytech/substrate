@@ -15,23 +15,13 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use substrate_executor as executor;
 use self::error::{Error, ErrorKind};
-use runtime_support::Hashable;
-use client;
+use test_client::{self, TestClient};
 
 #[test]
 fn should_return_storage() {
-	let test_genesis_block = block::Header {
-		parent_hash: 0.into(),
-		number: 0,
-		state_root: 0.into(),
-		extrinsics_root: Default::default(),
-		digest: Default::default(),
-	};
-
-	let client = Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap());
-	let genesis_hash = test_genesis_block.blake2_256().into();
+	let client = Arc::new(test_client::new());
+	let genesis_hash = client.genesis_hash();
 
 	assert_matches!(
 		StateApi::storage_at(&client, StorageKey(vec![10]), genesis_hash),
@@ -40,19 +30,9 @@ fn should_return_storage() {
 }
 
 #[test]
-#[ignore]	// TODO: [ToDr] reenable once we can properly mock the wasm executor env
 fn should_call_contract() {
-	// TODO [ToDr] Fix test after we are able to mock state.
-	let test_genesis_block = block::Header {
-		parent_hash: 0.into(),
-		number: 0,
-		state_root: 0.into(),
-		extrinsics_root: Default::default(),
-		digest: Default::default(),
-	};
-
-	let client = Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap());
-	let genesis_hash = test_genesis_block.blake2_256().into();
+	let client = Arc::new(test_client::new());
+	let genesis_hash = client.genesis_hash();
 
 	assert_matches!(
 		StateApi::call_at(&client, "balanceOf".into(), vec![1,2,3], genesis_hash),

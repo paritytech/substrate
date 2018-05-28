@@ -23,8 +23,10 @@ pub use network::NetworkConfiguration;
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
 pub enum ChainSpec {
-	/// Whatever the current runtime is, with simple Alice/Bob auths.
+	/// Whatever the current runtime is, with just Alice as an auth.
 	Development,
+	/// Whatever the current runtime is, with simple Alice/Bob auths.
+	LocalTestnet,
 	/// The PoC-1 testnet.
 	PoC1Testnet,
 }
@@ -39,6 +41,8 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Path to key files.
 	pub keystore_path: String,
+	/// Path to the database.
+	pub database_path: String,
 	/// Additional key seeds.
 	pub keys: Vec<String>,
 	/// Chain specification.
@@ -52,6 +56,7 @@ impl Default for Configuration {
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
+			database_path: Default::default(),
 			keys: Default::default(),
 			chain_spec: ChainSpec::Development,
 		}

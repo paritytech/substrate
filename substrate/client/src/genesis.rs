@@ -42,15 +42,16 @@ mod tests {
 	use codec::{Slicable, Joiner};
 	use runtime_support::Hashable;
 	use keyring::Keyring;
-	use test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use executor::WasmExecutor;
 	use state_machine::{execute, OverlayedChanges};
 	use state_machine::backend::InMemory;
-	use test_runtime::{self, Hash, Block, BlockNumber, Header, Digest, Transaction,
+	use test_client;
+	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+	use test_client::runtime::{Hash, Block, BlockNumber, Header, Digest, Transaction,
 		UncheckedTransaction};
 	use ed25519::{Public, Pair};
 
-	native_executor_instance!(Executor, test_runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+	native_executor_instance!(Executor, test_client::runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
 	fn construct_block(backend: &InMemory, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transaction>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
@@ -76,7 +77,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 
 		for tx in transactions.iter() {
-			let ret_data = execute(
+			let (ret_data, _) = execute(
 				backend,
 				&mut overlay,
 				&Executor::new(),
@@ -86,7 +87,7 @@ mod tests {
 			header = Header::decode(&mut &ret_data[..]).unwrap();
 		}
 
-		let ret_data = execute(
+		let (ret_data, _) = execute(
 			backend,
 			&mut overlay,
 			&Executor::new(),

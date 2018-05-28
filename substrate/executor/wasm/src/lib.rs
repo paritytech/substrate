@@ -8,6 +8,8 @@ use alloc::vec::Vec;
 
 #[macro_use]
 extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_sandbox as sandbox;
+
 use runtime_io::{
 	set_storage, storage, print, blake2_256,
 	twox_128, twox_256, ed25519_verify, enumerated_trie_root
@@ -50,5 +52,46 @@ impl_stubs!(
 	},
 	test_enumerated_trie_root NO_DECODE => |_| {
 		enumerated_trie_root(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).to_vec()
+	},
+	test_sandbox NO_DECODE => |code: &[u8]| {
+		let result = execute_sandboxed(code).is_ok();
+		[result as u8].to_vec()
 	}
 );
+
+fn execute_sandboxed(code: &[u8]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	struct State {
+		counter: u32,
+	}
+
+	fn env_assert(_e: &mut State, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+		if args.len() != 1 {
+			return Err(sandbox::HostError);
+		}
+		let condition = args[0].as_i32().ok_or_else(|| sandbox::HostError)?;
+		if condition != 0 {
+			Ok(sandbox::ReturnValue::Unit)
+		} else {
+			Err(sandbox::HostError)
+		}
+	}
+	fn env_inc_counter(e: &mut State, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+		if args.len() != 1 {
+			return Err(sandbox::HostError);
+		}
+		let inc_by = args[0].as_i32().ok_or_else(|| sandbox::HostError)?;
+		e.counter += inc_by as u32;
+		Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(e.counter as i32)))
+	}
+
+	let mut state = State { counter: 0 };
+
+	let mut env_builder = sandbox::EnvironmentDefinitionBuilder::new();
+	env_builder.add_host_func("env", "assert", env_assert);
+	env_builder.add_host_func("env", "inc_counter", env_inc_counter);
+
+	let mut instance = sandbox::Instance::new(code, &env_builder, &mut state)?;
+	let result = instance.invoke(b"call", &[], &mut state);
+
+	result.map_err(|_| sandbox::HostError)
+}

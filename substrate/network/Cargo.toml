@@ -17,6 +17,7 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 futures = "0.1.17"
+linked-hash-map = "0.5"
 ethcore-network = { git = "https://github.com/paritytech/parity.git" }
 ethcore-network-devp2p = { git = "https://github.com/paritytech/parity.git" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
@@ -29,9 +30,7 @@ substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-bft = { path = "../../substrate/bft" }
 
 [dev-dependencies]
-substrate-test-runtime = { path = "../test-runtime" }
-substrate-executor = { path = "../../substrate/executor" }
-substrate-keyring = { path = "../../substrate/keyring" }
-substrate-codec = { path = "../../substrate/codec" }
-substrate-bft = { path = "../bft" }
 env_logger = "0.4"
+substrate-codec = { path = "../../substrate/codec" }
+substrate-keyring = { path = "../../substrate/keyring" }
+substrate-test-client = { path = "../../substrate/test-client" }

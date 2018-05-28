@@ -14,42 +14,63 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use substrate_executor as executor;
-use client;
-use runtime_support::Hashable;
 use super::*;
+use jsonrpc_macros::pubsub;
+use client::BlockOrigin;
+use test_client::{self, TestClient};
 
 #[test]
 fn should_return_header() {
-	let test_genesis_block = block::Header {
-		parent_hash: 0.into(),
-		number: 0,
-		state_root: 0.into(),
-		extrinsics_root: Default::default(),
-		digest: Default::default(),
-	};
-
 	let core = ::tokio_core::reactor::Core::new().unwrap();
 	let remote = core.remote();
 
 	let client = Chain {
-		client: Arc::new(client::new_in_mem(executor::WasmExecutor, || (test_genesis_block.clone(), vec![])).unwrap()),
+		client: Arc::new(test_client::new()),
 		subscriptions: Subscriptions::new(remote),
 	};
-
 	assert_matches!(
-		ChainApi::header(&client, test_genesis_block.blake2_256().into()),
+		client.header(client.client.genesis_hash()),
 		Ok(Some(ref x)) if x == &block::Header {
 			parent_hash: 0.into(),
 			number: 0,
-			state_root: 0.into(),
-			extrinsics_root: Default::default(),
+			state_root: "0c81ab6cfac8c8d7201d78cb699b6b79d714462a4ba00abcacce22444babe315".into(),
+			extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
 			digest: Default::default(),
 		}
 	);
 
 	assert_matches!(
-		ChainApi::header(&client, 5.into()),
+		client.header(5.into()),
 		Ok(None)
 	);
+}
+
+#[test]
+fn should_notify_about_latest_block() {
+	let mut core = ::tokio_core::reactor::Core::new().unwrap();
+	let remote = core.remote();
+	let (subscriber, id, transport) = pubsub::Subscriber::new_test("test");
+
+	{
+		let api = Chain {
+			client: Arc::new(test_client::new()),
+			subscriptions: Subscriptions::new(remote),
+		};
+
+		api.subscribe_new_head(Default::default(), subscriber);
+
+		// assert id assigned
+		assert_eq!(core.run(id), Ok(Ok(SubscriptionId::Number(0))));
+
+		let builder = api.client.new_block().unwrap();
+		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+	}
+
+	// assert notification send to transport
+	let (notification, next) = core.run(transport.into_future()).unwrap();
+	assert_eq!(notification, Some(
+		r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"digest":{"logs":[]},"extrinsicsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","number":1,"parentHash":"0x72ae67388233893fb4594f13df56d4e654aa8721763bcd0bd4e187fee7b2f349","stateRoot":"0x2e1f2f1c53ffb1767fe1abf4fe5953cc87c7650d4af2d4393d1f72324f2cc5d7"},"subscription":0}}"#.to_owned()
+	));
+	// no more notifications on this channel
+	assert_eq!(core.run(next.into_future()).unwrap().0, None);
 }

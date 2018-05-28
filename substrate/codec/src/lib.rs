@@ -14,14 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implements the serialization and deserialization codec for polkadot runtime
-//! values.
+//! Implements a serialization and deserialization codec for simple marshalling.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg_attr(not(feature = "std"), macro_use)]
-extern crate substrate_runtime_std as rstd;
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+extern crate core;
+
+#[cfg(feature = "std")]
+pub mod alloc {
+	pub use std::boxed;
+	pub use std::vec;
+}
 
 mod slicable;
 mod joiner;

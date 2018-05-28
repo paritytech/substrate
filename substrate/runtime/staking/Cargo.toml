@@ -12,11 +12,18 @@ substrate-codec = { path = "../../codec", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-io = { path = "../../runtime-io", default_features = false }
+substrate-runtime-sandbox = { path = "../../runtime-sandbox", default_features = false }
 substrate-runtime-support = { path = "../../runtime-support", default_features = false }
 substrate-runtime-primitives = { path = "../primitives", default_features = false }
 substrate-runtime-consensus = { path = "../consensus", default_features = false }
 substrate-runtime-system = { path = "../system", default_features = false }
 substrate-runtime-session = { path = "../session", default_features = false }
+parity-wasm = { version = "0.30", default_features = false }
+pwasm-utils = { version = "0.2", default_features = false }
+
+[dev-dependencies]
+wabt = "0.1.7"
+assert_matches = "1.1"
 
 [features]
 default = ["std"]
@@ -28,8 +35,11 @@ std = [
 	"substrate-primitives/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",
+	"substrate-runtime-sandbox/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-primitives/std",
 	"substrate-runtime-session/std",
 	"substrate-runtime-system/std",
+	"pwasm-utils/std",
+	"parity-wasm/std",
 ]

@@ -38,14 +38,16 @@ use std::{
 	sync::Arc,
 };
 
-use codec::Slicable;
 use polkadot_api::PolkadotApi;
+use primitives::{AccountId, Timestamp, Hash};
 use primitives::{Hash, AccountId, Timestamp};
+use primitives::parachain::CandidateReceipt;
 use substrate_primitives::block::{Extrinsic, ExtrinsicHash};
 use substrate_primitives::hexdisplay::HexDisplay;
-use runtime::{Block, UncheckedExtrinsic, TimestampCall, Call};
-use substrate_runtime_primitives::traits::Checkable;
+use runtime::{Block, UncheckedExtrinsic, TimestampCall, ParachainsCall, Call};
+use substrate_runtime_primitives::traits::{Bounded, Checkable};
 use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
+
 pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
 
@@ -58,14 +60,23 @@ pub struct PolkadotBlock {
 impl PolkadotBlock {
 	/// Create a new block, checking high-level well-formedness.
 	pub fn from(unchecked: Block) -> ::std::result::Result<Self, Block> {
-		if unchecked.extrinsics.len() < 1 {
+		if unchecked.extrinsics.len() < 2 {
 			return Err(unchecked);
 		}
 		if unchecked.extrinsics[0].is_signed() {
 			return Err(unchecked);
 		}
+		if unchecked.extrinsics[1].is_signed() {
+			return Err(unchecked);
+		}
+
 		match unchecked.extrinsics[0].extrinsic.function {
 			Call::Timestamp(TimestampCall::set(_)) => {},
+			_ => return Err(unchecked),
+		}
+
+		match unchecked.extrinsics[1].extrinsic.function {
+			Call::Parachains(ParachainsCall::set_heads(_)) => {},
 			_ => return Err(unchecked),
 		}
 
@@ -83,6 +94,19 @@ impl PolkadotBlock {
 	pub fn timestamp(&self) -> Timestamp {
 		if let Call::Timestamp(TimestampCall::set(t)) = self.block.extrinsics[0].extrinsic.function {
 			t
+		} else {
+			if let Some((file, line)) = self.location {
+				panic!("Invalid block used in `PolkadotBlock::force_from` at {}:{}", file, line);
+			} else {
+				panic!("Invalid block made it through the PolkadotBlock verification!?");
+			}
+		}
+	}
+
+	/// Retrieve the parachain candidates proposed for this block.
+	pub fn parachain_heads(&self) -> &[CandidateReceipt] {
+		if let Call::Parachains(ParachainsCall::set_heads(ref t)) = self.block.extrinsics[1].extrinsic.function {
+			&t[..]
 		} else {
 			if let Some((file, line)) = self.location {
 				panic!("Invalid block used in `PolkadotBlock::force_from` at {}:{}", file, line);
@@ -213,7 +237,7 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 		&self,
 		xts: &[txpool::Transaction<VerifiedTransaction>],
 		scores: &mut [Self::Score],
-		_change: Change
+		_change: Change<()>
 	) {
 		for i in 0..xts.len() {
 			// all the same score since there are no fees.
@@ -264,7 +288,7 @@ impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T
 		// transaction-pool trait.
 		let (api_handle, at_block) = (&self.api_handle, &self.at_block);
 		let next_index = self.known_indices.entry(sender)
-			.or_insert_with(|| api_handle.index(at_block, sender).ok().unwrap_or_else(u64::max_value));
+			.or_insert_with(|| api_handle.index(at_block, sender).ok().unwrap_or_else(Bounded::max_value));
 
 		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.inner.index);
 

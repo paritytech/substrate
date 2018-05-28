@@ -21,6 +21,13 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
+#[cfg(test)]
+extern crate wabt;
+
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
+
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -32,8 +39,11 @@ extern crate substrate_primitives;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
+extern crate pwasm_utils;
+extern crate parity_wasm;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
@@ -43,6 +53,10 @@ use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
+
+mod contract;
+#[cfg(test)]
+mod mock;
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -78,7 +92,7 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Default + Copy;
+	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy;
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 }
 
@@ -169,8 +183,8 @@ impl<T: Trait> Module<T> {
 	/// Create a smart-contract account.
 	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, DirectAccountDb) {
-			<AccountDb<T>>::merge(&DirectAccountDb, commit);
+		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb) {
+			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
 	}
 
@@ -180,8 +194,8 @@ impl<T: Trait> Module<T> {
 	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, DirectAccountDb) {
-			<AccountDb<T>>::merge(&DirectAccountDb, commit);
+		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb) {
+			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
 	}
 
@@ -382,11 +396,11 @@ trait AccountDb<T: Trait> {
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 
-	fn set_storage(&self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>);
-	fn set_code(&self, account: &T::AccountId, code: Vec<u8>);
-	fn set_balance(&self, account: &T::AccountId, balance: T::Balance);
+	fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>);
+	fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>);
+	fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance);
 
-	fn merge(&self, state: State<T>);
+	fn merge(&mut self, state: State<T>);
 }
 
 struct DirectAccountDb;
@@ -400,20 +414,20 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		<FreeBalance<T>>::get(account)
 	}
-	fn set_storage(&self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
+	fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
 		if let Some(value) = value {
 			<StorageOf<T>>::insert(&(account.clone(), location), &value);
 		} else {
 			<StorageOf<T>>::remove(&(account.clone(), location));
 		}
 	}
-	fn set_code(&self, account: &T::AccountId, code: Vec<u8>) {
+	fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>) {
 		<CodeOf<T>>::insert(account, &code);
 	}
-	fn set_balance(&self, account: &T::AccountId, balance: T::Balance) {
+	fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
 		<FreeBalance<T>>::insert(account, balance);
 	}
-	fn merge(&self, s: State<T>) {
+	fn merge(&mut self, s: State<T>) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
 				<FreeBalance<T>>::insert(&address, balance);
@@ -450,40 +464,50 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		self.local.borrow().get(account)
+		self.local
+			.borrow()
+			.get(account)
 			.and_then(|a| a.storage.get(location))
 			.cloned()
 			.unwrap_or_else(|| self.underlying.get_storage(account, location))
 	}
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		self.local.borrow().get(account)
+		self.local
+			.borrow()
+			.get(account)
 			.and_then(|a| a.code.clone())
 			.unwrap_or_else(|| self.underlying.get_code(account))
 	}
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
-		self.local.borrow().get(account)
+		self.local
+			.borrow()
+			.get(account)
 			.and_then(|a| a.balance)
 			.unwrap_or_else(|| self.underlying.get_balance(account))
 	}
-	fn set_storage(&self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
-		self.local.borrow_mut()
+	fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
+		self.local
+			.borrow_mut()
 			.entry(account.clone())
 			.or_insert(Default::default())
-			.storage.insert(location, value);
+			.storage
+			.insert(location, value);
 	}
-	fn set_code(&self, account: &T::AccountId, code: Vec<u8>) {
-		self.local.borrow_mut()
+	fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>) {
+		self.local
+			.borrow_mut()
 			.entry(account.clone())
 			.or_insert(Default::default())
 			.code = Some(code);
 	}
-	fn set_balance(&self, account: &T::AccountId, balance: T::Balance) {
-		self.local.borrow_mut()
+	fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
+		self.local
+			.borrow_mut()
 			.entry(account.clone())
 			.or_insert(Default::default())
 			.balance = Some(balance);
 	}
-	fn merge(&self, s: State<T>) {
+	fn merge(&mut self, s: State<T>) {
 		let mut local = self.local.borrow_mut();
 
 		for (address, changed) in s.into_iter() {
@@ -511,7 +535,7 @@ impl<T: Trait> Module<T> {
 		transactor: &T::AccountId,
 		code: &[u8],
 		value: T::Balance,
-		account_db: DB
+		account_db: &DB,
 	) -> Option<State<T>> {
 		let from_balance = account_db.get_balance(transactor);
 		// TODO: a fee.
@@ -538,32 +562,36 @@ impl<T: Trait> Module<T> {
 		transactor: &T::AccountId,
 		dest: &T::AccountId,
 		value: T::Balance,
-		account_db: DB
+		account_db: &DB,
 	) -> Option<State<T>> {
 		let from_balance = account_db.get_balance(transactor);
 		assert!(from_balance >= value);
 
 		let to_balance = account_db.get_balance(dest);
 		assert!(<Bondage<T>>::get(transactor) <= <Bondage<T>>::get(dest));
-		assert!(to_balance + value > to_balance);	// no overflow
+		assert!(to_balance + value > to_balance); // no overflow
 
 		// TODO: a fee, based upon gaslimit/gasprice.
+		let gas_limit = 100_000;
+
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
 
 		// Our local overlay: Should be used for any transfers and creates that happen internally.
-		let overlay = OverlayAccountDb::new(&account_db);
+		let mut overlay = OverlayAccountDb::new(account_db);
 
 		if transactor != dest {
 			overlay.set_balance(transactor, from_balance - value);
 			overlay.set_balance(dest, to_balance + value);
 		}
 
-		let should_commit = {
+		let dest_code = overlay.get_code(dest);
+		let should_commit = if dest_code.is_empty() {
+			true
+		} else {
 			// TODO: logging (logs are just appended into a notable storage-based vector and cleared every
 			// block).
-			// TODO: if `overlay.get_code(dest)` isn't empty then execute code with `overlay`.
-			true
+			contract::execute(&dest_code, dest, &mut overlay, gas_limit).is_ok()
 		};
 
 		if should_commit {
@@ -685,61 +713,7 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
-	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity};
-	use primitives::testing::{Digest, Header};
-
-	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
-	impl consensus::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
-		type SessionKey = u64;
-	}
-	impl system::Trait for Test {
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
-		type Digest = Digest;
-		type AccountId = u64;
-		type Header = Header;
-	}
-	impl session::Trait for Test {
-		type ConvertAccountIdToSessionKey = Identity;
-	}
-	impl Trait for Test {
-		type Balance = u64;
-		type DetermineContractAddress = DummyContractAddressFor;
-	}
-
-	fn new_test_ext(session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
-		t.extend(consensus::GenesisConfig::<Test>{
-			code: vec![],
-			authorities: vec![],
-		}.build_externalities());
-		t.extend(session::GenesisConfig::<Test>{
-			session_length,
-			validators: vec![10, 20],
-		}.build_externalities());
-		t.extend(GenesisConfig::<Test>{
-			sessions_per_era,
-			current_era,
-			balances: if monied { vec![(1, 10), (2, 20), (3, 30), (4, 40)] } else { vec![] },
-			intentions: vec![],
-			validator_count: 2,
-			bonding_duration: 3,
-			transaction_fee: 0,
-		}.build_externalities());
-		t
-	}
-
-	type System = system::Module<Test>;
-	type Session = session::Module<Test>;
-	type Staking = Module<Test>;
+	use mock::*;
 
 	#[test]
 	fn staking_should_work() {

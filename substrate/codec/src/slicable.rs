@@ -16,8 +16,9 @@
 
 //! Serialisation.
 
-use rstd::prelude::*;
-use rstd::{mem, slice};
+use alloc::vec::Vec;
+use alloc::boxed::Box;
+use core::{mem, slice};
 use super::joiner::Joiner;
 
 /// Trait that allows reading of data into a slice.
@@ -38,7 +39,7 @@ pub trait Input {
 
 impl<'a> Input for &'a [u8] {
 	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = ::rstd::cmp::min(into.len(), self.len());
+		let len = ::core::cmp::min(into.len(), self.len());
 		into[..len].copy_from_slice(&self[..len]);
 		*self = &self[len..];
 		len
@@ -58,6 +59,31 @@ pub trait Slicable: Sized {
 	/// Convert self to a slice and then invoke the given closure with it.
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&self.encode())
+	}
+}
+
+impl<T: Slicable, E: Slicable> Slicable for Result<T, E> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			0 => Some(Ok(T::decode(input)?)),
+			1 => Some(Err(E::decode(input)?)),
+			_ => None,
+		}
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		match *self {
+			Ok(ref t) => {
+				v.push(0);
+				t.using_encoded(|s| v.extend(s));
+			}
+			Err(ref e) => {
+				v.push(1);
+				e.using_encoded(|s| v.extend(s));
+			}
+		}
+		v
 	}
 }
 
@@ -130,7 +156,7 @@ impl<T: Slicable> Slicable for Vec<T> {
 	}
 
 	fn encode(&self) -> Vec<u8> {
-		use rstd::iter::Extend;
+		use core::iter::Extend;
 
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
@@ -216,7 +242,7 @@ macro_rules! tuple_impl {
 
 #[allow(non_snake_case)]
 mod inner_tuple_impl {
-	use rstd::vec::Vec;
+	use alloc::vec::Vec;
 
 	use super::{Input, Slicable};
 	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
@@ -319,7 +345,7 @@ macro_rules! impl_non_endians {
 	)* }
 }
 
-impl_endians!(u16, u32, u64, usize, i16, i32, i64, isize);
+impl_endians!(u16, u32, u64, u128, usize, i16, i32, i64, i128, isize);
 impl_non_endians!(i8, [u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7], [u8; 8],
 	[u8; 10], [u8; 12], [u8; 14], [u8; 16], [u8; 20], [u8; 24], [u8; 28], [u8; 32], [u8; 40],
 	[u8; 48], [u8; 56], [u8; 64], [u8; 80], [u8; 96], [u8; 112], [u8; 128], bool);

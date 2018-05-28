@@ -17,6 +17,7 @@
 use std::sync::Arc;
 use std::collections::{BTreeMap};
 use std::io;
+use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
 use network::{NetworkProtocolHandler, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
@@ -30,9 +31,12 @@ use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
 use message::{Statement, LocalizedBftMessage};
+use on_demand::OnDemandService;
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
+
+const V0_PACKET_COUNT: u8 = 1;
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
@@ -40,6 +44,12 @@ pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 pub type StatementStream = mpsc::UnboundedReceiver<Statement>;
 /// Type that represents bft messages stream.
 pub type BftMessageStream = mpsc::UnboundedReceiver<LocalizedBftMessage>;
+
+const TICK_TOKEN: TimerToken = 0;
+const TICK_TIMEOUT: Duration = Duration::from_millis(1000);
+
+const PROPAGATE_TOKEN: TimerToken = 1;
+const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 
 bitflags! {
 	/// Node roles bitmask.
@@ -91,10 +101,17 @@ pub trait ConsensusService: Send + Sync {
 	/// Pass `None` to clear the candidate.
 	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>);
 
-	/// Get BFT message stream.
-	fn bft_messages(&self) -> BftMessageStream;
+	/// Get BFT message stream for messages corresponding to consensus on given
+	/// parent hash.
+	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream;
 	/// Send out a BFT message.
 	fn send_bft_message(&self, message: LocalizedBftMessage);
+}
+
+/// Service able to execute closure in the network context.
+pub trait ExecuteInContext: Send + Sync {
+	/// Execute closure in network context.
+	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol)>(&self, closure: F);
 }
 
 /// devp2p Protocol handler
@@ -127,6 +144,8 @@ pub struct Params {
 	pub network_config: NetworkConfiguration,
 	/// Polkadot relay chain access point.
 	pub chain: Arc<Client>,
+	/// On-demand service reference.
+	pub on_demand: Option<Arc<OnDemandService>>,
 	/// Transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
 }
@@ -146,7 +165,7 @@ impl Service {
 		let sync = Arc::new(Service {
 			network: service,
 			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(params.config, params.chain.clone(), params.transaction_pool)?,
+				protocol: Protocol::new(params.config, params.chain, params.on_demand, params.transaction_pool)?,
 			}),
 		});
 
@@ -161,9 +180,9 @@ impl Service {
 	}
 
 	/// Called when new transactons are imported by the client.
-	pub fn on_new_transactions(&self, transactions: &[(ExtrinsicHash, Vec<u8>)]) {
+	pub fn trigger_repropagate(&self) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context), transactions);
+			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context));
 		});
 	}
 
@@ -174,7 +193,7 @@ impl Service {
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, 1, &[0u8])
+		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, &[(0, V0_PACKET_COUNT)])
 			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}
 
@@ -187,6 +206,14 @@ impl Service {
 impl Drop for Service {
 	fn drop(&mut self) {
 		self.stop();
+	}
+}
+
+impl ExecuteInContext for Service {
+	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol)>(&self, closure: F) {
+		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+			closure(&mut NetSyncIo::new(context), &self.handler.protocol)
+		});
 	}
 }
 
@@ -254,8 +281,8 @@ impl ConsensusService for Service {
 		self.handler.protocol.set_local_candidate(candidate)
 	}
 
-	fn bft_messages(&self) -> BftMessageStream {
-		self.handler.protocol.bft_messages()
+	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
+		self.handler.protocol.bft_messages(parent_hash)
 	}
 
 	fn send_bft_message(&self, message: LocalizedBftMessage) {
@@ -267,7 +294,11 @@ impl ConsensusService for Service {
 
 impl NetworkProtocolHandler for ProtocolHandler {
 	fn initialize(&self, io: &NetworkContext, _host_info: &HostInfo) {
-		io.register_timer(0, 1000).expect("Error registering sync timer");
+		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
+			.expect("Error registering sync timer");
+
+		io.register_timer(PROPAGATE_TOKEN, PROPAGATE_TIMEOUT)
+			.expect("Error registering transaction propagation timer");
 	}
 
 	fn read(&self, io: &NetworkContext, peer: &PeerId, _packet_id: u8, data: &[u8]) {
@@ -282,8 +313,12 @@ impl NetworkProtocolHandler for ProtocolHandler {
 		self.protocol.on_peer_disconnected(&mut NetSyncIo::new(io), *peer);
 	}
 
-	fn timeout(&self, io: &NetworkContext, _timer: TimerToken) {
-		self.protocol.tick(&mut NetSyncIo::new(io));
+	fn timeout(&self, io: &NetworkContext, timer: TimerToken) {
+		match timer {
+			TICK_TOKEN => self.protocol.tick(&mut NetSyncIo::new(io)),
+			PROPAGATE_TOKEN => self.protocol.propagate_transactions(&mut NetSyncIo::new(io)),
+			_ => {}
+		}
 	}
 }
 

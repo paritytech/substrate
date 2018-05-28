@@ -18,22 +18,29 @@
 
 use std::{error, fmt};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
-pub trait Backend {
+///
+/// The clone operation should be cheap.
+pub trait Backend: Clone {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
-	/// Get keyed storage associated with specific address, or None if there is nothing associated.
-	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, Self::Error>;
+	/// Changes to be applied if committing
+	type Transaction;
 
-	/// Commit updates to the backend and get new state.
-	fn commit<I>(&mut self, changes: I)
+	/// Get keyed storage associated with specific address, or None if there is nothing associated.
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
+	/// Calculate the storage root, with given delta over what is already stored in
+	/// the backend, and produce a "transaction" that can be used to commit.
+	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 
 	/// Get all key/value pairs into a Vec.
-	fn pairs(&self) -> Vec<(&[u8], &[u8])>;
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 }
 
 /// Error impossible.
@@ -53,29 +60,67 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-pub type InMemory = HashMap<Vec<u8>, Vec<u8>>;
+#[derive(Clone, PartialEq, Eq)]
+pub struct InMemory {
+	inner: Arc<HashMap<Vec<u8>, Vec<u8>>>,
+}
 
-impl Backend for InMemory {
-	type Error = Void;
-
-	fn storage(&self, key: &[u8]) -> Result<Option<&[u8]>, Self::Error> {
-		Ok(self.get(key).map(AsRef::as_ref))
-	}
-
-	fn commit<I>(&mut self, changes: I)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		for (key, val) in changes {
-			match val {
-				Some(v) => { self.insert(key, v); },
-				None => { self.remove(&key); },
-			}
+impl Default for InMemory {
+	fn default() -> Self {
+		InMemory {
+			inner: Arc::new(Default::default()),
 		}
-	}
-
-	fn pairs(&self) -> Vec<(&[u8], &[u8])> {
-		self.iter().map(|(k, v)| (&k[..], &v[..])).collect()
 	}
 }
 
-// TODO: DB-based backend
+impl InMemory {
+	/// Copy the state, with applied updates
+	pub fn update(&self, changes: <Self as Backend>::Transaction) -> Self {
+		let mut inner: HashMap<_, _> = (&*self.inner).clone();
+		for (key, val) in changes {
+			match val {
+				Some(v) => { inner.insert(key, v); },
+				None => { inner.remove(&key); },
+			}
+		}
+
+		inner.into()
+	}
+}
+
+impl From<HashMap<Vec<u8>, Vec<u8>>> for InMemory {
+	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		InMemory {
+			inner: Arc::new(inner),
+		}
+	}
+}
+
+impl Backend for InMemory {
+	type Error = Void;
+	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		Ok(self.inner.get(key).map(Clone::clone))
+	}
+
+	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		let existing_pairs = self.inner.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
+
+		let transaction: Vec<_> = delta.into_iter().collect();
+		let root = ::triehash::trie_root(existing_pairs.chain(transaction.iter().cloned())
+			.collect::<HashMap<_, _>>()
+			.into_iter()
+			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+		).0;
+
+		(root, transaction)
+	}
+
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.inner.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+	}
+}
+

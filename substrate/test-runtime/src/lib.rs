@@ -68,6 +68,7 @@ pub mod api {
 	use system;
 
 	impl_stubs!(
+		authorities => |()| system::authorities(),
 		execute_block => |block| system::execute_block(block),
 		execute_transaction => |(header, utx)| system::execute_transaction(utx, header),
 		finalise_block => |header| system::finalise_block(header)

@@ -6,9 +6,6 @@ description = "Substrate State Machine"
 
 [dependencies]
 substrate-primitives = { path = "../primitives", version = "0.1.0" }
-hashdb = "0.1.1"
-patricia-trie = "0.1.0"
-memorydb = "0.1.1"
 triehash = "0.1"
 byteorder = "1.1"
 hex-literal = "0.1.0"

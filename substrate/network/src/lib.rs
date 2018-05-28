@@ -22,6 +22,7 @@
 extern crate ethcore_network_devp2p as network_devp2p;
 extern crate ethcore_network as network;
 extern crate ethcore_io as core_io;
+extern crate linked_hash_map;
 extern crate rand;
 extern crate parking_lot;
 extern crate substrate_primitives as primitives;
@@ -40,11 +41,9 @@ extern crate ed25519;
 #[macro_use] extern crate error_chain;
 
 #[cfg(test)] extern crate env_logger;
-#[cfg(test)] extern crate substrate_test_runtime as test_runtime;
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] #[macro_use] extern crate substrate_executor as executor;
 #[cfg(test)] extern crate substrate_codec as codec;
-#[cfg(test)] extern crate substrate_bft as bft;
+#[cfg(test)] extern crate substrate_keyring as keyring;
+#[cfg(test)] extern crate substrate_test_client as test_client;
 
 mod service;
 mod sync;
@@ -55,6 +54,7 @@ mod config;
 mod chain;
 mod blocks;
 mod consensus;
+mod on_demand;
 pub mod error;
 
 #[cfg(test)] mod test;
@@ -68,6 +68,7 @@ pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
 pub use message::{Statement, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
+pub use on_demand::{OnDemand, OnDemandService, Response as OnDemandResponse};
 
 // TODO: move it elsewhere
 fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {
