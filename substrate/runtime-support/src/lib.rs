@@ -22,7 +22,8 @@
 extern crate serde;
 
 #[cfg(feature = "std")]
-#[allow(unused_imports)] #[macro_use]	// can be removed when fixed: https://github.com/rust-lang/rust/issues/43497
+#[allow(unused_imports)] // can be removed when fixed: https://github.com/rust-lang/rust/issues/43497
+#[macro_use]
 extern crate serde_derive;
 
 #[cfg(feature = "std")]

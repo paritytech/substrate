@@ -37,6 +37,13 @@ impl From<u32> for Id {
 	fn from(x: u32) -> Self { Id(x) }
 }
 
+impl Id {
+	/// Convert this Id into its inner representation.
+	pub fn into_inner(self) -> u32 {
+		self.0
+	}
+}
+
 impl Slicable for Id {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).map(Id)
@@ -85,8 +92,6 @@ impl Slicable for Chain {
 		f(&self.encode().as_slice())
 	}
 }
-
-
 
 /// The duty roster specifying what jobs each validator must do.
 #[derive(Clone, PartialEq)]

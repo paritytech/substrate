@@ -356,6 +356,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(instance_idx as u32)
 	},
+	ext_sandbox_instance_teardown(instance_idx: u32) => {
+		this.sandbox_store.instance_teardown(instance_idx)?;
+		Ok(())
+	},
 	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, state: usize) -> u32 => {
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
@@ -406,6 +410,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(sandbox_primitives::ERR_OK)
 	},
+	ext_sandbox_memory_teardown(memory_idx: u32) => {
+		this.sandbox_store.memory_teardown(memory_idx)?;
+		Ok(())
+	},
 	=> <'e, E: Externalities + 'e>
 );
 
@@ -425,9 +433,6 @@ impl CodeExecutor for WasmExecutor {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		// TODO: handle all expects as errors to be returned.
-		println!("Wasm-Calling {}({})", method, HexDisplay::from(&data));
-
 		let module = Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
 
 		// start module instantiation. Don't run 'start' function yet.
@@ -473,7 +478,6 @@ impl CodeExecutor for WasmExecutor {
 			let length = (r >> 32) as u32 as usize;
 			memory.get(offset, length)
 				.map_err(|_| ErrorKind::Runtime.into())
-				.map(|v| { println!("Returned {}", HexDisplay::from(&v)); v })
 		} else {
 			Err(ErrorKind::InvalidReturn.into())
 		}

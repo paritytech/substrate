@@ -247,6 +247,10 @@ pub enum Message {
 	CandidateResponse(CandidateResponse),
 	/// BFT Consensus statement.
 	BftMessage(LocalizedBftMessage),
+	/// Remote method call request.
+	RemoteCallRequest(RemoteCallRequest),
+	/// Remote method call response.
+	RemoteCallResponse(RemoteCallResponse),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -318,4 +322,28 @@ pub struct BlockResponse {
 pub struct BlockAnnounce {
 	/// New block header.
 	pub header: Header,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+/// Remote call request.
+pub struct RemoteCallRequest {
+	/// Unique request id.
+	pub id: RequestId,
+	/// Block at which to perform call.
+	pub block: HeaderHash,
+	/// Method name.
+	pub method: String,
+	/// Call data.
+	pub data: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+/// Remote call response.
+pub struct RemoteCallResponse {
+	/// Id of a request this response was made for.
+	pub id: RequestId,
+	/// Method return value.
+	pub value: Vec<u8>,
+	/// Execution proof.
+	pub proof: Vec<Vec<u8>>,
 }

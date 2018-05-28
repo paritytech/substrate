@@ -16,7 +16,7 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin};
+use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin, CallExecutor};
 use client::error::Error;
 use state_machine;
 use primitives::block::{self, Id as BlockId};
@@ -43,11 +43,14 @@ pub trait Client: Send + Sync {
 
 	/// Get block justification.
 	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error>;
+
+	/// Get method execution proof.
+	fn execution_proof(&self, block: &block::HeaderHash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
 }
 
 impl<B, E> Client for PolkadotClient<B, E> where
 	B: client::backend::Backend + Send + Sync + 'static,
-	E: state_machine::CodeExecutor + Send + Sync + 'static,
+	E: CallExecutor + Send + Sync + 'static,
 	Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>, {
 
 	fn import(&self, is_best: bool, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error> {
@@ -79,5 +82,9 @@ impl<B, E> Client for PolkadotClient<B, E> where
 
 	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error> {
 		(self as &PolkadotClient<B, E>).justification(id)
+	}
+
+	fn execution_proof(&self, block: &block::HeaderHash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
+		(self as &PolkadotClient<B, E>).execution_proof(&BlockId::Hash(block.clone()), method, data)
 	}
 }

@@ -18,6 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
+use primitives::AuthorityId;
 use runtime_io::{storage_root, enumerated_trie_root, ed25519_verify};
 use runtime_support::{Hashable, storage};
 use codec::{KeyedVec, Slicable};
@@ -26,6 +27,8 @@ use super::{AccountId, UncheckedTransaction, H256 as Hash, Block, Header};
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
 const LATEST_BLOCK_HASH: &[u8] = b"latest";
+const AUTHORITY_AT: &'static[u8] = b":auth:";
+const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 
 pub fn latest_block_hash() -> Hash {
 	storage::get(LATEST_BLOCK_HASH).expect("There must always be a latest block")
@@ -37,6 +40,14 @@ pub fn balance_of(who: AccountId) -> u64 {
 
 pub fn nonce_of(who: AccountId) -> u64 {
 	storage::get_or(&who.to_keyed_vec(NONCE_OF), 0)
+}
+
+/// Get authorities ar given block.
+pub fn authorities() -> Vec<AuthorityId> {
+	let len: u32 = storage::unhashed::get(AUTHORITY_COUNT).expect("There are always authorities in test-runtime");
+	(0..len)
+		.map(|i| storage::unhashed::get(&i.to_keyed_vec(AUTHORITY_AT)).expect("Authority is properly encoded in test-runtime"))
+		.collect()
 }
 
 /// Actually execute all transitioning for `block`.

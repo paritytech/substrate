@@ -22,6 +22,7 @@
 extern crate ethcore_network_devp2p as network_devp2p;
 extern crate ethcore_network as network;
 extern crate ethcore_io as core_io;
+extern crate linked_hash_map;
 extern crate rand;
 extern crate parking_lot;
 extern crate substrate_primitives as primitives;
@@ -53,6 +54,7 @@ mod config;
 mod chain;
 mod blocks;
 mod consensus;
+mod on_demand;
 pub mod error;
 
 #[cfg(test)] mod test;
@@ -66,6 +68,7 @@ pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
 pub use message::{Statement, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
+pub use on_demand::{OnDemand, OnDemandService, Response as OnDemandResponse};
 
 // TODO: move it elsewhere
 fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {

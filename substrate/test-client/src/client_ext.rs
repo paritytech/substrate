@@ -39,7 +39,7 @@ pub trait TestClient {
 
 impl TestClient for Client<Backend, Executor> {
 	fn new_for_tests() -> Self {
-		client::new_in_mem(NativeExecutor::new(), prepare_genesis).unwrap()
+		client::new_in_mem(NativeExecutor::new(), GenesisBuilder).unwrap()
 	}
 
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: block::Block) -> client::error::Result<()> {
@@ -95,14 +95,18 @@ fn genesis_config() -> GenesisConfig {
 	], 1000)
 }
 
-fn prepare_genesis() -> (block::Header, Vec<(Vec<u8>, Vec<u8>)>) {
-	let mut storage = genesis_config().genesis_map();
-	let block = client::genesis::construct_genesis_block(&storage);
-	storage.extend(additional_storage_with_genesis(&block));
+struct GenesisBuilder;
 
-	(
-		block::Header::decode(&mut block.header.encode().as_ref())
-			.expect("to_vec() always gives a valid serialisation; qed"),
-		storage.into_iter().collect()
-	)
+impl client::GenesisBuilder for GenesisBuilder {
+	fn build(self) -> (block::Header, Vec<(Vec<u8>, Vec<u8>)>) {
+		let mut storage = genesis_config().genesis_map();
+		let block = client::genesis::construct_genesis_block(&storage);
+		storage.extend(additional_storage_with_genesis(&block));
+
+		(
+			block::Header::decode(&mut block.header.encode().as_ref())
+				.expect("to_vec() always gives a valid serialisation; qed"),
+			storage.into_iter().collect()
+		)
+	}
 }

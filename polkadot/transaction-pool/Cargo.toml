@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 log = "0.4.0"
-transaction-pool = "1.9.0"
+transaction-pool = "1.12.0"
 error-chain = "0.11"
 polkadot-api = { path = "../api" }
 polkadot-primitives = { path = "../primitives" }
@@ -16,4 +16,3 @@ substrate-primitives = { path = "../../substrate/primitives" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-codec = { path = "../../substrate/codec" }
 ed25519 = { path = "../../substrate/ed25519" }
-ethereum-types = "0.2"
