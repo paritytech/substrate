@@ -205,12 +205,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 
 	match role == service::Role::LIGHT {
-		true => run_until_exit(core, service::new_light(config.clone())?, &matches),
-		false => run_until_exit(core, service::new_full(config.clone())?, &matches),
+		true => run_until_exit(core, service::new_light(config.clone())?, &matches, config),
+		false => run_until_exit(core, service::new_full(config.clone())?, &matches, config),
 	}
 }
 
-fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches) -> error::Result<()>
+fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
 	where
 		B: client::backend::Backend + Send + Sync + 'static,
 		E: client::CallExecutor + Send + Sync + 'static,
