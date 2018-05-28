@@ -19,12 +19,13 @@ members = [
 	"polkadot/consensus",
 	"polkadot/executor",
 	"polkadot/keystore",
+	"polkadot/parachain",
 	"polkadot/primitives",
 	"polkadot/runtime",
 	"polkadot/statement-table",
 	"polkadot/transaction-pool",
-	"polkadot/validator",
 	"polkadot/service",
+
 	"substrate/bft",
 	"substrate/client",
 	"substrate/client/db",
@@ -53,6 +54,7 @@ members = [
 	"substrate/serializer",
 	"substrate/state-machine",
 	"substrate/test-runtime",
+
 	"demo/runtime",
 	"demo/primitives",
 	"demo/executor",

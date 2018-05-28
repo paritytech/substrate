@@ -45,6 +45,7 @@
 //! to be performed, as the collation logic itself.
 
 extern crate futures;
+extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate polkadot_primitives;
 
@@ -82,7 +83,6 @@ pub trait RelayChainContext {
 }
 
 /// Collate the necessary ingress queue using the given context.
-// TODO: impl trait
 pub fn collate_ingress<'a, R>(relay_context: R)
 	-> Box<Future<Item=ConsolidatedIngress, Error=R::Error> + 'a>
 	where
@@ -105,7 +105,7 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 	// and then by the parachain ID.
 	//
 	// then transform that into the consolidated egress queue.
-	let future = stream::futures_unordered(egress_fetch)
+	Box::new(stream::futures_unordered(egress_fetch)
 		.fold(BTreeMap::new(), |mut map, (routing_id, egresses)| {
 			for (depth, egress) in egresses.into_iter().rev().enumerate() {
 				let depth = -(depth as i64);
@@ -116,9 +116,7 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 		})
 		.map(|ordered| ordered.into_iter().map(|((_, id), egress)| (id, egress)))
 		.map(|i| i.collect::<Vec<_>>())
-		.map(ConsolidatedIngress);
-
-	Box::new(future)
+		.map(ConsolidatedIngress))
 }
 
 /// Produce a candidate for the parachain.

@@ -16,8 +16,9 @@
 
 //! Serialisation.
 
-use rstd::prelude::*;
-use rstd::{mem, slice};
+use alloc::vec::Vec;
+use alloc::boxed::Box;
+use core::{mem, slice};
 use super::joiner::Joiner;
 
 /// Trait that allows reading of data into a slice.
@@ -38,7 +39,7 @@ pub trait Input {
 
 impl<'a> Input for &'a [u8] {
 	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = ::rstd::cmp::min(into.len(), self.len());
+		let len = ::core::cmp::min(into.len(), self.len());
 		into[..len].copy_from_slice(&self[..len]);
 		*self = &self[len..];
 		len
@@ -155,7 +156,7 @@ impl<T: Slicable> Slicable for Vec<T> {
 	}
 
 	fn encode(&self) -> Vec<u8> {
-		use rstd::iter::Extend;
+		use core::iter::Extend;
 
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
@@ -241,7 +242,7 @@ macro_rules! tuple_impl {
 
 #[allow(non_snake_case)]
 mod inner_tuple_impl {
-	use rstd::vec::Vec;
+	use alloc::vec::Vec;
 
 	use super::{Input, Slicable};
 	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);

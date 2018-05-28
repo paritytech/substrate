@@ -5,7 +5,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 rustc-hex = "1.0"
-hex-literal = "0.1.0"
 log = { version = "0.3", optional = true }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
@@ -27,6 +26,9 @@ substrate-runtime-staking = { path = "../../substrate/runtime/staking" }
 substrate-runtime-system = { path = "../../substrate/runtime/system" }
 substrate-runtime-timestamp = { path = "../../substrate/runtime/timestamp" }
 polkadot-primitives = { path = "../primitives" }
+
+[dev-dependencies]
+hex-literal = "0.1.0"
 
 [features]
 default = ["std"]

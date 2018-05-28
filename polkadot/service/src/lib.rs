@@ -295,14 +295,26 @@ pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend
 
 /// Creates full client and register protocol with the network service
 pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend, client::LocalCallExecutor<client_db::Backend, CodeExecutor>>, error::Error> {
+	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
 	Service::new(|db_settings, executor, genesis_builder: GenesisBuilder|
 		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_builder)?), None)),
 		|client| client,
 		|client, network, tx_pool, keystore| {
+			if !is_validator {
+				return Ok(None);
+			}
+
 			// Load the first available key. Code above makes sure it exisis.
 			let key = keystore.load(&keystore.contents()?[0], "")?;
 			info!("Using authority key {:?}", key.public());
-			Ok(Some(consensus::Service::new(client.clone(), client.clone(), network, tx_pool, key)))
+			Ok(Some(consensus::Service::new(
+				client.clone(),
+				client.clone(),
+				network.clone(),
+				tx_pool.clone(),
+				::std::time::Duration::from_millis(4000), // TODO: dynamic
+				key,
+			)))
 		},
 		config)
 }

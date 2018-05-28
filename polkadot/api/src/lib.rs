@@ -38,7 +38,7 @@ pub mod full;
 pub mod light;
 
 use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::DutyRoster;
+use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
 use runtime::{Block, UncheckedExtrinsic};
 
 error_chain! {
@@ -133,12 +133,21 @@ pub trait PolkadotApi {
 	/// Get the index of an account at a block.
 	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index>;
 
+	/// Get the active parachains at a block.
+	fn active_parachains(&self, at: &Self::CheckedBlockId) -> Result<Vec<ParaId>>;
 
-	/// Evaluate a block and see if it gives an error.
-	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<()>;
+	/// Get the validation code of a parachain at a block. If the parachain is active, this will always return `Some`.
+	fn parachain_code(&self, at: &Self::CheckedBlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
+
+	/// Get the chain head of a parachain. If the parachain is active, this will always return `Some`.
+	fn parachain_head(&self, at: &Self::CheckedBlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
+
+	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
+	/// and an error if we can't evaluate for some reason.
+	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<bool>;
 
 	/// Create a block builder on top of the parent block.
-	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: Timestamp) -> Result<Self::BlockBuilder>;
+	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: Timestamp, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
 }
 
 /// Mark for all Polkadot API implementations, that are making use of state data, stored locally.

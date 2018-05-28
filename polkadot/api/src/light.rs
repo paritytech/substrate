@@ -22,7 +22,7 @@ use client::{Client, CallExecutor};
 use codec::Slicable;
 use state_machine;
 use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::DutyRoster;
+use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
 use runtime::{Block, UncheckedExtrinsic};
 use full::CheckedId;
 use {PolkadotApi, RemotePolkadotApi, BlockBuilder, CheckedBlockId, Result, ErrorKind};
@@ -66,7 +66,7 @@ impl<B: Backend, E: CallExecutor> PolkadotApi for RemotePolkadotApiWrapper<B, E>
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn evaluate_block(&self, _at: &CheckedId, _block: Block) -> Result<()> {
+	fn evaluate_block(&self, _at: &CheckedId, _block: Block) -> Result<bool> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
@@ -74,7 +74,19 @@ impl<B: Backend, E: CallExecutor> PolkadotApi for RemotePolkadotApiWrapper<B, E>
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn build_block(&self, _parent: &CheckedId, _timestamp: Timestamp) -> Result<Self::BlockBuilder> {
+	fn active_parachains(&self, _at: &Self::CheckedBlockId) -> Result<Vec<ParaId>> {
+		Err(ErrorKind::UnknownRuntime.into())
+	}
+
+	fn parachain_code(&self, _at: &Self::CheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
+		Err(ErrorKind::UnknownRuntime.into())
+	}
+
+	fn parachain_head(&self, _at: &Self::CheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
+		Err(ErrorKind::UnknownRuntime.into())
+	}
+
+	fn build_block(&self, _parent: &CheckedId, _timestamp: Timestamp, _parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 }

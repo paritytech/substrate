@@ -16,7 +16,7 @@
 
 //! Trait
 
-use rstd::iter::Extend;
+use core::iter::Extend;
 use super::slicable::Slicable;
 
 /// Trait to allow itself to be serialised into a value which can be extended
