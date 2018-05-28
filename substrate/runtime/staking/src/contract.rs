@@ -21,11 +21,22 @@
 use codec::Slicable;
 use rstd::prelude::*;
 use sandbox;
-use {AccountDb, Module, OverlayAccountDb, Trait};
 
 use parity_wasm::elements::{self, External, MemoryType};
 use pwasm_utils;
 use pwasm_utils::rules;
+
+pub trait Ext {
+	type AccountId: Slicable + Clone;
+	type Balance: Slicable;
+
+	// TODO: Convert input vectors to slices?
+	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>);
+	// TODO: Return the address of the created contract.
+	fn create(&mut self, code: &[u8], value: Self::Balance);
+	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance);
+}
 
 /// Error that can occur while preparing or executing wasm smart-contract.
 #[derive(Debug, PartialEq, Eq)]
@@ -67,25 +78,21 @@ pub enum Error {
 	Memory,
 }
 
-struct ExecutionExt<'a, 'b: 'a, T: Trait + 'b> {
-	account_db: &'a mut OverlayAccountDb<'b, T>,
-	account: T::AccountId,
+struct Runtime<'a, T: Ext + 'a> {
+	ext: &'a mut T,
 	memory: sandbox::Memory,
 	gas_used: u64,
 	gas_limit: u64,
 }
-impl<'a, 'b: 'a, T: Trait> ExecutionExt<'a, 'b, T> {
-	fn account(&self) -> &T::AccountId {
-		&self.account
-	}
-	fn account_db(&self) -> &OverlayAccountDb<T> {
-		self.account_db
-	}
-	fn account_db_mut(&mut self) -> &mut OverlayAccountDb<'b, T> {
-		self.account_db
-	}
+impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	fn memory(&self) -> &sandbox::Memory {
 		&self.memory
+	}
+	fn ext(&self) -> &T {
+		self.ext
+	}
+	fn ext_mut(&mut self) -> &mut T {
+		self.ext
 	}
 	/// Account for used gas.
 	///
@@ -105,10 +112,9 @@ impl<'a, 'b: 'a, T: Trait> ExecutionExt<'a, 'b, T> {
 	}
 }
 
-pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
+pub(crate) fn execute<'a, T: Ext>(
 	code: &[u8],
-	account: &T::AccountId,
-	account_db: &'a mut OverlayAccountDb<'b, T>,
+	ext: &'a mut T,
 	gas_limit: u64,
 ) -> Result<(), Error> {
 	// ext_gas(amount: u32)
@@ -116,7 +122,7 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
 	// - amount: How much gas is used.
-	fn ext_gas<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_gas<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let amount = args[0].as_i32().unwrap() as u32;
 		if e.charge_gas(amount as u64) {
 			Ok(sandbox::ReturnValue::Unit)
@@ -135,7 +141,10 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 	//   at the given location will be removed.
 	// - value_ptr: pointer into the linear memory
 	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
-	fn ext_set_storage<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_set_storage<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let location_ptr = args[0].as_i32().unwrap() as u32;
 		let value_non_null = args[1].as_i32().unwrap() as u32;
 		let value_ptr = args[2].as_i32().unwrap() as u32;
@@ -143,17 +152,18 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		let mut location = [0; 32];
 
 		e.memory().get(location_ptr, &mut location)?;
-		let account = e.account().clone();
 
-		if value_non_null != 0 {
+		let value = if value_non_null != 0 {
 			let mut value = [0; 32];
 			e.memory().get(value_ptr, &mut value)?;
-			e.account_db_mut()
-				.set_storage(&account, location.to_vec(), Some(value.to_vec()));
+			Some(value.to_vec())
 		} else {
-			e.account_db_mut()
-				.set_storage(&account, location.to_vec(), None);
-		}
+			None
+		};
+		e.ext_mut().set_storage(
+			&location,
+			value,
+		);
 
 		Ok(sandbox::ReturnValue::Unit)
 	}
@@ -168,15 +178,14 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 	//   memory where the location of the requested value is placed.
 	// - dest_ptr: pointer where contents of the specified storage location
 	//   should be placed.
-	fn ext_get_storage<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_get_storage<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let location_ptr = args[0].as_i32().unwrap() as u32;
 		let dest_ptr = args[1].as_i32().unwrap() as u32;
 
 		let mut location = [0; 32];
 		e.memory().get(location_ptr, &mut location)?;
 
-		let account = e.account().clone();
-		if let Some(value) = e.account_db_mut().get_storage(&account, &location) {
+		if let Some(value) = e.ext().get_storage(&location) {
 			e.memory().set(dest_ptr, &value)?;
 		} else {
 			e.memory().set(dest_ptr, &[0u8; 32])?;
@@ -185,8 +194,8 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		Ok(sandbox::ReturnValue::Unit)
 	}
 
-	// ext_transfer(transfer_to: u32, transfer_to_len: u32, value: u32)
-	fn ext_transfer<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	// ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
+	fn ext_transfer<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let transfer_to_ptr = args[0].as_i32().unwrap() as u32;
 		let transfer_to_len = args[1].as_i32().unwrap() as u32;
 		let value_ptr = args[2].as_i32().unwrap() as u32;
@@ -202,19 +211,13 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		e.memory().get(value_ptr, &mut value_buf)?;
 		let value = T::Balance::decode(&mut &value_buf[..]).unwrap();
 
-		let account = e.account().clone();
-		if let Some(commit_state) =
-			Module::<T>::effect_transfer(&account, &transfer_to, value, e.account_db())
-				.map_err(|_| sandbox::Error::Execution)?
-		{
-			e.account_db_mut().merge(commit_state);
-		}
+		e.ext_mut().transfer(&transfer_to, value);
 
 		Ok(sandbox::ReturnValue::Unit)
 	}
 
-	// ext_create(code_ptr: u32, code_len: u32, value: u32)
-	fn ext_create<T: Trait>(e: &mut ExecutionExt<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
+	fn ext_create<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let code_ptr = args[0].as_i32().unwrap() as u32;
 		let code_len = args[1].as_i32().unwrap() as u32;
 		let value_ptr = args[2].as_i32().unwrap() as u32;
@@ -229,13 +232,7 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		code.resize(code_len as usize, 0u8);
 		e.memory().get(code_ptr, &mut code)?;
 
-		let account = e.account().clone();
-		if let Some(commit_state) =
-			Module::<T>::effect_create(&account, &code, value, e.account_db())
-				.map_err(|_| sandbox::Error::Execution)?
-		{
-			e.account_db_mut().merge(commit_state);
-		}
+		e.ext_mut().create(&code, value);
 
 		Ok(sandbox::ReturnValue::Unit)
 	}
@@ -254,19 +251,18 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 	// TODO: ext_balance, ext_address, ext_callvalue, etc.
 	imports.add_memory("env", "memory", memory.clone());
 
-	let mut exec_ext = ExecutionExt {
-		account: account.clone(),
-		account_db,
+	let mut runtime = Runtime {
+		ext,
 		memory,
 		gas_limit,
 		gas_used: 0,
 	};
 
 	let mut instance =
-		sandbox::Instance::new(&instrumented_code, &imports, &mut exec_ext)
+		sandbox::Instance::new(&instrumented_code, &imports, &mut runtime)
 			.map_err(|_| Error::Instantiate)?;
 	instance
-		.invoke(b"call", &[], &mut exec_ext)
+		.invoke(b"call", &[], &mut runtime)
 		.map(|_| ())
 		.map_err(|_| Error::Invoke)
 }
@@ -448,7 +444,7 @@ mod tests {
 	use wabt;
 	use runtime_io::with_externalities;
 	use mock::{Staking, Test, new_test_ext};
-	use ::{CodeOf, ContractAddressFor, DirectAccountDb, FreeBalance, StorageMap};
+	use ::{AccountDb, Trait, CodeOf, ContractAddressFor, DirectAccountDb, FreeBalance, StorageMap};
 
 	impl fmt::Debug for PreparedContract {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
