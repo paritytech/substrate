@@ -98,6 +98,10 @@ impl substrate_rpc::author::AuthorApi for RpcTransactionPool {
 struct Configuration(service::Configuration);
 
 impl substrate_rpc::system::SystemApi for Configuration {
+	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok("parity-polkadot".into())
+	}
+
 	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok(crate_version!().into())
 	}

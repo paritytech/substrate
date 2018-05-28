@@ -18,12 +18,23 @@ use super::*;
 use super::error::*;
 
 impl SystemApi for () {
+	fn system_name(&self) -> Result<String> {
+		Ok("testclient".into())
+	}
 	fn system_version(&self) -> Result<String> {
 		Ok("0.2.0".into())
 	}
 	fn system_chain(&self) -> Result<String> {
-		Ok("test".into())
+		Ok("testchain".into())
 	}
+}
+
+#[test]
+fn system_name_works() {
+	assert_matches!(
+		AuthorApi::system_name(&()),
+		Ok("testclient".to_owned())
+	);
 }
 
 #[test]
@@ -38,6 +49,6 @@ fn system_version_works() {
 fn system_chain_works() {
 	assert_matches!(
 		AuthorApi::system_chain(&()),
-		Ok("test".to_owned())
+		Ok("testchain".to_owned())
 	);
 }

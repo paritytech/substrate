@@ -26,11 +26,15 @@ use self::error::Result;
 build_rpc_trait! {
 	/// Substrate system RPC API
 	pub trait SystemApi {
-		/// Get the system's version. Given as a semver string.
+		/// Get the node's implementation name. Plain old string.
+		#[rpc(name = "system_name")]
+		fn system_name(&self) -> Result<String>;
+
+		/// Get the node implementation's version. Should be a semver string.
 		#[rpc(name = "system_version")]
 		fn system_version(&self) -> Result<String>;
 
-		/// Get the chain's type. Given as a semver string.
+		/// Get the chain's type. Given as a string identifier.
 		#[rpc(name = "system_chain")]
 		fn system_chain(&self) -> Result<String>;
 	}
