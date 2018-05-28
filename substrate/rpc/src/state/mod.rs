@@ -22,7 +22,7 @@ mod error;
 mod tests;
 
 use std::sync::Arc;
-use client::{self, Client};
+use client::{self, Client, CallExecutor};
 use primitives::{block, Hash, blake2_256};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::hexdisplay::HexDisplay;
@@ -69,7 +69,7 @@ build_rpc_trait! {
 
 impl<B, E> StateApi for Arc<Client<B, E>> where
 	B: client::backend::Backend + Send + Sync + 'static,
-	E: state_machine::CodeExecutor + Send + Sync + 'static,
+	E: CallExecutor + Send + Sync + 'static,
 	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
 {
 	fn storage_at(&self, key: StorageKey, block: block::HeaderHash) -> Result<StorageData> {
@@ -79,7 +79,7 @@ impl<B, E> StateApi for Arc<Client<B, E>> where
 
 	fn call_at(&self, method: String, data: Vec<u8>, block: block::HeaderHash) -> Result<Vec<u8>> {
 		trace!(target: "rpc", "Calling runtime at {:?} for method {} ({})", block, method, HexDisplay::from(&data));
-		Ok(self.as_ref().call(&block::Id::Hash(block), &method, &data)?.return_data)
+		Ok(self.as_ref().executor().call(&block::Id::Hash(block), &method, &data)?.return_data)
 	}
 
 	fn storage_hash_at(&self, key: StorageKey, block: block::HeaderHash) -> Result<Hash> {

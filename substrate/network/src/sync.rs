@@ -22,6 +22,7 @@ use client::{ImportResult, BlockStatus, ClientInfo};
 use primitives::block::{HeaderHash, Number as BlockNumber, Header, Id as BlockId};
 use blocks::{self, BlockCollection};
 use message::{self, Message};
+use service::Role;
 use super::header_hash;
 
 // Maximum blocks to request in a single packet.
@@ -37,10 +38,10 @@ struct PeerSync {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 enum PeerSyncState {
-    AncestorSearch(BlockNumber),
-    Available,
-    DownloadingNew(BlockNumber),
-    DownloadingStale(HeaderHash),
+	AncestorSearch(BlockNumber),
+	Available,
+	DownloadingNew(BlockNumber),
+	DownloadingStale(HeaderHash),
 }
 
 /// Relay chain sync strategy.
@@ -73,14 +74,22 @@ pub struct Status {
 
 impl ChainSync {
 	/// Create a new instance.
-	pub fn new(info: &ClientInfo) -> ChainSync {
+	pub fn new(role: Role, info: &ClientInfo) -> ChainSync {
+		let mut required_block_attributes = vec![
+			message::BlockAttribute::Header,
+			message::BlockAttribute::Justification
+		];
+		if role.intersects(Role::FULL | Role::VALIDATOR | Role::COLLATOR) {
+			required_block_attributes.push(message::BlockAttribute::Body);
+		}
+
 		ChainSync {
 			genesis_hash: info.chain.genesis_hash,
 			peers: HashMap::new(),
 			blocks: BlockCollection::new(),
 			best_queued_hash: info.best_queued_hash.unwrap_or(info.chain.best_hash),
 			best_queued_number: info.best_queued_number.unwrap_or(info.chain.best_number),
-			required_block_attributes: vec![message::BlockAttribute::Header, message::BlockAttribute::Body, message::BlockAttribute::Justification],
+			required_block_attributes: required_block_attributes,
 		}
 	}
 

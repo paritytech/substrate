@@ -65,14 +65,15 @@ pub struct DatabaseSettings {
 pub fn new_client<E, F>(
 	settings: DatabaseSettings,
 	executor: E,
-	build_genesis: F
-) -> Result<client::Client<Backend, E>, client::error::Error>
+	genesis_builder: F,
+) -> Result<client::Client<Backend, client::LocalCallExecutor<Backend, E>>, client::error::Error>
 	where
 		E: CodeExecutor,
-		F: FnOnce() -> (block::Header, Vec<(Vec<u8>, Vec<u8>)>)
+		F: client::GenesisBuilder,
 {
-	let backend = Backend::new(&settings)?;
-	Ok(client::Client::new(backend, executor, build_genesis)?)
+	let backend = Arc::new(Backend::new(&settings)?);
+	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
+	Ok(client::Client::new(backend, executor, genesis_builder)?)
 }
 
 mod columns {
@@ -265,8 +266,8 @@ pub struct BlockImportOperation {
 impl client::backend::BlockImportOperation for BlockImportOperation {
 	type State = DbState;
 
-	fn state(&self) -> Result<&Self::State, client::error::Error> {
-		Ok(&self.old_state)
+	fn state(&self) -> Result<Option<&Self::State>, client::error::Error> {
+		Ok(Some(&self.old_state))
 	}
 
 	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_best: bool) -> Result<(), client::error::Error> {
@@ -533,6 +534,8 @@ impl client::backend::Backend for Backend {
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(block).into()))
 	}
 }
+
+impl client::backend::LocalBackend for Backend {}
 
 #[cfg(test)]
 mod tests {

@@ -35,6 +35,7 @@ extern crate substrate_network as network;
 extern crate substrate_codec as codec;
 extern crate substrate_client_db as client_db;
 extern crate substrate_executor;
+extern crate substrate_state_machine as state_machine;
 
 extern crate exit_future;
 extern crate tokio_core;
@@ -55,7 +56,7 @@ use futures::prelude::*;
 use parking_lot::Mutex;
 use tokio_core::reactor::Core;
 use codec::Slicable;
-use primitives::block::{Id as BlockId, Extrinsic, ExtrinsicHash, HeaderHash};
+use primitives::block::{Id as BlockId, Extrinsic, ExtrinsicHash, HeaderHash, Header};
 use primitives::{AuthorityId, hashing};
 use transaction_pool::TransactionPool;
 use substrate_executor::NativeExecutor;
@@ -64,31 +65,39 @@ use keystore::Store as Keystore;
 use polkadot_api::PolkadotApi;
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
-use client::{genesis, BlockchainEvents};
+use client::backend::Backend;
+use client::{genesis, Client, BlockchainEvents, CallExecutor};
 use network::ManageNetwork;
 use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Role, ChainSpec};
 
-type Client = client::Client<client_db::Backend, NativeExecutor<LocalDispatch>>;
+type CodeExecutor = NativeExecutor<LocalDispatch>;
 
 /// Polkadot service.
-pub struct Service {
+pub struct Service<B, E> {
 	thread: Option<thread::JoinHandle<()>>,
-	client: Arc<Client>,
+	client: Arc<Client<B, E>>,
 	network: Arc<network::Service>,
 	transaction_pool: Arc<Mutex<TransactionPool>>,
 	signal: Option<Signal>,
 	_consensus: Option<consensus::Service>,
 }
 
-struct TransactionPoolAdapter {
+struct TransactionPoolAdapter<B, E, A> where A: Send + Sync, E: Send + Sync {
 	pool: Arc<Mutex<TransactionPool>>,
-	client: Arc<Client>,
+	client: Arc<Client<B, E>>,
+	api: Arc<A>,
 }
 
-impl network::TransactionPool for TransactionPoolAdapter {
+impl<B, E, A> network::TransactionPool for TransactionPoolAdapter<B, E, A>
+	where
+		B: Backend + Send + Sync,
+		E: client::CallExecutor + Send + Sync,
+		client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>,
+		A: PolkadotApi + Send + Sync,
+{
 	fn transactions(&self) -> Vec<(ExtrinsicHash, Vec<u8>)> {
 		let best_block = match self.client.info() {
 			Ok(info) => info.chain.best_hash,
@@ -97,10 +106,11 @@ impl network::TransactionPool for TransactionPoolAdapter {
 				return Vec::new();
 			}
 		};
-		let id = self.client.check_id(BlockId::Hash(best_block)).expect("Best block is always valid; qed.");
+
+		let id = self.api.check_id(BlockId::Hash(best_block)).expect("Best block is always valid; qed.");
 		let mut pool = self.pool.lock();
-		pool.cull(None, transaction_pool::Ready::create(id, &*self.client));
-		pool.pending(transaction_pool::Ready::create(id, &*self.client)).map(|t| {
+		pool.cull(None, transaction_pool::Ready::create(id.clone(), &*self.api));
+		pool.pending(transaction_pool::Ready::create(id, &*self.api)).map(|t| {
 			let hash = ::primitives::Hash::from(&t.hash()[..]);
 			let tx = codec::Slicable::encode(t.as_transaction());
 			(hash, tx)
@@ -257,16 +267,89 @@ fn local_testnet_config() -> ChainConfig {
 	])
 }
 
-impl Service {
+struct GenesisBuilder {
+	config: GenesisConfig,
+}
+
+impl client::GenesisBuilder for GenesisBuilder {
+	fn build(self) -> (Header, Vec<(Vec<u8>, Vec<u8>)>) {
+		let storage = self.config.build_externalities();
+		let block = genesis::construct_genesis_block(&storage);
+		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+	}
+}
+
+/// Creates light client and register protocol with the network service
+pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend, client::RemoteCallExecutor<client::light::Backend, network::OnDemand<network::Service>>>, error::Error> {
+	Service::new(move |_, executor, genesis_builder: GenesisBuilder| {
+			let client_backend = client::light::new_light_backend();
+			let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));
+			let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
+			let client = client::light::new_light(client_backend, fetcher.clone(), genesis_builder)?;
+			Ok((Arc::new(client), Some(fetcher)))
+		},
+		|client| Arc::new(polkadot_api::light::RemotePolkadotApiWrapper(client.clone())),
+		|_client, _network, _tx_pool, _keystore| Ok(None),
+		config)
+}
+
+/// Creates full client and register protocol with the network service
+pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend, client::LocalCallExecutor<client_db::Backend, CodeExecutor>>, error::Error> {
+	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
+	Service::new(|db_settings, executor, genesis_builder: GenesisBuilder|
+		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_builder)?), None)),
+		|client| client,
+		|client, network, tx_pool, keystore| {
+			if !is_validator {
+				return Ok(None);
+			}
+
+			// Load the first available key. Code above makes sure it exisis.
+			let key = keystore.load(&keystore.contents()?[0], "")?;
+			info!("Using authority key {:?}", key.public());
+			Ok(Some(consensus::Service::new(
+				client.clone(),
+				client.clone(),
+				network.clone(),
+				tx_pool.clone(),
+				::std::time::Duration::from_millis(4000), // TODO: dynamic
+				key,
+			)))
+		},
+		config)
+}
+
+impl<B, E> Service<B, E>
+	where
+		B: Backend + Send + Sync + 'static,
+		E: CallExecutor + Send + Sync + 'static,
+		client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+{
 	/// Creates and register protocol with the network service
-	pub fn new(mut config: Configuration) -> Result<Service, error::Error> {
+	fn new<F, G, C, A>(client_creator: F, api_creator: G, consensus_creator: C, mut config: Configuration) -> Result<Self, error::Error>
+		where
+			F: FnOnce(
+					client_db::DatabaseSettings,
+					CodeExecutor,
+					GenesisBuilder,
+				) -> Result<(Arc<Client<B, E>>, Option<Arc<network::OnDemand<network::Service>>>), error::Error>,
+			G: Fn(
+					Arc<Client<B, E>>,
+				) -> Arc<A>,
+			C: Fn(
+					Arc<Client<B, E>>,
+					Arc<network::Service>,
+					Arc<Mutex<TransactionPool>>,
+					&Keystore
+				) -> Result<Option<consensus::Service>, error::Error>,
+			A: PolkadotApi + Send + Sync + 'static,
+	{
 		use std::sync::Barrier;
 
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
 		let executor = polkadot_executor::Executor::new();
-		let mut storage = Default::default();
 
 		let mut keystore = Keystore::open(config.keystore_path.into())?;
 		for seed in &config.keys {
@@ -285,10 +368,8 @@ impl Service {
 		};
 		config.network.boot_nodes.extend(boot_nodes);
 
-		let prepare_genesis = || {
-			storage = genesis_config.build_externalities();
-			let block = genesis::construct_genesis_block(&storage);
-			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+		let genesis_builder = GenesisBuilder {
+			config: genesis_config,
 		};
 
 		let db_settings = client_db::DatabaseSettings {
@@ -296,13 +377,15 @@ impl Service {
 			path: config.database_path.into(),
 		};
 
-		let client = Arc::new(client_db::new_client(db_settings, executor, prepare_genesis)?);
+		let (client, on_demand) = client_creator(db_settings, executor, genesis_builder)?;
+		let api = api_creator(client.clone());
 		let best_header = client.best_block_header()?;
 		info!("Starting Polkadot. Best block is #{}", best_header.number);
 		let transaction_pool = Arc::new(Mutex::new(TransactionPool::new(config.transaction_pool)));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			pool: transaction_pool.clone(),
 			client: client.clone(),
+			api: api.clone(),
 		});
 		let network_params = network::Params {
 			config: network::ProtocolConfig {
@@ -310,11 +393,13 @@ impl Service {
 			},
 			network_config: config.network,
 			chain: client.clone(),
+			on_demand: on_demand.clone().map(|d| d as Arc<network::OnDemandService>),
 			transaction_pool: transaction_pool_adapter,
 		};
 
 		let network = network::Service::new(network_params)?;
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
+		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
 		let thread = {
 			let client = client.clone();
@@ -347,20 +432,7 @@ impl Service {
 		barrier.wait();
 
 		// Spin consensus service if configured
-		let consensus_service = if config.roles & Role::VALIDATOR == Role::VALIDATOR {
-			// Load the first available key. Code above makes sure it exisis.
-			let key = keystore.load(&keystore.contents()?[0], "")?;
-			info!("Using authority key {:?}", key.public());
-			Some(consensus::Service::new(
-				client.clone(),
-				network.clone(),
-				transaction_pool.clone(),
-				::std::time::Duration::from_millis(4000), // TODO: dynamic
-				key,
-			))
-		} else {
-			None
-		};
+		let consensus_service = consensus_creator(client.clone(), network.clone(), transaction_pool.clone(), &keystore)?;
 
 		Ok(Service {
 			thread: Some(thread),
@@ -373,7 +445,7 @@ impl Service {
 	}
 
 	/// Get shared client instance.
-	pub fn client(&self) -> Arc<Client> {
+	pub fn client(&self) -> Arc<Client<B, E>> {
 		self.client.clone()
 	}
 
@@ -396,7 +468,12 @@ fn prune_transactions(pool: &mut TransactionPool, extrinsics: &[Extrinsic]) {
 }
 
 /// Produce a task which prunes any finalized transactions from the pool.
-pub fn prune_imported(client: &Client, pool: &Mutex<TransactionPool>, hash: HeaderHash) {
+pub fn prune_imported<B, E>(client: &Client<B, E>, pool: &Mutex<TransactionPool>, hash: HeaderHash)
+	where
+		B: Backend + Send + Sync,
+		E: CallExecutor + Send + Sync,
+		client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+{
 	let id = BlockId::Hash(hash);
 	match client.body(&id) {
 		Ok(Some(body)) => prune_transactions(&mut *pool.lock(), &body[..]),
@@ -405,7 +482,7 @@ pub fn prune_imported(client: &Client, pool: &Mutex<TransactionPool>, hash: Head
 	}
 }
 
-impl Drop for Service {
+impl<B, E> Drop for Service<B, E> {
 	fn drop(&mut self) {
 		self.network.stop_network();
 

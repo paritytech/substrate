@@ -29,7 +29,7 @@ use ed25519;
 use futures::prelude::*;
 use futures::{future, Canceled};
 use parking_lot::Mutex;
-use polkadot_api::PolkadotApi;
+use polkadot_api::LocalPolkadotApi;
 use polkadot_primitives::AccountId;
 use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
 use primitives::{Hash, AuthorityId};
@@ -233,15 +233,17 @@ pub struct Service {
 
 impl Service {
 	/// Create and start a new instance.
-	pub fn new<C>(
+	pub fn new<A, C>(
 		client: Arc<C>,
+		api: Arc<A>,
 		network: Arc<net::ConsensusService>,
 		transaction_pool: Arc<Mutex<TransactionPool>>,
 		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
 	) -> Service
 		where
-			C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static,
+			A: LocalPolkadotApi + Send + Sync + 'static,
+			C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + Send + Sync + 'static,
 	{
 		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {
@@ -249,7 +251,7 @@ impl Service {
 			let key = Arc::new(key);
 
 			let factory = ProposerFactory {
-				client: client.clone(),
+				client: api.clone(),
 				transaction_pool: transaction_pool.clone(),
 				network: Network(network.clone()),
 				collators: NoCollators,
