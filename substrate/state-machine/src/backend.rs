@@ -19,12 +19,13 @@
 use std::{error, fmt};
 use std::collections::HashMap;
 use std::sync::Arc;
+use trie_backend::{TryIntoTrieBackend, TrieBackend};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///
 /// The clone operation should be cheap.
-pub trait Backend: Clone {
+pub trait Backend: TryIntoTrieBackend + Clone {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
@@ -124,3 +125,24 @@ impl Backend for InMemory {
 	}
 }
 
+impl TryIntoTrieBackend for InMemory {
+	fn try_into_trie_backend(self) -> Option<TrieBackend> {
+		use ethereum_types::H256 as TrieH256;
+		use memorydb::MemoryDB;
+		use patricia_trie::{TrieDBMut, TrieMut};
+
+		let mut root = TrieH256::default();
+		let mut mdb = MemoryDB::default();
+		{
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
+			for (key, value) in self.inner.iter() {
+				if let Err(e) = trie.insert(&key, &value) {
+					warn!(target: "trie", "Failed to write to trie: {}", e);
+					return None;
+				}
+			}
+		}
+
+		Some(TrieBackend::with_memorydb(mdb, root))
+	}
+}
