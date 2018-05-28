@@ -31,24 +31,24 @@ impl SystemApi for () {
 
 #[test]
 fn system_name_works() {
-	assert_matches!(
-		AuthorApi::system_name(&()),
-		Ok("testclient".to_owned())
+	assert_eq!(
+		SystemApi::system_name(&()).unwrap(),
+		"testclient".to_owned()
 	);
 }
 
 #[test]
 fn system_version_works() {
-	assert_matches!(
-		AuthorApi::system_version(&()),
-		Ok("0.2.0".to_owned())
+	assert_eq!(
+		SystemApi::system_version(&()).unwrap(),
+		"0.2.0".to_owned()
 	);
 }
 
 #[test]
 fn system_chain_works() {
-	assert_matches!(
-		AuthorApi::system_chain(&()),
-		Ok("testchain".to_owned())
+	assert_eq!(
+		SystemApi::system_chain(&()).unwrap(),
+		"testchain".to_owned()
 	);
 }
