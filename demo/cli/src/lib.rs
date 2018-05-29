@@ -61,6 +61,19 @@ impl substrate_rpc::author::AuthorApi for DummyPool {
 	}
 }
 
+struct DummySystem;
+impl substrate_rpc::system::SystemApi for DummySystem {
+	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok("substrate-demo".into())
+	}
+	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(crate_version!().into())
+	}
+	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok("default".into())
+	}
+}
+
 /// Parse command line arguments and start the node.
 ///
 /// IANA unassigned port ranges that we could use:
@@ -142,7 +155,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let _rpc_servers = {
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
-			rpc::rpc_handler(client.clone(), chain, DummyPool)
+			rpc::rpc_handler(client.clone(), chain, DummyPool, DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();

@@ -1194,7 +1194,7 @@ name = "polkadot"
 version = "0.1.0"
 dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-cli 0.1.0",
+ "polkadot-cli 0.2.0",
 ]
 
 [[package]]
@@ -1217,7 +1217,7 @@ dependencies = [
 
 [[package]]
 name = "polkadot-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ansi_term 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "app_dirs 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
