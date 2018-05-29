@@ -202,7 +202,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("a63d59c6a7347cd7a1dc1ec139723b531f0ac450e39b1c532d5ca69ff74ad811").into(),
+			hex!("76b0393b4958d3cb98bb51d9f4edb316af48485142b8721e94c3b52c75ec3243").into(),
 			vec![Extrinsic {
 				signed: Alice.into(),
 				index: 0,
@@ -215,7 +215,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("1c3623b2e3f7e43752debb9015bace4f6931593579b5af34457b931315f5e2ab").into(),
+			hex!("8ae9828a5988459d35fb428086170dead660176ee0766e89bc1a4b48153d4e88").into(),
 			vec![
 				Extrinsic {
 					signed: Bob.into(),
