@@ -68,7 +68,7 @@ impl<AccountId, Index, Call> Slicable for Extrinsic<AccountId, Index, Call> wher
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize))]
 pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
  	Signature: Member,			// TODO: should be Option<Signature>
