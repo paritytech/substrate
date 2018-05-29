@@ -626,7 +626,8 @@ mod tests {
 			intentions: vec![],
 			validator_count: 2,
 			bonding_duration: 0,
-			transaction_fee: 0,
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
 		}.build_externalities());
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,

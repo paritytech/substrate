@@ -110,7 +110,7 @@ impl substrate_rpc::system::SystemApi for Configuration {
 		Ok(match self.0.chain_spec {
 			ChainSpec::Development => "dev",
 			ChainSpec::LocalTestnet => "local",
-			ChainSpec::PoC1Testnet => "poc-1",
+			ChainSpec::PoC2Testnet => "poc-2",
 		}.into())
 	}
 }
@@ -174,14 +174,14 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	match matches.value_of("chain") {
 		Some("dev") => config.chain_spec = ChainSpec::Development,
 		Some("local") => config.chain_spec = ChainSpec::LocalTestnet,
-		Some("poc-1") => config.chain_spec = ChainSpec::PoC1Testnet,
+		Some("poc-2") => config.chain_spec = ChainSpec::PoC2Testnet,
 		None => (),
 		Some(unknown) => panic!("Invalid chain name: {}", unknown),
 	}
 	info!("Chain specification: {}", match config.chain_spec {
 		ChainSpec::Development => "Development",
 		ChainSpec::LocalTestnet => "Local Testnet",
-		ChainSpec::PoC1Testnet => "PoC-1 Testnet",
+		ChainSpec::PoC2Testnet => "PoC-2 Testnet",
 	});
 
 	config.roles = role;

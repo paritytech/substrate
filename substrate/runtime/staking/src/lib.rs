@@ -52,7 +52,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
+use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment, As};
 
 mod contract;
 #[cfg(test)]
@@ -122,8 +122,10 @@ decl_storage! {
 	pub SessionsPerEra get(sessions_per_era): b"sta:spe" => required T::BlockNumber;
 	// The total amount of stake on the system.
 	pub TotalStake get(total_stake): b"sta:tot" => required T::Balance;
-	// The fee to be paid for making a transaction.
-	pub TransactionFee get(transaction_fee): b"sta:fee" => required T::Balance;
+	// The fee to be paid for making a transaction; the base.
+	pub TransactionBaseFee get(transaction_base_fee): b"sta:basefee" => required T::Balance;
+	// The fee to be paid for making a transaction; the per-byte portion.
+	pub TransactionByteFee get(transaction_byte_fee): b"sta:bytefee" => required T::Balance;
 
 	// The current era index.
 	pub CurrentEra get(current_era): b"sta:era" => required T::BlockNumber;
@@ -603,9 +605,9 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
-	fn make_payment(transactor: &T::AccountId) {
+	fn make_payment(transactor: &T::AccountId, encoded_len: usize) {
 		let b = Self::free_balance(transactor);
-		let transaction_fee = Self::transaction_fee();
+		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<usize>>::sa(encoded_len);
 		assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
 		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
 	}
@@ -628,7 +630,8 @@ pub struct GenesisConfig<T: Trait> {
 	pub intentions: Vec<T::AccountId>,
 	pub validator_count: u64,
 	pub bonding_duration: T::BlockNumber,
-	pub transaction_fee: T::Balance,
+	pub transaction_base_fee: T::Balance,
+	pub transaction_byte_fee: T::Balance,
 }
 
 #[cfg(any(feature = "std", test))]
@@ -642,7 +645,8 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
 			validator_count: 3,
 			bonding_duration: T::BlockNumber::sa(0),
-			transaction_fee: T::Balance::sa(0),
+			transaction_base_fee: T::Balance::sa(0),
+			transaction_byte_fee: T::Balance::sa(0),
 		}
 	}
 
@@ -663,7 +667,8 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
 			validator_count: 3,
 			bonding_duration: T::BlockNumber::sa(0),
-			transaction_fee: T::Balance::sa(1),
+			transaction_base_fee: T::Balance::sa(1),
+			transaction_byte_fee: T::Balance::sa(0),
 		}
 	}
 }
@@ -679,7 +684,8 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			intentions: vec![],
 			validator_count: 0,
 			bonding_duration: T::BlockNumber::sa(1000),
-			transaction_fee: T::Balance::sa(0),
+			transaction_base_fee: T::Balance::sa(0),
+			transaction_byte_fee: T::Balance::sa(0),
 		}
 	}
 }
@@ -697,7 +703,8 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
 			twox_128(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
 			twox_128(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
-			twox_128(<TransactionFee<T>>::key()).to_vec() => self.transaction_fee.encode(),
+			twox_128(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
+			twox_128(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
 			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
 			twox_128(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
 		];

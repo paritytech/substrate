@@ -141,7 +141,7 @@ pub struct ChainConfig {
 	boot_nodes: Vec<String>,
 }
 
-fn poc_1_testnet_config() -> ChainConfig {
+fn poc_2_testnet_config() -> ChainConfig {
 	let initial_authorities = vec![
 		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
 		hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
@@ -164,7 +164,8 @@ fn poc_1_testnet_config() -> ChainConfig {
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: initial_authorities.clone(),
-			transaction_fee: 100,
+			transaction_base_fee: 100,
+			transaction_byte_fee: 1,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u128 << 60)).collect(),
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
@@ -222,7 +223,8 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: initial_authorities.clone(),
-			transaction_fee: 1,
+			transaction_base_fee: 1,
+			transaction_byte_fee: 0,
 			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60))).collect(),
 			validator_count: 2,
 			sessions_per_era: 5,
@@ -364,7 +366,7 @@ impl<B, E> Service<B, E>
 		let ChainConfig { genesis_config, boot_nodes } = match config.chain_spec {
 			ChainSpec::Development => development_config(),
 			ChainSpec::LocalTestnet => local_testnet_config(),
-			ChainSpec::PoC1Testnet => poc_1_testnet_config(),
+			ChainSpec::PoC2Testnet => poc_2_testnet_config(),
 		};
 		config.network.boot_nodes.extend(boot_nodes);
 
