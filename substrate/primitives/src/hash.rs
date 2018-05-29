@@ -48,12 +48,6 @@ macro_rules! impl_rest {
 				self.0.using_encoded(f)
 			}
 		}
-/*
-		impl Default for $name {
-			fn default() -> Self {
-				Self::new()
-			}
-		}*/
 	}
 }
 
