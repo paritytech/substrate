@@ -95,6 +95,26 @@ impl substrate_rpc::author::AuthorApi for RpcTransactionPool {
 	}
 }
 
+struct Configuration(service::Configuration);
+
+impl substrate_rpc::system::SystemApi for Configuration {
+	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok("parity-polkadot".into())
+	}
+
+	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(crate_version!().into())
+	}
+
+	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(match self.0.chain_spec {
+			ChainSpec::Development => "dev",
+			ChainSpec::LocalTestnet => "local",
+			ChainSpec::PoC1Testnet => "poc-1",
+		}.into())
+	}
+}
+
 /// Parse command line arguments and start the node.
 ///
 /// IANA unassigned port ranges that we could use:
@@ -189,12 +209,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 
 	match role == service::Role::LIGHT {
-		true => run_until_exit(core, service::new_light(config)?, &matches),
-		false => run_until_exit(core, service::new_full(config)?, &matches),
+		true => run_until_exit(core, service::new_light(config.clone())?, &matches, config),
+		false => run_until_exit(core, service::new_full(config.clone())?, &matches, config),
 	}
 }
 
-fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches) -> error::Result<()>
+fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
 	where
 		B: client::backend::Backend + Send + Sync + 'static,
 		E: client::CallExecutor + Send + Sync + 'static,
@@ -222,7 +242,7 @@ fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>
 				inner: service.transaction_pool(),
 				network: service.network(),
 			};
-			rpc::rpc_handler(service.client(), chain, pool)
+			rpc::rpc_handler(service.client(), chain, pool, Configuration(config.clone()))
 		};
 		(
 			start_server(http_address, |address| rpc::start_http(address, handler())),

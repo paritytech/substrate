@@ -22,6 +22,7 @@ pub use network::NetworkConfiguration;
 
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
+#[derive(Clone)]
 pub enum ChainSpec {
 	/// Whatever the current runtime is, with just Alice as an auth.
 	Development,
@@ -59,6 +60,24 @@ impl Default for Configuration {
 			database_path: Default::default(),
 			keys: Default::default(),
 			chain_spec: ChainSpec::Development,
+		}
+	}
+}
+
+impl Clone for Configuration {
+	fn clone(&self) -> Configuration {
+		Configuration {
+			roles: self.roles.clone(),
+			transaction_pool: transaction_pool::Options {
+				max_count: self.transaction_pool.max_count.clone(),
+				max_mem_usage: self.transaction_pool.max_mem_usage.clone(),
+				max_per_sender: self.transaction_pool.max_per_sender.clone(),
+			},
+			network: self.network.clone(),
+			keystore_path: self.keystore_path.clone(),
+			database_path: self.database_path.clone(),
+			keys: self.keys.clone(),
+			chain_spec: self.chain_spec.clone(),
 		}
 	}
 }

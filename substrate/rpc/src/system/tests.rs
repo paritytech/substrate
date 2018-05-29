@@ -14,35 +14,41 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate RPC interfaces.
+use super::*;
+use super::error::*;
 
-#![warn(missing_docs)]
+impl SystemApi for () {
+	fn system_name(&self) -> Result<String> {
+		Ok("testclient".into())
+	}
+	fn system_version(&self) -> Result<String> {
+		Ok("0.2.0".into())
+	}
+	fn system_chain(&self) -> Result<String> {
+		Ok("testchain".into())
+	}
+}
 
-extern crate jsonrpc_core as rpc;
-extern crate jsonrpc_pubsub;
-extern crate parking_lot;
-extern crate substrate_client as client;
-extern crate substrate_primitives as primitives;
-extern crate substrate_state_machine as state_machine;
-extern crate tokio_core;
+#[test]
+fn system_name_works() {
+	assert_eq!(
+		SystemApi::system_name(&()).unwrap(),
+		"testclient".to_owned()
+	);
+}
 
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate jsonrpc_macros;
-#[macro_use]
-extern crate log;
+#[test]
+fn system_version_works() {
+	assert_eq!(
+		SystemApi::system_version(&()).unwrap(),
+		"0.2.0".to_owned()
+	);
+}
 
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-#[cfg(test)]
-extern crate substrate_test_client as test_client;
-
-mod subscriptions;
-
-pub mod author;
-pub mod chain;
-pub mod metadata;
-pub mod state;
-pub mod system;
+#[test]
+fn system_chain_works() {
+	assert_eq!(
+		SystemApi::system_chain(&()).unwrap(),
+		"testchain".to_owned()
+	);
+}
