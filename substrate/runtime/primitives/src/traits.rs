@@ -348,7 +348,7 @@ pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
 	fn hash(&self) -> Self::Hash {
-		<<Self::Header as Header>::Hashing as Hashing>::hash_of(self)
+		<<Self::Header as Header>::Hashing as Hashing>::hash_of(self.header())
 	}
 }
 

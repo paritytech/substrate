@@ -16,7 +16,6 @@
 
 //! Client extension for tests.
 
-use codec::Slicable;
 use client::{self, Client};
 use keyring::Keyring;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
@@ -97,12 +96,11 @@ fn genesis_config() -> GenesisConfig {
 
 fn prepare_genesis() -> (runtime::Header, Vec<(Vec<u8>, Vec<u8>)>) {
 	let mut storage = genesis_config().genesis_map();
-	let block = client::genesis::construct_genesis_block(&storage);
+	let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
 	storage.extend(additional_storage_with_genesis(&block));
 
 	(
-		runtime::Header::decode(&mut block.header.encode().as_ref())
-			.expect("to_vec() always gives a valid serialisation; qed"),
+		block.header,
 		storage.into_iter().collect()
 	)
 }

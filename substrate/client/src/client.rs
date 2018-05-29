@@ -468,7 +468,7 @@ mod tests {
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::runtime as test_runtime;
-	use test_client::runtime::{UncheckedTransaction, Transaction};
+	use test_client::runtime::{Call, UncheckedExtrinsic, Extrinsic};
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
@@ -476,8 +476,8 @@ mod tests {
 		let genesis_hash = client.block_hash(0).unwrap().unwrap();
 
 		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), genesis_hash);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public())).unwrap(), 1000);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public())).unwrap(), 0);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 1000);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 0);
 	}
 
 	#[test]
@@ -504,9 +504,9 @@ mod tests {
 		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
 	}
 
-	fn sign_tx(tx: Transaction) -> UncheckedTransaction {
-		let signature = Keyring::from_raw_public(tx.from.clone()).unwrap().sign(&tx.encode());
-		UncheckedTransaction { tx, signature }
+	fn sign_tx(tx: Extrinsic) -> UncheckedExtrinsic {
+		let signature = Keyring::from_raw_public(tx.signed.0.clone()).unwrap().sign(&tx.encode()).into();
+		UncheckedExtrinsic { extrinsic: tx, signature }
 	}
 
 	#[test]
@@ -515,18 +515,17 @@ mod tests {
 
 		let mut builder = client.new_block().unwrap();
 
-		builder.push(sign_tx(Transaction {
-			from: Keyring::Alice.to_raw_public(),
-			to: Keyring::Ferdie.to_raw_public(),
-			amount: 42,
-			nonce: 0
+		builder.push(sign_tx(Extrinsic {
+			signed: Keyring::Alice.to_raw_public().into(),
+			function: Call { to: Keyring::Ferdie.to_raw_public().into(), amount: 42 },
+			index: 0,
 		})).unwrap();
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public())).unwrap(), 958);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public())).unwrap(), 42);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 958);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 42);
 	}
 }
