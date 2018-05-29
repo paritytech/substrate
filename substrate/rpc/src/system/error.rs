@@ -25,11 +25,6 @@ error_chain! {
 			description("not yet implemented"),
 			display("Method Not Implemented"),
 		}
-		/// Invalid format
-		InvalidFormat {
-			description("invalid format"),
-			display("Invalid format for the extrinsic data"),
-		}
 	}
 }
 
