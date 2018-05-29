@@ -1,6 +1,7 @@
 extern crate ed25519;
 extern crate substrate_primitives;
 
+use std::env::args;
 use ed25519::Pair;
 use substrate_primitives::hexdisplay::HexDisplay;
 
@@ -14,17 +15,22 @@ fn good_waypoint(done: u64) -> u64 {
 }
 
 fn main() {
-	let desired = "GavWood";
+	if args().len() != 2 {
+		println!("Usage: subkey <search string>");
+		return;
+	}
+	let desired = args().last().unwrap();
 	let score = |s: &str| {
 		for truncate in 0..desired.len() - 1 {
 			let snip_size = desired.len() - truncate;
 			let truncated = &desired[0..snip_size];
 			if let Some(pos) = s.find(truncated) {
-				return (32 - pos) + (snip_size << 16);
+				return (31 - pos) + (snip_size * 32);
 			}
 		}
 		0
 	};
+	let top = 30 + (desired.len() * 32);
 	let mut best = 0;
 	let mut seed = Pair::generate().public().0;
 	let mut done = 0;
@@ -33,8 +39,11 @@ fn main() {
 		let ss58 = p.public().to_ss58check();
 		let s = score(&ss58);
 		if s > best {
-			println!("{}: {}", ss58, HexDisplay::from(&seed));
+			println!("{}: {} ({}% complete)", ss58, HexDisplay::from(&seed), s * 100 / top);
 			best = s;
+			if best == top {
+				break;
+			}
 		}
 		seed = p.public().0;
 		done += 1;
