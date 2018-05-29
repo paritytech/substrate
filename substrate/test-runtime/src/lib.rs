@@ -93,7 +93,6 @@ pub type Extrinsic = runtime_primitives::generic::Extrinsic<AccountId, Index, Ca
 /// Signed extrinsic.
 pub type UncheckedExtrinsic = runtime_primitives::generic::UncheckedExtrinsic<AccountId, Index, Call, Ed25519Signature>;
 
-
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	use runtime_io::print;

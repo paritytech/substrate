@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, enumerated_trie_root, ed25519_verify};
+use runtime_io::{storage_root, enumerated_trie_root};
 use runtime_support::{Hashable, storage};
 use codec::{KeyedVec, Slicable};
 use super::{AccountId, Call, UncheckedExtrinsic, H256 as Hash, Block, Header};
@@ -138,8 +138,7 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
-	use runtime_primitives::testing::Digest;
-	use ::{Header, Extrinsic, UncheckedExtrinsic};
+	use ::{Header, Digest, Extrinsic, UncheckedExtrinsic};
 
 	fn new_test_ext() -> TestExternalities {
 		map![
@@ -153,8 +152,8 @@ mod tests {
 	}
 
 	fn construct_signed_tx(tx: Extrinsic) -> UncheckedExtrinsic {
-		let signature = Keyring::from_raw_public(tx.signed).unwrap().sign(&tx.encode());
-		UncheckedExtrinsic { tx, signature }
+		let signature = Keyring::from_raw_public(tx.signed.0).unwrap().sign(&tx.encode()).into();
+		UncheckedExtrinsic { extrinsic: tx, signature }
 	}
 
 	#[test]
@@ -184,8 +183,8 @@ mod tests {
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
-			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 111);
-			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 0);
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 111);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 0);
 		});
 
 		let b = Block {
@@ -193,15 +192,14 @@ mod tests {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
 				state_root: hex!("0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1").into(),
-				extrinsics_root: hex!("5e44188712452f900acfa1b4bf4084753122ea1856d58187dd33374a2ca653b1").into(),
+				extrinsics_root: hex!("65ed452ee5c22a1b3527658f921f9a052d5942762f6363a5ed6525bc017bad44").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
 				construct_signed_tx(Extrinsic {
-					from: Keyring::Alice.to_raw_public(),
-					to: Keyring::Bob.to_raw_public(),
-					amount: 69,
-					nonce: 0,
+					signed: Keyring::Alice.to_raw_public().into(),
+					function: Call { to: Keyring::Bob.to_raw_public().into(), amount: 69 },
+					index: 0,
 				})
 			],
 		};
@@ -209,29 +207,27 @@ mod tests {
 		with_externalities(&mut t, || {
 			execute_block(b.clone());
 
-			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 42);
-			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 69);
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 42);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 69);
 		});
 
 		let b = Block {
 			header: Header {
 				parent_hash: b.header.blake2_256().into(),
 				number: 2,
-				state_root: hex!("aea7c370a9fa4075b703742c22cc4fb12759bdd7d5aa5cdd85895447f838b81b").into(),
-				extrinsics_root: hex!("9ac45fbcc93fa6a8b5a3c44f04d936d53569c72a53fbc12eb58bf884f6dbfae5").into(),
+				state_root: hex!("1bd77fc89d5380aad314df357f265a94a051be6b1f137bc9882d6b9edcbbd810").into(),
+				extrinsics_root: hex!("f6ba96c4df7fcfbcdf58d4ad6ca360dbf7894f17a7136894edb518c0c06829e6").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
 				construct_signed_tx(Extrinsic {
 					signed: Keyring::Bob.to_raw_public().into(),
-					to: Keyring::Alice.to_raw_public(),
-					amount: 27,
+					function: Call { to: Keyring::Alice.to_raw_public().into(), amount: 27 },
 					index: 0,
 				}),
 				construct_signed_tx(Extrinsic {
-					signed: Keyring::Alice.to_raw_public(),
-					to: Keyring::Charlie.to_raw_public(),
-					amount: 69,
+					signed: Keyring::Alice.to_raw_public().into(),
+					function: Call { to: Keyring::Charlie.to_raw_public().into(), amount: 69 },
 					index: 1,
 				})
 			],
@@ -240,9 +236,9 @@ mod tests {
 		with_externalities(&mut t, || {
 			execute_block(b);
 
-			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 0);
-			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 42);
-			assert_eq!(balance_of(Keyring::Charlie.to_raw_public()), 69);
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 0);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 42);
+			assert_eq!(balance_of(Keyring::Charlie.to_raw_public().into()), 69);
 		});
 	}
 }
