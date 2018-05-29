@@ -28,7 +28,7 @@ use rstd::ops;
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct Extrinsic<AccountId, Index, Call> where
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 {
@@ -41,7 +41,7 @@ pub struct Extrinsic<AccountId, Index, Call> where
 }
 
 impl<AccountId, Index, Call> Slicable for Extrinsic<AccountId, Index, Call> where
- 	AccountId: Member + Slicable + MaybeDisplay,
+ 	AccountId: Member + Default + Slicable + MaybeDisplay,
  	Index: Member + Slicable + MaybeDisplay + SimpleArithmetic,
  	Call: Member + Slicable
 {
@@ -79,11 +79,36 @@ pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> where
 	pub signature: Signature,
 }
 
+impl<AccountId, Index, Call, Signature> traits::Checkable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
+ 	AccountId: Member + Default + MaybeDisplay,
+ 	Index: Member + MaybeDisplay + SimpleArithmetic,
+ 	Call: Member,
+	Signature: Member + Default + traits::Verify<Signer = AccountId>,
+	Extrinsic<AccountId, Index, Call>: Slicable,
+{
+	type Checked = CheckedExtrinsic<AccountId, Index, Call, Signature>;
+
+	fn check(self) -> Result<Self::Checked, Self> {
+		if !self.is_signed() {
+			Ok(CheckedExtrinsic(self))
+		} else {
+			if ::codec::Slicable::using_encoded(&self.extrinsic, |msg|
+				self.signature.verify(msg, &self.extrinsic.signed)
+			) {
+				Ok(CheckedExtrinsic(self))
+			} else {
+				Err(self)
+			}
+		}
+	}
+}
+
 impl<AccountId, Index, Call, Signature> UncheckedExtrinsic<AccountId, Index, Call, Signature> where
  	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
-	Signature: Member + Default,
+	Signature: Member + Default + traits::Verify<Signer = AccountId>,
+	Extrinsic<AccountId, Index, Call>: Slicable,
 {
 	/// Is this extrinsic signed?
 	pub fn is_signed(&self) -> bool {
@@ -93,7 +118,7 @@ impl<AccountId, Index, Call, Signature> UncheckedExtrinsic<AccountId, Index, Cal
 }
 
 impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member + Slicable,
@@ -135,7 +160,7 @@ impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountI
 
 #[cfg(feature = "std")]
 impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member,
@@ -145,44 +170,20 @@ impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Accoun
 	}
 }
 
-impl<AccountId, Index, Call, Signature> traits::Checkable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Default + MaybeDisplay,
- 	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
-	Signature: Member + Default + traits::Verify<Signer = AccountId> + Slicable,
-	Extrinsic<AccountId, Index, Call>: Slicable,
-{
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, Signature>;
-
-	fn check(self) -> Result<Self::Checked, Self> {
-		if !self.is_signed() {
-			Ok(CheckedExtrinsic(self))
-		} else {
-			if ::codec::Slicable::using_encoded(&self.extrinsic, |msg|
-				self.signature.verify(msg, &self.extrinsic.signed)
-			) {
-				Ok(CheckedExtrinsic(self))
-			} else {
-				Err(self)
-			}
-		}
-	}
-}
-
 /// A type-safe indicator that a extrinsic has been checked.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct CheckedExtrinsic<AccountId, Index, Call, Signature>
 	(UncheckedExtrinsic<AccountId, Index, Call, Signature>)
 where
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member;
 
 impl<AccountId, Index, Call, Signature> CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member
@@ -206,7 +207,7 @@ where
 impl<AccountId, Index, Call, Signature> ops::Deref
 	for CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member
@@ -221,7 +222,7 @@ where
 impl<AccountId, Index, Call, Signature> traits::Applyable
 	for CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member + AuxDispatchable<Aux = AccountId>,
 	Signature: Member
@@ -387,10 +388,13 @@ pub struct Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature>
 	Hashing: HashingT,
 	DigestItem: Member + Default,
 	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
- 	Signature: Member
+	Signature: Member + Default + traits::Verify<Signer = AccountId>,
+	Header<Number, Hashing, DigestItem>: traits::Header,
+	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
+	Extrinsic<AccountId, Index, Call>: Slicable,
 {
 	/// The block header.
 	pub header: Header<Number, Hashing, DigestItem>,
@@ -405,12 +409,13 @@ where
 	Hashing: HashingT,
 	DigestItem: Member + Default,
 	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
- 	Signature: Member,
-	Header<Number, Hashing, DigestItem>: Slicable,
+	Signature: Member + Default + traits::Verify<Signer = AccountId>,
+	Header<Number, Hashing, DigestItem>: traits::Header,
 	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
+	Extrinsic<AccountId, Index, Call>: Slicable,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
@@ -434,12 +439,13 @@ where
 	Hashing::Output: ::rstd::hash::Hash,
 	DigestItem: Member + Default,
 	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
- 	AccountId: Member + MaybeDisplay,
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
- 	Signature: Member,
+	Signature: Member + Default + traits::Verify<Signer = AccountId>,
 	Header<Number, Hashing, DigestItem>: traits::Header,
 	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
+	Extrinsic<AccountId, Index, Call>: Slicable,
 {
 	type Extrinsic = UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 	type Header = Header<Number, Hashing, DigestItem>;

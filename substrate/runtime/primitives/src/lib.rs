@@ -37,7 +37,7 @@ extern crate substrate_primitives;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use substrate_primitives::hash::H512;
+use substrate_primitives::hash::{H256, H512};
 
 #[cfg(feature = "std")]
 pub mod testing;
@@ -59,9 +59,9 @@ pub trait BuildExternalities {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub struct Ed25519Signature(H512);
 impl traits::Verify for Ed25519Signature {
-	type Signer = [u8; 32];
+	type Signer = H256;
 	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(&(self.0).0, msg, &signer[..])
+		runtime_io::ed25519_verify(&(self.0).0, msg, &signer.0[..])
 	}
 }
 impl codec::Slicable for Ed25519Signature {
