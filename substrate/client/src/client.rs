@@ -465,7 +465,6 @@ mod tests {
 	use super::*;
 	use codec::Slicable;
 	use keyring::Keyring;
-	use primitives::block::Extrinsic as PrimitiveExtrinsic;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::runtime as test_runtime;
@@ -505,14 +504,9 @@ mod tests {
 		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
 	}
 
-	trait Signable {
-		fn signed(self) -> PrimitiveExtrinsic;
-	}
-	impl Signable for Transaction {
-		fn signed(self) -> PrimitiveExtrinsic {
-			let signature = Keyring::from_raw_public(self.from.clone()).unwrap().sign(&self.encode());
-			PrimitiveExtrinsic::decode(&mut UncheckedTransaction { signature, tx: self }.encode().as_ref()).unwrap()
-		}
+	fn sign_tx(tx: Transaction) -> UncheckedTransaction {
+		let signature = Keyring::from_raw_public(tx.from.clone()).unwrap().sign(&tx.encode());
+		UncheckedTransaction { tx, signature }
 	}
 
 	#[test]
@@ -521,12 +515,12 @@ mod tests {
 
 		let mut builder = client.new_block().unwrap();
 
-		builder.push(Transaction {
+		builder.push(sign_tx(Transaction {
 			from: Keyring::Alice.to_raw_public(),
 			to: Keyring::Ferdie.to_raw_public(),
 			amount: 42,
 			nonce: 0
-		}.signed()).unwrap();
+		})).unwrap();
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 

@@ -43,7 +43,6 @@ pub fn construct_genesis_block<
 mod tests {
 	use super::*;
 	use codec::{Slicable, Joiner};
-	use runtime_support::Hashable;
 	use keyring::Keyring;
 	use executor::WasmExecutor;
 	use state_machine::{execute, OverlayedChanges};
@@ -75,7 +74,7 @@ mod tests {
 			extrinsics_root,
 			digest: Digest { logs: vec![], },
 		};
-		let hash = header.blake2_256();
+		let hash = header.hash();
 
 		let mut overlay = OverlayedChanges::default();
 
@@ -84,7 +83,7 @@ mod tests {
 				backend,
 				&mut overlay,
 				&Executor::new(),
-				"execute_transaction",
+				"apply_extrinsic",
 				&vec![].and(&header).and(tx)
 			).unwrap();
 			header = Header::decode(&mut &ret_data[..]).unwrap();
@@ -99,7 +98,7 @@ mod tests {
 		).unwrap();
 		header = Header::decode(&mut &ret_data[..]).unwrap();
 
-		(vec![].and(&Block { header, transactions }), hash.into())
+		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
 
 	fn block1(genesis_hash: Hash, backend: &InMemory) -> (Vec<u8>, Hash) {
@@ -122,8 +121,8 @@ mod tests {
 		let mut storage = GenesisConfig::new_simple(
 			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 1000
 		).genesis_map();
-		let block = construct_genesis_block(&storage);
-		let genesis_hash = block.header.blake2_256().into();
+		let block = construct_genesis_block::<Block>(&storage);
+		let genesis_hash = block.header.hash();
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 
 		let backend = InMemory::from(storage);
@@ -144,8 +143,8 @@ mod tests {
 		let mut storage = GenesisConfig::new_simple(
 			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 1000
 		).genesis_map();
-		let block = construct_genesis_block(&storage);
-		let genesis_hash = block.header.blake2_256().into();
+		let block = construct_genesis_block::<Block>(&storage);
+		let genesis_hash = block.header.hash();
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 
 		let backend = InMemory::from(storage);
@@ -167,8 +166,8 @@ mod tests {
 		let mut storage = GenesisConfig::new_simple(
 			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 68
 		).genesis_map();
-		let block = construct_genesis_block(&storage);
-		let genesis_hash = block.header.blake2_256().into();
+		let block = construct_genesis_block::<Block>(&storage);
+		let genesis_hash = block.header.hash();
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 
 		let backend = InMemory::from(storage);

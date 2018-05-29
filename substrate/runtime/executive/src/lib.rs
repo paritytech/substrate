@@ -60,7 +60,7 @@ pub struct Executive<
 
 impl<
 	System: system::Trait,
-	Block: traits::Block<Header = System::Header>,
+	Block: traits::Block<Header = System::Header,Hash = System::Hash>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
 > Executive<System, Block, Payment, Finalisation> where
