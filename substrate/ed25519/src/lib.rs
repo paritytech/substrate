@@ -17,11 +17,14 @@
 //! Simple Ed25519 API.
 
 extern crate ring;
+extern crate base58;
 extern crate substrate_primitives as primitives;
 extern crate untrusted;
+extern crate blake2_rfc;
 
 use ring::{rand, signature};
 use primitives::hash::H512;
+use base58::{ToBase58, FromBase58};
 
 #[cfg(test)]
 #[macro_use]
@@ -67,6 +70,14 @@ impl ::std::hash::Hash for Public {
 	}
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum PublicError {
+	BadBase58,
+	BadLength,
+	UnknownVersion,
+	InvalidChecksum,
+}
+
 impl Public {
 	/// A new instance from the given 32-byte `data`.
 	pub fn from_raw(data: [u8; 32]) -> Self {
@@ -78,6 +89,24 @@ impl Public {
 		let mut r = [0u8; 32];
 		r.copy_from_slice(data);
 		Public(r)
+	}
+
+	/// Some if the string is a properly encoded SS58Check address.
+	pub fn from_ss58check(s: &str) -> Result<Self, PublicError> {
+		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?;	// failure here would be invalid encoding.
+		if d.len() != 35 {
+			// Invalid length.
+			return Err(PublicError::BadLength);
+		}
+		if d[0] != 42 {
+			// Invalid version.
+			return Err(PublicError::UnknownVersion);
+		}
+		if d[33..35] != blake2_rfc::blake2b::blake2b(64, &[], &d[0..33]).as_bytes()[0..2] {
+			// Invalid checksum.
+			return Err(PublicError::InvalidChecksum);
+		}
+		Ok(Self::from_slice(&d[1..33]))
 	}
 
 	/// Return a `Vec<u8>` filled with raw data.
@@ -95,6 +124,15 @@ impl Public {
 	/// Return a slice filled with raw data.
 	pub fn as_array_ref(&self) -> &[u8; 32] {
 		self.as_ref()
+	}
+
+	/// Return the ss58-check string for this key.
+	pub fn to_ss58check(&self) -> String {
+		let mut v = vec![42u8];
+		v.extend(self.as_slice());
+		let r = blake2_rfc::blake2b::blake2b(64, &[], &v);
+		v.extend(&r.as_bytes()[0..2]);
+		v.to_base58()
 	}
 }
 
@@ -280,5 +318,22 @@ mod test {
 	fn derive_child() {
 		let pair = Pair::generate();
 		let _pair2 = pair.derive_child_probably_bad(b"session_1234");
+	}
+
+	#[test]
+	fn ss58check_roundtrip_works() {
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let public = pair.public();
+		let s = public.to_ss58check();
+		println!("Correct: {}", s);
+		let cmp = Public::from_ss58check(&s).unwrap();
+		assert_eq!(cmp, public);
+	}
+
+	#[test]
+	fn ss58check_known_works() {
+		let k = "5CGavy93sZgPPjHyziRohwVumxiHXMGmQLyuqQP4ZFx5vRU9";
+		let enc = hex!["090fa15cb5b1666222fff584b4cc2b1761fe1e238346b340491b37e25ea183ff"];
+		assert_eq!(Public::from_ss58check(k).unwrap(), Public::from_raw(enc));
 	}
 }

@@ -60,6 +60,7 @@ members = [
 	"demo/executor",
 	"demo/cli",
 	"safe-mix",
+	"subkey",
 ]
 exclude = [
 	"polkadot/runtime/wasm",
