@@ -875,12 +875,12 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	fn staking_balance_transfer_when_bonded_panics() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			Staking::stake(&1);
 			Staking::transfer(&1, 2, 69);
+			assert_eq!(Staking::balance(&1), 111);
 		});
 	}
 
@@ -901,13 +901,13 @@ mod tests {
 		});
 	}
 
-	#[test]
 	#[should_panic]
 	fn staking_balance_transfer_when_reserved_panics() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			Staking::reserve_balance(&1, 69);
 			Staking::transfer(&1, 2, 69);
+			assert_eq!(Staking::balance(&1), 111);
 		});
 	}
 
