@@ -1,0 +1,8 @@
+[package]
+name = "subkey"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+ed25519 = { version = "*", path = "../substrate/ed25519" }
+substrate-primitives = { version = "*", path = "../substrate/primitives" }
