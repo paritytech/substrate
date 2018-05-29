@@ -12,29 +12,61 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-//! Smart-contract execution module.
+//! Crate for executing smart-contracts.
+//!
+//! It provides an means for executing contracts represented in WebAssembly (Wasm for short).
+//! Contracts are able to create other contracts, transfer funds to each other and operate on a simple key-value storage.
 
-// TODO: Extract to it's own crate?
+#![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
 
-use codec::Slicable;
+extern crate parity_wasm;
+extern crate pwasm_utils;
+
+extern crate substrate_runtime_std as rstd;
+extern crate substrate_runtime_sandbox as sandbox;
+extern crate substrate_codec as codec;
+
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
+
+#[cfg(test)]
+extern crate wabt;
+
 use rstd::prelude::*;
-use sandbox;
+use codec::Slicable;
 
 use parity_wasm::elements::{self, External, MemoryType};
-use pwasm_utils;
 use pwasm_utils::rules;
 
+/// An interface that provides an access to the external environment in which the
+/// smart-contract is executed.
+///
+/// This interface is specialised to an account of the executing code, so all
+/// operations are implicitly performed on that account.
 pub trait Ext {
+	/// The indentifier of an account.
 	type AccountId: Slicable + Clone;
+	/// The balance of an account.
 	type Balance: Slicable;
 
-	// TODO: Convert input vectors to slices?
+	/// Returns the storage entry of the executing account by the given key.
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Sets the storage entry by the given key to the specified value.
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>);
+
 	// TODO: Return the address of the created contract.
+	/// Create a new account for a contract.
+	///
+	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
+	/// transfered from this to the newly created account.
 	fn create(&mut self, code: &[u8], value: Self::Balance);
+
+	/// Transfer some funds to the specified account.
 	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance);
 }
 
@@ -112,7 +144,8 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	}
 }
 
-pub(crate) fn execute<'a, T: Ext>(
+/// Execute the given code as a contract.
+pub fn execute<'a, T: Ext>(
 	code: &[u8],
 	ext: &'a mut T,
 	gas_limit: u64,
@@ -442,9 +475,51 @@ mod tests {
 	use super::*;
 	use std::fmt;
 	use wabt;
-	use runtime_io::with_externalities;
-	use mock::{Staking, Test, new_test_ext};
-	use ::{AccountDb, Trait, CodeOf, ContractAddressFor, DirectAccountDb, FreeBalance, StorageMap};
+	use std::collections::HashMap;
+
+	#[derive(Debug, PartialEq, Eq)]
+	struct CreateEntry {
+		code: Vec<u8>,
+		endownment: u64,
+	}
+	#[derive(Debug, PartialEq, Eq)]
+	struct TransferEntry {
+		to: u64,
+		value: u64,
+	}
+	#[derive(Default)]
+	struct MockExt {
+		storage: HashMap<Vec<u8>, Vec<u8>>,
+		creates: Vec<CreateEntry>,
+		transfers: Vec<TransferEntry>,
+	}
+	impl Ext for MockExt {
+		type AccountId = u64;
+		type Balance = u64;
+
+		fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+			self.storage.get(key).cloned()
+		}
+		fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
+			*self.storage.entry(key.to_vec()).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
+		}
+		fn create(&mut self, code: &[u8], value: Self::Balance) {
+			self.creates.push(
+				CreateEntry {
+					code: code.to_vec(),
+					endownment: value,
+				}
+			);
+		}
+		fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
+			self.transfers.push(
+				TransferEntry {
+					to: *to,
+					value,
+				}
+			);
+		}
+	}
 
 	impl fmt::Debug for PreparedContract {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -540,19 +615,13 @@ mod tests {
 	fn contract_transfer() {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
-			<FreeBalance<Test>>::insert(0, 111);
-			<FreeBalance<Test>>::insert(1, 0);
-			<FreeBalance<Test>>::insert(2, 30);
+		let mut mock_ext = MockExt::default();
+		execute(&code_transfer, &mut mock_ext, 50_000).unwrap();
 
-			<CodeOf<Test>>::insert(1, code_transfer.to_vec());
-
-			assert_ok!(Staking::transfer(&0, 1, 11));
-
-			assert_eq!(Staking::balance(&0), 100);
-			assert_eq!(Staking::balance(&1), 5);
-			assert_eq!(Staking::balance(&2), 36);
-		});
+		assert_eq!(&mock_ext.transfers, &[TransferEntry {
+			to: 2,
+			value: 6,
+		}]);
 	}
 
 	/// Returns code that uses `ext_create` runtime call.
@@ -605,22 +674,15 @@ r#"
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let code_create = wabt::wat2wasm(&code_create(&code_transfer)).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
-			<FreeBalance<Test>>::insert(0, 111);
-			<FreeBalance<Test>>::insert(1, 0);
+		let mut mock_ext = MockExt::default();
+		execute(&code_create, &mut mock_ext, 50_000).unwrap();
 
-			<CodeOf<Test>>::insert(1, code_create.to_vec());
-
-			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
-			assert_ok!(Staking::transfer(&0, 1, 11));
-
-			let derived_address =
-				<Test as Trait>::DetermineContractAddress::contract_address_for(&code_transfer, &1);
-
-			assert_eq!(Staking::balance(&0), 100);
-			assert_eq!(Staking::balance(&1), 8);
-			assert_eq!(Staking::balance(&derived_address), 3);
-		});
+		assert_eq!(&mock_ext.creates, &[
+			CreateEntry {
+				code: code_transfer,
+				endownment: 3,
+			}
+		]);
 	}
 
 	/// This code a value from the storage, increment it's first byte
@@ -665,32 +727,25 @@ r#"
 	fn contract_adder() {
 		let code_adder = wabt::wat2wasm(CODE_ADDER).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
-			<FreeBalance<Test>>::insert(0, 111);
-			<FreeBalance<Test>>::insert(1, 0);
-			<CodeOf<Test>>::insert(1, code_adder);
+		let mut mock_ext = MockExt::default();
 
-			assert_ok!(Staking::transfer(&0, 1, 1));
-			assert_ok!(Staking::transfer(&0, 1, 1));
+		// Execute the test twice.
+		execute(&code_adder, &mut mock_ext, 50_000).unwrap();
+		execute(&code_adder, &mut mock_ext, 50_000).unwrap();
 
-			let storage_addr = [0x01u8; 32];
-			let value =
-				AccountDb::<Test>::get_storage(&DirectAccountDb, &1, &storage_addr).unwrap();
-
-			assert_eq!(
-				&value,
-				&[
-					2, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0,
-				]
-			);
-		});
+		let storage_addr = [0x01u8; 32];
+		assert_eq!(
+			&mock_ext.storage.get(&storage_addr[..]).unwrap()[..],
+			&[
+				2, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+			][..],
+		);
 	}
 
-	// This code should make 100_000 iterations so it should
-	// consume more than 100_000 units of gas.
+	// This code should make 100_000 iterations.
 	const CODE_LOOP: &str =
 r#"
 (module
@@ -722,21 +777,16 @@ r#"
 	fn contract_out_of_gas() {
 		let code_loop = wabt::wat2wasm(CODE_LOOP).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
-			// Set initial balances.
-			<FreeBalance<Test>>::insert(0, 111);
-			<FreeBalance<Test>>::insert(1, 0);
+		let mut mock_ext = MockExt::default();
 
-			<CodeOf<Test>>::insert(1, code_loop.to_vec());
-
-			// Transfer some balance from 0 to 1. This will trigger execution
-			// of the smart-contract code at address 1.
-			assert_ok!(Staking::transfer(&0, 1, 11));
-
-			// The balance should remain unchanged since we are expecting
-			// out-of-gas error which will revert transfer.
-			assert_eq!(Staking::balance(&0), 111);
-		});
+		assert_matches!(
+			execute(&code_loop, &mut mock_ext, 900_000),
+			Err(_)
+		);
+		assert_matches!(
+			execute(&code_loop, &mut mock_ext, 937_000),
+			Ok(_)
+		);
 	}
 
 	const CODE_MEM: &str =
@@ -755,19 +805,11 @@ r#"
 	fn contract_internal_mem() {
 		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
-			// Set initial balances.
-			<FreeBalance<Test>>::insert(0, 111);
-			<FreeBalance<Test>>::insert(1, 0);
+		let mut mock_ext = MockExt::default();
 
-			<CodeOf<Test>>::insert(1, code_mem.to_vec());
-
-			// Transfer some balance from 0 to 1.
-			assert_ok!(Staking::transfer(&0, 1, 11));
-
-			// The balance should remain unchanged since we are expecting
-			// validation error caused by internal memory declaration.
-			assert_eq!(Staking::balance(&0), 111);
-		});
+		assert_matches!(
+			execute(&code_mem, &mut mock_ext, 100_000),
+			Err(_)
+		);
 	}
 }

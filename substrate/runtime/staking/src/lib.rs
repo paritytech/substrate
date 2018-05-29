@@ -24,10 +24,6 @@ extern crate serde;
 #[cfg(test)]
 extern crate wabt;
 
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -36,14 +32,13 @@ extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
+extern crate substrate_runtime_contract as contract;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
-extern crate pwasm_utils;
-extern crate parity_wasm;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
@@ -54,10 +49,6 @@ use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment, As};
-
-mod contract;
-#[cfg(test)]
-mod mock;
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -793,7 +784,62 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use mock::*;
+	use substrate_primitives::H256;
+	use primitives::BuildExternalities;
+	use primitives::traits::{HasPublicAux, Identity};
+	use primitives::testing::{Digest, Header};
+
+	pub struct Test;
+	impl HasPublicAux for Test {
+		type PublicAux = u64;
+	}
+	impl consensus::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		type SessionKey = u64;
+	}
+	impl system::Trait for Test {
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = runtime_io::BlakeTwo256;
+		type Digest = Digest;
+		type AccountId = u64;
+		type Header = Header;
+	}
+	impl session::Trait for Test {
+		type ConvertAccountIdToSessionKey = Identity;
+	}
+	impl Trait for Test {
+		type Balance = u64;
+		type DetermineContractAddress = DummyContractAddressFor;
+	}
+
+	fn new_test_ext(session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
+		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		t.extend(consensus::GenesisConfig::<Test>{
+			code: vec![],
+			authorities: vec![],
+		}.build_externalities());
+		t.extend(session::GenesisConfig::<Test>{
+			session_length,
+			validators: vec![10, 20],
+		}.build_externalities());
+		t.extend(GenesisConfig::<Test>{
+			sessions_per_era,
+			current_era,
+			balances: if monied { vec![(1, 10), (2, 20), (3, 30), (4, 40)] } else { vec![] },
+			intentions: vec![],
+			validator_count: 2,
+			bonding_duration: 3,
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
+		}.build_externalities());
+		t
+	}
+
+	type System = system::Module<Test>;
+	type Session = session::Module<Test>;
+	type Staking = Module<Test>;
 
 	#[test]
 	fn staking_should_work() {
@@ -1075,6 +1121,78 @@ mod tests {
 			assert_eq!(Staking::free_balance(&1), 69);
 			assert_eq!(Staking::reserved_balance(&2), 0);
 			assert_eq!(Staking::free_balance(&2), 42);
+		});
+	}
+
+	const CODE_TRANSFER: &str = r#"
+(module
+	;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(call $ext_transfer
+			(i32.const 4)  ;; Pointer to "Transfer to" address.
+			(i32.const 8)  ;; Length of "Transfer to" address.
+			(i32.const 12)  ;; Pointer to the buffer with value to transfer
+			(i32.const 8)   ;; Length of the buffer with value to transfer.
+		)
+	)
+	;; Destination AccountId to transfer the funds.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\02\00\00\00\00\00\00\00")
+	;; Amount of value to transfer.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
+)
+"#;
+
+	#[test]
+	fn contract_transfer() {
+		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+			<FreeBalance<Test>>::insert(2, 30);
+
+			<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+			assert_ok!(Staking::transfer(&0, 1, 11));
+
+			assert_eq!(Staking::balance(&0), 100);
+			assert_eq!(Staking::balance(&1), 5);
+			assert_eq!(Staking::balance(&2), 36);
+		});
+	}
+
+	const CODE_MEM: &str =
+r#"
+(module
+	;; Internal memory is not allowed.
+	(memory 1 1)
+	(func (export "call")
+		nop
+	)
+)
+"#;
+
+	#[test]
+	fn contract_internal_mem() {
+		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
+
+		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+			// Set initial balances.
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+
+			<CodeOf<Test>>::insert(1, code_mem.to_vec());
+
+			// Transfer some balance from 0 to 1.
+			assert_ok!(Staking::transfer(&0, 1, 11));
+
+			// The balance should remain unchanged since we are expecting
+			// validation error caused by internal memory declaration.
+			assert_eq!(Staking::balance(&0), 111);
 		});
 	}
 }

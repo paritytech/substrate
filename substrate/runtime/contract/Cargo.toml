@@ -1,0 +1,25 @@
+[package]
+name = "substrate-runtime-contract"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+substrate-codec = { path = "../../codec", default_features = false }
+substrate-runtime-std = { path = "../../runtime-std", default_features = false }
+substrate-runtime-sandbox = { path = "../../runtime-sandbox", default_features = false }
+parity-wasm = { version = "0.30", default_features = false }
+pwasm-utils = { version = "0.2", default_features = false }
+
+[dev-dependencies]
+wabt = "0.1.7"
+assert_matches = "1.1"
+
+[features]
+default = ["std"]
+std = [
+	"substrate-codec/std",
+	"substrate-runtime-std/std",
+	"substrate-runtime-sandbox/std",
+	"parity-wasm/std",
+	"pwasm-utils/std",
+]
