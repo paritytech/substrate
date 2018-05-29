@@ -137,19 +137,21 @@ impl<
 		// Verify the signature is good.
 		let xt = match uxt.check() {
 			Ok(xt) => xt,
-			Err(_) => panic!("All transactions should be properly signed"),
+			Err(_) => panic!("All extrinsics should be properly signed"),
 		};
 
 		if xt.sender() != &Default::default() {
 			// check index
 			let expected_index = <system::Module<System>>::account_index(xt.sender());
-			assert!(xt.index() == &expected_index, "All transactions should have the correct nonce");
+			assert!(xt.index() == &expected_index, "All extrinsics should have the correct nonce");
+
+			// pay any fees.
+			assert!(Payment::make_payment(xt.sender(), encoded_len), "All extrinsics should have sender able to pay their fees");
+
+			// AUDIT: Under no circumstances may this function panic from here onwards.
 
 			// increment nonce in storage
 			<system::Module<System>>::inc_account_index(xt.sender());
-
-			// pay any fees.
-			Payment::make_payment(xt.sender(), encoded_len);
 		}
 
 		// decode parameters and dispatch

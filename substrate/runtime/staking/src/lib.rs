@@ -207,7 +207,7 @@ impl<T: Trait> Module<T> {
 	fn stake(aux: &T::PublicAux) {
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
-		assert!(intentions.iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot stake if already staked.");
+		ensure!(intentions.iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot stake if already staked.");
 		intentions.push(aux.ref_into().clone());
 		<Intentions<T>>::put(intentions);
 		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
@@ -220,11 +220,11 @@ impl<T: Trait> Module<T> {
 		let mut intentions = <Intentions<T>>::get();
 		if let Some(position) = intentions.iter().position(|t| t == aux.ref_into()) {
 			intentions.swap_remove(position);
+			<Intentions<T>>::put(intentions);
+			<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
 		} else {
-			panic!("Cannot unstake if not already staked.");
+			fail!("Cannot unstake if not already staked.");
 		}
-		<Intentions<T>>::put(intentions);
-		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
 	}
 
 	// PRIV DISPATCH
@@ -282,11 +282,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Moves `value` from balance to reserved balance.
-	pub fn reserve_balance(who: &T::AccountId, value: T::Balance) {
+	pub fn reserve_balance(who: &T::AccountId, value: T::Balance) -> bool {
 		let b = Self::free_balance(who);
-		assert!(b >= value);
+		if b < value {
+			return false;
+		}
 		<FreeBalance<T>>::insert(who, b - value);
 		<ReservedBalance<T>>::insert(who, Self::reserved_balance(who) + value);
+		true
 	}
 
 	/// Moves `value` from reserved balance to balance.
@@ -605,11 +608,14 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
-	fn make_payment(transactor: &T::AccountId, encoded_len: usize) {
+	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> bool {
 		let b = Self::free_balance(transactor);
 		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<usize>>::sa(encoded_len);
-		assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
+		if b < transaction_fee {
+			return false;
+		}
 		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
+		true
 	}
 }
 
