@@ -22,7 +22,7 @@ use super::AccountId;
 
 /// An instruction to do something.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Transaction {
 	/// Who is sending.
 	pub from: AccountId,

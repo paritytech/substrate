@@ -50,14 +50,14 @@ pub fn execute_block(block: Block) {
 	);
 
 	// check transaction trie root represents the transactions.
-	let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
+	let txs = block.extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
 	info_expect_equal_hash(&header.extrinsics_root, &txs_root);
 	assert!(header.extrinsics_root == txs_root, "Transaction trie root must be valid.");
 
 	// execute transactions
-	block.transactions.iter().for_each(execute_transaction_backend);
+	block.extrinsics.iter().for_each(execute_transaction_backend);
 
 	// check storage root.
 	let storage_root = storage_root().into();
@@ -133,7 +133,8 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
-	use ::{Header, Digest, Transaction, UncheckedTransaction};
+	use runtime_primitives::testing::Digest;
+	use ::{Header, Transaction, UncheckedTransaction};
 
 	fn new_test_ext() -> TestExternalities {
 		map![
@@ -165,7 +166,7 @@ mod tests {
 
 		let b = Block {
 			header: h,
-			transactions: vec![],
+			extrinsics: vec![],
 		};
 
 		with_externalities(&mut t, || {
@@ -190,7 +191,7 @@ mod tests {
 				extrinsics_root: hex!("5e44188712452f900acfa1b4bf4084753122ea1856d58187dd33374a2ca653b1").into(),
 				digest: Digest { logs: vec![], },
 			},
-			transactions: vec![
+			extrinsics: vec![
 				construct_signed_tx(Transaction {
 					from: Keyring::Alice.to_raw_public(),
 					to: Keyring::Bob.to_raw_public(),
@@ -215,7 +216,7 @@ mod tests {
 				extrinsics_root: hex!("9ac45fbcc93fa6a8b5a3c44f04d936d53569c72a53fbc12eb58bf884f6dbfae5").into(),
 				digest: Digest { logs: vec![], },
 			},
-			transactions: vec![
+			extrinsics: vec![
 				construct_signed_tx(Transaction {
 					from: Keyring::Bob.to_raw_public(),
 					to: Keyring::Alice.to_raw_public(),

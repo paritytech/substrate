@@ -22,7 +22,7 @@ use super::{Signature, Transaction};
 
 /// A transactions right from the external world. Unchecked.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct UncheckedTransaction {
 	/// The actual transaction information.
 	pub tx: Transaction,

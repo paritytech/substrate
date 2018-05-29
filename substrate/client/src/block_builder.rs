@@ -77,7 +77,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "execute_transaction",
+		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "apply_extrinsic",
 			&vec![].and(&self.header).and(&xt))?;
 		self.header = <<Block as BlockT>::Header as Slicable>::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		self.extrinsics.push(xt);
