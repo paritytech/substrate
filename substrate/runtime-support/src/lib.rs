@@ -48,25 +48,25 @@ pub use runtime_io::print;
 
 #[macro_export]
 macro_rules! fail {
-	( $y:expr ) => {
+	( $y:expr ) => {{
 		$crate::print($y);
 		return;
-	}
+	}}
 }
 
 #[macro_export]
 macro_rules! ensure {
-	( $x:expr, $y:expr ) => {
+	( $x:expr, $y:expr ) => {{
 		if !$x {
 			$crate::print($y);
 			return;
 		}
-	};
-	($x:expr) => {
+	}};
+	($x:expr) => {{
 		if !$x {
 			$crate::print("Bailing! Cannot ensure: ");
 			$crate::print(stringify!($x));
 			return;
 		}
-	}
+	}}
 }

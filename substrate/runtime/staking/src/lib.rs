@@ -185,7 +185,7 @@ impl<T: Trait> Module<T> {
 	/// Create a smart-contract account.
 	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb) {
+		if let Ok(Some(commit)) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb) {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
 	}
@@ -196,7 +196,7 @@ impl<T: Trait> Module<T> {
 	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb) {
+		if let Ok(Some(commit)) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb) {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
 	}
@@ -541,26 +541,28 @@ impl<T: Trait> Module<T> {
 		code: &[u8],
 		value: T::Balance,
 		account_db: &DB,
-	) -> Option<State<T>> {
+	) -> Result<Option<State<T>>, &'static str> {
 		let from_balance = account_db.get_balance(transactor);
 		// TODO: a fee.
-		assert!(from_balance >= value);
+		if from_balance < value {
+			return Err("balance too low to send value");
+		}
 
 		let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
 
 		// early-out if degenerate.
 		if &dest == transactor {
-			return None;
+			return Ok(None);
 		}
 
 		let mut local = BTreeMap::new();
 
 		// two inserts are safe
-		assert!(&dest != transactor);
+		// note that we now know that `&dest != transactor` due to early-out before.
 		local.insert(dest, ChangeEntry { balance: Some(value), code: Some(code.to_vec()), storage: Default::default() });
 		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - value));
 
-		Some(local)
+		Ok(Some(local))
 	}
 
 	fn effect_transfer<DB: AccountDb<T>>(
@@ -568,13 +570,19 @@ impl<T: Trait> Module<T> {
 		dest: &T::AccountId,
 		value: T::Balance,
 		account_db: &DB,
-	) -> Option<State<T>> {
+	) -> Result<Option<State<T>>, &'static str> {
 		let from_balance = account_db.get_balance(transactor);
-		assert!(from_balance >= value);
+		if from_balance < value {
+			return Err("balance too low to send value");
+		}
 
 		let to_balance = account_db.get_balance(dest);
-		assert!(<Bondage<T>>::get(transactor) <= <Bondage<T>>::get(dest));
-		assert!(to_balance + value > to_balance); // no overflow
+		if <Bondage<T>>::get(transactor) > <Bondage<T>>::get(dest) {
+			return Err("bondage too high to send value");
+		}
+		if to_balance + value <= to_balance {
+			return Err("destination balance too high to receive value");
+		}
 
 		// TODO: a fee, based upon gaslimit/gasprice.
 		let gas_limit = 100_000;
@@ -599,11 +607,11 @@ impl<T: Trait> Module<T> {
 			contract::execute(&dest_code, dest, &mut overlay, gas_limit).is_ok()
 		};
 
-		if should_commit {
+		Ok(if should_commit {
 			Some(overlay.into_state())
 		} else {
 			None
-		}
+		})
 	}
 }
 
