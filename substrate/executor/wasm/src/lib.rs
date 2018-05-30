@@ -54,12 +54,22 @@ impl_stubs!(
 		enumerated_trie_root(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).to_vec()
 	},
 	test_sandbox NO_DECODE => |code: &[u8]| {
-		let result = execute_sandboxed(code).is_ok();
-		[result as u8].to_vec()
+		let ok = execute_sandboxed(code, &[]).is_ok();
+		[ok as u8].to_vec()
+	},
+	test_sandbox_args NO_DECODE => |code: &[u8]| {
+		let ok = execute_sandboxed(
+			code,
+			&[
+				sandbox::TypedValue::I32(0x12345678),
+				sandbox::TypedValue::I64(0x1234567887654321),
+			]
+		).is_ok();
+		[ok as u8].to_vec()
 	}
 );
 
-fn execute_sandboxed(code: &[u8]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+fn execute_sandboxed(code: &[u8], args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 	struct State {
 		counter: u32,
 	}
@@ -91,7 +101,7 @@ fn execute_sandboxed(code: &[u8]) -> Result<sandbox::ReturnValue, sandbox::HostE
 	env_builder.add_host_func("env", "inc_counter", env_inc_counter);
 
 	let mut instance = sandbox::Instance::new(code, &env_builder, &mut state)?;
-	let result = instance.invoke(b"call", &[], &mut state);
+	let result = instance.invoke(b"call", args, &mut state);
 
 	result.map_err(|_| sandbox::HostError)
 }

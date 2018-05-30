@@ -20,9 +20,11 @@ use rstd::collections::btree_map::BTreeMap;
 use rstd::fmt;
 
 
-use self::wasmi::{Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalRef, ImportResolver,
-                  MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
-                  RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap, TrapKind};
+use self::wasmi::{
+	Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalRef, ImportResolver,
+	MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
+	RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap, TrapKind
+};
 use self::wasmi::memory_units::Pages;
 use super::{Error, TypedValue, ReturnValue, HostFuncType, HostError};
 
@@ -284,10 +286,7 @@ impl<T> Instance<T> {
 		args: &[TypedValue],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
-		if args.len() > 0 {
-			// TODO: Convert args into `RuntimeValue` and use it.
-			unimplemented!();
-		}
+		let args = args.iter().cloned().map(Into::into).collect::<Vec<_>>();
 
 		let name = ::std::str::from_utf8(name).map_err(|_| Error::Execution)?;
 		let mut externals = GuestExternals {
@@ -295,7 +294,7 @@ impl<T> Instance<T> {
 			defined_host_functions: &self.defined_host_functions,
 		};
 		let result = self.instance
-			.invoke_export(&name, &[], &mut externals);
+			.invoke_export(&name, &args, &mut externals);
 
 		match result {
 			Ok(None) => Ok(ReturnValue::Unit),
@@ -305,5 +304,82 @@ impl<T> Instance<T> {
 			}
 			Err(_err) => Err(Error::Execution),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use wabt;
+	use ::{TypedValue, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
+
+	fn execute_sandboxed(code: &[u8], args: &[TypedValue]) -> Result<ReturnValue, HostError> {
+		struct State {
+			counter: u32,
+		}
+
+		fn env_assert(_e: &mut State, args: &[TypedValue]) -> Result<ReturnValue, HostError> {
+			if args.len() != 1 {
+				return Err(HostError);
+			}
+			let condition = args[0].as_i32().ok_or_else(|| HostError)?;
+			if condition != 0 {
+				Ok(ReturnValue::Unit)
+			} else {
+				Err(HostError)
+			}
+		}
+		fn env_inc_counter(e: &mut State, args: &[TypedValue]) -> Result<ReturnValue, HostError> {
+			if args.len() != 1 {
+				return Err(HostError);
+			}
+			let inc_by = args[0].as_i32().ok_or_else(|| HostError)?;
+			e.counter += inc_by as u32;
+			Ok(ReturnValue::Value(TypedValue::I32(e.counter as i32)))
+		}
+
+		let mut state = State { counter: 0 };
+
+		let mut env_builder = EnvironmentDefinitionBuilder::new();
+		env_builder.add_host_func("env", "assert", env_assert);
+		env_builder.add_host_func("env", "inc_counter", env_inc_counter);
+
+		let mut instance = Instance::new(code, &env_builder, &mut state)?;
+		let result = instance.invoke(b"call", args, &mut state);
+
+		result.map_err(|_| HostError)
+	}
+
+	#[test]
+	fn invoke_args() {
+		let code = wabt::wat2wasm(r#"
+		(module
+			(import "env" "assert" (func $assert (param i32)))
+
+			(func (export "call") (param $x i32) (param $y i64)
+				;; assert that $x = 0x12345678
+				(call $assert
+					(i32.eq
+						(get_local $x)
+						(i32.const 0x12345678)
+					)
+				)
+
+				(call $assert
+					(i64.eq
+						(get_local $y)
+						(i64.const 0x1234567887654321)
+					)
+				)
+			)
+		)
+		"#).unwrap();
+
+		let result = execute_sandboxed(
+			&code,
+			&[
+				TypedValue::I32(0x12345678),
+				TypedValue::I64(0x1234567887654321),
+			]);
+		assert!(result.is_ok());
 	}
 }

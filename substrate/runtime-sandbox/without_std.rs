@@ -61,6 +61,8 @@ mod ffi {
 			instance_idx: u32,
 			export_ptr: *const u8,
 			export_len: usize,
+			args_ptr: *const u8,
+			args_len: usize,
 			state: usize,
 		) -> u32;
 		pub fn ext_sandbox_memory_new(initial: u32, maximum: u32) -> u32;
@@ -260,12 +262,21 @@ impl<T> Instance<T> {
 	pub fn invoke(
 		&mut self,
 		name: &[u8],
-		_args: &[TypedValue],
+		args: &[TypedValue],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
-		// TODO: Serialize arguments and pass them thru.
-		let result =
-			unsafe { ffi::ext_sandbox_invoke(self.instance_idx, name.as_ptr(), name.len(), state as *const T as usize) };
+		let serialized_args = args.to_vec().encode();
+
+		let result = unsafe {
+			ffi::ext_sandbox_invoke(
+				self.instance_idx,
+				name.as_ptr(),
+				name.len(),
+				serialized_args.as_ptr(),
+				serialized_args.len(),
+				state as *const T as usize,
+			)
+		};
 		match result {
 			sandbox_primitives::ERR_OK => {
 				// TODO: Fetch the result of the execution.

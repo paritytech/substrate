@@ -611,4 +611,38 @@ mod tests {
 			vec![1],
 		);
 	}
+
+	#[test]
+	fn invoke_args() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(import "env" "assert" (func $assert (param i32)))
+
+			(func (export "call") (param $x i32) (param $y i64)
+				;; assert that $x = 0x12345678
+				(call $assert
+					(i32.eq
+						(get_local $x)
+						(i32.const 0x12345678)
+					)
+				)
+
+				(call $assert
+					(i64.eq
+						(get_local $y)
+						(i64.const 0x1234567887654321)
+					)
+				)
+			)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox_args", &code).unwrap(),
+			vec![1],
+		);
+	}
 }

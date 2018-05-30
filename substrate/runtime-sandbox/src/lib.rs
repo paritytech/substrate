@@ -43,6 +43,9 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_primitives as primitives;
 
+#[cfg(test)]
+extern crate wabt;
+
 use rstd::prelude::*;
 
 pub use primitives::sandbox::{TypedValue, ReturnValue, HostError};
