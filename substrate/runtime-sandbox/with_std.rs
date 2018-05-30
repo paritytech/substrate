@@ -300,10 +300,7 @@ impl<T> Instance<T> {
 
 		match result {
 			Ok(None) => Ok(ReturnValue::Unit),
-			Ok(_val) => {
-				// TODO: Convert result value into `TypedValue` and return it.
-				unimplemented!();
-			}
+			Ok(Some(val)) => Ok(ReturnValue::Value(val.into())),
 			Err(_err) => Err(Error::Execution),
 		}
 	}
@@ -381,7 +378,30 @@ mod tests {
 			&[
 				TypedValue::I32(0x12345678),
 				TypedValue::I64(0x1234567887654321),
-			]);
+			]
+		);
 		assert!(result.is_ok());
+	}
+
+	#[test]
+	fn return_value() {
+		let code = wabt::wat2wasm(r#"
+		(module
+			(func (export "call") (param $x i32) (result i32)
+				(i32.add
+					(get_local $x)
+					(i32.const 1)
+				)
+			)
+		)
+		"#).unwrap();
+
+		let return_val = execute_sandboxed(
+			&code,
+			&[
+				TypedValue::I32(0x1336),
+			]
+		).unwrap();
+		assert_eq!(return_val, ReturnValue::Value(TypedValue::I32(0x1337)));
 	}
 }

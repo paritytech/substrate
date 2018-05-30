@@ -66,6 +66,16 @@ impl_stubs!(
 			]
 		).is_ok();
 		[ok as u8].to_vec()
+	},
+	test_sandbox_return_val NO_DECODE => |code: &[u8]| {
+		let result = execute_sandboxed(
+			code,
+			&[
+				sandbox::TypedValue::I32(0x1336),
+			]
+		);
+		let ok = if let Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(0x1337))) = result { true } else { false };
+		[ok as u8].to_vec()
 	}
 );
 

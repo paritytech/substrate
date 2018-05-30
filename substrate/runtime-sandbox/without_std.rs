@@ -63,6 +63,8 @@ mod ffi {
 			export_len: usize,
 			args_ptr: *const u8,
 			args_len: usize,
+			return_val_ptr: *mut u8,
+			return_val_len: usize,
 			state: usize,
 		) -> u32;
 		pub fn ext_sandbox_memory_new(initial: u32, maximum: u32) -> u32;
@@ -266,6 +268,7 @@ impl<T> Instance<T> {
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
 		let serialized_args = args.to_vec().encode();
+		let mut return_val = vec![0u8; sandbox_primitives::ReturnValue::ENCODED_MAX_SIZE];
 
 		let result = unsafe {
 			ffi::ext_sandbox_invoke(
@@ -274,13 +277,16 @@ impl<T> Instance<T> {
 				name.len(),
 				serialized_args.as_ptr(),
 				serialized_args.len(),
+				return_val.as_mut_ptr(),
+				return_val.len(),
 				state as *const T as usize,
 			)
 		};
 		match result {
 			sandbox_primitives::ERR_OK => {
-				// TODO: Fetch the result of the execution.
-				Ok(ReturnValue::Unit)
+				let return_val = sandbox_primitives::ReturnValue::decode(&mut &return_val[..])
+					.ok_or(Error::Execution)?;
+				Ok(return_val)
 			}
 			sandbox_primitives::ERR_EXECUTION => Err(Error::Execution),
 			_ => unreachable!(),

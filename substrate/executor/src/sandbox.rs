@@ -25,8 +25,10 @@ use primitives::sandbox as sandbox_primitives;
 use wasm_utils::DummyUserError;
 use wasmi;
 use wasmi::memory_units::Pages;
-use wasmi::{Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
-            ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind};
+use wasmi::{
+	Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
+	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind
+};
 
 /// Index of a function inside the supervisor.
 ///
@@ -646,6 +648,28 @@ mod tests {
 
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox_args", &code).unwrap(),
+			vec![1],
+		);
+	}
+
+	#[test]
+	fn return_val() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(func (export "call") (param $x i32) (result i32)
+				(i32.add
+					(get_local $x)
+					(i32.const 1)
+				)
+			)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
 			vec![1],
 		);
 	}

@@ -360,7 +360,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.sandbox_store.instance_teardown(instance_idx)?;
 		Ok(())
 	},
-	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, state: usize) -> u32 => {
+	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
+		use codec::Slicable;
+
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
 			.map_err(|_| DummyUserError)
@@ -368,17 +370,33 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				String::from_utf8(b)
 					.map_err(|_| DummyUserError)
 			)?;
+
+		// Deserialize arguments and convert them into wasmi types.
 		let serialized_args = this.memory.get(args_ptr, args_len as usize)
 			.map_err(|_| DummyUserError)?;
-		let args: Vec<sandbox_primitives::TypedValue> = ::codec::Slicable::decode(&mut &serialized_args[..]).ok_or_else(|| DummyUserError)?;
-		let args = args.into_iter().map(|e| e.into()).collect::<Vec<_>>();
+		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &serialized_args[..])
+			.ok_or_else(|| DummyUserError)?
+			.into_iter()
+			.map(Into::into)
+			.collect::<Vec<_>>();
 
 		let instance = this.sandbox_store.instance(instance_idx)?;
 		let result = instance.invoke(&export, &args, this, state);
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
-			Ok(Some(_val)) => unimplemented!(),
+			Ok(Some(val)) => {
+				// Serialize return value and write it back into the memory.
+				sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
+					if val.len() > return_val_len as usize {
+						Err(DummyUserError)?;
+					}
+					this.memory
+						.set(return_val_ptr, val)
+						.map_err(|_| DummyUserError)?;
+					Ok(sandbox_primitives::ERR_OK)
+				})
+			}
 			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
 		}
 	},
