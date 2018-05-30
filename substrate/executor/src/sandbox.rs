@@ -111,22 +111,26 @@ impl ImportResolver for Imports {
 
 	fn resolve_global(
 		&self,
-		_module_name: &str,
-		_field_name: &str,
+		module_name: &str,
+		field_name: &str,
 		_global_type: &::wasmi::GlobalDescriptor,
 	) -> Result<::wasmi::GlobalRef, ::wasmi::Error> {
-		// TODO:
-		unimplemented!()
+		Err(::wasmi::Error::Instantiation(format!(
+			"Export {}:{} not found",
+			module_name, field_name
+		)))
 	}
 
 	fn resolve_table(
 		&self,
-		_module_name: &str,
-		_field_name: &str,
+		module_name: &str,
+		field_name: &str,
 		_table_type: &::wasmi::TableDescriptor,
 	) -> Result<::wasmi::TableRef, ::wasmi::Error> {
-		// TODO:
-		unimplemented!()
+		Err(::wasmi::Error::Instantiation(format!(
+			"Export {}:{} not found",
+			module_name, field_name
+		)))
 	}
 }
 

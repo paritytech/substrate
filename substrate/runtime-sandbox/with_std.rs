@@ -210,8 +210,9 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 		_field_name: &str,
 		_global_type: &GlobalDescriptor,
 	) -> Result<GlobalRef, wasmi::Error> {
-		// TODO: Implement sandboxed globals.
-		unimplemented!()
+		Err(wasmi::Error::Instantiation(format!(
+			"Importing globals is not supported yet"
+		)))
 	}
 
 	fn resolve_memory(
@@ -245,8 +246,9 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 		_field_name: &str,
 		_table_type: &TableDescriptor,
 	) -> Result<TableRef, wasmi::Error> {
-		// TODO: Implement sandboxed tables.
-		unimplemented!()
+		Err(wasmi::Error::Instantiation(format!(
+			"Importing tables is not supported yet"
+		)))
 	}
 }
 
