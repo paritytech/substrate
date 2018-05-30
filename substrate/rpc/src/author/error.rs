@@ -16,7 +16,6 @@
 
 //! Authoring RPC module errors.
 
-use client;
 use extrinsic_pool::txpool;
 use rpc;
 
