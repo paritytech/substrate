@@ -17,7 +17,7 @@
 //! Substrate block-author/full-node API.
 
 use std::sync::Arc;
-use primitives::block::Extrinsic;
+use primitives::block::{Extrinsic, ExtrinsicHash};
 use extrinsic_pool::api::{Error, ExtrinsicPool};
 
 pub mod error;
@@ -32,17 +32,17 @@ build_rpc_trait! {
 	pub trait AuthorApi {
 		/// Submit extrinsic for inclusion in block.
 		#[rpc(name = "author_submitExtrinsic")]
-		fn submit_extrinsic(&self, Extrinsic) -> Result<()>;
+		fn submit_extrinsic(&self, Extrinsic) -> Result<ExtrinsicHash>;
 	}
 }
 
 impl<T> AuthorApi for Arc<T> where
 	T: ExtrinsicPool,
 {
-	fn submit_extrinsic(&self, xt: Extrinsic) -> Result<()> {
+	fn submit_extrinsic(&self, xt: Extrinsic) -> Result<ExtrinsicHash> {
 		self
 			.submit(vec![xt])
-			.map(|_| ())
+			.map(|mut res| res.pop().expect("One extrinsic passed; one result back; qed"))
 			.map_err(|e| e.into_pool_error()
 				.map(Into::into)
 				.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
