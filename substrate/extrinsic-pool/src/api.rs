@@ -30,7 +30,11 @@ pub trait Error: ::std::error::Error + Send + Sized {
 	/// This implementation is optional and used only to
 	/// provide more descriptive error messages for end users
 	/// of RPC API.
-	fn into_pool_error(self) -> Result<txpool::Error, Self>;
+	fn into_pool_error(self) -> Result<txpool::Error, Self> { Err(self) }
+}
+
+impl Error for txpool::Error {
+	fn into_pool_error(self) -> Result<txpool::Error, Self> { Ok(self) }
 }
 
 /// Extrinsic pool.
