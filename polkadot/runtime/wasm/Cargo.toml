@@ -23,7 +23,6 @@ substrate-runtime-session = { path = "../../../substrate/runtime/session", defau
 substrate-runtime-staking = { path = "../../../substrate/runtime/staking", default-features = false }
 substrate-runtime-system = { path = "../../../substrate/runtime/system", default-features = false }
 substrate-runtime-timestamp = { path = "../../../substrate/runtime/timestamp", default-features = false }
-polkadot-primitives = { path = "../../primitives", default-features = false }
 
 [features]
 default = []
@@ -43,7 +42,6 @@ std = [
 	"substrate-runtime-staking/std",
 	"substrate-runtime-system/std",
 	"substrate-runtime-timestamp/std",
-	"polkadot-primitives/std",
 ]
 
 [profile.release]

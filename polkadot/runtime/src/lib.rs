@@ -18,6 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+#[cfg(feature = "std")]
+extern crate serde;
+
 #[macro_use]
 extern crate substrate_runtime_io as runtime_io;
 
@@ -47,12 +53,12 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
-extern crate polkadot_primitives;
 
+pub mod primitives;
 mod parachains;
 
-use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
-use runtime_primitives::generic;
+use primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey};
+use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
 
 #[cfg(feature = "std")]
 pub use runtime_primitives::BuildExternalities;
@@ -60,14 +66,12 @@ pub use runtime_primitives::BuildExternalities;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use parachains::Call as ParachainsCall;
-
+pub use primitives::{Header, Block, UncheckedExtrinsic, Extrinsic};
 
 /// The position of the timestamp set extrinsic.
 pub const TIMESTAMP_SET_POSITION: u32 = 0;
 /// The position of the parachains set extrinsic.
 pub const PARACHAINS_SET_POSITION: u32 = 1;
-/// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
@@ -102,8 +106,16 @@ impl timestamp::Trait for Concrete {
 /// Timestamp module for this concrete runtime.
 pub type Timestamp = timestamp::Module<Concrete>;
 
+/// Session key conversion.
+pub struct SessionKeyConversion;
+impl Convert<AccountId, SessionKey> for SessionKeyConversion {
+	fn convert(a: AccountId) -> SessionKey {
+		a.0
+	}
+}
+
 impl session::Trait for Concrete {
-	type ConvertAccountIdToSessionKey = Identity;
+	type ConvertAccountIdToSessionKey = SessionKeyConversion;
 }
 /// Session module for this concrete runtime.
 pub type Session = session::Module<Concrete>;
@@ -156,12 +168,6 @@ impl_outer_dispatch! {
 	}
 }
 
-/// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, BlakeTwo256, Log, AccountId, Index, Call, Signature>;
-/// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
-/// Extrinsic type as expected by this runtime.
-pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Concrete, Block, Staking,
 	(((((((), Parachains), Council), Democracy), Staking), Session), Timestamp)>;

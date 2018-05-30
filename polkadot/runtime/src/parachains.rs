@@ -16,13 +16,13 @@
 
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
-use polkadot_primitives;
+use primitives;
 use rstd::prelude::*;
 use codec::{Slicable, Joiner};
 use runtime_support::Hashable;
 
 use runtime_primitives::traits::{Executable, RefInto, MaybeEmpty};
-use polkadot_primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
+use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
 use {system, session};
 
 use runtime_support::{StorageValue, StorageMap};
@@ -33,7 +33,7 @@ use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))]
 use {runtime_io, runtime_primitives};
 
-pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trait {
+pub trait Trait: system::Trait<Hash = primitives::Hash> + session::Trait {
 	/// The position of the set_heads call in the block.
 	const SET_POSITION: u32;
 

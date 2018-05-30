@@ -41,7 +41,7 @@ extern crate demo_primitives;
 use rstd::prelude::*;
 use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Identity, HasPublicAux, BlakeTwo256};
+use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildExternalities;
@@ -83,8 +83,16 @@ impl timestamp::Trait for Concrete {
 /// Timestamp module for this concrete runtime.
 pub type Timestamp = timestamp::Module<Concrete>;
 
+/// Session key conversion.
+pub struct SessionKeyConversion;
+impl Convert<AccountId, SessionKey> for SessionKeyConversion {
+	fn convert(a: AccountId) -> SessionKey {
+		a.0
+	}
+}
+
 impl session::Trait for Concrete {
-	type ConvertAccountIdToSessionKey = Identity;
+	type ConvertAccountIdToSessionKey = SessionKeyConversion;
 }
 
 /// Session module for this concrete runtime.
