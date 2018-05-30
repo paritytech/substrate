@@ -27,12 +27,17 @@ pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 
+/// A lazy value.
+pub trait Lazy<T: ?Sized> {
+	fn get(&mut self) -> &T;
+}
+
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
 	type Signer;
 	/// Verify a signature.
-	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
 /// Simple payment making trait, operating on a single generic `AccountId` type.
@@ -138,15 +143,6 @@ impl<T: Default + Eq + PartialEq> Clear for T {
 	fn clear() -> Self { Default::default() }
 }
 
-/*impl<T: Zero> Clear for T {
-	fn is_clear(&self) -> bool { self.is_zero() }
-	fn clear() -> Self { Self::zero() }
-}
-
-impl Clear for substrate_primitives::H256 {
-	fn clear() -> Self { substrate_primitives::H256::new() }
-}*/
-
 pub trait SimpleBitOps:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
@@ -238,7 +234,6 @@ impl Hashing for BlakeTwo256 {
 	}
 }
 
-
 /// Something that can be checked for equality and printed out to a debug channel if bad.
 pub trait CheckEqual {
 	fn check_equal(&self, other: &Self);
@@ -262,8 +257,6 @@ impl CheckEqual for substrate_primitives::H256 {
 		}
 	}
 }
-
-
 
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + Debug {}

@@ -28,7 +28,7 @@ use rstd::ops;
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct Extrinsic<AccountId, Index, Call> where
- 	AccountId: Member + Default + MaybeDisplay,
+ 	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 {
@@ -41,7 +41,7 @@ pub struct Extrinsic<AccountId, Index, Call> where
 }
 
 impl<AccountId, Index, Call> Slicable for Extrinsic<AccountId, Index, Call> where
- 	AccountId: Member + Default + Slicable + MaybeDisplay,
+ 	AccountId: Member + Slicable + MaybeDisplay,
  	Index: Member + Slicable + MaybeDisplay + SimpleArithmetic,
  	Call: Member + Slicable
 {
@@ -68,7 +68,7 @@ impl<AccountId, Index, Call> Slicable for Extrinsic<AccountId, Index, Call> wher
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize))]
 pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Default + MaybeDisplay,
+ 	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
  	Signature: Member,			// TODO: should be Option<Signature>
@@ -80,30 +80,44 @@ pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> where
 }
 
 impl<AccountId, Index, Call, Signature> traits::Checkable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Default + MaybeDisplay,
+ 	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
-	Signature: Member + Default + traits::Verify<Signer = AccountId>,
+	Signature: Member + traits::Verify<Signer = AccountId>,
 	Extrinsic<AccountId, Index, Call>: Slicable,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call, Signature>;
 
 	fn check(self) -> Result<Self::Checked, Self> {
-		if !self.is_signed() {
+		// TODO: unfortunately this is a lifetime relationship that can't
+		// be expressed without higher-kinded lifetimes.
+		struct LazyEncode<F> {
+			inner: F,
+			encoded: Option<Vec<u8>>,
+		}
+
+		impl<F: Fn() -> Vec<u8>> traits::Lazy<[u8]> for LazyEncode<F> {
+			fn get(&mut self) -> &[u8] {
+				self.encoded.get_or_insert_with(&self.inner).as_slice()
+			}
+		}
+
+		let sig_ok = {
+			self.signature.verify(
+				LazyEncode { inner: || self.extrinsic.encode(), encoded: None },
+				&self.extrinsic.signed,
+			)
+		};
+
+		if sig_ok {
 			Ok(CheckedExtrinsic(self))
 		} else {
-			if ::codec::Slicable::using_encoded(&self.extrinsic, |msg|
-				self.signature.verify(msg, &self.extrinsic.signed)
-			) {
-				Ok(CheckedExtrinsic(self))
-			} else {
-				Err(self)
-			}
+			Err(self)
 		}
 	}
 }
 
-impl<AccountId, Index, Call, Signature> UncheckedExtrinsic<AccountId, Index, Call, Signature> where
+impl<AccountId, Index, Call, Signature> UncheckedExtrinsic<AccountId, Index, Call, ::MaybeUnsigned<Signature>> where
  	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
@@ -112,13 +126,12 @@ impl<AccountId, Index, Call, Signature> UncheckedExtrinsic<AccountId, Index, Cal
 {
 	/// Is this extrinsic signed?
 	pub fn is_signed(&self) -> bool {
-		// TODO: should be Option<Signature> and Option<AccountId>
-		self.signature != Signature::default() || self.extrinsic.signed != AccountId::default()
+		self.signature.is_signed(&self.extrinsic.signed)
 	}
 }
 
 impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Default + MaybeDisplay,
+ 	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member + Slicable,
@@ -160,7 +173,7 @@ impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountI
 
 #[cfg(feature = "std")]
 impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Default + MaybeDisplay,
+ 	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member,
@@ -176,14 +189,14 @@ impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Accoun
 pub struct CheckedExtrinsic<AccountId, Index, Call, Signature>
 	(UncheckedExtrinsic<AccountId, Index, Call, Signature>)
 where
- 	AccountId: Member + Default + MaybeDisplay,
+ 	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member;
 
 impl<AccountId, Index, Call, Signature> CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
- 	AccountId: Member + Default + MaybeDisplay,
+ 	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member
@@ -207,7 +220,7 @@ where
 impl<AccountId, Index, Call, Signature> ops::Deref
 	for CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
- 	AccountId: Member + Default + MaybeDisplay,
+ 	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
 	Signature: Member
@@ -222,7 +235,7 @@ where
 impl<AccountId, Index, Call, Signature> traits::Applyable
 	for CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
- 	AccountId: Member + Default + MaybeDisplay,
+ 	AccountId: Member + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member + AuxDispatchable<Aux = AccountId>,
 	Signature: Member
