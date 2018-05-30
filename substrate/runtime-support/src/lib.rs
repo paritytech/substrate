@@ -70,3 +70,11 @@ macro_rules! ensure {
 		}
 	}}
 }
+
+#[macro_export]
+macro_rules! ensure_unwrap {
+	($x:expr, $y: expr) => {{
+		ensure!($x.is_some(), $y);
+		$x.unwrap()
+	}}
+}

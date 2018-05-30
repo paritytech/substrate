@@ -224,8 +224,8 @@ impl<T: Trait> Module<T> {
 	/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 	/// are registered.
 	fn set_approvals(aux: &T::PublicAux, votes: Vec<bool>, index: VoteIndex) {
-		assert!(!Self::presentation_active());
-		assert_eq!(index, Self::vote_index());
+		ensure!(!Self::presentation_active());
+		ensure!(index == Self::vote_index());
 		if !<LastActiveOf<T>>::exists(aux.ref_into()) {
 			// not yet a voter - deduct bond.
 			<staking::Module<T>>::reserve_balance(aux.ref_into(), Self::voting_bond());
@@ -245,16 +245,16 @@ impl<T: Trait> Module<T> {
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
 	fn reap_inactive_voter(aux: &T::PublicAux, signed_index: u32, who: T::AccountId, who_index: u32, assumed_vote_index: VoteIndex) {
-		assert!(!Self::presentation_active(), "cannot reap during presentation period");
-		assert!(Self::voter_last_active(aux.ref_into()).is_some(), "reaper must be a voter");
-		let last_active = Self::voter_last_active(&who).expect("target for inactivity cleanup must be active");
-		assert!(assumed_vote_index == Self::vote_index(), "vote index not current");
-		assert!(last_active < assumed_vote_index - Self::inactivity_grace_period(), "cannot reap during grace perid");
+		ensure!(!Self::presentation_active(), "cannot reap during presentation period");
+		ensure!(Self::voter_last_active(aux.ref_into()).is_some(), "reaper must be a voter");
+		let last_active = ensure_unwrap!(Self::voter_last_active(&who), "target for inactivity cleanup must be active");
+		ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
+		ensure!(last_active < assumed_vote_index - Self::inactivity_grace_period(), "cannot reap during grace perid");
 		let voters = Self::voters();
 		let signed_index = signed_index as usize;
 		let who_index = who_index as usize;
-		assert!(signed_index < voters.len() && &voters[signed_index] == aux.ref_into(), "bad reporter index");
-		assert!(who_index < voters.len() && voters[who_index] == who, "bad target index");
+		ensure!(signed_index < voters.len() && &voters[signed_index] == aux.ref_into(), "bad reporter index");
+		ensure!(who_index < voters.len() && voters[who_index] == who, "bad target index");
 
 		// will definitely kill one of signed or who now.
 
@@ -263,8 +263,8 @@ impl<T: Trait> Module<T> {
 			.any(|(&appr, addr)|
 				appr &&
 				*addr != T::AccountId::default() &&
-				Self::candidate_reg_info(addr)
-					.expect("all items in candidates list are registered").0 <= last_active);
+				Self::candidate_reg_info(addr).map_or(false, |x| x.0 <= last_active)/*defensive only: all items in candidates list are registered*/
+			);
 
 		Self::remove_voter(
 			if valid { &who } else { aux.ref_into() },
@@ -280,12 +280,12 @@ impl<T: Trait> Module<T> {
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
 	fn retract_voter(aux: &T::PublicAux, index: u32) {
-		assert!(!Self::presentation_active(), "cannot retract when presenting");
-		assert!(<LastActiveOf<T>>::exists(aux.ref_into()), "cannot retract non-voter");
+		ensure!(!Self::presentation_active(), "cannot retract when presenting");
+		ensure!(<LastActiveOf<T>>::exists(aux.ref_into()), "cannot retract non-voter");
 		let voters = Self::voters();
 		let index = index as usize;
-		assert!(index < voters.len(), "retraction index invalid");
-		assert!(&voters[index] == aux.ref_into(), "retraction index mismatch");
+		ensure!(index < voters.len(), "retraction index invalid");
+		ensure!(&voters[index] == aux.ref_into(), "retraction index mismatch");
 		Self::remove_voter(aux.ref_into(), index, voters);
 		<staking::Module<T>>::unreserve_balance(aux.ref_into(), Self::voting_bond());
 	}
@@ -294,13 +294,13 @@ impl<T: Trait> Module<T> {
 	///
 	/// Account must have enough transferrable funds in it to pay the bond.
 	fn submit_candidacy(aux: &T::PublicAux, slot: u32) {
-		assert!(!Self::is_a_candidate(aux.ref_into()), "duplicate candidate submission");
-		assert!(<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond()), "candidate has not enough funds");
+		ensure!(!Self::is_a_candidate(aux.ref_into()), "duplicate candidate submission");
+		ensure!(<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond()), "candidate has not enough funds");
 
 		let slot = slot as usize;
 		let count = Self::candidate_count() as usize;
 		let candidates = Self::candidates();
-		assert!(
+		ensure!(
 			(slot == count && count == candidates.len()) ||
 			(slot < candidates.len() && candidates[slot] == T::AccountId::default()),
 			"invalid candidate slot"
@@ -321,23 +321,22 @@ impl<T: Trait> Module<T> {
 	/// Only works if the `block_number >= current_vote().0` and `< current_vote().0 + presentation_duration()``
 	/// `signed` should have at least
 	fn present_winner(aux: &T::PublicAux, candidate: T::AccountId, total: T::Balance, index: VoteIndex) {
-		assert_eq!(index, Self::vote_index(), "index not current");
-		let (_, _, expiring) = Self::next_finalise()
-			.expect("cannot present outside of presentation period");
+		ensure!(index == Self::vote_index(), "index not current");
+		let (_, _, expiring) = ensure_unwrap!(Self::next_finalise(), "cannot present outside of presentation period");
 		let stakes = Self::snapshoted_stakes();
 		let voters = Self::voters();
 		let bad_presentation_punishment = Self::present_slash_per_voter() * T::Balance::sa(voters.len());
-		assert!(<staking::Module<T>>::can_slash(aux.ref_into(), bad_presentation_punishment), "presenter must have sufficient slashable funds");
+		ensure!(<staking::Module<T>>::can_slash(aux.ref_into(), bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
-		let mut leaderboard = Self::leaderboard().expect("leaderboard must exist while present phase active");
-		assert!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
+		let mut leaderboard = ensure_unwrap!(Self::leaderboard(), "leaderboard must exist while present phase active");
+		ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
 
 		if let Some(p) = Self::active_council().iter().position(|&(ref c, _)| c == &candidate) {
-			assert!(p < expiring.len(), "candidate must not form a duplicated member if elected");
+			ensure!(p < expiring.len(), "candidate must not form a duplicated member if elected");
 		}
 
 		let (registered_since, candidate_index): (VoteIndex, u32) =
-			Self::candidate_reg_info(&candidate).expect("presented candidate must be current");
+			ensure_unwrap!(Self::candidate_reg_info(&candidate), "presented candidate must be current");
 		let actual_total = voters.iter()
 			.zip(stakes.iter())
 			.filter_map(|(voter, stake)|
@@ -440,8 +439,8 @@ impl<T: Trait> Module<T> {
 	/// Clears all presented candidates, returning the bond of the elected ones.
 	fn finalise_tally() {
 		<SnapshotedStakes<T>>::kill();
-		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) = <NextFinalise<T>>::take()
-			.expect("finalise can only be called after a tally is started.");
+		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
+			ensure_unwrap!(<NextFinalise<T>>::take(), "finalise can only be called after a tally is started.");
 		let leaderboard: Vec<(T::Balance, T::AccountId)> = <Leaderboard<T>>::take().unwrap_or_default();
 		let new_expiry = <system::Module<T>>::block_number() + Self::term_duration();
 
@@ -476,7 +475,7 @@ impl<T: Trait> Module<T> {
 			.rev()
 			.take_while(|&(b, _)| !b.is_zero())
 			.skip(coming as usize)
-			.map(|(_, a)| { let i = Self::candidate_reg_info(&a).expect("runner up must be registered").1; (a, i) });
+			.filter_map(|(_, a)| Self::candidate_reg_info(&a).map(|i| (a, i)));
 		let mut count = 0u32;
 		for (address, slot) in runners_up {
 			new_candidates[slot as usize] = address;
