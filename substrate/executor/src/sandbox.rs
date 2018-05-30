@@ -259,7 +259,8 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		self.supervisor_externals
 			.deallocate(serialized_result_val_ptr);
 
-		// TODO: check the signature?
+		// We do not have to check the signature here, because it's automatically
+		// checked by wasmi.
 
 		deserialize_result(&serialized_result_val)
 	}
