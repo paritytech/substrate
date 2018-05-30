@@ -15,30 +15,82 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	sync::Weak,
+	sync::Arc,
 	collections::HashMap,
 };
 use primitives::Hash;
 use txpool;
 
-use watcher::Watcher;
+use watcher;
 
-pub struct Listener<T> {
-	_typ: ::std::marker::PhantomData<T>,
-	watchers: HashMap<Hash, Weak<Watcher>>
+pub struct Listener {
+	watchers: HashMap<Hash, watcher::Sender>
 }
 
-impl<T> Default for Listener<T> {
+impl Default for Listener {
 	fn default() -> Self {
 		Listener {
-			_typ: Default::default(),
 			watchers: Default::default(),
 		}
 	}
 }
 
-impl<T> txpool::Listener<T> for Listener<T> {
+impl Listener {
+	pub fn create_watcher<T: txpool::VerifiedTransaction<Hash=Hash>>(&mut self, xt: Arc<T>) -> watcher::Watcher {
+		let sender = self.watchers.entry(*xt.hash()).or_insert_with(watcher::Sender::default);
+		sender.new_watcher()
+	}
 
+	pub fn broadcasted(&mut self, hash: &Hash, peers: Vec<String>) {
+		self.fire(hash, |watcher| watcher.broadcast(peers));
+	}
+
+	fn fire<F: FnOnce(&mut watcher::Sender)>(&mut self, hash: &Hash, fun: F) {
+		let clean = if let Some(h) = self.watchers.get_mut(hash) {
+			fun(h);
+			h.is_done()
+		} else {
+			false
+		};
+
+		if clean {
+			self.watchers.remove(hash);
+		}
+	}
+}
+
+impl<T: txpool::VerifiedTransaction<Hash=Hash>> txpool::Listener<T> for Listener {
+	fn added(&mut self, tx: &Arc<T>, old: Option<&Arc<T>>) {
+		if let Some(old) = old {
+			let hash = tx.hash();
+			self.fire(old.hash(), |watcher| watcher.usurped(*hash));
+		}
+	}
+
+	fn dropped(&mut self, tx: &Arc<T>, by: Option<&T>) {
+		self.fire(tx.hash(), |watcher| match by {
+			Some(t) => watcher.usurped(*t.hash()),
+			None => watcher.dropped(),
+		})
+	}
+
+	fn rejected(&mut self, tx: &Arc<T>, reason: &txpool::ErrorKind) {
+		warn!("Extrinsic rejected ({}): {:?}", reason, tx);
+	}
+
+	fn invalid(&mut self, tx: &Arc<T>) {
+		warn!("Extrinsic invalid: {:?}", tx);
+	}
+
+	fn canceled(&mut self, tx: &Arc<T>) {
+		warn!("Extrinsic canceled: {:?}", tx);
+	}
+
+	fn mined(&mut self, tx: &Arc<T>) {
+		// TODO [ToDr] latest block number?
+		let header_hash = 1.into();
+		self.fire(tx.hash(), |watcher| watcher.finalised(header_hash))
+	}
 }
 
 

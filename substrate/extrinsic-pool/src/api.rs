@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! External API for extrinsic pool.
+
 use std::ops::Deref;
 use txpool;
 use primitives::{
@@ -53,6 +55,6 @@ impl<V, S, E, T> ExtrinsicPool for T where
 	type Error = E;
 
 	fn submit(&self, xt: Vec<Extrinsic>) -> Result<(), Self::Error> {
-		(*self).submit(xt)
+		self.deref().submit(xt).map(|_| ())
 	}
 }

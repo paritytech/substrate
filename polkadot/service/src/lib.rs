@@ -50,6 +50,7 @@ extern crate hex_literal;
 mod error;
 mod config;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 use futures::prelude::*;
@@ -135,6 +136,10 @@ impl<B, E, A> network::TransactionPool for TransactionPoolAdapter<B, E, A>
 			debug!("Error decoding transaction");
 			None
 		}
+	}
+
+	fn on_broadcasted(&self, propagations: HashMap<ExtrinsicHash, Vec<String>>) {
+		self.pool.on_broadcasted(propagations)
 	}
 }
 
