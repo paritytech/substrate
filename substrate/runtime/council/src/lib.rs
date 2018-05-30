@@ -295,7 +295,7 @@ impl<T: Trait> Module<T> {
 	/// Account must have enough transferrable funds in it to pay the bond.
 	fn submit_candidacy(aux: &T::PublicAux, slot: u32) {
 		ensure!(!Self::is_a_candidate(aux.ref_into()), "duplicate candidate submission");
-		ensure!(<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond()), "candidate has not enough funds");
+		ensure!(<staking::Module<T>>::can_deduct_unbonded(aux.ref_into(), Self::candidacy_bond()), "candidate has not enough funds");
 
 		let slot = slot as usize;
 		let count = Self::candidate_count() as usize;
@@ -306,6 +306,7 @@ impl<T: Trait> Module<T> {
 			"invalid candidate slot"
 		);
 
+		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond());
 		let mut candidates = candidates;
 		if slot == candidates.len() {
 			candidates.push(aux.ref_into().clone());
@@ -659,6 +660,16 @@ mod tests {
 	pub type Democracy = democracy::Module<Test>;
 	pub type Council = Module<Test>;
 
+	macro_rules! assert_noop {
+		( $( $x:tt )* ) => {
+			let __h = runtime_io::storage_root();
+			{
+				$( $x )*
+			}
+			assert_eq!(__h, runtime_io::storage_root());
+		}
+	}
+
 	#[test]
 	fn params_should_work() {
 		with_externalities(&mut new_test_ext(false), || {
@@ -760,56 +771,50 @@ mod tests {
 	}
 
 	#[test]
-
-	fn candidate_submission_not_using_free_slot_should_panic() {
-		let mut t = new_test_ext_with_candidate_holes();
-
-		with_externalities(&mut t, || {
+	fn candidate_submission_not_using_free_slot_should_not_work() {
+		with_externalities(&mut new_test_ext_with_candidate_holes(), || {
 			System::set_block_number(1);
-			Council::submit_candidacy(&4, 3);	// gives "invalid candidate slot"
-			assert_eq!(Council::candidates(), vec![0, 0, 1]);
+			assert_noop!{Council::submit_candidacy(&4, 3)};	// gives "invalid candidate slot"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "invalid candidate slot")]
-	fn bad_candidate_slot_submission_should_panic() {
+	fn bad_candidate_slot_submission_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
-			Council::submit_candidacy(&1, 1);
+			assert_noop!{Council::submit_candidacy(&1, 1)};	// gives "invalid candidate slot"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "invalid candidate slot")]
-	fn non_free_candidate_slot_submission_should_panic() {
+	fn non_free_candidate_slot_submission_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
 			Council::submit_candidacy(&1, 0);
-			Council::submit_candidacy(&2, 0);
+			assert_eq!(Council::candidates(), vec![1]);
+			assert_noop!{Council::submit_candidacy(&2, 0)};	// gives "invalid candidate slot"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "duplicate candidate submission")]
-	fn dupe_candidate_submission_should_panic() {
+	fn dupe_candidate_submission_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
 			Council::submit_candidacy(&1, 0);
-			Council::submit_candidacy(&1, 1);
+			assert_eq!(Council::candidates(), vec![1]);
+			assert_noop!{Council::submit_candidacy(&1, 1)};	// gives "duplicate candidate submission"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "candidate has not enough funds")]
-	fn poor_candidate_submission_should_panic() {
+	fn poor_candidate_submission_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
-			Council::submit_candidacy(&7, 0);
+			assert_noop!{Council::submit_candidacy(&7, 0)};	// gives "candidate has not enough funds"
 		});
 	}
 
@@ -907,36 +912,34 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "retraction index mismatch")]
-	fn invalid_retraction_index_should_panic() {
+	fn invalid_retraction_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			Council::submit_candidacy(&3, 0);
 			Council::set_approvals(&1, vec![true], 0);
 			Council::set_approvals(&2, vec![true], 0);
-			Council::retract_voter(&1, 1);
+			assert_eq!(Council::voters(), vec![1, 2]);
+			assert_noop!{Council::retract_voter(&1, 1)};	// gives "retraction index mismatch"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "retraction index invalid")]
-	fn overflow_retraction_index_should_panic() {
+	fn overflow_retraction_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			Council::submit_candidacy(&3, 0);
 			Council::set_approvals(&1, vec![true], 0);
-			Council::retract_voter(&1, 1);
+			assert_noop!{Council::retract_voter(&1, 1)};	// gives "retraction index invalid"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "cannot retract non-voter")]
-	fn non_voter_retraction_should_panic() {
+	fn non_voter_retraction_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			Council::submit_candidacy(&3, 0);
 			Council::set_approvals(&1, vec![true], 0);
-			Council::retract_voter(&2, 0);
+			assert_noop!{Council::retract_voter(&2, 0)};	// gives "cannot retract non-voter"
 		});
 	}
 
@@ -1029,8 +1032,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "candidate must not form a duplicated member if elected")]
-	fn presenting_for_double_election_should_panic() {
+	fn presenting_for_double_election_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			Council::submit_candidacy(&2, 0);
@@ -1047,7 +1049,7 @@ mod tests {
 			Council::end_block(System::block_number());
 
 			System::set_block_number(10);
-			Council::present_winner(&4, 2, 11, 1);
+			assert_noop!{Council::present_winner(&4, 2, 11, 1)};	// gives "candidate must not form a duplicated member if elected"
 		});
 	}
 
@@ -1089,8 +1091,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "bad reporter index")]
-	fn retracting_inactive_voter_with_bad_reporter_index_should_panic() {
+	fn retracting_inactive_voter_with_bad_reporter_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			Council::submit_candidacy(&2, 0);
@@ -1110,17 +1111,16 @@ mod tests {
 			Council::present_winner(&4, 5, 38, 1);
 			Council::end_block(System::block_number());
 
-			Council::reap_inactive_voter(&2,
+			assert_noop!{Council::reap_inactive_voter(&2,
 				42,
 				2, Council::voters().iter().position(|&i| i == 2).unwrap() as u32,
 				2
-			);
+			)};	// given "bad reporter index"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "bad target index")]
-	fn retracting_inactive_voter_with_bad_target_index_should_panic() {
+	fn retracting_inactive_voter_with_bad_target_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			Council::submit_candidacy(&2, 0);
@@ -1140,11 +1140,11 @@ mod tests {
 			Council::present_winner(&4, 5, 38, 1);
 			Council::end_block(System::block_number());
 
-			Council::reap_inactive_voter(&2,
+			assert_noop!{Council::reap_inactive_voter(&2,
 				Council::voters().iter().position(|&i| i == 2).unwrap() as u32,
 				2, 42,
 				2
-			);
+			)};	// gives "bad target index"
 		});
 	}
 
@@ -1191,8 +1191,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "reaper must be a voter")]
-	fn attempting_to_retract_inactive_voter_by_nonvoter_should_panic() {
+	fn attempting_to_retract_inactive_voter_by_nonvoter_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			Council::submit_candidacy(&2, 0);
@@ -1212,17 +1211,16 @@ mod tests {
 			Council::present_winner(&4, 5, 41, 1);
 			Council::end_block(System::block_number());
 
-			Council::reap_inactive_voter(&4,
+			assert_noop!{Council::reap_inactive_voter(&4,
 				0,
 				2, Council::voters().iter().position(|&i| i == 2).unwrap() as u32,
 				2
-			);
+			)};	// gives "reaper must be a voter"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "candidate not worthy of leaderboard")]
-	fn presenting_loser_should_panic() {
+	fn presenting_loser_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			Council::submit_candidacy(&1, 0);
@@ -1242,7 +1240,7 @@ mod tests {
 			Council::present_winner(&4, 3, 21, 0);
 			Council::present_winner(&4, 4, 31, 0);
 			Council::present_winner(&4, 5, 41, 0);
-			Council::present_winner(&4, 2, 11, 0);
+			assert_noop!{Council::present_winner(&4, 2, 11, 0)};	// gives "candidate not worthy of leaderboard"
 		});
 	}
 
@@ -1279,18 +1277,16 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "cannot present outside of presentation period")]
-	fn present_panics_outside_of_presentation_period() {
+	fn present_outside_of_presentation_period_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
-			Council::present_winner(&5, 5, 1, 0);
+			assert_noop!{Council::present_winner(&5, 5, 1, 0)};	// gives "cannot present outside of presentation period"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "index not current")]
-	fn present_panics_with_invalid_vote_index() {
+	fn present_with_invalid_vote_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			Council::submit_candidacy(&2, 0);
@@ -1300,13 +1296,12 @@ mod tests {
 			Council::end_block(System::block_number());
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 11, 1);
+			assert_noop!{Council::present_winner(&4, 2, 11, 1)};	// gives "index not current"
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "presenter must have sufficient slashable funds")]
-	fn present_panics_when_presenter_is_poor() {
+	fn present_when_presenter_is_poor_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
@@ -1319,7 +1314,7 @@ mod tests {
 
 			System::set_block_number(6);
 			assert_eq!(Staking::balance(&1), 1);
-			Council::present_winner(&1, 1, 30, 0);
+			assert_noop!{Council::present_winner(&1, 1, 30, 0)};	// gives "presenter must have sufficient slashable funds"
 		});
 	}
 

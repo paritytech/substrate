@@ -58,8 +58,7 @@ macro_rules! fail {
 macro_rules! ensure {
 	( $x:expr, $y:expr ) => {{
 		if !$x {
-			$crate::print($y);
-			return;
+			fail!($y);
 		}
 	}};
 	($x:expr) => {{
@@ -73,8 +72,11 @@ macro_rules! ensure {
 
 #[macro_export]
 macro_rules! ensure_unwrap {
-	($x:expr, $y: expr) => {{
-		ensure!($x.is_some(), $y);
-		$x.unwrap()
-	}}
+	($x:expr, $y: expr) => {
+		if let Some(v) = $x {
+			v
+		} else {
+			fail!{$y}
+		}
+	}
 }

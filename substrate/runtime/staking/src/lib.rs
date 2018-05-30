@@ -167,10 +167,20 @@ impl<T: Trait> Module<T> {
 		Self::free_balance(who) + Self::reserved_balance(who)
 	}
 
-	/// Some result as `slash(who, value)` (but without the side-effects) asuming there are no
+	/// Some result as `slash(who, value)` (but without the side-effects) assuming there are no
 	/// balance changes in the meantime.
 	pub fn can_slash(who: &T::AccountId, value: T::Balance) -> bool {
 		Self::balance(who) >= value
+	}
+
+	/// Same result as `deduct_unbonded(who, value)` (but without the side-effects) assuming there
+	/// are no balance changes in the meantime.
+	pub fn can_deduct_unbonded(who: &T::AccountId, value: T::Balance) -> bool {
+		if let LockStatus::Liquid = Self::unlock_block(who) {
+			Self::free_balance(who) >= value
+		} else {
+			false
+		}
 	}
 
 	/// The block at which the `who`'s funds become entirely liquid.
