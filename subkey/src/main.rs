@@ -14,6 +14,16 @@ fn good_waypoint(done: u64) -> u64 {
 	}
 }
 
+fn next_seed(mut seed: [u8; 32]) -> [u8; 32] {
+	for i in 0..32 {
+		match seed[i] {
+			255 => { seed[i] = 0; }
+			_ => { seed[i] += 1; break; }
+		}
+	}
+	return seed;
+}
+
 fn main() {
 	if args().len() != 2 {
 		println!("Usage: subkey <search string>");
@@ -45,7 +55,7 @@ fn main() {
 				break;
 			}
 		}
-		seed = p.public().0;
+		seed = next_seed(seed);
 		done += 1;
 
 		if done % good_waypoint(done) == 0 {
