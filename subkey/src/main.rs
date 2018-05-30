@@ -1,6 +1,8 @@
 extern crate ed25519;
 extern crate substrate_primitives;
+extern crate rand;
 
+use rand::{OsRng, Rng};
 use std::env::args;
 use ed25519::Pair;
 use substrate_primitives::hexdisplay::HexDisplay;
@@ -42,9 +44,14 @@ fn main() {
 	};
 	let top = 30 + (desired.len() * 32);
 	let mut best = 0;
-	let mut seed = Pair::generate().public().0;
+	let mut seed = [0u8; 32];
 	let mut done = 0;
 	loop {
+		// reset to a new random seed at beginning and regularly after for paranoia.
+		if done % 100000 == 0 {
+			OsRng::new().unwrap().fill_bytes(&mut seed[..]);
+		}
+
 		let p = Pair::from_seed(&seed);
 		let ss58 = p.public().to_ss58check();
 		let s = score(&ss58);
