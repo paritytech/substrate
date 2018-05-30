@@ -1,6 +1,8 @@
 extern crate ed25519;
 extern crate substrate_primitives;
+extern crate rand;
 
+use rand::{OsRng, Rng};
 use std::env::args;
 use ed25519::Pair;
 use substrate_primitives::hexdisplay::HexDisplay;
@@ -12,6 +14,16 @@ fn good_waypoint(done: u64) -> u64 {
 		0 ... 100_000_000 => 10_000_000,
 		_ => 100_000_000,
 	}
+}
+
+fn next_seed(mut seed: [u8; 32]) -> [u8; 32] {
+	for i in 0..32 {
+		match seed[i] {
+			255 => { seed[i] = 0; }
+			_ => { seed[i] += 1; break; }
+		}
+	}
+	return seed;
 }
 
 fn main() {
@@ -32,9 +44,14 @@ fn main() {
 	};
 	let top = 30 + (desired.len() * 32);
 	let mut best = 0;
-	let mut seed = Pair::generate().public().0;
+	let mut seed = [0u8; 32];
 	let mut done = 0;
 	loop {
+		// reset to a new random seed at beginning and regularly after for paranoia.
+		if done % 100000 == 0 {
+			OsRng::new().unwrap().fill_bytes(&mut seed[..]);
+		}
+
 		let p = Pair::from_seed(&seed);
 		let ss58 = p.public().to_ss58check();
 		let s = score(&ss58);
@@ -45,7 +62,7 @@ fn main() {
 				break;
 			}
 		}
-		seed = p.public().0;
+		seed = next_seed(seed);
 		done += 1;
 
 		if done % good_waypoint(done) == 0 {
