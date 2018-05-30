@@ -23,7 +23,6 @@ members = [
 	"polkadot/primitives",
 	"polkadot/runtime",
 	"polkadot/service",
-	"polkadot/service",
 	"polkadot/statement-table",
 	"polkadot/transaction-pool",
 	"substrate/bft",
@@ -61,6 +60,7 @@ members = [
 	"demo/primitives",
 	"demo/runtime",
 	"safe-mix",
+	"subkey",
 ]
 exclude = [
 	"polkadot/runtime/wasm",
