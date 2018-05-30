@@ -660,16 +660,6 @@ mod tests {
 	pub type Democracy = democracy::Module<Test>;
 	pub type Council = Module<Test>;
 
-	macro_rules! assert_noop {
-		( $( $x:tt )* ) => {
-			let __h = runtime_io::storage_root();
-			{
-				$( $x )*
-			}
-			assert_eq!(__h, runtime_io::storage_root());
-		}
-	}
-
 	#[test]
 	fn params_should_work() {
 		with_externalities(&mut new_test_ext(false), || {

@@ -80,3 +80,26 @@ macro_rules! ensure_unwrap {
 		}
 	}
 }
+
+#[macro_export]
+macro_rules! ensure_unwrap_err {
+	($x:expr, $y: expr) => {
+		if let Err(v) = $x {
+			v
+		} else {
+			fail!{$y}
+		}
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_noop {
+	( $( $x:tt )* ) => {
+		let __h = runtime_io::storage_root();
+		{
+			$( $x )*
+		}
+		assert_eq!(__h, runtime_io::storage_root());
+	}
+}
