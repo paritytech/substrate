@@ -18,15 +18,15 @@
 
 use std::vec::Vec;
 use codec::{Joiner, Slicable};
-use state_machine::{self, CodeExecutor};
+use state_machine;
 use runtime_primitives::traits::{Header as HeaderT, Hashing as HashingT, Block as BlockT, One, HashingFor};
 use runtime_primitives::generic::BlockId;
-use {backend, error, Client};
+use {backend, error, Client, CallExecutor};
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<B, E, Block> where
 	B: backend::Backend<Block>,
-	E: CodeExecutor + Clone,
+	E: CallExecutor<Block> + Clone,
 	Block: BlockT,
 	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
@@ -39,7 +39,7 @@ pub struct BlockBuilder<B, E, Block> where
 
 impl<B, E, Block> BlockBuilder<B, E, Block> where
 	B: backend::Backend<Block>,
-	E: CodeExecutor + Clone,
+	E: CallExecutor<Block> + Clone,
 	Block: BlockT,
 	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
@@ -67,7 +67,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 				Default::default()
 			),
 			extrinsics: Default::default(),
-			executor: client.clone_executor(),
+			executor: client.executor().clone(),
 			state: client.state_at(block_id)?,
 			changes: Default::default(),
 		})
@@ -77,7 +77,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "apply_extrinsic",
+		let (output, _) = self.executor.call_at_state(&self.state, &mut self.changes, "apply_extrinsic",
 			&vec![].and(&self.header).and(&xt))?;
 		self.header = <<Block as BlockT>::Header as Slicable>::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		self.extrinsics.push(xt);
@@ -89,8 +89,12 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 		let new_extrinsics_root = HashingFor::<Block>::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode));
 		self.header.set_extrinsics_root(new_extrinsics_root);
 
-		let (output, _) = state_machine::execute(&self.state, &mut self.changes, &self.executor, "finalise_block",
-			&self.header.encode())?;
+		let (output, _) = self.executor.call_at_state(
+			&self.state,
+			&mut self.changes,
+			"finalise_block",
+			&self.header.encode()
+		)?;
 		self.header = <<Block as BlockT>::Header as Slicable>::decode(&mut &output[..]).expect("Header came straight out of runtime so must be valid");
 		Ok(<Block as BlockT>::new(self.header, self.extrinsics))
 	}

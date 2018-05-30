@@ -99,14 +99,16 @@ impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 }
 
 impl<Block: BlockT> Blockchain<Block> {
-	fn id(&self, id: BlockId<Block>) -> Option<Block::Hash> {
+	/// Get header hash of given block.
+	pub fn id(&self, id: BlockId<Block>) -> Option<Block::Hash> {
 		match id {
 			BlockId::Hash(h) => Some(h),
 			BlockId::Number(n) => self.storage.read().hashes.get(&n).cloned(),
 		}
 	}
 
-	fn new() -> Self {
+	/// Create new in-memory blockchain storage.
+	pub fn new() -> Self {
 		Blockchain {
 			storage: RwLock::new(
 				BlockchainStorage {
@@ -119,7 +121,8 @@ impl<Block: BlockT> Blockchain<Block> {
 		}
 	}
 
-	fn insert(
+	/// Insert a block header and associated data.
+	pub fn insert(
 		&self,
 		hash: Block::Hash,
 		header: <Block as BlockT>::Header,
@@ -150,7 +153,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		let this = self.storage.read();
 		let other = other.storage.read();
 			this.hashes == other.hashes
-		    && this.best_hash == other.best_hash
+			&& this.best_hash == other.best_hash
 			&& this.best_number == other.best_number
 			&& this.genesis_hash == other.genesis_hash
 	}
@@ -207,8 +210,8 @@ pub struct BlockImportOperation<Block: BlockT> {
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
 	type State = InMemory;
 
-	fn state(&self) -> error::Result<&Self::State> {
-		Ok(&self.old_state)
+	fn state(&self) -> error::Result<Option<&Self::State>> {
+		Ok(Some(&self.old_state))
 	}
 
 	fn set_block_data(
@@ -300,3 +303,5 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 		}
 	}
 }
+
+impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> {}

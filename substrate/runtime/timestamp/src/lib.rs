@@ -37,6 +37,9 @@ use runtime_support::{StorageValue, Parameter};
 use runtime_primitives::traits::{HasPublicAux, Executable, MaybeEmpty};
 
 pub trait Trait: HasPublicAux + system::Trait {
+	// the position of the required timestamp-set extrinsic.
+	const SET_POSITION: u32;
+
 	type Value: Parameter + Default;
 }
 
@@ -64,7 +67,11 @@ impl<T: Trait> Module<T> {
 	fn set(aux: &T::PublicAux, now: T::Value) {
 		assert!(aux.is_empty());
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
-		assert!(<system::Module<T>>::extrinsic_index() == 0, "Timestamp must be first extrinsic in the block");
+		assert!(
+			<system::Module<T>>::extrinsic_index() == T::SET_POSITION,
+			"Timestamp extrinsic must be at position {} in the block",
+			T::SET_POSITION
+		);
 		<Self as Store>::Now::put(now);
 		<Self as Store>::DidUpdate::put(true);
 	}
@@ -119,6 +126,7 @@ mod tests {
 		type Header = Header;
 	}
 	impl Trait for Test {
+		const SET_POSITION: u32 = 0;
 		type Value = u64;
 	}
 	type Timestamp = Module<Test>;

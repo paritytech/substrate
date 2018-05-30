@@ -38,7 +38,7 @@ pub trait TestClient {
 
 impl TestClient for Client<Backend, Executor, runtime::Block> {
 	fn new_for_tests() -> Self {
-		client::new_in_mem(NativeExecutor::new(), prepare_genesis).unwrap()
+		client::new_in_mem(NativeExecutor::new(), GenesisBuilder).unwrap()
 	}
 
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
@@ -94,13 +94,17 @@ fn genesis_config() -> GenesisConfig {
 	], 1000)
 }
 
-fn prepare_genesis() -> (runtime::Header, Vec<(Vec<u8>, Vec<u8>)>) {
-	let mut storage = genesis_config().genesis_map();
-	let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
-	storage.extend(additional_storage_with_genesis(&block));
+struct GenesisBuilder;
 
-	(
-		block.header,
-		storage.into_iter().collect()
-	)
+impl client::GenesisBuilder<runtime::Block> for GenesisBuilder {
+	fn build(self) -> (runtime::Header, Vec<(Vec<u8>, Vec<u8>)>) {
+		let mut storage = genesis_config().genesis_map();
+		let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
+		storage.extend(additional_storage_with_genesis(&block));
+
+		(
+			block.header,
+			storage.into_iter().collect()
+		)
+	}
 }

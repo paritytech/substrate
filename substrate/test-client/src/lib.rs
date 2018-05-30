@@ -47,7 +47,7 @@ pub use self::native_executor::NativeExecutor;
 pub type Backend = client::in_mem::Backend<runtime::Block>;
 
 /// Test client executor.
-pub type Executor = executor::NativeExecutor<NativeExecutor>;
+pub type Executor = client::LocalCallExecutor<Backend, executor::NativeExecutor<NativeExecutor>>;
 
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block> {

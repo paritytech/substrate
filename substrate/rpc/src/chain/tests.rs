@@ -28,13 +28,12 @@ fn should_return_header() {
 		client: Arc::new(test_client::new()),
 		subscriptions: Subscriptions::new(remote),
 	};
-
 	assert_matches!(
 		client.header(client.client.genesis_hash()),
 		Ok(Some(ref x)) if x == &block::Header {
 			parent_hash: 0.into(),
 			number: 0,
-			state_root: "6da331d07a82d99f4debaafb0110a2e36244ed34162f9a7f6312a23fd52989ed".into(),
+			state_root: "0c81ab6cfac8c8d7201d78cb699b6b79d714462a4ba00abcacce22444babe315".into(),
 			extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
 			digest: Default::default(),
 		}
@@ -70,7 +69,7 @@ fn should_notify_about_latest_block() {
 	// assert notification send to transport
 	let (notification, next) = core.run(transport.into_future()).unwrap();
 	assert_eq!(notification, Some(
-		r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"digest":{"logs":[]},"extrinsicsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","number":1,"parentHash":"0x4c4ab196ed07bbd5b8c901ae5092d9d3990cbb4d44421af8e988af7d3c2a4226","stateRoot":"0x75b634da2a0d272e8a5145ab704406d3b50676c7739f977f2ccb2d0e5a0cdbd0"},"subscription":0}}"#.to_owned()
+		r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"digest":{"logs":[]},"extrinsicsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","number":1,"parentHash":"0x72ae67388233893fb4594f13df56d4e654aa8721763bcd0bd4e187fee7b2f349","stateRoot":"0x2e1f2f1c53ffb1767fe1abf4fe5953cc87c7650d4af2d4393d1f72324f2cc5d7"},"subscription":0}}"#.to_owned()
 	));
 	// no more notifications on this channel
 	assert_eq!(core.run(next.into_future()).unwrap().0, None);

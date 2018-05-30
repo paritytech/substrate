@@ -17,6 +17,7 @@
 //! Substrate Client and associated logic.
 
 #![warn(missing_docs)]
+#![recursion_limit="128"]
 
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
@@ -44,12 +45,17 @@ pub mod backend;
 pub mod in_mem;
 pub mod genesis;
 pub mod block_builder;
+pub mod light;
+mod call_executor;
 mod client;
 
 pub use client::{
 	new_in_mem,
-	BlockStatus, BlockOrigin, BlockchainEvents,
-	Client, ClientInfo, CallResult, ChainHead,
-	ImportResult,
+	BlockStatus, BlockOrigin, BlockchainEventStream, BlockchainEvents,
+	Client, ClientInfo, ChainHead,
+	ImportResult, GenesisBuilder,
 };
 pub use blockchain::Info as ChainInfo;
+pub use call_executor::{
+	CallResult, CallExecutor, LocalCallExecutor, RemoteCallExecutor,
+};

@@ -75,6 +75,8 @@ impl consensus::Trait for Concrete {
 pub type Consensus = consensus::Module<Concrete>;
 
 impl timestamp::Trait for Concrete {
+	const SET_POSITION: u32 = 0;
+
 	type Value = u64;
 }
 
