@@ -23,16 +23,9 @@ use txpool;
 
 use watcher;
 
+#[derive(Default)]
 pub struct Listener {
 	watchers: HashMap<Hash, watcher::Sender>
-}
-
-impl Default for Listener {
-	fn default() -> Self {
-		Listener {
-			watchers: Default::default(),
-		}
-	}
 }
 
 impl Listener {

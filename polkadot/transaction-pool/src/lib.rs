@@ -135,10 +135,6 @@ impl From<PolkadotBlock> for Block {
 	}
 }
 
-// /// Iterator over pending transactions.
-// pub type PendingIterator<'a, C> =
-// 	txpool::PendingIterator<'a, VerifiedTransaction, Ready<'a, C>, Scoring, NoopListener>;
-
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Debug, Clone)]
 pub struct VerifiedTransaction {

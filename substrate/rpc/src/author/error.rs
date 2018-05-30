@@ -22,7 +22,6 @@ use rpc;
 
 error_chain! {
 	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
 		Pool(txpool::Error, txpool::ErrorKind) #[doc = "Pool error"];
 	}
 	errors {
@@ -47,6 +46,7 @@ impl From<Error> for rpc::Error {
 				message: "Not implemented yet".into(),
 				data: None,
 			},
+			// TODO [ToDr] Unwrap Pool errors.
 			_ => rpc::Error::internal_error(),
 		}
 	}
