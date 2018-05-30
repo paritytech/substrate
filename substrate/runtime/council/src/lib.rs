@@ -475,7 +475,7 @@ impl<T: Trait> Module<T> {
 			.rev()
 			.take_while(|&(b, _)| !b.is_zero())
 			.skip(coming as usize)
-			.filter_map(|(_, a)| Self::candidate_reg_info(&a).map(|i| (a, i)));
+			.filter_map(|(_, a)| Self::candidate_reg_info(&a).map(|i| (a, i.1)));
 		let mut count = 0u32;
 		for (address, slot) in runners_up {
 			new_candidates[slot as usize] = address;
@@ -760,13 +760,14 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "invalid candidate slot")]
+
 	fn candidate_submission_not_using_free_slot_should_panic() {
 		let mut t = new_test_ext_with_candidate_holes();
 
 		with_externalities(&mut t, || {
 			System::set_block_number(1);
-			Council::submit_candidacy(&4, 3);
+			Council::submit_candidacy(&4, 3);	// gives "invalid candidate slot"
+			assert_eq!(Council::candidates(), vec![0, 0, 1]);
 		});
 	}
 
