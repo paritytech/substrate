@@ -31,9 +31,9 @@ extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_state_machine as state_machine;
-extern crate demo_executor;
-extern crate demo_primitives;
-extern crate demo_runtime;
+extern crate blitz_executor;
+extern crate blitz_primitives;
+extern crate blitz_runtime;
 
 #[macro_use]
 extern crate hex_literal;
@@ -49,7 +49,7 @@ pub mod error;
 use std::sync::Arc;
 use client::genesis;
 use codec::Slicable;
-use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
+use blitz_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
 use futures::{Future, Sink, Stream};
 
@@ -81,7 +81,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 
 	// Create client
-	let executor = demo_executor::Executor::new();
+	let executor = blitz_executor::Executor::new();
 	let mut storage = Default::default();
 	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
 

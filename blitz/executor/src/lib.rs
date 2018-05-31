@@ -17,13 +17,13 @@
 //! A `CodeExecutor` specialisation which uses natively compiled runtime when the wasm to be
 //! executed is equivalent to the natively compiled code.
 
-extern crate demo_runtime;
+extern crate blitz_runtime;
 #[macro_use] extern crate substrate_executor;
 extern crate substrate_codec as codec;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
-extern crate demo_primitives;
+extern crate blitz_primitives;
 extern crate ed25519;
 extern crate triehash;
 
@@ -34,7 +34,7 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_runtime_system as system;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
-native_executor_instance!(pub Executor, demo_runtime::api::dispatch, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm"));
+native_executor_instance!(pub Executor, blitz_runtime::api::dispatch, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm"));
 
 #[cfg(test)]
 mod tests {
@@ -46,15 +46,15 @@ mod tests {
 	use runtime_support::{Hashable, StorageValue, StorageMap};
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
-	use demo_primitives::{Hash, BlockNumber};
+	use blitz_primitives::{Hash, BlockNumber};
 	use runtime_primitives::traits::Header as HeaderT;
 	use {staking, system};
-	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
+	use blitz_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
 		BuildExternalities, GenesisConfig, SessionConfig, StakingConfig};
 	use ed25519::{Public, Pair};
 
-	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
-	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm");
+	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/blitz_runtime.wasm");
+	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/blitz_runtime.compact.wasm");
 
 	// TODO: move into own crate.
 	macro_rules! map {

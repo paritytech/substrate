@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate Demo CLI
+//! Blitz Demo CLI
 
 #![warn(missing_docs)]
 
-extern crate demo_cli as cli;
+extern crate blitz_cli as cli;
 
 #[macro_use]
 extern crate error_chain;

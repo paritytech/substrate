@@ -36,11 +36,11 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
-extern crate demo_primitives;
+extern crate blitz_primitives;
 
 use rstd::prelude::*;
 use runtime_io::BlakeTwo256;
-use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
+use blitz_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Identity, HasPublicAux};
 
