@@ -115,11 +115,12 @@ impl Protocol {
 	pub fn new(config: ProtocolConfig, chain: Arc<Client>, transaction_pool: Arc<TransactionPool>) -> error::Result<Protocol>  {
 		let info = chain.info()?;
 		let best_hash = info.chain.best_hash;
+		let sync = ChainSync::new(config.roles, &info);
 		let protocol = Protocol {
 			config: config,
 			chain: chain,
 			genesis_hash: info.chain.genesis_hash,
-			sync: RwLock::new(ChainSync::new(&info)),
+			sync: RwLock::new(sync),
 			consensus: Mutex::new(Consensus::new(best_hash)),
 			peers: RwLock::new(HashMap::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
@@ -520,7 +521,7 @@ impl Protocol {
 			}
 		}
 
-		self.consensus.lock().collect_garbage(Some((hash, &header)));
+		self.consensus.lock().collect_garbage(Some(&header));
 	}
 
 	pub fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats> {
