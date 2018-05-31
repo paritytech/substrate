@@ -331,7 +331,7 @@ impl<B: BlockT> ChainSync<B> where
 
 	pub fn update_chain_info(&mut self, best_header: &B::Header) {
 		let hash = best_header.hash();
-		self.block_imported(&hash, best_header.number())
+		self.block_imported(&hash, best_header.number().clone())
 	}
 
 	pub fn on_block_announce(&mut self, io: &mut SyncIo, protocol: &Protocol<B>, peer_id: PeerId, hash: B::Hash, header: &B::Header) {

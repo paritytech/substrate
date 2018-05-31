@@ -463,7 +463,7 @@ fn check_justification_signed_message<H>(authorities: &[AuthorityId], message: &
 pub fn check_justification<B: Block>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
 	-> Result<Justification<B::Hash>, UncheckedJustification<B::Hash>>
 {
-	let message = Slicable::encode(&PrimitiveMessage::<B> {
+	let message = Slicable::encode(&PrimitiveMessage::<B, _> {
 		parent,
 		action: PrimitiveAction::Commit(just.round_number as u32, just.digest.clone()),
 	});
@@ -478,7 +478,7 @@ pub fn check_justification<B: Block>(authorities: &[AuthorityId], parent: B::Has
 pub fn check_prepare_justification<B: Block>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
 	-> Result<PrepareJustification<B::Hash>, UncheckedJustification<B::Hash>>
 {
-	let message = Slicable::encode(&PrimitiveMessage::<B> {
+	let message = Slicable::encode(&PrimitiveMessage::<B, _> {
 		parent,
 		action: PrimitiveAction::Prepare(just.round_number as u32, just.digest.clone()),
 	});
@@ -524,7 +524,7 @@ pub fn check_vote<B: Block>(
 	check_action::<B>(action, parent_hash, &vote.signature)
 }
 
-fn check_action<B: Block>(action: PrimitiveAction<B>, parent_hash: &B::Hash, sig: &LocalizedSignature) -> Result<(), Error> {
+fn check_action<B: Block>(action: PrimitiveAction<B, B::Hash>, parent_hash: &B::Hash, sig: &LocalizedSignature) -> Result<(), Error> {
 	let primitive = PrimitiveMessage {
 		parent: parent_hash.clone(),
 		action,
@@ -542,8 +542,8 @@ fn check_action<B: Block>(action: PrimitiveAction<B>, parent_hash: &B::Hash, sig
 pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, parent_hash: B::Hash) -> LocalizedMessage<B> {
 	let signer = key.public();
 
-	let sign_action = |action: PrimitiveAction<B>| {
-		let primitive: PrimitiveMessage<B> = PrimitiveMessage {
+	let sign_action = |action: PrimitiveAction<B, B::Hash>| {
+		let primitive = PrimitiveMessage {
 			parent: parent_hash.clone(),
 			action,
 		};

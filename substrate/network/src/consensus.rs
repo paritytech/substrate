@@ -96,14 +96,14 @@ impl<B: BlockT> Consensus<B> {
 			return;
 		}
 
-		match (protocol.chain().info(), protocol.chain().header(&BlockId::Hash(message.parent_hash))) {
+		match (protocol.chain().info(), protocol.chain().header(&BlockId::Hash(message.parent_hash().clone()))) {
 			(_, Err(e)) | (Err(e), _) => {
 				debug!(target:"sync", "Error reading blockchain: {:?}", e);
 				return;
 			},
 			(Ok(info), Ok(Some(header))) => {
 				if header.number < info.chain.best_number {
-					trace!(target:"sync", "Ignored ancient BFT message from {}, hash={}", peer_id, message.parent_hash);
+					trace!(target:"sync", "Ignored ancient BFT message from {}, hash={}", peer_id, message.parent_hash());
 					return;
 				}
 			},
@@ -114,7 +114,7 @@ impl<B: BlockT> Consensus<B> {
 			peer.known_messages.insert(hash);
 			// TODO: validate signature?
 			if let Some((sink, parent_hash)) = self.bft_message_sink.take() {
-				if message.parent_hash == parent_hash {
+				if message.parent_hash() == &parent_hash {
 					if let Err(e) = sink.unbounded_send(message.clone()) {
 						trace!(target:"sync", "Error broadcasting BFT message notification: {:?}", e);
 					} else {
@@ -169,7 +169,7 @@ impl<B: BlockT> Consensus<B> {
 		let last_block_hash = &mut self.last_block_hash;
 		let before = self.messages.len();
 		let (best_hash, best_header) = best_hash_and_header.map(|(h, header)| (Some(h), Some(header))).unwrap_or((None, None));
-		if best_header.as_ref().map_or(false, |header| header.parent_hash != *last_block_hash) {
+		if best_header.as_ref().map_or(false, |header| header.parent_hash() != last_block_hash) {
 			trace!(target:"sync", "Clearing conensus message cache");
 			self.messages.clear();
 			hashes.clear();
@@ -183,7 +183,7 @@ impl<B: BlockT> Consensus<B> {
 					timestamp < now + expiration ||
 					best_header.map_or(true, |header| {
 						if match *message {
-							Message::BftMessage(ref msg) => msg.parent_hash != header.parent_hash,
+							Message::BftMessage(ref msg) => &msg.parent_hash != header.parent_hash(),
 							_ => true,
 						} {
 							hashes.remove(hash);

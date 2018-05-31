@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::{RwLock, Mutex};
 use serde_json;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, HashingFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing, HashingFor};
 use runtime_primitives::generic::BlockId;
 use network::{PeerId, NodeId};
 

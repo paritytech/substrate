@@ -139,14 +139,14 @@ pub struct Params<B: BlockT> {
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT> {
+pub struct Service<B: BlockT + 'static> where B::Header: HeaderT<Number=u64> {
 	/// Network service
 	network: NetworkService,
 	/// Devp2p protocol handler
 	handler: Arc<ProtocolHandler<B>>,
 }
 
-impl<B: BlockT> Service<B> {
+impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params<B>) -> Result<Arc<Service<B>>, Error> {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
@@ -191,13 +191,13 @@ impl<B: BlockT> Service<B> {
 	}
 }
 
-impl<B: BlockT> Drop for Service<B> {
+impl<B: BlockT + 'static> Drop for Service<B> where B::Header: HeaderT<Number=u64> {
 	fn drop(&mut self) {
 		self.stop();
 	}
 }
 
-impl<B: BlockT> ExecuteInContext<B> for Service<B> {
+impl<B: BlockT + 'static> ExecuteInContext<B> for Service<B> where B::Header: HeaderT<Number=u64> {
 	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol<B>)>(&self, closure: F) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
 			closure(&mut NetSyncIo::new(context), &self.handler.protocol)
@@ -205,7 +205,7 @@ impl<B: BlockT> ExecuteInContext<B> for Service<B> {
 	}
 }
 
-impl<B: BlockT> SyncProvider<B> for Service<B> {
+impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: HeaderT<Number=u64> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.protocol.status()
@@ -244,7 +244,7 @@ impl<B: BlockT> SyncProvider<B> for Service<B> {
 }
 
 /// ConsensusService
-impl<B: BlockT> ConsensusService<B> for Service<B> {
+impl<B: BlockT + 'static> ConsensusService<B> for Service<B> where B::Header: HeaderT<Number=u64> {
 	fn connect_to_authorities(&self, _addresses: &[String]) {
 		//TODO: implement me
 	}
@@ -260,7 +260,7 @@ impl<B: BlockT> ConsensusService<B> for Service<B> {
 	}
 }
 
-impl<B: BlockT> NetworkProtocolHandler for ProtocolHandler<B> {
+impl<B: BlockT + 'static> NetworkProtocolHandler for ProtocolHandler<B> where B::Header: HeaderT<Number=u64> {
 	fn initialize(&self, io: &NetworkContext, _host_info: &HostInfo) {
 		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
 			.expect("Error registering sync timer");
@@ -291,7 +291,7 @@ impl<B: BlockT> NetworkProtocolHandler for ProtocolHandler<B> {
 }
 
 /// Trait for managing network
-pub trait ManageNetwork : Send + Sync {
+pub trait ManageNetwork: Send + Sync {
 	/// Set to allow unreserved peers to connect
 	fn accept_unreserved_peers(&self);
 	/// Set to deny unreserved peers to connect
@@ -307,7 +307,7 @@ pub trait ManageNetwork : Send + Sync {
 }
 
 
-impl<B: BlockT> ManageNetwork for Service<B> {
+impl<B: BlockT + 'static> ManageNetwork for Service<B> where B::Header: HeaderT<Number=u64> {
 	fn accept_unreserved_peers(&self) {
 		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}
