@@ -15,37 +15,53 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use super::error::*;
 
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
+use extrinsic_pool::api;
 use parking_lot::Mutex;
 use primitives::block;
 
 #[derive(Default)]
 struct DummyTxPool {
-	submitted: Vec<block::Extrinsic>,
+	submitted: Mutex<Vec<block::Extrinsic>>,
 }
 
-impl AuthorApi for Arc<Mutex<DummyTxPool>> {
+#[derive(Debug)]
+struct Error;
+impl api::Error for Error {}
+impl ::std::error::Error for Error {
+	fn description(&self) -> &str { "Error" }
+}
+impl fmt::Display for Error {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Debug::fmt(self, fmt)
+	}
+}
+
+impl api::ExtrinsicPool for DummyTxPool {
+	type Error = Error;
+
 	/// Submit extrinsic for inclusion in block.
-	fn submit_extrinsic(&self, xt: Extrinsic) -> Result<()> {
-		let mut s = self.lock();
-		if s.submitted.len() < 1 {
-			s.submitted.push(xt);
-			Ok(())
+	fn submit(&self, xt: Vec<Extrinsic>) -> ::std::result::Result<Vec<ExtrinsicHash>, Self::Error> {
+		let mut submitted = self.submitted.lock();
+		if submitted.len() < 1 {
+			let hashes = xt.iter().map(|_xt| 1.into()).collect();
+			submitted.extend(xt);
+			Ok(hashes)
 		} else {
-			Err(ErrorKind::PoolError.into())
+			Err(Error)
 		}
 	}
 }
 
 #[test]
 fn submit_transaction_should_not_cause_error() {
-	let p = Arc::new(Mutex::new(DummyTxPool::default()));
+	let p = Arc::new(DummyTxPool::default());
+	let hash: ExtrinsicHash = 1.into();
 
 	assert_matches!(
 		AuthorApi::submit_extrinsic(&p, block::Extrinsic(vec![])),
-		Ok(())
+		Ok(hash)
 	);
 	assert!(
 		AuthorApi::submit_extrinsic(&p, block::Extrinsic(vec![])).is_err()

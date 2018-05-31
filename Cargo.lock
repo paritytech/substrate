@@ -229,6 +229,7 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
+ "substrate-extrinsic-pool 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-rpc 0.1.0",
  "substrate-rpc-servers 0.1.0",
@@ -1429,16 +1430,15 @@ version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
+ "substrate-extrinsic-pool 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-rpc 0.1.0",
  "substrate-runtime-primitives 0.1.0",
- "transaction-pool 1.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1943,6 +1943,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-extrinsic-pool"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives 0.1.0",
+ "transaction-pool 1.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "substrate-keyring"
 version = "0.1.0"
 dependencies = [
@@ -2025,6 +2037,7 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
  "substrate-executor 0.1.0",
+ "substrate-extrinsic-pool 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-test-client 0.1.0",
