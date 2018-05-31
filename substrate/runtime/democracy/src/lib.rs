@@ -147,7 +147,8 @@ impl<T: Trait> Module<T> {
 	/// Propose a sensitive action to be taken.
 	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>, value: T::Balance) -> Result {
 		ensure!(value >= Self::minimum_deposit(), "value too low");
-		ensure!(<staking::Module<T>>::deduct_unbonded(aux.ref_into(), value), "proposer's balance too low");
+		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), value)
+			.map_err("proposer's balance too low")?;
 
 		let index = Self::public_prop_count();
 		<PublicPropCount<T>>::put(index + 1);
@@ -161,8 +162,10 @@ impl<T: Trait> Module<T> {
 
 	/// Propose a sensitive action to be taken.
 	fn second(aux: &T::PublicAux, proposal: PropIndex) -> Result {
-		let mut deposit = Self::deposit_of(proposal).ok_or("can only second an existing proposal")?;
-		ensure!(<staking::Module<T>>::deduct_unbonded(aux.ref_into(), deposit.0), "seconder's balance too low");
+		let mut deposit = Self::deposit_of(proposal)
+			.ok_or("can only second an existing proposal")?;
+		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), deposit.0)
+			.map_err("seconder's balance too low")?;
 		deposit.1.push(aux.ref_into().clone());
 		<DepositOf<T>>::insert(proposal, deposit);
 		Ok(())
@@ -255,7 +258,7 @@ impl<T: Trait> Module<T> {
 					<PublicProps<T>>::put(public_props);
 					Self::inject_referendum(now + Self::voting_period(), proposal, VoteThreshold::SuperMajorityApprove)?;
 				} else {
-					Err("depositors always exist for current proposals")?
+					return Err("depositors always exist for current proposals")
 				}
 			}
 		}

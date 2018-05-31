@@ -66,11 +66,25 @@ macro_rules! ensure {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
-	( $( $x:tt )* ) => {
+	( $x:expr , $y:expr ) => {
 		let __h = runtime_io::storage_root();
-		{
-			$( $x )*
-		}
+		assert_err!($x, $y);
 		assert_eq!(__h, runtime_io::storage_root());
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err {
+	( $x:expr , $y:expr ) => {
+		assert_eq!($x, Err($y));
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_ok {
+	( $x:expr ) => {
+		assert!($x.is_ok());
 	}
 }

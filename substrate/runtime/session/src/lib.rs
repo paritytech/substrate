@@ -252,14 +252,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: Change to length 3; no visible change.
 			System::set_block_number(1);
-			Session::set_length(3);
+			assert_ok!(Session::set_length(3));
 			Session::check_rotate_session();
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
 			System::set_block_number(2);
-			Session::set_length(3);
+			assert_ok!(Session::set_length(3));
 			Session::check_rotate_session();
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -272,7 +272,7 @@ mod tests {
 
 			// Block 4: Change to length 2; no visible change.
 			System::set_block_number(4);
-			Session::set_length(2);
+			assert_ok!(Session::set_length(2));
 			Session::check_rotate_session();
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -312,7 +312,7 @@ mod tests {
 
 			// Block 3: Set new key for validator 2; no visible change.
 			System::set_block_number(3);
-			Session::set_key(&2, 5);
+			assert_ok!(Session::set_key(&2, 5));
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			Session::check_rotate_session();

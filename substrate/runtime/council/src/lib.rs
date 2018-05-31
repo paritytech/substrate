@@ -295,6 +295,7 @@ impl<T: Trait> Module<T> {
 		let index = index as usize;
 		ensure!(index < voters.len(), "retraction index invalid");
 		ensure!(&voters[index] == aux.ref_into(), "retraction index mismatch");
+		
 		Self::remove_voter(aux.ref_into(), index, voters);
 		<staking::Module<T>>::unreserve_balance(aux.ref_into(), Self::voting_bond());
 		Ok(())
@@ -305,8 +306,6 @@ impl<T: Trait> Module<T> {
 	/// Account must have enough transferrable funds in it to pay the bond.
 	fn submit_candidacy(aux: &T::PublicAux, slot: u32) -> Result {
 		ensure!(!Self::is_a_candidate(aux.ref_into()), "duplicate candidate submission");
-		ensure!(<staking::Module<T>>::can_deduct_unbonded(aux.ref_into(), Self::candidacy_bond()), "candidate has not enough funds");
-
 		let slot = slot as usize;
 		let count = Self::candidate_count() as usize;
 		let candidates = Self::candidates();
@@ -315,8 +314,10 @@ impl<T: Trait> Module<T> {
 			(slot < candidates.len() && candidates[slot] == T::AccountId::default()),
 			"invalid candidate slot"
 		);
+		// NOTE: This must be last as it has side-effects.
+		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond())
+			.ok_or("candidate has not enough funds")?;
 
-		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond());
 		let mut candidates = candidates;
 		if slot == candidates.len() {
 			candidates.push(aux.ref_into().clone());
