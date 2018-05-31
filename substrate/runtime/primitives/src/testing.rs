@@ -16,14 +16,14 @@
 
 //! Testing utilities.
 
-use serde;
+use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
 use substrate_primitives::H256;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 
-#[derive(Default, PartialEq, Eq, Clone, Serialize, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
 pub struct Digest {
 	pub logs: Vec<u64>,
 }
@@ -42,7 +42,7 @@ impl traits::Digest for Digest {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Debug)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -107,12 +107,12 @@ impl traits::Header for Header {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Debug)]
-pub struct Block<Xt: Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug> {
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
+pub struct Block<Xt: Slicable + Sized + Send + Sync + Serialize + Clone + Eq + Debug> {
 	pub header: Header,
 	pub extrinsics: Vec<Xt>,
 }
-impl<Xt: Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug> Slicable for Block<Xt> {
+impl<Xt: Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Slicable for Block<Xt> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
 			header: Slicable::decode(input)?,
@@ -126,7 +126,7 @@ impl<Xt: Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug>
 		v
 	}
 }
-impl<Xt: Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug> traits::Block for Block<Xt> {
+impl<Xt: 'static + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
 	type Extrinsic = Xt;
 	type Header = Header;
 	type Hash = <Header as traits::Header>::Hash;
@@ -145,9 +145,10 @@ impl<Xt: Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug>
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Debug)]
-pub struct TestXt<Call: AuxDispatchable + Slicable + Sized + Send + Sync + serde::Serialize>(pub (u64, u64, Call));
-impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug> Slicable for TestXt<Call> {
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
+pub struct TestXt<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize>(pub (u64, u64, Call));
+
+impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Slicable for TestXt<Call> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(TestXt(Slicable::decode(input)?))
 	}
@@ -155,11 +156,11 @@ impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + serde::Serialize +
 		self.0.encode()
 	}
 }
-impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug> Checkable for TestXt<Call> {
+impl<Call: 'static + AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Checkable for TestXt<Call> {
 	type Checked = Self;
 	fn check(self) -> Result<Self, Self> { Ok(self) }
 }
-impl<Call: AuxDispatchable<Aux = u64> + Slicable + Sized + Send + Sync + serde::Serialize + Clone + Eq + Debug> Applyable for TestXt<Call> {
+impl<Call: AuxDispatchable<Aux = u64> + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
 	type AccountId = u64;
 	type Index = u64;
 	fn sender(&self) -> &u64 { &(self.0).0 }

@@ -16,7 +16,12 @@
 
 //! Generic implementations of Extrinsic/Header/Block.
 
-#[cfg(feature = "std")] use std::fmt;
+#[cfg(feature = "std")]
+use std::fmt;
+
+#[cfg(feature = "std")]
+use serde::{Deserialize, Deserializer};
+
 use rstd::prelude::*;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
@@ -26,12 +31,8 @@ use rstd::ops;
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-pub struct Extrinsic<AccountId, Index, Call> where
- 	AccountId: Member + MaybeDisplay,
- 	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
-{
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct Extrinsic<AccountId, Index, Call> {
 	/// Who signed it (note this is not a signature).
 	pub signed: AccountId,
 	/// The number of extrinsics have come before from the same signer.
@@ -66,13 +67,8 @@ impl<AccountId, Index, Call> Slicable for Extrinsic<AccountId, Index, Call> wher
 
 /// A extrinsics right from the external world. Unchecked.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize))]
-pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + MaybeDisplay,
- 	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
- 	Signature: Member,			// TODO: should be Option<Signature>
-{
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> {
 	/// The actual extrinsic information.
 	pub extrinsic: Extrinsic<AccountId, Index, Call>,
 	/// The signature; should be an Ed25519 signature applied to the serialised `extrinsic` field.
@@ -173,10 +169,9 @@ impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountI
 
 #[cfg(feature = "std")]
 impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + MaybeDisplay,
- 	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
-	Signature: Member,
+ 	AccountId: fmt::Debug,
+ 	Index: fmt::Debug,
+ 	Call: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "UncheckedExtrinsic({:?})", self.extrinsic)
@@ -185,14 +180,9 @@ impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Accoun
 
 /// A type-safe indicator that a extrinsic has been checked.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct CheckedExtrinsic<AccountId, Index, Call, Signature>
-	(UncheckedExtrinsic<AccountId, Index, Call, Signature>)
-where
- 	AccountId: Member + MaybeDisplay,
- 	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
-	Signature: Member;
+	(UncheckedExtrinsic<AccountId, Index, Call, Signature>);
 
 impl<AccountId, Index, Call, Signature> CheckedExtrinsic<AccountId, Index, Call, Signature>
 where
@@ -258,10 +248,11 @@ where
 }
 
 #[derive(Default, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-pub struct Digest<Item: Member + Default> {
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct Digest<Item> {
 	pub logs: Vec<Item>,
 }
+
 impl<Item> Slicable for Digest<Item> where
  	Item: Member + Default + Slicable
 {
@@ -281,17 +272,13 @@ impl<Item> traits::Digest for Digest<Item> where
 	}
 }
 
+
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Header<Number, Hashing, DigestItem> where
-	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
-	Hashing: HashingT,
-	DigestItem: Member + Default,
-	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
-{
+pub struct Header<Number, Hashing: HashingT, DigestItem> {
 	/// The parent hash.
 	pub parent_hash: <Hashing as HashingT>::Output,
 	/// The block number.
@@ -302,6 +289,43 @@ pub struct Header<Number, Hashing, DigestItem> where
 	pub extrinsics_root: <Hashing as HashingT>::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest<DigestItem>,
+}
+
+// Hack to work around the fact that deriving deserialize doesn't work nicely with
+// the `hashing` trait without requiring that it itself is deserializable.
+
+// dummy struct that uses the hash type directly.
+#[cfg(feature = "std")]
+#[derive(Deserialize)]
+struct DeserializeHeader<N, H, D> {
+	parent_hash: H,
+	number: N,
+	state_root: H,
+	extrinsics_root: H,
+	digest: Digest<D>,
+}
+
+impl<N, D, Hashing: HashingT> From<DeserializeHeader<N, Hashing::Output, D>> for Header<N, Hashing, D> {
+	fn from(other: DeserializeHeader<N, Hashing::Output, D>) -> Self {
+		Header {
+			parent_hash: other.parent_hash,
+			number: other.number,
+			state_root: other.state_root,
+			extrinsics_root: other.extrinsics_root,
+			digest: other.digest,
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, Number: 'a, Hashing: 'a + HashingT, DigestItem: 'a> Deserialize<'a> for Header<Number, Hashing, DigestItem> where
+	Number: Deserialize<'a>,
+	Hashing::Output: Deserialize<'a>,
+	DigestItem: Deserialize<'a>,
+{
+	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
+		DeserializeHeader::<Number, Hashing::Output, DigestItem>::deserialize(de).map(Into::into)
+	}
 }
 
 impl<Number, Hashing, DigestItem> Slicable for Header<Number, Hashing, DigestItem> where
@@ -383,7 +407,6 @@ pub enum BlockId<Block: BlockT> where {
 
 impl<Block: BlockT> Copy for BlockId<Block> {}
 
-
 #[cfg(feature = "std")]
 impl<Block: BlockT> fmt::Display for BlockId<Block> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -396,23 +419,45 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> where
-	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
-	Hashing: HashingT,
-	DigestItem: Member + Default,
-	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
- 	AccountId: Member + Default + MaybeDisplay,
- 	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
-	Signature: Member + Default + traits::Verify<Signer = AccountId>,
-	Header<Number, Hashing, DigestItem>: traits::Header,
-	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
-	Extrinsic<AccountId, Index, Call>: Slicable,
-{
+pub struct Block<Number, Hashing: HashingT, DigestItem, AccountId, Index, Call, Signature> {
 	/// The block header.
 	pub header: Header<Number, Hashing, DigestItem>,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<UncheckedExtrinsic<AccountId, Index, Call, Signature>>,
+}
+
+// Hack to work around the fact that deriving deserialize doesn't work nicely with
+// the `hashing` trait without requiring that it itself is deserializable.
+#[cfg(feature = "std")]
+impl<'a, Number, Hashing: HashingT, DigestItem, AccountId, Index, Call, Signature> Deserialize<'a> for Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> where
+	Number: 'a + Deserialize<'a>,
+	Hashing::Output: 'a + Deserialize<'a>,
+	DigestItem: 'a + Deserialize<'a>,
+	AccountId: 'a + Deserialize<'a>,
+	Index: 'a + Deserialize<'a>,
+	Call: 'a + Deserialize<'a>,
+	Signature: 'a + Deserialize<'a>,
+{
+	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
+		// dummy struct that uses the hash type directly.
+		#[derive(Deserialize)]
+		struct Inner<N, H, D, X> {
+			header: DeserializeHeader<N, H, D>,
+			extrinsics: Vec<X>,
+		}
+
+		let inner = Inner::<
+			Number,
+			Hashing::Output,
+			DigestItem,
+			UncheckedExtrinsic<AccountId, Index, Call, Signature>,
+		>::deserialize(de)?;
+
+		Ok(Block {
+			header: inner.header.into(),
+			extrinsics: inner.extrinsics,
+		})
+	}
 }
 
 impl<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> Slicable

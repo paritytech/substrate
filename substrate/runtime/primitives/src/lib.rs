@@ -58,7 +58,7 @@ pub trait BuildExternalities {
 
 /// Ed25519 signature verify.
 #[derive(Eq, PartialEq, Clone, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Ed25519Signature(H512);
 
 impl Verify for Ed25519Signature {
@@ -81,7 +81,7 @@ impl From<H512> for Ed25519Signature {
 
 /// Potentially "unsigned" signature verification.
 #[derive(Eq, PartialEq, Clone, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct MaybeUnsigned<T>(T);
 
 impl<T: Verify> MaybeUnsigned<T> where

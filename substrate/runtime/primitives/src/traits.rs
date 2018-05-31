@@ -20,7 +20,7 @@ use rstd::prelude::*;
 use rstd;
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
-#[cfg(feature = "std")] use serde::Serialize;
+#[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 use substrate_primitives;
 use codec::Slicable;
 pub use integer_sqrt::IntegerSquareRoot;
@@ -170,10 +170,10 @@ impl<A: Executable, B: Executable> Executable for (A, B) {
 }
 
 /// Abstraction around hashing
-pub trait Hashing: MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
+pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output;
+	type Output: Member;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -205,7 +205,7 @@ pub trait Hashing: MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug 
 
 /// Blake2-256 Hashing implementation.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
 impl Hashing for BlakeTwo256 {
@@ -259,9 +259,9 @@ impl CheckEqual for substrate_primitives::H256 {
 }
 
 #[cfg(feature = "std")]
-pub trait MaybeSerializeDebug: Serialize + Debug {}
+pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
 #[cfg(feature = "std")]
-impl<T: Serialize + Debug> MaybeSerializeDebug for T {}
+impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
 
 #[cfg(not(feature = "std"))]
 pub trait MaybeSerializeDebug {}
@@ -278,8 +278,8 @@ pub trait MaybeDisplay {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDisplay for T {}
 
-pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone {}
-impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone> Member for T {}
+pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
+impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Slicable`.
