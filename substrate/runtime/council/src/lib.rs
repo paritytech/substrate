@@ -319,7 +319,6 @@ impl<T: Trait> Module<T> {
 		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond())
 			.map_err(|_| "candidate has not enough funds")?;
 
-		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond());
 		let mut candidates = candidates;
 		if slot == candidates.len() {
 			candidates.push(aux.ref_into().clone());
