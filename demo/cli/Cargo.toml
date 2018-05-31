@@ -17,6 +17,7 @@ tokio-core = "0.1.12"
 triehash = "0.1"
 substrate-client = { path = "../../substrate/client" }
 substrate-codec = { path = "../../substrate/codec" }
+substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-executor = { path = "../../substrate/executor" }

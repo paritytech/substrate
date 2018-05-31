@@ -1,0 +1,12 @@
+[package]
+name = "substrate-extrinsic-pool"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+error-chain = "0.11"
+futures = "0.1"
+log = "0.3"
+parking_lot = "0.4"
+substrate-primitives = { path = "../primitives" }
+transaction-pool = "1.12"
