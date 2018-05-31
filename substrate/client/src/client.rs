@@ -18,9 +18,9 @@
 
 use std::sync::Arc;
 use futures::sync::mpsc;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use primitives::{self, block, AuthorityId};
-use primitives::block::Id as BlockId;
+use primitives::block::{Id as BlockId, HeaderHash};
 use primitives::storage::{StorageKey, StorageData};
 use runtime_support::Hashable;
 use codec::Slicable;
@@ -45,6 +45,8 @@ pub struct Client<B, E> {
 	backend: Arc<B>,
 	executor: E,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification>>>,
+	import_lock: Mutex<()>,
+	importing_block: RwLock<Option<HeaderHash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 }
 
 /// A source of blockchain evenets.
@@ -183,6 +185,8 @@ impl<B, E> Client<B, E> where
 			backend,
 			executor,
 			import_notification_sinks: Mutex::new(Vec::new()),
+			import_lock: Mutex::new(()),
+			importing_block: RwLock::new(None),
 		})
 	}
 
@@ -283,12 +287,31 @@ impl<B, E> Client<B, E> where
 		header: JustifiedHeader,
 		body: Option<block::Body>,
 	) -> error::Result<ImportResult> {
-		// TODO: import lock
-		// TODO: import justification.
 		let (header, justification) = header.into_inner();
 		match self.backend.blockchain().status(BlockId::Hash(header.parent_hash))? {
-			blockchain::BlockStatus::InChain => (),
+			blockchain::BlockStatus::InChain => {},
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+		let hash: block::HeaderHash = header.blake2_256().into();
+
+		let _import_lock = self.import_lock.lock();
+		*self.importing_block.write() = Some(hash);
+		let result = self.execute_and_import_block(origin, hash, header, justification, body);
+		*self.importing_block.write() = None;
+		result
+	}
+
+	fn execute_and_import_block(
+		&self,
+		origin: BlockOrigin,
+		hash: HeaderHash,
+		header: block::Header,
+		justification: bft::Justification,
+		body: Option<block::Body>,
+	) -> error::Result<ImportResult> {
+		match self.backend.blockchain().status(BlockId::Hash(hash))? {
+			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
+			blockchain::BlockStatus::Unknown => {},
 		}
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(header.parent_hash))?;
@@ -308,14 +331,12 @@ impl<B, E> Client<B, E> where
 		};
 
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
-		let hash: block::HeaderHash = header.blake2_256().into();
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number, is_new_best, origin);
 		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}
 		self.backend.commit_operation(transaction)?;
-
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
 			let notification = BlockImportNotification {
 				hash: hash,
@@ -325,7 +346,6 @@ impl<B, E> Client<B, E> where
 			};
 			self.import_notification_sinks.lock().retain(|sink| !sink.unbounded_send(notification.clone()).is_err());
 		}
-
 		Ok(ImportResult::Queued)
 	}
 
@@ -342,6 +362,11 @@ impl<B, E> Client<B, E> where
 	/// Get block status.
 	pub fn block_status(&self, id: &BlockId) -> error::Result<BlockStatus> {
 		// TODO: more efficient implementation
+		if let BlockId::Hash(ref h) = id {
+			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
+				return Ok(BlockStatus::Queued);
+			}
+		}
 		match self.backend.blockchain().header(*id).map_err(|e| error::Error::from_blockchain(Box::new(e)))?.is_some() {
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),

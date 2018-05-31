@@ -22,12 +22,12 @@ use std::time::{Instant, Duration};
 use io::SyncIo;
 use protocol::Protocol;
 use network::PeerId;
-use primitives::{Hash, block::HeaderHash, block::Id as BlockId, block::Header};
+use primitives::{Hash, block::Id as BlockId, block::Header};
 use message::{self, Message};
 use runtime_support::Hashable;
 
 // TODO: Add additional spam/DoS attack protection.
-const MESSAGE_LIFETIME_SECONDS: u64 = 600;
+const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
 
 struct CandidateRequest {
 	id: message::RequestId,
@@ -48,12 +48,11 @@ pub struct Consensus {
 	bft_message_sink: Option<(mpsc::UnboundedSender<message::LocalizedBftMessage>, Hash)>,
 	messages: Vec<(Hash, Instant, message::Message)>,
 	message_hashes: HashSet<Hash>,
-	last_block_hash: HeaderHash,
 }
 
 impl Consensus {
 	/// Create a new instance.
-	pub fn new(best_hash: HeaderHash) -> Consensus {
+	pub fn new() -> Consensus {
 		Consensus {
 			peers: HashMap::new(),
 			our_candidate: None,
@@ -61,7 +60,6 @@ impl Consensus {
 			bft_message_sink: None,
 			messages: Default::default(),
 			message_hashes: Default::default(),
-			last_block_hash: best_hash,
 		}
 	}
 
@@ -283,42 +281,95 @@ impl Consensus {
 		self.peers.remove(&peer_id);
 	}
 
-	pub fn collect_garbage(&mut self, best_hash_and_header: Option<(HeaderHash, &Header)>) {
+	pub fn collect_garbage(&mut self, best_header: Option<&Header>) {
 		let hashes = &mut self.message_hashes;
-		let last_block_hash = &mut self.last_block_hash;
 		let before = self.messages.len();
-		let (best_hash, best_header) = best_hash_and_header.map(|(h, header)| (Some(h), Some(header))).unwrap_or((None, None));
-		if best_header.as_ref().map_or(false, |header| header.parent_hash != *last_block_hash) {
-			trace!(target:"sync", "Clearing conensus message cache");
-			self.messages.clear();
-			hashes.clear();
-		} else {
-			let expiration = Duration::from_secs(MESSAGE_LIFETIME_SECONDS);
-			let now = Instant::now();
-			if let Some(hash) = best_hash {
-				*last_block_hash = hash;
-			}
-			self.messages.retain(|&(ref hash, timestamp, ref message)| {
-					timestamp < now + expiration ||
-					best_header.map_or(true, |header| {
-						if match *message {
-							Message::BftMessage(ref msg) => msg.parent_hash != header.parent_hash,
-							Message::Statement(ref msg) => msg.parent_hash != header.parent_hash,
-							_ => true,
-						} {
-							hashes.remove(hash);
-							true
-						} else {
-							false
-						}
+		let now = Instant::now();
+		self.messages.retain(|&(ref hash, timestamp, ref message)| {
+			if timestamp >= now - MESSAGE_LIFETIME &&
+				best_header.map_or(true, |header|
+					match *message {
+						Message::BftMessage(ref msg) => msg.parent_hash != header.parent_hash,
+						Message::Statement(ref msg) => msg.parent_hash != header.parent_hash,
+						_ => true,
 					})
-			});
-		}
+			{
+				true
+			} else {
+				hashes.remove(hash);
+				false
+			}
+		});
 		if self.messages.len() != before {
 			trace!(target:"sync", "Cleaned up {} stale messages", before - self.messages.len());
 		}
 		for (_, ref mut peer) in self.peers.iter_mut() {
 			peer.known_messages.retain(|h| hashes.contains(h));
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use primitives::Hash;
+	use primitives::bft::Justification;
+	use primitives::block::{HeaderHash, Header};
+	use std::time::Instant;
+	use message::{self, Message};
+	use super::{Consensus, MESSAGE_LIFETIME};
+
+	#[test]
+	fn collects_garbage() {
+		let prev_hash = HeaderHash::random();
+		let best_hash = HeaderHash::random();
+		let mut consensus = Consensus::new();
+		let now = Instant::now();
+		let m1_hash = Hash::random();
+		let m2_hash = Hash::random();
+		let m1 = Message::BftMessage(message::LocalizedBftMessage {
+			parent_hash: prev_hash,
+			message: message::BftMessage::Auxiliary(Justification {
+				round_number: 0,
+				hash: Default::default(),
+				signatures: Default::default(),
+			}),
+		});
+		let m2 = Message::BftMessage(message::LocalizedBftMessage {
+			parent_hash: best_hash,
+			message: message::BftMessage::Auxiliary(Justification {
+				round_number: 0,
+				hash: Default::default(),
+				signatures: Default::default(),
+			}),
+		});
+		consensus.messages.push((m1_hash, now, m1));
+		consensus.messages.push((m2_hash, now, m2.clone()));
+		consensus.message_hashes.insert(m1_hash);
+		consensus.message_hashes.insert(m2_hash);
+
+		// nothing to collect
+		consensus.collect_garbage(None);
+		assert_eq!(consensus.messages.len(), 2);
+		assert_eq!(consensus.message_hashes.len(), 2);
+
+		// random header, nothing should be cleared
+		let mut header = Header::from_block_number(0);
+		consensus.collect_garbage(Some(&header));
+		assert_eq!(consensus.messages.len(), 2);
+		assert_eq!(consensus.message_hashes.len(), 2);
+
+		// header that matches one of the messages
+		header.parent_hash = prev_hash;
+		consensus.collect_garbage(Some(&header));
+		assert_eq!(consensus.messages.len(), 1);
+		assert_eq!(consensus.message_hashes.len(), 1);
+		assert!(consensus.message_hashes.contains(&m2_hash));
+
+		// make timestamp expired
+		consensus.messages.clear();
+		consensus.messages.push((m2_hash, now - MESSAGE_LIFETIME, m2));
+		consensus.collect_garbage(None);
+		assert!(consensus.messages.is_empty());
+		assert!(consensus.message_hashes.is_empty());
 	}
 }
