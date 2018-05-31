@@ -204,8 +204,8 @@ impl<T: Trait> Module<T> {
 	// exposed mutables.
 
 	/// Start a referendum. Can be called directly by the council.
-	pub fn internal_start_referendum(proposal: T::Proposal, vote_threshold: VoteThreshold) {
-		let _ = <Module<T>>::inject_referendum(<system::Module<T>>::block_number() + <Module<T>>::voting_period(), proposal, vote_threshold);
+	pub fn internal_start_referendum(proposal: T::Proposal, vote_threshold: VoteThreshold) -> result::Result<ReferendumIndex, &'static str> {
+		<Module<T>>::inject_referendum(<system::Module<T>>::block_number() + <Module<T>>::voting_period(), proposal, vote_threshold)
 	}
 
 	/// Remove a referendum. Can be called directly by the council.

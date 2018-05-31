@@ -229,7 +229,9 @@ impl<T: Trait> Module<T> {
 		ensure!(index == Self::vote_index(), "incorrect vote index");
 		if !<LastActiveOf<T>>::exists(aux.ref_into()) {
 			// not yet a voter - deduct bond.
-			<staking::Module<T>>::reserve_balance(aux.ref_into(), Self::voting_bond());
+			// NOTE: this must be the last potential bailer, since it changes state.
+			<staking::Module<T>>::reserve_balance(aux.ref_into(), Self::voting_bond())?;
+
 			<Voters<T>>::put({
 				let mut v = Self::voters();
 				v.push(aux.ref_into().clone());
@@ -280,11 +282,10 @@ impl<T: Trait> Module<T> {
 			voters
 		);
 		if valid {
-			<staking::Module<T>>::transfer_reserved_balance(&who, aux.ref_into(), Self::voting_bond());
+			<staking::Module<T>>::transfer_reserved_balance(&who, aux.ref_into(), Self::voting_bond())
 		} else {
-			<staking::Module<T>>::slash_reserved(aux.ref_into(), Self::voting_bond());
+			<staking::Module<T>>::slash_reserved(aux.ref_into(), Self::voting_bond())
 		}
-		Ok(())
 	}
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
@@ -295,7 +296,7 @@ impl<T: Trait> Module<T> {
 		let index = index as usize;
 		ensure!(index < voters.len(), "retraction index invalid");
 		ensure!(&voters[index] == aux.ref_into(), "retraction index mismatch");
-		
+
 		Self::remove_voter(aux.ref_into(), index, voters);
 		<staking::Module<T>>::unreserve_balance(aux.ref_into(), Self::voting_bond());
 		Ok(())
@@ -316,7 +317,7 @@ impl<T: Trait> Module<T> {
 		);
 		// NOTE: This must be last as it has side-effects.
 		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond())
-			.ok_or("candidate has not enough funds")?;
+			.map_err(|_| "candidate has not enough funds")?;
 
 		let mut candidates = candidates;
 		if slot == candidates.len() {
@@ -372,7 +373,9 @@ impl<T: Trait> Module<T> {
 			leaderboard.sort_by_key(|&(t, _)| t);
 			<Leaderboard<T>>::put(leaderboard);
 		} else {
-			<staking::Module<T>>::slash(aux.ref_into(), bad_presentation_punishment);
+			// we can rest assured it will be Ok since we checked `can_slash` earlier; still
+			// better safe than sorry.
+			let _ = <staking::Module<T>>::slash(aux.ref_into(), bad_presentation_punishment);
 		}
 		Ok(())
 	}
@@ -726,14 +729,14 @@ mod tests {
 			assert_eq!(Council::is_a_candidate(&1), false);
 			assert_eq!(Council::is_a_candidate(&2), false);
 
-			Council::submit_candidacy(&1, 0);
+			assert_ok!(Council::submit_candidacy(&1, 0));
 			assert_eq!(Council::candidates(), vec![1]);
 			assert_eq!(Council::candidate_reg_info(1), Some((0, 0)));
 			assert_eq!(Council::candidate_reg_info(2), None);
 			assert_eq!(Council::is_a_candidate(&1), true);
 			assert_eq!(Council::is_a_candidate(&2), false);
 
-			Council::submit_candidacy(&2, 1);
+			assert_ok!(Council::submit_candidacy(&2, 1));
 			assert_eq!(Council::candidates(), vec![1, 2]);
 			assert_eq!(Council::candidate_reg_info(1), Some((0, 0)));
 			assert_eq!(Council::candidate_reg_info(2), Some((0, 1)));
@@ -760,10 +763,10 @@ mod tests {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), vec![0, 0, 1]);
 
-			Council::submit_candidacy(&2, 1);
+			assert_ok!(Council::submit_candidacy(&2, 1));
 			assert_eq!(Council::candidates(), vec![0, 2, 1]);
 
-			Council::submit_candidacy(&3, 0);
+			assert_ok!(Council::submit_candidacy(&3, 0));
 			assert_eq!(Council::candidates(), vec![3, 2, 1]);
 		});
 	}
@@ -776,10 +779,10 @@ mod tests {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), vec![0, 0, 1]);
 
-			Council::submit_candidacy(&2, 0);
+			assert_ok!(Council::submit_candidacy(&2, 0));
 			assert_eq!(Council::candidates(), vec![2, 0, 1]);
 
-			Council::submit_candidacy(&3, 1);
+			assert_ok!(Council::submit_candidacy(&3, 1));
 			assert_eq!(Council::candidates(), vec![2, 3, 1]);
 		});
 	}
@@ -788,7 +791,7 @@ mod tests {
 	fn candidate_submission_not_using_free_slot_should_not_work() {
 		with_externalities(&mut new_test_ext_with_candidate_holes(), || {
 			System::set_block_number(1);
-			assert_noop!{Council::submit_candidacy(&4, 3)};	// gives "invalid candidate slot"
+			assert_noop!(Council::submit_candidacy(&4, 3), "invalid candidate slot");
 		});
 	}
 
@@ -797,7 +800,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
-			assert_noop!{Council::submit_candidacy(&1, 1)};	// gives "invalid candidate slot"
+			assert_noop!(Council::submit_candidacy(&1, 1), "invalid candidate slot");
 		});
 	}
 
@@ -806,9 +809,9 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
-			Council::submit_candidacy(&1, 0);
+			assert_ok!(Council::submit_candidacy(&1, 0));
 			assert_eq!(Council::candidates(), vec![1]);
-			assert_noop!{Council::submit_candidacy(&2, 0)};	// gives "invalid candidate slot"
+			assert_noop!(Council::submit_candidacy(&2, 0), "invalid candidate slot");
 		});
 	}
 
@@ -817,9 +820,9 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
-			Council::submit_candidacy(&1, 0);
+			assert_ok!(Council::submit_candidacy(&1, 0));
 			assert_eq!(Council::candidates(), vec![1]);
-			assert_noop!{Council::submit_candidacy(&1, 1)};	// gives "duplicate candidate submission"
+			assert_noop!(Council::submit_candidacy(&1, 1), "duplicate candidate submission");
 		});
 	}
 
@@ -828,7 +831,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
-			assert_noop!{Council::submit_candidacy(&7, 0)};	// gives "candidate has not enough funds"
+			assert_noop!(Council::submit_candidacy(&7, 0), "candidate has not enough funds");
 		});
 	}
 
@@ -837,20 +840,20 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 
-			Council::submit_candidacy(&5, 0);
+			assert_ok!(Council::submit_candidacy(&5, 0));
 
-			Council::set_approvals(&1, vec![true], 0);
-			Council::set_approvals(&4, vec![true], 0);
+			assert_ok!(Council::set_approvals(&1, vec![true], 0));
+			assert_ok!(Council::set_approvals(&4, vec![true], 0));
 
 			assert_eq!(Council::approvals_of(1), vec![true]);
 			assert_eq!(Council::approvals_of(4), vec![true]);
 			assert_eq!(Council::voters(), vec![1, 4]);
 
-			Council::submit_candidacy(&2, 1);
-			Council::submit_candidacy(&3, 2);
+			assert_ok!(Council::submit_candidacy(&2, 1));
+			assert_ok!(Council::submit_candidacy(&3, 2));
 
-			Council::set_approvals(&2, vec![false, true, true], 0);
-			Council::set_approvals(&3, vec![false, true, true], 0);
+			assert_ok!(Council::set_approvals(&2, vec![false, true, true], 0));
+			assert_ok!(Council::set_approvals(&3, vec![false, true, true], 0));
 
 			assert_eq!(Council::approvals_of(1), vec![true]);
 			assert_eq!(Council::approvals_of(4), vec![true]);
@@ -866,14 +869,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 
-			Council::submit_candidacy(&5, 0);
-			Council::set_approvals(&4, vec![true], 0);
+			assert_ok!(Council::submit_candidacy(&5, 0));
+			assert_ok!(Council::set_approvals(&4, vec![true], 0));
 
 			assert_eq!(Council::approvals_of(4), vec![true]);
 
-			Council::submit_candidacy(&2, 1);
-			Council::submit_candidacy(&3, 2);
-			Council::set_approvals(&4, vec![true, false, true], 0);
+			assert_ok!(Council::submit_candidacy(&2, 1));
+			assert_ok!(Council::submit_candidacy(&3, 2));
+			assert_ok!(Council::set_approvals(&4, vec![true, false, true], 0));
 
 			assert_eq!(Council::approvals_of(4), vec![true, false, true]);
 		});
@@ -884,14 +887,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
 
-			Council::submit_candidacy(&5, 0);
-			Council::submit_candidacy(&2, 1);
-			Council::submit_candidacy(&3, 2);
+			assert_ok!(Council::submit_candidacy(&5, 0));
+			assert_ok!(Council::submit_candidacy(&2, 1));
+			assert_ok!(Council::submit_candidacy(&3, 2));
 
-			Council::set_approvals(&1, vec![true], 0);
-			Council::set_approvals(&2, vec![false, true, true], 0);
-			Council::set_approvals(&3, vec![false, true, true], 0);
-			Council::set_approvals(&4, vec![true, false, true], 0);
+			assert_ok!(Council::set_approvals(&1, vec![true], 0));
+			assert_ok!(Council::set_approvals(&2, vec![false, true, true], 0));
+			assert_ok!(Council::set_approvals(&3, vec![false, true, true], 0));
+			assert_ok!(Council::set_approvals(&4, vec![true, false, true], 0));
 
 			assert_eq!(Council::voters(), vec![1, 2, 3, 4]);
 			assert_eq!(Council::approvals_of(1), vec![true]);
@@ -899,7 +902,7 @@ mod tests {
 			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
 			assert_eq!(Council::approvals_of(4), vec![true, false, true]);
 
-			Council::retract_voter(&1, 0);
+			assert_ok!(Council::retract_voter(&1, 0));
 
 			assert_eq!(Council::voters(), vec![4, 2, 3]);
 			assert_eq!(Council::approvals_of(1), Vec::<bool>::new());
@@ -907,7 +910,7 @@ mod tests {
 			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
 			assert_eq!(Council::approvals_of(4), vec![true, false, true]);
 
-			Council::retract_voter(&2, 1);
+			assert_ok!(Council::retract_voter(&2, 1));
 
 			assert_eq!(Council::voters(), vec![4, 3]);
 			assert_eq!(Council::approvals_of(1), Vec::<bool>::new());
@@ -915,7 +918,7 @@ mod tests {
 			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
 			assert_eq!(Council::approvals_of(4), vec![true, false, true]);
 
-			Council::retract_voter(&3, 1);
+			assert_ok!(Council::retract_voter(&3, 1));
 
 			assert_eq!(Council::voters(), vec![4]);
 			assert_eq!(Council::approvals_of(1), Vec::<bool>::new());
@@ -929,11 +932,11 @@ mod tests {
 	fn invalid_retraction_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
-			Council::submit_candidacy(&3, 0);
-			Council::set_approvals(&1, vec![true], 0);
-			Council::set_approvals(&2, vec![true], 0);
+			assert_ok!(Council::submit_candidacy(&3, 0));
+			assert_ok!(Council::set_approvals(&1, vec![true], 0));
+			assert_ok!(Council::set_approvals(&2, vec![true], 0));
 			assert_eq!(Council::voters(), vec![1, 2]);
-			assert_noop!{Council::retract_voter(&1, 1)};	// gives "retraction index mismatch"
+			assert_noop!(Council::retract_voter(&1, 1), "retraction index mismatch");
 		});
 	}
 
@@ -941,9 +944,9 @@ mod tests {
 	fn overflow_retraction_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
-			Council::submit_candidacy(&3, 0);
-			Council::set_approvals(&1, vec![true], 0);
-			assert_noop!{Council::retract_voter(&1, 1)};	// gives "retraction index invalid"
+			assert_ok!(Council::submit_candidacy(&3, 0));
+			assert_ok!(Council::set_approvals(&1, vec![true], 0));
+			assert_noop!(Council::retract_voter(&1, 1), "retraction index invalid");
 		});
 	}
 
@@ -951,9 +954,9 @@ mod tests {
 	fn non_voter_retraction_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(1);
-			Council::submit_candidacy(&3, 0);
-			Council::set_approvals(&1, vec![true], 0);
-			assert_noop!{Council::retract_voter(&2, 0)};	// gives "cannot retract non-voter"
+			assert_ok!(Council::submit_candidacy(&3, 0));
+			assert_ok!(Council::set_approvals(&1, vec![true], 0));
+			assert_noop!(Council::retract_voter(&2, 0), "cannot retract non-voter");
 		});
 	}
 
@@ -963,19 +966,19 @@ mod tests {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
 
-			Council::submit_candidacy(&2, 0);
-			Council::submit_candidacy(&5, 1);
-			Council::set_approvals(&2, vec![true, false], 0);
-			Council::set_approvals(&5, vec![false, true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::submit_candidacy(&5, 1));
+			assert_ok!(Council::set_approvals(&2, vec![true, false], 0));
+			assert_ok!(Council::set_approvals(&5, vec![false, true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
 			assert!(Council::presentation_active());
-			Council::present_winner(&4, 2, 11, 0);
-			Council::present_winner(&4, 5, 41, 0);
+			assert_ok!(Council::present_winner(&4, 2, 11, 0));
+			assert_ok!(Council::present_winner(&4, 5, 41, 0));
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (0, 0), (11, 2), (41, 5)]));
 
-			Council::end_block(System::block_number());
+			assert_ok!(Council::end_block(System::block_number()));
 
 			assert!(!Council::presentation_active());
 			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
@@ -994,17 +997,17 @@ mod tests {
 			assert!(Staking::can_slash(&4, 10));
 
 			System::set_block_number(4);
-			Council::submit_candidacy(&2, 0);
-			Council::submit_candidacy(&5, 1);
-			Council::set_approvals(&2, vec![true, false], 0);
-			Council::set_approvals(&5, vec![false, true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::submit_candidacy(&5, 1));
+			assert_ok!(Council::set_approvals(&2, vec![true, false], 0));
+			assert_ok!(Council::set_approvals(&5, vec![false, true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 11, 0);
-			Council::present_winner(&4, 5, 41, 0);
-			Council::present_winner(&4, 5, 41, 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 2, 11, 0));
+			assert_ok!(Council::present_winner(&4, 5, 41, 0));
+			assert_ok!(Council::present_winner(&4, 5, 41, 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
 			assert_eq!(Staking::balance(&4), 38);
@@ -1015,28 +1018,28 @@ mod tests {
 	fn retracting_inactive_voter_should_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&2, 0);
-			Council::set_approvals(&2, vec![true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::set_approvals(&2, vec![true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 11, 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 2, 11, 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			Council::submit_candidacy(&5, 0);
-			Council::set_approvals(&5, vec![true], 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&5, 0));
+			assert_ok!(Council::set_approvals(&5, vec![true], 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			Council::present_winner(&4, 5, 41, 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 5, 41, 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
-			Council::reap_inactive_voter(&5,
+			assert_ok!(Council::reap_inactive_voter(&5,
 				Council::voters().iter().position(|&i| i == 5).unwrap() as u32,
 				2, Council::voters().iter().position(|&i| i == 2).unwrap() as u32,
 				2
-			);
+			));
 
 			assert_eq!(Council::voters(), vec![5]);
 			assert_eq!(Council::approvals_of(2).len(), 0);
@@ -1049,21 +1052,21 @@ mod tests {
 	fn presenting_for_double_election_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&2, 0);
-			Council::set_approvals(&2, vec![true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::set_approvals(&2, vec![true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 11, 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 2, 11, 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			Council::submit_candidacy(&2, 0);
-			Council::set_approvals(&2, vec![true], 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::set_approvals(&2, vec![true], 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_noop!{Council::present_winner(&4, 2, 11, 1)};	// gives "candidate must not form a duplicated member if elected"
+			assert_noop!(Council::present_winner(&4, 2, 11, 1), "candidate must not form a duplicated member if elected");
 		});
 	}
 
@@ -1071,31 +1074,31 @@ mod tests {
 	fn retracting_inactive_voter_with_other_candidates_in_slots_should_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&2, 0);
-			Council::set_approvals(&2, vec![true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::set_approvals(&2, vec![true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 11, 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 2, 11, 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			Council::submit_candidacy(&5, 0);
-			Council::set_approvals(&5, vec![true], 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&5, 0));
+			assert_ok!(Council::set_approvals(&5, vec![true], 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			Council::present_winner(&4, 5, 41, 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 5, 41, 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(11);
-			Council::submit_candidacy(&1, 0);
+			assert_ok!(Council::submit_candidacy(&1, 0));
 
-			Council::reap_inactive_voter(&5,
+			assert_ok!(Council::reap_inactive_voter(&5,
 				Council::voters().iter().position(|&i| i == 5).unwrap() as u32,
 				2, Council::voters().iter().position(|&i| i == 2).unwrap() as u32,
 				2
-			);
+			));
 
 			assert_eq!(Council::voters(), vec![5]);
 			assert_eq!(Council::approvals_of(2).len(), 0);
@@ -1108,28 +1111,28 @@ mod tests {
 	fn retracting_inactive_voter_with_bad_reporter_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&2, 0);
-			Council::set_approvals(&2, vec![true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::set_approvals(&2, vec![true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 8, 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 2, 8, 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			Council::submit_candidacy(&5, 0);
-			Council::set_approvals(&5, vec![true], 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&5, 0));
+			assert_ok!(Council::set_approvals(&5, vec![true], 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			Council::present_winner(&4, 5, 38, 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 5, 38, 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_noop!{Council::reap_inactive_voter(&2,
+			assert_noop!(Council::reap_inactive_voter(&2,
 				42,
 				2, Council::voters().iter().position(|&i| i == 2).unwrap() as u32,
 				2
-			)};	// given "bad reporter index"
+			), "bad reporter index");
 		});
 	}
 
@@ -1137,28 +1140,28 @@ mod tests {
 	fn retracting_inactive_voter_with_bad_target_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&2, 0);
-			Council::set_approvals(&2, vec![true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::set_approvals(&2, vec![true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 8, 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 2, 8, 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			Council::submit_candidacy(&5, 0);
-			Council::set_approvals(&5, vec![true], 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&5, 0));
+			assert_ok!(Council::set_approvals(&5, vec![true], 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			Council::present_winner(&4, 5, 38, 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 5, 38, 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_noop!{Council::reap_inactive_voter(&2,
+			assert_noop!(Council::reap_inactive_voter(&2,
 				Council::voters().iter().position(|&i| i == 2).unwrap() as u32,
 				2, 42,
 				2
-			)};	// gives "bad target index"
+			), "bad target index");
 		});
 	}
 
@@ -1166,37 +1169,37 @@ mod tests {
 	fn attempting_to_retract_active_voter_should_slash_reporter() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&2, 0);
-			Council::submit_candidacy(&3, 1);
-			Council::submit_candidacy(&4, 2);
-			Council::submit_candidacy(&5, 3);
-			Council::set_approvals(&2, vec![true, false, false, false], 0);
-			Council::set_approvals(&3, vec![false, true, false, false], 0);
-			Council::set_approvals(&4, vec![false, false, true, false], 0);
-			Council::set_approvals(&5, vec![false, false, false, true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::submit_candidacy(&3, 1));
+			assert_ok!(Council::submit_candidacy(&4, 2));
+			assert_ok!(Council::submit_candidacy(&5, 3));
+			assert_ok!(Council::set_approvals(&2, vec![true, false, false, false], 0));
+			assert_ok!(Council::set_approvals(&3, vec![false, true, false, false], 0));
+			assert_ok!(Council::set_approvals(&4, vec![false, false, true, false], 0));
+			assert_ok!(Council::set_approvals(&5, vec![false, false, false, true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 11, 0);
-			Council::present_winner(&4, 3, 21, 0);
-			Council::present_winner(&4, 4, 31, 0);
-			Council::present_winner(&4, 5, 41, 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 2, 11, 0));
+			assert_ok!(Council::present_winner(&4, 3, 21, 0));
+			assert_ok!(Council::present_winner(&4, 4, 31, 0));
+			assert_ok!(Council::present_winner(&4, 5, 41, 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			Council::set_desired_seats(3);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::set_desired_seats(3));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			Council::present_winner(&4, 2, 11, 1);
-			Council::present_winner(&4, 3, 21, 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 2, 11, 1));
+			assert_ok!(Council::present_winner(&4, 3, 21, 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
-			Council::reap_inactive_voter(&4,
+			assert_ok!(Council::reap_inactive_voter(&4,
 				Council::voters().iter().position(|&i| i == 4).unwrap() as u32,
 				2, Council::voters().iter().position(|&i| i == 2).unwrap() as u32,
 				2
-			);
+			));
 
 			assert_eq!(Council::voters(), vec![2, 3, 5]);
 			assert_eq!(Council::approvals_of(4).len(), 0);
@@ -1208,28 +1211,28 @@ mod tests {
 	fn attempting_to_retract_inactive_voter_by_nonvoter_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&2, 0);
-			Council::set_approvals(&2, vec![true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::set_approvals(&2, vec![true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 11, 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 2, 11, 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			Council::submit_candidacy(&5, 0);
-			Council::set_approvals(&5, vec![true], 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&5, 0));
+			assert_ok!(Council::set_approvals(&5, vec![true], 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			Council::present_winner(&4, 5, 41, 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 5, 41, 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_noop!{Council::reap_inactive_voter(&4,
+			assert_noop!(Council::reap_inactive_voter(&4,
 				0,
 				2, Council::voters().iter().position(|&i| i == 2).unwrap() as u32,
 				2
-			)};	// gives "reaper must be a voter"
+			), "reaper must be a voter");
 		});
 	}
 
@@ -1237,24 +1240,24 @@ mod tests {
 	fn presenting_loser_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&1, 0);
-			Council::set_approvals(&6, vec![true], 0);
-			Council::submit_candidacy(&2, 1);
-			Council::set_approvals(&2, vec![false, true], 0);
-			Council::submit_candidacy(&3, 2);
-			Council::set_approvals(&3, vec![false, false, true], 0);
-			Council::submit_candidacy(&4, 3);
-			Council::set_approvals(&4, vec![false, false, false, true], 0);
-			Council::submit_candidacy(&5, 4);
-			Council::set_approvals(&5, vec![false, false, false, false, true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&1, 0));
+			assert_ok!(Council::set_approvals(&6, vec![true], 0));
+			assert_ok!(Council::submit_candidacy(&2, 1));
+			assert_ok!(Council::set_approvals(&2, vec![false, true], 0));
+			assert_ok!(Council::submit_candidacy(&3, 2));
+			assert_ok!(Council::set_approvals(&3, vec![false, false, true], 0));
+			assert_ok!(Council::submit_candidacy(&4, 3));
+			assert_ok!(Council::set_approvals(&4, vec![false, false, false, true], 0));
+			assert_ok!(Council::submit_candidacy(&5, 4));
+			assert_ok!(Council::set_approvals(&5, vec![false, false, false, false, true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 1, 60, 0);
-			Council::present_winner(&4, 3, 21, 0);
-			Council::present_winner(&4, 4, 31, 0);
-			Council::present_winner(&4, 5, 41, 0);
-			assert_noop!{Council::present_winner(&4, 2, 11, 0)};	// gives "candidate not worthy of leaderboard"
+			assert_ok!(Council::present_winner(&4, 1, 60, 0));
+			assert_ok!(Council::present_winner(&4, 3, 21, 0));
+			assert_ok!(Council::present_winner(&4, 4, 31, 0));
+			assert_ok!(Council::present_winner(&4, 5, 41, 0));
+			assert_noop!(Council::present_winner(&4, 2, 11, 0), "candidate not worthy of leaderboard");
 		});
 	}
 
@@ -1262,24 +1265,24 @@ mod tests {
 	fn presenting_loser_first_should_not_matter() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&1, 0);
-			Council::set_approvals(&6, vec![true], 0);
-			Council::submit_candidacy(&2, 1);
-			Council::set_approvals(&2, vec![false, true], 0);
-			Council::submit_candidacy(&3, 2);
-			Council::set_approvals(&3, vec![false, false, true], 0);
-			Council::submit_candidacy(&4, 3);
-			Council::set_approvals(&4, vec![false, false, false, true], 0);
-			Council::submit_candidacy(&5, 4);
-			Council::set_approvals(&5, vec![false, false, false, false, true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&1, 0));
+			assert_ok!(Council::set_approvals(&6, vec![true], 0));
+			assert_ok!(Council::submit_candidacy(&2, 1));
+			assert_ok!(Council::set_approvals(&2, vec![false, true], 0));
+			assert_ok!(Council::submit_candidacy(&3, 2));
+			assert_ok!(Council::set_approvals(&3, vec![false, false, true], 0));
+			assert_ok!(Council::submit_candidacy(&4, 3));
+			assert_ok!(Council::set_approvals(&4, vec![false, false, false, true], 0));
+			assert_ok!(Council::submit_candidacy(&5, 4));
+			assert_ok!(Council::set_approvals(&5, vec![false, false, false, false, true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 11, 0);
-			Council::present_winner(&4, 1, 60, 0);
-			Council::present_winner(&4, 3, 21, 0);
-			Council::present_winner(&4, 4, 31, 0);
-			Council::present_winner(&4, 5, 41, 0);
+			assert_ok!(Council::present_winner(&4, 2, 11, 0));
+			assert_ok!(Council::present_winner(&4, 1, 60, 0));
+			assert_ok!(Council::present_winner(&4, 3, 21, 0));
+			assert_ok!(Council::present_winner(&4, 4, 31, 0));
+			assert_ok!(Council::present_winner(&4, 5, 41, 0));
 
 			assert_eq!(Council::leaderboard(), Some(vec![
 				(21, 3),
@@ -1295,7 +1298,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
-			assert_noop!{Council::present_winner(&5, 5, 1, 0)};	// gives "cannot present outside of presentation period"
+			assert_noop!(Council::present_winner(&5, 5, 1, 0), "cannot present outside of presentation period");
 		});
 	}
 
@@ -1303,14 +1306,14 @@ mod tests {
 	fn present_with_invalid_vote_index_should_not_work() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&2, 0);
-			Council::submit_candidacy(&5, 1);
-			Council::set_approvals(&2, vec![true, false], 0);
-			Council::set_approvals(&5, vec![false, true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::submit_candidacy(&5, 1));
+			assert_ok!(Council::set_approvals(&2, vec![true, false], 0));
+			assert_ok!(Council::set_approvals(&5, vec![false, true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_noop!{Council::present_winner(&4, 2, 11, 1)};	// gives "index not current"
+			assert_noop!(Council::present_winner(&4, 2, 11, 1), "index not current");
 		});
 	}
 
@@ -1320,15 +1323,15 @@ mod tests {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
 
-			Council::submit_candidacy(&1, 0);
-			Council::submit_candidacy(&5, 1);
-			Council::set_approvals(&2, vec![true, false], 0);
-			Council::set_approvals(&5, vec![false, true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&1, 0));
+			assert_ok!(Council::submit_candidacy(&5, 1));
+			assert_ok!(Council::set_approvals(&2, vec![true, false], 0));
+			assert_ok!(Council::set_approvals(&5, vec![false, true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
 			assert_eq!(Staking::balance(&1), 1);
-			assert_noop!{Council::present_winner(&1, 1, 30, 0)};	// gives "presenter must have sufficient slashable funds"
+			assert_noop!(Council::present_winner(&1, 1, 30, 0), "presenter must have sufficient slashable funds");
 		});
 	}
 
@@ -1339,14 +1342,14 @@ mod tests {
 			assert!(!Council::presentation_active());
 			assert_eq!(Staking::balance(&4), 40);
 
-			Council::submit_candidacy(&2, 0);
-			Council::submit_candidacy(&5, 1);
-			Council::set_approvals(&2, vec![true, false], 0);
-			Council::set_approvals(&5, vec![false, true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&2, 0));
+			assert_ok!(Council::submit_candidacy(&5, 1));
+			assert_ok!(Council::set_approvals(&2, vec![true, false], 0));
+			assert_ok!(Council::set_approvals(&5, vec![false, true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 2, 80, 0);
+			assert_ok!(Council::present_winner(&4, 2, 80, 0));
 
 			assert_eq!(Staking::balance(&4), 38);
 		});
@@ -1358,31 +1361,31 @@ mod tests {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
 
-			Council::submit_candidacy(&1, 0);
-			Council::set_approvals(&6, vec![true], 0);
-			Council::submit_candidacy(&2, 1);
-			Council::set_approvals(&2, vec![false, true], 0);
-			Council::submit_candidacy(&3, 2);
-			Council::set_approvals(&3, vec![false, false, true], 0);
-			Council::submit_candidacy(&4, 3);
-			Council::set_approvals(&4, vec![false, false, false, true], 0);
-			Council::submit_candidacy(&5, 4);
-			Council::set_approvals(&5, vec![false, false, false, false, true], 0);
+			assert_ok!(Council::submit_candidacy(&1, 0));
+			assert_ok!(Council::set_approvals(&6, vec![true], 0));
+			assert_ok!(Council::submit_candidacy(&2, 1));
+			assert_ok!(Council::set_approvals(&2, vec![false, true], 0));
+			assert_ok!(Council::submit_candidacy(&3, 2));
+			assert_ok!(Council::set_approvals(&3, vec![false, false, true], 0));
+			assert_ok!(Council::submit_candidacy(&4, 3));
+			assert_ok!(Council::set_approvals(&4, vec![false, false, false, true], 0));
+			assert_ok!(Council::submit_candidacy(&5, 4));
+			assert_ok!(Council::set_approvals(&5, vec![false, false, false, false, true], 0));
 
-			Council::end_block(System::block_number());
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
 			assert!(Council::presentation_active());
-			Council::present_winner(&4, 1, 60, 0);
+			assert_ok!(Council::present_winner(&4, 1, 60, 0));
 			assert_eq!(Council::leaderboard(), Some(vec![
 				(0, 0),
 				(0, 0),
 				(0, 0),
 				(60, 1)
 			]));
-			Council::present_winner(&4, 3, 21, 0);
-			Council::present_winner(&4, 4, 31, 0);
-			Council::present_winner(&4, 5, 41, 0);
+			assert_ok!(Council::present_winner(&4, 3, 21, 0));
+			assert_ok!(Council::present_winner(&4, 4, 31, 0));
+			assert_ok!(Council::present_winner(&4, 5, 41, 0));
 			assert_eq!(Council::leaderboard(), Some(vec![
 				(21, 3),
 				(31, 4),
@@ -1390,7 +1393,7 @@ mod tests {
 				(60, 1)
 			]));
 
-			Council::end_block(System::block_number());
+			assert_ok!(Council::end_block(System::block_number()));
 
 			assert!(!Council::presentation_active());
 			assert_eq!(Council::active_council(), vec![(1, 11), (5, 11)]);
@@ -1415,34 +1418,34 @@ mod tests {
 	fn second_tally_should_use_runners_up() {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
-			Council::submit_candidacy(&1, 0);
-			Council::set_approvals(&6, vec![true], 0);
-			Council::submit_candidacy(&2, 1);
-			Council::set_approvals(&2, vec![false, true], 0);
-			Council::submit_candidacy(&3, 2);
-			Council::set_approvals(&3, vec![false, false, true], 0);
-			Council::submit_candidacy(&4, 3);
-			Council::set_approvals(&4, vec![false, false, false, true], 0);
-			Council::submit_candidacy(&5, 4);
-			Council::set_approvals(&5, vec![false, false, false, false, true], 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::submit_candidacy(&1, 0));
+			assert_ok!(Council::set_approvals(&6, vec![true], 0));
+			assert_ok!(Council::submit_candidacy(&2, 1));
+			assert_ok!(Council::set_approvals(&2, vec![false, true], 0));
+			assert_ok!(Council::submit_candidacy(&3, 2));
+			assert_ok!(Council::set_approvals(&3, vec![false, false, true], 0));
+			assert_ok!(Council::submit_candidacy(&4, 3));
+			assert_ok!(Council::set_approvals(&4, vec![false, false, false, true], 0));
+			assert_ok!(Council::submit_candidacy(&5, 4));
+			assert_ok!(Council::set_approvals(&5, vec![false, false, false, false, true], 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			Council::present_winner(&4, 1, 60, 0);
-			Council::present_winner(&4, 3, 21, 0);
-			Council::present_winner(&4, 4, 31, 0);
-			Council::present_winner(&4, 5, 41, 0);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 1, 60, 0));
+			assert_ok!(Council::present_winner(&4, 3, 21, 0));
+			assert_ok!(Council::present_winner(&4, 4, 31, 0));
+			assert_ok!(Council::present_winner(&4, 5, 41, 0));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			Council::set_approvals(&6, vec![false, false, true, false], 1);
-			Council::set_desired_seats(3);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::set_approvals(&6, vec![false, false, true, false], 1));
+			assert_ok!(Council::set_desired_seats(3));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			Council::present_winner(&4, 3, 81, 1);
-			Council::present_winner(&4, 4, 31, 1);
-			Council::end_block(System::block_number());
+			assert_ok!(Council::present_winner(&4, 3, 81, 1));
+			assert_ok!(Council::present_winner(&4, 4, 31, 1));
+			assert_ok!(Council::end_block(System::block_number()));
 
 			assert!(!Council::presentation_active());
 			assert_eq!(Council::active_council(), vec![(1, 11), (5, 11), (3, 15)]);
