@@ -30,7 +30,7 @@ use io::SyncIo;
 use message;
 use network::PeerId;
 use service;
-use runtime_primitives::traits::{Block as BlockT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -87,7 +87,10 @@ impl Future for Response {
 	}
 }
 
-impl<B: BlockT, E> OnDemand<B, E> where E: service::ExecuteInContext<B> {
+impl<B: BlockT, E> OnDemand<B, E> where
+	E: service::ExecuteInContext<B>,
+	B::Header: HeaderT<Number=u64>,
+{
 	/// Creates new on-demand service.
 	pub fn new(checker: Arc<FetchChecker<B>>) -> Self {
 		OnDemand {
@@ -124,7 +127,11 @@ impl<B: BlockT, E> OnDemand<B, E> where E: service::ExecuteInContext<B> {
 	}
 }
 
-impl<B, E> OnDemandService for OnDemand<B, E> where B: BlockT, E: service::ExecuteInContext<B> {
+impl<B, E> OnDemandService for OnDemand<B, E> where
+	B: BlockT,
+	E: service::ExecuteInContext<B>,
+	B::Header: HeaderT<Number=u64>,
+{
 	fn on_connect(&self, peer: PeerId, role: service::Role) {
 		if !role.intersects(service::Role::FULL | service::Role::COLLATOR | service::Role::VALIDATOR) { // TODO: correct?
 			return;
@@ -176,15 +183,23 @@ impl<B, E> OnDemandService for OnDemand<B, E> where B: BlockT, E: service::Execu
 	}
 }
 
-impl<B, E> Fetcher<B> for OnDemand<B, E> where B: BlockT, E: service::ExecuteInContext<B> {
+impl<B, E> Fetcher<B> for OnDemand<B, E> where
+	B: BlockT,
+	E: service::ExecuteInContext<B>,
+	B::Header: HeaderT<Number=u64>,
+{
 	type RemoteCallResult = Response;
 
 	fn remote_call(&self, request: RemoteCallRequest<B::Hash>) -> Self::RemoteCallResult {
-		self.remote_call(request)
+		OnDemand::remote_call(self, request)
 	}
 }
 
-impl<B, E> OnDemandCore<B, E> where B: BlockT, E: service::ExecuteInContext<B> {
+impl<B, E> OnDemandCore<B, E> where
+	B: BlockT,
+	E: service::ExecuteInContext<B> ,
+	B::Header: HeaderT<Number=u64>
+{
 	pub fn add_peer(&mut self, peer: PeerId) {
 		self.idle_peers.push_back(peer);
 	}
@@ -264,7 +279,7 @@ impl<B, E> OnDemandCore<B, E> where B: BlockT, E: service::ExecuteInContext<B> {
 					data: request.request.call_data.clone(),
 				};
 
-				protocol.send_message(ctx, peer, message::Message::RemoteCallRequest(message))
+				protocol.send_message(ctx, peer, message::generic::Message::RemoteCallRequest(message))
 			});
 			self.active_peers.insert(peer, request);
 		}

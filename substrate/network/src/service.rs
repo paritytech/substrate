@@ -15,7 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
 use std::sync::Arc;
-use std::collections::{BTreeMap};
+use std::collections::{HashMap};
 use std::io;
 use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
@@ -73,7 +73,7 @@ pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get this node id if available.
 	fn node_id(&self) -> Option<String>;
 	/// Returns propagation count for pending transactions.
-	fn transactions_stats(&self) -> BTreeMap<B::Hash, TransactionStats>;
+	fn transactions_stats(&self) -> HashMap<B::Hash, TransactionStats>;
 }
 
 /// Transaction pool interface
@@ -187,7 +187,7 @@ impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 
 	fn stop(&self) {
 		self.handler.protocol.abort();
-		self.network.stop().unwrap_or_else(|e| warn!("Error stopping network: {:?}", e));
+		self.network.stop();
 	}
 }
 
@@ -238,7 +238,7 @@ impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: Header
 		self.network.external_url()
 	}
 
-	fn transactions_stats(&self) -> BTreeMap<B::Hash, TransactionStats> {
+	fn transactions_stats(&self) -> HashMap<B::Hash, TransactionStats> {
 		self.handler.protocol.transactions_stats()
 	}
 }

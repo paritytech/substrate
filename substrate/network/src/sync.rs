@@ -22,7 +22,7 @@ use client::{ImportResult, BlockStatus, ClientInfo};
 use blocks::{self, BlockCollection};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
-use message::{self, Message};
+use message::{self, generic::Message as GenericMessage};
 use service::Role;
 
 // Maximum blocks to request in a single packet.
@@ -406,7 +406,7 @@ impl<B: BlockT> ChainSync<B> where
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			match peer.state {
 				PeerSyncState::Available => {
-					let request = message::BlockRequest {
+					let request = message::generic::BlockRequest {
 						id: 0,
 						fields: self.required_block_attributes.clone(),
 						from: message::FromBlock::Hash(*hash),
@@ -415,7 +415,7 @@ impl<B: BlockT> ChainSync<B> where
 						max: Some(1),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
-					protocol.send_message(io, peer_id, Message::BlockRequest(request));
+					protocol.send_message(io, peer_id, GenericMessage::BlockRequest(request));
 				},
 				_ => (),
 			}
@@ -430,7 +430,7 @@ impl<B: BlockT> ChainSync<B> where
 				PeerSyncState::Available => {
 					if let Some(range) = self.blocks.needed_blocks(peer_id, MAX_BLOCKS_TO_REQUEST, peer.best_number, peer.common_number) {
 						trace!(target: "sync", "Requesting blocks from {}, ({} to {})", peer_id, range.start, range.end);
-						let request = message::BlockRequest {
+						let request = message::generic::BlockRequest {
 							id: 0,
 							fields: self.required_block_attributes.clone(),
 							from: message::FromBlock::Number(range.start),
@@ -439,7 +439,7 @@ impl<B: BlockT> ChainSync<B> where
 							max: Some((range.end - range.start) as u32),
 						};
 						peer.state = PeerSyncState::DownloadingNew(range.start);
-						protocol.send_message(io, peer_id, Message::BlockRequest(request));
+						protocol.send_message(io, peer_id, GenericMessage::BlockRequest(request));
 					} else {
 						trace!(target: "sync", "Nothing to request");
 					}
@@ -451,7 +451,7 @@ impl<B: BlockT> ChainSync<B> where
 
 	fn request_ancestry(io: &mut SyncIo, protocol: &Protocol<B>, peer_id: PeerId, block: u64) {
 		trace!(target: "sync", "Requesting ancestry block #{} from {}", block, peer_id);
-		let request = message::BlockRequest {
+		let request = message::generic::BlockRequest {
 			id: 0,
 			fields: vec![message::BlockAttribute::Header, message::BlockAttribute::Justification],
 			from: message::FromBlock::Number(block),
@@ -459,6 +459,6 @@ impl<B: BlockT> ChainSync<B> where
 			direction: message::Direction::Ascending,
 			max: Some(1),
 		};
-		protocol.send_message(io, peer_id, Message::BlockRequest(request));
+		protocol.send_message(io, peer_id, GenericMessage::BlockRequest(request));
 	}
 }

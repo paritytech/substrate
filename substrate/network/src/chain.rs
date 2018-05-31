@@ -59,34 +59,34 @@ impl<B, E, Block> Client<Block> for PolkadotClient<B, E, Block> where
 		// TODO: defer justification check.
 		let justified_header = self.check_justification(header, justification.into())?;
 		let origin = if is_best { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
-		(self as &PolkadotClient<B, E>).import_block(origin, justified_header, body)
+		(self as &PolkadotClient<B, E, Block>).import_block(origin, justified_header, body)
 	}
 
 	fn info(&self) -> Result<ClientInfo<Block>, Error> {
-		(self as &PolkadotClient<B, E>).info()
+		(self as &PolkadotClient<B, E, Block>).info()
 	}
 
 	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error> {
-		(self as &PolkadotClient<B, E>).block_status(id)
+		(self as &PolkadotClient<B, E, Block>).block_status(id)
 	}
 
 	fn block_hash(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, Error> {
-		(self as &PolkadotClient<B, E>).block_hash(block_number)
+		(self as &PolkadotClient<B, E, Block>).block_hash(block_number)
 	}
 
 	fn header(&self, id: &BlockId<Block>) -> Result<Option<Block::Header>, Error> {
-		(self as &PolkadotClient<B, E>).header(id)
+		(self as &PolkadotClient<B, E, Block>).header(id)
 	}
 
 	fn body(&self, id: &BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, Error> {
-		(self as &PolkadotClient<B, E>).body(id)
+		(self as &PolkadotClient<B, E, Block>).body(id)
 	}
 
 	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, Error> {
-		(self as &PolkadotClient<B, E>).justification(id)
+		(self as &PolkadotClient<B, E, Block>).justification(id)
 	}
 
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
-		(self as &PolkadotClient<B, E>).execution_proof(&BlockId::Hash(block.clone()), method, data)
+		(self as &PolkadotClient<B, E, Block>).execution_proof(&BlockId::Hash(block.clone()), method, data)
 	}
 }

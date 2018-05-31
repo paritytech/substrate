@@ -24,7 +24,7 @@ use protocol::Protocol;
 use network::PeerId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
-use message::{self, Message};
+use message::{self, generic::Message as GenericMessage};
 
 // TODO: Add additional spam/DoS attack protection.
 const MESSAGE_LIFETIME_SECONDS: u64 = 600;
@@ -42,7 +42,7 @@ pub struct Consensus<B: BlockT> {
 	last_block_hash: B::Hash,
 }
 
-impl<B: BlockT> Consensus<B> {
+impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 	/// Create a new instance.
 	pub fn new(best_hash: B::Hash) -> Consensus<B> {
 		Consensus {
@@ -96,14 +96,14 @@ impl<B: BlockT> Consensus<B> {
 			return;
 		}
 
-		match (protocol.chain().info(), protocol.chain().header(&BlockId::Hash(message.parent_hash().clone()))) {
+		match (protocol.chain().info(), protocol.chain().header(&BlockId::Hash(message.parent_hash))) {
 			(_, Err(e)) | (Err(e), _) => {
 				debug!(target:"sync", "Error reading blockchain: {:?}", e);
 				return;
 			},
 			(Ok(info), Ok(Some(header))) => {
-				if header.number < info.chain.best_number {
-					trace!(target:"sync", "Ignored ancient BFT message from {}, hash={}", peer_id, message.parent_hash());
+				if header.number() < &info.chain.best_number {
+					trace!(target:"sync", "Ignored ancient BFT message from {}, hash={}", peer_id, message.parent_hash);
 					return;
 				}
 			},
@@ -114,7 +114,7 @@ impl<B: BlockT> Consensus<B> {
 			peer.known_messages.insert(hash);
 			// TODO: validate signature?
 			if let Some((sink, parent_hash)) = self.bft_message_sink.take() {
-				if message.parent_hash() == &parent_hash {
+				if message.parent_hash == parent_hash {
 					if let Err(e) = sink.unbounded_send(message.clone()) {
 						trace!(target:"sync", "Error broadcasting BFT message notification: {:?}", e);
 					} else {
@@ -127,7 +127,7 @@ impl<B: BlockT> Consensus<B> {
 			return;
 		}
 
-		let message = Message::BftMessage(message);
+		let message = GenericMessage::BftMessage(message);
 		self.register_message(hash.clone(), message.clone());
 		// Propagate to other peers.
 		self.propagate(io, protocol, message, hash);
@@ -138,7 +138,7 @@ impl<B: BlockT> Consensus<B> {
 
 		for &(_, _, ref message) in self.messages.iter() {
 			let bft_message = match *message {
-				Message::BftMessage(ref msg) => msg,
+				GenericMessage::BftMessage(ref msg) => msg,
 				_ => continue,
 			};
 
@@ -154,7 +154,7 @@ impl<B: BlockT> Consensus<B> {
 	pub fn send_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol<B>, message: message::LocalizedBftMessage<B>) {
 		// Broadcast message to all validators.
 		trace!(target:"sync", "Broadcasting BFT message {:?}", message);
-		let message = Message::BftMessage(message);
+		let message = GenericMessage::BftMessage(message);
 		let hash = Protocol::hash_message(&message);
 		self.register_message(hash.clone(), message.clone());
 		self.propagate(io, protocol, message, hash);
@@ -183,7 +183,7 @@ impl<B: BlockT> Consensus<B> {
 					timestamp < now + expiration ||
 					best_header.map_or(true, |header| {
 						if match *message {
-							Message::BftMessage(ref msg) => &msg.parent_hash != header.parent_hash(),
+							GenericMessage::BftMessage(ref msg) => &msg.parent_hash != header.parent_hash(),
 							_ => true,
 						} {
 							hashes.remove(hash);

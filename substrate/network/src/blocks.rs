@@ -102,7 +102,7 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 		let count = count as u64;
 		let (mut range, downloading) = {
 			let mut downloading_iter = self.blocks.iter().peekable();
-			let mut prev: Option<(&u64, &BlockRangeState)> = None;
+			let mut prev: Option<(&u64, &BlockRangeState<B>)> = None;
 			loop {
 				let next = downloading_iter.next();
 				break match &(prev, next) {
