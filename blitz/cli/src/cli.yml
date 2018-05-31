@@ -1,4 +1,4 @@
-name: substrate-demo
+name: blitz-demo
 author: "Parity Team <admin@parity.io>"
 about: Blitz Demo Node Rust Implementation
 args:
