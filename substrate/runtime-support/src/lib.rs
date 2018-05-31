@@ -67,9 +67,9 @@ macro_rules! ensure {
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
 	( $x:expr , $y:expr ) => {
-		let __h = runtime_io::storage_root();
+		let h = runtime_io::storage_root();
 		assert_err!($x, $y);
-		assert_eq!(__h, runtime_io::storage_root());
+		assert_eq!(h, runtime_io::storage_root());
 	}
 }
 

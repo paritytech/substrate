@@ -116,7 +116,6 @@ impl Protocol {
 	/// Create a new instance.
 	pub fn new(config: ProtocolConfig, chain: Arc<Client>, on_demand: Option<Arc<OnDemandService>>, transaction_pool: Arc<TransactionPool>) -> error::Result<Protocol>  {
 		let info = chain.info()?;
-		let best_hash = info.chain.best_hash;
 		let sync = ChainSync::new(config.roles, &info);
 		let protocol = Protocol {
 			config: config,
@@ -124,7 +123,7 @@ impl Protocol {
 			on_demand: on_demand,
 			genesis_hash: info.chain.genesis_hash,
 			sync: RwLock::new(sync),
-			consensus: Mutex::new(Consensus::new(best_hash)),
+			consensus: Mutex::new(Consensus::new()),
 			peers: RwLock::new(HashMap::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
 			transaction_pool: transaction_pool,
@@ -528,7 +527,7 @@ impl Protocol {
 			}
 		}
 
-		self.consensus.lock().collect_garbage(Some((hash, &header)));
+		self.consensus.lock().collect_garbage(Some(&header));
 	}
 
 	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest) {

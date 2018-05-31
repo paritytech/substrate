@@ -1851,6 +1851,7 @@ name = "subkey"
 version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
+ "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 0.1.0",
 ]
 
