@@ -30,6 +30,7 @@ use io::SyncIo;
 use message;
 use network::PeerId;
 use service;
+use runtime_primitives::traits::{Block as BlockT};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -50,9 +51,9 @@ pub trait OnDemandService: Send + Sync {
 }
 
 /// On-demand requests service. Dispatches requests to appropriate peers.
-pub struct OnDemand<E: service::ExecuteInContext> {
-	core: Mutex<OnDemandCore<E>>,
-	checker: Arc<FetchChecker>,
+pub struct OnDemand<B: BlockT, E: service::ExecuteInContext<B>> {
+	core: Mutex<OnDemandCore<B, E>>,
+	checker: Arc<FetchChecker<B>>,
 }
 
 /// On-demand response.
@@ -61,19 +62,19 @@ pub struct Response {
 }
 
 #[derive(Default)]
-struct OnDemandCore<E: service::ExecuteInContext> {
+struct OnDemandCore<B: BlockT, E: service::ExecuteInContext<B>> {
 	service: Weak<E>,
 	next_request_id: u64,
-	pending_requests: VecDeque<Request>,
-	active_peers: LinkedHashMap<PeerId, Request>,
+	pending_requests: VecDeque<Request<B::Hash>>,
+	active_peers: LinkedHashMap<PeerId, Request<B::Hash>>,
 	idle_peers: VecDeque<PeerId>,
 }
 
-struct Request {
+struct Request<H> {
 	id: u64,
 	timestamp: Instant,
 	sender: Sender<client::CallResult>,
-	request: RemoteCallRequest,
+	request: RemoteCallRequest<H>,
 }
 
 impl Future for Response {
@@ -86,9 +87,9 @@ impl Future for Response {
 	}
 }
 
-impl<E> OnDemand<E> where E: service::ExecuteInContext {
+impl<B: BlockT, E> OnDemand<B, E> where E: service::ExecuteInContext<B> {
 	/// Creates new on-demand service.
-	pub fn new(checker: Arc<FetchChecker>) -> Self {
+	pub fn new(checker: Arc<FetchChecker<B>>) -> Self {
 		OnDemand {
 			checker,
 			core: Mutex::new(OnDemandCore {
@@ -107,7 +108,7 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 	}
 
 	/// Execute method call on remote node, returning execution result and proof.
-	pub fn remote_call(&self, request: RemoteCallRequest) -> Response {
+	pub fn remote_call(&self, request: RemoteCallRequest<B::Hash>) -> Response {
 		let (sender, receiver) = channel();
 		let result = Response {
 			receiver: receiver,
@@ -123,7 +124,7 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 	}
 }
 
-impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
+impl<B, E> OnDemandService for OnDemand<B, E> where B: BlockT, E: service::ExecuteInContext<B> {
 	fn on_connect(&self, peer: PeerId, role: service::Role) {
 		if !role.intersects(service::Role::FULL | service::Role::COLLATOR | service::Role::VALIDATOR) { // TODO: correct?
 			return;
@@ -175,15 +176,15 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 	}
 }
 
-impl<E> Fetcher for OnDemand<E> where E: service::ExecuteInContext {
+impl<B, E> Fetcher<B> for OnDemand<B, E> where B: BlockT, E: service::ExecuteInContext<B> {
 	type RemoteCallResult = Response;
 
-	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult {
+	fn remote_call(&self, request: RemoteCallRequest<B::Hash>) -> Self::RemoteCallResult {
 		self.remote_call(request)
 	}
 }
 
-impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
+impl<B, E> OnDemandCore<B, E> where B: BlockT, E: service::ExecuteInContext<B> {
 	pub fn add_peer(&mut self, peer: PeerId) {
 		self.idle_peers.push_back(peer);
 	}
@@ -214,7 +215,7 @@ impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
 		}
 	}
 
-	pub fn insert(&mut self, sender: Sender<client::CallResult>, request: RemoteCallRequest) {
+	pub fn insert(&mut self, sender: Sender<client::CallResult>, request: RemoteCallRequest<B::Hash>) {
 		let request_id = self.next_request_id;
 		self.next_request_id += 1;
 
@@ -226,7 +227,7 @@ impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
 		});
 	}
 
-	pub fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request> {
+	pub fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request<B::Hash>> {
 		match self.active_peers.entry(peer) {
 			Entry::Occupied(entry) => match entry.get().id == id {
 				true => {

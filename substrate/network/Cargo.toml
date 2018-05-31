@@ -27,6 +27,7 @@ substrate-client = { path = "../../substrate/client" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-serializer = { path = "../../substrate/serializer" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-bft = { path = "../../substrate/bft" }
 
 [dev-dependencies]
