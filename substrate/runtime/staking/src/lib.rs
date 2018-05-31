@@ -52,7 +52,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment};
+use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment, As};
 
 mod contract;
 #[cfg(test)]
@@ -122,8 +122,10 @@ decl_storage! {
 	pub SessionsPerEra get(sessions_per_era): b"sta:spe" => required T::BlockNumber;
 	// The total amount of stake on the system.
 	pub TotalStake get(total_stake): b"sta:tot" => required T::Balance;
-	// The fee to be paid for making a transaction.
-	pub TransactionFee get(transaction_fee): b"sta:fee" => required T::Balance;
+	// The fee to be paid for making a transaction; the base.
+	pub TransactionBaseFee get(transaction_base_fee): b"sta:basefee" => required T::Balance;
+	// The fee to be paid for making a transaction; the per-byte portion.
+	pub TransactionByteFee get(transaction_byte_fee): b"sta:bytefee" => required T::Balance;
 
 	// The current era index.
 	pub CurrentEra get(current_era): b"sta:era" => required T::BlockNumber;
@@ -165,10 +167,20 @@ impl<T: Trait> Module<T> {
 		Self::free_balance(who) + Self::reserved_balance(who)
 	}
 
-	/// Some result as `slash(who, value)` (but without the side-effects) asuming there are no
+	/// Some result as `slash(who, value)` (but without the side-effects) assuming there are no
 	/// balance changes in the meantime.
 	pub fn can_slash(who: &T::AccountId, value: T::Balance) -> bool {
 		Self::balance(who) >= value
+	}
+
+	/// Same result as `deduct_unbonded(who, value)` (but without the side-effects) assuming there
+	/// are no balance changes in the meantime.
+	pub fn can_deduct_unbonded(who: &T::AccountId, value: T::Balance) -> bool {
+		if let LockStatus::Liquid = Self::unlock_block(who) {
+			Self::free_balance(who) >= value
+		} else {
+			false
+		}
 	}
 
 	/// The block at which the `who`'s funds become entirely liquid.
@@ -183,7 +195,7 @@ impl<T: Trait> Module<T> {
 	/// Create a smart-contract account.
 	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb) {
+		if let Ok(Some(commit)) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb) {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
 	}
@@ -194,7 +206,7 @@ impl<T: Trait> Module<T> {
 	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) {
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb) {
+		if let Ok(Some(commit)) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb) {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
 	}
@@ -205,7 +217,7 @@ impl<T: Trait> Module<T> {
 	fn stake(aux: &T::PublicAux) {
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
-		assert!(intentions.iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot stake if already staked.");
+		ensure!(intentions.iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot stake if already staked.");
 		intentions.push(aux.ref_into().clone());
 		<Intentions<T>>::put(intentions);
 		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
@@ -218,11 +230,11 @@ impl<T: Trait> Module<T> {
 		let mut intentions = <Intentions<T>>::get();
 		if let Some(position) = intentions.iter().position(|t| t == aux.ref_into()) {
 			intentions.swap_remove(position);
+			<Intentions<T>>::put(intentions);
+			<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
 		} else {
-			panic!("Cannot unstake if not already staked.");
+			fail!("Cannot unstake if not already staked.");
 		}
-		<Intentions<T>>::put(intentions);
-		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
 	}
 
 	// PRIV DISPATCH
@@ -280,11 +292,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Moves `value` from balance to reserved balance.
-	pub fn reserve_balance(who: &T::AccountId, value: T::Balance) {
+	pub fn reserve_balance(who: &T::AccountId, value: T::Balance) -> bool {
 		let b = Self::free_balance(who);
-		assert!(b >= value);
+		if b < value {
+			return false;
+		}
 		<FreeBalance<T>>::insert(who, b - value);
 		<ReservedBalance<T>>::insert(who, Self::reserved_balance(who) + value);
+		true
 	}
 
 	/// Moves `value` from reserved balance to balance.
@@ -536,26 +551,28 @@ impl<T: Trait> Module<T> {
 		code: &[u8],
 		value: T::Balance,
 		account_db: &DB,
-	) -> Option<State<T>> {
+	) -> Result<Option<State<T>>, &'static str> {
 		let from_balance = account_db.get_balance(transactor);
 		// TODO: a fee.
-		assert!(from_balance >= value);
+		if from_balance < value {
+			return Err("balance too low to send value");
+		}
 
 		let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
 
 		// early-out if degenerate.
 		if &dest == transactor {
-			return None;
+			return Ok(None);
 		}
 
 		let mut local = BTreeMap::new();
 
 		// two inserts are safe
-		assert!(&dest != transactor);
+		// note that we now know that `&dest != transactor` due to early-out before.
 		local.insert(dest, ChangeEntry { balance: Some(value), code: Some(code.to_vec()), storage: Default::default() });
 		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - value));
 
-		Some(local)
+		Ok(Some(local))
 	}
 
 	fn effect_transfer<DB: AccountDb<T>>(
@@ -563,13 +580,19 @@ impl<T: Trait> Module<T> {
 		dest: &T::AccountId,
 		value: T::Balance,
 		account_db: &DB,
-	) -> Option<State<T>> {
+	) -> Result<Option<State<T>>, &'static str> {
 		let from_balance = account_db.get_balance(transactor);
-		assert!(from_balance >= value);
+		if from_balance < value {
+			return Err("balance too low to send value");
+		}
 
 		let to_balance = account_db.get_balance(dest);
-		assert!(<Bondage<T>>::get(transactor) <= <Bondage<T>>::get(dest));
-		assert!(to_balance + value > to_balance); // no overflow
+		if <Bondage<T>>::get(transactor) > <Bondage<T>>::get(dest) {
+			return Err("bondage too high to send value");
+		}
+		if to_balance + value <= to_balance {
+			return Err("destination balance too high to receive value");
+		}
 
 		// TODO: a fee, based upon gaslimit/gasprice.
 		let gas_limit = 100_000;
@@ -594,20 +617,23 @@ impl<T: Trait> Module<T> {
 			contract::execute(&dest_code, dest, &mut overlay, gas_limit).is_ok()
 		};
 
-		if should_commit {
+		Ok(if should_commit {
 			Some(overlay.into_state())
 		} else {
 			None
-		}
+		})
 	}
 }
 
 impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
-	fn make_payment(transactor: &T::AccountId) {
+	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> bool {
 		let b = Self::free_balance(transactor);
-		let transaction_fee = Self::transaction_fee();
-		assert!(b >= transaction_fee, "attempt to transact without enough funds to pay fee");
+		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<usize>>::sa(encoded_len);
+		if b < transaction_fee {
+			return false;
+		}
 		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
+		true
 	}
 }
 
@@ -628,7 +654,8 @@ pub struct GenesisConfig<T: Trait> {
 	pub intentions: Vec<T::AccountId>,
 	pub validator_count: u64,
 	pub bonding_duration: T::BlockNumber,
-	pub transaction_fee: T::Balance,
+	pub transaction_base_fee: T::Balance,
+	pub transaction_byte_fee: T::Balance,
 }
 
 #[cfg(any(feature = "std", test))]
@@ -642,7 +669,8 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
 			validator_count: 3,
 			bonding_duration: T::BlockNumber::sa(0),
-			transaction_fee: T::Balance::sa(0),
+			transaction_base_fee: T::Balance::sa(0),
+			transaction_byte_fee: T::Balance::sa(0),
 		}
 	}
 
@@ -663,7 +691,8 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
 			validator_count: 3,
 			bonding_duration: T::BlockNumber::sa(0),
-			transaction_fee: T::Balance::sa(1),
+			transaction_base_fee: T::Balance::sa(1),
+			transaction_byte_fee: T::Balance::sa(0),
 		}
 	}
 }
@@ -679,7 +708,8 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			intentions: vec![],
 			validator_count: 0,
 			bonding_duration: T::BlockNumber::sa(1000),
-			transaction_fee: T::Balance::sa(0),
+			transaction_base_fee: T::Balance::sa(0),
+			transaction_byte_fee: T::Balance::sa(0),
 		}
 	}
 }
@@ -697,7 +727,8 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
 			twox_128(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
 			twox_128(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
-			twox_128(<TransactionFee<T>>::key()).to_vec() => self.transaction_fee.encode(),
+			twox_128(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
+			twox_128(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
 			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
 			twox_128(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
 		];
@@ -854,12 +885,12 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	fn staking_balance_transfer_when_bonded_panics() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			Staking::stake(&1);
 			Staking::transfer(&1, 2, 69);
+			assert_eq!(Staking::balance(&1), 111);
 		});
 	}
 
@@ -880,13 +911,13 @@ mod tests {
 		});
 	}
 
-	#[test]
 	#[should_panic]
 	fn staking_balance_transfer_when_reserved_panics() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			Staking::reserve_balance(&1, 69);
 			Staking::transfer(&1, 2, 69);
+			assert_eq!(Staking::balance(&1), 111);
 		});
 	}
 

@@ -35,12 +35,13 @@ pub trait Verify {
 
 /// Simple payment making trait, operating on a single generic `AccountId` type.
 pub trait MakePayment<AccountId> {
-	/// Make some sort of payment concerning `who`.
-	fn make_payment(who: &AccountId);
+	/// Make some sort of payment concerning `who` for an extrinsic (transaction) of encoded length
+	/// `encoded_len` bytes. Return true iff the payment was successful.
+	fn make_payment(who: &AccountId, encoded_len: usize) -> bool;
 }
 
 impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T) {}
+	fn make_payment(_: &T, _: usize) -> bool { true }
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.

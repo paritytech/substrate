@@ -65,6 +65,6 @@ args:
   - chain:
       long: chain
       value_name: CHAIN_SPEC
-      help: Specify the chain specification (one of dev, local or poc-1)
+      help: Specify the chain specification (one of dev, local or poc-2)
       takes_value: true
 subcommands:

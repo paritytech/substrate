@@ -205,6 +205,7 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		let account = e.account().clone();
 		if let Some(commit_state) =
 			Module::<T>::effect_transfer(&account, &transfer_to, value, e.account_db())
+				.map_err(|_| sandbox::Error::Execution)?
 		{
 			e.account_db_mut().merge(commit_state);
 		}
@@ -231,6 +232,7 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		let account = e.account().clone();
 		if let Some(commit_state) =
 			Module::<T>::effect_create(&account, &code, value, e.account_db())
+				.map_err(|_| sandbox::Error::Execution)?
 		{
 			e.account_db_mut().merge(commit_state);
 		}
