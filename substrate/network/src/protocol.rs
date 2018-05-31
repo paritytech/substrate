@@ -516,6 +516,12 @@ impl Protocol {
 
 	pub fn on_block_imported(&self, io: &mut SyncIo, hash: HeaderHash, header: &Header) {
 		self.sync.write().update_chain_info(&header);
+
+		// blocks are not announced by light clients
+		if self.config.roles & Role::LIGHT == Role::LIGHT {
+			return;
+		}
+
 		// send out block announcements
 		let mut peers = self.peers.write();
 
