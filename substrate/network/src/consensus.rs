@@ -309,61 +309,67 @@ impl Consensus {
 	}
 }
 
-
-#[test]
-fn collects_garbage() {
+#[cfg(test)]
+mod tests {
+	use primitives::Hash;
 	use primitives::bft::Justification;
-	use primitives::block::HeaderHash;
+	use primitives::block::{HeaderHash, Header};
+	use std::time::Instant;
+	use message::{self, Message};
+	use super::{Consensus, MESSAGE_LIFETIME};
 
-	let prev_hash = HeaderHash::random();
-	let best_hash = HeaderHash::random();
-	let mut consensus = Consensus::new();
-	let now = Instant::now();
-	let m1_hash = Hash::random();
-	let m2_hash = Hash::random();
-	let m1 = Message::BftMessage(message::LocalizedBftMessage {
-		parent_hash: prev_hash,
-		message: message::BftMessage::Auxiliary(Justification {
-			round_number: 0,
-			hash: Default::default(),
-			signatures: Default::default(),
-		}),
-	});
-	let m2 = Message::BftMessage(message::LocalizedBftMessage {
-		parent_hash: best_hash,
-		message: message::BftMessage::Auxiliary(Justification {
-			round_number: 0,
-			hash: Default::default(),
-			signatures: Default::default(),
-		}),
-	});
-	consensus.messages.push((m1_hash, now, m1));
-	consensus.messages.push((m2_hash, now, m2.clone()));
-	consensus.message_hashes.insert(m1_hash);
-	consensus.message_hashes.insert(m2_hash);
+	#[test]
+	fn collects_garbage() {
+		let prev_hash = HeaderHash::random();
+		let best_hash = HeaderHash::random();
+		let mut consensus = Consensus::new();
+		let now = Instant::now();
+		let m1_hash = Hash::random();
+		let m2_hash = Hash::random();
+		let m1 = Message::BftMessage(message::LocalizedBftMessage {
+			parent_hash: prev_hash,
+			message: message::BftMessage::Auxiliary(Justification {
+				round_number: 0,
+				hash: Default::default(),
+				signatures: Default::default(),
+			}),
+		});
+		let m2 = Message::BftMessage(message::LocalizedBftMessage {
+			parent_hash: best_hash,
+			message: message::BftMessage::Auxiliary(Justification {
+				round_number: 0,
+				hash: Default::default(),
+				signatures: Default::default(),
+			}),
+		});
+		consensus.messages.push((m1_hash, now, m1));
+		consensus.messages.push((m2_hash, now, m2.clone()));
+		consensus.message_hashes.insert(m1_hash);
+		consensus.message_hashes.insert(m2_hash);
 
-	// nothing to collect
-	consensus.collect_garbage(None);
-	assert_eq!(consensus.messages.len(), 2);
-	assert_eq!(consensus.message_hashes.len(), 2);
+		// nothing to collect
+		consensus.collect_garbage(None);
+		assert_eq!(consensus.messages.len(), 2);
+		assert_eq!(consensus.message_hashes.len(), 2);
 
-	// random header, nothing should be cleared
-	let mut header = Header::from_block_number(0);
-	consensus.collect_garbage(Some(&header));
-	assert_eq!(consensus.messages.len(), 2);
-	assert_eq!(consensus.message_hashes.len(), 2);
+		// random header, nothing should be cleared
+		let mut header = Header::from_block_number(0);
+		consensus.collect_garbage(Some(&header));
+		assert_eq!(consensus.messages.len(), 2);
+		assert_eq!(consensus.message_hashes.len(), 2);
 
-	// header that matches one of the messages
-	header.parent_hash = prev_hash;
-	consensus.collect_garbage(Some(&header));
-	assert_eq!(consensus.messages.len(), 1);
-	assert_eq!(consensus.message_hashes.len(), 1);
-	assert!(consensus.message_hashes.contains(&m2_hash));
+		// header that matches one of the messages
+		header.parent_hash = prev_hash;
+		consensus.collect_garbage(Some(&header));
+		assert_eq!(consensus.messages.len(), 1);
+		assert_eq!(consensus.message_hashes.len(), 1);
+		assert!(consensus.message_hashes.contains(&m2_hash));
 
-	// make timestamp expired
-	consensus.messages.clear();
-	consensus.messages.push((m2_hash, now - MESSAGE_LIFETIME, m2));
-	consensus.collect_garbage(None);
-	assert!(consensus.messages.is_empty());
-	assert!(consensus.message_hashes.is_empty());
+		// make timestamp expired
+		consensus.messages.clear();
+		consensus.messages.push((m2_hash, now - MESSAGE_LIFETIME, m2));
+		consensus.collect_garbage(None);
+		assert!(consensus.messages.is_empty());
+		assert!(consensus.message_hashes.is_empty());
+	}
 }
