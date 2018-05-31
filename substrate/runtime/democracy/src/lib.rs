@@ -148,7 +148,7 @@ impl<T: Trait> Module<T> {
 	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>, value: T::Balance) -> Result {
 		ensure!(value >= Self::minimum_deposit(), "value too low");
 		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), value)
-			.map_err("proposer's balance too low")?;
+			.map_err(|_| "proposer's balance too low")?;
 
 		let index = Self::public_prop_count();
 		<PublicPropCount<T>>::put(index + 1);
@@ -165,7 +165,7 @@ impl<T: Trait> Module<T> {
 		let mut deposit = Self::deposit_of(proposal)
 			.ok_or("can only second an existing proposal")?;
 		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), deposit.0)
-			.map_err("seconder's balance too low")?;
+			.map_err(|_| "seconder's balance too low")?;
 		deposit.1.push(aux.ref_into().clone());
 		<DepositOf<T>>::insert(proposal, deposit);
 		Ok(())
@@ -430,17 +430,17 @@ mod tests {
 		});
 	}
 
-	fn propose_sessions_per_era(who: u64, value: u64, locked: u64) {
-		Democracy::propose(&who, Box::new(Proposal::Staking(staking::PrivCall::set_sessions_per_era(value))), locked);
+	fn propose_sessions_per_era(who: u64, value: u64, locked: u64) -> super::Result {
+		Democracy::propose(&who, Box::new(Proposal::Staking(staking::PrivCall::set_sessions_per_era(value))), locked)
 	}
 
 	#[test]
 	fn locked_for_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			propose_sessions_per_era(1, 2, 2);
-			propose_sessions_per_era(1, 4, 4);
-			propose_sessions_per_era(1, 3, 3);
+			assert_ok!(propose_sessions_per_era(1, 2, 2));
+			assert_ok!(propose_sessions_per_era(1, 4, 4));
+			assert_ok!(propose_sessions_per_era(1, 3, 3));
 			assert_eq!(Democracy::locked_for(0), Some(2));
 			assert_eq!(Democracy::locked_for(1), Some(4));
 			assert_eq!(Democracy::locked_for(2), Some(3));
@@ -451,12 +451,12 @@ mod tests {
 	fn single_proposal_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			propose_sessions_per_era(1, 2, 1);
+			assert_ok!(propose_sessions_per_era(1, 2, 1));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
 			System::set_block_number(2);
 			let r = 0;
-			Democracy::vote(&1, r, true);
+			assert_ok!(Democracy::vote(&1, r, true));
 
 			assert_eq!(Democracy::referendum_count(), 1);
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -474,11 +474,11 @@ mod tests {
 	fn deposit_for_proposals_should_be_taken() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			propose_sessions_per_era(1, 2, 5);
-			Democracy::second(&2, 0);
-			Democracy::second(&5, 0);
-			Democracy::second(&5, 0);
-			Democracy::second(&5, 0);
+			assert_ok!(propose_sessions_per_era(1, 2, 5));
+			assert_ok!(Democracy::second(&2, 0));
+			assert_ok!(Democracy::second(&5, 0));
+			assert_ok!(Democracy::second(&5, 0));
+			assert_ok!(Democracy::second(&5, 0));
 			assert_eq!(Staking::balance(&1), 5);
 			assert_eq!(Staking::balance(&2), 15);
 			assert_eq!(Staking::balance(&5), 35);
@@ -489,11 +489,11 @@ mod tests {
 	fn deposit_for_proposals_should_be_returned() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			propose_sessions_per_era(1, 2, 5);
-			Democracy::second(&2, 0);
-			Democracy::second(&5, 0);
-			Democracy::second(&5, 0);
-			Democracy::second(&5, 0);
+			assert_ok!(propose_sessions_per_era(1, 2, 5));
+			assert_ok!(Democracy::second(&2, 0));
+			assert_ok!(Democracy::second(&5, 0));
+			assert_ok!(Democracy::second(&5, 0));
+			assert_ok!(Democracy::second(&5, 0));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			assert_eq!(Staking::balance(&1), 10);
 			assert_eq!(Staking::balance(&2), 20);
@@ -502,60 +502,57 @@ mod tests {
 	}
 
 	#[test]
-	fn proposal_with_deposit_below_minimum_should_panic() {
+	fn proposal_with_deposit_below_minimum_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			propose_sessions_per_era(1, 2, 0);
-			assert_eq!(Democracy::locked_for(0), None);
+			assert_noop!(propose_sessions_per_era(1, 2, 0), "value too low");
 		});
 	}
 
 	#[test]
-	fn poor_proposer_should_panic() {
+	fn poor_proposer_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			propose_sessions_per_era(1, 2, 11);
-			assert_eq!(Democracy::locked_for(0), None);
+			assert_noop!(propose_sessions_per_era(1, 2, 11), "proposer\'s balance too low");
 		});
 	}
 
 	#[test]
-	fn poor_seconder_should_panic() {
+	fn poor_seconder_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			propose_sessions_per_era(2, 2, 11);
-			Democracy::second(&1, 0);
-			assert_eq!(Democracy::locked_for(0), Some(11));
+			assert_ok!(propose_sessions_per_era(2, 2, 11));
+			assert_noop!(Democracy::second(&1, 0), "seconder\'s balance too low");
 		});
 	}
 
-	fn propose_bonding_duration(who: u64, value: u64, locked: u64) {
-		Democracy::propose(&who, Box::new(Proposal::Staking(staking::PrivCall::set_bonding_duration(value))), locked);
+	fn propose_bonding_duration(who: u64, value: u64, locked: u64) -> super::Result {
+		Democracy::propose(&who, Box::new(Proposal::Staking(staking::PrivCall::set_bonding_duration(value))), locked)
 	}
 
 	#[test]
 	fn runners_up_should_come_after() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(0);
-			propose_bonding_duration(1, 2, 2);
-			propose_bonding_duration(1, 4, 4);
-			propose_bonding_duration(1, 3, 3);
+			assert_ok!(propose_bonding_duration(1, 2, 2));
+			assert_ok!(propose_bonding_duration(1, 4, 4));
+			assert_ok!(propose_bonding_duration(1, 3, 3));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
 			System::set_block_number(1);
-			Democracy::vote(&1, 0, true);
+			assert_ok!(Democracy::vote(&1, 0, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			Staking::check_new_era();
 			assert_eq!(Staking::bonding_duration(), 4);
 
 			System::set_block_number(2);
-			Democracy::vote(&1, 1, true);
+			assert_ok!(Democracy::vote(&1, 1, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			Staking::check_new_era();
 			assert_eq!(Staking::bonding_duration(), 3);
 
 			System::set_block_number(3);
-			Democracy::vote(&1, 2, true);
+			assert_ok!(Democracy::vote(&1, 2, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			Staking::check_new_era();
 			assert_eq!(Staking::bonding_duration(), 2);
@@ -571,7 +568,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			Democracy::vote(&1, r, true);
+			assert_ok!(Democracy::vote(&1, r, true));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), Some(true));
@@ -589,8 +586,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			Democracy::vote(&1, r, true);
-			Democracy::cancel_referendum(r);
+			assert_ok!(Democracy::vote(&1, r, true));
+			assert_ok!(Democracy::cancel_referendum(r));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			Staking::check_new_era();
@@ -604,7 +601,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			Democracy::vote(&1, r, false);
+			assert_ok!(Democracy::vote(&1, r, false));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), Some(false));
@@ -622,12 +619,12 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			Democracy::vote(&1, r, true);
-			Democracy::vote(&2, r, false);
-			Democracy::vote(&3, r, false);
-			Democracy::vote(&4, r, true);
-			Democracy::vote(&5, r, false);
-			Democracy::vote(&6, r, true);
+			assert_ok!(Democracy::vote(&1, r, true));
+			assert_ok!(Democracy::vote(&2, r, false));
+			assert_ok!(Democracy::vote(&3, r, false));
+			assert_ok!(Democracy::vote(&4, r, true));
+			assert_ok!(Democracy::vote(&5, r, false));
+			assert_ok!(Democracy::vote(&6, r, true));
 
 			assert_eq!(Democracy::tally(r), (110, 100));
 
@@ -643,8 +640,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			Democracy::vote(&5, r, false);
-			Democracy::vote(&6, r, true);
+			assert_ok!(Democracy::vote(&5, r, false));
+			assert_ok!(Democracy::vote(&6, r, true));
 
 			assert_eq!(Democracy::tally(r), (60, 50));
 
@@ -663,9 +660,9 @@ mod tests {
 
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			Democracy::vote(&4, r, true);
-			Democracy::vote(&5, r, false);
-			Democracy::vote(&6, r, true);
+			assert_ok!(Democracy::vote(&4, r, true));
+			assert_ok!(Democracy::vote(&5, r, false));
+			assert_ok!(Democracy::vote(&6, r, true));
 
 			assert_eq!(Democracy::tally(r), (100, 50));
 

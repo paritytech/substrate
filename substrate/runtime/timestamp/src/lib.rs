@@ -140,7 +140,7 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			assert_eq!(<Timestamp as Store>::Now::get(), 42);
-			Timestamp::aux_dispatch(Call::set(69), &0);
+			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
