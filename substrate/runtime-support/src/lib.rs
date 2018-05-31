@@ -46,11 +46,11 @@ pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, AuxDispatchable, AuxCallable, IsSubType, IsAuxSubType};
 pub use runtime_io::print;
 
+
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
-		$crate::print($y);
-		return;
+		return Err($y);
 	}}
 }
 
@@ -60,36 +60,7 @@ macro_rules! ensure {
 		if !$x {
 			fail!($y);
 		}
-	}};
-	($x:expr) => {{
-		if !$x {
-			$crate::print("Bailing! Cannot ensure: ");
-			$crate::print(stringify!($x));
-			return;
-		}
 	}}
-}
-
-#[macro_export]
-macro_rules! ensure_unwrap {
-	($x:expr, $y: expr) => {
-		if let Some(v) = $x {
-			v
-		} else {
-			fail!{$y}
-		}
-	}
-}
-
-#[macro_export]
-macro_rules! ensure_unwrap_err {
-	($x:expr, $y: expr) => {
-		if let Err(v) = $x {
-			v
-		} else {
-			fail!{$y}
-		}
-	}
 }
 
 #[macro_export]

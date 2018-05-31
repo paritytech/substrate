@@ -19,20 +19,23 @@
 pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
 #[cfg(feature = "std")]
 pub use std::fmt;
+pub use rstd::result;
 pub use rstd::marker::PhantomData;
 #[cfg(feature = "std")]
 use serde;
 pub use codec::{Slicable, Input};
 
+pub type Result = result::Result<(), &'static str>;
+
 pub trait Dispatchable {
 	type Trait;
-	fn dispatch(self);
+	fn dispatch(self) -> Result;
 }
 
 pub trait AuxDispatchable {
 	type Aux;
 	type Trait;
-	fn dispatch(self, aux: &Self::Aux);
+	fn dispatch(self, aux: &Self::Aux) -> Result;
 }
 
 #[cfg(feature = "std")]
@@ -104,7 +107,7 @@ macro_rules! decl_dispatch {
 					$(
 						$param_name:ident : $param:ty
 					),*
-				)
+				) -> $result:ty
 				= $id:expr ;
 			)*
 		}
@@ -114,7 +117,7 @@ macro_rules! decl_dispatch {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			pub enum $call_type;
 			$(
-				fn $fn_name( $( $param_name: $param ),* ) = $id;
+				fn $fn_name( $( $param_name: $param ),* ) -> $result = $id;
 			)*
 		}
 		decl_dispatch! {
@@ -131,7 +134,7 @@ macro_rules! decl_dispatch {
 					$(
 						, $param_name:ident : $param:ty
 					)*
-				)
+				) -> $result:ty
 				= $id:expr ;
 			)*
 		}
@@ -141,7 +144,7 @@ macro_rules! decl_dispatch {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			pub enum $call_type where aux: $aux_type;
 			$(
-				fn $fn_name(aux $(, $param_name: $param )*)= $id;
+				fn $fn_name(aux $(, $param_name: $param )*) -> $result = $id;
 			)*
 		}
 		decl_dispatch! {
@@ -154,11 +157,11 @@ macro_rules! decl_dispatch {
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-			pub fn aux_dispatch<D: $crate::dispatch::AuxDispatchable<Trait = $trait_instance>>(d: D, aux: &D::Aux) {
-				d.dispatch(aux);
+			pub fn aux_dispatch<D: $crate::dispatch::AuxDispatchable<Trait = $trait_instance>>(d: D, aux: &D::Aux) -> $crate::dispatch::Result {
+				d.dispatch(aux)
 			}
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D) {
-				d.dispatch();
+			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D) -> $crate::dispatch::Result {
+				d.dispatch()
 			}
 		}
 	}
@@ -176,19 +179,20 @@ macro_rules! __decl_dispatch_module_without_aux {
 					$param_name:ident : $param:ty
 				),*
 			)
+			-> $result:ty
 			= $id:expr ;
 		)*
 	) => {
 		__decl_dispatch_module_common! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			pub enum $call_type;
-			$( fn $fn_name( $( $param_name : $param ),* ) = $id ; )*
+			$( fn $fn_name( $( $param_name : $param ),* ) -> $result = $id ; )*
 		}
 		impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
 			for $call_type<$trait_instance>
 		{
 			type Trait = $trait_instance;
-			fn dispatch(self) {
+			fn dispatch(self) -> $crate::dispatch::Result {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) =>
@@ -218,20 +222,21 @@ macro_rules! __decl_dispatch_module_with_aux {
 					, $param_name:ident : $param:ty
 				)*
 			)
+			-> $result:ty
 			= $id:expr ;
 		)*
 	) => {
 		__decl_dispatch_module_common! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			pub enum $call_type;
-			$( fn $fn_name( $( $param_name : $param ),* ) = $id ; )*
+			$( fn $fn_name( $( $param_name : $param ),* ) -> $result = $id ; )*
 		}
 		impl<$trait_instance: $trait_name> $crate::dispatch::AuxDispatchable
 			for $call_type<$trait_instance>
 		{
 			type Trait = $trait_instance;
 			type Aux = $aux_type;
-			fn dispatch(self, aux: &Self::Aux) {
+			fn dispatch(self, aux: &Self::Aux) -> $crate::dispatch::Result {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) =>
@@ -261,6 +266,7 @@ macro_rules! __decl_dispatch_module_common {
 					$param_name:ident : $param:ty
 				),*
 			)
+			-> $result:ty
 			= $id:expr ;
 		)*
 	) => {
@@ -320,7 +326,7 @@ macro_rules! __decl_dispatch_module_common {
 		impl<$trait_instance: $trait_name> $crate::dispatch::fmt::Debug
 			for $call_type<$trait_instance>
 		{
-			fn fmt(&self, f: &mut $crate::dispatch::fmt::Formatter) -> Result<(), $crate::dispatch::fmt::Error> {
+			fn fmt(&self, f: &mut $crate::dispatch::fmt::Formatter) -> $crate::dispatch::result::Result<(), $crate::dispatch::fmt::Error> {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) =>
@@ -408,7 +414,7 @@ macro_rules! impl_outer_dispatch {
 		impl $crate::dispatch::AuxDispatchable for $call_type {
 			type Aux = $aux;
 			type Trait = $call_type;
-			fn dispatch(self, aux: &$aux) {
+			fn dispatch(self, aux: &$aux) -> $crate::dispatch::Result {
 				match self {
 					$(
 						$call_type::$camelcase(call) => call.dispatch(&aux),
@@ -448,7 +454,7 @@ macro_rules! impl_outer_dispatch {
 		impl_outer_dispatch_common! { $call_type, $($camelcase = $id,)* }
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Trait = $call_type;
-			fn dispatch(self) {
+			fn dispatch(self) -> $crate::dispatch::Result {
 				match self {
 					$(
 						$call_type::$camelcase(call) => call.dispatch(),

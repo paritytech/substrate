@@ -39,8 +39,10 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
+use rstd::result;
 use primitives::traits::{Zero, Executable, RefInto, As};
 use runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
+use runtime_support::dispatch::Result;
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
@@ -57,13 +59,13 @@ pub trait Trait: staking::Trait + Sized {
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) = 0;
-		fn second(aux, proposal: PropIndex) = 1;
-		fn vote(aux, ref_index: ReferendumIndex, approve_proposal: bool) = 2;
+		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) -> Result = 0;
+		fn second(aux, proposal: PropIndex) -> Result = 1;
+		fn vote(aux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result = 2;
 	}
 	pub enum PrivCall {
-		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) = 0;
-		fn cancel_referendum(ref_index: ReferendumIndex) = 1;
+		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result = 0;
+		fn cancel_referendum(ref_index: ReferendumIndex) -> Result = 1;
 	}
 }
 
@@ -143,9 +145,9 @@ impl<T: Trait> Module<T> {
 	// dispatching.
 
 	/// Propose a sensitive action to be taken.
-	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>, value: T::Balance) {
-		ensure!(value >= Self::minimum_deposit());
-		ensure!(<staking::Module<T>>::deduct_unbonded(aux.ref_into(), value));
+	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>, value: T::Balance) -> Result {
+		ensure!(value >= Self::minimum_deposit(), "value too low");
+		ensure!(<staking::Module<T>>::deduct_unbonded(aux.ref_into(), value), "proposer's balance too low");
 
 		let index = Self::public_prop_count();
 		<PublicPropCount<T>>::put(index + 1);
@@ -154,44 +156,46 @@ impl<T: Trait> Module<T> {
 		let mut props = Self::public_props();
 		props.push((index, (*proposal).clone(), aux.ref_into().clone()));
 		<PublicProps<T>>::put(props);
+		Ok(())
 	}
 
 	/// Propose a sensitive action to be taken.
-	fn second(aux: &T::PublicAux, proposal: PropIndex) {
-		if let Some(mut deposit) = Self::deposit_of(proposal) {
-			ensure!(<staking::Module<T>>::deduct_unbonded(aux.ref_into(), deposit.0));
-			deposit.1.push(aux.ref_into().clone());
-			<DepositOf<T>>::insert(proposal, deposit);
-		} else {
-			fail!("can only second an existing proposal");
-		}
+	fn second(aux: &T::PublicAux, proposal: PropIndex) -> Result {
+		let mut deposit = Self::deposit_of(proposal).ok_or("can only second an existing proposal")?;
+		ensure!(<staking::Module<T>>::deduct_unbonded(aux.ref_into(), deposit.0), "seconder's balance too low");
+		deposit.1.push(aux.ref_into().clone());
+		<DepositOf<T>>::insert(proposal, deposit);
+		Ok(())
 	}
 
 	/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
 	/// false would be a vote to keep the status quo..
-	fn vote(aux: &T::PublicAux, ref_index: ReferendumIndex, approve_proposal: bool) {
-		if !Self::is_active_referendum(ref_index) {
-			fail!("vote given for invalid referendum.")
-		}
-		if <staking::Module<T>>::balance(aux.ref_into()).is_zero() {
-			fail!("transactor must have balance to signal approval.");
-		}
+	fn vote(aux: &T::PublicAux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result {
+		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
+		ensure!(!<staking::Module<T>>::balance(aux.ref_into()).is_zero(),
+			"transactor must have balance to signal approval.");
 		if !<VoteOf<T>>::exists(&(ref_index, aux.ref_into().clone())) {
 			let mut voters = Self::voters_for(ref_index);
 			voters.push(aux.ref_into().clone());
 			<VotersFor<T>>::insert(ref_index, voters);
 		}
 		<VoteOf<T>>::insert(&(ref_index, aux.ref_into().clone()), approve_proposal);
+		Ok(())
 	}
 
 	/// Start a referendum.
-	fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) {
-		let _ = Self::inject_referendum(<system::Module<T>>::block_number() + Self::voting_period(), *proposal, vote_threshold);
+	fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
+		Self::inject_referendum(
+			<system::Module<T>>::block_number() + Self::voting_period(),
+			*proposal,
+			vote_threshold
+		).map(|_| ())
 	}
 
 	/// Remove a referendum.
-	fn cancel_referendum(ref_index: ReferendumIndex) {
+	fn cancel_referendum(ref_index: ReferendumIndex) -> Result {
 		Self::clear_referendum(ref_index);
+		Ok(())
 	}
 
 	// exposed mutables.
@@ -213,7 +217,7 @@ impl<T: Trait> Module<T> {
 		end: T::BlockNumber,
 		proposal: T::Proposal,
 		vote_threshold: VoteThreshold
-	) -> Result<ReferendumIndex, &'static str> {
+	) -> result::Result<ReferendumIndex, &'static str> {
 		let ref_index = Self::referendum_count();
 		if ref_index > 0 && Self::referendum_info(ref_index - 1).map(|i| i.0 > end).unwrap_or(false) {
 			Err("Cannot inject a referendum that ends earlier than preceeding referendum")?
@@ -234,7 +238,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Current era is ending; we should finish up any proposals.
-	fn end_block(now: T::BlockNumber) -> Result<(), &'static str> {
+	fn end_block(now: T::BlockNumber) -> Result {
 		// pick out another public referendum if it's time.
 		if (now % Self::launch_period()).is_zero() {
 			let mut public_props = Self::public_props();
@@ -262,7 +266,7 @@ impl<T: Trait> Module<T> {
 			let total_stake = <staking::Module<T>>::total_stake();
 			Self::clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
-				proposal.dispatch();
+				proposal.dispatch()?;
 			}
 			<NextTally<T>>::put(index + 1);
 		}

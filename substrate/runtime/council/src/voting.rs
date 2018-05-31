@@ -19,21 +19,22 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use primitives::traits::{Executable, RefInto};
-use runtime_io::Hashing;
+use runtime_io::{Hashing, print};
 use runtime_support::{StorageValue, StorageMap, IsSubType};
+use runtime_support::dispatch::Result;
 use {system, democracy};
 use super::{Trait, Module as Council};
 
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn propose(aux, proposal: Box<T::Proposal>) = 0;
-		fn vote(aux, proposal: T::Hash, approve: bool) = 1;
-		fn veto(aux, proposal_hash: T::Hash) = 2;
+		fn propose(aux, proposal: Box<T::Proposal>) -> Result = 0;
+		fn vote(aux, proposal: T::Hash, approve: bool) -> Result = 1;
+		fn veto(aux, proposal_hash: T::Hash) -> Result = 2;
 	}
 	pub enum PrivCall {
-		fn set_cooloff_period(blocks: T::BlockNumber) = 0;
-		fn set_voting_period(blocks: T::BlockNumber) = 1;
+		fn set_cooloff_period(blocks: T::BlockNumber) -> Result = 0;
+		fn set_voting_period(blocks: T::BlockNumber) -> Result = 1;
 	}
 }
 
@@ -73,14 +74,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	// Dispatch
-	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>) {
+	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>) -> Result {
 		let expiry = <system::Module<T>>::block_number() + Self::voting_period();
-		ensure!(Self::will_still_be_councillor_at(aux.ref_into(), expiry));
+		ensure!(Self::will_still_be_councillor_at(aux.ref_into(), expiry), "proposer leaves council too soon");
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
-		ensure!(!<ProposalOf<T>>::exists(proposal_hash), "No duplicate proposals allowed");
-		ensure!(!Self::is_vetoed(&proposal_hash));
+		ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
+		ensure!(!Self::is_vetoed(&proposal_hash), "proposal is vetoed");
 
 		let mut proposals = Self::proposals();
 		proposals.push((expiry, proposal_hash));
@@ -90,26 +91,28 @@ impl<T: Trait> Module<T> {
 		<ProposalOf<T>>::insert(proposal_hash, *proposal);
 		<ProposalVoters<T>>::insert(proposal_hash, vec![aux.ref_into().clone()]);
 		<CouncilVoteOf<T>>::insert((proposal_hash, aux.ref_into().clone()), true);
+		Ok(())
 	}
 
-	fn vote(aux: &T::PublicAux, proposal: T::Hash, approve: bool) {
+	fn vote(aux: &T::PublicAux, proposal: T::Hash, approve: bool) -> Result {
 		if Self::vote_of((proposal, aux.ref_into().clone())).is_none() {
 			let mut voters = Self::proposal_voters(&proposal);
 			voters.push(aux.ref_into().clone());
 			<ProposalVoters<T>>::insert(proposal, voters);
 		}
 		<CouncilVoteOf<T>>::insert((proposal, aux.ref_into().clone()), approve);
+		Ok(())
 	}
 
-	fn veto(aux: &T::PublicAux, proposal_hash: T::Hash) {
+	fn veto(aux: &T::PublicAux, proposal_hash: T::Hash) -> Result {
 		ensure!(Self::is_councillor(aux.ref_into()), "only councillors may veto council proposals");
 		ensure!(<ProposalVoters<T>>::exists(&proposal_hash), "proposal must exist to be vetoed");
 
 		let mut existing_vetoers = Self::veto_of(&proposal_hash)
 			.map(|pair| pair.1)
 			.unwrap_or_else(Vec::new);
-		let insert_position = ensure_unwrap_err!(existing_vetoers.binary_search(aux.ref_into()),
-			"a councillor may not veto a proposal twice");
+		let insert_position = existing_vetoers.binary_search(aux.ref_into())
+			.err().ok_or("a councillor may not veto a proposal twice")?;
 		existing_vetoers.insert(insert_position, aux.ref_into().clone());
 		Self::set_veto_of(&proposal_hash, <system::Module<T>>::block_number() + Self::cooloff_period(), existing_vetoers);
 
@@ -119,14 +122,17 @@ impl<T: Trait> Module<T> {
 		for (c, _) in <Council<T>>::active_council() {
 			<CouncilVoteOf<T>>::remove((proposal_hash, c));
 		}
+		Ok(())
 	}
 
-	fn set_cooloff_period(blocks: T::BlockNumber) {
+	fn set_cooloff_period(blocks: T::BlockNumber) -> Result {
 		<CooloffPeriod<T>>::put(blocks);
+		Ok(())
 	}
 
-	fn set_voting_period(blocks: T::BlockNumber) {
+	fn set_voting_period(blocks: T::BlockNumber) -> Result {
 		<VotingPeriod<T>>::put(blocks);
+		Ok(())
 	}
 
 	// private
@@ -192,7 +198,10 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> Executable for Council<T> {
 	fn execute() {
 		let n = <system::Module<T>>::block_number();
-		Self::end_block(n);
+		if let Err(e) = Self::end_block(n) {
+			print("Guru meditation");
+			print(e);
+		}
 		<Module<T>>::end_block(n);
 	}
 }

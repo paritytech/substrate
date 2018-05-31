@@ -37,6 +37,7 @@ extern crate substrate_runtime_system as system;
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, As};
 use runtime_support::{StorageValue, StorageMap};
+use runtime_support::dispatch::Result;
 
 pub mod voting;
 
@@ -101,17 +102,17 @@ pub trait Trait: democracy::Trait {}
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) = 0;
-		fn reap_inactive_voter(aux, signed_index: u32, who: T::AccountId, who_index: u32, assumed_vote_index: VoteIndex) = 1;
-		fn retract_voter(aux, index: u32) = 2;
-		fn submit_candidacy(aux, slot: u32) = 3;
-		fn present_winner(aux, candidate: T::AccountId, total: T::Balance, index: VoteIndex) = 4;
+		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) -> Result = 0;
+		fn reap_inactive_voter(aux, signed_index: u32, who: T::AccountId, who_index: u32, assumed_vote_index: VoteIndex) -> Result = 1;
+		fn retract_voter(aux, index: u32) -> Result = 2;
+		fn submit_candidacy(aux, slot: u32) -> Result = 3;
+		fn present_winner(aux, candidate: T::AccountId, total: T::Balance, index: VoteIndex) -> Result = 4;
 	}
 	pub enum PrivCall {
-		fn set_desired_seats(count: u32) = 0;
-		fn remove_member(who: T::AccountId) = 1;
-		fn set_presentation_duration(count: T::BlockNumber) = 2;
-		fn set_term_duration(count: T::BlockNumber) = 3;
+		fn set_desired_seats(count: u32) -> Result = 0;
+		fn remove_member(who: T::AccountId) -> Result = 1;
+		fn set_presentation_duration(count: T::BlockNumber) -> Result = 2;
+		fn set_term_duration(count: T::BlockNumber) -> Result = 3;
 	}
 }
 
@@ -223,9 +224,9 @@ impl<T: Trait> Module<T> {
 
 	/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 	/// are registered.
-	fn set_approvals(aux: &T::PublicAux, votes: Vec<bool>, index: VoteIndex) {
-		ensure!(!Self::presentation_active());
-		ensure!(index == Self::vote_index());
+	fn set_approvals(aux: &T::PublicAux, votes: Vec<bool>, index: VoteIndex) -> Result {
+		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
+		ensure!(index == Self::vote_index(), "incorrect vote index");
 		if !<LastActiveOf<T>>::exists(aux.ref_into()) {
 			// not yet a voter - deduct bond.
 			<staking::Module<T>>::reserve_balance(aux.ref_into(), Self::voting_bond());
@@ -237,6 +238,7 @@ impl<T: Trait> Module<T> {
 		}
 		<ApprovalsOf<T>>::insert(aux.ref_into().clone(), votes);
 		<LastActiveOf<T>>::insert(aux.ref_into(), index);
+		Ok(())
 	}
 
 	/// Remove a voter. For it not to be a bond-consuming no-op, all approved candidate indices
@@ -244,10 +246,16 @@ impl<T: Trait> Module<T> {
 	/// the voter gave their last approval set.
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
-	fn reap_inactive_voter(aux: &T::PublicAux, signed_index: u32, who: T::AccountId, who_index: u32, assumed_vote_index: VoteIndex) {
+	fn reap_inactive_voter(
+		aux: &T::PublicAux,
+		signed_index: u32,
+		who: T::AccountId,
+		who_index: u32,
+		assumed_vote_index: VoteIndex
+	) -> Result {
 		ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 		ensure!(Self::voter_last_active(aux.ref_into()).is_some(), "reaper must be a voter");
-		let last_active = ensure_unwrap!(Self::voter_last_active(&who), "target for inactivity cleanup must be active");
+		let last_active = Self::voter_last_active(&who).ok_or("target for inactivity cleanup must be active")?;
 		ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
 		ensure!(last_active < assumed_vote_index - Self::inactivity_grace_period(), "cannot reap during grace perid");
 		let voters = Self::voters();
@@ -276,10 +284,11 @@ impl<T: Trait> Module<T> {
 		} else {
 			<staking::Module<T>>::slash_reserved(aux.ref_into(), Self::voting_bond());
 		}
+		Ok(())
 	}
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
-	fn retract_voter(aux: &T::PublicAux, index: u32) {
+	fn retract_voter(aux: &T::PublicAux, index: u32) -> Result {
 		ensure!(!Self::presentation_active(), "cannot retract when presenting");
 		ensure!(<LastActiveOf<T>>::exists(aux.ref_into()), "cannot retract non-voter");
 		let voters = Self::voters();
@@ -288,12 +297,13 @@ impl<T: Trait> Module<T> {
 		ensure!(&voters[index] == aux.ref_into(), "retraction index mismatch");
 		Self::remove_voter(aux.ref_into(), index, voters);
 		<staking::Module<T>>::unreserve_balance(aux.ref_into(), Self::voting_bond());
+		Ok(())
 	}
 
 	/// Submit oneself for candidacy.
 	///
 	/// Account must have enough transferrable funds in it to pay the bond.
-	fn submit_candidacy(aux: &T::PublicAux, slot: u32) {
+	fn submit_candidacy(aux: &T::PublicAux, slot: u32) -> Result {
 		ensure!(!Self::is_a_candidate(aux.ref_into()), "duplicate candidate submission");
 		ensure!(<staking::Module<T>>::can_deduct_unbonded(aux.ref_into(), Self::candidacy_bond()), "candidate has not enough funds");
 
@@ -316,20 +326,26 @@ impl<T: Trait> Module<T> {
 		<Candidates<T>>::put(candidates);
 		<CandidateCount<T>>::put(count as u32 + 1);
 		<RegisterInfoOf<T>>::insert(aux.ref_into(), (Self::vote_index(), slot as u32));
+		Ok(())
 	}
 
 	/// Claim that `signed` is one of the top Self::carry_count() + current_vote().1 candidates.
 	/// Only works if the `block_number >= current_vote().0` and `< current_vote().0 + presentation_duration()``
 	/// `signed` should have at least
-	fn present_winner(aux: &T::PublicAux, candidate: T::AccountId, total: T::Balance, index: VoteIndex) {
+	fn present_winner(
+		aux: &T::PublicAux,
+		candidate: T::AccountId,
+		total: T::Balance,
+		index: VoteIndex
+	) -> Result {
 		ensure!(index == Self::vote_index(), "index not current");
-		let (_, _, expiring) = ensure_unwrap!(Self::next_finalise(), "cannot present outside of presentation period");
+		let (_, _, expiring) = Self::next_finalise().ok_or("cannot present outside of presentation period")?;
 		let stakes = Self::snapshoted_stakes();
 		let voters = Self::voters();
 		let bad_presentation_punishment = Self::present_slash_per_voter() * T::Balance::sa(voters.len());
 		ensure!(<staking::Module<T>>::can_slash(aux.ref_into(), bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
-		let mut leaderboard = ensure_unwrap!(Self::leaderboard(), "leaderboard must exist while present phase active");
+		let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;
 		ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
 
 		if let Some(p) = Self::active_council().iter().position(|&(ref c, _)| c == &candidate) {
@@ -337,7 +353,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let (registered_since, candidate_index): (VoteIndex, u32) =
-			ensure_unwrap!(Self::candidate_reg_info(&candidate), "presented candidate must be current");
+			Self::candidate_reg_info(&candidate).ok_or("presented candidate must be current")?;
 		let actual_total = voters.iter()
 			.zip(stakes.iter())
 			.filter_map(|(voter, stake)|
@@ -357,42 +373,47 @@ impl<T: Trait> Module<T> {
 		} else {
 			<staking::Module<T>>::slash(aux.ref_into(), bad_presentation_punishment);
 		}
+		Ok(())
 	}
 
 	/// Set the desired member count; if lower than the current count, then seats will not be up
 	/// election when they expire. If more, then a new vote will be started if one is not already
 	/// in progress.
-	fn set_desired_seats(count: u32) {
+	fn set_desired_seats(count: u32) -> Result {
 		<DesiredSeats<T>>::put(count);
+		Ok(())
 	}
 
 	/// Remove a particular member. A tally will happen instantly (if not already in a presentation
 	/// period) to fill the seat if removal means that the desired members are not met.
 	/// This is effective immediately.
-	fn remove_member(who: T::AccountId) {
+	fn remove_member(who: T::AccountId) -> Result {
 		let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
 			.into_iter()
 			.filter(|i| i.0 != who)
 			.collect();
 		<ActiveCouncil<T>>::put(new_council);
+		Ok(())
 	}
 
 	/// Set the presentation duration. If there is current a vote being presented for, will
 	/// invoke `finalise_vote`.
-	fn set_presentation_duration(count: T::BlockNumber) {
+	fn set_presentation_duration(count: T::BlockNumber) -> Result {
 		<PresentationDuration<T>>::put(count);
+		Ok(())
 	}
 
 	/// Set the presentation duration. If there is current a vote being presented for, will
 	/// invoke `finalise_vote`.
-	fn set_term_duration(count: T::BlockNumber) {
+	fn set_term_duration(count: T::BlockNumber) -> Result {
 		<TermDuration<T>>::put(count);
+		Ok(())
 	}
 
 	// private
 
 	/// Check there's nothing to do this block
-	fn end_block(block_number: T::BlockNumber) {
+	fn end_block(block_number: T::BlockNumber) -> Result {
 		if (block_number % Self::voting_period()).is_zero() {
 			if let Some(number) = Self::next_tally() {
 				if block_number == number {
@@ -402,9 +423,10 @@ impl<T: Trait> Module<T> {
 		}
 		if let Some((number, _, _)) = Self::next_finalise() {
 			if block_number == number {
-				Self::finalise_tally();
+				Self::finalise_tally()?
 			}
 		}
+		Ok(())
 	}
 
 	/// Remove a voter from the system. Trusts that Self::voters()[index] != voter.
@@ -438,10 +460,10 @@ impl<T: Trait> Module<T> {
 	/// candidates in their place. If the total council members is less than the desired membership
 	/// a new vote is started.
 	/// Clears all presented candidates, returning the bond of the elected ones.
-	fn finalise_tally() {
+	fn finalise_tally() -> Result {
 		<SnapshotedStakes<T>>::kill();
 		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
-			ensure_unwrap!(<NextFinalise<T>>::take(), "finalise can only be called after a tally is started.");
+			<NextFinalise<T>>::take().ok_or("finalise can only be called after a tally is started.")?;
 		let leaderboard: Vec<(T::Balance, T::AccountId)> = <Leaderboard<T>>::take().unwrap_or_default();
 		let new_expiry = <system::Module<T>>::block_number() + Self::term_duration();
 
@@ -495,6 +517,7 @@ impl<T: Trait> Module<T> {
 		<Candidates<T>>::put(new_candidates);
 		<CandidateCount<T>>::put(count);
 		<VoteCount<T>>::put(Self::vote_index() + 1);
+		Ok(())
 	}
 }
 

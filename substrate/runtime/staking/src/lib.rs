@@ -47,11 +47,12 @@ extern crate parity_wasm;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
-use rstd::cmp;
+use rstd::{cmp, result};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
+use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment, As};
 
 mod contract;
@@ -99,15 +100,15 @@ pub trait Trait: system::Trait + session::Trait {
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn transfer(aux, dest: T::AccountId, value: T::Balance) = 0;
-		fn stake(aux) = 1;
-		fn unstake(aux) = 2;
+		fn transfer(aux, dest: T::AccountId, value: T::Balance) -> Result = 0;
+		fn stake(aux) -> Result = 1;
+		fn unstake(aux) -> Result = 2;
 	}
 	pub enum PrivCall {
-		fn set_sessions_per_era(new: T::BlockNumber) = 0;
-		fn set_bonding_duration(new: T::BlockNumber) = 1;
-		fn set_validator_count(new: u32) = 2;
-		fn force_new_era() = 3;
+		fn set_sessions_per_era(new: T::BlockNumber) -> Result = 0;
+		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;
+		fn set_validator_count(new: u32) -> Result = 2;
+		fn force_new_era() -> Result = 3;
 	}
 }
 
@@ -204,60 +205,64 @@ impl<T: Trait> Module<T> {
 
 	/// Transfer some unlocked staking balance to another staker.
 	/// TODO: probably want to state gas-limit and gas-price.
-	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) {
+	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) -> Result {
 		// commit anything that made it this far to storage
 		if let Ok(Some(commit)) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb) {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
+		Ok(())
 	}
 
 	/// Declare the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn stake(aux: &T::PublicAux) {
+	fn stake(aux: &T::PublicAux) -> Result {
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
 		ensure!(intentions.iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot stake if already staked.");
 		intentions.push(aux.ref_into().clone());
 		<Intentions<T>>::put(intentions);
 		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
+		Ok(())
 	}
 
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake(aux: &T::PublicAux) {
+	fn unstake(aux: &T::PublicAux) -> Result {
 		let mut intentions = <Intentions<T>>::get();
-		if let Some(position) = intentions.iter().position(|t| t == aux.ref_into()) {
-			intentions.swap_remove(position);
-			<Intentions<T>>::put(intentions);
-			<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
-		} else {
-			fail!("Cannot unstake if not already staked.");
-		}
+		let position = intentions.iter().position(|t| t == aux.ref_into()).ok_or("Cannot unstake if not already staked.")?;
+		intentions.swap_remove(position);
+		<Intentions<T>>::put(intentions);
+		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
+		Ok(())
 	}
 
 	// PRIV DISPATCH
 
 	/// Set the number of sessions in an era.
-	fn set_sessions_per_era(new: T::BlockNumber) {
+	fn set_sessions_per_era(new: T::BlockNumber) -> Result {
 		<NextSessionsPerEra<T>>::put(&new);
+		Ok(())
 	}
 
 	/// The length of the bonding duration in eras.
-	fn set_bonding_duration(new: T::BlockNumber) {
+	fn set_bonding_duration(new: T::BlockNumber) -> Result {
 		<BondingDuration<T>>::put(&new);
+		Ok(())
 	}
 
 	/// The length of a staking era in sessions.
-	fn set_validator_count(new: u32) {
+	fn set_validator_count(new: u32) -> Result {
 		<ValidatorCount<T>>::put(&new);
+		Ok(())
 	}
 
 	/// Force there to be a new era. This also forces a new session immediately after.
-	fn force_new_era() {
+	fn force_new_era() -> Result {
 		Self::new_era();
 		<session::Module<T>>::rotate_session();
+		Ok(())
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
@@ -551,7 +556,7 @@ impl<T: Trait> Module<T> {
 		code: &[u8],
 		value: T::Balance,
 		account_db: &DB,
-	) -> Result<Option<State<T>>, &'static str> {
+	) -> result::Result<Option<State<T>>, &'static str> {
 		let from_balance = account_db.get_balance(transactor);
 		// TODO: a fee.
 		if from_balance < value {
@@ -580,7 +585,7 @@ impl<T: Trait> Module<T> {
 		dest: &T::AccountId,
 		value: T::Balance,
 		account_db: &DB,
-	) -> Result<Option<State<T>>, &'static str> {
+	) -> result::Result<Option<State<T>>, &'static str> {
 		let from_balance = account_db.get_balance(transactor);
 		if from_balance < value {
 			return Err("balance too low to send value");
