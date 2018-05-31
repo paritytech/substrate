@@ -28,8 +28,8 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The PoC-1 testnet.
-	PoC1Testnet,
+	/// The PoC-2 testnet.
+	PoC2Testnet,
 }
 
 /// Service configuration.

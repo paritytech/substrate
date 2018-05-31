@@ -75,12 +75,12 @@ impl<T: Trait> Module<T> {
 	// Dispatch
 	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>) {
 		let expiry = <system::Module<T>>::block_number() + Self::voting_period();
-		assert!(Self::will_still_be_councillor_at(aux.ref_into(), expiry));
+		ensure!(Self::will_still_be_councillor_at(aux.ref_into(), expiry));
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
-		assert!(!<ProposalOf<T>>::exists(proposal_hash), "No duplicate proposals allowed");
-		assert!(!Self::is_vetoed(&proposal_hash));
+		ensure!(!<ProposalOf<T>>::exists(proposal_hash), "No duplicate proposals allowed");
+		ensure!(!Self::is_vetoed(&proposal_hash));
 
 		let mut proposals = Self::proposals();
 		proposals.push((expiry, proposal_hash));
@@ -102,14 +102,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn veto(aux: &T::PublicAux, proposal_hash: T::Hash) {
-		assert!(Self::is_councillor(aux.ref_into()), "only councillors may veto council proposals");
-		assert!(<ProposalVoters<T>>::exists(&proposal_hash), "proposal must exist to be vetoed");
+		ensure!(Self::is_councillor(aux.ref_into()), "only councillors may veto council proposals");
+		ensure!(<ProposalVoters<T>>::exists(&proposal_hash), "proposal must exist to be vetoed");
 
 		let mut existing_vetoers = Self::veto_of(&proposal_hash)
 			.map(|pair| pair.1)
 			.unwrap_or_else(Vec::new);
-		let insert_position = existing_vetoers.binary_search(aux.ref_into())
-			.expect_err("a councillor may not veto a proposal twice");
+		let insert_position = ensure_unwrap_err!(existing_vetoers.binary_search(aux.ref_into()),
+			"a councillor may not veto a proposal twice");
 		existing_vetoers.insert(insert_position, aux.ref_into().clone());
 		Self::set_veto_of(&proposal_hash, <system::Module<T>>::block_number() + Self::cooloff_period(), existing_vetoers);
 
@@ -163,8 +163,7 @@ impl<T: Trait> Module<T> {
 			Some(&(expiry, hash)) if expiry == n => {
 				// yes this is horrible, but fixing it will need substantial work in storage.
 				Self::set_proposals(&proposals[1..].to_vec());
-				let proposal = <ProposalOf<T>>::take(hash).expect("all queued proposal hashes must have associated proposals");
-				Some((proposal, hash))
+				<ProposalOf<T>>::take(hash).map(|p| (p, hash))	/* defensive only: all queued proposal hashes must have associated proposals*/
 			}
 			_ => None,
 		}
@@ -311,8 +310,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
-	fn double_veto_should_panic() {
+	fn double_veto_should_not_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
@@ -322,13 +320,12 @@ mod tests {
 
 			System::set_block_number(3);
 			CouncilVoting::propose(&1, Box::new(proposal.clone()));
-			CouncilVoting::veto(&2, hash);
+			assert_noop!{CouncilVoting::veto(&2, hash)};
 		});
 	}
 
 	#[test]
-	#[should_panic]
-	fn retry_in_cooloff_should_panic() {
+	fn retry_in_cooloff_should_not_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
@@ -337,7 +334,7 @@ mod tests {
 			CouncilVoting::veto(&2, hash);
 
 			System::set_block_number(2);
-			CouncilVoting::propose(&1, Box::new(proposal.clone()));
+			assert_noop!{CouncilVoting::propose(&1, Box::new(proposal.clone()))};
 		});
 	}
 
@@ -447,12 +444,11 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
-	fn propose_by_public_should_panic() {
+	fn propose_by_public_should_not_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = bonding_duration_proposal(42);
-			CouncilVoting::propose(&4, Box::new(proposal));
+			assert_noop!{CouncilVoting::propose(&4, Box::new(proposal))};
 		});
 	}
 }

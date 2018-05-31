@@ -115,7 +115,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 				staking: Some(StakingConfig {
 					current_era: 0,
 					intentions: vec![],
-					transaction_fee: 100,
+					transaction_base_fee: 100,
+					transaction_byte_fee: 1,
 					balances: vec![(god_key.clone(), 1u64 << 63)].into_iter().collect(),
 					validator_count: 12,
 					sessions_per_era: 24,	// 24 hours per era.
