@@ -292,8 +292,7 @@ pub struct Header<Number, Hashing: HashingT, DigestItem> {
 }
 
 // Hack to work around the fact that deriving deserialize doesn't work nicely with
-// the `hashing` trait without requiring that it itself is deserializable.
-
+// the `hashing` trait used as a parameter.
 // dummy struct that uses the hash type directly.
 #[cfg(feature = "std")]
 #[derive(Deserialize)]
@@ -427,7 +426,7 @@ pub struct Block<Number, Hashing: HashingT, DigestItem, AccountId, Index, Call, 
 }
 
 // Hack to work around the fact that deriving deserialize doesn't work nicely with
-// the `hashing` trait without requiring that it itself is deserializable.
+// the `Hashing` trait used as a parameter.
 #[cfg(feature = "std")]
 impl<'a, Number, Hashing: HashingT, DigestItem, AccountId, Index, Call, Signature> Deserialize<'a> for Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> where
 	Number: 'a + Deserialize<'a>,
