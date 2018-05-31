@@ -1,8 +1,8 @@
 [package]
-name = "demo-cli"
+name = "blitz-cli"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Substrate Demo node implementation in Rust."
+description = "Blitz Demo node implementation in Rust."
 
 [dependencies]
 clap = { version = "2.27", features = ["yaml"] }
@@ -23,6 +23,6 @@ substrate-executor = { path = "../../substrate/executor" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-rpc = { path = "../../substrate/rpc" }
-demo-primitives = { path = "../primitives" }
-demo-executor = { path = "../executor" }
-demo-runtime = { path = "../runtime" }
+blitz-primitives = { path = "../primitives" }
+blitz-executor = { path = "../executor" }
+blitz-runtime = { path = "../runtime" }

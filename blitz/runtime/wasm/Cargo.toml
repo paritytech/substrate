@@ -1,5 +1,5 @@
 [package]
-name = "demo-runtime"
+name = "blitz-runtime"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
@@ -23,7 +23,7 @@ substrate-runtime-session = { path = "../../../substrate/runtime/session", defau
 substrate-runtime-staking = { path = "../../../substrate/runtime/staking", default-features = false }
 substrate-runtime-system = { path = "../../../substrate/runtime/system", default-features = false }
 substrate-runtime-timestamp = { path = "../../../substrate/runtime/timestamp", default-features = false }
-demo-primitives = { path = "../../primitives", default-features = false }
+blitz-primitives = { path = "../../primitives", default-features = false }
 
 [features]
 default = []

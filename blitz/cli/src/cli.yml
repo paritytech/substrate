@@ -1,6 +1,6 @@
 name: substrate-demo
 author: "Parity Team <admin@parity.io>"
-about: Substrate Demo Node Rust Implementation
+about: Blitz Demo Node Rust Implementation
 args:
   - log:
       short: l

@@ -63,9 +63,12 @@ members = [
 	"demo/primitives",
 	"demo/executor",
 	"demo/cli",
-	"demo/executor",
-	"demo/primitives",
-	"demo/runtime",
+
+	"blitz/runtime",
+	"blitz/primitives",
+	"blitz/executor",
+	"blitz/cli",
+
 	"safe-mix",
 	"subkey",
 ]
