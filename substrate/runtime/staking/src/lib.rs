@@ -100,7 +100,7 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy;
+	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<AccountIndex>;
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 }
 
@@ -149,7 +149,7 @@ decl_storage! {
 	// The next free enumeration set.
 	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required AccountIndex;
 	// The enumeration sets.
-	pub EnumSet get(enum_set): b"sta:enum_set" => map [ AccountIndex => [ Option<T::AccountId>; ENUM_SET_SIZE as usize ] ];
+	pub EnumSet get(enum_set): b"sta:enum_set" => default map [ AccountIndex => Vec<T::AccountId> ];
 
 	// The balance of a given account.
 	pub FreeBalance get(free_balance): b"sta:bal:" => default map [ T::AccountId => T::Balance ];
@@ -403,6 +403,85 @@ impl<T: Trait> Module<T> {
 				.collect::<Vec<_>>()
 		);
 	}
+
+	/// Lookup an AccountIndex to get an Id, if there's one there.
+	pub fn lookup_index(index: AccountIndex) -> Option<T::AccountId> {
+		let mut set = Self::enum_set(index / ENUM_SET_SIZE);
+		let i = (index % ENUM_SET_SIZE) as usize;
+		if i < set.len() {
+			Some(set.swap_remove(i))
+		} else {
+			None
+		}
+	}
+
+	/// Register a new account (with existential balance).
+	fn new_account(who: &T::AccountId, balance: T::Balance) {
+		<FreeBalance<T>>::insert(who, balance);
+
+		let next_set_index = Self::next_enum_set();
+
+		// A little easter-egg for reclaiming dead indexes..
+		{
+			// we quantise the number of accounts so it stays constant over a reasonable
+			// period of time.
+			const QUANTIZATION: AccountIndex = 256;
+			let quantized_account_count = (next_set_index * ENUM_SET_SIZE + QUANTIZATION - 1) / QUANTIZATION * QUANTIZATION;
+			// then modify the starting balance to be modulo this to allow it to potentially
+			// identify an account index for reuse.
+			let maybe_try_index: AccountIndex = <T::Balance as As<AccountIndex>>::as_(balance) % (quantized_account_count * 256);
+
+			// this identifier must end with magic byte 0x69 to trigger this check (a minor
+			// optimisation to ensure we don't check most unintended account creations).
+			if maybe_try_index % 256 == 0x69 {
+				// reuse is probably intended. first, remove magic byte.
+				let try_index = maybe_try_index / 256;
+
+				// then check to see if this balance identifies a dead account index.
+				let set_index = try_index / ENUM_SET_SIZE;
+				let mut try_set = Self::enum_set(set_index);
+				let item_index = (try_index % ENUM_SET_SIZE) as usize;
+				if item_index < try_set.len() {
+					if Self::balance(&try_set[item_index]).is_zero() {
+						// yup - this index refers to a dead account. can be reused.
+						try_set[item_index] = who.clone();
+						<EnumSet<T>>::insert(set_index, try_set);
+						return;
+					}
+				}
+			}
+		}
+
+		// insert normally as a back up
+		let mut set_index = next_set_index;
+		// defensive only: this loop should never iterate since we keep NextEnumSet up to date later.
+		let mut set = loop {
+			let set = Self::enum_set(set_index);
+			if set.len() < ENUM_SET_SIZE as usize {
+				break set;
+			}
+			set_index += 1;
+		};
+
+		// update set.
+		set.push(who.clone());
+
+		// keep NextEnumSet up to date
+		if set.len() == ENUM_SET_SIZE as usize {
+			<NextEnumSet<T>>::put(set_index + 1);
+		}
+
+		// write set.
+		<EnumSet<T>>::insert(set_index, set);
+	}
+
+	/// Kill an account.
+	fn kill_account(who: &T::AccountId) {
+		<system::AccountIndex<T>>::remove(who);
+		<FreeBalance<T>>::remove(who);
+		<CodeOf<T>>::remove(who);
+		// TODO: <StorageOf<T>>::remove_prefix(address.clone());
+	}
 }
 
 impl<T: Trait> Executable for Module<T> {
@@ -441,10 +520,6 @@ impl<T: Trait> ChangeEntry<T> {
 	pub fn balance_changed(b: T::Balance) -> Self {
 		ChangeEntry { balance: Some(b), code: None, storage: Default::default() }
 	}
-	pub fn killed() -> Self {
-		// Zero balance indicates the account will be removed.
-		ChangeEntry { balance: Some(Zero::zero()), code: None, storage: Default::default() }
-	}
 }
 
 type State<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
@@ -469,16 +544,19 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		<FreeBalance<T>>::get(account)
 	}
 	fn merge(&mut self, s: State<T>) {
+		let ed = <Module<T>>::existential_deposit();
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
-				// Zero-balance indicates deletion of the entire account.
-				if balance.is_zero() {
-					<FreeBalance<T>>::remove(&address);
-					<CodeOf<T>>::remove(&address);
-					// TODO: <StorageOf<T>>::remove_prefix(address.clone());
+				// If the balance is too low, then the entire account is reaped.
+				if balance < ed {
+					<Module<T>>::kill_account(&address);
 					continue;
 				} else {
-					<FreeBalance<T>>::insert(&address, balance);
+					if !<FreeBalance<T>>::exists(&address) {
+						<Module<T>>::new_account(&address, balance);
+					} else {
+						<FreeBalance<T>>::insert(&address, balance);
+					}
 				}
 			}
 			if let Some(code) = changed.code {
@@ -598,16 +676,10 @@ impl<T: Trait> Module<T> {
 		}
 
 		let mut local = BTreeMap::new();
-
 		// two inserts are safe
 		// note that we now know that `&dest != transactor` due to early-out before.
 		local.insert(dest, ChangeEntry::contract_created(value, code.to_vec()));
-		local.insert(transactor.clone(), if from_balance - value < Self::existential_deposit() {
-			ChangeEntry::killed()
-		} else {
-			ChangeEntry::balance_changed(from_balance - value)
-		});
-
+		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - value));
 		Ok(Some(local))
 	}
 
@@ -620,6 +692,9 @@ impl<T: Trait> Module<T> {
 		let from_balance = account_db.get_balance(transactor);
 		if from_balance < value {
 			return Err("balance too low to send value");
+		}
+		if value < Self::existential_deposit() {
+			return Err("value too low to create account");
 		}
 
 		let to_balance = account_db.get_balance(dest);
