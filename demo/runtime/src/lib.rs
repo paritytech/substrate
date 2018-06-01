@@ -22,10 +22,17 @@
 extern crate substrate_runtime_io as runtime_io;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_support;
 
 #[macro_use]
 extern crate substrate_runtime_primitives as runtime_primitives;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
+#[cfg(feature = "std")]
+extern crate serde;
 
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_consensus as consensus;
@@ -121,6 +128,8 @@ pub type Council = council::Module<Concrete>;
 pub type CouncilVoting = council::voting::Module<Concrete>;
 
 impl_outer_dispatch! {
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
 		Consensus = 0,
 		Session = 1,
@@ -131,6 +140,8 @@ impl_outer_dispatch! {
 		CouncilVoting = 7,
 	}
 
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum PrivCall {
 		Consensus = 0,
 		Session = 1,
