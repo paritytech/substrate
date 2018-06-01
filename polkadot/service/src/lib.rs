@@ -166,6 +166,7 @@ fn poc_2_testnet_config() -> ChainConfig {
 			intentions: initial_authorities.clone(),
 			transaction_base_fee: 100,
 			transaction_byte_fee: 1,
+			existential_deposit: 500,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u128 << 60)).collect(),
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
@@ -225,6 +226,7 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 			intentions: initial_authorities.clone(),
 			transaction_base_fee: 1,
 			transaction_byte_fee: 0,
+			existential_deposit: 500,
 			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60))).collect(),
 			validator_count: 2,
 			sessions_per_era: 5,

@@ -426,7 +426,7 @@ impl<T: Trait> Module<T> {
 			// we quantise the number of accounts so it stays constant over a reasonable
 			// period of time.
 			const QUANTIZATION: AccountIndex = 256;
-			let quantized_account_count = (next_set_index * ENUM_SET_SIZE + QUANTIZATION - 1) / QUANTIZATION * QUANTIZATION;
+			let quantized_account_count = (next_set_index * ENUM_SET_SIZE / QUANTIZATION + 1) * QUANTIZATION;
 			// then modify the starting balance to be modulo this to allow it to potentially
 			// identify an account index for reuse.
 			let maybe_try_index: AccountIndex = <T::Balance as As<AccountIndex>>::as_(balance) % (quantized_account_count * 256);
@@ -838,6 +838,7 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
 		let mut r: runtime_io::TestExternalities = map![
+			twox_128(<NextEnumSet<T>>::key()).to_vec() => (0 as AccountIndex).encode(),
 			twox_128(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
 			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
 			twox_128(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),

@@ -70,6 +70,7 @@ pub fn new_test_ext(session_length: u64, sessions_per_era: u64, current_era: u64
 		bonding_duration: 3,
 		transaction_base_fee: 0,
 		transaction_byte_fee: 0,
+		existential_deposit: 0,
 	}.build_externalities());
 	t
 }
