@@ -16,8 +16,8 @@
 
 //! Polkadot service components.
 
+use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::Mutex;
 use client::{self, genesis, Client};
 use client_db;
 use codec::{self, Slicable};
@@ -56,11 +56,11 @@ pub trait Components {
 	fn build_api(&self, client: Arc<Client<Self::Backend, Self::Executor>>) -> Arc<Self::Api>;
 
 	/// Create network transaction pool adapter.
-	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor>>, api: Arc<Self::Api>, tx_pool: Arc<Mutex<TransactionPool>>)
+	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor>>, api: Arc<Self::Api>, tx_pool: Arc<TransactionPool>)
 		-> Arc<network::TransactionPool>;
 
 	/// Create consensus service.
-	fn build_consensus(&self, client: Arc<Client<Self::Backend, Self::Executor>>, network: Arc<network::Service>, tx_pool: Arc<Mutex<TransactionPool>>, keystore: &Keystore)
+	fn build_consensus(&self, client: Arc<Client<Self::Backend, Self::Executor>>, network: Arc<network::Service>, tx_pool: Arc<TransactionPool>, keystore: &Keystore)
 		-> Result<Option<consensus::Service>, error::Error>;
 }
 
@@ -97,7 +97,7 @@ impl Components for FullComponents {
 		client
 	}
 
-	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor>>, api: Arc<Self::Api>, pool: Arc<Mutex<TransactionPool>>)
+	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor>>, api: Arc<Self::Api>, pool: Arc<TransactionPool>)
 		-> Arc<network::TransactionPool> {
 		Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: true,
@@ -107,7 +107,7 @@ impl Components for FullComponents {
 		})
 	}
 
-	fn build_consensus(&self, client: Arc<client::Client<Self::Backend, Self::Executor>>, network: Arc<network::Service>, tx_pool: Arc<Mutex<TransactionPool>>, keystore: &Keystore)
+	fn build_consensus(&self, client: Arc<client::Client<Self::Backend, Self::Executor>>, network: Arc<network::Service>, tx_pool: Arc<TransactionPool>, keystore: &Keystore)
 		-> Result<Option<consensus::Service>, error::Error> {
 		if !self.is_validator {
 			return Ok(None);
@@ -148,7 +148,7 @@ impl Components for LightComponents {
 		Arc::new(polkadot_api::light::RemotePolkadotApiWrapper(client.clone()))
 	}
 
-	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor>>, api: Arc<Self::Api>, pool: Arc<Mutex<TransactionPool>>)
+	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor>>, api: Arc<Self::Api>, pool: Arc<TransactionPool>)
 		-> Arc<network::TransactionPool> {
 		Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: false,
@@ -158,7 +158,7 @@ impl Components for LightComponents {
 		})
 	}
 
-	fn build_consensus(&self, _client: Arc<client::Client<Self::Backend, Self::Executor>>, _network: Arc<network::Service>, _tx_pool: Arc<Mutex<TransactionPool>>, _keystore: &Keystore)
+	fn build_consensus(&self, _client: Arc<client::Client<Self::Backend, Self::Executor>>, _network: Arc<network::Service>, _tx_pool: Arc<TransactionPool>, _keystore: &Keystore)
 		-> Result<Option<consensus::Service>, error::Error> {
 		Ok(None)
 	}
@@ -167,7 +167,7 @@ impl Components for LightComponents {
 /// Transaction pool adapter.
 pub struct TransactionPoolAdapter<B, E, A> where A: Send + Sync, E: Send + Sync {
 	imports_external_transactions: bool,
-	pool: Arc<Mutex<TransactionPool>>,
+	pool: Arc<TransactionPool>,
 	client: Arc<Client<B, E>>,
 	api: Arc<A>,
 }
@@ -189,13 +189,16 @@ impl<B, E, A> network::TransactionPool for TransactionPoolAdapter<B, E, A>
 		};
 
 		let id = self.api.check_id(BlockId::Hash(best_block)).expect("Best block is always valid; qed.");
-		let mut pool = self.pool.lock();
-		pool.cull(None, transaction_pool::Ready::create(id.clone(), &*self.api));
-		pool.pending(transaction_pool::Ready::create(id, &*self.api)).map(|t| {
-			let hash = ::primitives::Hash::from(&t.hash()[..]);
-			let tx = codec::Slicable::encode(t.as_transaction());
-			(hash, tx)
-		}).collect()
+		let ready = transaction_pool::Ready::create(id, &*self.api);
+
+		self.pool.cull_and_get_pending(ready, |pending| pending
+			.map(|t| {
+				let hash = ::primitives::Hash::from(&t.hash()[..]);
+				let tx = codec::Slicable::encode(t.as_transaction());
+				(hash, tx)
+			})
+			.collect()
+		)
 	}
 
 	fn import(&self, transaction: &[u8]) -> Option<ExtrinsicHash> {
@@ -203,9 +206,9 @@ impl<B, E, A> network::TransactionPool for TransactionPoolAdapter<B, E, A>
 			return None;
 		}
 
-		if let Some(tx) = codec::Slicable::decode(&mut &transaction[..]) {
-			match self.pool.lock().import(tx) {
-				Ok(t) => Some(t.hash()[..].into()),
+		if let Some(uxt) = codec::Slicable::decode(&mut &transaction[..]) {
+			match self.pool.import_unchecked_extrinsic(uxt) {
+				Ok(xt) => Some(*xt.hash()),
 				Err(e) => match *e.kind() {
 					transaction_pool::ErrorKind::AlreadyImported(hash) => Some(hash[..].into()),
 					_ => {
@@ -218,5 +221,9 @@ impl<B, E, A> network::TransactionPool for TransactionPoolAdapter<B, E, A>
 			debug!("Error decoding transaction");
 			None
 		}
+	}
+
+	fn on_broadcasted(&self, propagations: HashMap<ExtrinsicHash, Vec<String>>) {
+		self.pool.on_broadcasted(propagations)
 	}
 }

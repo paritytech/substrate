@@ -54,17 +54,14 @@ mod config;
 use std::sync::Arc;
 use std::thread;
 use futures::prelude::*;
-use parking_lot::Mutex;
 use tokio_core::reactor::Core;
-use codec::Slicable;
-use primitives::block::{Id as BlockId, Extrinsic, HeaderHash};
-use primitives::{AuthorityId, hashing};
+use primitives::block::{Id as BlockId, HeaderHash};
+use primitives::{AuthorityId};
 use transaction_pool::TransactionPool;
 use keystore::Store as Keystore;
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig};
-use client::backend::Backend;
-use client::{Client, BlockchainEvents, CallExecutor};
+use client::{Client, BlockchainEvents};
 use network::ManageNetwork;
 use exit_future::Signal;
 
@@ -77,7 +74,7 @@ pub struct Service<Components: components::Components> {
 	thread: Option<thread::JoinHandle<()>>,
 	client: Arc<Client<Components::Backend, Components::Executor>>,
 	network: Arc<network::Service>,
-	transaction_pool: Arc<Mutex<TransactionPool>>,
+	transaction_pool: Arc<TransactionPool>,
 	signal: Option<Signal>,
 	_consensus: Option<consensus::Service>,
 }
@@ -87,7 +84,7 @@ pub struct ChainConfig {
 	boot_nodes: Vec<String>,
 }
 
-fn poc_1_testnet_config() -> ChainConfig {
+fn poc_2_testnet_config() -> ChainConfig {
 	let initial_authorities = vec![
 		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
 		hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
@@ -110,7 +107,8 @@ fn poc_1_testnet_config() -> ChainConfig {
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: initial_authorities.clone(),
-			transaction_fee: 100,
+			transaction_base_fee: 100,
+			transaction_byte_fee: 1,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u128 << 60)).collect(),
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
@@ -168,7 +166,8 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: initial_authorities.clone(),
-			transaction_fee: 1,
+			transaction_base_fee: 1,
+			transaction_byte_fee: 0,
 			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60))).collect(),
 			validator_count: 2,
 			sessions_per_era: 5,
@@ -251,7 +250,7 @@ impl<Components> Service<Components>
 		let ChainConfig { genesis_config, boot_nodes } = match config.chain_spec {
 			ChainSpec::Development => development_config(),
 			ChainSpec::LocalTestnet => local_testnet_config(),
-			ChainSpec::PoC1Testnet => poc_1_testnet_config(),
+			ChainSpec::PoC2Testnet => poc_2_testnet_config(),
 		};
 		config.network.boot_nodes.extend(boot_nodes);
 
@@ -269,8 +268,10 @@ impl<Components> Service<Components>
 		let best_header = client.best_block_header()?;
 		info!("Starting Polkadot. Best block is #{}", best_header.number);
 
-		let transaction_pool = Arc::new(Mutex::new(TransactionPool::new(config.transaction_pool)));
-		let transaction_pool_adapter = components.build_network_tx_pool(client.clone(), api.clone(), transaction_pool.clone());
+		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
+		let transaction_pool_adapter = components.build_network_tx_pool(client.clone(),
+			api.clone(), transaction_pool.clone());
+
 		let network_params = network::Params {
 			config: network::ProtocolConfig {
 				roles: config.roles,
@@ -296,14 +297,28 @@ impl<Components> Service<Components>
 
 				thread_barrier.wait();
 				let mut core = Core::new().expect("tokio::Core could not be created");
-				let events = client.import_notification_stream().for_each(move |notification| {
-					network.on_block_imported(notification.hash, &notification.header);
-					prune_imported(&*client, &*txpool, notification.hash);
 
-					Ok(())
-				});
+				// block notifications
+				let network1 = network.clone();
+				let txpool1 = txpool.clone();
+				let events = client.import_notification_stream()
+					.for_each(move |notification| {
+						network1.on_block_imported(notification.hash, &notification.header);
+						prune_imported(&*api, &*txpool1, notification.hash);
 
+						Ok(())
+					});
 				core.handle().spawn(events);
+
+				// transaction notifications
+				let events = txpool.import_notification_stream()
+					// TODO [ToDr] Consider throttling?
+					.for_each(move |_| {
+						network.trigger_repropagate();
+						Ok(())
+					});
+				core.handle().spawn(events);
+
 				if let Err(e) = core.run(exit) {
 					debug!("Polkadot service event loop shutdown with {:?}", e);
 				}
@@ -339,30 +354,22 @@ impl<Components> Service<Components>
 	}
 
 	/// Get shared transaction pool instance.
-	pub fn transaction_pool(&self) -> Arc<Mutex<TransactionPool>> {
+	pub fn transaction_pool(&self) -> Arc<TransactionPool> {
 		self.transaction_pool.clone()
 	}
 }
 
-fn prune_transactions(pool: &mut TransactionPool, extrinsics: &[Extrinsic]) {
-	for extrinsic in extrinsics {
-		let hash: _ = hashing::blake2_256(&extrinsic.encode()).into();
-		pool.remove(&hash, true);
-	}
-}
-
 /// Produce a task which prunes any finalized transactions from the pool.
-pub fn prune_imported<B, E>(client: &Client<B, E>, pool: &Mutex<TransactionPool>, hash: HeaderHash)
+pub fn prune_imported<A>(api: &A, pool: &TransactionPool, hash: HeaderHash)
 	where
-		B: Backend + Send + Sync,
-		E: CallExecutor + Send + Sync,
-		client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+		A: polkadot_api::PolkadotApi,
 {
-	let id = BlockId::Hash(hash);
-	match client.body(&id) {
-		Ok(Some(body)) => prune_transactions(&mut *pool.lock(), &body[..]),
-		Ok(None) => warn!("Missing imported block {:?}", hash),
-		Err(e) => warn!("Failed to fetch block: {:?}", e),
+	match api.check_id(BlockId::Hash(hash)) {
+		Ok(id) => {
+			let ready = transaction_pool::Ready::create(id, api);
+			pool.cull(None, ready);
+		},
+		Err(e) => warn!("Failed to check block id: {:?}", e),
 	}
 }
 

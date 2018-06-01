@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{HashMap, HashSet};
 use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
@@ -24,7 +24,7 @@ use serde_json;
 use primitives::block::{HeaderHash, ExtrinsicHash, Number as BlockNumber, Header, Id as BlockId};
 use primitives::{Hash, blake2_256};
 use runtime_support::Hashable;
-use network::{PeerId, NodeId};
+use network::PeerId;
 
 use message::{self, Message};
 use sync::{ChainSync, Status as SyncStatus, SyncState};
@@ -103,20 +103,10 @@ pub struct PeerInfo {
 	pub best_number: BlockNumber,
 }
 
-/// Transaction stats
-#[derive(Debug)]
-pub struct TransactionStats {
-	/// Block number where this TX was first seen.
-	pub first_seen: u64,
-	/// Peers it was propagated to.
-	pub propagated_to: BTreeMap<NodeId, usize>,
-}
-
 impl Protocol {
 	/// Create a new instance.
 	pub fn new(config: ProtocolConfig, chain: Arc<Client>, on_demand: Option<Arc<OnDemandService>>, transaction_pool: Arc<TransactionPool>) -> error::Result<Protocol>  {
 		let info = chain.info()?;
-		let best_hash = info.chain.best_hash;
 		let sync = ChainSync::new(config.roles, &info);
 		let protocol = Protocol {
 			config: config,
@@ -124,7 +114,7 @@ impl Protocol {
 			on_demand: on_demand,
 			genesis_hash: info.chain.genesis_hash,
 			sync: RwLock::new(sync),
-			consensus: Mutex::new(Consensus::new(best_hash)),
+			consensus: Mutex::new(Consensus::new()),
 			peers: RwLock::new(HashMap::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
 			transaction_pool: transaction_pool,
@@ -464,15 +454,31 @@ impl Protocol {
 
 		let transactions = self.transaction_pool.transactions();
 
+		let mut propagated_to = HashMap::new();
 		let mut peers = self.peers.write();
 		for (peer_id, ref mut peer) in peers.iter_mut() {
-			let to_send: Vec<_> = transactions.iter().filter_map(|&(hash, ref t)|
-				if peer.known_transactions.insert(hash.clone()) { Some(t.clone()) } else { None }).collect();
+			let (hashes, to_send): (Vec<_>, Vec<_>) = transactions
+				.iter()
+				.cloned()
+				.filter(|&(hash, _)| peer.known_transactions.insert(hash))
+				.unzip();
+
 			if !to_send.is_empty() {
+				let node_id = io.peer_session_info(*peer_id).map(|info| match info.id {
+					Some(id) => format!("{}@{:x}", info.remote_address, id),
+					None => info.remote_address.clone(),
+				});
+
+				if let Some(id) = node_id {
+					for hash in hashes {
+						propagated_to.entry(hash).or_insert_with(Vec::new).push(id.clone());
+					}
+				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), peer_id);
 				self.send_message(io, *peer_id, Message::Transactions(to_send));
 			}
 		}
+		self.transaction_pool.on_broadcasted(propagated_to);
 	}
 
 	/// Send Status message
@@ -534,7 +540,7 @@ impl Protocol {
 			}
 		}
 
-		self.consensus.lock().collect_garbage(Some((hash, &header)));
+		self.consensus.lock().collect_garbage(Some(&header));
 	}
 
 	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest) {
@@ -556,10 +562,6 @@ impl Protocol {
 	fn on_remote_call_response(&self, io: &mut SyncIo, peer_id: PeerId, response: message::RemoteCallResponse) {
 		trace!(target: "sync", "Remote response {} from {}", response.id, peer_id);
 		self.on_demand.as_ref().map(|s| s.on_remote_response(io, peer_id, response));
-	}
-
-	pub fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats> {
-		BTreeMap::new()
 	}
 
 	pub fn chain(&self) -> &Client {

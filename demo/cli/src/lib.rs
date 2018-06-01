@@ -31,6 +31,7 @@ extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate demo_executor;
 extern crate demo_primitives;
 extern crate demo_runtime;
@@ -53,11 +54,14 @@ use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfi
 	SessionConfig, StakingConfig, BuildExternalities};
 use futures::{Future, Sink, Stream};
 
-
 struct DummyPool;
-impl substrate_rpc::author::AuthorApi for DummyPool {
-	fn submit_extrinsic(&self, _: primitives::block::Extrinsic) -> substrate_rpc::author::error::Result<()> {
-		Err(substrate_rpc::author::error::ErrorKind::Unimplemented.into())
+impl extrinsic_pool::api::ExtrinsicPool for DummyPool {
+	type Error = extrinsic_pool::txpool::Error;
+
+	fn submit(&self, _: Vec<primitives::block::Extrinsic>)
+		-> Result<Vec<primitives::block::ExtrinsicHash>, Self::Error>
+	{
+		Err("unimplemented".into())
 	}
 }
 
@@ -115,7 +119,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 				staking: Some(StakingConfig {
 					current_era: 0,
 					intentions: vec![],
-					transaction_fee: 100,
+					transaction_base_fee: 100,
+					transaction_byte_fee: 1,
 					balances: vec![(god_key.clone(), 1u64 << 63)].into_iter().collect(),
 					validator_count: 12,
 					sessions_per_era: 24,	// 24 hours per era.
@@ -155,7 +160,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let _rpc_servers = {
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
-			rpc::rpc_handler(client.clone(), chain, DummyPool, DummySystem)
+			rpc::rpc_handler(client.clone(), chain, Arc::new(DummyPool), DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();
