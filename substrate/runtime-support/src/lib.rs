@@ -46,11 +46,11 @@ pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, AuxDispatchable, AuxCallable, IsSubType, IsAuxSubType};
 pub use runtime_io::print;
 
+
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
-		$crate::print($y);
-		return;
+		return Err($y);
 	}}
 }
 
@@ -60,46 +60,31 @@ macro_rules! ensure {
 		if !$x {
 			fail!($y);
 		}
-	}};
-	($x:expr) => {{
-		if !$x {
-			$crate::print("Bailing! Cannot ensure: ");
-			$crate::print(stringify!($x));
-			return;
-		}
 	}}
-}
-
-#[macro_export]
-macro_rules! ensure_unwrap {
-	($x:expr, $y: expr) => {
-		if let Some(v) = $x {
-			v
-		} else {
-			fail!{$y}
-		}
-	}
-}
-
-#[macro_export]
-macro_rules! ensure_unwrap_err {
-	($x:expr, $y: expr) => {
-		if let Err(v) = $x {
-			v
-		} else {
-			fail!{$y}
-		}
-	}
 }
 
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
-	( $( $x:tt )* ) => {
+	( $x:expr , $y:expr ) => {
 		let h = runtime_io::storage_root();
-		{
-			$( $x )*
-		}
+		assert_err!($x, $y);
 		assert_eq!(h, runtime_io::storage_root());
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err {
+	( $x:expr , $y:expr ) => {
+		assert_eq!($x, Err($y));
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_ok {
+	( $x:expr ) => {
+		assert!($x.is_ok());
 	}
 }

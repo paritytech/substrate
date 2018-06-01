@@ -33,6 +33,7 @@ extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
+use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::RefInto;
 use substrate_primitives::bft::MisbehaviorReport;
@@ -59,11 +60,11 @@ pub trait Trait: system::Trait {
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn report_misbehavior(aux, report: MisbehaviorReport) = 0;
+		fn report_misbehavior(aux, report: MisbehaviorReport) -> Result = 0;
 	}
 	pub enum PrivCall {
-		fn set_code(new: Vec<u8>) = 0;
-		fn set_storage(items: Vec<KeyValue>) = 1;
+		fn set_code(new: Vec<u8>) -> Result = 0;
+		fn set_storage(items: Vec<KeyValue>) -> Result = 1;
 	}
 }
 
@@ -74,20 +75,23 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the new code.
-	fn set_code(new: Vec<u8>) {
+	fn set_code(new: Vec<u8>) -> Result {
 		storage::unhashed::put_raw(CODE, &new);
+		Ok(())
 	}
 
 	/// Set some items of storage.
-	fn set_storage(items: Vec<KeyValue>) {
+	fn set_storage(items: Vec<KeyValue>) -> Result {
 		for i in &items {
 			storage::unhashed::put_raw(&i.0, &i.1);
 		}
+		Ok(())
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport) {
+	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport) -> Result {
 		// TODO.
+		Ok(())
 	}
 
 	/// Set the current set of authorities' session keys.
