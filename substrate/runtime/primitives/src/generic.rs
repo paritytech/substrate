@@ -304,6 +304,7 @@ struct DeserializeHeader<N, H, D> {
 	digest: Digest<D>,
 }
 
+#[cfg(feature = "std")]
 impl<N, D, Hashing: HashingT> From<DeserializeHeader<N, Hashing::Output, D>> for Header<N, Hashing, D> {
 	fn from(other: DeserializeHeader<N, Hashing::Output, D>) -> Self {
 		Header {

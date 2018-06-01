@@ -302,16 +302,17 @@ mod tests {
 	use service::{Role, ExecuteInContext};
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
+	use test_client::runtime::{Block, Hash};
 
 	struct DummyExecutor;
 	struct DummyFetchChecker { ok: bool }
 
-	impl ExecuteInContext for DummyExecutor {
-		fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol)>(&self, _closure: F) {}
+	impl ExecuteInContext<Block> for DummyExecutor {
+		fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol<Block>)>(&self, _closure: F) {}
 	}
 
-	impl FetchChecker for DummyFetchChecker {
-		fn check_execution_proof(&self, _request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> client::error::Result<client::CallResult> {
+	impl FetchChecker<Block> for DummyFetchChecker {
+		fn check_execution_proof(&self, _request: &RemoteCallRequest<Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> client::error::Result<client::CallResult> {
 			match self.ok {
 				true => Ok(client::CallResult {
 					return_data: remote_proof.0,
@@ -322,19 +323,19 @@ mod tests {
 		}
 	}
 
-	fn dummy(ok: bool) -> (Arc<DummyExecutor>, Arc<OnDemand<DummyExecutor>>) {
+	fn dummy(ok: bool) -> (Arc<DummyExecutor>, Arc<OnDemand<Block, DummyExecutor>>) {
 		let executor = Arc::new(DummyExecutor);
 		let service = Arc::new(OnDemand::new(Arc::new(DummyFetchChecker { ok })));
 		service.set_service_link(Arc::downgrade(&executor));
 		(executor, service)
 	}
 
-	fn total_peers(on_demand: &OnDemand<DummyExecutor>) -> usize {
+	fn total_peers(on_demand: &OnDemand<Block, DummyExecutor>) -> usize {
 		let core = on_demand.core.lock();
 		core.idle_peers.len() + core.active_peers.len()
 	}
 
-	fn receive_response(on_demand: &OnDemand<DummyExecutor>, network: &mut TestIo, peer: PeerId, id: message::RequestId) {
+	fn receive_response(on_demand: &OnDemand<Block, DummyExecutor>, network: &mut TestIo, peer: PeerId, id: message::RequestId) {
 		on_demand.on_remote_response(network, peer, message::RemoteCallResponse {
 			id: id,
 			value: vec![1],

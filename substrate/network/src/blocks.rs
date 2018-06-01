@@ -191,16 +191,19 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 mod test {
 	use super::{BlockCollection, BlockData};
 	use message;
-	use primitives::block::HeaderHash;
+	use runtime_primitives::testing::Block as RawBlock;
+	use primitives::H256;
 
-	fn is_empty(bc: &BlockCollection) -> bool {
+	type Block = RawBlock<u64>;
+
+	fn is_empty(bc: &BlockCollection<Block>) -> bool {
 		bc.blocks.is_empty() &&
 		bc.peer_requests.is_empty()
 	}
 
-	fn generate_blocks(n: usize) -> Vec<message::BlockData> {
-		(0 .. n).map(|_| message::BlockData {
-			hash: HeaderHash::random(),
+	fn generate_blocks(n: usize) -> Vec<message::BlockData<Block>> {
+		(0 .. n).map(|_| message::generic::BlockData {
+			hash: H256::random(),
 			header: None,
 			body: None,
 			message_queue: None,
