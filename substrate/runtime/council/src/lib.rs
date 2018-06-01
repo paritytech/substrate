@@ -105,12 +105,9 @@ pub type VoteIndex = u32;
 pub trait Trait: democracy::Trait {}
 
 decl_module! {
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub struct Module<T: Trait>;
 
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) -> Result = 0;
 		fn reap_inactive_voter(aux, signed_index: u32, who: T::AccountId, who_index: u32, assumed_vote_index: VoteIndex) -> Result = 1;
@@ -119,8 +116,7 @@ decl_module! {
 		fn present_winner(aux, candidate: T::AccountId, total: T::Balance, index: VoteIndex) -> Result = 4;
 	}
 
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_desired_seats(count: u32) -> Result = 0;
 		fn remove_member(who: T::AccountId) -> Result = 1;

@@ -54,18 +54,14 @@ pub trait Trait: consensus::Trait {
 }
 
 decl_module! {
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub struct Module<T: Trait>;
 
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set_key(aux, key: T::SessionKey) -> Result = 0;
 	}
 
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
 		fn force_new_session() -> Result = 1;

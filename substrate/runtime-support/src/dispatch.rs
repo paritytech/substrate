@@ -20,7 +20,6 @@ pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
 #[cfg(feature = "std")]
 pub use std::fmt;
 pub use rstd::result;
-pub use rstd::marker::PhantomData;
 #[cfg(feature = "std")]
 use serde;
 pub use codec::{Slicable, Input};
@@ -47,6 +46,9 @@ pub trait AuxCallable {
 	type Call: AuxDispatchable + Slicable + Clone + PartialEq + Eq;
 }
 
+// dirty hack to work around serde_derive issue.
+pub type AuxCallableCallFor<A> = <A as AuxCallable>::Call;
+
 #[cfg(feature = "std")]
 pub trait Callable {
 	type Call: Dispatchable + Slicable + ::serde::Serialize + Clone + PartialEq + Eq;
@@ -55,6 +57,9 @@ pub trait Callable {
 pub trait Callable {
 	type Call: Dispatchable + Slicable + Clone + PartialEq + Eq;
 }
+
+// dirty hack to work around serde_derive issue.
+pub type CallableCallFor<C> = <C as Callable>::Call;
 
 #[cfg(feature = "std")]
 pub trait Parameter: Slicable + serde::Serialize + Clone + Eq + fmt::Debug {}
@@ -77,8 +82,17 @@ macro_rules! decl_module {
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$($rest:tt)*
 	) => {
+		// TODO: switching based on std feature is because of an issue in
+		// serde-derive for when we attempt to derive `Deserialize` on these types,
+		// in a situation where we've imported `substrate_runtime_support` as another name.
+		#[cfg(feature = "std")]
 		$(#[$attr])*
-		pub struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
+		pub struct $mod_type<$trait_instance: $trait_name>(::std::marker::PhantomData<$trait_instance>);
+
+		#[cfg(not(feature = "std"))]
+		$(#[$attr])*
+		pub struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
+
 		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
@@ -89,8 +103,13 @@ macro_rules! decl_module {
 		struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$($rest:tt)*
 	) => {
+		#[cfg(feature = "std")]
 		$(#[$attr])*
-		struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
+		struct $mod_type<$trait_instance: $trait_name>(::std::marker::PhantomData<$trait_instance>);
+
+		#[cfg(not(feature = "std"))]
+		$(#[$attr])*
+		struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
 		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
@@ -265,8 +284,8 @@ macro_rules! __decl_dispatch_module_with_aux {
 	};
 }
 
-#[macro_export]
 /// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
+#[macro_export]
 macro_rules! __decl_dispatch_module_common {
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
@@ -282,9 +301,20 @@ macro_rules! __decl_dispatch_module_common {
 			= $id:expr ;
 		)*
 	) => {
+		#[cfg(feature = "std")]
 		$(#[$attr])*
 		pub enum $call_type<$trait_instance: $trait_name> {
-			__PhantomItem($crate::dispatch::PhantomData<$trait_instance>),
+			__PhantomItem(::std::marker::PhantomData<$trait_instance>),
+			$(
+				#[allow(non_camel_case_types)]
+				$fn_name ( $( $param ),* ),
+			)*
+		}
+
+		#[cfg(not(feature = "std"))]
+		$(#[$attr])*
+		pub enum $call_type<$trait_instance: $trait_name> {
+			__PhantomItem(::core::marker::PhantomData<$trait_instance>),
 			$(
 				#[allow(non_camel_case_types)]
 				$fn_name ( $( $param ),* ),
@@ -417,7 +447,7 @@ macro_rules! impl_outer_dispatch {
 		$(#[$attr])*
 		pub enum $call_type {
 			$(
-				$camelcase ( <$camelcase as $crate::dispatch::AuxCallable>::Call )
+				$camelcase ( $crate::dispatch::AuxCallableCallFor<$camelcase> )
 			,)*
 		}
 		impl_outer_dispatch_common! { $call_type, $($camelcase = $id,)* }
@@ -454,10 +484,10 @@ macro_rules! impl_outer_dispatch {
 		}
 		$( $rest:tt )*
 	) => {
-		$(#[$attr:meta])*
+		$(#[$attr])*
 		pub enum $call_type {
 			$(
-				$camelcase ( <$camelcase as $crate::dispatch::Callable>::Call )
+				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
 			,)*
 		}
 		impl_outer_dispatch_common! { $call_type, $($camelcase = $id,)* }

@@ -26,11 +26,8 @@ use {system, democracy};
 use super::{Trait, Module as Council};
 
 decl_module! {
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub struct Module<T: Trait>;
 
-	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn propose(aux, proposal: Box<T::Proposal>) -> Result = 0;
@@ -38,7 +35,6 @@ decl_module! {
 		fn veto(aux, proposal_hash: T::Hash) -> Result = 2;
 	}
 
-	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_cooloff_period(blocks: T::BlockNumber) -> Result = 0;

@@ -28,10 +28,6 @@ extern crate substrate_runtime_support as runtime_support;
 #[cfg(feature = "std")]
 extern crate serde;
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
@@ -78,8 +74,6 @@ pub trait Trait {
 }
 
 decl_module! {
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub struct Module<T: Trait>;
 }
 

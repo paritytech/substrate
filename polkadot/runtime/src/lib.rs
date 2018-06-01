@@ -21,6 +21,7 @@
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
+
 #[cfg(feature = "std")]
 extern crate serde;
 
@@ -28,7 +29,7 @@ extern crate serde;
 extern crate substrate_runtime_io as runtime_io;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_support;
 
 #[macro_use]
 extern crate substrate_runtime_primitives as runtime_primitives;
@@ -149,7 +150,7 @@ pub type Parachains = parachains::Module<Concrete>;
 impl_outer_dispatch! {
 	/// Call type for polkadot transactions.
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
 		Consensus = 0,
 		Session = 1,
@@ -163,7 +164,7 @@ impl_outer_dispatch! {
 
 	/// Internal calls.
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum PrivCall {
 		Consensus = 0,
 		Session = 1,

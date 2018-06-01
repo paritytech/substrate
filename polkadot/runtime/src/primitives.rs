@@ -97,7 +97,7 @@ pub mod parachain {
 
 	/// Unique identifier of a parachain.
 	#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct Id(u32);
 
 	impl From<Id> for u32 {
@@ -199,7 +199,7 @@ pub mod parachain {
 
 	/// Extrinsic data for a parachain.
 	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 	#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 	pub struct Extrinsic;
@@ -208,7 +208,7 @@ pub mod parachain {
 	///
 	/// https://github.com/w3f/polkadot-spec/blob/master/spec.md#candidate-para-chain-block
 	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 	#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 	pub struct Candidate {
@@ -226,7 +226,7 @@ pub mod parachain {
 
 	/// Candidate receipt type.
 	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 	#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 	pub struct CandidateReceipt {
@@ -295,7 +295,7 @@ pub mod parachain {
 
 	/// Parachain ingress queue message.
 	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct Message(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 	/// Consolidated ingress queue data.
@@ -303,34 +303,34 @@ pub mod parachain {
 	/// This is just an ordered vector of other parachains' egress queues,
 	/// obtained according to the routing rules.
 	#[derive(Default, PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 
 	/// Parachain block data.
 	///
 	/// contains everything required to validate para-block, may contain block and witness data
 	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct BlockData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 	/// Parachain header raw bytes wrapper type.
 	#[derive(PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct Header(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 	/// Parachain head data included in the chain.
 	#[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct HeadData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 	/// Parachain validation code.
 	#[derive(PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 	/// Activitiy bit field
 	#[derive(PartialEq, Eq, Clone, Default)]
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct Activity(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 	impl Slicable for Activity {

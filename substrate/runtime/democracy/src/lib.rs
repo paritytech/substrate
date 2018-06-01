@@ -44,7 +44,7 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 use rstd::result;
-use primitives::traits::{Zero, Executable, RefInto, As};
+use primitives::traits::{Zero, Executable, RefInto, As, MaybeSerializeDebug};
 use runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use runtime_support::dispatch::Result;
 
@@ -57,24 +57,20 @@ pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
 pub trait Trait: staking::Trait + Sized {
-	type Proposal: Parameter + Dispatchable + IsSubType<Module<Self>>;
+	type Proposal: Parameter + Dispatchable + IsSubType<Module<Self>> + MaybeSerializeDebug;
 }
 
 decl_module! {
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub struct Module<T: Trait>;
 
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) -> Result = 0;
 		fn second(aux, proposal: PropIndex) -> Result = 1;
 		fn vote(aux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result = 2;
 	}
 
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result = 0;
 		fn cancel_referendum(ref_index: ReferendumIndex) -> Result = 1;

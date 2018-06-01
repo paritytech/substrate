@@ -19,14 +19,13 @@
 use primitives;
 use rstd::prelude::*;
 use codec::{Slicable, Joiner};
-use runtime_support::Hashable;
 
 use runtime_primitives::traits::{Executable, RefInto, MaybeEmpty};
 use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
 use {system, session};
 
-use runtime_support::{StorageValue, StorageMap};
-use runtime_support::dispatch::Result;
+use substrate_runtime_support::{Hashable, StorageValue, StorageMap};
+use substrate_runtime_support::dispatch::Result;
 
 #[cfg(any(feature = "std", test))]
 use rstd::marker::PhantomData;
@@ -43,12 +42,9 @@ pub trait Trait: system::Trait<Hash = primitives::Hash> + session::Trait {
 
 decl_module! {
 	/// Parachains module.
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub struct Module<T: Trait>;
 
 	/// Call type for parachains.
-	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: <T as Trait>::PublicAux {
 		// provide candidate receipts for parachains, in ascending order by id.
