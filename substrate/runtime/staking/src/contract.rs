@@ -544,7 +544,7 @@ mod tests {
 	fn contract_transfer() {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(0, 111);
 			<FreeBalance<Test>>::insert(1, 0);
 			<FreeBalance<Test>>::insert(2, 30);
@@ -609,7 +609,7 @@ r#"
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let code_create = wabt::wat2wasm(&code_create(&code_transfer)).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(0, 111);
 			<FreeBalance<Test>>::insert(1, 0);
 
@@ -669,7 +669,7 @@ r#"
 	fn contract_adder() {
 		let code_adder = wabt::wat2wasm(CODE_ADDER).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(0, 111);
 			<FreeBalance<Test>>::insert(1, 0);
 			<CodeOf<Test>>::insert(1, code_adder);
@@ -726,7 +726,7 @@ r#"
 	fn contract_out_of_gas() {
 		let code_loop = wabt::wat2wasm(CODE_LOOP).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			// Set initial balances.
 			<FreeBalance<Test>>::insert(0, 111);
 			<FreeBalance<Test>>::insert(1, 0);
@@ -759,7 +759,7 @@ r#"
 	fn contract_internal_mem() {
 		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
 
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			// Set initial balances.
 			<FreeBalance<Test>>::insert(0, 111);
 			<FreeBalance<Test>>::insert(1, 0);

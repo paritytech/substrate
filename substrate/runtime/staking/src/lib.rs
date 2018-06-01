@@ -838,7 +838,7 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
 		let mut r: runtime_io::TestExternalities = map![
-			twox_128(<NextEnumSet<T>>::key()).to_vec() => (0 as AccountIndex).encode(),
+			twox_128(<NextEnumSet<T>>::key()).to_vec() => ((self.balances.len() as AccountIndex) / ENUM_SET_SIZE).encode(),
 			twox_128(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
 			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
 			twox_128(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
@@ -850,6 +850,11 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 			twox_128(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
 		];
 
+		let ids: Vec<_> = self.balances.iter().map(|x| x.0.clone()).collect();
+		for i in 0..(ids.len() + (ENUM_SET_SIZE as usize) - 1) / (ENUM_SET_SIZE as usize) {
+			r.insert(twox_128(&<EnumSet<T>>::key_for(i as AccountIndex)).to_vec(),
+				ids[i * (ENUM_SET_SIZE as usize)..ids.len().min((i + 1) * (ENUM_SET_SIZE as usize))].to_owned().encode());
+		}
 		for (who, value) in self.balances.into_iter() {
 			r.insert(twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
 		}
@@ -864,8 +869,19 @@ mod tests {
 	use mock::*;
 
 	#[test]
+	fn indexing_should_work() {
+		with_externalities(&mut new_test_ext(10, 1, 2, 0, true), || {
+			assert_eq!(Staking::lookup_index(0), Some(1));
+			assert_eq!(Staking::lookup_index(1), Some(2));
+			assert_eq!(Staking::lookup_index(2), Some(3));
+			assert_eq!(Staking::lookup_index(3), Some(4));
+			assert_eq!(Staking::lookup_index(4), None);
+		});
+	}
+
+	#[test]
 	fn staking_should_work() {
-		with_externalities(&mut new_test_ext(1, 2, 0, true), || {
+		with_externalities(&mut new_test_ext(0, 1, 2, 0, true), || {
 			assert_eq!(Staking::era_length(), 2);
 			assert_eq!(Staking::validator_count(), 2);
 			assert_eq!(Staking::bonding_duration(), 3);
@@ -920,7 +936,7 @@ mod tests {
 
 	#[test]
 	fn staking_eras_work() {
-		with_externalities(&mut new_test_ext(1, 2, 0, true), || {
+		with_externalities(&mut new_test_ext(0, 1, 2, 0, true), || {
 			assert_eq!(Staking::era_length(), 2);
 			assert_eq!(Staking::sessions_per_era(), 2);
 			assert_eq!(Staking::last_era_length_change(), 0);
@@ -980,7 +996,7 @@ mod tests {
 
 	#[test]
 	fn staking_balance_works() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 42);
 			assert_eq!(Staking::free_balance(&1), 42);
 			assert_eq!(Staking::reserved_balance(&1), 0);
@@ -993,7 +1009,7 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_works() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::transfer(&1, 2, 69));
 			assert_eq!(Staking::balance(&1), 42);
@@ -1003,7 +1019,7 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_when_bonded_should_not_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::stake(&1));
 			assert_noop!(Staking::transfer(&1, 2, 69), "bondage too high to send value");
@@ -1012,7 +1028,7 @@ mod tests {
 
 	#[test]
 	fn reserving_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 
 			assert_eq!(Staking::balance(&1), 111);
@@ -1029,7 +1045,7 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_when_reserved_should_not_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::reserve_balance(&1, 69));
 			assert_noop!(Staking::transfer(&1, 2, 69), "balance too low to send value");
@@ -1038,7 +1054,7 @@ mod tests {
 
 	#[test]
 	fn deducting_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::deduct_unbonded(&1, 69));
 			assert_eq!(Staking::free_balance(&1), 42);
@@ -1047,7 +1063,7 @@ mod tests {
 
 	#[test]
 	fn deducting_balance_when_bonded_should_not_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			<Bondage<Test>>::insert(1, 2);
 			System::set_block_number(1);
@@ -1058,7 +1074,7 @@ mod tests {
 
 	#[test]
 	fn refunding_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 42);
 			Staking::refund(&1, 69);
 			assert_eq!(Staking::free_balance(&1), 111);
@@ -1067,7 +1083,7 @@ mod tests {
 
 	#[test]
 	fn slashing_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::reserve_balance(&1, 69));
 			assert_ok!(Staking::slash(&1, 69));
@@ -1078,7 +1094,7 @@ mod tests {
 
 	#[test]
 	fn slashing_incomplete_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 42);
 			assert_ok!(Staking::reserve_balance(&1, 21));
 			assert_err!(Staking::slash(&1, 69), "not enough funds");
@@ -1089,7 +1105,7 @@ mod tests {
 
 	#[test]
 	fn unreserving_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::reserve_balance(&1, 111));
 			Staking::unreserve_balance(&1, 42);
@@ -1100,7 +1116,7 @@ mod tests {
 
 	#[test]
 	fn slashing_reserved_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::reserve_balance(&1, 111));
 			assert_ok!(Staking::slash_reserved(&1, 42));
@@ -1111,7 +1127,7 @@ mod tests {
 
 	#[test]
 	fn slashing_incomplete_reserved_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::reserve_balance(&1, 42));
 			assert_err!(Staking::slash_reserved(&1, 69), "not enough (reserved) funds");
@@ -1122,7 +1138,7 @@ mod tests {
 
 	#[test]
 	fn transferring_reserved_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::reserve_balance(&1, 111));
 			assert_ok!(Staking::transfer_reserved_balance(&1, &2, 42));
@@ -1135,7 +1151,7 @@ mod tests {
 
 	#[test]
 	fn transferring_incomplete_reserved_balance_should_work() {
-		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::reserve_balance(&1, 42));
 			assert_err!(Staking::transfer_reserved_balance(&1, &2, 69), "not enough (reserved) funds");
