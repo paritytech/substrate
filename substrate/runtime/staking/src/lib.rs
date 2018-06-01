@@ -62,6 +62,9 @@ mod mock;
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: u64 = 64;
 
+/// The byte to identify intention to reclaim an existing account index.
+const RECLAIM_INDEX_MAGIC: AccountIndex = 0x69;
+
 /// Type used for storing an account's index; implies the maximum number of accounts the system
 /// can hold.
 type AccountIndex = u64;
@@ -433,7 +436,7 @@ impl<T: Trait> Module<T> {
 
 			// this identifier must end with magic byte 0x69 to trigger this check (a minor
 			// optimisation to ensure we don't check most unintended account creations).
-			if maybe_try_index % 256 == 0x69 {
+			if maybe_try_index % 256 == RECLAIM_INDEX_MAGIC {
 				// reuse is probably intended. first, remove magic byte.
 				let try_index = maybe_try_index / 256;
 
@@ -869,13 +872,46 @@ mod tests {
 	use mock::*;
 
 	#[test]
-	fn indexing_should_work() {
+	fn indexing_lookup_should_work() {
 		with_externalities(&mut new_test_ext(10, 1, 2, 0, true), || {
 			assert_eq!(Staking::lookup_index(0), Some(1));
 			assert_eq!(Staking::lookup_index(1), Some(2));
 			assert_eq!(Staking::lookup_index(2), Some(3));
 			assert_eq!(Staking::lookup_index(3), Some(4));
 			assert_eq!(Staking::lookup_index(4), None);
+		});
+	}
+
+	#[test]
+	fn default_indexing_on_new_accounts_should_work() {
+		with_externalities(&mut new_test_ext(10, 1, 2, 0, true), || {
+			assert_eq!(Staking::lookup_index(4), None);
+			assert_ok!(Staking::transfer(&1, 5, 10));
+			assert_eq!(Staking::lookup_index(4), Some(5));
+		});
+	}
+
+	#[test]
+	fn dust_account_removal_should_work() {
+		with_externalities(&mut new_test_ext(256 * 10, 1, 2, 0, true), || {
+			assert_eq!(Staking::balance(&2), 256 * 20);
+			assert_ok!(Staking::transfer(&2, 5, 256 * 10 + 1));	// index 1 (account 2) becomes zombie
+			assert_eq!(Staking::balance(&2), 0);
+			assert_eq!(Staking::balance(&5), 256 * 10 + 1);
+		});
+	}
+
+	#[test]
+	fn reclaim_indexing_on_new_accounts_should_work() {
+		with_externalities(&mut new_test_ext(256 * 1, 1, 2, 0, true), || {
+			assert_eq!(Staking::lookup_index(1), Some(2));
+			assert_eq!(Staking::lookup_index(4), None);
+			assert_eq!(Staking::balance(&2), 256 * 20);
+			assert_ok!(Staking::transfer(&2, 5, 256 * 20));	// account 2 becomes zombie freeing index 1 for reclaim)
+			assert_eq!(Staking::balance(&2), 0);
+			assert_ok!(Staking::transfer(&5, 6, 256 * 1 + RECLAIM_INDEX_MAGIC));	// account 6 takes index 1.
+			assert_eq!(Staking::balance(&6), 256 * 1 + RECLAIM_INDEX_MAGIC);
+			assert_eq!(Staking::lookup_index(1), Some(6));
 		});
 	}
 
