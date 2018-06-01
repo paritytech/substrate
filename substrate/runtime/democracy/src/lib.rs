@@ -404,6 +404,7 @@ mod tests {
 			bonding_duration: 3,
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
+			existential_deposit: 0,
 		}.build_externalities());
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,

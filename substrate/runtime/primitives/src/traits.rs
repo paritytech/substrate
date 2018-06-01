@@ -255,7 +255,7 @@ pub trait Applyable {
 	type Index;
 	fn index(&self) -> &Self::Index;
 	fn sender(&self) -> &Self::AccountId;
-	fn apply(self);
+	fn apply(self) -> Result<(), &'static str>;
 }
 
 /// Something that can be checked for equality and printed out to a debug channel if bad.

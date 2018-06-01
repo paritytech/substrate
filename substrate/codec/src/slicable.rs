@@ -135,13 +135,11 @@ macro_rules! impl_array {
 	( $( $n:expr )* ) => { $(
 		impl<T: Slicable> Slicable for [T; $n] {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
-				u32::decode(input).and_then(move |len| {
-					let mut r: Self = unsafe { mem::uninitialized() };
-					for i in 0..$n {
-						r[i] = T::decode(input)?;
-					}
-					Some(r)
-				})
+				let mut r: Self = unsafe { mem::uninitialized() };
+				for i in 0..$n {
+					r[i] = T::decode(input)?;
+				}
+				Some(r)
 			}
 
 			fn encode(&self) -> Vec<u8> {

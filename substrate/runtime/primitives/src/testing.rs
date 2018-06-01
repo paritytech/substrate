@@ -146,5 +146,5 @@ impl<Call: AuxDispatchable<Aux = u64> + Slicable + Sized + serde::Serialize> App
 	type Index = u64;
 	fn sender(&self) -> &u64 { &(self.0).0 }
 	fn index(&self) -> &u64 { &(self.0).1 }
-	fn apply(self) { (self.0).2.dispatch(&(self.0).0); }
+	fn apply(self) -> Result<(), &'static str> { (self.0).2.dispatch(&(self.0).0) }
 }

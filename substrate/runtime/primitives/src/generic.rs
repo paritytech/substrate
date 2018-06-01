@@ -249,9 +249,9 @@ where
 		&self.0.extrinsic.signed
 	}
 
-	fn apply(self) {
+	fn apply(self) -> Result<(), &'static str> {
 		let xt = self.0.extrinsic;
-		xt.function.dispatch(&xt.signed);
+		xt.function.dispatch(&xt.signed)
 	}
 }
 

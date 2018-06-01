@@ -155,7 +155,9 @@ impl<
 		}
 
 		// decode parameters and dispatch
-		xt.apply();
+		if let Err(e) = xt.apply() {
+			runtime_io::print(e);
+		}
 
 		<system::ExtrinsicIndex<System>>::put(<system::ExtrinsicIndex<System>>::get() + 1u32);
 	}
@@ -224,6 +226,7 @@ mod tests {
 			bonding_duration: 0,
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,
+			existential_deposit: 0,
 		}.build_externalities());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2, 69)));
 		with_externalities(&mut t, || {

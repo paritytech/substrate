@@ -168,6 +168,7 @@ mod tests {
 				bonding_duration: 0,
 				transaction_base_fee: 1,
 				transaction_byte_fee: 0,
+				existential_deposit: 0,
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
@@ -202,7 +203,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("76b0393b4958d3cb98bb51d9f4edb316af48485142b8721e94c3b52c75ec3243").into(),
+			hex!("de98b34e958af85ab79cbc9b853e49ec2ff19a83b5bc2eba28117c9f6527a51d").into(),
 			vec![Extrinsic {
 				signed: Alice.into(),
 				index: 0,
@@ -215,7 +216,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("8ae9828a5988459d35fb428086170dead660176ee0766e89bc1a4b48153d4e88").into(),
+			hex!("05c912d1604370951bacd587c47ab0a67f2afddd978d2a3998e96288045f18dd").into(),
 			vec![
 				Extrinsic {
 					signed: Bob.into(),
