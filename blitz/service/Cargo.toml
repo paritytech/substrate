@@ -1,0 +1,30 @@
+[package]
+name = "blitz-service"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+hex-literal = "0.1"
+futures = "0.1.17"
+parking_lot = "0.4"
+tokio-timer = "0.1.2"
+error-chain = "0.11"
+log = "0.3"
+tokio-core = "0.1.12"
+exit-future = "0.1"
+ed25519 = { path = "../../substrate/ed25519" }
+blitz-primitives = { path = "../primitives" }
+blitz-runtime = { path = "../runtime" }
+# polkadot-consensus = { path = "../consensus" }
+blitz-executor = { path = "../executor" }
+# polkadot-api = { path = "../api" }
+# polkadot-transaction-pool = { path = "../transaction-pool" }
+blitz-keystore = { path = "../keystore" }
+blitz-network = { path = "../network" }
+substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-primitives = { path = "../../substrate/primitives" }
+substrate-network = { path = "../../substrate/network" }
+substrate-client = { path = "../../substrate/client" }
+substrate-client-db = { path = "../../substrate/client/db" }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-executor = { path = "../../substrate/executor" }

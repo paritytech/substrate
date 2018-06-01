@@ -68,6 +68,9 @@ members = [
 	"blitz/primitives",
 	"blitz/executor",
 	"blitz/cli",
+	"blitz/network",
+	"blitz/service",
+	"blitz/keystore",
 
 	"safe-mix",
 	"subkey",
