@@ -37,6 +37,7 @@ pub use core::num;
 pub use core::ops;
 pub use core::ptr;
 pub use core::slice;
+pub use core::result;
 
 pub mod collections {
 	pub use alloc::btree_map;

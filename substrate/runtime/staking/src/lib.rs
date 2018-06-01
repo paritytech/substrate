@@ -47,11 +47,12 @@ extern crate parity_wasm;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
-use rstd::cmp;
+use rstd::{cmp, result};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use codec::Slicable;
 use runtime_support::{StorageValue, StorageMap, Parameter};
+use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment, As};
 
 mod contract;
@@ -99,15 +100,15 @@ pub trait Trait: system::Trait + session::Trait {
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn transfer(aux, dest: T::AccountId, value: T::Balance) = 0;
-		fn stake(aux) = 1;
-		fn unstake(aux) = 2;
+		fn transfer(aux, dest: T::AccountId, value: T::Balance) -> Result = 0;
+		fn stake(aux) -> Result = 1;
+		fn unstake(aux) -> Result = 2;
 	}
 	pub enum PrivCall {
-		fn set_sessions_per_era(new: T::BlockNumber) = 0;
-		fn set_bonding_duration(new: T::BlockNumber) = 1;
-		fn set_validator_count(new: u32) = 2;
-		fn force_new_era() = 3;
+		fn set_sessions_per_era(new: T::BlockNumber) -> Result = 0;
+		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;
+		fn set_validator_count(new: u32) -> Result = 2;
+		fn force_new_era() -> Result = 3;
 	}
 }
 
@@ -193,85 +194,90 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Create a smart-contract account.
-	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) {
+	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) -> Result {
 		// commit anything that made it this far to storage
-		if let Ok(Some(commit)) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb) {
+		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb)? {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
+		Ok(())
 	}
 
 	// PUBLIC DISPATCH
 
 	/// Transfer some unlocked staking balance to another staker.
 	/// TODO: probably want to state gas-limit and gas-price.
-	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) {
+	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) -> Result {
 		// commit anything that made it this far to storage
-		if let Ok(Some(commit)) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb) {
+		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
+		Ok(())
 	}
 
 	/// Declare the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn stake(aux: &T::PublicAux) {
+	fn stake(aux: &T::PublicAux) -> Result {
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
 		ensure!(intentions.iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot stake if already staked.");
 		intentions.push(aux.ref_into().clone());
 		<Intentions<T>>::put(intentions);
 		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
+		Ok(())
 	}
 
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake(aux: &T::PublicAux) {
+	fn unstake(aux: &T::PublicAux) -> Result {
 		let mut intentions = <Intentions<T>>::get();
-		if let Some(position) = intentions.iter().position(|t| t == aux.ref_into()) {
-			intentions.swap_remove(position);
-			<Intentions<T>>::put(intentions);
-			<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
-		} else {
-			fail!("Cannot unstake if not already staked.");
-		}
+		let position = intentions.iter().position(|t| t == aux.ref_into()).ok_or("Cannot unstake if not already staked.")?;
+		intentions.swap_remove(position);
+		<Intentions<T>>::put(intentions);
+		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
+		Ok(())
 	}
 
 	// PRIV DISPATCH
 
 	/// Set the number of sessions in an era.
-	fn set_sessions_per_era(new: T::BlockNumber) {
+	fn set_sessions_per_era(new: T::BlockNumber) -> Result {
 		<NextSessionsPerEra<T>>::put(&new);
+		Ok(())
 	}
 
 	/// The length of the bonding duration in eras.
-	fn set_bonding_duration(new: T::BlockNumber) {
+	fn set_bonding_duration(new: T::BlockNumber) -> Result {
 		<BondingDuration<T>>::put(&new);
+		Ok(())
 	}
 
 	/// The length of a staking era in sessions.
-	fn set_validator_count(new: u32) {
+	fn set_validator_count(new: u32) -> Result {
 		<ValidatorCount<T>>::put(&new);
+		Ok(())
 	}
 
 	/// Force there to be a new era. This also forces a new session immediately after.
-	fn force_new_era() {
+	fn force_new_era() -> Result {
 		Self::new_era();
 		<session::Module<T>>::rotate_session();
+		Ok(())
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Deduct from an unbonded balance. true if it happened.
-	pub fn deduct_unbonded(who: &T::AccountId, value: T::Balance) -> bool {
+	pub fn deduct_unbonded(who: &T::AccountId, value: T::Balance) -> Result {
 		if let LockStatus::Liquid = Self::unlock_block(who) {
 			let b = Self::free_balance(who);
 			if b >= value {
 				<FreeBalance<T>>::insert(who, b - value);
-				return true;
+				return Ok(())
 			}
 		}
-		false
+		Err("not enough liquid funds")
 	}
 
 	/// Refund some balance.
@@ -280,26 +286,27 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Will slash any balance, but prefer free over reserved.
-	pub fn slash(who: &T::AccountId, value: T::Balance) -> bool {
+	pub fn slash(who: &T::AccountId, value: T::Balance) -> Result {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
 		<FreeBalance<T>>::insert(who, &(free_balance - free_slash));
 		if free_slash < value {
 			Self::slash_reserved(who, value - free_slash)
+				.map_err(|_| "not enough funds")
 		} else {
-			true
+			Ok(())
 		}
 	}
 
 	/// Moves `value` from balance to reserved balance.
-	pub fn reserve_balance(who: &T::AccountId, value: T::Balance) -> bool {
+	pub fn reserve_balance(who: &T::AccountId, value: T::Balance) -> Result {
 		let b = Self::free_balance(who);
 		if b < value {
-			return false;
+			return Err("not enough free funds")
 		}
 		<FreeBalance<T>>::insert(who, b - value);
 		<ReservedBalance<T>>::insert(who, Self::reserved_balance(who) + value);
-		true
+		Ok(())
 	}
 
 	/// Moves `value` from reserved balance to balance.
@@ -311,20 +318,28 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Moves `value` from reserved balance to balance.
-	pub fn slash_reserved(who: &T::AccountId, value: T::Balance) -> bool {
+	pub fn slash_reserved(who: &T::AccountId, value: T::Balance) -> Result {
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
 		<ReservedBalance<T>>::insert(who, b - slash);
-		value == slash
+		if value == slash {
+			Ok(())
+		} else {
+			Err("not enough (reserved) funds")
+		}
 	}
 
 	/// Moves `value` from reserved balance to balance.
-	pub fn transfer_reserved_balance(slashed: &T::AccountId, beneficiary: &T::AccountId, value: T::Balance) -> bool {
+	pub fn transfer_reserved_balance(slashed: &T::AccountId, beneficiary: &T::AccountId, value: T::Balance) -> Result {
 		let b = Self::reserved_balance(slashed);
 		let slash = cmp::min(b, value);
 		<ReservedBalance<T>>::insert(slashed, b - slash);
 		<FreeBalance<T>>::insert(beneficiary, Self::free_balance(beneficiary) + slash);
-		slash == value
+		if value == slash {
+			Ok(())
+		} else {
+			Err("not enough (reserved) funds")
+		}
 	}
 
 	/// Hook to be called after to transaction processing.
@@ -551,7 +566,7 @@ impl<T: Trait> Module<T> {
 		code: &[u8],
 		value: T::Balance,
 		account_db: &DB,
-	) -> Result<Option<State<T>>, &'static str> {
+	) -> result::Result<Option<State<T>>, &'static str> {
 		let from_balance = account_db.get_balance(transactor);
 		// TODO: a fee.
 		if from_balance < value {
@@ -580,7 +595,7 @@ impl<T: Trait> Module<T> {
 		dest: &T::AccountId,
 		value: T::Balance,
 		account_db: &DB,
-	) -> Result<Option<State<T>>, &'static str> {
+	) -> result::Result<Option<State<T>>, &'static str> {
 		let from_balance = account_db.get_balance(transactor);
 		if from_balance < value {
 			return Err("balance too low to send value");
@@ -756,9 +771,9 @@ mod tests {
 
 			// Block 1: Add three validators. No obvious change.
 			System::set_block_number(1);
-			Staking::stake(&1);
-			Staking::stake(&2);
-			Staking::stake(&4);
+			assert_ok!(Staking::stake(&1));
+			assert_ok!(Staking::stake(&2));
+			assert_ok!(Staking::stake(&4));
 			Staking::check_new_era();
 			assert_eq!(Session::validators(), vec![10, 20]);
 
@@ -769,8 +784,8 @@ mod tests {
 
 			// Block 3: Unstake highest, introduce another staker. No change yet.
 			System::set_block_number(3);
-			Staking::stake(&3);
-			Staking::unstake(&4);
+			assert_ok!(Staking::stake(&3));
+			assert_ok!(Staking::unstake(&4));
 			Staking::check_new_era();
 
 			// Block 4: New era - validators change.
@@ -780,7 +795,7 @@ mod tests {
 
 			// Block 5: Transfer stake from highest to lowest. No change yet.
 			System::set_block_number(5);
-			Staking::transfer(&4, 1, 40);
+			assert_ok!(Staking::transfer(&4, 1, 40));
 			Staking::check_new_era();
 
 			// Block 6: Lowest now validator.
@@ -790,7 +805,7 @@ mod tests {
 
 			// Block 7: Unstake three. No change yet.
 			System::set_block_number(7);
-			Staking::unstake(&3);
+			assert_ok!(Staking::unstake(&3));
 			Staking::check_new_era();
 			assert_eq!(Session::validators(), vec![1, 3]);
 
@@ -825,7 +840,7 @@ mod tests {
 
 			// Block 3: Schedule an era length change; no visible changes.
 			System::set_block_number(3);
-			Staking::set_sessions_per_era(3);
+			assert_ok!(Staking::set_sessions_per_era(3));
 			Staking::check_new_era();
 			assert_eq!(Staking::sessions_per_era(), 2);
 			assert_eq!(Staking::last_era_length_change(), 0);
@@ -878,19 +893,18 @@ mod tests {
 	fn staking_balance_transfer_works() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			Staking::transfer(&1, 2, 69);
+			assert_ok!(Staking::transfer(&1, 2, 69));
 			assert_eq!(Staking::balance(&1), 42);
 			assert_eq!(Staking::balance(&2), 69);
 		});
 	}
 
 	#[test]
-	fn staking_balance_transfer_when_bonded_panics() {
+	fn staking_balance_transfer_when_bonded_should_not_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			Staking::stake(&1);
-			Staking::transfer(&1, 2, 69);
-			assert_eq!(Staking::balance(&1), 111);
+			assert_ok!(Staking::stake(&1));
+			assert_noop!(Staking::transfer(&1, 2, 69), "bondage too high to send value");
 		});
 	}
 
@@ -903,7 +917,7 @@ mod tests {
 			assert_eq!(Staking::free_balance(&1), 111);
 			assert_eq!(Staking::reserved_balance(&1), 0);
 
-			Staking::reserve_balance(&1, 69);
+			assert_ok!(Staking::reserve_balance(&1, 69));
 
 			assert_eq!(Staking::balance(&1), 111);
 			assert_eq!(Staking::free_balance(&1), 42);
@@ -911,13 +925,12 @@ mod tests {
 		});
 	}
 
-	#[should_panic]
-	fn staking_balance_transfer_when_reserved_panics() {
+	#[test]
+	fn staking_balance_transfer_when_reserved_should_not_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			Staking::reserve_balance(&1, 69);
-			Staking::transfer(&1, 2, 69);
-			assert_eq!(Staking::balance(&1), 111);
+			assert_ok!(Staking::reserve_balance(&1, 69));
+			assert_noop!(Staking::transfer(&1, 2, 69), "balance too low to send value");
 		});
 	}
 
@@ -925,19 +938,19 @@ mod tests {
 	fn deducting_balance_should_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			assert!(Staking::deduct_unbonded(&1, 69));
+			assert_ok!(Staking::deduct_unbonded(&1, 69));
 			assert_eq!(Staking::free_balance(&1), 42);
 		});
 	}
 
 	#[test]
-	fn deducting_balance_should_fail_when_bonded() {
+	fn deducting_balance_when_bonded_should_not_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			<Bondage<Test>>::insert(1, 2);
 			System::set_block_number(1);
 			assert_eq!(Staking::unlock_block(&1), LockStatus::LockedUntil(2));
-			assert!(!Staking::deduct_unbonded(&1, 69));
+			assert_noop!(Staking::deduct_unbonded(&1, 69), "not enough liquid funds");
 		});
 	}
 
@@ -954,8 +967,8 @@ mod tests {
 	fn slashing_balance_should_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			Staking::reserve_balance(&1, 69);
-			assert!(Staking::slash(&1, 69));
+			assert_ok!(Staking::reserve_balance(&1, 69));
+			assert_ok!(Staking::slash(&1, 69));
 			assert_eq!(Staking::free_balance(&1), 0);
 			assert_eq!(Staking::reserved_balance(&1), 42);
 		});
@@ -965,8 +978,8 @@ mod tests {
 	fn slashing_incomplete_balance_should_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 42);
-			Staking::reserve_balance(&1, 21);
-			assert!(!Staking::slash(&1, 69));
+			assert_ok!(Staking::reserve_balance(&1, 21));
+			assert_err!(Staking::slash(&1, 69), "not enough funds");
 			assert_eq!(Staking::free_balance(&1), 0);
 			assert_eq!(Staking::reserved_balance(&1), 0);
 		});
@@ -976,7 +989,7 @@ mod tests {
 	fn unreserving_balance_should_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			Staking::reserve_balance(&1, 111);
+			assert_ok!(Staking::reserve_balance(&1, 111));
 			Staking::unreserve_balance(&1, 42);
 			assert_eq!(Staking::reserved_balance(&1), 69);
 			assert_eq!(Staking::free_balance(&1), 42);
@@ -987,8 +1000,8 @@ mod tests {
 	fn slashing_reserved_balance_should_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			Staking::reserve_balance(&1, 111);
-			assert!(Staking::slash_reserved(&1, 42));
+			assert_ok!(Staking::reserve_balance(&1, 111));
+			assert_ok!(Staking::slash_reserved(&1, 42));
 			assert_eq!(Staking::reserved_balance(&1), 69);
 			assert_eq!(Staking::free_balance(&1), 0);
 		});
@@ -998,8 +1011,8 @@ mod tests {
 	fn slashing_incomplete_reserved_balance_should_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			Staking::reserve_balance(&1, 42);
-			assert!(!Staking::slash_reserved(&1, 69));
+			assert_ok!(Staking::reserve_balance(&1, 42));
+			assert_err!(Staking::slash_reserved(&1, 69), "not enough (reserved) funds");
 			assert_eq!(Staking::free_balance(&1), 69);
 			assert_eq!(Staking::reserved_balance(&1), 0);
 		});
@@ -1009,8 +1022,8 @@ mod tests {
 	fn transferring_reserved_balance_should_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			Staking::reserve_balance(&1, 111);
-			assert!(Staking::transfer_reserved_balance(&1, &2, 42));
+			assert_ok!(Staking::reserve_balance(&1, 111));
+			assert_ok!(Staking::transfer_reserved_balance(&1, &2, 42));
 			assert_eq!(Staking::reserved_balance(&1), 69);
 			assert_eq!(Staking::free_balance(&1), 0);
 			assert_eq!(Staking::reserved_balance(&2), 0);
@@ -1022,8 +1035,8 @@ mod tests {
 	fn transferring_incomplete_reserved_balance_should_work() {
 		with_externalities(&mut new_test_ext(1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			Staking::reserve_balance(&1, 42);
-			assert!(!Staking::transfer_reserved_balance(&1, &2, 69));
+			assert_ok!(Staking::reserve_balance(&1, 42));
+			assert_err!(Staking::transfer_reserved_balance(&1, &2, 69), "not enough (reserved) funds");
 			assert_eq!(Staking::reserved_balance(&1), 0);
 			assert_eq!(Staking::free_balance(&1), 69);
 			assert_eq!(Staking::reserved_balance(&2), 0);
