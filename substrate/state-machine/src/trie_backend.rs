@@ -250,3 +250,63 @@ impl TrieBackendStorage {
 		}
 	}
 }
+
+#[cfg(test)]
+pub mod tests {
+	use super::*;
+
+	fn test_db() -> (MemoryDB, TrieH256) {
+		let mut root = TrieH256::default();
+		let mut mdb = MemoryDB::default();
+		{
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
+			trie.insert(b"key", b"value").unwrap();
+			trie.insert(b"value1", &[42]).unwrap();
+			trie.insert(b"value2", &[24]).unwrap();
+			trie.insert(b":code", b"return 42").unwrap();
+		}
+		(mdb, root)
+	}
+
+	pub fn test_trie() -> TrieBackend {
+		let (mdb, root) = test_db();
+		TrieBackend::with_memorydb(mdb, root)
+	}
+
+	#[test]
+	fn read_from_storage_returns_some() {
+		assert_eq!(test_trie().storage(b"key").unwrap(), Some(b"value".to_vec()));
+	}
+
+	#[test]
+	fn read_from_storage_returns_none() {
+		assert_eq!(test_trie().storage(b"non-existing-key").unwrap(), None);
+	}
+
+	#[test]
+	fn pairs_are_not_empty_on_non_empty_storage() {
+		assert!(!test_trie().pairs().is_empty());
+	}
+
+	#[test]
+	fn pairs_are_empty_on_empty_storage() {
+		assert!(TrieBackend::with_memorydb(MemoryDB::new(), Default::default()).pairs().is_empty());
+	}
+
+	#[test]
+	fn storage_root_is_non_default() {
+		assert!(test_trie().storage_root(::std::iter::empty()).0 != [0; 32]);
+	}
+
+	#[test]
+	fn storage_root_transaction_is_empty() {
+		assert!(test_trie().storage_root(::std::iter::empty()).1.drain().is_empty());
+	}
+
+	#[test]
+	fn storage_root_transaction_is_non_empty() {
+		let (new_root, mut tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
+		assert!(!tx.drain().is_empty());
+		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
+	}
+}

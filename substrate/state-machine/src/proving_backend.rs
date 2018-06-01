@@ -123,7 +123,42 @@ pub fn create_proof_check_backend(root: TrieH256, proof: Vec<Vec<u8>>) -> Result
 #[cfg(test)]
 mod tests {
 	use backend::{InMemory};
+	use trie_backend::tests::test_trie;
 	use super::*;
+
+	fn test_proving() -> ProvingBackend {
+		ProvingBackend::new(test_trie())
+	}
+
+	#[test]
+	fn proof_is_empty_until_value_is_read() {
+		assert!(test_proving().extract_proof().is_empty());
+	}
+
+	#[test]
+	fn proof_is_non_empty_after_value_is_read() {
+		let backend = test_proving();
+		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
+		assert!(!backend.extract_proof().is_empty());
+	}
+
+	#[test]
+	fn proof_is_invalid_when_does_not_contains_root() {
+		assert!(create_proof_check_backend(1.into(), vec![]).is_err());
+	}
+
+	#[test]
+	fn passes_throgh_backend_calls() {
+		let trie_backend = test_trie();
+		let proving_backend = test_proving();
+		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
+		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
+		
+		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
+		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
+		assert_eq!(trie_root, proving_root);
+		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
+	}
 
 	#[test]
 	fn proof_recorded_and_checked() {

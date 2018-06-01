@@ -248,6 +248,22 @@ mod tests {
 	use super::backend::InMemory;
 	use super::ext::Ext;
 
+	struct DummyCodeExecutor;
+
+	impl CodeExecutor for DummyCodeExecutor {
+		type Error = u8;
+
+		fn call<E: Externalities>(
+			&self,
+			ext: &mut E,
+			_code: &[u8],
+			_method: &str,
+			_data: &[u8],
+		) -> Result<Vec<u8>, Self::Error> {
+			Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]])
+		}
+	}
+
 	#[test]
 	fn overlayed_storage_works() {
 		let mut overlayed = OverlayedChanges::default();
@@ -305,5 +321,28 @@ mod tests {
 		let mut ext = Ext::new(&mut overlay, &backend);
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
 		assert_eq!(ext.storage_root(), ROOT);
+	}
+
+	#[test]
+	fn execute_works() {
+		assert_eq!(execute(&trie_backend::tests::test_trie(),
+			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap().0, vec![66]);
+	}
+
+	#[test]
+	fn prove_and_proof_check_works() {
+		// fetch execution proof from 'remote' full node
+		let remote_backend = trie_backend::tests::test_trie();
+		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let (remote_result, remote_proof, _) = prove(remote_backend,
+			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
+
+		// check proof locally
+		let (local_result, _) = proof_check(remote_root, remote_proof,
+			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
+
+		// check that both results are correct
+		assert_eq!(remote_result, vec![66]);
+		assert_eq!(remote_result, local_result);
 	}
 }
