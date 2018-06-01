@@ -16,12 +16,12 @@
 
 //! Authoring RPC module errors.
 
-use client;
+use extrinsic_pool::txpool;
 use rpc;
 
 error_chain! {
 	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
+		Pool(txpool::Error, txpool::ErrorKind) #[doc = "Pool error"];
 	}
 	errors {
 		/// Not implemented yet
@@ -29,15 +29,10 @@ error_chain! {
 			description("not yet implemented"),
 			display("Method Not Implemented"),
 		}
-		/// Invalid format
-		InvalidFormat {
-			description("invalid format"),
-			display("Invalid format for the extrinsic data"),
-		}
-		/// Some error with the pool since the import failed.
-		PoolError {
-			description("pool import failed"),
-			display("Pool import failed"),
+		/// Verification error
+		Verification(e: Box<::std::error::Error + Send>) {
+			description("extrinsic verification error"),
+			display("Extrinsic verification error: {}", e.description()),
 		}
 	}
 }
@@ -50,6 +45,7 @@ impl From<Error> for rpc::Error {
 				message: "Not implemented yet".into(),
 				data: None,
 			},
+			// TODO [ToDr] Unwrap Pool errors.
 			_ => rpc::Error::internal_error(),
 		}
 	}

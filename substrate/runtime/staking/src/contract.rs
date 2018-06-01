@@ -205,6 +205,7 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		let account = e.account().clone();
 		if let Some(commit_state) =
 			Module::<T>::effect_transfer(&account, &transfer_to, value, e.account_db())
+				.map_err(|_| sandbox::Error::Execution)?
 		{
 			e.account_db_mut().merge(commit_state);
 		}
@@ -231,6 +232,7 @@ pub(crate) fn execute<'a, 'b: 'a, T: Trait>(
 		let account = e.account().clone();
 		if let Some(commit_state) =
 			Module::<T>::effect_create(&account, &code, value, e.account_db())
+				.map_err(|_| sandbox::Error::Execution)?
 		{
 			e.account_db_mut().merge(commit_state);
 		}
@@ -549,7 +551,7 @@ mod tests {
 
 			<CodeOf<Test>>::insert(1, code_transfer.to_vec());
 
-			Staking::transfer(&0, 1, 11);
+			assert_ok!(Staking::transfer(&0, 1, 11));
 
 			assert_eq!(Staking::balance(&0), 100);
 			assert_eq!(Staking::balance(&1), 5);
@@ -614,7 +616,7 @@ r#"
 			<CodeOf<Test>>::insert(1, code_create.to_vec());
 
 			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
-			Staking::transfer(&0, 1, 11);
+			assert_ok!(Staking::transfer(&0, 1, 11));
 
 			let derived_address =
 				<Test as Trait>::DetermineContractAddress::contract_address_for(&code_transfer, &1);
@@ -672,8 +674,8 @@ r#"
 			<FreeBalance<Test>>::insert(1, 0);
 			<CodeOf<Test>>::insert(1, code_adder);
 
-			Staking::transfer(&0, 1, 1);
-			Staking::transfer(&0, 1, 1);
+			assert_ok!(Staking::transfer(&0, 1, 1));
+			assert_ok!(Staking::transfer(&0, 1, 1));
 
 			let storage_addr = [0x01u8; 32];
 			let value =
@@ -733,7 +735,7 @@ r#"
 
 			// Transfer some balance from 0 to 1. This will trigger execution
 			// of the smart-contract code at address 1.
-			Staking::transfer(&0, 1, 11);
+			assert_ok!(Staking::transfer(&0, 1, 11));
 
 			// The balance should remain unchanged since we are expecting
 			// out-of-gas error which will revert transfer.
@@ -765,7 +767,7 @@ r#"
 			<CodeOf<Test>>::insert(1, code_mem.to_vec());
 
 			// Transfer some balance from 0 to 1.
-			Staking::transfer(&0, 1, 11);
+			assert_ok!(Staking::transfer(&0, 1, 11));
 
 			// The balance should remain unchanged since we are expecting
 			// validation error caused by internal memory declaration.

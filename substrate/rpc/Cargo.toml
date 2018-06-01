@@ -12,6 +12,7 @@ log = "0.3"
 parking_lot = "0.4"
 substrate-client = { path = "../client" }
 substrate-executor = { path = "../executor" }
+substrate-extrinsic-pool = { path = "../extrinsic-pool" }
 substrate-primitives = { path = "../primitives" }
 substrate-state-machine = { path = "../state-machine" }
 tokio-core = "0.1.12"

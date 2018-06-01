@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::collections::{HashMap};
 use std::io;
 use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
@@ -24,7 +24,7 @@ NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_devp2p::{NetworkService};
 use core_io::{TimerToken};
 use io::NetSyncIo;
-use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo, TransactionStats};
+use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
@@ -72,8 +72,6 @@ pub trait SyncProvider<B: BlockT>: Send + Sync {
 	fn peers(&self) -> Vec<PeerInfo<B>>;
 	/// Get this node id if available.
 	fn node_id(&self) -> Option<String>;
-	/// Returns propagation count for pending transactions.
-	fn transactions_stats(&self) -> HashMap<B::Hash, TransactionStats>;
 }
 
 /// Transaction pool interface
@@ -82,6 +80,8 @@ pub trait TransactionPool<B: BlockT>: Send + Sync {
 	fn transactions(&self) -> Vec<(B::Hash, B::Extrinsic)>;
 	/// Import a transction into the pool.
 	fn import(&self, transaction: &B::Extrinsic) -> Option<B::Hash>;
+	/// Notify the pool about transactions broadcast.
+	fn on_broadcasted(&self, propagations: HashMap<B::Hash, Vec<String>>);
 }
 
 /// ConsensusService
@@ -236,10 +236,6 @@ impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: Header
 
 	fn node_id(&self) -> Option<String> {
 		self.network.external_url()
-	}
-
-	fn transactions_stats(&self) -> HashMap<B::Hash, TransactionStats> {
-		self.handler.protocol.transactions_stats()
 	}
 }
 

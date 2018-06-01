@@ -26,6 +26,7 @@ use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
 use {system, session};
 
 use runtime_support::{StorageValue, StorageMap};
+use runtime_support::dispatch::Result;
 
 #[cfg(any(feature = "std", test))]
 use rstd::marker::PhantomData;
@@ -41,10 +42,17 @@ pub trait Trait: system::Trait<Hash = primitives::Hash> + session::Trait {
 }
 
 decl_module! {
+	/// Parachains module.
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub struct Module<T: Trait>;
+
+	/// Call type for parachains.
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: <T as Trait>::PublicAux {
 		// provide candidate receipts for parachains, in ascending order by id.
-		fn set_heads(aux, heads: Vec<CandidateReceipt>) = 0;
+		fn set_heads(aux, heads: Vec<CandidateReceipt>) -> Result = 0;
 	}
 }
 
@@ -137,13 +145,13 @@ impl<T: Trait> Module<T> {
 		<Parachains<T>>::put(parachains);
 	}
 
-	fn set_heads(aux: &<T as Trait>::PublicAux, heads: Vec<CandidateReceipt>) {
-		assert!(aux.is_empty());
-		assert!(!<DidUpdate<T>>::exists(), "Parachain heads must be updated only once in the block");
-		assert!(
+	fn set_heads(aux: &<T as Trait>::PublicAux, heads: Vec<CandidateReceipt>) -> Result {
+		ensure!(aux.is_empty(), "set_heads must not be signed");
+		ensure!(!<DidUpdate<T>>::exists(), "Parachain heads must be updated only once in the block");
+		ensure!(
 			<system::Module<T>>::extrinsic_index() == T::SET_POSITION,
-			"Parachain heads update extrinsic must be at position {} in the block",
-			T::SET_POSITION
+			"Parachain heads update extrinsic must be at position {} in the block"
+//			, T::SET_POSITION
 		);
 
 		let active_parachains = Self::active_parachains();
@@ -151,10 +159,10 @@ impl<T: Trait> Module<T> {
 
 		// perform this check before writing to storage.
 		for head in &heads {
-			assert!(
+			ensure!(
 				iter.find(|&p| p == &head.parachain_index).is_some(),
-				"Submitted candidate for unregistered or out-of-order parachain {}",
-				head.parachain_index.into_inner()
+				"Submitted candidate for unregistered or out-of-order parachain {}"
+//				, head.parachain_index.into_inner()
 			);
 		}
 
@@ -164,6 +172,8 @@ impl<T: Trait> Module<T> {
 		}
 
 		<DidUpdate<T>>::put(true);
+
+		Ok(())
 	}
 }
 

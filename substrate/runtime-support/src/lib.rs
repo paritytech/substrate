@@ -21,14 +21,6 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
-#[cfg(feature = "std")]
-#[allow(unused_imports)] // can be removed when fixed: https://github.com/rust-lang/rust/issues/43497
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(feature = "std")]
-pub use serde_derive::*;
-
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
@@ -44,3 +36,47 @@ mod hashable;
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, AuxDispatchable, AuxCallable, IsSubType, IsAuxSubType};
+pub use runtime_io::print;
+
+
+#[macro_export]
+macro_rules! fail {
+	( $y:expr ) => {{
+		return Err($y);
+	}}
+}
+
+#[macro_export]
+macro_rules! ensure {
+	( $x:expr, $y:expr ) => {{
+		if !$x {
+			fail!($y);
+		}
+	}}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_noop {
+	( $x:expr , $y:expr ) => {
+		let h = runtime_io::storage_root();
+		assert_err!($x, $y);
+		assert_eq!(h, runtime_io::storage_root());
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err {
+	( $x:expr , $y:expr ) => {
+		assert_eq!($x, Err($y));
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_ok {
+	( $x:expr ) => {
+		assert!($x.is_ok());
+	}
+}

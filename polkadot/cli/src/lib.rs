@@ -61,39 +61,11 @@ mod informant;
 use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use parking_lot::Mutex;
 use service::ChainSpec;
-use primitives::block::Extrinsic;
-
-struct RpcTransactionPool {
-	inner: Arc<Mutex<txpool::TransactionPool>>,
-	network: Arc<network::Service>,
-}
-
-impl substrate_rpc::author::AuthorApi for RpcTransactionPool {
-	fn submit_extrinsic(&self, xt: Extrinsic) -> substrate_rpc::author::error::Result<()> {
-		use primitives::hexdisplay::HexDisplay;
-		use polkadot_runtime::UncheckedExtrinsic;
-		use codec::Slicable;
-
-		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
-		let decoded = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
-			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?;
-
-		info!("Correctly formatted: {:?}", decoded);
-
-		self.inner.lock().import(decoded)
-			.map_err(|_| substrate_rpc::author::error::ErrorKind::PoolError)?;
-
-		self.network.trigger_repropagate();
-		Ok(())
-	}
-}
 
 struct Configuration(service::Configuration);
 
@@ -110,7 +82,7 @@ impl substrate_rpc::system::SystemApi for Configuration {
 		Ok(match self.0.chain_spec {
 			ChainSpec::Development => "dev",
 			ChainSpec::LocalTestnet => "local",
-			ChainSpec::PoC1Testnet => "poc-1",
+			ChainSpec::PoC2Testnet => "poc-2",
 		}.into())
 	}
 }
@@ -174,14 +146,14 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	match matches.value_of("chain") {
 		Some("dev") => config.chain_spec = ChainSpec::Development,
 		Some("local") => config.chain_spec = ChainSpec::LocalTestnet,
-		Some("poc-1") => config.chain_spec = ChainSpec::PoC1Testnet,
+		Some("poc-2") => config.chain_spec = ChainSpec::PoC2Testnet,
 		None => (),
 		Some(unknown) => panic!("Invalid chain name: {}", unknown),
 	}
 	info!("Chain specification: {}", match config.chain_spec {
 		ChainSpec::Development => "Development",
 		ChainSpec::LocalTestnet => "Local Testnet",
-		ChainSpec::PoC1Testnet => "PoC-1 Testnet",
+		ChainSpec::PoC2Testnet => "PoC-2 Testnet",
 	});
 
 	config.roles = role;
@@ -238,11 +210,12 @@ fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
-			let pool = RpcTransactionPool {
-				inner: service.transaction_pool(),
-				network: service.network(),
-			};
-			rpc::rpc_handler(service.client(), chain, pool, Configuration(config.clone()))
+			rpc::rpc_handler(
+				service.client(),
+				chain,
+				service.transaction_pool(),
+				Configuration(config.clone()),
+			)
 		};
 		(
 			start_server(http_address, |address| rpc::start_http(address, handler())),

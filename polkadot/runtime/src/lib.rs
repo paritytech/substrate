@@ -147,6 +147,9 @@ impl parachains::Trait for Concrete {
 pub type Parachains = parachains::Module<Concrete>;
 
 impl_outer_dispatch! {
+	/// Call type for polkadot transactions.
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
 		Consensus = 0,
 		Session = 1,
@@ -158,6 +161,9 @@ impl_outer_dispatch! {
 		Parachains = 8,
 	}
 
+	/// Internal calls.
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		Consensus = 0,
 		Session = 1,

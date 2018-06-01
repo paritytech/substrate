@@ -27,6 +27,10 @@ extern crate substrate_runtime_support as runtime_support;
 #[cfg(any(feature = "std", test))]
 extern crate substrate_runtime_io as runtime_io;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
 #[cfg(test)]
 extern crate substrate_primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
@@ -34,6 +38,7 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
+use runtime_support::dispatch::Result;
 use runtime_primitives::traits::{HasPublicAux, Executable, MaybeEmpty};
 
 pub trait Trait: HasPublicAux + system::Trait {
@@ -44,9 +49,14 @@ pub trait Trait: HasPublicAux + system::Trait {
 }
 
 decl_module! {
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub struct Module<T: Trait>;
+
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn set(aux, now: T::Value) = 0;
+		fn set(aux, now: T::Value) -> Result = 0;
 	}
 }
 
@@ -64,7 +74,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the current time.
-	fn set(aux: &T::PublicAux, now: T::Value) {
+	fn set(aux: &T::PublicAux, now: T::Value) -> Result {
 		assert!(aux.is_empty());
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
@@ -74,6 +84,7 @@ impl<T: Trait> Module<T> {
 		);
 		<Self as Store>::Now::put(now);
 		<Self as Store>::DidUpdate::put(true);
+		Ok(())
 	}
 }
 
@@ -138,7 +149,7 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			assert_eq!(<Timestamp as Store>::Now::get(), 42);
-			Timestamp::aux_dispatch(Call::set(69), &0);
+			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}

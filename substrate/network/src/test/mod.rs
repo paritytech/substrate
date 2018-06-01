@@ -202,6 +202,8 @@ impl TransactionPool<Block> for EmptyTransactionPool {
 	fn import(&self, _transaction: &UncheckedExtrinsic) -> Option<Hash> {
 		None
 	}
+
+	fn on_broadcasted(&self, _: HashMap<ExtrinsicHash, Vec<String>>) {}
 }
 
 pub struct TestNet {
