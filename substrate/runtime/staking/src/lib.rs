@@ -59,6 +59,9 @@ mod contract;
 #[cfg(test)]
 mod mock;
 
+/// Number of account IDs stored per enum set.
+const ENUM_SET_SIZE: u64 = 16;
+
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum LockStatus<BlockNumber: Debug + PartialEq + Clone> {
@@ -136,6 +139,11 @@ decl_storage! {
 	pub NextSessionsPerEra get(next_sessions_per_era): b"sta:nse" => T::BlockNumber;
 	// The block number at which the era length last changed.
 	pub LastEraLengthChange get(last_era_length_change): b"sta:lec" => default T::BlockNumber;
+
+	// The next free enumeration set.
+	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required u64;
+	// The enumeration sets.
+	pub EnumSet get(enum_set): b"sta:enum_set" => default map [ u64 => [ Option<T::AccountId>; ENUM_SET_SIZE as usize ] ];
 
 	// The balance of a given account.
 	pub FreeBalance get(free_balance): b"sta:bal:" => default map [ T::AccountId => T::Balance ];
