@@ -202,18 +202,18 @@ pub enum MisbehaviorKind<Hash> {
 /// A report of misbehavior by an authority.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct MisbehaviorReport<Hash> {
+pub struct MisbehaviorReport<Hash, Number> {
 	/// The parent hash of the block where the misbehavior occurred.
 	pub parent_hash: Hash,
 	/// The parent number of the block where the misbehavior occurred.
-	pub parent_number: Hash,
+	pub parent_number: Number,
 	/// The authority who misbehavior.
 	pub target: AuthorityId,
 	/// The misbehavior kind.
 	pub misbehavior: MisbehaviorKind<Hash>,
 }
 
-impl<Hash: Slicable> Slicable for MisbehaviorReport<Hash> {
+impl<Hash: Slicable, Number: Slicable> Slicable for MisbehaviorReport<Hash, Number> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		self.parent_hash.using_encoded(|s| v.extend(s));
@@ -244,7 +244,7 @@ impl<Hash: Slicable> Slicable for MisbehaviorReport<Hash> {
 
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let parent_hash = Hash::decode(input)?;
-		let parent_number = Hash::decode(input)?;
+		let parent_number = Number::decode(input)?;
 		let target = AuthorityId::decode(input)?;
 
 		let misbehavior = match i8::decode(input).and_then(MisbehaviorCode::from_i8)? {
@@ -280,7 +280,7 @@ mod test {
 
 	#[test]
 	fn misbehavior_report_roundtrip() {
-		let report = MisbehaviorReport::<H256> {
+		let report = MisbehaviorReport::<H256, u64> {
 			parent_hash: [0; 32].into(),
 			parent_number: 999,
 			target: [1; 32].into(),
@@ -292,9 +292,9 @@ mod test {
 		};
 
 		let encoded = report.encode();
-		assert_eq!(MisbehaviorReport::<H256>::decode(&mut &encoded[..]).unwrap(), report);
+		assert_eq!(MisbehaviorReport::<H256, u64>::decode(&mut &encoded[..]).unwrap(), report);
 
-		let report = MisbehaviorReport::<H256> {
+		let report = MisbehaviorReport::<H256, u64> {
 			parent_hash: [0; 32].into(),
 			parent_number: 999,
 			target: [1; 32].into(),
@@ -306,6 +306,6 @@ mod test {
 		};
 
 		let encoded = report.encode();
-		assert_eq!(MisbehaviorReport::<H256>::decode(&mut &encoded[..]).unwrap(), report);
+		assert_eq!(MisbehaviorReport::<H256, u64>::decode(&mut &encoded[..]).unwrap(), report);
 	}
 }

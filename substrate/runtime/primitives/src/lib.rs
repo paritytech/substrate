@@ -34,6 +34,9 @@ extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 
+#[cfg(test)]
+extern crate serde_json;
+
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 

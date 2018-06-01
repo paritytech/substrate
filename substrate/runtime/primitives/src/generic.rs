@@ -295,6 +295,7 @@ pub struct Header<Number, Hashing: HashingT, DigestItem> {
 // the `hashing` trait used as a parameter.
 // dummy struct that uses the hash type directly.
 #[cfg(feature = "std")]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[derive(Deserialize)]
 struct DeserializeHeader<N, H, D> {
 	parent_hash: H,
@@ -441,6 +442,7 @@ impl<'a, Number, Hashing: HashingT, DigestItem, AccountId, Index, Call, Signatur
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
 		// dummy struct that uses the hash type directly.
 		#[derive(Deserialize)]
+		#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 		struct Inner<N, H, D, X> {
 			header: DeserializeHeader<N, H, D>,
 			extrinsics: Vec<X>,
@@ -520,5 +522,67 @@ where
 	}
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
 		Block { header, extrinsics }
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use codec::Slicable;
+	use substrate_primitives::{H256, H512};
+	use super::{Digest, Header, UncheckedExtrinsic, Extrinsic};
+
+	type Block = super::Block<
+		u64,
+		::traits::BlakeTwo256,
+		Vec<u8>,
+		H256,
+		u64,
+		u64,
+		::Ed25519Signature
+	>;
+
+	#[test]
+	fn block_roundtrip_serialization() {
+		let block: Block = Block {
+			header: Header {
+				parent_hash: [0u8; 32].into(),
+				number: 100_000,
+				state_root: [1u8; 32].into(),
+				extrinsics_root: [2u8; 32].into(),
+				digest: Digest { logs: vec![vec![1, 2, 3], vec![4, 5, 6]] },
+			},
+			extrinsics: vec![
+				UncheckedExtrinsic {
+					signature: H512::from([0u8; 64]).into(),
+					extrinsic: Extrinsic {
+						signed: [255u8; 32].into(),
+						index: 0,
+						function: 100,
+					}
+				},
+				UncheckedExtrinsic {
+					signature: H512::from([255u8; 64]).into(),
+					extrinsic: Extrinsic {
+						signed: [128u8; 32].into(),
+						index: 100,
+						function: 99,
+					}
+				},
+			]
+		};
+
+		{
+			let encoded = ::serde_json::to_vec(&block).unwrap();
+			let decoded: Block = ::serde_json::from_slice(&encoded).unwrap();
+
+			assert_eq!(block, decoded);
+		}
+
+		{
+			let encoded = block.encode();
+			let decoded = Block::decode(&mut &encoded[..]).unwrap();
+
+			assert_eq!(block, decoded);
+		}
 	}
 }
