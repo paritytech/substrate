@@ -78,7 +78,6 @@ macro_rules! decl_module {
 		$($rest:tt)*
 	) => {
 		$(#[$attr])*
-		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 		pub struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
 		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
@@ -86,9 +85,11 @@ macro_rules! decl_module {
 		}
 	};
 	(
+		$(#[$attr:meta])*
 		struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$($rest:tt)*
 	) => {
+		$(#[$attr])*
 		struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
 		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;

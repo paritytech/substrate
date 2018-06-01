@@ -62,11 +62,11 @@ pub trait Trait: staking::Trait + Sized {
 
 decl_module! {
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub struct Module<T: Trait>;
 
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) -> Result = 0;
 		fn second(aux, proposal: PropIndex) -> Result = 1;
@@ -74,7 +74,7 @@ decl_module! {
 	}
 
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub enum PrivCall {
 		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result = 0;
 		fn cancel_referendum(ref_index: ReferendumIndex) -> Result = 1;

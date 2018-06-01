@@ -65,17 +65,17 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub struct Module<T: Trait>;
 
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn report_misbehavior(aux, report: MisbehaviorReport<T::Header, T::BlockNumber>) -> Result = 0;
 	}
 
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub enum PrivCall {
 		fn set_code(new: Vec<u8>) -> Result = 0;
 		fn set_storage(items: Vec<KeyValue>) -> Result = 1;

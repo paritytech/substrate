@@ -103,11 +103,11 @@ pub trait Trait: system::Trait + session::Trait {
 
 decl_module! {
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub struct Module<T: Trait>;
 
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn transfer(aux, dest: T::AccountId, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
@@ -115,7 +115,7 @@ decl_module! {
 	}
 
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub enum PrivCall {
 		fn set_sessions_per_era(new: T::BlockNumber) -> Result = 0;
 		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;

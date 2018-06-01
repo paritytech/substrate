@@ -79,6 +79,7 @@ pub trait Trait {
 
 decl_module! {
 	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub struct Module<T: Trait>;
 }
 

@@ -50,11 +50,11 @@ pub trait Trait: HasPublicAux + system::Trait {
 
 decl_module! {
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub struct Module<T: Trait>;
 
 	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", derive(Serialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set(aux, now: T::Value) -> Result = 0;
 	}
