@@ -231,7 +231,7 @@ impl<B, E> Client<B, E> where
 	/// No changes are made.
 	pub fn execution_proof(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
 		use call_executor::state_to_execution_proof;
-		
+
 		let result = self.executor.call(id, method, call_data);
 		let result = result?.return_data;
 		let proof = self.backend.state_at(*id).map(|state| state_to_execution_proof(&state))?;
@@ -344,7 +344,8 @@ impl<B, E> Client<B, E> where
 				header: header,
 				is_new_best: is_new_best,
 			};
-			self.import_notification_sinks.lock().retain(|sink| !sink.unbounded_send(notification.clone()).is_err());
+			self.import_notification_sinks.lock()
+				.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 		}
 		Ok(ImportResult::Queued)
 	}
