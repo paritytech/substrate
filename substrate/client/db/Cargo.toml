@@ -13,6 +13,7 @@ hashdb = { git = "https://github.com/paritytech/parity.git" }
 patricia-trie = { git = "https://github.com/paritytech/parity.git" }
 memorydb = { git = "https://github.com/paritytech/parity.git" }
 substrate-primitives = { path = "../../../substrate/primitives" }
+substrate-runtime-primitives = { path = "../../../substrate/runtime/primitives" }
 substrate-client = { path = "../../../substrate/client" }
 substrate-state-machine = { path = "../../../substrate/state-machine" }
 substrate-runtime-support = { path = "../../../substrate/runtime-support" }

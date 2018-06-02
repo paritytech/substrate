@@ -1224,6 +1224,7 @@ version = "0.1.0"
 dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-executor 0.1.0",
+ "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
@@ -1314,16 +1315,8 @@ dependencies = [
 name = "polkadot-executor"
 version = "0.1.0"
 dependencies = [
- "ed25519 0.1.0",
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
+ "polkadot-runtime 0.1.0",
  "substrate-executor 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-state-machine 0.1.0",
- "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1924,6 +1917,7 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-state-machine 0.1.0",
 ]

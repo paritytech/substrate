@@ -18,6 +18,7 @@
 //! runtime.
 
 extern crate polkadot_executor;
+extern crate polkadot_primitives as primitives;
 extern crate polkadot_runtime as runtime;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
@@ -36,7 +37,6 @@ extern crate substrate_keyring as keyring;
 pub mod full;
 pub mod light;
 
-use polkadot_runtime::primitives as primitives;
 use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
 use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
 use runtime::{Block, UncheckedExtrinsic};

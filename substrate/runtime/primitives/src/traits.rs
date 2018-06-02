@@ -174,7 +174,7 @@ impl<A: Executable, B: Executable> Executable for (A, B) {
 pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member;
+	type Output: Member + AsRef<[u8]>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -296,7 +296,7 @@ pub trait Digest {
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Slicable;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Member + Default;
 
@@ -335,7 +335,7 @@ pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
 pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
 	type Extrinsic: Member + Slicable;
 	type Header: Header<Hash=Self::Hash>;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
 
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
