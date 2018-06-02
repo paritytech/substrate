@@ -44,6 +44,7 @@ extern crate substrate_serializer;
 #[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_primitives;
 
+extern crate polkadot_primitives as primitives;
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_consensus as consensus;
@@ -57,7 +58,7 @@ extern crate substrate_runtime_timestamp as timestamp;
 
 mod parachains;
 
-use primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey};
+use primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
 
 #[cfg(feature = "std")]
@@ -66,7 +67,7 @@ pub use runtime_primitives::BuildExternalities;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use parachains::Call as ParachainsCall;
-pub use primitives::{Header, Block, UncheckedExtrinsic, Extrinsic};
+pub use primitives::Header;
 
 /// The position of the timestamp set extrinsic.
 pub const TIMESTAMP_SET_POSITION: u32 = 0;
@@ -307,9 +308,9 @@ mod tests {
 		});
 
 		let raw = block.encode();
-		let decoded_substrate = primitives::block::Block::decode(&mut &raw[..]).unwrap();
-		let encoded_substrate = decoded_substrate.encode();
-		let decoded = Block::decode(&mut &encoded_substrate[..]).unwrap();
+		let decoded_primitive = ::primitives::Block::decode(&mut &raw[..]).unwrap();
+		let encoded_primitive = decoded_primitive.encode();
+		let decoded = Block::decode(&mut &encoded_primitive[..]).unwrap();
 
 		assert_eq!(block, decoded);
 	}
@@ -318,11 +319,11 @@ mod tests {
 	fn serialize_unchecked() {
 		let tx = UncheckedExtrinsic {
 			extrinsic: Extrinsic {
-				signed: [1; 32],
+				signed: [1; 32].into(),
 				index: 999,
 				function: Call::Timestamp(TimestampCall::set(135135)),
 			},
-			signature: primitives::hash::H512([0; 64]).into(),
+			signature: runtime_primitives::Ed25519Signature(primitives::hash::H512([0; 64])).into(),
 		};
 		// 71000000
 		// 0101010101010101010101010101010101010101010101010101010101010101
@@ -339,7 +340,7 @@ mod tests {
 	#[test]
 	fn serialize_checked() {
 		let xt = Extrinsic {
-			signed: hex!["0d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e"],
+			signed: hex!["0d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e"].into(),
 			index: 0,
 			function: Call::CouncilVoting(council::voting::Call::propose(Box::new(
 				PrivCall::Consensus(consensus::PrivCall::set_code(

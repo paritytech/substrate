@@ -29,30 +29,29 @@ extern crate substrate_serializer;
 
 extern crate substrate_codec as codec;
 
-pub mod parachain;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
+#[cfg(feature = "std")]
+extern crate serde;
+
+use std::cmp::Ordering;
+
+use primitives::bytes;
+use runtime_primitives::traits::{BlakeTwo256, Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic;
-use codec::Slicable;
+use codec::{Input, Slicable};
 
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 
-/// A log entry in the block.
-#[derive(PartialEq, Eq, Clone, Default)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
-
-impl Slicable for Log {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Vec::<u8>::decode(input).map(Log)
-	}
-
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.using_encoded(f)
-	}
-}
-
-/// Something that identifies a block.
-pub type BlockId = generic::BlockId<Block>;
+/// A "future-proof" block type for Polkadot. This will be resilient to upgrades in transaction
+/// format, because it doesn't attempt to decode extrinsics.
+///
+/// Specialized code needs to link to (at least one version of) the runtime directly
+/// in order to handle the extrinsics within.
+pub type Block = generic::Block<Header, Vec<u8>>;
 
 /// An index to a block.
 /// 32-bits will allow for 136 years of blocks assuming 1 block per second.
@@ -61,20 +60,20 @@ pub type BlockNumber = u64;
 
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
 /// certainly continue to be the same as the substrate's `AuthorityId`.
-pub type AccountId = substrate_primitives::hash::H256;
+pub type AccountId = primitives::hash::H256;
 
 /// The Ed25519 pub key of an session that belongs to an authority of the relay chain. This is
 /// exactly equivalent to what the substrate calls an "authority".
-pub type SessionKey = substrate_primitives::AuthorityId;
+pub type SessionKey = primitives::AuthorityId;
 
 /// Indentifier for a chain. 32-bit should be plenty.
 pub type ChainId = u32;
 
+/// A hash of some data used by the relay chain.
+pub type Hash = primitives::H256;
+
 /// Index of a transaction in the relay chain. 32-bit should be plenty.
 pub type Index = u32;
-
-/// A hash of some data used by the relay chain.
-pub type Hash = substrate_primitives::H256;
 
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 /// Equipped with logic for possibly "unsigned" messages.
@@ -91,6 +90,43 @@ pub type Timestamp = u64;
 /// We round denomination to 10^12 (12 sdf), and leave the other redundancy at the upper end so
 /// that 32 bits may be multiplied with a balance in 128 bits without worrying about overflow.
 pub type Balance = u128;
+
+/// Something that identifies a block.
+#[derive(PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub enum BlockId {
+	/// Block by number.
+	Number(BlockNumber),
+	/// Block by hash.
+	Hash(Hash),
+}
+
+impl<B: BlockT> Into<generic::BlockId<B>> for BlockId where
+	B: BlockT<Hash=Hash>,
+	B::Header: HeaderT<Number=BlockNumber>
+{
+	fn into(self) -> generic::BlockId<B> {
+		match self {
+			BlockId::Number(number) => generic::BlockId::Number(number),
+			BlockId::Hash(hash) => generic::BlockId::Hash(hash),
+		}
+	}
+}
+
+/// A log entry in the block.
+#[derive(PartialEq, Eq, Clone, Default)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+impl Slicable for Log {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<u8>::decode(input).map(Log)
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
+	}
+}
 
 /// Parachain data types.
 pub mod parachain {

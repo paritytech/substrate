@@ -20,6 +20,7 @@ members = [
 	"polkadot/executor",
 	"polkadot/keystore",
 	"polkadot/parachain",
+	"polkadot/primitives",
 	"polkadot/runtime",
 	"polkadot/service",
 	"polkadot/statement-table",
