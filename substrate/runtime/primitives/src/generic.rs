@@ -20,7 +20,7 @@
 use rstd::prelude::*;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
-use traits;
+use traits::{self, As};
 use rstd::ops;
 
 #[cfg(feature = "std")]
@@ -38,6 +38,65 @@ impl<T> MaybeSerializeDebug for T {}
 
 pub trait Member: MaybeSerializeDebug + Eq + PartialEq + Clone {}
 impl<T: MaybeSerializeDebug + Eq + PartialEq + Clone> Member for T {}
+
+
+/// A vetted and verified extrinsic from the external world.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+pub enum Address<AccountId, AccountIndex> where
+ 	AccountId: Member,
+ 	AccountIndex: Member,
+{
+	/// It's an account ID (pubkey).
+	Id(AccountId),
+	/// It's an account index.
+	Index(AccountIndex),
+}
+
+impl<AccountId, AccountIndex> Slicable for Address<AccountId, AccountIndex> where
+	AccountId: Member + Slicable,
+	AccountIndex: Member + Slicable + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+	u32: As<AccountIndex>,
+	u16: As<AccountIndex>,
+	u8: As<AccountIndex>,
+{
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			255 => Some(Address::Id(Slicable::decode(input)?)),
+			254 => Some(Address::Index(Slicable::decode(input)?)),
+			253 => Some(Address::Index(As::sa(u32::decode(input)?))),
+			252 => Some(Address::Index(As::sa(u16::decode(input)?))),
+			x => Some(Address::Index(As::sa(x))),
+		}
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		match *self {
+			Address::Id(ref i) => {
+				v.push(255);
+				i.using_encoded(|s| v.extend(s));
+			}
+			Address::Index(i) if i > As::sa(0xffffffffu32) => {
+				v.push(254);
+				i.using_encoded(|s| v.extend(s));
+			}
+			Address::Index(i) if i > As::sa(0xffffu32) => {
+				v.push(253);
+				u32::sa(i).using_encoded(|s| v.extend(s));
+			}
+			Address::Index(i) if i >= As::sa(252u32) => {
+				v.push(252);
+				u16::sa(i).using_encoded(|s| v.extend(s));
+			}
+			Address::Index(i) => v.push(u8::sa(i)),
+		}
+
+		v
+	}
+}
+
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
