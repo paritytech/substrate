@@ -252,7 +252,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1d43ef0fcabb78d925093fe22e50cc9ca5d182d189a3407c778e5fca714177dd").into(),
+					state_root: hex!("1a34df18f84b844851afd0a91a5bb04738151af0f3850a4606202e0e4e5e99f1").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -286,7 +286,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1d43ef0fcabb78d925093fe22e50cc9ca5d182d189a3407c778e5fca714177dd").into(),
+					state_root: hex!("1a34df18f84b844851afd0a91a5bb04738151af0f3850a4606202e0e4e5e99f1").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
