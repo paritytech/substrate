@@ -203,7 +203,7 @@ impl TransactionPool<Block> for EmptyTransactionPool {
 		None
 	}
 
-	fn on_broadcasted(&self, _: HashMap<ExtrinsicHash, Vec<String>>) {}
+	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 }
 
 pub struct TestNet {

@@ -22,7 +22,7 @@ use parking_lot::{RwLock, Mutex};
 use serde_json;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing, HashingFor};
 use runtime_primitives::generic::BlockId;
-use network::{PeerId, NodeId};
+use network::PeerId;
 
 use message::{self, Message};
 use message::generic::Message as GenericMessage;

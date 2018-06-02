@@ -43,7 +43,7 @@ pub struct Consensus<B: BlockT> {
 
 impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 	/// Create a new instance.
-	pub fn new() -> Consensus {
+	pub fn new() -> Self {
 		Consensus {
 			peers: HashMap::new(),
 			bft_message_sink: None,
@@ -170,8 +170,7 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 			if timestamp >= now - MESSAGE_LIFETIME &&
 				best_header.map_or(true, |header|
 					match *message {
-						Message::BftMessage(ref msg) => &msg.parent_hash != header.parent_hash(),
-						Message::Statement(ref msg) => &msg.parent_hash != header.parent_hash(),
+						GenericMessage::BftMessage(ref msg) => &msg.parent_hash != header.parent_hash(),
 						_ => true,
 					})
 			{
@@ -192,32 +191,33 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 
 #[cfg(test)]
 mod tests {
-	use primitives::Hash;
-	use primitives::bft::Justification;
-	use primitives::block::{HeaderHash, Header};
+	use runtime_primitives::bft::Justification;
+	use runtime_primitives::testing::{H256, Header, Block as RawBlock};
 	use std::time::Instant;
-	use message::{self, Message};
+	use message::{self, generic::Message as GenericMessage};
 	use super::{Consensus, MESSAGE_LIFETIME};
+
+	type Block = RawBlock<u64>;
 
 	#[test]
 	fn collects_garbage() {
-		let prev_hash = HeaderHash::random();
-		let best_hash = HeaderHash::random();
-		let mut consensus = Consensus::new();
+		let prev_hash = H256::random();
+		let best_hash = H256::random();
+		let mut consensus = Consensus::<Block>::new();
 		let now = Instant::now();
-		let m1_hash = Hash::random();
-		let m2_hash = Hash::random();
-		let m1 = Message::BftMessage(message::LocalizedBftMessage {
+		let m1_hash = H256::random();
+		let m2_hash = H256::random();
+		let m1 = GenericMessage::BftMessage(message::LocalizedBftMessage {
 			parent_hash: prev_hash,
-			message: message::BftMessage::Auxiliary(Justification {
+			message: message::generic::BftMessage::Auxiliary(Justification {
 				round_number: 0,
 				hash: Default::default(),
 				signatures: Default::default(),
 			}),
 		});
-		let m2 = Message::BftMessage(message::LocalizedBftMessage {
+		let m2 = GenericMessage::BftMessage(message::LocalizedBftMessage {
 			parent_hash: best_hash,
-			message: message::BftMessage::Auxiliary(Justification {
+			message: message::generic::BftMessage::Auxiliary(Justification {
 				round_number: 0,
 				hash: Default::default(),
 				signatures: Default::default(),
@@ -234,7 +234,14 @@ mod tests {
 		assert_eq!(consensus.message_hashes.len(), 2);
 
 		// random header, nothing should be cleared
-		let mut header = Header::from_block_number(0);
+		let mut header = Header {
+			parent_hash: H256::default(),
+			number: 0,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Default::default(),
+		};
+
 		consensus.collect_garbage(Some(&header));
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);

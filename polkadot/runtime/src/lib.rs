@@ -74,7 +74,7 @@ pub const TIMESTAMP_SET_POSITION: u32 = 0;
 pub const PARACHAINS_SET_POSITION: u32 = 1;
 
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, BlakeTwo256, Log, AccountId, Index, Call, Signature>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
 /// Extrinsic type as expected by this runtime.
