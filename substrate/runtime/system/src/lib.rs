@@ -61,7 +61,7 @@ pub fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
 pub trait Trait {
 	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
-	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash;
+	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Parameter + Member + Default + traits::Digest;
 	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;

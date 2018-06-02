@@ -51,11 +51,11 @@ build_rpc_trait! {
 		fn head(&self) -> Result<block::HeaderHash>;
 
 		#[pubsub(name = "chain_newHead")] {
-			/// Hello subscription
+			/// New head subscription
 			#[rpc(name = "subscribe_newHead")]
 			fn subscribe_new_head(&self, Self::Metadata, pubsub::Subscriber<Self::Header>);
 
-			/// Unsubscribe from hello subscription.
+			/// Unsubscribe from new head subscription.
 			#[rpc(name = "unsubscribe_newHead")]
 			fn unsubscribe_new_head(&self, SubscriptionId) -> RpcResult<bool>;
 		}
