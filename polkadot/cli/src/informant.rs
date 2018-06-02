@@ -22,7 +22,6 @@ use service::Service;
 use tokio_core::reactor;
 use network::{SyncState, SyncProvider};
 use runtime_support::Hashable;
-use primitives::block::HeaderHash;
 use state_machine;
 use client::{self, BlockchainEvents};
 
@@ -45,7 +44,7 @@ pub fn start<B, E>(service: &Service<B, E>, handle: reactor::Handle)
 		let sync_status = network.status();
 
 		if let Ok(best_block) = client.best_block_header() {
-			let hash: HeaderHash = best_block.blake2_256().into();
+			let hash = best_block.hash();
 			let status = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
 				(SyncState::Idle, _) => "Idle".into(),
 				(SyncState::Downloading, None) => "Syncing".into(),

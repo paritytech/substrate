@@ -85,7 +85,7 @@ pub type Index = u64;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<Vec<u8>>;
 /// A test block.
-pub type Block = runtime_primitives::generic::Block<BlockNumber, BlakeTwo256, Vec<u8>, AccountId, Index, Call, Ed25519Signature>;
+pub type Block = runtime_primitives::generic::Block<Header, UncheckedExtrinsic>;
 /// A test block's header.
 pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 /// Extrinsic

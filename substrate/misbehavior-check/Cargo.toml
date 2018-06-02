@@ -6,6 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 substrate-codec = { path = "../codec", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
+substrate-runtime-primitives = { path = "../runtime/primitives", default-features = false }
 substrate-runtime-io = { path = "../runtime-io", default-features = false }
 
 [dev-dependencies]
@@ -14,4 +15,4 @@ substrate-keyring = { path = "../keyring" }
 
 [features]
 default = ["std"]
-std = ["substrate-codec/std", "substrate-primitives/std", "substrate-runtime-io/std"]
+std = ["substrate-codec/std", "substrate-primitives/std", "substrate-runtime-primitives/std", "substrate-runtime-io/std"]

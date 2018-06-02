@@ -7,7 +7,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 error-chain = "0.11"
 polkadot-executor = { path = "../executor" }
 polkadot-runtime = { path = "../runtime" }
-polkadot-primitives = { path = "../primitives" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-executive = { path  = "../../substrate/runtime/executive" }

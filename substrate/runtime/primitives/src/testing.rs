@@ -20,8 +20,9 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
-use substrate_primitives::H256;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
+
+pub use substrate_primitives::H256;
 
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
 pub struct Digest {

@@ -55,7 +55,6 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
-pub mod primitives;
 mod parachains;
 
 use primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey};
@@ -73,6 +72,13 @@ pub use primitives::{Header, Block, UncheckedExtrinsic, Extrinsic};
 pub const TIMESTAMP_SET_POSITION: u32 = 0;
 /// The position of the parachains set extrinsic.
 pub const PARACHAINS_SET_POSITION: u32 = 1;
+
+/// Block type as expected by this runtime.
+pub type Block = generic::Block<BlockNumber, BlakeTwo256, Log, AccountId, Index, Call, Signature>;
+/// Unchecked extrinsic type as expected by this runtime.
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
+/// Extrinsic type as expected by this runtime.
+pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
 
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;

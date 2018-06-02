@@ -40,7 +40,6 @@ extern crate substrate_network as network;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_support as runtime_support;
-extern crate polkadot_primitives;
 extern crate polkadot_executor;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;

@@ -121,6 +121,28 @@ impl<T> From<T> for MaybeUnsigned<T> {
 	}
 }
 
+/// Verify a signature on an encoded value in a lazy manner. This can be
+/// an optimization if the signature scheme has an "unsigned" escape hash.
+pub fn verify_encoded_lazy<V: Verify, T: codec::Slicable>(sig: &V, item: &T, signer: &V::Signer) -> bool {
+	// TODO: unfortunately this is a lifetime relationship that can't
+	// be expressed without higher-kinded lifetimes.
+	struct LazyEncode<F> {
+		inner: F,
+		encoded: Option<Vec<u8>>,
+	}
+
+	impl<F: Fn() -> Vec<u8>> traits::Lazy<[u8]> for LazyEncode<F> {
+		fn get(&mut self) -> &[u8] {
+			self.encoded.get_or_insert_with(&self.inner).as_slice()
+		}
+	}
+
+	sig.verify(
+		LazyEncode { inner: || item.encode(), encoded: None },
+		signer,
+	)
+}
+
 #[macro_export]
 macro_rules! __impl_outer_config_types {
 	($concrete:ident $config:ident $snake:ident $($rest:ident)*) => {

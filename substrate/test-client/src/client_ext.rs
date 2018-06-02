@@ -19,7 +19,6 @@
 use client::{self, Client};
 use keyring::Keyring;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use runtime_primitives::traits::Header;
 use runtime;
 use bft;
 use {Backend, Executor, NativeExecutor};

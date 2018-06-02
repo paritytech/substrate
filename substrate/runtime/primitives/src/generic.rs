@@ -85,27 +85,7 @@ impl<AccountId, Index, Call, Signature> traits::Checkable for UncheckedExtrinsic
 	type Checked = CheckedExtrinsic<AccountId, Index, Call, Signature>;
 
 	fn check(self) -> Result<Self::Checked, Self> {
-		// TODO: unfortunately this is a lifetime relationship that can't
-		// be expressed without higher-kinded lifetimes.
-		struct LazyEncode<F> {
-			inner: F,
-			encoded: Option<Vec<u8>>,
-		}
-
-		impl<F: Fn() -> Vec<u8>> traits::Lazy<[u8]> for LazyEncode<F> {
-			fn get(&mut self) -> &[u8] {
-				self.encoded.get_or_insert_with(&self.inner).as_slice()
-			}
-		}
-
-		let sig_ok = {
-			self.signature.verify(
-				LazyEncode { inner: || self.extrinsic.encode(), encoded: None },
-				&self.extrinsic.signed,
-			)
-		};
-
-		if sig_ok {
+		if ::verify_encoded_lazy(&self.signature, &self.extrinsic, &self.extrinsic.signed) {
 			Ok(CheckedExtrinsic(self))
 		} else {
 			Err(self)
@@ -355,6 +335,7 @@ impl<Number, Hashing, DigestItem> Slicable for Header<Number, Hashing, DigestIte
 		v
 	}
 }
+
 impl<Number, Hashing, DigestItem> traits::Header for Header<Number, Hashing, DigestItem> where
  	Number: Member + ::rstd::hash::Hash + Copy + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
 	Hashing: HashingT,
@@ -394,6 +375,19 @@ impl<Number, Hashing, DigestItem> traits::Header for Header<Number, Hashing, Dig
 	}
 }
 
+impl<Number, Hashing, DigestItem> Header<Number, Hashing, DigestItem> where
+ 	Number: Member + ::rstd::hash::Hash + Copy + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
+	Hashing: HashingT,
+	DigestItem: Member + Default + Slicable,
+	Hashing::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Slicable,
+ {
+	/// Convenience helper for computing the hash of the header without having
+	/// to import the trait.
+	pub fn hash(&self) -> Hashing::Output {
+		Hashing::hash_of(self)
+	}
+}
+
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
@@ -417,72 +411,24 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 
 /// Abstraction over a substrate block.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Number, Hashing: HashingT, DigestItem, AccountId, Index, Call, Signature> {
+pub struct Block<Header, Extrinsic> {
 	/// The block header.
-	pub header: Header<Number, Hashing, DigestItem>,
+	pub header: Header,
 	/// The accompanying extrinsics.
-	pub extrinsics: Vec<UncheckedExtrinsic<AccountId, Index, Call, Signature>>,
+	pub extrinsics: Vec<Extrinsic>,
 }
 
-// Hack to work around the fact that deriving deserialize doesn't work nicely with
-// the `Hashing` trait used as a parameter.
-#[cfg(feature = "std")]
-impl<'a, Number, Hashing: HashingT, DigestItem, AccountId, Index, Call, Signature> Deserialize<'a> for Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> where
-	Number: 'a + Deserialize<'a>,
-	Hashing::Output: 'a + Deserialize<'a>,
-	DigestItem: 'a + Deserialize<'a>,
-	AccountId: 'a + Deserialize<'a>,
-	Index: 'a + Deserialize<'a>,
-	Call: 'a + Deserialize<'a>,
-	Signature: 'a + Deserialize<'a>,
-{
-	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
-		// dummy struct that uses the hash type directly.
-		#[derive(Deserialize)]
-		#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-		struct Inner<N, H, D, X> {
-			header: DeserializeHeader<N, H, D>,
-			extrinsics: Vec<X>,
-		}
-
-		let inner = Inner::<
-			Number,
-			Hashing::Output,
-			DigestItem,
-			UncheckedExtrinsic<AccountId, Index, Call, Signature>,
-		>::deserialize(de)?;
-
-		Ok(Block {
-			header: inner.header.into(),
-			extrinsics: inner.extrinsics,
-		})
-	}
-}
-
-impl<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> Slicable
-	for Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature>
-where
-	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
-	Hashing: HashingT,
-	DigestItem: Member + Default,
-	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
- 	AccountId: Member + Default + MaybeDisplay,
- 	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
-	Signature: Member + Default + traits::Verify<Signer = AccountId>,
-	Header<Number, Hashing, DigestItem>: traits::Header,
-	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
-	Extrinsic<AccountId, Index, Call>: Slicable,
-{
+impl<Header: Slicable, Extrinsic: Slicable> Slicable for Block<Header, Extrinsic> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
 			header: Slicable::decode(input)?,
 			extrinsics: Slicable::decode(input)?,
 		})
 	}
+
 	fn encode(&self) -> Vec<u8> {
 		let mut v: Vec<u8> = Vec::new();
 		v.extend(self.header.encode());
@@ -491,24 +437,13 @@ where
 	}
 }
 
-impl<Number, Hashing, DigestItem, AccountId, Index, Call, Signature> traits::Block
-	for Block<Number, Hashing, DigestItem, AccountId, Index, Call, Signature>
+impl<Header, Extrinsic> traits::Block for Block<Header, Extrinsic>
 where
-	Number: Member + MaybeDisplay + SimpleArithmetic + Slicable,
-	Hashing: HashingT,
-	Hashing::Output: ::rstd::hash::Hash,
-	DigestItem: Member + Default,
-	<Hashing as HashingT>::Output: Default + Member + MaybeDisplay + SimpleBitOps + Slicable,
- 	AccountId: Member + Default + MaybeDisplay,
- 	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
-	Signature: Member + Default + traits::Verify<Signer = AccountId>,
-	Header<Number, Hashing, DigestItem>: traits::Header,
-	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
-	Extrinsic<AccountId, Index, Call>: Slicable,
+	Header: HeaderT,
+ 	Extrinsic: Member + Slicable,
 {
-	type Extrinsic = UncheckedExtrinsic<AccountId, Index, Call, Signature>;
-	type Header = Header<Number, Hashing, DigestItem>;
+	type Extrinsic = Extrinsic;
+	type Header = Header;
 	type Hash = <Self::Header as traits::Header>::Hash;
 
 	fn header(&self) -> &Self::Header {
@@ -532,13 +467,8 @@ mod tests {
 	use super::{Digest, Header, UncheckedExtrinsic, Extrinsic};
 
 	type Block = super::Block<
-		u64,
-		::traits::BlakeTwo256,
-		Vec<u8>,
-		H256,
-		u64,
-		u64,
-		::Ed25519Signature
+		Header<u64, ::traits::BlakeTwo256, Vec<u8>>,
+		UncheckedExtrinsic<H256, u64, u64, ::Ed25519Signature>,
 	>;
 
 	#[test]

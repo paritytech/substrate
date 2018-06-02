@@ -300,8 +300,7 @@ impl<B, E, Block: BlockT> Client<B, E, Block> where
 			blockchain::BlockStatus::InChain => {},
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
-		let hash: block::HeaderHash = header.blake2_256().into();
-
+		let hash = header.hash();
 		let _import_lock = self.import_lock.lock();
 		*self.importing_block.write() = Some(hash);
 		let result = self.execute_and_import_block(origin, hash, header, justification, body);
@@ -312,11 +311,12 @@ impl<B, E, Block: BlockT> Client<B, E, Block> where
 	fn execute_and_import_block(
 		&self,
 		origin: BlockOrigin,
-		hash: HeaderHash,
-		header: block::Header,
-		justification: bft::Justification,
-		body: Option<block::Body>,
+		hash: Block::Hash,
+		header: Block::Header,
+		justification: bft::Justification<Block::Hash>,
+		body: Option<Vec<Block::Extrinsic>>,
 	) -> error::Result<ImportResult> {
+		let parent_hash = header.parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
 			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
 			blockchain::BlockStatus::Unknown => {},
@@ -339,7 +339,6 @@ impl<B, E, Block: BlockT> Client<B, E, Block> where
 		};
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
-		let hash = header.hash();
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
 		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
 		if let Some(storage_update) = storage_update {

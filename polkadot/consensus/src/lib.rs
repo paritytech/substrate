@@ -35,7 +35,6 @@ extern crate polkadot_api;
 extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
-extern crate polkadot_primitives;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_runtime;
 
@@ -69,6 +68,7 @@ use codec::Slicable;
 use table::generic::Statement as GenericStatement;
 use runtime_support::Hashable;
 use polkadot_api::{PolkadotApi, BlockBuilder};
+use polkadot_runtime::primitives as polkadot_primitives;
 use polkadot_primitives::{Hash, Timestamp};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};

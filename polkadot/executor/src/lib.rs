@@ -23,7 +23,6 @@ extern crate substrate_codec as codec;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
-extern crate polkadot_primitives as polkadot_primitives;
 extern crate ed25519;
 extern crate triehash;
 
