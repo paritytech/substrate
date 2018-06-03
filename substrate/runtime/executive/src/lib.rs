@@ -228,7 +228,7 @@ mod tests {
 			transaction_byte_fee: 0,
 			existential_deposit: 0,
 		}.build_externalities());
-		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2, 69)));
+		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt);

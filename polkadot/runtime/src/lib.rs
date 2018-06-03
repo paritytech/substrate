@@ -63,14 +63,12 @@ pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use parachains::Call as ParachainsCall;
 
-
 /// The position of the timestamp set extrinsic.
 pub const TIMESTAMP_SET_POSITION: u32 = 0;
 /// The position of the parachains set extrinsic.
 pub const PARACHAINS_SET_POSITION: u32 = 1;
 
 /// Concrete runtime type used to parameterize the various modules.
-
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -111,6 +109,9 @@ impl session::Trait for Concrete {
 }
 /// Session module for this concrete runtime.
 pub type Session = session::Module<Concrete>;
+
+/// The address format for describing accounts.
+pub type Address = staking::Address<AccountId, staking::AccountIndex>;
 
 impl staking::Trait for Concrete {
 	type Balance = Balance;
@@ -160,8 +161,6 @@ impl_outer_dispatch! {
 	}
 }
 
-/// The address format for describing accounts.
-pub type Address = staking::Address<AccountId, staking::AccountIndex>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, Hash, Log>;
 /// Block type as expected by this runtime.

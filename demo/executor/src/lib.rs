@@ -47,7 +47,7 @@ mod tests {
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
 	use demo_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::{Header as HeaderT, Lookup};
+	use runtime_primitives::traits::Header as HeaderT;
 	use {staking, system};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
 		BuildExternalities, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic};
@@ -67,7 +67,7 @@ mod tests {
 		let extrinsic = BareExtrinsic {
 			signed: Alice.into(),
 			index: 0,
-			function: Call::Staking(staking::Call::transfer::<Concrete>(Bob.into(), 69)),
+			function: Call::Staking(staking::Call::transfer::<Concrete>(AccountId::from(Bob).into(), 69)),
 		};
 		let signature = Keyring::from_raw_public(extrinsic.signed.clone()).unwrap()
 			.sign(&extrinsic.encode()).into();
@@ -223,7 +223,7 @@ mod tests {
 			vec![BareExtrinsic {
 				signed: Alice.into(),
 				index: 0,
-				function: Call::Staking(staking::Call::transfer(Bob.into(), 69)),
+				function: Call::Staking(staking::Call::transfer(AccountId::from(Bob).into(), 69)),
 			}]
 		)
 	}
@@ -232,17 +232,17 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("7d0a316fca98001219a2c80fe5379be59c1fd8df86072957cea0e22b2e57eaf9").into(),
+			hex!("38ce5a52fea2832eddd11d9e2f6fe62aaa94ba6ebf8cb451fbb47be9c68d12da").into(),
 			vec![
 				BareExtrinsic {
 					signed: Bob.into(),
 					index: 0,
-					function: Call::Staking(staking::Call::transfer(Alice.into(), 5)),
+					function: Call::Staking(staking::Call::transfer(AccountId::from(Alice).into(), 5)),
 				},
 				BareExtrinsic {
 					signed: Alice.into(),
 					index: 1,
-					function: Call::Staking(staking::Call::transfer(Bob.into(), 15)),
+					function: Call::Staking(staking::Call::transfer(AccountId::from(Bob).into(), 15)),
 				}
 			]
 		)

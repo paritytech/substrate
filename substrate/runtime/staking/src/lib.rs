@@ -181,13 +181,14 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<AccountIndex>;
+	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 }
 
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn transfer(aux, dest: T::AccountId, value: T::Balance) -> Result = 0;
+		fn transfer(aux, dest: Address<T::AccountId, AccountIndex>, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
 		fn unstake(aux) -> Result = 2;
 	}
@@ -307,7 +308,8 @@ impl<T: Trait> Module<T> {
 
 	/// Transfer some unlocked staking balance to another staker.
 	/// TODO: probably want to state gas-limit and gas-price.
-	fn transfer(aux: &T::PublicAux, dest: T::AccountId, value: T::Balance) -> Result {
+	fn transfer(aux: &T::PublicAux, dest: Address<T::AccountId, AccountIndex>, value: T::Balance) -> Result {
+		let dest = Self::lookup(dest).ok_or("bad destination")?;
 		// commit anything that made it this far to storage
 		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
@@ -974,7 +976,7 @@ mod tests {
 	fn default_indexing_on_new_accounts_should_work() {
 		with_externalities(&mut new_test_ext(10, 1, 2, 0, true), || {
 			assert_eq!(Staking::lookup_index(4), None);
-			assert_ok!(Staking::transfer(&1, 5, 10));
+			assert_ok!(Staking::transfer(&1, 5.into(), 10));
 			assert_eq!(Staking::lookup_index(4), Some(5));
 		});
 	}
@@ -983,7 +985,7 @@ mod tests {
 	fn dust_account_removal_should_work() {
 		with_externalities(&mut new_test_ext(256 * 10, 1, 2, 0, true), || {
 			assert_eq!(Staking::balance(&2), 256 * 20);
-			assert_ok!(Staking::transfer(&2, 5, 256 * 10 + 1));	// index 1 (account 2) becomes zombie
+			assert_ok!(Staking::transfer(&2, 5.into(), 256 * 10 + 1));	// index 1 (account 2) becomes zombie
 			assert_eq!(Staking::balance(&2), 0);
 			assert_eq!(Staking::balance(&5), 256 * 10 + 1);
 		});
@@ -995,9 +997,9 @@ mod tests {
 			assert_eq!(Staking::lookup_index(1), Some(2));
 			assert_eq!(Staking::lookup_index(4), None);
 			assert_eq!(Staking::balance(&2), 256 * 20);
-			assert_ok!(Staking::transfer(&2, 5, 256 * 20));	// account 2 becomes zombie freeing index 1 for reclaim)
+			assert_ok!(Staking::transfer(&2, 5.into(), 256 * 20));	// account 2 becomes zombie freeing index 1 for reclaim)
 			assert_eq!(Staking::balance(&2), 0);
-			assert_ok!(Staking::transfer(&5, 6, 256 * 1 + RECLAIM_INDEX_MAGIC));	// account 6 takes index 1.
+			assert_ok!(Staking::transfer(&5, 6.into(), 256 * 1 + RECLAIM_INDEX_MAGIC));	// account 6 takes index 1.
 			assert_eq!(Staking::balance(&6), 256 * 1 + RECLAIM_INDEX_MAGIC);
 			assert_eq!(Staking::lookup_index(1), Some(6));
 		});
@@ -1037,7 +1039,7 @@ mod tests {
 
 			// Block 5: Transfer stake from highest to lowest. No change yet.
 			System::set_block_number(5);
-			assert_ok!(Staking::transfer(&4, 1, 40));
+			assert_ok!(Staking::transfer(&4, 1.into(), 40));
 			Staking::check_new_era();
 
 			// Block 6: Lowest now validator.
@@ -1135,7 +1137,7 @@ mod tests {
 	fn staking_balance_transfer_works() {
 		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
-			assert_ok!(Staking::transfer(&1, 2, 69));
+			assert_ok!(Staking::transfer(&1, 2.into(), 69));
 			assert_eq!(Staking::balance(&1), 42);
 			assert_eq!(Staking::balance(&2), 69);
 		});
@@ -1146,7 +1148,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::stake(&1));
-			assert_noop!(Staking::transfer(&1, 2, 69), "bondage too high to send value");
+			assert_noop!(Staking::transfer(&1, 2.into(), 69), "bondage too high to send value");
 		});
 	}
 
@@ -1172,7 +1174,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 			<FreeBalance<Test>>::insert(1, 111);
 			assert_ok!(Staking::reserve_balance(&1, 69));
-			assert_noop!(Staking::transfer(&1, 2, 69), "balance too low to send value");
+			assert_noop!(Staking::transfer(&1, 2.into(), 69), "balance too low to send value");
 		});
 	}
 
