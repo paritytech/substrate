@@ -34,9 +34,9 @@ error_chain! {
 			display("Inehrent transactions cannot be queued."),
 		}
 		/// Attempted to queue a transaction with bad signature.
-		BadSignature(xt: UncheckedExtrinsic) {
+		BadSignature(e: &'static str) {
 			description("Transaction had bad signature."),
-			display("Transaction had bad signature."),
+			display("Transaction had bad signature: {}", e),
 		}
 		/// Attempted to queue a transaction that is already in the pool.
 		AlreadyImported(hash: Hash) {
