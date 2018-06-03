@@ -47,6 +47,9 @@ use runtime_primitives::traits::{Identity, HasPublicAux};
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildExternalities;
 
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
 
@@ -134,12 +137,14 @@ impl_outer_dispatch! {
 	}
 }
 
+/// The address format for describing accounts.
+pub type Address = staking::Address<AccountId, staking::AccountIndex>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, AccountId, Index, Call, Signature>;
+pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, Address, Index, Call, Signature, Staking>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature, Staking>;
 /// Extrinsic type as expected by this runtime.
 pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.

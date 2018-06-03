@@ -84,6 +84,15 @@ pub enum Address<AccountId, AccountIndex> where
 	Index(AccountIndex),
 }
 
+impl<AccountId, AccountIndex> From<AccountId> for Address<AccountId, AccountIndex> where
+ 	AccountId: Member,
+ 	AccountIndex: Member,
+{
+	fn from(a: AccountId) -> Self {
+		Address::Id(a)
+	}
+}
+
 impl<AccountId, AccountIndex> Slicable for Address<AccountId, AccountIndex> where
 	AccountId: Member + Slicable,
 	AccountIndex: Member + Slicable + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,

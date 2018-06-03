@@ -25,6 +25,7 @@ use state_machine::{self, OverlayedChanges};
 use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
 use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
 use runtime::{self, Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall, ParachainsCall};
+use runtime_primitives::generic;
 
 use {CheckedBlockId, BlockBuilder, PolkadotApi, LocalPolkadotApi, ErrorKind, Error, Result};
 
@@ -229,7 +230,7 @@ impl<B: LocalBackend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecu
 
 		let extrinsics = vec![
 			UncheckedExtrinsic::new(
-				Extrinsic {
+				generic::Extrinsic {
 					signed: Default::default(),
 					index: Default::default(),
 					function: Call::Timestamp(TimestampCall::set(timestamp)),
@@ -237,7 +238,7 @@ impl<B: LocalBackend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecu
 				Default::default()
 			),
 			UncheckedExtrinsic::new(
-				Extrinsic {
+				generic::Extrinsic {
 					signed: Default::default(),
 					index: Default::default(),
 					function: Call::Parachains(ParachainsCall::set_heads(parachains)),

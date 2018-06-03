@@ -139,7 +139,7 @@ error_chain! {
 			display("Inehrent transactions cannot be queued."),
 		}
 		/// Attempted to queue a transaction with bad signature.
-		BadSignature(e: 'static str) {
+		BadSignature(e: &'static str) {
 			description("Transaction had bad signature."),
 			display("Transaction had bad signature: {}", e),
 		}

@@ -531,7 +531,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 				}
 			};
 			let extrinsic = Extrinsic {
-				signed: local_id,
+				signed: local_id.into(),
 				index: next_index,
 				function: Call::Consensus(ConsensusCall::report_misbehavior(report)),
 			};

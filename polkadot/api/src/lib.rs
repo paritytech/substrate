@@ -26,6 +26,7 @@ extern crate substrate_client as client;
 extern crate substrate_executor as substrate_executor;
 extern crate substrate_runtime_executive;
 extern crate substrate_primitives;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
 
 #[macro_use]
