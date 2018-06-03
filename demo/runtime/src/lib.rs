@@ -148,7 +148,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, 
 /// Extrinsic type as expected by this runtime. This is not the type that is signed.
 pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
 /// Extrinsic type that is signed.
-pub type SignedExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
+pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Concrete, Block, Staking,
 	(((((), Council), Democracy), Staking), Session)>;

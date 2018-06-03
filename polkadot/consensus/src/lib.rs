@@ -71,6 +71,7 @@ use runtime_support::Hashable;
 use polkadot_api::{PolkadotApi, BlockBuilder};
 use polkadot_primitives::{Hash, Timestamp};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_runtime::BareExtrinsic;
 use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
 use transaction_pool::{Ready, TransactionPool};
@@ -530,8 +531,8 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1, s1.signature), (h2, s2.signature)),
 				}
 			};
-			let extrinsic = Extrinsic {
-				signed: local_id.into(),
+			let extrinsic = BareExtrinsic {
+				signed: local_id,
 				index: next_index,
 				function: Call::Consensus(ConsensusCall::report_misbehavior(report)),
 			};
@@ -539,6 +540,12 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			next_index += 1;
 
 			let signature = self.local_key.sign(&extrinsic.encode()).into();
+
+			let extrinsic = Extrinsic {
+				signed: extrinsic.signed.into(),
+				index: extrinsic.index,
+				function: extrinsic.function,
+			};
 			let uxt = UncheckedExtrinsic::new(extrinsic, signature);
 
 			pool.import(uxt).expect("locally signed extrinsic is valid; qed");

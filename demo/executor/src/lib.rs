@@ -50,7 +50,7 @@ mod tests {
 	use runtime_primitives::traits::{Header as HeaderT, Lookup};
 	use {staking, system};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
-		BuildExternalities, GenesisConfig, SessionConfig, StakingConfig, SignedExtrinsic};
+		BuildExternalities, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -64,7 +64,7 @@ mod tests {
 	}
 
 	fn xt() -> UncheckedExtrinsic {
-		let extrinsic = SignedExtrinsic {
+		let extrinsic = BareExtrinsic {
 			signed: Alice.into(),
 			index: 0,
 			function: Call::Staking(staking::Call::transfer::<Concrete>(Bob.into(), 69)),
@@ -187,7 +187,7 @@ mod tests {
 		}.build_externalities()
 	}
 
-	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<SignedExtrinsic>) -> (Vec<u8>, Hash) {
+	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<BareExtrinsic>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(|extrinsic| {
@@ -220,7 +220,7 @@ mod tests {
 			1,
 			[69u8; 32].into(),
 			hex!("de98b34e958af85ab79cbc9b853e49ec2ff19a83b5bc2eba28117c9f6527a51d").into(),
-			vec![SignedExtrinsic {
+			vec![BareExtrinsic {
 				signed: Alice.into(),
 				index: 0,
 				function: Call::Staking(staking::Call::transfer(Bob.into(), 69)),
@@ -234,12 +234,12 @@ mod tests {
 			block1().1,
 			hex!("7d0a316fca98001219a2c80fe5379be59c1fd8df86072957cea0e22b2e57eaf9").into(),
 			vec![
-				SignedExtrinsic {
+				BareExtrinsic {
 					signed: Bob.into(),
 					index: 0,
 					function: Call::Staking(staking::Call::transfer(Alice.into(), 5)),
 				},
-				SignedExtrinsic {
+				BareExtrinsic {
 					signed: Alice.into(),
 					index: 1,
 					function: Call::Staking(staking::Call::transfer(Bob.into(), 15)),
