@@ -33,6 +33,14 @@ pub trait Verify {
 	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool;
 }
 
+/// Means of changing one type into another in a manner dependent on the source type.
+pub trait Lookup<Source> {
+	/// Type to lookup into.
+	type Target;
+	/// Attempt a lookup.
+	fn lookup(s: Source) -> Option<Self::Target>;
+}
+
 /// Simple payment making trait, operating on a single generic `AccountId` type.
 pub trait MakePayment<AccountId> {
 	/// Make some sort of payment concerning `who` for an extrinsic (transaction) of encoded length
@@ -241,7 +249,7 @@ impl Block for substrate_primitives::Block {
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 pub trait Checkable: Sized {
 	type Checked: Sized;
-	fn check(self) -> Result<Self::Checked, Self>;
+	fn check(self) -> Result<Self::Checked, &'static str>;
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to

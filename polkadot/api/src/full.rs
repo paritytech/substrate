@@ -228,22 +228,22 @@ impl<B: LocalBackend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecu
 		};
 
 		let extrinsics = vec![
-			UncheckedExtrinsic {
-				extrinsic: Extrinsic {
+			UncheckedExtrinsic::new(
+				Extrinsic {
 					signed: Default::default(),
 					index: Default::default(),
 					function: Call::Timestamp(TimestampCall::set(timestamp)),
 				},
-				signature: Default::default(),
-			},
-			UncheckedExtrinsic {
-				extrinsic: Extrinsic {
+				Default::default()
+			),
+			UncheckedExtrinsic::new(
+				Extrinsic {
 					signed: Default::default(),
 					index: Default::default(),
 					function: Call::Parachains(ParachainsCall::set_heads(parachains)),
 				},
-				signature: Default::default(),
-			}
+				Default::default()
+			)
 		];
 
 		let mut builder = ClientBlockBuilder {

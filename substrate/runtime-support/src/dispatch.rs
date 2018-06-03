@@ -77,6 +77,9 @@ macro_rules! decl_module {
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$($rest:tt)*
 	) => {
+		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+		#[derive(Clone, Copy, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		pub struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
 		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
@@ -87,6 +90,9 @@ macro_rules! decl_module {
 		struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$($rest:tt)*
 	) => {
+		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+		#[derive(Clone, Copy, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
 		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;

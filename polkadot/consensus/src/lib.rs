@@ -539,7 +539,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			next_index += 1;
 
 			let signature = self.local_key.sign(&extrinsic.encode()).into();
-			let uxt = UncheckedExtrinsic { extrinsic, signature };
+			let uxt = UncheckedExtrinsic::new(extrinsic, signature);
 
 			pool.import(uxt).expect("locally signed extrinsic is valid; qed");
 		}

@@ -70,6 +70,10 @@ pub const TIMESTAMP_SET_POSITION: u32 = 0;
 pub const PARACHAINS_SET_POSITION: u32 = 1;
 
 /// Concrete runtime type used to parameterize the various modules.
+
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Concrete;
 
 impl HasPublicAux for Concrete {
@@ -156,12 +160,14 @@ impl_outer_dispatch! {
 	}
 }
 
+/// The address format for describing accounts.
+pub type Address = staking::Address<AccountId, staking::AccountIndex>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, Hash, Log>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, Hash, Log, AccountId, Index, Call, Signature>;
+pub type Block = generic::Block<BlockNumber, Hash, Log, Address, Index, Call, Signature, Staking>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature, Staking>;
 /// Extrinsic type as expected by this runtime.
 pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
@@ -233,14 +239,14 @@ mod tests {
 		let mut block = Block {
 			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default()),
 			extrinsics: vec![
-				UncheckedExtrinsic {
-					extrinsic: Extrinsic {
+				UncheckedExtrinsic::new(
+					generic::Extrinsic {
 						function: Call::Timestamp(timestamp::Call::set(100_000_000)),
 						signed: Default::default(),
 						index: Default::default(),
 					},
-					signature: Default::default(),
-				}
+					Default::default(),
+				)
 			],
 		};
 
@@ -249,14 +255,14 @@ mod tests {
 
 		assert_eq!(block, decoded);
 
-		block.extrinsics.push(UncheckedExtrinsic {
-			extrinsic: Extrinsic {
+		block.extrinsics.push(UncheckedExtrinsic::new(
+			generic::Extrinsic {
 				function: Call::Staking(staking::Call::stake()),
 				signed: Default::default(),
 				index: 10101,
 			},
-			signature: Default::default(),
-		});
+			Default::default(),
+		));
 
 		let raw = block.encode();
 		let decoded = Block::decode(&mut &raw[..]).unwrap();
@@ -269,25 +275,25 @@ mod tests {
 		let mut block = Block {
 			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default()),
 			extrinsics: vec![
-				UncheckedExtrinsic {
-					extrinsic: Extrinsic {
+				UncheckedExtrinsic::new(
+					generic::Extrinsic {
 						function: Call::Timestamp(timestamp::Call::set(100_000_000)),
 						signed: Default::default(),
 						index: Default::default(),
 					},
-					signature: Default::default(),
-				}
+					Default::default(),
+				)
 			],
 		};
 
-		block.extrinsics.push(UncheckedExtrinsic {
-			extrinsic: Extrinsic {
+		block.extrinsics.push(UncheckedExtrinsic::new(
+			generic::Extrinsic {
 				function: Call::Staking(staking::Call::stake()),
 				signed: Default::default(),
 				index: 10101,
 			},
-			signature: Default::default(),
-		});
+			Default::default()
+		));
 
 		let raw = block.encode();
 		let decoded_substrate = primitives::block::Block::decode(&mut &raw[..]).unwrap();
@@ -299,22 +305,24 @@ mod tests {
 
 	#[test]
 	fn serialize_unchecked() {
-		let tx = UncheckedExtrinsic {
-			extrinsic: Extrinsic {
-				signed: [1; 32],
+		let tx = UncheckedExtrinsic::new(
+			generic::Extrinsic {
+				signed: staking::Address::Id([1; 32]),
 				index: 999,
 				function: Call::Timestamp(TimestampCall::set(135135)),
 			},
-			signature: primitives::hash::H512([0; 64]).into(),
-		};
-		// 71000000
-		// 0101010101010101010101010101010101010101010101010101010101010101
-		// e703000000000000
-		// 00
+			primitives::hash::H512([0; 64]).into(),
+		);
+
+		// 6f000000
+		// ff0101010101010101010101010101010101010101010101010101010101010101
+		// e7030000
+		// 0300
 		// df0f0200
 		// 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
 		let v = Slicable::encode(&tx);
+		assert_eq!(&v[..], &hex!["6f000000ff0101010101010101010101010101010101010101010101010101010101010101e70300000300df0f02000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"][..]);
 		println!("{}", HexDisplay::from(&v));
 		assert_eq!(UncheckedExtrinsic::decode(&mut &v[..]).unwrap(), tx);
 	}
@@ -331,11 +339,6 @@ mod tests {
 			))),
 		};
 		let v = Slicable::encode(&xt);
-
-		let data = hex!["e00000000d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e0000000007000000000000006369D39D892B7B87A6769F90E14C618C2B84EBB293E2CC46640136E112C078C75619AC2E0815F2511568736623C055156C8FC427CE2AEE4AE2838F86EFE80208"];
-		let uxt: UncheckedExtrinsic = Slicable::decode(&mut &data[..]).unwrap();
-		assert_eq!(uxt.extrinsic, xt);
-
 		assert_eq!(Extrinsic::decode(&mut &v[..]).unwrap(), xt);
 	}
 }

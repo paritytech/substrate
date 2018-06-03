@@ -18,9 +18,10 @@
 
 #[cfg(feature = "std")] use serde::Serialize;
 use rstd::prelude::*;
+use rstd::marker::PhantomData;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
-use traits::{self, As};
+use traits::{self, Lookup};
 use rstd::ops;
 
 #[cfg(feature = "std")]
@@ -38,65 +39,6 @@ impl<T> MaybeSerializeDebug for T {}
 
 pub trait Member: MaybeSerializeDebug + Eq + PartialEq + Clone {}
 impl<T: MaybeSerializeDebug + Eq + PartialEq + Clone> Member for T {}
-
-
-/// A vetted and verified extrinsic from the external world.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-pub enum Address<AccountId, AccountIndex> where
- 	AccountId: Member,
- 	AccountIndex: Member,
-{
-	/// It's an account ID (pubkey).
-	Id(AccountId),
-	/// It's an account index.
-	Index(AccountIndex),
-}
-
-impl<AccountId, AccountIndex> Slicable for Address<AccountId, AccountIndex> where
-	AccountId: Member + Slicable,
-	AccountIndex: Member + Slicable + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
-	u32: As<AccountIndex>,
-	u16: As<AccountIndex>,
-	u8: As<AccountIndex>,
-{
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		match input.read_byte()? {
-			255 => Some(Address::Id(Slicable::decode(input)?)),
-			254 => Some(Address::Index(Slicable::decode(input)?)),
-			253 => Some(Address::Index(As::sa(u32::decode(input)?))),
-			252 => Some(Address::Index(As::sa(u16::decode(input)?))),
-			x => Some(Address::Index(As::sa(x))),
-		}
-	}
-
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		match *self {
-			Address::Id(ref i) => {
-				v.push(255);
-				i.using_encoded(|s| v.extend(s));
-			}
-			Address::Index(i) if i > As::sa(0xffffffffu32) => {
-				v.push(254);
-				i.using_encoded(|s| v.extend(s));
-			}
-			Address::Index(i) if i > As::sa(0xffffu32) => {
-				v.push(253);
-				u32::sa(i).using_encoded(|s| v.extend(s));
-			}
-			Address::Index(i) if i >= As::sa(252u32) => {
-				v.push(252);
-				u16::sa(i).using_encoded(|s| v.extend(s));
-			}
-			Address::Index(i) => v.push(u8::sa(i)),
-		}
-
-		v
-	}
-}
-
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
@@ -138,39 +80,67 @@ impl<AccountId, Index, Call> Slicable for Extrinsic<AccountId, Index, Call> wher
 	}
 }
 
-/// A extrinsics right from the external world. Unchecked.
-#[derive(PartialEq, Eq, Clone)]
+/// An extrinsic right from the external world. Unchecked.
+#[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-pub struct UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member,
- 	Index: Member,
- 	Call: Member,
- 	Signature: Member,			// TODO: should be Option<Signature>
+pub struct UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> where
+	Address: Member,
+	Index: Member,
+	Call: Member,
+	Signature: Member,			// TODO: should be Option<Signature>
 {
 	/// The actual extrinsic information.
-	pub extrinsic: Extrinsic<AccountId, Index, Call>,
+	pub extrinsic: Extrinsic<Address, Index, Call>,
 	/// The signature; should be an Ed25519 signature applied to the serialised `extrinsic` field.
 	pub signature: Signature,
+	pub dummy: PhantomData<DoLookup>,
 }
 
-impl<AccountId, Index, Call, Signature> UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Default,
+// derive doesn't work since we have the null type `DoLookup` as a generic type param.
+impl<Address, Index, Call, Signature, DoLookup> Eq for UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> where
+ 	Address: Member,
+ 	Index: Member,
+ 	Call: Member,
+	Signature: Member,
+{}
+impl<Address, Index, Call, Signature, DoLookup> PartialEq for UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> where
+ 	Address: Member,
+ 	Index: Member,
+ 	Call: Member,
+	Signature: Member,
+{
+	fn eq(&self, other: &Self) -> bool {
+		self.extrinsic == other.extrinsic && self.signature == other.signature
+	}
+}
+
+impl<Address, Index, Call, Signature, DoLookup> UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> where
+ 	Address: Member + Default,
  	Index: Member,
  	Call: Member,
 	Signature: Member + Default,
 {
+	/// New instance.
+	pub fn new(extrinsic: Extrinsic<Address, Index, Call>, signature: Signature) -> Self {
+		UncheckedExtrinsic {
+			extrinsic,
+			signature,
+			dummy: Default::default(),
+		}
+	}
+
 	/// Is this extrinsic signed?
 	pub fn is_signed(&self) -> bool {
 		// TODO: should be Option<Signature> and Option<AccountId>
-		self.signature != Signature::default() || self.extrinsic.signed != AccountId::default()
+		self.signature != Default::default() || self.extrinsic.signed != Default::default()
 	}
 }
 
-impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Slicable,
+impl<Address, Index, Call, Signature, DoLookup> Slicable for UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> where
+ 	Address: Member + Default + Slicable,
  	Index: Member + Slicable,
  	Call: Member + Slicable,
-	Signature: Member + Slicable
+	Signature: Member + Default + Slicable
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
@@ -179,10 +149,10 @@ impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountI
 		// to use this).
 		let _length_do_not_remove_me_see_above: u32 = Slicable::decode(input)?;
 
-		Some(UncheckedExtrinsic {
-			extrinsic: Slicable::decode(input)?,
-			signature: Slicable::decode(input)?,
-		})
+		Some(UncheckedExtrinsic::new(
+			Slicable::decode(input)?,
+			Slicable::decode(input)?
+		))
 	}
 
 	fn encode(&self) -> Vec<u8> {
@@ -205,8 +175,8 @@ impl<AccountId, Index, Call, Signature> Slicable for UncheckedExtrinsic<AccountI
 }
 
 #[cfg(feature = "std")]
-impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member,
+impl<Address, Index, Call, Signature, DoLookup> fmt::Debug for UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> where
+ 	Address: Member,
  	Index: Member,
  	Call: Member,
 	Signature: Member,
@@ -216,100 +186,87 @@ impl<AccountId, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Accoun
 	}
 }
 
-impl<AccountId, Index, Call, Signature> traits::Checkable for UncheckedExtrinsic<AccountId, Index, Call, Signature> where
- 	AccountId: Member + Default,
+impl<Address, Index, Call, Signature, DoLookup> traits::Checkable for UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> where
+ 	Address: Member + Default,
  	Index: Member,
  	Call: Member,
-	Signature: Member + Default + traits::Verify<Signer = AccountId>,
-	Extrinsic<AccountId, Index, Call>: Slicable
+	Signature: Member + Default + traits::Verify<Signer = <DoLookup as Lookup<Address>>::Target>,
+	Extrinsic<<DoLookup as Lookup<Address>>::Target, Index, Call>: Slicable,
+	DoLookup: Lookup<Address>,
+	<DoLookup as Lookup<Address>>::Target: Member + Default,
 {
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, Signature>;
+	type Checked = CheckedExtrinsic<<DoLookup as Lookup<Address>>::Target, Index, Call>;
 
-	fn check(self) -> Result<Self::Checked, Self> {
+	fn check(self) -> Result<Self::Checked, &'static str> {
 		if !self.is_signed() {
-			Ok(CheckedExtrinsic(self))
+			Ok(CheckedExtrinsic(Extrinsic {
+				signed: Default::default(),
+				index: self.extrinsic.index,
+				function: self.extrinsic.function,
+			}))
 		} else {
-			if ::codec::Slicable::using_encoded(&self.extrinsic, |msg|
-				self.signature.verify(msg, &self.extrinsic.signed)
+			let extrinsic: Extrinsic<<DoLookup as Lookup<Address>>::Target, Index, Call>
+				= Extrinsic {
+					signed: <DoLookup as Lookup<Address>>::lookup(self.extrinsic.signed).ok_or("bad address in extrinsic")?,
+				 	index: self.extrinsic.index,
+					function: self.extrinsic.function,
+				};
+			let sig = self.signature;
+			if ::codec::Slicable::using_encoded(&extrinsic, |msg|
+				sig.verify(msg, &extrinsic.signed)
 			) {
-				Ok(CheckedExtrinsic(self))
+				Ok(CheckedExtrinsic(extrinsic))
 			} else {
-				Err(self)
+				Err("bad signature in extrinsic")
 			}
 		}
 	}
 }
 
-/// A type-safe indicator that a extrinsic has been checked.
+/// A type-safe indicator that an extrinsic has been checked.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct CheckedExtrinsic<AccountId, Index, Call, Signature>
-	(UncheckedExtrinsic<AccountId, Index, Call, Signature>)
+pub struct CheckedExtrinsic<AccountId, Index, Call>
+	(Extrinsic<AccountId, Index, Call>)
+where
+ 	AccountId: Member,
+ 	Index: Member,
+ 	Call: Member;
+
+impl<AccountId, Index, Call> ops::Deref
+	for CheckedExtrinsic<AccountId, Index, Call>
 where
  	AccountId: Member,
  	Index: Member,
  	Call: Member,
-	Signature: Member;
-
-impl<AccountId, Index, Call, Signature> CheckedExtrinsic<AccountId, Index, Call, Signature>
-where
- 	AccountId: Member,
- 	Index: Member,
- 	Call: Member,
-	Signature: Member
-{
-	/// Get a reference to the checked signature.
-	pub fn signature(&self) -> &Signature {
-		&self.0.signature
-	}
-
-	/// Get a reference to the checked signature.
-	pub fn as_unchecked(&self) -> &UncheckedExtrinsic<AccountId, Index, Call, Signature> {
-		&self.0
-	}
-
-	/// Get a reference to the checked signature.
-	pub fn into_unchecked(self) -> UncheckedExtrinsic<AccountId, Index, Call, Signature> {
-		self.0
-	}
-}
-
-impl<AccountId, Index, Call, Signature> ops::Deref
-	for CheckedExtrinsic<AccountId, Index, Call, Signature>
-where
- 	AccountId: Member,
- 	Index: Member,
- 	Call: Member,
-	Signature: Member
 {
 	type Target = Extrinsic<AccountId, Index, Call>;
 
 	fn deref(&self) -> &Self::Target {
-		&self.0.extrinsic
+		&self.0
 	}
 }
 
-impl<AccountId, Index, Call, Signature> traits::Applyable
-	for CheckedExtrinsic<AccountId, Index, Call, Signature>
+impl<AccountId, Index, Call> traits::Applyable
+	for CheckedExtrinsic<AccountId, Index, Call>
 where
  	AccountId: Member,
  	Index: Member,
  	Call: Member + AuxDispatchable<Aux = AccountId>,
-	Signature: Member
 {
 	type Index = Index;
 	type AccountId = AccountId;
 
 	fn index(&self) -> &Self::Index {
-		&self.0.extrinsic.index
+		&self.0.index
 	}
 
 	fn sender(&self) -> &Self::AccountId {
-		&self.0.extrinsic.signed
+		&self.0.signed
 	}
 
 	fn apply(self) -> Result<(), &'static str> {
-		let xt = self.0.extrinsic;
+		let xt = self.0;
 		xt.function.dispatch(&xt.signed)
 	}
 }
@@ -417,23 +374,23 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature> where
+pub struct Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature, DoLookup> where
 	Number: Member,
 	Hash: Member,
 	DigestItem: Member,
  	AccountId: Member,
  	Index: Member,
  	Call: Member,
- 	Signature: Member
+ 	Signature: Member,
 {
 	/// The block header.
 	pub header: Header<Number, Hash, DigestItem>,
 	/// The accompanying extrinsics.
-	pub extrinsics: Vec<UncheckedExtrinsic<AccountId, Index, Call, Signature>>,
+	pub extrinsics: Vec<UncheckedExtrinsic<AccountId, Index, Call, Signature, DoLookup>>,
 }
 
-impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> Slicable
-	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
+impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature, DoLookup> Slicable
+	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature, DoLookup>
 where
 	Number: Member,
 	Hash: Member,
@@ -443,7 +400,7 @@ where
  	Call: Member,
  	Signature: Member,
 	Header<Number, Hash, DigestItem>: Slicable,
-	UncheckedExtrinsic<AccountId, Index, Call, Signature>: Slicable,
+	UncheckedExtrinsic<AccountId, Index, Call, Signature, DoLookup>: Slicable,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
@@ -459,8 +416,8 @@ where
 	}
 }
 
-impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature> traits::Block
-	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature>
+impl<Number, Hash, DigestItem, AccountId, Index, Call, Signature, DoLookup> traits::Block
+	for Block<Number, Hash, DigestItem, AccountId, Index, Call, Signature, DoLookup>
 where
 	Number: Member + Slicable,
 	Hash: Member + Slicable,
@@ -470,7 +427,7 @@ where
  	Call: Member,
  	Signature: Member
 {
-	type Extrinsic = UncheckedExtrinsic<AccountId, Index, Call, Signature>;
+	type Extrinsic = UncheckedExtrinsic<AccountId, Index, Call, Signature, DoLookup>;
 	type Header = Header<Number, Hash, DigestItem>;
 	fn header(&self) -> &Self::Header {
 		&self.header

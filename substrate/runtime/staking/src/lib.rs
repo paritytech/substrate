@@ -50,10 +50,12 @@ use rstd::prelude::*;
 use rstd::{cmp, result};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
-use codec::Slicable;
+use codec::{Input, Slicable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment, As};
+use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
+	As, Lookup};
+use primitives::generic::Member;
 
 mod contract;
 #[cfg(test)]
@@ -67,7 +69,73 @@ const RECLAIM_INDEX_MAGIC: AccountIndex = 0x69;
 
 /// Type used for storing an account's index; implies the maximum number of accounts the system
 /// can hold.
-type AccountIndex = u64;
+pub type AccountIndex = u64;
+
+/// A vetted and verified extrinsic from the external world.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+pub enum Address<AccountId, AccountIndex> where
+ 	AccountId: Member,
+ 	AccountIndex: Member,
+{
+	/// It's an account ID (pubkey).
+	Id(AccountId),
+	/// It's an account index.
+	Index(AccountIndex),
+}
+
+impl<AccountId, AccountIndex> Slicable for Address<AccountId, AccountIndex> where
+	AccountId: Member + Slicable,
+	AccountIndex: Member + Slicable + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+	u32: As<AccountIndex>,
+	u16: As<AccountIndex>,
+	u8: As<AccountIndex>,
+{
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			255 => Some(Address::Id(Slicable::decode(input)?)),
+			254 => Some(Address::Index(Slicable::decode(input)?)),
+			253 => Some(Address::Index(As::sa(u32::decode(input)?))),
+			252 => Some(Address::Index(As::sa(u16::decode(input)?))),
+			x => Some(Address::Index(As::sa(x))),
+		}
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		match *self {
+			Address::Id(ref i) => {
+				v.push(255);
+				i.using_encoded(|s| v.extend(s));
+			}
+			Address::Index(i) if i > As::sa(0xffffffffu32) => {
+				v.push(254);
+				i.using_encoded(|s| v.extend(s));
+			}
+			Address::Index(i) if i > As::sa(0xffffu32) => {
+				v.push(253);
+				u32::sa(i).using_encoded(|s| v.extend(s));
+			}
+			Address::Index(i) if i >= As::sa(252u32) => {
+				v.push(252);
+				u16::sa(i).using_encoded(|s| v.extend(s));
+			}
+			Address::Index(i) => v.push(u8::sa(i)),
+		}
+
+		v
+	}
+}
+
+impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
+	AccountId: Member + Default,
+	AccountIndex: Member,
+{
+	fn default() -> Self {
+		Address::Id(Default::default())
+	}
+}
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -492,6 +560,17 @@ impl<T: Trait> Executable for Module<T> {
 		Self::check_new_era();
 	}
 }
+
+impl<T: Trait> Lookup<Address<T::AccountId, AccountIndex>> for Module<T> {
+	type Target = T::AccountId;
+	fn lookup(a: Address<T::AccountId, AccountIndex>) -> Option<T::AccountId> {
+		match a {
+			Address::Id(i) => Some(i),
+			Address::Index(i) => <Module<T>>::lookup_index(i),
+		}
+	}
+}
+
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
 // - n | n <= <CurrentEra<T>>::get(): inactive: free to be transferred.

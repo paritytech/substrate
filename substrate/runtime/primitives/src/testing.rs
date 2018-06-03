@@ -139,7 +139,7 @@ impl<Call: AuxDispatchable + Slicable + Sized + serde::Serialize> Slicable for T
 }
 impl<Call: AuxDispatchable + Slicable + Sized + serde::Serialize> Checkable for TestXt<Call> {
 	type Checked = Self;
-	fn check(self) -> Result<Self, Self> { Ok(self) }
+	fn check(self) -> Result<Self, &'static str> { Ok(self) }
 }
 impl<Call: AuxDispatchable<Aux = u64> + Slicable + Sized + serde::Serialize> Applyable for TestXt<Call> {
 	type AccountId = u64;

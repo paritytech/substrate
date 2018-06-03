@@ -139,9 +139,9 @@ error_chain! {
 			display("Inehrent transactions cannot be queued."),
 		}
 		/// Attempted to queue a transaction with bad signature.
-		BadSignature(xt: UncheckedExtrinsic) {
+		BadSignature(e: 'static str) {
 			description("Transaction had bad signature."),
-			display("Transaction had bad signature."),
+			display("Transaction had bad signature: {}", e),
 		}
 		/// Attempted to queue a transaction that is already in the pool.
 		AlreadyImported(hash: Hash) {
@@ -159,6 +159,7 @@ error_chain! {
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Debug, Clone)]
 pub struct VerifiedTransaction {
+	original: UncheckedExtrinsic,
 	inner: <UncheckedExtrinsic as Checkable>::Checked,
 	hash: Hash,
 	address: AccountId,
@@ -174,26 +175,27 @@ impl VerifiedTransaction {
 		}
 
 		let message = codec::Slicable::encode(&xt);
-		match xt.check() {
-			Ok(xt) => {
+		match xt.clone().check() {
+			Ok(checked) => {
 				// TODO: make transaction-pool use generic types.
 				let hash = substrate_primitives::hashing::blake2_256(&message);
-				let address = xt.signed;
+				let address = checked.signed;
 				Ok(VerifiedTransaction {
-					inner: xt,
+					original: xt,
+					inner: checked,
 					hash: hash.into(),
 					encoded_size: message.len(),
 					address,
 					insertion_id,
 				})
 			}
-			Err(xt) => Err(ErrorKind::BadSignature(xt).into()),
+			Err(e) => Err(ErrorKind::BadSignature(e).into()),
 		}
 	}
 
 	/// Access the underlying transaction.
 	pub fn as_transaction(&self) -> &UncheckedExtrinsic {
-		self.as_ref().as_unchecked()
+		&self.original
 	}
 
 	/// Consume the verified transaciton, yielding the unchecked counterpart.

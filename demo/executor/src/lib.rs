@@ -72,7 +72,7 @@ mod tests {
 		let signature = Keyring::from_raw_public(extrinsic.signed).unwrap()
 			.sign(&extrinsic.encode()).into();
 
-		UncheckedExtrinsic { extrinsic, signature }
+		UncheckedExtrinsic::new(extrinsic, signature)
 	}
 
 	fn from_block_number(n: u64) -> Header {
@@ -190,7 +190,7 @@ mod tests {
 			let signature = Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed)).unwrap())
 				.sign(&extrinsic.encode()).into();
 
-			UncheckedExtrinsic { extrinsic, signature }
+			UncheckedExtrinsic::new(extrinsic, signature)
 		}).collect::<Vec<_>>();
 
 		let extrinsics_root = ordered_trie_root(extrinsics.iter().map(Slicable::encode)).0.into();
