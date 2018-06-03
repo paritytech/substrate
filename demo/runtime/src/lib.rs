@@ -146,7 +146,7 @@ pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, Address, Index, Call
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature, Staking>;
 /// Extrinsic type as expected by this runtime.
-pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
+pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Concrete, Block, Staking,
 	(((((), Council), Democracy), Staking), Session)>;

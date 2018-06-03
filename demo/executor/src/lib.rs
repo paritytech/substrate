@@ -46,8 +46,8 @@ mod tests {
 	use runtime_support::{Hashable, StorageValue, StorageMap};
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
-	use demo_primitives::{Hash, BlockNumber};
-	use runtime_primitives::traits::Header as HeaderT;
+	use demo_primitives::{Hash, BlockNumber, AccountId};
+	use runtime_primitives::traits::{Header as HeaderT, Lookup};
 	use {staking, system};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
 		BuildExternalities, GenesisConfig, SessionConfig, StakingConfig};
@@ -64,12 +64,13 @@ mod tests {
 	}
 
 	fn xt() -> UncheckedExtrinsic {
+		let sender: [u8; 32] = Alice.into();
 		let extrinsic = Extrinsic {
-			signed: Alice.into(),
+			signed: sender.clone().into(),
 			index: 0,
 			function: Call::Staking(staking::Call::transfer::<Concrete>(Bob.into(), 69)),
 		};
-		let signature = Keyring::from_raw_public(extrinsic.signed).unwrap()
+		let signature = Keyring::from_raw_public(sender).unwrap()
 			.sign(&extrinsic.encode()).into();
 
 		UncheckedExtrinsic::new(extrinsic, signature)
@@ -187,7 +188,7 @@ mod tests {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(|extrinsic| {
-			let signature = Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed)).unwrap())
+			let signature = Pair::from(Keyring::from_public(Public::from_raw(Staking::lookup(extrinsic.signed.clone()).unwrap())).unwrap())
 				.sign(&extrinsic.encode()).into();
 
 			UncheckedExtrinsic::new(extrinsic, signature)
@@ -213,7 +214,7 @@ mod tests {
 			[69u8; 32].into(),
 			hex!("de98b34e958af85ab79cbc9b853e49ec2ff19a83b5bc2eba28117c9f6527a51d").into(),
 			vec![Extrinsic {
-				signed: Alice.into(),
+				signed: Into::<AccountId>::into(Alice).into(),
 				index: 0,
 				function: Call::Staking(staking::Call::transfer(Bob.into(), 69)),
 			}]
@@ -227,12 +228,12 @@ mod tests {
 			hex!("05c912d1604370951bacd587c47ab0a67f2afddd978d2a3998e96288045f18dd").into(),
 			vec![
 				Extrinsic {
-					signed: Bob.into(),
+					signed: Into::<AccountId>::into(Bob).into(),
 					index: 0,
 					function: Call::Staking(staking::Call::transfer(Alice.into(), 5)),
 				},
 				Extrinsic {
-					signed: Alice.into(),
+					signed: Into::<AccountId>::into(Alice).into(),
 					index: 1,
 					function: Call::Staking(staking::Call::transfer(Bob.into(), 15)),
 				}

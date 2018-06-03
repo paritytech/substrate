@@ -306,8 +306,8 @@ mod tests {
 	#[test]
 	fn serialize_unchecked() {
 		let tx = UncheckedExtrinsic::new(
-			generic::Extrinsic {
-				signed: staking::Address::Id([1; 32]),
+			Extrinsic {
+				signed: [1; 32].into(),
 				index: 999,
 				function: Call::Timestamp(TimestampCall::set(135135)),
 			},
@@ -330,7 +330,7 @@ mod tests {
 	#[test]
 	fn serialize_checked() {
 		let xt = Extrinsic {
-			signed: hex!["0d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e"],
+			signed: hex!["0d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e"].into(),
 			index: 0,
 			function: Call::CouncilVoting(council::voting::Call::propose(Box::new(
 				PrivCall::Consensus(consensus::PrivCall::set_code(
