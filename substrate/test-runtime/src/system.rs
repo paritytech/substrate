@@ -19,15 +19,24 @@
 
 use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root};
-use runtime_support::{Hashable, storage};
+use runtime_support::storage::{self, StorageValue, StorageMap};
+use runtime_primitives::traits::{Hashing, BlakeTwo256};
 use codec::{KeyedVec, Slicable};
-use super::{AccountId, Call, UncheckedExtrinsic, H256 as Hash, Block, Header};
+use super::{AccountId, BlockNumber, Call, UncheckedExtrinsic, H256 as Hash, Block, Header};
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
 const LATEST_BLOCK_HASH: &[u8] = b"latest";
 const AUTHORITY_AT: &'static[u8] = b":auth:";
 const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
+
+storage_items! {
+	ExtrinsicIndex: b"sys:xti" => required u32;
+	ExtrinsicData: b"sys:xtd" => required map [ u32 => Vec<u8> ];
+	// The current block number being processed. Set by `execute_block`.
+	Number: b"sys:num" => required BlockNumber;
+	ParentHash: b"sys:pha" => required Hash;
+}
 
 pub fn latest_block_hash() -> Hash {
 	storage::get(LATEST_BLOCK_HASH).expect("There must always be a latest block")
@@ -49,15 +58,17 @@ pub fn authorities() -> Vec<::primitives::AuthorityId> {
 		.collect()
 }
 
+pub fn initialise_block(header: Header) {
+	// populate environment.
+	<Number>::put(&header.number);
+	<ParentHash>::put(&header.parent_hash);
+	<ExtrinsicIndex>::put(0);
+	storage::put(LATEST_BLOCK_HASH, &header.parent_hash);
+}
+
 /// Actually execute all transitioning for `block`.
 pub fn execute_block(block: Block) {
 	let ref header = block.header;
-
-	// check parent_hash is correct.
-	assert!(
-		header.number > 0 && latest_block_hash() == header.parent_hash,
-		"Parent hash should be valid."
-	);
 
 	// check transaction trie root represents the transactions.
 	let txs = block.extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
@@ -73,23 +84,37 @@ pub fn execute_block(block: Block) {
 	let storage_root = storage_root().into();
 	info_expect_equal_hash(&header.state_root, &storage_root);
 	assert!(header.state_root == storage_root, "Storage root must match that calculated.");
-
-	// put the header hash into storage.
-	storage::put(LATEST_BLOCK_HASH, &header.blake2_256());
 }
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
-pub fn execute_transaction(utx: UncheckedExtrinsic, header: Header) -> Header {
+pub fn execute_transaction(utx: UncheckedExtrinsic) {
+	ExtrinsicData::insert(ExtrinsicIndex::get(), utx.encode());
 	execute_transaction_backend(&utx);
-	header
 }
 
-/// Finalise the block - it is up the caller to ensure that all header fields are valid
-/// except state-root.
-pub fn finalise_block(mut header: Header) -> Header {
-	header.state_root = storage_root().into();
-	header
+/// Finalise the block.
+pub fn finalise_block() -> Header {
+	fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
+		let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
+		H::enumerated_trie_root(&xts)
+	}
+
+	let extrinsic_index = ExtrinsicIndex::take();
+	let extrinsics = (0..extrinsic_index).map(ExtrinsicData::take).collect();
+	let extrinsics_root = extrinsics_data_root::<BlakeTwo256>(extrinsics);
+
+	let number = <Number>::take();
+	let parent_hash = <ParentHash>::take();
+	let storage_root = BlakeTwo256::storage_root();
+
+	Header {
+		number,
+		extrinsics_root,
+		state_root: storage_root,
+		parent_hash,
+		digest: Default::default(),
+	}
 }
 
 fn execute_transaction_backend(utx: &UncheckedExtrinsic) {
@@ -223,9 +248,9 @@ mod tests {
 
 		let b = Block {
 			header: Header {
-				parent_hash: b.header.blake2_256().into(),
+				parent_hash: b.header.hash(),
 				number: 2,
-				state_root: hex!("1bd77fc89d5380aad314df357f265a94a051be6b1f137bc9882d6b9edcbbd810").into(),
+				state_root: hex!("c93f2fd494c386fa32ee76b6198a7ccf5db12c02c3a79755fd2d4646ec2bf8d7").into(),
 				extrinsics_root: hex!("f6ba96c4df7fcfbcdf58d4ad6ca360dbf7894f17a7136894edb518c0c06829e6").into(),
 				digest: Digest { logs: vec![], },
 			},

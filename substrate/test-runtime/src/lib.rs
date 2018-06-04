@@ -19,7 +19,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate substrate_runtime_std as rstd;
-extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as runtime_primitives;
 
@@ -29,6 +28,9 @@ extern crate serde;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
+
+#[macro_use]
+extern crate substrate_runtime_support as runtime_support;
 
 #[cfg(test)]
 #[macro_use]
@@ -110,8 +112,9 @@ pub mod api {
 
 	impl_stubs!(
 		authorities => |()| system::authorities(),
+		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),
-		apply_extrinsic => |(header, utx)| system::execute_transaction(utx, header),
-		finalise_block => |header| system::finalise_block(header)
+		apply_extrinsic => |utx| system::execute_transaction(utx),
+		finalise_block => |()| system::finalise_block()
 	);
 }
