@@ -346,7 +346,14 @@ impl Protocol {
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.maintain_peers(io);
 		self.on_demand.as_ref().map(|s| s.maintain_peers(io));
-		self.consensus.lock().collect_garbage(None);
+		let best_hash = match self.chain().info() {
+			Ok(info) => info.chain.best_hash,
+			Err(e) => {
+				debug!(target: "sync", "Error reading the blockchain: {:?}", e);
+				return;
+			}
+		};
+		self.consensus.lock().collect_garbage(&best_hash, None);
 	}
 
 	fn maintain_peers(&self, io: &mut SyncIo) {
@@ -540,7 +547,14 @@ impl Protocol {
 			}
 		}
 
-		self.consensus.lock().collect_garbage(Some(&header));
+		let best_hash = match self.chain().info() {
+			Ok(info) => info.chain.best_hash,
+			Err(e) => {
+				debug!(target: "sync", "Error reading the blockchain: {:?}", e);
+				return;
+			}
+		};
+		self.consensus.lock().collect_garbage(&best_hash, Some(&header));
 	}
 
 	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest) {
