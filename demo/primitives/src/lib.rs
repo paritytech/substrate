@@ -35,6 +35,10 @@ pub type BlockNumber = u64;
 /// certainly continue to be the same as the substrate's `AuthorityId`.
 pub type AccountId = primitives::AuthorityId;
 
+/// The type for looking up accounts. We don't expect more than 4 billion of them, but you
+/// never know...
+pub type AccountIndex = u32;
+
 /// Balance of an account.
 pub type Balance = u64;
 

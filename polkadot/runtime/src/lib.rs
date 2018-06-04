@@ -52,7 +52,7 @@ extern crate polkadot_primitives;
 mod parachains;
 
 use runtime_io::BlakeTwo256;
-use polkadot_primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
+use polkadot_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Identity, HasPublicAux};
 
@@ -111,11 +111,12 @@ impl session::Trait for Concrete {
 pub type Session = session::Module<Concrete>;
 
 /// The address format for describing accounts.
-pub type Address = staking::Address<AccountId, staking::AccountIndex>;
+pub type Address = staking::Address<AccountId, AccountIndex>;
 
 impl staking::Trait for Concrete {
 	type Balance = Balance;
 	type DetermineContractAddress = BlakeTwo256;
+	type AccountIndex = AccountIndex;
 }
 /// Staking module for this concrete runtime.
 pub type Staking = staking::Module<Concrete>;

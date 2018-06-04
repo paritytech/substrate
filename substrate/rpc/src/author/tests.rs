@@ -57,12 +57,8 @@ impl api::ExtrinsicPool for DummyTxPool {
 #[test]
 fn submit_transaction_should_not_cause_error() {
 	let p = Arc::new(DummyTxPool::default());
-	let hash: ExtrinsicHash = 1.into();
 
-	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, block::Extrinsic(vec![])),
-		Ok(hash)
-	);
+	assert_eq!(AuthorApi::submit_extrinsic(&p, block::Extrinsic(vec![])).unwrap(), 1.into());
 	assert!(
 		AuthorApi::submit_extrinsic(&p, block::Extrinsic(vec![])).is_err()
 	);

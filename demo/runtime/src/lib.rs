@@ -40,7 +40,7 @@ extern crate demo_primitives;
 
 use rstd::prelude::*;
 use runtime_io::BlakeTwo256;
-use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
+use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Identity, HasPublicAux};
 
@@ -97,6 +97,7 @@ pub type Session = session::Module<Concrete>;
 impl staking::Trait for Concrete {
 	type Balance = Balance;
 	type DetermineContractAddress = BlakeTwo256;
+	type AccountIndex = AccountIndex;
 }
 
 /// Staking module for this concrete runtime.
@@ -138,7 +139,7 @@ impl_outer_dispatch! {
 }
 
 /// The address format for describing accounts.
-pub type Address = staking::Address<AccountId, staking::AccountIndex>;
+pub type Address = staking::Address<AccountId, AccountIndex>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
 /// Block type as expected by this runtime.

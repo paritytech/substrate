@@ -62,14 +62,10 @@ mod contract;
 mod mock;
 
 /// Number of account IDs stored per enum set.
-const ENUM_SET_SIZE: u64 = 64;
+const ENUM_SET_SIZE: usize = 64;
 
 /// The byte to identify intention to reclaim an existing account index.
-const RECLAIM_INDEX_MAGIC: AccountIndex = 0x69;
-
-/// Type used for storing an account's index; implies the maximum number of accounts the system
-/// can hold.
-pub type AccountIndex = u64;
+const RECLAIM_INDEX_MAGIC: usize = 0x69;
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
@@ -96,9 +92,6 @@ impl<AccountId, AccountIndex> From<AccountId> for Address<AccountId, AccountInde
 impl<AccountId, AccountIndex> Slicable for Address<AccountId, AccountIndex> where
 	AccountId: Member + Slicable,
 	AccountIndex: Member + Slicable + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
-	u32: As<AccountIndex>,
-	u16: As<AccountIndex>,
-	u8: As<AccountIndex>,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
@@ -124,13 +117,13 @@ impl<AccountId, AccountIndex> Slicable for Address<AccountId, AccountIndex> wher
 			}
 			Address::Index(i) if i > As::sa(0xffffu32) => {
 				v.push(253);
-				u32::sa(i).using_encoded(|s| v.extend(s));
+				As::<u32>::as_(i).using_encoded(|s| v.extend(s));
 			}
 			Address::Index(i) if i >= As::sa(252u32) => {
 				v.push(252);
-				u16::sa(i).using_encoded(|s| v.extend(s));
+				As::<u16>::as_(i).using_encoded(|s| v.extend(s));
 			}
-			Address::Index(i) => v.push(u8::sa(i)),
+			Address::Index(i) => v.push(As::<u8>::as_(i)),
 		}
 
 		v
@@ -180,15 +173,18 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<AccountIndex>;
+	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize>;
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
+	/// Type used for storing an account's index; implies the maximum number of accounts the system
+	/// can hold.
+	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<usize> + Copy;
 }
 
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn transfer(aux, dest: Address<T::AccountId, AccountIndex>, value: T::Balance) -> Result = 0;
+		fn transfer(aux, dest: Address<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
 		fn unstake(aux) -> Result = 2;
 	}
@@ -228,9 +224,9 @@ decl_storage! {
 	pub LastEraLengthChange get(last_era_length_change): b"sta:lec" => default T::BlockNumber;
 
 	// The next free enumeration set.
-	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required AccountIndex;
+	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required T::AccountIndex;
 	// The enumeration sets.
-	pub EnumSet get(enum_set): b"sta:enum_set" => default map [ AccountIndex => Vec<T::AccountId> ];
+	pub EnumSet get(enum_set): b"sta:enum_set" => default map [ T::AccountIndex => Vec<T::AccountId> ];
 
 	// The balance of a given account.
 	pub FreeBalance get(free_balance): b"sta:bal:" => default map [ T::AccountId => T::Balance ];
@@ -308,7 +304,7 @@ impl<T: Trait> Module<T> {
 
 	/// Transfer some unlocked staking balance to another staker.
 	/// TODO: probably want to state gas-limit and gas-price.
-	fn transfer(aux: &T::PublicAux, dest: Address<T::AccountId, AccountIndex>, value: T::Balance) -> Result {
+	fn transfer(aux: &T::PublicAux, dest: Address<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result {
 		let dest = Self::lookup(dest).ok_or("bad destination")?;
 		// commit anything that made it this far to storage
 		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
@@ -486,10 +482,11 @@ impl<T: Trait> Module<T> {
 		);
 	}
 
-	/// Lookup an AccountIndex to get an Id, if there's one there.
-	pub fn lookup_index(index: AccountIndex) -> Option<T::AccountId> {
-		let mut set = Self::enum_set(index / ENUM_SET_SIZE);
-		let i = (index % ENUM_SET_SIZE) as usize;
+	/// Lookup an T::AccountIndex to get an Id, if there's one there.
+	pub fn lookup_index(index: T::AccountIndex) -> Option<T::AccountId> {
+		let usize_index: usize = As::<usize>::as_(index);
+		let mut set = Self::enum_set(T::AccountIndex::sa(usize_index / ENUM_SET_SIZE));
+		let i = usize_index % ENUM_SET_SIZE;
 		if i < set.len() {
 			Some(set.swap_remove(i))
 		} else {
@@ -505,13 +502,17 @@ impl<T: Trait> Module<T> {
 
 		// A little easter-egg for reclaiming dead indexes..
 		{
+			let next_set_index: usize = next_set_index.as_();
+
 			// we quantise the number of accounts so it stays constant over a reasonable
 			// period of time.
-			const QUANTIZATION: AccountIndex = 256;
+			const QUANTIZATION: usize = 256;
 			let quantized_account_count = (next_set_index * ENUM_SET_SIZE / QUANTIZATION + 1) * QUANTIZATION;
 			// then modify the starting balance to be modulo this to allow it to potentially
 			// identify an account index for reuse.
-			let maybe_try_index: AccountIndex = <T::Balance as As<AccountIndex>>::as_(balance) % (quantized_account_count * 256);
+			let maybe_try_index = balance % T::Balance::sa(quantized_account_count * 256);
+			let maybe_try_index = As::<T::AccountIndex>::as_(maybe_try_index);
+			let maybe_try_index = As::<usize>::as_(maybe_try_index);
 
 			// this identifier must end with magic byte 0x69 to trigger this check (a minor
 			// optimisation to ensure we don't check most unintended account creations).
@@ -520,9 +521,9 @@ impl<T: Trait> Module<T> {
 				let try_index = maybe_try_index / 256;
 
 				// then check to see if this balance identifies a dead account index.
-				let set_index = try_index / ENUM_SET_SIZE;
+				let set_index = T::AccountIndex::sa(try_index / ENUM_SET_SIZE);
 				let mut try_set = Self::enum_set(set_index);
-				let item_index = (try_index % ENUM_SET_SIZE) as usize;
+				let item_index = try_index % ENUM_SET_SIZE;
 				if item_index < try_set.len() {
 					if Self::balance(&try_set[item_index]).is_zero() {
 						// yup - this index refers to a dead account. can be reused.
@@ -539,18 +540,18 @@ impl<T: Trait> Module<T> {
 		// defensive only: this loop should never iterate since we keep NextEnumSet up to date later.
 		let mut set = loop {
 			let set = Self::enum_set(set_index);
-			if set.len() < ENUM_SET_SIZE as usize {
+			if set.len() < ENUM_SET_SIZE {
 				break set;
 			}
-			set_index += 1;
+			set_index += One::one();
 		};
 
 		// update set.
 		set.push(who.clone());
 
 		// keep NextEnumSet up to date
-		if set.len() == ENUM_SET_SIZE as usize {
-			<NextEnumSet<T>>::put(set_index + 1);
+		if set.len() == ENUM_SET_SIZE {
+			<NextEnumSet<T>>::put(set_index + One::one());
 		}
 
 		// write set.
@@ -572,9 +573,9 @@ impl<T: Trait> Executable for Module<T> {
 	}
 }
 
-impl<T: Trait> Lookup<Address<T::AccountId, AccountIndex>> for Module<T> {
+impl<T: Trait> Lookup<Address<T::AccountId, T::AccountIndex>> for Module<T> {
 	type Target = T::AccountId;
-	fn lookup(a: Address<T::AccountId, AccountIndex>) -> Option<T::AccountId> {
+	fn lookup(a: Address<T::AccountId, T::AccountIndex>) -> Option<T::AccountId> {
 		match a {
 			Address::Id(i) => Some(i),
 			Address::Index(i) => <Module<T>>::lookup_index(i),
@@ -931,7 +932,7 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
 		let mut r: runtime_io::TestExternalities = map![
-			twox_128(<NextEnumSet<T>>::key()).to_vec() => ((self.balances.len() as AccountIndex) / ENUM_SET_SIZE).encode(),
+			twox_128(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
 			twox_128(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
 			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
 			twox_128(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
@@ -944,9 +945,9 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 		];
 
 		let ids: Vec<_> = self.balances.iter().map(|x| x.0.clone()).collect();
-		for i in 0..(ids.len() + (ENUM_SET_SIZE as usize) - 1) / (ENUM_SET_SIZE as usize) {
-			r.insert(twox_128(&<EnumSet<T>>::key_for(i as AccountIndex)).to_vec(),
-				ids[i * (ENUM_SET_SIZE as usize)..ids.len().min((i + 1) * (ENUM_SET_SIZE as usize))].to_owned().encode());
+		for i in 0..(ids.len() + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE {
+			r.insert(twox_128(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
+				ids[i * ENUM_SET_SIZE..ids.len().min((i + 1) * ENUM_SET_SIZE)].to_owned().encode());
 		}
 		for (who, value) in self.balances.into_iter() {
 			r.insert(twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
@@ -999,8 +1000,8 @@ mod tests {
 			assert_eq!(Staking::balance(&2), 256 * 20);
 			assert_ok!(Staking::transfer(&2, 5.into(), 256 * 20));	// account 2 becomes zombie freeing index 1 for reclaim)
 			assert_eq!(Staking::balance(&2), 0);
-			assert_ok!(Staking::transfer(&5, 6.into(), 256 * 1 + RECLAIM_INDEX_MAGIC));	// account 6 takes index 1.
-			assert_eq!(Staking::balance(&6), 256 * 1 + RECLAIM_INDEX_MAGIC);
+			assert_ok!(Staking::transfer(&5, 6.into(), 256 * 1 + 69));	// account 6 takes index 1.
+			assert_eq!(Staking::balance(&6), 256 * 1 + 69);
 			assert_eq!(Staking::lookup_index(1), Some(6));
 		});
 	}
