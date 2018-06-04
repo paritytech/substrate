@@ -134,7 +134,7 @@ impl<T: Slicable> Slicable for Option<T> {
 
 macro_rules! impl_array {
 	( $( $n:expr )* ) => { $(
-		impl<T: Slicable + Default> Slicable for [T; $n] {
+		impl<T: Slicable> Slicable for [T; $n] {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
 				let mut r = ArrayVec::new();
 				for _ in 0..$n {
