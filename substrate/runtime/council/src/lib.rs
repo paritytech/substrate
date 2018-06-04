@@ -35,7 +35,7 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, As};
+use primitives::traits::{Zero, One, RefInto, As, Lookup};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
@@ -103,14 +103,14 @@ decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
 		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) -> Result = 0;
-		fn reap_inactive_voter(aux, signed_index: u32, who: T::AccountId, who_index: u32, assumed_vote_index: VoteIndex) -> Result = 1;
+		fn reap_inactive_voter(aux, signed_index: u32, who: staking::Address<T>, who_index: u32, assumed_vote_index: VoteIndex) -> Result = 1;
 		fn retract_voter(aux, index: u32) -> Result = 2;
 		fn submit_candidacy(aux, slot: u32) -> Result = 3;
-		fn present_winner(aux, candidate: T::AccountId, total: T::Balance, index: VoteIndex) -> Result = 4;
+		fn present_winner(aux, candidate: staking::Address<T>, total: T::Balance, index: VoteIndex) -> Result = 4;
 	}
 	pub enum PrivCall {
 		fn set_desired_seats(count: u32) -> Result = 0;
-		fn remove_member(who: T::AccountId) -> Result = 1;
+		fn remove_member(who: staking::Address<T>) -> Result = 1;
 		fn set_presentation_duration(count: T::BlockNumber) -> Result = 2;
 		fn set_term_duration(count: T::BlockNumber) -> Result = 3;
 	}
@@ -251,10 +251,11 @@ impl<T: Trait> Module<T> {
 	fn reap_inactive_voter(
 		aux: &T::PublicAux,
 		signed_index: u32,
-		who: T::AccountId,
+		who: staking::Address<T>,
 		who_index: u32,
 		assumed_vote_index: VoteIndex
 	) -> Result {
+		let who = <staking::Module<T>>::lookup(who)?;
 		ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 		ensure!(Self::voter_last_active(aux.ref_into()).is_some(), "reaper must be a voter");
 		let last_active = Self::voter_last_active(&who).ok_or("target for inactivity cleanup must be active")?;
@@ -336,10 +337,11 @@ impl<T: Trait> Module<T> {
 	/// `signed` should have at least
 	fn present_winner(
 		aux: &T::PublicAux,
-		candidate: T::AccountId,
+		candidate: staking::Address<T>,
 		total: T::Balance,
 		index: VoteIndex
 	) -> Result {
+		let candidate = <staking::Module<T>>::lookup(candidate)?;
 		ensure!(index == Self::vote_index(), "index not current");
 		let (_, _, expiring) = Self::next_finalise().ok_or("cannot present outside of presentation period")?;
 		let stakes = Self::snapshoted_stakes();
@@ -391,7 +393,8 @@ impl<T: Trait> Module<T> {
 	/// Remove a particular member. A tally will happen instantly (if not already in a presentation
 	/// period) to fill the seat if removal means that the desired members are not met.
 	/// This is effective immediately.
-	fn remove_member(who: T::AccountId) -> Result {
+	fn remove_member(who: staking::Address<T>) -> Result {
+		let who = <staking::Module<T>>::lookup(who)?;
 		let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
 			.into_iter()
 			.filter(|i| i.0 != who)

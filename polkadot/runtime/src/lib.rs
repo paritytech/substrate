@@ -71,7 +71,7 @@ pub const PARACHAINS_SET_POSITION: u32 = 1;
 /// Concrete runtime type used to parameterize the various modules.
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub struct Concrete;
 
 impl HasPublicAux for Concrete {
@@ -85,6 +85,8 @@ impl system::Trait for Concrete {
 	type Hashing = BlakeTwo256;
 	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
+	type Address = Address;
+	type Lookup = Staking;
 	type Header = generic::Header<BlockNumber, Hash, Log>;
 }
 /// System module for this concrete runtime.
@@ -109,9 +111,6 @@ impl session::Trait for Concrete {
 }
 /// Session module for this concrete runtime.
 pub type Session = session::Module<Concrete>;
-
-/// The address format for describing accounts.
-pub type Address = staking::Address<AccountId, AccountIndex>;
 
 impl staking::Trait for Concrete {
 	type Balance = Balance;
@@ -162,6 +161,8 @@ impl_outer_dispatch! {
 	}
 }
 
+/// The address format for describing accounts.
+pub type Address = staking::Address<Concrete>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, Hash, Log>;
 /// Block type as expected by this runtime.

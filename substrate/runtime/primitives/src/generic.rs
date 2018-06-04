@@ -207,7 +207,7 @@ impl<Address, Index, Call, Signature, DoLookup> traits::Checkable for UncheckedE
 		} else {
 			let extrinsic: Extrinsic<<DoLookup as Lookup<Address>>::Target, Index, Call>
 				= Extrinsic {
-					signed: <DoLookup as Lookup<Address>>::lookup(self.extrinsic.signed).ok_or("bad address in extrinsic")?,
+					signed: <DoLookup as Lookup<Address>>::lookup(self.extrinsic.signed)?,
 				 	index: self.extrinsic.index,
 					function: self.extrinsic.function,
 				};

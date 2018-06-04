@@ -55,7 +55,7 @@ use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
 	As, Lookup};
-use primitives::generic::Member;
+use primitives::generic::{Member, MaybeSerializeDebug};
 
 mod contract;
 #[cfg(test)]
@@ -67,77 +67,83 @@ const ENUM_SET_SIZE: usize = 64;
 /// The byte to identify intention to reclaim an existing account index.
 const RECLAIM_INDEX_MAGIC: usize = 0x69;
 
-/// A vetted and verified extrinsic from the external world.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-pub enum Address<AccountId, AccountIndex> where
- 	AccountId: Member,
- 	AccountIndex: Member,
-{
-	/// It's an account ID (pubkey).
-	Id(AccountId),
-	/// It's an account index.
-	Index(AccountIndex),
-}
+pub mod address {
+	use super::{Member, Slicable, As, Input};
 
-impl<AccountId, AccountIndex> From<AccountId> for Address<AccountId, AccountIndex> where
- 	AccountId: Member,
- 	AccountIndex: Member,
-{
-	fn from(a: AccountId) -> Self {
-		Address::Id(a)
+	/// A vetted and verified extrinsic from the external world.
+	#[derive(PartialEq, Eq, Clone)]
+	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	pub enum Address<AccountId, AccountIndex> where
+	 	AccountId: Member,
+	 	AccountIndex: Member,
+	{
+		/// It's an account ID (pubkey).
+		Id(AccountId),
+		/// It's an account index.
+		Index(AccountIndex),
 	}
-}
 
-impl<AccountId, AccountIndex> Slicable for Address<AccountId, AccountIndex> where
-	AccountId: Member + Slicable,
-	AccountIndex: Member + Slicable + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
-{
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		match input.read_byte()? {
-			255 => Some(Address::Id(Slicable::decode(input)?)),
-			254 => Some(Address::Index(Slicable::decode(input)?)),
-			253 => Some(Address::Index(As::sa(u32::decode(input)?))),
-			252 => Some(Address::Index(As::sa(u16::decode(input)?))),
-			x => Some(Address::Index(As::sa(x))),
+	impl<AccountId, AccountIndex> From<AccountId> for Address<AccountId, AccountIndex> where
+	 	AccountId: Member,
+	 	AccountIndex: Member,
+	{
+		fn from(a: AccountId) -> Self {
+			Address::Id(a)
 		}
 	}
 
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		match *self {
-			Address::Id(ref i) => {
-				v.push(255);
-				i.using_encoded(|s| v.extend(s));
+	impl<AccountId, AccountIndex> Slicable for Address<AccountId, AccountIndex> where
+		AccountId: Member + Slicable,
+		AccountIndex: Member + Slicable + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+	{
+		fn decode<I: Input>(input: &mut I) -> Option<Self> {
+			match input.read_byte()? {
+				255 => Some(Address::Id(Slicable::decode(input)?)),
+				254 => Some(Address::Index(Slicable::decode(input)?)),
+				253 => Some(Address::Index(As::sa(u32::decode(input)?))),
+				252 => Some(Address::Index(As::sa(u16::decode(input)?))),
+				x => Some(Address::Index(As::sa(x))),
 			}
-			Address::Index(i) if i > As::sa(0xffffffffu32) => {
-				v.push(254);
-				i.using_encoded(|s| v.extend(s));
-			}
-			Address::Index(i) if i > As::sa(0xffffu32) => {
-				v.push(253);
-				As::<u32>::as_(i).using_encoded(|s| v.extend(s));
-			}
-			Address::Index(i) if i >= As::sa(252u32) => {
-				v.push(252);
-				As::<u16>::as_(i).using_encoded(|s| v.extend(s));
-			}
-			Address::Index(i) => v.push(As::<u8>::as_(i)),
 		}
 
-		v
+		fn encode(&self) -> Vec<u8> {
+			let mut v = Vec::new();
+
+			match *self {
+				Address::Id(ref i) => {
+					v.push(255);
+					i.using_encoded(|s| v.extend(s));
+				}
+				Address::Index(i) if i > As::sa(0xffffffffu32) => {
+					v.push(254);
+					i.using_encoded(|s| v.extend(s));
+				}
+				Address::Index(i) if i > As::sa(0xffffu32) => {
+					v.push(253);
+					As::<u32>::as_(i).using_encoded(|s| v.extend(s));
+				}
+				Address::Index(i) if i >= As::sa(252u32) => {
+					v.push(252);
+					As::<u16>::as_(i).using_encoded(|s| v.extend(s));
+				}
+				Address::Index(i) => v.push(As::<u8>::as_(i)),
+			}
+
+			v
+		}
+	}
+
+	impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
+		AccountId: Member + Default,
+		AccountIndex: Member,
+	{
+		fn default() -> Self {
+			Address::Id(Default::default())
+		}
 	}
 }
 
-impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
-	AccountId: Member + Default,
-	AccountIndex: Member,
-{
-	fn default() -> Self {
-		Address::Id(Default::default())
-	}
-}
+pub type Address<T> = address::Address<<T as system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -171,7 +177,8 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 	}
 }
 
-pub trait Trait: system::Trait + session::Trait {
+// MaybeSerializeDebug is workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+pub trait Trait: system::Trait + session::Trait + MaybeSerializeDebug {
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize>;
 	/// Function type to get the contract address given the creator.
@@ -184,7 +191,7 @@ pub trait Trait: system::Trait + session::Trait {
 decl_module! {
 	pub struct Module<T: Trait>;
 	pub enum Call where aux: T::PublicAux {
-		fn transfer(aux, dest: Address<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result = 0;
+		fn transfer(aux, dest: Address<T>, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
 		fn unstake(aux) -> Result = 2;
 	}
@@ -304,8 +311,8 @@ impl<T: Trait> Module<T> {
 
 	/// Transfer some unlocked staking balance to another staker.
 	/// TODO: probably want to state gas-limit and gas-price.
-	fn transfer(aux: &T::PublicAux, dest: Address<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result {
-		let dest = Self::lookup(dest).ok_or("bad destination")?;
+	fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
+		let dest = Self::lookup(dest)?;
 		// commit anything that made it this far to storage
 		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
@@ -573,16 +580,15 @@ impl<T: Trait> Executable for Module<T> {
 	}
 }
 
-impl<T: Trait> Lookup<Address<T::AccountId, T::AccountIndex>> for Module<T> {
+impl<T: Trait> Lookup<address::Address<T::AccountId, T::AccountIndex>> for Module<T> {
 	type Target = T::AccountId;
-	fn lookup(a: Address<T::AccountId, T::AccountIndex>) -> Option<T::AccountId> {
+	fn lookup(a: address::Address<T::AccountId, T::AccountIndex>) -> result::Result<T::AccountId, &'static str> {
 		match a {
-			Address::Id(i) => Some(i),
-			Address::Index(i) => <Module<T>>::lookup_index(i),
+			address::Address::Id(i) => Ok(i),
+			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
 		}
 	}
 }
-
 
 // Each identity's stake may be in one of three bondage states, given by an integer:
 // - n | n <= <CurrentEra<T>>::get(): inactive: free to be transferred.

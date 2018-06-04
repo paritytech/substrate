@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd;
+use rstd::{self, result};
 #[cfg(not(feature = "std"))] use runtime_io;
 use substrate_primitives;
 use codec::Slicable;
@@ -38,7 +38,7 @@ pub trait Lookup<Source> {
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
-	fn lookup(s: Source) -> Option<Self::Target>;
+	fn lookup(s: Source) -> result::Result<Self::Target, &'static str>;
 }
 
 /// Simple payment making trait, operating on a single generic `AccountId` type.

@@ -79,7 +79,7 @@ macro_rules! decl_module {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		pub struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
 		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
@@ -92,7 +92,7 @@ macro_rules! decl_module {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		struct $mod_type<$trait_instance: $trait_name>($crate::dispatch::PhantomData<$trait_instance>);
 		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
