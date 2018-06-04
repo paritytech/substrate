@@ -35,7 +35,7 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use runtime_io::Hashing;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup};
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -65,8 +65,6 @@ pub trait Trait {
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Parameter + Default + traits::Digest;
 	type AccountId: Parameter + Ord + Default;
-	type Address: Parameter + Default;
-	type Lookup: Lookup<Self::Address, Target=Self::AccountId>;
 	type Header: traits::Header<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
 }
 

@@ -49,7 +49,7 @@ pub use runtime_primitives::BuildExternalities;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
 
@@ -139,7 +139,7 @@ impl_outer_dispatch! {
 }
 
 /// The address format for describing accounts.
-pub type Address = staking::Address<AccountId, AccountIndex>;
+pub type Address = staking::Address<Concrete>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
 /// Block type as expected by this runtime.

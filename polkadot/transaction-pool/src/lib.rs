@@ -129,9 +129,9 @@ impl ::std::ops::Deref for PolkadotBlock {
 	}
 }
 
-impl From<PolkadotBlock> for Block {
-	fn from(pd: PolkadotBlock) -> Self {
-		pd.block
+impl Into<Block> for PolkadotBlock {
+	fn into(self) -> Block {
+		self.block
 	}
 }
 

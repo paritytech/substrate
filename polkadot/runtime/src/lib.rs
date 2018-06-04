@@ -85,8 +85,6 @@ impl system::Trait for Concrete {
 	type Hashing = BlakeTwo256;
 	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
-	type Address = Address;
-	type Lookup = Staking;
 	type Header = generic::Header<BlockNumber, Hash, Log>;
 }
 /// System module for this concrete runtime.
