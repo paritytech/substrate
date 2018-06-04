@@ -26,6 +26,8 @@ use substrate_primitives::H256;
 use runtime_io;
 use {DummyContractAddressFor, GenesisConfig, Module, Trait, consensus, session, system};
 
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Debug, Serialize)]
 pub struct Test;
 impl HasPublicAux for Test {
 	type PublicAux = u64;

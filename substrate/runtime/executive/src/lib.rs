@@ -19,6 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")] extern crate serde;
+#[cfg(test)] #[macro_use] extern crate serde_derive;
 
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_support as runtime_support;
@@ -186,6 +187,8 @@ mod tests {
 	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT};
 	use primitives::testing::{Digest, Header, Block};
 
+	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+	#[derive(Debug, Serialize)]
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;

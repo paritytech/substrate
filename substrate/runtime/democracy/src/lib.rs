@@ -21,6 +21,10 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
+#[cfg(test)]
+#[macro_use]
+extern crate serde_derive;
+
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -357,6 +361,8 @@ mod tests {
 		}
 	}
 
+	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+	#[derive(Debug, Serialize)]
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;
