@@ -1000,8 +1000,8 @@ mod tests {
 			assert_eq!(Staking::balance(&2), 256 * 20);
 			assert_ok!(Staking::transfer(&2, 5.into(), 256 * 20));	// account 2 becomes zombie freeing index 1 for reclaim)
 			assert_eq!(Staking::balance(&2), 0);
-			assert_ok!(Staking::transfer(&5, 6.into(), 256 * 1 + 69));	// account 6 takes index 1.
-			assert_eq!(Staking::balance(&6), 256 * 1 + 69);
+			assert_ok!(Staking::transfer(&5, 6.into(), 256 * 1 + 0x69));	// account 6 takes index 1.
+			assert_eq!(Staking::balance(&6), 256 * 1 + 0x69);
 			assert_eq!(Staking::lookup_index(1), Some(6));
 		});
 	}
