@@ -90,6 +90,7 @@ mod tests {
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
@@ -107,6 +108,7 @@ mod tests {
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
@@ -124,6 +126,7 @@ mod tests {
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
@@ -146,6 +149,7 @@ mod tests {
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
@@ -181,6 +185,10 @@ mod tests {
 				transaction_base_fee: 1,
 				transaction_byte_fee: 0,
 				existential_deposit: 0,
+				transfer_fee: 0,
+				creation_fee: 0,
+				contract_fee: 0,
+				reclaim_rebate: 0,
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
@@ -219,7 +227,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("c1c253204478edc6ae5310ee3cac9b4098d5207ba7801d8b4e44bb53a7d5848e").into(),
+			hex!("4f7a61bceecddc19d49fbee53f82402c2a8727c1b2aeb5e5070a59f0777a203b").into(),
 			vec![BareExtrinsic {
 				signed: Alice.into(),
 				index: 0,
@@ -232,7 +240,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("f49ea19485902e7aaca338eb1395b0e07a5eafd864019d1e01214c98f8e11b6a").into(),
+			hex!("67c588603dd727601263cf8d6138a2003ffc0df793c5ea34e7defc945da24bf0").into(),
 			vec![
 				BareExtrinsic {
 					signed: Bob.into(),
@@ -293,6 +301,7 @@ mod tests {
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
@@ -311,6 +320,7 @@ mod tests {
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];

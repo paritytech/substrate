@@ -16,6 +16,7 @@
 
 //! Address type that is union of index and id for an account.
 
+use rstd::prelude::*;
 use super::{Member, Slicable, As, Input};
 
 /// A vetted and verified extrinsic from the external world.

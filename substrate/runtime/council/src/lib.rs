@@ -662,6 +662,10 @@ mod tests {
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
 			existential_deposit: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
 		}.build_externalities());
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,

@@ -151,6 +151,14 @@ decl_storage! {
 	pub TransactionByteFee get(transaction_byte_fee): b"sta:bytefee" => required T::Balance;
 	// The minimum amount allowed to keep an account open.
 	pub ExistentialDeposit get(existential_deposit): b"sta:existential_deposit" => required T::Balance;
+	// The amount credited to a destination's account whose index was reclaimed.
+	pub ReclaimRebate get(reclaim_rebate): b"sta:reclaim_rebate" => required T::Balance;
+	// The fee required to make a transfer.
+	pub TransferFee get(transfer_fee): b"sta:transfer_fee" => required T::Balance;
+	// The fee required to create an account. At least as big as ReclaimRebate.
+	pub CreationFee get(creation_fee): b"sta:creation_fee" => required T::Balance;
+	// The fee required to create a contract. At least as big as ReclaimRebate.
+	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
 
 	// The current era index.
 	pub CurrentEra get(current_era): b"sta:era" => required T::BlockNumber;
@@ -188,6 +196,12 @@ decl_storage! {
 	// of smart contracts.
 //	pub StorageOf: b"sta:sto:" => map [ T::AccountId => map(blake2) Vec<u8> => Vec<u8> ];
 	pub StorageOf: b"sta:sto:" => map [ (T::AccountId, Vec<u8>) => Vec<u8> ];
+}
+
+enum NewAccountOutcome {
+	NoHint,
+	GoodHint,
+	BadHint,
 }
 
 impl<T: Trait> Module<T> {
@@ -433,13 +447,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Register a new account (with existential balance).
-	fn new_account(who: &T::AccountId, balance: T::Balance) {
-		<FreeBalance<T>>::insert(who, balance);
-
+	fn new_account(who: &T::AccountId, balance: T::Balance) -> NewAccountOutcome {
 		let next_set_index = Self::next_enum_set();
 
 		// A little easter-egg for reclaiming dead indexes..
-		{
+		let ret = {
 			let next_set_index: usize = next_set_index.as_();
 
 			// we quantise the number of accounts so it stays constant over a reasonable
@@ -467,11 +479,15 @@ impl<T: Trait> Module<T> {
 						// yup - this index refers to a dead account. can be reused.
 						try_set[item_index] = who.clone();
 						<EnumSet<T>>::insert(set_index, try_set);
-						return;
+
+						return NewAccountOutcome::GoodHint;
 					}
 				}
+				NewAccountOutcome::BadHint
+			} else {
+				NewAccountOutcome::NoHint
 			}
-		}
+		};
 
 		// insert normally as a back up
 		let mut set_index = next_set_index;
@@ -494,12 +510,15 @@ impl<T: Trait> Module<T> {
 
 		// write set.
 		<EnumSet<T>>::insert(set_index, set);
+
+		ret
 	}
 
 	/// Kill an account.
 	fn kill_account(who: &T::AccountId) {
 		<system::AccountIndex<T>>::remove(who);
 		<FreeBalance<T>>::remove(who);
+		<Bondage<T>>::remove(who);
 		<CodeOf<T>>::remove(who);
 		// TODO: <StorageOf<T>>::remove_prefix(address.clone());
 	}
@@ -578,13 +597,28 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		let ed = <Module<T>>::existential_deposit();
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
-				// If the balance is too low, then the entire account is reaped.
+				// If the balance is too low, then the account is reaped.
+				// NOTE: There are two balances for every account: `reserved_balance` and
+				// `free_balance`. This contract subsystem only cares about the latter: whenever
+				// the term "balance" is used *here* it should be assumed to mean "free balance"
+				// in the rest of the module.
+				// Free balance can never be less than ED. If that happens, it gets reduced to zero
+				// and the account information relevant to this subsystem is deleted (i.e. the
+				// account is reaped).
+				// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
+				// value of which makes even the `free_balance` unspendable.
+				// TODO: enforce this for the other balance-altering functions.
 				if balance < ed {
 					<Module<T>>::kill_account(&address);
 					continue;
 				} else {
 					if !<FreeBalance<T>>::exists(&address) {
-						<Module<T>>::new_account(&address, balance);
+						let outcome = <Module<T>>::new_account(&address, balance);
+						let credit = match outcome {
+							NewAccountOutcome::GoodHint => balance + <Module<T>>::reclaim_rebate(),
+							_ => balance,
+						};
+						<FreeBalance<T>>::insert(&address, credit);
 					} else {
 						<FreeBalance<T>>::insert(&address, balance);
 					}
@@ -691,12 +725,17 @@ impl<T: Trait> Module<T> {
 		account_db: &DB,
 	) -> result::Result<Option<State<T>>, &'static str> {
 		let from_balance = account_db.get_balance(transactor);
-		// TODO: a fee.
-		if from_balance < value {
+
+		let liability = value + Self::contract_fee();
+
+		if from_balance < liability {
 			return Err("balance too low to send value");
 		}
 		if value < Self::existential_deposit() {
 			return Err("value too low to create account");
+		}
+		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
+			return Err("bondage too high to send value");
 		}
 
 		let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
@@ -710,7 +749,7 @@ impl<T: Trait> Module<T> {
 		// two inserts are safe
 		// note that we now know that `&dest != transactor` due to early-out before.
 		local.insert(dest, ChangeEntry::contract_created(value, code.to_vec()));
-		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - value));
+		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - liability));
 		Ok(Some(local))
 	}
 
@@ -720,23 +759,27 @@ impl<T: Trait> Module<T> {
 		value: T::Balance,
 		account_db: &DB,
 	) -> result::Result<Option<State<T>>, &'static str> {
+		let would_create = account_db.get_balance(transactor).is_zero();
+		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
+		let liability = value + fee;
+
 		let from_balance = account_db.get_balance(transactor);
-		if from_balance < value {
+		if from_balance < liability {
 			return Err("balance too low to send value");
 		}
-		if value < Self::existential_deposit() {
+		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
+		}
+		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
+			return Err("bondage too high to send value");
 		}
 
 		let to_balance = account_db.get_balance(dest);
-		if <Bondage<T>>::get(transactor) > <Bondage<T>>::get(dest) {
-			return Err("bondage too high to send value");
-		}
 		if to_balance + value <= to_balance {
 			return Err("destination balance too high to receive value");
 		}
 
-		// TODO: a fee, based upon gaslimit/gasprice.
+		// TODO: an additional fee, based upon gaslimit/gasprice.
 		let gas_limit = 100_000;
 
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
@@ -746,7 +789,7 @@ impl<T: Trait> Module<T> {
 		let mut overlay = OverlayAccountDb::new(account_db);
 
 		if transactor != dest {
-			overlay.set_balance(transactor, from_balance - value);
+			overlay.set_balance(transactor, from_balance - liability);
 			overlay.set_balance(dest, to_balance + value);
 		}
 
@@ -754,8 +797,8 @@ impl<T: Trait> Module<T> {
 		let should_commit = if dest_code.is_empty() {
 			true
 		} else {
-			// TODO: logging (logs are just appended into a notable storage-based vector and cleared every
-			// block).
+			// TODO: logging (logs are just appended into a notable storage-based vector and
+			// cleared every block).
 			contract::execute(&dest_code, dest, &mut overlay, gas_limit).is_ok()
 		};
 
@@ -798,6 +841,10 @@ pub struct GenesisConfig<T: Trait> {
 	pub bonding_duration: T::BlockNumber,
 	pub transaction_base_fee: T::Balance,
 	pub transaction_byte_fee: T::Balance,
+	pub transfer_fee: T::Balance,
+	pub creation_fee: T::Balance,
+	pub contract_fee: T::Balance,
+	pub reclaim_rebate: T::Balance,
 	pub existential_deposit: T::Balance,
 }
 
@@ -814,7 +861,11 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_base_fee: T::Balance::sa(0),
 			transaction_byte_fee: T::Balance::sa(0),
+			transfer_fee: T::Balance::sa(0),
+			creation_fee: T::Balance::sa(0),
+			contract_fee: T::Balance::sa(0),
 			existential_deposit: T::Balance::sa(0),
+			reclaim_rebate: T::Balance::sa(0),
 		}
 	}
 
@@ -837,7 +888,11 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_base_fee: T::Balance::sa(1),
 			transaction_byte_fee: T::Balance::sa(0),
+			transfer_fee: T::Balance::sa(0),
+			creation_fee: T::Balance::sa(0),
+			contract_fee: T::Balance::sa(0),
 			existential_deposit: T::Balance::sa(0),
+			reclaim_rebate: T::Balance::sa(0),
 		}
 	}
 }
@@ -855,7 +910,11 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			bonding_duration: T::BlockNumber::sa(1000),
 			transaction_base_fee: T::Balance::sa(0),
 			transaction_byte_fee: T::Balance::sa(0),
+			transfer_fee: T::Balance::sa(0),
+			creation_fee: T::Balance::sa(0),
+			contract_fee: T::Balance::sa(0),
 			existential_deposit: T::Balance::sa(0),
+			reclaim_rebate: T::Balance::sa(0),
 		}
 	}
 }
@@ -876,7 +935,11 @@ impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
 			twox_128(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
 			twox_128(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
 			twox_128(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
+			twox_128(<TransferFee<T>>::key()).to_vec() => self.transfer_fee.encode(),
+			twox_128(<CreationFee<T>>::key()).to_vec() => self.creation_fee.encode(),
+			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
 			twox_128(<ExistentialDeposit<T>>::key()).to_vec() => self.existential_deposit.encode(),
+			twox_128(<ReclaimRebate<T>>::key()).to_vec() => self.reclaim_rebate.encode(),
 			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
 			twox_128(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
 		];

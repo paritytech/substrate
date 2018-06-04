@@ -231,6 +231,10 @@ mod tests {
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,
 			existential_deposit: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
 		}.build_externalities());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		with_externalities(&mut t, || {
@@ -256,7 +260,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1a34df18f84b844851afd0a91a5bb04738151af0f3850a4606202e0e4e5e99f1").into(),
+					state_root: hex!("4fd406d2d62a841f7e2f956b52ce9ed98111c9eb6b3a9051aa4667b470030832").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -290,7 +294,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1a34df18f84b844851afd0a91a5bb04738151af0f3850a4606202e0e4e5e99f1").into(),
+					state_root: hex!("4fd406d2d62a841f7e2f956b52ce9ed98111c9eb6b3a9051aa4667b470030832").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

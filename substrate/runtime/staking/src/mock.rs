@@ -79,6 +79,10 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		transaction_base_fee: 0,
 		transaction_byte_fee: 0,
 		existential_deposit: ext_deposit,
+		transfer_fee: 0,
+		creation_fee: 0,
+		contract_fee: 0,
+		reclaim_rebate: 0,
 	}.build_externalities());
 	t
 }
