@@ -22,7 +22,7 @@ use std::time::{Instant, Duration};
 use io::SyncIo;
 use protocol::Protocol;
 use network::PeerId;
-use primitives::{Hash, block::Id as BlockId, block::Header};
+use primitives::{Hash, block::Id as BlockId, block::Header, block::HeaderHash};
 use message::{self, Message};
 use runtime_support::Hashable;
 
@@ -67,6 +67,15 @@ impl Consensus {
 	pub fn restart(&mut self) {
 		self.statement_sink = None;
 		self.bft_message_sink = None;
+	}
+
+	/// Clear everything and restart
+	pub fn clear(&mut self) {
+		self.peers.clear();
+		self.our_candidate = None;
+		self.messages.clear();
+		self.message_hashes.clear();
+		self.restart();
 	}
 
 	/// Handle new connected peer.
@@ -281,18 +290,22 @@ impl Consensus {
 		self.peers.remove(&peer_id);
 	}
 
-	pub fn collect_garbage(&mut self, best_header: Option<&Header>) {
+	pub fn collect_garbage(&mut self, best_hash: &HeaderHash, best_header: Option<&Header>) {
 		let hashes = &mut self.message_hashes;
 		let before = self.messages.len();
 		let now = Instant::now();
+
+		let parent_hash = |message: &Message| {
+			match *message {
+				Message::BftMessage(ref msg) => Some(msg.parent_hash),
+				Message::Statement(ref msg) => Some(msg.parent_hash),
+				_ => None
+			}
+		};
+
 		self.messages.retain(|&(ref hash, timestamp, ref message)| {
-			if timestamp >= now - MESSAGE_LIFETIME &&
-				best_header.map_or(true, |header|
-					match *message {
-						Message::BftMessage(ref msg) => msg.parent_hash != header.parent_hash,
-						Message::Statement(ref msg) => msg.parent_hash != header.parent_hash,
-						_ => true,
-					})
+			if (timestamp >= now - MESSAGE_LIFETIME || parent_hash(message).map_or(false, |h| h == *best_hash)) &&
+				best_header.map_or(true, |header| parent_hash(message).map_or(true, |h| h != header.parent_hash))
 			{
 				true
 			} else {
@@ -342,34 +355,41 @@ mod tests {
 				signatures: Default::default(),
 			}),
 		});
-		consensus.messages.push((m1_hash, now, m1));
+		consensus.messages.push((m1_hash, now, m1.clone()));
 		consensus.messages.push((m2_hash, now, m2.clone()));
 		consensus.message_hashes.insert(m1_hash);
 		consensus.message_hashes.insert(m2_hash);
 
 		// nothing to collect
-		consensus.collect_garbage(None);
+		consensus.collect_garbage(&best_hash, None);
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);
 
 		// random header, nothing should be cleared
 		let mut header = Header::from_block_number(0);
-		consensus.collect_garbage(Some(&header));
+		consensus.collect_garbage(&best_hash, Some(&header));
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);
 
 		// header that matches one of the messages
 		header.parent_hash = prev_hash;
-		consensus.collect_garbage(Some(&header));
+		consensus.collect_garbage(&best_hash, Some(&header));
 		assert_eq!(consensus.messages.len(), 1);
 		assert_eq!(consensus.message_hashes.len(), 1);
 		assert!(consensus.message_hashes.contains(&m2_hash));
 
 		// make timestamp expired
+		let expired = now - MESSAGE_LIFETIME;
 		consensus.messages.clear();
-		consensus.messages.push((m2_hash, now - MESSAGE_LIFETIME, m2));
-		consensus.collect_garbage(None);
-		assert!(consensus.messages.is_empty());
-		assert!(consensus.message_hashes.is_empty());
+		consensus.message_hashes.clear();
+		consensus.messages.push((m1_hash, expired, m1.clone()));
+		consensus.messages.push((m2_hash, expired, m2.clone()));
+		consensus.message_hashes.insert(m1_hash);
+		consensus.message_hashes.insert(m2_hash);
+		consensus.collect_garbage(&best_hash, None);
+		// current block is preserved, the rest in purged.
+		assert_eq!(consensus.messages.len(), 1);
+		assert_eq!(consensus.message_hashes.len(), 1);
+		assert!(consensus.message_hashes.contains(&m2_hash));
 	}
 }

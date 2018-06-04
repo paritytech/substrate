@@ -130,10 +130,10 @@ impl Protocol {
 
 	/// Returns protocol status
 	pub fn status(&self) -> ProtocolStatus {
-		let sync = self.sync.read();
+		let status = self.sync.read().status();
 		let peers = self.peers.read();
 		ProtocolStatus {
-			sync: sync.status(),
+			sync: status,
 			num_peers: peers.values().count(),
 			num_active_peers: peers.values().filter(|p| p.block_request.is_some()).count(),
 		}
@@ -223,6 +223,9 @@ impl Protocol {
 	/// Called by peer when it is disconnecting
 	pub fn on_peer_disconnected(&self, io: &mut SyncIo, peer: PeerId) {
 		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_info(peer));
+		// lock all the the peer lists so that add/remove peer events are in order
+		let mut sync = self.sync.write();
+		let mut consensus = self.consensus.lock();
 		let removed = {
 			let mut peers = self.peers.write();
 			let mut handshaking_peers = self.handshaking_peers.write();
@@ -230,8 +233,8 @@ impl Protocol {
 			peers.remove(&peer).is_some()
 		};
 		if removed {
-			self.consensus.lock().peer_disconnected(io, self, peer);
-			self.sync.write().peer_disconnected(io, self, peer);
+			sync.peer_disconnected(io, self, peer);
+			consensus.peer_disconnected(io, self, peer);
 		}
 	}
 
@@ -345,7 +348,14 @@ impl Protocol {
 	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.maintain_peers(io);
-		self.consensus.lock().collect_garbage(None);
+		let best_hash = match self.chain().info() {
+			Ok(info) => info.chain.best_hash,
+			Err(e) => {
+				debug!(target: "sync", "Error reading the blockchain: {:?}", e);
+				return;
+			}
+		};
+		self.consensus.lock().collect_garbage(&best_hash, None);
 	}
 
 	fn maintain_peers(&self, io: &mut SyncIo) {
@@ -388,6 +398,7 @@ impl Protocol {
 			return;
 		}
 
+		// lock all the the peer lists so that add/remove peer events are in order
 		let mut sync = self.sync.write();
 		let mut consensus = self.consensus.lock();
 		{
@@ -486,12 +497,11 @@ impl Protocol {
 
 	pub fn abort(&self) {
 		let mut sync = self.sync.write();
-		let mut peers = self.peers.write();
-		let mut handshaking_peers = self.handshaking_peers.write();
+		let mut consensus = self.consensus.lock();
+		self.peers.write().clear();
+		self.handshaking_peers.write().clear();
 		sync.clear();
-		peers.clear();
-		handshaking_peers.clear();
-		self.consensus.lock().restart();
+		consensus.clear();
 	}
 
 	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce) {
@@ -508,19 +518,27 @@ impl Protocol {
 
 	pub fn on_block_imported(&self, io: &mut SyncIo, hash: HeaderHash, header: &Header) {
 		self.sync.write().update_chain_info(&header);
-		// send out block announcements
-		let mut peers = self.peers.write();
-
-		for (peer_id, ref mut peer) in peers.iter_mut() {
-			if peer.known_blocks.insert(hash.clone()) {
-				trace!(target: "sync", "Announcing block {:?} to {}", hash, peer_id);
-				self.send_message(io, *peer_id, Message::BlockAnnounce(message::BlockAnnounce {
-					header: header.clone()
-				}));
+		{
+			// send out block announcements
+			let mut peers = self.peers.write();
+			for (peer_id, ref mut peer) in peers.iter_mut() {
+				if peer.known_blocks.insert(hash.clone()) {
+					trace!(target: "sync", "Announcing block {:?} to {}", hash, peer_id);
+					self.send_message(io, *peer_id, Message::BlockAnnounce(message::BlockAnnounce {
+						header: header.clone()
+					}));
+				}
 			}
 		}
 
-		self.consensus.lock().collect_garbage(Some(&header));
+		let best_hash = match self.chain().info() {
+			Ok(info) => info.chain.best_hash,
+			Err(e) => {
+				debug!(target: "sync", "Error reading the blockchain: {:?}", e);
+				return;
+			}
+		};
+		self.consensus.lock().collect_garbage(&best_hash, Some(&header));
 	}
 
 	pub fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats> {
