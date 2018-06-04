@@ -46,11 +46,28 @@ extern crate substrate_runtime_staking as staking;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
+use rstd::result;
 use runtime_io::Hashing;
 use runtime_support::StorageValue;
-use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable, MakePayment};
+use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
+	MakePayment};
 use codec::Slicable;
 use system::extrinsics_root;
+use primitives::{ApplyOutcome, ApplyError};
+
+mod internal {
+	pub enum ApplyError {
+		BadSignature(&'static str),
+		Stale,
+		Future,
+		CantPay,
+	}
+
+	pub enum ApplyOutcome {
+		Success,
+		Fail(&'static str),
+	}
+}
 
 pub struct Executive<
 	System,
@@ -120,34 +137,46 @@ impl<
 	/// Apply extrinsic outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
-	pub fn apply_extrinsic(uxt: Block::Extrinsic) {
+	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> result::Result<ApplyOutcome, ApplyError> {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
 		<system::Module<System>>::note_extrinsic(encoded);
-		Self::apply_extrinsic_no_note_with_len(uxt, encoded_len);
+		match Self::apply_extrinsic_no_note_with_len(uxt, encoded_len) {
+			Ok(internal::ApplyOutcome::Success) => Ok(ApplyOutcome::Success),
+			Ok(internal::ApplyOutcome::Fail(_)) => Ok(ApplyOutcome::Fail),
+			Err(internal::ApplyError::CantPay) => Err(ApplyError::CantPay),
+			Err(internal::ApplyError::BadSignature(_)) => Err(ApplyError::BadSignature),
+			Err(internal::ApplyError::Stale) => Err(ApplyError::Stale),
+			Err(internal::ApplyError::Future) => Err(ApplyError::Future),
+		}
 	}
 
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
-		Self::apply_extrinsic_no_note_with_len(uxt, l);
+		match Self::apply_extrinsic_no_note_with_len(uxt, l) {
+			Ok(internal::ApplyOutcome::Success) => (),
+			Ok(internal::ApplyOutcome::Fail(e)) => runtime_io::print(e),
+			Err(internal::ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
+			Err(internal::ApplyError::BadSignature(_)) => panic!("All extrinsics should be properly signed"),
+			Err(internal::ApplyError::Stale) | Err(internal::ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
+		}
 	}
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
-	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) {
+	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
-		let xt = match uxt.check() {
-			Ok(xt) => xt,
-			Err(_) => panic!("All extrinsics should be properly signed"),
-		};
+		let xt = uxt.check().map_err(internal::ApplyError::BadSignature)?;
 
 		if xt.sender() != &Default::default() {
 			// check index
 			let expected_index = <system::Module<System>>::account_nonce(xt.sender());
-			assert!(xt.index() == &expected_index, "All extrinsics should have the correct nonce");
+			if xt.index() != &expected_index { return Err(
+				if xt.index() < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
+			) }
 
 			// pay any fees.
-			assert!(Payment::make_payment(xt.sender(), encoded_len), "All extrinsics should have sender able to pay their fees");
+			Payment::make_payment(xt.sender(), encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 
@@ -156,11 +185,11 @@ impl<
 		}
 
 		// decode parameters and dispatch
-		if let Err(e) = xt.apply() {
-			runtime_io::print(e);
-		}
+		let r = xt.apply();
 
 		<system::ExtrinsicIndex<System>>::put(<system::ExtrinsicIndex<System>>::get() + 1u32);
+
+		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
 	}
 
 	fn final_checks(header: &System::Header) {

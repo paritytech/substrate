@@ -45,11 +45,11 @@ pub trait Lookup<Source> {
 pub trait MakePayment<AccountId> {
 	/// Make some sort of payment concerning `who` for an extrinsic (transaction) of encoded length
 	/// `encoded_len` bytes. Return true iff the payment was successful.
-	fn make_payment(who: &AccountId, encoded_len: usize) -> bool;
+	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
 }
 
 impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: usize) -> bool { true }
+	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.

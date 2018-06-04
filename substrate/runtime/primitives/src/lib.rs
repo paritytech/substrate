@@ -73,6 +73,52 @@ impl From<H512> for Ed25519Signature {
 	}
 }
 
+#[derive(Eq, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[repr(u8)]
+pub enum ApplyOutcome {
+	Success = 0,
+	Fail = 1,
+}
+impl codec::Slicable for ApplyOutcome {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			x if x == ApplyOutcome::Success as u8 => Some(ApplyOutcome::Success),
+			x if x == ApplyOutcome::Fail as u8 => Some(ApplyOutcome::Fail),
+			_ => None,
+		}
+	}
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&[*self as u8])
+	}
+}
+
+#[derive(Eq, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[repr(u8)]
+pub enum ApplyError {
+	BadSignature = 0,
+	Stale = 1,
+	Future = 2,
+	CantPay = 3,
+}
+impl codec::Slicable for ApplyError {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			x if x == ApplyError::BadSignature as u8 => Some(ApplyError::BadSignature),
+			x if x == ApplyError::Stale as u8 => Some(ApplyError::Stale),
+			x if x == ApplyError::Future as u8 => Some(ApplyError::Future),
+			x if x == ApplyError::CantPay as u8 => Some(ApplyError::CantPay),
+			_ => None,
+		}
+	}
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&[*self as u8])
+	}
+}
+
+pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
+
 #[macro_export]
 macro_rules! __impl_outer_config_types {
 	($concrete:ident $config:ident $snake:ident $($rest:ident)*) => {

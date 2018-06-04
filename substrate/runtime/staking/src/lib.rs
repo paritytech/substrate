@@ -811,14 +811,14 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
-	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> bool {
+	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let b = Self::free_balance(transactor);
 		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<usize>>::sa(encoded_len);
 		if b < transaction_fee {
-			return false;
+			return Err("not enough funds for transaction fee");
 		}
 		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
-		true
+		Ok(())
 	}
 }
 
