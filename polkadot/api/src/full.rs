@@ -23,7 +23,7 @@ use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine;
 
 use primitives::{AccountId, Block, Header, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::{DutyRoster, Id as ParaId};
+use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 
 use {CheckedBlockId, PolkadotApi, LocalPolkadotApi, ErrorKind, Error, Result};
 
@@ -134,6 +134,19 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	fn parachain_head(&self, at: &CheckedId, parachain: ParaId) -> Result<Option<Vec<u8>>> {
 		with_runtime!(self, at, || ::runtime::Parachains::parachain_head(parachain))
 	}
+
+	fn inherent_extrinsics(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> {
+		use codec::Slicable;
+
+		with_runtime!(self, at, || {
+			let extrinsics = ::runtime::inherent_extrinsics(timestamp, new_heads);
+			extrinsics.into_iter()
+				.map(|x| x.encode()) // get encoded representation
+				.map(|x| Slicable::decode(&mut &x[..])) // get byte-vec equivalent to extrinsic
+				.map(|x| x.expect("UncheckedExtrinsic has encoded representation equivalent to Vec<u8>; qed"))
+				.collect()
+		})
+	}
 }
 
 impl<B: LocalBackend<Block>> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
@@ -144,29 +157,34 @@ impl<B: LocalBackend<Block>> LocalPolkadotApi for Client<B, LocalCallExecutor<B,
 mod tests {
 	use super::*;
 	use keyring::Keyring;
-	use codec::Slicable;
 	use client::{self, LocalCallExecutor};
 	use client::in_mem::Backend as InMemory;
 	use substrate_executor::NativeExecutionDispatch;
-	use substrate_primitives::{self, Header};
 	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildExternalities};
 
 	fn validators() -> Vec<AccountId> {
+		vec![
+			Keyring::One.to_raw_public().into(),
+			Keyring::Two.to_raw_public().into(),
+		]
+	}
+
+	fn session_keys() -> Vec<SessionKey> {
 		vec![
 			Keyring::One.to_raw_public(),
 			Keyring::Two.to_raw_public(),
 		]
 	}
 
-	fn client() -> Client<InMemory, LocalCallExecutor<InMemory, NativeExecutor<LocalDispatch>>> {
+	fn client() -> Client<InMemory<Block>, LocalCallExecutor<InMemory<Block>, NativeExecutor<LocalDispatch>>, Block> {
 		struct GenesisBuilder;
 
-		impl client::GenesisBuilder for GenesisBuilder {
+		impl client::GenesisBuilder<Block> for GenesisBuilder {
 			fn build(self) -> (Header, Vec<(Vec<u8>, Vec<u8>)>) {
 				let genesis_config = GenesisConfig {
 					consensus: Some(ConsensusConfig {
 						code: LocalDispatch::native_equivalent().to_vec(),
-						authorities: validators(),
+						authorities: session_keys(),
 					}),
 					system: None,
 					session: Some(SessionConfig {
@@ -180,8 +198,8 @@ mod tests {
 				};
 
 				let storage = genesis_config.build_externalities();
-				let block = ::client::genesis::construct_genesis_block(&storage);
-				(substrate_primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+				let block = ::client::genesis::construct_genesis_block::<Block>(&storage);
+				(block.header, storage.into_iter().collect())
 			}
 		}
 
@@ -191,18 +209,24 @@ mod tests {
 	#[test]
 	fn gets_session_and_validator_keys() {
 		let client = client();
-		let id = client.check_id(BlockId::Number(0)).unwrap();
-		assert_eq!(client.session_keys(&id).unwrap(), validators());
+		let id = client.check_id(BlockId::number(0)).unwrap();
+		assert_eq!(client.session_keys(&id).unwrap(), session_keys());
 		assert_eq!(client.validators(&id).unwrap(), validators());
 	}
 
 	#[test]
-	fn build_block() {
+	fn build_block_with_inherent_succeeds() {
 		let client = client();
 
-		let id = client.check_id(BlockId::Number(0)).unwrap();
-		let block_builder = client.build_block(&id, 1_000_000, Vec::new()).unwrap();
-		let block = block_builder.bake();
+		let id = client.check_id(BlockId::number(0)).unwrap();
+		let inherent = client.inherent_extrinsics(&id, 1_000_000, Vec::new()).unwrap();
+
+		let mut block_builder = client.new_block_at(id.block_id()).unwrap();
+		for extrinsic in inherent {
+			block_builder.push(extrinsic).unwrap();
+		}
+
+		let block = block_builder.bake().unwrap();
 
 		assert_eq!(block.header.number, 1);
 		assert!(block.header.extrinsics_root != Default::default());
@@ -210,14 +234,14 @@ mod tests {
 
 	#[test]
 	fn fails_to_check_id_for_unknown_block() {
-		assert!(client().check_id(BlockId::Number(100)).is_err());
+		assert!(client().check_id(BlockId::number(100)).is_err());
 	}
 
 	#[test]
 	fn gets_random_seed_with_genesis() {
 		let client = client();
 
-		let id = client.check_id(BlockId::Number(0)).unwrap();
+		let id = client.check_id(BlockId::number(0)).unwrap();
 		assert!(client.random_seed(&id).is_ok());
 	}
 }

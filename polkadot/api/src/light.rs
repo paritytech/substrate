@@ -22,7 +22,7 @@ use client::{Client, CallExecutor};
 use codec::Slicable;
 use state_machine;
 use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::{DutyRoster, Id as ParaId};
+use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 use full::CheckedId;
 use {PolkadotApi, RemotePolkadotApi, CheckedBlockId, Result, ErrorKind};
 
@@ -78,6 +78,10 @@ impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotAp
 	}
 
 	fn parachain_head(&self, _at: &Self::CheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
+		Err(ErrorKind::UnknownRuntime.into())
+	}
+
+	fn inherent_extrinsics(&self, _at: &Self::CheckedBlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 }

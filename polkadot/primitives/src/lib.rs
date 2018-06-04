@@ -61,8 +61,7 @@ pub type Block = generic::Block<Header, Vec<u8>>;
 /// TODO: switch to u32
 pub type BlockNumber = u64;
 
-/// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
-/// certainly continue to be the same as the substrate's `AuthorityId`.
+/// Alias to Ed25519 pubkey that identifies an account on the relay chain.
 pub type AccountId = primitives::hash::H256;
 
 /// The Ed25519 pub key of an session that belongs to an authority of the relay chain. This is

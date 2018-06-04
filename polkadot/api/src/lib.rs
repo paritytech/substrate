@@ -38,7 +38,7 @@ pub mod full;
 pub mod light;
 
 use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::{DutyRoster, Id as ParaId};
+use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 
 error_chain! {
 	errors {
@@ -123,6 +123,10 @@ pub trait PolkadotApi {
 	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
 	/// and an error if we can't evaluate for some reason.
 	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<bool>;
+
+	/// Attempt to produce the (encoded) inherent extrinsics for a block being built upon the given.
+	/// This may vary by runtime and will fail if a runtime doesn't follow the same API.
+	fn inherent_extrinsics(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>>;
 }
 
 /// Mark for all Polkadot API implementations, that are making use of state data, stored locally.

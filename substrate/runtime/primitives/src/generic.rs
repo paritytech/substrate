@@ -393,11 +393,23 @@ impl<Number, Hashing, DigestItem> Header<Number, Hashing, DigestItem> where
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub enum BlockId<Block: BlockT> where {
+pub enum BlockId<Block: BlockT> {
 	/// Identify by block header hash.
 	Hash(<<Block as BlockT>::Header as HeaderT>::Hash),
 	/// Identify by block number.
 	Number(<<Block as BlockT>::Header as HeaderT>::Number),
+}
+
+impl<Block: BlockT> BlockId<Block> {
+	/// Create a block ID from a hash.
+	pub fn hash(hash: Block::Hash) -> Self {
+		BlockId::Hash(hash)
+	}
+
+	/// Create a block ID from a number.
+	pub fn number(number: <Block::Header as HeaderT>::Number) -> Self {
+		BlockId::Number(number)
+	}
 }
 
 impl<Block: BlockT> Copy for BlockId<Block> {}

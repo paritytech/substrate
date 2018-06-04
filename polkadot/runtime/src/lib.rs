@@ -58,7 +58,9 @@ extern crate substrate_runtime_timestamp as timestamp;
 
 mod parachains;
 
+use rstd::prelude::*;
 use primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
+use primitives::parachain::CandidateReceipt;
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
 
 #[cfg(feature = "std")]
@@ -200,6 +202,28 @@ impl_outer_config! {
 	}
 }
 
+/// Produces the list of inherent extrinsics.
+pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: Vec<CandidateReceipt>) -> Vec<UncheckedExtrinsic> {
+	vec![
+		UncheckedExtrinsic {
+			extrinsic: Extrinsic {
+				signed: Default::default(),
+				function: Call::Timestamp(TimestampCall::set(timestamp)),
+				index: 0,
+			},
+			signature: Default::default(),
+		},
+		UncheckedExtrinsic {
+			extrinsic: Extrinsic {
+				signed: Default::default(),
+				function: Call::Parachains(ParachainsCall::set_heads(parachain_heads)),
+				index: 0,
+			},
+			signature: Default::default(),
+		},
+	]
+}
+
 pub mod api {
 	impl_stubs!(
 		authorities => |()| super::Consensus::authorities(),
@@ -207,6 +231,7 @@ pub mod api {
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),
 		finalise_block => |()| super::Executive::finalise_block(),
+		inherent_extrinsics => |(timestamp, heads)| super::inherent_extrinsics(timestamp, heads),
 		validator_count => |()| super::Session::validator_count(),
 		validators => |()| super::Session::validators()
 	);
