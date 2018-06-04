@@ -20,6 +20,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use core::{mem, slice};
 use super::joiner::Joiner;
+use arrayvec::ArrayVec;
 
 /// Trait that allows reading of data into a slice.
 pub trait Input {
@@ -88,7 +89,7 @@ impl<T: Slicable, E: Slicable> Slicable for Result<T, E> {
 }
 
 /// Shim type because we can't do a specialised implementation for `Option<bool>` directly.
-pub struct OptionBool (Option<bool>);
+pub struct OptionBool(pub Option<bool>);
 
 impl Slicable for OptionBool {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
@@ -133,13 +134,13 @@ impl<T: Slicable> Slicable for Option<T> {
 
 macro_rules! impl_array {
 	( $( $n:expr )* ) => { $(
-		impl<T: Slicable> Slicable for [T; $n] {
+		impl<T: Slicable + Default> Slicable for [T; $n] {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
-				let mut r: Self = unsafe { mem::uninitialized() };
-				for i in 0..$n {
-					r[i] = T::decode(input)?;
+				let mut r = ArrayVec::new();
+				for _ in 0..$n {
+					r.push(T::decode(input)?);
 				}
-				Some(r)
+				r.into_inner().ok()
 			}
 
 			fn encode(&self) -> Vec<u8> {
@@ -155,7 +156,7 @@ macro_rules! impl_array {
 }
 
 impl_array!(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
-	40 48 56 64 72 80 96 112 128 160 192 224 256);
+	40 48 56 64 72 96 128 160 192 224 256);
 
 impl<T: Slicable> Slicable for Box<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
