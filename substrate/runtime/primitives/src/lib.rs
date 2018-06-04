@@ -63,12 +63,11 @@ pub trait BuildExternalities {
 /// Ed25519 signature verify.
 #[derive(Eq, PartialEq, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Ed25519Signature(pub H512);
-
-impl Verify for Ed25519Signature {
-	type Signer = H256;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(&(self.0).0, msg.get(), &signer.0[..])
+pub struct Ed25519Signature(H512);
+impl traits::Verify for Ed25519Signature {
+	type Signer = [u8; 32];
+	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
+		runtime_io::ed25519_verify(&(self.0).0, msg, &signer[..])
 	}
 }
 
