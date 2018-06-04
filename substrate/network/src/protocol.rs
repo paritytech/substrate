@@ -124,10 +124,10 @@ impl Protocol {
 
 	/// Returns protocol status
 	pub fn status(&self) -> ProtocolStatus {
-		let sync = self.sync.read();
+		let status = self.sync.read().status();
 		let peers = self.peers.read();
 		ProtocolStatus {
-			sync: sync.status(),
+			sync: status,
 			num_peers: peers.values().count(),
 			num_active_peers: peers.values().filter(|p| p.block_request.is_some()).count(),
 		}
@@ -219,6 +219,9 @@ impl Protocol {
 	/// Called by peer when it is disconnecting
 	pub fn on_peer_disconnected(&self, io: &mut SyncIo, peer: PeerId) {
 		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_info(peer));
+		// lock all the the peer lists so that add/remove peer events are in order
+		let mut sync = self.sync.write();
+		let mut consensus = self.consensus.lock();
 		let removed = {
 			let mut peers = self.peers.write();
 			let mut handshaking_peers = self.handshaking_peers.write();
@@ -226,8 +229,8 @@ impl Protocol {
 			peers.remove(&peer).is_some()
 		};
 		if removed {
-			self.consensus.lock().peer_disconnected(io, self, peer);
-			self.sync.write().peer_disconnected(io, self, peer);
+			sync.peer_disconnected(io, self, peer);
+			consensus.peer_disconnected(io, self, peer);
 			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
 		}
 	}
@@ -386,6 +389,9 @@ impl Protocol {
 			return;
 		}
 
+		// lock all the the peer lists so that add/remove peer events are in order
+		let mut sync = self.sync.write();
+		let mut consensus = self.consensus.lock();
 		{
 			let mut peers = self.peers.write();
 			let mut handshaking_peers = self.handshaking_peers.write();
@@ -420,8 +426,8 @@ impl Protocol {
 			debug!(target: "sync", "Connected {} {}", peer_id, io.peer_info(peer_id));
 		}
 
-		self.sync.write().new_peer(io, self, peer_id);
-		self.consensus.lock().new_peer(io, self, peer_id, &status.roles);
+		sync.new_peer(io, self, peer_id);
+		consensus.new_peer(io, self, peer_id, &status.roles);
 		self.on_demand.as_ref().map(|s| s.on_connect(peer_id, message::Role::as_flags(&status.roles)));
 	}
 
@@ -500,12 +506,11 @@ impl Protocol {
 
 	pub fn abort(&self) {
 		let mut sync = self.sync.write();
-		let mut peers = self.peers.write();
-		let mut handshaking_peers = self.handshaking_peers.write();
+		let mut consensus = self.consensus.lock();
+		self.peers.write().clear();
+		self.handshaking_peers.write().clear();
 		sync.clear();
-		peers.clear();
-		handshaking_peers.clear();
-		self.consensus.lock().restart();
+		consensus.clear();
 	}
 
 	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce) {
@@ -522,15 +527,16 @@ impl Protocol {
 
 	pub fn on_block_imported(&self, io: &mut SyncIo, hash: HeaderHash, header: &Header) {
 		self.sync.write().update_chain_info(&header);
-		// send out block announcements
-		let mut peers = self.peers.write();
-
-		for (peer_id, ref mut peer) in peers.iter_mut() {
-			if peer.known_blocks.insert(hash.clone()) {
-				trace!(target: "sync", "Announcing block {:?} to {}", hash, peer_id);
-				self.send_message(io, *peer_id, Message::BlockAnnounce(message::BlockAnnounce {
-					header: header.clone()
-				}));
+		{
+			// send out block announcements
+			let mut peers = self.peers.write();
+			for (peer_id, ref mut peer) in peers.iter_mut() {
+				if peer.known_blocks.insert(hash.clone()) {
+					trace!(target: "sync", "Announcing block {:?} to {}", hash, peer_id);
+					self.send_message(io, *peer_id, Message::BlockAnnounce(message::BlockAnnounce {
+						header: header.clone()
+					}));
+				}
 			}
 		}
 

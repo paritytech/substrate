@@ -69,6 +69,15 @@ impl Consensus {
 		self.bft_message_sink = None;
 	}
 
+	/// Clear everything and restart
+	pub fn clear(&mut self) {
+		self.peers.clear();
+		self.our_candidate = None;
+		self.messages.clear();
+		self.message_hashes.clear();
+		self.restart();
+	}
+
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, io: &mut SyncIo, protocol: &Protocol, peer_id: PeerId, roles: &[message::Role]) {
 		if roles.iter().any(|r| *r == message::Role::Validator) {
