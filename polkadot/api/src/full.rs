@@ -17,20 +17,19 @@
 //! Strongly typed API for full Polkadot client.
 
 use client::backend::{Backend, LocalBackend};
-use client::{self, Client, LocalCallExecutor};
+use client::{Client, LocalCallExecutor};
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
-use state_machine::{self, OverlayedChanges};
+use state_machine;
 
-use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
-use runtime::{self, Block, Header, UncheckedExtrinsic, Extrinsic, Call, TimestampCall, ParachainsCall};
+use primitives::{AccountId, Block, Header, BlockId, Hash, Index, SessionKey, Timestamp};
+use primitives::parachain::{DutyRoster, Id as ParaId};
 
-use {CheckedBlockId, BlockBuilder, PolkadotApi, LocalPolkadotApi, ErrorKind, Error, Result};
+use {CheckedBlockId, PolkadotApi, LocalPolkadotApi, ErrorKind, Error, Result};
 
 /// A checked block ID used for the substrate-client implementation of CheckedBlockId;
 #[derive(Debug, Clone, Copy)]
-pub struct CheckedId(pub BlockId);
+pub struct CheckedId(pub(crate) BlockId);
 
 impl CheckedBlockId for CheckedId {
 	fn block_id(&self) -> &BlockId {
@@ -44,14 +43,16 @@ macro_rules! with_runtime {
 	($client: ident, $at: expr, $exec: expr) => {{
 		let parent = $at.block_id();
 		let header = Header {
-			parent_hash: $client.block_hash_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))?,
-			number: $client.block_number_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))? + 1,
+			parent_hash: $client.block_hash_from_id(&parent)?
+				.ok_or_else(|| ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
+			number: $client.block_number_from_id(&parent)?
+				.ok_or_else(|| ErrorKind::UnknownBlock(format!("{:?}", parent)))? + 1,
 			state_root: Default::default(),
 			extrinsics_root: Default::default(),
 			digest: Default::default(),
 		};
 
-		$client.state_at(parent).map_err(Error::from).and_then(|state| {
+		$client.state_at(&parent).map_err(Error::from).and_then(|state| {
 			let mut changes = Default::default();
 			let mut ext = state_machine::Ext::new(&mut changes, &state);
 
@@ -63,105 +64,14 @@ macro_rules! with_runtime {
 	}}
 }
 
-/// A polkadot block builder.
-#[derive(Debug, Clone)]
-pub struct ClientBlockBuilder<S> {
-	parent: BlockId,
-	changes: OverlayedChanges,
-	state: S,
-	header: Header,
-	timestamp: Timestamp,
-	extrinsics: Vec<UncheckedExtrinsic>,
-}
-
-impl<S: state_machine::Backend> ClientBlockBuilder<S>
-	where S::Error: Into<client::error::Error>
-{
-	// initialises a block, ready to allow extrinsics to be applied.
-	fn initialise_block(&mut self) -> Result<()> {
-		let result = {
-			let mut ext = state_machine::Ext::new(&mut self.changes, &self.state);
-			let h = self.header.clone();
-
-			::substrate_executor::with_native_environment(
-				&mut ext,
-				|| runtime::Executive::initialise_block(&h),
-			).map_err(Into::into)
-		};
-
-		match result {
-			Ok(_) => {
-				self.changes.commit_prospective();
-				Ok(())
-			}
-			Err(e) => {
-				self.changes.discard_prospective();
-				Err(e)
-			}
-		}
-	}
-
-	// executes a extrinsic, inherent or otherwise, without appending to the list.
-	fn apply_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
-		let result = {
-			let mut ext = state_machine::Ext::new(&mut self.changes, &self.state);
-
-			::substrate_executor::with_native_environment(
-				&mut ext,
-				move || runtime::Executive::apply_extrinsic(extrinsic),
-			).map_err(Into::into)
-		};
-
-		match result {
-			Ok(_) => {
-				self.changes.commit_prospective();
-				Ok(())
-			}
-			Err(e) => {
-				self.changes.discard_prospective();
-				Err(e)
-			}
-		}
-	}
-}
-
-impl<S: state_machine::Backend> BlockBuilder for ClientBlockBuilder<S>
-	where S::Error: Into<client::error::Error>
-{
-	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
-		// Check that this is not an "inherent" extrinsic.
-		if extrinsic.signature == Default::default() {
-			bail!(ErrorKind::PushedInherentTransaction(extrinsic));
-		} else {
-			self.apply_extrinsic(extrinsic.clone())?;
-			self.extrinsics.push(extrinsic);
-			Ok(())
-		}
-	}
-
-	fn bake(mut self) -> Block {
-		let mut ext = state_machine::Ext::new(&mut self.changes, &self.state);
-
-		let final_header = ::substrate_executor::with_native_environment(
-			&mut ext,
-			move || runtime::Executive::finalise_block()
-		).expect("all inherent extrinsics pushed; all other extrinsics executed correctly; qed");
-		Block {
-			header: final_header,
-			extrinsics: self.extrinsics,
-		}
-	}
-}
-
-impl<B: LocalBackend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>>
-	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
+	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {
 	type CheckedBlockId = CheckedId;
-	type BlockBuilder = ClientBlockBuilder<B::State>;
 
 	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
 		// bail if the code is not the same as the natively linked.
-		if self.code_at(&id)? != LocalDispatch::native_equivalent() {
+		if self.code_at(&id.into())? != LocalDispatch::native_equivalent() {
 			bail!("This node is out of date. Block authoring may not work correctly. Bailing.")
 		}
 
@@ -190,8 +100,16 @@ impl<B: LocalBackend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecu
 
 	fn evaluate_block(&self, at: &CheckedId, block: Block) -> Result<bool> {
 		use substrate_executor::error::ErrorKind as ExecErrorKind;
+		use codec::Slicable;
+		use runtime::Block as RuntimeBlock;
 
-		let res = with_runtime!(self, at, || ::runtime::Executive::execute_block(block));
+		let encoded = block.encode();
+		let runtime_block = match RuntimeBlock::decode(&mut &encoded[..]) {
+			Some(x) => x,
+			None => return Ok(false),
+		};
+
+		let res = with_runtime!(self, at, || ::runtime::Executive::execute_block(runtime_block));
 		match res {
 			Ok(()) => Ok(true),
 			Err(err) => match err.kind() {
@@ -216,57 +134,10 @@ impl<B: LocalBackend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecu
 	fn parachain_head(&self, at: &CheckedId, parachain: ParaId) -> Result<Option<Vec<u8>>> {
 		with_runtime!(self, at, || ::runtime::Parachains::parachain_head(parachain))
 	}
-
-	fn build_block(&self, parent: &CheckedId, timestamp: Timestamp, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
-		let parent = parent.block_id();
-		let header = Header {
-			parent_hash: self.block_hash_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))?,
-			number: self.block_number_from_id(parent)?.ok_or(ErrorKind::UnknownBlock(*parent))? + 1,
-			state_root: Default::default(),
-			extrinsics_root: Default::default(),
-			digest: Default::default(),
-		};
-
-		let extrinsics = vec![
-			UncheckedExtrinsic {
-				extrinsic: Extrinsic {
-					signed: Default::default(),
-					index: Default::default(),
-					function: Call::Timestamp(TimestampCall::set(timestamp)),
-				},
-				signature: Default::default(),
-			},
-			UncheckedExtrinsic {
-				extrinsic: Extrinsic {
-					signed: Default::default(),
-					index: Default::default(),
-					function: Call::Parachains(ParachainsCall::set_heads(parachains)),
-				},
-				signature: Default::default(),
-			}
-		];
-
-		let mut builder = ClientBlockBuilder {
-			parent: *parent,
-			changes: OverlayedChanges::default(),
-			state: self.state_at(parent)?,
-			header,
-			timestamp,
-			extrinsics: extrinsics.clone(),
-		};
-
-		builder.initialise_block()?;
-
-		for inherent in extrinsics {
-			builder.apply_extrinsic(inherent)?;
-		}
-
-		Ok(builder)
-	}
 }
 
-impl<B: LocalBackend> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>>
-	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+impl<B: LocalBackend<Block>> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
+	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {}
 
 #[cfg(test)]

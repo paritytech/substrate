@@ -91,27 +91,9 @@ pub type Timestamp = u64;
 /// that 32 bits may be multiplied with a balance in 128 bits without worrying about overflow.
 pub type Balance = u128;
 
-/// Something that identifies a block.
-#[derive(PartialEq, Eq, Clone, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub enum BlockId {
-	/// Block by number.
-	Number(BlockNumber),
-	/// Block by hash.
-	Hash(Hash),
-}
-
-impl<B: BlockT> Into<generic::BlockId<B>> for BlockId where
-	B: BlockT<Hash=Hash>,
-	B::Header: HeaderT<Number=BlockNumber>
-{
-	fn into(self) -> generic::BlockId<B> {
-		match self {
-			BlockId::Number(number) => generic::BlockId::Number(number),
-			BlockId::Hash(hash) => generic::BlockId::Hash(hash),
-		}
-	}
-}
+/// "generic" block ID for the future-proof block type.
+// TODO: parameterize blockid only as necessary.
+pub type BlockId = generic::BlockId<Block>;
 
 /// A log entry in the block.
 #[derive(PartialEq, Eq, Clone, Default)]

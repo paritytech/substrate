@@ -73,7 +73,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 		})
 	}
 
-	/// Push a transaction onto the block's list of extrinsics. This will ensure the transaction
+	/// Push onto the block's list of extrinsics. This will ensure the extrinsic
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {

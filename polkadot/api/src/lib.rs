@@ -37,9 +37,8 @@ extern crate substrate_keyring as keyring;
 pub mod full;
 pub mod light;
 
-use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
-use runtime::{Block, UncheckedExtrinsic};
+use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp};
+use primitives::parachain::{DutyRoster, Id as ParaId};
 
 error_chain! {
 	errors {
@@ -49,19 +48,9 @@ error_chain! {
 			display("Unknown runtime code")
 		}
 		/// Unknown block ID.
-		UnknownBlock(b: BlockId) {
+		UnknownBlock(b: String) {
 			description("Unknown block")
-			display("Unknown block")
-		}
-		/// Attempted to push an inherent extrinsic manually.
-		PushedInherentTransaction(xt: UncheckedExtrinsic) {
-			description("Attempted to push an inherent extrinsic to a block."),
-			display("Pushed inherent extrinsic to a block: {:?}", xt),
-		}
-		/// Badly-formed extrinsic.
-		BadlyFormedTransaction(xt: UncheckedExtrinsic) {
-			description("Attempted to push a badly-formed extrinsic to a block."),
-			display("Pushed badly-formed extrinsic to a block: {:?}", xt),
+			display("Unknown block {}", b)
 		}
 		/// Some other error.
 		// TODO: allow to be specified as associated type of PolkadotApi
@@ -85,15 +74,6 @@ impl From<client::error::Error> for Error {
 	}
 }
 
-/// A builder for blocks.
-pub trait BlockBuilder: Sized {
-	/// Push a non-inherent extrinsic.
-	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()>;
-
-	/// Finalise the block.
-	fn bake(self) -> Block;
-}
-
 /// A checked block identifier.
 pub trait CheckedBlockId: Clone + 'static {
 	/// Yield the underlying block ID.
@@ -106,8 +86,6 @@ pub trait CheckedBlockId: Clone + 'static {
 pub trait PolkadotApi {
 	/// A checked block ID. Used to avoid redundancy of code check.
 	type CheckedBlockId: CheckedBlockId;
-	/// The type used to build blocks.
-	type BlockBuilder: BlockBuilder;
 
 	/// Check whether requests at the given block ID can be served.
 	///
@@ -145,9 +123,6 @@ pub trait PolkadotApi {
 	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
 	/// and an error if we can't evaluate for some reason.
 	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<bool>;
-
-	/// Create a block builder on top of the parent block.
-	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: Timestamp, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
 }
 
 /// Mark for all Polkadot API implementations, that are making use of state data, stored locally.

@@ -21,23 +21,18 @@ use client::backend::{Backend, RemoteBackend};
 use client::{Client, CallExecutor};
 use codec::Slicable;
 use state_machine;
-use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
-use runtime::{Block, UncheckedExtrinsic};
+use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp};
+use primitives::parachain::{DutyRoster, Id as ParaId};
 use full::CheckedId;
-use {PolkadotApi, RemotePolkadotApi, BlockBuilder, CheckedBlockId, Result, ErrorKind};
+use {PolkadotApi, RemotePolkadotApi, CheckedBlockId, Result, ErrorKind};
 
 /// Remote polkadot API implementation.
-pub struct RemotePolkadotApiWrapper<B: Backend, E: CallExecutor>(pub Arc<Client<B, E>>);
+pub struct RemotePolkadotApiWrapper<B: Backend<Block>, E: CallExecutor<Block>>(pub Arc<Client<B, E, Block>>);
 
-/// Block builder for light client.
-pub struct LightBlockBuilder;
-
-impl<B: Backend, E: CallExecutor> PolkadotApi for RemotePolkadotApiWrapper<B, E>
-	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotApiWrapper<B, E>
+	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {
 	type CheckedBlockId = CheckedId;
-	type BlockBuilder = LightBlockBuilder;
 
 	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
 		Ok(CheckedId(id))
@@ -85,22 +80,8 @@ impl<B: Backend, E: CallExecutor> PolkadotApi for RemotePolkadotApiWrapper<B, E>
 	fn parachain_head(&self, _at: &Self::CheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
-
-	fn build_block(&self, _parent: &CheckedId, _timestamp: Timestamp, _parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
-		Err(ErrorKind::UnknownRuntime.into())
-	}
 }
 
-impl<B: RemoteBackend, E: CallExecutor> RemotePolkadotApi for RemotePolkadotApiWrapper<B, E>
-	where ::client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+impl<B: RemoteBackend<Block>, E: CallExecutor<Block>> RemotePolkadotApi for RemotePolkadotApiWrapper<B, E>
+	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {}
-
-impl BlockBuilder for LightBlockBuilder {
-	fn push_extrinsic(&mut self, _extrinsic: UncheckedExtrinsic) -> Result<()> {
-		Err(ErrorKind::UnknownRuntime.into())
-	}
-
-	fn bake(self) -> Block {
-		unimplemented!()
-	}
-}
