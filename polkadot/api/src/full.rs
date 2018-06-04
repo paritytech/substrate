@@ -202,7 +202,7 @@ impl<B: LocalBackend> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecu
 	}
 
 	fn index(&self, at: &CheckedId, account: AccountId) -> Result<Index> {
-		with_runtime!(self, at, || ::runtime::System::account_index(account))
+		with_runtime!(self, at, || ::runtime::System::account_nonce(account))
 	}
 
 	fn active_parachains(&self, at: &CheckedId) -> Result<Vec<ParaId>> {

@@ -143,7 +143,7 @@ impl<
 
 		if xt.sender() != &Default::default() {
 			// check index
-			let expected_index = <system::Module<System>>::account_index(xt.sender());
+			let expected_index = <system::Module<System>>::account_nonce(xt.sender());
 			assert!(xt.index() == &expected_index, "All extrinsics should have the correct nonce");
 
 			// pay any fees.
@@ -152,7 +152,7 @@ impl<
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 
 			// increment nonce in storage
-			<system::Module<System>>::inc_account_index(xt.sender());
+			<system::Module<System>>::inc_account_nonce(xt.sender());
 		}
 
 		// decode parameters and dispatch

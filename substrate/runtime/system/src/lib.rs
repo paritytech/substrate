@@ -75,7 +75,7 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait>;
 
-	pub AccountIndex get(account_index): b"sys:non" => default map [ T::AccountId => T::Index ];
+	pub AccountNonce get(account_nonce): b"sys:non" => default map [ T::AccountId => T::Index ];
 	pub BlockHash get(block_hash): b"sys:old" => required map [ T::BlockNumber => T::Hash ];
 
 	pub ExtrinsicIndex get(extrinsic_index): b"sys:xti" => required u32;
@@ -165,8 +165,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Increment a particular account's nonce by 1.
-	pub fn inc_account_index(who: &T::AccountId) {
-		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::one());
+	pub fn inc_account_nonce(who: &T::AccountId) {
+		<AccountNonce<T>>::insert(who, Self::account_nonce(who) + T::Index::one());
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then

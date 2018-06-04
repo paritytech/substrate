@@ -16,22 +16,15 @@
 
 //! Defines WASM module logic.
 
+use core::intrinsics;
 use parachain::{self, ValidationResult};
 use parachain::codec::Slicable;
 use super::{HeadData, BlockData};
 
-#[lang = "panic_fmt"]
+#[panic_implementation]
 #[no_mangle]
-pub extern fn panic_fmt(
-	_args: ::core::fmt::Arguments,
-	_file: &'static str,
-	_line: u32,
-	_col: u32,
-) -> ! {
-	use core::intrinsics;
-	unsafe {
-		intrinsics::abort();
-	}
+fn panic(_info: &PanicInfo) -> ! {
+	unsafe { intrinsics::abort() }
 }
 
 #[no_mangle]

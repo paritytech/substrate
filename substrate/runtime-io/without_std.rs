@@ -23,17 +23,19 @@ pub extern crate substrate_runtime_std as rstd;
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
 
-use rstd::intrinsics;
+use core::intrinsics;
 use rstd::vec::Vec;
 pub use rstd::{mem, slice};
 
-#[lang = "panic_fmt"]
+#[panic_implementation]
 #[no_mangle]
-pub extern fn panic_fmt(_fmt: ::core::fmt::Arguments, _file: &'static str, _line: u32, _col: u32) {
+pub fn panic(_info: &core::panic::PanicInfo) -> ! {
 	unsafe {
-		ext_print_utf8(_file.as_ptr() as *const u8, _file.len() as u32);
-		ext_print_num(_line as u64);
-		ext_print_num(_col as u64);
+		if let Some(location) = _info.location() {
+			ext_print_utf8(location.file().as_ptr() as *const u8, location.file().len() as u32);
+			ext_print_num(location.line() as u64);
+			ext_print_num(location.column() as u64);
+		}
 		intrinsics::abort()
 	}
 }

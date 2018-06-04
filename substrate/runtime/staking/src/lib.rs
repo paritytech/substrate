@@ -516,7 +516,7 @@ impl<T: Trait> Module<T> {
 
 	/// Kill an account.
 	fn kill_account(who: &T::AccountId) {
-		<system::AccountIndex<T>>::remove(who);
+		<system::AccountNonce<T>>::remove(who);
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
 		<CodeOf<T>>::remove(who);
