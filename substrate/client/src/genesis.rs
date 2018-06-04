@@ -66,6 +66,7 @@ mod tests {
 
 		let extrinsics_root = ordered_trie_root(transactions.iter().map(Slicable::encode)).0.into();
 
+		println!("root before: {:?}", extrinsics_root);
 		let mut header = Header {
 			parent_hash,
 			number,
@@ -74,18 +75,24 @@ mod tests {
 			digest: Digest { logs: vec![], },
 		};
 		let hash = header.hash();
-
 		let mut overlay = OverlayedChanges::default();
 
+		execute(
+			backend,
+			&mut overlay,
+			&Executor::new(),
+			"initialise_block",
+			&header.encode(),
+		).unwrap();
+
 		for tx in transactions.iter() {
-			let (ret_data, _) = execute(
+			execute(
 				backend,
 				&mut overlay,
 				&Executor::new(),
 				"apply_extrinsic",
-				&vec![].and(&header).and(tx)
+				&tx.encode(),
 			).unwrap();
-			header = Header::decode(&mut &ret_data[..]).unwrap();
 		}
 
 		let (ret_data, _) = execute(
@@ -93,9 +100,10 @@ mod tests {
 			&mut overlay,
 			&Executor::new(),
 			"finalise_block",
-			&vec![].and(&header)
+			&[]
 		).unwrap();
 		header = Header::decode(&mut &ret_data[..]).unwrap();
+		println!("root after: {:?}", header.extrinsics_root);
 
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}

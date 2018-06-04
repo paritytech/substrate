@@ -8,6 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
+polkadot-primitives = { path = "../../primitives", default-features = false }
 safe-mix = { path = "../../../safe-mix", default-features = false }
 substrate-codec = { path = "../../../substrate/codec", default-features = false }
 substrate-primitives = { path = "../../../substrate/primitives", default-features = false }
@@ -27,6 +28,7 @@ substrate-runtime-timestamp = { path = "../../../substrate/runtime/timestamp", d
 [features]
 default = []
 std = [
+	"polkadot-primitives/std",
 	"safe-mix/std",
 	"substrate-codec/std",
 	"substrate-primitives/std",

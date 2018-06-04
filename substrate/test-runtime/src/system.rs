@@ -89,20 +89,18 @@ pub fn execute_block(block: Block) {
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: UncheckedExtrinsic) {
-	ExtrinsicData::insert(ExtrinsicIndex::get(), utx.encode());
+	let extrinsic_index = ExtrinsicIndex::get();
+	ExtrinsicData::insert(extrinsic_index, utx.encode());
+	ExtrinsicIndex::put(extrinsic_index + 1);
 	execute_transaction_backend(&utx);
 }
 
 /// Finalise the block.
 pub fn finalise_block() -> Header {
-	fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
-		let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
-		H::enumerated_trie_root(&xts)
-	}
-
 	let extrinsic_index = ExtrinsicIndex::take();
-	let extrinsics = (0..extrinsic_index).map(ExtrinsicData::take).collect();
-	let extrinsics_root = extrinsics_data_root::<BlakeTwo256>(extrinsics);
+	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
+	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
+	let extrinsics_root = enumerated_trie_root(&txs).into();
 
 	let number = <Number>::take();
 	let parent_hash = <ParentHash>::take();

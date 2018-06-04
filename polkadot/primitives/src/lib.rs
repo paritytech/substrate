@@ -36,10 +36,13 @@ extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate serde;
 
-use std::cmp::Ordering;
-
+#[cfg(feature = "std")]
 use primitives::bytes;
-use runtime_primitives::traits::{BlakeTwo256, Block as BlockT, Header as HeaderT};
+
+use rstd::cmp::Ordering;
+
+use rstd::prelude::*;
+use runtime_primitives::traits::BlakeTwo256;
 use runtime_primitives::generic;
 use codec::{Input, Slicable};
 

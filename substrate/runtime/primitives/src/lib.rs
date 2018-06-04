@@ -40,6 +40,7 @@ extern crate serde_json;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
+use rstd::prelude::*;
 use substrate_primitives::hash::{H256, H512};
 
 #[cfg(feature = "std")]

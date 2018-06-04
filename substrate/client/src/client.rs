@@ -526,7 +526,6 @@ mod tests {
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
-		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
 	}
 
 	fn sign_tx(tx: Extrinsic) -> UncheckedExtrinsic {
