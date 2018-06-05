@@ -26,7 +26,7 @@ extern crate serde;
 extern crate serde_derive;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_support;
 
 #[cfg(feature = "std")]
 extern crate substrate_primitives;
@@ -45,8 +45,8 @@ extern crate substrate_runtime_system as system;
 use rstd::prelude::*;
 use rstd::result;
 use primitives::traits::{Zero, Executable, RefInto, As, MaybeSerializeDebug};
-use runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
-use runtime_support::dispatch::Result;
+use substrate_runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
+use substrate_runtime_support::dispatch::Result;
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
@@ -358,6 +358,7 @@ mod tests {
 	use primitives::testing::{Digest, Header};
 
 	impl_outer_dispatch! {
+		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
 		pub enum Proposal {
 			Session = 0,
 			Staking = 1,

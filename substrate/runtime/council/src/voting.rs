@@ -20,8 +20,8 @@ use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use primitives::traits::{Executable, RefInto, Hashing};
 use runtime_io::print;
-use runtime_support::dispatch::Result;
-use runtime_support::{StorageValue, StorageMap, IsSubType};
+use substrate_runtime_support::dispatch::Result;
+use substrate_runtime_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
 use super::{Trait, Module as Council};
 
@@ -218,7 +218,7 @@ impl<T: Trait> Executable for Council<T> {
 mod tests {
 	use super::*;
 	use ::tests::*;
-	use runtime_support::Hashable;
+	use substrate_runtime_support::Hashable;
 	use democracy::VoteThreshold;
 
 	type CouncilVoting = super::Module<Test>;

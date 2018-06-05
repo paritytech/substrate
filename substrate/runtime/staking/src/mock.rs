@@ -38,7 +38,7 @@ impl system::Trait for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = runtime_io::BlakeTwo256;
+	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
 	type Header = Header;

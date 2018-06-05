@@ -31,7 +31,7 @@ extern crate substrate_primitives;
 #[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
 #[macro_use] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
-#[macro_use] extern crate substrate_runtime_support as runtime_support;
+#[macro_use] extern crate substrate_runtime_support;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_democracy as democracy;
@@ -41,8 +41,8 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, As};
-use runtime_support::{StorageValue, StorageMap};
-use runtime_support::dispatch::Result;
+use substrate_runtime_support::{StorageValue, StorageMap};
+use substrate_runtime_support::dispatch::Result;
 
 pub mod voting;
 
@@ -610,6 +610,7 @@ mod tests {
 	use primitives::testing::{Digest, Header};
 
 	impl_outer_dispatch! {
+		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
 		pub enum Proposal {
 			Staking = 0,
 			Democracy = 1,
