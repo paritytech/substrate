@@ -40,8 +40,9 @@ use std::{
 
 use codec::Slicable;
 use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
+use extrinsic_pool::api::ExtrinsicPool;
 use polkadot_api::PolkadotApi;
-use primitives::{AccountId, Hash};
+use primitives::{AccountId, Hash, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use runtime::UncheckedExtrinsic;
 use substrate_runtime_primitives::traits::{Bounded, Checkable, BlakeTwo256, Hashing};
 
@@ -260,5 +261,21 @@ impl Deref for TransactionPool {
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
+	}
+}
+
+impl ExtrinsicPool<FutureProofUncheckedExtrinsic, Hash> for TransactionPool {
+	type Error = Error;
+
+	fn submit(&self, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
+		// TODO: more general transaction pool, which can handle more kinds of vec-encoded transactions,
+		// even when runtime is out of date.
+		xts.into_iter()
+			.map(|xt| xt.encode())
+			.map(|encoded| UncheckedExtrinsic::decode(&mut &encoded[..]))
+			.map(|maybe_decoded| maybe_decoded.ok_or_else(|| ErrorKind::InvalidExtrinsicFormat.into()))
+			.map(|x| x.and_then(|x| self.import_unchecked_extrinsic(x)))
+			.map(|x| x.map(|x| x.hash().clone()))
+			.collect()
 	}
 }

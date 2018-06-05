@@ -4,9 +4,10 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc.git", branch="forward_types_in_macro" }
-jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc.git", branch="forward_types_in_macro" }
-jsonrpc-pubsub = { git = "https://github.com/paritytech/jsonrpc.git", branch="forward_types_in_macro" }
-jsonrpc-ws-server = { git = "https://github.com/paritytech/jsonrpc.git", branch="forward_types_in_macro" }
+jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc.git", branch="rh-generic-traits" }
+jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc.git", branch="rh-generic-traits" }
+jsonrpc-pubsub = { git = "https://github.com/paritytech/jsonrpc.git", branch="rh-generic-traits" }
+jsonrpc-ws-server = { git = "https://github.com/paritytech/jsonrpc.git", branch="rh-generic-traits" }
 log = "0.3"
 substrate-rpc = { path = "../rpc", version = "0.1" }
+substrate-runtime-primitives = { path = "../runtime/primitives" }
