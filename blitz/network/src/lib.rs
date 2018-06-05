@@ -31,6 +31,7 @@ extern crate serde_json;
 mod message;
 mod transaction;
 
+use message::BlitzMessage;
 use codec::Slicable;
 use substrate_primitives::{AuthorityId, Hash};
 use substrate_network::{PeerId, RequestId};
@@ -174,7 +175,7 @@ impl Specialization for BlitzProtocol {
 	}
 
 	fn on_message(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, message: Vec<u8>) {
-		let message: message::BlitzMessage = match serde_json::from_slice(&message) {
+		let message: BlitzMessage = match serde_json::from_slice(&message) {
 			Ok(m) => m,
 			Err(e) => {
 				//debug!("Invalid packet from {}: {}", peer_id, e);
@@ -185,5 +186,12 @@ impl Specialization for BlitzProtocol {
 		};
 
 		// TODO [dk] process incoming message
+	}
+}
+
+impl BlitzProtocol {
+	fn send_message(ctx: &mut HandlerContext, peer_id: PeerId, message: BlitzMessage) {
+		let data = serde_json::to_vec(&message).expect("serialization is infallible");
+		ctx.send(peer_id, data);
 	}
 }
