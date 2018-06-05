@@ -17,15 +17,16 @@
 //! Strongly typed API for full Polkadot client.
 
 use client::backend::{Backend, LocalBackend};
+use client::block_builder::BlockBuilder as ClientBlockBuilder;
 use client::{Client, LocalCallExecutor};
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine;
 
-use primitives::{AccountId, Block, Header, BlockId, Hash, Index, SessionKey, Timestamp};
+use primitives::{AccountId, Block, Header, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 
-use {CheckedBlockId, PolkadotApi, LocalPolkadotApi, ErrorKind, Error, Result};
+use {CheckedBlockId, BlockBuilder, PolkadotApi, LocalPolkadotApi, ErrorKind, Error, Result};
 
 /// A checked block ID used for the substrate-client implementation of CheckedBlockId;
 #[derive(Debug, Clone, Copy)]
@@ -64,10 +65,24 @@ macro_rules! with_runtime {
 	}}
 }
 
+impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
+	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
+{
+	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
+		self.push(extrinsic).map_err(Into::into)
+	}
+
+	/// Bake the block with provided extrinsics.
+	fn bake(self) -> Result<Block> {
+		ClientBlockBuilder::bake(self).map_err(Into::into)
+	}
+}
+
 impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
 	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {
 	type CheckedBlockId = CheckedId;
+	type BlockBuilder = ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>;
 
 	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
 		// bail if the code is not the same as the natively linked.
@@ -135,7 +150,16 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 		with_runtime!(self, at, || ::runtime::Parachains::parachain_head(parachain))
 	}
 
-	fn inherent_extrinsics(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> {
+	fn build_block(&self, at: &CheckedId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
+		let mut block_builder = self.new_block_at(at.block_id())?;
+		for inherent in self.inherent_extrinsics(at, timestamp, new_heads)? {
+			block_builder.push(inherent)?;
+		}
+
+		Ok(block_builder)
+	}
+
+	fn inherent_extrinsics(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>> {
 		use codec::Slicable;
 
 		with_runtime!(self, at, || {
@@ -212,6 +236,18 @@ mod tests {
 		let id = client.check_id(BlockId::number(0)).unwrap();
 		assert_eq!(client.session_keys(&id).unwrap(), session_keys());
 		assert_eq!(client.validators(&id).unwrap(), validators());
+	}
+
+	#[test]
+	fn build_block_implicit_succeeds() {
+		let client = client();
+
+		let id = client.check_id(BlockId::number(0)).unwrap();
+		let block_builder = client.build_block(&id, 1_000_000, Vec::new()).unwrap();
+		let block = block_builder.bake().unwrap();
+
+		assert_eq!(block.header.number, 1);
+		assert!(block.header.extrinsics_root != Default::default());
 	}
 
 	#[test]

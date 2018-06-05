@@ -38,6 +38,7 @@ use std::{
 	sync::Arc,
 };
 
+use codec::Slicable;
 use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, Hash};
@@ -65,7 +66,7 @@ impl VerifiedTransaction {
 			bail!(ErrorKind::IsInherent(xt))
 		}
 
-		let message = codec::Slicable::encode(&xt);
+		let message = Slicable::encode(&xt);
 		match xt.check() {
 			Ok(xt) => {
 				let hash = BlakeTwo256::hash_of(&message);
@@ -82,6 +83,12 @@ impl VerifiedTransaction {
 	/// Access the underlying transaction.
 	pub fn as_transaction(&self) -> &UncheckedExtrinsic {
 		self.as_ref().as_unchecked()
+	}
+
+	/// Convert to primitive unchecked extrinsic.
+	pub fn primitive_extrinsic(&self) -> ::primitives::UncheckedExtrinsic {
+		Slicable::decode(&mut self.as_transaction().encode().as_slice())
+			.expect("UncheckedExtrinsic shares repr with Vec<u8>; qed")
 	}
 
 	/// Consume the verified transaciton, yielding the unchecked counterpart.

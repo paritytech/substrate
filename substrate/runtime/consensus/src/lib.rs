@@ -68,7 +68,7 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn report_misbehavior(aux, report: MisbehaviorReport<T::Header, T::BlockNumber>) -> Result = 0;
+		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result = 0;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -99,7 +99,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Header, T::BlockNumber>) -> Result {
+	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
 		// TODO.
 		Ok(())
 	}

@@ -19,11 +19,9 @@
 use super::MAX_TRANSACTIONS_SIZE;
 
 use codec::Slicable;
-use polkadot_runtime::Block as PolkadotGenericBlock;
-use polkadot_primitives::Timestamp;
+use polkadot_runtime::{Block as PolkadotGenericBlock, CheckedBlock};
+use polkadot_primitives::{Block, Hash, BlockNumber, Timestamp};
 use polkadot_primitives::parachain::Id as ParaId;
-use primitives::block::{Block as SubstrateBlock, HeaderHash, Number as BlockNumber};
-use transaction_pool::PolkadotBlock;
 
 error_chain! {
 	links {
@@ -51,7 +49,7 @@ error_chain! {
 			description("Proposal included unregistered parachain."),
 			display("Proposal included unregistered parachain {:?}", id),
 		}
-		WrongParentHash(expected: HeaderHash, got: HeaderHash) {
+		WrongParentHash(expected: Hash, got: Hash) {
 			description("Proposal had wrong parent hash."),
 			display("Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
 		}
@@ -72,17 +70,17 @@ error_chain! {
 /// Attempt to evaluate a substrate block as a polkadot block, returning error
 /// upon any initial validity checks failing.
 pub fn evaluate_initial(
-	proposal: &SubstrateBlock,
+	proposal: &Block,
 	now: Timestamp,
-	parent_hash: &HeaderHash,
+	parent_hash: &Hash,
 	parent_number: BlockNumber,
 	active_parachains: &[ParaId],
-) -> Result<PolkadotBlock> {
+) -> Result<CheckedBlock> {
 	const MAX_TIMESTAMP_DRIFT: Timestamp = 60;
 
 	let encoded = Slicable::encode(proposal);
 	let proposal = PolkadotGenericBlock::decode(&mut &encoded[..])
-		.and_then(|b| PolkadotBlock::from(b).ok())
+		.and_then(|b| CheckedBlock::new(b).ok())
 		.ok_or_else(|| ErrorKind::ProposalNotForPolkadot)?;
 
 	let transactions_size = proposal.extrinsics.iter().fold(0, |a, tx| {

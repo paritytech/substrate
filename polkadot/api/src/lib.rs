@@ -37,7 +37,7 @@ extern crate substrate_keyring as keyring;
 pub mod full;
 pub mod light;
 
-use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp};
+use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 
 error_chain! {
@@ -80,12 +80,23 @@ pub trait CheckedBlockId: Clone + 'static {
 	fn block_id(&self) -> &BlockId;
 }
 
+/// Build new blocks.
+pub trait BlockBuilder {
+	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
+	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()>;
+
+	/// Bake the block with provided extrinsics.
+	fn bake(self) -> Result<Block>;
+}
+
 /// Trait encapsulating the Polkadot API.
 ///
 /// All calls should fail when the exact runtime is unknown.
 pub trait PolkadotApi {
 	/// A checked block ID. Used to avoid redundancy of code check.
 	type CheckedBlockId: CheckedBlockId;
+	/// The block builder for this API type.
+	type BlockBuilder: BlockBuilder;
 
 	/// Check whether requests at the given block ID can be served.
 	///
@@ -124,9 +135,12 @@ pub trait PolkadotApi {
 	/// and an error if we can't evaluate for some reason.
 	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<bool>;
 
+	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
+	fn build_block(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
+
 	/// Attempt to produce the (encoded) inherent extrinsics for a block being built upon the given.
 	/// This may vary by runtime and will fail if a runtime doesn't follow the same API.
-	fn inherent_extrinsics(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>>;
+	fn inherent_extrinsics(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>>;
 }
 
 /// Mark for all Polkadot API implementations, that are making use of state data, stored locally.

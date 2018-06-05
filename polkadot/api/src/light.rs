@@ -21,10 +21,24 @@ use client::backend::{Backend, RemoteBackend};
 use client::{Client, CallExecutor};
 use codec::Slicable;
 use state_machine;
-use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp};
+use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 use full::CheckedId;
-use {PolkadotApi, RemotePolkadotApi, CheckedBlockId, Result, ErrorKind};
+use {PolkadotApi, BlockBuilder, RemotePolkadotApi, CheckedBlockId, Result, ErrorKind};
+
+/// Light block builder. TODO: make this work (efficiently)
+#[derive(Clone, Copy)]
+pub struct LightBlockBuilder;
+
+impl BlockBuilder for LightBlockBuilder {
+	fn push_extrinsic(&mut self, _xt: UncheckedExtrinsic) -> Result<()> {
+		Err(ErrorKind::UnknownRuntime.into())
+	}
+
+	fn bake(self) -> Result<Block> {
+		Err(ErrorKind::UnknownRuntime.into())
+	}
+}
 
 /// Remote polkadot API implementation.
 pub struct RemotePolkadotApiWrapper<B: Backend<Block>, E: CallExecutor<Block>>(pub Arc<Client<B, E, Block>>);
@@ -33,6 +47,7 @@ impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotAp
 	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {
 	type CheckedBlockId = CheckedId;
+	type BlockBuilder = LightBlockBuilder;
 
 	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
 		Ok(CheckedId(id))
@@ -78,6 +93,10 @@ impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotAp
 	}
 
 	fn parachain_head(&self, _at: &Self::CheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
+		Err(ErrorKind::UnknownRuntime.into())
+	}
+
+	fn build_block(&self, _at: &Self::CheckedBlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 

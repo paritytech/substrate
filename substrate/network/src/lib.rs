@@ -65,7 +65,7 @@ pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, NetworkConfiguration, ConnectionFilter, ConnectionDirection};
-pub use message::{BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
+pub use message::{generic as generic_message, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
 pub use on_demand::{OnDemand, OnDemandService, Response as OnDemandResponse};

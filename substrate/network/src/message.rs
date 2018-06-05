@@ -289,6 +289,7 @@ pub mod generic {
 		RemoteCallResponse(RemoteCallResponse),
 	}
 
+	/// Status sent on connection.
 	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 	pub struct Status<Hash, Number> {
 		/// Protocol version.

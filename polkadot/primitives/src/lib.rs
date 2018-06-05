@@ -47,12 +47,15 @@ use codec::{Input, Slicable};
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 
+/// Opaque, encoded, unchecked extrinsic.
+pub type UncheckedExtrinsic = Vec<u8>;
+
 /// A "future-proof" block type for Polkadot. This will be resilient to upgrades in transaction
 /// format, because it doesn't attempt to decode extrinsics.
 ///
 /// Specialized code needs to link to (at least one version of) the runtime directly
 /// in order to handle the extrinsics within.
-pub type Block = generic::Block<Header, Vec<u8>>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 /// An index to a block.
 /// 32-bits will allow for 136 years of blocks assuming 1 block per second.
