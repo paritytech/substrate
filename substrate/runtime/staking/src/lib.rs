@@ -28,10 +28,6 @@ extern crate serde_derive;
 #[cfg(test)]
 extern crate wabt;
 
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -40,14 +36,13 @@ extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
+extern crate substrate_runtime_contract as contract;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
-extern crate pwasm_utils;
-extern crate parity_wasm;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
@@ -62,7 +57,6 @@ use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executab
 use primitives::generic::{Member, MaybeSerializeDebug};
 
 pub mod address;
-mod contract;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -799,7 +793,11 @@ impl<T: Trait> Module<T> {
 		} else {
 			// TODO: logging (logs are just appended into a notable storage-based vector and
 			// cleared every block).
-			contract::execute(&dest_code, dest, &mut overlay, gas_limit).is_ok()
+			let mut staking_ext = StakingExt {
+				account_db: &mut overlay,
+				account: dest.clone(),
+			};
+			contract::execute(&dest_code, &mut staking_ext, gas_limit).is_ok()
 		};
 
 		Ok(if should_commit {
@@ -807,6 +805,36 @@ impl<T: Trait> Module<T> {
 		} else {
 			None
 		})
+	}
+}
+
+struct StakingExt<'a, 'b: 'a, T: Trait + 'b> {
+	account_db: &'a mut OverlayAccountDb<'b, T>,
+	account: T::AccountId,
+}
+impl<'a, 'b: 'a, T: Trait> contract::Ext for StakingExt<'a, 'b, T> {
+	type AccountId = T::AccountId;
+	type Balance = T::Balance;
+
+	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.account_db.get_storage(&self.account, key)
+	}
+	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
+		self.account_db.set_storage(&self.account, key.to_vec(), value);
+	}
+	fn create(&mut self, code: &[u8], value: Self::Balance) {
+		if let Ok(Some(commit_state)) =
+			Module::<T>::effect_create(&self.account, code, value, self.account_db)
+		{
+			self.account_db.merge(commit_state);
+		}
+	}
+	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
+		if let Ok(Some(commit_state)) =
+			Module::<T>::effect_transfer(&self.account, to, value, self.account_db)
+		{
+			self.account_db.merge(commit_state);
+		}
 	}
 }
 
