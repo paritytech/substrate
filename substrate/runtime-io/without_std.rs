@@ -29,12 +29,12 @@ pub use rstd::{mem, slice};
 
 #[panic_implementation]
 #[no_mangle]
-pub fn panic(_info: &core::panic::PanicInfo) -> ! {
+pub fn panic(info: &::core::panic::PanicInfo) -> ! {
 	unsafe {
-		if let Some(location) = _info.location() {
-			ext_print_utf8(location.file().as_ptr() as *const u8, location.file().len() as u32);
-			ext_print_num(location.line() as u64);
-			ext_print_num(location.column() as u64);
+		if let Some(loc) = info.location() {
+			ext_print_utf8(loc.file().as_ptr() as *const u8, loc.file().len() as u32);
+			ext_print_num(loc.line() as u64);
+			ext_print_num(loc.column() as u64);
 		}
 		intrinsics::abort()
 	}
