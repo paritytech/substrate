@@ -90,7 +90,8 @@ impl Components for FullComponents {
 
 	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis: GenesisBuilder)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor>>, Option<Arc<network::OnDemand<network::Service>>>), error::Error> {
-		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis)?), None))
+		let backend = client_db::new_backend(db_settings)?;
+		Ok((Arc::new(client_db::new_client(backend, executor, genesis)?), None))
 	}
 
 	fn build_api(&self, client: Arc<client::Client<Self::Backend, Self::Executor>>) -> Arc<Self::Api> {
@@ -131,13 +132,14 @@ impl Components for FullComponents {
 pub struct LightComponents;
 
 impl Components for LightComponents {
-	type Backend = client::light::Backend;
+	type Backend = client::light::Backend<client_db::Backend>;
 	type Api = polkadot_api::light::RemotePolkadotApiWrapper<Self::Backend, Self::Executor>;
-	type Executor = client::RemoteCallExecutor<client::light::Backend, network::OnDemand<network::Service>>;
+	type Executor = client::RemoteCallExecutor<client::light::Backend<client_db::Backend>, network::OnDemand<network::Service>>;
 
-	fn build_client(&self, _settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis: GenesisBuilder)
+	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis: GenesisBuilder)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor>>, Option<Arc<network::OnDemand<network::Service>>>), error::Error> {
-		let client_backend = client::light::new_light_backend();
+		let db_backend = client_db::new_backend(db_settings)?;
+		let client_backend = client::light::new_light_backend(db_backend);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client = client::light::new_light(client_backend, fetcher.clone(), genesis)?;

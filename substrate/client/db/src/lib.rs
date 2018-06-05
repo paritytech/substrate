@@ -58,9 +58,17 @@ pub struct DatabaseSettings {
 	pub path: PathBuf,
 }
 
+/// Create an instance of db-backed client backend.
+pub fn new_backend(
+	settings: DatabaseSettings,
+) -> Result<Backend, client::error::Error>
+{
+	Backend::new(&settings)
+}
+
 /// Create an instance of db-backed client.
 pub fn new_client<E, F>(
-	settings: DatabaseSettings,
+	backend: Backend,
 	executor: E,
 	genesis_builder: F,
 ) -> Result<client::Client<Backend, client::LocalCallExecutor<Backend, E>>, client::error::Error>
@@ -68,7 +76,7 @@ pub fn new_client<E, F>(
 		E: CodeExecutor,
 		F: client::GenesisBuilder,
 {
-	let backend = Arc::new(Backend::new(&settings)?);
+	let backend = Arc::new(backend);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	Ok(client::Client::new(backend, executor, genesis_builder)?)
 }
