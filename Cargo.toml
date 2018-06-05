@@ -43,6 +43,7 @@ members = [
 	"substrate/runtime-std",
 	"substrate/runtime-support",
 	"substrate/runtime/consensus",
+	"substrate/runtime/contract",
 	"substrate/runtime/council",
 	"substrate/runtime/democracy",
 	"substrate/runtime/executive",

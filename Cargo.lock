@@ -2072,6 +2072,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-runtime-contract"
+version = "0.1.0"
+dependencies = [
+ "assert_matches 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-wasm 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pwasm-utils 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-runtime-sandbox 0.1.0",
+ "substrate-runtime-std 0.1.0",
+ "wabt 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "substrate-runtime-council"
 version = "0.1.0"
 dependencies = [
@@ -2193,16 +2206,14 @@ dependencies = [
 name = "substrate-runtime-staking"
 version = "0.1.0"
 dependencies = [
- "assert_matches 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-wasm 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pwasm-utils 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 0.1.0",
  "serde 1.0.63 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-consensus 0.1.0",
+ "substrate-runtime-contract 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-sandbox 0.1.0",
