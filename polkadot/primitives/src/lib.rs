@@ -39,8 +39,6 @@ extern crate serde;
 #[cfg(feature = "std")]
 use primitives::bytes;
 
-use rstd::cmp::Ordering;
-
 use rstd::prelude::*;
 use runtime_primitives::traits::BlakeTwo256;
 use runtime_primitives::generic;
@@ -114,7 +112,16 @@ impl Slicable for Log {
 
 /// Parachain data types.
 pub mod parachain {
-	use super::*;
+	use codec::{Slicable, Input};
+	use rstd::prelude::*;
+	use rstd::cmp::Ordering;
+	use super::{Hash, BlakeTwo256};
+
+	#[cfg(feature = "std")]
+	use primitives::bytes;
+
+	/// Signature on candidate's block data by a collator.
+	pub type CandidateSignature = ::runtime_primitives::Ed25519Signature;
 
 	/// Unique identifier of a parachain.
 	#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
@@ -236,7 +243,7 @@ pub mod parachain {
 		/// The ID of the parachain this is a proposal for.
 		pub parachain_index: Id,
 		/// Collator's signature
-		pub collator_signature: runtime_primitives::Ed25519Signature,
+		pub collator_signature: CandidateSignature,
 		/// Unprocessed ingress queue.
 		///
 		/// Ordered by parachain ID and block number.

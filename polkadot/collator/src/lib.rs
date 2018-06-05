@@ -48,11 +48,12 @@ extern crate futures;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate polkadot_runtime;
+extern crate polkadot_primitives;
 
 use std::collections::{BTreeSet, BTreeMap};
 
 use futures::{stream, Stream, Future, IntoFuture};
-use polkadot_runtime::primitives::parachain::{self, ConsolidatedIngress, Message, Id as ParaId};
+use polkadot_primitives::parachain::{self, CandidateSignature, ConsolidatedIngress, Message, Id as ParaId};
 
 /// Parachain context needed for collation.
 ///
@@ -62,7 +63,7 @@ pub trait ParachainContext {
 	fn produce_candidate<I: IntoIterator<Item=(ParaId, Message)>>(
 		&self,
 		ingress: I,
-	) -> (parachain::BlockData, polkadot_primitives::AccountId, polkadot_primitives::Signature);
+	) -> (parachain::BlockData, polkadot_primitives::AccountId, CandidateSignature);
 }
 
 /// Relay chain context needed to collate.
@@ -149,7 +150,7 @@ mod tests {
 	use std::collections::{HashMap, BTreeSet};
 
 	use futures::Future;
-	use polkadot_runtime::primitives::parachain::{Message, Id as ParaId};
+	use polkadot_primitives::parachain::{Message, Id as ParaId};
 
 	pub struct DummyRelayChainCtx {
 		egresses: HashMap<ParaId, Vec<Vec<Message>>>,

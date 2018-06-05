@@ -224,6 +224,13 @@ pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: 
 	]
 }
 
+/// Checks an unchecked extrinsic for validity.
+pub fn check_extrinsic(xt: UncheckedExtrinsic) -> bool {
+	use runtime_primitives::traits::Checkable;
+
+	xt.check().is_ok()
+}
+
 pub mod api {
 	impl_stubs!(
 		authorities => |()| super::Consensus::authorities(),

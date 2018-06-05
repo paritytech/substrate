@@ -1279,6 +1279,7 @@ version = "0.1.0"
 dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-parachain 0.1.0",
+ "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
