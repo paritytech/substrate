@@ -28,17 +28,18 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate authoring RPC API
-	pub trait AuthorApi<Ex, Hash> {
+	pub trait AuthorApi<Hash, Extrinsic> {
 		/// Submit extrinsic for inclusion in block.
 		#[rpc(name = "author_submitExtrinsic")]
-		fn submit_extrinsic(&self, Ex) -> Result<Hash>;
+		fn submit_extrinsic(&self, Extrinsic) -> Result<Hash>;
 	}
 }
 
-impl<Ex, Hash, T> AuthorApi<Ex, Hash> for Arc<T> where
+impl<Ex, Hash, T> AuthorApi<Hash, Ex> for Arc<T> where
 	T: ExtrinsicPool<Ex, Hash>,
+	T::Error: 'static,
 {
-	fn submit_extrinsic(&self, xt: B::Extrinsic) -> Result<B::Hash> {
+	fn submit_extrinsic(&self, xt: Ex) -> Result<Hash> {
 		self
 			.submit(vec![xt])
 			.map(|mut res| res.pop().expect("One extrinsic passed; one result back; qed"))

@@ -47,7 +47,7 @@ impl api::ExtrinsicPool<Extrinsic, Hash> for DummyTxPool {
 	fn submit(&self, xt: Vec<Extrinsic>) -> ::std::result::Result<Vec<Hash>, Self::Error> {
 		let mut submitted = self.submitted.lock();
 		if submitted.len() < 1 {
-			let hashes = xt.iter().map(|_xt| 1.into()).collect();
+			let hashes = xt.iter().map(|_xt| 1).collect();
 			submitted.extend(xt);
 			Ok(hashes)
 		} else {
@@ -59,11 +59,10 @@ impl api::ExtrinsicPool<Extrinsic, Hash> for DummyTxPool {
 #[test]
 fn submit_transaction_should_not_cause_error() {
 	let p = Arc::new(DummyTxPool::default());
-	let hash: Hash = 1.into();
 
 	assert_matches!(
 		AuthorApi::submit_extrinsic(&p, 5),
-		Ok(hash)
+		Ok(1)
 	);
 	assert!(
 		AuthorApi::submit_extrinsic(&p, 5).is_err()

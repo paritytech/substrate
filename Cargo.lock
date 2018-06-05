@@ -806,6 +806,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpc-core"
+version = "8.0.2"
+source = "git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits#3c72add50ff1ad10d9bc537c762cdbd0c65314b5"
+dependencies = [
+ "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.19 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "jsonrpc-http-server"
 version = "8.0.1"
 source = "git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro#1264963914cedabdd184517738a082cc0a3d1efa"
@@ -821,10 +833,10 @@ dependencies = [
 [[package]]
 name = "jsonrpc-macros"
 version = "8.0.1"
-source = "git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro#1264963914cedabdd184517738a082cc0a3d1efa"
+source = "git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits#3c72add50ff1ad10d9bc537c762cdbd0c65314b5"
 dependencies = [
- "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)",
- "jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)",
+ "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits)",
+ "jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits)",
  "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -834,6 +846,16 @@ version = "8.0.1"
 source = "git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro#1264963914cedabdd184517738a082cc0a3d1efa"
 dependencies = [
  "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)",
+ "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "jsonrpc-pubsub"
+version = "8.0.1"
+source = "git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits#3c72add50ff1ad10d9bc537c762cdbd0c65314b5"
+dependencies = [
+ "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2040,9 +2062,9 @@ version = "0.1.0"
 dependencies = [
  "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)",
- "jsonrpc-macros 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)",
- "jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)",
+ "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits)",
+ "jsonrpc-macros 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits)",
+ "jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
@@ -2939,9 +2961,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum itertools 0.5.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4833d6978da405305126af4ac88569b5d71ff758581ce5a987dbfa3755f694fc"
 "checksum itoa 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "c069bbec61e1ca5a596166e55dfe4773ff745c3d16b700013bcaff9a6df2c682"
 "checksum jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)" = "<none>"
+"checksum jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits)" = "<none>"
 "checksum jsonrpc-http-server 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)" = "<none>"
-"checksum jsonrpc-macros 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)" = "<none>"
+"checksum jsonrpc-macros 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits)" = "<none>"
 "checksum jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)" = "<none>"
+"checksum jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=rh-generic-traits)" = "<none>"
 "checksum jsonrpc-server-utils 8.0.1 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)" = "<none>"
 "checksum jsonrpc-ws-server 8.0.0 (git+https://github.com/paritytech/jsonrpc.git?branch=forward_types_in_macro)" = "<none>"
 "checksum keccak-hash 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0b7f51f30d7986536accaec4a6a288008dfb3dbffe8a2863a65292bc395a3ae7"
