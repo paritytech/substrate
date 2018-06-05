@@ -17,7 +17,7 @@
 use std::sync::Arc;
 use futures::{IntoFuture, Future};
 use primitives::Hash;
-use primitives::block::Id as BlockId;
+use primitives::block::{Id as BlockId, HeaderHash};
 use state_machine::{self, OverlayedChanges, Backend as StateBackend, CodeExecutor};
 
 use backend;
@@ -26,7 +26,7 @@ use error;
 use light::{Fetcher, RemoteCallRequest};
 
 /// Information regarding the result of a call.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallResult {
 	/// The data that was returned from the call.
 	pub return_data: Vec<u8>,
@@ -55,6 +55,18 @@ pub trait CallExecutor {
 	fn prove_at_state<S: state_machine::Backend>(&self, state: S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
 }
 
+/// Method call execution cache.
+///
+/// It only makes sense to use this cache to cache readonly calls, since it only caches
+/// CallResult::return_data (CallResult::changes are 'cached' empty).
+pub trait CallExecutorCache {
+	/// Cache call result.
+	fn cache_call(&self, block: &HeaderHash, method: &str, call_data: &[u8], return_data: &[u8]);
+
+	/// Try to get call result from the cache.
+	fn cached_call(&self, block: &HeaderHash, method: &str, call_data: &[u8]) -> Option<Vec<u8>>;
+}
+
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
 pub struct LocalCallExecutor<B, E> {
@@ -64,9 +76,10 @@ pub struct LocalCallExecutor<B, E> {
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
-pub struct RemoteCallExecutor<B, F> {
+pub struct RemoteCallExecutor<B, F, C> {
 	backend: Arc<B>,
 	fetcher: Arc<F>,
+	cache: C,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
@@ -122,17 +135,18 @@ impl<B, E> CallExecutor for LocalCallExecutor<B, E>
 	}
 }
 
-impl<B, F> RemoteCallExecutor<B, F> {
+impl<B, F, C> RemoteCallExecutor<B, F, C> {
 	/// Creates new instance of remote call executor.
-	pub fn new(backend: Arc<B>, fetcher: Arc<F>) -> Self {
-		RemoteCallExecutor { backend, fetcher }
+	pub fn new(backend: Arc<B>, fetcher: Arc<F>, cache: C) -> Self {
+		RemoteCallExecutor { backend, fetcher, cache }
 	}
 }
 
-impl<B, F> CallExecutor for RemoteCallExecutor<B, F>
+impl<B, F, C> CallExecutor for RemoteCallExecutor<B, F, C>
 	where
 		B: backend::RemoteBackend,
 		F: Fetcher,
+		C: CallExecutorCache,
 		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
 {
 	type Error = error::Error;
@@ -144,11 +158,27 @@ impl<B, F> CallExecutor for RemoteCallExecutor<B, F>
 				.ok_or_else(|| error::ErrorKind::UnknownBlock(BlockId::Number(number)))?,
 		};
 
-		self.fetcher.remote_call(RemoteCallRequest {
-			block: block_hash,
+		// try to read from cache
+		if let Some(cached_result) = self.cache.cached_call(&block_hash, method, call_data) {
+			return Ok(CallResult {
+				return_data: cached_result,
+				changes: Default::default(),
+			});
+		}
+
+		// fetch and check execution proof from remote node
+		let call_result = self.fetcher.remote_call(RemoteCallRequest {
+			block: block_hash.clone(),
 			method: method.into(),
 			call_data: call_data.to_vec(),
-		}).into_future().wait()
+		}).into_future().wait()?;
+
+		// only cache results when changes are empty
+		if call_result.changes.is_empty() {
+			self.cache.cache_call(&block_hash, method, call_data, &call_result.return_data);
+		}
+
+		Ok(call_result)
 	}
 
 	fn call_at_state<S: state_machine::Backend>(&self, _state: &S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> error::Result<(Vec<u8>, S::Transaction)> {
@@ -198,11 +228,47 @@ fn do_check_execution_proof<E>(local_state_root: Hash, executor: &E, request: &R
 
 #[cfg(test)]
 mod tests {
-	use primitives::block::Id as BlockId;
+	use std::collections::HashMap;
+	use std::sync::Arc;
+	use parking_lot::Mutex;
+	use primitives::block::{Id as BlockId, HeaderHash};
 	use state_machine::Backend;
 	use test_client;
-	use light::RemoteCallRequest;
-	use super::do_check_execution_proof;
+	use in_mem::{Backend as InMemoryBackend};
+	use light::{RemoteCallRequest, new_light_backend};
+	use light::tests::OkFetcher;
+	use super::{do_check_execution_proof, CallExecutor, CallExecutorCache,
+		RemoteCallExecutor, CallResult};
+
+	#[derive(Default)]
+	struct InMemoryCallCache {
+		data: Mutex<InMemoryCallCacheData>,
+	}
+
+	#[derive(Default)]
+	struct InMemoryCallCacheData {
+		cache_accesses: usize,
+		cache_matches: usize,
+		cache: HashMap<(HeaderHash, String, Vec<u8>), Vec<u8>>,
+	}
+
+	impl CallExecutorCache for InMemoryCallCache {
+		fn cache_call(&self, block: &HeaderHash, method: &str, call_data: &[u8], return_data: &[u8]) {
+			self.data.lock().cache.insert((block.clone(), method.into(), call_data.to_vec()), return_data.to_vec());
+		}
+
+		fn cached_call(&self, block: &HeaderHash, method: &str, call_data: &[u8]) -> Option<Vec<u8>> {
+			let mut data = self.data.lock();
+			data.cache_accesses += 1;
+			match data.cache.get(&(block.clone(), method.into(), call_data.to_vec())).cloned() {
+				Some(result) => {
+					data.cache_matches += 1;
+					Some(result)
+				},
+				None => None,
+			}
+		}
+	}
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
@@ -222,5 +288,53 @@ mod tests {
 			method: "authorities".into(),
 			call_data: vec![],
 		}, remote_execution_proof).unwrap();
+	}
+
+	#[test]
+	fn execution_proof_is_cached() {
+		let fetcher = OkFetcher::new(CallResult {
+			return_data: vec![42],
+			changes: Default::default(),
+		});
+		let light_backend = new_light_backend(InMemoryBackend::new());
+
+		// cache is empty initially
+		let call_executor = RemoteCallExecutor::new(light_backend, Arc::new(fetcher), InMemoryCallCache::default());
+		assert_eq!(call_executor.cache.data.lock().cache_accesses, 0);
+		assert_eq!(call_executor.cache.data.lock().cache_matches, 0);
+		assert_eq!(call_executor.cache.data.lock().cache.len(), 0);
+
+		// cache entry is created after successful call
+		call_executor.call(&BlockId::Hash(Default::default()), "test", &[]).unwrap();
+		assert_eq!(call_executor.cache.data.lock().cache_accesses, 1);
+		assert_eq!(call_executor.cache.data.lock().cache_matches, 0);
+		assert_eq!(call_executor.cache.data.lock().cache.len(), 1);
+
+		// cache entry is used when called with same arguments
+		call_executor.call(&BlockId::Hash(Default::default()), "test", &[]).unwrap();
+		assert_eq!(call_executor.cache.data.lock().cache_accesses, 2);
+		assert_eq!(call_executor.cache.data.lock().cache_matches, 1);
+		assert_eq!(call_executor.cache.data.lock().cache.len(), 1);
+
+		// cache entry is NOT used when called with same arguments
+		// new cache entry is crated when called with other arguments
+		call_executor.call(&BlockId::Hash(Default::default()), "test", &[1]).unwrap();
+		assert_eq!(call_executor.cache.data.lock().cache_accesses, 3);
+		assert_eq!(call_executor.cache.data.lock().cache_matches, 1);
+		assert_eq!(call_executor.cache.data.lock().cache.len(), 2);
+
+		// cache entry is NOT used when called at other block
+		// new cache entry is crated when called at other block
+		call_executor.call(&BlockId::Hash(1.into()), "test", &[]).unwrap();
+		assert_eq!(call_executor.cache.data.lock().cache_accesses, 4);
+		assert_eq!(call_executor.cache.data.lock().cache_matches, 1);
+		assert_eq!(call_executor.cache.data.lock().cache.len(), 3);
+
+		// cache entry is NOT used when calling other method
+		// new cache entry is crated when calling other method
+		call_executor.call(&BlockId::Hash(Default::default()), "test1", &[]).unwrap();
+		assert_eq!(call_executor.cache.data.lock().cache_accesses, 5);
+		assert_eq!(call_executor.cache.data.lock().cache_matches, 1);
+		assert_eq!(call_executor.cache.data.lock().cache.len(), 4);
 	}
 }

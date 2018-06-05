@@ -134,15 +134,16 @@ pub struct LightComponents;
 impl Components for LightComponents {
 	type Backend = client::light::Backend<client_db::Backend>;
 	type Api = polkadot_api::light::RemotePolkadotApiWrapper<Self::Backend, Self::Executor>;
-	type Executor = client::RemoteCallExecutor<client::light::Backend<client_db::Backend>, network::OnDemand<network::Service>>;
+	type Executor = client::RemoteCallExecutor<client::light::Backend<client_db::Backend>, network::OnDemand<network::Service>, client_db::CallCache>;
 
 	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis: GenesisBuilder)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor>>, Option<Arc<network::OnDemand<network::Service>>>), error::Error> {
 		let db_backend = client_db::new_backend(db_settings)?;
+		let db_call_cache = db_backend.call_cache();
 		let client_backend = client::light::new_light_backend(db_backend);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
-		let client = client::light::new_light(client_backend, fetcher.clone(), genesis)?;
+		let client = client::light::new_light(client_backend, fetcher.clone(), db_call_cache, genesis)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 

@@ -11,6 +11,8 @@ kvdb-rocksdb = { git = "https://github.com/paritytech/parity.git" }
 ethereum-types = "0.3"
 hashdb = { git = "https://github.com/paritytech/parity.git" }
 patricia-trie = { git = "https://github.com/paritytech/parity.git" }
+serde = "1.0"
+serde_derive = "1.0"
 memorydb = { git = "https://github.com/paritytech/parity.git" }
 substrate-primitives = { path = "../../../substrate/primitives" }
 substrate-client = { path = "../../../substrate/client" }

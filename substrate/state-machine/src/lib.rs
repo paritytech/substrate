@@ -75,6 +75,11 @@ impl OverlayedChanges {
 		self.prospective.insert(key, val);
 	}
 
+	/// Is this an empty change?
+	pub fn is_empty(&self) -> bool {
+		self.prospective.is_empty() && self.committed.is_empty()
+	}
+
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.prospective.clear();

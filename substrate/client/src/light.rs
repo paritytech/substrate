@@ -25,7 +25,7 @@ use state_machine::{CodeExecutor, Backend as StateBackend, TrieBackend as StateT
 	TryIntoTrieBackend as TryIntoStateTrieBackend};
 use blockchain::{self, BlockStatus, Backend as BlockchainBackend};
 use backend;
-use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
+use call_executor::{CallResult, RemoteCallExecutor, CallExecutorCache, check_execution_proof};
 use client::{Client, GenesisBuilder};
 use error;
 
@@ -215,17 +215,19 @@ pub fn new_light_backend<B: backend::Backend>(storage: B) -> Arc<Backend<B>> {
 }
 
 /// Create an instance of light client.
-pub fn new_light<B, F, GB>(
+pub fn new_light<B, F, C, GB>(
 	backend: Arc<Backend<B>>,
 	fetcher: Arc<F>,
+	call_cache: C,
 	genesis_builder: GB,
-) -> error::Result<Client<Backend<B>, RemoteCallExecutor<Backend<B>, F>>>
+) -> error::Result<Client<Backend<B>, RemoteCallExecutor<Backend<B>, F, C>>>
 	where
 		B: backend::Backend,
 		F: Fetcher,
+		C: CallExecutorCache,
 		GB: GenesisBuilder,
 {
-	let executor = RemoteCallExecutor::new(backend.clone(), fetcher);
+	let executor = RemoteCallExecutor::new(backend.clone(), fetcher, call_cache);
 	Client::new(backend, executor, genesis_builder)
 }
 
@@ -239,4 +241,21 @@ pub fn new_fetch_checker<B, E>(
 		E: CodeExecutor,
 {
 	LightDataChecker { backend, executor }
+}
+
+#[cfg(test)]
+pub mod tests {
+	use futures::future::{ok, FutureResult};
+	use parking_lot::Mutex;
+	use super::*;
+
+	pub type OkFetcher = Mutex<CallResult>;
+
+	impl Fetcher for OkFetcher {
+		type RemoteCallResult = FutureResult<CallResult, error::Error>;
+
+		fn remote_call(&self, _request: RemoteCallRequest) -> Self::RemoteCallResult {
+			ok((*self.lock()).clone())
+		}
+	}
 }
