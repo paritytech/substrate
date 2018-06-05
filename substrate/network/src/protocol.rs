@@ -19,6 +19,7 @@ use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
 use parking_lot::{RwLock, Mutex};
+use rustc_hex::ToHex;
 use futures::sync::oneshot;
 use serde_json;
 use primitives::block::{HeaderHash, ExtrinsicHash, Number as BlockNumber, Header, Id as BlockId};
@@ -180,7 +181,9 @@ impl Protocol {
 			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m, blake2_256(data).into()),
 			Message::Transactions(m) => self.on_transactions(io, peer_id, m),
 			Message::RemoteCallRequest(request) => self.on_remote_call_request(io, peer_id, request),
-			Message::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response)
+			Message::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response),
+			Message::RemoteReadRequest(request) => self.on_remote_read_request(io, peer_id, request),
+			Message::RemoteReadResponse(response) => self.on_remote_read_response(io, peer_id, response)
 		}
 	}
 
@@ -544,11 +547,11 @@ impl Protocol {
 	}
 
 	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest) {
-		trace!(target: "sync", "Remote request {} from {} ({} at {})", request.id, peer_id, request.method, request.block);
+		trace!(target: "sync", "Remote call request {} from {} ({} at {})", request.id, peer_id, request.method, request.block);
 		let (value, proof) = match self.chain.execution_proof(&request.block, &request.method, &request.data) {
 			Ok((value, proof)) => (value, proof),
 			Err(error) => {
-				trace!(target: "sync", "Remote request {} from {} ({} at {}) failed with: {}",
+				trace!(target: "sync", "Remote call request {} from {} ({} at {}) failed with: {}",
 					request.id, peer_id, request.method, request.block, error);
 				(Default::default(), Default::default())
 			},
@@ -560,8 +563,29 @@ impl Protocol {
 	}
 
 	fn on_remote_call_response(&self, io: &mut SyncIo, peer_id: PeerId, response: message::RemoteCallResponse) {
-		trace!(target: "sync", "Remote response {} from {}", response.id, peer_id);
-		self.on_demand.as_ref().map(|s| s.on_remote_response(io, peer_id, response));
+		trace!(target: "sync", "Remote call response {} from {}", response.id, peer_id);
+		self.on_demand.as_ref().map(|s| s.on_remote_call_response(io, peer_id, response));
+	}
+
+	fn on_remote_read_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteReadRequest) {
+		trace!(target: "sync", "Remote read request {} from {} ({} at {})", request.id, peer_id, request.key.to_hex(), request.block);
+		let proof = match self.chain.read_proof(&request.block, &request.key) {
+			Ok(proof) => proof,
+			Err(error) => {
+				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
+					request.id, peer_id, request.key.to_hex(), request.block, error);
+				Default::default()
+			},
+		};
+
+		self.send_message(io, peer_id, message::Message::RemoteReadResponse(message::RemoteReadResponse {
+			id: request.id, proof,
+		}));
+	}
+
+	fn on_remote_read_response(&self, io: &mut SyncIo, peer_id: PeerId, response: message::RemoteReadResponse) {
+		trace!(target: "sync", "Remote read response {} from {}", response.id, peer_id);
+		self.on_demand.as_ref().map(|s| s.on_remote_read_response(io, peer_id, response));
 	}
 
 	pub fn chain(&self) -> &Client {

@@ -123,7 +123,7 @@ impl<B, E> CallExecutor for LocalCallExecutor<B, E>
 	}
 
 	fn prove_at_state<S: state_machine::Backend>(&self, state: S, changes: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
-		state_machine::prove(
+		state_machine::prove_execution(
 			state,
 			changes,
 			&self.executor,
@@ -211,7 +211,7 @@ fn do_check_execution_proof<E>(local_state_root: Hash, executor: &E, request: &R
 	let (remote_result, remote_proof) = remote_proof;
 
 	let mut changes = OverlayedChanges::default();
-	let (local_result, _) = state_machine::proof_check(
+	let (local_result, _) = state_machine::execution_proof_check(
 		local_state_root.into(),
 		remote_proof,
 		&mut changes,
@@ -236,7 +236,7 @@ mod tests {
 	use test_client;
 	use in_mem::{Backend as InMemoryBackend};
 	use light::{RemoteCallRequest, new_light_backend};
-	use light::tests::OkFetcher;
+	use light::tests::OkCallFetcher;
 	use super::{do_check_execution_proof, CallExecutor, CallExecutorCache,
 		RemoteCallExecutor, CallResult};
 
@@ -292,7 +292,7 @@ mod tests {
 
 	#[test]
 	fn execution_proof_is_cached() {
-		let fetcher = OkFetcher::new(CallResult {
+		let fetcher = OkCallFetcher::new(CallResult {
 			return_data: vec![42],
 			changes: Default::default(),
 		});

@@ -23,8 +23,9 @@ extern crate ethcore_network_devp2p as network_devp2p;
 extern crate ethcore_network as network;
 extern crate ethcore_io as core_io;
 extern crate linked_hash_map;
-extern crate rand;
 extern crate parking_lot;
+extern crate rand;
+extern crate rustc_hex;
 extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
@@ -68,7 +69,7 @@ pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
 pub use message::{Statement, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
-pub use on_demand::{OnDemand, OnDemandService, Response as OnDemandResponse};
+pub use on_demand::{OnDemand, OnDemandService, RemoteCallResponse, RemoteReadResponse};
 
 // TODO: move it elsewhere
 fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {

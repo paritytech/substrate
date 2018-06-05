@@ -29,7 +29,17 @@ use call_executor::{CallResult, RemoteCallExecutor, CallExecutorCache, check_exe
 use client::{Client, GenesisBuilder};
 use error;
 
+/// Remote storage read request;
+#[derive(Debug)]
+pub struct RemoteReadRequest {
+	/// Read at state of given block.
+	pub block: HeaderHash,
+	/// Storage key to read.
+	pub key: Vec<u8>,
+}
+
 /// Remote call request.
+#[derive(Debug)]
 pub struct RemoteCallRequest {
 	/// Call at state of given block.
 	pub block: HeaderHash,
@@ -42,15 +52,21 @@ pub struct RemoteCallRequest {
 /// Light client data fetcher. Implementations of this trait must check if remote data
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher: Send + Sync {
+	/// Remote storage read future.
+	type RemoteReadResult: IntoFuture<Item=Vec<u8>, Error=error::Error>;
 	/// Remote call result future.
 	type RemoteCallResult: IntoFuture<Item=CallResult, Error=error::Error>;
 
+	/// Fetch remote storage value.
+	fn remote_read(&self, request: RemoteReadRequest) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult;
 }
 
 /// Light client remote data checker.
 pub trait FetchChecker: Send + Sync {
+	/// Check remote storage read proof.
+	fn check_read_proof(&self, request: &RemoteReadRequest, remote_proot: Vec<Vec<u8>>) -> error::Result<Vec<u8>>;
 	/// Check remote method execution proof.
 	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult>;
 }
@@ -203,6 +219,10 @@ impl<B, E> FetchChecker for LightDataChecker<B, E>
 		B: backend::Backend,
 		E: CodeExecutor,
 {
+	fn check_read_proof(&self, _request: &RemoteReadRequest, _remote_proot: Vec<Vec<u8>>) -> error::Result<Vec<u8>> {
+		unimplemented!("TODO")
+	}
+
 	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult> {
 		check_execution_proof(&*self.backend, &self.executor, request, remote_proof)
 	}
@@ -245,14 +265,19 @@ pub fn new_fetch_checker<B, E>(
 
 #[cfg(test)]
 pub mod tests {
-	use futures::future::{ok, FutureResult};
+	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
 	use super::*;
 
-	pub type OkFetcher = Mutex<CallResult>;
+	pub type OkCallFetcher = Mutex<CallResult>;
 
-	impl Fetcher for OkFetcher {
+	impl Fetcher for OkCallFetcher {
+		type RemoteReadResult = FutureResult<Vec<u8>, error::Error>;
 		type RemoteCallResult = FutureResult<CallResult, error::Error>;
+
+		fn remote_read(&self, _request: RemoteReadRequest) -> Self::RemoteReadResult {
+			err("Not implemented on test node".into())
+		}
 
 		fn remote_call(&self, _request: RemoteCallRequest) -> Self::RemoteCallResult {
 			ok((*self.lock()).clone())

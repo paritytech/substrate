@@ -46,6 +46,9 @@ pub trait Client: Send + Sync {
 
 	/// Get method execution proof.
 	fn execution_proof(&self, block: &block::HeaderHash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
+
+	/// Get storage read execution proof.
+	fn read_proof(&self, block: &block::HeaderHash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error>;
 }
 
 impl<B, E> Client for PolkadotClient<B, E> where
@@ -86,5 +89,9 @@ impl<B, E> Client for PolkadotClient<B, E> where
 
 	fn execution_proof(&self, block: &block::HeaderHash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
 		(self as &PolkadotClient<B, E>).execution_proof(&BlockId::Hash(block.clone()), method, data)
+	}
+
+	fn read_proof(&self, block: &block::HeaderHash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
+		(self as &PolkadotClient<B, E>).read_proof(&BlockId::Hash(block.clone()), key)
 	}
 }

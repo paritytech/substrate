@@ -233,6 +233,11 @@ impl<B, E> Client<B, E> where
 		self.state_at(id).and_then(|state| self.executor.prove_at_state(state, &mut Default::default(), method, call_data))
 	}
 
+	/// Reads storage value at a given block + key, returning read proof.
+	pub fn read_proof(&self, id: &BlockId, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
+		self.state_at(id).and_then(|state| state_machine::prove_read(state, key).map_err(Into::into))
+	}
+
 	/// Set up the native execution environment to call into a native runtime code.
 	pub fn using_environment<F: FnOnce() -> T, T>(
 		&self, f: F

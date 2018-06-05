@@ -251,6 +251,10 @@ pub enum Message {
 	RemoteCallRequest(RemoteCallRequest),
 	/// Remote method call response.
 	RemoteCallResponse(RemoteCallResponse),
+	/// Remote storage read request.
+	RemoteReadRequest(RemoteReadRequest),
+	/// Remote storage read response.
+	RemoteReadResponse(RemoteReadResponse),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -345,5 +349,25 @@ pub struct RemoteCallResponse {
 	/// Method return value.
 	pub value: Vec<u8>,
 	/// Execution proof.
+	pub proof: Vec<Vec<u8>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+/// Remote storage read request.
+pub struct RemoteReadRequest {
+	/// Unique request id.
+	pub id: RequestId,
+	/// Block at which to perform call.
+	pub block: HeaderHash,
+	/// Storage key.
+	pub key: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+/// Remote read response.
+pub struct RemoteReadResponse {
+	/// Id of a request this response was made for.
+	pub id: RequestId,
+	/// Read proof.
 	pub proof: Vec<Vec<u8>>,
 }
