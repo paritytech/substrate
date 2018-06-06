@@ -5,7 +5,7 @@ Implementation of a https://polkadot.io node in Rust.
 ## To play
 
 If you'd like to play with Polkadot, you'll need to install a client like this
-one. First, get Rust and the support software if you don't already have it:
+one. First, get Rust (1.26.1 stable) and the support software if you don't already have it:
 
 ```
 curl https://sh.rustup.rs -sSf | sh
