@@ -170,6 +170,7 @@ impl<B, F, C> CallExecutor for RemoteCallExecutor<B, F, C>
 			block: block_hash.clone(),
 			method: method.into(),
 			call_data: call_data.to_vec(),
+			..Default::default()
 		}).into_future().wait()?;
 
 		// only cache results when changes are empty
@@ -285,6 +286,7 @@ mod tests {
 			block: Default::default(),
 			method: "authorities".into(),
 			call_data: vec![],
+			..Default::default()
 		}, remote_execution_proof).unwrap();
 	}
 

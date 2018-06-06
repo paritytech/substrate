@@ -32,16 +32,18 @@ use client::{Client, GenesisBuilder};
 use error;
 
 /// Remote storage read request;
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RemoteReadRequest {
 	/// Read at state of given block.
 	pub block: HeaderHash,
 	/// Storage key to read.
 	pub key: Vec<u8>,
+	/// Request retry count before failing. If None, default value is used.
+	pub retry_count: Option<usize>,
 }
 
 /// Remote call request.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RemoteCallRequest {
 	/// Call at state of given block.
 	pub block: HeaderHash,
@@ -49,6 +51,8 @@ pub struct RemoteCallRequest {
 	pub method: String,
 	/// Call data.
 	pub call_data: Vec<u8>,
+	/// Request retry count before failing. If None, default value is used.
+	pub retry_count: Option<usize>,
 }
 
 /// Light client data fetcher. Implementations of this trait must check if remote data
@@ -209,6 +213,7 @@ impl<F> StateBackend for OnDemandState<F> where F: Fetcher {
 			.remote_read(RemoteReadRequest {
 				block: self.block,
 				key: key.to_vec(),
+				..Default::default()
 			})
 			.into_future().wait()
 	}
@@ -342,6 +347,7 @@ pub mod tests {
 		assert_eq!(local_checker.check_read_proof(&RemoteReadRequest {
 			block: remote_block_hash,
 			key: b":auth:len".to_vec(),
+			..Default::default()
 		}, remote_read_proof).unwrap().unwrap()[0], authorities_len as u8);
 	}
 }

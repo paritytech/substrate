@@ -94,10 +94,16 @@ error_chain! {
 			display("Remote node has responded with invalid execution proof"),
 		}
 
-		/// Invalid remote proof.
+		/// Remote fetch has been cancelled.
 		RemoteFetchCancelled {
 			description("remote fetch cancelled"),
 			display("Remote data fetch has been cancelled"),
+		}
+
+		/// Remote fetch has been failed.
+		RemoteFetchFailed {
+			description("remote fetch failed"),
+			display("Remote data fetch has been failed"),
 		}
 	}
 }

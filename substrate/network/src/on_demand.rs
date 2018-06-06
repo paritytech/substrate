@@ -19,7 +19,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Weak};
 use std::time::{Instant, Duration};
-use futures::{Future, Poll};
+use futures::{Async, Future, Poll};
 use futures::sync::oneshot::{channel, Receiver, Sender};
 use linked_hash_map::LinkedHashMap;
 use linked_hash_map::Entry;
@@ -33,6 +33,8 @@ use service;
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+/// Default request retry count.
+const RETRY_COUNT: usize = 0;
 
 /// On-demand service API.
 pub trait OnDemandService: Send + Sync {
@@ -60,12 +62,12 @@ pub struct OnDemand<E: service::ExecuteInContext> {
 
 /// On-demand remote call response.
 pub struct RemoteCallResponse {
-	receiver: Receiver<client::CallResult>,
+	receiver: Receiver<Result<client::CallResult, client::error::Error>>,
 }
 
 /// On-demand remote read response.
 pub struct RemoteReadResponse {
-	receiver: Receiver<Option<Vec<u8>>>,
+	receiver: Receiver<Result<Option<Vec<u8>>, client::error::Error>>,
 }
 
 #[derive(Default)]
@@ -80,12 +82,13 @@ struct OnDemandCore<E: service::ExecuteInContext> {
 struct Request {
 	id: u64,
 	timestamp: Instant,
+	retry_count: usize,
 	data: RequestData,
 }
 
 enum RequestData {
-	RemoteRead(RemoteReadRequest, Sender<Option<Vec<u8>>>),
-	RemoteCall(RemoteCallRequest, Sender<client::CallResult>),
+	RemoteRead(RemoteReadRequest, Sender<Result<Option<Vec<u8>>, client::error::Error>>),
+	RemoteCall(RemoteCallRequest, Sender<Result<client::CallResult, client::error::Error>>),
 }
 
 enum Accept {
@@ -101,6 +104,11 @@ impl Future for RemoteReadResponse {
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.receiver.poll()
 			.map_err(|_| client::error::ErrorKind::RemoteFetchCancelled.into())
+			.and_then(|r| match r {
+				Async::Ready(Ok(ready)) => Ok(Async::Ready(ready)),
+				Async::Ready(Err(error)) => Err(error),
+				Async::NotReady => Ok(Async::NotReady),
+			})
 	}
 }
 
@@ -111,6 +119,11 @@ impl Future for RemoteCallResponse {
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.receiver.poll()
 			.map_err(|_| client::error::ErrorKind::RemoteFetchCancelled.into())
+			.and_then(|r| match r {
+				Async::Ready(Ok(ready)) => Ok(Async::Ready(ready)),
+				Async::Ready(Err(error)) => Err(error),
+				Async::NotReady => Ok(Async::NotReady),
+			})
 	}
 }
 
@@ -135,9 +148,9 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 	}
 
 	/// Schedule && dispatch all scheduled requests.
-	fn schedule_request<R>(&self, data: RequestData, result: R) -> R {
+	fn schedule_request<R>(&self, retry_count: Option<usize>, data: RequestData, result: R) -> R {
 		let mut core = self.core.lock();
-		core.insert(data);
+		core.insert(data, retry_count.unwrap_or(RETRY_COUNT));
 		core.dispatch();
 		result
 	}
@@ -155,22 +168,29 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 			},
 		};
 
-		let retry_request_data = match try_accept(request) {
-			Accept::Ok => None,
-			Accept::CheckFailed(error, retry_request_data) => {
+		let retry_count = request.retry_count;
+		let (retry_count, retry_request_data) = match try_accept(request) {
+			Accept::Ok => (retry_count, None),
+			Accept::CheckFailed(error, mut retry_request_data) => {
 				trace!(target: "sync", "Failed to check remote {} response from peer {}: {}", rtype, peer, error);
-				Some(retry_request_data)
+				if retry_count > 0 {
+					(retry_count - 1, Some(retry_request_data))
+				} else {
+					trace!(target: "sync", "Failed to get remote {} response for given number of retries", rtype);
+					retry_request_data.fail(client::error::ErrorKind::RemoteFetchFailed.into());
+					(0, None)
+				}
 			},
 			Accept::Unexpected(retry_request_data) => {
 				trace!(target: "sync", "Unexpected response to remote {} from peer {}", rtype, peer);
-				Some(retry_request_data)
+				(retry_count, Some(retry_request_data))
 			},
 		};
 
 		if let Some(request_data) = retry_request_data {
 			io.disconnect_peer(peer);
 			core.remove_peer(peer);
-			core.insert(request_data);
+			core.insert(request_data, retry_count);
 		}
 
 		core.dispatch();
@@ -208,7 +228,7 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 			RequestData::RemoteRead(request, sender) => match self.checker.check_read_proof(&request, response.proof) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
-					let _ = sender.send(response);
+					let _ = sender.send(Ok(response));
 					Accept::Ok
 				},
 				Err(error) => Accept::CheckFailed(error, RequestData::RemoteRead(request, sender)),
@@ -222,7 +242,7 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, (response.value, response.proof)) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
-					let _ = sender.send(response);
+					let _ = sender.send(Ok(response));
 					Accept::Ok
 				},
 				Err(error) => Accept::CheckFailed(error, RequestData::RemoteCall(request, sender)),
@@ -238,13 +258,13 @@ impl<E> Fetcher for OnDemand<E> where E: service::ExecuteInContext {
 
 	fn remote_read(&self, request: RemoteReadRequest) -> Self::RemoteReadResult {
 		let (sender, receiver) = channel();
-		self.schedule_request(RequestData::RemoteRead(request, sender),
+		self.schedule_request(request.retry_count.clone(), RequestData::RemoteRead(request, sender),
 			RemoteReadResponse { receiver })
 	}
 
 	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult {
 		let (sender, receiver) = channel();
-		self.schedule_request(RequestData::RemoteCall(request, sender),
+		self.schedule_request(request.retry_count.clone(), RequestData::RemoteCall(request, sender),
 			RemoteCallResponse { receiver })
 	}
 }
@@ -280,13 +300,14 @@ impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
 		}
 	}
 
-	pub fn insert(&mut self, data: RequestData) {
+	pub fn insert(&mut self, data: RequestData, retry_count: usize) {
 		let request_id = self.next_request_id;
 		self.next_request_id += 1;
 
 		self.pending_requests.push_back(Request {
 			id: request_id,
 			timestamp: Instant::now(),
+			retry_count,
 			data,
 		});
 	}
@@ -342,6 +363,16 @@ impl Request {
 				block: data.block,
 				key: data.key.clone(),
 			}),
+		}
+	}
+}
+
+impl RequestData {
+	pub fn fail(self, error: client::error::Error) {
+		// don't care if anyone is listening
+		match self {
+			RequestData::RemoteCall(_, sender) => { let _ = sender.send(Err(error)); },
+			RequestData::RemoteRead(_, sender) => { let _ = sender.send(Err(error)); },
 		}
 	}
 }
@@ -446,7 +477,7 @@ mod tests {
 		assert_eq!(vec![0, 1], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
 		assert!(on_demand.core.lock().active_peers.is_empty());
 
-		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
+		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![], ..Default::default() });
 		assert_eq!(vec![1], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
 		assert_eq!(vec![0], on_demand.core.lock().active_peers.keys().cloned().collect::<Vec<_>>());
 
@@ -464,7 +495,7 @@ mod tests {
 		let mut network = TestIo::new(&queue, None);
 		on_demand.on_connect(0, Role::FULL);
 
-		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
+		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![], ..Default::default() });
 		receive_call_response(&*on_demand, &mut network, 0, 1);
 		assert!(network.to_disconnect.contains(&0));
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
@@ -475,9 +506,9 @@ mod tests {
 		let (_x, on_demand) = dummy(false);
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
-		on_demand.on_connect(0, Role::FULL);
+		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![], retry_count: Some(1) });
 
-		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
+		on_demand.on_connect(0, Role::FULL);
 		receive_call_response(&*on_demand, &mut network, 0, 0);
 		assert!(network.to_disconnect.contains(&0));
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
@@ -501,10 +532,48 @@ mod tests {
 		let mut network = TestIo::new(&queue, None);
 		on_demand.on_connect(0, Role::FULL);
 
-		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
+		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![], retry_count: Some(1) });
 		receive_read_response(&*on_demand, &mut network, 0, 0);
 		assert!(network.to_disconnect.contains(&0));
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+	}
+
+	#[test]
+	fn receives_remote_failure_after_retry_count_failures() {
+		use parking_lot::{Condvar, Mutex};
+
+		let retry_count = 2;
+		let (_x, on_demand) = dummy(false);
+		let queue = RwLock::new(VecDeque::new());
+		let mut network = TestIo::new(&queue, None);
+		for i in 0..retry_count+1 {
+			on_demand.on_connect(i, Role::FULL);
+		}
+
+		let sync = Arc::new((Mutex::new(0), Mutex::new(0), Condvar::new()));
+		let thread_sync = sync.clone();
+
+		let response = on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(),
+			call_data: vec![], retry_count: Some(retry_count) });
+		let thread = ::std::thread::spawn(move || {
+			let &(ref current, ref finished_at, ref finished) = &*thread_sync;
+			let _ = response.wait().unwrap_err();
+			*finished_at.lock() = *current.lock();
+			finished.notify_one();
+		});
+
+		let &(ref current, ref finished_at, ref finished) = &*sync;
+		for i in 0..retry_count+1 {
+			let mut current = current.lock();
+			*current = *current + 1;
+			receive_call_response(&*on_demand, &mut network, i, i as u64);
+		}
+
+		let mut finished_at = finished_at.lock();
+		assert!(!finished.wait_for(&mut finished_at, ::std::time::Duration::from_millis(1000)).timed_out());
+		assert_eq!(*finished_at, retry_count + 1);
+
+		thread.join().unwrap();
 	}
 
 	#[test]
@@ -514,7 +583,7 @@ mod tests {
 		let mut network = TestIo::new(&queue, None);
 		on_demand.on_connect(0, Role::FULL);
 
-		let response = on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
+		let response = on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![], ..Default::default() });
 		let thread = ::std::thread::spawn(move || {
 			let result = response.wait().unwrap();
 			assert_eq!(result.return_data, vec![1]);
