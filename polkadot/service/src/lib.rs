@@ -109,9 +109,7 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 
 		let id = match self.api.check_id(BlockId::hash(best_block)) {
 			Ok(id) => id,
-			Err(_) => {
-				return Vec::new()
-			}
+			Err(_) => return Vec::new(),
 		};
 
 		let ready = transaction_pool::Ready::create(id, &*self.api);
