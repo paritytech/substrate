@@ -46,7 +46,8 @@ pub trait AuxCallable {
 	type Call: AuxDispatchable + Slicable + Clone + PartialEq + Eq;
 }
 
-// dirty hack to work around serde_derive issue.
+// dirty hack to work around serde_derive issue
+// https://github.com/rust-lang/rust/issues/51331
 pub type AuxCallableCallFor<A> = <A as AuxCallable>::Call;
 
 #[cfg(feature = "std")]
