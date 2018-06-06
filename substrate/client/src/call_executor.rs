@@ -77,7 +77,7 @@ pub struct LocalCallExecutor<B, E> {
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
 pub struct RemoteCallExecutor<B, F, C> {
-	backend: Arc<B>,
+	blockchain: Arc<B>,
 	fetcher: Arc<F>,
 	cache: C,
 }
@@ -137,24 +137,23 @@ impl<B, E> CallExecutor for LocalCallExecutor<B, E>
 
 impl<B, F, C> RemoteCallExecutor<B, F, C> {
 	/// Creates new instance of remote call executor.
-	pub fn new(backend: Arc<B>, fetcher: Arc<F>, cache: C) -> Self {
-		RemoteCallExecutor { backend, fetcher, cache }
+	pub fn new(blockchain: Arc<B>, fetcher: Arc<F>, cache: C) -> Self {
+		RemoteCallExecutor { blockchain, fetcher, cache }
 	}
 }
 
 impl<B, F, C> CallExecutor for RemoteCallExecutor<B, F, C>
 	where
-		B: backend::RemoteBackend,
+		B: ChainBackend,
 		F: Fetcher,
 		C: CallExecutorCache,
-		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
 {
 	type Error = error::Error;
 
 	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let block_hash = match *id {
 			BlockId::Hash(hash) => hash,
-			BlockId::Number(number) => self.backend.blockchain().hash(number)?
+			BlockId::Number(number) => self.blockchain.hash(number)?
 				.ok_or_else(|| error::ErrorKind::UnknownBlock(BlockId::Number(number)))?,
 		};
 
@@ -191,13 +190,12 @@ impl<B, F, C> CallExecutor for RemoteCallExecutor<B, F, C>
 }
 
 /// Check remote execution proof using given backend.
-pub fn check_execution_proof<B, E>(backend: &B, executor: &E, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> Result<CallResult, error::Error>
+pub fn check_execution_proof<B, E>(blockchain: &B, executor: &E, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> Result<CallResult, error::Error>
 	where
-		B: backend::RemoteBackend,
+		B: ChainBackend,
 		E: CodeExecutor,
-		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
 {
-	let local_header = backend.blockchain().header(BlockId::Hash(request.block))?;
+	let local_header = blockchain.header(BlockId::Hash(request.block))?;
 	let local_header = local_header.ok_or_else(|| error::ErrorKind::UnknownBlock(BlockId::Hash(request.block)))?;
 	let local_state_root = local_header.state_root;
 	do_check_execution_proof(local_state_root, executor, request, remote_proof)
@@ -235,7 +233,7 @@ mod tests {
 	use state_machine::Backend;
 	use test_client;
 	use in_mem::{Backend as InMemoryBackend};
-	use light::{RemoteCallRequest, new_light_backend};
+	use light::{RemoteCallRequest, Blockchain, new_light_blockchain};
 	use light::tests::OkCallFetcher;
 	use super::{do_check_execution_proof, CallExecutor, CallExecutorCache,
 		RemoteCallExecutor, CallResult};
@@ -296,10 +294,10 @@ mod tests {
 			return_data: vec![42],
 			changes: Default::default(),
 		});
-		let light_backend = new_light_backend(InMemoryBackend::new());
+		let light_blockchain: Arc<Blockchain<InMemoryBackend, OkCallFetcher>> = new_light_blockchain(InMemoryBackend::new());
 
 		// cache is empty initially
-		let call_executor = RemoteCallExecutor::new(light_backend, Arc::new(fetcher), InMemoryCallCache::default());
+		let call_executor = RemoteCallExecutor::new(light_blockchain, Arc::new(fetcher), InMemoryCallCache::default());
 		assert_eq!(call_executor.cache.data.lock().cache_accesses, 0);
 		assert_eq!(call_executor.cache.data.lock().cache_matches, 0);
 		assert_eq!(call_executor.cache.data.lock().cache.len(), 0);

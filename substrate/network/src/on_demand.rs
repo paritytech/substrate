@@ -123,6 +123,11 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 		}
 	}
 
+	/// Get checker reference.
+	pub fn checker(&self) -> &Arc<FetchChecker> {
+		&self.checker
+	}
+
 	/// Sets weak reference to network service.
 	pub fn set_service_link(&self, service: Weak<E>) {
 		self.core.lock().service = service;
