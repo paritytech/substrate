@@ -59,6 +59,7 @@ pub trait Callable {
 }
 
 // dirty hack to work around serde_derive issue.
+// https://github.com/rust-lang/rust/issues/51331
 pub type CallableCallFor<C> = <C as Callable>::Call;
 
 #[cfg(feature = "std")]

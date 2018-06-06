@@ -125,8 +125,10 @@ impl<T> From<T> for MaybeUnsigned<T> {
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
 pub fn verify_encoded_lazy<V: Verify, T: codec::Slicable>(sig: &V, item: &T, signer: &V::Signer) -> bool {
-	// TODO: unfortunately this is a lifetime relationship that can't
-	// be expressed without higher-kinded lifetimes.
+	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
+	// unfortunately this is a lifetime relationship that can't
+	// be expressed without generic associated types, better unification of HRTBs in type position,
+	// and some kind of integration into the Fn* traits.
 	struct LazyEncode<F> {
 		inner: F,
 		encoded: Option<Vec<u8>>,

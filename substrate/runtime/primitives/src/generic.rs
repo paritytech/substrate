@@ -274,6 +274,7 @@ pub struct Header<Number, Hashing: HashingT, DigestItem> {
 // Hack to work around the fact that deriving deserialize doesn't work nicely with
 // the `hashing` trait used as a parameter.
 // dummy struct that uses the hash type directly.
+// https://github.com/serde-rs/serde/issues/1296
 #[cfg(feature = "std")]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[derive(Deserialize)]

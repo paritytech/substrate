@@ -70,7 +70,7 @@ impl VerifiedTransaction {
 		let message = Slicable::encode(&xt);
 		match xt.check() {
 			Ok(xt) => {
-				let hash = BlakeTwo256::hash_of(&message);
+				let hash = BlakeTwo256::hash(&message);
 				Ok(VerifiedTransaction {
 					inner: xt,
 					hash: hash.into(),
