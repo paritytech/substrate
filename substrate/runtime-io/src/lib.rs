@@ -30,37 +30,3 @@ include!("../with_std.rs");
 
 #[cfg(not(feature = "std"))]
 include!("../without_std.rs");
-
-/// Abstraction around hashing
-pub trait Hashing {
-	/// The hash type produced.
-	type Output;
-
-	/// Produce the hash of some byte-slice.
-	fn hash(s: &[u8]) -> Self::Output;
-	/// Produce the hash of some codec-encodable value.
-	fn hash_of<S: codec::Slicable>(s: &S) -> Self::Output {
-		codec::Slicable::using_encoded(s, Self::hash)
-	}
-	/// Produce the patricia-trie root of a mapping from indices to byte slices.
-	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output;
-
-	/// Acquire the global storage root.
-	fn storage_root() -> Self::Output;
-}
-
-/// Blake2-256 Hashing implementation.
-pub struct BlakeTwo256;
-
-impl Hashing for BlakeTwo256 {
-	type Output = primitives::H256;
-	fn hash(s: &[u8]) -> Self::Output {
-		blake2_256(s).into()
-	}
-	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output {
-		enumerated_trie_root(items).into()
-	}
-	fn storage_root() -> Self::Output {
-		storage_root().into()
-	}
-}

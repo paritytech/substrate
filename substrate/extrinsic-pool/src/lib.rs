@@ -20,7 +20,6 @@
 
 extern crate futures;
 extern crate parking_lot;
-extern crate substrate_primitives as primitives;
 
 #[macro_use]
 extern crate log;

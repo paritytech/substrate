@@ -20,47 +20,47 @@ use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use network::PeerId;
-use primitives::block::Number as BlockNumber;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use message;
 
 const MAX_PARALLEL_DOWNLOADS: u32 = 1;
 
 /// Block data with origin.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockData {
-	pub block: message::BlockData,
+pub struct BlockData<B: BlockT> {
+	pub block: message::BlockData<B>,
 	pub origin: PeerId,
 }
 
 #[derive(Debug)]
-enum BlockRangeState {
+enum BlockRangeState<B: BlockT> {
 	Downloading {
-		len: BlockNumber,
+		len: u64,
 		downloading: u32,
 	},
-	Complete(Vec<BlockData>),
+	Complete(Vec<BlockData<B>>),
 }
 
-impl BlockRangeState {
-	pub fn len(&self) -> BlockNumber {
+impl<B: BlockT> BlockRangeState<B> where B::Header: HeaderT<Number=u64> {
+	pub fn len(&self) -> u64 {
 		match *self {
 			BlockRangeState::Downloading { len, .. } => len,
-			BlockRangeState::Complete(ref blocks) => blocks.len() as BlockNumber,
+			BlockRangeState::Complete(ref blocks) => blocks.len() as u64,
 		}
 	}
 }
 
 /// A collection of blocks being downloaded.
 #[derive(Default)]
-pub struct BlockCollection {
+pub struct BlockCollection<B: BlockT> {
 	/// Downloaded blocks.
-	blocks: BTreeMap<BlockNumber, BlockRangeState>,
-	peer_requests: HashMap<PeerId, BlockNumber>,
+	blocks: BTreeMap<u64, BlockRangeState<B>>,
+	peer_requests: HashMap<PeerId, u64>,
 }
 
-impl BlockCollection {
+impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 	/// Create a new instance.
-	pub fn new() -> BlockCollection {
+	pub fn new() -> Self {
 		BlockCollection {
 			blocks: BTreeMap::new(),
 			peer_requests: HashMap::new(),
@@ -74,7 +74,7 @@ impl BlockCollection {
 	}
 
 	/// Insert a set of blocks into collection.
-	pub fn insert(&mut self, start: BlockNumber, blocks: Vec<message::BlockData>, peer_id: PeerId) {
+	pub fn insert(&mut self, start: u64, blocks: Vec<message::BlockData<B>>, peer_id: PeerId) {
 		if blocks.is_empty() {
 			return;
 		}
@@ -96,13 +96,13 @@ impl BlockCollection {
 	}
 
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
-	pub fn needed_blocks(&mut self, peer_id: PeerId, count: usize, peer_best: BlockNumber, common: BlockNumber) -> Option<Range<BlockNumber>> {
+	pub fn needed_blocks(&mut self, peer_id: PeerId, count: usize, peer_best: u64, common: u64) -> Option<Range<u64>> {
 		// First block number that we need to download
 		let first_different = common + 1;
-		let count = count as BlockNumber;
+		let count = count as u64;
 		let (mut range, downloading) = {
 			let mut downloading_iter = self.blocks.iter().peekable();
-			let mut prev: Option<(&BlockNumber, &BlockRangeState)> = None;
+			let mut prev: Option<(&u64, &BlockRangeState<B>)> = None;
 			loop {
 				let next = downloading_iter.next();
 				break match &(prev, next) {
@@ -137,7 +137,7 @@ impl BlockCollection {
 	}
 
 	/// Get a valid chain of blocks ordered in descending order and ready for importing into blockchain.
-	pub fn drain(&mut self, from: BlockNumber) -> Vec<BlockData> {
+	pub fn drain(&mut self, from: u64) -> Vec<BlockData<B>> {
 		let mut drained = Vec::new();
 		let mut ranges = Vec::new();
 		{
@@ -145,7 +145,7 @@ impl BlockCollection {
 			for (start, range_data) in &mut self.blocks {
 				match range_data {
 					&mut BlockRangeState::Complete(ref mut blocks) if *start <= prev => {
-							prev = *start + blocks.len() as BlockNumber;
+							prev = *start + blocks.len() as u64;
 							let mut blocks = mem::replace(blocks, Vec::new());
 							drained.append(&mut blocks);
 							ranges.push(*start);
@@ -191,16 +191,19 @@ impl BlockCollection {
 mod test {
 	use super::{BlockCollection, BlockData};
 	use message;
-	use primitives::block::HeaderHash;
+	use runtime_primitives::testing::Block as RawBlock;
+	use primitives::H256;
 
-	fn is_empty(bc: &BlockCollection) -> bool {
+	type Block = RawBlock<u64>;
+
+	fn is_empty(bc: &BlockCollection<Block>) -> bool {
 		bc.blocks.is_empty() &&
 		bc.peer_requests.is_empty()
 	}
 
-	fn generate_blocks(n: usize) -> Vec<message::BlockData> {
-		(0 .. n).map(|_| message::BlockData {
-			hash: HeaderHash::random(),
+	fn generate_blocks(n: usize) -> Vec<message::BlockData<Block>> {
+		(0 .. n).map(|_| message::generic::BlockData {
+			hash: H256::random(),
 			header: None,
 			body: None,
 			message_queue: None,

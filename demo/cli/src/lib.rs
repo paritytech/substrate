@@ -49,17 +49,18 @@ pub mod error;
 
 use std::sync::Arc;
 use client::genesis;
-use codec::Slicable;
+use demo_primitives::Hash;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
+use demo_runtime::{Block, Header, UncheckedExtrinsic};
 use futures::{Future, Sink, Stream};
 
 struct DummyPool;
-impl extrinsic_pool::api::ExtrinsicPool for DummyPool {
+impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, Hash> for DummyPool {
 	type Error = extrinsic_pool::txpool::Error;
 
-	fn submit(&self, _: Vec<primitives::block::Extrinsic>)
-		-> Result<Vec<primitives::block::ExtrinsicHash>, Self::Error>
+	fn submit(&self, _: Vec<UncheckedExtrinsic>)
+		-> Result<Vec<Hash>, Self::Error>
 	{
 		Err("unimplemented".into())
 	}
@@ -102,8 +103,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	struct GenesisBuilder;
 
-	impl client::GenesisBuilder for GenesisBuilder {
-		fn build(self) -> (primitives::Header, Vec<(Vec<u8>, Vec<u8>)>) {
+	impl client::GenesisBuilder<Block> for GenesisBuilder {
+		fn build(self) -> (Header, Vec<(Vec<u8>, Vec<u8>)>) {
 			let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
 			let genesis_config = GenesisConfig {
 				consensus: Some(ConsensusConfig {
@@ -113,7 +114,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 				system: None,
 		//		block_time: 5,			// 5 second block time.
 				session: Some(SessionConfig {
-					validators: vec![god_key.clone()],
+					validators: vec![god_key.clone().into()],
 					session_length: 720,	// that's 1 hour per session.
 				}),
 				staking: Some(StakingConfig {
@@ -121,7 +122,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 					intentions: vec![],
 					transaction_base_fee: 100,
 					transaction_byte_fee: 1,
-					balances: vec![(god_key.clone(), 1u64 << 63)].into_iter().collect(),
+					balances: vec![(god_key.clone().into(), 1u64 << 63)].into_iter().collect(),
 					validator_count: 12,
 					sessions_per_era: 24,	// 24 hours per era.
 					bonding_duration: 90,	// 90 days per bond.
@@ -149,8 +150,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			};
 
 			let storage = genesis_config.build_externalities();
-			let block = genesis::construct_genesis_block(&storage);
-			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+			let block = genesis::construct_genesis_block::<Block>(&storage);
+			(block.header, storage.into_iter().collect())
 		}
 	}
 
@@ -160,7 +161,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let _rpc_servers = {
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
-			rpc::rpc_handler(client.clone(), chain, Arc::new(DummyPool), DummySystem)
+			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, Arc::new(DummyPool), DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();

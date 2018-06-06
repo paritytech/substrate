@@ -40,106 +40,23 @@ use std::{
 
 use codec::Slicable;
 use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
+use extrinsic_pool::api::ExtrinsicPool;
 use polkadot_api::PolkadotApi;
-use primitives::parachain::CandidateReceipt;
-use primitives::{AccountId, Timestamp, Hash};
-use runtime::{Block, UncheckedExtrinsic, TimestampCall, ParachainsCall, Call};
-use substrate_primitives::block::{Extrinsic, ExtrinsicHash};
-use substrate_primitives::hexdisplay::HexDisplay;
-use substrate_runtime_primitives::traits::{Bounded, Checkable};
+use primitives::{AccountId, Hash, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
+use runtime::UncheckedExtrinsic;
+use substrate_runtime_primitives::traits::{Bounded, Checkable, BlakeTwo256, Hashing};
 
 pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
 
-/// Useful functions for working with Polkadot blocks.
-pub struct PolkadotBlock {
-	block: Block,
-	location: Option<(&'static str, usize)>,
-}
-
-impl PolkadotBlock {
-	/// Create a new block, checking high-level well-formedness.
-	pub fn from(unchecked: Block) -> ::std::result::Result<Self, Block> {
-		if unchecked.extrinsics.len() < 2 {
-			return Err(unchecked);
-		}
-		if unchecked.extrinsics[0].is_signed() {
-			return Err(unchecked);
-		}
-		if unchecked.extrinsics[1].is_signed() {
-			return Err(unchecked);
-		}
-
-		match unchecked.extrinsics[0].extrinsic.function {
-			Call::Timestamp(TimestampCall::set(_)) => {},
-			_ => return Err(unchecked),
-		}
-
-		match unchecked.extrinsics[1].extrinsic.function {
-			Call::Parachains(ParachainsCall::set_heads(_)) => {},
-			_ => return Err(unchecked),
-		}
-
-		// any further checks...
-		Ok(PolkadotBlock { block: unchecked, location: None })
-	}
-
-	/// Create a new block, skipping any high-level well-formedness checks. WARNING: This could
-	/// result in internal functions panicking if the block is, in fact, not well-formed.
-	pub fn force_from(known_good: Block, file: &'static str, line: usize) -> Self {
-		PolkadotBlock { block: known_good, location: Some((file, line)) }
-	}
-
-	/// Retrieve the timestamp of a Polkadot block.
-	pub fn timestamp(&self) -> Timestamp {
-		if let Call::Timestamp(TimestampCall::set(t)) = self.block.extrinsics[0].extrinsic.function {
-			t
-		} else {
-			if let Some((file, line)) = self.location {
-				panic!("Invalid block used in `PolkadotBlock::force_from` at {}:{}", file, line);
-			} else {
-				panic!("Invalid block made it through the PolkadotBlock verification!?");
-			}
-		}
-	}
-
-	/// Retrieve the parachain candidates proposed for this block.
-	pub fn parachain_heads(&self) -> &[CandidateReceipt] {
-		if let Call::Parachains(ParachainsCall::set_heads(ref t)) = self.block.extrinsics[1].extrinsic.function {
-			&t[..]
-		} else {
-			if let Some((file, line)) = self.location {
-				panic!("Invalid block used in `PolkadotBlock::force_from` at {}:{}", file, line);
-			} else {
-				panic!("Invalid block made it through the PolkadotBlock verification!?");
-			}
-		}
-	}
-}
-
-#[macro_export]
-macro_rules! assert_polkadot_block {
-	($known_good:expr) => ( PolkadotBlock::force_from(known_good, file!(), line!()) )
-}
-
-impl ::std::ops::Deref for PolkadotBlock {
-	type Target = Block;
-	fn deref(&self) -> &Block {
-		&self.block
-	}
-}
-
-impl From<PolkadotBlock> for Block {
-	fn from(pd: PolkadotBlock) -> Self {
-		pd.block
-	}
-}
+/// Type alias for convenience.
+pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable>::Checked;
 
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Debug, Clone)]
 pub struct VerifiedTransaction {
-	inner: <UncheckedExtrinsic as Checkable>::Checked,
-	hash: ExtrinsicHash,
+	inner: CheckedExtrinsic,
+	hash: Hash,
 	encoded_size: usize,
 }
 
@@ -150,10 +67,10 @@ impl VerifiedTransaction {
 			bail!(ErrorKind::IsInherent(xt))
 		}
 
-		let message = codec::Slicable::encode(&xt);
+		let message = Slicable::encode(&xt);
 		match xt.check() {
 			Ok(xt) => {
-				let hash = substrate_primitives::hashing::blake2_256(&message);
+				let hash = BlakeTwo256::hash(&message);
 				Ok(VerifiedTransaction {
 					inner: xt,
 					hash: hash.into(),
@@ -169,8 +86,14 @@ impl VerifiedTransaction {
 		self.as_ref().as_unchecked()
 	}
 
+	/// Convert to primitive unchecked extrinsic.
+	pub fn primitive_extrinsic(&self) -> ::primitives::UncheckedExtrinsic {
+		Slicable::decode(&mut self.as_transaction().encode().as_slice())
+			.expect("UncheckedExtrinsic shares repr with Vec<u8>; qed")
+	}
+
 	/// Consume the verified transaciton, yielding the unchecked counterpart.
-	pub fn into_inner(self) -> <UncheckedExtrinsic as Checkable>::Checked {
+	pub fn into_inner(self) -> CheckedExtrinsic {
 		self.inner
 	}
 
@@ -190,8 +113,8 @@ impl VerifiedTransaction {
 	}
 }
 
-impl AsRef< <UncheckedExtrinsic as Checkable>::Checked > for VerifiedTransaction {
-	fn as_ref(&self) -> &<UncheckedExtrinsic as Checkable>::Checked {
+impl AsRef<CheckedExtrinsic> for VerifiedTransaction {
+	fn as_ref(&self) -> &CheckedExtrinsic {
 		&self.inner
 	}
 }
@@ -303,15 +226,12 @@ impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T
 
 pub struct Verifier;
 
-impl txpool::Verifier<Extrinsic> for Verifier {
+impl txpool::Verifier<UncheckedExtrinsic> for Verifier {
 	type VerifiedTransaction = VerifiedTransaction;
 	type Error = Error;
 
-	fn verify_transaction(&self, xt: Extrinsic) -> Result<Self::VerifiedTransaction> {
-		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
-		let uxt = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
-			.ok_or_else(|| ErrorKind::InvalidExtrinsicFormat)?;
-		info!("Correctly formatted: {:?}", uxt);
+	fn verify_transaction(&self, uxt: UncheckedExtrinsic) -> Result<Self::VerifiedTransaction> {
+		info!("Extrinsic Submitted: {:?}", uxt);
 		VerifiedTransaction::create(uxt)
 	}
 }
@@ -320,7 +240,7 @@ impl txpool::Verifier<Extrinsic> for Verifier {
 ///
 /// Wraps a `extrinsic_pool::Pool`.
 pub struct TransactionPool {
-	inner: Pool<Verifier, Scoring, Error>,
+	inner: Pool<UncheckedExtrinsic, Hash, Verifier, Scoring, Error>,
 }
 
 impl TransactionPool {
@@ -337,14 +257,25 @@ impl TransactionPool {
 }
 
 impl Deref for TransactionPool {
-	type Target = Pool<Verifier, Scoring, Error>;
+	type Target = Pool<UncheckedExtrinsic, Hash, Verifier, Scoring, Error>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
 	}
 }
 
-#[cfg(test)]
-mod tests {
-}
+impl ExtrinsicPool<FutureProofUncheckedExtrinsic, Hash> for TransactionPool {
+	type Error = Error;
 
+	fn submit(&self, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
+		// TODO: more general transaction pool, which can handle more kinds of vec-encoded transactions,
+		// even when runtime is out of date.
+		xts.into_iter()
+			.map(|xt| xt.encode())
+			.map(|encoded| UncheckedExtrinsic::decode(&mut &encoded[..]))
+			.map(|maybe_decoded| maybe_decoded.ok_or_else(|| ErrorKind::InvalidExtrinsicFormat.into()))
+			.map(|x| x.and_then(|x| self.import_unchecked_extrinsic(x)))
+			.map(|x| x.map(|x| x.hash().clone()))
+			.collect()
+	}
+}

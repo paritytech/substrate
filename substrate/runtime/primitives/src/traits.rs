@@ -18,19 +18,26 @@
 
 use rstd::prelude::*;
 use rstd;
-#[cfg(not(feature = "std"))] use runtime_io;
+use runtime_io;
+#[cfg(feature = "std")] use std::fmt::{Debug, Display};
+#[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 use substrate_primitives;
 use codec::Slicable;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 
+/// A lazy value.
+pub trait Lazy<T: ?Sized> {
+	fn get(&mut self) -> &T;
+}
+
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
 	type Signer;
 	/// Verify a signature.
-	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
 /// Simple payment making trait, operating on a single generic `AccountId` type.
@@ -122,13 +129,28 @@ impl<T:
 	PartialOrd<Self> + Ord
 > SimpleArithmetic for T {}
 
+/// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
+/// as `Zero`.
+pub trait Clear {
+	/// True iff no bits are set.
+	fn is_clear(&self) -> bool;
+
+	/// Return the value of Self that is clear.
+	fn clear() -> Self;
+}
+
+impl<T: Default + Eq + PartialEq> Clear for T {
+	fn is_clear(&self) -> bool { *self == Self::clear() }
+	fn clear() -> Self { Default::default() }
+}
+
 pub trait SimpleBitOps:
-	Sized +
+	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
-	Sized +
+	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
@@ -148,114 +170,69 @@ impl<A: Executable, B: Executable> Executable for (A, B) {
 	}
 }
 
-/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
-/// each `Slicable`.
-pub trait Digest {
-	type Item: Sized;
-	fn push(&mut self, item: Self::Item);
-}
+/// Abstraction around hashing
+pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
+																	// traits must be fulfilled by all type parameters.
+	/// The hash type produced.
+	type Output: Member + AsRef<[u8]>;
 
-impl Digest for substrate_primitives::Digest {
-	type Item = substrate_primitives::block::Log;
-	fn push(&mut self, item: Self::Item) {
-		self.logs.push(item);
+	/// Produce the hash of some byte-slice.
+	fn hash(s: &[u8]) -> Self::Output;
+
+	/// Produce the hash of some codec-encodable value.
+	fn hash_of<S: Slicable>(s: &S) -> Self::Output {
+		Slicable::using_encoded(s, Self::hash)
 	}
+
+	/// Produce the patricia-trie root of a mapping from indices to byte slices.
+	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output;
+
+	/// Iterator-based version of `enumerated_trie_root`.
+	fn ordered_trie_root<
+		I: IntoIterator<Item = A>,
+		A: AsRef<[u8]>
+	>(input: I) -> Self::Output;
+
+	/// The Patricia tree root of the given mapping as an iterator.
+	fn trie_root<
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>
+	>(input: I) -> Self::Output;
+
+	/// Acquire the global storage root.
+	fn storage_root() -> Self::Output;
 }
 
-/// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
-/// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
-/// `parent_hash`, as well as a `digest` and a block `number`.
-///
-/// You can also create a `new` one from those fields.
-pub trait Header: Sized + Slicable {
-	type Number: Sized;
-	type Hash: Sized;
-	type Digest: Sized;
-	fn number(&self) -> &Self::Number;
-	fn extrinsics_root(&self) -> &Self::Hash;
-	fn state_root(&self) -> &Self::Hash;
-	fn parent_hash(&self) -> &Self::Hash;
-	fn digest(&self) -> &Self::Digest;
-	fn new(
-		number: Self::Number,
-		extrinsics_root: Self::Hash,
-		state_root: Self::Hash,
-		parent_hash: Self::Hash,
-		digest: Self::Digest
-	) -> Self;
-}
+/// Blake2-256 Hashing implementation.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct BlakeTwo256;
 
-impl Header for substrate_primitives::Header {
-	type Number = substrate_primitives::block::Number;
-	type Hash = substrate_primitives::block::HeaderHash;
-	type Digest = substrate_primitives::block::Digest;
-	fn number(&self) -> &Self::Number { &self.number }
-	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
-	fn state_root(&self) -> &Self::Hash { &self.state_root }
-	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
-	fn digest(&self) -> &Self::Digest { &self.digest }
-	fn new(
-		number: Self::Number,
-		extrinsics_root: Self::Hash,
-		state_root: Self::Hash,
-		parent_hash: Self::Hash,
-		digest: Self::Digest
-	) -> Self {
-		substrate_primitives::Header {
-			number: number,
-			extrinsics_root: extrinsics_root,
-			state_root: state_root,
-			parent_hash: parent_hash,
-			digest: digest,
-		}
+impl Hashing for BlakeTwo256 {
+	type Output = substrate_primitives::H256;
+	fn hash(s: &[u8]) -> Self::Output {
+		runtime_io::blake2_256(s).into()
 	}
-}
-
-/// Something which fulfills the abstract idea of a Substrate block. It has types for an
-/// `Extrinsic` piece of information as well as a `Header`.
-///
-/// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block {
-	type Extrinsic: Sized;
-	type Header: Header;
-	fn header(&self) -> &Self::Header;
-	fn extrinsics(&self) -> &[Self::Extrinsic];
-	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
-}
-
-impl Block for substrate_primitives::Block {
-	type Extrinsic = substrate_primitives::block::Extrinsic;
-	type Header = substrate_primitives::Header;
-	fn header(&self) -> &Self::Header {
-		&self.header
+	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output {
+		runtime_io::enumerated_trie_root(items).into()
 	}
-	fn extrinsics(&self) -> &[Self::Extrinsic] {
-		&self.transactions[..]
+	fn trie_root<
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>
+	>(input: I) -> Self::Output {
+		runtime_io::trie_root(input).into()
 	}
-	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
-		(self.header, self.transactions)
+	fn ordered_trie_root<
+		I: IntoIterator<Item = A>,
+		A: AsRef<[u8]>
+	>(input: I) -> Self::Output {
+		runtime_io::ordered_trie_root(input).into()
 	}
-}
-
-/// A "checkable" piece of information, used by the standard Substrate Executive in order to
-/// check the validity of a piece of extrinsic information, usually by verifying the signature.
-pub trait Checkable: Sized {
-	type Checked: Sized;
-	fn check(self) -> Result<Self::Checked, Self>;
-}
-
-/// An "executable" piece of information, used by the standard Substrate Executive in order to
-/// enact a piece of extrinsic information by marshalling and dispatching to a named functioon
-/// call.
-///
-/// Also provides information on to whom this information is attributable and an index that allows
-/// each piece of attributable information to be disambiguated.
-pub trait Applyable {
-	type AccountId;
-	type Index;
-	fn index(&self) -> &Self::Index;
-	fn sender(&self) -> &Self::AccountId;
-	fn apply(self);
+	fn storage_root() -> Self::Output {
+		runtime_io::storage_root().into()
+	}
 }
 
 /// Something that can be checked for equality and printed out to a debug channel if bad.
@@ -280,4 +257,115 @@ impl CheckEqual for substrate_primitives::H256 {
 			runtime_io::print(&other.0[..]);
 		}
 	}
+}
+
+#[cfg(feature = "std")]
+pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
+#[cfg(feature = "std")]
+impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeSerializeDebug {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeSerializeDebug for T {}
+
+#[cfg(feature = "std")]
+pub trait MaybeDisplay: Display {}
+#[cfg(feature = "std")]
+impl<T: Display> MaybeDisplay for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeDisplay {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeDisplay for T {}
+
+pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
+impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
+
+/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
+/// each `Slicable`.
+pub trait Digest {
+	type Item: Member;
+	fn push(&mut self, item: Self::Item);
+}
+
+/// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
+/// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
+/// `parent_hash`, as well as a `digest` and a block `number`.
+///
+/// You can also create a `new` one from those fields.
+pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
+	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Slicable;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
+	type Hashing: Hashing<Output = Self::Hash>;
+	type Digest: Member + Default;
+
+	fn new(
+		number: Self::Number,
+		extrinsics_root: Self::Hash,
+		state_root: Self::Hash,
+		parent_hash: Self::Hash,
+		digest: Self::Digest
+	) -> Self;
+
+	fn number(&self) -> &Self::Number;
+	fn set_number(&mut self, Self::Number);
+
+	fn extrinsics_root(&self) -> &Self::Hash;
+	fn set_extrinsics_root(&mut self, Self::Hash);
+
+	fn state_root(&self) -> &Self::Hash;
+	fn set_state_root(&mut self, Self::Hash);
+
+	fn parent_hash(&self) -> &Self::Hash;
+	fn set_parent_hash(&mut self, Self::Hash);
+
+	fn digest(&self) -> &Self::Digest;
+	fn set_digest(&mut self, Self::Digest);
+
+	fn hash(&self) -> Self::Hash {
+		<Self::Hashing as Hashing>::hash_of(self)
+	}
+}
+
+/// Something which fulfills the abstract idea of a Substrate block. It has types for an
+/// `Extrinsic` piece of information as well as a `Header`.
+///
+/// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
+pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
+	type Extrinsic: Member + Slicable;
+	type Header: Header<Hash=Self::Hash>;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
+
+	fn header(&self) -> &Self::Header;
+	fn extrinsics(&self) -> &[Self::Extrinsic];
+	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
+	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
+	fn hash(&self) -> Self::Hash {
+		<<Self::Header as Header>::Hashing as Hashing>::hash_of(self.header())
+	}
+}
+
+/// Extract the hashing type for a block.
+pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
+
+/// A "checkable" piece of information, used by the standard Substrate Executive in order to
+/// check the validity of a piece of extrinsic information, usually by verifying the signature.
+pub trait Checkable: Sized + Send + Sync {
+	type Checked: Member;
+	fn check(self) -> Result<Self::Checked, Self>;
+}
+
+/// An "executable" piece of information, used by the standard Substrate Executive in order to
+/// enact a piece of extrinsic information by marshalling and dispatching to a named functioon
+/// call.
+///
+/// Also provides information on to whom this information is attributable and an index that allows
+/// each piece of attributable information to be disambiguated.
+pub trait Applyable: Sized + Send + Sync {
+	type AccountId: Member + MaybeDisplay;
+	type Index: Member + MaybeDisplay + SimpleArithmetic;
+	fn index(&self) -> &Self::Index;
+	fn sender(&self) -> &Self::AccountId;
+	fn apply(self);
 }

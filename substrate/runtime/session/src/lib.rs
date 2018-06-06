@@ -22,6 +22,10 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
 #[cfg(any(feature = "std", test))]
 extern crate substrate_keyring as keyring;
 
@@ -51,9 +55,13 @@ pub trait Trait: consensus::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait>;
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set_key(aux, key: T::SessionKey) -> Result = 0;
 	}
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
 		fn force_new_session() -> Result = 1;
@@ -197,7 +205,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity};
+	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
 	pub struct Test;
@@ -212,7 +220,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

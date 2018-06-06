@@ -8,6 +8,7 @@ futures = "0.1.17"
 substrate-codec = { path = "../codec" }
 substrate-primitives = { path = "../primitives" }
 substrate-runtime-support = { path = "../runtime-support" }
+substrate-runtime-primitives = { path = "../runtime/primitives" }
 ed25519 = { path = "../ed25519" }
 tokio-timer = "0.1.2"
 parking_lot = "0.4"

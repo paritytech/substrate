@@ -21,8 +21,8 @@ pub mod generic;
 
 pub use generic::Table;
 
-use primitives::parachain::{Id, CandidateReceipt};
-use primitives::{SessionKey, Hash, Signature};
+use primitives::parachain::{Id, CandidateReceipt, CandidateSignature as Signature};
+use primitives::{SessionKey, Hash};
 
 /// Statements about candidates on the network.
 pub type Statement = generic::Statement<CandidateReceipt, Hash>;

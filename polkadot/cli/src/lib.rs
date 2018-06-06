@@ -32,17 +32,12 @@ extern crate ed25519;
 extern crate triehash;
 extern crate parking_lot;
 
-extern crate substrate_codec as codec;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
-extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
-extern crate substrate_runtime_support as runtime_support;
 extern crate polkadot_primitives;
-extern crate polkadot_executor;
-extern crate polkadot_runtime;
 extern crate polkadot_service as service;
 extern crate polkadot_transaction_pool as txpool;
 
@@ -61,6 +56,7 @@ mod informant;
 use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use polkadot_primitives::Block;
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
@@ -188,9 +184,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
 	where
-		B: client::backend::Backend + Send + Sync + 'static,
-		E: client::CallExecutor + Send + Sync + 'static,
-		client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>
+		B: client::backend::Backend<Block> + Send + Sync + 'static,
+		E: client::CallExecutor<Block> + Send + Sync + 'static,
+		client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {
 	let exit = {
 		// can't use signal directly here because CtrlC takes only `Fn`.
@@ -210,7 +206,7 @@ fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
-			rpc::rpc_handler(
+			rpc::rpc_handler::<Block, _, _, _, _>(
 				service.client(),
 				chain,
 				service.transaction_pool(),

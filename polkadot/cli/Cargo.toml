@@ -24,16 +24,10 @@ ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 fdlimit = "0.1"
 parking_lot = "0.4"
 substrate-client = { path = "../../substrate/client" }
-substrate-network = { path = "../../substrate/network" }
-substrate-codec = { path = "../../substrate/codec" }
-substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
-substrate-executor = { path = "../../substrate/executor" }
-substrate-primitives = { path = "../../substrate/primitives" }
 substrate-rpc = { path = "../../substrate/rpc" }
 substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
+substrate-network = { path = "../../substrate/network" }
 polkadot-primitives = { path = "../primitives" }
-polkadot-executor = { path = "../executor" }
-polkadot-runtime = { path = "../runtime" }
 polkadot-service = { path = "../service" }
 polkadot-transaction-pool = { path = "../transaction-pool" }

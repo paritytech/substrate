@@ -33,7 +33,7 @@ pub type BlockNumber = u64;
 
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
 /// certainly continue to be the same as the substrate's `AuthorityId`.
-pub type AccountId = primitives::AuthorityId;
+pub type AccountId = ::primitives::H256;
 
 /// Balance of an account.
 pub type Balance = u64;

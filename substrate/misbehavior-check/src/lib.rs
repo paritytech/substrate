@@ -21,6 +21,7 @@
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_primitives as runtime_primitives;
 
 #[cfg(test)]
 extern crate substrate_bft;
@@ -29,23 +30,27 @@ extern crate substrate_keyring as keyring;
 
 use codec::Slicable;
 use primitives::{AuthorityId, Signature};
-use primitives::block::HeaderHash;
-use	primitives::bft::{Action, Message, MisbehaviorKind};
+
+use runtime_primitives::bft::{Action, Message, MisbehaviorKind};
 
 // check a message signature. returns true if signed by that authority.
-fn check_message_sig(message: Message, signature: &Signature, from: &AuthorityId) -> bool {
-	let msg = message.encode();
+fn check_message_sig<B: Slicable, H: Slicable>(
+	message: Message<B, H>,
+	signature: &Signature,
+	from: &AuthorityId
+) -> bool {
+	let msg: Vec<u8> = message.encode();
 	runtime_io::ed25519_verify(&signature.0, &msg, from)
 }
 
-fn prepare(parent: HeaderHash, round_number: u32, hash: HeaderHash) -> Message {
+fn prepare<B, H>(parent: H, round_number: u32, hash: H) -> Message<B, H> {
 	Message {
 		parent,
 		action: Action::Prepare(round_number, hash),
 	}
 }
 
-fn commit(parent: HeaderHash, round_number: u32, hash: HeaderHash) -> Message {
+fn commit<B, H>(parent: H, round_number: u32, hash: H) -> Message<B, H> {
 	Message {
 		parent,
 		action: Action::Commit(round_number, hash),
@@ -57,21 +62,21 @@ fn commit(parent: HeaderHash, round_number: u32, hash: HeaderHash) -> Message {
 /// Doesn't check that the header hash in question is
 /// valid or whether the misbehaving authority was part of
 /// the set at that block.
-pub fn evaluate_misbehavior(
+pub fn evaluate_misbehavior<B: Slicable, H: Slicable + Copy>(
 	misbehaved: &AuthorityId,
-	parent_hash: HeaderHash,
-	kind: &MisbehaviorKind,
+	parent_hash: H,
+	kind: &MisbehaviorKind<H>,
 ) -> bool {
 	match *kind {
 		MisbehaviorKind::BftDoublePrepare(round, (h_1, ref s_1), (h_2, ref s_2)) => {
 			s_1 != s_2 &&
-			check_message_sig(prepare(parent_hash, round, h_1), s_1, misbehaved) &&
-			check_message_sig(prepare(parent_hash, round, h_2), s_2, misbehaved)
+			check_message_sig::<B, H>(prepare::<B, H>(parent_hash, round, h_1), s_1, misbehaved) &&
+			check_message_sig::<B, H>(prepare::<B, H>(parent_hash, round, h_2), s_2, misbehaved)
 		}
 		MisbehaviorKind::BftDoubleCommit(round, (h_1, ref s_1), (h_2, ref s_2)) => {
 			s_1 != s_2 &&
-			check_message_sig(commit(parent_hash, round, h_1), s_1, misbehaved) &&
-			check_message_sig(commit(parent_hash, round, h_2), s_2, misbehaved)
+			check_message_sig::<B, H>(commit::<B, H>(parent_hash, round, h_1), s_1, misbehaved) &&
+			check_message_sig::<B, H>(commit::<B, H>(parent_hash, round, h_2), s_2, misbehaved)
 		}
 	}
 }
@@ -84,8 +89,12 @@ mod tests {
 	use keyring::ed25519;
 	use keyring::Keyring;
 
-	fn sign_prepare(key: &ed25519::Pair, round: u32, hash: HeaderHash, parent_hash: HeaderHash) -> (HeaderHash, Signature) {
-		let msg = substrate_bft::sign_message(
+	use runtime_primitives::testing::{H256, Block as RawBlock};
+
+	type Block = RawBlock<u64>;
+
+	fn sign_prepare(key: &ed25519::Pair, round: u32, hash: H256, parent_hash: H256) -> (H256, Signature) {
+		let msg = substrate_bft::sign_message::<Block>(
 			generic::Message::Vote(generic::Vote::Prepare(round as _, hash)),
 			key,
 			parent_hash
@@ -97,8 +106,8 @@ mod tests {
 		}
 	}
 
-	fn sign_commit(key: &ed25519::Pair, round: u32, hash: HeaderHash, parent_hash: HeaderHash) -> (HeaderHash, Signature) {
-		let msg = substrate_bft::sign_message(
+	fn sign_commit(key: &ed25519::Pair, round: u32, hash: H256, parent_hash: H256) -> (H256, Signature) {
+		let msg = substrate_bft::sign_message::<Block>(
 			generic::Message::Vote(generic::Vote::Commit(round as _, hash)),
 			key,
 			parent_hash
@@ -117,7 +126,7 @@ mod tests {
 		let hash_1 = [0; 32].into();
 		let hash_2 = [1; 32].into();
 
-		assert!(evaluate_misbehavior(
+		assert!(evaluate_misbehavior::<Block, H256>(
 			&key.public().0,
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
@@ -129,7 +138,7 @@ mod tests {
 
 		// same signature twice is not misbehavior.
 		let signed = sign_prepare(&key, 1, hash_1, parent_hash);
-		assert!(evaluate_misbehavior(
+		assert!(evaluate_misbehavior::<Block, H256>(
 			&key.public().0,
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
@@ -140,7 +149,7 @@ mod tests {
 		) == false);
 
 		// misbehavior has wrong target.
-		assert!(evaluate_misbehavior(
+		assert!(evaluate_misbehavior::<Block, H256>(
 			&Keyring::Two.to_raw_public(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
@@ -158,7 +167,7 @@ mod tests {
 		let hash_1 = [0; 32].into();
 		let hash_2 = [1; 32].into();
 
-		assert!(evaluate_misbehavior(
+		assert!(evaluate_misbehavior::<Block, H256>(
 			&key.public().0,
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
@@ -170,7 +179,7 @@ mod tests {
 
 		// same signature twice is not misbehavior.
 		let signed = sign_commit(&key, 1, hash_1, parent_hash);
-		assert!(evaluate_misbehavior(
+		assert!(evaluate_misbehavior::<Block, H256>(
 			&key.public().0,
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
@@ -181,7 +190,7 @@ mod tests {
 		) == false);
 
 		// misbehavior has wrong target.
-		assert!(evaluate_misbehavior(
+		assert!(evaluate_misbehavior::<Block, H256>(
 			&Keyring::Two.to_raw_public(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(

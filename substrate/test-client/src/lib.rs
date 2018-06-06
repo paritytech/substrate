@@ -23,6 +23,7 @@ extern crate substrate_codec as codec;
 extern crate substrate_keyring as keyring;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_primitives as runtime_primitives;
 #[macro_use] extern crate substrate_executor as executor;
 
 pub extern crate substrate_test_runtime as runtime;
@@ -43,12 +44,12 @@ mod native_executor {
 pub use self::native_executor::NativeExecutor;
 
 /// Test client database backend.
-pub type Backend = client::in_mem::Backend;
+pub type Backend = client::in_mem::Backend<runtime::Block>;
 
 /// Test client executor.
 pub type Executor = client::LocalCallExecutor<Backend, executor::NativeExecutor<NativeExecutor>>;
 
 /// Creates new client instance used for tests.
-pub fn new() -> client::Client<Backend, Executor> {
+pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
 	TestClient::new_for_tests()
 }

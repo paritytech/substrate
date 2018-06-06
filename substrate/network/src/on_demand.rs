@@ -30,6 +30,7 @@ use io::SyncIo;
 use message;
 use network::PeerId;
 use service;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -50,9 +51,9 @@ pub trait OnDemandService: Send + Sync {
 }
 
 /// On-demand requests service. Dispatches requests to appropriate peers.
-pub struct OnDemand<E: service::ExecuteInContext> {
-	core: Mutex<OnDemandCore<E>>,
-	checker: Arc<FetchChecker>,
+pub struct OnDemand<B: BlockT, E: service::ExecuteInContext<B>> {
+	core: Mutex<OnDemandCore<B, E>>,
+	checker: Arc<FetchChecker<B>>,
 }
 
 /// On-demand response.
@@ -61,19 +62,19 @@ pub struct Response {
 }
 
 #[derive(Default)]
-struct OnDemandCore<E: service::ExecuteInContext> {
+struct OnDemandCore<B: BlockT, E: service::ExecuteInContext<B>> {
 	service: Weak<E>,
 	next_request_id: u64,
-	pending_requests: VecDeque<Request>,
-	active_peers: LinkedHashMap<PeerId, Request>,
+	pending_requests: VecDeque<Request<B::Hash>>,
+	active_peers: LinkedHashMap<PeerId, Request<B::Hash>>,
 	idle_peers: VecDeque<PeerId>,
 }
 
-struct Request {
+struct Request<H> {
 	id: u64,
 	timestamp: Instant,
 	sender: Sender<client::CallResult>,
-	request: RemoteCallRequest,
+	request: RemoteCallRequest<H>,
 }
 
 impl Future for Response {
@@ -86,9 +87,12 @@ impl Future for Response {
 	}
 }
 
-impl<E> OnDemand<E> where E: service::ExecuteInContext {
+impl<B: BlockT, E> OnDemand<B, E> where
+	E: service::ExecuteInContext<B>,
+	B::Header: HeaderT<Number=u64>,
+{
 	/// Creates new on-demand service.
-	pub fn new(checker: Arc<FetchChecker>) -> Self {
+	pub fn new(checker: Arc<FetchChecker<B>>) -> Self {
 		OnDemand {
 			checker,
 			core: Mutex::new(OnDemandCore {
@@ -107,7 +111,7 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 	}
 
 	/// Execute method call on remote node, returning execution result and proof.
-	pub fn remote_call(&self, request: RemoteCallRequest) -> Response {
+	pub fn remote_call(&self, request: RemoteCallRequest<B::Hash>) -> Response {
 		let (sender, receiver) = channel();
 		let result = Response {
 			receiver: receiver,
@@ -123,7 +127,11 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 	}
 }
 
-impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
+impl<B, E> OnDemandService for OnDemand<B, E> where
+	B: BlockT,
+	E: service::ExecuteInContext<B>,
+	B::Header: HeaderT<Number=u64>,
+{
 	fn on_connect(&self, peer: PeerId, role: service::Role) {
 		if !role.intersects(service::Role::FULL | service::Role::COLLATOR | service::Role::VALIDATOR) { // TODO: correct?
 			return;
@@ -175,15 +183,23 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 	}
 }
 
-impl<E> Fetcher for OnDemand<E> where E: service::ExecuteInContext {
+impl<B, E> Fetcher<B> for OnDemand<B, E> where
+	B: BlockT,
+	E: service::ExecuteInContext<B>,
+	B::Header: HeaderT<Number=u64>,
+{
 	type RemoteCallResult = Response;
 
-	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult {
-		self.remote_call(request)
+	fn remote_call(&self, request: RemoteCallRequest<B::Hash>) -> Self::RemoteCallResult {
+		OnDemand::remote_call(self, request)
 	}
 }
 
-impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
+impl<B, E> OnDemandCore<B, E> where
+	B: BlockT,
+	E: service::ExecuteInContext<B> ,
+	B::Header: HeaderT<Number=u64>
+{
 	pub fn add_peer(&mut self, peer: PeerId) {
 		self.idle_peers.push_back(peer);
 	}
@@ -214,7 +230,7 @@ impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
 		}
 	}
 
-	pub fn insert(&mut self, sender: Sender<client::CallResult>, request: RemoteCallRequest) {
+	pub fn insert(&mut self, sender: Sender<client::CallResult>, request: RemoteCallRequest<B::Hash>) {
 		let request_id = self.next_request_id;
 		self.next_request_id += 1;
 
@@ -226,7 +242,7 @@ impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
 		});
 	}
 
-	pub fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request> {
+	pub fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request<B::Hash>> {
 		match self.active_peers.entry(peer) {
 			Entry::Occupied(entry) => match entry.get().id == id {
 				true => {
@@ -263,7 +279,7 @@ impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
 					data: request.request.call_data.clone(),
 				};
 
-				protocol.send_message(ctx, peer, message::Message::RemoteCallRequest(message))
+				protocol.send_message(ctx, peer, message::generic::Message::RemoteCallRequest(message))
 			});
 			self.active_peers.insert(peer, request);
 		}
@@ -286,16 +302,17 @@ mod tests {
 	use service::{Role, ExecuteInContext};
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
+	use test_client::runtime::{Block, Hash};
 
 	struct DummyExecutor;
 	struct DummyFetchChecker { ok: bool }
 
-	impl ExecuteInContext for DummyExecutor {
-		fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol)>(&self, _closure: F) {}
+	impl ExecuteInContext<Block> for DummyExecutor {
+		fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol<Block>)>(&self, _closure: F) {}
 	}
 
-	impl FetchChecker for DummyFetchChecker {
-		fn check_execution_proof(&self, _request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> client::error::Result<client::CallResult> {
+	impl FetchChecker<Block> for DummyFetchChecker {
+		fn check_execution_proof(&self, _request: &RemoteCallRequest<Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> client::error::Result<client::CallResult> {
 			match self.ok {
 				true => Ok(client::CallResult {
 					return_data: remote_proof.0,
@@ -306,19 +323,19 @@ mod tests {
 		}
 	}
 
-	fn dummy(ok: bool) -> (Arc<DummyExecutor>, Arc<OnDemand<DummyExecutor>>) {
+	fn dummy(ok: bool) -> (Arc<DummyExecutor>, Arc<OnDemand<Block, DummyExecutor>>) {
 		let executor = Arc::new(DummyExecutor);
 		let service = Arc::new(OnDemand::new(Arc::new(DummyFetchChecker { ok })));
 		service.set_service_link(Arc::downgrade(&executor));
 		(executor, service)
 	}
 
-	fn total_peers(on_demand: &OnDemand<DummyExecutor>) -> usize {
+	fn total_peers(on_demand: &OnDemand<Block, DummyExecutor>) -> usize {
 		let core = on_demand.core.lock();
 		core.idle_peers.len() + core.active_peers.len()
 	}
 
-	fn receive_response(on_demand: &OnDemand<DummyExecutor>, network: &mut TestIo, peer: PeerId, id: message::RequestId) {
+	fn receive_response(on_demand: &OnDemand<Block, DummyExecutor>, network: &mut TestIo, peer: PeerId, id: message::RequestId) {
 		on_demand.on_remote_response(network, peer, message::RemoteCallResponse {
 			id: id,
 			value: vec![1],

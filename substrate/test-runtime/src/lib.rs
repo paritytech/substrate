@@ -19,38 +19,114 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate substrate_runtime_std as rstd;
-#[macro_use] extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
-#[cfg(test)] #[macro_use] extern crate hex_literal;
-#[cfg(test)] extern crate ed25519;
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_primitives as runtime_primitives;
+
+#[cfg(feature = "std")]
+extern crate serde;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
+#[macro_use]
+extern crate substrate_runtime_support as runtime_support;
+
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
+#[cfg(test)]
+extern crate ed25519;
+#[cfg(test)]
+extern crate substrate_keyring as keyring;
+#[cfg_attr(test, macro_use)]
+extern crate substrate_primitives as primitives;
+#[macro_use]
+extern crate substrate_runtime_io as runtime_io;
+
 
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
-mod transaction;
-mod unchecked_transaction;
 
 use rstd::prelude::*;
 use codec::Slicable;
 
-use primitives::AuthorityId;
-use primitives::hash::H512;
-use primitives::block::generic;
+use runtime_primitives::traits::{Checkable, BlakeTwo256};
+use runtime_primitives::Ed25519Signature;
 pub use primitives::hash::H256;
-pub use primitives::block::{Header, Number as BlockNumber, Digest};
-pub use transaction::Transaction;
-pub use unchecked_transaction::UncheckedTransaction;
 
-/// A test block.
-pub type Block = generic::Block<UncheckedTransaction>;
+/// Calls in transactions.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct Transfer {
+	pub from: AccountId,
+	pub to: AccountId,
+	pub amount: u64,
+	pub nonce: u64,
+}
+
+impl Slicable for Transfer {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		self.from.using_encoded(|s| v.extend(s));
+		self.to.using_encoded(|s| v.extend(s));
+		self.amount.using_encoded(|s| v.extend(s));
+		self.nonce.using_encoded(|s| v.extend(s));
+		v
+	}
+
+	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+		Slicable::decode(input).map(|(from, to, amount, nonce)| Transfer { from, to, amount, nonce })
+	}
+}
+
+/// Extrinsic for test-runtime.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct Extrinsic {
+	pub transfer: Transfer,
+	pub signature: Ed25519Signature,
+}
+
+impl Slicable for Extrinsic {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		self.transfer.using_encoded(|s| v.extend(s));
+		self.signature.using_encoded(|s| v.extend(s));
+		v
+	}
+
+	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+		Slicable::decode(input).map(|(transfer, signature)| Extrinsic { transfer, signature })
+	}
+}
+
+impl Checkable for Extrinsic {
+	type Checked = Self;
+
+	fn check(self) -> Result<Self, Self> {
+		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
+			Ok(self)
+		} else {
+			Err(self)
+		}
+	}
+}
+
 /// An identifier for an account on this system.
-pub type AccountId = AuthorityId;
-/// Signature for our transactions.
-pub type Signature = H512;
+pub type AccountId = H256;
 /// A simple hash type for all our hashing.
 pub type Hash = H256;
+/// The block number type used in this runtime.
+pub type BlockNumber = u64;
+/// Index of a transaction.
+pub type Index = u64;
+/// The digest of a block.
+pub type Digest = runtime_primitives::generic::Digest<Vec<u8>>;
+/// A test block.
+pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
+/// A test block's header.
+pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
@@ -59,7 +135,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
 	print("deserialised block.");
-	let stxs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
+	let stxs = block.extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
 	print("reserialised transactions.");
 	[stxs.len() as u8].encode()
 }
@@ -69,8 +145,9 @@ pub mod api {
 
 	impl_stubs!(
 		authorities => |()| system::authorities(),
+		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),
-		execute_transaction => |(header, utx)| system::execute_transaction(utx, header),
-		finalise_block => |header| system::finalise_block(header)
+		apply_extrinsic => |utx| system::execute_transaction(utx),
+		finalise_block => |()| system::finalise_block()
 	);
 }

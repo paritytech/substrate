@@ -21,12 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-#[cfg(feature = "std")]
-extern crate serde;
-
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
@@ -35,27 +29,43 @@ extern crate substrate_serializer;
 
 extern crate substrate_codec as codec;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
+#[cfg(feature = "std")]
+extern crate serde;
+
+#[cfg(feature = "std")]
+use primitives::bytes;
+
+use rstd::prelude::*;
+use runtime_primitives::traits::BlakeTwo256;
+use runtime_primitives::generic;
+use codec::{Input, Slicable};
+
 pub mod parachain;
 
-/// Virtual account ID that represents the idea of a dispatch/statement being signed by everybody
-/// (who matters). Essentially this means that a majority of validators have decided it is
-/// "correct".
-pub const EVERYBODY: AccountId = [255u8; 32];
+/// Block header type as expected by this runtime.
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 
-/// Something that identifies a block.
-pub use primitives::block::Id as BlockId;
+/// Opaque, encoded, unchecked extrinsic.
+pub type UncheckedExtrinsic = Vec<u8>;
 
-/// The type of digest item.
-pub use primitives::block::Log as Log;
+/// A "future-proof" block type for Polkadot. This will be resilient to upgrades in transaction
+/// format, because it doesn't attempt to decode extrinsics.
+///
+/// Specialized code needs to link to (at least one version of) the runtime directly
+/// in order to handle the extrinsics within.
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 /// An index to a block.
 /// 32-bits will allow for 136 years of blocks assuming 1 block per second.
 /// TODO: switch to u32
 pub type BlockNumber = u64;
 
-/// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
-/// certainly continue to be the same as the substrate's `AuthorityId`.
-pub type AccountId = primitives::AuthorityId;
+/// Alias to Ed25519 pubkey that identifies an account on the relay chain.
+pub type AccountId = primitives::hash::H256;
 
 /// The Ed25519 pub key of an session that belongs to an authority of the relay chain. This is
 /// exactly equivalent to what the substrate calls an "authority".
@@ -64,14 +74,15 @@ pub type SessionKey = primitives::AuthorityId;
 /// Indentifier for a chain. 32-bit should be plenty.
 pub type ChainId = u32;
 
-/// Index of a transaction in the relay chain. 32-bit should be plenty.
-pub type Index = u32;
-
 /// A hash of some data used by the relay chain.
 pub type Hash = primitives::H256;
 
+/// Index of a transaction in the relay chain. 32-bit should be plenty.
+pub type Index = u32;
+
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
-pub type Signature = runtime_primitives::Ed25519Signature;
+/// Equipped with logic for possibly "unsigned" messages.
+pub type Signature = runtime_primitives::MaybeUnsigned<runtime_primitives::Ed25519Signature>;
 
 /// A timestamp: seconds since the unix epoch.
 pub type Timestamp = u64;
@@ -84,3 +95,22 @@ pub type Timestamp = u64;
 /// We round denomination to 10^12 (12 sdf), and leave the other redundancy at the upper end so
 /// that 32 bits may be multiplied with a balance in 128 bits without worrying about overflow.
 pub type Balance = u128;
+
+/// "generic" block ID for the future-proof block type.
+// TODO: parameterize blockid only as necessary.
+pub type BlockId = generic::BlockId<Block>;
+
+/// A log entry in the block.
+#[derive(PartialEq, Eq, Clone, Default)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+impl Slicable for Log {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<u8>::decode(input).map(Log)
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
+	}
+}

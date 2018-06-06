@@ -16,12 +16,10 @@
 
 //! Client extension for tests.
 
-use codec::Slicable;
 use client::{self, Client};
 use keyring::Keyring;
-use runtime_support::Hashable;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use primitives::block;
+use runtime;
 use bft;
 use {Backend, Executor, NativeExecutor};
 
@@ -31,26 +29,26 @@ pub trait TestClient {
 	fn new_for_tests() -> Self;
 
 	/// Justify and import block to the chain.
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: block::Block) -> client::error::Result<()>;
+	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()>;
 
 	/// Returns hash of the genesis block.
-	fn genesis_hash(&self) -> block::HeaderHash;
+	fn genesis_hash(&self) -> runtime::Hash;
 }
 
-impl TestClient for Client<Backend, Executor> {
+impl TestClient for Client<Backend, Executor, runtime::Block> {
 	fn new_for_tests() -> Self {
 		client::new_in_mem(NativeExecutor::new(), GenesisBuilder).unwrap()
 	}
 
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: block::Block) -> client::error::Result<()> {
+	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
 		let justification = fake_justify(&block.header);
 		let justified = self.check_justification(block.header, justification)?;
-		self.import_block(origin, justified, Some(block.transactions))?;
+		self.import_block(origin, justified, Some(block.extrinsics))?;
 
 		Ok(())
 	}
 
-	fn genesis_hash(&self) -> block::HeaderHash {
+	fn genesis_hash(&self) -> runtime::Hash {
 		self.block_hash(0).unwrap().unwrap()
 	}
 }
@@ -61,8 +59,8 @@ impl TestClient for Client<Backend, Executor> {
 /// headers.
 /// TODO: remove this in favor of custom verification pipelines for the
 /// client
-fn fake_justify(header: &block::Header) -> bft::UncheckedJustification {
-	let hash = header.blake2_256().into();
+fn fake_justify(header: &runtime::Header) -> bft::UncheckedJustification<runtime::Hash> {
+	let hash = header.hash();
 	let authorities = vec![
 		Keyring::Alice.into(),
 		Keyring::Bob.into(),
@@ -72,7 +70,7 @@ fn fake_justify(header: &block::Header) -> bft::UncheckedJustification {
 	bft::UncheckedJustification {
 		digest: hash,
 		signatures: authorities.iter().map(|key| {
-			let msg = bft::sign_message(
+			let msg = bft::sign_message::<runtime::Block>(
 				bft::generic::Vote::Commit(1, hash).into(),
 				key,
 				header.parent_hash
@@ -97,15 +95,14 @@ fn genesis_config() -> GenesisConfig {
 
 struct GenesisBuilder;
 
-impl client::GenesisBuilder for GenesisBuilder {
-	fn build(self) -> (block::Header, Vec<(Vec<u8>, Vec<u8>)>) {
+impl client::GenesisBuilder<runtime::Block> for GenesisBuilder {
+	fn build(self) -> (runtime::Header, Vec<(Vec<u8>, Vec<u8>)>) {
 		let mut storage = genesis_config().genesis_map();
-		let block = client::genesis::construct_genesis_block(&storage);
+		let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
 		storage.extend(additional_storage_with_genesis(&block));
 
 		(
-			block::Header::decode(&mut block.header.encode().as_ref())
-				.expect("to_vec() always gives a valid serialisation; qed"),
+			block.header,
 			storage.into_iter().collect()
 		)
 	}

@@ -22,16 +22,15 @@ use futures::sync::{oneshot, mpsc};
 use network::{NetworkProtocolHandler, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_devp2p::{NetworkService};
-use primitives::block::{ExtrinsicHash, Header, HeaderHash};
-use primitives::Hash;
 use core_io::{TimerToken};
 use io::NetSyncIo;
 use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
-use message::{Statement, LocalizedBftMessage};
+use message::LocalizedBftMessage;
 use on_demand::OnDemandService;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
@@ -40,10 +39,8 @@ const V0_PACKET_COUNT: u8 = 1;
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
-/// Type that represents statement stream.
-pub type StatementStream = mpsc::UnboundedReceiver<Statement>;
 /// Type that represents bft messages stream.
-pub type BftMessageStream = mpsc::UnboundedReceiver<LocalizedBftMessage>;
+pub type BftMessageStream<B> = mpsc::UnboundedReceiver<LocalizedBftMessage<B>>;
 
 const TICK_TOKEN: TimerToken = 0;
 const TICK_TIMEOUT: Duration = Duration::from_millis(1000);
@@ -68,60 +65,51 @@ bitflags! {
 }
 
 /// Sync status
-pub trait SyncProvider: Send + Sync {
+pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
-	fn status(&self) -> ProtocolStatus;
+	fn status(&self) -> ProtocolStatus<B>;
 	/// Get peers information
-	fn peers(&self) -> Vec<PeerInfo>;
+	fn peers(&self) -> Vec<PeerInfo<B>>;
 	/// Get this node id if available.
 	fn node_id(&self) -> Option<String>;
 }
 
 /// Transaction pool interface
-pub trait TransactionPool: Send + Sync {
+pub trait TransactionPool<B: BlockT>: Send + Sync {
 	/// Get transactions from the pool that are ready to be propagated.
-	fn transactions(&self) -> Vec<(ExtrinsicHash, Vec<u8>)>;
+	fn transactions(&self) -> Vec<(B::Hash, B::Extrinsic)>;
 	/// Import a transction into the pool.
-	fn import(&self, transaction: &[u8]) -> Option<ExtrinsicHash>;
+	fn import(&self, transaction: &B::Extrinsic) -> Option<B::Hash>;
 	/// Notify the pool about transactions broadcast.
-	fn on_broadcasted(&self, propagations: HashMap<ExtrinsicHash, Vec<String>>);
+	fn on_broadcasted(&self, propagations: HashMap<B::Hash, Vec<String>>);
 }
 
 /// ConsensusService
-pub trait ConsensusService: Send + Sync {
-	/// Get statement stream.
-	fn statements(&self) -> StatementStream;
-	/// Send out a statement.
-	fn send_statement(&self, statement: Statement);
+pub trait ConsensusService<B: BlockT>: Send + Sync {
 	/// Maintain connectivity to given addresses.
 	fn connect_to_authorities(&self, addresses: &[String]);
-	/// Fetch candidate.
-	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Vec<u8>>;
-	/// Note local candidate. Accepts candidate receipt hash and candidate data.
-	/// Pass `None` to clear the candidate.
-	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>);
 
 	/// Get BFT message stream for messages corresponding to consensus on given
 	/// parent hash.
-	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream;
+	fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B>;
 	/// Send out a BFT message.
-	fn send_bft_message(&self, message: LocalizedBftMessage);
+	fn send_bft_message(&self, message: LocalizedBftMessage<B>);
 }
 
 /// Service able to execute closure in the network context.
-pub trait ExecuteInContext: Send + Sync {
+pub trait ExecuteInContext<B: BlockT>: Send + Sync {
 	/// Execute closure in network context.
-	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol)>(&self, closure: F);
+	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol<B>)>(&self, closure: F);
 }
 
 /// devp2p Protocol handler
-struct ProtocolHandler {
-	protocol: Protocol,
+struct ProtocolHandler<B: BlockT> {
+	protocol: Protocol<B>,
 }
 
 /// Peer connection information
 #[derive(Debug)]
-pub struct PeerInfo {
+pub struct PeerInfo<B: BlockT> {
 	/// Public node id
 	pub id: Option<String>,
 	/// Node client ID
@@ -133,34 +121,34 @@ pub struct PeerInfo {
 	/// Local endpoint address
 	pub local_address: String,
 	/// Dot protocol info.
-	pub dot_info: Option<ProtocolPeerInfo>,
+	pub dot_info: Option<ProtocolPeerInfo<B>>,
 }
 
 /// Service initialization parameters.
-pub struct Params {
+pub struct Params<B: BlockT> {
 	/// Configuration.
 	pub config: ProtocolConfig,
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 	/// Polkadot relay chain access point.
-	pub chain: Arc<Client>,
+	pub chain: Arc<Client<B>>,
 	/// On-demand service reference.
 	pub on_demand: Option<Arc<OnDemandService>>,
 	/// Transaction pool.
-	pub transaction_pool: Arc<TransactionPool>,
+	pub transaction_pool: Arc<TransactionPool<B>>,
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
-pub struct Service {
+pub struct Service<B: BlockT + 'static> where B::Header: HeaderT<Number=u64> {
 	/// Network service
 	network: NetworkService,
 	/// Devp2p protocol handler
-	handler: Arc<ProtocolHandler>,
+	handler: Arc<ProtocolHandler<B>>,
 }
 
-impl Service {
+impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 	/// Creates and register protocol with the network service
-	pub fn new(params: Params) -> Result<Arc<Service>, Error> {
+	pub fn new(params: Params<B>) -> Result<Arc<Service<B>>, Error> {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
 		let sync = Arc::new(Service {
 			network: service,
@@ -173,7 +161,7 @@ impl Service {
 	}
 
 	/// Called when a new block is imported by the client.
-	pub fn on_block_imported(&self, hash: HeaderHash, header: &Header) {
+	pub fn on_block_imported(&self, hash: B::Hash, header: &B::Header) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
 			self.handler.protocol.on_block_imported(&mut NetSyncIo::new(context), hash, header)
 		});
@@ -199,32 +187,32 @@ impl Service {
 
 	fn stop(&self) {
 		self.handler.protocol.abort();
-		self.network.stop().unwrap_or_else(|e| warn!("Error stopping network: {:?}", e));
+		self.network.stop();
 	}
 }
 
-impl Drop for Service {
+impl<B: BlockT + 'static> Drop for Service<B> where B::Header: HeaderT<Number=u64> {
 	fn drop(&mut self) {
 		self.stop();
 	}
 }
 
-impl ExecuteInContext for Service {
-	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol)>(&self, closure: F) {
+impl<B: BlockT + 'static> ExecuteInContext<B> for Service<B> where B::Header: HeaderT<Number=u64> {
+	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol<B>)>(&self, closure: F) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
 			closure(&mut NetSyncIo::new(context), &self.handler.protocol)
 		});
 	}
 }
 
-impl SyncProvider for Service {
+impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: HeaderT<Number=u64> {
 	/// Get sync status
-	fn status(&self) -> ProtocolStatus {
+	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.protocol.status()
 	}
 
 	/// Get sync peers
-	fn peers(&self) -> Vec<PeerInfo> {
+	fn peers(&self) -> Vec<PeerInfo<B>> {
 		self.network.with_context_eval(DOT_PROTOCOL_ID, |ctx| {
 			let peer_ids = self.network.connected_peers();
 
@@ -252,43 +240,23 @@ impl SyncProvider for Service {
 }
 
 /// ConsensusService
-impl ConsensusService for Service {
-	fn statements(&self) -> StatementStream {
-		self.handler.protocol.statements()
-	}
-
+impl<B: BlockT + 'static> ConsensusService<B> for Service<B> where B::Header: HeaderT<Number=u64> {
 	fn connect_to_authorities(&self, _addresses: &[String]) {
 		//TODO: implement me
 	}
 
-	fn fetch_candidate(&self, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
-		self.network.with_context_eval(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.fetch_candidate(&mut NetSyncIo::new(context), hash)
-		}).expect("DOT Service is registered")
-	}
-
-	fn send_statement(&self, statement: Statement) {
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.send_statement(&mut NetSyncIo::new(context), statement);
-		});
-	}
-
-	fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
-		self.handler.protocol.set_local_candidate(candidate)
-	}
-
-	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
+	fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B> {
 		self.handler.protocol.bft_messages(parent_hash)
 	}
 
-	fn send_bft_message(&self, message: LocalizedBftMessage) {
+	fn send_bft_message(&self, message: LocalizedBftMessage<B>) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
 			self.handler.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
 		});
 	}
 }
 
-impl NetworkProtocolHandler for ProtocolHandler {
+impl<B: BlockT + 'static> NetworkProtocolHandler for ProtocolHandler<B> where B::Header: HeaderT<Number=u64> {
 	fn initialize(&self, io: &NetworkContext, _host_info: &HostInfo) {
 		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
 			.expect("Error registering sync timer");
@@ -319,7 +287,7 @@ impl NetworkProtocolHandler for ProtocolHandler {
 }
 
 /// Trait for managing network
-pub trait ManageNetwork : Send + Sync {
+pub trait ManageNetwork: Send + Sync {
 	/// Set to allow unreserved peers to connect
 	fn accept_unreserved_peers(&self);
 	/// Set to deny unreserved peers to connect
@@ -335,7 +303,7 @@ pub trait ManageNetwork : Send + Sync {
 }
 
 
-impl ManageNetwork for Service {
+impl<B: BlockT + 'static> ManageNetwork for Service<B> where B::Header: HeaderT<Number=u64> {
 	fn accept_unreserved_peers(&self) {
 		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}

@@ -18,8 +18,8 @@
 //! runtime.
 
 extern crate polkadot_executor;
-extern crate polkadot_runtime as runtime;
 extern crate polkadot_primitives as primitives;
+extern crate polkadot_runtime as runtime;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_client as client;
@@ -37,9 +37,8 @@ extern crate substrate_keyring as keyring;
 pub mod full;
 pub mod light;
 
-use primitives::{AccountId, BlockId, Hash, Index, SessionKey, Timestamp};
-use primitives::parachain::{DutyRoster, CandidateReceipt, Id as ParaId};
-use runtime::{Block, UncheckedExtrinsic};
+use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
+use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 
 error_chain! {
 	errors {
@@ -49,19 +48,9 @@ error_chain! {
 			display("Unknown runtime code")
 		}
 		/// Unknown block ID.
-		UnknownBlock(b: BlockId) {
+		UnknownBlock(b: String) {
 			description("Unknown block")
-			display("Unknown block")
-		}
-		/// Attempted to push an inherent extrinsic manually.
-		PushedInherentTransaction(xt: UncheckedExtrinsic) {
-			description("Attempted to push an inherent extrinsic to a block."),
-			display("Pushed inherent extrinsic to a block: {:?}", xt),
-		}
-		/// Badly-formed extrinsic.
-		BadlyFormedTransaction(xt: UncheckedExtrinsic) {
-			description("Attempted to push a badly-formed extrinsic to a block."),
-			display("Pushed badly-formed extrinsic to a block: {:?}", xt),
+			display("Unknown block {}", b)
 		}
 		/// Some other error.
 		// TODO: allow to be specified as associated type of PolkadotApi
@@ -85,19 +74,19 @@ impl From<client::error::Error> for Error {
 	}
 }
 
-/// A builder for blocks.
-pub trait BlockBuilder: Sized {
-	/// Push a non-inherent extrinsic.
-	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()>;
-
-	/// Finalise the block.
-	fn bake(self) -> Block;
-}
-
 /// A checked block identifier.
 pub trait CheckedBlockId: Clone + 'static {
 	/// Yield the underlying block ID.
 	fn block_id(&self) -> &BlockId;
+}
+
+/// Build new blocks.
+pub trait BlockBuilder {
+	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
+	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()>;
+
+	/// Bake the block with provided extrinsics.
+	fn bake(self) -> Result<Block>;
 }
 
 /// Trait encapsulating the Polkadot API.
@@ -106,7 +95,7 @@ pub trait CheckedBlockId: Clone + 'static {
 pub trait PolkadotApi {
 	/// A checked block ID. Used to avoid redundancy of code check.
 	type CheckedBlockId: CheckedBlockId;
-	/// The type used to build blocks.
+	/// The block builder for this API type.
 	type BlockBuilder: BlockBuilder;
 
 	/// Check whether requests at the given block ID can be served.
@@ -146,8 +135,12 @@ pub trait PolkadotApi {
 	/// and an error if we can't evaluate for some reason.
 	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<bool>;
 
-	/// Create a block builder on top of the parent block.
-	fn build_block(&self, parent: &Self::CheckedBlockId, timestamp: Timestamp, parachains: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
+	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
+	fn build_block(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
+
+	/// Attempt to produce the (encoded) inherent extrinsics for a block being built upon the given.
+	/// This may vary by runtime and will fail if a runtime doesn't follow the same API.
+	fn inherent_extrinsics(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>>;
 }
 
 /// Mark for all Polkadot API implementations, that are making use of state data, stored locally.

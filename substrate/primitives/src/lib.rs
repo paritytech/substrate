@@ -54,17 +54,6 @@ extern crate substrate_serializer;
 #[macro_use]
 extern crate pretty_assertions;
 
-// TODO: factor out to separate crate.
-#[macro_export]
-macro_rules! try_opt {
-	($e: expr) => {
-		match $e {
-			Some(x) => x,
-			None => return None,
-		}
-	}
-}
-
 #[macro_export]
 macro_rules! map {
 	($( $name:expr => $value:expr ),*) => (
@@ -82,8 +71,6 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
 
-pub mod bft;
-pub mod block;
 pub mod hash;
 pub mod sandbox;
 pub mod storage;
@@ -92,12 +79,8 @@ pub mod uint;
 #[cfg(test)]
 mod tests;
 
-pub use self::hash::{H160, H256};
+pub use self::hash::{H160, H256, H512};
 pub use self::uint::{U256, U512};
-pub use block::{Block, Header, Digest};
-
-/// General hash type.
-pub type Hash = H256;
 
 /// An identifier for an authority in the consensus algorithm. The same as ed25519::Public.
 pub type AuthorityId = [u8; 32];

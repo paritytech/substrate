@@ -19,23 +19,21 @@ use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
 use parking_lot::{RwLock, Mutex};
-use futures::sync::oneshot;
 use serde_json;
-use primitives::block::{HeaderHash, ExtrinsicHash, Number as BlockNumber, Header, Id as BlockId};
-use primitives::{Hash, blake2_256};
-use runtime_support::Hashable;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing, HashingFor};
+use runtime_primitives::generic::BlockId;
 use network::PeerId;
 
 use message::{self, Message};
+use message::generic::Message as GenericMessage;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use consensus::Consensus;
-use service::{Role, TransactionPool, StatementStream, BftMessageStream};
+use service::{Role, TransactionPool, BftMessageStream};
 use config::ProtocolConfig;
 use chain::Client;
 use on_demand::OnDemandService;
 use io::SyncIo;
 use error;
-use super::header_hash;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 const PROTOCOL_VERSION: u32 = 0;
@@ -44,25 +42,25 @@ const PROTOCOL_VERSION: u32 = 0;
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 
 // Lock must always be taken in order declared here.
-pub struct Protocol {
+pub struct Protocol<B: BlockT> {
 	config: ProtocolConfig,
-	chain: Arc<Client>,
+	chain: Arc<Client<B>>,
 	on_demand: Option<Arc<OnDemandService>>,
-	genesis_hash: HeaderHash,
-	sync: RwLock<ChainSync>,
-	consensus: Mutex<Consensus>,
+	genesis_hash: B::Hash,
+	sync: RwLock<ChainSync<B>>,
+	consensus: Mutex<Consensus<B>>,
 	// All connected peers
-	peers: RwLock<HashMap<PeerId, Peer>>,
+	peers: RwLock<HashMap<PeerId, Peer<B>>>,
 	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<PeerId, time::Instant>>,
-	transaction_pool: Arc<TransactionPool>,
+	transaction_pool: Arc<TransactionPool<B>>,
 }
 
 /// Syncing status and statistics
 #[derive(Clone)]
-pub struct ProtocolStatus {
+pub struct ProtocolStatus<B: BlockT> {
 	/// Sync status.
-	pub sync: SyncStatus,
+	pub sync: SyncStatus<B>,
 	/// Total number of connected peers
 	pub num_peers: usize,
 	/// Total number of active peers.
@@ -70,42 +68,49 @@ pub struct ProtocolStatus {
 }
 
 /// Peer information
-struct Peer {
+struct Peer<B: BlockT> {
 	/// Protocol version
 	protocol_version: u32,
 	/// Roles
 	roles: Role,
 	/// Peer best block hash
-	best_hash: HeaderHash,
+	best_hash: B::Hash,
 	/// Peer best block number
-	best_number: BlockNumber,
+	best_number: <B::Header as HeaderT>::Number,
 	/// Pending block request if any
-	block_request: Option<message::BlockRequest>,
+	block_request: Option<message::BlockRequest<B>>,
 	/// Request timestamp
 	request_timestamp: Option<time::Instant>,
 	/// Holds a set of transactions known to this peer.
-	known_transactions: HashSet<ExtrinsicHash>,
+	known_transactions: HashSet<B::Hash>,
 	/// Holds a set of blocks known to this peer.
-	known_blocks: HashSet<HeaderHash>,
+	known_blocks: HashSet<B::Hash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
 }
 
 #[derive(Debug)]
-pub struct PeerInfo {
+pub struct PeerInfo<B: BlockT> {
 	/// Roles
 	pub roles: Role,
 	/// Protocol version
 	pub protocol_version: u32,
 	/// Peer best block hash
-	pub best_hash: HeaderHash,
+	pub best_hash: B::Hash,
 	/// Peer best block number
-	pub best_number: BlockNumber,
+	pub best_number: <B::Header as HeaderT>::Number,
 }
 
-impl Protocol {
+impl<B: BlockT> Protocol<B> where
+	B::Header: HeaderT<Number=u64>
+{
 	/// Create a new instance.
-	pub fn new(config: ProtocolConfig, chain: Arc<Client>, on_demand: Option<Arc<OnDemandService>>, transaction_pool: Arc<TransactionPool>) -> error::Result<Protocol>  {
+	pub fn new(
+		config: ProtocolConfig,
+		chain: Arc<Client<B>>,
+		on_demand: Option<Arc<OnDemandService>>,
+		transaction_pool: Arc<TransactionPool<B>>
+	) -> error::Result<Self>  {
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info);
 		let protocol = Protocol {
@@ -123,7 +128,7 @@ impl Protocol {
 	}
 
 	/// Returns protocol status
-	pub fn status(&self) -> ProtocolStatus {
+	pub fn status(&self) -> ProtocolStatus<B> {
 		let sync = self.sync.read();
 		let peers = self.peers.read();
 		ProtocolStatus {
@@ -134,7 +139,7 @@ impl Protocol {
 	}
 
 	pub fn handle_packet(&self, io: &mut SyncIo, peer_id: PeerId, data: &[u8]) {
-		let message: Message = match serde_json::from_slice(data) {
+		let message: Message<B> = match serde_json::from_slice(data) {
 			Ok(m) => m,
 			Err(e) => {
 				debug!("Invalid packet from {}: {}", peer_id, e);
@@ -144,9 +149,9 @@ impl Protocol {
 		};
 
 		match message {
-			Message::Status(s) => self.on_status_message(io, peer_id, s),
-			Message::BlockRequest(r) => self.on_block_request(io, peer_id, r),
-			Message::BlockResponse(r) => {
+			GenericMessage::Status(s) => self.on_status_message(io, peer_id, s),
+			GenericMessage::BlockRequest(r) => self.on_block_request(io, peer_id, r),
+			GenericMessage::BlockResponse(r) => {
 				let request = {
 					let mut peers = self.peers.write();
 					if let Some(ref mut peer) = peers.get_mut(&peer_id) {
@@ -171,22 +176,19 @@ impl Protocol {
 				}
 				self.on_block_response(io, peer_id, request, r);
 			},
-			Message::BlockAnnounce(announce) => {
+			GenericMessage::BlockAnnounce(announce) => {
 				self.on_block_announce(io, peer_id, announce);
 			},
-			Message::Statement(s) => self.on_statement(io, peer_id, s, blake2_256(data).into()),
-			Message::CandidateRequest(r) => self.on_candidate_request(io, peer_id, r),
-			Message::CandidateResponse(r) => self.on_candidate_response(io, peer_id, r),
-			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m, blake2_256(data).into()),
-			Message::Transactions(m) => self.on_transactions(io, peer_id, m),
-			Message::RemoteCallRequest(request) => self.on_remote_call_request(io, peer_id, request),
-			Message::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response)
+			GenericMessage::BftMessage(m) => self.on_bft_message(io, peer_id, m, HashingFor::<B>::hash(data)),
+			GenericMessage::Transactions(m) => self.on_transactions(io, peer_id, m),
+			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(io, peer_id, request),
+			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response)
 		}
 	}
 
-	pub fn send_message(&self, io: &mut SyncIo, peer_id: PeerId, mut message: Message) {
+	pub fn send_message(&self, io: &mut SyncIo, peer_id: PeerId, mut message: Message<B>) {
 		match &mut message {
-			&mut Message::BlockRequest(ref mut r) => {
+			&mut GenericMessage::BlockRequest(ref mut r) => {
 				let mut peers = self.peers.write();
 				if let Some(ref mut peer) = peers.get_mut(&peer_id) {
 					r.id = peer.next_request_id;
@@ -204,9 +206,9 @@ impl Protocol {
 		}
 	}
 
-	pub fn hash_message(message: &Message) -> Hash {
+	pub fn hash_message(message: &Message<B>) -> B::Hash {
 		let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
-		blake2_256(&data).into()
+		HashingFor::<B>::hash(&data)
 	}
 
 	/// Called when a new peer is connected
@@ -232,7 +234,7 @@ impl Protocol {
 		}
 	}
 
-	fn on_block_request(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest) {
+	fn on_block_request(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest<B>) {
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}", request.id, peer, request.from, request.to, request.max);
 		let mut blocks = Vec::new();
 		let mut id = match request.from {
@@ -255,9 +257,9 @@ impl Protocol {
 			if blocks.len() >= max{
 				break;
 			}
-			let number = header.number;
-			let hash = header_hash(&header);
-			let block_data = message::BlockData {
+			let number = header.number().clone();
+			let hash = header.hash();
+			let block_data = message::generic::BlockData {
 				hash: hash,
 				header: if get_header { Some(header) } else { None },
 				body: if get_body { self.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
@@ -276,67 +278,32 @@ impl Protocol {
 				}
 			}
 		}
-		let response = message::BlockResponse {
+		let response = message::generic::BlockResponse {
 			id: request.id,
 			blocks: blocks,
 		};
-		self.send_message(io, peer, Message::BlockResponse(response))
+		self.send_message(io, peer, GenericMessage::BlockResponse(response))
 	}
 
-	fn on_block_response(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest, response: message::BlockResponse) {
+	fn on_block_response(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest<B>, response: message::BlockResponse<B>) {
 		// TODO: validate response
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks", response.id, peer, response.blocks.len());
 		self.sync.write().on_block_data(io, self, peer, request, response);
 	}
 
-	fn on_candidate_request(&self, io: &mut SyncIo, peer: PeerId, request: message::CandidateRequest) {
-		trace!(target: "sync", "CandidateRequest {} from {} for {}", request.id, peer, request.hash);
-		self.consensus.lock().on_candidate_request(io, self, peer, request);
-	}
-
-	fn on_candidate_response(&self, io: &mut SyncIo, peer: PeerId, response: message::CandidateResponse) {
-		trace!(target: "sync", "CandidateResponse {} from {} with {:?} bytes", response.id, peer, response.data.as_ref().map(|d| d.len()));
-		self.consensus.lock().on_candidate_response(io, self, peer, response);
-	}
-
-	fn on_statement(&self, io: &mut SyncIo, peer: PeerId, statement: message::Statement, hash: Hash) {
-		trace!(target: "sync", "Statement from {}: {:?}", peer, statement);
-		self.consensus.lock().on_statement(io, self, peer, statement, hash);
-	}
-
-	fn on_bft_message(&self, io: &mut SyncIo, peer: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
+	fn on_bft_message(&self, io: &mut SyncIo, peer: PeerId, message: message::LocalizedBftMessage<B>, hash: B::Hash) {
 		trace!(target: "sync", "BFT message from {}: {:?}", peer, message);
 		self.consensus.lock().on_bft_message(io, self, peer, message, hash);
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn send_bft_message(&self, io: &mut SyncIo, message: message::LocalizedBftMessage) {
+	pub fn send_bft_message(&self, io: &mut SyncIo, message: message::LocalizedBftMessage<B>) {
 		self.consensus.lock().send_bft_message(io, self, message)
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
+	pub fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B> {
 		self.consensus.lock().bft_messages(parent_hash)
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn statements(&self) -> StatementStream {
-		self.consensus.lock().statements()
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn fetch_candidate(&self, io: &mut SyncIo, hash: &Hash) -> oneshot::Receiver<Vec<u8>> {
-		self.consensus.lock().fetch_candidate(io, self, hash)
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn send_statement(&self, io: &mut SyncIo, statement: message::Statement) {
-		self.consensus.lock().send_statement(io, self, statement)
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn set_local_candidate(&self, candidate: Option<(Hash, Vec<u8>)>) {
-		self.consensus.lock().set_local_candidate(candidate)
 	}
 
 	/// Perform time based maintenance.
@@ -367,7 +334,7 @@ impl Protocol {
 		}
 	}
 
-	pub fn peer_info(&self, peer: PeerId) -> Option<PeerInfo> {
+	pub fn peer_info(&self, peer: PeerId) -> Option<PeerInfo<B>> {
 		self.peers.read().get(&peer).map(|p| {
 			PeerInfo {
 				roles: p.roles,
@@ -379,7 +346,7 @@ impl Protocol {
 	}
 
 	/// Called by peer to report status
-	fn on_status_message(&self, io: &mut SyncIo, peer_id: PeerId, status: message::Status) {
+	fn on_status_message(&self, io: &mut SyncIo, peer_id: PeerId, status: message::Status<B>) {
 		trace!(target: "sync", "New peer {} {:?}", peer_id, status);
 		if io.is_expired() {
 			trace!(target: "sync", "Status packet from expired session {}:{}", peer_id, io.peer_info(peer_id));
@@ -426,7 +393,7 @@ impl Protocol {
 	}
 
 	/// Called when peer sends us new transactions
-	fn on_transactions(&self, _io: &mut SyncIo, peer_id: PeerId, transactions: message::Transactions) {
+	fn on_transactions(&self, _io: &mut SyncIo, peer_id: PeerId, transactions: message::Transactions<B::Extrinsic>) {
 		// Accept transactions only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
 			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
@@ -475,7 +442,7 @@ impl Protocol {
 					}
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), peer_id);
-				self.send_message(io, *peer_id, Message::Transactions(to_send));
+				self.send_message(io, *peer_id, GenericMessage::Transactions(to_send));
 			}
 		}
 		self.transaction_pool.on_broadcasted(propagated_to);
@@ -484,7 +451,7 @@ impl Protocol {
 	/// Send Status message
 	fn send_status(&self, io: &mut SyncIo, peer_id: PeerId) {
 		if let Ok(info) = self.chain.info() {
-			let status = message::Status {
+			let status = message::generic::Status {
 				version: PROTOCOL_VERSION,
 				genesis_hash: info.chain.genesis_hash,
 				roles: self.config.roles.into(),
@@ -494,7 +461,7 @@ impl Protocol {
 				validator_id: None,
 				parachain_id: None,
 			};
-			self.send_message(io, peer_id, Message::Status(status))
+			self.send_message(io, peer_id, GenericMessage::Status(status))
 		}
 	}
 
@@ -508,9 +475,9 @@ impl Protocol {
 		self.consensus.lock().restart();
 	}
 
-	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce) {
+	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce<B::Header>) {
 		let header = announce.header;
-		let hash: HeaderHash = header.blake2_256().into();
+		let hash = header.hash();
 		{
 			let mut peers = self.peers.write();
 			if let Some(ref mut peer) = peers.get_mut(&peer_id) {
@@ -520,7 +487,7 @@ impl Protocol {
 		self.sync.write().on_block_announce(io, self, peer_id, hash, &header);
 	}
 
-	pub fn on_block_imported(&self, io: &mut SyncIo, hash: HeaderHash, header: &Header) {
+	pub fn on_block_imported(&self, io: &mut SyncIo, hash: B::Hash, header: &B::Header) {
 		self.sync.write().update_chain_info(&header);
 		// send out block announcements
 		let mut peers = self.peers.write();
@@ -528,7 +495,7 @@ impl Protocol {
 		for (peer_id, ref mut peer) in peers.iter_mut() {
 			if peer.known_blocks.insert(hash.clone()) {
 				trace!(target: "sync", "Announcing block {:?} to {}", hash, peer_id);
-				self.send_message(io, *peer_id, Message::BlockAnnounce(message::BlockAnnounce {
+				self.send_message(io, *peer_id, GenericMessage::BlockAnnounce(message::BlockAnnounce {
 					header: header.clone()
 				}));
 			}
@@ -537,7 +504,7 @@ impl Protocol {
 		self.consensus.lock().collect_garbage(Some(&header));
 	}
 
-	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest) {
+	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest<B::Hash>) {
 		trace!(target: "sync", "Remote request {} from {} ({} at {})", request.id, peer_id, request.method, request.block);
 		let (value, proof) = match self.chain.execution_proof(&request.block, &request.method, &request.data) {
 			Ok((value, proof)) => (value, proof),
@@ -548,7 +515,7 @@ impl Protocol {
 			},
 		};
 
-		self.send_message(io, peer_id, message::Message::RemoteCallResponse(message::RemoteCallResponse {
+		self.send_message(io, peer_id, GenericMessage::RemoteCallResponse(message::RemoteCallResponse {
 			id: request.id, value, proof,
 		}));
 	}
@@ -558,7 +525,7 @@ impl Protocol {
 		self.on_demand.as_ref().map(|s| s.on_remote_response(io, peer_id, response));
 	}
 
-	pub fn chain(&self) -> &Client {
+	pub fn chain(&self) -> &Client<B> {
 		&*self.chain
 	}
 }
