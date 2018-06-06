@@ -21,14 +21,6 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
-#[cfg(feature = "std")]
-#[allow(unused_imports)] // can be removed when fixed: https://github.com/rust-lang/rust/issues/43497
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(feature = "std")]
-pub use serde_derive::*;
-
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;

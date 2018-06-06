@@ -27,6 +27,10 @@ extern crate substrate_runtime_support as runtime_support;
 #[cfg(any(feature = "std", test))]
 extern crate substrate_runtime_io as runtime_io;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
 #[cfg(test)]
 extern crate substrate_primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
@@ -46,6 +50,8 @@ pub trait Trait: HasPublicAux + system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait>;
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set(aux, now: T::Value) -> Result = 0;
 	}
@@ -111,7 +117,7 @@ mod tests {
 	use runtime_support::storage::StorageValue;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildExternalities;
-	use runtime_primitives::traits::{HasPublicAux};
+	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 
 	pub struct Test;
@@ -122,7 +128,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

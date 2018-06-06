@@ -18,7 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")] extern crate serde;
+#[cfg(feature = "std")]
+extern crate serde;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
 
 extern crate integer_sqrt;
 extern crate substrate_codec as codec;
@@ -26,7 +31,7 @@ extern crate substrate_primitives;
 #[cfg(any(feature = "std", test))] extern crate substrate_keyring as keyring;
 #[macro_use] extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
-#[macro_use] extern crate substrate_runtime_support as runtime_support;
+#[macro_use] extern crate substrate_runtime_support;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_democracy as democracy;
@@ -36,8 +41,8 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, As};
-use runtime_support::{StorageValue, StorageMap};
-use runtime_support::dispatch::Result;
+use substrate_runtime_support::{StorageValue, StorageMap};
+use substrate_runtime_support::dispatch::Result;
 
 pub mod voting;
 
@@ -101,6 +106,8 @@ pub trait Trait: democracy::Trait {}
 
 decl_module! {
 	pub struct Module<T: Trait>;
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) -> Result = 0;
 		fn reap_inactive_voter(aux, signed_index: u32, who: T::AccountId, who_index: u32, assumed_vote_index: VoteIndex) -> Result = 1;
@@ -108,6 +115,8 @@ decl_module! {
 		fn submit_candidacy(aux, slot: u32) -> Result = 3;
 		fn present_winner(aux, candidate: T::AccountId, total: T::Balance, index: VoteIndex) -> Result = 4;
 	}
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_desired_seats(count: u32) -> Result = 0;
 		fn remove_member(who: T::AccountId) -> Result = 1;
@@ -597,10 +606,11 @@ mod tests {
 	pub use runtime_io::with_externalities;
 	pub use substrate_primitives::H256;
 	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity};
+	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
 	impl_outer_dispatch! {
+		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
 		pub enum Proposal {
 			Staking = 0,
 			Democracy = 1,
@@ -619,7 +629,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

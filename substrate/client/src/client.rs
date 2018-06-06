@@ -19,11 +19,11 @@
 use std::sync::Arc;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
-use primitives::{self, block, AuthorityId};
-use primitives::block::{Id as BlockId, HeaderHash};
+use primitives::AuthorityId;
+use runtime_primitives::{bft::Justification, generic::BlockId};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
 use primitives::storage::{StorageKey, StorageData};
-use runtime_support::Hashable;
-use codec::Slicable;
+use codec::{Slicable};
 use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
 
 use backend::{self, BlockImportOperation};
@@ -32,45 +32,45 @@ use call_executor::{CallExecutor, LocalCallExecutor};
 use {error, in_mem, block_builder, runtime_io, bft};
 
 /// Type that implements `futures::Stream` of block import events.
-pub type BlockchainEventStream = mpsc::UnboundedReceiver<BlockImportNotification>;
+pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 
 /// Polkadot Client genesis block builder.
-pub trait GenesisBuilder {
+pub trait GenesisBuilder<B: BlockT> {
 	/// Build genesis block.
-	fn build(self) -> (block::Header, Vec<(Vec<u8>, Vec<u8>)>);
+	fn build(self) -> (B::Header, Vec<(Vec<u8>, Vec<u8>)>);
 }
 
 /// Polkadot Client
-pub struct Client<B, E> {
+pub struct Client<B, E, Block> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification>>>,
+	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	import_lock: Mutex<()>,
-	importing_block: RwLock<Option<HeaderHash>>, // holds the block hash currently being imported. TODO: replace this with block queue
+	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 }
 
 /// A source of blockchain evenets.
-pub trait BlockchainEvents {
+pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> BlockchainEventStream;
+	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 }
 
 /// Chain head information.
-pub trait ChainHead {
+pub trait ChainHead<Block: BlockT> {
 	/// Get best block header.
-	fn best_block_header(&self) -> Result<block::Header, error::Error>;
+	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, error::Error>;
 }
 
 /// Client info
 // TODO: split queue info from chain info and amalgamate into single struct.
 #[derive(Debug)]
-pub struct ClientInfo {
+pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
-	pub chain: ChainInfo,
+	pub chain: ChainInfo<Block>,
 	/// Best block number in the queue.
-	pub best_queued_number: Option<block::Number>,
+	pub best_queued_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>,
 	/// Best queued block hash.
-	pub best_queued_hash: Option<block::HeaderHash>,
+	pub best_queued_hash: Option<Block::Hash>,
 }
 
 /// Block import result.
@@ -120,49 +120,51 @@ pub enum BlockOrigin {
 
 /// Summary of an imported block
 #[derive(Clone, Debug)]
-pub struct BlockImportNotification {
+pub struct BlockImportNotification<Block: BlockT> {
 	/// Imported block header hash.
-	pub hash: block::HeaderHash,
+	pub hash: Block::Hash,
 	/// Imported block origin.
 	pub origin: BlockOrigin,
 	/// Imported block header.
-	pub header: block::Header,
+	pub header: Block::Header,
 	/// Is this the new best block.
 	pub is_new_best: bool,
 }
 
 /// A header paired with a justification which has already been checked.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct JustifiedHeader {
-	header: block::Header,
-	justification: bft::Justification,
+pub struct JustifiedHeader<Block: BlockT> {
+	header: <Block as BlockT>::Header,
+	justification: ::bft::Justification<Block::Hash>,
 }
 
-impl JustifiedHeader {
+impl<Block: BlockT> JustifiedHeader<Block> {
 	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self) -> (block::Header, bft::Justification) {
+	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>) {
 		(self.header, self.justification)
 	}
 }
 
 /// Create an instance of in-memory client.
-pub fn new_in_mem<E, F>(
+pub fn new_in_mem<E, F, Block>(
 	executor: E,
 	genesis_builder: F
-) -> error::Result<Client<in_mem::Backend, LocalCallExecutor<in_mem::Backend, E>>>
+) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
 	where
 		E: CodeExecutor,
-		F: GenesisBuilder,
+		F: GenesisBuilder<Block>,
+		Block: BlockT,
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, executor, genesis_builder)
 }
 
-impl<B, E> Client<B, E> where
-	B: backend::Backend,
-	E: CallExecutor,
-	error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
+impl<B, E, Block: BlockT> Client<B, E, Block> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+	error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	/// Creates new Polkadot Client with given blockchain and code executor.
 	pub fn new<F>(
@@ -171,12 +173,12 @@ impl<B, E> Client<B, E> where
 		genesis_builder: F,
 	) -> error::Result<Self>
 		where
-			F: GenesisBuilder
+			F: GenesisBuilder<Block>
 	{
-		if backend.blockchain().header(BlockId::Number(0))?.is_none() {
+		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			trace!("Empty database, writing genesis block");
 			let (genesis_header, genesis_store) = genesis_builder.build();
-			let mut op = backend.begin_operation(BlockId::Hash(block::HeaderHash::default()))?;
+			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
 			op.reset_storage(genesis_store.into_iter())?;
 			op.set_block_data(genesis_header, Some(vec![]), None, true)?;
 			backend.commit_operation(op)?;
@@ -191,7 +193,7 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Get a reference to the state at a given block.
-	pub fn state_at(&self, block: &BlockId) -> error::Result<B::State> {
+	pub fn state_at(&self, block: &BlockId<Block>) -> error::Result<B::State> {
 		self.backend.state_at(*block)
 	}
 
@@ -201,7 +203,7 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
-	pub fn storage(&self, id: &BlockId, key: &StorageKey) -> error::Result<StorageData> {
+	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<StorageData> {
 		Ok(StorageData(self.state_at(id)?
 			.storage(&key.0)?
 			.ok_or_else(|| error::ErrorKind::NoValueForKey(key.0.clone()))?
@@ -209,12 +211,12 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Get the code at a given block.
-	pub fn code_at(&self, id: &BlockId) -> error::Result<Vec<u8>> {
+	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
 		self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0)
 	}
 
 	/// Get the set of authorities at a given block.
-	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
+	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
 		self.executor.call(id, "authorities",&[])
 			.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
 				.ok_or(error::ErrorKind::AuthLenInvalid.into()))
@@ -229,7 +231,7 @@ impl<B, E> Client<B, E> where
 	/// AND returning execution proof.
 	///
 	/// No changes are made.
-	pub fn execution_proof(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
+	pub fn execution_proof(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
 		use call_executor::state_to_execution_proof;
 
 		let result = self.executor.call(id, method, call_data);
@@ -248,7 +250,7 @@ impl<B, E> Client<B, E> where
 	/// Set up the native execution environment to call into a native runtime code.
 	pub fn using_environment_at<F: FnOnce() -> T, T>(
 		&self,
-		id: &BlockId,
+		id: &BlockId<Block>,
 		overlay: &mut OverlayedChanges,
 		f: F
 	) -> error::Result<T> {
@@ -256,24 +258,29 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E>> where E: Clone {
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(&self, parent: &BlockId) -> error::Result<block_builder::BlockBuilder<B, E>> where E: Clone {
+	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
 	/// Check a header's justification.
 	pub fn check_justification(
 		&self,
-		header: block::Header,
-		justification: bft::UncheckedJustification,
-	) -> error::Result<JustifiedHeader> {
-		let authorities = self.authorities_at(&BlockId::Hash(header.parent_hash))?;
-		let just = bft::check_justification(&authorities[..], header.parent_hash, justification)
-			.map_err(|_| error::ErrorKind::BadJustification(BlockId::Hash(header.blake2_256().into())))?;
+		header: <Block as BlockT>::Header,
+		justification: ::bft::UncheckedJustification<Block::Hash>,
+	) -> error::Result<JustifiedHeader<Block>> {
+		let parent_hash = header.parent_hash().clone();
+		let authorities = self.authorities_at(&BlockId::Hash(parent_hash))?;
+		let just = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
+			.map_err(|_|
+				error::ErrorKind::BadJustification(
+					format!("{}", header.hash())
+				)
+			)?;
 		Ok(JustifiedHeader {
 			header,
 			justification: just,
@@ -284,16 +291,16 @@ impl<B, E> Client<B, E> where
 	pub fn import_block(
 		&self,
 		origin: BlockOrigin,
-		header: JustifiedHeader,
-		body: Option<block::Body>,
+		header: JustifiedHeader<Block>,
+		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 	) -> error::Result<ImportResult> {
 		let (header, justification) = header.into_inner();
-		match self.backend.blockchain().status(BlockId::Hash(header.parent_hash))? {
+		let parent_hash = header.parent_hash().clone();
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
 			blockchain::BlockStatus::InChain => {},
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
-		let hash: block::HeaderHash = header.blake2_256().into();
-
+		let hash = header.hash();
 		let _import_lock = self.import_lock.lock();
 		*self.importing_block.write() = Some(hash);
 		let result = self.execute_and_import_block(origin, hash, header, justification, body);
@@ -304,17 +311,18 @@ impl<B, E> Client<B, E> where
 	fn execute_and_import_block(
 		&self,
 		origin: BlockOrigin,
-		hash: HeaderHash,
-		header: block::Header,
-		justification: bft::Justification,
-		body: Option<block::Body>,
+		hash: Block::Hash,
+		header: Block::Header,
+		justification: bft::Justification<Block::Hash>,
+		body: Option<Vec<Block::Extrinsic>>,
 	) -> error::Result<ImportResult> {
+		let parent_hash = header.parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
 			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
 			blockchain::BlockStatus::Unknown => {},
 		}
 
-		let mut transaction = self.backend.begin_operation(BlockId::Hash(header.parent_hash))?;
+		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
 		let storage_update = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
@@ -322,7 +330,7 @@ impl<B, E> Client<B, E> where
 					transaction_state,
 					&mut overlay,
 					"execute_block",
-					&block::Block { header: header.clone(), transactions: body.clone().unwrap_or_default().clone() }.encode(),
+					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode()
 				)?;
 
 				Some(storage_update)
@@ -330,15 +338,15 @@ impl<B, E> Client<B, E> where
 			None => None,
 		};
 
-		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
-		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number, is_new_best, origin);
+		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
+		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
 		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}
 		self.backend.commit_operation(transaction)?;
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
-			let notification = BlockImportNotification {
+			let notification = BlockImportNotification::<Block> {
 				hash: hash,
 				origin: origin,
 				header: header,
@@ -351,7 +359,7 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Get blockchain info.
-	pub fn info(&self) -> error::Result<ClientInfo> {
+	pub fn info(&self) -> error::Result<ClientInfo<Block>> {
 		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
 		Ok(ClientInfo {
 			chain: info,
@@ -361,7 +369,7 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Get block status.
-	pub fn block_status(&self, id: &BlockId) -> error::Result<BlockStatus> {
+	pub fn block_status(&self, id: &BlockId<Block>) -> error::Result<BlockStatus> {
 		// TODO: more efficient implementation
 		if let BlockId::Hash(ref h) = id {
 			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
@@ -375,12 +383,12 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Get block hash by number.
-	pub fn block_hash(&self, block_number: block::Number) -> error::Result<Option<block::HeaderHash>> {
+	pub fn block_hash(&self, block_number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(block_number)
 	}
 
 	/// Convert an arbitrary block ID into a block hash.
-	pub fn block_hash_from_id(&self, id: &BlockId) -> error::Result<Option<block::HeaderHash>> {
+	pub fn block_hash_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<Block::Hash>> {
 		match *id {
 			BlockId::Hash(h) => Ok(Some(h)),
 			BlockId::Number(n) => self.block_hash(n),
@@ -388,83 +396,91 @@ impl<B, E> Client<B, E> where
 	}
 
 	/// Convert an arbitrary block ID into a block hash.
-	pub fn block_number_from_id(&self, id: &BlockId) -> error::Result<Option<block::Number>> {
+	pub fn block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
 		match *id {
-			BlockId::Hash(_) => Ok(self.header(id)?.map(|h| h.number)),
+			BlockId::Hash(_) => Ok(self.header(id)?.map(|h| h.number().clone())),
 			BlockId::Number(n) => Ok(Some(n)),
 		}
 	}
 
 	/// Get block header by id.
-	pub fn header(&self, id: &BlockId) -> error::Result<Option<block::Header>> {
+	pub fn header(&self, id: &BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
 		self.backend.blockchain().header(*id)
 	}
 
 	/// Get block body by id.
-	pub fn body(&self, id: &BlockId) -> error::Result<Option<block::Body>> {
+	pub fn body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.backend.blockchain().body(*id)
 	}
 
 	/// Get block justification set by id.
-	pub fn justification(&self, id: &BlockId) -> error::Result<Option<primitives::bft::Justification>> {
+	pub fn justification(&self, id: &BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
 		self.backend.blockchain().justification(*id)
 	}
 
 	/// Get best block header.
-	pub fn best_block_header(&self) -> error::Result<block::Header> {
+	pub fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
 		Ok(self.header(&BlockId::Hash(info.best_hash))?.expect("Best block header must always exist"))
 	}
 }
 
-impl<B, E> bft::BlockImport for Client<B, E>
+impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend,
-		E: CallExecutor,
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
-	fn import_block(&self, block: block::Block, justification: bft::Justification) {
+	fn import_block(&self, block: Block, justification: ::bft::Justification<Block::Hash>) {
+		let (header, extrinsics) = block.deconstruct();
 		let justified_header = JustifiedHeader {
-			header: block.header,
+			header: header,
 			justification,
 		};
 
-		let _ = self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(block.transactions));
+		let _ = self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics));
 	}
 }
 
-impl<B, E> bft::Authorities for Client<B, E>
+impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend,
-		E: CallExecutor,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
+		error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
-	fn authorities(&self, at: &BlockId) -> Result<Vec<AuthorityId>, bft::Error> {
-		self.authorities_at(at).map_err(|_| bft::ErrorKind::StateUnavailable(*at).into())
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
+		self.authorities_at(at).map_err(|_| {
+			let descriptor = format!("{:?}", at);
+			bft::ErrorKind::StateUnavailable(descriptor).into()
+		})
 	}
 }
 
-impl<B, E> BlockchainEvents for Client<B, E>
+impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend,
-		E: CallExecutor,
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> BlockchainEventStream {
+	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}
 }
 
-impl<B, E> ChainHead for Client<B, E>
+impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend,
-		E: CallExecutor,
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
-	fn best_block_header(&self) -> error::Result<block::Header> {
+	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
 	}
 }
@@ -474,20 +490,18 @@ mod tests {
 	use super::*;
 	use codec::Slicable;
 	use keyring::Keyring;
-	use primitives::block::Extrinsic as PrimitiveExtrinsic;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::runtime as test_runtime;
-	use test_client::runtime::{UncheckedTransaction, Transaction};
+	use test_client::runtime::{Transfer, Extrinsic};
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = test_client::new();
 		let genesis_hash = client.block_hash(0).unwrap().unwrap();
 
-		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), genesis_hash);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public())).unwrap(), 1000);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public())).unwrap(), 0);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 1000);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 0);
 	}
 
 	#[test]
@@ -511,17 +525,11 @@ mod tests {
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
-		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), client.block_hash(1).unwrap().unwrap());
 	}
 
-	trait Signable {
-		fn signed(self) -> PrimitiveExtrinsic;
-	}
-	impl Signable for Transaction {
-		fn signed(self) -> PrimitiveExtrinsic {
-			let signature = Keyring::from_raw_public(self.from.clone()).unwrap().sign(&self.encode());
-			PrimitiveExtrinsic::decode(&mut UncheckedTransaction { signature, tx: self }.encode().as_ref()).unwrap()
-		}
+	fn sign_tx(tx: Transfer) -> Extrinsic {
+		let signature = Keyring::from_raw_public(tx.from.0.clone()).unwrap().sign(&tx.encode()).into();
+		Extrinsic { transfer: tx, signature }
 	}
 
 	#[test]
@@ -530,18 +538,18 @@ mod tests {
 
 		let mut builder = client.new_block().unwrap();
 
-		builder.push(Transaction {
-			from: Keyring::Alice.to_raw_public(),
-			to: Keyring::Ferdie.to_raw_public(),
+		builder.push(sign_tx(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
 			amount: 42,
-			nonce: 0
-		}.signed()).unwrap();
+			nonce: 0,
+		})).unwrap();
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public())).unwrap(), 958);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public())).unwrap(), 42);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 958);
+		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 42);
 	}
 }

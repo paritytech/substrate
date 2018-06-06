@@ -29,9 +29,9 @@ error_chain! {
 		}
 
 		/// Unknown block.
-		UnknownBlock(h: ::primitives::block::Id) {
+		UnknownBlock(h: String) {
 			description("unknown block"),
-			display("UnknownBlock: {}", h),
+			display("UnknownBlock: {}", &*h),
 		}
 
 		/// Execution error.
@@ -77,9 +77,9 @@ error_chain! {
 		}
 
 		/// Bad justification for header.
-		BadJustification(h: ::primitives::block::Id) {
+		BadJustification(h: String) {
 			description("bad justification for header"),
-			display("bad justification for header: {}", h),
+			display("bad justification for header: {}", &*h),
 		}
 
 		/// Not available on light client.
@@ -110,8 +110,8 @@ impl From<Box<state_machine::Error>> for Error {
 }
 
 impl From<state_machine::backend::Void> for Error {
-	fn from(_e: state_machine::backend::Void) -> Self {
-		unreachable!()
+	fn from(e: state_machine::backend::Void) -> Self {
+		match e {}
 	}
 }
 

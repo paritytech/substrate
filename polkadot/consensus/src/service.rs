@@ -29,10 +29,9 @@ use ed25519;
 use futures::prelude::*;
 use futures::{future, Canceled};
 use polkadot_api::LocalPolkadotApi;
-use polkadot_primitives::AccountId;
+use polkadot_primitives::{BlockId, Block, Header, Hash, AccountId};
 use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
-use primitives::{Hash, AuthorityId};
-use primitives::block::{Id as BlockId, HeaderHash, Header};
+use primitives::AuthorityId;
 use runtime_support::Hashable;
 use substrate_network as net;
 use tokio_core::reactor;
@@ -45,19 +44,19 @@ const TIMER_DELAY_MS: u64 = 5000;
 const TIMER_INTERVAL_MS: u64 = 500;
 
 struct BftSink<E> {
-	network: Arc<net::ConsensusService>,
-	parent_hash: HeaderHash,
+	network: Arc<net::ConsensusService<Block>>,
+	parent_hash: Hash,
 	_e: ::std::marker::PhantomData<E>,
 }
 
 struct Messages {
-	network_stream: net::BftMessageStream,
+	network_stream: net::BftMessageStream<Block>,
 	local_id: AuthorityId,
 	authorities: Vec<AuthorityId>,
 }
 
 impl Stream for Messages {
-	type Item = bft::Communication;
+	type Item = bft::Communication<Block>;
 	type Error = bft::Error;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -81,10 +80,10 @@ impl Stream for Messages {
 	}
 }
 
-fn process_message(msg: net::LocalizedBftMessage, local_id: &AuthorityId, authorities: &[AuthorityId]) -> Result<Option<bft::Communication>, bft::Error> {
+fn process_message(msg: net::LocalizedBftMessage<Block>, local_id: &AuthorityId, authorities: &[AuthorityId]) -> Result<Option<bft::Communication<Block>>, bft::Error> {
 	Ok(Some(match msg.message {
-		net::BftMessage::Consensus(c) => bft::generic::Communication::Consensus(match c {
-			net::SignedConsensusMessage::Propose(proposal) => bft::generic::LocalizedMessage::Propose({
+		net::generic_message::BftMessage::Consensus(c) => bft::generic::Communication::Consensus(match c {
+			net::generic_message::SignedConsensusMessage::Propose(proposal) => bft::generic::LocalizedMessage::Propose({
 				if &proposal.sender == local_id { return Ok(None) }
 				let proposal = bft::generic::LocalizedProposal {
 					round_number: proposal.round_number as usize,
@@ -105,7 +104,7 @@ fn process_message(msg: net::LocalizedBftMessage, local_id: &AuthorityId, author
 				trace!(target: "bft", "importing proposal message for round {} from {}", proposal.round_number, Hash::from(proposal.sender));
 				proposal
 			}),
-			net::SignedConsensusMessage::Vote(vote) => bft::generic::LocalizedMessage::Vote({
+			net::generic_message::SignedConsensusMessage::Vote(vote) => bft::generic::LocalizedMessage::Vote({
 				if &vote.sender == local_id { return Ok(None) }
 				let vote = bft::generic::LocalizedVote {
 					sender: vote.sender,
@@ -114,21 +113,21 @@ fn process_message(msg: net::LocalizedBftMessage, local_id: &AuthorityId, author
 						signer: ed25519::Public(vote.sender),
 					},
 					vote: match vote.vote {
-						net::ConsensusVote::Prepare(r, h) => bft::generic::Vote::Prepare(r as usize, h),
-						net::ConsensusVote::Commit(r, h) => bft::generic::Vote::Commit(r as usize, h),
-						net::ConsensusVote::AdvanceRound(r) => bft::generic::Vote::AdvanceRound(r as usize),
+						net::generic_message::ConsensusVote::Prepare(r, h) => bft::generic::Vote::Prepare(r as usize, h),
+						net::generic_message::ConsensusVote::Commit(r, h) => bft::generic::Vote::Commit(r as usize, h),
+						net::generic_message::ConsensusVote::AdvanceRound(r) => bft::generic::Vote::AdvanceRound(r as usize),
 					}
 				};
-				bft::check_vote(authorities, &msg.parent_hash, &vote)?;
+				bft::check_vote::<Block>(authorities, &msg.parent_hash, &vote)?;
 
 				trace!(target: "bft", "importing vote {:?} from {}", vote.vote, Hash::from(vote.sender));
 				vote
 			}),
 		}),
-		net::BftMessage::Auxiliary(a) => {
-			let justification = bft::UncheckedJustification::from(a);
+		net::generic_message::BftMessage::Auxiliary(a) => {
+			let justification = bft::UncheckedJustification::<Hash>::from(a);
 			// TODO: get proper error
-			let justification: Result<_, bft::Error> = bft::check_prepare_justification(authorities, msg.parent_hash, justification)
+			let justification: Result<_, bft::Error> = bft::check_prepare_justification::<Block>(authorities, msg.parent_hash, justification)
 				.map_err(|_| bft::ErrorKind::InvalidJustification.into());
 			bft::generic::Communication::Auxiliary(justification?)
 		},
@@ -136,15 +135,15 @@ fn process_message(msg: net::LocalizedBftMessage, local_id: &AuthorityId, author
 }
 
 impl<E> Sink for BftSink<E> {
-	type SinkItem = bft::Communication;
+	type SinkItem = bft::Communication<Block>;
 	// TODO: replace this with the ! type when that's stabilized
 	type SinkError = E;
 
-	fn start_send(&mut self, message: bft::Communication) -> ::futures::StartSend<bft::Communication, E> {
-		let network_message = net::LocalizedBftMessage {
+	fn start_send(&mut self, message: bft::Communication<Block>) -> ::futures::StartSend<bft::Communication<Block>, E> {
+		let network_message = net::generic_message::LocalizedBftMessage {
 			message: match message {
-				bft::generic::Communication::Consensus(c) => net::BftMessage::Consensus(match c {
-					bft::generic::LocalizedMessage::Propose(proposal) => net::SignedConsensusMessage::Propose(net::SignedConsensusProposal {
+				bft::generic::Communication::Consensus(c) => net::generic_message::BftMessage::Consensus(match c {
+					bft::generic::LocalizedMessage::Propose(proposal) => net::generic_message::SignedConsensusMessage::Propose(net::generic_message::SignedConsensusProposal {
 						round_number: proposal.round_number as u32,
 						proposal: proposal.proposal,
 						digest: proposal.digest,
@@ -152,17 +151,17 @@ impl<E> Sink for BftSink<E> {
 						digest_signature: proposal.digest_signature.signature,
 						full_signature: proposal.full_signature.signature,
 					}),
-					bft::generic::LocalizedMessage::Vote(vote) => net::SignedConsensusMessage::Vote(net::SignedConsensusVote {
+					bft::generic::LocalizedMessage::Vote(vote) => net::generic_message::SignedConsensusMessage::Vote(net::generic_message::SignedConsensusVote {
 						sender: vote.sender,
 						signature: vote.signature.signature,
 						vote: match vote.vote {
-							bft::generic::Vote::Prepare(r, h) => net::ConsensusVote::Prepare(r as u32, h),
-							bft::generic::Vote::Commit(r, h) => net::ConsensusVote::Commit(r as u32, h),
-							bft::generic::Vote::AdvanceRound(r) => net::ConsensusVote::AdvanceRound(r as u32),
+							bft::generic::Vote::Prepare(r, h) => net::generic_message::ConsensusVote::Prepare(r as u32, h),
+							bft::generic::Vote::Commit(r, h) => net::generic_message::ConsensusVote::Commit(r as u32, h),
+							bft::generic::Vote::AdvanceRound(r) => net::generic_message::ConsensusVote::AdvanceRound(r as u32),
 						}
 					}),
 				}),
-				bft::generic::Communication::Auxiliary(justification) => net::BftMessage::Auxiliary(justification.uncheck().into()),
+				bft::generic::Communication::Auxiliary(justification) => net::generic_message::BftMessage::Auxiliary(justification.uncheck().into()),
 			},
 			parent_hash: self.parent_hash,
 		};
@@ -175,7 +174,7 @@ impl<E> Sink for BftSink<E> {
 	}
 }
 
-struct Network(Arc<net::ConsensusService>);
+struct Network(Arc<net::ConsensusService<Block>>);
 
 impl super::Network for Network {
 	type TableRouter = Router;
@@ -189,20 +188,20 @@ impl super::Network for Network {
 fn start_bft<F, C>(
 	header: &Header,
 	handle: reactor::Handle,
-	client: &bft::Authorities,
-	network: Arc<net::ConsensusService>,
-	bft_service: &BftService<F, C>,
+	client: &bft::Authorities<Block>,
+	network: Arc<net::ConsensusService<Block>>,
+	bft_service: &BftService<Block, F, C>,
 ) where
-	F: bft::ProposerFactory + 'static,
-	C: bft::BlockImport + bft::Authorities + 'static,
-	<F as bft::ProposerFactory>::Error: ::std::fmt::Debug,
-	<F::Proposer as bft::Proposer>::Error: ::std::fmt::Display + Into<error::Error>,
+	F: bft::ProposerFactory<Block> + 'static,
+	C: bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
+	<F as bft::ProposerFactory<Block>>::Error: ::std::fmt::Debug,
+	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
 {
-	let parent_hash = header.blake2_256().into();
+	let parent_hash = header.hash();
 	if bft_service.live_agreement().map_or(false, |h| h == parent_hash) {
 		return;
 	}
-	let authorities = match client.authorities(&BlockId::Hash(parent_hash)) {
+	let authorities = match client.authorities(&BlockId::hash(parent_hash)) {
 		Ok(authorities) => authorities,
 		Err(e) => {
 			debug!("Error reading authorities: {:?}", e);
@@ -235,14 +234,14 @@ impl Service {
 	pub fn new<A, C>(
 		client: Arc<C>,
 		api: Arc<A>,
-		network: Arc<net::ConsensusService>,
+		network: Arc<net::ConsensusService<Block>>,
 		transaction_pool: Arc<TransactionPool>,
 		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
 	) -> Service
 		where
 			A: LocalPolkadotApi + Send + Sync + 'static,
-			C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + Send + Sync + 'static,
+			C: BlockchainEvents<Block> + ChainHead<Block> + bft::BlockImport<Block> + bft::Authorities<Block> + Send + Sync + 'static,
 	{
 		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {
@@ -346,36 +345,25 @@ impl ::collation::Collators for NoCollators {
 	fn note_bad_collator(&self, _collator: AccountId) { }
 }
 
-type FetchCandidateAdapter = future::Map<net::FetchFuture, fn(Vec<u8>) -> BlockData>;
-
 #[derive(Clone)]
 struct Router {
-	network: Arc<net::ConsensusService>,
-}
-
-impl Router {
-	fn fetch_candidate_adapter(data: Vec<u8>) -> BlockData {
-		BlockData(data)
-	}
+	network: Arc<net::ConsensusService<Block>>,
 }
 
 impl TableRouter for Router {
 	type Error = Canceled;
-	type FetchCandidate =  FetchCandidateAdapter;
+	type FetchCandidate =  future::Empty<BlockData, Self::Error>;
 	type FetchExtrinsic = future::FutureResult<Extrinsic, Self::Error>;
 
-	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, _extrinsic: Extrinsic) {
-		let data = block_data.0;
-		self.network.set_local_candidate(Some((hash, data)))
+	fn local_candidate_data(&self, _hash: Hash, _block_data: BlockData, _extrinsic: Extrinsic) {
+		// TODO
 	}
 
-	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> Self::FetchCandidate {
-		let hash = candidate.hash();
-		self.network.fetch_candidate(&hash).map(Self::fetch_candidate_adapter)
+	fn fetch_block_data(&self, _candidate: &CandidateReceipt) -> Self::FetchCandidate {
+		future::empty()
 	}
 
 	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
 		future::ok(Extrinsic)
 	}
 }
-

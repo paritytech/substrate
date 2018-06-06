@@ -19,6 +19,7 @@
 
 extern crate futures;
 extern crate ed25519;
+extern crate exit_future;
 extern crate parking_lot;
 extern crate tokio_timer;
 extern crate polkadot_primitives;
@@ -28,17 +29,16 @@ extern crate polkadot_api;
 extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_keystore as keystore;
-extern crate substrate_client as client;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
-extern crate substrate_client_db as client_db;
 extern crate substrate_executor;
 extern crate substrate_state_machine as state_machine;
 
-extern crate exit_future;
 extern crate tokio_core;
+extern crate substrate_client as client;
+extern crate substrate_client_db as client_db;
 
 #[macro_use]
 extern crate error_chain;
@@ -56,13 +56,13 @@ use std::thread;
 use futures::prelude::*;
 use tokio_core::reactor::Core;
 use codec::Slicable;
-use primitives::block::{Id as BlockId, ExtrinsicHash, HeaderHash, Header};
-use primitives::{AuthorityId};
+use primitives::AuthorityId;
 use transaction_pool::TransactionPool;
 use substrate_executor::NativeExecutor;
 use polkadot_executor::Executor as LocalDispatch;
 use keystore::Store as Keystore;
 use polkadot_api::PolkadotApi;
+use polkadot_primitives::{Block, BlockId, Hash, Header};
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
 use client::backend::Backend;
@@ -78,8 +78,8 @@ type CodeExecutor = NativeExecutor<LocalDispatch>;
 /// Polkadot service.
 pub struct Service<B, E> {
 	thread: Option<thread::JoinHandle<()>>,
-	client: Arc<Client<B, E>>,
-	network: Arc<network::Service>,
+	client: Arc<Client<B, E, Block>>,
+	network: Arc<network::Service<Block>>,
 	transaction_pool: Arc<TransactionPool>,
 	signal: Option<Signal>,
 	_consensus: Option<consensus::Service>,
@@ -87,18 +87,18 @@ pub struct Service<B, E> {
 
 struct TransactionPoolAdapter<B, E, A> where A: Send + Sync, E: Send + Sync {
 	pool: Arc<TransactionPool>,
-	client: Arc<Client<B, E>>,
+	client: Arc<Client<B, E, Block>>,
 	api: Arc<A>,
 }
 
-impl<B, E, A> network::TransactionPool for TransactionPoolAdapter<B, E, A>
+impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A>
 	where
-		B: Backend + Send + Sync,
-		E: client::CallExecutor + Send + Sync,
-		client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>,
+		B: Backend<Block> + Send + Sync,
+		E: client::CallExecutor<Block> + Send + Sync,
+		client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 		A: PolkadotApi + Send + Sync,
 {
-	fn transactions(&self) -> Vec<(ExtrinsicHash, Vec<u8>)> {
+	fn transactions(&self) -> Vec<(Hash, Vec<u8>)> {
 		let best_block = match self.client.info() {
 			Ok(info) => info.chain.best_hash,
 			Err(e) => {
@@ -107,21 +107,25 @@ impl<B, E, A> network::TransactionPool for TransactionPoolAdapter<B, E, A>
 			}
 		};
 
-		let id = self.api.check_id(BlockId::Hash(best_block)).expect("Best block is always valid; qed.");
+		let id = match self.api.check_id(BlockId::hash(best_block)) {
+			Ok(id) => id,
+			Err(_) => return Vec::new(),
+		};
+
 		let ready = transaction_pool::Ready::create(id, &*self.api);
 
 		self.pool.cull_and_get_pending(ready, |pending| pending
 			.map(|t| {
-				let hash = ::primitives::Hash::from(&t.hash()[..]);
-				let tx = codec::Slicable::encode(t.as_transaction());
-				(hash, tx)
+				let hash = t.hash().clone();
+				(hash, t.primitive_extrinsic())
 			})
 			.collect()
 		)
 	}
 
-	fn import(&self, transaction: &[u8]) -> Option<ExtrinsicHash> {
-		if let Some(uxt) = codec::Slicable::decode(&mut &transaction[..]) {
+	fn import(&self, transaction: &Vec<u8>) -> Option<Hash> {
+		let encoded = transaction.encode();
+		if let Some(uxt) = codec::Slicable::decode(&mut &encoded[..]) {
 			match self.pool.import_unchecked_extrinsic(uxt) {
 				Ok(xt) => Some(*xt.hash()),
 				Err(e) => match *e.kind() {
@@ -138,7 +142,7 @@ impl<B, E, A> network::TransactionPool for TransactionPoolAdapter<B, E, A>
 		}
 	}
 
-	fn on_broadcasted(&self, propagations: HashMap<ExtrinsicHash, Vec<String>>) {
+	fn on_broadcasted(&self, propagations: HashMap<Hash, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
 	}
 }
@@ -165,12 +169,12 @@ fn poc_2_testnet_config() -> ChainConfig {
 		}),
 		system: None,
 		session: Some(SessionConfig {
-			validators: initial_authorities.clone(),
+			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
 			session_length: 720,	// that's 1 hour per session.
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			intentions: initial_authorities.clone(),
+			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
 			transaction_base_fee: 100,
 			transaction_byte_fee: 1,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u128 << 60)).collect(),
@@ -210,12 +214,12 @@ fn poc_2_testnet_config() -> ChainConfig {
 
 fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 	let endowed_accounts = vec![
-		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
-		ed25519::Pair::from_seed(b"Charlie                         ").public().into(),
-		ed25519::Pair::from_seed(b"Dave                            ").public().into(),
-		ed25519::Pair::from_seed(b"Eve                             ").public().into(),
-		ed25519::Pair::from_seed(b"Ferdie                          ").public().into(),
+		ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
+		ed25519::Pair::from_seed(b"Bob                             ").public().0.into(),
+		ed25519::Pair::from_seed(b"Charlie                         ").public().0.into(),
+		ed25519::Pair::from_seed(b"Dave                            ").public().0.into(),
+		ed25519::Pair::from_seed(b"Eve                             ").public().0.into(),
+		ed25519::Pair::from_seed(b"Ferdie                          ").public().0.into(),
 	];
 	let genesis_config = GenesisConfig {
 		consensus: Some(ConsensusConfig {
@@ -224,12 +228,12 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 		}),
 		system: None,
 		session: Some(SessionConfig {
-			validators: initial_authorities.clone(),
+			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
 			session_length: 10,
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			intentions: initial_authorities.clone(),
+			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
 			transaction_base_fee: 1,
 			transaction_byte_fee: 0,
 			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60))).collect(),
@@ -243,7 +247,7 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 			minimum_deposit: 10,
 		}),
 		council: Some(CouncilConfig {
-			active_council: endowed_accounts.iter().filter(|a| initial_authorities.iter().find(|b| a == b).is_none()).map(|a| (a.clone(), 1000000)).collect(),
+			active_council: endowed_accounts.iter().filter(|a| initial_authorities.iter().find(|&b| &a.0 == b).is_none()).map(|a| (a.clone(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
 			present_slash_per_voter: 1,
@@ -280,16 +284,23 @@ struct GenesisBuilder {
 	config: GenesisConfig,
 }
 
-impl client::GenesisBuilder for GenesisBuilder {
+impl client::GenesisBuilder<Block> for GenesisBuilder {
 	fn build(self) -> (Header, Vec<(Vec<u8>, Vec<u8>)>) {
 		let storage = self.config.build_externalities();
-		let block = genesis::construct_genesis_block(&storage);
-		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
+		let block = genesis::construct_genesis_block::<Block>(&storage);
+		(block.header, storage.into_iter().collect())
 	}
 }
 
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend, client::RemoteCallExecutor<client::light::Backend, network::OnDemand<network::Service>>>, error::Error> {
+pub fn new_light(config: Configuration)
+	-> Result<
+		Service<
+			client::light::Backend<Block>,
+			client::RemoteCallExecutor<client::light::Backend<Block>, network::OnDemand<Block, network::Service<Block>>>
+		>,
+		error::Error,
+	> {
 	Service::new(move |_, executor, genesis_builder: GenesisBuilder| {
 			let client_backend = client::light::new_light_backend();
 			let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));
@@ -303,7 +314,7 @@ pub fn new_light(config: Configuration) -> Result<Service<client::light::Backend
 }
 
 /// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend, client::LocalCallExecutor<client_db::Backend, CodeExecutor>>, error::Error> {
+pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend<Block>, client::LocalCallExecutor<client_db::Backend<Block>, CodeExecutor>>, error::Error> {
 	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
 	Service::new(|db_settings, executor, genesis_builder: GenesisBuilder|
 		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_builder)?), None)),
@@ -330,9 +341,9 @@ pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend, cli
 
 impl<B, E> Service<B, E>
 	where
-		B: Backend + Send + Sync + 'static,
-		E: CallExecutor + Send + Sync + 'static,
-		client::error::Error: From<<<B as Backend>::State as state_machine::backend::Backend>::Error>
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static,
+		client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {
 	/// Creates and register protocol with the network service
 	fn new<F, G, C, A>(client_creator: F, api_creator: G, consensus_creator: C, mut config: Configuration) -> Result<Self, error::Error>
@@ -341,13 +352,13 @@ impl<B, E> Service<B, E>
 					client_db::DatabaseSettings,
 					CodeExecutor,
 					GenesisBuilder,
-				) -> Result<(Arc<Client<B, E>>, Option<Arc<network::OnDemand<network::Service>>>), error::Error>,
+				) -> Result<(Arc<Client<B, E, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error>,
 			G: Fn(
-					Arc<Client<B, E>>,
+					Arc<Client<B, E, Block>>,
 				) -> Arc<A>,
 			C: Fn(
-					Arc<Client<B, E>>,
-					Arc<network::Service>,
+					Arc<Client<B, E, Block>>,
+					Arc<network::Service<Block>>,
 					Arc<TransactionPool>,
 					&Keystore
 				) -> Result<Option<consensus::Service>, error::Error>,
@@ -405,7 +416,6 @@ impl<B, E> Service<B, E>
 			on_demand: on_demand.clone().map(|d| d as Arc<network::OnDemandService>),
 			transaction_pool: transaction_pool_adapter,
 		};
-
 		let network = network::Service::new(network_params)?;
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
@@ -468,12 +478,12 @@ impl<B, E> Service<B, E>
 	}
 
 	/// Get shared client instance.
-	pub fn client(&self) -> Arc<Client<B, E>> {
+	pub fn client(&self) -> Arc<Client<B, E, Block>> {
 		self.client.clone()
 	}
 
 	/// Get shared network instance.
-	pub fn network(&self) -> Arc<network::Service> {
+	pub fn network(&self) -> Arc<network::Service<Block>> {
 		self.network.clone()
 	}
 
@@ -484,11 +494,11 @@ impl<B, E> Service<B, E>
 }
 
 /// Produce a task which prunes any finalized transactions from the pool.
-pub fn prune_imported<A>(api: &A, pool: &TransactionPool, hash: HeaderHash)
+pub fn prune_imported<A>(api: &A, pool: &TransactionPool, hash: Hash)
 	where
 		A: PolkadotApi,
 {
-	match api.check_id(BlockId::Hash(hash)) {
+	match api.check_id(BlockId::hash(hash)) {
 		Ok(id) => {
 			let ready = transaction_pool::Ready::create(id, api);
 			pool.cull(None, ready);

@@ -19,11 +19,11 @@
 
 use std::sync::Arc;
 use futures::future::IntoFuture;
-use primitives;
-use primitives::block::{self, Id as BlockId, HeaderHash};
-use runtime_support::Hashable;
 use state_machine::CodeExecutor;
 use state_machine::backend::Backend as StateBackend;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::bft::Justification;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use blockchain::{self, BlockStatus};
 use backend;
 use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
@@ -32,9 +32,9 @@ use error;
 use in_mem::Blockchain as InMemBlockchain;
 
 /// Remote call request.
-pub struct RemoteCallRequest {
-	/// Call at state of given block.
-	pub block: HeaderHash,
+pub struct RemoteCallRequest<H> {
+	/// Call at state of block referenced by given header hash.
+	pub block: H,
 	/// Method to call.
 	pub method: String,
 	/// Call data.
@@ -43,62 +43,62 @@ pub struct RemoteCallRequest {
 
 /// Light client data fetcher. Implementations of this trait must check if remote data
 /// is correct (see FetchedDataChecker) and return already checked data.
-pub trait Fetcher: Send + Sync {
+pub trait Fetcher<B: BlockT>: Send + Sync {
 	/// Remote call result future.
 	type RemoteCallResult: IntoFuture<Item=CallResult, Error=error::Error>;
 
 	/// Fetch remote call result.
-	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult;
+	fn remote_call(&self, request: RemoteCallRequest<B::Hash>) -> Self::RemoteCallResult;
 }
 
 /// Light client remote data checker.
-pub trait FetchChecker: Send + Sync {
+pub trait FetchChecker<B: BlockT>: Send + Sync {
 	/// Check remote method execution proof.
-	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult>;
+	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult>;
 }
 
 /// Light client backend.
-pub struct Backend {
-	blockchain: Blockchain,
+pub struct Backend<B: BlockT> {
+	blockchain: Blockchain<B>,
 }
 
 /// Light client blockchain.
-pub struct Blockchain {
-	storage: InMemBlockchain,
+pub struct Blockchain<B: BlockT> {
+	storage: InMemBlockchain<B>,
 }
 
 /// Block (header and justification) import operation.
-pub struct BlockImportOperation {
-	pending_block: Option<PendingBlock>,
+pub struct BlockImportOperation<B: BlockT> {
+	pending_block: Option<PendingBlock<B>>,
 }
 
 /// On-demand state.
 #[derive(Clone)]
-pub struct OnDemandState {
+pub struct OnDemandState<H> {
 	/// Hash of the block, state is valid for.
-	_block: HeaderHash,
+	_block: H,
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<E> {
+pub struct LightDataChecker<E, B: BlockT> {
 	/// Backend reference.
-	backend: Arc<Backend>,
+	backend: Arc<Backend<B>>,
 	/// Executor.
 	executor: E,
 }
 
-struct PendingBlock {
-	header: block::Header,
-	justification: Option<primitives::bft::Justification>,
+struct PendingBlock<B: BlockT> {
+	header: B::Header,
+	justification: Option<Justification<B::Hash>>,
 	is_best: bool,
 }
 
-impl backend::Backend for Backend {
-	type BlockImportOperation = BlockImportOperation;
-	type Blockchain = Blockchain;
-	type State = OnDemandState;
+impl<B: BlockT> backend::Backend<B> for Backend<B> {
+	type BlockImportOperation = BlockImportOperation<B>;
+	type Blockchain = Blockchain<B>;
+	type State = OnDemandState<B::Hash>;
 
-	fn begin_operation(&self, _block: BlockId) -> error::Result<Self::BlockImportOperation> {
+	fn begin_operation(&self, _block: BlockId<B>) -> error::Result<Self::BlockImportOperation> {
 		Ok(BlockImportOperation {
 			pending_block: None,
 		})
@@ -106,34 +106,34 @@ impl backend::Backend for Backend {
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
 		if let Some(pending_block) = operation.pending_block {
-			let hash = pending_block.header.blake2_256().into();
+			let hash = pending_block.header.hash();
 			self.blockchain.storage.insert(hash, pending_block.header, pending_block.justification, None, pending_block.is_best);
 		}
 		Ok(())
 	}
 
-	fn blockchain(&self) -> &Blockchain {
+	fn blockchain(&self) -> &Blockchain<B> {
 		&self.blockchain
 	}
 
-	fn state_at(&self, block: BlockId) -> error::Result<Self::State> {
+	fn state_at(&self, block: BlockId<B>) -> error::Result<Self::State> {
 		Ok(OnDemandState {
-			_block: self.blockchain.storage.id(block).ok_or(error::ErrorKind::UnknownBlock(block))?,
+			_block: self.blockchain.storage.id(block).ok_or(error::ErrorKind::UnknownBlock(format!("{:?}", block)))?,
 		})
 	}
 }
 
-impl backend::RemoteBackend for Backend {}
+impl<B: BlockT> backend::RemoteBackend<B> for Backend<B> {}
 
-impl backend::BlockImportOperation for BlockImportOperation {
-	type State = OnDemandState;
+impl<B: BlockT> backend::BlockImportOperation<B> for BlockImportOperation<B> {
+	type State = OnDemandState<B::Hash>;
 
 	fn state(&self) -> error::Result<Option<&Self::State>> {
 		// None means 'locally-stateless' backend
 		Ok(None)
 	}
 
-	fn set_block_data(&mut self, header: block::Header, _body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()> {
+	fn set_block_data(&mut self, header: B::Header, _body: Option<Vec<B::Extrinsic>>, justification: Option<Justification<B::Hash>>, is_new_best: bool) -> error::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
 			header,
@@ -154,34 +154,34 @@ impl backend::BlockImportOperation for BlockImportOperation {
 	}
 }
 
-impl blockchain::Backend for Blockchain {
-	fn header(&self, id: BlockId) -> error::Result<Option<block::Header>> {
+impl<B: BlockT> blockchain::Backend<B> for Blockchain<B> {
+	fn header(&self, id: BlockId<B>) -> error::Result<Option<B::Header>> {
 		self.storage.header(id)
 	}
 
-	fn body(&self, _id: BlockId) -> error::Result<Option<block::Body>> {
+	fn body(&self, _id: BlockId<B>) -> error::Result<Option<Vec<B::Extrinsic>>> {
 		// TODO [light]: fetch from remote node
 		Ok(None)
 	}
 
-	fn justification(&self, id: BlockId) -> error::Result<Option<primitives::bft::Justification>> {
+	fn justification(&self, id: BlockId<B>) -> error::Result<Option<Justification<B::Hash>>> {
 		self.storage.justification(id)
 	}
 
-	fn info(&self) -> error::Result<blockchain::Info> {
+	fn info(&self) -> error::Result<blockchain::Info<B>> {
 		self.storage.info()
 	}
 
-	fn status(&self, id: BlockId) -> error::Result<BlockStatus> {
+	fn status(&self, id: BlockId<B>) -> error::Result<BlockStatus> {
 		self.storage.status(id)
 	}
 
-	fn hash(&self, number: block::Number) -> error::Result<Option<block::HeaderHash>> {
+	fn hash(&self, number: <B::Header as HeaderT>::Number) -> error::Result<Option<B::Hash>> {
 		self.storage.hash(number)
 	}
 }
 
-impl StateBackend for OnDemandState {
+impl<H: Clone> StateBackend for OnDemandState<H> {
 	type Error = error::Error;
 	type Transaction = ();
 
@@ -191,7 +191,8 @@ impl StateBackend for OnDemandState {
 	}
 
 	fn storage_root<I>(&self, _delta: I) -> ([u8; 32], Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
 		([0; 32], ())
 	}
 
@@ -201,43 +202,46 @@ impl StateBackend for OnDemandState {
 	}
 }
 
-impl<E> FetchChecker for LightDataChecker<E>
+impl<E, B> FetchChecker<B> for LightDataChecker<E, B>
 	where
 		E: CodeExecutor,
+		B: BlockT,
 {
-	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult> {
+	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult> {
 		check_execution_proof(&*self.backend, &self.executor, request, remote_proof)
 	}
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend() -> Arc<Backend> {
+pub fn new_light_backend<B: BlockT>() -> Arc<Backend<B>> {
 	let storage = InMemBlockchain::new();
 	let blockchain = Blockchain { storage };
 	Arc::new(Backend { blockchain })
 }
 
 /// Create an instance of light client.
-pub fn new_light<F, B>(
-	backend: Arc<Backend>,
+pub fn new_light<F, B, Block>(
+	backend: Arc<Backend<Block>>,
 	fetcher: Arc<F>,
 	genesis_builder: B,
-) -> error::Result<Client<Backend, RemoteCallExecutor<Backend, F>>>
+) -> error::Result<Client<Backend<Block>, RemoteCallExecutor<Backend<Block>, F>, Block>>
 	where
-		F: Fetcher,
-		B: GenesisBuilder,
+		F: Fetcher<Block>,
+		B: GenesisBuilder<Block>,
+		Block: BlockT,
 {
 	let executor = RemoteCallExecutor::new(backend.clone(), fetcher);
 	Client::new(backend, executor, genesis_builder)
 }
 
 /// Create an instance of fetch data checker.
-pub fn new_fetch_checker<E>(
-	backend: Arc<Backend>,
+pub fn new_fetch_checker<E, Block>(
+	backend: Arc<Backend<Block>>,
 	executor: E,
-) -> LightDataChecker<E>
+) -> LightDataChecker<E, Block>
 	where
 		E: CodeExecutor,
+		Block: BlockT,
 {
 	LightDataChecker { backend, executor }
 }

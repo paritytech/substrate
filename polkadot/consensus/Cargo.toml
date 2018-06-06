@@ -25,3 +25,4 @@ substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-network = { path = "../../substrate/network" }
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-client = { path = "../../substrate/client" }
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }

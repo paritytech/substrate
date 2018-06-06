@@ -21,8 +21,12 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
+#[cfg(feature = "std")]
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate serde_derive;
+
+#[macro_use]
+extern crate substrate_runtime_support;
 
 #[cfg(feature = "std")]
 extern crate substrate_primitives;
@@ -40,9 +44,9 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 use rstd::result;
-use primitives::traits::{Zero, Executable, RefInto, As};
-use runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
-use runtime_support::dispatch::Result;
+use primitives::traits::{Zero, Executable, RefInto, As, MaybeSerializeDebug};
+use substrate_runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
+use substrate_runtime_support::dispatch::Result;
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
@@ -53,16 +57,20 @@ pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
 pub trait Trait: staking::Trait + Sized {
-	type Proposal: Parameter + Dispatchable + IsSubType<Module<Self>>;
+	type Proposal: Parameter + Dispatchable + IsSubType<Module<Self>> + MaybeSerializeDebug;
 }
 
 decl_module! {
 	pub struct Module<T: Trait>;
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) -> Result = 0;
 		fn second(aux, proposal: PropIndex) -> Result = 1;
 		fn vote(aux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result = 2;
 	}
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result = 0;
 		fn cancel_referendum(ref_index: ReferendumIndex) -> Result = 1;
@@ -346,10 +354,11 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity};
+	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
 	impl_outer_dispatch! {
+		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
 		pub enum Proposal {
 			Session = 0,
 			Staking = 1,
@@ -369,7 +378,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

@@ -16,17 +16,16 @@
 
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
-use polkadot_primitives;
+use primitives;
 use rstd::prelude::*;
 use codec::{Slicable, Joiner};
-use runtime_support::Hashable;
 
 use runtime_primitives::traits::{Executable, RefInto, MaybeEmpty};
-use polkadot_primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
+use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
 use {system, session};
 
-use runtime_support::{StorageValue, StorageMap};
-use runtime_support::dispatch::Result;
+use substrate_runtime_support::{Hashable, StorageValue, StorageMap};
+use substrate_runtime_support::dispatch::Result;
 
 #[cfg(any(feature = "std", test))]
 use rstd::marker::PhantomData;
@@ -34,7 +33,7 @@ use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))]
 use {runtime_io, runtime_primitives};
 
-pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trait {
+pub trait Trait: system::Trait<Hash = primitives::Hash> + session::Trait {
 	/// The position of the set_heads call in the block.
 	const SET_POSITION: u32;
 
@@ -42,7 +41,11 @@ pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trai
 }
 
 decl_module! {
+	/// Parachains module.
 	pub struct Module<T: Trait>;
+
+	/// Call type for parachains.
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: <T as Trait>::PublicAux {
 		// provide candidate receipts for parachains, in ascending order by id.
 		fn set_heads(aux, heads: Vec<CandidateReceipt>) -> Result = 0;
@@ -227,7 +230,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildExternalities;
-	use runtime_primitives::traits::{HasPublicAux, Identity};
+	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 	use consensus;
 
@@ -243,7 +246,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

@@ -18,10 +18,10 @@
 
 error_chain! {
 	errors {
-		/// Missing state at block with given Id.
-		StateUnavailable(b: ::primitives::block::Id) {
+		/// Missing state at block with given descriptor.
+		StateUnavailable(b: String) {
 			description("State missing at given block."),
-			display("State unavailable at block {:?}", b),
+			display("State unavailable at block {}", b),
 		}
 
 		/// I/O terminated unexpectedly
