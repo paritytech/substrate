@@ -493,7 +493,7 @@ mod tests {
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::runtime as test_runtime;
-	use test_client::runtime::{Call, UncheckedExtrinsic, Extrinsic};
+	use test_client::runtime::{Transfer, Extrinsic};
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
@@ -528,9 +528,9 @@ mod tests {
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 	}
 
-	fn sign_tx(tx: Extrinsic) -> UncheckedExtrinsic {
-		let signature = Keyring::from_raw_public(tx.signed.0.clone()).unwrap().sign(&tx.encode()).into();
-		UncheckedExtrinsic { extrinsic: tx, signature }
+	fn sign_tx(tx: Transfer) -> Extrinsic {
+		let signature = Keyring::from_raw_public(tx.from.0.clone()).unwrap().sign(&tx.encode()).into();
+		Extrinsic { transfer: tx, signature }
 	}
 
 	#[test]
@@ -539,10 +539,11 @@ mod tests {
 
 		let mut builder = client.new_block().unwrap();
 
-		builder.push(sign_tx(Extrinsic {
-			signed: Keyring::Alice.to_raw_public().into(),
-			function: Call { to: Keyring::Ferdie.to_raw_public().into(), amount: 42 },
-			index: 0,
+		builder.push(sign_tx(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
 		})).unwrap();
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();

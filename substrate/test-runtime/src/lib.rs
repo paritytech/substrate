@@ -51,28 +51,65 @@ pub mod system;
 use rstd::prelude::*;
 use codec::Slicable;
 
-use runtime_primitives::traits::BlakeTwo256;
+use runtime_primitives::traits::{Checkable, BlakeTwo256};
 use runtime_primitives::Ed25519Signature;
 pub use primitives::hash::H256;
 
 /// Calls in transactions.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Call {
+pub struct Transfer {
+	pub from: AccountId,
 	pub to: AccountId,
 	pub amount: u64,
+	pub nonce: u64,
 }
 
-impl Slicable for Call {
+impl Slicable for Transfer {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
+		self.from.using_encoded(|s| v.extend(s));
 		self.to.using_encoded(|s| v.extend(s));
 		self.amount.using_encoded(|s| v.extend(s));
+		self.nonce.using_encoded(|s| v.extend(s));
 		v
 	}
 
 	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Slicable::decode(input).map(|(to, amount)| Call { to, amount })
+		Slicable::decode(input).map(|(from, to, amount, nonce)| Transfer { from, to, amount, nonce })
+	}
+}
+
+/// Extrinsic for test-runtime.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct Extrinsic {
+	pub transfer: Transfer,
+	pub signature: Ed25519Signature,
+}
+
+impl Slicable for Extrinsic {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		self.transfer.using_encoded(|s| v.extend(s));
+		self.signature.using_encoded(|s| v.extend(s));
+		v
+	}
+
+	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+		Slicable::decode(input).map(|(transfer, signature)| Extrinsic { transfer, signature })
+	}
+}
+
+impl Checkable for Extrinsic {
+	type Checked = Self;
+
+	fn check(self) -> Result<Self, Self> {
+		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
+			Ok(self)
+		} else {
+			Err(self)
+		}
 	}
 }
 
@@ -87,13 +124,9 @@ pub type Index = u64;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<Vec<u8>>;
 /// A test block.
-pub type Block = runtime_primitives::generic::Block<Header, UncheckedExtrinsic>;
+pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
-/// Extrinsic
-pub type Extrinsic = runtime_primitives::generic::Extrinsic<AccountId, Index, Call>;
-/// Signed extrinsic.
-pub type UncheckedExtrinsic = runtime_primitives::generic::UncheckedExtrinsic<AccountId, Index, Call, Ed25519Signature>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {

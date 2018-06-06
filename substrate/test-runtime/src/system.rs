@@ -22,7 +22,7 @@ use runtime_io::{storage_root, enumerated_trie_root};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_primitives::traits::{Hashing, BlakeTwo256};
 use codec::{KeyedVec, Slicable};
-use super::{AccountId, BlockNumber, Call, UncheckedExtrinsic, H256 as Hash, Block, Header};
+use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -88,7 +88,7 @@ pub fn execute_block(block: Block) {
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
-pub fn execute_transaction(utx: UncheckedExtrinsic) {
+pub fn execute_transaction(utx: Extrinsic) {
 	let extrinsic_index = ExtrinsicIndex::get();
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
 	ExtrinsicIndex::put(extrinsic_index + 1);
@@ -115,7 +115,7 @@ pub fn finalise_block() -> Header {
 	}
 }
 
-fn execute_transaction_backend(utx: &UncheckedExtrinsic) {
+fn execute_transaction_backend(utx: &Extrinsic) {
 	use runtime_primitives::traits::Checkable;
 
 	// check signature
@@ -124,27 +124,26 @@ fn execute_transaction_backend(utx: &UncheckedExtrinsic) {
 		Err(_) => panic!("All transactions should be properly signed"),
 	};
 
-	let ref tx = utx.as_unchecked().extrinsic;
+	let tx: ::Transfer = utx.transfer;
 
 	// check nonce
-	let nonce_key = tx.signed.to_keyed_vec(NONCE_OF);
+	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
-	assert!(tx.index == expected_nonce, "All transactions should have the correct nonce");
+	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
 
 	// increment nonce in storage
 	storage::put(&nonce_key, &(expected_nonce + 1));
 
 	// check sender balance
-	let from_balance_key = tx.signed.to_keyed_vec(BALANCE_OF);
+	let from_balance_key = tx.from.to_keyed_vec(BALANCE_OF);
 	let from_balance: u64 = storage::get_or(&from_balance_key, 0);
 
 	// enact transfer
-	let Call { to, amount } = tx.function.clone();
-	assert!(amount <= from_balance, "All transactions should transfer at most the sender balance");
-	let to_balance_key = to.to_keyed_vec(BALANCE_OF);
+	assert!(tx.amount <= from_balance, "All transactions should transfer at most the sender balance");
+	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
 	let to_balance: u64 = storage::get_or(&to_balance_key, 0);
-	storage::put(&from_balance_key, &(from_balance - amount));
-	storage::put(&to_balance_key, &(to_balance + amount));
+	storage::put(&from_balance_key, &(from_balance - tx.amount));
+	storage::put(&to_balance_key, &(to_balance + tx.amount));
 }
 
 #[cfg(feature = "std")]
@@ -171,7 +170,7 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
-	use ::{Header, Digest, Extrinsic, UncheckedExtrinsic};
+	use ::{Header, Digest, Extrinsic, Transfer};
 
 	fn new_test_ext() -> TestExternalities {
 		map![
@@ -184,9 +183,9 @@ mod tests {
 		]
 	}
 
-	fn construct_signed_tx(tx: Extrinsic) -> UncheckedExtrinsic {
-		let signature = Keyring::from_raw_public(tx.signed.0).unwrap().sign(&tx.encode()).into();
-		UncheckedExtrinsic { extrinsic: tx, signature }
+	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
+		let signature = Keyring::from_raw_public(tx.from.0).unwrap().sign(&tx.encode()).into();
+		Extrinsic { transfer: tx, signature }
 	}
 
 	#[test]
@@ -225,14 +224,15 @@ mod tests {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
 				state_root: hex!("0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1").into(),
-				extrinsics_root: hex!("65ed452ee5c22a1b3527658f921f9a052d5942762f6363a5ed6525bc017bad44").into(),
+				extrinsics_root: hex!("951508f2cc0071500a74765ab0fb2f280fdcdd329d5f989dda675010adee99d6").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
-				construct_signed_tx(Extrinsic {
-					signed: Keyring::Alice.to_raw_public().into(),
-					function: Call { to: Keyring::Bob.to_raw_public().into(), amount: 69 },
-					index: 0,
+				construct_signed_tx(Transfer {
+					from: Keyring::Alice.to_raw_public().into(),
+					to: Keyring::Bob.to_raw_public().into(),
+					amount: 69,
+					nonce: 0,
 				})
 			],
 		};
@@ -249,20 +249,22 @@ mod tests {
 				parent_hash: b.header.hash(),
 				number: 2,
 				state_root: hex!("c93f2fd494c386fa32ee76b6198a7ccf5db12c02c3a79755fd2d4646ec2bf8d7").into(),
-				extrinsics_root: hex!("f6ba96c4df7fcfbcdf58d4ad6ca360dbf7894f17a7136894edb518c0c06829e6").into(),
+				extrinsics_root: hex!("3563642676d7e042c894eedc579ba2d6eeedf9a6c66d9d557599effc9f674372").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
-				construct_signed_tx(Extrinsic {
-					signed: Keyring::Bob.to_raw_public().into(),
-					function: Call { to: Keyring::Alice.to_raw_public().into(), amount: 27 },
-					index: 0,
+				construct_signed_tx(Transfer {
+					from: Keyring::Bob.to_raw_public().into(),
+					to: Keyring::Alice.to_raw_public().into(),
+					amount: 27,
+					nonce: 0,
 				}),
-				construct_signed_tx(Extrinsic {
-					signed: Keyring::Alice.to_raw_public().into(),
-					function: Call { to: Keyring::Charlie.to_raw_public().into(), amount: 69 },
-					index: 1,
-				})
+				construct_signed_tx(Transfer {
+					from: Keyring::Alice.to_raw_public().into(),
+					to: Keyring::Charlie.to_raw_public().into(),
+					amount: 69,
+					nonce: 1,
+				}),
 			],
 		};
 

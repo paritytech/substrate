@@ -33,7 +33,7 @@ use network::{PeerId, SessionInfo, Error as NetworkError};
 use keyring::Keyring;
 use codec::Slicable;
 use test_client::{self, TestClient};
-use test_client::runtime::{Block, Hash, Call, Extrinsic, UncheckedExtrinsic};
+use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 
 pub struct TestIo<'p> {
 	pub queue: &'p RwLock<VecDeque<TestPacket>>,
@@ -172,13 +172,14 @@ impl Peer {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks(count, |builder| {
-				let xt = Extrinsic {
-					signed: Keyring::Alice.to_raw_public().into(),
-					function: Call { to: Keyring::Alice.to_raw_public().into(), amount: 1 },
-					index: nonce,
+				let transfer = Transfer {
+					from: Keyring::Alice.to_raw_public().into(),
+					to: Keyring::Alice.to_raw_public().into(),
+					amount: 1,
+					nonce,
 				};
-				let signature = Keyring::from_raw_public(xt.signed.0).unwrap().sign(&xt.encode()).into();
-				builder.push(UncheckedExtrinsic { extrinsic: xt, signature }).unwrap();
+				let signature = Keyring::from_raw_public(transfer.from.0).unwrap().sign(&transfer.encode()).into();
+				builder.push(Extrinsic { transfer, signature }).unwrap();
 				nonce = nonce + 1;
 			});
 		} else {
@@ -195,11 +196,11 @@ impl Peer {
 struct EmptyTransactionPool;
 
 impl TransactionPool<Block> for EmptyTransactionPool {
-	fn transactions(&self) -> Vec<(Hash, UncheckedExtrinsic)> {
+	fn transactions(&self) -> Vec<(Hash, Extrinsic)> {
 		Vec::new()
 	}
 
-	fn import(&self, _transaction: &UncheckedExtrinsic) -> Option<Hash> {
+	fn import(&self, _transaction: &Extrinsic) -> Option<Hash> {
 		None
 	}
 

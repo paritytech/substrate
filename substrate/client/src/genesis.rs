@@ -49,19 +49,19 @@ mod tests {
 	use state_machine::backend::InMemory;
 	use test_client;
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-	use test_client::runtime::{Hash, Call, Block, BlockNumber, Header, Digest, Extrinsic, UncheckedExtrinsic};
+	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
 	use ed25519::{Public, Pair};
 
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
-	fn construct_block(backend: &InMemory, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Extrinsic>) -> (Vec<u8>, Hash) {
+	fn construct_block(backend: &InMemory, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transfer>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
-			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.signed.0)).unwrap())
+			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.0)).unwrap())
 				.sign(&tx.encode()).into();
 
-			UncheckedExtrinsic { extrinsic: tx, signature }
+			Extrinsic { transfer: tx, signature }
 		}).collect::<Vec<_>>();
 
 		let extrinsics_root = ordered_trie_root(transactions.iter().map(Slicable::encode)).0.into();
@@ -114,10 +114,11 @@ mod tests {
 			1,
 			genesis_hash,
 			hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c").into(),
-			vec![Extrinsic {
-				signed: Keyring::One.to_raw_public().into(),
-				function: Call { to: Keyring::Two.to_raw_public().into(), amount: 69 },
-				index: 0,
+			vec![Transfer {
+				from: Keyring::One.to_raw_public().into(),
+				to: Keyring::Two.to_raw_public().into(),
+				amount: 69,
+				nonce: 0,
 			}]
 		)
 	}
