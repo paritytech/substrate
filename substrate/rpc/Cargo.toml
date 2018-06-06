@@ -5,9 +5,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 error-chain = "0.11"
-jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git", branch="rh-generic-traits" }
-jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git", branch="rh-generic-traits" }
-jsonrpc-pubsub = { git="https://github.com/paritytech/jsonrpc.git", branch="rh-generic-traits" }
+jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
+jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
+jsonrpc-pubsub = { git="https://github.com/paritytech/jsonrpc.git" }
 log = "0.3"
 parking_lot = "0.4"
 substrate-client = { path = "../client" }
