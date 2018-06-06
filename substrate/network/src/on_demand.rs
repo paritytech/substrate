@@ -65,7 +65,7 @@ pub struct RemoteCallResponse {
 
 /// On-demand remote read response.
 pub struct RemoteReadResponse {
-	receiver: Receiver<Vec<u8>>,
+	receiver: Receiver<Option<Vec<u8>>>,
 }
 
 #[derive(Default)]
@@ -84,12 +84,12 @@ struct Request {
 }
 
 enum RequestData {
-	RemoteRead(RemoteReadRequest, Sender<Vec<u8>>),
+	RemoteRead(RemoteReadRequest, Sender<Option<Vec<u8>>>),
 	RemoteCall(RemoteCallRequest, Sender<client::CallResult>),
 }
 
 impl Future for RemoteReadResponse {
-	type Item = Vec<u8>;
+	type Item = Option<Vec<u8>>;
 	type Error = client::error::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
@@ -395,8 +395,11 @@ mod tests {
 	}
 
 	impl FetchChecker for DummyFetchChecker {
-		fn check_read_proof(&self, _request: &RemoteReadRequest, _remote_proof: Vec<Vec<u8>>) -> client::error::Result<Vec<u8>> {
-			unimplemented!("TODO")
+		fn check_read_proof(&self, _request: &RemoteReadRequest, _remote_proof: Vec<Vec<u8>>) -> client::error::Result<Option<Vec<u8>>> {
+			match self.ok {
+				true => Ok(Some(vec![42])),
+				false => Err(client::error::ErrorKind::Backend("Test error".into()).into()),
+			}
 		}
 
 		fn check_execution_proof(&self, _request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> client::error::Result<client::CallResult> {
@@ -426,6 +429,13 @@ mod tests {
 		on_demand.on_remote_call_response(network, peer, message::RemoteCallResponse {
 			id: id,
 			value: vec![1],
+			proof: vec![vec![2]],
+		});
+	}
+
+	fn receive_read_response(on_demand: &OnDemand<DummyExecutor>, network: &mut TestIo, peer: PeerId, id: message::RequestId) {
+		on_demand.on_remote_read_response(network, peer, message::RemoteReadResponse {
+			id: id,
 			proof: vec![vec![2]],
 		});
 	}
@@ -506,6 +516,19 @@ mod tests {
 
 		receive_call_response(&*on_demand, &mut network, 0, 0);
 		assert!(network.to_disconnect.contains(&0));
+	}
+
+	#[test]
+	fn disconnects_from_peer_on_wrong_response_type() {
+		let (_x, on_demand) = dummy(false);
+		let queue = RwLock::new(VecDeque::new());
+		let mut network = TestIo::new(&queue, None);
+		on_demand.on_connect(0, Role::FULL);
+
+		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
+		receive_read_response(&*on_demand, &mut network, 0, 0);
+		assert!(network.to_disconnect.contains(&0));
+		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 	}
 
 	#[test]

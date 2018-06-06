@@ -21,10 +21,10 @@ use std::sync::Arc;
 use futures::future::IntoFuture;
 use primitives;
 use primitives::block::{self, Id as BlockId, HeaderHash};
-use state_machine::{CodeExecutor, Backend as StateBackend, TrieBackend as StateTrieBackend,
-	TryIntoTrieBackend as TryIntoStateTrieBackend};
+use state_machine::{self, CodeExecutor, Backend as StateBackend,
+	TrieBackend as StateTrieBackend, TryIntoTrieBackend as TryIntoStateTrieBackend};
 use blockchain::{self, BlockStatus, Backend as BlockchainBackend};
-use backend;
+use backend::{self, Backend as ClientBackend};
 use call_executor::{CallResult, RemoteCallExecutor, CallExecutorCache, check_execution_proof};
 use client::{Client, GenesisBuilder};
 use error;
@@ -53,7 +53,7 @@ pub struct RemoteCallRequest {
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher: Send + Sync {
 	/// Remote storage read future.
-	type RemoteReadResult: IntoFuture<Item=Vec<u8>, Error=error::Error>;
+	type RemoteReadResult: IntoFuture<Item=Option<Vec<u8>>, Error=error::Error>;
 	/// Remote call result future.
 	type RemoteCallResult: IntoFuture<Item=CallResult, Error=error::Error>;
 
@@ -66,7 +66,7 @@ pub trait Fetcher: Send + Sync {
 /// Light client remote data checker.
 pub trait FetchChecker: Send + Sync {
 	/// Check remote storage read proof.
-	fn check_read_proof(&self, request: &RemoteReadRequest, remote_proot: Vec<Vec<u8>>) -> error::Result<Vec<u8>>;
+	fn check_read_proof(&self, request: &RemoteReadRequest, remote_proot: Vec<Vec<u8>>) -> error::Result<Option<Vec<u8>>>;
 	/// Check remote method execution proof.
 	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult>;
 }
@@ -219,8 +219,11 @@ impl<B, E> FetchChecker for LightDataChecker<B, E>
 		B: backend::Backend,
 		E: CodeExecutor,
 {
-	fn check_read_proof(&self, _request: &RemoteReadRequest, _remote_proot: Vec<Vec<u8>>) -> error::Result<Vec<u8>> {
-		unimplemented!("TODO")
+	fn check_read_proof(&self, request: &RemoteReadRequest, remote_proof: Vec<Vec<u8>>) -> error::Result<Option<Vec<u8>>> {
+		let local_header = self.backend.blockchain().header(BlockId::Hash(request.block))?;
+		let local_header = local_header.ok_or_else(|| error::ErrorKind::UnknownBlock(BlockId::Hash(request.block)))?;
+		let local_state_root = local_header.state_root;
+		state_machine::read_proof_check(local_state_root.0, remote_proof, &request.key).map_err(Into::into)
 	}
 
 	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult> {
@@ -267,6 +270,8 @@ pub fn new_fetch_checker<B, E>(
 pub mod tests {
 	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
+	use test_client;
+	use in_mem::{Backend as InMemoryBackend};
 	use super::*;
 
 	pub type OkCallFetcher = Mutex<CallResult>;
@@ -282,5 +287,29 @@ pub mod tests {
 		fn remote_call(&self, _request: RemoteCallRequest) -> Self::RemoteCallResult {
 			ok((*self.lock()).clone())
 		}
+	}
+
+	#[test]
+	fn storage_read_proof_is_generated_and_checked() {
+		// prepare remote client
+		let remote_client = test_client::new();
+		let remote_block_id = BlockId::Number(0);
+		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
+		let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
+		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
+
+		// 'fetch' read proof from remote node
+		let authorities_len = remote_client.authorities_at(&remote_block_id).unwrap().len();
+		let remote_read_proof = remote_client.read_proof(&remote_block_id, b":auth:len").unwrap();
+
+		// check remote read proof locally
+		let local_storage = InMemoryBackend::new();
+		local_storage.blockchain().insert(remote_block_hash, remote_block_header, None, None, true);
+		let local_executor = test_client::NativeExecutor::new();
+		let local_checker = new_fetch_checker(new_light_backend(local_storage), local_executor);
+		assert_eq!(local_checker.check_read_proof(&RemoteReadRequest {
+			block: remote_block_hash,
+			key: b":auth:len".to_vec(),
+		}, remote_read_proof).unwrap().unwrap()[0], authorities_len as u8);
 	}
 }

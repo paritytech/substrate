@@ -360,7 +360,7 @@ mod tests {
 	}
 
 	#[test]
-	fn prove_and_proof_check_works() {
+	fn prove_execution_and_proof_check_works() {
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
@@ -374,5 +374,21 @@ mod tests {
 		// check that both results are correct
 		assert_eq!(remote_result, vec![66]);
 		assert_eq!(remote_result, local_result);
+	}
+
+	#[test]
+	fn prove_read_and_proof_check_works() {
+		// fetch read proof from 'remote' full node
+		let remote_backend = trie_backend::tests::test_trie();
+		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_proof = prove_read(remote_backend, b"value2").unwrap();
+
+		// check proof locally
+		let local_result1 = read_proof_check(remote_root, remote_proof.clone(), b"value2").unwrap();
+		let local_result2 = read_proof_check(remote_root, remote_proof.clone(), &[0xff]).is_ok();
+
+		// check that results are correct
+		assert_eq!(local_result1, Some(vec![24]));
+		assert_eq!(local_result2, false);
 	}
 }
