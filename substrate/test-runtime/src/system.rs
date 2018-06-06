@@ -26,7 +26,6 @@ use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
-const LATEST_BLOCK_HASH: &[u8] = b"latest";
 const AUTHORITY_AT: &'static[u8] = b":auth:";
 const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 
@@ -36,10 +35,6 @@ storage_items! {
 	// The current block number being processed. Set by `execute_block`.
 	Number: b"sys:num" => required BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
-}
-
-pub fn latest_block_hash() -> Hash {
-	storage::get(LATEST_BLOCK_HASH).expect("There must always be a latest block")
 }
 
 pub fn balance_of(who: AccountId) -> u64 {
@@ -63,7 +58,6 @@ pub fn initialise_block(header: Header) {
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
 	<ExtrinsicIndex>::put(0);
-	storage::put(LATEST_BLOCK_HASH, &header.parent_hash);
 }
 
 /// Actually execute all transitioning for `block`.

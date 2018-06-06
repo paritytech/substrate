@@ -500,7 +500,6 @@ mod tests {
 		let client = test_client::new();
 		let genesis_hash = client.block_hash(0).unwrap().unwrap();
 
-		assert_eq!(client.using_environment(|| test_runtime::system::latest_block_hash()).unwrap(), genesis_hash);
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 1000);
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 0);
 	}
