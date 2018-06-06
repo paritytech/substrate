@@ -88,6 +88,12 @@ enum RequestData {
 	RemoteCall(RemoteCallRequest, Sender<client::CallResult>),
 }
 
+enum Accept {
+	Ok,
+	CheckFailed(client::error::Error, RequestData),
+	Unexpected(RequestData),
+}
+
 impl Future for RemoteReadResponse {
 	type Item = Option<Vec<u8>>;
 	type Error = client::error::Error;
@@ -123,46 +129,51 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 		}
 	}
 
-	/// Get checker reference.
-	pub fn checker(&self) -> &Arc<FetchChecker> {
-		&self.checker
-	}
-
 	/// Sets weak reference to network service.
 	pub fn set_service_link(&self, service: Weak<E>) {
 		self.core.lock().service = service;
 	}
 
-	/// Execute method call on remote node, returning execution result and proof.
-	pub fn remote_call(&self, request: RemoteCallRequest) -> RemoteCallResponse {
-		let (sender, receiver) = channel();
-		let result = RemoteCallResponse {
-			receiver: receiver,
-		};
-
-		{
-			let mut core = self.core.lock();
-			core.insert(RequestData::RemoteCall(request, sender));
-			core.dispatch();
-		}
-
+	/// Schedule && dispatch all scheduled requests.
+	fn schedule_request<R>(&self, data: RequestData, result: R) -> R {
+		let mut core = self.core.lock();
+		core.insert(data);
+		core.dispatch();
 		result
 	}
 
-	/// Read storage element on remote node, returning read proof.
-	pub fn remote_read(&self, request: RemoteReadRequest) -> RemoteReadResponse {
-		let (sender, receiver) = channel();
-		let result = RemoteReadResponse {
-			receiver: receiver,
+	/// Try to accept response from given peer.
+	fn accept_response<F: FnOnce(Request) -> Accept>(&self, rtype: &str, io: &mut SyncIo, peer: PeerId, request_id: u64, try_accept: F) {
+		let mut core = self.core.lock();
+		let request = match core.remove(peer, request_id) {
+			Some(request) => request,
+			None => {
+				trace!(target: "sync", "Invalid remote {} response from peer {}", rtype, peer);
+				io.disconnect_peer(peer);
+				core.remove_peer(peer);
+				return;
+			},
 		};
 
-		{
-			let mut core = self.core.lock();
-			core.insert(RequestData::RemoteRead(request, sender));
-			core.dispatch();
+		let retry_request_data = match try_accept(request) {
+			Accept::Ok => None,
+			Accept::CheckFailed(error, retry_request_data) => {
+				trace!(target: "sync", "Failed to check remote {} response from peer {}: {}", rtype, peer, error);
+				Some(retry_request_data)
+			},
+			Accept::Unexpected(retry_request_data) => {
+				trace!(target: "sync", "Unexpected response to remote {} from peer {}", rtype, peer);
+				Some(retry_request_data)
+			},
+		};
+
+		if let Some(request_data) = retry_request_data {
+			io.disconnect_peer(peer);
+			core.remove_peer(peer);
+			core.insert(request_data);
 		}
 
-		result
+		core.dispatch();
 	}
 }
 
@@ -192,76 +203,32 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 		core.dispatch();
 	}
 
-	fn on_remote_call_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteCallResponse) {
-		let mut core = self.core.lock();
-		let request = match core.remove(peer, response.id) {
-			Some(request) => request,
-			None => {
-				trace!(target: "sync", "Invalid remote call response from peer {}", peer);
-				io.disconnect_peer(peer);
-				core.remove_peer(peer);
-				return;
-			},
-		};
-
-		match request.data {
-			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, (response.value, response.proof)) {
-				Ok(response) => {
-					// we do not bother if receiver has been dropped already
-					let _ = sender.send(response);
-				},
-				Err(error) => {
-					trace!(target: "sync", "Failed to check remote call response from peer {}: {}", peer, error);
-					io.disconnect_peer(peer);
-					core.remove_peer(peer);
-					core.insert(RequestData::RemoteCall(request, sender));
-				},
-			},
-			request_data @ _ => {
-				trace!(target: "sync", "Unexpected response to remote call from peer {}", peer);
-				io.disconnect_peer(peer);
-				core.remove_peer(peer);
-				core.insert(request_data);
-			},
-		}
-
-		core.dispatch();
-	}
-
 	fn on_remote_read_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteReadResponse) {
-		let mut core = self.core.lock();
-		let request = match core.remove(peer, response.id) {
-			Some(request) => request,
-			None => {
-				trace!(target: "sync", "Invalid remote read response from peer {}", peer);
-				io.disconnect_peer(peer);
-				core.remove_peer(peer);
-				return;
-			},
-		};
-
-		match request.data {
+		self.accept_response("read", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteRead(request, sender) => match self.checker.check_read_proof(&request, response.proof) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(response);
+					Accept::Ok
 				},
-				Err(error) => {
-					trace!(target: "sync", "Failed to check remote read response from peer {}: {}", peer, error);
-					io.disconnect_peer(peer);
-					core.remove_peer(peer);
-					core.insert(RequestData::RemoteRead(request, sender));
-				},
+				Err(error) => Accept::CheckFailed(error, RequestData::RemoteRead(request, sender)),
 			},
-			request_data @ _ => {
-				trace!(target: "sync", "Unexpected response to remote read from peer {}", peer);
-				io.disconnect_peer(peer);
-				core.remove_peer(peer);
-				core.insert(request_data);
-			},
-		}
+			data @ _ => Accept::Unexpected(data),
+		})
+	}
 
-		core.dispatch();
+	fn on_remote_call_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteCallResponse) {
+		self.accept_response("call", io, peer, response.id, |request| match request.data {
+			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, (response.value, response.proof)) {
+				Ok(response) => {
+					// we do not bother if receiver has been dropped already
+					let _ = sender.send(response);
+					Accept::Ok
+				},
+				Err(error) => Accept::CheckFailed(error, RequestData::RemoteCall(request, sender)),
+			},
+			data @ _ => Accept::Unexpected(data),
+		})
 	}
 }
 
@@ -270,11 +237,15 @@ impl<E> Fetcher for OnDemand<E> where E: service::ExecuteInContext {
 	type RemoteCallResult = RemoteCallResponse;
 
 	fn remote_read(&self, request: RemoteReadRequest) -> Self::RemoteReadResult {
-		self.remote_read(request)
+		let (sender, receiver) = channel();
+		self.schedule_request(RequestData::RemoteRead(request, sender),
+			RemoteReadResponse { receiver })
 	}
 
 	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult {
-		self.remote_call(request)
+		let (sender, receiver) = channel();
+		self.schedule_request(RequestData::RemoteCall(request, sender),
+			RemoteCallResponse { receiver })
 	}
 }
 
@@ -383,7 +354,7 @@ mod tests {
 	use futures::Future;
 	use parking_lot::RwLock;
 	use client;
-	use client::light::{FetchChecker, RemoteCallRequest, RemoteReadRequest};
+	use client::light::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest};
 	use io::NetSyncIo;
 	use message;
 	use network::PeerId;
