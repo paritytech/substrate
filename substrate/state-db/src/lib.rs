@@ -14,30 +14,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-
-
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 
 mod unfinalized;
+mod pruning;
 
-use primitives::{Hash, blake2_256};
+use primitives::{H256, blake2_256};
 use codec::Slicable;
 use std::collections::HashSet;
 use unfinalized::UnfinalizedOverlay;
+use pruning::CountedWindow;
 
 pub type DBValue = Vec<u8>;
 
 pub trait KeyValueDb {
 	type Error;
 
-	fn get(&self, key: &Hash) -> Result<Option<DBValue>, Self::Error>;
+	fn get(&self, key: &H256) -> Result<Option<DBValue>, Self::Error>;
 }
 
 #[cfg(test)]
-impl KeyValueDb for ::std::collections::HashMap<Hash, DBValue> {
+impl KeyValueDb for ::std::collections::HashMap<H256, DBValue> {
 	type Error = ();
-	fn get(&self, key: &Hash) -> Result<Option<DBValue>, ()> {
+	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
 		Ok(::std::collections::HashMap::get(self, key).cloned())
 	}
 }
@@ -50,8 +50,8 @@ pub enum Error<D: KeyValueDb> {
 
 #[derive(Default, Debug, Clone)]
 pub struct Changeset {
-	inserted: Vec<(Hash, DBValue)>,
-	deleted: Vec<Hash>,
+	inserted: Vec<(H256, DBValue)>,
+	deleted: Vec<H256>,
 }
 
 pub struct Constraints {
@@ -65,29 +65,7 @@ pub enum Pruning {
 	ArchiveCanonical,
 }
 
-struct CountedWindow;
-
-impl CountedWindow {
-	fn prune_one(&mut self, _deleted: &mut Vec<Hash>) {
-	}
-
-	fn note_finalized(&mut self, _hash: &Hash, _changeset: &Changeset) {
-	}
-
-	fn window_size(&self) -> u64 {
-		0
-	}
-
-	fn next_hash(&self) -> Option<Hash> {
-		None
-	}
-
-	fn mem_used(&self) -> usize {
-		0
-	}
-}
-
-fn to_key<S: Slicable>(prefix: &[u8], data: &S) -> Hash {
+fn to_key<S: Slicable>(prefix: &[u8], data: &S) -> H256 {
 	let mut buffer = data.encode();
 	buffer.extend(prefix);
 	blake2_256(&buffer).into()
@@ -97,7 +75,7 @@ pub struct StateDb {
 	mode: Pruning,
 	unfinalized: UnfinalizedOverlay,
 	pruning: Option<CountedWindow>,
-	pinned: HashSet<Hash>,
+	pinned: HashSet<H256>,
 }
 
 impl StateDb {
@@ -111,7 +89,7 @@ impl StateDb {
 		})
 	}
 
-	pub fn insert_block(&mut self, hash: &Hash, number: u64, parent_hash: &Hash, changeset: Changeset) -> Changeset {
+	pub fn insert_block(&mut self, hash: &H256, number: u64, parent_hash: &H256, changeset: Changeset) -> Changeset {
 		match self.mode {
 			Pruning::ArchiveAll => {
 				// write changes immediatelly
@@ -123,7 +101,7 @@ impl StateDb {
 		}
 	}
 
-	pub fn finalize_block(&mut self, hash: &Hash) -> Changeset {
+	pub fn finalize_block(&mut self, hash: &H256) -> Changeset {
 		let changeset = match self.mode {
 			Pruning::ArchiveAll => {
 				Changeset::default()
@@ -168,15 +146,15 @@ impl StateDb {
 		}
 	}
 
-	pub fn pin(&mut self, hash: &Hash) {
+	pub fn pin(&mut self, hash: &H256) {
 		self.pinned.insert(*hash);
 	}
 
-	pub fn unpin(&mut self, hash: &Hash) {
+	pub fn unpin(&mut self, hash: &H256) {
 		self.pinned.remove(hash);
 	}
 
-	pub fn get<D: KeyValueDb>(&self, key: &Hash, db: &D) -> Result<Option<DBValue>, Error<D>> {
+	pub fn get<D: KeyValueDb>(&self, key: &H256, db: &D) -> Result<Option<DBValue>, Error<D>> {
 		if let Some(value) = self.unfinalized.get(key) {
 			return Ok(Some(value));
 		}
