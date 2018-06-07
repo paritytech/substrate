@@ -41,7 +41,7 @@ pub trait Verify {
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
-pub trait Lookup<Source>: MaybeSerializeDebug + Eq + PartialEq + Clone {
+pub trait Lookup<Source> {
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.

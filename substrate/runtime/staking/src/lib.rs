@@ -57,7 +57,8 @@ use codec::{Input, Slicable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, Lookup, Hashing as HashingT, MaybeSerializeDebug, Member};
+	As, Lookup, Hashing as HashingT, Member};
+use address::Address as RawAddress;
 
 pub mod address;
 #[cfg(test)]
@@ -71,7 +72,7 @@ const ENUM_SET_SIZE: usize = 64;
 /// The byte to identify intention to reclaim an existing account index.
 const RECLAIM_INDEX_MAGIC: usize = 0x69;
 
-pub type Address<T> = address::Address<<T as system::Trait>::AccountId, <T as Trait>::AccountIndex>;
+pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
@@ -106,7 +107,7 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 }
 
 // MaybeSerializeDebug is workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-pub trait Trait: system::Trait + session::Trait + MaybeSerializeDebug {
+pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize>;
 	/// Function type to get the contract address given the creator.
@@ -121,7 +122,7 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn transfer(aux, dest: Address<T>, value: T::Balance) -> Result = 0;
+		fn transfer(aux, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
 		fn unstake(aux) -> Result = 2;
 	}
