@@ -16,10 +16,10 @@
 
 use std::sync::Arc;
 use futures::{IntoFuture, Future};
-use primitives::block::Id as BlockId;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::Block as BlockT;
 use state_machine::{self, OverlayedChanges, Backend as StateBackend, CodeExecutor};
 use state_machine::backend::InMemory as InMemoryStateBackend;
-use triehash::trie_root;
 
 use backend;
 use blockchain::Backend as ChainBackend;
@@ -36,14 +36,14 @@ pub struct CallResult {
 }
 
 /// Method call executor.
-pub trait CallExecutor {
+pub trait CallExecutor<B: BlockT> {
 	/// Externalities error type.
 	type Error: state_machine::Error;
 
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error>;
+	fn call(&self, id: &BlockId<B>, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error>;
 
 	/// Execute a call to a contract on top of given state.
 	///
@@ -81,15 +81,16 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 	}
 }
 
-impl<B, E> CallExecutor for LocalCallExecutor<B, E>
+impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 	where
-		B: backend::LocalBackend,
+		B: backend::LocalBackend<Block>,
 		E: CodeExecutor,
-		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
+		Block: BlockT,
+		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	type Error = E::Error;
 
-	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
+	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let mut changes = OverlayedChanges::default();
 		let (return_data, _) = self.call_at_state(&self.backend.state_at(*id)?, &mut changes, method, call_data)?;
 		Ok(CallResult{ return_data, changes })
@@ -113,19 +114,20 @@ impl<B, F> RemoteCallExecutor<B, F> {
 	}
 }
 
-impl<B, F> CallExecutor for RemoteCallExecutor<B, F>
+impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 	where
-		B: backend::RemoteBackend,
-		F: Fetcher,
-		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
+		B: backend::RemoteBackend<Block>,
+		F: Fetcher<Block>,
+		Block: BlockT,
+		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	type Error = error::Error;
 
-	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
+	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let block_hash = match *id {
 			BlockId::Hash(hash) => hash,
 			BlockId::Number(number) => self.backend.blockchain().hash(number)?
-				.ok_or_else(|| error::ErrorKind::UnknownBlock(BlockId::Number(number)))?,
+				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", number)))?,
 		};
 
 		self.fetcher.remote_call(RemoteCallRequest {
@@ -141,22 +143,25 @@ impl<B, F> CallExecutor for RemoteCallExecutor<B, F>
 }
 
 /// Check remote execution proof.
-pub fn check_execution_proof<B, E>(backend: &B, executor: &E, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> Result<CallResult, error::Error>
+pub fn check_execution_proof<B, E, Block>(backend: &B, executor: &E, request: &RemoteCallRequest<Block::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> Result<CallResult, error::Error>
 	where
-		B: backend::RemoteBackend,
+		B: backend::RemoteBackend<Block>,
 		E: CodeExecutor,
-		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
+		Block: BlockT,
+		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
+	use runtime_primitives::traits::{Header, Hashing, HashingFor};
+
 	let (remote_result, remote_proof) = remote_proof;
 
 	let remote_state = state_from_execution_proof(remote_proof);
-	let remote_state_root = trie_root(remote_state.pairs().into_iter()).0;
+	let remote_state_root = HashingFor::<Block>::trie_root(remote_state.pairs().into_iter());
 
 	let local_header = backend.blockchain().header(BlockId::Hash(request.block))?;
-	let local_header = local_header.ok_or_else(|| error::ErrorKind::UnknownBlock(BlockId::Hash(request.block)))?;
-	let local_state_root = local_header.state_root;
+	let local_header = local_header.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", request.block)))?;
+	let local_state_root = local_header.state_root().clone();
 
-	if remote_state_root != *local_state_root {
+	if remote_state_root != local_state_root {
 		return Err(error::ErrorKind::InvalidExecutionProof.into());
 	}
 

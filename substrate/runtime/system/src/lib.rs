@@ -34,8 +34,8 @@ extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
-use runtime_io::Hashing;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded};
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
+	Hashing, Member, MaybeDisplay};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -59,13 +59,18 @@ pub fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait {
-	type Index: Parameter + Default + SimpleArithmetic + Copy;
-	type BlockNumber: Parameter + SimpleArithmetic + Default + Bounded + Copy;
-	type Hash: Parameter + SimpleBitOps + Default + Copy + CheckEqual;
+	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
+	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
+	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
 	type Hashing: Hashing<Output = Self::Hash>;
-	type Digest: Parameter + Default + traits::Digest;
-	type AccountId: Parameter + Ord + Default;
-	type Header: traits::Header<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
+	type Digest: Parameter + Member + Default + traits::Digest;
+	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
+	type Header: Parameter + traits::Header<
+		Number = Self::BlockNumber,
+		Hashing = Self::Hashing,
+		Hash = Self::Hash,
+		Digest = Self::Digest
+	>;
 }
 
 decl_module! {

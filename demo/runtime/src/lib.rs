@@ -22,10 +22,17 @@
 extern crate substrate_runtime_io as runtime_io;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_support;
 
 #[macro_use]
 extern crate substrate_runtime_primitives as runtime_primitives;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
+#[cfg(feature = "std")]
+extern crate serde;
 
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_consensus as consensus;
@@ -39,10 +46,9 @@ extern crate substrate_runtime_timestamp as timestamp;
 extern crate demo_primitives;
 
 use rstd::prelude::*;
-use runtime_io::BlakeTwo256;
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Identity, HasPublicAux};
+use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildExternalities;
@@ -64,7 +70,7 @@ impl system::Trait for Concrete {
 	type Hashing = BlakeTwo256;
 	type Digest = generic::Digest<Vec<u8>>;
 	type AccountId = AccountId;
-	type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+	type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 }
 
 /// System module for this concrete runtime.
@@ -87,8 +93,16 @@ impl timestamp::Trait for Concrete {
 /// Timestamp module for this concrete runtime.
 pub type Timestamp = timestamp::Module<Concrete>;
 
+/// Session key conversion.
+pub struct SessionKeyConversion;
+impl Convert<AccountId, SessionKey> for SessionKeyConversion {
+	fn convert(a: AccountId) -> SessionKey {
+		a.0
+	}
+}
+
 impl session::Trait for Concrete {
-	type ConvertAccountIdToSessionKey = Identity;
+	type ConvertAccountIdToSessionKey = SessionKeyConversion;
 }
 
 /// Session module for this concrete runtime.
@@ -118,6 +132,8 @@ pub type Council = council::Module<Concrete>;
 pub type CouncilVoting = council::voting::Module<Concrete>;
 
 impl_outer_dispatch! {
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
 		Consensus = 0,
 		Session = 1,
@@ -128,6 +144,8 @@ impl_outer_dispatch! {
 		CouncilVoting = 7,
 	}
 
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum PrivCall {
 		Consensus = 0,
 		Session = 1,
@@ -141,9 +159,9 @@ impl_outer_dispatch! {
 /// The address format for describing accounts.
 pub type Address = staking::Address<Concrete>;
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, Hash, Vec<u8>>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, Hash, Vec<u8>, Address, Index, Call, Signature, Staking>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic, Staking>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature, Staking>;
 /// Extrinsic type as expected by this runtime. This is not the type that is signed.

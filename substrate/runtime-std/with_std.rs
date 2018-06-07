@@ -20,6 +20,7 @@ pub use std::cell;
 pub use std::clone;
 pub use std::cmp;
 pub use std::fmt;
+pub use std::hash;
 pub use std::iter;
 pub use std::marker;
 pub use std::mem;

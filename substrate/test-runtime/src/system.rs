@@ -18,20 +18,23 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use primitives::AuthorityId;
-use runtime_io::{storage_root, enumerated_trie_root, ed25519_verify};
-use runtime_support::{Hashable, storage};
+use runtime_io::{storage_root, enumerated_trie_root};
+use runtime_support::storage::{self, StorageValue, StorageMap};
+use runtime_primitives::traits::{Hashing, BlakeTwo256};
 use codec::{KeyedVec, Slicable};
-use super::{AccountId, UncheckedTransaction, H256 as Hash, Block, Header};
+use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
-const LATEST_BLOCK_HASH: &[u8] = b"latest";
 const AUTHORITY_AT: &'static[u8] = b":auth:";
 const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 
-pub fn latest_block_hash() -> Hash {
-	storage::get(LATEST_BLOCK_HASH).expect("There must always be a latest block")
+storage_items! {
+	ExtrinsicIndex: b"sys:xti" => required u32;
+	ExtrinsicData: b"sys:xtd" => required map [ u32 => Vec<u8> ];
+	// The current block number being processed. Set by `execute_block`.
+	Number: b"sys:num" => required BlockNumber;
+	ParentHash: b"sys:pha" => required Hash;
 }
 
 pub fn balance_of(who: AccountId) -> u64 {
@@ -43,62 +46,79 @@ pub fn nonce_of(who: AccountId) -> u64 {
 }
 
 /// Get authorities ar given block.
-pub fn authorities() -> Vec<AuthorityId> {
+pub fn authorities() -> Vec<::primitives::AuthorityId> {
 	let len: u32 = storage::unhashed::get(AUTHORITY_COUNT).expect("There are always authorities in test-runtime");
 	(0..len)
 		.map(|i| storage::unhashed::get(&i.to_keyed_vec(AUTHORITY_AT)).expect("Authority is properly encoded in test-runtime"))
 		.collect()
 }
 
+pub fn initialise_block(header: Header) {
+	// populate environment.
+	<Number>::put(&header.number);
+	<ParentHash>::put(&header.parent_hash);
+	<ExtrinsicIndex>::put(0);
+}
+
 /// Actually execute all transitioning for `block`.
 pub fn execute_block(block: Block) {
 	let ref header = block.header;
 
-	// check parent_hash is correct.
-	assert!(
-		header.number > 0 && latest_block_hash() == header.parent_hash,
-		"Parent hash should be valid."
-	);
-
 	// check transaction trie root represents the transactions.
-	let txs = block.transactions.iter().map(Slicable::encode).collect::<Vec<_>>();
+	let txs = block.extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
 	info_expect_equal_hash(&header.extrinsics_root, &txs_root);
 	assert!(header.extrinsics_root == txs_root, "Transaction trie root must be valid.");
 
 	// execute transactions
-	block.transactions.iter().for_each(execute_transaction_backend);
+	block.extrinsics.iter().for_each(execute_transaction_backend);
 
 	// check storage root.
 	let storage_root = storage_root().into();
 	info_expect_equal_hash(&header.state_root, &storage_root);
 	assert!(header.state_root == storage_root, "Storage root must match that calculated.");
-
-	// put the header hash into storage.
-	storage::put(LATEST_BLOCK_HASH, &header.blake2_256());
 }
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
-pub fn execute_transaction(utx: UncheckedTransaction, header: Header) -> Header {
+pub fn execute_transaction(utx: Extrinsic) {
+	let extrinsic_index = ExtrinsicIndex::get();
+	ExtrinsicData::insert(extrinsic_index, utx.encode());
+	ExtrinsicIndex::put(extrinsic_index + 1);
 	execute_transaction_backend(&utx);
-	header
 }
 
-/// Finalise the block - it is up the caller to ensure that all header fields are valid
-/// except state-root.
-pub fn finalise_block(mut header: Header) -> Header {
-	header.state_root = storage_root().into();
-	header
+/// Finalise the block.
+pub fn finalise_block() -> Header {
+	let extrinsic_index = ExtrinsicIndex::take();
+	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
+	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
+	let extrinsics_root = enumerated_trie_root(&txs).into();
+
+	let number = <Number>::take();
+	let parent_hash = <ParentHash>::take();
+	let storage_root = BlakeTwo256::storage_root();
+
+	Header {
+		number,
+		extrinsics_root,
+		state_root: storage_root,
+		parent_hash,
+		digest: Default::default(),
+	}
 }
 
-fn execute_transaction_backend(utx: &UncheckedTransaction) {
+fn execute_transaction_backend(utx: &Extrinsic) {
+	use runtime_primitives::traits::Checkable;
+
 	// check signature
-	let ref tx = utx.tx;
-	let msg = ::codec::Slicable::encode(tx);
-	assert!(ed25519_verify(&utx.signature.0, &msg, &tx.from),
-		"All transactions should be properly signed");
+	let utx = match utx.clone().check() {
+		Ok(tx) => tx,
+		Err(_) => panic!("All transactions should be properly signed"),
+	};
+
+	let tx: ::Transfer = utx.transfer;
 
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
@@ -111,9 +131,9 @@ fn execute_transaction_backend(utx: &UncheckedTransaction) {
 	// check sender balance
 	let from_balance_key = tx.from.to_keyed_vec(BALANCE_OF);
 	let from_balance: u64 = storage::get_or(&from_balance_key, 0);
-	assert!(tx.amount <= from_balance, "All transactions should transfer at most the sender balance");
 
 	// enact transfer
+	assert!(tx.amount <= from_balance, "All transactions should transfer at most the sender balance");
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
 	let to_balance: u64 = storage::get_or(&to_balance_key, 0);
 	storage::put(&from_balance_key, &(from_balance - tx.amount));
@@ -144,7 +164,7 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
-	use ::{Header, Digest, Transaction, UncheckedTransaction};
+	use ::{Header, Digest, Extrinsic, Transfer};
 
 	fn new_test_ext() -> TestExternalities {
 		map![
@@ -157,9 +177,9 @@ mod tests {
 		]
 	}
 
-	fn construct_signed_tx(tx: Transaction) -> UncheckedTransaction {
-		let signature = Keyring::from_raw_public(tx.from).unwrap().sign(&tx.encode());
-		UncheckedTransaction { tx, signature }
+	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
+		let signature = Keyring::from_raw_public(tx.from.0).unwrap().sign(&tx.encode()).into();
+		Extrinsic { transfer: tx, signature }
 	}
 
 	#[test]
@@ -176,7 +196,7 @@ mod tests {
 
 		let b = Block {
 			header: h,
-			transactions: vec![],
+			extrinsics: vec![],
 		};
 
 		with_externalities(&mut t, || {
@@ -189,8 +209,8 @@ mod tests {
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
-			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 111);
-			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 0);
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 111);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 0);
 		});
 
 		let b = Block {
@@ -198,13 +218,13 @@ mod tests {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
 				state_root: hex!("0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1").into(),
-				extrinsics_root: hex!("5e44188712452f900acfa1b4bf4084753122ea1856d58187dd33374a2ca653b1").into(),
+				extrinsics_root: hex!("951508f2cc0071500a74765ab0fb2f280fdcdd329d5f989dda675010adee99d6").into(),
 				digest: Digest { logs: vec![], },
 			},
-			transactions: vec![
-				construct_signed_tx(Transaction {
-					from: Keyring::Alice.to_raw_public(),
-					to: Keyring::Bob.to_raw_public(),
+			extrinsics: vec![
+				construct_signed_tx(Transfer {
+					from: Keyring::Alice.to_raw_public().into(),
+					to: Keyring::Bob.to_raw_public().into(),
 					amount: 69,
 					nonce: 0,
 				})
@@ -214,40 +234,40 @@ mod tests {
 		with_externalities(&mut t, || {
 			execute_block(b.clone());
 
-			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 42);
-			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 69);
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 42);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 69);
 		});
 
 		let b = Block {
 			header: Header {
-				parent_hash: b.header.blake2_256().into(),
+				parent_hash: b.header.hash(),
 				number: 2,
-				state_root: hex!("aea7c370a9fa4075b703742c22cc4fb12759bdd7d5aa5cdd85895447f838b81b").into(),
-				extrinsics_root: hex!("9ac45fbcc93fa6a8b5a3c44f04d936d53569c72a53fbc12eb58bf884f6dbfae5").into(),
+				state_root: hex!("c93f2fd494c386fa32ee76b6198a7ccf5db12c02c3a79755fd2d4646ec2bf8d7").into(),
+				extrinsics_root: hex!("3563642676d7e042c894eedc579ba2d6eeedf9a6c66d9d557599effc9f674372").into(),
 				digest: Digest { logs: vec![], },
 			},
-			transactions: vec![
-				construct_signed_tx(Transaction {
-					from: Keyring::Bob.to_raw_public(),
-					to: Keyring::Alice.to_raw_public(),
+			extrinsics: vec![
+				construct_signed_tx(Transfer {
+					from: Keyring::Bob.to_raw_public().into(),
+					to: Keyring::Alice.to_raw_public().into(),
 					amount: 27,
 					nonce: 0,
 				}),
-				construct_signed_tx(Transaction {
-					from: Keyring::Alice.to_raw_public(),
-					to: Keyring::Charlie.to_raw_public(),
+				construct_signed_tx(Transfer {
+					from: Keyring::Alice.to_raw_public().into(),
+					to: Keyring::Charlie.to_raw_public().into(),
 					amount: 69,
 					nonce: 1,
-				})
+				}),
 			],
 		};
 
 		with_externalities(&mut t, || {
 			execute_block(b);
 
-			assert_eq!(balance_of(Keyring::Alice.to_raw_public()), 0);
-			assert_eq!(balance_of(Keyring::Bob.to_raw_public()), 42);
-			assert_eq!(balance_of(Keyring::Charlie.to_raw_public()), 69);
+			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 0);
+			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 42);
+			assert_eq!(balance_of(Keyring::Charlie.to_raw_public().into()), 69);
 		});
 	}
 }

@@ -18,11 +18,18 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
+#[cfg(feature = "std")]
+extern crate serde;
+
 #[macro_use]
 extern crate substrate_runtime_io as runtime_io;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_support;
 
 #[macro_use]
 extern crate substrate_runtime_primitives as runtime_primitives;
@@ -37,7 +44,10 @@ extern crate substrate_serializer;
 #[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_primitives;
 
+#[macro_use]
 extern crate substrate_runtime_std as rstd;
+
+extern crate polkadot_primitives as primitives;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
@@ -47,14 +57,13 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
-extern crate polkadot_primitives;
 
 mod parachains;
 
-use runtime_io::BlakeTwo256;
-use polkadot_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
-use runtime_primitives::generic;
-use runtime_primitives::traits::{Identity, HasPublicAux};
+use rstd::prelude::*;
+use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
+use primitives::parachain::CandidateReceipt;
+use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
 
 #[cfg(feature = "std")]
 pub use runtime_primitives::BuildExternalities;
@@ -62,11 +71,115 @@ pub use runtime_primitives::BuildExternalities;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use parachains::Call as ParachainsCall;
+pub use primitives::Header;
 
 /// The position of the timestamp set extrinsic.
 pub const TIMESTAMP_SET_POSITION: u32 = 0;
 /// The position of the parachains set extrinsic.
 pub const PARACHAINS_SET_POSITION: u32 = 1;
+
+/// The address format for describing accounts.
+pub type Address = staking::Address<Concrete>;
+/// Block Id type for this block.
+pub type BlockId = generic::BlockId<Block>;
+/// Unchecked extrinsic type as expected by this runtime.
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature, Staking>;
+/// Extrinsic type as expected by this runtime. This is not the type that is signed.
+pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
+/// Extrinsic type that is signed.
+pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
+/// Block type as expected by this runtime.
+pub type Block = generic::Block<Header, UncheckedExtrinsic, Staking>;
+
+/// Provides a type-safe wrapper around a structurally valid block.
+#[cfg(feature = "std")]
+pub struct CheckedBlock {
+	inner: Block,
+	file_line: Option<(&'static str, u32)>,
+}
+
+#[cfg(feature = "std")]
+impl CheckedBlock {
+	/// Create a new checked block. Fails if the block is not structurally valid.
+	pub fn new(block: Block) -> Result<Self, Block> {
+		let has_timestamp = block.extrinsics.get(TIMESTAMP_SET_POSITION as usize).map_or(false, |xt| {
+			!xt.is_signed() && match xt.extrinsic.function {
+				Call::Timestamp(TimestampCall::set(_)) => true,
+				_ => false,
+			}
+		});
+
+		if !has_timestamp { return Err(block) }
+
+		let has_heads = block.extrinsics.get(PARACHAINS_SET_POSITION as usize).map_or(false, |xt| {
+			!xt.is_signed() && match xt.extrinsic.function {
+				Call::Parachains(ParachainsCall::set_heads(_)) => true,
+				_ => false,
+			}
+		});
+
+		if !has_heads { return Err(block) }
+		Ok(CheckedBlock {
+			inner: block,
+			file_line: None,
+		})
+	}
+
+	// Creates a new checked block, asserting that it is valid.
+	#[doc(hidden)]
+	pub fn new_unchecked(block: Block, file: &'static str, line: u32) -> Self {
+		CheckedBlock {
+			inner: block,
+			file_line: Some((file, line)),
+		}
+	}
+
+	/// Extract the timestamp from the block.
+	pub fn timestamp(&self) -> ::primitives::Timestamp {
+		let x = self.inner.extrinsics.get(TIMESTAMP_SET_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
+			Call::Timestamp(TimestampCall::set(x)) => Some(x),
+			_ => None
+		});
+
+		match x {
+			Some(x) => x,
+			None => panic!("Invalid polkadot block asserted at {:?}", self.file_line),
+		}
+	}
+
+	/// Extract the parachain heads from the block.
+	pub fn parachain_heads(&self) -> &[CandidateReceipt] {
+		let x = self.inner.extrinsics.get(PARACHAINS_SET_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
+			Call::Parachains(ParachainsCall::set_heads(ref x)) => Some(&x[..]),
+			_ => None
+		});
+
+		match x {
+			Some(x) => x,
+			None => panic!("Invalid polkadot block asserted at {:?}", self.file_line),
+		}
+	}
+
+	/// Convert into inner block.
+	pub fn into_inner(self) -> Block { self.inner }
+}
+
+#[cfg(feature = "std")]
+impl ::std::ops::Deref for CheckedBlock {
+	type Target = Block;
+
+	fn deref(&self) -> &Block { &self.inner }
+}
+
+/// Assert that a block is structurally valid. May lead to panic in the future
+/// in case it isn't.
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! assert_polkadot_block {
+	($block: expr) => {
+		$crate::CheckedBlock::new_unchecked($block, file!(), line!())
+	}
+}
 
 /// Concrete runtime type used to parameterize the various modules.
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -85,7 +198,7 @@ impl system::Trait for Concrete {
 	type Hashing = BlakeTwo256;
 	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
-	type Header = generic::Header<BlockNumber, Hash, Log>;
+	type Header = Header;
 }
 /// System module for this concrete runtime.
 pub type System = system::Module<Concrete>;
@@ -104,8 +217,16 @@ impl timestamp::Trait for Concrete {
 /// Timestamp module for this concrete runtime.
 pub type Timestamp = timestamp::Module<Concrete>;
 
+/// Session key conversion.
+pub struct SessionKeyConversion;
+impl Convert<AccountId, SessionKey> for SessionKeyConversion {
+	fn convert(a: AccountId) -> SessionKey {
+		a.0
+	}
+}
+
 impl session::Trait for Concrete {
-	type ConvertAccountIdToSessionKey = Identity;
+	type ConvertAccountIdToSessionKey = SessionKeyConversion;
 }
 /// Session module for this concrete runtime.
 pub type Session = session::Module<Concrete>;
@@ -138,6 +259,9 @@ impl parachains::Trait for Concrete {
 pub type Parachains = parachains::Module<Concrete>;
 
 impl_outer_dispatch! {
+	/// Call type for polkadot transactions.
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
 		Consensus = 0,
 		Session = 1,
@@ -149,6 +273,9 @@ impl_outer_dispatch! {
 		Parachains = 8,
 	}
 
+	/// Internal calls.
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum PrivCall {
 		Consensus = 0,
 		Session = 1,
@@ -159,18 +286,6 @@ impl_outer_dispatch! {
 	}
 }
 
-/// The address format for describing accounts.
-pub type Address = staking::Address<Concrete>;
-/// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, Hash, Log>;
-/// Block type as expected by this runtime.
-pub type Block = generic::Block<BlockNumber, Hash, Log, Address, Index, Call, Signature, Staking>;
-/// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature, Staking>;
-/// Extrinsic type as expected by this runtime. This is not the type that is signed.
-pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
-/// Extrinsic type that is signed.
-pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Concrete, Block, Staking,
 	(((((((), Parachains), Council), Democracy), Staking), Session), Timestamp)>;
@@ -187,6 +302,35 @@ impl_outer_config! {
 	}
 }
 
+/// Produces the list of inherent extrinsics.
+pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: Vec<CandidateReceipt>) -> Vec<UncheckedExtrinsic> {
+	vec![
+		UncheckedExtrinsic::new(
+			Extrinsic {
+				signed: Default::default(),
+				function: Call::Timestamp(TimestampCall::set(timestamp)),
+				index: 0,
+			},
+			Default::default()
+		),
+		UncheckedExtrinsic::new(
+			Extrinsic {
+				signed: Default::default(),
+				function: Call::Parachains(ParachainsCall::set_heads(parachain_heads)),
+				index: 0,
+			},
+			Default::default()
+		)
+	]
+}
+
+/// Checks an unchecked extrinsic for validity.
+pub fn check_extrinsic(xt: UncheckedExtrinsic) -> bool {
+	use runtime_primitives::traits::Checkable;
+
+	xt.check().is_ok()
+}
+
 pub mod api {
 	impl_stubs!(
 		authorities => |()| super::Consensus::authorities(),
@@ -194,6 +338,7 @@ pub mod api {
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),
 		finalise_block => |()| super::Executive::finalise_block(),
+		inherent_extrinsics => |(timestamp, heads)| super::inherent_extrinsics(timestamp, heads),
 		validator_count => |()| super::Session::validator_count(),
 		validators => |()| super::Session::validators()
 	);
@@ -297,9 +442,9 @@ mod tests {
 		));
 
 		let raw = block.encode();
-		let decoded_substrate = primitives::block::Block::decode(&mut &raw[..]).unwrap();
-		let encoded_substrate = decoded_substrate.encode();
-		let decoded = Block::decode(&mut &encoded_substrate[..]).unwrap();
+		let decoded_primitive = ::primitives::Block::decode(&mut &raw[..]).unwrap();
+		let encoded_primitive = decoded_primitive.encode();
+		let decoded = Block::decode(&mut &encoded_primitive[..]).unwrap();
 
 		assert_eq!(block, decoded);
 	}
@@ -312,7 +457,7 @@ mod tests {
 				index: 999,
 				function: Call::Timestamp(TimestampCall::set(135135)),
 			},
-			primitives::hash::H512([0; 64]).into(),
+			runtime_primitives::Ed25519Signature(primitives::hash::H512([0; 64])).into()
 		);
 
 		// 6f000000

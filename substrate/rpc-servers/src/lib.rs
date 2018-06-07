@@ -24,25 +24,28 @@ extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_http_server as http;
 extern crate jsonrpc_pubsub as pubsub;
 extern crate jsonrpc_ws_server as ws;
+extern crate substrate_runtime_primitives;
 
 #[macro_use]
 extern crate log;
 
 use std::io;
+use substrate_runtime_primitives::traits::Block as BlockT;
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<S, C, A, Y>(
+pub fn rpc_handler<Block: BlockT, S, C, A, Y>(
 	state: S,
 	chain: C,
 	author: A,
 	system: Y,
 ) -> RpcHandler where
-	S: apis::state::StateApi,
-	C: apis::chain::ChainApi<Metadata=Metadata>,
-	A: apis::author::AuthorApi,
+	Block: 'static,
+	S: apis::state::StateApi<Block::Hash>,
+	C: apis::chain::ChainApi<Block::Hash, Block::Header, Metadata=Metadata>,
+	A: apis::author::AuthorApi<Block::Hash, Block::Extrinsic>,
 	Y: apis::system::SystemApi,
 {
 	let mut io = pubsub::PubSubHandler::default();

@@ -18,20 +18,24 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::traits::{Executable, RefInto};
-use runtime_io::{Hashing, print};
-use runtime_support::{StorageValue, StorageMap, IsSubType};
-use runtime_support::dispatch::Result;
+use primitives::traits::{Executable, RefInto, Hashing};
+use runtime_io::print;
+use substrate_runtime_support::dispatch::Result;
+use substrate_runtime_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
 use super::{Trait, Module as Council};
 
 decl_module! {
 	pub struct Module<T: Trait>;
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn propose(aux, proposal: Box<T::Proposal>) -> Result = 0;
 		fn vote(aux, proposal: T::Hash, approve: bool) -> Result = 1;
 		fn veto(aux, proposal_hash: T::Hash) -> Result = 2;
 	}
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_cooloff_period(blocks: T::BlockNumber) -> Result = 0;
 		fn set_voting_period(blocks: T::BlockNumber) -> Result = 1;
@@ -214,7 +218,7 @@ impl<T: Trait> Executable for Council<T> {
 mod tests {
 	use super::*;
 	use ::tests::*;
-	use runtime_support::Hashable;
+	use substrate_runtime_support::Hashable;
 	use democracy::VoteThreshold;
 
 	type CouncilVoting = super::Module<Test>;

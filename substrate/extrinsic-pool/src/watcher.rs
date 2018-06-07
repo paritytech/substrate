@@ -15,17 +15,14 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::sync::mpsc;
-use primitives::{
-	block::{HeaderHash, ExtrinsicHash}
-};
 
 /// Possible extrinsic status events
 #[derive(Debug, Clone)]
-pub enum Status {
+pub enum Status<H> {
 	/// Extrinsic has been finalised in block with given hash.
-	Finalised(HeaderHash),
+	Finalised(H),
 	/// Some state change (perhaps another extrinsic was included) rendered this extrinsic invalid.
-	Usurped(ExtrinsicHash),
+	Usurped(H),
 	/// The extrinsic has been broadcast to the given peers.
 	Broadcast(Vec<String>),
 	/// Extrinsic has been dropped from the pool because of the limit.
@@ -36,19 +33,19 @@ pub enum Status {
 ///
 /// Represents a stream of status updates for particular extrinsic.
 #[derive(Debug)]
-pub struct Watcher {
-	receiver: mpsc::UnboundedReceiver<Status>,
+pub struct Watcher<H> {
+	receiver: mpsc::UnboundedReceiver<Status<H>>,
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct Sender {
-	receivers: Vec<mpsc::UnboundedSender<Status>>,
+pub(crate) struct Sender<H> {
+	receivers: Vec<mpsc::UnboundedSender<Status<H>>>,
 	finalised: bool,
 }
 
-impl Sender {
+impl<H: Clone> Sender<H> {
 	/// Add a new watcher to this sender object.
-	pub fn new_watcher(&mut self) -> Watcher {
+	pub fn new_watcher(&mut self) -> Watcher<H> {
 		let (tx, receiver) = mpsc::unbounded();
 		self.receivers.push(tx);
 		Watcher {
@@ -57,12 +54,12 @@ impl Sender {
 	}
 
 	/// Some state change (perhaps another extrinsic was included) rendered this extrinsic invalid.
-	pub fn usurped(&mut self, hash: ExtrinsicHash) {
+	pub fn usurped(&mut self, hash: H) {
 		self.send(Status::Usurped(hash))
 	}
 
 	/// Extrinsic has been finalised in block with given hash.
-	pub fn finalised(&mut self, hash: HeaderHash) {
+	pub fn finalised(&mut self, hash: H) {
 		self.send(Status::Finalised(hash));
 		self.finalised = true;
 	}
@@ -82,7 +79,7 @@ impl Sender {
 		self.finalised || self.receivers.is_empty()
 	}
 
-	fn send(&mut self, status: Status) {
+	fn send(&mut self, status: Status<H>) {
 		self.receivers.retain(|sender| sender.unbounded_send(status.clone()).is_ok())
 	}
 }

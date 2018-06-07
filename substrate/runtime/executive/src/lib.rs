@@ -18,8 +18,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")] extern crate serde;
-#[cfg(test)] #[macro_use] extern crate serde_derive;
+#[cfg(feature = "std")]
+extern crate serde;
+#[cfg(test)]
+#[macro_use]
+extern crate serde_derive;
 
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_support as runtime_support;
@@ -47,10 +50,9 @@ extern crate substrate_runtime_staking as staking;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
-use runtime_io::Hashing;
 use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
-	MakePayment};
+	MakePayment, Hashing};
 use codec::Slicable;
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
@@ -78,7 +80,7 @@ pub struct Executive<
 
 impl<
 	System: system::Trait,
-	Block: traits::Block<Header = System::Header>,
+	Block: traits::Block<Header = System::Header,Hash = System::Hash>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
 > Executive<System, Block, Payment, Finalisation> where
@@ -213,7 +215,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT};
+	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256};
 	use primitives::testing::{Digest, Header, Block};
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -230,7 +232,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = substrate_primitives::H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;

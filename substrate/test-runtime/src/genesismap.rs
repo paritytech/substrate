@@ -18,10 +18,9 @@
 
 use std::collections::HashMap;
 use runtime_io::twox_128;
-use runtime_support::Hashable;
 use codec::{KeyedVec, Joiner};
 use primitives::AuthorityId;
-use primitives::block::Block;
+use runtime_primitives::traits::Block;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
@@ -60,12 +59,8 @@ macro_rules! map {
 	)
 }
 
-pub fn additional_storage_with_genesis(genesis_block: &Block) -> HashMap<Vec<u8>, Vec<u8>> {
-	use codec::Slicable;
-	use primitives::hexdisplay::HexDisplay;
-	println!("genesis hash {}", HexDisplay::from(&genesis_block.header.blake2_256()));
-	println!("genesis {}", HexDisplay::from(&genesis_block.header.encode()));
+pub fn additional_storage_with_genesis(genesis_block: &::Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	map![
-		twox_128(&b"latest"[..]).to_vec() => genesis_block.header.blake2_256().to_vec()
+		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().0.to_vec()
 	]
 }

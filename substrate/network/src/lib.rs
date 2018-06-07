@@ -30,6 +30,7 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_client as client;
 extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_bft;
 extern crate serde;
 extern crate serde_json;
@@ -59,19 +60,12 @@ pub mod error;
 
 #[cfg(test)] mod test;
 
-pub use service::{Service, FetchFuture, StatementStream, ConsensusService, BftMessageStream,
+pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 	TransactionPool, Params, ManageNetwork, SyncProvider};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
-pub use network::{NonReservedPeerMode, NetworkConfiguration};
-pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
-pub use message::{Statement, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
+pub use network::{NonReservedPeerMode, NetworkConfiguration, ConnectionFilter, ConnectionDirection};
+pub use message::{generic as generic_message, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
 pub use on_demand::{OnDemand, OnDemandService, Response as OnDemandResponse};
-
-// TODO: move it elsewhere
-fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {
-	use runtime_support::Hashable;
-	header.blake2_256().into()
-}

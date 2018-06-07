@@ -16,12 +16,9 @@
 
 //! External API for extrinsic pool.
 
+use std::fmt;
 use std::ops::Deref;
 use txpool::{self, VerifiedTransaction};
-use primitives::{
-	Hash,
-	block::{Extrinsic, ExtrinsicHash},
-};
 
 /// Extrinsic pool error.
 pub trait Error: ::std::error::Error + Send + Sized {
@@ -38,18 +35,19 @@ impl Error for txpool::Error {
 }
 
 /// Extrinsic pool.
-pub trait ExtrinsicPool: Send + Sync + 'static {
+pub trait ExtrinsicPool<Ex, Hash>: Send + Sync + 'static {
 	/// Error type
 	type Error: Error;
 
 	/// Submit a collection of extrinsics to the pool.
-	fn submit(&self, xt: Vec<Extrinsic>) -> Result<Vec<ExtrinsicHash>, Self::Error>;
+	fn submit(&self, xt: Vec<Ex>) -> Result<Vec<Hash>, Self::Error>;
 }
 
 // Blanket implementation for anything that `Derefs` to the pool.
-impl<V, S, E, T> ExtrinsicPool for T where
-	T: Deref<Target=super::Pool<V, S, E>> + Send + Sync + 'static,
-	V: txpool::Verifier<Extrinsic>,
+impl<Ex, Hash, V, S, E, T> ExtrinsicPool<Ex, Hash> for T where
+	Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default,
+	T: Deref<Target=super::Pool<Ex, Hash, V, S, E>> + Send + Sync + 'static,
+	V: txpool::Verifier<Ex>,
 	S: txpool::Scoring<V::VerifiedTransaction>,
 	V::VerifiedTransaction: txpool::VerifiedTransaction<Hash=Hash>,
 	E: From<V::Error>,
@@ -58,7 +56,7 @@ impl<V, S, E, T> ExtrinsicPool for T where
 {
 	type Error = E;
 
-	fn submit(&self, xt: Vec<Extrinsic>) -> Result<Vec<ExtrinsicHash>, Self::Error> {
+	fn submit(&self, xt: Vec<Ex>) -> Result<Vec<Hash>, Self::Error> {
 		self.deref().submit(xt).map(|result| result.into_iter().map(|xt| *xt.hash()).collect())
 	}
 }

@@ -19,72 +19,74 @@
 use client::{self, Client as PolkadotClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin, CallExecutor};
 use client::error::Error;
 use state_machine;
-use primitives::block::{self, Id as BlockId};
-use primitives::bft::Justification;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::bft::Justification;
 
-pub trait Client: Send + Sync {
+pub trait Client<Block: BlockT>: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
-	fn import(&self, is_best: bool, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error>;
+	fn import(&self, is_best: bool, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error>;
 
 	/// Get blockchain info.
-	fn info(&self) -> Result<ClientInfo, Error>;
+	fn info(&self) -> Result<ClientInfo<Block>, Error>;
 
 	/// Get block status.
-	fn block_status(&self, id: &BlockId) -> Result<BlockStatus, Error>;
+	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error>;
 
 	/// Get block hash by number.
-	fn block_hash(&self, block_number: block::Number) -> Result<Option<block::HeaderHash>, Error>;
+	fn block_hash(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, Error>;
 
 	/// Get block header.
-	fn header(&self, id: &BlockId) -> Result<Option<block::Header>, Error>;
+	fn header(&self, id: &BlockId<Block>) -> Result<Option<Block::Header>, Error>;
 
 	/// Get block body.
-	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error>;
+	fn body(&self, id: &BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, Error>;
 
 	/// Get block justification.
-	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error>;
+	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, Error>;
 
 	/// Get method execution proof.
-	fn execution_proof(&self, block: &block::HeaderHash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
+	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
 }
 
-impl<B, E> Client for PolkadotClient<B, E> where
-	B: client::backend::Backend + Send + Sync + 'static,
-	E: CallExecutor + Send + Sync + 'static,
-	Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>, {
+impl<B, E, Block> Client<Block> for PolkadotClient<B, E, Block> where
+	B: client::backend::Backend<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+	Block: BlockT,
+	Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>, {
 
-	fn import(&self, is_best: bool, header: block::Header, justification: Justification, body: Option<block::Body>) -> Result<ImportResult, Error> {
+	fn import(&self, is_best: bool, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error> {
 		// TODO: defer justification check.
 		let justified_header = self.check_justification(header, justification.into())?;
 		let origin = if is_best { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
-		(self as &PolkadotClient<B, E>).import_block(origin, justified_header, body)
+		(self as &PolkadotClient<B, E, Block>).import_block(origin, justified_header, body)
 	}
 
-	fn info(&self) -> Result<ClientInfo, Error> {
-		(self as &PolkadotClient<B, E>).info()
+	fn info(&self) -> Result<ClientInfo<Block>, Error> {
+		(self as &PolkadotClient<B, E, Block>).info()
 	}
 
-	fn block_status(&self, id: &BlockId) -> Result<BlockStatus, Error> {
-		(self as &PolkadotClient<B, E>).block_status(id)
+	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error> {
+		(self as &PolkadotClient<B, E, Block>).block_status(id)
 	}
 
-	fn block_hash(&self, block_number: block::Number) -> Result<Option<block::HeaderHash>, Error> {
-		(self as &PolkadotClient<B, E>).block_hash(block_number)
+	fn block_hash(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, Error> {
+		(self as &PolkadotClient<B, E, Block>).block_hash(block_number)
 	}
 
-	fn header(&self, id: &BlockId) -> Result<Option<block::Header>, Error> {
-		(self as &PolkadotClient<B, E>).header(id)
+	fn header(&self, id: &BlockId<Block>) -> Result<Option<Block::Header>, Error> {
+		(self as &PolkadotClient<B, E, Block>).header(id)
 	}
 
-	fn body(&self, id: &BlockId) -> Result<Option<block::Body>, Error> {
-		(self as &PolkadotClient<B, E>).body(id)
+	fn body(&self, id: &BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, Error> {
+		(self as &PolkadotClient<B, E, Block>).body(id)
 	}
 
-	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error> {
-		(self as &PolkadotClient<B, E>).justification(id)
+	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, Error> {
+		(self as &PolkadotClient<B, E, Block>).justification(id)
 	}
 
-	fn execution_proof(&self, block: &block::HeaderHash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
-		(self as &PolkadotClient<B, E>).execution_proof(&BlockId::Hash(block.clone()), method, data)
+	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
+		(self as &PolkadotClient<B, E, Block>).execution_proof(&BlockId::Hash(block.clone()), method, data)
 	}
 }

@@ -18,7 +18,8 @@
 
 use std::sync::Arc;
 
-use primitives::block;
+use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::generic::BlockId;
 use client::{self, Client, BlockchainEvents};
 use state_machine;
 
@@ -38,23 +39,23 @@ use self::error::{Result, ResultExt};
 
 build_rpc_trait! {
 	/// Polkadot blockchain API
-	pub trait ChainApi {
+	pub trait ChainApi<Hash, Header> {
 		type Metadata;
 
 		/// Get header of a relay chain block.
 		#[rpc(name = "chain_getHeader")]
-		fn header(&self, block::HeaderHash) -> Result<Option<block::Header>>;
+		fn header(&self, Hash) -> Result<Option<Header>>;
 
 		/// Get hash of the head.
 		#[rpc(name = "chain_getHead")]
-		fn head(&self) -> Result<block::HeaderHash>;
+		fn head(&self) -> Result<Hash>;
 
 		#[pubsub(name = "chain_newHead")] {
-			/// Hello subscription
+			/// New head subscription
 			#[rpc(name = "subscribe_newHead")]
-			fn subscribe_new_head(&self, Self::Metadata, pubsub::Subscriber<block::Header>);
+			fn subscribe_new_head(&self, Self::Metadata, pubsub::Subscriber<Header>);
 
-			/// Unsubscribe from hello subscription.
+			/// Unsubscribe from new head subscription.
 			#[rpc(name = "unsubscribe_newHead")]
 			fn unsubscribe_new_head(&self, SubscriptionId) -> RpcResult<bool>;
 		}
@@ -62,16 +63,16 @@ build_rpc_trait! {
 }
 
 /// Chain API with subscriptions support.
-pub struct Chain<B, E> {
+pub struct Chain<B, E, Block: BlockT> {
 	/// Substrate client.
-	client: Arc<Client<B, E>>,
+	client: Arc<Client<B, E, Block>>,
 	/// Current subscriptions.
 	subscriptions: Subscriptions,
 }
 
-impl<B, E> Chain<B, E> {
+impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client<B, E>>, remote: Remote) -> Self {
+	pub fn new(client: Arc<Client<B, E, Block>>, remote: Remote) -> Self {
 		Chain {
 			client,
 			subscriptions: Subscriptions::new(remote),
@@ -79,22 +80,23 @@ impl<B, E> Chain<B, E> {
 	}
 }
 
-impl<B, E> ChainApi for Chain<B, E> where
-	B: client::backend::Backend + Send + Sync + 'static,
-	E: client::CallExecutor + Send + Sync + 'static,
-	client::error::Error: From<<<B as client::backend::Backend>::State as state_machine::backend::Backend>::Error>,
+impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> where
+	Block: BlockT + 'static,
+	B: client::backend::Backend<Block> + Send + Sync + 'static,
+	E: client::CallExecutor<Block> + Send + Sync + 'static,
+	client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	type Metadata = ::metadata::Metadata;
 
-	fn header(&self, hash: block::HeaderHash) -> Result<Option<block::Header>> {
-		self.client.header(&block::Id::Hash(hash)).chain_err(|| "Blockchain error")
+	fn header(&self, hash: Block::Hash) -> Result<Option<Block::Header>> {
+		self.client.header(&BlockId::Hash(hash)).chain_err(|| "Blockchain error")
 	}
 
-	fn head(&self) -> Result<block::HeaderHash> {
+	fn head(&self) -> Result<Block::Hash> {
 		Ok(self.client.info().chain_err(|| "Blockchain error")?.chain.best_hash)
 	}
 
-	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<block::Header>) {
+	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
 		self.subscriptions.add(subscriber, |sink| {
 			let stream = self.client.import_notification_stream()
 				.filter(|notification| notification.is_new_best)

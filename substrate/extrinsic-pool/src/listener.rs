@@ -16,29 +16,29 @@
 
 use std::{
 	sync::Arc,
+	fmt,
 	collections::HashMap,
 };
-use primitives::Hash;
 use txpool;
 
 use watcher;
 
 #[derive(Default)]
-pub struct Listener {
-	watchers: HashMap<Hash, watcher::Sender>
+pub struct Listener<H: ::std::hash::Hash + Eq> {
+	watchers: HashMap<H, watcher::Sender<H>>
 }
 
-impl Listener {
-	pub fn create_watcher<T: txpool::VerifiedTransaction<Hash=Hash>>(&mut self, xt: Arc<T>) -> watcher::Watcher {
+impl<H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default> Listener<H> {
+	pub fn create_watcher<T: txpool::VerifiedTransaction<Hash=H>>(&mut self, xt: Arc<T>) -> watcher::Watcher<H> {
 		let sender = self.watchers.entry(*xt.hash()).or_insert_with(watcher::Sender::default);
 		sender.new_watcher()
 	}
 
-	pub fn broadcasted(&mut self, hash: &Hash, peers: Vec<String>) {
+	pub fn broadcasted(&mut self, hash: &H, peers: Vec<String>) {
 		self.fire(hash, |watcher| watcher.broadcast(peers));
 	}
 
-	fn fire<F: FnOnce(&mut watcher::Sender)>(&mut self, hash: &Hash, fun: F) {
+	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H>) {
 		let clean = if let Some(h) = self.watchers.get_mut(hash) {
 			fun(h);
 			h.is_done()
@@ -52,7 +52,10 @@ impl Listener {
 	}
 }
 
-impl<T: txpool::VerifiedTransaction<Hash=Hash>> txpool::Listener<T> for Listener {
+impl<H, T> txpool::Listener<T> for Listener<H> where
+	H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default,
+	T: txpool::VerifiedTransaction<Hash=H>,
+{
 	fn added(&mut self, tx: &Arc<T>, old: Option<&Arc<T>>) {
 		if let Some(old) = old {
 			let hash = tx.hash();
@@ -81,9 +84,7 @@ impl<T: txpool::VerifiedTransaction<Hash=Hash>> txpool::Listener<T> for Listener
 
 	fn mined(&mut self, tx: &Arc<T>) {
 		// TODO [ToDr] latest block number?
-		let header_hash = 1.into();
+		let header_hash = Default::default();
 		self.fire(tx.hash(), |watcher| watcher.finalised(header_hash))
 	}
 }
-
-

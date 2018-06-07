@@ -16,10 +16,9 @@
 
 //! Message formats for the BFT consensus layer.
 
-use block::{Block, HeaderHash};
+use rstd::prelude::*;
 use codec::{Slicable, Input};
-use rstd::vec::Vec;
-use ::{AuthorityId, Signature};
+use substrate_primitives::{AuthorityId, Signature};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -32,24 +31,27 @@ enum ActionKind {
 	AdvanceRound = 5,
 }
 
+/// Type alias for extracting message type from block.
+pub type ActionFor<B> = Action<B, <B as ::traits::Block>::Hash>;
+
 /// Actions which can be taken during the BFT process.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum Action {
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum Action<Block, H> {
 	/// Proposal of a block candidate.
 	Propose(u32, Block),
 	/// Proposal header of a block candidate. Accompanies any proposal,
 	/// but is used for misbehavior reporting since blocks themselves are big.
-	ProposeHeader(u32, HeaderHash),
+	ProposeHeader(u32, H),
 	/// Preparation to commit for a candidate.
-	Prepare(u32, HeaderHash),
+	Prepare(u32, H),
 	/// Vote to commit to a candidate.
-	Commit(u32, HeaderHash),
+	Commit(u32, H),
 	/// Vote to advance round after inactive primary.
 	AdvanceRound(u32),
 }
 
-impl Slicable for Action {
+impl<Block: Slicable, Hash: Slicable> Slicable for Action<Block, Hash> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		match *self {
@@ -85,22 +87,19 @@ impl Slicable for Action {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match i8::decode(value) {
 			Some(x) if x == ActionKind::Propose as i8 => {
-				let (round, block) = try_opt!(Slicable::decode(value));
+				let (round, block) = Slicable::decode(value)?;
 				Some(Action::Propose(round, block))
 			}
 			Some(x) if x == ActionKind::ProposeHeader as i8 => {
-				let (round, hash) = try_opt!(Slicable::decode(value));
-
+				let (round, hash) = Slicable::decode(value)?;
 				Some(Action::ProposeHeader(round, hash))
 			}
 			Some(x) if x == ActionKind::Prepare as i8 => {
-				let (round, hash) = try_opt!(Slicable::decode(value));
-
+				let (round, hash) = Slicable::decode(value)?;
 				Some(Action::Prepare(round, hash))
 			}
 			Some(x) if x == ActionKind::Commit as i8 => {
-				let (round, hash) = try_opt!(Slicable::decode(value));
-
+				let (round, hash) = Slicable::decode(value)?;
 				Some(Action::Commit(round, hash))
 			}
 			Some(x) if x == ActionKind::AdvanceRound as i8 => {
@@ -111,17 +110,20 @@ impl Slicable for Action {
 	}
 }
 
+/// Type alias for extracting message type from block.
+pub type MessageFor<B> = Message<B, <B as ::traits::Block>::Hash>;
+
 /// Messages exchanged between participants in the BFT consensus.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct Message {
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct Message<Block, Hash> {
 	/// The parent header hash this action is relative to.
-	pub parent: HeaderHash,
+	pub parent: Hash,
 	/// The action being broadcasted.
-	pub action: Action,
+	pub action: Action<Block, Hash>,
 }
 
-impl Slicable for Message {
+impl<Block: Slicable, Hash: Slicable> Slicable for Message<Block, Hash> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = self.parent.encode();
 		self.action.using_encoded(|s| v.extend(s));
@@ -130,8 +132,8 @@ impl Slicable for Message {
 
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		Some(Message {
-			parent: try_opt!(Slicable::decode(value)),
-			action: try_opt!(Slicable::decode(value)),
+			parent: Slicable::decode(value)?,
+			action: Slicable::decode(value)?,
 		})
 	}
 }
@@ -139,16 +141,16 @@ impl Slicable for Message {
 /// Justification of a block.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Justification {
+pub struct Justification<H> {
 	/// The round consensus was reached in.
 	pub round_number: u32,
 	/// The hash of the header justified.
-	pub hash: HeaderHash,
+	pub hash: H,
 	/// The signatures and signers of the hash.
-	pub signatures: Vec<(::AuthorityId, ::Signature)>
+	pub signatures: Vec<(AuthorityId, Signature)>
 }
 
-impl Slicable for Justification {
+impl<H: Slicable> Slicable for Justification<H> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
@@ -161,9 +163,9 @@ impl Slicable for Justification {
 
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		Some(Justification {
-			round_number: try_opt!(Slicable::decode(value)),
-			hash: try_opt!(Slicable::decode(value)),
-			signatures: try_opt!(Slicable::decode(value)),
+			round_number: Slicable::decode(value)?,
+			hash: Slicable::decode(value)?,
+			signatures: Slicable::decode(value)?,
 		})
 	}
 }
@@ -190,28 +192,28 @@ impl MisbehaviorCode {
 /// Misbehavior kinds.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub enum MisbehaviorKind {
+pub enum MisbehaviorKind<Hash> {
 	/// BFT: double prepare.
-	BftDoublePrepare(u32, (HeaderHash, Signature), (HeaderHash, Signature)),
+	BftDoublePrepare(u32, (Hash, Signature), (Hash, Signature)),
 	/// BFT: double commit.
-	BftDoubleCommit(u32, (HeaderHash, Signature), (HeaderHash, Signature)),
+	BftDoubleCommit(u32, (Hash, Signature), (Hash, Signature)),
 }
 
 /// A report of misbehavior by an authority.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct MisbehaviorReport {
+pub struct MisbehaviorReport<Hash, Number> {
 	/// The parent hash of the block where the misbehavior occurred.
-	pub parent_hash: HeaderHash,
+	pub parent_hash: Hash,
 	/// The parent number of the block where the misbehavior occurred.
-	pub parent_number: ::block::Number,
+	pub parent_number: Number,
 	/// The authority who misbehavior.
 	pub target: AuthorityId,
 	/// The misbehavior kind.
-	pub misbehavior: MisbehaviorKind,
+	pub misbehavior: MisbehaviorKind<Hash>,
 }
 
-impl Slicable for MisbehaviorReport {
+impl<Hash: Slicable, Number: Slicable> Slicable for MisbehaviorReport<Hash, Number> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		self.parent_hash.using_encoded(|s| v.extend(s));
@@ -241,23 +243,23 @@ impl Slicable for MisbehaviorReport {
 	}
 
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let parent_hash = HeaderHash::decode(input)?;
-		let parent_number = ::block::Number::decode(input)?;
+		let parent_hash = Hash::decode(input)?;
+		let parent_number = Number::decode(input)?;
 		let target = AuthorityId::decode(input)?;
 
 		let misbehavior = match i8::decode(input).and_then(MisbehaviorCode::from_i8)? {
 			MisbehaviorCode::BftDoublePrepare => {
 				MisbehaviorKind::BftDoublePrepare(
 					u32::decode(input)?,
-					(HeaderHash::decode(input)?, Signature::decode(input)?),
-					(HeaderHash::decode(input)?, Signature::decode(input)?),
+					(Hash::decode(input)?, Signature::decode(input)?),
+					(Hash::decode(input)?, Signature::decode(input)?),
 				)
 			}
 			MisbehaviorCode::BftDoubleCommit => {
 				MisbehaviorKind::BftDoubleCommit(
 					u32::decode(input)?,
-					(HeaderHash::decode(input)?, Signature::decode(input)?),
-					(HeaderHash::decode(input)?, Signature::decode(input)?),
+					(Hash::decode(input)?, Signature::decode(input)?),
+					(Hash::decode(input)?, Signature::decode(input)?),
 				)
 			}
 		};
@@ -274,10 +276,11 @@ impl Slicable for MisbehaviorReport {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use substrate_primitives::H256;
 
 	#[test]
 	fn misbehavior_report_roundtrip() {
-		let report = MisbehaviorReport {
+		let report = MisbehaviorReport::<H256, u64> {
 			parent_hash: [0; 32].into(),
 			parent_number: 999,
 			target: [1; 32].into(),
@@ -289,9 +292,9 @@ mod test {
 		};
 
 		let encoded = report.encode();
-		assert_eq!(MisbehaviorReport::decode(&mut &encoded[..]).unwrap(), report);
+		assert_eq!(MisbehaviorReport::<H256, u64>::decode(&mut &encoded[..]).unwrap(), report);
 
-		let report = MisbehaviorReport {
+		let report = MisbehaviorReport::<H256, u64> {
 			parent_hash: [0; 32].into(),
 			parent_number: 999,
 			target: [1; 32].into(),
@@ -303,6 +306,6 @@ mod test {
 		};
 
 		let encoded = report.encode();
-		assert_eq!(MisbehaviorReport::decode(&mut &encoded[..]).unwrap(), report);
+		assert_eq!(MisbehaviorReport::<H256, u64>::decode(&mut &encoded[..]).unwrap(), report);
 	}
 }

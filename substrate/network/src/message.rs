@@ -16,14 +16,74 @@
 
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
-use primitives::{AuthorityId, Hash};
-use primitives::block::{Number as BlockNumber, HeaderHash, Header, Body, Block};
-use primitives::bft::Justification;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use service::Role as RoleFlags;
-use ed25519;
+
+pub use self::generic::{BlockAnnounce, RemoteCallRequest, ConsensusVote, SignedConsensusVote, FromBlock};
 
 pub type RequestId = u64;
-type Bytes = Vec<u8>;
+
+/// Type alias for using the message type using block type parameters.
+pub type Message<B> = generic::Message<
+	B,
+	<B as BlockT>::Header,
+	<B as BlockT>::Hash,
+	<<B as BlockT>::Header as HeaderT>::Number,
+	<B as BlockT>::Extrinsic,
+>;
+
+/// Type alias for using the status type using block type parameters.
+pub type Status<B> = generic::Status<
+	<B as BlockT>::Hash,
+	<<B as BlockT>::Header as HeaderT>::Number,
+>;
+
+/// Type alias for using the block request type using block type parameters.
+pub type BlockRequest<B> = generic::BlockRequest<
+	<B as BlockT>::Hash,
+	<<B as BlockT>::Header as HeaderT>::Number,
+>;
+
+/// Type alias for using the localized bft message type using block type parameters.
+pub type LocalizedBftMessage<B> = generic::LocalizedBftMessage<
+	B,
+	<B as BlockT>::Hash,
+>;
+
+/// Type alias for using the BlockData type using block type parameters.
+pub type BlockData<B> = generic::BlockData<
+	<B as BlockT>::Header,
+	<B as BlockT>::Hash,
+	<B as BlockT>::Extrinsic,
+>;
+
+/// Type alias for using the BlockResponse type using block type parameters.
+pub type BlockResponse<B> = generic::BlockResponse<
+	<B as BlockT>::Header,
+	<B as BlockT>::Hash,
+	<B as BlockT>::Extrinsic,
+>;
+
+/// Type alias for using the BftMessage type using block type parameters.
+pub type BftMessage<B> = generic::BftMessage<
+	B,
+	<B as BlockT>::Hash,
+>;
+
+/// Type alias for using the SignedConsensusProposal type using block type parameters.
+pub type SignedConsensusProposal<B> = generic::SignedConsensusProposal<
+	B,
+	<B as BlockT>::Hash,
+>;
+
+/// Type alias for using the SignedConsensusProposal type using block type parameters.
+pub type SignedConsensusMessage<B> = generic::SignedConsensusProposal<
+	B,
+	<B as BlockT>::Hash,
+>;
+
+/// A set of transactions.
+pub type Transactions<E> = Vec<E>;
 
 /// Configured node role.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -73,8 +133,8 @@ impl From<RoleFlags> for Vec<Role> where {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 /// Bits of block data and associated artefacts to request.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub enum BlockAttribute {
 	/// Include block header.
 	Header,
@@ -89,252 +149,12 @@ pub enum BlockAttribute {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Block data sent in the response.
-pub struct BlockData {
-	/// Block header hash.
-	pub hash: HeaderHash,
-	/// Block header if requested.
-	pub header: Option<Header>,
-	/// Block body if requested.
-	pub body: Option<Body>,
-	/// Block receipt if requested.
-	pub receipt: Option<Bytes>,
-	/// Block message queue if requested.
-	pub message_queue: Option<Bytes>,
-	/// Justification if requested.
-	pub justification: Option<Justification>,
-}
-
-#[serde(untagged)]
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Identifies starting point of a block sequence.
-pub enum FromBlock {
-	/// Start with given hash.
-	Hash(HeaderHash),
-	/// Start with given block number.
-	Number(BlockNumber),
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 /// Block enumeration direction.
 pub enum Direction {
 	/// Enumerate in ascending order (from child to parent).
 	Ascending,
 	/// Enumerate in descendfing order (from parent to canonical child).
 	Descending,
-}
-
-/// A set of transactions.
-pub type Transactions = Vec<Vec<u8>>;
-
-/// Statements circulated among peers.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum UnsignedStatement {
-	/// Broadcast by a authority to indicate that this is his candidate for
-	/// inclusion.
-	///
-	/// Broadcasting two different candidate messages per round is not allowed.
-	Candidate(Vec<u8>),
-	/// Broadcast by a authority to attest that the candidate with given digest
-	/// is valid.
-	Valid(Hash),
-	/// Broadcast by a authority to attest that the auxiliary data for a candidate
-	/// with given digest is available.
-	Available(Hash),
-	/// Broadcast by a authority to attest that the candidate with given digest
-	/// is invalid.
-	Invalid(Hash),
-}
-
-/// A signed statement.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Statement {
-	/// Parent relay chain block header hash.
-	pub parent_hash: HeaderHash,
-	/// The statement.
-	pub statement: UnsignedStatement,
-	/// The signature.
-	pub signature: ed25519::Signature,
-	/// The sender.
-	pub sender: AuthorityId,
-}
-
-
-/// Communication that can occur between participants in consensus.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum BftMessage {
-	/// A consensus message (proposal or vote)
-	Consensus(SignedConsensusMessage),
-	/// Auxiliary communication (just proof-of-lock for now).
-	Auxiliary(Justification),
-}
-
-/// BFT Consensus message with parent header hash attached to it.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct LocalizedBftMessage {
-	/// Consensus message.
-	pub message: BftMessage,
-	/// Parent header hash.
-	pub parent_hash: HeaderHash,
-}
-
-/// A localized proposal message. Contains two signed pieces of data.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct SignedConsensusProposal {
-	/// The round number.
-	pub round_number: u32,
-	/// The proposal sent.
-	pub proposal: Block,
-	/// The digest of the proposal.
-	pub digest: Hash,
-	/// The sender of the proposal
-	pub sender: AuthorityId,
-	/// The signature on the message (propose, round number, digest)
-	pub digest_signature: ed25519::Signature,
-	/// The signature on the message (propose, round number, proposal)
-	pub full_signature: ed25519::Signature,
-}
-
-/// A localized vote message, including the sender.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct SignedConsensusVote {
-	/// The message sent.
-	pub vote: ConsensusVote,
-	/// The sender of the message
-	pub sender: AuthorityId,
-	/// The signature of the message.
-	pub signature: ed25519::Signature,
-}
-
-/// Votes during a consensus round.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum ConsensusVote {
-	/// Prepare to vote for proposal with digest D.
-	Prepare(u32, Hash),
-	/// Commit to proposal with digest D..
-	Commit(u32, Hash),
-	/// Propose advancement to a new round.
-	AdvanceRound(u32),
-}
-
-/// A localized message.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum SignedConsensusMessage {
-	/// A proposal.
-	Propose(SignedConsensusProposal),
-	/// A vote.
-	Vote(SignedConsensusVote),
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// A network message.
-pub enum Message {
-	/// Status packet.
-	Status(Status),
-	/// Block request.
-	BlockRequest(BlockRequest),
-	/// Block response.
-	BlockResponse(BlockResponse),
-	/// Block announce.
-	BlockAnnounce(BlockAnnounce),
-	/// Transactions.
-	Transactions(Transactions),
-	/// Consensus statement.
-	Statement(Statement),
-	/// Candidate data request.
-	CandidateRequest(CandidateRequest),
-	/// Candidate response.
-	CandidateResponse(CandidateResponse),
-	/// BFT Consensus statement.
-	BftMessage(LocalizedBftMessage),
-	/// Remote method call request.
-	RemoteCallRequest(RemoteCallRequest),
-	/// Remote method call response.
-	RemoteCallResponse(RemoteCallResponse),
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Status {
-	/// Protocol version.
-	pub version: u32,
-	/// Supported roles.
-	pub roles: Vec<Role>,
-	/// Best block number.
-	pub best_number: BlockNumber,
-	/// Best block hash.
-	pub best_hash: HeaderHash,
-	/// Genesis block hash.
-	pub genesis_hash: HeaderHash,
-	/// Signatue of `best_hash` made with validator address. Required for the validator role.
-	pub validator_signature: Option<ed25519::Signature>,
-	/// Validator address. Required for the validator role.
-	pub validator_id: Option<AuthorityId>,
-	/// Parachain id. Required for the collator role.
-	pub parachain_id: Option<u64>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Request block data from a peer.
-pub struct BlockRequest {
-	/// Unique request id.
-	pub id: RequestId,
-	/// Bits of block data to request.
-	pub fields: Vec<BlockAttribute>,
-	/// Start from this block.
-	pub from: FromBlock,
-	/// End at this block. An implementation defined maximum is used when unspecified.
-	pub to: Option<HeaderHash>,
-	/// Sequence direction.
-	pub direction: Direction,
-	/// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
-	pub max: Option<u32>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Request candidate block data from a peer.
-pub struct CandidateRequest {
-	/// Unique request id.
-	pub id: RequestId,
-	/// Candidate receipt hash.
-	pub hash: Hash,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Candidate block data response.
-pub struct CandidateResponse {
-	/// Unique request id.
-	pub id: RequestId,
-	/// Candidate data. Empty if the peer does not have the candidate anymore.
-	pub data: Option<Vec<u8>>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Response to `BlockRequest`
-pub struct BlockResponse {
-	/// Id of a request this response was made for.
-	pub id: RequestId,
-	/// Block data for the requested sequence.
-	pub blocks: Vec<BlockData>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Announce a new complete relay chain block on the network.
-pub struct BlockAnnounce {
-	/// New block header.
-	pub header: Header,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-/// Remote call request.
-pub struct RemoteCallRequest {
-	/// Unique request id.
-	pub id: RequestId,
-	/// Block at which to perform call.
-	pub block: HeaderHash,
-	/// Method name.
-	pub method: String,
-	/// Call data.
-	pub data: Vec<u8>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -346,4 +166,193 @@ pub struct RemoteCallResponse {
 	pub value: Vec<u8>,
 	/// Execution proof.
 	pub proof: Vec<Vec<u8>>,
+}
+
+/// Generic types.
+pub mod generic {
+	use primitives::AuthorityId;
+	use runtime_primitives::bft::Justification;
+	use ed25519;
+
+	use super::{Role, BlockAttribute, RemoteCallResponse, RequestId, Transactions, Direction};
+	/// Block data sent in the response.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct BlockData<Header, Hash, Extrinsic> {
+		/// Block header hash.
+		pub hash: Hash,
+		/// Block header if requested.
+		pub header: Option<Header>,
+		/// Block body if requested.
+		pub body: Option<Vec<Extrinsic>>,
+		/// Block receipt if requested.
+		pub receipt: Option<Vec<u8>>,
+		/// Block message queue if requested.
+		pub message_queue: Option<Vec<u8>>,
+		/// Justification if requested.
+		pub justification: Option<Justification<Hash>>,
+	}
+
+	/// Identifies starting point of a block sequence.
+	#[serde(untagged)]
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub enum FromBlock<Hash, Number> {
+		/// Start with given hash.
+		Hash(Hash),
+		/// Start with given block number.
+		Number(Number),
+	}
+
+	/// Communication that can occur between participants in consensus.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub enum BftMessage<Block, Hash> {
+		/// A consensus message (proposal or vote)
+		Consensus(SignedConsensusMessage<Block, Hash>),
+		/// Auxiliary communication (just proof-of-lock for now).
+		Auxiliary(Justification<Hash>),
+	}
+
+	/// BFT Consensus message with parent header hash attached to it.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct LocalizedBftMessage<Block, Hash> {
+		/// Consensus message.
+		pub message: BftMessage<Block, Hash>,
+		/// Parent header hash.
+		pub parent_hash: Hash,
+	}
+
+	/// A localized proposal message. Contains two signed pieces of data.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct SignedConsensusProposal<Block, Hash> {
+		/// The round number.
+		pub round_number: u32,
+		/// The proposal sent.
+		pub proposal: Block,
+		/// The digest of the proposal.
+		pub digest: Hash,
+		/// The sender of the proposal
+		pub sender: AuthorityId,
+		/// The signature on the message (propose, round number, digest)
+		pub digest_signature: ed25519::Signature,
+		/// The signature on the message (propose, round number, proposal)
+		pub full_signature: ed25519::Signature,
+	}
+
+	/// A localized vote message, including the sender.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct SignedConsensusVote<H> {
+		/// The message sent.
+		pub vote: ConsensusVote<H>,
+		/// The sender of the message
+		pub sender: AuthorityId,
+		/// The signature of the message.
+		pub signature: ed25519::Signature,
+	}
+
+	/// Votes during a consensus round.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub enum ConsensusVote<H> {
+		/// Prepare to vote for proposal with digest D.
+		Prepare(u32, H),
+		/// Commit to proposal with digest D..
+		Commit(u32, H),
+		/// Propose advancement to a new round.
+		AdvanceRound(u32),
+	}
+
+	/// A localized message.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub enum SignedConsensusMessage<Block, Hash> {
+		/// A proposal.
+		Propose(SignedConsensusProposal<Block, Hash>),
+		/// A vote.
+		Vote(SignedConsensusVote<Hash>),
+	}
+
+	/// A network message.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub enum Message<Block, Header, Hash, Number, Extrinsic> {
+		/// Status packet.
+		Status(Status<Hash, Number>),
+		/// Block request.
+		BlockRequest(BlockRequest<Hash, Number>),
+		/// Block response.
+		BlockResponse(BlockResponse<Header, Hash, Extrinsic>),
+		/// Block announce.
+		BlockAnnounce(BlockAnnounce<Header>),
+		/// Transactions.
+		Transactions(Transactions<Extrinsic>),
+		/// BFT Consensus statement.
+		BftMessage(LocalizedBftMessage<Block, Hash>),
+		/// Remote method call request.
+		RemoteCallRequest(RemoteCallRequest<Hash>),
+		/// Remote method call response.
+		RemoteCallResponse(RemoteCallResponse),
+	}
+
+	/// Status sent on connection.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct Status<Hash, Number> {
+		/// Protocol version.
+		pub version: u32,
+		/// Supported roles.
+		pub roles: Vec<Role>,
+		/// Best block number.
+		pub best_number: Number,
+		/// Best block hash.
+		pub best_hash: Hash,
+		/// Genesis block hash.
+		pub genesis_hash: Hash,
+		/// Signatue of `best_hash` made with validator address. Required for the validator role.
+		pub validator_signature: Option<ed25519::Signature>,
+		/// Validator address. Required for the validator role.
+		pub validator_id: Option<AuthorityId>,
+		/// Parachain id. Required for the collator role.
+		pub parachain_id: Option<u64>,
+	}
+
+	/// Request block data from a peer.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct BlockRequest<Hash, Number> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Bits of block data to request.
+		pub fields: Vec<BlockAttribute>,
+		/// Start from this block.
+		pub from: FromBlock<Hash, Number>,
+		/// End at this block. An implementation defined maximum is used when unspecified.
+		pub to: Option<Hash>,
+		/// Sequence direction.
+		pub direction: Direction,
+		/// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
+		pub max: Option<u32>,
+	}
+
+	/// Response to `BlockRequest`
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct BlockResponse<Header, Hash, Extrinsic> {
+		/// Id of a request this response was made for.
+		pub id: RequestId,
+		/// Block data for the requested sequence.
+		pub blocks: Vec<BlockData<Header, Hash, Extrinsic>>,
+	}
+
+	/// Announce a new complete relay chain block on the network.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct BlockAnnounce<H> {
+		/// New block header.
+		pub header: H,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	/// Remote call request.
+	pub struct RemoteCallRequest<H> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Block at which to perform call.
+		pub block: H,
+		/// Method name.
+		pub method: String,
+		/// Call data.
+		pub data: Vec<u8>,
+	}
 }

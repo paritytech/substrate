@@ -35,14 +35,15 @@ extern crate polkadot_api;
 extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
-extern crate polkadot_primitives;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_runtime;
+extern crate polkadot_primitives;
 
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_network;
 
 extern crate exit_future;
@@ -68,11 +69,10 @@ use std::time::{Duration, Instant};
 use codec::Slicable;
 use table::generic::Statement as GenericStatement;
 use runtime_support::Hashable;
-use polkadot_api::{PolkadotApi, BlockBuilder};
-use polkadot_primitives::{Hash, Timestamp};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_api::PolkadotApi;
+use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
 use polkadot_runtime::BareExtrinsic;
-use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
 use primitives::AuthorityId;
 use transaction_pool::{Ready, TransactionPool};
 use tokio_core::reactor::{Handle, Timeout, Interval};
@@ -106,10 +106,10 @@ pub trait TableRouter: Clone {
 	/// Future that resolves when candidate data is fetched.
 	type FetchCandidate: IntoFuture<Item=BlockData,Error=Self::Error>;
 	/// Future that resolves when extrinsic candidate data is fetched.
-	type FetchExtrinsic: IntoFuture<Item=Extrinsic,Error=Self::Error>;
+	type FetchExtrinsic: IntoFuture<Item=ParachainExtrinsic,Error=Self::Error>;
 
 	/// Note local candidate data, making it available on the network to other validators.
-	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: Extrinsic);
+	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: ParachainExtrinsic);
 
 	/// Fetch block data for a specific candidate.
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> Self::FetchCandidate;
@@ -237,7 +237,7 @@ pub struct ProposerFactory<C, N, P> {
 	pub parachain_empty_duration: Duration,
 }
 
-impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
+impl<C, N, P> bft::ProposerFactory<Block> for ProposerFactory<C, N, P>
 	where
 		C: PolkadotApi,
 		N: Network,
@@ -246,14 +246,14 @@ impl<C, N, P> bft::ProposerFactory for ProposerFactory<C, N, P>
 	type Proposer = Proposer<C, N::TableRouter, P>;
 	type Error = Error;
 
-	fn init(&self, parent_header: &SubstrateHeader, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
+	fn init(&self, parent_header: &Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
 		use std::time::Duration;
 
 		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
 
 		let parent_hash = parent_header.blake2_256().into();
 
-		let checked_id = self.client.check_id(BlockId::Hash(parent_hash))?;
+		let checked_id = self.client.check_id(BlockId::hash(parent_hash))?;
 		let duty_roster = self.client.duty_roster(&checked_id)?;
 		let random_seed = self.client.random_seed(&checked_id)?;
 
@@ -313,7 +313,7 @@ pub struct Proposer<C: PolkadotApi, R, P> {
 	handle: Handle,
 	local_duty: LocalDuty,
 	local_key: Arc<ed25519::Pair>,
-	parent_hash: HeaderHash,
+	parent_hash: Hash,
 	parent_id: C::CheckedBlockId,
 	parent_number: BlockNumber,
 	random_seed: Hash,
@@ -322,7 +322,7 @@ pub struct Proposer<C: PolkadotApi, R, P> {
 	transaction_pool: Arc<TransactionPool>,
 }
 
-impl<C, R, P> bft::Proposer for Proposer<C, R, P>
+impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 	where
 		C: PolkadotApi,
 		R: TableRouter,
@@ -331,7 +331,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 	type Error = Error;
 	type Create = future::Either<
 		CreateProposal<C, R, P>,
-		future::FutureResult<SubstrateBlock, Error>,
+		future::FutureResult<Block, Error>,
 	>;
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
@@ -386,7 +386,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 		})
 	}
 
-	fn evaluate(&self, proposal: &SubstrateBlock) -> Self::Evaluate {
+	fn evaluate(&self, unchecked_proposal: &Block) -> Self::Evaluate {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
 		let active_parachains = match self.client.active_parachains(&self.parent_id) {
@@ -398,7 +398,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 
 		// do initial serialization and structural integrity checks.
 		let maybe_proposal = evaluation::evaluate_initial(
-			proposal,
+			unchecked_proposal,
 			current_timestamp,
 			&self.parent_hash,
 			self.parent_number,
@@ -462,7 +462,10 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 
 		// evaluate whether the block is actually valid.
 		// TODO: is it better to delay this until the delays are finished?
-		let evaluated = self.client.evaluate_block(&self.parent_id, proposal.into()).map_err(Into::into);
+		let evaluated = self.client
+			.evaluate_block(&self.parent_id, unchecked_proposal.clone())
+			.map_err(Into::into);
+
 		let future = future::result(evaluated).and_then(move |good| {
 			let end_result = future::ok(good);
 			if good {
@@ -490,13 +493,13 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 		proposer
 	}
 
-	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior)>) {
+	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<Hash>)>) {
 		use bft::generic::Misbehavior as GenericMisbehavior;
-		use primitives::bft::{MisbehaviorKind, MisbehaviorReport};
+		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
+		use runtime_primitives::MaybeUnsigned;
 		use polkadot_runtime::{Call, Extrinsic, UncheckedExtrinsic, ConsensusCall};
 
-
-		let local_id = self.local_key.public().0;
+		let local_id = self.local_key.public().0.into();
 		let mut next_index = {
 			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 			let cur_index = self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending| pending
@@ -537,7 +540,7 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 
 			next_index += 1;
 
-			let signature = self.local_key.sign(&extrinsic.encode()).into();
+			let signature = MaybeUnsigned(self.local_key.sign(&extrinsic.encode()).into());
 
 			let extrinsic = Extrinsic {
 				signed: extrinsic.signed.into(),
@@ -546,7 +549,8 @@ impl<C, R, P> bft::Proposer for Proposer<C, R, P>
 			};
 			let uxt = UncheckedExtrinsic::new(extrinsic, signature);
 
-			self.transaction_pool.import_unchecked_extrinsic(uxt).expect("locally signed extrinsic is valid; qed");
+			self.transaction_pool.import_unchecked_extrinsic(uxt)
+				.expect("locally signed extrinsic is valid; qed");
 		}
 	}
 }
@@ -610,7 +614,7 @@ impl ProposalTiming {
 
 /// Future which resolves upon the creation of a proposal.
 pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
-	parent_hash: HeaderHash,
+	parent_hash: Hash,
 	parent_number: BlockNumber,
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
@@ -627,14 +631,13 @@ impl<C, R, P> CreateProposal<C, R, P>
 		R: TableRouter,
 		P: Collators,
 {
-	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<SubstrateBlock, Error> {
+	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<Block, Error> {
+		use polkadot_api::BlockBuilder;
+		use runtime_primitives::traits::{Hashing, BlakeTwo256};
+
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();
-		let mut block_builder = self.client.build_block(
-			&self.parent_id,
-			timestamp,
-			candidates,
-		)?;
+		let mut block_builder = self.client.build_block(&self.parent_id, timestamp, candidates)?;
 
 		{
 			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
@@ -650,7 +653,7 @@ impl<C, R, P> CreateProposal<C, R, P>
 
 					if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
 
-					match block_builder.push_extrinsic(pending.as_transaction().clone()) {
+					match block_builder.push_extrinsic(pending.primitive_extrinsic()) {
 						Ok(()) => {
 							pending_size += pending.encoded_size();
 						}
@@ -665,14 +668,14 @@ impl<C, R, P> CreateProposal<C, R, P>
 			self.transaction_pool.remove(&unqueue_invalid, false);
 		}
 
-		let polkadot_block = block_builder.bake();
+		let polkadot_block = block_builder.bake()?;
 
 		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
 			polkadot_block.header.number,
-			Hash::from(polkadot_block.header.blake2_256()),
+			Hash::from(polkadot_block.header.hash()),
 			polkadot_block.header.parent_hash,
 			polkadot_block.extrinsics.iter()
-				.map(|xt| format!("{}", Hash::from(xt.blake2_256())))
+				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
@@ -700,10 +703,10 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 		R: TableRouter,
 		P: Collators,
 {
-	type Item = SubstrateBlock;
+	type Item = Block;
 	type Error = Error;
 
-	fn poll(&mut self) -> Poll<SubstrateBlock, Error> {
+	fn poll(&mut self) -> Poll<Block, Error> {
 		// 1. poll local collation future.
 		match self.collation.poll() {
 			Ok(Async::Ready((collation, extrinsic))) => {

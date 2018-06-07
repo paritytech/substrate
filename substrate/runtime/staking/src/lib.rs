@@ -21,6 +21,10 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
 #[cfg(test)]
 #[macro_use]
 extern crate serde_derive;
@@ -53,7 +57,7 @@ use codec::{Input, Slicable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, Lookup};
+	As, Lookup, Hashing as HashingT};
 use primitives::generic::{Member, MaybeSerializeDebug};
 
 pub mod address;
@@ -91,7 +95,7 @@ pub trait ContractAddressFor<AccountId: Sized> {
 }
 
 impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
-	Hashing: runtime_io::Hashing,
+	Hashing: HashingT,
 	AccountId: Sized + Slicable + From<Hashing::Output>,
 	Hashing::Output: Slicable
 {
@@ -115,11 +119,15 @@ pub trait Trait: system::Trait + session::Trait + MaybeSerializeDebug {
 
 decl_module! {
 	pub struct Module<T: Trait>;
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn transfer(aux, dest: Address<T>, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
 		fn unstake(aux) -> Result = 2;
 	}
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_sessions_per_era(new: T::BlockNumber) -> Result = 0;
 		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;
@@ -879,7 +887,6 @@ pub struct GenesisConfig<T: Trait> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 	pub fn simple() -> Self {
-		use primitives::traits::As;
 		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(2),
 			current_era: T::BlockNumber::sa(0),
@@ -898,7 +905,6 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 	}
 
 	pub fn extended() -> Self {
-		use primitives::traits::As;
 		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(3),
 			current_era: T::BlockNumber::sa(1),
@@ -928,7 +934,6 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		use primitives::traits::As;
 		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(1000),
 			current_era: T::BlockNumber::sa(0),
