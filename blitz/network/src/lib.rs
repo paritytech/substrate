@@ -186,6 +186,12 @@ impl Specialization for BlitzProtocol {
 		};
 
 		// TODO [dk] process incoming message
+		match message {
+			BlitzMessage::TransactionStateQuery(query) => {
+				
+			},
+			_ => {},
+		}
 	}
 }
 

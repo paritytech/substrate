@@ -1,0 +1,18 @@
+[package]
+name = "blitz-state"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Blitz-specific objects and structs"
+
+[dependencies]
+# polkadot-consensus = { path = "../consensus" }
+# substrate-bft = { path = "../../substrate/bft" }
+# substrate-codec = { path = "../../substrate/codec" }
+# substrate-network = { path = "../../substrate/network" }
+substrate-primitives = { path = "../../substrate/primitives" }
+blitz-primitives = { path = "../primitives" }
+# ed25519 = { path = "../../substrate/ed25519" }
+futures = "0.1"
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"

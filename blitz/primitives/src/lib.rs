@@ -62,3 +62,6 @@ pub type Timestamp = u64;
 
 /// Amount of funds to be transfered
 pub type Amount = u64;
+
+/// Address of an account within the Blitz network
+pub type AccountAddress = Hash;

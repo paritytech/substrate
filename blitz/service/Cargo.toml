@@ -21,6 +21,7 @@ blitz-executor = { path = "../executor" }
 # polkadot-transaction-pool = { path = "../transaction-pool" }
 blitz-keystore = { path = "../keystore" }
 blitz-network = { path = "../network" }
+blitz-state = { path = "../state" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }

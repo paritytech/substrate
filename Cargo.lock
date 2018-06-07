@@ -238,6 +238,7 @@ dependencies = [
  "blitz-network 0.1.0",
  "blitz-primitives 0.1.0",
  "blitz-runtime 0.1.0",
+ "blitz-state 0.1.0",
  "ed25519 0.1.0",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -254,6 +255,18 @@ dependencies = [
  "substrate-runtime-io 0.1.0",
  "tokio-core 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-timer 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "blitz-state"
+version = "0.1.0"
+dependencies = [
+ "blitz-primitives 0.1.0",
+ "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives 0.1.0",
 ]
 
 [[package]]

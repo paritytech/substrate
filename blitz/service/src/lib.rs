@@ -26,6 +26,7 @@ extern crate blitz_runtime;
 extern crate blitz_executor;
 extern crate blitz_network;
 extern crate blitz_keystore as keystore;
+extern crate blitz_state;
 // extern crate polkadot_api;
 // extern crate polkadot_consensus as consensus;
 // extern crate polkadot_transaction_pool as transaction_pool;
@@ -50,6 +51,7 @@ extern crate hex_literal;
 mod error;
 mod config;
 
+use blitz_primitives::RoundId;
 use std::sync::Arc;
 use std::thread;
 use futures::prelude::*;
@@ -69,6 +71,7 @@ use client::{genesis, BlockchainEvents};
 use network::ManageNetwork;
 use blitz_network::BlitzProtocol;
 use exit_future::Signal;
+use blitz_state::GlobalState;
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Role, ChainSpec};
@@ -83,6 +86,7 @@ pub struct Service {
 	// transaction_pool: Arc<Mutex<TransactionPool>>,
 	signal: Option<Signal>,
 	// _consensus: Option<consensus::Service>,
+	global_state: GlobalState,
 }
 
 /*
