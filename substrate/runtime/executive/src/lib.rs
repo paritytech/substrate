@@ -219,7 +219,7 @@ mod tests {
 	use primitives::testing::{Digest, Header, Block};
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Debug, Serialize)]
+	#[derive(Debug, Serialize, Deserialize)]
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;

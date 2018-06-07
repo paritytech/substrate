@@ -86,7 +86,7 @@ macro_rules! decl_module {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		// TODO: switching based on std feature is because of an issue in
 		// serde-derive for when we attempt to derive `Deserialize` on these types,
 		// in a situation where we've imported `substrate_runtime_support` as another name.
@@ -96,7 +96,7 @@ macro_rules! decl_module {
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		#[cfg(not(feature = "std"))]
 		$(#[$attr])*
 		pub struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
@@ -113,14 +113,14 @@ macro_rules! decl_module {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		#[cfg(feature = "std")]
 		$(#[$attr])*
 		struct $mod_type<$trait_instance: $trait_name>(::std::marker::PhantomData<$trait_instance>);
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		#[cfg(not(feature = "std"))]
 		$(#[$attr])*
 		struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);

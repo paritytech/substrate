@@ -138,8 +138,12 @@ impl<T: Verify> MaybeUnsigned<T> where
 	T: Default + Eq,
 	<T as Verify>::Signer: Default + Eq,
 {
-	fn is_signed(&self, signer: &<Self as Verify>::Signer) -> bool {
-		self.0 != T::default() || signer != &<Self as Verify>::Signer::default()
+	fn is_signed(&self) -> bool {
+		self.0 != T::default()
+	}
+
+	fn is_addressed(&self, signer: &<Self as Verify>::Signer) -> bool {
+		signer != Default::default()
 	}
 }
 
@@ -149,8 +153,8 @@ impl<T: Verify> Verify for MaybeUnsigned<T> where
 {
 	type Signer = T::Signer;
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
-		if !self.is_signed(signer) {
-			true
+		if !self.is_signed() {
+			!self.is_addressed(signer)
 		} else {
 			self.0.verify(msg, signer)
 		}

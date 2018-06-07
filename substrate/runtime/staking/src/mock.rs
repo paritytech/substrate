@@ -18,7 +18,6 @@
 
 #![cfg(test)]
 
-
 use primitives::BuildExternalities;
 use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
@@ -27,7 +26,7 @@ use runtime_io;
 use {DummyContractAddressFor, GenesisConfig, Module, Trait, consensus, session, system};
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Test;
 impl HasPublicAux for Test {
 	type PublicAux = u64;
@@ -40,7 +39,7 @@ impl system::Trait for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = runtime_io::BlakeTwo256;
+	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
 	type Header = Header;
