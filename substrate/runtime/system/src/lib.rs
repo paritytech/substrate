@@ -28,6 +28,10 @@ extern crate substrate_runtime_support as runtime_support;
 #[cfg(feature = "std")]
 extern crate serde;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
@@ -58,7 +62,7 @@ pub fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::enumerated_trie_root(&xts)
 }
 
-pub trait Trait {
+pub trait Trait: Eq + Clone {
 	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
 	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;

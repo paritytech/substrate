@@ -143,7 +143,7 @@ impl<T: Verify> MaybeUnsigned<T> where
 	}
 
 	fn is_addressed(&self, signer: &<Self as Verify>::Signer) -> bool {
-		signer != Default::default()
+		signer != &Default::default()
 	}
 }
 

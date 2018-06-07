@@ -184,7 +184,7 @@ macro_rules! assert_polkadot_block {
 /// Concrete runtime type used to parameterize the various modules.
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Concrete;
 
 impl HasPublicAux for Concrete {

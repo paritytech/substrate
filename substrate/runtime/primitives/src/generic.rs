@@ -23,10 +23,11 @@ use std::fmt;
 use serde::{Deserialize, Deserializer};
 
 use rstd::prelude::*;
+use rstd::marker::PhantomData;
 use codec::{Slicable, Input};
 use runtime_support::AuxDispatchable;
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Block as BlockT,
-	Header as HeaderT, Hashing as HashingT};
+	Header as HeaderT, Hashing as HashingT, Lookup};
 use rstd::ops;
 
 /// A vetted and verified extrinsic from the external world.
@@ -76,16 +77,18 @@ pub struct UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> {
 	dummy: PhantomData<DoLookup>,
 }
 
-impl<AccountId, Index, Call, Signature, DoLookup> traits::Checkable for UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> where
- 	Address: Member + MaybeDisplay,
+impl<Address, Index, Call, Signature, DoLookup> traits::Checkable for UncheckedExtrinsic<Address, Index, Call, ::MaybeUnsigned<Signature>, DoLookup> where
+ 	Address: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
  	Call: Member,
-	Signature: Member + traits::Verify<Signer = <DoLookup as Lookup<Address>>::Target>,
+	Signature: traits::Verify + Eq + Default,
+	<Signature as traits::Verify>::Signer: Default + Eq,
+	::MaybeUnsigned<Signature>: Member + traits::Verify<Signer = <DoLookup as Lookup<Address>>::Target>,
 	Extrinsic<<DoLookup as Lookup<Address>>::Target, Index, Call>: Slicable,
-	DoLookup: Lookup<Address>,
+	DoLookup: Lookup<Address> + Send + Sync,
 	<DoLookup as Lookup<Address>>::Target: Member + Default,
 {
-	type Checked = CheckedExtrinsic<<DoLookup as Lookup<Address>>::Target, Index, Call, Signature>;
+	type Checked = CheckedExtrinsic<<DoLookup as Lookup<Address>>::Target, Index, Call>;
 
 	fn check(self) -> Result<Self::Checked, &'static str> {
 		if !self.is_signed() {
@@ -110,12 +113,7 @@ impl<AccountId, Index, Call, Signature, DoLookup> traits::Checkable for Unchecke
 	}
 }
 
-impl<Address, Index, Call, Signature, DoLookup> UncheckedExtrinsic<Address, Index, Call, ::MaybeUnsigned<Signature>> where
- 	Address: Member + Default + MaybeDisplay,
-	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
-	Extrinsic<AccountId, Index, Call>: Slicable,
-{
+impl<Address, Index, Call, Signature, DoLookup> UncheckedExtrinsic<Address, Index, Call, Signature, DoLookup> {
 	/// New instance.
 	pub fn new(extrinsic: Extrinsic<Address, Index, Call>, signature: Signature) -> Self {
 		UncheckedExtrinsic {
@@ -124,18 +122,27 @@ impl<Address, Index, Call, Signature, DoLookup> UncheckedExtrinsic<Address, Inde
 			dummy: Default::default(),
 		}
 	}
+}
 
+impl<Address, Index, Call, Signature, DoLookup> UncheckedExtrinsic<Address, Index, Call, ::MaybeUnsigned<Signature>, DoLookup> where
+	Address: Member + Default + MaybeDisplay,
+	Index: Member + MaybeDisplay + SimpleArithmetic,
+	Call: Member,
+	Signature: traits::Verify + Eq + Default,
+	<Signature as traits::Verify>::Signer: Default + Eq,
+{
 	/// Is this extrinsic signed?
 	pub fn is_signed(&self) -> bool {
 		self.signature.is_signed()
 	}
 }
 
-impl<AccountId, Index, Call, Signature, DoLookup> Slicable for UncheckedExtrinsic<AccountId, Index, Call, Signature, DoLookup> where
- 	AccountId: Member + MaybeDisplay,
+impl<AccountId, Index, Call, Signature, DoLookup> Slicable for UncheckedExtrinsic<AccountId, Index, Call, ::MaybeUnsigned<Signature>, DoLookup> where
+ 	AccountId: Member + Default + MaybeDisplay,
  	Index: Member + MaybeDisplay + SimpleArithmetic,
- 	Call: Member,
-	Signature: Member + Slicable,
+	Call: Member,
+	Signature: Member + traits::Verify + Default + Slicable,
+	<Signature as traits::Verify>::Signer: Default + Eq,
 	Extrinsic<AccountId, Index, Call>: Slicable,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {

@@ -268,6 +268,16 @@ impl CheckEqual for substrate_primitives::H256 {
 }
 
 #[cfg(feature = "std")]
+pub trait MaybeSerializeDebugButNotDeserialize: Serialize + Debug {}
+#[cfg(feature = "std")]
+impl<T: Serialize + Debug> MaybeSerializeDebugButNotDeserialize for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeSerializeDebugButNotDeserialize {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeSerializeDebugButNotDeserialize for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
