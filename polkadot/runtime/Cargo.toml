@@ -9,6 +9,7 @@ log = { version = "0.3", optional = true }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 safe-mix = { path = "../../safe-mix", default_features = false}
+polkadot-primitives = { path = "../primitives", default_features = false }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-serializer = { path = "../../substrate/serializer" }
 substrate-runtime-std = { path = "../../substrate/runtime-std" }
@@ -25,7 +26,6 @@ substrate-runtime-session = { path = "../../substrate/runtime/session" }
 substrate-runtime-staking = { path = "../../substrate/runtime/staking" }
 substrate-runtime-system = { path = "../../substrate/runtime/system" }
 substrate-runtime-timestamp = { path = "../../substrate/runtime/timestamp" }
-polkadot-primitives = { path = "../primitives" }
 
 [dev-dependencies]
 hex-literal = "0.1.0"
@@ -33,6 +33,7 @@ hex-literal = "0.1.0"
 [features]
 default = ["std"]
 std = [
+	"polkadot-primitives/std",
 	"substrate-codec/std",
 	"substrate-primitives/std",
 	"substrate-runtime-std/std",
@@ -47,7 +48,6 @@ std = [
 	"substrate-runtime-staking/std",
 	"substrate-runtime-system/std",
 	"substrate-runtime-timestamp/std",
-	"polkadot-primitives/std",
 	"serde_derive",
 	"serde/std",
 	"log",

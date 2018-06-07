@@ -82,9 +82,26 @@ pub fn storage_root() -> [u8; 32] {
 	).unwrap_or([0u8; 32])
 }
 
-/// "Commit" all existing operations and get the resultant storage root.
+/// A trie root formed from the enumerated items.
 pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
 	triehash::ordered_trie_root(serialised_values.iter().map(|s| s.to_vec())).0
+}
+
+/// A trie root formed from the iterated items.
+pub fn trie_root<
+	I: IntoIterator<Item = (A, B)>,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
+>(input: I) -> [u8; 32] {
+	triehash::trie_root(input).0
+}
+
+/// A trie root formed from the enumerated items.
+pub fn ordered_trie_root<
+	I: IntoIterator<Item = A>,
+	A: AsRef<[u8]>
+>(input: I) -> [u8; 32] {
+	triehash::ordered_trie_root(input).0
 }
 
 /// Verify a ed25519 signature.

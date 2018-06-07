@@ -20,6 +20,7 @@ pub use std::cell;
 pub use std::clone;
 pub use std::cmp;
 pub use std::fmt;
+pub use std::hash;
 pub use std::iter;
 pub use std::marker;
 pub use std::mem;
@@ -29,6 +30,7 @@ pub use std::ptr;
 pub use std::rc;
 pub use std::slice;
 pub use std::vec;
+pub use std::result;
 
 pub mod collections {
 	pub use std::collections::btree_map;

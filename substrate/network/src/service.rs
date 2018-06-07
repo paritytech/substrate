@@ -14,29 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::collections::{BTreeMap};
 use std::io;
 use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
 use network::{NetworkProtocolHandler, NetworkContext, HostInfo, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_devp2p::{NetworkService};
-use primitives::block::{ExtrinsicHash, Header, HeaderHash};
-use primitives::Hash;
 use core_io::{TimerToken};
 use io::NetSyncIo;
-use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo, TransactionStats};
+use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
 use message::LocalizedBftMessage;
 use specialization::Specialization;
+use on_demand::OnDemandService;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 /// Type that represents bft messages stream.
-pub type BftMessageStream = mpsc::UnboundedReceiver<LocalizedBftMessage>;
+pub type BftMessageStream<B> = mpsc::UnboundedReceiver<LocalizedBftMessage<B>>;
 
 const TICK_TOKEN: TimerToken = 0;
 const TICK_TIMEOUT: Duration = Duration::from_millis(1000);
@@ -59,44 +59,51 @@ bitflags! {
 }
 
 /// Sync status
-pub trait SyncProvider: Send + Sync {
+pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
-	fn status(&self) -> ProtocolStatus;
+	fn status(&self) -> ProtocolStatus<B>;
 	/// Get peers information
-	fn peers(&self) -> Vec<PeerInfo>;
+	fn peers(&self) -> Vec<PeerInfo<B>>;
 	/// Get this node id if available.
 	fn node_id(&self) -> Option<String>;
-	/// Returns propagation count for pending transactions.
-	fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats>;
 }
 
 /// Transaction pool interface
-pub trait TransactionPool: Send + Sync {
+pub trait TransactionPool<B: BlockT>: Send + Sync {
 	/// Get transactions from the pool that are ready to be propagated.
-	fn transactions(&self) -> Vec<(ExtrinsicHash, Vec<u8>)>;
+	fn transactions(&self) -> Vec<(B::Hash, B::Extrinsic)>;
 	/// Import a transction into the pool.
-	fn import(&self, transaction: &[u8]) -> Option<ExtrinsicHash>;
+	fn import(&self, transaction: &B::Extrinsic) -> Option<B::Hash>;
+	/// Notify the pool about transactions broadcast.
+	fn on_broadcasted(&self, propagations: HashMap<B::Hash, Vec<String>>);
 }
 
 /// ConsensusService
-pub trait ConsensusService: Send + Sync {
+pub trait ConsensusService<B: BlockT>: Send + Sync {
 	/// Maintain connectivity to given addresses.
 	fn connect_to_authorities(&self, addresses: &[String]);
+
 	/// Get BFT message stream for messages corresponding to consensus on given
 	/// parent hash.
-	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream;
+	fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B>;
 	/// Send out a BFT message.
-	fn send_bft_message(&self, message: LocalizedBftMessage);
+	fn send_bft_message(&self, message: LocalizedBftMessage<B>);
+}
+
+/// Service able to execute closure in the network context.
+pub trait ExecuteInContext<B: BlockT>: Send + Sync {
+	/// Execute closure in network context.
+	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F);
 }
 
 /// devp2p Protocol handler
-struct ProtocolHandler<S: Specialization> {
-	protocol: Protocol<S>,
+struct ProtocolHandler<B: BlockT, S: Specialization<B>> {
+	protocol: Protocol<B, S>,
 }
 
 /// Peer connection information
 #[derive(Debug)]
-pub struct PeerInfo {
+pub struct PeerInfo<B: BlockT> {
 	/// Public node id
 	pub id: Option<String>,
 	/// Node client ID
@@ -108,36 +115,38 @@ pub struct PeerInfo {
 	/// Local endpoint address
 	pub local_address: String,
 	/// Dot protocol info.
-	pub dot_info: Option<ProtocolPeerInfo>,
+	pub dot_info: Option<ProtocolPeerInfo<B>>,
 }
 
 /// Service initialization parameters.
-pub struct Params<S> {
+pub struct Params<B: BlockT, S> {
 	/// Configuration.
 	pub config: ProtocolConfig,
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 	/// Polkadot relay chain access point.
-	pub chain: Arc<Client>,
+	pub chain: Arc<Client<B>>,
+	/// On-demand service reference.
+	pub on_demand: Option<Arc<OnDemandService>>,
 	/// Transaction pool.
-	pub transaction_pool: Arc<TransactionPool>,
+	pub transaction_pool: Arc<TransactionPool<B>>,
 	/// Protocol specialization.
 	pub specialization: S,
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
-pub struct Service<S: Specialization> {
+pub struct Service<B: BlockT + 'static, S: Specialization<B>> where B::Header: HeaderT<Number=u64> {
 	/// Network service
 	network: NetworkService,
 	/// Devp2p protocol handler
-	handler: Arc<ProtocolHandler<S>>,
+	handler: Arc<ProtocolHandler<B, S>>,
 	/// Devp2p protocol ID.
 	protocol_id: ProtocolId,
 }
 
-impl<S: Specialization> Service<S> {
+impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> where B::Header: HeaderT<Number=u64> {
 	/// Creates and register protocol with the network service
-	pub fn new(params: Params<S>, protocol_id: ProtocolId) -> Result<Arc<Service<S>>, Error> {
+	pub fn new(params: Params<B, S>, protocol_id: ProtocolId) -> Result<Arc<Service<B, S>>, Error> {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
 		let sync = Arc::new(Service {
 			network: service,
@@ -146,6 +155,7 @@ impl<S: Specialization> Service<S> {
 				protocol: Protocol::new(
 					params.config,
 					params.chain.clone(),
+					params.on_demand,
 					params.transaction_pool,
 					params.specialization
 				)?,
@@ -156,7 +166,7 @@ impl<S: Specialization> Service<S> {
 	}
 
 	/// Called when a new block is imported by the client.
-	pub fn on_block_imported(&self, hash: HeaderHash, header: &Header) {
+	pub fn on_block_imported(&self, hash: B::Hash, header: &B::Header) {
 		self.network.with_context(self.protocol_id, |context| {
 			self.handler.protocol.on_block_imported(&mut NetSyncIo::new(context), hash, header)
 		});
@@ -172,7 +182,7 @@ impl<S: Specialization> Service<S> {
 	/// Execute a closure with the chain-specific network specialization.
 	/// If the network is unavailable, this will return `None`.
 	pub fn with_spec<F, U>(&self, f: F) -> Option<U>
-		where F: FnOnce(&mut S, &mut ::specialization::HandlerContext) -> U
+		where F: FnOnce(&mut S, &mut ::specialization::HandlerContext<B>) -> U
 	{
 		let mut res = None;
 		self.network.with_context(self.protocol_id, |context| {
@@ -195,24 +205,32 @@ impl<S: Specialization> Service<S> {
 
 	fn stop(&self) {
 		self.handler.protocol.abort();
-		self.network.stop().unwrap_or_else(|e| warn!("Error stopping network: {:?}", e));
+		self.network.stop();
 	}
 }
 
-impl<S: Specialization> Drop for Service<S> {
+impl<B: BlockT + 'static, S: Specialization<B>> Drop for Service<B, S> where B::Header: HeaderT<Number=u64> {
 	fn drop(&mut self) {
 		self.stop();
 	}
 }
 
-impl<S: Specialization> SyncProvider for Service<S> {
+impl<B: BlockT + 'static, S: Specialization<B>> ExecuteInContext<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
+	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F) {
+		self.network.with_context(self.protocol_id, |context| {
+			closure(&mut ::protocol::Context::new(self.handler.protocol.context_data(), &mut NetSyncIo::new(context)))
+		});
+	}
+}
+
+impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
 	/// Get sync status
-	fn status(&self) -> ProtocolStatus {
+	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.protocol.status()
 	}
 
 	/// Get sync peers
-	fn peers(&self) -> Vec<PeerInfo> {
+	fn peers(&self) -> Vec<PeerInfo<B>> {
 		self.network.with_context_eval(self.protocol_id, |ctx| {
 			let peer_ids = self.network.connected_peers();
 
@@ -237,30 +255,26 @@ impl<S: Specialization> SyncProvider for Service<S> {
 	fn node_id(&self) -> Option<String> {
 		self.network.external_url()
 	}
-
-	fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats> {
-		self.handler.protocol.transactions_stats()
-	}
 }
 
 /// ConsensusService
-impl<S: Specialization> ConsensusService for Service<S> {
+impl<B: BlockT + 'static, S: Specialization<B>> ConsensusService<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
 	fn connect_to_authorities(&self, _addresses: &[String]) {
 		//TODO: implement me
 	}
 
-	fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
+	fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B> {
 		self.handler.protocol.bft_messages(parent_hash)
 	}
 
-	fn send_bft_message(&self, message: LocalizedBftMessage) {
+	fn send_bft_message(&self, message: LocalizedBftMessage<B>) {
 		self.network.with_context(self.protocol_id, |context| {
 			self.handler.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
 		});
 	}
 }
 
-impl<S: Specialization> NetworkProtocolHandler for ProtocolHandler<S> {
+impl<B: BlockT + 'static, S: Specialization<B>> NetworkProtocolHandler for ProtocolHandler<B, S> where B::Header: HeaderT<Number=u64> {
 	fn initialize(&self, io: &NetworkContext, _host_info: &HostInfo) {
 		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
 			.expect("Error registering sync timer");
@@ -291,7 +305,7 @@ impl<S: Specialization> NetworkProtocolHandler for ProtocolHandler<S> {
 }
 
 /// Trait for managing network
-pub trait ManageNetwork : Send + Sync {
+pub trait ManageNetwork: Send + Sync {
 	/// Set to allow unreserved peers to connect
 	fn accept_unreserved_peers(&self);
 	/// Set to deny unreserved peers to connect
@@ -306,7 +320,8 @@ pub trait ManageNetwork : Send + Sync {
 	fn stop_network(&self);
 }
 
-impl<S: Specialization> ManageNetwork for Service<S> {
+
+impl<B: BlockT + 'static, S: Specialization<B>> ManageNetwork for Service<B, S> where B::Header: HeaderT<Number=u64> {
 	fn accept_unreserved_peers(&self) {
 		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}

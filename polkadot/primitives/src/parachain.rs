@@ -14,19 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Parachain data types.
+//! Polkadot parachain types.
+
+use codec::{Slicable, Input};
+use rstd::prelude::*;
+use rstd::cmp::Ordering;
+use super::Hash;
 
 #[cfg(feature = "std")]
 use primitives::bytes;
-use primitives;
-use codec::{Input, Slicable};
-use rstd::cmp::{PartialOrd, Ord, Ordering};
-use rstd::vec::Vec;
-use ::Hash;
+
+/// Signature on candidate's block data by a collator.
+pub type CandidateSignature = ::runtime_primitives::Ed25519Signature;
 
 /// Unique identifier of a parachain.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Id(u32);
 
 impl From<Id> for u32 {
@@ -67,7 +70,6 @@ pub enum Chain {
 impl Slicable for Chain {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let disc = input.read_byte()?;
-
 		match disc {
 			0 => Some(Chain::Relay),
 			1 => Some(Chain::Parachain(Slicable::decode(input)?)),
@@ -84,7 +86,6 @@ impl Slicable for Chain {
 				id.using_encoded(|s| v.extend(s));
 			}
 		}
-
 		v
 	}
 
@@ -128,7 +129,7 @@ impl Slicable for DutyRoster {
 
 /// Extrinsic data for a parachain.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Extrinsic;
@@ -137,14 +138,14 @@ pub struct Extrinsic;
 ///
 /// https://github.com/w3f/polkadot-spec/blob/master/spec.md#candidate-para-chain-block
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Candidate {
 	/// The ID of the parachain this is a proposal for.
 	pub parachain_index: Id,
 	/// Collator's signature
-	pub collator_signature: ::Signature,
+	pub collator_signature: CandidateSignature,
 	/// Unprocessed ingress queue.
 	///
 	/// Ordered by parachain ID and block number.
@@ -155,20 +156,20 @@ pub struct Candidate {
 
 /// Candidate receipt type.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct CandidateReceipt {
 	/// The ID of the parachain this is a candidate for.
 	pub parachain_index: Id,
 	/// The collator's relay-chain account ID
-	pub collator: ::AccountId,
+	pub collator: super::AccountId,
 	/// The head-data
 	pub head_data: HeadData,
 	/// Balance uploads to the relay chain.
-	pub balance_uploads: Vec<(::AccountId, u64)>,
+	pub balance_uploads: Vec<(super::AccountId, u64)>,
 	/// Egress queue roots.
-	pub egress_queue_roots: Vec<(Id, primitives::H256)>,
+	pub egress_queue_roots: Vec<(Id, Hash)>,
 	/// Fees paid from the chain to the relay chain validators
 	pub fees: u64,
 }
@@ -203,8 +204,8 @@ impl CandidateReceipt {
 	/// Get the blake2_256 hash
 	#[cfg(feature = "std")]
 	pub fn hash(&self) -> Hash {
-		let encoded = self.encode();
-		primitives::hashing::blake2_256(&encoded).into()
+		use runtime_primitives::traits::{BlakeTwo256, Hashing};
+		BlakeTwo256::hash_of(self)
 	}
 }
 
@@ -224,7 +225,7 @@ impl Ord for CandidateReceipt {
 
 /// Parachain ingress queue message.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Message(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Consolidated ingress queue data.
@@ -232,34 +233,34 @@ pub struct Message(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>
 /// This is just an ordered vector of other parachains' egress queues,
 /// obtained according to the routing rules.
 #[derive(Default, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 
 /// Parachain block data.
 ///
 /// contains everything required to validate para-block, may contain block and witness data
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct BlockData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Parachain header raw bytes wrapper type.
 #[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Header(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Parachain head data included in the chain.
 #[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct HeadData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Parachain validation code.
 #[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Activitiy bit field
 #[derive(PartialEq, Eq, Clone, Default)]
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Activity(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl Slicable for Activity {
@@ -337,43 +338,5 @@ impl Slicable for Statement {
 			}
 			_ => None,
 		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use substrate_serializer as ser;
-
-	#[test]
-	fn test_candidate() {
-		assert_eq!(ser::to_string_pretty(&Candidate {
-			parachain_index: 5.into(),
-			collator_signature: primitives::hash::H512::from(10).into(),
-			unprocessed_ingress: ConsolidatedIngress(vec![
-				(Id(1), vec![Message(vec![2])]),
-				(Id(2), vec![Message(vec![2]), Message(vec![3])]),
-			]),
-			block: BlockData(vec![1, 2, 3]),
-    }), r#"{
-  "parachainIndex": 5,
-  "collatorSignature": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a",
-  "unprocessedIngress": [
-    [
-      1,
-      [
-        "0x02"
-      ]
-    ],
-    [
-      2,
-      [
-        "0x02",
-        "0x03"
-      ]
-    ]
-  ],
-  "block": "0x010203"
-}"#);
 	}
 }

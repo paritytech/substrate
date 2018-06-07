@@ -42,7 +42,7 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::WasmExecutor;
 	use codec::{Slicable, Joiner};
-	use keyring::Keyring::{self, Alice, Bob};
+	use keyring::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap};
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
@@ -63,13 +63,21 @@ mod tests {
 		)
 	}
 
+	fn alice() -> Hash {
+		Keyring::Alice.to_raw_public().into()
+	}
+
+	fn bob() -> Hash {
+		Keyring::Bob.to_raw_public().into()
+	}
+
 	fn xt() -> UncheckedExtrinsic {
 		let extrinsic = Extrinsic {
-			signed: Alice.into(),
+			signed: alice(),
 			index: 0,
-			function: Call::Staking(staking::Call::transfer::<Concrete>(Bob.into(), 69)),
+			function: Call::Staking(staking::Call::transfer::<Concrete>(bob(), 69)),
 		};
-		let signature = Keyring::from_raw_public(extrinsic.signed).unwrap()
+		let signature = Keyring::from_raw_public(extrinsic.signed.0).unwrap()
 			.sign(&extrinsic.encode()).into();
 
 		UncheckedExtrinsic { extrinsic, signature }
@@ -82,8 +90,9 @@ mod tests {
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t: TestExternalities = map![
-			twox_128(&<staking::FreeBalance<Concrete>>::key_for(*Alice)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<staking::TransactionFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -96,8 +105,9 @@ mod tests {
 	#[test]
 	fn panic_execution_with_native_equivalent_code_gives_error() {
 		let mut t: TestExternalities = map![
-			twox_128(&<staking::FreeBalance<Concrete>>::key_for(*Alice)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<staking::TransactionFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -110,8 +120,9 @@ mod tests {
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t: TestExternalities = map![
-			twox_128(&<staking::FreeBalance<Concrete>>::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<staking::TransactionFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -121,16 +132,17 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&Alice), 42);
-			assert_eq!(Staking::balance(&Bob), 69);
+			assert_eq!(Staking::balance(&alice()), 42);
+			assert_eq!(Staking::balance(&bob()), 69);
 		});
 	}
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t: TestExternalities = map![
-			twox_128(&<staking::FreeBalance<Concrete>>::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<staking::TransactionFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -140,29 +152,30 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&Alice), 42);
-			assert_eq!(Staking::balance(&Bob), 69);
+			assert_eq!(Staking::balance(&alice()), 42);
+			assert_eq!(Staking::balance(&bob()), 69);
 		});
 	}
 
 	fn new_test_ext() -> TestExternalities {
 		use keyring::Keyring::*;
-		let three = [3u8; 32];
+		let three = [3u8; 32].into();
 		GenesisConfig {
 			consensus: Some(Default::default()),
 			system: Some(Default::default()),
 			session: Some(SessionConfig {
 				session_length: 2,
-				validators: vec![One.into(), Two.into(), three],
+				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
 				current_era: 0,
-				balances: vec![(Alice.into(), 111)],
-				intentions: vec![Alice.into(), Bob.into(), Charlie.into()],
+				balances: vec![(alice(), 111)],
+				intentions: vec![alice(), bob(), Charlie.to_raw_public().into()],
 				validator_count: 3,
 				bonding_duration: 0,
-				transaction_fee: 1,
+				transaction_base_fee: 1,
+				transaction_byte_fee: 0,
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
@@ -173,7 +186,7 @@ mod tests {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(|extrinsic| {
-			let signature = Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed)).unwrap())
+			let signature = Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed.0)).unwrap())
 				.sign(&extrinsic.encode()).into();
 
 			UncheckedExtrinsic { extrinsic, signature }
@@ -197,11 +210,11 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("a63d59c6a7347cd7a1dc1ec139723b531f0ac450e39b1c532d5ca69ff74ad811").into(),
+			hex!("76b0393b4958d3cb98bb51d9f4edb316af48485142b8721e94c3b52c75ec3243").into(),
 			vec![Extrinsic {
-				signed: Alice.into(),
+				signed: alice(),
 				index: 0,
-				function: Call::Staking(staking::Call::transfer(Bob.into(), 69)),
+				function: Call::Staking(staking::Call::transfer(bob(), 69)),
 			}]
 		)
 	}
@@ -210,17 +223,17 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("1c3623b2e3f7e43752debb9015bace4f6931593579b5af34457b931315f5e2ab").into(),
+			hex!("8ae9828a5988459d35fb428086170dead660176ee0766e89bc1a4b48153d4e88").into(),
 			vec![
 				Extrinsic {
-					signed: Bob.into(),
+					signed: bob(),
 					index: 0,
-					function: Call::Staking(staking::Call::transfer(Alice.into(), 5)),
+					function: Call::Staking(staking::Call::transfer(alice(), 5)),
 				},
 				Extrinsic {
-					signed: Alice.into(),
+					signed: alice(),
 					index: 1,
-					function: Call::Staking(staking::Call::transfer(Bob.into(), 15)),
+					function: Call::Staking(staking::Call::transfer(bob(), 15)),
 				}
 			]
 		)
@@ -233,15 +246,15 @@ mod tests {
 		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&Alice), 41);
-			assert_eq!(Staking::balance(&Bob), 69);
+			assert_eq!(Staking::balance(&alice()), 41);
+			assert_eq!(Staking::balance(&bob()), 69);
 		});
 
 		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&Alice), 30);
-			assert_eq!(Staking::balance(&Bob), 78);
+			assert_eq!(Staking::balance(&alice()), 30);
+			assert_eq!(Staking::balance(&bob()), 78);
 		});
 	}
 
@@ -252,23 +265,24 @@ mod tests {
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&Alice), 41);
-			assert_eq!(Staking::balance(&Bob), 69);
+			assert_eq!(Staking::balance(&alice()), 41);
+			assert_eq!(Staking::balance(&bob()), 69);
 		});
 
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&Alice), 30);
-			assert_eq!(Staking::balance(&Bob), 78);
+			assert_eq!(Staking::balance(&alice()), 30);
+			assert_eq!(Staking::balance(&bob()), 78);
 		});
 	}
 
 	#[test]
 	fn panic_execution_gives_error() {
 		let mut t: TestExternalities = map![
-			twox_128(&<staking::FreeBalance<Concrete>>::key_for(*Alice)).to_vec() => vec![68u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<staking::TransactionFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -282,8 +296,9 @@ mod tests {
 	#[test]
 	fn successful_execution_gives_ok() {
 		let mut t: TestExternalities = map![
-			twox_128(&<staking::FreeBalance<Concrete>>::key_for(*Alice)).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<staking::TransactionFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -294,8 +309,8 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&Alice), 42);
-			assert_eq!(Staking::balance(&Bob), 69);
+			assert_eq!(Staking::balance(&alice()), 42);
+			assert_eq!(Staking::balance(&bob()), 69);
 		});
 	}
 }

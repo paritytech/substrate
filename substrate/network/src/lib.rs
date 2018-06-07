@@ -22,6 +22,7 @@
 extern crate ethcore_network_devp2p as network_devp2p;
 extern crate ethcore_network as network;
 extern crate ethcore_io as core_io;
+extern crate linked_hash_map;
 extern crate rand;
 extern crate parking_lot;
 extern crate substrate_primitives as primitives;
@@ -29,6 +30,7 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_client as client;
 extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_bft;
 extern crate serde;
 extern crate serde_json;
@@ -53,6 +55,7 @@ mod config;
 mod chain;
 mod blocks;
 mod consensus;
+mod on_demand;
 pub mod error;
 pub mod specialization;
 
@@ -62,14 +65,8 @@ pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 	TransactionPool, Params, ManageNetwork, SyncProvider};
 pub use protocol::{ProtocolStatus};
 pub use sync::{Status as SyncStatus, SyncState};
-pub use network::{NonReservedPeerMode, NetworkConfiguration, PeerId, ProtocolId};
-pub use network_devp2p::{ConnectionFilter, ConnectionDirection};
-pub use message::{BftMessage, RequestId, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal, Status as StatusMessage};
+pub use network::{NonReservedPeerMode, NetworkConfiguration, PeerId, ProtocolId, ConnectionFilter, ConnectionDirection};
+pub use message::{generic as generic_message, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal, Status as StatusMessage};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
-
-// TODO: move it elsewhere
-fn header_hash(header: &primitives::Header) -> primitives::block::HeaderHash {
-	use runtime_support::Hashable;
-	header.blake2_256().into()
-}
+pub use on_demand::{OnDemand, OnDemandService, Response as OnDemandResponse};

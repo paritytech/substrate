@@ -8,3 +8,5 @@ ring = "0.12"
 untrusted = "0.5"
 substrate-primitives = { version = "0.1", path = "../primitives" }
 hex-literal = "0.1"
+base58 = "0.1"
+blake2-rfc = "0.2"

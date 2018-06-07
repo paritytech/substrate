@@ -22,7 +22,9 @@ extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_pubsub;
 extern crate parking_lot;
 extern crate substrate_client as client;
+extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate tokio_core;
 
@@ -45,3 +47,4 @@ pub mod author;
 pub mod chain;
 pub mod metadata;
 pub mod state;
+pub mod system;

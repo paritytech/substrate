@@ -27,14 +27,17 @@ use bft::{self, BftService};
 use client::{BlockchainEvents, ChainHead};
 use ed25519;
 use futures::prelude::*;
-use parking_lot::Mutex;
-use polkadot_api::PolkadotApi;
-use primitives::block::Header;
+use futures::{future, Canceled};
+use polkadot_api::LocalPolkadotApi;
+use polkadot_primitives::{BlockId, Block, Header, Hash, AccountId};
+use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
+use primitives::AuthorityId;
 use runtime_support::Hashable;
+use substrate_network as net;
 use tokio_core::reactor;
 use transaction_pool::TransactionPool;
 
-use super::{Network, Collators, ProposerFactory};
+use super::{Network, Collators, TableRouter, SharedTable, ProposerFactory};
 use error;
 
 const TIMER_DELAY_MS: u64 = 5000;
@@ -43,12 +46,12 @@ const TIMER_INTERVAL_MS: u64 = 500;
 fn start_bft<F, C>(
 	header: &Header,
 	handle: reactor::Handle,
-	bft_service: &BftService<F, C>,
+	bft_service: &BftService<Block, F, C>,
 ) where
-	F: bft::Environment + 'static,
-	C: bft::BlockImport + bft::Authorities + 'static,
-	<F as bft::Environment>::Error: ::std::fmt::Debug,
-	<F::Proposer as bft::Proposer>::Error: ::std::fmt::Display + Into<error::Error>,
+	F: bft::Environment<Block> + 'static,
+	C: bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
+	F::Error: ::std::fmt::Debug,
+	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
 {
 	match bft_service.build_upon(&header) {
 		Ok(Some(bft)) => handle.spawn(bft),
@@ -65,16 +68,19 @@ pub struct Service {
 
 impl Service {
 	/// Create and start a new instance.
-	pub fn new<C, N: Network + Collators + Send + 'static>(
+	pub fn new<A, C, N>(
 		client: Arc<C>,
+		api: Arc<A>,
 		network: N,
-		transaction_pool: Arc<Mutex<TransactionPool>>,
+		transaction_pool: Arc<TransactionPool>,
 		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
 	) -> Service
 		where
-			C: BlockchainEvents + ChainHead + bft::BlockImport + bft::Authorities + PolkadotApi + Send + Sync + 'static,
+			A: LocalPolkadotApi + Send + Sync + 'static,
+			C: BlockchainEvents<Block> + ChainHead<Block> + bft::BlockImport<Block> + bft::Authorities<Block> + Send + Sync + 'static,
 			C::CheckedBlockId: Send + 'static,
+			N: Network + Collators + Send + 'static,
 			N::TableRouter: Send + 'static,
 			<N::Collation as IntoFuture>::Future: Send + 'static,
 	{
@@ -84,7 +90,7 @@ impl Service {
 			let key = Arc::new(key);
 
 			let factory = ProposerFactory {
-				client: client.clone(),
+				client: api.clone(),
 				transaction_pool: transaction_pool.clone(),
 				collators: network.clone(),
 				network,

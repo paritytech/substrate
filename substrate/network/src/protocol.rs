@@ -14,27 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{HashMap, HashSet};
 use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
 use parking_lot::{RwLock, Mutex};
 use serde_json;
-use primitives::block::{HeaderHash, ExtrinsicHash, Number as BlockNumber, Header, Id as BlockId};
-use primitives::{Hash, blake2_256};
-use runtime_support::Hashable;
-use network::{PeerId, NodeId};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing, HashingFor};
+use runtime_primitives::generic::BlockId;
+use network::PeerId;
 
-use chain::Client;
-use config::ProtocolConfig;
-use consensus::Consensus;
-use error;
-use io::SyncIo;
 use message::{self, Message};
-use service::{Role, TransactionPool, BftMessageStream};
+use message::generic::Message as GenericMessage;
 use specialization::Specialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
-use super::header_hash;
+use consensus::Consensus;
+use service::{Role, TransactionPool, BftMessageStream};
+use config::ProtocolConfig;
+use chain::Client;
+use on_demand::OnDemandService;
+use io::SyncIo;
+use error;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 
@@ -47,11 +47,24 @@ pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 
+// Lock must always be taken in order declared here.
+pub struct Protocol<B: BlockT, S: Specialization<B>> {
+	config: ProtocolConfig,
+	specialization: RwLock<S>,
+	context_data: ContextData<B>,
+	on_demand: Option<Arc<OnDemandService>>,
+	genesis_hash: B::Hash,
+	sync: RwLock<ChainSync<B>>,
+	consensus: Mutex<Consensus<B>>,
+	// Connected peers pending Status message.
+	handshaking_peers: RwLock<HashMap<PeerId, time::Instant>>,
+	transaction_pool: Arc<TransactionPool<B>>,
+}
 /// Syncing status and statistics
 #[derive(Clone)]
-pub struct ProtocolStatus {
+pub struct ProtocolStatus<B: BlockT> {
 	/// Sync status.
-	pub sync: SyncStatus,
+	pub sync: SyncStatus<B>,
 	/// Total number of connected peers
 	pub num_peers: usize,
 	/// Total number of active peers.
@@ -59,56 +72,47 @@ pub struct ProtocolStatus {
 }
 
 /// Peer information
-struct Peer {
+struct Peer<B: BlockT> {
 	/// Protocol version
 	protocol_version: u32,
 	/// Roles
 	roles: Role,
 	/// Peer best block hash
-	best_hash: HeaderHash,
+	best_hash: B::Hash,
 	/// Peer best block number
-	best_number: BlockNumber,
+	best_number: <B::Header as HeaderT>::Number,
 	/// Pending block request if any
-	block_request: Option<message::BlockRequest>,
+	block_request: Option<message::BlockRequest<B>>,
 	/// Request timestamp
 	request_timestamp: Option<time::Instant>,
 	/// Holds a set of transactions known to this peer.
-	known_extrinsics: HashSet<ExtrinsicHash>,
+	known_extrinsics: HashSet<B::Hash>,
 	/// Holds a set of blocks known to this peer.
-	known_blocks: HashSet<HeaderHash>,
+	known_blocks: HashSet<B::Hash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
 }
 
 #[derive(Debug)]
-pub struct PeerInfo {
+pub struct PeerInfo<B: BlockT> {
 	/// Roles
 	pub roles: Role,
 	/// Protocol version
 	pub protocol_version: u32,
 	/// Peer best block hash
-	pub best_hash: HeaderHash,
+	pub best_hash: B::Hash,
 	/// Peer best block number
-	pub best_number: BlockNumber,
-}
-
-/// Transaction stats
-#[derive(Debug)]
-pub struct TransactionStats {
-	/// Block number where this TX was first seen.
-	pub first_seen: u64,
-	/// Peers it was propagated to.
-	pub propagated_to: BTreeMap<NodeId, usize>,
+	pub best_number: <B::Header as HeaderT>::Number,
 }
 
 /// Protocol context.
-pub(crate) struct Context<'a> {
+pub struct Context<'a, B: 'a + BlockT> {
 	io: &'a mut SyncIo,
-	context_data: &'a ContextData,
+	context_data: &'a ContextData<B>,
 }
 
-impl<'a> Context<'a> {
-	fn new(context_data: &'a ContextData, io: &'a mut SyncIo) -> Self {
+impl<'a, B: BlockT + 'a> Context<'a, B> {
+	pub(crate) fn new(context_data: &'a ContextData<B>, io: &'a mut SyncIo) -> Self {
 		Context {
 			io,
 			context_data,
@@ -116,20 +120,20 @@ impl<'a> Context<'a> {
 	}
 
 	/// Send a message to a peer.
-	pub(crate) fn send_message(&mut self, peer_id: PeerId, message: Message) {
+	pub fn send_message(&mut self, peer_id: PeerId, message: Message<B>) {
 		send_message(&self.context_data.peers, self.io, peer_id, message)
 	}
 
-	pub(crate) fn disable_peer(&mut self, peer_id: PeerId) {
+	pub fn disable_peer(&mut self, peer_id: PeerId) {
 		self.io.disable_peer(peer_id);
 	}
 
-	pub(crate) fn disconnect_peer(&mut self, peer_id: PeerId) {
+	pub fn disconnect_peer(&mut self, peer_id: PeerId) {
 		self.io.disconnect_peer(peer_id)
 	}
 
 	/// Get peer info.
-	pub(crate) fn peer_info(&self, peer: PeerId) -> Option<PeerInfo> {
+	pub fn peer_info(&self, peer: PeerId) -> Option<PeerInfo<B>> {
 		self.context_data.peers.read().get(&peer).map(|p| {
 			PeerInfo {
 				roles: p.roles,
@@ -141,14 +145,14 @@ impl<'a> Context<'a> {
 	}
 
 	/// Get a handle to the chain.
-	pub(crate) fn chain(&self) -> &Client {
+	pub fn chain(&self) -> &Client<B> {
 		&*self.context_data.chain
 	}
 }
 
-impl<'a> ::specialization::HandlerContext for Context<'a> {
+impl<'a, B: BlockT + 'a> ::specialization::HandlerContext<B> for Context<'a, B> {
 	fn send(&mut self, peer_id: PeerId, message: Vec<u8>) {
-		self.send_message(peer_id, Message::ChainSpecific(message));
+		self.send_message(peer_id, GenericMessage::ChainSpecific(message));
 	}
 
 	fn disable_peer(&mut self, peer_id: PeerId) {
@@ -159,40 +163,29 @@ impl<'a> ::specialization::HandlerContext for Context<'a> {
 		Context::disable_peer(self, peer_id);
 	}
 
-	fn client(&self) -> &Client {
+	fn client(&self) -> &Client<B> {
 		&*self.context_data.chain
 	}
 }
 
-struct ContextData {
+/// Data necessary to create a context.
+pub(crate) struct ContextData<B: BlockT> {
 	// All connected peers
-	peers: RwLock<HashMap<PeerId, Peer>>,
-	chain: Arc<Client>,
+	peers: RwLock<HashMap<PeerId, Peer<B>>>,
+	chain: Arc<Client<B>>,
 }
 
-// Lock must always be taken in order declared here.
-pub struct Protocol<S: Specialization> {
-	config: ProtocolConfig,
-	specialization: RwLock<S>,
-	genesis_hash: HeaderHash,
-	sync: RwLock<ChainSync>,
-	consensus: Mutex<Consensus>,
-	context_data: ContextData,
-	// Connected peers pending Status message.
-	handshaking_peers: RwLock<HashMap<PeerId, time::Instant>>,
-	transaction_pool: Arc<TransactionPool>,
-}
-
-impl<S: Specialization> Protocol<S> {
+impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Number=u64> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
-		chain: Arc<Client>,
-		transaction_pool: Arc<TransactionPool>,
+		chain: Arc<Client<B>>,
+		on_demand: Option<Arc<OnDemandService>>,
+		transaction_pool: Arc<TransactionPool<B>>,
 		specialization: S,
 	) -> error::Result<Self>  {
 		let info = chain.info()?;
-		let best_hash = info.chain.best_hash;
+		let sync = ChainSync::new(config.roles, &info);
 		let protocol = Protocol {
 			config: config,
 			specialization: RwLock::new(specialization),
@@ -200,17 +193,22 @@ impl<S: Specialization> Protocol<S> {
 				peers: RwLock::new(HashMap::new()),
 				chain,
 			},
+			on_demand,
 			genesis_hash: info.chain.genesis_hash,
-			sync: RwLock::new(ChainSync::new(&info)),
-			consensus: Mutex::new(Consensus::new(best_hash)),
+			sync: RwLock::new(sync),
+			consensus: Mutex::new(Consensus::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
 			transaction_pool: transaction_pool,
 		};
 		Ok(protocol)
 	}
 
+	pub(crate) fn context_data(&self) -> &ContextData<B> {
+		&self.context_data
+	}
+
 	/// Returns protocol status
-	pub fn status(&self) -> ProtocolStatus {
+	pub fn status(&self) -> ProtocolStatus<B> {
 		let sync = self.sync.read();
 		let peers = self.context_data.peers.read();
 		ProtocolStatus {
@@ -221,7 +219,7 @@ impl<S: Specialization> Protocol<S> {
 	}
 
 	pub fn handle_packet(&self, io: &mut SyncIo, peer_id: PeerId, data: &[u8]) {
-		let message: Message = match serde_json::from_slice(data) {
+		let message: Message<B> = match serde_json::from_slice(data) {
 			Ok(m) => m,
 			Err(e) => {
 				debug!("Invalid packet from {}: {}", peer_id, e);
@@ -231,9 +229,9 @@ impl<S: Specialization> Protocol<S> {
 		};
 
 		match message {
-			Message::Status(s) => self.on_status_message(io, peer_id, s),
-			Message::BlockRequest(r) => self.on_block_request(io, peer_id, r),
-			Message::BlockResponse(r) => {
+			GenericMessage::Status(s) => self.on_status_message(io, peer_id, s),
+			GenericMessage::BlockRequest(r) => self.on_block_request(io, peer_id, r),
+			GenericMessage::BlockResponse(r) => {
 				let request = {
 					let mut peers = self.context_data.peers.write();
 					if let Some(ref mut peer) = peers.get_mut(&peer_id) {
@@ -258,17 +256,19 @@ impl<S: Specialization> Protocol<S> {
 				}
 				self.on_block_response(io, peer_id, request, r);
 			},
-			Message::BlockAnnounce(announce) => {
+			GenericMessage::BlockAnnounce(announce) => {
 				self.on_block_announce(io, peer_id, announce);
 			},
-			Message::BftMessage(m) => self.on_bft_message(io, peer_id, m, blake2_256(data).into()),
-			Message::Extrinsics(m) => self.on_extrinsics(io, peer_id, m),
-			Message::ChainSpecific(data) => self.on_chain_specific(io, peer_id, data),
+			GenericMessage::BftMessage(m) => self.on_bft_message(io, peer_id, m, HashingFor::<B>::hash(data)),
+			GenericMessage::Transactions(m) => self.on_extrinsics(io, peer_id, m),
+			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(io, peer_id, request),
+			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response),
+			GenericMessage::ChainSpecific(msg) => self.on_chain_specific(io, peer_id, msg),
 		}
 	}
 
-	pub fn send_message(&self, io: &mut SyncIo, peer_id: PeerId, message: Message) {
-		send_message(&self.context_data.peers, io, peer_id, message);
+	pub fn send_message(&self, io: &mut SyncIo, peer_id: PeerId, message: Message<B>) {
+		send_message::<B>(&self.context_data.peers, io, peer_id, message)
 	}
 
 	/// Called when a new peer is connected
@@ -281,6 +281,11 @@ impl<S: Specialization> Protocol<S> {
 	/// Called by peer when it is disconnecting
 	pub fn on_peer_disconnected(&self, io: &mut SyncIo, peer: PeerId) {
 		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_info(peer));
+
+		// lock all the the peer lists so that add/remove peer events are in order
+		let mut sync = self.sync.write();
+		let mut consensus = self.consensus.lock();
+
 		let removed = {
 			let mut peers = self.context_data.peers.write();
 			let mut handshaking_peers = self.handshaking_peers.write();
@@ -289,12 +294,13 @@ impl<S: Specialization> Protocol<S> {
 		};
 		if removed {
 			let mut context = Context::new(&self.context_data, io);
-			self.consensus.lock().peer_disconnected(&mut context, peer);
-			self.sync.write().peer_disconnected(&mut context, peer);
+			sync.peer_disconnected(&mut context, peer);
+			consensus.peer_disconnected(&mut context, peer);
+			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
 		}
 	}
 
-	fn on_block_request(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest) {
+	fn on_block_request(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest<B>) {
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}", request.id, peer, request.from, request.to, request.max);
 		let mut blocks = Vec::new();
 		let mut id = match request.from {
@@ -317,9 +323,9 @@ impl<S: Specialization> Protocol<S> {
 			if blocks.len() >= max{
 				break;
 			}
-			let number = header.number;
-			let hash = header_hash(&header);
-			let block_data = message::BlockData {
+			let number = header.number().clone();
+			let hash = header.hash();
+			let block_data = message::generic::BlockData {
 				hash: hash,
 				header: if get_header { Some(header) } else { None },
 				body: if get_body { self.context_data.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
@@ -338,20 +344,20 @@ impl<S: Specialization> Protocol<S> {
 				}
 			}
 		}
-		let response = message::BlockResponse {
+		let response = message::generic::BlockResponse {
 			id: request.id,
 			blocks: blocks,
 		};
-		self.send_message(io, peer, Message::BlockResponse(response))
+		self.send_message(io, peer, GenericMessage::BlockResponse(response))
 	}
 
-	fn on_block_response(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest, response: message::BlockResponse) {
+	fn on_block_response(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest<B>, response: message::BlockResponse<B>) {
 		// TODO: validate response
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks", response.id, peer, response.blocks.len());
 		self.sync.write().on_block_data(&mut Context::new(&self.context_data, io), peer, request, response);
 	}
 
-	fn on_bft_message(&self, io: &mut SyncIo, peer: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
+	fn on_bft_message(&self, io: &mut SyncIo, peer: PeerId, message: message::LocalizedBftMessage<B>, hash: B::Hash) {
 		trace!(target: "sync", "BFT message from {}: {:?}", peer, message);
 		self.consensus.lock().on_bft_message(&mut Context::new(&self.context_data, io), peer, message, hash);
 	}
@@ -361,18 +367,19 @@ impl<S: Specialization> Protocol<S> {
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn send_bft_message(&self, io: &mut SyncIo, message: message::LocalizedBftMessage) {
+	pub fn send_bft_message(&self, io: &mut SyncIo, message: message::LocalizedBftMessage<B>) {
 		self.consensus.lock().send_bft_message(&mut Context::new(&self.context_data, io), message)
 	}
 
 	/// See `ConsensusService` trait.
-	pub fn bft_messages(&self, parent_hash: Hash) -> BftMessageStream {
+	pub fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B> {
 		self.consensus.lock().bft_messages(parent_hash)
 	}
 
 	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.maintain_peers(io);
+		self.on_demand.as_ref().map(|s| s.maintain_peers(io));
 		self.consensus.lock().collect_garbage(None);
 	}
 
@@ -397,7 +404,7 @@ impl<S: Specialization> Protocol<S> {
 		}
 	}
 
-	pub fn peer_info(&self, peer: PeerId) -> Option<PeerInfo> {
+	pub fn peer_info(&self, peer: PeerId) -> Option<PeerInfo<B>> {
 		self.context_data.peers.read().get(&peer).map(|p| {
 			PeerInfo {
 				roles: p.roles,
@@ -409,15 +416,13 @@ impl<S: Specialization> Protocol<S> {
 	}
 
 	/// Called by peer to report status
-	fn on_status_message(&self, io: &mut SyncIo, peer_id: PeerId, status: message::Status) {
+	fn on_status_message(&self, io: &mut SyncIo, peer_id: PeerId, status: message::Status<B>) {
 		trace!(target: "sync", "New peer {} {:?}", peer_id, status);
 		if io.is_expired() {
 			trace!(target: "sync", "Status packet from expired session {}:{}", peer_id, io.peer_info(peer_id));
 			return;
 		}
 
-		let mut sync = self.sync.write();
-		let mut consensus = self.consensus.lock();
 		{
 			let mut peers = self.context_data.peers.write();
 			let mut handshaking_peers = self.handshaking_peers.write();
@@ -453,12 +458,13 @@ impl<S: Specialization> Protocol<S> {
 		}
 
 		let mut context = Context::new(&self.context_data, io);
-		sync.new_peer(&mut context, peer_id);
-		consensus.new_peer(&mut context, peer_id, &status.roles);
+		self.sync.write().new_peer(&mut context, peer_id);
+		self.consensus.lock().new_peer(&mut context, peer_id, &status.roles);
+		self.on_demand.as_ref().map(|s| s.on_connect(peer_id, message::Role::as_flags(&status.roles)));
 	}
 
 	/// Called when peer sends us new extrinsics
-	fn on_extrinsics(&self, _io: &mut SyncIo, peer_id: PeerId, extrinsics: message::Extrinsics) {
+	fn on_extrinsics(&self, _io: &mut SyncIo, peer_id: PeerId, extrinsics: message::Transactions<B::Extrinsic>) {
 		// Accept extrinsics only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
 			trace!(target: "sync", "{} Ignoring extrinsics while syncing", peer_id);
@@ -486,31 +492,45 @@ impl<S: Specialization> Protocol<S> {
 
 		let extrinsics = self.transaction_pool.transactions();
 
+		let mut propagated_to = HashMap::new();
 		let mut peers = self.context_data.peers.write();
 		for (peer_id, ref mut peer) in peers.iter_mut() {
-			let to_send: Vec<_> = extrinsics.iter().filter_map(|&(hash, ref t)|
-				if peer.known_extrinsics.insert(hash.clone()) { Some(t.clone()) } else { None }).collect();
+			let (hashes, to_send): (Vec<_>, Vec<_>) = extrinsics
+				.iter()
+				.cloned()
+				.filter(|&(hash, _)| peer.known_extrinsics.insert(hash))
+				.unzip();
+
 			if !to_send.is_empty() {
-				trace!(target: "sync", "Sending {} extrinsics to {}", to_send.len(), peer_id);
-				self.send_message(io, *peer_id, Message::Extrinsics(to_send));
+				let node_id = io.peer_session_info(*peer_id).map(|info| match info.id {
+					Some(id) => format!("{}@{:x}", info.remote_address, id),
+					None => info.remote_address.clone(),
+				});
+
+				if let Some(id) = node_id {
+					for hash in hashes {
+						propagated_to.entry(hash).or_insert_with(Vec::new).push(id.clone());
+					}
+				}
+				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), peer_id);
+				self.send_message(io, *peer_id, GenericMessage::Transactions(to_send));
 			}
 		}
+		self.transaction_pool.on_broadcasted(propagated_to);
 	}
 
 	/// Send Status message
 	fn send_status(&self, io: &mut SyncIo, peer_id: PeerId) {
 		if let Ok(info) = self.context_data.chain.info() {
-			let status = message::Status {
+			let status = message::generic::Status {
 				version: CURRENT_VERSION,
 				genesis_hash: info.chain.genesis_hash,
 				roles: self.config.roles.into(),
 				best_number: info.chain.best_number,
 				best_hash: info.chain.best_hash,
-				authority_signature: None,
-				authority_id: None,
 				chain_status: self.specialization.read().status(),
 			};
-			self.send_message(io, peer_id, Message::Status(status))
+			self.send_message(io, peer_id, GenericMessage::Status(status))
 		}
 	}
 
@@ -524,9 +544,9 @@ impl<S: Specialization> Protocol<S> {
 		self.consensus.lock().restart();
 	}
 
-	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce) {
+	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce<B::Header>) {
 		let header = announce.header;
-		let hash: HeaderHash = header.blake2_256().into();
+		let hash = header.hash();
 		{
 			let mut peers = self.context_data.peers.write();
 			if let Some(ref mut peer) = peers.get_mut(&peer_id) {
@@ -536,7 +556,7 @@ impl<S: Specialization> Protocol<S> {
 		self.sync.write().on_block_announce(&mut Context::new(&self.context_data, io), peer_id, hash, &header);
 	}
 
-	pub fn on_block_imported(&self, io: &mut SyncIo, hash: HeaderHash, header: &Header) {
+	pub fn on_block_imported(&self, io: &mut SyncIo, hash: B::Hash, header: &B::Header) {
 		self.sync.write().update_chain_info(&header);
 		// send out block announcements
 		let mut peers = self.context_data.peers.write();
@@ -544,34 +564,47 @@ impl<S: Specialization> Protocol<S> {
 		for (peer_id, ref mut peer) in peers.iter_mut() {
 			if peer.known_blocks.insert(hash.clone()) {
 				trace!(target: "sync", "Announcing block {:?} to {}", hash, peer_id);
-				self.send_message(io, *peer_id, Message::BlockAnnounce(message::BlockAnnounce {
+				self.send_message(io, *peer_id, GenericMessage::BlockAnnounce(message::BlockAnnounce {
 					header: header.clone()
 				}));
 			}
 		}
 
-		self.consensus.lock().collect_garbage(Some((hash, &header)));
+		self.consensus.lock().collect_garbage(Some(&header));
 	}
 
-	pub fn transactions_stats(&self) -> BTreeMap<ExtrinsicHash, TransactionStats> {
-		BTreeMap::new()
+	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest<B::Hash>) {
+		trace!(target: "sync", "Remote request {} from {} ({} at {})", request.id, peer_id, request.method, request.block);
+		let (value, proof) = match self.context_data.chain.execution_proof(&request.block, &request.method, &request.data) {
+			Ok((value, proof)) => (value, proof),
+			Err(error) => {
+				trace!(target: "sync", "Remote request {} from {} ({} at {}) failed with: {}",
+					request.id, peer_id, request.method, request.block, error);
+				(Default::default(), Default::default())
+			},
+		};
+
+		self.send_message(io, peer_id, GenericMessage::RemoteCallResponse(message::RemoteCallResponse {
+			id: request.id, value, proof,
+		}));
 	}
 
-	pub fn chain(&self) -> &Client {
-		&*self.context_data.chain
+	fn on_remote_call_response(&self, io: &mut SyncIo, peer_id: PeerId, response: message::RemoteCallResponse) {
+		trace!(target: "sync", "Remote response {} from {}", response.id, peer_id);
+		self.on_demand.as_ref().map(|s| s.on_remote_response(io, peer_id, response));
 	}
 
 	/// Execute a closure with access to a network context and specialization.
 	pub fn with_spec<F, U>(&self, io: &mut SyncIo, f: F) -> U
-		where F: FnOnce(&mut S, &mut ::specialization::HandlerContext) -> U
+		where F: FnOnce(&mut S, &mut ::specialization::HandlerContext<B>) -> U
 	{
 		f(&mut* self.specialization.write(), &mut Context::new(&self.context_data, io))
 	}
 }
 
-fn send_message(peers: &RwLock<HashMap<PeerId, Peer>>, io: &mut SyncIo, peer_id: PeerId, mut message: Message) {
+fn send_message<B: BlockT>(peers: &RwLock<HashMap<PeerId, Peer<B>>>, io: &mut SyncIo, peer_id: PeerId, mut message: Message<B>) {
 	match &mut message {
-		&mut Message::BlockRequest(ref mut r) => {
+		&mut GenericMessage::BlockRequest(ref mut r) => {
 			let mut peers = peers.write();
 			if let Some(ref mut peer) = peers.get_mut(&peer_id) {
 				r.id = peer.next_request_id;
@@ -590,8 +623,7 @@ fn send_message(peers: &RwLock<HashMap<PeerId, Peer>>, io: &mut SyncIo, peer_id:
 }
 
 /// Hash a message.
-// TODO: remove this. non-unique and insecure.
-pub fn hash_message(message: &Message) -> Hash {
+pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
 	let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
-	blake2_256(&data).into()
+	HashingFor::<B>::hash(&data)
 }

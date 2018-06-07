@@ -35,14 +35,16 @@ extern crate polkadot_api;
 extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
-extern crate polkadot_primitives;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_runtime;
+extern crate polkadot_primitives;
 
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_network;
 
 extern crate exit_future;
 extern crate tokio_core;
@@ -67,17 +69,15 @@ use std::time::{Duration, Instant};
 use codec::Slicable;
 use table::generic::Statement as GenericStatement;
 use runtime_support::Hashable;
-use polkadot_api::{PolkadotApi, BlockBuilder};
-use polkadot_primitives::{Hash, Timestamp};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic, CandidateReceipt};
-use primitives::block::{Block as SubstrateBlock, Header as SubstrateHeader, HeaderHash, Id as BlockId, Number as BlockNumber};
+use polkadot_api::PolkadotApi;
+use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
 use primitives::AuthorityId;
 use transaction_pool::{Ready, TransactionPool};
 use tokio_core::reactor::{Handle, Timeout, Interval};
 
 use futures::prelude::*;
 use futures::future::{self, Shared};
-use parking_lot::Mutex;
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
 
@@ -105,10 +105,10 @@ pub trait TableRouter: Clone {
 	/// Future that resolves when candidate data is fetched.
 	type FetchCandidate: IntoFuture<Item=BlockData,Error=Self::Error>;
 	/// Future that resolves when extrinsic candidate data is fetched.
-	type FetchExtrinsic: IntoFuture<Item=Extrinsic,Error=Self::Error>;
+	type FetchExtrinsic: IntoFuture<Item=ParachainExtrinsic,Error=Self::Error>;
 
 	/// Note local candidate data, making it available on the network to other validators.
-	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: Extrinsic);
+	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: ParachainExtrinsic);
 
 	/// Fetch block data for a specific candidate.
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> Self::FetchCandidate;
@@ -123,10 +123,10 @@ pub trait Network {
 	/// routing statements to peers, and driving completion of any `StatementProducers`.
 	type TableRouter: TableRouter;
 	/// The input stream of BFT messages. Should never logically conclude.
-	type Input: Stream<Item=bft::Communication,Error=Error>;
+	type Input: Stream<Item=bft::Communication<Block>,Error=Error>;
 	/// The output sink of BFT messages. Messages sent here should eventually pass to all
 	/// current authorities.
-	type Output: Sink<SinkItem=bft::Communication,SinkError=Error>;
+	type Output: Sink<SinkItem=bft::Communication<Block>,SinkError=Error>;
 
 	/// Execute a future in the background. Typically used for fairly heavy computations,
 	/// so it is recommended to have this use a thread pool.
@@ -234,7 +234,7 @@ pub struct ProposerFactory<C, N, P> {
 	/// The client instance.
 	pub client: Arc<P>,
 	/// The transaction pool.
-	pub transaction_pool: Arc<Mutex<TransactionPool>>,
+	pub transaction_pool: Arc<TransactionPool>,
 	/// The backing network handle.
 	pub network: N,
 	/// Parachain collators.
@@ -245,7 +245,7 @@ pub struct ProposerFactory<C, N, P> {
 	pub parachain_empty_duration: Duration,
 }
 
-impl<C, N, P> bft::Environment for ProposerFactory<C, N, P>
+impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 	where
 		C: Collators + Send + 'static,
 		N: Network,
@@ -260,7 +260,7 @@ impl<C, N, P> bft::Environment for ProposerFactory<C, N, P>
 	type Error = Error;
 
 	fn init(&self,
-		parent_header: &SubstrateHeader,
+		parent_header: &Header,
 		authorities: &[AuthorityId],
 		sign_with: Arc<ed25519::Pair>
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
@@ -270,7 +270,7 @@ impl<C, N, P> bft::Environment for ProposerFactory<C, N, P>
 
 		let parent_hash = parent_header.blake2_256().into();
 
-		let checked_id = self.client.check_id(BlockId::Hash(parent_hash))?;
+		let checked_id = self.client.check_id(BlockId::hash(parent_hash))?;
 		let duty_roster = self.client.duty_roster(&checked_id)?;
 		let random_seed = self.client.random_seed(&checked_id)?;
 
@@ -376,23 +376,23 @@ pub struct Proposer<C: PolkadotApi> {
 	dynamic_inclusion: DynamicInclusion,
 	handle: Handle,
 	local_key: Arc<ed25519::Pair>,
-	parent_hash: HeaderHash,
+	parent_hash: Hash,
 	parent_id: C::CheckedBlockId,
 	parent_number: BlockNumber,
 	random_seed: Hash,
 	table: Arc<SharedTable>,
-	transaction_pool: Arc<Mutex<TransactionPool>>,
+	transaction_pool: Arc<TransactionPool>,
 	_drop_signal: exit_future::Signal,
 }
 
-impl<C> bft::Proposer for Proposer<C>
+impl<C> bft::Proposer<Block> for Proposer<C>
 	where
 		C: PolkadotApi,
 {
 	type Error = Error;
 	type Create = future::Either<
 		CreateProposal<C>,
-		future::FutureResult<SubstrateBlock, Error>,
+		future::FutureResult<Block, Error>,
 	>;
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
@@ -439,7 +439,7 @@ impl<C> bft::Proposer for Proposer<C>
 		})
 	}
 
-	fn evaluate(&self, proposal: &SubstrateBlock) -> Self::Evaluate {
+	fn evaluate(&self, unchecked_proposal: &Block) -> Self::Evaluate {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
 		let active_parachains = match self.client.active_parachains(&self.parent_id) {
@@ -451,7 +451,7 @@ impl<C> bft::Proposer for Proposer<C>
 
 		// do initial serialization and structural integrity checks.
 		let maybe_proposal = evaluation::evaluate_initial(
-			proposal,
+			unchecked_proposal,
 			current_timestamp,
 			&self.parent_hash,
 			self.parent_number,
@@ -515,7 +515,10 @@ impl<C> bft::Proposer for Proposer<C>
 
 		// evaluate whether the block is actually valid.
 		// TODO: is it better to delay this until the delays are finished?
-		let evaluated = self.client.evaluate_block(&self.parent_id, proposal.into()).map_err(Into::into);
+		let evaluated = self.client
+			.evaluate_block(&self.parent_id, unchecked_proposal.clone())
+			.map_err(Into::into);
+
 		let future = future::result(evaluated).and_then(move |good| {
 			let end_result = future::ok(good);
 			if good {
@@ -543,22 +546,21 @@ impl<C> bft::Proposer for Proposer<C>
 		proposer
 	}
 
-	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior)>) {
+	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<Hash>)>) {
 		use bft::generic::Misbehavior as GenericMisbehavior;
-		use primitives::bft::{MisbehaviorKind, MisbehaviorReport};
+		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
+		use runtime_primitives::MaybeUnsigned;
 		use polkadot_runtime::{Call, Extrinsic, UncheckedExtrinsic, ConsensusCall};
 
-		let local_id = self.local_key.public().0;
-		let mut pool = self.transaction_pool.lock();
+		let local_id = self.local_key.public().0.into();
 		let mut next_index = {
 			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
-
-			pool.cull(None, readiness_evaluator.clone());
-			let cur_index = pool.pending(readiness_evaluator)
+			let cur_index = self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending| pending
 				.filter(|tx| tx.as_ref().as_ref().signed == local_id)
 				.last()
 				.map(|tx| Ok(tx.as_ref().as_ref().index))
-				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id));
+				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id))
+			);
 
 			match cur_index {
 				Ok(cur_index) => cur_index + 1,
@@ -591,10 +593,11 @@ impl<C> bft::Proposer for Proposer<C>
 
 			next_index += 1;
 
-			let signature = self.local_key.sign(&extrinsic.encode()).into();
+			let signature = MaybeUnsigned(self.local_key.sign(&extrinsic.encode()).into());
 			let uxt = UncheckedExtrinsic { extrinsic, signature };
 
-			pool.import(uxt).expect("locally signed extrinsic is valid; qed");
+			self.transaction_pool.import_unchecked_extrinsic(uxt)
+				.expect("locally signed extrinsic is valid; qed");
 		}
 	}
 }
@@ -658,69 +661,61 @@ impl ProposalTiming {
 
 /// Future which resolves upon the creation of a proposal.
 pub struct CreateProposal<C: PolkadotApi>  {
-	parent_hash: HeaderHash,
+	parent_hash: Hash,
 	parent_number: BlockNumber,
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
-	transaction_pool: Arc<Mutex<TransactionPool>>,
+	transaction_pool: Arc<TransactionPool>,
 	table: Arc<SharedTable>,
 	timing: ProposalTiming,
 }
 
-impl<C> CreateProposal<C>
-	where
-		C: PolkadotApi,
-{
-	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<SubstrateBlock, Error> {
+impl<C> CreateProposal<C> where C: PolkadotApi {
+	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<Block, Error> {
+		use polkadot_api::BlockBuilder;
+		use runtime_primitives::traits::{Hashing, BlakeTwo256};
+
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();
-		let mut block_builder = self.client.build_block(
-			&self.parent_id,
-			timestamp,
-			candidates,
-		)?;
-
-		let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
+		let mut block_builder = self.client.build_block(&self.parent_id, timestamp, candidates)?;
 
 		{
-			let mut pool = self.transaction_pool.lock();
+			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 			let mut unqueue_invalid = Vec::new();
-			let mut pending_size = 0;
-
-			pool.cull(None, readiness_evaluator.clone());
-			for pending in pool.pending(readiness_evaluator.clone()) {
-				// skip and cull transactions which are too large.
-				if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
-					unqueue_invalid.push(pending.hash().clone());
-					continue
-				}
-
-				if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
-
-				match block_builder.push_extrinsic(pending.as_transaction().clone()) {
-					Ok(()) => {
-						pending_size += pending.encoded_size();
-					}
-					Err(e) => {
-						trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+			self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending_iterator| {
+				let mut pending_size = 0;
+				for pending in pending_iterator {
+					// skip and cull transactions which are too large.
+					if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
 						unqueue_invalid.push(pending.hash().clone());
+						continue
+					}
+
+					if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
+
+					match block_builder.push_extrinsic(pending.primitive_extrinsic()) {
+						Ok(()) => {
+							pending_size += pending.encoded_size();
+						}
+						Err(e) => {
+							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+							unqueue_invalid.push(pending.hash().clone());
+						}
 					}
 				}
-			}
+			});
 
-			for tx_hash in unqueue_invalid {
-				pool.remove(&tx_hash, false);
-			}
+			self.transaction_pool.remove(&unqueue_invalid, false);
 		}
 
-		let polkadot_block = block_builder.bake();
+		let polkadot_block = block_builder.bake()?;
 
 		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
 			polkadot_block.header.number,
-			Hash::from(polkadot_block.header.blake2_256()),
+			Hash::from(polkadot_block.header.hash()),
 			polkadot_block.header.parent_hash,
 			polkadot_block.extrinsics.iter()
-				.map(|xt| format!("{}", Hash::from(xt.blake2_256())))
+				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
@@ -742,14 +737,11 @@ impl<C> CreateProposal<C>
 	}
 }
 
-impl<C> Future for CreateProposal<C>
-	where
-		C: PolkadotApi,
-{
-	type Item = SubstrateBlock;
+impl<C> Future for CreateProposal<C> where C: PolkadotApi {
+	type Item = Block;
 	type Error = Error;
 
-	fn poll(&mut self) -> Poll<SubstrateBlock, Error> {
+	fn poll(&mut self) -> Poll<Block, Error> {
 		// 1. try to propose if we have enough includable candidates and other
 		// delays have concluded.
 		let included = self.table.includable_count();

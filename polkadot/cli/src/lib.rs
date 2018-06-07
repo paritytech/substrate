@@ -32,17 +32,12 @@ extern crate ed25519;
 extern crate triehash;
 extern crate parking_lot;
 
-extern crate substrate_codec as codec;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
-extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
-extern crate substrate_runtime_support as runtime_support;
 extern crate polkadot_primitives;
-extern crate polkadot_executor;
-extern crate polkadot_runtime;
 extern crate polkadot_service as service;
 extern crate polkadot_transaction_pool as txpool;
 
@@ -61,37 +56,30 @@ mod informant;
 use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use polkadot_primitives::Block;
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use parking_lot::Mutex;
 use service::ChainSpec;
-use primitives::block::Extrinsic;
 
-struct RpcTransactionPool {
-	inner: Arc<Mutex<txpool::TransactionPool>>,
-	network: Arc<network::Service>,
-}
+struct Configuration(service::Configuration);
 
-impl substrate_rpc::author::AuthorApi for RpcTransactionPool {
-	fn submit_extrinsic(&self, xt: Extrinsic) -> substrate_rpc::author::error::Result<()> {
-		use primitives::hexdisplay::HexDisplay;
-		use polkadot_runtime::UncheckedExtrinsic;
-		use codec::Slicable;
+impl substrate_rpc::system::SystemApi for Configuration {
+	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok("parity-polkadot".into())
+	}
 
-		info!("Extrinsic submitted: {}", HexDisplay::from(&xt.0));
-		let decoded = xt.using_encoded(|ref mut s| UncheckedExtrinsic::decode(s))
-			.ok_or(substrate_rpc::author::error::ErrorKind::InvalidFormat)?;
+	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(crate_version!().into())
+	}
 
-		info!("Correctly formatted: {:?}", decoded);
-
-		self.inner.lock().import(decoded)
-			.map_err(|_| substrate_rpc::author::error::ErrorKind::PoolError)?;
-
-		self.network.trigger_repropagate();
-		Ok(())
+	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(match self.0.chain_spec {
+			ChainSpec::Development => "dev",
+			ChainSpec::LocalTestnet => "local",
+			ChainSpec::PoC2Testnet => "poc-2",
+		}.into())
 	}
 }
 
@@ -107,16 +95,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
-	let mut core = reactor::Core::new().expect("tokio::Core could not be created");
-	let exit = {
-		// can't use signal directly here because CtrlC takes only `Fn`.
-		let (exit_send, exit) = mpsc::channel(1);
-		ctrlc::CtrlC::set_handler(move || {
-			exit_send.clone().send(()).wait().expect("Error sending exit notification");
-		});
-
-		exit
-	};
+	let core = reactor::Core::new().expect("tokio::Core could not be created");
 
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
@@ -152,23 +131,25 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	if matches.is_present("collator") {
 		info!("Starting collator.");
 		role = service::Role::COLLATOR;
-	}
-	else if matches.is_present("validator") {
+	} else if matches.is_present("validator") {
 		info!("Starting validator.");
 		role = service::Role::VALIDATOR;
+	} else if matches.is_present("light") {
+		info!("Starting light.");
+		role = service::Role::LIGHT;
 	}
 
 	match matches.value_of("chain") {
 		Some("dev") => config.chain_spec = ChainSpec::Development,
 		Some("local") => config.chain_spec = ChainSpec::LocalTestnet,
-		Some("poc-1") => config.chain_spec = ChainSpec::PoC1Testnet,
+		Some("poc-2") => config.chain_spec = ChainSpec::PoC2Testnet,
 		None => (),
 		Some(unknown) => panic!("Invalid chain name: {}", unknown),
 	}
 	info!("Chain specification: {}", match config.chain_spec {
 		ChainSpec::Development => "Development",
 		ChainSpec::LocalTestnet => "Local Testnet",
-		ChainSpec::PoC1Testnet => "PoC-1 Testnet",
+		ChainSpec::PoC2Testnet => "PoC-2 Testnet",
 	});
 
 	config.roles = role;
@@ -195,21 +176,42 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 
-	let service = service::Service::new(config)?;
+	match role == service::Role::LIGHT {
+		true => run_until_exit(core, service::new_light(config.clone())?, &matches, config),
+		false => run_until_exit(core, service::new_full(config.clone())?, &matches, config),
+	}
+}
+
+fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
+	where
+		B: client::backend::Backend<Block> + Send + Sync + 'static,
+		E: client::CallExecutor<Block> + Send + Sync + 'static,
+		client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>
+{
+	let exit = {
+		// can't use signal directly here because CtrlC takes only `Fn`.
+		let (exit_send, exit) = mpsc::channel(1);
+		ctrlc::CtrlC::set_handler(move || {
+			exit_send.clone().send(()).wait().expect("Error sending exit notification");
+		});
+
+		exit
+	};
 
 	informant::start(&service, core.handle());
 
 	let _rpc_servers = {
-		let http_address = parse_address("127.0.0.1:9933", "rpc-port", &matches)?;
-		let ws_address = parse_address("127.0.0.1:9944", "ws-port", &matches)?;
+		let http_address = parse_address("127.0.0.1:9933", "rpc-port", matches)?;
+		let ws_address = parse_address("127.0.0.1:9944", "ws-port", matches)?;
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
-			let pool = RpcTransactionPool {
-				inner: service.transaction_pool(),
-				network: service.network(),
-			};
-			rpc::rpc_handler(service.client(), chain, pool)
+			rpc::rpc_handler::<Block, _, _, _, _>(
+				service.client(),
+				chain,
+				service.transaction_pool(),
+				Configuration(config.clone()),
+			)
 		};
 		(
 			start_server(http_address, |address| rpc::start_http(address, handler())),

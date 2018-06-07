@@ -17,6 +17,7 @@ substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
 substrate-runtime-io = { path = "../runtime-io" }
 substrate-runtime-support = { path = "../runtime-support" }
+substrate-runtime-primitives = { path = "../runtime/primitives" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-keyring = { path = "../../substrate/keyring" }
 

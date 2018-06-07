@@ -25,6 +25,13 @@ extern crate substrate_runtime_std as rstd;
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
+#[cfg(feature = "std")]
+extern crate serde;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_codec as codec;
@@ -33,10 +40,10 @@ extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
+use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::RefInto;
-use substrate_primitives::bft::MisbehaviorReport;
-
+use primitives::bft::MisbehaviorReport;
 
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
@@ -58,12 +65,16 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait>;
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn report_misbehavior(aux, report: MisbehaviorReport) = 0;
+		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result = 0;
 	}
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		fn set_code(new: Vec<u8>) = 0;
-		fn set_storage(items: Vec<KeyValue>) = 1;
+		fn set_code(new: Vec<u8>) -> Result = 0;
+		fn set_storage(items: Vec<KeyValue>) -> Result = 1;
 	}
 }
 
@@ -74,20 +85,23 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the new code.
-	fn set_code(new: Vec<u8>) {
+	fn set_code(new: Vec<u8>) -> Result {
 		storage::unhashed::put_raw(CODE, &new);
+		Ok(())
 	}
 
 	/// Set some items of storage.
-	fn set_storage(items: Vec<KeyValue>) {
+	fn set_storage(items: Vec<KeyValue>) -> Result {
 		for i in &items {
 			storage::unhashed::put_raw(&i.0, &i.1);
 		}
+		Ok(())
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport) {
+	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
 		// TODO.
+		Ok(())
 	}
 
 	/// Set the current set of authorities' session keys.

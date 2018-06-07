@@ -16,16 +16,15 @@
 
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
-use polkadot_primitives;
 use rstd::prelude::*;
-use codec::{Slicable, Joiner};
-use runtime_support::Hashable;
+use codec::Slicable;
 
-use runtime_primitives::traits::{Executable, RefInto, MaybeEmpty};
-use polkadot_primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
+use runtime_primitives::traits::{Hashing, BlakeTwo256, Executable, RefInto, MaybeEmpty};
+use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
 use {system, session};
 
-use runtime_support::{StorageValue, StorageMap};
+use substrate_runtime_support::{StorageValue, StorageMap};
+use substrate_runtime_support::dispatch::Result;
 
 #[cfg(any(feature = "std", test))]
 use rstd::marker::PhantomData;
@@ -33,7 +32,7 @@ use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))]
 use {runtime_io, runtime_primitives};
 
-pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trait {
+pub trait Trait: system::Trait<Hash = ::primitives::Hash> + session::Trait {
 	/// The position of the set_heads call in the block.
 	const SET_POSITION: u32;
 
@@ -41,14 +40,20 @@ pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trai
 }
 
 decl_module! {
+	/// Parachains module.
 	pub struct Module<T: Trait>;
+	/// Call type for parachains.
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: <T as Trait>::PublicAux {
 		// provide candidate receipts for parachains, in ascending order by id.
-		fn set_heads(aux, heads: Vec<CandidateReceipt>) = 0;
+		fn set_heads(aux, heads: Vec<CandidateReceipt>) -> Result = 0;
 	}
+
+	/// Private calls for parachains.
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		fn register_parachain(id: Id, code: Vec<u8>, initial_head_data: Vec<u8>) = 0;
-		fn deregister_parachain(id: Id) = 1;
+		fn register_parachain(id: Id, code: Vec<u8>, initial_head_data: Vec<u8>) -> Result = 0;
+		fn deregister_parachain(id: Id) -> Result = 1;
 	}
 }
 
@@ -83,8 +88,9 @@ impl<T: Trait> Module<T> {
 
 		let mut roles_gua = roles_val.clone();
 
-		let random_seed = system::Module::<T>::random_seed();
-		let mut seed = random_seed.to_vec().and(b"validator_role_pairs").blake2_256();
+		let mut random_seed = system::Module::<T>::random_seed().to_vec();
+		random_seed.extend(b"validator_role_pairs");
+		let mut seed = BlakeTwo256::hash(&random_seed);
 
 		// shuffle
 		for i in 0..(validator_count - 1) {
@@ -100,7 +106,7 @@ impl<T: Trait> Module<T> {
 
 			if offset == 24 {
 				// into the last 8 bytes - rehash to gather new entropy
-				seed = seed.blake2_256();
+				seed = BlakeTwo256::hash(&seed);
 			}
 
 			// exchange last item with randomly chosen first.
@@ -116,20 +122,22 @@ impl<T: Trait> Module<T> {
 
 	/// Register a parachain with given code.
 	/// Fails if given ID is already used.
-	pub fn register_parachain(id: Id, code: Vec<u8>, initial_head_data: Vec<u8>) {
+	pub fn register_parachain(id: Id, code: Vec<u8>, initial_head_data: Vec<u8>) -> Result {
 		let mut parachains = Self::active_parachains();
 		match parachains.binary_search(&id) {
-			Ok(_) => panic!("Parachain with id {} already exists", id.into_inner()),
+			Ok(_) => fail!("Parachain with given already exists"),
 			Err(idx) => parachains.insert(idx, id),
 		}
 
 		<Code<T>>::insert(id, code);
 		<Parachains<T>>::put(parachains);
 		<Heads<T>>::insert(id, initial_head_data);
+
+		Ok(())
 	}
 
 	/// Deregister a parachain with given id
-	pub fn deregister_parachain(id: Id) {
+	pub fn deregister_parachain(id: Id) -> Result {
 		let mut parachains = Self::active_parachains();
 		match parachains.binary_search(&id) {
 			Ok(idx) => { parachains.remove(idx); }
@@ -139,15 +147,16 @@ impl<T: Trait> Module<T> {
 		<Code<T>>::remove(id);
 		<Heads<T>>::remove(id);
 		<Parachains<T>>::put(parachains);
+		Ok(())
 	}
 
-	fn set_heads(aux: &<T as Trait>::PublicAux, heads: Vec<CandidateReceipt>) {
-		assert!(aux.is_empty());
-		assert!(!<DidUpdate<T>>::exists(), "Parachain heads must be updated only once in the block");
-		assert!(
+	fn set_heads(aux: &<T as Trait>::PublicAux, heads: Vec<CandidateReceipt>) -> Result {
+		ensure!(aux.is_empty(), "set_heads must not be signed");
+		ensure!(!<DidUpdate<T>>::exists(), "Parachain heads must be updated only once in the block");
+		ensure!(
 			<system::Module<T>>::extrinsic_index() == T::SET_POSITION,
-			"Parachain heads update extrinsic must be at position {} in the block",
-			T::SET_POSITION
+			"Parachain heads update extrinsic must be at position {} in the block"
+//			, T::SET_POSITION
 		);
 
 		let active_parachains = Self::active_parachains();
@@ -155,10 +164,10 @@ impl<T: Trait> Module<T> {
 
 		// perform this check before writing to storage.
 		for head in &heads {
-			assert!(
+			ensure!(
 				iter.find(|&p| p == &head.parachain_index).is_some(),
-				"Submitted candidate for unregistered or out-of-order parachain {}",
-				head.parachain_index.into_inner()
+				"Submitted candidate for unregistered or out-of-order parachain {}"
+//				, head.parachain_index.into_inner()
 			);
 		}
 
@@ -168,6 +177,8 @@ impl<T: Trait> Module<T> {
 		}
 
 		<DidUpdate<T>>::put(true);
+
+		Ok(())
 	}
 }
 
@@ -228,7 +239,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildExternalities;
-	use runtime_primitives::traits::{HasPublicAux, Identity};
+	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 	use consensus;
 
@@ -244,7 +255,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
@@ -304,12 +315,12 @@ mod tests {
 			assert_eq!(Parachains::parachain_code(&5u32.into()), Some(vec![1,2,3]));
 			assert_eq!(Parachains::parachain_code(&100u32.into()), Some(vec![4,5,6]));
 
-			Parachains::register_parachain(99u32.into(), vec![7,8,9], vec![1, 1, 1]);
+			Parachains::register_parachain(99u32.into(), vec![7,8,9], vec![1, 1, 1]).unwrap();
 
 			assert_eq!(Parachains::active_parachains(), vec![5u32.into(), 99u32.into(), 100u32.into()]);
 			assert_eq!(Parachains::parachain_code(&99u32.into()), Some(vec![7,8,9]));
 
-			Parachains::deregister_parachain(5u32.into());
+			Parachains::deregister_parachain(5u32.into()).unwrap();
 
 			assert_eq!(Parachains::active_parachains(), vec![99u32.into(), 100u32.into()]);
 			assert_eq!(Parachains::parachain_code(&5u32.into()), None);

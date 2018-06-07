@@ -20,35 +20,34 @@ use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use std::time::{Instant, Duration};
 use network::PeerId;
-use primitives::{Hash, block::HeaderHash, block::Id as BlockId, block::Header};
-use message::{self, Message};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::generic::BlockId;
+use message::{self, generic::Message as GenericMessage};
 use protocol::Context;
 
 // TODO: Add additional spam/DoS attack protection.
-const MESSAGE_LIFETIME_SECONDS: u64 = 600;
+const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
 
-struct PeerConsensus {
-	known_messages: HashSet<Hash>,
+struct PeerConsensus<H> {
+	known_messages: HashSet<H>,
 }
 
-/// Consensus network protocol handler. Propagates BFT messages.
-pub struct Consensus {
-	peers: HashMap<PeerId, PeerConsensus>,
-	bft_message_sink: Option<(mpsc::UnboundedSender<message::LocalizedBftMessage>, Hash)>,
-	messages: Vec<(Hash, Instant, message::Message)>,
-	message_hashes: HashSet<Hash>,
-	last_block_hash: HeaderHash,
+/// Consensus network protocol handler. Manages statements and candidate requests.
+pub struct Consensus<B: BlockT> {
+	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
+	bft_message_sink: Option<(mpsc::UnboundedSender<message::LocalizedBftMessage<B>>, B::Hash)>,
+	messages: Vec<(B::Hash, Instant, message::Message<B>)>,
+	message_hashes: HashSet<B::Hash>,
 }
 
-impl Consensus {
+impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 	/// Create a new instance.
-	pub(crate) fn new(best_hash: HeaderHash) -> Consensus {
+	pub(crate) fn new() -> Self {
 		Consensus {
 			peers: HashMap::new(),
 			bft_message_sink: None,
 			messages: Default::default(),
 			message_hashes: Default::default(),
-			last_block_hash: best_hash,
 		}
 	}
 
@@ -58,7 +57,7 @@ impl Consensus {
 	}
 
 	/// Handle new connected peer.
-	pub(crate) fn new_peer(&mut self, protocol: &mut Context, peer_id: PeerId, roles: &[message::Role]) {
+	pub(crate) fn new_peer(&mut self, protocol: &mut Context<B>, peer_id: PeerId, roles: &[message::Role]) {
 		if roles.iter().any(|r| *r == message::Role::Authority) {
 			trace!(target:"sync", "Registering authority {}", peer_id);
 			// Send out all known messages.
@@ -74,7 +73,7 @@ impl Consensus {
 		}
 	}
 
-	fn propagate(&mut self, protocol: &mut Context, message: message::Message, hash: Hash) {
+	fn propagate(&mut self, protocol: &mut Context<B>, message: message::Message<B>, hash: B::Hash) {
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.known_messages.insert(hash.clone()) {
 				protocol.send_message(*id, message.clone());
@@ -82,13 +81,13 @@ impl Consensus {
 		}
 	}
 
-	fn register_message(&mut self, hash: Hash, message: message::Message) {
+	fn register_message(&mut self, hash: B::Hash, message: message::Message<B>) {
 		if self.message_hashes.insert(hash) {
 			self.messages.push((hash, Instant::now(), message));
 		}
 	}
 
-	pub(crate) fn on_bft_message(&mut self, protocol: &mut Context, peer_id: PeerId, message: message::LocalizedBftMessage, hash: Hash) {
+	pub(crate) fn on_bft_message(&mut self, protocol: &mut Context<B>, peer_id: PeerId, message: message::LocalizedBftMessage<B>, hash: B::Hash) {
 		if self.message_hashes.contains(&hash) {
 			trace!(target:"sync", "Ignored already known BFT message from {}", peer_id);
 			return;
@@ -100,7 +99,7 @@ impl Consensus {
 				return;
 			},
 			(Ok(info), Ok(Some(header))) => {
-				if header.number < info.chain.best_number {
+				if header.number() < &info.chain.best_number {
 					trace!(target:"sync", "Ignored ancient BFT message from {}, hash={}", peer_id, message.parent_hash);
 					return;
 				}
@@ -125,18 +124,18 @@ impl Consensus {
 			return;
 		}
 
-		let message = Message::BftMessage(message);
+		let message = GenericMessage::BftMessage(message);
 		self.register_message(hash.clone(), message.clone());
 		// Propagate to other peers.
 		self.propagate(protocol, message, hash);
 	}
 
-	pub(crate) fn bft_messages(&mut self, parent_hash: Hash) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage>{
+	pub(crate) fn bft_messages(&mut self, parent_hash: B::Hash) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage<B>> {
 		let (sink, stream) = mpsc::unbounded();
 
 		for &(_, _, ref message) in self.messages.iter() {
 			let bft_message = match *message {
-				Message::BftMessage(ref msg) => msg,
+				GenericMessage::BftMessage(ref msg) => msg,
 				_ => continue,
 			};
 
@@ -149,54 +148,115 @@ impl Consensus {
 		stream
 	}
 
-	pub(crate) fn send_bft_message(&mut self, protocol: &mut Context, message: message::LocalizedBftMessage) {
+	pub(crate) fn send_bft_message(&mut self, protocol: &mut Context<B>, message: message::LocalizedBftMessage<B>) {
 		// Broadcast message to all validators.
 		trace!(target:"sync", "Broadcasting BFT message {:?}", message);
-		let message = Message::BftMessage(message);
+		let message = GenericMessage::BftMessage(message);
 		let hash = ::protocol::hash_message(&message);
 		self.register_message(hash.clone(), message.clone());
 		self.propagate(protocol, message, hash);
 	}
 
-	pub(crate) fn peer_disconnected(&mut self, _protocol: &mut Context, peer_id: PeerId) {
+	pub(crate) fn peer_disconnected(&mut self, _protocol: &mut Context<B>, peer_id: PeerId) {
 		self.peers.remove(&peer_id);
 	}
 
-	pub(crate) fn collect_garbage(&mut self, best_hash_and_header: Option<(HeaderHash, &Header)>) {
+	pub(crate) fn collect_garbage(&mut self, best_header: Option<&B::Header>) {
 		let hashes = &mut self.message_hashes;
-		let last_block_hash = &mut self.last_block_hash;
 		let before = self.messages.len();
-		let (best_hash, best_header) = best_hash_and_header.map(|(h, header)| (Some(h), Some(header))).unwrap_or((None, None));
-		if best_header.as_ref().map_or(false, |header| header.parent_hash != *last_block_hash) {
-			trace!(target:"sync", "Clearing conensus message cache");
-			self.messages.clear();
-			hashes.clear();
-		} else {
-			let expiration = Duration::from_secs(MESSAGE_LIFETIME_SECONDS);
-			let now = Instant::now();
-			if let Some(hash) = best_hash {
-				*last_block_hash = hash;
-			}
-			self.messages.retain(|&(ref hash, timestamp, ref message)| {
-					timestamp < now + expiration ||
-					best_header.map_or(true, |header| {
-						if match *message {
-							Message::BftMessage(ref msg) => msg.parent_hash != header.parent_hash,
-							_ => true,
-						} {
-							hashes.remove(hash);
-							true
-						} else {
-							false
-						}
+		let now = Instant::now();
+		self.messages.retain(|&(ref hash, timestamp, ref message)| {
+			if timestamp >= now - MESSAGE_LIFETIME &&
+				best_header.map_or(true, |header|
+					match *message {
+						GenericMessage::BftMessage(ref msg) => &msg.parent_hash != header.parent_hash(),
+						_ => true,
 					})
-			});
-		}
+			{
+				true
+			} else {
+				hashes.remove(hash);
+				false
+			}
+		});
 		if self.messages.len() != before {
 			trace!(target:"sync", "Cleaned up {} stale messages", before - self.messages.len());
 		}
 		for (_, ref mut peer) in self.peers.iter_mut() {
 			peer.known_messages.retain(|h| hashes.contains(h));
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use runtime_primitives::bft::Justification;
+	use runtime_primitives::testing::{H256, Header, Block as RawBlock};
+	use std::time::Instant;
+	use message::{self, generic::Message as GenericMessage};
+	use super::{Consensus, MESSAGE_LIFETIME};
+
+	type Block = RawBlock<u64>;
+
+	#[test]
+	fn collects_garbage() {
+		let prev_hash = H256::random();
+		let best_hash = H256::random();
+		let mut consensus = Consensus::<Block>::new();
+		let now = Instant::now();
+		let m1_hash = H256::random();
+		let m2_hash = H256::random();
+		let m1 = GenericMessage::BftMessage(message::LocalizedBftMessage {
+			parent_hash: prev_hash,
+			message: message::generic::BftMessage::Auxiliary(Justification {
+				round_number: 0,
+				hash: Default::default(),
+				signatures: Default::default(),
+			}),
+		});
+		let m2 = GenericMessage::BftMessage(message::LocalizedBftMessage {
+			parent_hash: best_hash,
+			message: message::generic::BftMessage::Auxiliary(Justification {
+				round_number: 0,
+				hash: Default::default(),
+				signatures: Default::default(),
+			}),
+		});
+		consensus.messages.push((m1_hash, now, m1));
+		consensus.messages.push((m2_hash, now, m2.clone()));
+		consensus.message_hashes.insert(m1_hash);
+		consensus.message_hashes.insert(m2_hash);
+
+		// nothing to collect
+		consensus.collect_garbage(None);
+		assert_eq!(consensus.messages.len(), 2);
+		assert_eq!(consensus.message_hashes.len(), 2);
+
+		// random header, nothing should be cleared
+		let mut header = Header {
+			parent_hash: H256::default(),
+			number: 0,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Default::default(),
+		};
+
+		consensus.collect_garbage(Some(&header));
+		assert_eq!(consensus.messages.len(), 2);
+		assert_eq!(consensus.message_hashes.len(), 2);
+
+		// header that matches one of the messages
+		header.parent_hash = prev_hash;
+		consensus.collect_garbage(Some(&header));
+		assert_eq!(consensus.messages.len(), 1);
+		assert_eq!(consensus.message_hashes.len(), 1);
+		assert!(consensus.message_hashes.contains(&m2_hash));
+
+		// make timestamp expired
+		consensus.messages.clear();
+		consensus.messages.push((m2_hash, now - MESSAGE_LIFETIME, m2));
+		consensus.collect_garbage(None);
+		assert!(consensus.messages.is_empty());
+		assert!(consensus.message_hashes.is_empty());
 	}
 }
