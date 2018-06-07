@@ -1,3 +1,6 @@
+// TODO: authorities do not change often && we will reexecute authorities() after field in digest is set,
+// current cache (block => execution result) doesn't help! + also need a cache for other requests
+
 // Copyright 2017 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
