@@ -5,12 +5,11 @@ Implementation of a https://polkadot.io node in Rust.
 ## To play
 
 If you'd like to play with Polkadot, you'll need to install a client like this
-one. First, get Rust (1.26.1 or later) and the support software if you don't already have it, and ensure you change the active toolchain to the stable version instead of the nightly version:
+one. First, get Rust (1.26.1 or later) and the support software if you don't already have it:
 
 ```
 curl https://sh.rustup.rs -sSf | sh
 sudo apt install make clang
-rustup default stable
 ```
 
 Then, install Polkadot PoC-1:
@@ -20,8 +19,8 @@ cargo install --git https://github.com/paritytech/polkadot.git --branch v0.1
 ```
 
 You'll now have a `polkadot` binary installed to your `PATH`. You can drop the
-`--branch v0.1` or run `cargo install --git https://github.com/paritytech/polkadot.git polkadot subkey` to get the very latest version of Polkadot, but these
-instructions might not work in that case.
+`--branch v0.1` or run `cargo install --git https://github.com/paritytech/polkadot.git polkadot`
+to get the very latest version of Polkadot, but these instructions might not work in that case.
 
 ### Development
 
