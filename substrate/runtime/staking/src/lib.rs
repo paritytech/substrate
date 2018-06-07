@@ -57,7 +57,7 @@ use codec::{Input, Slicable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, Lookup, Hashing as HashingT, MaybeSerializeDebug, Member, MaybeSerializeDebugButNotDeserialize};
+	As, Lookup, Hashing as HashingT, MaybeSerializeDebug, Member};
 
 pub mod address;
 #[cfg(test)]
@@ -106,7 +106,7 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 }
 
 // MaybeSerializeDebug is workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-pub trait Trait: system::Trait + session::Trait + MaybeSerializeDebugButNotDeserialize {
+pub trait Trait: system::Trait + session::Trait + MaybeSerializeDebug {
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize>;
 	/// Function type to get the contract address given the creator.
