@@ -29,6 +29,7 @@ extern crate polkadot_api;
 extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_keystore as keystore;
+extern crate polkadot_network;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
@@ -69,6 +70,7 @@ use client::backend::Backend;
 use client::{genesis, Client, BlockchainEvents, CallExecutor};
 use network::ManageNetwork;
 use exit_future::Signal;
+use polkadot_network::NetworkService;
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Role, ChainSpec};
@@ -79,7 +81,7 @@ type CodeExecutor = NativeExecutor<LocalDispatch>;
 pub struct Service<B, E> {
 	thread: Option<thread::JoinHandle<()>>,
 	client: Arc<Client<B, E, Block>>,
-	network: Arc<network::Service<Block>>,
+	network: Arc<NetworkService>,
 	transaction_pool: Arc<TransactionPool>,
 	signal: Option<Signal>,
 	_consensus: Option<consensus::Service>,
@@ -297,7 +299,7 @@ pub fn new_light(config: Configuration)
 	-> Result<
 		Service<
 			client::light::Backend<Block>,
-			client::RemoteCallExecutor<client::light::Backend<Block>, network::OnDemand<Block, network::Service<Block>>>
+			client::RemoteCallExecutor<client::light::Backend<Block>, network::OnDemand<Block, NetworkService>>
 		>,
 		error::Error,
 	> {
@@ -315,7 +317,7 @@ pub fn new_light(config: Configuration)
 
 /// Creates full client and register protocol with the network service
 pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend<Block>, client::LocalCallExecutor<client_db::Backend<Block>, CodeExecutor>>, error::Error> {
-	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
+	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
 	Service::new(|db_settings, executor, genesis_builder: GenesisBuilder|
 		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_builder)?), None)),
 		|client| client,
@@ -352,13 +354,13 @@ impl<B, E> Service<B, E>
 					client_db::DatabaseSettings,
 					CodeExecutor,
 					GenesisBuilder,
-				) -> Result<(Arc<Client<B, E, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error>,
+				) -> Result<(Arc<Client<B, E, Block>>, Option<Arc<network::OnDemand<Block, NetworkService>>>), error::Error>,
 			G: Fn(
 					Arc<Client<B, E, Block>>,
 				) -> Arc<A>,
 			C: Fn(
 					Arc<Client<B, E, Block>>,
-					Arc<network::Service<Block>>,
+					Arc<NetworkService>,
 					Arc<TransactionPool>,
 					&Keystore
 				) -> Result<Option<consensus::Service>, error::Error>,
@@ -483,7 +485,7 @@ impl<B, E> Service<B, E>
 	}
 
 	/// Get shared network instance.
-	pub fn network(&self) -> Arc<network::Service<Block>> {
+	pub fn network(&self) -> Arc<NetworkService> {
 		self.network.clone()
 	}
 

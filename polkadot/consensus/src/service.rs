@@ -27,17 +27,12 @@ use bft::{self, BftService};
 use client::{BlockchainEvents, ChainHead};
 use ed25519;
 use futures::prelude::*;
-use futures::{future, Canceled};
 use polkadot_api::LocalPolkadotApi;
-use polkadot_primitives::{BlockId, Block, Header, Hash, AccountId};
-use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
-use primitives::AuthorityId;
-use runtime_support::Hashable;
-use substrate_network as net;
+use polkadot_primitives::{Block, Header};
 use tokio_core::reactor;
 use transaction_pool::TransactionPool;
 
-use super::{Network, Collators, TableRouter, SharedTable, ProposerFactory};
+use super::{Network, Collators, ProposerFactory};
 use error;
 
 const TIMER_DELAY_MS: u64 = 5000;
@@ -78,8 +73,8 @@ impl Service {
 	) -> Service
 		where
 			A: LocalPolkadotApi + Send + Sync + 'static,
+			A::CheckedBlockId: Send + 'static,
 			C: BlockchainEvents<Block> + ChainHead<Block> + bft::BlockImport<Block> + bft::Authorities<Block> + Send + Sync + 'static,
-			C::CheckedBlockId: Send + 'static,
 			N: Network + Collators + Send + 'static,
 			N::TableRouter: Send + 'static,
 			<N::Collation as IntoFuture>::Future: Send + 'static,
@@ -118,7 +113,7 @@ impl Service {
 				&core.handle(),
 			).expect("it is always possible to create an interval with valid params");
 			let mut prev_best = match client.best_block_header() {
-				Ok(header) => header.blake2_256(),
+				Ok(header) => header.hash(),
 				Err(e) => {
 					warn!("Cant's start consensus service. Error reading best block header: {:?}", e);
 					return;
@@ -132,7 +127,7 @@ impl Service {
 
 				interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 					if let Ok(best_block) = c.best_block_header() {
-						let hash = best_block.blake2_256();
+						let hash = best_block.hash();
 						if hash == prev_best {
 							debug!("Starting consensus round after a timeout");
 							start_bft(&best_block, handle.clone(), &*s);

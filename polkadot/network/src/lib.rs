@@ -19,26 +19,28 @@ extern crate substrate_codec as codec;
 extern crate substrate_network;
 
 extern crate substrate_primitives;
-extern crate polkadot_consensus as consensus;;
+extern crate polkadot_consensus as consensus;
 extern crate polkadot_primitives;
 extern crate ed25519;
 extern crate futures;
 
 use codec::Slicable;
-use substrate_primitives::{AuthorityId, Hash};
+use polkadot_primitives::{Header, Block, Hash};
+use polkadot_primitives::parachain::{CandidateSignature, Id as ParaId};
+use substrate_primitives::{AuthorityId};
 use substrate_network::{PeerId, RequestId};
 use substrate_network::specialization::{Specialization, HandlerContext};
-use substrate_network::StatusMessage as FullStatus;
-
-use polkadot_primitives::parachain::Id as ParaId;
+use substrate_network::StatusMessage as GenericFullStatus;
 
 use std::collections::HashMap;
 
 /// Polkadot protocol id.
-pub const DOT_PROTOCOL_ID: ::network::ProtocolId = *b"dot";
+pub const DOT_PROTOCOL_ID: ::substrate_network::ProtocolId = *b"dot";
+
+type FullStatus = GenericFullStatus<Block>;
 
 /// Specialization of the network service for the polkadot protocol.
-pub type NetworkService = ::substrate_network::Service<PolkadotProtocol>;
+pub type NetworkService = ::substrate_network::Service<Block, PolkadotProtocol>;
 
 /// Status of a Polkadot node.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -116,7 +118,7 @@ pub struct Statement {
 	/// The statement.
 	pub statement: UnsignedStatement,
 	/// The signature.
-	pub signature: ed25519::Signature,
+	pub signature: CandidateSignature,
 	/// The sender.
 	pub sender: AuthorityId,
 }
@@ -132,12 +134,12 @@ pub struct PolkadotProtocol {
 	collating_for: Option<ParaId>,
 }
 
-impl Specialization for PolkadotProtocol {
+impl Specialization<Block> for PolkadotProtocol {
 	fn status(&self) -> Vec<u8> {
 		Status { collating_for: self.collating_for.clone() }.encode()
 	}
 
-	fn on_peer_connected(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, status: FullStatus) {
+	fn on_peer_connected(&mut self, ctx: &mut HandlerContext<Block>, peer_id: PeerId, status: FullStatus) {
 		let status = match Status::decode(&mut &status.chain_status[..]) {
 			Some(status) => status,
 			None => {
@@ -155,7 +157,7 @@ impl Specialization for PolkadotProtocol {
 		self.peers.insert(peer_id, PeerInfo { status });
 	}
 
-	fn on_peer_disconnected(&mut self, _ctx: &mut HandlerContext, peer_id: PeerId) {
+	fn on_peer_disconnected(&mut self, _ctx: &mut HandlerContext<Block>, peer_id: PeerId) {
 		if let Some(info) = self.peers.remove(&peer_id) {
 			if let Some(collators) = info.status.collating_for.and_then(|id| self.collators.get_mut(&id)) {
 				if let Some(pos) = collators.iter().position(|x| x == &peer_id) {
@@ -165,7 +167,7 @@ impl Specialization for PolkadotProtocol {
 		}
 	}
 
-	fn on_message(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, message: Vec<u8>) {
+	fn on_message(&mut self, ctx: &mut HandlerContext<Block>, peer_id: PeerId, message: Vec<u8>) {
 
 	}
 }

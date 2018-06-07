@@ -1414,6 +1414,7 @@ dependencies = [
  "polkadot-consensus 0.1.0",
  "polkadot-executor 0.1.0",
  "polkadot-keystore 0.1.0",
+ "polkadot-network 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "polkadot-transaction-pool 0.1.0",
