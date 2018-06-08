@@ -34,6 +34,7 @@ extern crate triehash;
 extern crate patricia_trie;
 
 extern crate byteorder;
+extern crate heapsize;
 extern crate parking_lot;
 
 use std::collections::HashMap;
@@ -97,6 +98,12 @@ impl OverlayedChanges {
 	/// Drain prospective changes to an iterator.
 	pub fn drain(&mut self) -> Drain<Vec<u8>, Option<Vec<u8>>> {
 		self.committed.drain()
+	}
+}
+
+impl heapsize::HeapSizeOf for OverlayedChanges {
+	fn heap_size_of_children(&self) -> usize {
+		self.prospective.heap_size_of_children() + self.committed.heap_size_of_children()
 	}
 }
 

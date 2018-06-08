@@ -29,6 +29,7 @@ use client::light::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest}
 use io::SyncIo;
 use message;
 use network::PeerId;
+use on_demand_cache::OnDemandCache;
 use service;
 
 /// Remote request timeout.
@@ -56,6 +57,7 @@ pub trait OnDemandService: Send + Sync {
 
 /// On-demand requests service. Dispatches requests to appropriate peers.
 pub struct OnDemand<E: service::ExecuteInContext> {
+	cache: OnDemandCache,
 	core: Mutex<OnDemandCore<E>>,
 	checker: Arc<FetchChecker>,
 }
@@ -131,6 +133,7 @@ impl<E> OnDemand<E> where E: service::ExecuteInContext {
 	/// Creates new on-demand service.
 	pub fn new(checker: Arc<FetchChecker>) -> Self {
 		OnDemand {
+			cache: OnDemandCache::new(),
 			checker,
 			core: Mutex::new(OnDemandCore {
 				service: Weak::new(),
@@ -227,6 +230,7 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 		self.accept_response("read", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteRead(request, sender) => match self.checker.check_read_proof(&request, response.proof) {
 				Ok(response) => {
+					self.cache.cache_remote_read(request.clone(), response.clone());
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(Ok(response));
 					Accept::Ok
@@ -241,6 +245,7 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 		self.accept_response("call", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, (response.value, response.proof)) {
 				Ok(response) => {
+					self.cache.cache_remote_call(request.clone(), response.clone());
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(Ok(response));
 					Accept::Ok
@@ -258,14 +263,26 @@ impl<E> Fetcher for OnDemand<E> where E: service::ExecuteInContext {
 
 	fn remote_read(&self, request: RemoteReadRequest) -> Self::RemoteReadResult {
 		let (sender, receiver) = channel();
-		self.schedule_request(request.retry_count.clone(), RequestData::RemoteRead(request, sender),
-			RemoteReadResponse { receiver })
+		match self.cache.remote_read(&request) {
+			Some(response) => {
+				sender.send(Ok(response)).expect("receiver is NOT deallocated; qed");
+				RemoteReadResponse { receiver }
+			},
+			None => self.schedule_request(request.retry_count.clone(), RequestData::RemoteRead(request, sender),
+				RemoteReadResponse { receiver }),
+		}
 	}
 
 	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult {
 		let (sender, receiver) = channel();
-		self.schedule_request(request.retry_count.clone(), RequestData::RemoteCall(request, sender),
-			RemoteCallResponse { receiver })
+		match self.cache.remote_call(&request) {
+			Some(response) => {
+				sender.send(Ok(response)).expect("receiver is NOT deallocated; qed");
+				RemoteCallResponse { receiver }
+			},
+			None => self.schedule_request(request.retry_count.clone(), RequestData::RemoteCall(request, sender),
+				RemoteCallResponse { receiver }),
+		}
 	}
 }
 

@@ -30,6 +30,7 @@ extern crate substrate_state_machine as state_machine;
 
 extern crate ed25519;
 extern crate futures;
+extern crate heapsize;
 extern crate parking_lot;
 extern crate triehash;
 

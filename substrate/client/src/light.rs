@@ -28,6 +28,7 @@
 use std::sync::{Arc, Weak};
 use futures::Future;
 use futures::future::IntoFuture;
+use heapsize::HeapSizeOf;
 use parking_lot::Mutex;
 use primitives;
 use primitives::block::{self, Id as BlockId, HeaderHash};
@@ -39,8 +40,8 @@ use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
 use client::{Client, GenesisBuilder};
 use error;
 
-/// Remote storage read request;
-#[derive(Debug, Default)]
+/// Remote storage read request.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct RemoteReadRequest {
 	/// Read at state of given block.
 	pub block: HeaderHash,
@@ -51,7 +52,7 @@ pub struct RemoteReadRequest {
 }
 
 /// Remote call request.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct RemoteCallRequest {
 	/// Call at state of given block.
 	pub block: HeaderHash,
@@ -304,6 +305,19 @@ pub fn new_fetch_checker<B, E, F>(
 		E: CodeExecutor,
 {
 	LightDataChecker { blockchain, executor }
+}
+
+impl HeapSizeOf for RemoteReadRequest {
+	fn heap_size_of_children(&self) -> usize {
+		self.block.heap_size_of_children() + self.key.heap_size_of_children()
+	}
+}
+
+impl HeapSizeOf for RemoteCallRequest {
+	fn heap_size_of_children(&self) -> usize {
+		self.block.heap_size_of_children() + self.method.heap_size_of_children()
+			+ self.call_data.heap_size_of_children()
+	}
 }
 
 #[cfg(test)]

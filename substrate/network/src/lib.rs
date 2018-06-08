@@ -22,6 +22,7 @@
 extern crate ethcore_network_devp2p as network_devp2p;
 extern crate ethcore_network as network;
 extern crate ethcore_io as core_io;
+extern crate heapsize;
 extern crate linked_hash_map;
 extern crate parking_lot;
 extern crate rand;
@@ -56,6 +57,7 @@ mod chain;
 mod blocks;
 mod consensus;
 mod on_demand;
+mod on_demand_cache;
 pub mod error;
 
 #[cfg(test)] mod test;

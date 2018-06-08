@@ -16,6 +16,7 @@
 
 use std::sync::Arc;
 use futures::{IntoFuture, Future};
+use heapsize::HeapSizeOf;
 use primitives::Hash;
 use primitives::block::Id as BlockId;
 use state_machine::{self, OverlayedChanges, Backend as StateBackend, CodeExecutor};
@@ -193,6 +194,12 @@ fn do_check_execution_proof<E>(local_state_root: Hash, executor: &E, request: &R
 	}
 
 	Ok(CallResult { return_data: local_result, changes })
+}
+
+impl HeapSizeOf for CallResult {
+	fn heap_size_of_children(&self) -> usize {
+		self.return_data.heap_size_of_children() + self.changes.heap_size_of_children()
+	}
 }
 
 #[cfg(test)]
