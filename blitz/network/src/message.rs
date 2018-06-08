@@ -16,8 +16,18 @@
 
 //! Messages specific to the Blitz protocol
 
-use blitz_primitives::{Hash, RoundId};
-use transaction::Transaction;
+use blitz_primitives::{Hash, RoundId, PublicKey, Signature};
+use transaction::{Transaction, SignedTransaction};
+
+#[derive(Serialize, Deserialize)]
+pub struct SignTransactionQuery {
+	transaction: Transaction,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SignTransactionResponse {
+	signed_transaction: SignedTransaction,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct TransactionStateQuery {
@@ -36,16 +46,35 @@ pub struct TransactionStateResponse {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct TransactionBroadcast {
+	transaction: Transaction,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct SyncState {
 	round_id: RoundId,
 	separator_hashes: Vec<Hash>,
 	range_hashes: Vec<Hash>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct RoundState {
+	round_id: RoundId,
+	transactions_count: u32,
+	hash: Hash,
+	public_key: PublicKey,
+	signature: Signature,
+}
+
 /// Messages specific to the Blitz protocol
 #[derive(Serialize, Deserialize)]
 pub enum BlitzMessage {
+	SignTransactionQuery(SignTransactionQuery),
+	SignTransactionResponse(SignTransactionResponse),
+	TransactionBroadcast(TransactionBroadcast),
 	TransactionStateQuery(TransactionStateQuery),
 	TransactionStateResponse(TransactionStateResponse),
 	SyncState(SyncState),
+	RoundStateProposal(RoundState),
+	RoundStateCommitment(RoundState),
 }

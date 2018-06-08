@@ -113,6 +113,20 @@ pub enum Transaction {
 	NodeCreation(NodeCreationTransaction),
 }
 
+/// Signature of a locker that verified a transaction
+#[derive(Serialize, Deserialize)]
+pub struct LockerSignature {
+	// TODO locker id
+	signature: Signature,
+}
+
+/// Represents a transaction that was signed by one or more lockers
+#[derive(Serialize, Deserialize)]
+pub struct SignedTransaction {
+	transaction: Transaction,
+	locker_signatures: Vec<LockerSignature>,
+}
+
 /// Runtime data related to transaction that is not part of its payload
 pub struct TransactionContext {
 	/// Associated transaction

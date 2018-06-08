@@ -51,10 +51,10 @@ pub type Hash = primitives::H256;
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = runtime_primitives::Ed25519Signature;
 
-/// RoundId of the Blitz protocol
+/// Round id of the Blitz protocol
 pub type RoundId = u64;
 
-/// Public key of a node within Blitz network
+/// Public key of an entity within a Blitz network
 pub type PublicKey = primitives::AuthorityId;
 
 /// Timestamp within the Blitz network

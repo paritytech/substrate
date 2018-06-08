@@ -69,7 +69,7 @@ use blitz_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConf
 	SessionConfig, StakingConfig, BuildExternalities};
 use client::{genesis, BlockchainEvents};
 use network::ManageNetwork;
-use blitz_network::BlitzProtocol;
+use blitz_network::NetworkService;
 use exit_future::Signal;
 use blitz_state::GlobalState;
 
@@ -82,7 +82,7 @@ type Client = client::Client<client_db::Backend, NativeExecutor<LocalDispatch>>;
 pub struct Service {
 	thread: Option<thread::JoinHandle<()>>,
 	client: Arc<Client>,
-	network: Arc<network::Service<BlitzProtocol>>,
+	network: Arc<NetworkService>,
 	// transaction_pool: Arc<Mutex<TransactionPool>>,
 	signal: Option<Signal>,
 	// _consensus: Option<consensus::Service>,
@@ -388,6 +388,7 @@ impl Service {
 			// transaction_pool: transaction_pool,
 			signal: Some(signal),
 			// _consensus: consensus_service,
+			global_state: GlobalState::default(),
 		})
 	}
 
@@ -397,7 +398,7 @@ impl Service {
 	}
 
 	/// Get shared network instance.
-	pub fn network(&self) -> Arc<network::Service<BlitzProtocol>> {
+	pub fn network(&self) -> Arc<NetworkService> {
 		self.network.clone()
 	}
 
