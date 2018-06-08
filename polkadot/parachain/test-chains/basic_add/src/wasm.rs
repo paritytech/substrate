@@ -23,7 +23,7 @@ use super::{HeadData, BlockData};
 
 #[panic_implementation]
 #[no_mangle]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(_info: &core::panic::PanicInfo) -> ! {
 	unsafe {
 		intrinsics::abort()
 	}
