@@ -55,7 +55,7 @@ pub use runtime_primitives::BuildExternalities;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
 
@@ -161,7 +161,7 @@ pub type Address = staking::Address<Concrete>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<Header, UncheckedExtrinsic, Staking>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature, Staking>;
 /// Extrinsic type as expected by this runtime. This is not the type that is signed.

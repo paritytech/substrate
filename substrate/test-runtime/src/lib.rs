@@ -104,11 +104,11 @@ impl Slicable for Extrinsic {
 impl Checkable for Extrinsic {
 	type Checked = Self;
 
-	fn check(self) -> Result<Self, Self> {
+	fn check(self) -> Result<Self, &'static str> {
 		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
 			Ok(self)
 		} else {
-			Err(self)
+			Err("bad signature")
 		}
 	}
 }
