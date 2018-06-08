@@ -22,7 +22,6 @@ extern crate kvdb;
 extern crate hashdb;
 extern crate memorydb;
 extern crate parking_lot;
-extern crate serde;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
@@ -31,16 +30,13 @@ extern crate substrate_codec as codec;
 #[macro_use]
 extern crate log;
 
-#[macro_use]
-extern crate serde_derive;
-
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
 use std::sync::Arc;
 use std::path::PathBuf;
 
-use codec::{Slicable, Input};
+use codec::Slicable;
 use hashdb::DBValue;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -92,8 +88,7 @@ mod columns {
 	pub const HEADER: Option<u32> = Some(3);
 	pub const BODY: Option<u32> = Some(4);
 	pub const JUSTIFICATION: Option<u32> = Some(5);
-	pub const CALL_CACHE: Option<u32> = Some(6);
-	pub const NUM_COLUMNS: u32 = 7;
+	pub const NUM_COLUMNS: u32 = 6;
 }
 
 mod meta {
@@ -266,70 +261,6 @@ impl client::blockchain::Backend for BlockchainDb {
 	}
 }
 
-/// DB-backed method call cache.
-pub struct CallCache {
-	db: Arc<KeyValueDB>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct CachedCallKey {
-	block: HeaderHash,
-	method: Vec<u8>,
-	call_data: Vec<u8>,
-}
-
-impl Slicable for CachedCallKey {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.block.using_encoded(|s| v.extend(s));
-		self.method.using_encoded(|s| v.extend(s));
-		self.call_data.using_encoded(|s| v.extend(s));
-
-		v
-	}
-
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(CachedCallKey {
-			block: Slicable::decode(input)?,
-			method: Slicable::decode(input)?,
-			call_data: Slicable::decode(input)?,
-		})
-	}
-}
-
-impl client::CallExecutorCache for CallCache {
-	fn cache_call(&self, block: &HeaderHash, method: &str, call_data: &[u8], return_data: &[u8]) {
-		// TODO [light]: when about removal? when and who will control it?
-		let mut transaction = DBTransaction::new();
-		let call_key = Slicable::encode(&CachedCallKey {
-			block: block.clone(),
-			method: method.to_owned().into_bytes(),
-			call_data: call_data.to_vec(),
-		});
-		transaction.put(columns::CALL_CACHE, &call_key, return_data);
-
-		if let Err(error) = self.db.write(transaction) {
-			trace!("Failed to write cached call result to db: {:?}", error);
-		}
-	}
-
-	fn cached_call(&self, block: &HeaderHash, method: &str, call_data: &[u8]) -> Option<Vec<u8>> {
-		let call_key = Slicable::encode(&CachedCallKey {
-			block: block.clone(),
-			method: method.to_owned().into_bytes(),
-			call_data: call_data.to_vec(),
-		});
-		self.db.get(columns::CALL_CACHE, &call_key)
-			.map_err(|error| {
-				trace!("Failed to read cached call result from db: {:?}", error);
-				error
-			})
-			.unwrap_or_default()
-			.map(|v| v.into_vec())
-	}
-}
-
 /// Database transaction
 pub struct BlockImportOperation {
 	old_state: DbState,
@@ -393,13 +324,6 @@ impl Backend {
 		let db = Arc::new(::kvdb_memorydb::create(columns::NUM_COLUMNS));
 
 		Backend::from_kvdb(db as Arc<_>, false).expect("failed to create test-db")
-	}
-
-	/// Create method call cache.
-	pub fn call_cache(&self) -> CallCache {
-		CallCache {
-			db: self.db.clone(),
-		}
 	}
 
 	fn from_kvdb(db: Arc<KeyValueDB>, archive: bool) -> Result<Backend, client::error::Error> {
@@ -487,7 +411,6 @@ mod tests {
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;
 	use client::blockchain::Backend as BCTrait;
-	use client::CallExecutorCache;
 
 	#[test]
 	fn block_hash_inserted_correctly() {
@@ -702,14 +625,5 @@ mod tests {
 
 			assert!(db.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
 		}
-	}
-
-	#[test]
-	fn db_call_cache_works() {
-		let db = Backend::new_test();
-		let call_cache = db.call_cache();
-		assert_eq!(call_cache.cached_call(&Default::default(), "authorities_at", &[]), None);
-		call_cache.cache_call(&Default::default(), "authorities_at", &[], &[42]);
-		assert_eq!(call_cache.cached_call(&Default::default(), "authorities_at", &[]), Some(vec![42]));
 	}
 }

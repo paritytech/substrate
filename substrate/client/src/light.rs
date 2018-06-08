@@ -1,5 +1,10 @@
 // TODO: authorities do not change often && we will reexecute authorities() after field in digest is set,
 // current cache (block => execution result) doesn't help! + also need a cache for other requests
+// =>
+// two types of cache:
+// 1) authorities_at cache (db level). get(at_block) -> Vec<AuthorityId>
+// 1.1) key1: rolling
+// 2) on-demand cache (another implementation which only caches data in-memory)
 
 // Copyright 2017 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
@@ -30,7 +35,7 @@ use state_machine::{self, CodeExecutor, Backend as StateBackend,
 	TrieBackend as StateTrieBackend, TryIntoTrieBackend as TryIntoStateTrieBackend};
 use blockchain::{self, BlockStatus, Backend as BlockchainBackend};
 use backend;
-use call_executor::{CallResult, RemoteCallExecutor, CallExecutorCache, check_execution_proof};
+use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
 use client::{Client, GenesisBuilder};
 use error;
 
@@ -275,19 +280,17 @@ pub fn new_light_backend<B: backend::Backend, F>(blockchain: Arc<Blockchain<B, F
 }
 
 /// Create an instance of light client.
-pub fn new_light<B, F, C, GB>(
+pub fn new_light<B, F, GB>(
 	backend: Arc<Backend<B, F>>,
 	fetcher: Arc<F>,
-	call_cache: C,
 	genesis_builder: GB,
-) -> error::Result<Client<Backend<B, F>, RemoteCallExecutor<Blockchain<B, F>, F, C>>>
+) -> error::Result<Client<Backend<B, F>, RemoteCallExecutor<Blockchain<B, F>, F>>>
 	where
 		B: backend::Backend,
 		F: Fetcher,
-		C: CallExecutorCache,
 		GB: GenesisBuilder,
 {
-	let executor = RemoteCallExecutor::new(backend.blockchain.clone(), fetcher, call_cache);
+	let executor = RemoteCallExecutor::new(backend.blockchain.clone(), fetcher);
 	Client::new(backend, executor, genesis_builder)
 }
 
