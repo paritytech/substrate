@@ -24,7 +24,17 @@ use super::{HeadData, BlockData};
 #[panic_implementation]
 #[no_mangle]
 fn panic(_info: &PanicInfo) -> ! {
-	unsafe { intrinsics::abort() }
+	unsafe {
+		intrinsics::abort()
+	}
+}
+
+#[lang = "oom"]
+#[no_mangle]
+pub fn oom() -> ! {
+	unsafe {
+		intrinsics::abort();
+	}
 }
 
 #[no_mangle]
