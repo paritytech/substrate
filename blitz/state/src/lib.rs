@@ -24,33 +24,35 @@ use blitz_primitives::{PublicKey, Hash, Balance, RoundId};
 use std::collections::{HashMap, HashSet};
 
 pub struct Account {
-    public_key: PublicKey,
-    cth: Hash,
-    balance: Balance,
+	public_key: PublicKey,
+	cth: Hash,
+	balance: Balance,
 
-    first_as_node: Option<RoundId>,
-    last_as_node: Option<RoundId>,
+	first_as_node: Option<RoundId>,
+	last_as_node: Option<RoundId>,
 
-    num_operations: usize,
-    last_modified: RoundId,
-    last_transaction: Hash,
+	num_operations: usize,
+	last_modified: RoundId,
+	last_transaction: Hash,
 }
 
+#[derive(Default)]
 pub struct AccountStore {
-    accounts: HashMap<Hash, Account>,
-    public_keys: HashSet<PublicKey>,
+	accounts: HashMap<Hash, Account>,
+	public_keys: HashSet<PublicKey>,
 }
 
 impl AccountStore {
-    pub fn get_by_key(&self, key: PublicKey) -> Option<&Account> {
-        unimplemented!()
-    }
+	pub fn get_by_key(&self, key: PublicKey) -> Option<&Account> {
+		unimplemented!()
+	}
 
-    pub fn get_by_cth(&self, cth: Hash) -> Option<&Account> {
-        unimplemented!()
-    }
+	pub fn get_by_cth(&self, cth: Hash) -> Option<&Account> {
+		unimplemented!()
+	}
 }
 
+#[derive(Default)]
 pub struct GlobalState {
 	genesis_round_id: RoundId, // TODO [dk] should probably be in the config
 	account_store: AccountStore,
@@ -65,9 +67,9 @@ struct NodeStore {
 }
 
 impl NodeStore {
-    pub fn get_locker(id: PublicKey, global_state_hash: Hash) -> Node {
-        unimplemented!()
-    }
+	pub fn get_locker(id: PublicKey, global_state_hash: Hash) -> Node {
+		unimplemented!()
+	}
 }
 
 struct TransactionStore {

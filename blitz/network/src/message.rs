@@ -21,31 +21,31 @@ use transaction::Transaction;
 
 #[derive(Serialize, Deserialize)]
 pub struct TransactionStateQuery {
-    round_id: RoundId,
-    full_transaction: bool,
-    transaction_hash: Hash,
+	round_id: RoundId,
+	full_transaction: bool,
+	transaction_hash: Hash,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct TransactionStateResponse {
-    transaction_hash: Hash,
-    full_transaction: bool,
-    seen: bool,
-    accepted: bool,
-    transaction: Transaction,
+	transaction_hash: Hash,
+	full_transaction: bool,
+	seen: bool,
+	accepted: bool,
+	transaction: Transaction,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct SyncState {
-    round_id: RoundId,
-    separator_hashes: Vec<Hash>,
-    range_hashes: Vec<Hash>,
+	round_id: RoundId,
+	separator_hashes: Vec<Hash>,
+	range_hashes: Vec<Hash>,
 }
 
 /// Messages specific to the Blitz protocol
 #[derive(Serialize, Deserialize)]
 pub enum BlitzMessage {
-    TransactionStateQuery(TransactionStateQuery),
-    TransactionStateResponse(TransactionStateResponse),
-    SyncState(SyncState),
+	TransactionStateQuery(TransactionStateQuery),
+	TransactionStateResponse(TransactionStateResponse),
+	SyncState(SyncState),
 }
