@@ -172,11 +172,29 @@ decl_storage! {
 	// The enumeration sets.
 	pub EnumSet get(enum_set): b"sta:enum_set" => default map [ T::AccountIndex => Vec<T::AccountId> ];
 
-	// The balance of a given account.
+	// The "free" balance of a given account.
+	//
+	// This is the only balance that matters in terms of most operations on tokens. It is
+	// alone used to determine the balance when in the contract execution environment. When this
+	// balance falls below the value of `ExistentialDeposit`, then the "current account" is
+	// deleted: specifically, `Bondage`, `StorageOf`, `CodeOf` and `FreeBalance`.
+	//
+	// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
+	// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 	pub FreeBalance get(free_balance): b"sta:bal:" => default map [ T::AccountId => T::Balance ];
 
 	// The amount of the balance of a given account that is exterally reserved; this can still get
 	// slashed, but gets slashed last of all.
+	//
+	// This balance is a "reserve" balance that other subsystems use in order to set aside tokens
+	// that are still "owned" by the account holder, but which are unspendable. This is different
+	// and wholly unrelated to the `Bondage` system used for staking.
+	// 
+	// When this balance falls below the value of `ExistentialDeposit`, then this "reserve account"
+	// is deleted: specifically, `ReservedBalance`.
+	//
+	// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
+	// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 	pub ReservedBalance get(reserved_balance): b"sta:lbo:" => default map [ T::AccountId => T::Balance ];
 
 	// The block at which the `who`'s funds become entirely liquid.
@@ -444,6 +462,14 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// `true` if the account `index` is ready for reclaim.
+	pub fn can_reclaim(index: T::AccountIndex) -> bool {
+		let try_index: usize = index.as_();
+		let try_set = Self::enum_set(T::AccountIndex::sa(try_index / ENUM_SET_SIZE));
+		let item_index = try_index % ENUM_SET_SIZE;
+		item_index < try_set.len() && Self::balance(&try_set[item_index]).is_zero()
+	}
+
 	/// Register a new account (with existential balance).
 	fn new_account(who: &T::AccountId, balance: T::Balance) -> NewAccountOutcome {
 		let next_set_index = Self::next_enum_set();
@@ -512,13 +538,24 @@ impl<T: Trait> Module<T> {
 		ret
 	}
 
-	/// Kill an account.
-	fn kill_account(who: &T::AccountId) {
-		<system::AccountNonce<T>>::remove(who);
+	/// Kill an account's free portion.
+	fn on_free_too_low(who: &T::AccountId) {
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
 		<CodeOf<T>>::remove(who);
 		// TODO: <StorageOf<T>>::remove_prefix(address.clone());
+
+		if Self::reserved_balance(who).is_zero() {
+			<system::AccountNonce<T>>::remove(who);
+		}
+	}
+
+	/// Kill an account's reserved portion.
+	fn on_reserved_too_low(who: &T::AccountId) {
+		<ReservedBalance<T>>::remove(who);
+		if Self::free_balance(who).is_zero() {
+			<system::AccountNonce<T>>::remove(who);
+		}
 	}
 }
 
@@ -607,7 +644,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				// value of which makes even the `free_balance` unspendable.
 				// TODO: enforce this for the other balance-altering functions.
 				if balance < ed {
-					<Module<T>>::kill_account(&address);
+					<Module<T>>::anull_account(&address);
 					continue;
 				} else {
 					if !<FreeBalance<T>>::exists(&address) {
