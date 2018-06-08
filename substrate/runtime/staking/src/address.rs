@@ -17,6 +17,8 @@
 //! Address type that is union of index and id for an account.
 
 use rstd::prelude::*;
+#[cfg(feature = "std")]
+use std::fmt;
 use super::{Member, Slicable, As, Input};
 
 /// A vetted and verified extrinsic from the external world.
@@ -32,6 +34,16 @@ pub enum Address<AccountId, AccountIndex> where
 	/// It's an account index.
 	#[cfg_attr(feature = "std", serde(deserialize_with="AccountIndex::deserialize"))]
 	Index(AccountIndex),
+}
+
+#[cfg(feature = "std")]
+impl<AccountId, AccountIndex> fmt::Display for Address<AccountId, AccountIndex> where
+ 	AccountId: Member,
+ 	AccountIndex: Member,
+{
+	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		write!(f, "{:?}", self)
+	}
 }
 
 impl<AccountId, AccountIndex> From<AccountId> for Address<AccountId, AccountIndex> where

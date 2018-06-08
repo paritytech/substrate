@@ -83,13 +83,13 @@ pub type Address = staking::Address<Concrete>;
 /// Block Id type for this block.
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature, Staking>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature, Staking>;
 /// Extrinsic type as expected by this runtime. This is not the type that is signed.
 pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
 /// Extrinsic type that is signed.
 pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<Header, UncheckedExtrinsic, Staking>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 /// Provides a type-safe wrapper around a structurally valid block.
 #[cfg(feature = "std")]

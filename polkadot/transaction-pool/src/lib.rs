@@ -63,17 +63,17 @@ pub struct VerifiedTransaction {
 
 impl VerifiedTransaction {
 	/// Attempt to verify a transaction.
-	fn create(xt: UncheckedExtrinsic) -> Result<Self> {
-		if !xt.is_signed() {
-			bail!(ErrorKind::IsInherent(xt))
+	fn create(original: UncheckedExtrinsic) -> Result<Self> {
+		if !original.is_signed() {
+			bail!(ErrorKind::IsInherent(original))
 		}
 
-		let message = Slicable::encode(&xt);
-		match xt.clone().check() {
-			Ok(xt) => {
+		let message = Slicable::encode(&original);
+		match original.clone().check() {
+			Ok(checked) => {
 				let hash = BlakeTwo256::hash(&message);
 				Ok(VerifiedTransaction {
-					original: xt,
+					original,
 					inner: checked,
 					hash: hash.into(),
 					encoded_size: message.len(),

@@ -43,6 +43,7 @@ use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, As, Lookup};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
+use staking::address::Address;
 
 pub mod voting;
 
@@ -110,16 +111,16 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) -> Result = 0;
-		fn reap_inactive_voter(aux, signed_index: u32, who: staking::Address<T>, who_index: u32, assumed_vote_index: VoteIndex) -> Result = 1;
+		fn reap_inactive_voter(aux, signed_index: u32, who: Address<T::AccountId, T::AccountIndex>, who_index: u32, assumed_vote_index: VoteIndex) -> Result = 1;
 		fn retract_voter(aux, index: u32) -> Result = 2;
 		fn submit_candidacy(aux, slot: u32) -> Result = 3;
-		fn present_winner(aux, candidate: staking::Address<T>, total: T::Balance, index: VoteIndex) -> Result = 4;
+		fn present_winner(aux, candidate: Address<T::AccountId, T::AccountIndex>, total: T::Balance, index: VoteIndex) -> Result = 4;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_desired_seats(count: u32) -> Result = 0;
-		fn remove_member(who: staking::Address<T>) -> Result = 1;
+		fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result = 1;
 		fn set_presentation_duration(count: T::BlockNumber) -> Result = 2;
 		fn set_term_duration(count: T::BlockNumber) -> Result = 3;
 	}
@@ -260,7 +261,7 @@ impl<T: Trait> Module<T> {
 	fn reap_inactive_voter(
 		aux: &T::PublicAux,
 		signed_index: u32,
-		who: staking::Address<T>,
+		who: Address<T::AccountId, T::AccountIndex>,
 		who_index: u32,
 		assumed_vote_index: VoteIndex
 	) -> Result {
@@ -346,7 +347,7 @@ impl<T: Trait> Module<T> {
 	/// `signed` should have at least
 	fn present_winner(
 		aux: &T::PublicAux,
-		candidate: staking::Address<T>,
+		candidate: Address<T::AccountId, T::AccountIndex>,
 		total: T::Balance,
 		index: VoteIndex
 	) -> Result {
@@ -402,7 +403,7 @@ impl<T: Trait> Module<T> {
 	/// Remove a particular member. A tally will happen instantly (if not already in a presentation
 	/// period) to fill the seat if removal means that the desired members are not met.
 	/// This is effective immediately.
-	fn remove_member(who: staking::Address<T>) -> Result {
+	fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result {
 		let who = <staking::Module<T>>::lookup(who)?;
 		let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
 			.into_iter()
