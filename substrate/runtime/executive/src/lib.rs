@@ -219,7 +219,7 @@ mod tests {
 	use primitives::testing::{Digest, Header, Block};
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Debug, Serialize, Deserialize)]
+	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;
@@ -270,7 +270,7 @@ mod tests {
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
-			Executive::apply_extrinsic(xt);
+			Executive::apply_extrinsic(xt).unwrap();
 			assert_eq!(<staking::Module<Test>>::balance(&1), 32);
 			assert_eq!(<staking::Module<Test>>::balance(&2), 69);
 		});

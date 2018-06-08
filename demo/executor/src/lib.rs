@@ -48,7 +48,7 @@ mod tests {
 	use primitives::twox_128;
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
-	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
+	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
 	use {staking, system};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
 		BuildExternalities, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic};
@@ -64,22 +64,22 @@ mod tests {
 		)
 	}
 
-	fn alice() -> Hash {
-		Keyring::Alice.to_raw_public().into()
+	fn alice() -> AccountId {
+		AccountId::from(Keyring::Alice.to_raw_public())
 	}
 
-	fn bob() -> Hash {
-		Keyring::Bob.to_raw_public().into()
+	fn bob() -> AccountId {
+		AccountId::from(Keyring::Bob.to_raw_public())
 	}
 
 	fn xt() -> UncheckedExtrinsic {
 		let extrinsic = BareExtrinsic {
 			signed: alice(),
 			index: 0,
-			function: Call::Staking(staking::Call::transfer::<Concrete>(bob(), 69)),
+			function: Call::Staking(staking::Call::transfer::<Concrete>(bob().into(), 69)),
 		};
-		let signature = Keyring::from_raw_public(extrinsic.signed.0.clone()).unwrap()
-			.sign(&extrinsic.encode()).into();
+		let signature = MaybeUnsigned(Keyring::from_raw_public(extrinsic.signed.0.clone()).unwrap()
+			.sign(&extrinsic.encode()).into());
 		let extrinsic = Extrinsic {
 			signed: extrinsic.signed.into(),
 			index: extrinsic.index,
@@ -210,8 +210,8 @@ mod tests {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(|extrinsic| {
-			let signature = Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed.0.clone())).unwrap())
-				.sign(&extrinsic.encode()).into();
+			let signature = MaybeUnsigned(Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed.0.clone())).unwrap())
+				.sign(&extrinsic.encode()).into());
 			let extrinsic = Extrinsic {
 				signed: extrinsic.signed.into(),
 				index: extrinsic.index,
@@ -238,11 +238,11 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("76b0393b4958d3cb98bb51d9f4edb316af48485142b8721e94c3b52c75ec3243").into(),
+			hex!("4f7a61bceecddc19d49fbee53f82402c2a8727c1b2aeb5e5070a59f0777a203b").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
-				function: Call::Staking(staking::Call::transfer(bob(), 69)),
+				function: Call::Staking(staking::Call::transfer(bob().into(), 69)),
 			}]
 		)
 	}
@@ -256,12 +256,12 @@ mod tests {
 				BareExtrinsic {
 					signed: bob(),
 					index: 0,
-					function: Call::Staking(staking::Call::transfer(alice(), 5)),
+					function: Call::Staking(staking::Call::transfer(alice().into(), 5)),
 				},
 				BareExtrinsic {
 					signed: alice(),
 					index: 1,
-					function: Call::Staking(staking::Call::transfer(bob(), 15)),
+					function: Call::Staking(staking::Call::transfer(bob().into(), 15)),
 				}
 			]
 		)

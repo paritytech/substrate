@@ -367,7 +367,7 @@ mod tests {
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Debug, Serialize, Deserialize)]
+	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;

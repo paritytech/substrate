@@ -26,10 +26,6 @@ extern crate serde;
 extern crate serde_derive;
 
 #[cfg(test)]
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(test)]
 extern crate wabt;
 
 #[macro_use]
