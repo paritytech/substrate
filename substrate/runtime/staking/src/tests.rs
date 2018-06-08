@@ -253,7 +253,7 @@ fn deducting_balance_when_bonded_should_not_work() {
 		<Bondage<Test>>::insert(1, 2);
 		System::set_block_number(1);
 		assert_eq!(Staking::unlock_block(&1), LockStatus::LockedUntil(2));
-		assert_noop!(Staking::deduct_unbonded(&1, 69), "not enough liquid funds");
+		assert_noop!(Staking::deduct_unbonded(&1, 69), "free funds are still bonded");
 	});
 }
 
@@ -261,8 +261,10 @@ fn deducting_balance_when_bonded_should_not_work() {
 fn refunding_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 42);
+		<ReservedBalance<Test>>::insert(1, 69);
 		Staking::refund(&1, 69);
 		assert_eq!(Staking::free_balance(&1), 111);
+		assert_eq!(Staking::reserved_balance(&1), 0);
 	});
 }
 
@@ -271,7 +273,7 @@ fn slashing_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve_balance(&1, 69));
-		assert_ok!(Staking::slash(&1, 69));
+		assert!(Staking::slash(&1, 69).is_none());
 		assert_eq!(Staking::free_balance(&1), 0);
 		assert_eq!(Staking::reserved_balance(&1), 42);
 	});
@@ -282,7 +284,7 @@ fn slashing_incomplete_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 42);
 		assert_ok!(Staking::reserve_balance(&1, 21));
-		assert_err!(Staking::slash(&1, 69), "not enough funds");
+		assert!(Staking::slash(&1, 69).is_some());
 		assert_eq!(Staking::free_balance(&1), 0);
 		assert_eq!(Staking::reserved_balance(&1), 0);
 	});
@@ -304,7 +306,7 @@ fn slashing_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve_balance(&1, 111));
-		assert_ok!(Staking::slash_reserved(&1, 42));
+		assert!(Staking::slash_reserved(&1, 42).is_none());
 		assert_eq!(Staking::reserved_balance(&1), 69);
 		assert_eq!(Staking::free_balance(&1), 0);
 	});
@@ -315,7 +317,7 @@ fn slashing_incomplete_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve_balance(&1, 42));
-		assert_err!(Staking::slash_reserved(&1, 69), "not enough (reserved) funds");
+		assert!(Staking::slash_reserved(&1, 69).is_some());
 		assert_eq!(Staking::free_balance(&1), 69);
 		assert_eq!(Staking::reserved_balance(&1), 0);
 	});
@@ -324,9 +326,10 @@ fn slashing_incomplete_reserved_balance_should_work() {
 #[test]
 fn transferring_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
-		<FreeBalance<Test>>::insert(1, 111);
-		assert_ok!(Staking::reserve_balance(&1, 111));
-		assert_ok!(Staking::transfer_reserved_balance(&1, &2, 42));
+		<FreeBalance<Test>>::insert(1, 110);
+		<FreeBalance<Test>>::insert(2, 1);
+		assert_ok!(Staking::reserve_balance(&1, 110));
+		assert_ok!(Staking::transfer_reserved_balance(&1, &2, 41));
 		assert_eq!(Staking::reserved_balance(&1), 69);
 		assert_eq!(Staking::free_balance(&1), 0);
 		assert_eq!(Staking::reserved_balance(&2), 0);
@@ -335,11 +338,21 @@ fn transferring_reserved_balance_should_work() {
 }
 
 #[test]
-fn transferring_incomplete_reserved_balance_should_work() {
+fn transferring_reserved_balance_to_nonexistent_should_fail() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
-		assert_ok!(Staking::reserve_balance(&1, 42));
-		assert_err!(Staking::transfer_reserved_balance(&1, &2, 69), "not enough (reserved) funds");
+		assert_ok!(Staking::reserve_balance(&1, 111));
+		assert_noop!(Staking::transfer_reserved_balance(&1, &2, 42), "beneficiary account must pre-exist");
+	});
+}
+
+#[test]
+fn transferring_incomplete_reserved_balance_should_work() {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+		<FreeBalance<Test>>::insert(1, 110);
+		<FreeBalance<Test>>::insert(2, 1);
+		assert_ok!(Staking::reserve_balance(&1, 41));
+		assert!(Staking::transfer_reserved_balance(&1, &2, 69).unwrap().is_some());
 		assert_eq!(Staking::reserved_balance(&1), 0);
 		assert_eq!(Staking::free_balance(&1), 69);
 		assert_eq!(Staking::reserved_balance(&2), 0);

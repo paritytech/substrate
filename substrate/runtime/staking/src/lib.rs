@@ -189,7 +189,7 @@ decl_storage! {
 	// This balance is a "reserve" balance that other subsystems use in order to set aside tokens
 	// that are still "owned" by the account holder, but which are unspendable. This is different
 	// and wholly unrelated to the `Bondage` system used for staking.
-	// 
+	//
 	// When this balance falls below the value of `ExistentialDeposit`, then this "reserve account"
 	// is deleted: specifically, `ReservedBalance`.
 	//
@@ -335,77 +335,134 @@ impl<T: Trait> Module<T> {
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
-	/// Deduct from an unbonded balance. true if it happened.
-	pub fn deduct_unbonded(who: &T::AccountId, value: T::Balance) -> Result {
-		if let LockStatus::Liquid = Self::unlock_block(who) {
-			let b = Self::free_balance(who);
-			if b >= value {
-				<FreeBalance<T>>::insert(who, b - value);
-				return Ok(())
-			}
+	/// Set the free balance of an account to some new value. Will enforce ExistentialDeposit law,
+	/// anulling the account as needed.
+	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> bool {
+		if balance < Self::existential_deposit() {
+			Self::on_reserved_too_low(who);
+			false
+		} else {
+			<ReservedBalance<T>>::insert(who, balance);
+			true
 		}
-		Err("not enough liquid funds")
+	}
+
+	/// Set the reserved balance of an account to some new value. Will enforce ExistentialDeposit
+	/// law anulling the account as needed.
+	///
+	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
+	/// is known that the account already exists.
+	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> bool {
+		// Commented out for no - but consider it instructive.
+//		assert!(!Self::balance(who).is_zero());
+		if balance < Self::existential_deposit() {
+			Self::on_free_too_low(who);
+			false
+		} else {
+			<FreeBalance<T>>::insert(who, balance);
+			true
+		}
+	}
+
+	/// Deduct from an unbonded balance. true if it happened.
+	// TODO: replace acros the codebase.
+	pub fn deduct_unbonded(who: &T::AccountId, value: T::Balance) -> Result {
+		Self::reserve_balance(who, value)
 	}
 
 	/// Refund some balance.
+	// TODO: replace acros the codebase.
 	pub fn refund(who: &T::AccountId, value: T::Balance) {
-		<FreeBalance<T>>::insert(who, Self::free_balance(who) + value)
+		let _ = Self::unreserve_balance(who, value);
 	}
 
-	/// Will slash any balance, but prefer free over reserved.
-	pub fn slash(who: &T::AccountId, value: T::Balance) -> Result {
+	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
+	/// free balance. This function cannot fail.
+	///
+	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
+	/// then `Some(remaining)` will be retutned. Full completion is given by `None`.
+	pub fn slash(who: &T::AccountId, value: T::Balance) -> Option<T::Balance> {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
-		<FreeBalance<T>>::insert(who, &(free_balance - free_slash));
+		Self::set_free_balance(who, free_balance - free_slash);
 		if free_slash < value {
 			Self::slash_reserved(who, value - free_slash)
-				.map_err(|_| "not enough funds")
 		} else {
-			Ok(())
+			None
 		}
 	}
 
 	/// Moves `value` from balance to reserved balance.
+	///
+	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
+	/// be returned to notify of this. This is different behaviour to `unreserve_balance`.
 	pub fn reserve_balance(who: &T::AccountId, value: T::Balance) -> Result {
 		let b = Self::free_balance(who);
 		if b < value {
 			return Err("not enough free funds")
 		}
-		<FreeBalance<T>>::insert(who, b - value);
-		<ReservedBalance<T>>::insert(who, Self::reserved_balance(who) + value);
+		if Self::unlock_block(who) != LockStatus::Liquid {
+			return Err("free funds are still bonded")
+		}
+		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
+		Self::set_free_balance(who, b - value);
 		Ok(())
 	}
 
-	/// Moves `value` from reserved balance to balance.
-	pub fn unreserve_balance(who: &T::AccountId, value: T::Balance) {
+	/// Moves up to `value` from reserved balance to balance. This function cannot fail.
+	///
+	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
+	/// then `Some(remaining)` will be retutned. Full completion is given by `None`.
+	/// NOTE: This is different to `reserve_balance`.
+	pub fn unreserve_balance(who: &T::AccountId, value: T::Balance) -> Option<T::Balance> {
 		let b = Self::reserved_balance(who);
-		let value = cmp::min(b, value);
-		<ReservedBalance<T>>::insert(who, b - value);
-		<FreeBalance<T>>::insert(who, Self::free_balance(who) + value);
-	}
-
-	/// Moves `value` from reserved balance to balance.
-	pub fn slash_reserved(who: &T::AccountId, value: T::Balance) -> Result {
-		let b = Self::reserved_balance(who);
-		let slash = cmp::min(b, value);
-		<ReservedBalance<T>>::insert(who, b - slash);
-		if value == slash {
-			Ok(())
+		let actual = cmp::min(b, value);
+		Self::set_free_balance(who, Self::free_balance(who) + actual);
+		Self::set_reserved_balance(who, b - actual);
+		if actual == value {
+			None
 		} else {
-			Err("not enough (reserved) funds")
+			Some(value - actual)
 		}
 	}
 
-	/// Moves `value` from reserved balance to balance.
-	pub fn transfer_reserved_balance(slashed: &T::AccountId, beneficiary: &T::AccountId, value: T::Balance) -> Result {
+	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
+	///
+	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
+	/// then `Some(remaining)` will be retutned. Full completion is given by `None`.
+	pub fn slash_reserved(who: &T::AccountId, value: T::Balance) -> Option<T::Balance> {
+		let b = Self::reserved_balance(who);
+		let slash = cmp::min(b, value);
+		Self::set_reserved_balance(who, b - slash);
+		if value == slash {
+			None
+		} else {
+			Some(value - slash)
+		}
+	}
+
+	/// Moves up to `value` from reserved balance of account `slashed` to free balance of account
+	/// `beneficiary`. `beneficiary` must exist for this to succeed. If it does not, `Err` will be
+	/// returned.
+	///
+	/// As much funds up to `value` will be moved as possible. If this is less than `value`, then
+	/// `Ok(Some(remaining))` will be retutned. Full completion is given by `Ok(None)`.
+	pub fn transfer_reserved_balance(
+		slashed: &T::AccountId,
+		beneficiary: &T::AccountId,
+		value: T::Balance
+	) -> result::Result<Option<T::Balance>, &'static str> {
+		if Self::balance(beneficiary).is_zero() {
+			return Err("beneficiary account must pre-exist");
+		}
 		let b = Self::reserved_balance(slashed);
 		let slash = cmp::min(b, value);
-		<ReservedBalance<T>>::insert(slashed, b - slash);
-		<FreeBalance<T>>::insert(beneficiary, Self::free_balance(beneficiary) + slash);
+		Self::set_free_balance(beneficiary, Self::free_balance(beneficiary) + slash);
+		Self::set_reserved_balance(slashed, b - slash);
 		if value == slash {
-			Ok(())
+			Ok(None)
 		} else {
-			Err("not enough (reserved) funds")
+			Ok(Some(value - slash))
 		}
 	}
 
@@ -644,7 +701,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				// value of which makes even the `free_balance` unspendable.
 				// TODO: enforce this for the other balance-altering functions.
 				if balance < ed {
-					<Module<T>>::anull_account(&address);
+					<Module<T>>::on_free_too_low(&address);
 					continue;
 				} else {
 					if !<FreeBalance<T>>::exists(&address) {

@@ -293,10 +293,13 @@ impl<T: Trait> Module<T> {
 			voters
 		);
 		if valid {
-			<staking::Module<T>>::transfer_reserved_balance(&who, aux.ref_into(), Self::voting_bond())
+			// This only fails if `who` doesn't exist, which is clearly must do since its the aux.
+			// Still, it's no more harmful to propagate any error at this point.
+			<staking::Module<T>>::transfer_reserved_balance(&who, aux.ref_into(), Self::voting_bond())?;
 		} else {
-			<staking::Module<T>>::slash_reserved(aux.ref_into(), Self::voting_bond())
+			<staking::Module<T>>::slash_reserved(aux.ref_into(), Self::voting_bond());
 		}
+		Ok(())
 	}
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
@@ -1352,7 +1355,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_eq!(Staking::balance(&1), 1);
+			assert_eq!(Staking::free_balance(&1), 1);
 			assert_noop!(Council::present_winner(&1, 1.into(), 30, 0), "presenter must have sufficient slashable funds");
 		});
 	}
