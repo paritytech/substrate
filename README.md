@@ -33,16 +33,18 @@ polkadot --chain=dev --validator --key Alice
 
 You can muck around by cloning and building the http://github.com/paritytech/polka-ui and http://github.com/paritytech/polkadot-ui or just heading to https://polkadot.js.org/apps.
 
-### PoC-1 Testnet
+### PoC-X Testnet
 
-You can also connect to the global PoC-1 testnet. To do this, just use:
+You can also connect to the global PoC-X testnet, where X is the Polkadot PoC version number. To do this, just use:
 
 ```
-polkadot --chain=poc-1
+polkadot --chain=CHAIN_SPEC
 ```
+
+Ensure you replace `CHAIN_SPEC` with an available chain specification from the list shown with `polkadot --help`.  
 
 If you want to do anything on it (not that there's much to do), then you'll need
-to get some PoC-1 testnet DOTs. Ask in the Polkadot watercooler.
+to get some PoC-X testnet DOTs. Ask in the Polkadot watercooler.
 
 ## Local Two-node Testnet
 
