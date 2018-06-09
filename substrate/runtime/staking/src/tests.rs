@@ -329,7 +329,7 @@ fn transferring_reserved_balance_should_work() {
 		<FreeBalance<Test>>::insert(1, 110);
 		<FreeBalance<Test>>::insert(2, 1);
 		assert_ok!(Staking::reserve_balance(&1, 110));
-		assert_ok!(Staking::transfer_reserved_balance(&1, &2, 41));
+		assert_ok!(Staking::transfer_reserved_balance(&1, &2, 41), None);
 		assert_eq!(Staking::reserved_balance(&1), 69);
 		assert_eq!(Staking::free_balance(&1), 0);
 		assert_eq!(Staking::reserved_balance(&2), 0);

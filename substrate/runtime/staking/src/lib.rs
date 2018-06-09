@@ -235,9 +235,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Some result as `slash(who, value)` (but without the side-effects) assuming there are no
-	/// balance changes in the meantime.
+	/// balance changes in the meantime and only the reserved balance is not taken into account.
 	pub fn can_slash(who: &T::AccountId, value: T::Balance) -> bool {
-		Self::balance(who) >= value
+		Self::free_balance(who) >= value
 	}
 
 	/// Same result as `deduct_unbonded(who, value)` (but without the side-effects) assuming there

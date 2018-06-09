@@ -496,9 +496,9 @@ mod tests {
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
-			assert_eq!(Staking::balance(&1), 5);
-			assert_eq!(Staking::balance(&2), 15);
-			assert_eq!(Staking::balance(&5), 35);
+			assert_eq!(Staking::free_balance(&1), 5);
+			assert_eq!(Staking::free_balance(&2), 15);
+			assert_eq!(Staking::free_balance(&5), 35);
 		});
 	}
 
@@ -512,9 +512,9 @@ mod tests {
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			assert_eq!(Staking::balance(&1), 10);
-			assert_eq!(Staking::balance(&2), 20);
-			assert_eq!(Staking::balance(&5), 50);
+			assert_eq!(Staking::free_balance(&1), 10);
+			assert_eq!(Staking::free_balance(&2), 20);
+			assert_eq!(Staking::free_balance(&5), 50);
 		});
 	}
 
