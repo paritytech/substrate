@@ -22,13 +22,11 @@ use parachains::Call as ParachainsCall;
 use primitives::parachain::CandidateReceipt;
 
 /// Provides a type-safe wrapper around a structurally valid block.
-#[cfg(feature = "std")]
 pub struct CheckedBlock {
 	inner: Block,
 	file_line: Option<(&'static str, u32)>,
 }
 
-#[cfg(feature = "std")]
 impl CheckedBlock {
 	/// Create a new checked block. Fails if the block is not structurally valid.
 	pub fn new(block: Block) -> Result<Self, Block> {
@@ -94,7 +92,6 @@ impl CheckedBlock {
 	pub fn into_inner(self) -> Block { self.inner }
 }
 
-#[cfg(feature = "std")]
 impl ::std::ops::Deref for CheckedBlock {
 	type Target = Block;
 
@@ -103,7 +100,6 @@ impl ::std::ops::Deref for CheckedBlock {
 
 /// Assert that a block is structurally valid. May lead to panic in the future
 /// in case it isn't.
-#[cfg(feature = "std")]
 #[macro_export]
 macro_rules! assert_polkadot_block {
 	($block: expr) => {
