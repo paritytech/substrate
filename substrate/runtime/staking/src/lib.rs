@@ -230,7 +230,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// The combined balance of `who`.
-	pub fn balance(who: &T::AccountId) -> T::Balance {
+	pub fn voting_balance(who: &T::AccountId) -> T::Balance {
 		Self::free_balance(who) + Self::reserved_balance(who)
 	}
 
@@ -240,9 +240,9 @@ impl<T: Trait> Module<T> {
 		Self::free_balance(who) >= value
 	}
 
-	/// Same result as `deduct_unbonded(who, value)` (but without the side-effects) assuming there
+	/// Same result as `reserve(who, value)` (but without the side-effects) assuming there
 	/// are no balance changes in the meantime.
-	pub fn can_deduct_unbonded(who: &T::AccountId, value: T::Balance) -> bool {
+	pub fn can_reserve(who: &T::AccountId, value: T::Balance) -> bool {
 		if let LockStatus::Liquid = Self::unlock_block(who) {
 			Self::free_balance(who) >= value
 		} else {
@@ -354,7 +354,7 @@ impl<T: Trait> Module<T> {
 	/// is known that the account already exists.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> bool {
 		// Commented out for no - but consider it instructive.
-//		assert!(!Self::balance(who).is_zero());
+//		assert!(!Self::voting_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
 			Self::on_free_too_low(who);
 			false
@@ -362,18 +362,6 @@ impl<T: Trait> Module<T> {
 			<FreeBalance<T>>::insert(who, balance);
 			true
 		}
-	}
-
-	/// Deduct from an unbonded balance. true if it happened.
-	// TODO: replace acros the codebase.
-	pub fn deduct_unbonded(who: &T::AccountId, value: T::Balance) -> Result {
-		Self::reserve_balance(who, value)
-	}
-
-	/// Refund some balance.
-	// TODO: replace acros the codebase.
-	pub fn refund(who: &T::AccountId, value: T::Balance) {
-		let _ = Self::unreserve_balance(who, value);
 	}
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
@@ -395,8 +383,8 @@ impl<T: Trait> Module<T> {
 	/// Moves `value` from balance to reserved balance.
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
-	/// be returned to notify of this. This is different behaviour to `unreserve_balance`.
-	pub fn reserve_balance(who: &T::AccountId, value: T::Balance) -> Result {
+	/// be returned to notify of this. This is different behaviour to `unreserve`.
+	pub fn reserve(who: &T::AccountId, value: T::Balance) -> Result {
 		let b = Self::free_balance(who);
 		if b < value {
 			return Err("not enough free funds")
@@ -413,8 +401,8 @@ impl<T: Trait> Module<T> {
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Some(remaining)` will be retutned. Full completion is given by `None`.
-	/// NOTE: This is different to `reserve_balance`.
-	pub fn unreserve_balance(who: &T::AccountId, value: T::Balance) -> Option<T::Balance> {
+	/// NOTE: This is different to `reserve`.
+	pub fn unreserve(who: &T::AccountId, value: T::Balance) -> Option<T::Balance> {
 		let b = Self::reserved_balance(who);
 		let actual = cmp::min(b, value);
 		Self::set_free_balance(who, Self::free_balance(who) + actual);
@@ -447,12 +435,12 @@ impl<T: Trait> Module<T> {
 	///
 	/// As much funds up to `value` will be moved as possible. If this is less than `value`, then
 	/// `Ok(Some(remaining))` will be retutned. Full completion is given by `Ok(None)`.
-	pub fn transfer_reserved_balance(
+	pub fn transfer_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: T::Balance
 	) -> result::Result<Option<T::Balance>, &'static str> {
-		if Self::balance(beneficiary).is_zero() {
+		if Self::voting_balance(beneficiary).is_zero() {
 			return Err("beneficiary account must pre-exist");
 		}
 		let b = Self::reserved_balance(slashed);
@@ -496,7 +484,7 @@ impl<T: Trait> Module<T> {
 		// <ValidatorCount<T>>::get() of them.
 		let mut intentions = <Intentions<T>>::get()
 			.into_iter()
-			.map(|v| (Self::balance(&v), v))
+			.map(|v| (Self::voting_balance(&v), v))
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 		<session::Module<T>>::set_validators(
@@ -524,7 +512,7 @@ impl<T: Trait> Module<T> {
 		let try_index: usize = index.as_();
 		let try_set = Self::enum_set(T::AccountIndex::sa(try_index / ENUM_SET_SIZE));
 		let item_index = try_index % ENUM_SET_SIZE;
-		item_index < try_set.len() && Self::balance(&try_set[item_index]).is_zero()
+		item_index < try_set.len() && Self::voting_balance(&try_set[item_index]).is_zero()
 	}
 
 	/// Register a new account (with existential balance).
@@ -556,7 +544,7 @@ impl<T: Trait> Module<T> {
 				let mut try_set = Self::enum_set(set_index);
 				let item_index = try_index % ENUM_SET_SIZE;
 				if item_index < try_set.len() {
-					if Self::balance(&try_set[item_index]).is_zero() {
+					if Self::voting_balance(&try_set[item_index]).is_zero() {
 						// yup - this index refers to a dead account. can be reused.
 						try_set[item_index] = who.clone();
 						<EnumSet<T>>::insert(set_index, try_set);

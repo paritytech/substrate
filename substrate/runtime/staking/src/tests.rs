@@ -43,10 +43,10 @@ fn default_indexing_on_new_accounts_should_work() {
 #[test]
 fn dust_account_removal_should_work() {
 	with_externalities(&mut new_test_ext(256 * 10, 1, 2, 0, true), || {
-		assert_eq!(Staking::balance(&2), 256 * 20);
+		assert_eq!(Staking::voting_balance(&2), 256 * 20);
 		assert_ok!(Staking::transfer(&2, 5.into(), 256 * 10 + 1));	// index 1 (account 2) becomes zombie
-		assert_eq!(Staking::balance(&2), 0);
-		assert_eq!(Staking::balance(&5), 256 * 10 + 1);
+		assert_eq!(Staking::voting_balance(&2), 0);
+		assert_eq!(Staking::voting_balance(&5), 256 * 10 + 1);
 	});
 }
 
@@ -55,12 +55,38 @@ fn reclaim_indexing_on_new_accounts_should_work() {
 	with_externalities(&mut new_test_ext(256 * 1, 1, 2, 0, true), || {
 		assert_eq!(Staking::lookup_index(1), Some(2));
 		assert_eq!(Staking::lookup_index(4), None);
-		assert_eq!(Staking::balance(&2), 256 * 20);
+		assert_eq!(Staking::voting_balance(&2), 256 * 20);
+
 		assert_ok!(Staking::transfer(&2, 5.into(), 256 * 20));	// account 2 becomes zombie freeing index 1 for reclaim)
-		assert_eq!(Staking::balance(&2), 0);
+		assert_eq!(Staking::voting_balance(&2), 0);
+
 		assert_ok!(Staking::transfer(&5, 6.into(), 256 * 1 + 0x69));	// account 6 takes index 1.
-		assert_eq!(Staking::balance(&6), 256 * 1 + 0x69);
+		assert_eq!(Staking::voting_balance(&6), 256 * 1 + 0x69);
 		assert_eq!(Staking::lookup_index(1), Some(6));
+	});
+}
+
+#[test]
+fn reserved_balance_should_prevent_reclaim_count() {
+	with_externalities(&mut new_test_ext(256 * 1, 1, 2, 0, true), || {
+		assert_eq!(Staking::lookup_index(1), Some(2));
+		assert_eq!(Staking::lookup_index(4), None);
+		assert_eq!(Staking::voting_balance(&2), 256 * 20);
+
+		assert_ok!(Staking::reserve(&2, 256 * 19 + 1));	// account 2 becomes mostly reserved
+		assert_eq!(Staking::free_balance(&2), 0);	// "free" account deleted."
+		assert_eq!(Staking::voting_balance(&2), 256 * 19 + 1);	// reserve still exists.
+
+		assert_ok!(Staking::transfer(&4, 5.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 for account 5.
+		assert_eq!(Staking::voting_balance(&5), 256 * 1 + 0x69);
+		assert_eq!(Staking::lookup_index(1), Some(2));					// but fails.
+
+		assert_eq!(Staking::slash(&2, 256 * 18 + 2), None);				// account 2 gets slashed
+		assert_eq!(Staking::voting_balance(&2), 0);						// "free" account deleted."
+
+		assert_ok!(Staking::transfer(&4, 6.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 again for account 6.
+		assert_eq!(Staking::voting_balance(&6), 256 * 1 + 0x69);
+		assert_eq!(Staking::lookup_index(1), Some(6));					// and succeeds.
 	});
 }
 
@@ -185,10 +211,10 @@ fn staking_balance_works() {
 		<FreeBalance<Test>>::insert(1, 42);
 		assert_eq!(Staking::free_balance(&1), 42);
 		assert_eq!(Staking::reserved_balance(&1), 0);
-		assert_eq!(Staking::balance(&1), 42);
+		assert_eq!(Staking::voting_balance(&1), 42);
 		assert_eq!(Staking::free_balance(&2), 0);
 		assert_eq!(Staking::reserved_balance(&2), 0);
-		assert_eq!(Staking::balance(&2), 0);
+		assert_eq!(Staking::voting_balance(&2), 0);
 	});
 }
 
@@ -197,8 +223,8 @@ fn staking_balance_transfer_works() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::transfer(&1, 2.into(), 69));
-		assert_eq!(Staking::balance(&1), 42);
-		assert_eq!(Staking::balance(&2), 69);
+		assert_eq!(Staking::voting_balance(&1), 42);
+		assert_eq!(Staking::voting_balance(&2), 69);
 	});
 }
 
@@ -216,13 +242,13 @@ fn reserving_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
 
-		assert_eq!(Staking::balance(&1), 111);
+		assert_eq!(Staking::voting_balance(&1), 111);
 		assert_eq!(Staking::free_balance(&1), 111);
 		assert_eq!(Staking::reserved_balance(&1), 0);
 
-		assert_ok!(Staking::reserve_balance(&1, 69));
+		assert_ok!(Staking::reserve(&1, 69));
 
-		assert_eq!(Staking::balance(&1), 111);
+		assert_eq!(Staking::voting_balance(&1), 111);
 		assert_eq!(Staking::free_balance(&1), 42);
 		assert_eq!(Staking::reserved_balance(&1), 69);
 	});
@@ -232,7 +258,7 @@ fn reserving_balance_should_work() {
 fn staking_balance_transfer_when_reserved_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
-		assert_ok!(Staking::reserve_balance(&1, 69));
+		assert_ok!(Staking::reserve(&1, 69));
 		assert_noop!(Staking::transfer(&1, 2.into(), 69), "balance too low to send value");
 	});
 }
@@ -241,7 +267,7 @@ fn staking_balance_transfer_when_reserved_should_not_work() {
 fn deducting_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
-		assert_ok!(Staking::deduct_unbonded(&1, 69));
+		assert_ok!(Staking::reserve(&1, 69));
 		assert_eq!(Staking::free_balance(&1), 42);
 	});
 }
@@ -253,7 +279,7 @@ fn deducting_balance_when_bonded_should_not_work() {
 		<Bondage<Test>>::insert(1, 2);
 		System::set_block_number(1);
 		assert_eq!(Staking::unlock_block(&1), LockStatus::LockedUntil(2));
-		assert_noop!(Staking::deduct_unbonded(&1, 69), "free funds are still bonded");
+		assert_noop!(Staking::reserve(&1, 69), "free funds are still bonded");
 	});
 }
 
@@ -262,7 +288,7 @@ fn refunding_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 42);
 		<ReservedBalance<Test>>::insert(1, 69);
-		Staking::refund(&1, 69);
+		Staking::unreserve(&1, 69);
 		assert_eq!(Staking::free_balance(&1), 111);
 		assert_eq!(Staking::reserved_balance(&1), 0);
 	});
@@ -272,7 +298,7 @@ fn refunding_balance_should_work() {
 fn slashing_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
-		assert_ok!(Staking::reserve_balance(&1, 69));
+		assert_ok!(Staking::reserve(&1, 69));
 		assert!(Staking::slash(&1, 69).is_none());
 		assert_eq!(Staking::free_balance(&1), 0);
 		assert_eq!(Staking::reserved_balance(&1), 42);
@@ -283,7 +309,7 @@ fn slashing_balance_should_work() {
 fn slashing_incomplete_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 42);
-		assert_ok!(Staking::reserve_balance(&1, 21));
+		assert_ok!(Staking::reserve(&1, 21));
 		assert!(Staking::slash(&1, 69).is_some());
 		assert_eq!(Staking::free_balance(&1), 0);
 		assert_eq!(Staking::reserved_balance(&1), 0);
@@ -294,8 +320,8 @@ fn slashing_incomplete_balance_should_work() {
 fn unreserving_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
-		assert_ok!(Staking::reserve_balance(&1, 111));
-		Staking::unreserve_balance(&1, 42);
+		assert_ok!(Staking::reserve(&1, 111));
+		Staking::unreserve(&1, 42);
 		assert_eq!(Staking::reserved_balance(&1), 69);
 		assert_eq!(Staking::free_balance(&1), 42);
 	});
@@ -305,7 +331,7 @@ fn unreserving_balance_should_work() {
 fn slashing_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
-		assert_ok!(Staking::reserve_balance(&1, 111));
+		assert_ok!(Staking::reserve(&1, 111));
 		assert!(Staking::slash_reserved(&1, 42).is_none());
 		assert_eq!(Staking::reserved_balance(&1), 69);
 		assert_eq!(Staking::free_balance(&1), 0);
@@ -316,7 +342,7 @@ fn slashing_reserved_balance_should_work() {
 fn slashing_incomplete_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
-		assert_ok!(Staking::reserve_balance(&1, 42));
+		assert_ok!(Staking::reserve(&1, 42));
 		assert!(Staking::slash_reserved(&1, 69).is_some());
 		assert_eq!(Staking::free_balance(&1), 69);
 		assert_eq!(Staking::reserved_balance(&1), 0);
@@ -328,8 +354,8 @@ fn transferring_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 110);
 		<FreeBalance<Test>>::insert(2, 1);
-		assert_ok!(Staking::reserve_balance(&1, 110));
-		assert_ok!(Staking::transfer_reserved_balance(&1, &2, 41), None);
+		assert_ok!(Staking::reserve(&1, 110));
+		assert_ok!(Staking::transfer_reserved(&1, &2, 41), None);
 		assert_eq!(Staking::reserved_balance(&1), 69);
 		assert_eq!(Staking::free_balance(&1), 0);
 		assert_eq!(Staking::reserved_balance(&2), 0);
@@ -341,8 +367,8 @@ fn transferring_reserved_balance_should_work() {
 fn transferring_reserved_balance_to_nonexistent_should_fail() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 111);
-		assert_ok!(Staking::reserve_balance(&1, 111));
-		assert_noop!(Staking::transfer_reserved_balance(&1, &2, 42), "beneficiary account must pre-exist");
+		assert_ok!(Staking::reserve(&1, 111));
+		assert_noop!(Staking::transfer_reserved(&1, &2, 42), "beneficiary account must pre-exist");
 	});
 }
 
@@ -351,8 +377,8 @@ fn transferring_incomplete_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
 		<FreeBalance<Test>>::insert(1, 110);
 		<FreeBalance<Test>>::insert(2, 1);
-		assert_ok!(Staking::reserve_balance(&1, 41));
-		assert!(Staking::transfer_reserved_balance(&1, &2, 69).unwrap().is_some());
+		assert_ok!(Staking::reserve(&1, 41));
+		assert!(Staking::transfer_reserved(&1, &2, 69).unwrap().is_some());
 		assert_eq!(Staking::reserved_balance(&1), 0);
 		assert_eq!(Staking::free_balance(&1), 69);
 		assert_eq!(Staking::reserved_balance(&2), 0);

@@ -240,7 +240,7 @@ impl<T: Trait> Module<T> {
 		if !<LastActiveOf<T>>::exists(aux.ref_into()) {
 			// not yet a voter - deduct bond.
 			// NOTE: this must be the last potential bailer, since it changes state.
-			<staking::Module<T>>::reserve_balance(aux.ref_into(), Self::voting_bond())?;
+			<staking::Module<T>>::reserve(aux.ref_into(), Self::voting_bond())?;
 
 			<Voters<T>>::put({
 				let mut v = Self::voters();
@@ -295,7 +295,7 @@ impl<T: Trait> Module<T> {
 		if valid {
 			// This only fails if `who` doesn't exist, which is clearly must do since its the aux.
 			// Still, it's no more harmful to propagate any error at this point.
-			<staking::Module<T>>::transfer_reserved_balance(&who, aux.ref_into(), Self::voting_bond())?;
+			<staking::Module<T>>::transfer_reserved(&who, aux.ref_into(), Self::voting_bond())?;
 		} else {
 			<staking::Module<T>>::slash_reserved(aux.ref_into(), Self::voting_bond());
 		}
@@ -312,7 +312,7 @@ impl<T: Trait> Module<T> {
 		ensure!(&voters[index] == aux.ref_into(), "retraction index mismatch");
 
 		Self::remove_voter(aux.ref_into(), index, voters);
-		<staking::Module<T>>::unreserve_balance(aux.ref_into(), Self::voting_bond());
+		<staking::Module<T>>::unreserve(aux.ref_into(), Self::voting_bond());
 		Ok(())
 	}
 
@@ -330,7 +330,7 @@ impl<T: Trait> Module<T> {
 			"invalid candidate slot"
 		);
 		// NOTE: This must be last as it has side-effects.
-		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), Self::candidacy_bond())
+		<staking::Module<T>>::reserve(aux.ref_into(), Self::candidacy_bond())
 			.map_err(|_| "candidate has not enough funds")?;
 
 		let mut candidates = candidates;
@@ -495,7 +495,7 @@ impl<T: Trait> Module<T> {
 			.take_while(|&&(b, _)| !b.is_zero())
 			.take(coming as usize)
 		{
-			<staking::Module<T>>::refund(w, candidacy_bond);
+			<staking::Module<T>>::unreserve(w, candidacy_bond);
 		}
 
 		// set the new council.
@@ -1039,7 +1039,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
-			assert_eq!(Staking::balance(&4), 38);
+			assert_eq!(Staking::voting_balance(&4), 38);
 		});
 	}
 
@@ -1072,8 +1072,8 @@ mod tests {
 
 			assert_eq!(Council::voters(), vec![5]);
 			assert_eq!(Council::approvals_of(2).len(), 0);
-			assert_eq!(Staking::balance(&2), 17);
-			assert_eq!(Staking::balance(&5), 53);
+			assert_eq!(Staking::voting_balance(&2), 17);
+			assert_eq!(Staking::voting_balance(&5), 53);
 		});
 	}
 
@@ -1131,8 +1131,8 @@ mod tests {
 
 			assert_eq!(Council::voters(), vec![5]);
 			assert_eq!(Council::approvals_of(2).len(), 0);
-			assert_eq!(Staking::balance(&2), 17);
-			assert_eq!(Staking::balance(&5), 53);
+			assert_eq!(Staking::voting_balance(&2), 17);
+			assert_eq!(Staking::voting_balance(&5), 53);
 		});
 	}
 
@@ -1232,7 +1232,7 @@ mod tests {
 
 			assert_eq!(Council::voters(), vec![2, 3, 5]);
 			assert_eq!(Council::approvals_of(4).len(), 0);
-			assert_eq!(Staking::balance(&4), 37);
+			assert_eq!(Staking::voting_balance(&4), 37);
 		});
 	}
 
@@ -1370,7 +1370,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
-			assert_eq!(Staking::balance(&4), 40);
+			assert_eq!(Staking::voting_balance(&4), 40);
 
 			assert_ok!(Council::submit_candidacy(&2, 0));
 			assert_ok!(Council::submit_candidacy(&5, 1));
@@ -1381,7 +1381,7 @@ mod tests {
 			System::set_block_number(6);
 			assert_err!(Council::present_winner(&4, 2.into(), 80, 0), "incorrect total");
 
-			assert_eq!(Staking::balance(&4), 38);
+			assert_eq!(Staking::voting_balance(&4), 38);
 		});
 	}
 

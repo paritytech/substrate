@@ -148,8 +148,8 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&alice()), 42);
-			assert_eq!(Staking::balance(&bob()), 69);
+			assert_eq!(Staking::voting_balance(&alice()), 42);
+			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
 	}
 
@@ -171,8 +171,8 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&alice()), 42);
-			assert_eq!(Staking::balance(&bob()), 69);
+			assert_eq!(Staking::voting_balance(&alice()), 42);
+			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
 	}
 
@@ -274,15 +274,15 @@ mod tests {
 		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&alice()), 41);
-			assert_eq!(Staking::balance(&bob()), 69);
+			assert_eq!(Staking::voting_balance(&alice()), 41);
+			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
 
 		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&alice()), 30);
-			assert_eq!(Staking::balance(&bob()), 78);
+			assert_eq!(Staking::voting_balance(&alice()), 30);
+			assert_eq!(Staking::voting_balance(&bob()), 78);
 		});
 	}
 
@@ -293,15 +293,15 @@ mod tests {
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&alice()), 41);
-			assert_eq!(Staking::balance(&bob()), 69);
+			assert_eq!(Staking::voting_balance(&alice()), 41);
+			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
 
 		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&alice()), 30);
-			assert_eq!(Staking::balance(&bob()), 78);
+			assert_eq!(Staking::voting_balance(&alice()), 30);
+			assert_eq!(Staking::voting_balance(&bob()), 78);
 		});
 	}
 
@@ -345,8 +345,8 @@ mod tests {
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Staking::balance(&alice()), 42);
-			assert_eq!(Staking::balance(&bob()), 69);
+			assert_eq!(Staking::voting_balance(&alice()), 42);
+			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
 	}
 }
