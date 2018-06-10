@@ -73,9 +73,9 @@ fn reserved_balance_should_prevent_reclaim_count() {
 		assert_eq!(Staking::lookup_index(4), None);
 		assert_eq!(Staking::voting_balance(&2), 256 * 20);
 
-		assert_ok!(Staking::reserve(&2, 256 * 19 + 1));	// account 2 becomes mostly reserved
-		assert_eq!(Staking::free_balance(&2), 0);	// "free" account deleted."
-		assert_eq!(Staking::voting_balance(&2), 256 * 19 + 1);	// reserve still exists.
+		assert_ok!(Staking::reserve(&2, 256 * 19 + 1));					// account 2 becomes mostly reserved
+		assert_eq!(Staking::free_balance(&2), 0);						// "free" account deleted."
+		assert_eq!(Staking::voting_balance(&2), 256 * 19 + 1);			// reserve still exists.
 
 		assert_ok!(Staking::transfer(&4, 5.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 for account 5.
 		assert_eq!(Staking::voting_balance(&5), 256 * 1 + 0x69);

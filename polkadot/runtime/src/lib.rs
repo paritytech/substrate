@@ -59,10 +59,13 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 mod parachains;
+mod checkedblock;
+mod utils;
 
-use rstd::prelude::*;
+pub use checkedblock::CheckedBlock;
+pub use utils::{inherent_extrinsics, check_extrinsic};
+
 use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
-use primitives::parachain::CandidateReceipt;
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
 
 #[cfg(feature = "std")]
@@ -90,96 +93,6 @@ pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
 pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-
-/// Provides a type-safe wrapper around a structurally valid block.
-#[cfg(feature = "std")]
-pub struct CheckedBlock {
-	inner: Block,
-	file_line: Option<(&'static str, u32)>,
-}
-
-#[cfg(feature = "std")]
-impl CheckedBlock {
-	/// Create a new checked block. Fails if the block is not structurally valid.
-	pub fn new(block: Block) -> Result<Self, Block> {
-		let has_timestamp = block.extrinsics.get(TIMESTAMP_SET_POSITION as usize).map_or(false, |xt| {
-			!xt.is_signed() && match xt.extrinsic.function {
-				Call::Timestamp(TimestampCall::set(_)) => true,
-				_ => false,
-			}
-		});
-
-		if !has_timestamp { return Err(block) }
-
-		let has_heads = block.extrinsics.get(PARACHAINS_SET_POSITION as usize).map_or(false, |xt| {
-			!xt.is_signed() && match xt.extrinsic.function {
-				Call::Parachains(ParachainsCall::set_heads(_)) => true,
-				_ => false,
-			}
-		});
-
-		if !has_heads { return Err(block) }
-		Ok(CheckedBlock {
-			inner: block,
-			file_line: None,
-		})
-	}
-
-	// Creates a new checked block, asserting that it is valid.
-	#[doc(hidden)]
-	pub fn new_unchecked(block: Block, file: &'static str, line: u32) -> Self {
-		CheckedBlock {
-			inner: block,
-			file_line: Some((file, line)),
-		}
-	}
-
-	/// Extract the timestamp from the block.
-	pub fn timestamp(&self) -> ::primitives::Timestamp {
-		let x = self.inner.extrinsics.get(TIMESTAMP_SET_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
-			Call::Timestamp(TimestampCall::set(x)) => Some(x),
-			_ => None
-		});
-
-		match x {
-			Some(x) => x,
-			None => panic!("Invalid polkadot block asserted at {:?}", self.file_line),
-		}
-	}
-
-	/// Extract the parachain heads from the block.
-	pub fn parachain_heads(&self) -> &[CandidateReceipt] {
-		let x = self.inner.extrinsics.get(PARACHAINS_SET_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
-			Call::Parachains(ParachainsCall::set_heads(ref x)) => Some(&x[..]),
-			_ => None
-		});
-
-		match x {
-			Some(x) => x,
-			None => panic!("Invalid polkadot block asserted at {:?}", self.file_line),
-		}
-	}
-
-	/// Convert into inner block.
-	pub fn into_inner(self) -> Block { self.inner }
-}
-
-#[cfg(feature = "std")]
-impl ::std::ops::Deref for CheckedBlock {
-	type Target = Block;
-
-	fn deref(&self) -> &Block { &self.inner }
-}
-
-/// Assert that a block is structurally valid. May lead to panic in the future
-/// in case it isn't.
-#[cfg(feature = "std")]
-#[macro_export]
-macro_rules! assert_polkadot_block {
-	($block: expr) => {
-		$crate::CheckedBlock::new_unchecked($block, file!(), line!())
-	}
-}
 
 /// Concrete runtime type used to parameterize the various modules.
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -300,35 +213,6 @@ impl_outer_config! {
 		CouncilConfig => council,
 		ParachainsConfig => parachains,
 	}
-}
-
-/// Produces the list of inherent extrinsics.
-pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: Vec<CandidateReceipt>) -> Vec<UncheckedExtrinsic> {
-	vec![
-		UncheckedExtrinsic::new(
-			Extrinsic {
-				signed: Default::default(),
-				function: Call::Timestamp(TimestampCall::set(timestamp)),
-				index: 0,
-			},
-			Default::default()
-		),
-		UncheckedExtrinsic::new(
-			Extrinsic {
-				signed: Default::default(),
-				function: Call::Parachains(ParachainsCall::set_heads(parachain_heads)),
-				index: 0,
-			},
-			Default::default()
-		)
-	]
-}
-
-/// Checks an unchecked extrinsic for validity.
-pub fn check_extrinsic(xt: UncheckedExtrinsic) -> bool {
-	use runtime_primitives::traits::Checkable;
-
-	xt.check().is_ok()
 }
 
 pub mod api {
