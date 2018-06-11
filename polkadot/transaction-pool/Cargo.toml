@@ -6,6 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 log = "0.3.0"
 error-chain = "0.11"
+parking_lot = "0.4"
 polkadot-api = { path = "../api" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }

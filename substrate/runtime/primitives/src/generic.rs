@@ -110,8 +110,12 @@ where
 	type AccountId = AccountId;
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 
+	fn sender(&self) -> &Address {
+		&self.extrinsic.signed
+	}
+
 	fn check<ThisLookup>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str> where
-		ThisLookup: Fn(Address) -> Result<AccountId, &'static str> + Send + Sync,
+		ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str> + Send + Sync,
 	{
 		if !self.is_signed() {
 			Ok(CheckedExtrinsic(Extrinsic {
@@ -476,14 +480,7 @@ where
 mod tests {
 	use codec::Slicable;
 	use substrate_primitives::{H256, H512};
-	use super::{Digest, Header, UncheckedExtrinsic, Extrinsic, Lookup};
-
-	#[derive(Clone, PartialEq)]//, Copy, Eq, PartialEq, Debug, Serialize, Deserialize)]
-	struct DoLookup;
-	impl Lookup<u64> for DoLookup {
-		type Target = u64;
-		fn lookup(id: u64) -> Result<u64, &'static str> { Ok(id) }
-	}
+	use super::{Digest, Header, UncheckedExtrinsic, Extrinsic};
 
 	type Block = super::Block<
 		Header<u64, ::traits::BlakeTwo256, Vec<u8>>,

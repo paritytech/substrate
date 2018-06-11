@@ -16,7 +16,7 @@
 
 use extrinsic_pool::{self, txpool};
 use primitives::Hash;
-use runtime::UncheckedExtrinsic;
+use runtime::{Address, UncheckedExtrinsic};
 
 error_chain! {
 	links {
@@ -47,6 +47,11 @@ error_chain! {
 		Import(err: Box<::std::error::Error + Send>) {
 			description("Error importing transaction"),
 			display("Error importing transaction: {}", err.description()),
+		}
+		/// Runtime failure.
+		UnrecognisedAddress(who: Address) {
+			description("Unrecognised address in extrinsic"),
+			display("Unrecognised address in extrinsic: {}", who),
 		}
 	}
 }

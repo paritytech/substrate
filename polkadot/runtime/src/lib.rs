@@ -66,6 +66,7 @@ mod utils;
 #[cfg(feature = "std")]
 pub use checkedblock::CheckedBlock;
 pub use utils::{inherent_extrinsics, check_extrinsic};
+pub use staking::address::Address as RawAddress;
 
 use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};

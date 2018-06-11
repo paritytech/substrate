@@ -375,7 +375,8 @@ pub trait Checkable: Sized + Send + Sync {
 	type Address: Member + MaybeDisplay;
 	type AccountId: Member + MaybeDisplay;
 	type Checked: Member;
-	fn check<ThisLookup: Fn(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
+	fn sender(&self) -> &Self::Address;
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
