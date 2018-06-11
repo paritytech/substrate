@@ -18,20 +18,7 @@
 
 use ::PeerId;
 use runtime_primitives::traits::Block as BlockT;
-
-/// Context for a network-specific handler.
-pub trait HandlerContext<B: BlockT> {
-	/// Get a reference to the client.
-	fn client(&self) -> &::chain::Client<B>;
-
-	/// Disable a peer
-	fn disable_peer(&mut self, peer_id: PeerId);
-	/// Disconnect peer
-	fn disconnect_peer(&mut self, peer_id: PeerId);
-
-	/// Send a message to a peer.
-	fn send(&mut self, peer_id: PeerId, data: Vec<u8>);
-}
+use protocol::Context;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
 pub trait Specialization<B: BlockT>: Send + Sync + 'static {
@@ -39,11 +26,14 @@ pub trait Specialization<B: BlockT>: Send + Sync + 'static {
 	fn status(&self) -> Vec<u8>;
 
 	/// Called when a peer successfully handshakes.
-	fn on_peer_connected(&mut self, ctx: &mut HandlerContext<B>, peer_id: PeerId, status: ::message::Status<B>);
+	fn on_connect(&mut self, ctx: &mut Context<B>, peer_id: PeerId, status: ::message::Status<B>);
 
 	/// Called when a peer is disconnected. If the peer ID is unknown, it should be ignored.
-	fn on_peer_disconnected(&mut self, ctx: &mut HandlerContext<B>, peer_id: PeerId);
+	fn on_disconnect(&mut self, ctx: &mut Context<B>, peer_id: PeerId);
 
 	/// Called when a network-specific message arrives.
-	fn on_message(&mut self, ctx: &mut HandlerContext<B>, peer_id: PeerId, message: Vec<u8>);
+	fn on_message(&mut self, ctx: &mut Context<B>, peer_id: PeerId, message: ::message::Message<B>);
+
+	/// Called on abort.
+	fn on_abort(&mut self) { }
 }

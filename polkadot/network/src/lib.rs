@@ -134,6 +134,11 @@ pub struct PolkadotProtocol {
 	collating_for: Option<ParaId>,
 }
 
+/// Polkadot-specific messages.
+pub enum Message {
+
+}
+
 impl Specialization<Block> for PolkadotProtocol {
 	fn status(&self) -> Vec<u8> {
 		Status { collating_for: self.collating_for.clone() }.encode()

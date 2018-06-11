@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet};
 use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::RwLock;
 use serde_json;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing, HashingFor};
 use runtime_primitives::generic::BlockId;
@@ -28,8 +28,7 @@ use message::{self, Message};
 use message::generic::Message as GenericMessage;
 use specialization::Specialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
-use consensus::Consensus;
-use service::{Role, TransactionPool, BftMessageStream};
+use service::{Role, TransactionPool};
 use config::ProtocolConfig;
 use chain::Client;
 use on_demand::OnDemandService;
@@ -50,12 +49,11 @@ const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: Specialization<B>> {
 	config: ProtocolConfig,
-	specialization: RwLock<S>,
 	context_data: ContextData<B>,
 	on_demand: Option<Arc<OnDemandService>>,
 	genesis_hash: B::Hash,
 	sync: RwLock<ChainSync<B>>,
-	consensus: Mutex<Consensus<B>>,
+	specialization: RwLock<S>,
 	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<PeerId, time::Instant>>,
 	transaction_pool: Arc<TransactionPool<B>>,
@@ -93,6 +91,7 @@ struct Peer<B: BlockT> {
 	next_request_id: message::RequestId,
 }
 
+/// Info about a peer's known state.
 #[derive(Debug)]
 pub struct PeerInfo<B: BlockT> {
 	/// Roles
@@ -105,15 +104,32 @@ pub struct PeerInfo<B: BlockT> {
 	pub best_number: <B::Header as HeaderT>::Number,
 }
 
+/// Context for a network-specific handler.
+pub trait Context<B: BlockT> {
+	/// Get a reference to the client.
+	fn client(&self) -> &::chain::Client<B>;
+
+	/// Disable a peer
+	fn disable_peer(&mut self, peer_id: PeerId);
+	/// Disconnect peer
+	fn disconnect_peer(&mut self, peer_id: PeerId);
+
+		/// Get peer info.
+	fn peer_info(&self, peer: PeerId) -> Option<PeerInfo<B>>;
+
+	/// Send a message to a peer.
+	fn send_message(&mut self, peer_id: PeerId, data: ::message::Message<B>);
+}
+
 /// Protocol context.
-pub struct Context<'a, B: 'a + BlockT> {
+pub(crate) struct ProtocolContext<'a, B: 'a + BlockT> {
 	io: &'a mut SyncIo,
 	context_data: &'a ContextData<B>,
 }
 
-impl<'a, B: BlockT + 'a> Context<'a, B> {
+impl<'a, B: BlockT + 'a> ProtocolContext<'a, B> {
 	pub(crate) fn new(context_data: &'a ContextData<B>, io: &'a mut SyncIo) -> Self {
-		Context {
+		ProtocolContext {
 			io,
 			context_data,
 		}
@@ -143,24 +159,23 @@ impl<'a, B: BlockT + 'a> Context<'a, B> {
 			}
 		})
 	}
-
-	/// Get a handle to the chain.
-	pub fn chain(&self) -> &Client<B> {
-		&*self.context_data.chain
-	}
 }
 
-impl<'a, B: BlockT + 'a> ::specialization::HandlerContext<B> for Context<'a, B> {
-	fn send(&mut self, peer_id: PeerId, message: Vec<u8>) {
-		self.send_message(peer_id, GenericMessage::ChainSpecific(message));
+impl<'a, B: BlockT + 'a> Context<B> for ProtocolContext<'a, B> {
+	fn send_message(&mut self, peer_id: PeerId, message: Message<B>) {
+		ProtocolContext::send_message(self, peer_id, message);
 	}
 
 	fn disable_peer(&mut self, peer_id: PeerId) {
-		Context::disable_peer(self, peer_id);
+		ProtocolContext::disable_peer(self, peer_id);
 	}
 
 	fn disconnect_peer(&mut self, peer_id: PeerId) {
-		Context::disable_peer(self, peer_id);
+		ProtocolContext::disconnect_peer(self, peer_id);
+	}
+
+	fn peer_info(&self, peer_id: PeerId) -> Option<PeerInfo<B>> {
+		ProtocolContext::peer_info(self, peer_id)
 	}
 
 	fn client(&self) -> &Client<B> {
@@ -188,7 +203,6 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 		let sync = ChainSync::new(config.roles, &info);
 		let protocol = Protocol {
 			config: config,
-			specialization: RwLock::new(specialization),
 			context_data: ContextData {
 				peers: RwLock::new(HashMap::new()),
 				chain,
@@ -196,7 +210,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 			on_demand,
 			genesis_hash: info.chain.genesis_hash,
 			sync: RwLock::new(sync),
-			consensus: Mutex::new(Consensus::new()),
+			specialization: RwLock::new(specialization),
 			handshaking_peers: RwLock::new(HashMap::new()),
 			transaction_pool: transaction_pool,
 		};
@@ -256,14 +270,11 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 				}
 				self.on_block_response(io, peer_id, request, r);
 			},
-			GenericMessage::BlockAnnounce(announce) => {
-				self.on_block_announce(io, peer_id, announce);
-			},
-			GenericMessage::BftMessage(m) => self.on_bft_message(io, peer_id, m, HashingFor::<B>::hash(data)),
+			GenericMessage::BlockAnnounce(announce) => self.on_block_announce(io, peer_id, announce),
 			GenericMessage::Transactions(m) => self.on_extrinsics(io, peer_id, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(io, peer_id, request),
 			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response),
-			GenericMessage::ChainSpecific(msg) => self.on_chain_specific(io, peer_id, msg),
+			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), peer_id, other),
 		}
 	}
 
@@ -284,7 +295,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 
 		// lock all the the peer lists so that add/remove peer events are in order
 		let mut sync = self.sync.write();
-		let mut consensus = self.consensus.lock();
+		let mut spec = self.specialization.write();
 
 		let removed = {
 			let mut peers = self.context_data.peers.write();
@@ -293,9 +304,9 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 			peers.remove(&peer).is_some()
 		};
 		if removed {
-			let mut context = Context::new(&self.context_data, io);
+			let mut context = ProtocolContext::new(&self.context_data, io);
 			sync.peer_disconnected(&mut context, peer);
-			consensus.peer_disconnected(&mut context, peer);
+			spec.on_disconnect(&mut context, peer);
 			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
 		}
 	}
@@ -354,33 +365,13 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 	fn on_block_response(&self, io: &mut SyncIo, peer: PeerId, request: message::BlockRequest<B>, response: message::BlockResponse<B>) {
 		// TODO: validate response
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks", response.id, peer, response.blocks.len());
-		self.sync.write().on_block_data(&mut Context::new(&self.context_data, io), peer, request, response);
-	}
-
-	fn on_bft_message(&self, io: &mut SyncIo, peer: PeerId, message: message::LocalizedBftMessage<B>, hash: B::Hash) {
-		trace!(target: "sync", "BFT message from {}: {:?}", peer, message);
-		self.consensus.lock().on_bft_message(&mut Context::new(&self.context_data, io), peer, message, hash);
-	}
-
-	fn on_chain_specific(&self, io: &mut SyncIo, peer: PeerId, message: Vec<u8>) {
-		self.specialization.write().on_message(&mut Context::new(&self.context_data, io), peer, message);
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn send_bft_message(&self, io: &mut SyncIo, message: message::LocalizedBftMessage<B>) {
-		self.consensus.lock().send_bft_message(&mut Context::new(&self.context_data, io), message)
-	}
-
-	/// See `ConsensusService` trait.
-	pub fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B> {
-		self.consensus.lock().bft_messages(parent_hash)
+		self.sync.write().on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response);
 	}
 
 	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.maintain_peers(io);
 		self.on_demand.as_ref().map(|s| s.maintain_peers(io));
-		self.consensus.lock().collect_garbage(None);
 	}
 
 	fn maintain_peers(&self, io: &mut SyncIo) {
@@ -457,9 +448,9 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 			debug!(target: "sync", "Connected {} {}", peer_id, io.peer_info(peer_id));
 		}
 
-		let mut context = Context::new(&self.context_data, io);
+		let mut context = ProtocolContext::new(&self.context_data, io);
 		self.sync.write().new_peer(&mut context, peer_id);
-		self.consensus.lock().new_peer(&mut context, peer_id, &status.roles);
+		self.specialization.write().on_connect(&mut context, peer_id, status.clone());
 		self.on_demand.as_ref().map(|s| s.on_connect(peer_id, message::Role::as_flags(&status.roles)));
 	}
 
@@ -536,12 +527,13 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 
 	pub fn abort(&self) {
 		let mut sync = self.sync.write();
+		let mut spec = self.specialization.write();
 		let mut peers = self.context_data.peers.write();
 		let mut handshaking_peers = self.handshaking_peers.write();
 		sync.clear();
+		spec.on_abort();
 		peers.clear();
 		handshaking_peers.clear();
-		self.consensus.lock().restart();
 	}
 
 	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce<B::Header>) {
@@ -553,7 +545,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 				peer.known_blocks.insert(hash.clone());
 			}
 		}
-		self.sync.write().on_block_announce(&mut Context::new(&self.context_data, io), peer_id, hash, &header);
+		self.sync.write().on_block_announce(&mut ProtocolContext::new(&self.context_data, io), peer_id, hash, &header);
 	}
 
 	pub fn on_block_imported(&self, io: &mut SyncIo, hash: B::Hash, header: &B::Header) {
@@ -569,8 +561,6 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 				}));
 			}
 		}
-
-		self.consensus.lock().collect_garbage(Some(&header));
 	}
 
 	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest<B::Hash>) {
@@ -596,9 +586,9 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 
 	/// Execute a closure with access to a network context and specialization.
 	pub fn with_spec<F, U>(&self, io: &mut SyncIo, f: F) -> U
-		where F: FnOnce(&mut S, &mut ::specialization::HandlerContext<B>) -> U
+		where F: FnOnce(&mut S, &mut Context<B>) -> U
 	{
-		f(&mut* self.specialization.write(), &mut Context::new(&self.context_data, io))
+		f(&mut* self.specialization.write(), &mut ProtocolContext::new(&self.context_data, io))
 	}
 }
 

@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-mod consensus;
 mod sync;
 
 use std::collections::{VecDeque, HashSet, HashMap};
@@ -26,7 +25,7 @@ use client::block_builder::BlockBuilder;
 use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
-use protocol::Protocol;
+use protocol::{Context, Protocol};
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network::{PeerId, SessionInfo, Error as NetworkError};
@@ -34,22 +33,22 @@ use keyring::Keyring;
 use codec::Slicable;
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
-use specialization::{Specialization, HandlerContext};
+use specialization::Specialization;
 
 pub struct DummySpecialization;
 
 impl Specialization<Block> for DummySpecialization {
 	fn status(&self) -> Vec<u8> { vec![] }
 
-	fn on_peer_connected(&mut self, _ctx: &mut HandlerContext<Block>, _peer_id: PeerId, _status: ::message::Status<Block>) {
+	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _status: ::message::Status<Block>) {
 
 	}
 
-	fn on_peer_disconnected(&mut self, _ctx: &mut HandlerContext<Block>, _peer_id: PeerId) {
+	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId) {
 
 	}
 
-	fn on_message(&mut self, _ctx: &mut HandlerContext<Block>, _peer_id: PeerId, _message: Vec<u8>) {
+	fn on_message(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _message: ::message::Message<Block>) {
 
 	}
 }
@@ -206,7 +205,7 @@ impl Peer {
 		}
 	}
 
-	pub fn genesis_hash(&self) -> Hash {
+	fn genesis_hash(&self) -> Hash {
 		let info = self.client.info().expect("In-mem client does not fail");
 		info.chain.genesis_hash
 	}

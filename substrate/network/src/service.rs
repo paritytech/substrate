@@ -24,7 +24,7 @@ NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_devp2p::{NetworkService};
 use core_io::{TimerToken};
 use io::NetSyncIo;
-use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
+use protocol::{Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
@@ -93,7 +93,7 @@ pub trait ConsensusService<B: BlockT>: Send + Sync {
 /// Service able to execute closure in the network context.
 pub trait ExecuteInContext<B: BlockT>: Send + Sync {
 	/// Execute closure in network context.
-	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F);
+	fn execute_in_context<F: Fn(&mut Context<B>)>(&self, closure: F);
 }
 
 /// devp2p Protocol handler
@@ -182,7 +182,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> where B::Header: H
 	/// Execute a closure with the chain-specific network specialization.
 	/// If the network is unavailable, this will return `None`.
 	pub fn with_spec<F, U>(&self, f: F) -> Option<U>
-		where F: FnOnce(&mut S, &mut ::specialization::HandlerContext<B>) -> U
+		where F: FnOnce(&mut S, &mut Context<B>) -> U
 	{
 		let mut res = None;
 		self.network.with_context(self.protocol_id, |context| {
@@ -218,7 +218,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> Drop for Service<B, S> where B::
 impl<B: BlockT + 'static, S: Specialization<B>> ExecuteInContext<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
 	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F) {
 		self.network.with_context(self.protocol_id, |context| {
-			closure(&mut ::protocol::Context::new(self.handler.protocol.context_data(), &mut NetSyncIo::new(context)))
+			closure(&mut ProtocolContext::new(self.handler.protocol.context_data(), &mut NetSyncIo::new(context)))
 		});
 	}
 }
@@ -254,23 +254,6 @@ impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S
 
 	fn node_id(&self) -> Option<String> {
 		self.network.external_url()
-	}
-}
-
-/// ConsensusService
-impl<B: BlockT + 'static, S: Specialization<B>> ConsensusService<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
-	fn connect_to_authorities(&self, _addresses: &[String]) {
-		//TODO: implement me
-	}
-
-	fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B> {
-		self.handler.protocol.bft_messages(parent_hash)
-	}
-
-	fn send_bft_message(&self, message: LocalizedBftMessage<B>) {
-		self.network.with_context(self.protocol_id, |context| {
-			self.handler.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
-		});
 	}
 }
 

@@ -54,8 +54,8 @@ mod message;
 mod config;
 mod chain;
 mod blocks;
-mod consensus;
 mod on_demand;
+pub mod consensus_gossip;
 pub mod error;
 pub mod specialization;
 
@@ -63,7 +63,7 @@ pub mod specialization;
 
 pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 	TransactionPool, Params, ManageNetwork, SyncProvider};
-pub use protocol::{ProtocolStatus};
+pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network::{NonReservedPeerMode, NetworkConfiguration, PeerId, ProtocolId, ConnectionFilter, ConnectionDirection};
 pub use message::{generic as generic_message, RequestId, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal, Status as StatusMessage};

@@ -114,7 +114,7 @@ impl<B: BlockT> ChainSync<B> where
 	/// Handle new connected peer.
 	pub(crate) fn new_peer(&mut self, protocol: &mut Context<B>, peer_id: PeerId) {
 		if let Some(info) = protocol.peer_info(peer_id) {
-			match (protocol.chain().block_status(&BlockId::Hash(info.best_hash)), info.best_number) {
+			match (protocol.client().block_status(&BlockId::Hash(info.best_hash)), info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
 					protocol.disconnect_peer(peer_id);
@@ -189,7 +189,7 @@ impl<B: BlockT> ChainSync<B> where
 					match response.blocks.get(0) {
 						Some(ref block) => {
 							trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", n, block.hash, peer_id);
-							match protocol.chain().block_hash(n) {
+							match protocol.client().block_hash(n) {
 								Ok(Some(block_hash)) if block_hash == block.hash => {
 									peer.common_hash = block.hash;
 									peer.common_number = n;
@@ -242,7 +242,7 @@ impl<B: BlockT> ChainSync<B> where
 					let is_best = best_seen.as_ref().map_or(false, |n| number >= *n);
 
 					// check whether the block is known before importing.
-					match protocol.chain().block_status(&BlockId::Hash(hash)) {
+					match protocol.client().block_status(&BlockId::Hash(hash)) {
 						Ok(BlockStatus::InChain) => continue,
 						Ok(_) => {},
 						Err(e) => {
@@ -252,7 +252,7 @@ impl<B: BlockT> ChainSync<B> where
 						}
 					}
 
-					let result = protocol.chain().import(
+					let result = protocol.client().import(
 						is_best,
 						header,
 						justification,
@@ -367,7 +367,7 @@ impl<B: BlockT> ChainSync<B> where
 
 	fn is_known_or_already_downloading(&self, protocol: &mut Context<B>, hash: &B::Hash) -> bool {
 		self.peers.iter().any(|(_, p)| p.state == PeerSyncState::DownloadingStale(*hash))
-			|| protocol.chain().block_status(&BlockId::Hash(*hash)).ok().map_or(false, |s| s != BlockStatus::Unknown)
+			|| protocol.client().block_status(&BlockId::Hash(*hash)).ok().map_or(false, |s| s != BlockStatus::Unknown)
 	}
 
 	pub(crate) fn peer_disconnected(&mut self, protocol: &mut Context<B>, peer_id: PeerId) {
@@ -382,7 +382,7 @@ impl<B: BlockT> ChainSync<B> where
 		for id in ids {
 			self.new_peer(protocol, id);
 		}
-		match protocol.chain().info() {
+		match protocol.client().info() {
 			Ok(info) => {
 				self.best_queued_hash = info.best_queued_hash.unwrap_or(info.chain.best_hash);
 				self.best_queued_number = info.best_queued_number.unwrap_or(info.chain.best_number);
