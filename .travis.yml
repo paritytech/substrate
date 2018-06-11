@@ -14,4 +14,8 @@ matrix:
 script:
   - cargo test --all
   - cargo clean
-  - ./publish-wasm.sh
+  - ./init.sh
+  - ./build.sh
+  - if [ "$TRAVIS_PULL_REQUEST" != "true" ] && [ "$TRAVIS_BRANCH" == "master" ]; then
+      ./publish-wasm.sh;
+    fi
