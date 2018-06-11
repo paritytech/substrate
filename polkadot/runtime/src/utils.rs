@@ -17,8 +17,8 @@
 //! Utils for block interaction.
 
 use rstd::prelude::*;
-use super::{Call, UncheckedExtrinsic, Extrinsic};
-use runtime_primitives::traits::Checkable;
+use super::{Call, UncheckedExtrinsic, Extrinsic, Staking};
+use runtime_primitives::traits::{Checkable, AuxLookup};
 use primitives::parachain::CandidateReceipt;
 use timestamp::Call as TimestampCall;
 use parachains::Call as ParachainsCall;
@@ -47,5 +47,5 @@ pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: 
 
 /// Checks an unchecked extrinsic for validity.
 pub fn check_extrinsic(xt: UncheckedExtrinsic) -> bool {
-	xt.check().is_ok()
+	xt.check(|a| Staking::lookup(a)).is_ok()
 }

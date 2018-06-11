@@ -40,7 +40,7 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, As, Lookup};
+use primitives::traits::{Zero, One, RefInto, As, AuxLookup};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
 use staking::address::Address;

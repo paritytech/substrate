@@ -25,8 +25,8 @@ use super::{Member, Slicable, As, Input};
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum Address<AccountId, AccountIndex> where
- 	AccountId: Member,
- 	AccountIndex: Member,
+	AccountId: Member,
+	AccountIndex: Member,
 {
 	/// It's an account ID (pubkey).
 	#[cfg_attr(feature = "std", serde(deserialize_with="AccountId::deserialize"))]
@@ -38,8 +38,8 @@ pub enum Address<AccountId, AccountIndex> where
 
 #[cfg(feature = "std")]
 impl<AccountId, AccountIndex> fmt::Display for Address<AccountId, AccountIndex> where
- 	AccountId: Member,
- 	AccountIndex: Member,
+	AccountId: Member,
+	AccountIndex: Member,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		write!(f, "{:?}", self)
@@ -47,8 +47,8 @@ impl<AccountId, AccountIndex> fmt::Display for Address<AccountId, AccountIndex> 
 }
 
 impl<AccountId, AccountIndex> From<AccountId> for Address<AccountId, AccountIndex> where
- 	AccountId: Member,
- 	AccountIndex: Member,
+	AccountId: Member,
+	AccountIndex: Member,
 {
 	fn from(a: AccountId) -> Self {
 		Address::Id(a)

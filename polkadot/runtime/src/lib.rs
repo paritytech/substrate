@@ -88,7 +88,7 @@ pub type Address = staking::Address<Concrete>;
 /// Block Id type for this block.
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature, Staking>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
 /// Extrinsic type as expected by this runtime. This is not the type that is signed.
 pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
 /// Extrinsic type that is signed.
@@ -202,7 +202,7 @@ impl_outer_dispatch! {
 }
 
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Concrete, Block, Staking,
+pub type Executive = executive::Executive<Concrete, Block, Staking, Staking,
 	(((((((), Parachains), Council), Democracy), Staking), Session), Timestamp)>;
 
 impl_outer_config! {

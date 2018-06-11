@@ -42,7 +42,7 @@ use codec::Slicable;
 use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
 use extrinsic_pool::api::ExtrinsicPool;
 use polkadot_api::PolkadotApi;
-use primitives::{AccountId, Hash, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
+use primitives::{AccountId, AccountIndex, Hash, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use runtime::UncheckedExtrinsic;
 use substrate_runtime_primitives::traits::{Bounded, Checkable, BlakeTwo256, Hashing};
 
@@ -175,7 +175,8 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 pub struct Ready<'a, T: 'a + PolkadotApi> {
 	at_block: T::CheckedBlockId,
 	api: &'a T,
-	known_indices: HashMap<AccountId, ::primitives::Index>,
+	known_nonces: HashMap<AccountId, ::primitives::Index>,
+	known_indexes: HashMap<AccountIndex, AccountId>,
 }
 
 impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
@@ -183,7 +184,8 @@ impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
 		Ready {
 			at_block: self.at_block.clone(),
 			api: self.api,
-			known_indices: self.known_indices.clone(),
+			known_nonces: self.known_nonces.clone(),
+			known_indexes: self.known_indexes.clone(),
 		}
 	}
 }
@@ -195,7 +197,8 @@ impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 		Ready {
 			at_block: at,
 			api,
-			known_indices: HashMap::new(),
+			known_nonces: HashMap::new(),
+			known_indexes: HashMap::new(),
 		}
 	}
 }
@@ -208,7 +211,7 @@ impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T
 		// TODO: find a way to handle index error properly -- will need changes to
 		// transaction-pool trait.
 		let (api, at_block) = (&self.api, &self.at_block);
-		let next_index = self.known_indices.entry(sender)
+		let next_index = self.known_nonces.entry(sender)
 			.or_insert_with(|| api.index(at_block, sender).ok().unwrap_or_else(Bounded::max_value));
 
 		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.inner.index);
@@ -222,7 +225,22 @@ impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T
 		// remember to increment `next_index`
 		*next_index = next_index.saturating_add(1);
 
+		// TODO: this won't work perfectly since accounts can now be killed, returning the nonce
+		// to zero.
+
 		result
+	}
+}
+
+impl<'a, T: 'a + PolkadotApi> txpool::Verifier<UncheckedExtrinsic> for Ready<'a, T> {
+	type VerifiedTransaction = VerifiedTransaction;
+	type Error = Error;
+
+	fn verify_transaction(&self, uxt: UncheckedExtrinsic) -> Result<Self::VerifiedTransaction> {
+		trace!(target: "transaction-pool", "Attempting to verify transaction; sender is {}", uxt.signer);
+
+		info!("Extrinsic Submitted: {:?}", uxt);
+		VerifiedTransaction::create(uxt)
 	}
 }
 

@@ -53,7 +53,7 @@ use codec::{Input, Slicable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, Lookup, Hashing as HashingT, Member};
+	As, AuxLookup, Hashing as HashingT, Member};
 use address::Address as RawAddress;
 
 pub mod address;
@@ -610,9 +610,10 @@ impl<T: Trait> Executable for Module<T> {
 	}
 }
 
-impl<T: Trait> Lookup<address::Address<T::AccountId, T::AccountIndex>> for Module<T> {
+impl<T: Trait> AuxLookup for Module<T> {
+	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
-	fn lookup(a: address::Address<T::AccountId, T::AccountIndex>) -> result::Result<T::AccountId, &'static str> {
+	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
 		match a {
 			address::Address::Id(i) => Ok(i),
 			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),

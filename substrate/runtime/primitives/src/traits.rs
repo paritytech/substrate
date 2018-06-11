@@ -41,11 +41,13 @@ pub trait Verify {
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
-pub trait Lookup<Source> {
+pub trait AuxLookup {
+	/// Type to lookup from.
+	type Source;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
-	fn lookup(s: Source) -> result::Result<Self::Target, &'static str>;
+	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
 }
 
 /// Simple payment making trait, operating on a single generic `AccountId` type.
@@ -370,8 +372,10 @@ pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 pub trait Checkable: Sized + Send + Sync {
+	type Address: Member + MaybeDisplay;
+	type AccountId: Member + MaybeDisplay;
 	type Checked: Member;
-	fn check(self) -> Result<Self::Checked, &'static str>;
+	fn check<ThisLookup: Fn(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
