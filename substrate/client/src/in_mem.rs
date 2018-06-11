@@ -21,7 +21,7 @@ use parking_lot::RwLock;
 use error;
 use backend;
 use runtime_support::Hashable;
-use primitives;
+use primitives::{self, AuthorityId};
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
@@ -178,6 +178,8 @@ impl backend::BlockImportOperation for BlockImportOperation {
 		});
 		Ok(())
 	}
+
+	fn update_authorities(&mut self, _authorities: Vec<AuthorityId>) { }
 
 	fn update_storage(&mut self, update: <InMemory as StateBackend>::Transaction) -> error::Result<()> {
 		self.new_state = Some(self.old_state.update(update));

@@ -6,6 +6,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 parking_lot = "0.4"
 log = "0.3"
+serde = "1.0"
+serde_derive = "1.0"
 kvdb = { git = "https://github.com/paritytech/parity.git" }
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity.git" }
 ethereum-types = "0.3"

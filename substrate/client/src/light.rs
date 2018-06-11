@@ -1,11 +1,3 @@
-// TODO: authorities do not change often && we will reexecute authorities() after field in digest is set,
-// current cache (block => execution result) doesn't help! + also need a cache for other requests
-// =>
-// two types of cache:
-// 1) authorities_at cache (db level). get(at_block) -> Vec<AuthorityId>
-// 1.1) key1: rolling
-// 2) on-demand cache (another implementation which only caches data in-memory)
-
 // Copyright 2017 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
@@ -30,12 +22,12 @@ use futures::Future;
 use futures::future::IntoFuture;
 use heapsize::HeapSizeOf;
 use parking_lot::Mutex;
-use primitives;
+use primitives::{self, AuthorityId};
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use state_machine::{self, CodeExecutor, Backend as StateBackend,
 	TrieBackend as StateTrieBackend, TryIntoTrieBackend as TryIntoStateTrieBackend};
 use blockchain::{self, BlockStatus, Backend as BlockchainBackend};
-use backend;
+use backend::{self, AuthoritiesCache};
 use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
 use client::{Client, GenesisBuilder};
 use error;
@@ -89,6 +81,7 @@ pub trait FetchChecker: Send + Sync {
 /// Light client backend.
 pub struct Backend<B, F> {
 	blockchain: Arc<Blockchain<B, F>>,
+	authorities_cache: Arc<AuthoritiesCache>,
 }
 
 /// Light client blockchain.
@@ -150,6 +143,10 @@ impl<B, F> backend::Backend for Backend<B, F> where B: backend::Backend, F: Fetc
 			fetcher: self.blockchain.fetcher.lock().clone(),
 		})
 	}
+
+	fn authorities_cache(&self) -> Option<Arc<AuthoritiesCache>> {
+		Some(self.authorities_cache.clone())
+	}
 }
 
 impl<B, F> backend::RemoteBackend for Backend<B, F> where B: backend::Backend, F: Fetcher {}
@@ -164,6 +161,10 @@ impl<O, F> backend::BlockImportOperation for BlockImportOperation<O, F> where O:
 
 	fn set_block_data(&mut self, header: block::Header, _body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()> {
 		self.operation.set_block_data(header, None, justification, is_new_best)
+	}
+
+	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
+		self.operation.update_authorities(authorities);
 	}
 
 	fn update_storage(&mut self, _update: <Self::State as StateBackend>::Transaction) -> error::Result<()> {
@@ -275,9 +276,9 @@ pub fn new_light_blockchain<B: backend::Backend, F>(storage: B) -> Arc<Blockchai
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B: backend::Backend, F>(blockchain: Arc<Blockchain<B, F>>, fetcher: Arc<F>) -> Arc<Backend<B, F>> {
+pub fn new_light_backend<B: backend::Backend, F>(blockchain: Arc<Blockchain<B, F>>, fetcher: Arc<F>, authorities_cache: Arc<AuthoritiesCache>) -> Arc<Backend<B, F>> {
 	*blockchain.fetcher.lock() = Arc::downgrade(&fetcher);
-	Arc::new(Backend { blockchain })
+	Arc::new(Backend { blockchain, authorities_cache })
 }
 
 /// Create an instance of light client.

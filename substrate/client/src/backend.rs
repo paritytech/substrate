@@ -16,10 +16,11 @@
 
 //! Polkadot Client data backend
 
+use std::sync::Arc; // TODO: get rid of me
 use state_machine::backend::Backend as StateBackend;
 use error;
 use primitives::block::{self, Id as BlockId};
-use primitives;
+use primitives::{self, AuthorityId};
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation {
@@ -30,6 +31,9 @@ pub trait BlockImportOperation {
 	fn state(&self) -> error::Result<Option<&Self::State>>;
 	/// Append block data to the transaction.
 	fn set_block_data(&mut self, header: block::Header, body: Option<block::Body>, justification: Option<primitives::bft::Justification>, is_new_best: bool) -> error::Result<()>;
+	/// Append authorities set to the transaction. This is a set of parent block (set which
+	/// has been used to check justification of this block).
+	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
 	/// Inject storage data into the database.
 	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
@@ -61,6 +65,15 @@ pub trait Backend: Send + Sync {
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId) -> error::Result<Self::State>;
+
+	/// Returns authorities cache, if it is enabled on this backend.
+	fn authorities_cache(&self) -> Option<Arc<AuthoritiesCache>> { None }
+}
+
+/// Backend authorities cache.
+pub trait AuthoritiesCache: Send + Sync {
+	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
+	fn authorities_at(&self, block: BlockId) -> Option<Vec<AuthorityId>>;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

@@ -148,7 +148,7 @@ pub trait Proposer {
 /// Block import trait.
 pub trait BlockImport {
 	/// Import a block alongside its corresponding justification.
-	fn import_block(&self, block: Block, justification: Justification);
+	fn import_block(&self, block: Block, justification: Justification, authorities: &[AuthorityId]);
 }
 
 /// Trait for getting the authorities at a given block.
@@ -260,7 +260,7 @@ impl<P, I, InStream, OutSink> Future for BftFuture<P, I, InStream, OutSink> wher
 			info!(target: "bft", "Importing block #{} ({}) directly from BFT consensus",
 				justified_block.header.number, HeaderHash::from(justified_block.header.blake2_256()));
 
-			self.import.import_block(justified_block, committed.justification)
+			self.import.import_block(justified_block, committed.justification, &self.inner.context().authorities)
 		}
 
 		Ok(Async::Ready(()))
@@ -592,7 +592,7 @@ mod tests {
 	}
 
 	impl BlockImport for FakeClient {
-		fn import_block(&self, block: Block, _justification: Justification) {
+		fn import_block(&self, block: Block, _justification: Justification, _authorities: &[AuthorityId]) {
 			assert!(self.imported_heights.lock().insert(block.header.number))
 		}
 	}

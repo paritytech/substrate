@@ -136,12 +136,13 @@ pub struct BlockImportNotification {
 pub struct JustifiedHeader {
 	header: block::Header,
 	justification: bft::Justification,
+	authorities: Vec<AuthorityId>,
 }
 
 impl JustifiedHeader {
 	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self) -> (block::Header, bft::Justification) {
-		(self.header, self.justification)
+	pub fn into_inner(self) -> (block::Header, bft::Justification, Vec<AuthorityId>) {
+		(self.header, self.justification, self.authorities)
 	}
 }
 
@@ -215,6 +216,12 @@ impl<B, E> Client<B, E> where
 
 	/// Get the set of authorities at a given block.
 	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
+		let authorities_from_cache = self.backend.authorities_cache()
+			.and_then(|authorities_cache| authorities_cache.authorities_at(*id));
+		if let Some(authorities) = authorities_from_cache {
+			return Ok(authorities);
+		}
+			
 		self.executor.call(id, "authorities",&[])
 			.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
 				.ok_or(error::ErrorKind::AuthLenInvalid.into()))
@@ -277,6 +284,7 @@ impl<B, E> Client<B, E> where
 		Ok(JustifiedHeader {
 			header,
 			justification: just,
+			authorities,
 		})
 	}
 
@@ -287,7 +295,7 @@ impl<B, E> Client<B, E> where
 		header: JustifiedHeader,
 		body: Option<block::Body>,
 	) -> error::Result<ImportResult> {
-		let (header, justification) = header.into_inner();
+		let (header, justification, authorities) = header.into_inner();
 		match self.backend.blockchain().status(BlockId::Hash(header.parent_hash))? {
 			blockchain::BlockStatus::InChain => {},
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
@@ -296,7 +304,7 @@ impl<B, E> Client<B, E> where
 
 		let _import_lock = self.import_lock.lock();
 		*self.importing_block.write() = Some(hash);
-		let result = self.execute_and_import_block(origin, hash, header, justification, body);
+		let result = self.execute_and_import_block(origin, hash, header, justification, body, authorities);
 		*self.importing_block.write() = None;
 		result
 	}
@@ -308,6 +316,7 @@ impl<B, E> Client<B, E> where
 		header: block::Header,
 		justification: bft::Justification,
 		body: Option<block::Body>,
+		authorities: Vec<AuthorityId>,
 	) -> error::Result<ImportResult> {
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
 			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
@@ -333,6 +342,7 @@ impl<B, E> Client<B, E> where
 		let is_new_best = header.number == self.backend.blockchain().info()?.best_number + 1;
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number, is_new_best, origin);
 		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
+		transaction.update_authorities(authorities);
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}
@@ -423,10 +433,11 @@ impl<B, E> bft::BlockImport for Client<B, E>
 		E: CallExecutor,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
-	fn import_block(&self, block: block::Block, justification: bft::Justification) {
+	fn import_block(&self, block: block::Block, justification: bft::Justification, authorities: &[AuthorityId]) {
 		let justified_header = JustifiedHeader {
 			header: block.header,
 			justification,
+			authorities: authorities.to_vec(),
 		};
 
 		let _ = self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(block.transactions));
