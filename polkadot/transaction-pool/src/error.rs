@@ -53,6 +53,11 @@ error_chain! {
 			description("Unrecognised address in extrinsic"),
 			display("Unrecognised address in extrinsic: {}", who),
 		}
+		/// Extrinsic is not yet checked.
+		NotReady {
+			description("Indexed address is unverified"),
+			display("Indexed address is unverified"),
+		}
 	}
 }
 

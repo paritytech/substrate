@@ -23,7 +23,7 @@ use super::{Member, Slicable, As, Input};
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash))]
 pub enum Address<AccountId, AccountIndex> where
 	AccountId: Member,
 	AccountIndex: Member,
