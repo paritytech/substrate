@@ -197,7 +197,7 @@ impl<B: Block, P: Proposer<B>> generic::Context for BftInstance<B, P>
 	type Digest = B::Hash;
 	type Signature = LocalizedSignature;
 	type Candidate = B;
-	type RoundTimeout = Box<Future<Item=(),Error=Self::Error> + Send>;
+	type RoundTimeout = Box<Future<Item=(),Error=Self::Error>>;
 	type CreateProposal = <P::Create as IntoFuture>::Future;
 	type EvaluateProposal = <P::Evaluate as IntoFuture>::Future;
 
@@ -234,7 +234,7 @@ impl<B: Block, P: Proposer<B>> generic::Context for BftInstance<B, P>
 			.saturating_mul(self.round_timeout_multiplier);
 
 		let fut = Delay::new(Instant::now() + Duration::from_secs(timeout))
-			.map_err(|_| Error::from(ErrorKind::FaultyTimer))
+			.map_err(|e| Error::from(ErrorKind::FaultyTimer(e)))
 			.map_err(Into::into);
 
 		Box::new(fut)

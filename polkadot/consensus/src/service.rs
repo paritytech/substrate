@@ -18,6 +18,10 @@
 
 /// Consensus service. A long runnung service that manages BFT agreement and parachain
 /// candidate agreement over the network.
+///
+/// This uses a handle to an underlying thread pool to dispatch heavy work
+/// such as candidate verification while performing event-driven work
+/// on a local event loop.
 
 use std::thread;
 use std::time::{Duration, Instant};
@@ -29,8 +33,12 @@ use ed25519;
 use futures::prelude::*;
 use polkadot_api::LocalPolkadotApi;
 use polkadot_primitives::{Block, Header};
-use tokio_core::reactor;
 use transaction_pool::TransactionPool;
+
+use tokio::executor::current_thread::TaskExecutor as LocalThreadHandle;
+use tokio::runtime::TaskExecutor as ThreadPoolHandle;
+use tokio::runtime::current_thread::Runtime as LocalRuntime;
+use tokio::timer::Interval;
 
 use super::{Network, Collators, ProposerFactory};
 use error;
@@ -38,9 +46,10 @@ use error;
 const TIMER_DELAY_MS: u64 = 5000;
 const TIMER_INTERVAL_MS: u64 = 500;
 
+// spin up an instance of BFT agreement on the current thread's executor.
+// panics if there is no current thread executor.
 fn start_bft<F, C>(
 	header: &Header,
-	handle: reactor::Handle,
 	bft_service: &BftService<Block, F, C>,
 ) where
 	F: bft::Environment<Block> + 'static,
@@ -48,8 +57,11 @@ fn start_bft<F, C>(
 	F::Error: ::std::fmt::Debug,
 	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
 {
+	let mut handle = LocalThreadHandle::current();
 	match bft_service.build_upon(&header) {
-		Ok(Some(bft)) => handle.spawn(bft),
+		Ok(Some(bft)) => if let Err(e) = handle.spawn_local(Box::new(bft)) {
+			debug!(target: "bft", "Couldn't initialize BFT agreement: {:?}", e);
+		},
 		Ok(None) => {},
 		Err(e) => debug!(target: "bft", "BFT agreement error: {:?}", e),
 	}
@@ -68,6 +80,7 @@ impl Service {
 		api: Arc<A>,
 		network: N,
 		transaction_pool: Arc<TransactionPool>,
+		thread_pool: ThreadPoolHandle,
 		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
 	) -> Service
@@ -81,7 +94,7 @@ impl Service {
 	{
 		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {
-			let mut core = reactor::Core::new().expect("tokio::Core could not be created");
+			let mut runtime = LocalRuntime::new().expect("Could not create local runtime");
 			let key = Arc::new(key);
 
 			let factory = ProposerFactory {
@@ -90,28 +103,27 @@ impl Service {
 				collators: network.clone(),
 				network,
 				parachain_empty_duration,
-				handle: core.handle(),
+				handle: thread_pool,
 			};
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
 
 			let notifications = {
-				let handle = core.handle();
 				let client = client.clone();
 				let bft_service = bft_service.clone();
 
 				client.import_notification_stream().for_each(move |notification| {
 					if notification.is_new_best {
-						start_bft(&notification.header, handle.clone(), &*bft_service);
+						start_bft(&notification.header, &*bft_service);
 					}
 					Ok(())
 				})
 			};
 
-			let interval = reactor::Interval::new_at(
+			let interval = Interval::new(
 				Instant::now() + Duration::from_millis(TIMER_DELAY_MS),
 				Duration::from_millis(TIMER_INTERVAL_MS),
-				&core.handle(),
-			).expect("it is always possible to create an interval with valid params");
+			);
+
 			let mut prev_best = match client.best_block_header() {
 				Ok(header) => header.hash(),
 				Err(e) => {
@@ -123,14 +135,13 @@ impl Service {
 			let timed = {
 				let c = client.clone();
 				let s = bft_service.clone();
-				let handle = core.handle();
 
 				interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 					if let Ok(best_block) = c.best_block_header() {
 						let hash = best_block.hash();
 						if hash == prev_best {
 							debug!("Starting consensus round after a timeout");
-							start_bft(&best_block, handle.clone(), &*s);
+							start_bft(&best_block, &*s);
 						}
 						prev_best = hash;
 					}
@@ -138,9 +149,9 @@ impl Service {
 				})
 			};
 
-			core.handle().spawn(notifications);
-			core.handle().spawn(timed);
-			if let Err(e) = core.run(exit) {
+			runtime.spawn(notifications);
+			runtime.spawn(timed);
+			if let Err(e) = runtime.block_on(exit) {
 				debug!("BFT event loop error {:?}", e);
 			}
 		});

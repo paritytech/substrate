@@ -47,7 +47,6 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_client as client;
 
 extern crate exit_future;
-extern crate tokio_core;
 extern crate tokio;
 
 #[macro_use]
@@ -68,16 +67,16 @@ use std::time::{Duration, Instant};
 
 use codec::Slicable;
 use table::generic::Statement as GenericStatement;
-use runtime_support::Hashable;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
 use primitives::AuthorityId;
 use transaction_pool::{Ready, TransactionPool};
-use tokio_core::reactor::{Handle, Timeout, Interval};
+use tokio::runtime::TaskExecutor;
+use tokio::timer::{Delay, Interval};
 
 use futures::prelude::*;
-use futures::future::{self, Shared};
+use futures::future;
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
 
@@ -221,10 +220,6 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: Au
 	}
 }
 
-fn timer_error(e: &::std::io::Error) -> Error {
-	ErrorKind::Timer(format!("{}", e)).into()
-}
-
 /// Polkadot proposer factory.
 pub struct ProposerFactory<C, N, P> {
 	/// The client instance.
@@ -235,8 +230,8 @@ pub struct ProposerFactory<C, N, P> {
 	pub network: N,
 	/// Parachain collators.
 	pub collators: C,
-	/// The timer used to schedule proposal intervals.
-	pub handle: Handle,
+	/// handle to remote task executor
+	pub handle: TaskExecutor,
 	/// The duration after which parachain-empty blocks will be allowed.
 	pub parachain_empty_duration: Duration,
 }
@@ -260,11 +255,9 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		authorities: &[AuthorityId],
 		sign_with: Arc<ed25519::Pair>
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
-		use std::time::Duration;
-
 		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
 
-		let parent_hash = parent_header.blake2_256().into();
+		let parent_hash = parent_header.hash().into();
 
 		let checked_id = self.client.check_id(BlockId::hash(parent_hash))?;
 		let duty_roster = self.client.duty_roster(&checked_id)?;
@@ -281,14 +274,12 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		let n_parachains = active_parachains.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
 		let (router, input, output) = self.network.communication_for(table.clone());
+		let now = Instant::now();
 		let dynamic_inclusion = DynamicInclusion::new(
 			n_parachains,
-			Instant::now(),
+			now,
 			self.parachain_empty_duration.clone(),
 		);
-
-		let timeout = Timeout::new(DELAY_UNTIL, &self.handle)
-			.map_err(|e| timer_error(&e))?;
 
 		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
 			DELAY_UNTIL);
@@ -308,10 +299,9 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 
 		let proposer = Proposer {
 			client: self.client.clone(),
-			delay: timeout.shared(),
-			handle: self.handle.clone(),
 			dynamic_inclusion,
 			local_key: sign_with,
+			minimum_delay: now + DELAY_UNTIL,
 			parent_hash,
 			parent_id: checked_id,
 			parent_number: parent_header.number,
@@ -330,7 +320,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 fn dispatch_collation_work<R, C, P>(
 	router: R,
 	table: Arc<SharedTable>,
-	handle: &Handle,
+	handle: &TaskExecutor,
 	work: CollationFetch<C, P>,
 ) -> exit_future::Signal where
 	C: Collators + Send + 'static,
@@ -355,14 +345,10 @@ fn dispatch_collation_work<R, C, P>(
 		}
 	});
 
-	let cancellable_work = handled_work.select(exit).map(|_| ()).map_err(|_| ());
+	let cancellable_work = handled_work.select(exit).then(|_| Ok(()));
 
-	// this most likely goes onto a thread pool. unfortunately,
-	// there isn't an easy way to make sure that the network's collation
-	// verification can get onto the same thread pool.
-	//
-	// we should accept a thread pool
-	handle.spawn_send(cancellable_work);
+	// spawn onto thread pool.
+	handle.spawn(cancellable_work);
 	signal
 }
 
@@ -373,10 +359,9 @@ struct LocalDuty {
 /// The Polkadot proposer logic.
 pub struct Proposer<C: PolkadotApi> {
 	client: Arc<C>,
-	delay: Shared<Timeout>,
 	dynamic_inclusion: DynamicInclusion,
-	handle: Handle,
 	local_key: Arc<ed25519::Pair>,
+	minimum_delay: Instant,
 	parent_hash: Hash,
 	parent_id: C::CheckedBlockId,
 	parent_number: BlockNumber,
@@ -401,32 +386,24 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 		const ATTEMPT_PROPOSE_EVERY: Duration = Duration::from_millis(100);
 
 		let initial_included = self.table.includable_count();
+		let now = Instant::now();
 		let enough_candidates = self.dynamic_inclusion.acceptable_in(
-			Instant::now(),
+			now,
 			initial_included,
-		).unwrap_or_default();
+		).unwrap_or_else(|| now + Duration::from_millis(1));
 
-		let timing = {
-			let delay = self.delay.clone();
-			let dynamic_inclusion = self.dynamic_inclusion.clone();
-			let make_timing = move |handle| -> Result<ProposalTiming, ::std::io::Error> {
-				let attempt_propose = Interval::new(ATTEMPT_PROPOSE_EVERY, handle)?;
-				let enough_candidates = Timeout::new(enough_candidates, handle)?;
-				Ok(ProposalTiming {
-					attempt_propose,
-					enough_candidates,
-					dynamic_inclusion,
-					minimum_delay: Some(delay),
-					last_included: initial_included,
-				})
-			};
+		let minimum_delay = if self.minimum_delay > now + ATTEMPT_PROPOSE_EVERY {
+			Some(Delay::new(self.minimum_delay))
+		} else {
+			None
+		};
 
-			match make_timing(&self.handle) {
-				Ok(timing) => timing,
-				Err(e) => {
-					return future::Either::B(future::err(timer_error(&e)));
-				}
-			}
+		let timing = ProposalTiming {
+			attempt_propose: Interval::new(now + ATTEMPT_PROPOSE_EVERY, ATTEMPT_PROPOSE_EVERY),
+			enough_candidates: Delay::new(enough_candidates),
+			dynamic_inclusion: self.dynamic_inclusion.clone(),
+			minimum_delay,
+			last_included: initial_included,
 		};
 
 		future::Either::A(CreateProposal {
@@ -469,9 +446,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 		};
 
 		let vote_delays = {
-			// delay casting vote until able (according to minimum block time)
-			let minimum_delay = self.delay.clone()
-				.map_err(|e| timer_error(&*e));
+			let now = Instant::now();
 
 			let included_candidate_hashes = proposal
 				.parachain_heads()
@@ -485,33 +460,35 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 
 			// the duration at which the given number of parachains is acceptable.
 			let count_delay = self.dynamic_inclusion.acceptable_in(
-				Instant::now(),
+				now,
 				proposal.parachain_heads().len(),
 			);
 
 			// the duration until the given timestamp is current
 			let proposed_timestamp = proposal.timestamp();
 			let timestamp_delay = if proposed_timestamp > current_timestamp {
-				Some(Duration::from_secs(proposed_timestamp - current_timestamp))
+				Some(now + Duration::from_secs(proposed_timestamp - current_timestamp))
 			} else {
 				None
 			};
 
+			// delay casting vote until able according to minimum block time,
+			// timestamp delay, and count delay.
 			// construct a future from the maximum of the two durations.
-			let temporary_delay = match ::std::cmp::max(timestamp_delay, count_delay) {
-				Some(duration) => {
-					let maybe_timeout = Timeout::new(duration, &self.handle);
+			let max_delay = [timestamp_delay, count_delay, Some(self.minimum_delay)]
+				.iter()
+				.cloned()
+				.max()
+				.expect("iterator not empty; thus max returns `Some`; qed");
 
-					let f = future::result(maybe_timeout)
-						.and_then(|timeout| timeout)
-						.map_err(|e| timer_error(&e));
-
-					future::Either::A(f)
-				}
+			let temporary_delay = match max_delay {
+				Some(duration) => future::Either::A(
+					Delay::new(duration).map_err(|e| Error::from(ErrorKind::Timer(e)))
+				),
 				None => future::Either::B(future::ok(())),
 			};
 
-			minimum_delay.join3(includability_tracker, temporary_delay)
+			includability_tracker.join(temporary_delay)
 		};
 
 		// evaluate whether the block is actually valid.
@@ -614,48 +591,43 @@ fn current_timestamp() -> Timestamp {
 struct ProposalTiming {
 	attempt_propose: Interval,
 	dynamic_inclusion: DynamicInclusion,
-	enough_candidates: Timeout,
-	minimum_delay: Option<Shared<Timeout>>,
+	enough_candidates: Delay,
+	minimum_delay: Option<Delay>,
 	last_included: usize,
 }
 
 impl ProposalTiming {
 	// whether it's time to attempt a proposal.
 	// shouldn't be called outside of the context of a task.
-	fn poll(&mut self, included: usize) -> Poll<(), Error> {
+	fn poll(&mut self, included: usize) -> Poll<(), ErrorKind> {
 		// first drain from the interval so when the minimum delay is up
 		// we don't have any notifications built up.
 		//
 		// this interval is just meant to produce periodic task wakeups
 		// that lead to the `dynamic_inclusion` getting updated as necessary.
-		if let Async::Ready(x) = self.attempt_propose.poll()
-			.map_err(|e| timer_error(&e))?
-		{
+		if let Async::Ready(x) = self.attempt_propose.poll().map_err(ErrorKind::Timer)? {
 			x.expect("timer still alive; intervals never end; qed");
 		}
 
 		if let Some(ref mut min) = self.minimum_delay {
-			try_ready!(min.poll().map_err(|e| timer_error(&*e)));
+			try_ready!(min.poll().map_err(ErrorKind::Timer));
 		}
 
 		self.minimum_delay = None; // after this point, the future must have completed.
 
 		if included == self.last_included {
-			return self.enough_candidates.poll().map_err(|e| timer_error(&e));
+			return self.enough_candidates.poll().map_err(ErrorKind::Timer);
 		}
 
 		// the amount of includable candidates has changed. schedule a wakeup
 		// if it's not sufficient anymore.
-		let now = Instant::now();
-		match self.dynamic_inclusion.acceptable_in(now, included) {
-			Some(duration) => {
+		match self.dynamic_inclusion.acceptable_in(Instant::now(), included) {
+			Some(instant) => {
 				self.last_included = included;
-				self.enough_candidates.reset(now + duration);
-				self.enough_candidates.poll().map_err(|e| timer_error(&e))
+				self.enough_candidates.reset(instant);
+				self.enough_candidates.poll().map_err(ErrorKind::Timer)
 			}
-			None => {
-				Ok(Async::Ready(()))
-			}
+			None => Ok(Async::Ready(())),
 		}
 	}
 }
