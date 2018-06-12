@@ -21,7 +21,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use table::{self, Table, Context as TableContextTrait};
-use table::generic::Statement as GenericStatement;
 use collation::Collation;
 use polkadot_primitives::Hash;
 use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
@@ -36,6 +35,8 @@ use self::includable::IncludabilitySender;
 mod includable;
 
 pub use self::includable::Includable;
+pub use table::Statement as Statement;
+pub use table::generic::Statement as GenericStatement;
 
 struct TableContext {
 	parent_hash: Hash,
@@ -312,6 +313,11 @@ impl SharedTable {
 				trackers: Vec::new(),
 			}))
 		}
+	}
+
+	/// Get the parent hash this table should hold statements localized to.
+	pub fn consensus_parent_hash(&self) -> &Hash {
+		&self.context.parent_hash
 	}
 
 	/// Get group info.

@@ -5,6 +5,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Polkadot-specific networking protocol"
 
 [dependencies]
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
 polkadot-consensus = { path = "../consensus" }
 substrate-bft = { path = "../../substrate/bft" }
 substrate-codec = { path = "../../substrate/codec" }
@@ -13,3 +16,4 @@ substrate-primitives = { path = "../../substrate/primitives" }
 polkadot-primitives = { path = "../primitives" }
 ed25519 = { path = "../../substrate/ed25519" }
 futures = "0.1"
+tokio = "0.1.2"

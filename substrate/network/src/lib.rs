@@ -50,13 +50,13 @@ mod service;
 mod sync;
 mod protocol;
 mod io;
-mod message;
 mod config;
 mod chain;
 mod blocks;
 mod on_demand;
 pub mod consensus_gossip;
 pub mod error;
+pub mod message;
 pub mod specialization;
 
 #[cfg(test)] mod test;

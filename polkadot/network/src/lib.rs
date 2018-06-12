@@ -14,6 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_network;
@@ -23,16 +28,21 @@ extern crate polkadot_consensus as consensus;
 extern crate polkadot_primitives;
 extern crate ed25519;
 extern crate futures;
+extern crate tokio;
 
 use codec::Slicable;
-use polkadot_primitives::{Header, Block, Hash};
+use polkadot_primitives::{Block, Hash};
 use polkadot_primitives::parachain::{CandidateSignature, Id as ParaId};
 use substrate_primitives::{AuthorityId};
-use substrate_network::{PeerId, RequestId};
-use substrate_network::specialization::{Specialization, HandlerContext};
+use substrate_network::{PeerId, RequestId, Context};
+use substrate_network::consensus_gossip::ConsensusGossip;
+use substrate_network::{message, generic_message};
+use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
 
 use std::collections::HashMap;
+
+mod consensus;
 
 /// Polkadot protocol id.
 pub const DOT_PROTOCOL_ID: ::substrate_network::ProtocolId = *b"dot";
@@ -91,38 +101,6 @@ pub struct CandidateResponse {
 	pub data: Option<Vec<u8>>,
 }
 
-/// Statements circulated among peers.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum UnsignedStatement {
-	/// Broadcast by a authority to indicate that this is his candidate for
-	/// inclusion.
-	///
-	/// Broadcasting two different candidate messages per round is not allowed.
-	Candidate(Vec<u8>),
-	/// Broadcast by a authority to attest that the candidate with given digest
-	/// is valid.
-	Valid(Hash),
-	/// Broadcast by a authority to attest that the auxiliary data for a candidate
-	/// with given digest is available.
-	Available(Hash),
-	/// Broadcast by a authority to attest that the candidate with given digest
-	/// is invalid.
-	Invalid(Hash),
-}
-
-/// A signed statement.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Statement {
-	/// Parent relay chain block header hash.
-	pub parent_hash: Hash,
-	/// The statement.
-	pub statement: UnsignedStatement,
-	/// The signature.
-	pub signature: CandidateSignature,
-	/// The sender.
-	pub sender: AuthorityId,
-}
-
 struct PeerInfo {
 	status: Status,
 }
@@ -130,13 +108,16 @@ struct PeerInfo {
 /// Polkadot protocol attachment for substrate.
 pub struct PolkadotProtocol {
 	peers: HashMap<PeerId, PeerInfo>,
+	consensus_gossip: ConsensusGossip<Block>,
 	collators: HashMap<ParaId, Vec<PeerId>>,
 	collating_for: Option<ParaId>,
 }
 
 /// Polkadot-specific messages.
+#[derive(Serialize, Deserialize)]
 pub enum Message {
-
+	/// signed statement and localized parent hash.
+	Statement(Hash, Statement),
 }
 
 impl Specialization<Block> for PolkadotProtocol {
@@ -144,8 +125,8 @@ impl Specialization<Block> for PolkadotProtocol {
 		Status { collating_for: self.collating_for.clone() }.encode()
 	}
 
-	fn on_peer_connected(&mut self, ctx: &mut HandlerContext<Block>, peer_id: PeerId, status: FullStatus) {
-		let status = match Status::decode(&mut &status.chain_status[..]) {
+	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, status: FullStatus) {
+		let local_status = match Status::decode(&mut &status.chain_status[..]) {
 			Some(status) => status,
 			None => {
 				ctx.disable_peer(peer_id);
@@ -153,26 +134,53 @@ impl Specialization<Block> for PolkadotProtocol {
 			}
 		};
 
-		if let Some(ref para_id) = status.collating_for {
+		if let Some(ref para_id) = local_status.collating_for {
 			self.collators.entry(para_id.clone())
 				.or_insert_with(Vec::new)
 				.push(peer_id);
 		}
 
-		self.peers.insert(peer_id, PeerInfo { status });
+		self.peers.insert(peer_id, PeerInfo { status: local_status });
+		self.consensus_gossip.new_peer(ctx, peer_id, &status.roles);
 	}
 
-	fn on_peer_disconnected(&mut self, _ctx: &mut HandlerContext<Block>, peer_id: PeerId) {
+	fn on_disconnect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId) {
 		if let Some(info) = self.peers.remove(&peer_id) {
 			if let Some(collators) = info.status.collating_for.and_then(|id| self.collators.get_mut(&id)) {
 				if let Some(pos) = collators.iter().position(|x| x == &peer_id) {
 					collators.swap_remove(pos);
 				}
 			}
+
+			self.consensus_gossip.peer_disconnected(ctx, peer_id);
 		}
 	}
 
-	fn on_message(&mut self, ctx: &mut HandlerContext<Block>, peer_id: PeerId, message: Vec<u8>) {
+	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, message: message::Message<Block>) {
+		match message {
+			generic_message::Message::BftMessage(msg) => self.consensus_gossip.on_bft_message(ctx, peer_id, msg),
+			generic_message::Message::ChainSpecific(raw) => {
+				let msg = match serde_json::from_slice(&raw) {
+					Ok(msg) => msg,
+					Err(e) => {
+						trace!(target: "p_net", "Bad message from {}: {}", peer_id, e);
+						ctx.disable_peer(peer_id);
+						return;
+					}
+				};
 
+				match msg {
+					Message::Statement(parent_hash, statement) => {
+						// TODO: notify table routing instance
+						self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash);
+					}
+				}
+			}
+			_ => {}
+		}
+	}
+
+	fn on_abort(&mut self) {
+		self.consensus_gossip.abort();
 	}
 }

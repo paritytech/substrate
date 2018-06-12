@@ -85,7 +85,7 @@ pub trait Context {
 }
 
 /// Statements circulated among peers.
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub enum Statement<C, D> {
 	/// Broadcast by a authority to indicate that this is his candidate for
 	/// inclusion.
@@ -104,7 +104,7 @@ pub enum Statement<C, D> {
 }
 
 /// A signed statement.
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub struct SignedStatement<C, D, V, S> {
 	/// The statement.
 	pub statement: Statement<C, D>,

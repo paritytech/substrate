@@ -16,19 +16,41 @@
 
 //! Implementation of the traits for consensus networking for the polkadot protocol.
 
-use consensus::{Network as ConsensusNetwork, TableRouter};
+use consensus::{Network, SharedTable, TableRouter, Error as ConsensusError};
 use bft;
 use substrate_network::{self as net, generic_message as msg};
-use subsrate_primitives::AuthorityId;
-use polkadot_primitives::{Block, Hash, Header, BlockId};
-use futures::prelude::*;
+use polkadot_primitives::{Block, Hash, Header, BlockId, SessionKey};
+use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
+use futures::{future, prelude::*};
+use tokio::runtime::TaskExecutor;
 
 use super::NetworkService;
 
+/// Table routing implementation.
+pub struct Router;
+
+impl TableRouter for Router {
+	type Error = ();
+	type FetchCandidate = future::Empty<BlockData, Self::Error>;
+	type FetchExtrinsic = future::Empty<Extrinsic, Self::Error>;
+
+	fn local_candidate_data(&self, _hash: Hash, _block_data: BlockData, _extrinsic: Extrinsic) {
+
+	}
+
+	fn fetch_block_data(&self, _candidate: &CandidateReceipt) -> Self::FetchCandidate {
+		future::empty()
+	}
+
+	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
+		future::empty()
+	}
+}
+
 struct BftSink<E> {
-	network: Arc<net::ConsensusService<Block>>,
+	network: Arc<NetworkService>,
 	parent_hash: Hash,
-	_e: ::std::marker::PhantomData<E>,
+	_marker: ::std::marker::PhantomData<E>,
 }
 
 impl<E> Sink for BftSink<E> {
@@ -38,6 +60,48 @@ impl<E> Sink for BftSink<E> {
 
 	fn start_send(&mut self, message: bft::Communication<Block>) -> ::futures::StartSend<bft::Communication<Block>, E> {
 		let network_message = net::LocalizedBftMessage {
+			message: match message {
+				bft::generic::Communication::Consensus(c) => msg::BftMessage::Consensus(match c {
+					bft::generic::LocalizedMessage::Propose(proposal) => msg::SignedConsensusMessage::Propose(msg::SignedConsensusProposal {
+						round_number: proposal.round_number as u32,
+						proposal: proposal.proposal,
+						digest: proposal.digest,
+						sender: proposal.sender,
+						digest_signature: proposal.digest_signature.signature,
+						full_signature: proposal.full_signature.signature,
+					}),
+					bft::generic::LocalizedMessage::Vote(vote) => msg::SignedConsensusMessage::Vote(msg::SignedConsensusVote {
+						sender: vote.sender,
+						signature: vote.signature.signature,
+						vote: match vote.vote {
+							bft::generic::Vote::Prepare(r, h) => msg::ConsensusVote::Prepare(r as u32, h),
+							bft::generic::Vote::Commit(r, h) => msg::ConsensusVote::Commit(r as u32, h),
+							bft::generic::Vote::AdvanceRound(r) => msg::ConsensusVote::AdvanceRound(r as u32),
+						}
+					}),
+				}),
+				bft::generic::Communication::Auxiliary(justification) => msg::BftMessage::Auxiliary(justification.uncheck().into()),
+			},
+			parent_hash: self.parent_hash,
+		};
+		self.network.with_spec(
+			move |spec, ctx| spec.consensus_gossip.multicast_bft_message(ctx, network_message)
+		);
+		Ok(::futures::AsyncSink::Ready)
+	}
+
+	fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
+		Ok(Async::Ready(()))
+	}
+}
+
+impl<E> Sink for BftSink<E> {
+	type SinkItem = bft::Communication<Block>;
+	// TODO: replace this with the ! type when that's stabilized
+	type SinkError = E;
+
+	fn start_send(&mut self, message: bft::Communication<Block>) -> ::futures::StartSend<bft::Communication<Block>, E> {
+		let network_message = msg::LocalizedBftMessage {
 			message: match message {
 				bft::generic::Communication::Consensus(c) => msg::BftMessage::Consensus(match c {
 					bft::generic::LocalizedMessage::Propose(proposal) => msg::SignedConsensusMessage::Propose(msg::SignedConsensusProposal {
@@ -72,20 +136,20 @@ impl<E> Sink for BftSink<E> {
 }
 
 struct Messages {
-	network_stream: msg::BftMessageStream,
-	local_id: AuthorityId,
-	authorities: Vec<AuthorityId>,
+	network_stream: mpsc::UnboundedReceiver<bft::Communication<Block>>,
+	local_id: SessionKey,
+	authorities: Vec<SessionKey>,
 }
 
 impl Stream for Messages {
 	type Item = bft::Communication<Block>;
-	type Error = bft::Error;
+	type Error = ConsensusError;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		// check the network
 		loop {
 			match self.network_stream.poll() {
-				Err(_) => return Err(bft::InputStreamConcluded.into()),
+				Err(_) => return Err(bft::Error::from(bft::InputStreamConcluded).into()),
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
 				Ok(Async::Ready(None)) => return Ok(Async::NotReady), // the input stream for agreements is never meant to logically end.
 				Ok(Async::Ready(Some(message))) => {
@@ -102,7 +166,8 @@ impl Stream for Messages {
 	}
 }
 
-fn process_message(msg: msg::LocalizedBftMessage, local_id: &AuthorityId, authorities: &[AuthorityId]) -> Result<Option<bft::Communication<Block>>, bft::Error> {
+// check signature and authority validity of message.
+fn process_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &SessionKey, authorities: &[SessionKey]) -> Result<Option<bft::Communication<Block>>, bft::Error> {
 	Ok(Some(match msg.message {
 		msg::BftMessage::Consensus(c) => bft::generic::Communication::Consensus(match c {
 			msg::SignedConsensusMessage::Propose(proposal) => bft::generic::LocalizedMessage::Propose({
@@ -156,42 +221,39 @@ fn process_message(msg: msg::LocalizedBftMessage, local_id: &AuthorityId, author
 	}))
 }
 
-impl<E> Sink for BftSink<E> {
-	type SinkItem = bft::Communication<Block>;
-	// TODO: replace this with the ! type when that's stabilized
-	type SinkError = E;
+/// Wrapper around the network service
+pub struct ConsensusNetwork {
+	network: Arc<NetworkService>,
+}
 
-	fn start_send(&mut self, message: bft::Communication<Block>) -> ::futures::StartSend<bft::Communication<Block>, E> {
-		let network_message = msg::LocalizedBftMessage {
-			message: match message {
-				bft::generic::Communication::Consensus(c) => msg::BftMessage::Consensus(match c {
-					bft::generic::LocalizedMessage::Propose(proposal) => msg::SignedConsensusMessage::Propose(msg::SignedConsensusProposal {
-						round_number: proposal.round_number as u32,
-						proposal: proposal.proposal,
-						digest: proposal.digest,
-						sender: proposal.sender,
-						digest_signature: proposal.digest_signature.signature,
-						full_signature: proposal.full_signature.signature,
-					}),
-					bft::generic::LocalizedMessage::Vote(vote) => msg::SignedConsensusMessage::Vote(msg::SignedConsensusVote {
-						sender: vote.sender,
-						signature: vote.signature.signature,
-						vote: match vote.vote {
-							bft::generic::Vote::Prepare(r, h) => msg::ConsensusVote::Prepare(r as u32, h),
-							bft::generic::Vote::Commit(r, h) => msg::ConsensusVote::Commit(r as u32, h),
-							bft::generic::Vote::AdvanceRound(r) => msg::ConsensusVote::AdvanceRound(r as u32),
-						}
-					}),
-				}),
-				bft::generic::Communication::Auxiliary(justification) => msg::BftMessage::Auxiliary(justification.uncheck().into()),
-			},
-			parent_hash: self.parent_hash,
-		};
-		self.network.send_bft_message(network_message);
-		Ok(::futures::AsyncSink::Ready)
+impl ConsensusNetwork {
+	/// Create a new consensus networking object.
+	pub fn new(network: Arc<NetworkService> ) -> Self {
+		ConsensusNetwork { network }
 	}
+}
 
-	fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
-		Ok(Async::Ready(()))
+/// A long-lived network which can create parachain statement and BFT message routing processes on demand.
+impl Network for ConsensusNetwork {
+	type TableRouter = TableRouter;
+	/// The input stream of BFT messages. Should never logically conclude.
+	type Input = Messages;
+	/// The output sink of BFT messages. Messages sent here should eventually pass to all
+	/// current authorities.
+	type Output = BftSink<ConsensusError>;
+
+	/// Instantiate a table router using the given shared table.
+	fn communication_for(&self, table: Arc<SharedTable>) -> (Self::TableRouter, Self::Input, Self::Output) {
+		let table_router = TableRouter;
+		let parent_hash = table.consensus_parent_hash().clone();
+
+		let sink = BftSink {
+			network: self.network.clone(),
+			parent_hash,
+			_marker: Default::default(),
+		};
+
+		// spin up a task in the background that processes all incoming statements
+		//
 	}
 }

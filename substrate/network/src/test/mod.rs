@@ -204,11 +204,6 @@ impl Peer {
 			self.generate_blocks(count, |_| ());
 		}
 	}
-
-	fn genesis_hash(&self) -> Hash {
-		let info = self.client.info().expect("In-mem client does not fail");
-		info.chain.genesis_hash
-	}
 }
 
 pub struct EmptyTransactionPool;

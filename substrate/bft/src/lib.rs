@@ -38,7 +38,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate ed25519;
-extern crate tokio_timer;
+extern crate tokio;
 extern crate parking_lot;
 
 #[macro_use]
@@ -63,7 +63,7 @@ use primitives::AuthorityId;
 
 use futures::{task, Async, Stream, Sink, Future, IntoFuture};
 use futures::sync::oneshot;
-use tokio_timer::Timer;
+use tokio::timer::Delay;
 use parking_lot::Mutex;
 
 pub use generic::InputStreamConcluded;
@@ -183,7 +183,6 @@ struct BftInstance<B: Block, P> {
 	key: Arc<ed25519::Pair>,
 	authorities: Vec<AuthorityId>,
 	parent_hash: B::Hash,
-	timer: Timer,
 	round_timeout_multiplier: u64,
 	proposer: P,
 }
@@ -227,16 +226,18 @@ impl<B: Block, P: Proposer<B>> generic::Context for BftInstance<B, P>
 	}
 
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
-		use std::time::Duration;
+		use std::time::{Instant, Duration};
 
 		let round = ::std::cmp::min(63, round) as u32;
 		let timeout = 1u64.checked_shl(round)
 			.unwrap_or_else(u64::max_value)
 			.saturating_mul(self.round_timeout_multiplier);
 
-		Box::new(self.timer.sleep(Duration::from_secs(timeout))
+		let fut = Delay::new(Instant::now() + Duration::from_secs(timeout))
 			.map_err(|_| Error::from(ErrorKind::FaultyTimer))
-			.map_err(Into::into))
+			.map_err(Into::into);
+
+		Box::new(fut)
 	}
 }
 
@@ -332,10 +333,11 @@ impl Drop for AgreementHandle {
 
 /// The BftService kicks off the agreement process on top of any blocks it
 /// is notified of.
+///
+/// This assumes that it is being run in the context of a tokio runtime.
 pub struct BftService<B: Block, P, I> {
 	client: Arc<I>,
 	live_agreement: Mutex<Option<(B::Hash, AgreementHandle)>>,
-	timer: Timer,
 	round_timeout_multiplier: u64,
 	key: Arc<ed25519::Pair>, // TODO: key changing over time.
 	factory: P,
@@ -354,7 +356,6 @@ impl<B, P, I> BftService<B, P, I>
 		BftService {
 			client: client,
 			live_agreement: Mutex::new(None),
-			timer: Timer::default(),
 			round_timeout_multiplier: 4,
 			key: key, // TODO: key changing over time.
 			factory: factory,
@@ -408,7 +409,6 @@ impl<B, P, I> BftService<B, P, I>
 			proposer,
 			parent_hash: hash.clone(),
 			round_timeout_multiplier: self.round_timeout_multiplier,
-			timer: self.timer.clone(),
 			key: self.key.clone(),
 			authorities: authorities,
 		};
@@ -617,13 +617,11 @@ mod tests {
 	use std::collections::HashSet;
 	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
-	use self::tokio_core::reactor::{Core};
 	use self::keyring::Keyring;
 	use futures::stream;
-	use futures::future::Executor;
+	use tokio::executor::current_thread;
 
 	extern crate substrate_keyring as keyring;
-	extern crate tokio_core;
 
 	type TestBlock = GenericTestBlock<()>;
 
@@ -706,7 +704,6 @@ mod tests {
 		BftService {
 			client: Arc::new(client),
 			live_agreement: Mutex::new(None),
-			timer: Timer::default(),
 			round_timeout_multiplier: 4,
 			key: Arc::new(Keyring::One.into()),
 			factory: DummyFactory
@@ -742,8 +739,6 @@ mod tests {
 			imported_heights: Mutex::new(HashSet::new()),
 		};
 
-		let mut core = Core::new().unwrap();
-
 		let service = make_service(client);
 
 		let first = from_block_number(2);
@@ -756,16 +751,18 @@ mod tests {
 		let bft = service.build_upon(&first).unwrap();
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first_hash);
 
+		let mut core = current_thread::CurrentThread::new();
+
 		// turn the core so the future gets polled and sends its task to the
 		// service. otherwise it deadlocks.
-		core.handle().execute(bft.unwrap()).unwrap();
-		core.turn(Some(::std::time::Duration::from_millis(100)));
+		core.spawn(bft.unwrap());
+		core.run_timeout(::std::time::Duration::from_millis(100)).unwrap();
 		let bft = service.build_upon(&second).unwrap();
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 != first_hash);
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 == second_hash);
 
-		core.handle().execute(bft.unwrap()).unwrap();
-		core.turn(Some(::std::time::Duration::from_millis(100)));
+		core.spawn(bft.unwrap());
+		core.run_timeout(::std::time::Duration::from_millis(100)).unwrap();
 	}
 
 	#[test]

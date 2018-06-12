@@ -44,10 +44,11 @@ extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_client as client;
 
 extern crate exit_future;
 extern crate tokio_core;
-extern crate substrate_client as client;
+extern crate tokio;
 
 #[macro_use]
 extern crate error_chain;
@@ -126,10 +127,6 @@ pub trait Network {
 	/// The output sink of BFT messages. Messages sent here should eventually pass to all
 	/// current authorities.
 	type Output: Sink<SinkItem=bft::Communication<Block>,SinkError=Error>;
-
-	/// Execute a future in the background. Typically used for fairly heavy computations,
-	/// so it is recommended to have this use a thread pool.
-	fn execute<F>(&self, future: F) where F: Future<Item=(),Error=()> + Send + 'static;
 
 	/// Instantiate a table router using the given shared table.
 	fn communication_for(&self, table: Arc<SharedTable>) -> (Self::TableRouter, Self::Input, Self::Output);
@@ -297,16 +294,16 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			DELAY_UNTIL);
 
 		let drop_signal = dispatch_collation_work(
-			&self.network,
 			router.clone(),
 			table.clone(),
+			&self.handle,
 			CollationFetch::new(
 				local_duty.validation,
 				checked_id.clone(),
 				parent_hash.clone(),
 				self.collators.clone(),
 				self.client.clone()
-			)
+			),
 		);
 
 		let proposer = Proposer {
@@ -328,19 +325,18 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 	}
 }
 
-// dispatch collation work onto the network's thread pool. returns a signal object
+// dispatch collation work to be done in the background. returns a signal object
 // that should fire when the collation work is no longer necessary (e.g. when the proposer object is dropped)
-fn dispatch_collation_work<N, C, P>(
-	network: &N,
-	router: N::TableRouter,
+fn dispatch_collation_work<R, C, P>(
+	router: R,
 	table: Arc<SharedTable>,
+	handle: &Handle,
 	work: CollationFetch<C, P>,
 ) -> exit_future::Signal where
 	C: Collators + Send + 'static,
-	N: Network,
 	P: PolkadotApi + Send + Sync + 'static,
 	<C::Collation as IntoFuture>::Future: Send + 'static,
-	N::TableRouter: Send + 'static,
+	R: TableRouter + Send + 'static,
 	P::CheckedBlockId: Send + 'static,
 {
 	let (signal, exit) = exit_future::signal();
@@ -360,7 +356,13 @@ fn dispatch_collation_work<N, C, P>(
 	});
 
 	let cancellable_work = handled_work.select(exit).map(|_| ()).map_err(|_| ());
-	network.execute(cancellable_work);
+
+	// this most likely goes onto a thread pool. unfortunately,
+	// there isn't an easy way to make sure that the network's collation
+	// verification can get onto the same thread pool.
+	//
+	// we should accept a thread pool
+	handle.spawn_send(cancellable_work);
 	signal
 }
 
