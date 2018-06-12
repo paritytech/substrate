@@ -19,12 +19,13 @@ extern crate substrate_primitives as primitives;
 
 mod unfinalized;
 mod pruning;
+#[cfg(test)] mod test;
 
 use primitives::{H256, blake2_256};
 use codec::Slicable;
 use std::collections::HashSet;
 use unfinalized::UnfinalizedOverlay;
-use pruning::CountedWindow;
+use pruning::RefWindow;
 
 pub type DBValue = Vec<u8>;
 
@@ -32,14 +33,7 @@ pub trait KeyValueDb {
 	type Error;
 
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, Self::Error>;
-}
-
-#[cfg(test)]
-impl KeyValueDb for ::std::collections::HashMap<H256, DBValue> {
-	type Error = ();
-	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
-		Ok(::std::collections::HashMap::get(self, key).cloned())
-	}
+	fn get_meta(&self, key: &H256) -> Result<Option<DBValue>, Self::Error>;
 }
 
 #[derive(Debug)]
@@ -49,18 +43,27 @@ pub enum Error<D: KeyValueDb> {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct Changeset {
+pub struct ChangeSet {
 	inserted: Vec<(H256, DBValue)>,
 	deleted: Vec<H256>,
 }
 
+
+#[derive(Default, Debug, Clone)]
+pub struct CommitSet {
+	data: ChangeSet,
+	meta: ChangeSet,
+}
+
+/// Pruning contraints. If none are specified pruning is
+#[derive(Default, Debug)]
 pub struct Constraints {
 	max_blocks: Option<u32>,
 	max_mem: Option<usize>,
 }
 
 pub enum Pruning {
-	Constraints(Constraints),
+	Constrained(Constraints),
 	ArchiveAll,
 	ArchiveCanonical,
 }
@@ -74,53 +77,66 @@ fn to_key<S: Slicable>(prefix: &[u8], data: &S) -> H256 {
 pub struct StateDb {
 	mode: Pruning,
 	unfinalized: UnfinalizedOverlay,
-	pruning: Option<CountedWindow>,
+	pruning: Option<RefWindow>,
 	pinned: HashSet<H256>,
 }
 
 impl StateDb {
 	pub fn new<D: KeyValueDb>(mode: Pruning, db: &D) -> Result<StateDb, Error<D>> {
 		let unfinalized = UnfinalizedOverlay::new(db)?;
+		let pruning = match mode {
+			Pruning::Constrained(_) => Some(RefWindow::new(db)?),
+			Pruning::ArchiveAll | Pruning::ArchiveCanonical => None,
+		};
 		Ok(StateDb {
 			mode,
 			unfinalized,
-			pruning: None,
+			pruning: pruning,
 			pinned: Default::default(),
 		})
 	}
 
-	pub fn insert_block(&mut self, hash: &H256, number: u64, parent_hash: &H256, changeset: Changeset) -> Changeset {
+	pub fn insert_block(&mut self, hash: &H256, number: u64, parent_hash: &H256, mut changeset: ChangeSet) -> CommitSet {
 		match self.mode {
 			Pruning::ArchiveAll => {
+				changeset.deleted.clear();
 				// write changes immediatelly
-				changeset
+				CommitSet {
+					data: changeset,
+					meta: Default::default(),
+				}
 			},
-			Pruning::Constraints(_) | Pruning::ArchiveCanonical => {
+			Pruning::Constrained(_) | Pruning::ArchiveCanonical => {
 				self.unfinalized.insert(hash, number, parent_hash, changeset)
 			}
 		}
 	}
 
-	pub fn finalize_block(&mut self, hash: &H256) -> Changeset {
-		let changeset = match self.mode {
+	pub fn finalize_block(&mut self, hash: &H256) -> CommitSet {
+		let mut commit = match self.mode {
 			Pruning::ArchiveAll => {
-				Changeset::default()
+				CommitSet::default()
 			},
-			Pruning::Constraints(_) | Pruning::ArchiveCanonical => {
+			Pruning::ArchiveCanonical => {
+				let mut commit = self.unfinalized.finalize(hash);
+				commit.data.deleted.clear();
+				commit
+			},
+			Pruning::Constrained(_) => {
 				self.unfinalized.finalize(hash)
-			}
+			},
 		};
 		if let Some(ref mut pruning) = self.pruning {
-			pruning.note_finalized(hash, &changeset);
+			pruning.note_finalized(hash, &mut commit);
 		}
-		changeset
+		self.prune(&mut commit);
+		commit
 	}
 
-	pub fn prune(&mut self) -> Changeset {
-		let mut deleted = Vec::new();
-		if let (&mut Some(ref mut pruning), &Pruning::Constraints(ref constraints)) = (&mut self.pruning, &self.mode) {
+	fn prune(&mut self, commit: &mut CommitSet) {
+		if let (&mut Some(ref mut pruning), &Pruning::Constrained(ref constraints)) = (&mut self.pruning, &self.mode) {
 			loop {
-				if pruning.window_size() > constraints.max_blocks.unwrap_or(1) as u64 {
+				if pruning.window_size() <= constraints.max_blocks.unwrap_or(0) as u64 {
 					break;
 				}
 
@@ -133,16 +149,8 @@ impl StateDb {
 					break;
 				}
 
-				pruning.prune_one(&mut deleted);
+				pruning.prune_one(commit);
 			}
-
-			Changeset {
-				inserted: Vec::new(),
-				deleted,
-			}
-		}
-		else {
-			Changeset::default()
 		}
 	}
 
@@ -160,9 +168,57 @@ impl StateDb {
 		}
 		db.get(key).map_err(|e| Error::Db(e))
 	}
-
-	pub fn mem_used(&self) -> usize {
-		0
-	}
 }
 
+#[cfg(test)]
+mod tests {
+	use primitives::H256;
+	use {StateDb, Pruning, Constraints};
+	use test::{make_db, make_changeset, TestDb};
+
+	fn make_test_db(settings: Pruning) -> (TestDb, StateDb) {
+		let mut db = make_db(&[91, 921, 922, 93]);
+		let mut state_db = StateDb::new(settings, &db).unwrap();
+
+		db.commit(&state_db.insert_block(&H256::from(1), 1, &H256::from(0), make_changeset(&[1], &[91])));
+		db.commit(&state_db.insert_block(&H256::from(21), 2, &H256::from(1), make_changeset(&[21], &[921, 1])));
+		db.commit(&state_db.insert_block(&H256::from(22), 2, &H256::from(1), make_changeset(&[22], &[922])));
+		db.commit(&state_db.insert_block(&H256::from(3), 3, &H256::from(21), make_changeset(&[3], &[922])));
+		db.commit(&state_db.finalize_block(&H256::from(1)));
+		db.commit(&state_db.insert_block(&H256::from(4), 4, &H256::from(3), make_changeset(&[4], &[93])));
+		db.commit(&state_db.finalize_block(&H256::from(21)));
+		db.commit(&state_db.finalize_block(&H256::from(3)));
+
+		(db, state_db)
+	}
+
+	#[test]
+	fn full_archive_keeps_everything() {
+		let (db, _) = make_test_db(Pruning::ArchiveAll);
+		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93])));
+	}
+
+	#[test]
+	fn canonical_archive_keeps_canonical() {
+		let (db, _) = make_test_db(Pruning::ArchiveCanonical);
+		assert!(db.data_eq(&make_db(&[1, 21, 3, 91, 921, 922, 93])));
+	}
+
+	#[test]
+	fn prune_window_1() {
+		let (db, _) = make_test_db(Pruning::Constrained(Constraints {
+			max_blocks: Some(1),
+			max_mem: None,
+		}));
+		assert!(db.data_eq(&make_db(&[21, 3, 922, 93])));
+	}
+
+	#[test]
+	fn prune_window_2() {
+		let (db, _) = make_test_db(Pruning::Constrained(Constraints {
+			max_blocks: Some(2),
+			max_mem: None,
+		}));
+		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93])));
+	}
+}

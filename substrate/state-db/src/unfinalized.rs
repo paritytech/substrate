@@ -15,15 +15,15 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::{HashMap, VecDeque};
-use super::{Error, DBValue, Changeset, KeyValueDb, to_key};
+use super::{Error, DBValue, ChangeSet, CommitSet, KeyValueDb, to_key};
 use codec::{self, Slicable};
 use primitives::H256;
 
 const UNFINALIZED_JOURNAL: &[u8] = b"unfinalized_journal";
-const LAST_UNFINALIZED: &[u8] = b"last_unfinalized";
+const LAST_FINALIZED: &[u8] = b"last_finalized";
 
 pub struct UnfinalizedOverlay {
-	front_block_number: u64,
+	last_finalized: Option<(H256, u64)>,
 	levels: VecDeque<Vec<BlockOverlay>>,
 	parents: HashMap<H256, H256>,
 }
@@ -59,6 +59,7 @@ fn to_journal_key(block: u64, index: u64) -> H256 {
 	to_key(UNFINALIZED_JOURNAL, &(block, index))
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
 struct BlockOverlay {
 	hash: H256,
 	journal_key: H256,
@@ -68,64 +69,75 @@ struct BlockOverlay {
 
 impl UnfinalizedOverlay {
 	pub fn new<D: KeyValueDb>(db: &D) -> Result<UnfinalizedOverlay, Error<D>> {
-		let first_unfinalized = db.get(&to_key(LAST_UNFINALIZED, &()))
+		let last_finalized = db.get_meta(&to_key(LAST_FINALIZED, &()))
 			.map_err(|e| Error::Db(e))?;
-		let first_unfinalized: u64 = match first_unfinalized {
-			Some(buffer) => Slicable::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)?,
-			None => 0,
+		let last_finalized = match last_finalized {
+			Some(buffer) => Some(<(H256, u64)>::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)?),
+			None => None,
 		};
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
-		let mut block = first_unfinalized;
-		// read the journal
-		loop {
-			let mut index: u64 = 0;
-			let mut level = Vec::new();
-			loop {
-				let journal_key = to_journal_key(block, index);
-				match db.get(&journal_key).map_err(|e| Error::Db(e))? {
-					Some(record) => {
-						let record: JournalRecord = Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
-						let overlay = BlockOverlay {
-							hash: record.hash,
-							journal_key,
-							values: record.inserted.into_iter().collect(),
-							deleted: record.deleted,
-						};
-						level.push(overlay);
-						parents.insert(record.hash, record.parent_hash);
-						index += 1;
-					},
-					None => break,
-				}
-			}
-			if level.is_empty() {
-				break;
-			}
-			levels.push_back(level);
+		if let Some((_, mut block)) = last_finalized {
+			// read the journal
 			block += 1;
+			loop {
+				let mut index: u64 = 0;
+				let mut level = Vec::new();
+				loop {
+					let journal_key = to_journal_key(block, index);
+					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+						Some(record) => {
+							let record: JournalRecord = Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
+							let overlay = BlockOverlay {
+								hash: record.hash,
+								journal_key,
+								values: record.inserted.into_iter().collect(),
+								deleted: record.deleted,
+							};
+							level.push(overlay);
+							parents.insert(record.hash, record.parent_hash);
+							index += 1;
+						},
+						None => break,
+					}
+				}
+				if level.is_empty() {
+					break;
+				}
+				levels.push_back(level);
+				block += 1;
+			}
 		}
 		Ok(UnfinalizedOverlay {
-			front_block_number: first_unfinalized,
+			last_finalized: last_finalized,
 			levels,
 			parents,
 		})
 	}
 
-	pub fn insert(&mut self, hash: &H256, number: u64, parent_hash: &H256, changeset: Changeset) -> Changeset {
-		if self.levels.is_empty() {
-			self.front_block_number = number;
-		} else {
-			assert!(number >= self.front_block_number && number < (self.front_block_number + self.levels.len() as u64 + 1));
+	pub fn insert(&mut self, hash: &H256, number: u64, parent_hash: &H256, changeset: ChangeSet) -> CommitSet {
+		let mut commit = CommitSet::default();
+		if self.levels.is_empty() && self.last_finalized.is_none() {
+			//  assume that parent was finalized
+			let last_finalized = (*parent_hash, number - 1);
+			commit.meta.inserted.push((to_key(LAST_FINALIZED, &()), last_finalized.encode()));
+			self.last_finalized = Some(last_finalized);
+		} else if self.last_finalized.is_some() {
+			assert!(number >= self.front_block_number() && number < (self.front_block_number() + self.levels.len() as u64 + 1));
 			// check for valid parent if inserting on second level or higher
-			assert!(number == self.front_block_number || self.parents.contains_key(&parent_hash));
+			if number == self.front_block_number() {
+				assert!(self.last_finalized.as_ref().map_or(false, |&(h, n)| h == *parent_hash && n == number - 1));
+			} else {
+				assert!(self.parents.contains_key(&parent_hash));
+			}
 		}
-		let level = if self.levels.is_empty() || number == self.front_block_number + self.levels.len() as u64 {
+		let level = if self.levels.is_empty() || number == self.front_block_number() + self.levels.len() as u64 {
 			self.levels.push_back(Vec::new());
 			self.levels.back_mut().expect("can't be empty after insertion; qed")
 		} else {
-			self.levels.get_mut((number - self.front_block_number) as usize)
-				.expect("number is [self.front_block_number .. self.front_block_number + levels.len()) is asserted in precondition; qed")
+			let front_block_number = self.front_block_number();
+			self.levels.get_mut((number - front_block_number) as usize)
+				.expect("number is [front_block_number .. front_block_number + levels.len()) is asserted in precondition; qed")
 		};
 
 		let index = level.len() as u64;
@@ -146,11 +158,8 @@ impl UnfinalizedOverlay {
 			deleted: changeset.deleted,
 		};
 		let journal_record = journal_record.encode();
-		let journal_changeset = Changeset {
-			inserted: vec![(journal_key, journal_record)],
-			deleted: Default::default(),
-		};
-		journal_changeset
+		commit.meta.inserted.push((journal_key, journal_record));
+		commit
 	}
 
 	fn discard(
@@ -177,19 +186,23 @@ impl UnfinalizedOverlay {
 		}
 	}
 
-	pub fn finalize(&mut self, hash: &H256) -> Changeset {
+	fn front_block_number(&self) -> u64 {
+		self.last_finalized.as_ref().map(|&(_, n)| n + 1).unwrap_or(0)
+	}
+
+	pub fn finalize(&mut self, hash: &H256) -> CommitSet {
 		let level = self.levels.pop_front().expect("no blocks to finalize");
 		let index = level.iter().position(|overlay| overlay.hash == *hash)
 			.expect("attempting to finalize unknown block");
 
-		let mut changeset = Changeset::default();
+		let mut commit = CommitSet::default();
 		let mut discarded_journals = Vec::new();
 		for (i, overlay) in level.into_iter().enumerate() {
 			self.parents.remove(&overlay.hash);
 			if i == index {
 				// that's the one we need to finalize
-				changeset.inserted = overlay.values.into_iter().collect();
-				changeset.deleted = overlay.deleted;
+				commit.data.inserted = overlay.values.into_iter().collect();
+				commit.data.deleted = overlay.deleted;
 			} else {
 				// TODO: borrow checker won't allow us to split out mutable refernces
 				// required for recursive processing. A more efficient implementaion
@@ -201,9 +214,11 @@ impl UnfinalizedOverlay {
 			// cleanup journal entry
 			discarded_journals.push(overlay.journal_key);
 		}
-		changeset.deleted.append(&mut discarded_journals);
-		self.front_block_number += 1;
-		changeset
+		commit.meta.deleted.append(&mut discarded_journals);
+		let last_finalized = (*hash, self.front_block_number());
+		commit.meta.inserted.push((to_key(LAST_FINALIZED, &()), last_finalized.encode()));
+		self.last_finalized = Some(last_finalized);
+		commit
 	}
 
 	pub fn get(&self, key: &H256) -> Option<DBValue> {
@@ -220,28 +235,10 @@ impl UnfinalizedOverlay {
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
 	use super::UnfinalizedOverlay;
-	use {DBValue, Changeset, to_key};
+	use {ChangeSet, to_key};
 	use primitives::H256;
-
-	fn make_changeset(inserted: &[u64], deleted: &[u64]) -> Changeset {
-		Changeset {
-			inserted: inserted.iter().map(|v| (to_key(b"test", v), to_key(b"value", v).to_vec())).collect(),
-			deleted: deleted.iter().map(|v| to_key(b"test", v)).collect(),
-		}
-	}
-
-	fn make_db(inserted: &[u64]) -> HashMap<H256, DBValue> {
-		inserted.iter().map(|v| (to_key(b"test", v), to_key(b"value", v).to_vec())).collect()
-	}
-
-	fn apply_changeset(db: &mut HashMap<H256, DBValue>, changeset: &Changeset) {
-		db.extend(changeset.inserted.iter().cloned());
-		for k in changeset.deleted.iter() {
-			db.remove(k);
-		}
-	}
+	use test::{make_db, make_changeset};
 
 	fn contains(overlay: &UnfinalizedOverlay, key: u64) -> bool {
 		overlay.get(&to_key(b"test", &key)) == Some(to_key(b"value", &key).to_vec())
@@ -249,9 +246,9 @@ mod tests {
 
 	#[test]
 	fn created_from_empty_db() {
-		let db = HashMap::new();
+		let db = make_db(&[]);
 		let overlay = UnfinalizedOverlay::new(&db).unwrap();
-		assert_eq!(overlay.front_block_number, 0);
+		assert_eq!(overlay.last_finalized, None);
 		assert!(overlay.levels.is_empty());
 		assert!(overlay.parents.is_empty());
 	}
@@ -259,7 +256,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn finalize_empty_panics() {
-		let db = HashMap::new();
+		let db = make_db(&[]);
 		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
 		overlay.finalize(&H256::default());
 	}
@@ -267,12 +264,12 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn insert_ahead_panics() {
-		let db = HashMap::new();
+		let db = make_db(&[]);
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
-		overlay.insert(&h1, 2, &H256::default(), Changeset::default());
-		overlay.insert(&h2, 1, &h1, Changeset::default());
+		overlay.insert(&h1, 2, &H256::default(), ChangeSet::default());
+		overlay.insert(&h2, 1, &h1, ChangeSet::default());
 	}
 
 	#[test]
@@ -280,21 +277,21 @@ mod tests {
 	fn insert_behind_panics() {
 		let h1 = H256::random();
 		let h2 = H256::random();
-		let db = HashMap::new();
+		let db = make_db(&[]);
 		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
-		overlay.insert(&h1, 1, &H256::default(), Changeset::default());
-		overlay.insert(&h2, 3, &h1, Changeset::default());
+		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default());
+		overlay.insert(&h2, 3, &h1, ChangeSet::default());
 	}
 
 	#[test]
 	#[should_panic]
 	fn insert_unknown_parent_panics() {
-		let db = HashMap::new();
+		let db = make_db(&[]);
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
-		overlay.insert(&h1, 1, &H256::default(), Changeset::default());
-		overlay.insert(&h2, 2, &H256::default(), Changeset::default());
+		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default());
+		overlay.insert(&h2, 2, &H256::default(), ChangeSet::default());
 	}
 
 	#[test]
@@ -302,9 +299,9 @@ mod tests {
 	fn finalize_unknown_panics() {
 		let h1 = H256::random();
 		let h2 = H256::random();
-		let db = HashMap::new();
+		let db = make_db(&[]);
 		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
-		overlay.insert(&h1, 1, &H256::default(), Changeset::default());
+		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default());
 		overlay.finalize(&h2);
 	}
 
@@ -315,14 +312,34 @@ mod tests {
 		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
 		let changeset = make_changeset(&[3, 4], &[2]);
 		let insertion = overlay.insert(&h1, 1, &H256::default(), changeset.clone());
-		assert_eq!(insertion.inserted.len(), 1);
-		assert_eq!(insertion.deleted.len(), 0);
-		apply_changeset(&mut db, &insertion);
+		assert_eq!(insertion.data.inserted.len(), 0);
+		assert_eq!(insertion.data.deleted.len(), 0);
+		assert_eq!(insertion.meta.inserted.len(), 2);
+		assert_eq!(insertion.meta.deleted.len(), 0);
+		db.commit(&insertion);
 		let finalization = overlay.finalize(&h1);
-		assert_eq!(finalization.inserted.len(), changeset.inserted.len());
-		assert_eq!(finalization.deleted.len(), changeset.deleted.len() + 1);
-		apply_changeset(&mut db, &finalization);
-		assert_eq!(db, make_db(&[1, 3, 4]));
+		assert_eq!(finalization.data.inserted.len(), changeset.inserted.len());
+		assert_eq!(finalization.data.deleted.len(), changeset.deleted.len());
+		assert_eq!(finalization.meta.inserted.len(), 1);
+		assert_eq!(finalization.meta.deleted.len(), 1);
+		db.commit(&finalization);
+		assert!(db.data_eq(&make_db(&[1, 3, 4])));
+	}
+
+	#[test]
+	fn restore_from_journal() {
+		let h1 = H256::random();
+		let h2 = H256::random();
+		let mut db = make_db(&[1, 2]);
+		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		db.commit(&overlay.insert(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2])));
+		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])));
+		assert_eq!(db.meta.len(), 3);
+
+		let overlay2 = UnfinalizedOverlay::new(&db).unwrap();
+		assert_eq!(overlay.levels, overlay2.levels);
+		assert_eq!(overlay.parents, overlay2.parents);
+		assert_eq!(overlay.last_finalized, overlay2.last_finalized);
 	}
 
 	#[test]
@@ -333,22 +350,22 @@ mod tests {
 		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
 		let changeset1 = make_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
-		apply_changeset(&mut db, &overlay.insert(&h1, 1, &H256::default(), changeset1));
+		db.commit(&overlay.insert(&h1, 1, &H256::default(), changeset1));
 		assert!(contains(&overlay, 5));
-		apply_changeset(&mut db, &overlay.insert(&h2, 2, &h1, changeset2));
+		db.commit(&overlay.insert(&h2, 2, &h1, changeset2));
 		assert!(contains(&overlay, 7));
 		assert!(contains(&overlay, 5));
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 2);
-		apply_changeset(&mut db, &overlay.finalize(&h1));
+		db.commit(&overlay.finalize(&h1));
 		assert_eq!(overlay.levels.len(), 1);
 		assert_eq!(overlay.parents.len(), 1);
 		assert!(!contains(&overlay, 5));
 		assert!(contains(&overlay, 7));
-		apply_changeset(&mut db, &overlay.finalize(&h2));
+		db.commit(&overlay.finalize(&h2));
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
-		assert_eq!(db, make_db(&[1, 4, 6, 7, 8]));
+		assert!(db.data_eq(&make_db(&[1, 4, 6, 7, 8])));
 	}
 
 
@@ -381,21 +398,21 @@ mod tests {
 		let (h_2_1_1, c_2_1_1) = (H256::random(), make_changeset(&[211], &[]));
 
 		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
-		apply_changeset(&mut db, &overlay.insert(&h_1, 1, &H256::default(), c_1));
+		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1));
 
-		apply_changeset(&mut db, &overlay.insert(&h_1_1, 2, &h_1, c_1_1));
-		apply_changeset(&mut db, &overlay.insert(&h_1_2, 2, &h_1, c_1_2));
+		db.commit(&overlay.insert(&h_1_1, 2, &h_1, c_1_1));
+		db.commit(&overlay.insert(&h_1_2, 2, &h_1, c_1_2));
 
-		apply_changeset(&mut db, &overlay.insert(&h_2, 1, &H256::default(), c_2));
+		db.commit(&overlay.insert(&h_2, 1, &H256::default(), c_2));
 
-		apply_changeset(&mut db, &overlay.insert(&h_2_1, 2, &h_2, c_2_1));
-		apply_changeset(&mut db, &overlay.insert(&h_2_2, 2, &h_2, c_2_2));
+		db.commit(&overlay.insert(&h_2_1, 2, &h_2, c_2_1));
+		db.commit(&overlay.insert(&h_2_2, 2, &h_2, c_2_2));
 
-		apply_changeset(&mut db, &overlay.insert(&h_1_1_1, 3, &h_1_1, c_1_1_1));
-		apply_changeset(&mut db, &overlay.insert(&h_1_2_1, 3, &h_1_2, c_1_2_1));
-		apply_changeset(&mut db, &overlay.insert(&h_1_2_2, 3, &h_1_2, c_1_2_2));
-		apply_changeset(&mut db, &overlay.insert(&h_1_2_3, 3, &h_1_2, c_1_2_3));
-		apply_changeset(&mut db, &overlay.insert(&h_2_1_1, 3, &h_2_1, c_2_1_1));
+		db.commit(&overlay.insert(&h_1_1_1, 3, &h_1_1, c_1_1_1));
+		db.commit(&overlay.insert(&h_1_2_1, 3, &h_1_2, c_1_2_1));
+		db.commit(&overlay.insert(&h_1_2_2, 3, &h_1_2, c_1_2_2));
+		db.commit(&overlay.insert(&h_1_2_3, 3, &h_1_2, c_1_2_3));
+		db.commit(&overlay.insert(&h_2_1_1, 3, &h_2_1, c_2_1_1));
 
 		assert!(contains(&overlay, 2));
 		assert!(contains(&overlay, 11));
@@ -405,9 +422,16 @@ mod tests {
 		assert!(contains(&overlay, 211));
 		assert_eq!(overlay.levels.len(), 3);
 		assert_eq!(overlay.parents.len(), 11);
+		assert_eq!(overlay.last_finalized, Some((H256::default(), 0)));
+
+		// check if restoration from journal results in the same tree
+		let overlay2 = UnfinalizedOverlay::new(&db).unwrap();
+		assert_eq!(overlay.levels, overlay2.levels);
+		assert_eq!(overlay.parents, overlay2.parents);
+		assert_eq!(overlay.last_finalized, overlay2.last_finalized);
 
 		// finalize 1. 2 and all its children should be discarded
-		apply_changeset(&mut db, &overlay.finalize(&h_1));
+		db.commit(&overlay.finalize(&h_1));
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 6);
 		assert!(!contains(&overlay, 1));
@@ -418,7 +442,7 @@ mod tests {
 		assert!(contains(&overlay, 111));
 
 		// finalize 1_2. 1_1 and all its children should be discarded
-		apply_changeset(&mut db, &overlay.finalize(&h_1_2));
+		db.commit(&overlay.finalize(&h_1_2));
 		assert_eq!(overlay.levels.len(), 1);
 		assert_eq!(overlay.parents.len(), 3);
 		assert!(!contains(&overlay, 11));
@@ -428,9 +452,10 @@ mod tests {
 		assert!(contains(&overlay, 123));
 
 		// finalize 1_2_2
-		apply_changeset(&mut db, &overlay.finalize(&h_1_2_2));
+		db.commit(&overlay.finalize(&h_1_2_2));
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
-		assert_eq!(db, make_db(&[1, 12, 122]));
+		assert!(db.data_eq(&make_db(&[1, 12, 122])));
+		assert_eq!(overlay.last_finalized, Some((h_1_2_2, 3)));
 	}
 }
