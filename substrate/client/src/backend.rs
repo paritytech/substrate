@@ -16,7 +16,6 @@
 
 //! Polkadot Client data backend
 
-use std::sync::Arc; // TODO: get rid of me
 use state_machine::backend::Backend as StateBackend;
 use error;
 use primitives::block::{self, Id as BlockId};
@@ -65,15 +64,6 @@ pub trait Backend: Send + Sync {
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId) -> error::Result<Self::State>;
-
-	/// Returns authorities cache, if it is enabled on this backend.
-	fn authorities_cache(&self) -> Option<Arc<AuthoritiesCache>> { None }
-}
-
-/// Backend authorities cache.
-pub trait AuthoritiesCache: Send + Sync {
-	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
-	fn authorities_at(&self, block: BlockId) -> Option<Vec<AuthorityId>>;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

@@ -17,7 +17,7 @@
 //! Polkadot blockchain trait
 
 use primitives::block::{self, Id as BlockId};
-use primitives;
+use primitives::{self, AuthorityId};
 use error::Result;
 
 /// Blockchain database backend. Does not perform any validation.
@@ -34,6 +34,15 @@ pub trait Backend: Send + Sync {
 	fn status(&self, id: BlockId) -> Result<BlockStatus>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>>;
+
+	/// Returns data cache reference, if it is enabled on this backend.
+	fn cache(&self) -> Option<&Cache>;
+}
+
+/// Blockchain optional data cache.
+pub trait Cache: Send + Sync {
+	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
+	fn authorities_at(&self, block: BlockId) -> Option<Vec<AuthorityId>>;
 }
 
 /// Block import outcome

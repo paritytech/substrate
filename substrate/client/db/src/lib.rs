@@ -158,6 +158,7 @@ fn db_err(err: kvdb::Error) -> client::error::Error {
 pub struct BlockchainDb {
 	db: Arc<KeyValueDB>,
 	meta: RwLock<Meta>,
+	cache: DbCache,
 }
 
 impl BlockchainDb {
@@ -193,8 +194,10 @@ impl BlockchainDb {
 		let genesis_hash = db.get(columns::HEADER, &number_to_db_key(0)).map_err(db_err)?
 			.map(|b| blake2_256(&b)).unwrap_or_default().into();
 
+		let cache = DbCache::new(db.clone())?;
 		Ok(BlockchainDb {
 			db,
+			cache,
 			meta: RwLock::new(Meta {
 				best_hash,
 				best_number,
@@ -279,6 +282,10 @@ impl client::blockchain::Backend for BlockchainDb {
 			x.map(|raw| blake2_256(&raw[..])).map(Into::into)
 		)
 	}
+
+	fn cache(&self) -> Option<&client::blockchain::Cache> {
+		Some(&self.cache)
+	}
 }
 
 /// Database transaction
@@ -332,7 +339,6 @@ impl client::backend::BlockImportOperation for BlockImportOperation {
 pub struct Backend {
 	db: Arc<KeyValueDB>,
 	blockchain: BlockchainDb,
-	authorities_cache: Arc<DbAuthoritiesCache>,
 	archive: bool,
 }
 
@@ -348,11 +354,6 @@ impl Backend {
 		Backend::from_kvdb(db as Arc<_>, true)
 	}
 
-	/// Get shared authorities cache reference.
-	pub fn authorities_cache(&self) -> Arc<client::backend::AuthoritiesCache> {
-		self.authorities_cache.clone()
-	}
-
 	#[cfg(test)]
 	fn new_test() -> Backend {
 		let db = Arc::new(::kvdb_memorydb::create(columns::NUM_COLUMNS));
@@ -362,12 +363,10 @@ impl Backend {
 
 	fn from_kvdb(db: Arc<KeyValueDB>, archive: bool) -> Result<Backend, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
-		let authorities_cache = Arc::new(DbAuthoritiesCache::new(db.clone())?);
 
 		Ok(Backend {
 			db,
 			blockchain,
-			authorities_cache,
 			archive
 		})
 	}
@@ -407,7 +406,7 @@ impl client::backend::Backend for Backend {
 				transaction.put(columns::META, meta::BEST_BLOCK, &key);
 
 				if let Some(previous_number) = number.checked_sub(1) {
-					self.authorities_cache.commit_best_authorities(&mut transaction, previous_number, operation.pending_authorities)
+					self.blockchain.cache.commit_best_authorities(&mut transaction, previous_number, operation.pending_authorities)
 				} else {
 					None
 				}
@@ -426,7 +425,7 @@ impl client::backend::Backend for Backend {
 			self.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
 			if let Some(updated_best_authorities) = updated_best_authorities {
-				self.authorities_cache.update_best_authorities(updated_best_authorities);
+				self.blockchain.cache.update_best_authorities(updated_best_authorities);
 			}
 		}
 		Ok(())
@@ -454,14 +453,14 @@ impl client::backend::Backend for Backend {
 
 impl client::backend::LocalBackend for Backend {}
 
-/// Database-backed authorities cache.
-struct DbAuthoritiesCache {
+/// Database-backed blockchain cache.
+struct DbCache {
 	db: Arc<KeyValueDB>,
-	/// None means that cache has no entries at all
+	/// Best authorities at the moent. None means that cache has no entries at all.
 	best_authorities: RwLock<Option<BestAuthorities>>,
 }
 
-impl DbAuthoritiesCache {
+impl DbCache {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
 		let best_authorities = RwLock::new(db.get(columns::META, meta::BEST_AUTHORITIES)
 			.map_err(db_err)
@@ -477,7 +476,7 @@ impl DbAuthoritiesCache {
 				None => Ok(None),
 			})?);
 
-		Ok(DbAuthoritiesCache {
+		Ok(DbCache {
 			db,
 			best_authorities,
 		})
@@ -558,7 +557,7 @@ impl DbAuthoritiesCache {
 	}
 }
 
-impl client::backend::AuthoritiesCache for DbAuthoritiesCache {
+impl client::blockchain::Cache for DbCache {
 	fn authorities_at(&self, at: BlockId) -> Option<Vec<AuthorityId>> {
 		let authorities_at = read_id(&*self.db, at).and_then(|at| match at {
 			Some(at) => self.authorities_at_key(at),
@@ -638,8 +637,7 @@ mod tests {
 	use super::*;
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;
-	use client::backend::AuthoritiesCache;
-	use client::blockchain::{Backend as BlockchainBackend};
+	use client::blockchain::{Backend as BlockchainBackend, Cache as BlockchainCache};
 
 	#[test]
 	fn block_hash_inserted_correctly() {
@@ -906,7 +904,7 @@ mod tests {
 		];
 
 		// before any block, there are no entries in cache
-		assert!(db.authorities_cache.best_authorities().is_none());
+		assert!(db.blockchain.cache.best_authorities().is_none());
 		assert_eq!(db.db.iter(columns::AUTHORITIES).count(), 0);
 
 		// insert blocks and check that best_authorities() returns correct result
@@ -914,13 +912,13 @@ mod tests {
 		for number in 0..authorities_at.len() {
 			let authorities_at_number = authorities_at[number].1.clone().and_then(|e| e.authorities);
 			prev_hash = insert_block(&db, &prev_hash, number as u64, authorities_at_number);
-			assert_eq!(db.authorities_cache.best_authorities(), authorities_at[number].1);
+			assert_eq!(db.blockchain.cache.best_authorities(), authorities_at[number].1);
 			assert_eq!(db.db.iter(columns::AUTHORITIES).count(), authorities_at[number].0);
 		}
 
 		// check that authorities_at() returns correct results for all retrospective blocks
 		for number in 1..authorities_at.len() + 1 {
-			assert_eq!(db.authorities_cache.authorities_at(BlockId::Number(number as u64)),
+			assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(number as u64)),
 				authorities_at.get(number + 1)
 					.or_else(|| authorities_at.last())
 					.unwrap().1.clone().and_then(|e| e.authorities));

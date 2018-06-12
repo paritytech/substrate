@@ -216,7 +216,7 @@ impl<B, E> Client<B, E> where
 
 	/// Get the set of authorities at a given block.
 	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
-		let authorities_from_cache = self.backend.authorities_cache()
+		let authorities_from_cache = self.backend.blockchain().cache()
 			.and_then(|authorities_cache| authorities_cache.authorities_at(*id));
 		if let Some(authorities) = authorities_from_cache {
 			return Ok(authorities);

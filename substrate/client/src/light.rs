@@ -26,8 +26,8 @@ use primitives::{self, AuthorityId};
 use primitives::block::{self, Id as BlockId, HeaderHash};
 use state_machine::{self, CodeExecutor, Backend as StateBackend,
 	TrieBackend as StateTrieBackend, TryIntoTrieBackend as TryIntoStateTrieBackend};
-use blockchain::{self, BlockStatus, Backend as BlockchainBackend};
-use backend::{self, AuthoritiesCache};
+use blockchain::{self, BlockStatus, Backend as BlockchainBackend, Cache as BlockchainCache};
+use backend;
 use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
 use client::{Client, GenesisBuilder};
 use error;
@@ -81,7 +81,6 @@ pub trait FetchChecker: Send + Sync {
 /// Light client backend.
 pub struct Backend<B, F> {
 	blockchain: Arc<Blockchain<B, F>>,
-	authorities_cache: Arc<AuthoritiesCache>,
 }
 
 /// Light client blockchain.
@@ -143,10 +142,6 @@ impl<B, F> backend::Backend for Backend<B, F> where B: backend::Backend, F: Fetc
 			fetcher: self.blockchain.fetcher.lock().clone(),
 		})
 	}
-
-	fn authorities_cache(&self) -> Option<Arc<AuthoritiesCache>> {
-		Some(self.authorities_cache.clone())
-	}
 }
 
 impl<B, F> backend::RemoteBackend for Backend<B, F> where B: backend::Backend, F: Fetcher {}
@@ -202,6 +197,10 @@ impl<B, F> blockchain::Backend for Blockchain<B, F> where B: backend::Backend, F
 
 	fn hash(&self, number: block::Number) -> error::Result<Option<block::HeaderHash>> {
 		self.storage.blockchain().hash(number)
+	}
+
+	fn cache(&self) -> Option<&BlockchainCache> {
+		self.storage.blockchain().cache()
 	}
 }
 
@@ -276,9 +275,9 @@ pub fn new_light_blockchain<B: backend::Backend, F>(storage: B) -> Arc<Blockchai
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B: backend::Backend, F>(blockchain: Arc<Blockchain<B, F>>, fetcher: Arc<F>, authorities_cache: Arc<AuthoritiesCache>) -> Arc<Backend<B, F>> {
+pub fn new_light_backend<B: backend::Backend, F>(blockchain: Arc<Blockchain<B, F>>, fetcher: Arc<F>) -> Arc<Backend<B, F>> {
 	*blockchain.fetcher.lock() = Arc::downgrade(&fetcher);
-	Arc::new(Backend { blockchain, authorities_cache })
+	Arc::new(Backend { blockchain })
 }
 
 /// Create an instance of light client.
