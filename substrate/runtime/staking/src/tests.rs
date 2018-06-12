@@ -43,10 +43,14 @@ fn default_indexing_on_new_accounts_should_work() {
 #[test]
 fn dust_account_removal_should_work() {
 	with_externalities(&mut new_test_ext(256 * 10, 1, 2, 0, true), || {
+		System::inc_account_nonce(&2);
+		assert_eq!(System::account_nonce(&2), 1);
 		assert_eq!(Staking::voting_balance(&2), 256 * 20);
+
 		assert_ok!(Staking::transfer(&2, 5.into(), 256 * 10 + 1));	// index 1 (account 2) becomes zombie
 		assert_eq!(Staking::voting_balance(&2), 0);
 		assert_eq!(Staking::voting_balance(&5), 256 * 10 + 1);
+		assert_eq!(System::account_nonce(&2), 0);
 	});
 }
 
@@ -69,6 +73,7 @@ fn reclaim_indexing_on_new_accounts_should_work() {
 #[test]
 fn reserved_balance_should_prevent_reclaim_count() {
 	with_externalities(&mut new_test_ext(256 * 1, 1, 2, 0, true), || {
+		System::inc_account_nonce(&2);
 		assert_eq!(Staking::lookup_index(1), Some(2));
 		assert_eq!(Staking::lookup_index(4), None);
 		assert_eq!(Staking::voting_balance(&2), 256 * 20);
@@ -76,13 +81,16 @@ fn reserved_balance_should_prevent_reclaim_count() {
 		assert_ok!(Staking::reserve(&2, 256 * 19 + 1));					// account 2 becomes mostly reserved
 		assert_eq!(Staking::free_balance(&2), 0);						// "free" account deleted."
 		assert_eq!(Staking::voting_balance(&2), 256 * 19 + 1);			// reserve still exists.
+		assert_eq!(System::account_nonce(&2), 1);
 
 		assert_ok!(Staking::transfer(&4, 5.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 for account 5.
 		assert_eq!(Staking::voting_balance(&5), 256 * 1 + 0x69);
 		assert_eq!(Staking::lookup_index(1), Some(2));					// but fails.
+		assert_eq!(System::account_nonce(&2), 1);
 
 		assert_eq!(Staking::slash(&2, 256 * 18 + 2), None);				// account 2 gets slashed
 		assert_eq!(Staking::voting_balance(&2), 0);						// "free" account deleted."
+		assert_eq!(System::account_nonce(&2), 0);
 
 		assert_ok!(Staking::transfer(&4, 6.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 again for account 6.
 		assert_eq!(Staking::voting_balance(&6), 256 * 1 + 0x69);
