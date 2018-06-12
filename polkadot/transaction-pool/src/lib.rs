@@ -45,7 +45,7 @@ use codec::Slicable;
 use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
 use extrinsic_pool::api::ExtrinsicPool;
 use polkadot_api::PolkadotApi;
-use primitives::{AccountId, AccountIndex, Hash, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
+use primitives::{AccountId, AccountIndex, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use runtime::{Address, RawAddress, UncheckedExtrinsic};
 use substrate_runtime_primitives::traits::{Bounded, Checkable, Hashing, BlakeTwo256};
 
@@ -135,6 +135,11 @@ impl VerifiedTransaction {
 		self.inner.lock().as_ref().map(|i| i.signed.clone()).ok_or(ErrorKind::NotReady.into())
 	}
 
+	/// Get the account ID of the sender of this transaction.
+	pub fn index(&self) -> Index {
+		self.original.extrinsic.index
+	}
+
 	/// Get encoded size of the transaction.
 	pub fn encoded_size(&self) -> usize {
 		self.encoded_size
@@ -167,7 +172,7 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 	type Event = ();
 
 	fn compare(&self, old: &VerifiedTransaction, other: &VerifiedTransaction) -> Ordering {
-		old.original.extrinsic.index.cmp(&other.original.extrinsic.index)
+		old.index().cmp(&other.index())
 	}
 
 	fn choose(&self, _old: &VerifiedTransaction, _new: &VerifiedTransaction) -> Choice {
@@ -223,8 +228,7 @@ impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 	}
 }
 
-impl<'a, T: 'a + PolkadotApi + Send + Sync> txpool::Ready<VerifiedTransaction> for Ready<'a, T> where
-	<T as PolkadotApi>::CheckedBlockId: Send + Sync,
+impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T>
 {
 	fn is_ready(&mut self, xt: &VerifiedTransaction) -> Readiness {
 		if !xt.is_really_verified() {
