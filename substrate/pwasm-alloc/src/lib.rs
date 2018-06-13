@@ -2,7 +2,6 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 #![no_std]
 #![crate_type = "rlib"]
-#![cfg_attr(feature = "nightly", feature(global_allocator))]
 #![cfg_attr(feature = "nightly", feature(alloc))]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 
@@ -17,7 +16,6 @@ static ALLOCATOR: WasmAllocator = WasmAllocator;
 
 #[cfg(feature = "nightly")]
 mod __impl {
-	extern crate alloc;
 	extern crate pwasm_libc;
 
 	use core::alloc::{GlobalAlloc, Layout};
