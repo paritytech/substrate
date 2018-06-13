@@ -470,7 +470,9 @@ impl DbCache {
 					Self::read_authorities_entry(&*db, valid_from)
 						.map(|entry| Some(BestAuthorities {
 							valid_from: valid_from,
-							authorities: entry.expect("TODO").authorities,
+							authorities: entry
+								.expect("BEST_AUTHORITIES points to the block; authorities entry at block exists when referenced; qed")
+								.authorities,
 						}))
 				},
 				None => Ok(None),
@@ -543,16 +545,18 @@ impl DbCache {
 		let mut authorities_entry = Self::read_authorities_entry(&*self.db, best_authorities_valid_from)?
 			.expect("self.best_authorities().is_some() if there's entry for valid_from; qed");
 		loop {
-			let prev_authorities_entry = match authorities_entry.prev_valid_from {
-				Some(prev_valid_from) => Some(Self::read_authorities_entry(&*self.db, prev_valid_from)?.expect("TODO")),
-				None => None,
+			let prev_valid_from = match authorities_entry.prev_valid_from {
+				Some(prev_valid_from) => prev_valid_from,
+				None => return Ok(None),
 			};
 
-			if prev_authorities_entry.is_none() || at >= authorities_entry.prev_valid_from.expect("TODO") {
-				return Ok(prev_authorities_entry.and_then(|e| e.authorities));
+			let prev_authorities_entry = Self::read_authorities_entry(&*self.db, prev_valid_from)?
+				.expect("entry referenced from next blocks; entry exists when referenced; qed");
+			if at >= prev_valid_from {
+				return Ok(prev_authorities_entry.authorities);
 			}
 
-			authorities_entry = prev_authorities_entry.expect("TODO");
+			authorities_entry = prev_authorities_entry;
 		}
 	}
 }
