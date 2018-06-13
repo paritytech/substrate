@@ -15,27 +15,26 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::{HashMap, VecDeque};
-use super::{Error, DBValue, ChangeSet, CommitSet, KeyValueDb, to_key};
+use super::{Error, DBValue, ChangeSet, CommitSet, KeyValueDb, Hash, to_meta_key};
 use codec::{self, Slicable};
-use primitives::H256;
 
 const UNFINALIZED_JOURNAL: &[u8] = b"unfinalized_journal";
 const LAST_FINALIZED: &[u8] = b"last_finalized";
 
-pub struct UnfinalizedOverlay {
-	last_finalized: Option<(H256, u64)>,
-	levels: VecDeque<Vec<BlockOverlay>>,
-	parents: HashMap<H256, H256>,
+pub struct UnfinalizedOverlay<BlockHash: Hash, Key: Hash> {
+	last_finalized: Option<(BlockHash, u64)>,
+	levels: VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
+	parents: HashMap<BlockHash, BlockHash>,
 }
 
-struct JournalRecord {
-	hash: H256,
-	parent_hash: H256,
-	inserted: Vec<(H256, DBValue)>,
-	deleted: Vec<H256>,
+struct JournalRecord<BlockHash: Hash, Key: Hash> {
+	hash: BlockHash,
+	parent_hash: BlockHash,
+	inserted: Vec<(Key, DBValue)>,
+	deleted: Vec<Key>,
 }
 
-impl Slicable for JournalRecord {
+impl<BlockHash: Hash, Key: Hash> Slicable for JournalRecord<BlockHash, Key> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::with_capacity(4096);
 		self.hash.using_encoded(|s| v.extend(s));
@@ -55,24 +54,24 @@ impl Slicable for JournalRecord {
 	}
 }
 
-fn to_journal_key(block: u64, index: u64) -> H256 {
-	to_key(UNFINALIZED_JOURNAL, &(block, index))
+fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
+	to_meta_key(UNFINALIZED_JOURNAL, &(block, index))
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
-struct BlockOverlay {
-	hash: H256,
-	journal_key: H256,
-	values: HashMap<H256, DBValue>,
-	deleted: Vec<H256>,
+struct BlockOverlay<BlockHash: Hash, Key: Hash> {
+	hash: BlockHash,
+	journal_key: Vec<u8>,
+	values: HashMap<Key, DBValue>,
+	deleted: Vec<Key>,
 }
 
-impl UnfinalizedOverlay {
-	pub fn new<D: KeyValueDb>(db: &D) -> Result<UnfinalizedOverlay, Error<D>> {
-		let last_finalized = db.get_meta(&to_key(LAST_FINALIZED, &()))
+impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
+	pub fn new<D: KeyValueDb<Hash=Key>>(db: &D) -> Result<UnfinalizedOverlay<BlockHash, Key>, Error<D>> {
+		let last_finalized = db.get_meta(&to_meta_key(LAST_FINALIZED, &()))
 			.map_err(|e| Error::Db(e))?;
 		let last_finalized = match last_finalized {
-			Some(buffer) => Some(<(H256, u64)>::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)?),
+			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)?),
 			None => None,
 		};
 		let mut levels = VecDeque::new();
@@ -87,9 +86,9 @@ impl UnfinalizedOverlay {
 					let journal_key = to_journal_key(block, index);
 					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 						Some(record) => {
-							let record: JournalRecord = Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
+							let record: JournalRecord<BlockHash, Key> = Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
 							let overlay = BlockOverlay {
-								hash: record.hash,
+								hash: record.hash.clone(),
 								journal_key,
 								values: record.inserted.into_iter().collect(),
 								deleted: record.deleted,
@@ -115,18 +114,18 @@ impl UnfinalizedOverlay {
 		})
 	}
 
-	pub fn insert(&mut self, hash: &H256, number: u64, parent_hash: &H256, changeset: ChangeSet) -> CommitSet {
+	pub fn insert(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
 		let mut commit = CommitSet::default();
 		if self.levels.is_empty() && self.last_finalized.is_none() {
 			//  assume that parent was finalized
-			let last_finalized = (*parent_hash, number - 1);
-			commit.meta.inserted.push((to_key(LAST_FINALIZED, &()), last_finalized.encode()));
+			let last_finalized = (parent_hash.clone(), number - 1);
+			commit.meta.inserted.push((to_meta_key(LAST_FINALIZED, &()), last_finalized.encode()));
 			self.last_finalized = Some(last_finalized);
 		} else if self.last_finalized.is_some() {
 			assert!(number >= self.front_block_number() && number < (self.front_block_number() + self.levels.len() as u64 + 1));
 			// check for valid parent if inserting on second level or higher
 			if number == self.front_block_number() {
-				assert!(self.last_finalized.as_ref().map_or(false, |&(h, n)| h == *parent_hash && n == number - 1));
+				assert!(self.last_finalized.as_ref().map_or(false, |&(ref h, n)| h == parent_hash && n == number - 1));
 			} else {
 				assert!(self.parents.contains_key(&parent_hash));
 			}
@@ -144,16 +143,16 @@ impl UnfinalizedOverlay {
 		let journal_key = to_journal_key(number, index);
 
 		let overlay = BlockOverlay {
-			hash: *hash,
-			journal_key,
+			hash: hash.clone(),
+			journal_key: journal_key.clone(),
 			values: changeset.inserted.iter().cloned().collect(),
 			deleted: changeset.deleted.clone(),
 		};
 		level.push(overlay);
-		self.parents.insert(*hash, *parent_hash);
+		self.parents.insert(hash.clone(), parent_hash.clone());
 		let journal_record = JournalRecord {
-			hash: *hash,
-			parent_hash: *parent_hash,
+			hash: hash.clone(),
+			parent_hash: parent_hash.clone(),
 			inserted: changeset.inserted,
 			deleted: changeset.deleted,
 		};
@@ -163,19 +162,19 @@ impl UnfinalizedOverlay {
 	}
 
 	fn discard(
-		levels: &mut [Vec<BlockOverlay>],
-		parents: &mut HashMap<H256, H256>,
-		discarded_journals: &mut Vec<H256>,
+		levels: &mut [Vec<BlockOverlay<BlockHash, Key>>],
+		parents: &mut HashMap<BlockHash, BlockHash>,
+		discarded_journals: &mut Vec<Vec<u8>>,
 		number: u64,
-		hash: &H256,
+		hash: &BlockHash,
 	) {
 		if let Some((level, sublevels)) = levels.split_first_mut() {
 			level.retain(|ref overlay| {
-				let parent = *parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed");
+				let parent = parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").clone();
 				if parent == *hash {
 					println!("delete");
 					parents.remove(&overlay.hash);
-					discarded_journals.push(overlay.journal_key);
+					discarded_journals.push(overlay.journal_key.clone());
 					Self::discard(sublevels, parents, discarded_journals, number + 1, &overlay.hash);
 					false
 				} else {
@@ -190,7 +189,7 @@ impl UnfinalizedOverlay {
 		self.last_finalized.as_ref().map(|&(_, n)| n + 1).unwrap_or(0)
 	}
 
-	pub fn finalize(&mut self, hash: &H256) -> CommitSet {
+	pub fn finalize(&mut self, hash: &BlockHash) -> CommitSet<Key> {
 		let level = self.levels.pop_front().expect("no blocks to finalize");
 		let index = level.iter().position(|overlay| overlay.hash == *hash)
 			.expect("attempting to finalize unknown block");
@@ -215,13 +214,13 @@ impl UnfinalizedOverlay {
 			discarded_journals.push(overlay.journal_key);
 		}
 		commit.meta.deleted.append(&mut discarded_journals);
-		let last_finalized = (*hash, self.front_block_number());
-		commit.meta.inserted.push((to_key(LAST_FINALIZED, &()), last_finalized.encode()));
+		let last_finalized = (hash.clone(), self.front_block_number());
+		commit.meta.inserted.push((to_meta_key(LAST_FINALIZED, &()), last_finalized.encode()));
 		self.last_finalized = Some(last_finalized);
 		commit
 	}
 
-	pub fn get(&self, key: &H256) -> Option<DBValue> {
+	pub fn get(&self, key: &Key) -> Option<DBValue> {
 		for level in self.levels.iter() {
 			for overlay in level.iter() {
 				if let Some(value) = overlay.values.get(&key) {
@@ -236,18 +235,18 @@ impl UnfinalizedOverlay {
 #[cfg(test)]
 mod tests {
 	use super::UnfinalizedOverlay;
-	use {ChangeSet, to_key};
+	use {ChangeSet};
 	use primitives::H256;
 	use test::{make_db, make_changeset};
 
-	fn contains(overlay: &UnfinalizedOverlay, key: u64) -> bool {
-		overlay.get(&to_key(b"test", &key)) == Some(to_key(b"value", &key).to_vec())
+	fn contains(overlay: &UnfinalizedOverlay<H256, H256>, key: u64) -> bool {
+		overlay.get(&H256::from(key)) == Some(H256::from(key).to_vec())
 	}
 
 	#[test]
 	fn created_from_empty_db() {
 		let db = make_db(&[]);
-		let overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let overlay: UnfinalizedOverlay<H256, H256>  = UnfinalizedOverlay::new(&db).unwrap();
 		assert_eq!(overlay.last_finalized, None);
 		assert!(overlay.levels.is_empty());
 		assert!(overlay.parents.is_empty());

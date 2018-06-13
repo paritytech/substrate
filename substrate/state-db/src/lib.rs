@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+extern crate parking_lot;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 
@@ -21,7 +22,7 @@ mod unfinalized;
 mod pruning;
 #[cfg(test)] mod test;
 
-use primitives::{H256, blake2_256};
+use parking_lot::RwLock;
 use codec::Slicable;
 use std::collections::HashSet;
 use unfinalized::UnfinalizedOverlay;
@@ -29,11 +30,15 @@ use pruning::RefWindow;
 
 pub type DBValue = Vec<u8>;
 
+pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + Slicable + std::hash::Hash + 'static {}
+impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + Slicable + std::hash::Hash + 'static> Hash for T {}
+
 pub trait KeyValueDb {
+	type Hash: Hash;
 	type Error;
 
-	fn get(&self, key: &H256) -> Result<Option<DBValue>, Self::Error>;
-	fn get_meta(&self, key: &H256) -> Result<Option<DBValue>, Self::Error>;
+	fn get(&self, key: &Self::Hash) -> Result<Option<DBValue>, Self::Error>;
+	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
 }
 
 #[derive(Debug)]
@@ -43,16 +48,16 @@ pub enum Error<D: KeyValueDb> {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct ChangeSet {
-	inserted: Vec<(H256, DBValue)>,
-	deleted: Vec<H256>,
+pub struct ChangeSet<H: Hash> {
+	inserted: Vec<(H, DBValue)>,
+	deleted: Vec<H>,
 }
 
 
 #[derive(Default, Debug, Clone)]
-pub struct CommitSet {
-	data: ChangeSet,
-	meta: ChangeSet,
+pub struct CommitSet<H: Hash> {
+	data: ChangeSet<H>,
+	meta: ChangeSet<Vec<u8>>,
 }
 
 /// Pruning contraints. If none are specified pruning is
@@ -68,27 +73,27 @@ pub enum Pruning {
 	ArchiveCanonical,
 }
 
-fn to_key<S: Slicable>(prefix: &[u8], data: &S) -> H256 {
+fn to_meta_key<S: Slicable>(suffix: &[u8], data: &S) -> Vec<u8> {
 	let mut buffer = data.encode();
-	buffer.extend(prefix);
-	blake2_256(&buffer).into()
+	buffer.extend(suffix);
+	buffer
 }
 
-pub struct StateDb {
+pub struct StateDbSync<BlockHash: Hash, Key: Hash> {
 	mode: Pruning,
-	unfinalized: UnfinalizedOverlay,
-	pruning: Option<RefWindow>,
-	pinned: HashSet<H256>,
+	unfinalized: UnfinalizedOverlay<BlockHash, Key>,
+	pruning: Option<RefWindow<BlockHash, Key>>,
+	pinned: HashSet<BlockHash>,
 }
 
-impl StateDb {
-	pub fn new<D: KeyValueDb>(mode: Pruning, db: &D) -> Result<StateDb, Error<D>> {
-		let unfinalized = UnfinalizedOverlay::new(db)?;
-		let pruning = match mode {
+impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
+	pub fn new<D: KeyValueDb<Hash=Key>>(mode: Pruning, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D>> {
+		let unfinalized: UnfinalizedOverlay<BlockHash, Key> = UnfinalizedOverlay::new(db)?;
+		let pruning: Option<RefWindow<BlockHash, Key>> = match mode {
 			Pruning::Constrained(_) => Some(RefWindow::new(db)?),
 			Pruning::ArchiveAll | Pruning::ArchiveCanonical => None,
 		};
-		Ok(StateDb {
+		Ok(StateDbSync {
 			mode,
 			unfinalized,
 			pruning: pruning,
@@ -96,7 +101,7 @@ impl StateDb {
 		})
 	}
 
-	pub fn insert_block(&mut self, hash: &H256, number: u64, parent_hash: &H256, mut changeset: ChangeSet) -> CommitSet {
+	pub fn insert_block(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> CommitSet<Key> {
 		match self.mode {
 			Pruning::ArchiveAll => {
 				changeset.deleted.clear();
@@ -112,7 +117,7 @@ impl StateDb {
 		}
 	}
 
-	pub fn finalize_block(&mut self, hash: &H256) -> CommitSet {
+	pub fn finalize_block(&mut self, hash: &BlockHash) -> CommitSet<Key> {
 		let mut commit = match self.mode {
 			Pruning::ArchiveAll => {
 				CommitSet::default()
@@ -133,7 +138,7 @@ impl StateDb {
 		commit
 	}
 
-	fn prune(&mut self, commit: &mut CommitSet) {
+	fn prune(&mut self, commit: &mut CommitSet<Key>) {
 		if let (&mut Some(ref mut pruning), &Pruning::Constrained(ref constraints)) = (&mut self.pruning, &self.mode) {
 			loop {
 				if pruning.window_size() <= constraints.max_blocks.unwrap_or(0) as u64 {
@@ -154,19 +159,51 @@ impl StateDb {
 		}
 	}
 
-	pub fn pin(&mut self, hash: &H256) {
-		self.pinned.insert(*hash);
+	pub fn pin(&mut self, hash: &BlockHash) {
+		self.pinned.insert(hash.clone());
 	}
 
-	pub fn unpin(&mut self, hash: &H256) {
+	pub fn unpin(&mut self, hash: &BlockHash) {
 		self.pinned.remove(hash);
 	}
 
-	pub fn get<D: KeyValueDb>(&self, key: &H256, db: &D) -> Result<Option<DBValue>, Error<D>> {
+	pub fn get<D: KeyValueDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D>> {
 		if let Some(value) = self.unfinalized.get(key) {
 			return Ok(Some(value));
 		}
 		db.get(key).map_err(|e| Error::Db(e))
+	}
+}
+
+pub struct StateDb<BlockHash: Hash, Key: Hash> {
+	db: RwLock<StateDbSync<BlockHash, Key>>,
+}
+
+impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
+	pub fn new<D: KeyValueDb<Hash=Key>>(mode: Pruning, db: &D) -> Result<StateDb<BlockHash, Key>, Error<D>> {
+		Ok(StateDb {
+			db: RwLock::new(StateDbSync::new(mode, db)?)
+		})
+	}
+
+	pub fn insert_block(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
+		self.db.write().insert_block(hash, number, parent_hash, changeset)
+	}
+
+	pub fn finalize_block(&self, hash: &BlockHash) -> CommitSet<Key> {
+		self.db.write().finalize_block(hash)
+	}
+
+	pub fn pin(&self, hash: &BlockHash) {
+		self.db.write().pin(hash)
+	}
+
+	pub fn unpin(&self, hash: &BlockHash) {
+		self.db.write().unpin(hash)
+	}
+
+	pub fn get<D: KeyValueDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D>> {
+		self.db.read().get(key, db)
 	}
 }
 
@@ -176,9 +213,9 @@ mod tests {
 	use {StateDb, Pruning, Constraints};
 	use test::{make_db, make_changeset, TestDb};
 
-	fn make_test_db(settings: Pruning) -> (TestDb, StateDb) {
+	fn make_test_db(settings: Pruning) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93]);
-		let mut state_db = StateDb::new(settings, &db).unwrap();
+		let state_db = StateDb::new(settings, &db).unwrap();
 
 		db.commit(&state_db.insert_block(&H256::from(1), 1, &H256::from(0), make_changeset(&[1], &[91])));
 		db.commit(&state_db.insert_block(&H256::from(21), 2, &H256::from(1), make_changeset(&[21], &[921, 1])));

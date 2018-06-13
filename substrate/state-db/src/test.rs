@@ -18,27 +18,29 @@
 
 use std::collections::HashMap;
 use primitives::H256;
-use {DBValue, ChangeSet, CommitSet, to_key, KeyValueDb};
+use {DBValue, ChangeSet, CommitSet, KeyValueDb};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
 	pub data: HashMap<H256, DBValue>,
-	pub meta: HashMap<H256, DBValue>,
+	pub meta: HashMap<Vec<u8>, DBValue>,
 }
 
 impl KeyValueDb for TestDb {
 	type Error = ();
+	type Hash = H256;
+
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
 		Ok(self.data.get(key).cloned())
 	}
 
-	fn get_meta(&self, key: &H256) -> Result<Option<DBValue>, ()> {
+	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, ()> {
 		Ok(self.meta.get(key).cloned())
 	}
 }
 
 impl TestDb {
-	pub fn commit(&mut self, commit: &CommitSet) {
+	pub fn commit(&mut self, commit: &CommitSet<H256>) {
 		self.data.extend(commit.data.inserted.iter().cloned());
 		for k in commit.data.deleted.iter() {
 			self.data.remove(k);
@@ -54,14 +56,14 @@ impl TestDb {
 	}
 }
 
-pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet {
+pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	ChangeSet {
-		inserted: inserted.iter().map(|v| (to_key(b"test", v), to_key(b"value", v).to_vec())).collect(),
-		deleted: deleted.iter().map(|v| to_key(b"test", v)).collect(),
+		inserted: inserted.iter().map(|v| (H256::from(*v), H256::from(*v).to_vec())).collect(),
+		deleted: deleted.iter().map(|v| H256::from(*v)).collect(),
 	}
 }
 
-pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet {
+pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 	CommitSet {
 		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
@@ -70,7 +72,7 @@ pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet {
 
 pub fn make_db(inserted: &[u64]) -> TestDb {
 	TestDb {
-		data: inserted.iter().map(|v| (to_key(b"test", v), to_key(b"value", v).to_vec())).collect(),
+		data: inserted.iter().map(|v| (H256::from(*v), H256::from(*v).to_vec())).collect(),
 		meta: Default::default(),
 	}
 }
