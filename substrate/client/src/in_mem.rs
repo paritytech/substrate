@@ -17,6 +17,7 @@
 //! In memory client backend
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use parking_lot::RwLock;
 use error;
 use backend;
@@ -49,13 +50,24 @@ struct BlockchainStorage {
 
 /// In-memory blockchain. Supports concurrent reads.
 pub struct Blockchain {
-	storage: RwLock<BlockchainStorage>,
+	storage: Arc<RwLock<BlockchainStorage>>,
+	cache: Cache,
+}
+
+struct Cache {
+	storage: Arc<RwLock<BlockchainStorage>>,
+	authorities_at: RwLock<HashMap<HeaderHash, Option<Vec<AuthorityId>>>>,
 }
 
 impl Clone for Blockchain {
 	fn clone(&self) -> Blockchain {
+		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
 		Blockchain {
-			storage: RwLock::new(self.storage.read().clone()),
+			storage: storage.clone(),
+			cache: Cache {
+				storage,
+				authorities_at: RwLock::new(self.cache.authorities_at.read().clone()),
+			},
 		}
 	}
 }
@@ -63,15 +75,20 @@ impl Clone for Blockchain {
 impl Blockchain {
 	/// Create new in-memory blockchain storage.
 	pub fn new() -> Blockchain {
+		let storage = Arc::new(RwLock::new(
+			BlockchainStorage {
+				blocks: HashMap::new(),
+				hashes: HashMap::new(),
+				best_hash: HeaderHash::default(),
+				best_number: 0,
+				genesis_hash: HeaderHash::default(),
+			}));
 		Blockchain {
-			storage: RwLock::new(
-				BlockchainStorage {
-					blocks: HashMap::new(),
-					hashes: HashMap::new(),
-					best_hash: HeaderHash::default(),
-					best_number: 0,
-					genesis_hash: HeaderHash::default(),
-				})
+			storage: storage.clone(),
+			cache: Cache {
+				storage: storage,
+				authorities_at: Default::default(),
+			}
 		}
 	}
 
@@ -150,11 +167,16 @@ impl blockchain::Backend for Blockchain {
 	fn hash(&self, number: block::Number) -> error::Result<Option<block::HeaderHash>> {
 		Ok(self.id(BlockId::Number(number)))
 	}
+
+	fn cache(&self) -> Option<&blockchain::Cache> {
+		Some(&self.cache)
+	}
 }
 
 /// In-memory operation.
 pub struct BlockImportOperation {
 	pending_block: Option<PendingBlock>,
+	pending_authorities: Option<Vec<AuthorityId>>,
 	old_state: InMemory,
 	new_state: Option<InMemory>,
 }
@@ -179,7 +201,9 @@ impl backend::BlockImportOperation for BlockImportOperation {
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, _authorities: Vec<AuthorityId>) { }
+	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
+		self.pending_authorities = Some(authorities);
+	}
 
 	fn update_storage(&mut self, update: <InMemory as StateBackend>::Transaction) -> error::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
@@ -221,6 +245,7 @@ impl backend::Backend for Backend {
 
 		Ok(BlockImportOperation {
 			pending_block: None,
+			pending_authorities: None,
 			old_state: state,
 			new_state: None,
 		})
@@ -230,8 +255,13 @@ impl backend::Backend for Backend {
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.block.header.blake2_256().into();
 			let old_state = &operation.old_state;
+			let parent_hash = pending_block.block.header.parent_hash;
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 			self.blockchain.insert(hash, pending_block.block.header, pending_block.block.justification, pending_block.block.body, pending_block.is_best);
+			// dumb implementation - store value for each block
+			if pending_block.is_best {
+				self.blockchain.cache.insert(parent_hash, operation.pending_authorities);
+			}
 		}
 		Ok(())
 	}
@@ -249,3 +279,25 @@ impl backend::Backend for Backend {
 }
 
 impl backend::LocalBackend for Backend {}
+
+impl Cache {
+	fn insert(&self, at: HeaderHash, authorities: Option<Vec<AuthorityId>>) {
+		self.authorities_at.write().insert(at, authorities);
+	}
+}
+
+impl blockchain::Cache for Cache {
+	fn authorities_at(&self, block: BlockId) -> Option<Vec<AuthorityId>> {
+		let hash = match block {
+			BlockId::Hash(hash) => hash,
+			BlockId::Number(number) => self.storage.read().hashes.get(&number).cloned()?,
+		};
+
+		self.authorities_at.read().get(&hash).cloned().unwrap_or(None)
+	}
+}
+
+/// Insert authorities entry into in-memory blockchain cache. Extracted as a separate function to use it in tests.
+pub fn cache_authorities_at(blockchain: &Blockchain, at: HeaderHash, authorities: Option<Vec<AuthorityId>>) {
+	blockchain.cache.insert(at, authorities);
+}

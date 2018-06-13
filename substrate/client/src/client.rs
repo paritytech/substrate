@@ -490,6 +490,7 @@ mod tests {
 	use test_client::client::BlockOrigin;
 	use test_client::runtime as test_runtime;
 	use test_client::runtime::{UncheckedTransaction, Transaction};
+	use test_client::client::backend::Backend;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
@@ -554,5 +555,12 @@ mod tests {
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public())).unwrap(), 958);
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public())).unwrap(), 42);
+	}
+
+	#[test]
+	fn client_uses_authorities_from_blockchain_cache() {
+		let client = test_client::new();
+		test_client::client::in_mem::cache_authorities_at(client.backend().blockchain(), Default::default(), Some(vec![[1u8; 32]]));
+		assert_eq!(client.authorities_at(&BlockId::Hash(Default::default())).unwrap(), vec![[1u8; 32]]);
 	}
 }
