@@ -14,6 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Pruning window.
+//!
+//! For each block we maintain a list of nodes pending deletion.
+//! There is also a global index of node key to block number.
+//! If a node is re-inserted into the window it gets removed from
+//! the death list.
+//! The changes are journaled in the DB.
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use codec::{Slicable, self};
 use {CommitSet, Error, KeyValueDb, to_meta_key, Hash};
@@ -21,6 +29,7 @@ use {CommitSet, Error, KeyValueDb, to_meta_key, Hash};
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 
+/// See module documentation.
 pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
 	death_index: HashMap<Key, u64>,
@@ -77,11 +86,13 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			pending_number: pending_number,
 		};
 		// read the journal
+		trace!(target: "state-db", "Reading pruning journal. Last pruned #{}", pending_number - 1);
 		loop {
 			let journal_key = to_journal_key(block);
 			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 				Some(record) => {
 					let record: JournalRecord<BlockHash, Key> = Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
+					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
 					pruning.import(&record.hash, journal_key, record.inserted.into_iter(), record.deleted);
 				},
 				None => break,
@@ -125,8 +136,10 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		0
 	}
 
+	/// Prune next block. Expects at least one block in the window. Adds changes to `commit`.
 	pub fn prune_one(&mut self, commit: &mut CommitSet<Key>) {
 		let pruned = self.death_rows.pop_front().expect("prune_one is only called with a non-empty window");
+		trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 		for k in pruned.deleted.iter() {
 			self.death_index.remove(&k);
 		}
@@ -136,7 +149,9 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		self.pending_number += 1;
 	}
 
+	/// Add a change set to the window. Creates a journal record and pushes it to `commit`
 	pub fn note_finalized(&mut self, hash: &BlockHash, commit: &mut CommitSet<Key>) {
+		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
 		let inserted = commit.data.inserted.iter().map(|(k, _)| k.clone()).collect();
 		let deleted = ::std::mem::replace(&mut commit.data.deleted, Vec::new());
 		let journal_record = JournalRecord {

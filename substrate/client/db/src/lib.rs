@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Client backend that uses RocksDB database as storage. State is still kept in memory.
+//! Client backend that uses RocksDB database as storage.
 
 extern crate substrate_client as client;
 extern crate ethereum_types;
@@ -29,6 +29,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_codec as codec;
+extern crate substrate_state_db as state_db;
 
 #[macro_use]
 extern crate log;
@@ -42,6 +43,7 @@ use std::collections::HashMap;
 
 use codec::Slicable;
 use ethereum_types::H256 as TrieH256;
+use primitives::H256;
 use hashdb::{DBValue, HashDB};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -53,6 +55,10 @@ use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing, HashingFor, Zero};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::CodeExecutor;
+use state_db::StateDb;
+
+const PRUNING_WINDOW: u32 = 256;
+const FINALIZATION_WINDOW: u64 = 32;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -83,11 +89,12 @@ pub fn new_client<E, F, Block>(
 mod columns {
 	pub const META: Option<u32> = Some(0);
 	pub const STATE: Option<u32> = Some(1);
-	pub const BLOCK_INDEX: Option<u32> = Some(2);
-	pub const HEADER: Option<u32> = Some(3);
-	pub const BODY: Option<u32> = Some(4);
-	pub const JUSTIFICATION: Option<u32> = Some(5);
-	pub const NUM_COLUMNS: u32 = 6;
+	pub const STATE_META: Option<u32> = Some(2);
+	pub const BLOCK_INDEX: Option<u32> = Some(3);
+	pub const HEADER: Option<u32> = Some(4);
+	pub const BODY: Option<u32> = Some(5);
+	pub const JUSTIFICATION: Option<u32> = Some(6);
+	pub const NUM_COLUMNS: u32 = 7;
 }
 
 mod meta {
@@ -129,6 +136,22 @@ fn db_err(err: kvdb::Error) -> client::error::Error {
 		&kvdb::ErrorKind::Io(ref err) => client::error::ErrorKind::Backend(err.description().into()).into(),
 		&kvdb::ErrorKind::Msg(ref m) => client::error::ErrorKind::Backend(m.clone()).into(),
 		_ => client::error::ErrorKind::Backend("Unknown backend error".into()).into(),
+	}
+}
+
+// wrapper that implements trait required for state_db
+struct BackingStateDb<'a>(&'a KeyValueDB);
+
+impl<'a> state_db::KeyValueDb for BackingStateDb<'a> {
+	type Error = kvdb::Error;
+	type Hash = H256;
+
+	fn get(&self, key: &H256) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.get(columns::STATE, &key[..]).map(|r| r.map(|v| v.to_vec()))
+	}
+
+	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.get(columns::STATE_META, key).map(|r| r.map(|v| v.to_vec()))
 	}
 }
 
@@ -264,13 +287,13 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> w
 
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
-	old_state: DbState,
+	old_state: DbState<Block>,
 	updates: MemoryDB,
 	pending_block: Option<PendingBlock<Block>>,
 }
 
 impl<Block: BlockT> client::backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
-	type State = DbState;
+	type State = DbState<Block>;
 
 	fn state(&self) -> Result<Option<&Self::State>, client::error::Error> {
 		Ok(Some(&self.old_state))
@@ -300,12 +323,13 @@ impl<Block: BlockT> client::backend::BlockImportOperation<Block> for BlockImport
 	}
 }
 
-struct Ephemeral<'a> {
+struct Ephemeral<'a, Block: BlockT> {
 	backing: &'a KeyValueDB,
+	state_db: &'a StateDb<Block::Hash, H256>,
 	overlay: &'a mut MemoryDB,
 }
 
-impl<'a> HashDB for Ephemeral<'a> {
+impl<'a, Block: BlockT> HashDB for Ephemeral<'a, Block> {
 	fn keys(&self) -> HashMap<TrieH256, i32> {
 		self.overlay.keys() // TODO: iterate backing
 	}
@@ -320,11 +344,10 @@ impl<'a> HashDB for Ephemeral<'a> {
 				}
 			}
 			None => {
-				match self.backing.get(::columns::STATE, &key.0[..]) {
-					Ok(x) => x,
+				match self.state_db.get(&H256::from(key.0), &BackingStateDb(self.backing)) {
+					Ok(x) => x.map(|v| DBValue::from_slice(&v)),
 					Err(e) => {
-						warn!("Failed to read from DB: {}", e);
-						None
+						panic!("Failed to read from DB: {:?}", e);
 					}
 				}
 			}
@@ -350,19 +373,46 @@ impl<'a> HashDB for Ephemeral<'a> {
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 #[derive(Clone)]
-pub struct DbState {
+pub struct DbState<Block: BlockT> {
+	block_hash: Block::Hash,
 	db: Arc<KeyValueDB>,
+	state_db: Arc<StateDb<Block::Hash, H256>>,
 	root: TrieH256,
 }
 
-impl state_machine::Backend for DbState {
+impl<Block: BlockT> DbState<Block> {
+	pub fn new(
+			block_hash: &Block::Hash,
+			db: Arc<KeyValueDB>,
+			state_db: Arc<StateDb<Block::Hash, H256>>,
+			root: TrieH256
+		) -> DbState<Block>
+	{
+		state_db.pin(block_hash);
+		DbState {
+			block_hash: block_hash.clone(),
+			db,
+			state_db,
+			root,
+		}
+	}
+}
+
+impl<Block: BlockT> Drop for DbState<Block> {
+	fn drop(&mut self) {
+		self.state_db.unpin(&self.block_hash);
+	}
+}
+
+impl<Block: BlockT> state_machine::Backend for DbState<Block> {
 	type Error = client::error::Error;
 	type Transaction = MemoryDB;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let mut read_overlay = MemoryDB::default();
-		let eph = Ephemeral {
+		let eph: Ephemeral<Block> = Ephemeral {
 			backing: &*self.db,
+			state_db: &*self.state_db,
 			overlay: &mut read_overlay,
 		};
 
@@ -374,8 +424,9 @@ impl state_machine::Backend for DbState {
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		let mut read_overlay = MemoryDB::default();
-		let eph = Ephemeral {
+		let eph: Ephemeral<Block> = Ephemeral {
 			backing: &*self.db,
+			state_db: &*self.state_db,
 			overlay: &mut read_overlay,
 		};
 
@@ -405,8 +456,9 @@ impl state_machine::Backend for DbState {
 		let mut write_overlay = MemoryDB::default();
 		let mut root = self.root;
 		{
-			let mut eph = Ephemeral {
+			let mut eph: Ephemeral<Block> = Ephemeral {
 				backing: &*self.db,
+				state_db: &*self.state_db,
 				overlay: &mut write_overlay,
 			};
 
@@ -431,8 +483,8 @@ impl state_machine::Backend for DbState {
 /// Otherwise, trie nodes are kept only from the most recent block.
 pub struct Backend<Block: BlockT> {
 	db: Arc<KeyValueDB>,
+	state_db: Arc<StateDb<Block::Hash, H256>>,
 	blockchain: BlockchainDb<Block>,
-	archive: bool,
 }
 
 impl<Block: BlockT> Backend<Block> where <Block::Header as HeaderT>::Number: As<u32> {
@@ -444,7 +496,7 @@ impl<Block: BlockT> Backend<Block> where <Block::Header as HeaderT>::Number: As<
 		let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
 		let db = Arc::new(Database::open(&db_config, &path).map_err(db_err)?);
 
-		Backend::from_kvdb(db as Arc<_>, true)
+		Backend::from_kvdb(db as Arc<_>, false)
 	}
 
 	#[cfg(test)]
@@ -456,12 +508,36 @@ impl<Block: BlockT> Backend<Block> where <Block::Header as HeaderT>::Number: As<
 
 	fn from_kvdb(db: Arc<KeyValueDB>, archive: bool) -> Result<Self, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
+		let pruning_mode = match archive {
+			true => state_db::PruningMode::ArchiveAll,
+			false => state_db::PruningMode::Constrained(state_db::Constraints {
+				max_mem: None,
+				max_blocks: Some(PRUNING_WINDOW),
+			}),
+		};
+		let map_e = |e: state_db::Error<BackingStateDb>| ::client::error::Error::from(format!("State database error: {:?}", e));
+		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning_mode, &BackingStateDb(&*db)).map_err(map_e)?;
 
 		Ok(Backend {
 			db,
+			state_db: Arc::new(state_db),
 			blockchain,
-			archive
 		})
+	}
+}
+
+fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitSet<H256>) {
+	for (key, val) in commit.data.inserted.into_iter() {
+		transaction.put(columns::STATE, &key[..], &val);
+	}
+	for key in commit.data.deleted.into_iter() {
+		transaction.delete(columns::STATE, &key[..]);
+	}
+	for (key, val) in commit.meta.inserted.into_iter() {
+		transaction.put(columns::STATE_META, &key[..], &val);
+	}
+	for key in commit.meta.deleted.into_iter() {
+		transaction.delete(columns::STATE_META, &key[..]);
 	}
 }
 
@@ -471,7 +547,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;
-	type State = DbState;
+	type State = DbState<Block>;
 
 	fn begin_operation(&self, block: BlockId<Block>) -> Result<Self::BlockImportOperation, client::error::Error> {
 		let state = self.state_at(block)?;
@@ -483,6 +559,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 	}
 
 	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> Result<(), client::error::Error> {
+		use client::blockchain::Backend;
 		let mut transaction = DBTransaction::new();
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
@@ -499,13 +576,27 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 			if pending_block.is_best {
 				transaction.put(columns::META, meta::BEST_BLOCK, &key);
 			}
+			let mut changeset: state_db::ChangeSet<H256> = state_db::ChangeSet::default();
 			for (key, (val, rc)) in operation.updates.drain() {
 				if rc > 0 {
-					transaction.put(columns::STATE, &key.0[..], &val);
-				} else if rc < 0 && !self.archive {
-					transaction.delete(columns::STATE, &key.0[..]);
+					changeset.inserted.push((key.0.into(), val.to_vec()));
+				} else if rc < 0 {
+					changeset.deleted.push(key.0.into());
 				}
 			}
+			let number_u64 = number.as_().into();
+			let commit = self.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset);
+			apply_state_commit(&mut transaction, commit);
+
+			//finalize an older block
+			if number_u64 > FINALIZATION_WINDOW {
+				if let Some(finalizing_hash) = self.blockchain.hash(As::sa((number_u64 - FINALIZATION_WINDOW) as u32))? {
+					trace!("Finalizing block #{} ({:?})", number_u64 - FINALIZATION_WINDOW, finalizing_hash);
+					let commit = self.state_db.finalize_block(&finalizing_hash);
+					apply_state_commit(&mut transaction, commit);
+				}
+			}
+
 			debug!("DB Commit {:?} ({})", hash, number);
 			self.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
@@ -527,20 +618,15 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 				let mut db = MemoryDB::default();
 				TrieDBMut::new(&mut db, &mut root);
 
-				return Ok(DbState {
-					db: self.db.clone(),
-					root,
-				})
+				return Ok(DbState::new(&h, self.db.clone(), self.state_db.clone(), root));
 			}
 			_ => {}
 		}
 
 		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
 			let root: [u8; 32] = hdr.state_root().clone().into();
-			DbState {
-				db: self.db.clone(),
-				root: root.into(),
-			}
+			// TODO: reuse header hash
+			DbState::new(&hdr.hash(), self.db.clone(), self.state_db.clone(), root.into())
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
 	}
 }
@@ -576,7 +662,11 @@ mod tests {
 				let mut op = db.begin_operation(id).unwrap();
 				let header = Header {
 					number: i,
-					parent_hash: Default::default(),
+					parent_hash: if i == 0 {
+						Default::default()
+					} else {
+						db.blockchain.hash(i - 1).unwrap().unwrap()
+					},
 					state_root: Default::default(),
 					digest: Default::default(),
 					extrinsics_root: Default::default(),
@@ -674,7 +764,7 @@ mod tests {
 	}
 
 	#[test]
-	fn delete_only_when_negative_rc() {
+	fn does_not_delete_when_negative_rc() {
 		let key;
 		let db = Backend::<Block>::new_test();
 
@@ -771,7 +861,7 @@ mod tests {
 
 			db.commit_operation(op).unwrap();
 
-			assert!(db.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
+			assert!(db.db.get(::columns::STATE, &key.0[..]).unwrap().is_some());
 		}
 	}
 }

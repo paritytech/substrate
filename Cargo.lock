@@ -2099,6 +2099,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-support 0.1.0",
+ "substrate-state-db 0.1.0",
  "substrate-state-machine 0.1.0",
 ]
 
@@ -2505,6 +2506,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-state-db"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "substrate-state-machine"
 version = "0.1.0"
 dependencies = [
@@ -2525,17 +2537,6 @@ dependencies = [
  "slog-json 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog-scope 4.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "websocket 0.20.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "substrate-statedb"
-version = "0.1.0"
-dependencies = [
- "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-primitives 0.1.0",
 ]
 
 [[package]]

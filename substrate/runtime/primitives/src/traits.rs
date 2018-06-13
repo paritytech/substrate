@@ -121,7 +121,7 @@ impl<T> RefInto<T> for T {
 }
 
 pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot + As<usize> +
+	Zero + One + IntegerSquareRoot + As<u64> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
@@ -130,7 +130,7 @@ pub trait SimpleArithmetic:
 	PartialOrd<Self> + Ord
 {}
 impl<T:
-	Zero + One + IntegerSquareRoot + As<usize> +
+	Zero + One + IntegerSquareRoot + As<u64> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +

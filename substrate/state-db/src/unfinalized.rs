@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Finalization window.
+//! Maintains trees of block overlays and allows discarding trees/roots
+
 use std::collections::{HashMap, VecDeque};
 use super::{Error, DBValue, ChangeSet, CommitSet, KeyValueDb, Hash, to_meta_key};
 use codec::{self, Slicable};
@@ -21,6 +24,7 @@ use codec::{self, Slicable};
 const UNFINALIZED_JOURNAL: &[u8] = b"unfinalized_journal";
 const LAST_FINALIZED: &[u8] = b"last_finalized";
 
+/// See module documentation.
 pub struct UnfinalizedOverlay<BlockHash: Hash, Key: Hash> {
 	last_finalized: Option<(BlockHash, u64)>,
 	levels: VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
@@ -67,6 +71,7 @@ struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 }
 
 impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
+	/// Creates a new instance. Does not expect any metadata to be present in the DB.
 	pub fn new<D: KeyValueDb<Hash=Key>>(db: &D) -> Result<UnfinalizedOverlay<BlockHash, Key>, Error<D>> {
 		let last_finalized = db.get_meta(&to_meta_key(LAST_FINALIZED, &()))
 			.map_err(|e| Error::Db(e))?;
@@ -76,8 +81,10 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 		};
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
-		if let Some((_, mut block)) = last_finalized {
+		if let Some((ref hash, mut block)) = last_finalized {
 			// read the journal
+			trace!(target: "state-db", "Reading unfinalized journal. Last finalized #{} ({:?})", block, hash);
+			let mut total: u64 = 0;
 			block += 1;
 			loop {
 				let mut index: u64 = 0;
@@ -93,9 +100,11 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 								values: record.inserted.into_iter().collect(),
 								deleted: record.deleted,
 							};
+							trace!(target: "state-db", "Unfinalized journal entry {}.{} ({} inserted, {} deleted)", block, index, overlay.values.len(), overlay.deleted.len());
 							level.push(overlay);
 							parents.insert(record.hash, record.parent_hash);
 							index += 1;
+							total += 1;
 						},
 						None => break,
 					}
@@ -106,6 +115,7 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 				levels.push_back(level);
 				block += 1;
 			}
+			trace!(target: "state-db", "Finished reading unfinalized journal, {} entries", total);
 		}
 		Ok(UnfinalizedOverlay {
 			last_finalized: last_finalized,
@@ -114,6 +124,7 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 		})
 	}
 
+	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent to be present in the window.
 	pub fn insert(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
 		let mut commit = CommitSet::default();
 		if self.levels.is_empty() && self.last_finalized.is_none() {
@@ -156,6 +167,7 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 			inserted: changeset.inserted,
 			deleted: changeset.deleted,
 		};
+		trace!(target: "state-db", "Inserted unfinalized changeset {}.{} ({} inserted, {} deleted)", number, index, journal_record.inserted.len(), journal_record.deleted.len());
 		let journal_record = journal_record.encode();
 		commit.meta.inserted.push((journal_key, journal_record));
 		commit
@@ -172,13 +184,11 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 			level.retain(|ref overlay| {
 				let parent = parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").clone();
 				if parent == *hash {
-					println!("delete");
 					parents.remove(&overlay.hash);
 					discarded_journals.push(overlay.journal_key.clone());
 					Self::discard(sublevels, parents, discarded_journals, number + 1, &overlay.hash);
 					false
 				} else {
-					println!("keep");
 					true
 				}
 			});
@@ -189,7 +199,10 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 		self.last_finalized.as_ref().map(|&(_, n)| n + 1).unwrap_or(0)
 	}
 
+	/// Select a top-level root and finalized it. Discards all sibling subtrees and the root.
+	/// Returns a set of changes that need to be added to the DB.
 	pub fn finalize(&mut self, hash: &BlockHash) -> CommitSet<Key> {
+		trace!(target: "state-db", "Finalizing {:?}", hash);
 		let level = self.levels.pop_front().expect("no blocks to finalize");
 		let index = level.iter().position(|overlay| overlay.hash == *hash)
 			.expect("attempting to finalize unknown block");
@@ -217,9 +230,11 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 		let last_finalized = (hash.clone(), self.front_block_number());
 		commit.meta.inserted.push((to_meta_key(LAST_FINALIZED, &()), last_finalized.encode()));
 		self.last_finalized = Some(last_finalized);
+		trace!(target: "state-db", "Discarded {} records", commit.meta.deleted.len());
 		commit
 	}
 
+	/// Get a value from the node overlay. This searches in every existing changeset.
 	pub fn get(&self, key: &Key) -> Option<DBValue> {
 		for level in self.levels.iter() {
 			for overlay in level.iter() {
