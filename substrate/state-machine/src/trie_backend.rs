@@ -58,7 +58,6 @@ impl TrieBackend {
 
 	/// Create new trie-based backend backed by MemoryDb storage.
 	pub fn with_memorydb(db: MemoryDB, root: TrieH256) -> Self {
-		// TODO: check that root is a part of db???
 		TrieBackend {
 			storage: TrieBackendStorage::MemoryDb(db),
 			root,
