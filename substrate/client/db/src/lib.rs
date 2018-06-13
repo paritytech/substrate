@@ -100,6 +100,9 @@ mod meta {
 	pub const BEST_AUTHORITIES: &[u8; 4] = b"auth";
 }
 
+/// Keep authorities for last 'AUTHORITIES_ENTRIES_TO_KEEP' blocks.
+const AUTHORITIES_ENTRIES_TO_KEEP: block::Number = 100;
+
 struct PendingBlock {
 	header: block::Header,
 	justification: Option<primitives::bft::Justification>,
@@ -402,16 +405,28 @@ impl client::backend::Backend for Backend {
 				transaction.put(columns::JUSTIFICATION, &key, &justification.encode());
 			}
 			transaction.put(columns::BLOCK_INDEX, &hash, &key);
-			let updated_best_authorities = if pending_block.is_best {
+			let (update_best_authorities, best_authorities) = if pending_block.is_best {
 				transaction.put(columns::META, meta::BEST_BLOCK, &key);
 
-				if let Some(previous_number) = number.checked_sub(1) {
-					self.blockchain.cache.commit_best_authorities(&mut transaction, previous_number, operation.pending_authorities)
-				} else {
-					None
+				// save authorities for previous block
+				let pending_authorities = operation.pending_authorities;
+				let mut best_authorities = number.checked_sub(1)
+					.and_then(|previous_number| self.blockchain.cache
+						.commit_best_authorities(&mut transaction, previous_number, pending_authorities));
+
+				// prune authorities from 'ancient' blocks
+				// TODO: when there'll be proper removal criteria, change this condition
+				let mut update_best_authorities = best_authorities.is_some();
+				if let Some(ancient_number) = number.checked_sub(AUTHORITIES_ENTRIES_TO_KEEP) {
+					if self.blockchain.cache.prune_authorities(&mut transaction, ancient_number)?.1 {
+						update_best_authorities = true;
+						best_authorities = None;
+					}
 				}
+
+				(update_best_authorities, best_authorities)
 			} else {
-				None
+				(false, None)
 			};
 			for (key, (val, rc)) in operation.updates.drain() {
 				if rc > 0 {
@@ -424,8 +439,8 @@ impl client::backend::Backend for Backend {
 			debug!("DB Commit {:?} ({})", hash, number);
 			self.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
-			if let Some(updated_best_authorities) = updated_best_authorities {
-				self.blockchain.cache.update_best_authorities(updated_best_authorities);
+			if update_best_authorities {
+				self.blockchain.cache.update_best_authorities(best_authorities);
 			}
 		}
 		Ok(())
@@ -512,8 +527,8 @@ impl DbCache {
 		})
 	}
 
-	fn update_best_authorities(&self, best_authorities: BestAuthorities) {
-		*self.best_authorities.write() = Some(best_authorities);
+	fn update_best_authorities(&self, best_authorities: Option<BestAuthorities>) {
+		*self.best_authorities.write() = best_authorities;
 	}
 
 	fn read_authorities_entry(db: &KeyValueDB, number: block::Number) -> Result<Option<BestAuthoritiesEntry>, client::error::Error> {
@@ -558,6 +573,53 @@ impl DbCache {
 
 			authorities_entry = prev_authorities_entry;
 		}
+	}
+
+	/// Prune all authorities entries from the beginning up to the given key (including entry at the number).
+	fn prune_authorities(&self, transaction: &mut DBTransaction, last_to_prune: block::Number) -> Result<(usize, bool), client::error::Error> {
+		let mut last_entry_to_keep = match self.best_authorities() {
+			Some(best_authorities) => best_authorities.valid_from,
+			None => return Ok((0, false)),
+		};
+
+		// find the last entry we want to keep
+		let mut first_entry_to_remove = last_entry_to_keep;
+		while first_entry_to_remove > last_to_prune {
+			last_entry_to_keep = first_entry_to_remove;
+
+			let entry = Self::read_authorities_entry(&*self.db, first_entry_to_remove)?
+				.expect("entry referenced from next blocks; entry exists when referenced; qed");
+			first_entry_to_remove = match entry.prev_valid_from {
+				Some(prev_valid_from) => prev_valid_from,
+				None => return Ok((0, false)),
+			}
+		}
+
+		// remove all entries, starting from entry_to_remove
+		let mut pruned = 0;
+		let mut entry_to_remove = Some(first_entry_to_remove);
+		while let Some(current_entry) = entry_to_remove {
+			let entry = Self::read_authorities_entry(&*self.db, current_entry)?
+				.expect("referenced entry exists; entry_to_remove is a reference to the entry; qed");
+
+			transaction.delete(columns::AUTHORITIES, &number_to_db_key(current_entry));
+			entry_to_remove = entry.prev_valid_from;
+			pruned += 1;
+		}
+
+		// update last entry to keep if required
+		let clear_cache = if last_entry_to_keep > first_entry_to_remove {
+			let mut entry = Self::read_authorities_entry(&*self.db, last_entry_to_keep)?
+				.expect("last_entry_to_keep > first_entry_to_remove; that means that we're leaving this entry in the db; qed");
+			entry.prev_valid_from = None;
+			transaction.put(columns::AUTHORITIES, &number_to_db_key(last_entry_to_keep), &entry.encode());
+
+			false
+		} else {
+			true
+		};
+
+		Ok((pruned, clear_cache))
 	}
 }
 
@@ -927,5 +989,69 @@ mod tests {
 					.or_else(|| authorities_at.last())
 					.unwrap().1.clone().and_then(|e| e.authorities));
 		}
+
+		// now check that cache entries are pruned when new blocks are inserted
+		let mut current_entries_count = authorities_at.last().unwrap().0;
+		let pruning_starts_at = AUTHORITIES_ENTRIES_TO_KEEP as usize;
+		for number in authorities_at.len()..authorities_at.len() + pruning_starts_at {
+			prev_hash = insert_block(&db, &prev_hash, number as u64, None);
+			if number > pruning_starts_at {
+				let prev_entries_count = authorities_at[number - pruning_starts_at].0;
+				let entries_count = authorities_at.get(number - pruning_starts_at + 1).map(|e| e.0)
+					.unwrap_or_else(|| authorities_at.last().unwrap().0);
+				current_entries_count -= entries_count - prev_entries_count;
+			}
+
+			assert_eq!(db.db.iter(columns::AUTHORITIES).count(), current_entries_count);
+		}
+	}
+
+	#[test]
+	fn best_authorities_are_pruned() {
+		let db = Backend::new_test();
+		let mut transaction = DBTransaction::new();
+		db.blockchain.cache.update_best_authorities(
+			db.blockchain.cache.commit_best_authorities(&mut transaction, 100, Some(vec![[1u8; 32]])));
+		db.db.write(transaction).unwrap();
+
+		let mut transaction = DBTransaction::new();
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 50).unwrap().0, 0);
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 100).unwrap().0, 1);
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 150).unwrap().0, 1);
+
+		let mut transaction = DBTransaction::new();
+		db.blockchain.cache.update_best_authorities(
+			db.blockchain.cache.commit_best_authorities(&mut transaction, 200, Some(vec![[2u8; 32]])));
+		db.db.write(transaction).unwrap();
+
+		let mut transaction = DBTransaction::new();
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 50).unwrap().0, 0);
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 100).unwrap().0, 1);
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 150).unwrap().0, 1);
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 200).unwrap().0, 2);
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 250).unwrap().0, 2);
+
+		let mut transaction = DBTransaction::new();
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 150).unwrap(), (1, false));
+		db.db.write(transaction).unwrap();
+
+		assert_eq!(db.blockchain.cache.best_authorities().unwrap().authorities, Some(vec![[2u8; 32]]));
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(50)), None);
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(100)), None);
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(150)), None);
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(200)), Some(vec![[2u8; 32]]));
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(250)), Some(vec![[2u8; 32]]));
+
+		let mut transaction = DBTransaction::new();
+		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 300).unwrap(), (1, true));
+		db.db.write(transaction).unwrap();
+		db.blockchain.cache.update_best_authorities(None);
+
+		assert_eq!(db.blockchain.cache.best_authorities(), None);
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(50)), None);
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(100)), None);
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(150)), None);
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(200)), None);
+		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(250)), None);
 	}
 }
