@@ -22,7 +22,7 @@ pub use network::NetworkConfiguration;
 
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ChainSpec {
 	/// Whatever the current runtime is, with just Alice as an auth.
 	Development,

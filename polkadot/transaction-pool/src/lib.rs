@@ -203,7 +203,6 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 }
 
 /// Readiness evaluator for polkadot transactions.
-#[derive(Clone)]
 pub struct Ready<'a, T: 'a + PolkadotApi> {
 	at_block: T::CheckedBlockId,
 	api: &'a T,
@@ -220,6 +219,17 @@ impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 			api,
 			known_nonces: HashMap::new(),
 			known_indexes: HashMap::new(),
+		}
+	}
+}
+
+impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
+	fn clone(&self) -> Self {
+		Ready {
+			at_block: self.at_block.clone(),
+			api: self.api,
+			known_nonces: self.known_nonces.clone(),
+			known_indexes: self.known_indexes.clone(),
 		}
 	}
 }

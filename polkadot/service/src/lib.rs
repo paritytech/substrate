@@ -19,6 +19,9 @@
 
 extern crate futures;
 extern crate ed25519;
+extern crate websocket as ws;
+extern crate slog;
+#[macro_use] extern crate clap;
 extern crate exit_future;
 extern crate parking_lot;
 extern crate tokio_timer;
@@ -430,6 +433,16 @@ impl<B, E> Service<B, E>
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
+		let mut maybe_stats = ws::ClientBuilder::new("ws://127.0.0.1:1024").ok()
+			.and_then(|mut x| x.connect_insecure().ok());
+		if let Some(ref mut stats) = maybe_stats {
+			let msg = format!("{{\"_type\": \"init\", \"version\": \"{}\", \"chain\": \"{:?}\", \"best\": {}}}",
+				crate_version!(),
+				config.chain_spec,
+				best_header.number);
+			let _ = stats.send_message(&ws::Message::text(msg));
+		}
+
 		let thread = {
 			let client = client.clone();
 			let network = network.clone();
@@ -447,9 +460,13 @@ impl<B, E> Service<B, E>
 				let txpool1 = txpool.clone();
 				let events = client.import_notification_stream()
 					.for_each(move |notification| {
+						if let Some(ref mut stats) = maybe_stats {
+							if let Err(e) = stats.send_message(&ws::Message::text(format!("{{\"_type\": \"importblock\", \"number\": {}}}", notification.header.number))) {
+								warn!("Stats server dropped connection! {}", e);
+							}
+						}
 						network1.on_block_imported(notification.hash, &notification.header);
 						prune_imported(&*api, &*txpool1, notification.hash);
-
 						Ok(())
 					});
 				core.handle().spawn(events);
