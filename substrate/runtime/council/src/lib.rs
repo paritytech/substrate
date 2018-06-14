@@ -293,7 +293,7 @@ impl<T: Trait> Module<T> {
 			voters
 		);
 		if valid {
-			// This only fails if `who` doesn't exist, which is clearly must do since its the aux.
+			// This only fails if `who` doesn't exist, which it clearly must do since its the aux.
 			// Still, it's no more harmful to propagate any error at this point.
 			<staking::Module<T>>::transfer_reserved(&who, aux.ref_into(), Self::voting_bond())?;
 		} else {

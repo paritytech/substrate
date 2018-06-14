@@ -62,7 +62,9 @@ pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable>::Checked;
 #[derive(Debug)]
 pub struct VerifiedTransaction {
 	original: UncheckedExtrinsic,
-	inner: Mutex<Option<CheckedExtrinsic>>,		// `Some` only if the Address is an AccountId
+	// `create()` will leave this as `Some` only if the `Address` is an `AccountId`, otherwise a
+	// call to `polish` is needed.
+	inner: Mutex<Option<CheckedExtrinsic>>,
 	hash: Hash,
 	encoded_size: usize,
 }
@@ -84,14 +86,15 @@ impl VerifiedTransaction {
 		if !original.is_signed() {
 			bail!(ErrorKind::IsInherent(original))
 		}
+		const UNAVAILABLE_MESSAGE: &'static str = "chain state not available";
 		let (encoded_size, hash) = original.using_encoded(|e| (e.len(), BlakeTwo256::hash(e)));
 		let lookup = |a| match a {
 			RawAddress::Id(i) => Ok(i),
-			_ => Err("chain state not available"),
+			_ => Err(UNAVAILABLE_MESSAGE),
 		};
 		let inner = Mutex::new(match original.clone().check(lookup) {
 			Ok(xt) => Some(xt),
-			Err(e) if e == "chain state not available" => None,
+			Err(e) if e == UNAVAILABLE_MESSAGE => None,
 			Err(e) => bail!(ErrorKind::BadSignature(e)),
 		});
 		Ok(VerifiedTransaction { original, inner, hash, encoded_size })
@@ -128,7 +131,7 @@ impl VerifiedTransaction {
 
 	/// Consume the verified transaciton, yielding the unchecked counterpart.
 	pub fn into_inner(self) -> Result<CheckedExtrinsic> {
-		self.inner.lock().clone().ok_or(ErrorKind::NotReady.into())
+		self.inner.lock().clone().ok_or_else(|| ErrorKind::NotReady.into())
 	}
 
 	/// Get the 256-bit hash of this transaction.
@@ -138,7 +141,7 @@ impl VerifiedTransaction {
 
 	/// Get the account ID of the sender of this transaction.
 	pub fn sender(&self) -> Result<AccountId> {
-		self.inner.lock().as_ref().map(|i| i.signed.clone()).ok_or(ErrorKind::NotReady.into())
+		self.inner.lock().as_ref().map(|i| i.signed.clone()).ok_or_else(|| ErrorKind::NotReady.into())
 	}
 
 	/// Get the account ID of the sender of this transaction.
@@ -203,7 +206,6 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 }
 
 /// Readiness evaluator for polkadot transactions.
-#[derive(Clone)]
 pub struct Ready<'a, T: 'a + PolkadotApi> {
 	at_block: T::CheckedBlockId,
 	api: &'a T,
@@ -220,6 +222,17 @@ impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
 			api,
 			known_nonces: HashMap::new(),
 			known_indexes: HashMap::new(),
+		}
+	}
+}
+
+impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
+	fn clone(&self) -> Self {
+		Ready {
+			at_block: self.at_block.clone(),
+			api: self.api,
+			known_nonces: self.known_nonces.clone(),
+			known_indexes: self.known_indexes.clone(),
 		}
 	}
 }
@@ -257,9 +270,8 @@ impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T
 
 		// guaranteed to be properly verified at this point.
 
-		let sender = xt.sender().expect("just ensured it was verified");
+		let sender = xt.sender().expect("only way to get here is `is_really_verified` or successful `polish`; either guarantees `is_really_verified`; `sender` is `Ok` if `is_really_verified`; qed");
 		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.hash, Hash::from(sender));
-		println!("Checking readiness of {} (from {})", xt.hash, Hash::from(sender));
 
 		let is_index_sender = match xt.original.extrinsic.signed { RawAddress::Index(_) => false, _ => true };
 
@@ -270,7 +282,6 @@ impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T
 		let (next_nonce, was_index_sender) = self.known_nonces.entry(sender).or_insert_with(|| (get_nonce(), is_index_sender));
 
 		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_nonce, xt.original.extrinsic.index);
-		println!("Next nonce for sender is {}; xt nonce is {}; on-chain nonce is {}; iis is {}; wis is {}", *next_nonce, xt.original.extrinsic.index, get_nonce(), is_index_sender, *was_index_sender);
 
 		if *was_index_sender == is_index_sender || get_nonce() == *next_nonce {
 			match xt.original.extrinsic.index.cmp(&next_nonce) {
