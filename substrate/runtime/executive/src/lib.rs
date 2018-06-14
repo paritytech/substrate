@@ -70,7 +70,7 @@ mod internal {
 		Fail(&'static str),
 	}
 }
-/*
+
 pub struct Executive<
 	System,
 	Block,
@@ -78,18 +78,6 @@ pub struct Executive<
 	Payment,
 	Finalisation,
 >(PhantomData<(System, Block, Lookup, Payment, Finalisation)>);
-*/
-
-pub struct Executive<
-	System: system::Trait,
-	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Lookup: AuxLookup<Source=<Block::Extrinsic as Checkable>::Address, Target=System::AccountId>,
-	Payment: MakePayment<System::AccountId>,
-	Finalisation: Executable,
->(PhantomData<(System, Block, Lookup, Payment, Finalisation)>) where
-	Block::Extrinsic: Checkable<AccountId=System::AccountId> + Slicable,
-	<Block::Extrinsic as Checkable>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
-;
 
 impl<
 	System: system::Trait,

@@ -503,7 +503,7 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 		let mut next_index = {
 			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 			let cur_index = self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending| pending
-				.filter(|tx| tx.sender().map(|s| s == local_id).unwrap_or(false))
+				.filter(|tx| tx.sender().map_or(false, |s| s == local_id))
 				.last()
 				.map(|tx| Ok(tx.index()))
 				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id))

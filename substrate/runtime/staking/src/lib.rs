@@ -102,7 +102,6 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 	}
 }
 
-// MaybeSerializeDebug is workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize>;
@@ -347,7 +346,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Set the reserved balance of an account to some new value. Will enforce ExistentialDeposit
+	/// Set the free balance of an account to some new value. Will enforce ExistentialDeposit
 	/// law anulling the account as needed.
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
