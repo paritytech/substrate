@@ -86,10 +86,25 @@ pub struct Service<B, E> {
 }
 
 struct TransactionPoolAdapter<B, E, A> where A: Send + Sync, E: Send + Sync {
-	pool: Arc<TransactionPool>,
+	pool: Arc<TransactionPool<A>>,
 	client: Arc<Client<B, E, Block>>,
-	api: Arc<A>,
 }
+
+impl<B, E, A> TransactionPoolAdapter<B, E, A>
+	where
+		A: Send + Sync,
+		E: Send + Sync,
+{
+	fn best_block_id(&self) -> Option<BlockId> {
+		self.client.info()
+			.map(|info| BlockId::Hash(info.chain.best_hash))
+			.map_err(|e| {
+				debug!("Error getting best block: {:?}", e);
+			})
+			.ok()
+	}
+}
+
 
 impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A>
 	where
@@ -99,22 +114,8 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 		A: PolkadotApi + Send + Sync,
 {
 	fn transactions(&self) -> Vec<(Hash, Vec<u8>)> {
-		let best_block = match self.client.info() {
-			Ok(info) => info.chain.best_hash,
-			Err(e) => {
-				debug!("Error getting best block: {:?}", e);
-				return Vec::new();
-			}
-		};
-
-		let id = match self.api.check_id(BlockId::hash(best_block)) {
-			Ok(id) => id,
-			Err(_) => return Vec::new(),
-		};
-
-		let ready = transaction_pool::Ready::create(id, &*self.api);
-
-		self.pool.cull_and_get_pending(ready, |pending| pending
+		let best_block_id = self.best_block_id();
+		self.pool.cull_and_get_pending(best_block_id, |pending| pending
 			.map(|t| {
 				let hash = t.hash().clone();
 				(hash, t.primitive_extrinsic())
@@ -126,7 +127,8 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 	fn import(&self, transaction: &Vec<u8>) -> Option<Hash> {
 		let encoded = transaction.encode();
 		if let Some(uxt) = codec::Slicable::decode(&mut &encoded[..]) {
-			match self.pool.import_unchecked_extrinsic(uxt) {
+			let best_block_id = self.best_block_id();
+			match self.pool.import_unchecked_extrinsic(best_block_id, uxt) {
 				Ok(xt) => Some(*xt.hash()),
 				Err(e) => match *e.kind() {
 					transaction_pool::ErrorKind::AlreadyImported(hash) => Some(hash[..].into()),
@@ -411,11 +413,10 @@ impl<B, E> Service<B, E>
 		let api = api_creator(client.clone());
 		let best_header = client.best_block_header()?;
 		info!("Starting Polkadot. Best block is #{}", best_header.number);
-		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
+		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool, api.clone()));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-			api: api.clone(),
 		});
 		let network_params = network::Params {
 			config: network::ProtocolConfig {
