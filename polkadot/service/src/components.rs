@@ -132,9 +132,10 @@ impl Components for FullComponents {
 pub struct LightComponents;
 
 impl Components for LightComponents {
-	type Backend = client::light::Backend<client_db::Backend, network::OnDemand<network::Service>>;
+	type Backend = client::light::backend::Backend<client_db::Backend, network::OnDemand<network::Service>>;
 	type Api = polkadot_api::light::RemotePolkadotApiWrapper<Self::Backend, Self::Executor>;
-	type Executor = client::RemoteCallExecutor<client::light::Blockchain<client_db::Backend, network::OnDemand<network::Service>>,
+	type Executor = client::light::call_executor::RemoteCallExecutor<
+		client::light::blockchain::Blockchain<client_db::Backend, network::OnDemand<network::Service>>,
 		network::OnDemand<network::Service>>;
 
 	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis: GenesisBuilder)

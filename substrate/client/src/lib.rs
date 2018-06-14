@@ -56,4 +56,5 @@ pub use client::{
 	ImportResult, GenesisBuilder,
 };
 pub use blockchain::Info as ChainInfo;
-pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor, RemoteCallExecutor};
+pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
+

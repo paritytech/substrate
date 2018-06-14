@@ -21,7 +21,7 @@ use heapsize::HeapSizeOf;
 use linked_hash_map::LinkedHashMap;
 use parking_lot::RwLock;
 use client::CallResult;
-use client::light::{RemoteCallRequest, RemoteReadRequest};
+use client::light::fetcher::{RemoteCallRequest, RemoteReadRequest};
 
 /// Total cache memory limit.
 const TOTAL_CACHE_LIMIT: usize = 1024 * 1024;

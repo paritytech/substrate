@@ -25,7 +25,7 @@ use linked_hash_map::LinkedHashMap;
 use linked_hash_map::Entry;
 use parking_lot::Mutex;
 use client;
-use client::light::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest};
+use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest};
 use io::SyncIo;
 use message;
 use network::PeerId;
@@ -402,7 +402,7 @@ mod tests {
 	use futures::Future;
 	use parking_lot::RwLock;
 	use client;
-	use client::light::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest};
+	use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest};
 	use io::NetSyncIo;
 	use message;
 	use network::PeerId;
