@@ -357,7 +357,15 @@ pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend<Bloc
 		config)
 }
 
-struct WebsocketWriter {
+pub struct WebsocketWriterConfig {
+	pub url: String,
+}
+
+lazy_static!{
+	static ref WEBSOCKET_WRITER_CONFIG: Mutex<Option<WebsocketWriterConfig>> = Mutex::new(None);
+}
+
+pub struct WebsocketWriter {
 	buffer: Vec<u8>,
 	out: Mutex<Option<ws::sync::Client<Box<ws::stream::sync::NetworkStream + Send>>>>,
 }
@@ -365,11 +373,21 @@ impl WebsocketWriter {
 	fn new() -> Self {
 		WebsocketWriter { buffer: vec![], out: Mutex::new(None) }
 	}
-	
+
+	pub fn disable() {
+		*WEBSOCKET_WRITER_CONFIG.lock() = None;
+	}
+
+	pub fn enable(config: WebsocketWriterConfig) {
+		*WEBSOCKET_WRITER_CONFIG.lock() = Some(config);
+	}
+
 	fn ensure_connected(&self) {
 		let mut client = self.out.lock();
-		if client.is_none() {
-			*client = ws::ClientBuilder::new("ws://127.0.0.1:1024").ok().and_then(|mut x| x.connect(None).ok());
+		if let Some(ref config) = *WEBSOCKET_WRITER_CONFIG.lock() {
+			if client.is_none() {
+				*client = ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok());
+			}
 		}
 	}
 }
@@ -399,8 +417,7 @@ impl io::Write for WebsocketWriter {
 }
 
 lazy_static!{
-	static ref SLOG_ROOT: slog::Logger = slog::Logger::root(slog_async::Async::new(slog_json::Json::default(
-		WebsocketWriter::new()).fuse()).build().fuse(), o!());
+	static ref SLOG_ROOT: slog::Logger = slog::Logger::root(slog_async::Async::new(slog_json::Json::default(WebsocketWriter::new()).fuse()).build().fuse(), o!());
 }
 
 impl<B, E> Service<B, E>
@@ -429,6 +446,8 @@ impl<B, E> Service<B, E>
 			A: PolkadotApi + Send + Sync + 'static,
 	{
 		use std::sync::Barrier;
+		info!("Parity Polkadot v{}", crate_version!());
+		info!("Node name: {}", config.name);
 
 		let (signal, exit) = ::exit_future::signal();
 
@@ -464,7 +483,7 @@ impl<B, E> Service<B, E>
 		let (client, on_demand) = client_creator(db_settings, executor, genesis_builder)?;
 		let api = api_creator(client.clone());
 		let best_header = client.best_block_header()?;
-		info!("Starting Polkadot. Best block is #{}", best_header.number);
+		info!("Best block is #{}", best_header.number);
 		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			pool: transaction_pool.clone(),
@@ -484,7 +503,7 @@ impl<B, E> Service<B, E>
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
-		slog_info!(SLOG_ROOT, "Starting version {version} (height is {best})", version = crate_version!(), best = best_header.number; "chain" => format!("{:?}", config.chain_spec));
+		slog_info!(SLOG_ROOT, "Starting node"; "name" => config.name, "version" => crate_version!(), "best" => best_header.number, "chain" => format!("{:?}", config.chain_spec));
 
 		let thread = {
 			let client = client.clone();

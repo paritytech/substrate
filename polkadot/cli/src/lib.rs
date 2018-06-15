@@ -61,7 +61,9 @@ use polkadot_primitives::Block;
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::ChainSpec;
+use service::{ChainSpec, WebsocketWriter, WebsocketWriterConfig};
+
+const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io";
 
 struct Configuration(service::Configuration);
 
@@ -114,6 +116,15 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	fdlimit::raise_fd_limit();
 
 	let mut config = service::Configuration::default();
+
+	if let Some(name) = matches.value_of("name") {
+		config.name = name.into();
+	}
+	if matches.is_present("telemetry") {
+		WebsocketWriter::enable(WebsocketWriterConfig {
+			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
+		})
+	}
 
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
