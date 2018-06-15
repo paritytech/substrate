@@ -66,8 +66,8 @@ pub trait BuildExternalities {
 pub struct Ed25519Signature(H512);
 impl traits::Verify for Ed25519Signature {
 	type Signer = [u8; 32];
-	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(&(self.0).0, msg, &signer[..])
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::ed25519_verify(&(self.0).0, msg.get(), &signer[..])
 	}
 }
 
