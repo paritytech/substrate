@@ -19,14 +19,8 @@
 
 extern crate futures;
 extern crate ed25519;
-extern crate websocket as ws;
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate slog;
-extern crate slog_async;
-extern crate slog_json;
 extern crate clap;
 extern crate exit_future;
-extern crate parking_lot;
 extern crate tokio_timer;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
@@ -47,7 +41,11 @@ extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 
 #[macro_use]
+extern crate polkadot_telemetry;
+#[macro_use]
 extern crate error_chain;
+#[macro_use]
+extern crate slog;	// needed until we can reexport `slog_info` from `polkadot_telemetry`
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -58,10 +56,8 @@ mod config;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::{thread, io};
-use parking_lot::Mutex;
+use std::thread;
 use futures::prelude::*;
-use slog::Drain;
 use tokio_core::reactor::Core;
 use codec::Slicable;
 use primitives::AuthorityId;
@@ -356,78 +352,6 @@ pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend<Bloc
 		},
 		config)
 }
-
-pub struct TelemetryConfig {
-	pub url: String,
-	pub on_connect: Box<Fn() + Send + 'static>,
-}
-
-lazy_static!{
-	static ref TELEMETRY_CONFIG: Mutex<Option<TelemetryConfig>> = Mutex::new(None);
-}
-
-pub struct TelemetryWriter {
-	buffer: Vec<u8>,
-	out: Mutex<Option<ws::sync::Client<Box<ws::stream::sync::NetworkStream + Send>>>>,
-}
-
-impl TelemetryWriter {
-	fn new() -> Self {
-		TelemetryWriter { buffer: vec![], out: Mutex::new(None) }
-	}
-
-	pub fn disable() {
-		*TELEMETRY_CONFIG.lock() = None;
-	}
-
-	pub fn enable(config: TelemetryConfig) {
-		*TELEMETRY_CONFIG.lock() = Some(config);
-	}
-
-	fn ensure_connected(&self) {
-		let mut client = self.out.lock();
-		if client.is_none() {
-			if let Some(ref config) = *TELEMETRY_CONFIG.lock() {
-				*client = ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok());
-				drop(client);
-				(config.on_connect)();
-			}
-		}
-	}
-}
-
-impl io::Write for TelemetryWriter {
-	fn write(&mut self, msg: &[u8]) -> io::Result<usize> {
-		if msg == b"\n" {
-			let _ = self.flush();
-		} else {
-			self.buffer.extend_from_slice(msg);
-		}
-		Ok(msg.len())
-	}
-	fn flush(&mut self) -> io::Result<()> {
-		self.ensure_connected();
-		if if let Some(ref mut socket) = *self.out.lock() {
-			if let Ok(s) = ::std::str::from_utf8(&self.buffer[..]) {
-				socket.send_message(&ws::Message::text(s)).is_err()
-			} else { false }
-		} else { false } {
-			warn!("Stats server dropped connection!");
-			*self.out.lock() = None;
-		}
-		self.buffer.clear();
-		Ok(())
-	}
-}
-
-lazy_static!{
-	pub static ref SLOG_TELEMETRY: slog::Logger = slog::Logger::root(slog_async::Async::new(slog_json::Json::default(TelemetryWriter::new()).fuse()).build().fuse(), o!());
-}
-
-#[macro_export]
-macro_rules! telemetry {
-	( $($t:tt)* ) => { slog_info!($crate::SLOG_TELEMETRY, $($t)*) }
-} 
 
 impl<B, E> Service<B, E>
 	where

@@ -32,3 +32,4 @@ substrate-network = { path = "../../substrate/network" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-service = { path = "../service" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
+polkadot-telemetry = { path = "../telemetry" }
