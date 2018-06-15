@@ -59,12 +59,12 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(feature = "std")]
-mod checkedblock;
+mod checked_block;
 mod parachains;
 mod utils;
 
 #[cfg(feature = "std")]
-pub use checkedblock::CheckedBlock;
+pub use checked_block::CheckedBlock;
 pub use utils::{inherent_extrinsics, check_extrinsic};
 pub use staking::address::Address as RawAddress;
 

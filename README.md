@@ -20,7 +20,7 @@ cargo install --git https://github.com/paritytech/polkadot.git --branch v0.1
 
 You'll now have a `polkadot` binary installed to your `PATH`. You can drop the
 `--branch v0.1` or run `cargo install --git https://github.com/paritytech/polkadot.git polkadot`
-to get the very latest version of Polkadot, but these instructions might not work in that case.
+to get the very latest version of Polkadot, but these instructions will not work in that case.
 
 ### Development
 

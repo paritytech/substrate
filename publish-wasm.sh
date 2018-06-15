@@ -1,34 +1,25 @@
 #!/bin/bash
 
+# Publish wasm binaries into the special repository.
+# This script assumes that wasm binaries have already been built.
+# Requires GH_TOKEN environment variable to be defined.
+
 set -e
+
+source `dirname "$0"`/common.sh
+
+if [ -z ${GH_TOKEN+x} ]; then
+	echo "GH_TOKEN environment variable is not set"
+	exit 1
+fi
 
 REPO="github.com/paritytech/polkadot-wasm-bin.git"
 REPO_AUTH="${GH_TOKEN}:@${REPO}"
-SRCS=( "polkadot/runtime/wasm" "substrate/executor/wasm" "demo/runtime/wasm" "substrate/test-runtime/wasm" "polkadot/parachain/test-chains" )
 DST=".wasm-binaries"
 TARGET="wasm32-unknown-unknown"
 UTCDATE=`date -u "+%Y%m%d.%H%M%S.0"`
 
 pushd .
-
-echo "*** Initilising WASM build environment"
-cd polkadot/runtime/wasm
-./init.sh || true
-cd ../../..
-
-for SRC in "${SRCS[@]}"
-do
-  echo "*** Building wasm binaries in $SRC"
-  cd $SRC
-  ./build.sh
-  cd ../../..
-done
-
-if [ "$TRAVIS_PULL_REQUEST" != "false" -o "$TRAVIS_BRANCH" != "master" ]; then
-  popd
-  echo "*** Skipping wasm binary publish"
-  exit 0
-fi
 
 echo "*** Cloning repo"
 rm -rf $DST

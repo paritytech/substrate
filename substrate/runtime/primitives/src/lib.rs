@@ -86,8 +86,11 @@ impl From<H512> for Ed25519Signature {
 #[derive(Eq, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
+/// Outcome of a valid extrinsic application. Capable of being sliced.
 pub enum ApplyOutcome {
+	/// Successful application (extrinsic reported no issue).
 	Success = 0,
+	/// Failed application (extrinsic was probably a no-op other than fees).
 	Fail = 1,
 }
 impl codec::Slicable for ApplyOutcome {
@@ -106,10 +109,15 @@ impl codec::Slicable for ApplyOutcome {
 #[derive(Eq, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
+/// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
+	/// Bad signature.
 	BadSignature = 0,
+	/// Nonce too low.
 	Stale = 1,
+	/// Nonce too high.
 	Future = 2,
+	/// Sending account had too low a balance.
 	CantPay = 3,
 }
 impl codec::Slicable for ApplyError {
@@ -127,6 +135,7 @@ impl codec::Slicable for ApplyError {
 	}
 }
 
+/// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
 /// Potentially "unsigned" signature verification.

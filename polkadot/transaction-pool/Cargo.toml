@@ -12,6 +12,7 @@ polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
 substrate-client = { path = "../../substrate/client" }
 substrate-codec = { path = "../../substrate/codec" }
+substrate-keyring = { path = "../../substrate/keyring" }
 substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }

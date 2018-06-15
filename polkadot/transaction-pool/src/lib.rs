@@ -25,6 +25,9 @@ extern crate polkadot_primitives as primitives;
 extern crate polkadot_api;
 extern crate parking_lot;
 
+#[cfg(test)]
+extern crate substrate_keyring;
+
 #[macro_use]
 extern crate error_chain;
 
@@ -192,6 +195,16 @@ impl<'a, A: 'a + PolkadotApi> Ready<'a, A> {
 	}
 }
 
+impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
+	fn clone(&self) -> Self {
+		Ready {
+			at_block: self.at_block.clone(),
+			api: self.api,
+			known_nonces: self.known_nonces.clone(),
+		}
+	}
+}
+
 impl<'a, A: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, A>
 {
 	fn is_ready(&mut self, xt: &VerifiedTransaction) -> Readiness {
@@ -201,6 +214,8 @@ impl<'a, A: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, A
 		};
 
 		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.hash, Hash::from(sender));
+
+		let is_index_sender = match xt.original.extrinsic.signed { RawAddress::Index(_) => false, _ => true };
 
 		// TODO: find a way to handle index error properly -- will need changes to
 		// transaction-pool trait.
@@ -330,5 +345,248 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 				Ok(*tx.hash())
 			})
 			.collect()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{TransactionPool, Ready};
+	use substrate_keyring::Keyring::{self, *};
+	use codec::Slicable;
+	use polkadot_api::{PolkadotApi, BlockBuilder, CheckedBlockId, Result};
+	use primitives::{AccountId, AccountIndex, Block, BlockId, Hash, Index, SessionKey, Timestamp,
+		UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
+	use runtime::{RawAddress, Call, TimestampCall, BareExtrinsic, Extrinsic, UncheckedExtrinsic};
+	use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
+	use substrate_runtime_primitives::{MaybeUnsigned, generic};
+
+	struct TestBlockBuilder;
+	impl BlockBuilder for TestBlockBuilder {
+		fn push_extrinsic(&mut self, _extrinsic: FutureProofUncheckedExtrinsic) -> Result<()> { unimplemented!() }
+		fn bake(self) -> Result<Block> { unimplemented!() }
+	}
+
+	#[derive(Clone)]
+	struct TestCheckedBlockId(pub BlockId);
+	impl CheckedBlockId for TestCheckedBlockId {
+		fn block_id(&self) -> &BlockId { &self.0 }
+	}
+
+	fn number_of(at: &TestCheckedBlockId) -> u32 {
+		match at.0 {
+			generic::BlockId::Number(n) => n as u32,
+			_ => 0,
+		}
+	}
+
+	#[derive(Clone)]
+	struct TestPolkadotApi;
+	impl PolkadotApi for TestPolkadotApi {
+		type CheckedBlockId = TestCheckedBlockId;
+		type BlockBuilder = TestBlockBuilder;
+
+		fn check_id(&self, id: BlockId) -> Result<TestCheckedBlockId> { Ok(TestCheckedBlockId(id)) }
+		fn session_keys(&self, _at: &TestCheckedBlockId) -> Result<Vec<SessionKey>> { unimplemented!() }
+		fn validators(&self, _at: &TestCheckedBlockId) -> Result<Vec<AccountId>> { unimplemented!() }
+		fn random_seed(&self, _at: &TestCheckedBlockId) -> Result<Hash> { unimplemented!() }
+		fn duty_roster(&self, _at: &TestCheckedBlockId) -> Result<DutyRoster> { unimplemented!() }
+		fn timestamp(&self, _at: &TestCheckedBlockId) -> Result<u64> { unimplemented!() }
+		fn evaluate_block(&self, _at: &TestCheckedBlockId, _block: Block) -> Result<bool> { unimplemented!() }
+		fn active_parachains(&self, _at: &TestCheckedBlockId) -> Result<Vec<ParaId>> { unimplemented!() }
+		fn parachain_code(&self, _at: &TestCheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
+		fn parachain_head(&self, _at: &TestCheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
+		fn build_block(&self, _at: &TestCheckedBlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> { unimplemented!() }
+		fn inherent_extrinsics(&self, _at: &TestCheckedBlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> { unimplemented!() }
+
+		fn index(&self, _at: &TestCheckedBlockId, _account: AccountId) -> Result<Index> {
+			Ok((_account[0] as u32) + number_of(_at))
+		}
+		fn lookup(&self, _at: &TestCheckedBlockId, _address: RawAddress<AccountId, AccountIndex>) -> Result<Option<AccountId>> {
+			match _address {
+				RawAddress::Id(i) => Ok(Some(i)),
+				RawAddress::Index(i) => Ok(match (i < 8, i + (number_of(_at) as u64) % 8) {
+					(false, _) => None,
+					(_, 0) => Some(Alice.to_raw_public().into()),
+					(_, 1) => Some(Bob.to_raw_public().into()),
+					(_, 2) => Some(Charlie.to_raw_public().into()),
+					(_, 3) => Some(Dave.to_raw_public().into()),
+					(_, 4) => Some(Eve.to_raw_public().into()),
+					(_, 5) => Some(Ferdie.to_raw_public().into()),
+					(_, 6) => Some(One.to_raw_public().into()),
+					(_, 7) => Some(Two.to_raw_public().into()),
+					_ => None,
+				}),
+			}
+		}
+	}
+
+	fn uxt(who: Keyring, nonce: Index, use_id: bool) -> UncheckedExtrinsic {
+		let sxt = BareExtrinsic {
+			signed: who.to_raw_public().into(),
+			index: nonce,
+			function: Call::Timestamp(TimestampCall::set(0)),
+		};
+		let sig = sxt.using_encoded(|e| who.sign(e));
+		UncheckedExtrinsic::new(Extrinsic {
+			signed: if use_id { RawAddress::Id(sxt.signed) } else { RawAddress::Index(
+				match who {
+					Alice => 0,
+					Bob => 1,
+					Charlie => 2,
+					Dave => 3,
+					Eve => 4,
+					Ferdie => 5,
+					One => 6,
+					Two => 7,
+				}
+			)},
+			index: sxt.index,
+			function: sxt.function,
+		}, MaybeUnsigned(sig.into())).using_encoded(|e| UncheckedExtrinsic::decode(&mut &e[..])).unwrap()
+	}
+
+	#[test]
+	fn id_submission_should_work() {
+		let pool = TransactionPool::new(Default::default());
+		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
+
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
+	}
+
+	#[test]
+	fn index_submission_should_work() {
+		let pool = TransactionPool::new(Default::default());
+		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
+
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
+	}
+
+	#[test]
+	fn multiple_id_submission_should_work() {
+		let pool = TransactionPool::new(Default::default());
+		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
+		pool.submit(vec![uxt(Alice, 210, true)]).unwrap();
+
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
+	}
+
+	#[test]
+	fn multiple_index_submission_should_work() {
+		let pool = TransactionPool::new(Default::default());
+		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
+		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
+	}
+
+	#[test]
+	fn id_based_early_nonce_should_be_culled() {
+		let pool = TransactionPool::new(Default::default());
+		pool.submit(vec![uxt(Alice, 208, true)]).unwrap();
+
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![]);
+	}
+
+	#[test]
+	fn index_based_early_nonce_should_be_culled() {
+		let pool = TransactionPool::new(Default::default());
+		pool.submit(vec![uxt(Alice, 208, false)]).unwrap();
+
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![]);
+	}
+
+	#[test]
+	fn id_based_late_nonce_should_be_queued() {
+		let pool = TransactionPool::new(Default::default());
+		let ready = || Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+
+		pool.submit(vec![uxt(Alice, 210, true)]).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![]);
+
+		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
+	}
+
+	#[test]
+	fn index_based_late_nonce_should_be_queued() {
+		let pool = TransactionPool::new(Default::default());
+		let ready = || Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+
+		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![]);
+
+		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
+	}
+
+	#[test]
+	fn index_then_id_submission_should_make_progress() {
+		let pool = TransactionPool::new(Default::default());
+		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
+		pool.submit(vec![uxt(Alice, 210, true)]).unwrap();
+
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![
+			(Some(Alice.to_raw_public().into()), 209)
+		]);
+	}
+
+	#[test]
+	fn id_then_index_submission_should_make_progress() {
+		let pool = TransactionPool::new(Default::default());
+		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
+		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![
+			(Some(Alice.to_raw_public().into()), 209)
+		]);
+	}
+
+	#[test]
+	fn index_change_should_result_in_second_tx_culled_or_future() {
+		let pool = TransactionPool::new(Default::default());
+		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
+		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![
+			(Some(Alice.to_raw_public().into()), 209),
+			(Some(Alice.to_raw_public().into()), 210)
+		]);
+
+		// first xt is mined, but that has a side-effect of switching index 0 from Alice to Bob.
+		// second xt now invalid signature, so it fails.
+
+		// there is no way of reporting this back to the queue right now (TODO). this should cause
+		// the queue to flush all information regarding the sender index/account.
+
+		// after this, a re-evaluation of the second's readiness should result in it being thrown
+		// out (or maybe placed in future queue).
+/*
+		// TODO: uncomment once the new queue design is in.
+		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(1)).unwrap(), &TestPolkadotApi);
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		assert_eq!(pending, vec![]);
+*/
 	}
 }

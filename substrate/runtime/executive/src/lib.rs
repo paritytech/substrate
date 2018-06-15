@@ -217,8 +217,17 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256};
+	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
+
+	struct NullLookup;
+	impl AuxLookup for NullLookup {
+		type Source = u64;
+		type Target = u64;
+		fn lookup(s: Self::Source) -> Result<Self::Target, &'static str> {
+			Ok(s)
+		}
+	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
@@ -249,7 +258,7 @@ mod tests {
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Test>>;
-	type Executive = super::Executive<Test, Block<TestXt>, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
+	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
