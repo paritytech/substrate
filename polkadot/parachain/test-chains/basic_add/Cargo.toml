@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 polkadot-parachain = { path = "../../", default-features = false }
-wee_alloc = "0.4.0"
+wee_alloc = { git = "https://github.com/rustwasm/wee_alloc", rev = "4e9f23fff1f2474962085ca693f8884db666889f" }
 tiny-keccak = "1.4"
 pwasm-libc = "0.2"
 
