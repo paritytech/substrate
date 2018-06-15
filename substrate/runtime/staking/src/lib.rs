@@ -494,54 +494,54 @@ impl<T: Trait> Module<T> {
 		);
 	}
 
+	fn enum_set_size() -> T::AccountIndex {
+		T::AccountIndex::sa(ENUM_SET_SIZE)
+	}
+
 	/// Lookup an T::AccountIndex to get an Id, if there's one there.
 	pub fn lookup_index(index: T::AccountIndex) -> Option<T::AccountId> {
-		let usize_index: usize = As::<usize>::as_(index);
-		let mut set = Self::enum_set(T::AccountIndex::sa(usize_index / ENUM_SET_SIZE));
-		let i = usize_index % ENUM_SET_SIZE;
-		if i < set.len() {
-			Some(set.swap_remove(i))
-		} else {
-			None
-		}
+		let enum_set_size = Self::enum_set_size();
+		let set = Self::enum_set(index / enum_set_size);
+		let i: usize = (index % enum_set_size).as_();
+		set.get(i).map(|x| x.clone())
 	}
 
 	/// `true` if the account `index` is ready for reclaim.
-	pub fn can_reclaim(index: T::AccountIndex) -> bool {
-		let try_index: usize = index.as_();
-		let try_set = Self::enum_set(T::AccountIndex::sa(try_index / ENUM_SET_SIZE));
-		let item_index = try_index % ENUM_SET_SIZE;
-		item_index < try_set.len() && Self::voting_balance(&try_set[item_index]).is_zero()
+	pub fn can_reclaim(try_index: T::AccountIndex) -> bool {
+		let enum_set_size = Self::enum_set_size();
+		let try_set = Self::enum_set(try_index / enum_set_size);
+		let i = (try_index % enum_set_size).as_();
+		i < try_set.len() && Self::voting_balance(&try_set[i]).is_zero()
 	}
 
 	/// Register a new account (with existential balance).
 	fn new_account(who: &T::AccountId, balance: T::Balance) -> NewAccountOutcome {
+		let enum_set_size = Self::enum_set_size();
 		let next_set_index = Self::next_enum_set();
+		let reclaim_index_magic = T::AccountIndex::sa(RECLAIM_INDEX_MAGIC);
+		let reclaim_index_modulus = T::AccountIndex::sa(256usize);
+		let quantization = T::AccountIndex::sa(256usize);
 
 		// A little easter-egg for reclaiming dead indexes..
 		let ret = {
-			let next_set_index: usize = next_set_index.as_();
-
 			// we quantise the number of accounts so it stays constant over a reasonable
 			// period of time.
-			const QUANTIZATION: usize = 256;
-			let quantized_account_count = (next_set_index * ENUM_SET_SIZE / QUANTIZATION + 1) * QUANTIZATION;
+			let quantized_account_count: T::AccountIndex = (next_set_index * enum_set_size / quantization + One::one()) * quantization;
 			// then modify the starting balance to be modulo this to allow it to potentially
 			// identify an account index for reuse.
-			let maybe_try_index = balance % T::Balance::sa(quantized_account_count * 256);
+			let maybe_try_index = balance % <T::Balance as As<T::AccountIndex>>::sa(quantized_account_count * reclaim_index_modulus);
 			let maybe_try_index = As::<T::AccountIndex>::as_(maybe_try_index);
-			let maybe_try_index = As::<usize>::as_(maybe_try_index);
 
 			// this identifier must end with magic byte 0x69 to trigger this check (a minor
 			// optimisation to ensure we don't check most unintended account creations).
-			if maybe_try_index % 256 == RECLAIM_INDEX_MAGIC {
+			if maybe_try_index % reclaim_index_modulus == reclaim_index_magic {
 				// reuse is probably intended. first, remove magic byte.
-				let try_index = maybe_try_index / 256;
+				let try_index = maybe_try_index / reclaim_index_modulus;
 
 				// then check to see if this balance identifies a dead account index.
-				let set_index = T::AccountIndex::sa(try_index / ENUM_SET_SIZE);
+				let set_index = try_index / enum_set_size;
 				let mut try_set = Self::enum_set(set_index);
-				let item_index = try_index % ENUM_SET_SIZE;
+				let item_index = (try_index % enum_set_size).as_();
 				if item_index < try_set.len() {
 					if Self::voting_balance(&try_set[item_index]).is_zero() {
 						// yup - this index refers to a dead account. can be reused.
