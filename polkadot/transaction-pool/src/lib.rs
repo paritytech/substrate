@@ -39,6 +39,7 @@ mod error;
 use std::{
 	cmp::Ordering,
 	collections::HashMap,
+	ops::Deref,
 	sync::Arc,
 };
 
@@ -215,8 +216,6 @@ impl<'a, A: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, A
 
 		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.hash, Hash::from(sender));
 
-		let is_index_sender = match xt.original.extrinsic.signed { RawAddress::Index(_) => false, _ => true };
-
 		// TODO: find a way to handle index error properly -- will need changes to
 		// transaction-pool trait.
 		let (api, at_block) = (&self.api, &self.at_block);
@@ -313,6 +312,7 @@ impl<A> TransactionPool<A> where
 		}
 	}
 
+	/// Attempt to directly import `UncheckedExtrinsic` without going through serialization.
 	pub fn import_unchecked_extrinsic(&self, block: BlockId, uxt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
 		let verifier = Verifier {
 			api: &self.api,
@@ -324,6 +324,14 @@ impl<A> TransactionPool<A> where
 	pub fn retry_verification(&self) {
 		// This function should get all transactions from `None` sender (not fully verified ones)
 		// and attempt to verify them again with current block number
+	}
+}
+
+impl<A> Deref for TransactionPool<A> {
+	type Target = Pool<Hash, VerifiedTransaction, Scoring, Error>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
 	}
 }
 
@@ -445,104 +453,108 @@ mod tests {
 		}, MaybeUnsigned(sig.into())).using_encoded(|e| UncheckedExtrinsic::decode(&mut &e[..])).unwrap()
 	}
 
+	fn pool() -> TransactionPool<TestPolkadotApi> {
+		TransactionPool::new(Default::default(), TestPolkadotApi)
+	}
+
 	#[test]
 	fn id_submission_should_work() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
+		let pool = pool();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
 
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
 	}
 
 	#[test]
 	fn index_submission_should_work() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
+		let pool = pool();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
 
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
 	}
 
 	#[test]
 	fn multiple_id_submission_should_work() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, true)]).unwrap();
+		let pool = pool();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
 
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
 	#[test]
 	fn multiple_index_submission_should_work() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+		let pool = pool();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
 
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
 	#[test]
 	fn id_based_early_nonce_should_be_culled() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 208, true)]).unwrap();
+		let pool = pool();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, true)).unwrap();
 
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![]);
 	}
 
 	#[test]
 	fn index_based_early_nonce_should_be_culled() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 208, false)]).unwrap();
+		let pool = pool();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, false)).unwrap();
 
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![]);
 	}
 
 	#[test]
 	fn id_based_late_nonce_should_be_queued() {
-		let pool = TransactionPool::new(Default::default());
+		let pool = pool();
 		let ready = || Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
 
-		pool.submit(vec![uxt(Alice, 210, true)]).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![]);
 
-		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
 	#[test]
 	fn index_based_late_nonce_should_be_queued() {
-		let pool = TransactionPool::new(Default::default());
+		let pool = pool();
 		let ready = || Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
 
-		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![]);
 
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
 	#[test]
 	fn index_then_id_submission_should_make_progress() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, true)]).unwrap();
+		let pool = pool();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
 
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![
 			(Some(Alice.to_raw_public().into()), 209)
 		]);
@@ -550,12 +562,12 @@ mod tests {
 
 	#[test]
 	fn id_then_index_submission_should_make_progress() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+		let pool = pool();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
 
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![
 			(Some(Alice.to_raw_public().into()), 209)
 		]);
@@ -563,12 +575,13 @@ mod tests {
 
 	#[test]
 	fn index_change_should_result_in_second_tx_culled_or_future() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+		let pool = pool();
+		let block = BlockId::number(0);
+		pool.import_unchecked_extrinsic(block, uxt(Alice, 209, false)).unwrap();
+		pool.import_unchecked_extrinsic(block, uxt(Alice, 210, false)).unwrap();
 
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![
 			(Some(Alice.to_raw_public().into()), 209),
 			(Some(Alice.to_raw_public().into()), 210)
@@ -585,7 +598,7 @@ mod tests {
 /*
 		// TODO: uncomment once the new queue design is in.
 		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(1)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![]);
 */
 	}
