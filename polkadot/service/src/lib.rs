@@ -359,6 +359,7 @@ pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend<Bloc
 
 pub struct WebsocketWriterConfig {
 	pub url: String,
+	pub on_connect: Box<Fn() + Send + 'static>,
 }
 
 lazy_static!{
@@ -384,9 +385,11 @@ impl WebsocketWriter {
 
 	fn ensure_connected(&self) {
 		let mut client = self.out.lock();
-		if let Some(ref config) = *WEBSOCKET_WRITER_CONFIG.lock() {
-			if client.is_none() {
+		if client.is_none() {
+			if let Some(ref config) = *WEBSOCKET_WRITER_CONFIG.lock() {
 				*client = ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok());
+				drop(client);
+				(config.on_connect)();
 			}
 		}
 	}
@@ -417,7 +420,7 @@ impl io::Write for WebsocketWriter {
 }
 
 lazy_static!{
-	static ref SLOG_ROOT: slog::Logger = slog::Logger::root(slog_async::Async::new(slog_json::Json::default(WebsocketWriter::new()).fuse()).build().fuse(), o!());
+	pub static ref SLOG_ROOT: slog::Logger = slog::Logger::root(slog_async::Async::new(slog_json::Json::default(WebsocketWriter::new()).fuse()).build().fuse(), o!());
 }
 
 impl<B, E> Service<B, E>
@@ -484,6 +487,7 @@ impl<B, E> Service<B, E>
 		let api = api_creator(client.clone());
 		let best_header = client.best_block_header()?;
 		info!("Best block is #{}", best_header.number);
+		slog_info!(SLOG_ROOT, "Starting node"; "best" => best_header.number);
 		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			pool: transaction_pool.clone(),
@@ -503,7 +507,6 @@ impl<B, E> Service<B, E>
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
-		slog_info!(SLOG_ROOT, "Starting node"; "name" => config.name, "version" => crate_version!(), "best" => best_header.number, "chain" => format!("{:?}", config.chain_spec));
 
 		let thread = {
 			let client = client.clone();

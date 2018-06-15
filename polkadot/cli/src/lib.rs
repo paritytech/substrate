@@ -48,6 +48,8 @@ extern crate clap;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
+extern crate slog;
+#[macro_use]
 extern crate log;
 
 pub mod error;
@@ -61,9 +63,9 @@ use polkadot_primitives::Block;
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::{ChainSpec, WebsocketWriter, WebsocketWriterConfig};
+use service::{ChainSpec, WebsocketWriter, WebsocketWriterConfig, SLOG_ROOT};
 
-const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io";
+const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:80";
 
 struct Configuration(service::Configuration);
 
@@ -121,8 +123,19 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		config.name = name.into();
 	}
 	if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+		let name = config.name.clone();
+		let chain = config.chain_spec.clone();
 		WebsocketWriter::enable(WebsocketWriterConfig {
 			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
+			on_connect: Box::new(move || {
+				slog_info!(SLOG_ROOT, "Connected";
+					"name" => name.clone(),
+					"implementation" => "parity-polkadot",
+					"version" => crate_version!(),
+					"config" => "",
+					"chain" => ?chain
+				);
+			}),
 		})
 	}
 

@@ -41,7 +41,6 @@ extern crate hex_literal;
 #[cfg(test)]
 extern crate substrate_serializer;
 
-#[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_primitives;
 
 #[macro_use]

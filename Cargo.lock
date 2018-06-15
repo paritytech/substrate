@@ -1379,6 +1379,7 @@ dependencies = [
  "polkadot-service 0.2.0",
  "polkadot-transaction-pool 0.1.0",
  "regex 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
  "substrate-network 0.1.0",
  "substrate-rpc 0.1.0",
