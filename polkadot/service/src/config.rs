@@ -49,6 +49,10 @@ pub struct Configuration {
 	pub keys: Vec<String>,
 	/// Chain specification.
 	pub chain_spec: ChainSpec,
+	/// Telemetry server URL, optional - only `Some` if telemetry reporting is enabled
+	pub telemetry: Option<String>,
+	/// Node name.
+	pub name: String,
 }
 
 impl Default for Configuration {
@@ -61,6 +65,8 @@ impl Default for Configuration {
 			database_path: Default::default(),
 			keys: Default::default(),
 			chain_spec: ChainSpec::Development,
+			telemetry: Default::default(),
+			name: "Anonymous".into(),
 		}
 	}
 }
