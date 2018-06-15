@@ -357,36 +357,37 @@ pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend<Bloc
 		config)
 }
 
-pub struct WebsocketWriterConfig {
+pub struct TelemetryConfig {
 	pub url: String,
 	pub on_connect: Box<Fn() + Send + 'static>,
 }
 
 lazy_static!{
-	static ref WEBSOCKET_WRITER_CONFIG: Mutex<Option<WebsocketWriterConfig>> = Mutex::new(None);
+	static ref TELEMETRY_CONFIG: Mutex<Option<TelemetryConfig>> = Mutex::new(None);
 }
 
-pub struct WebsocketWriter {
+pub struct TelemetryWriter {
 	buffer: Vec<u8>,
 	out: Mutex<Option<ws::sync::Client<Box<ws::stream::sync::NetworkStream + Send>>>>,
 }
-impl WebsocketWriter {
+
+impl TelemetryWriter {
 	fn new() -> Self {
-		WebsocketWriter { buffer: vec![], out: Mutex::new(None) }
+		TelemetryWriter { buffer: vec![], out: Mutex::new(None) }
 	}
 
 	pub fn disable() {
-		*WEBSOCKET_WRITER_CONFIG.lock() = None;
+		*TELEMETRY_CONFIG.lock() = None;
 	}
 
-	pub fn enable(config: WebsocketWriterConfig) {
-		*WEBSOCKET_WRITER_CONFIG.lock() = Some(config);
+	pub fn enable(config: TelemetryConfig) {
+		*TELEMETRY_CONFIG.lock() = Some(config);
 	}
 
 	fn ensure_connected(&self) {
 		let mut client = self.out.lock();
 		if client.is_none() {
-			if let Some(ref config) = *WEBSOCKET_WRITER_CONFIG.lock() {
+			if let Some(ref config) = *TELEMETRY_CONFIG.lock() {
 				*client = ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok());
 				drop(client);
 				(config.on_connect)();
@@ -395,7 +396,7 @@ impl WebsocketWriter {
 	}
 }
 
-impl io::Write for WebsocketWriter {
+impl io::Write for TelemetryWriter {
 	fn write(&mut self, msg: &[u8]) -> io::Result<usize> {
 		if msg == b"\n" {
 			let _ = self.flush();
@@ -420,8 +421,13 @@ impl io::Write for WebsocketWriter {
 }
 
 lazy_static!{
-	pub static ref SLOG_ROOT: slog::Logger = slog::Logger::root(slog_async::Async::new(slog_json::Json::default(WebsocketWriter::new()).fuse()).build().fuse(), o!());
+	pub static ref SLOG_TELEMETRY: slog::Logger = slog::Logger::root(slog_async::Async::new(slog_json::Json::default(TelemetryWriter::new()).fuse()).build().fuse(), o!());
 }
+
+#[macro_export]
+macro_rules! telemetry {
+	( $($t:tt)* ) => { slog_info!($crate::SLOG_TELEMETRY, $($t)*) }
+} 
 
 impl<B, E> Service<B, E>
 	where
@@ -487,7 +493,7 @@ impl<B, E> Service<B, E>
 		let api = api_creator(client.clone());
 		let best_header = client.best_block_header()?;
 		info!("Best block is #{}", best_header.number);
-		slog_info!(SLOG_ROOT, "Starting node"; "best" => best_header.number);
+		telemetry!("Starting node"; "best" => best_header.number);
 		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			pool: transaction_pool.clone(),
@@ -526,7 +532,7 @@ impl<B, E> Service<B, E>
 
 				let events = client.import_notification_stream()
 					.for_each(move |notification| {
-						slog_info!(SLOG_ROOT, "Block imported"; "number" => notification.header.number);
+						telemetry!("Block imported"; "number" => notification.header.number);
 						network1.on_block_imported(notification.hash, &notification.header);
 						prune_imported(&*api, &*txpool1, notification.hash);
 						Ok(())
@@ -538,7 +544,7 @@ impl<B, E> Service<B, E>
 					// TODO [ToDr] Consider throttling?
 					.for_each(move |_| {
 						let status = txpool.light_status();
-						slog_info!(SLOG_ROOT, "New transactions"; "mem_usage" => status.mem_usage, "count" => status.transaction_count, "sender" => status.senders);
+						telemetry!("New transactions"; "mem_usage" => status.mem_usage, "count" => status.transaction_count, "sender" => status.senders);
 						network.trigger_repropagate();
 						Ok(())
 					});

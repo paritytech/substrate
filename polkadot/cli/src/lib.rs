@@ -38,6 +38,7 @@ extern crate substrate_network as network;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate polkadot_primitives;
+#[macro_use]
 extern crate polkadot_service as service;
 extern crate polkadot_transaction_pool as txpool;
 
@@ -63,7 +64,7 @@ use polkadot_primitives::Block;
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::{ChainSpec, WebsocketWriter, WebsocketWriterConfig, SLOG_ROOT};
+use service::{ChainSpec, TelemetryWriter, TelemetryConfig};
 
 const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
@@ -125,10 +126,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
 		let name = config.name.clone();
 		let chain = config.chain_spec.clone();
-		WebsocketWriter::enable(WebsocketWriterConfig {
+		TelemetryWriter::enable(TelemetryConfig {
 			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
 			on_connect: Box::new(move || {
-				slog_info!(SLOG_ROOT, "Connected";
+				telemetry!("Connected";
 					"name" => name.clone(),
 					"implementation" => "parity-polkadot",
 					"version" => crate_version!(),
