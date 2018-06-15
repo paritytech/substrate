@@ -46,6 +46,7 @@ pub fn start<B, E>(service: &Service<B, E>, handle: reactor::Handle)
 
 		if let Ok(best_block) = client.best_block_header() {
 			let hash = best_block.hash();
+			let num_peers = sync_status.num_peers;
 			let status = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
 				(SyncState::Idle, _) => "Idle".into(),
 				(SyncState::Downloading, None) => "Syncing".into(),
@@ -53,7 +54,7 @@ pub fn start<B, E>(service: &Service<B, E>, handle: reactor::Handle)
 			};
 			let txpool_status = txpool.light_status();
 			info!(target: "polkadot", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_block.number, hash);
-			telemetry!("system.interval"; "status" => status, "peers" => sync_status.num_peers, "height" => best_block.number, "best" => %hash, "txcount" => txpool_status.transaction_count);
+			telemetry!("system.interval"; "status" => status, "peers" => num_peers, "height" => best_block.number, "best" => %hash, "txcount" => txpool_status.transaction_count);
 		} else {
 			warn!("Error getting best block information");
 		}

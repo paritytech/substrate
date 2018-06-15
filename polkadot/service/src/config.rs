@@ -32,6 +32,47 @@ pub enum ChainSpec {
 	PoC2Testnet,
 }
 
+/// Synonym for Option<ChainSpec> because we cannot `impl From<..> for Option<ChainSpec>`
+pub struct OptionChainSpec(Option<ChainSpec>);
+
+impl OptionChainSpec {
+	/// Return the inner part.
+	pub fn inner(self) -> Option<ChainSpec> {
+		self.0
+	}
+}
+
+impl<'a> From<&'a str> for OptionChainSpec {
+	fn from(s: &'a str) -> Self {
+		OptionChainSpec(Some(match s {
+			"dev" => ChainSpec::Development,
+			"local" => ChainSpec::LocalTestnet,
+			"poc-2" => ChainSpec::PoC2Testnet,
+			_ => return OptionChainSpec(None),
+		}))
+	}
+}
+
+impl From<ChainSpec> for &'static str {
+	fn from(s: ChainSpec) -> &'static str {
+		match s {
+			ChainSpec::Development => "dev",
+			ChainSpec::LocalTestnet => "local",
+			ChainSpec::PoC2Testnet => "poc-2",
+		}
+	}
+}
+
+impl ::std::fmt::Display for ChainSpec {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		write!(f, "{}", match *self {
+			ChainSpec::Development => "Development",
+			ChainSpec::LocalTestnet => "Local Testnet",
+			ChainSpec::PoC2Testnet => "PoC-2 Testnet",
+		})
+	}
+}
+
 /// Service configuration.
 #[derive(Clone)]
 pub struct Configuration {

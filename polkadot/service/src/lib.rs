@@ -75,7 +75,7 @@ use network::ManageNetwork;
 use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
-pub use config::{Configuration, Role, ChainSpec};
+pub use config::{Configuration, Role, OptionChainSpec, ChainSpec};
 
 type CodeExecutor = NativeExecutor<LocalDispatch>;
 

@@ -15,55 +15,74 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Telemtetry utils.
+//! 
+//! `telemetry` macro be used from whereever in the Polkadot codebase
+//! in order to send real-time logging information to the telemetry
+//! server (if there is one). We use the async drain adapter of `slog`
+//! so that the logging thread doesn't get held up at all.
 
 extern crate parking_lot;
 extern crate websocket as ws;
 extern crate slog_async;
 extern crate slog_json;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
+#[macro_use(o, kv)]
 extern crate slog;
+extern crate slog_scope;
 
 use std::io;
 use parking_lot::Mutex;
 use slog::Drain;
+pub use slog_scope::with_logger;
 
+/// Configuration for telemetry.
 pub struct TelemetryConfig {
+	/// URL of the telemetry WS server.
 	pub url: String,
+	/// What do do when we connect to the server.
 	pub on_connect: Box<Fn() + Send + 'static>,
 }
 
-lazy_static!{
-	static ref TELEMETRY_CONFIG: Mutex<Option<TelemetryConfig>> = Mutex::new(None);
+/// Initialise telemetry.
+pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard {
+	let log = slog::Logger::root(
+		slog_async::Async::new(
+			slog_json::Json::default(
+				TelemetryWriter::from_config(config)
+			).fuse()
+		).build().fuse(), o!()
+	);
+	slog_scope::set_global_logger(log)
 }
 
-pub struct TelemetryWriter {
+/// Exactly equivalent to `slog_scope::info`, provided as a convenience.
+#[macro_export]
+macro_rules! telemetry {
+	( $($t:tt)* ) => { $crate::with_logger(|l| slog_info!(l, $($t)* )) }
+}
+
+struct TelemetryWriter {
 	buffer: Vec<u8>,
 	out: Mutex<Option<ws::sync::Client<Box<ws::stream::sync::NetworkStream + Send>>>>,
+	config: TelemetryConfig,
 }
 
 impl TelemetryWriter {
-	fn new() -> Self {
-		TelemetryWriter { buffer: vec![], out: Mutex::new(None) }
-	}
-
-	pub fn disable() {
-		*TELEMETRY_CONFIG.lock() = None;
-	}
-
-	pub fn enable(config: TelemetryConfig) {
-		*TELEMETRY_CONFIG.lock() = Some(config);
+	fn from_config(config: TelemetryConfig) -> Self {
+		TelemetryWriter {
+			buffer: vec![],
+			out: Mutex::new(
+				ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok())
+			),
+			config: config,
+		}
 	}
 
 	fn ensure_connected(&self) {
 		let mut client = self.out.lock();
 		if client.is_none() {
-			if let Some(ref config) = *TELEMETRY_CONFIG.lock() {
-				*client = ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok());
-				drop(client);
-				(config.on_connect)();
-			}
+			*client = ws::ClientBuilder::new(&self.config.url).ok().and_then(|mut x| x.connect(None).ok());
+			drop(client);
+			(self.config.on_connect)();
 		}
 	}
 }
@@ -77,7 +96,7 @@ impl io::Write for TelemetryWriter {
 		}
 		Ok(msg.len())
 	}
-	
+
 	fn flush(&mut self) -> io::Result<()> {
 		self.ensure_connected();
 		if if let Some(ref mut socket) = *self.out.lock() {
@@ -91,12 +110,3 @@ impl io::Write for TelemetryWriter {
 		Ok(())
 	}
 }
-
-lazy_static!{
-	pub static ref SLOG_TELEMETRY: slog::Logger = slog::Logger::root(slog_async::Async::new(slog_json::Json::default(TelemetryWriter::new()).fuse()).build().fuse(), o!());
-}
-
-#[macro_export]
-macro_rules! telemetry {
-	( $($t:tt)* ) => { slog_info!($crate::SLOG_TELEMETRY, $($t)*) }
-} 

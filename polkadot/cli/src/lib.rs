@@ -61,12 +61,12 @@ use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use polkadot_primitives::Block;
-use polkadot_telemetry::{TelemetryWriter, TelemetryConfig};
+use polkadot_telemetry::{init_telemetry, TelemetryConfig};
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::ChainSpec;
+use service::{OptionChainSpec, ChainSpec};
 
 const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
@@ -131,10 +131,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		info!("Node name: {}", config.name);
 	}
 
-	if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
 		let name = config.name.clone();
 		let chain = config.chain_spec.clone();
-		TelemetryWriter::enable(TelemetryConfig {
+		Some(init_telemetry(TelemetryConfig {
 			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
 			on_connect: Box::new(move || {
 				telemetry!("system.connected";
@@ -142,11 +142,13 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 					"implementation" => "parity-polkadot",
 					"version" => crate_version!(),
 					"config" => "",
-					"chain" => ?chain
+					"chain" => <&'static str>::from(chain)
 				);
 			}),
-		})
-	}
+		}))
+	} else {
+		None
+	};
 
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
@@ -175,17 +177,11 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}
 
 	match matches.value_of("chain") {
-		Some("dev") => config.chain_spec = ChainSpec::Development,
-		Some("local") => config.chain_spec = ChainSpec::LocalTestnet,
-		Some("poc-2") => config.chain_spec = ChainSpec::PoC2Testnet,
 		None => (),
-		Some(unknown) => panic!("Invalid chain name: {}", unknown),
+		Some(n) => config.chain_spec = OptionChainSpec::from(n).inner()
+			.unwrap_or_else(|| panic!("Invalid chain name: {}", n)),
 	}
-	info!("Chain specification: {}", match config.chain_spec {
-		ChainSpec::Development => "Development",
-		ChainSpec::LocalTestnet => "Local Testnet",
-		ChainSpec::PoC2Testnet => "PoC-2 Testnet",
-	});
+	info!("Chain specification: {}", config.chain_spec);
 
 	config.roles = role;
 	{
