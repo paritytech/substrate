@@ -24,7 +24,7 @@ extern crate websocket as ws;
 #[macro_use] extern crate slog;
 extern crate slog_async;
 extern crate slog_json;
-#[macro_use] extern crate clap;
+extern crate clap;
 extern crate exit_future;
 extern crate parking_lot;
 extern crate tokio_timer;
@@ -455,8 +455,6 @@ impl<B, E> Service<B, E>
 			A: PolkadotApi + Send + Sync + 'static,
 	{
 		use std::sync::Barrier;
-		info!("Parity Polkadot v{}", crate_version!());
-		info!("Node name: {}", config.name);
 
 		let (signal, exit) = ::exit_future::signal();
 
@@ -493,7 +491,7 @@ impl<B, E> Service<B, E>
 		let api = api_creator(client.clone());
 		let best_header = client.best_block_header()?;
 		info!("Best block is #{}", best_header.number);
-		telemetry!("Starting node"; "best" => best_header.number);
+		telemetry!("node.start"; "height" => best_header.number, "best" => %best_header.hash());
 		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			pool: transaction_pool.clone(),
@@ -532,7 +530,6 @@ impl<B, E> Service<B, E>
 
 				let events = client.import_notification_stream()
 					.for_each(move |notification| {
-						telemetry!("Block imported"; "number" => notification.header.number);
 						network1.on_block_imported(notification.hash, &notification.header);
 						prune_imported(&*api, &*txpool1, notification.hash);
 						Ok(())
@@ -543,8 +540,6 @@ impl<B, E> Service<B, E>
 				let events = txpool.import_notification_stream()
 					// TODO [ToDr] Consider throttling?
 					.for_each(move |_| {
-						let status = txpool.light_status();
-						telemetry!("New transactions"; "mem_usage" => status.mem_usage, "count" => status.transaction_count, "sender" => status.senders);
 						network.trigger_repropagate();
 						Ok(())
 					});

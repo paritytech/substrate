@@ -118,18 +118,24 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
+	info!("Parity ·:· Polkadot");
+	info!("  version {}", crate_version!());
+	info!("  by Parity Technologies, 2017, 2018");
+
 	let mut config = service::Configuration::default();
 
 	if let Some(name) = matches.value_of("name") {
 		config.name = name.into();
+		info!("Node name: {}", config.name);
 	}
+
 	if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
 		let name = config.name.clone();
 		let chain = config.chain_spec.clone();
 		TelemetryWriter::enable(TelemetryConfig {
 			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
 			on_connect: Box::new(move || {
-				telemetry!("Connected";
+				telemetry!("system.connected";
 					"name" => name.clone(),
 					"implementation" => "parity-polkadot",
 					"version" => crate_version!(),
