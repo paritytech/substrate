@@ -16,15 +16,16 @@
 
 //! Implementation of the traits for consensus networking for the polkadot protocol.
 
-use consensus::{Network, SharedTable, TableRouter, Error as ConsensusError};
 use bft;
 use substrate_network::{self as net, generic_message as msg};
+use substrate_network::consensus_gossip::ConsensusMessage;
+use polkadot_consensus::{Network, SharedTable, TableRouter, Statement, Error as ConsensusError};
 use polkadot_primitives::{Block, Hash, Header, BlockId, SessionKey};
 use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
 use futures::{future, prelude::*};
 use tokio::runtime::TaskExecutor;
 
-use super::NetworkService;
+use super::{Message, NetworkService,};
 
 /// Table routing implementation.
 pub struct Router;
@@ -167,7 +168,7 @@ impl Stream for Messages {
 }
 
 // check signature and authority validity of message.
-fn process_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &SessionKey, authorities: &[SessionKey]) -> Result<Option<bft::Communication<Block>>, bft::Error> {
+fn process_bft_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &SessionKey, authorities: &[SessionKey]) -> Result<Option<bft::Communication<Block>>, bft::Error> {
 	Ok(Some(match msg.message {
 		msg::BftMessage::Consensus(c) => bft::generic::Communication::Consensus(match c {
 			msg::SignedConsensusMessage::Propose(proposal) => bft::generic::LocalizedMessage::Propose({
@@ -221,6 +222,57 @@ fn process_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &Sessio
 	}))
 }
 
+fn process_encoded_statement(raw_message: Vec<u8>) -> Option<generic_message::SignedStatement> {
+	match
+}
+
+// task that processes all gossipped consensus messages,
+// checking signatures
+struct MessageProcessTask {
+	inner_stream: mpsc::UnboundedReceiver<ConsensusMessage<Block>>,
+	bft_messages: mpsc::UnboundedSender<bft::Communication<Block>>,
+	authorities: Vec<SessionKey>,
+	local_id: SessionKey,
+}
+
+impl Future for MessageProcessTask {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<(), ()> {
+		loop {
+			match self.inner_stream.poll() {
+				Ok(Async::Ready(Some(val))) => match val {
+					ConsensusMessage::Bft(msg) => {
+						match process_bft_message(msg, &self.authorities, &self.local_id) {
+							Ok(Some(msg)) => {
+								if let Err(_) = self.bft_messages.unbounded_send(msg) {
+									// if the BFT receiving stream has ended then
+									// we should just bail.
+									trace!(target: "bft", "BFT message stream appears to have closed");
+									return Ok(());
+								}
+							}
+							Ok(None) => {} // ignored local message
+							Err(e) => {
+								debug!("Message validation failed: {:?}", e);
+							}
+						}
+					}
+					ConsensusMessage::ChainSpecific(msg, _) => {
+						let statement = match ::serde_json::from_slice(&msg) {
+							Ok(Message::Statement)
+						}
+					}
+				}
+				Ok(Async::Ready(None)) => return Ok(Async::Ready(()))
+				Ok(Async::NotReady) => {},
+				Err(e) => debug!(target: "p_net", "Error getting consensus message: {:?}", e),
+			}
+		}
+	}
+}
+
 /// Wrapper around the network service
 pub struct ConsensusNetwork {
 	network: Arc<NetworkService>,
@@ -228,7 +280,7 @@ pub struct ConsensusNetwork {
 
 impl ConsensusNetwork {
 	/// Create a new consensus networking object.
-	pub fn new(network: Arc<NetworkService> ) -> Self {
+	pub fn new(network: Arc<NetworkService>, ) -> Self {
 		ConsensusNetwork { network }
 	}
 }
@@ -243,7 +295,7 @@ impl Network for ConsensusNetwork {
 	type Output = BftSink<ConsensusError>;
 
 	/// Instantiate a table router using the given shared table.
-	fn communication_for(&self, table: Arc<SharedTable>) -> (Self::TableRouter, Self::Input, Self::Output) {
+	fn communication_for(&self, table: Arc<SharedTable>, task_executor: ) -> (Self::TableRouter, Self::Input, Self::Output) {
 		let table_router = TableRouter;
 		let parent_hash = table.consensus_parent_hash().clone();
 

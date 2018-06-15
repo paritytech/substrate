@@ -66,10 +66,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use codec::Slicable;
-use table::generic::Statement as GenericStatement;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt, CandidateSignature};
 use primitives::AuthorityId;
 use transaction_pool::{Ready, TransactionPool};
 use tokio::runtime::TaskExecutor;
@@ -82,7 +81,7 @@ use dynamic_inclusion::DynamicInclusion;
 
 pub use self::collation::{Collators, Collation};
 pub use self::error::{ErrorKind, Error};
-pub use self::shared_table::{SharedTable, StatementSource, StatementProducer, ProducedStatements};
+pub use self::shared_table::{SharedTable, StatementSource, StatementProducer, ProducedStatements, Statement, GenericStatement};
 pub use service::Service;
 
 mod collation;
@@ -147,20 +146,21 @@ pub struct GroupInfo {
 /// Sign a table statement against a parent hash.
 /// The actual message signed is the encoded statement concatenated with the
 /// parent hash.
-pub fn sign_table_statement(statement: &table::Statement, key: &ed25519::Pair, parent_hash: &Hash) -> ed25519::Signature {
-	use polkadot_primitives::parachain::Statement as RawStatement;
-
-	let raw = match *statement {
-		GenericStatement::Candidate(ref c) => RawStatement::Candidate(c.clone()),
-		GenericStatement::Valid(h) => RawStatement::Valid(h),
-		GenericStatement::Invalid(h) => RawStatement::Invalid(h),
-		GenericStatement::Available(h) => RawStatement::Available(h),
-	};
-
-	let mut encoded = raw.encode();
+pub fn sign_table_statement(statement: &Statement, key: &ed25519::Pair, parent_hash: &Hash) -> CandidateSignature {
+	let mut encoded = statement.encode();
 	encoded.extend(&parent_hash.0);
 
-	key.sign(&encoded)
+	key.sign(&encoded).into()
+}
+
+/// Check signature on table statement.
+pub fn check_statement(statement: &Statement, signature: &CandidateSignature, signer: SessionKey, parent_hash: &Hash) -> bool {
+	use runtime_primitives::traits::Verify;
+
+	let mut encoded = statement.encode();
+	encoded.extend(&parent_hash.0);
+
+	signature.verify(&encoded[..], signer.into())
 }
 
 fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: AuthorityId) -> Result<(HashMap<ParaId, GroupInfo>, LocalDuty), Error> {

@@ -32,6 +32,8 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::hash::Hash;
 use std::fmt::Debug;
 
+use codec::{Slicable, Input};
+
 /// A batch of statements to send out.
 pub trait StatementBatch<V, T> {
 	/// Get the target authorities of these statements.
@@ -101,6 +103,59 @@ pub enum Statement<C, D> {
 	/// Broadcast by a authority to attest that the candidate with given digest
 	/// is invalid.
 	Invalid(D),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum StatementKind {
+	Candidate = 1,
+	Valid = 2,
+	Invalid = 3,
+	Available = 4,
+}
+
+impl<C: Slicable, D: Slicable> Slicable for Statement<C, D> {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		match *self {
+			Statement::Candidate(ref candidate) => {
+				v.push(StatementKind::Candidate as u8);
+				candidate.using_encoded(|s| v.extend(s));
+			}
+			Statement::Valid(ref digest) => {
+				v.push(StatementKind::Valid as u8);
+				digest.using_encoded(|s| v.extend(s));
+			}
+			Statement::Invalid(ref digest) => {
+				v.push(StatementKind::Invalid as u8);
+				digest.using_encoded(|s| v.extend(s));
+			}
+			Statement::Available(ref digest) => {
+				v.push(StatementKind::Available as u8);
+				digest.using_encoded(|s| v.extend(s));
+			}
+		}
+
+		v
+	}
+
+	fn decode<I: Input>(value: &mut I) -> Option<Self> {
+		match value.read_byte() {
+			Some(x) if x == StatementKind::Candidate as u8 => {
+				Slicable::decode(value).map(Statement::Candidate)
+			}
+			Some(x) if x == StatementKind::Valid as u8 => {
+				Slicable::decode(value).map(Statement::Valid)
+			}
+			Some(x) if x == StatementKind::Invalid as u8 => {
+				Slicable::decode(value).map(Statement::Invalid)
+			}
+			Some(x) if x == StatementKind::Available as u8 => {
+				Slicable::decode(value).map(Statement::Available)
+			}
+			_ => None,
+		}
+	}
 }
 
 /// A signed statement.

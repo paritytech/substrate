@@ -273,19 +273,9 @@ impl Slicable for Activity {
 	}
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(u8)]
-enum StatementKind {
-	Candidate = 1,
-	Valid = 2,
-	Invalid = 3,
-	Available = 4,
-}
-
 /// Statements which can be made about parachain candidates.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum Statement {
 	/// Proposal of a parachain candidate.
 	Candidate(CandidateReceipt),
@@ -295,48 +285,4 @@ pub enum Statement {
 	Invalid(Hash),
 	/// Vote to advance round after inactive primary.
 	Available(Hash),
-}
-
-impl Slicable for Statement {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		match *self {
-			Statement::Candidate(ref candidate) => {
-				v.push(StatementKind::Candidate as u8);
-				candidate.using_encoded(|s| v.extend(s));
-			}
-			Statement::Valid(ref hash) => {
-				v.push(StatementKind::Valid as u8);
-				hash.using_encoded(|s| v.extend(s));
-			}
-			Statement::Invalid(ref hash) => {
-				v.push(StatementKind::Invalid as u8);
-				hash.using_encoded(|s| v.extend(s));
-			}
-			Statement::Available(ref hash) => {
-				v.push(StatementKind::Available as u8);
-				hash.using_encoded(|s| v.extend(s));
-			}
-		}
-
-		v
-	}
-
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		match value.read_byte() {
-			Some(x) if x == StatementKind::Candidate as u8 => {
-				Slicable::decode(value).map(Statement::Candidate)
-			}
-			Some(x) if x == StatementKind::Valid as u8 => {
-				Slicable::decode(value).map(Statement::Valid)
-			}
-			Some(x) if x == StatementKind::Invalid as u8 => {
-				Slicable::decode(value).map(Statement::Invalid)
-			}
-			Some(x) if x == StatementKind::Available as u8 => {
-				Slicable::decode(value).map(Statement::Available)
-			}
-			_ => None,
-		}
-	}
 }

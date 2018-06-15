@@ -240,7 +240,6 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
 			peer.known_messages.insert(hash);
-			// TODO: validate signature?
 			if let Some((sink, parent_hash)) = self.message_sink.take() {
 				if parent == parent_hash {
 					if let Err(e) = sink.unbounded_send(message.clone()) {

@@ -16,4 +16,4 @@ substrate-primitives = { path = "../../substrate/primitives" }
 polkadot-primitives = { path = "../primitives" }
 ed25519 = { path = "../../substrate/ed25519" }
 futures = "0.1"
-tokio = "0.1.2"
+tokio = "0.1.7"

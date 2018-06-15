@@ -24,15 +24,16 @@ extern crate substrate_codec as codec;
 extern crate substrate_network;
 
 extern crate substrate_primitives;
-extern crate polkadot_consensus as consensus;
+extern crate polkadot_consensus;
 extern crate polkadot_primitives;
 extern crate ed25519;
 extern crate futures;
 extern crate tokio;
 
 use codec::Slicable;
+use polkadot_consensus::Statement;
 use polkadot_primitives::{Block, Hash};
-use polkadot_primitives::parachain::{CandidateSignature, Id as ParaId};
+use polkadot_primitives::parachain::Id as ParaId;
 use substrate_primitives::{AuthorityId};
 use substrate_network::{PeerId, RequestId, Context};
 use substrate_network::consensus_gossip::ConsensusGossip;
@@ -158,7 +159,10 @@ impl Specialization<Block> for PolkadotProtocol {
 
 	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, message: message::Message<Block>) {
 		match message {
-			generic_message::Message::BftMessage(msg) => self.consensus_gossip.on_bft_message(ctx, peer_id, msg),
+			generic_message::Message::BftMessage(msg) => {
+				// TODO: check signature here? what if relevant block is unknown?
+				self.consensus_gossip.on_bft_message(ctx, peer_id, msg)
+			}
 			generic_message::Message::ChainSpecific(raw) => {
 				let msg = match serde_json::from_slice(&raw) {
 					Ok(msg) => msg,
