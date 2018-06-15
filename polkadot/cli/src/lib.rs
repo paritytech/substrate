@@ -65,7 +65,7 @@ use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
 use service::{ChainSpec, WebsocketWriter, WebsocketWriterConfig, SLOG_ROOT};
 
-const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:80";
+const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
 struct Configuration(service::Configuration);
 
