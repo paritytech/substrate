@@ -160,14 +160,16 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let mut role = service::Role::FULL;
 	if matches.is_present("collator") {
-		info!("Starting collator.");
+		info!("Starting collator");
 		role = service::Role::COLLATOR;
 	} else if matches.is_present("validator") {
-		info!("Starting validator.");
+		info!("Starting validator");
 		role = service::Role::VALIDATOR;
 	} else if matches.is_present("light") {
-		info!("Starting light.");
+		info!("Starting (light)");
 		role = service::Role::LIGHT;
+	} else {
+		info!("Starting (heavy)");
 	}
 
 	match matches.value_of("chain") {
