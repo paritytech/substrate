@@ -1,6 +1,6 @@
 [package]
 name = "polkadot-service"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
@@ -9,8 +9,11 @@ futures = "0.1.17"
 parking_lot = "0.4"
 tokio-timer = "0.1.2"
 error-chain = "0.11"
+lazy_static = "1.0"
 log = "0.3"
-slog = "0.4"
+slog = "^2"
+slog-json = "^2"
+slog-async = "^2"
 clap = "2.27"
 websocket = "*"
 tokio-core = "0.1.12"

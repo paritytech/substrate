@@ -20,7 +20,10 @@
 extern crate futures;
 extern crate ed25519;
 extern crate websocket as ws;
-extern crate slog;
+#[macro_use] extern crate lazy_static;
+#[macro_use] extern crate slog;
+extern crate slog_async;
+extern crate slog_json;
 #[macro_use] extern crate clap;
 extern crate exit_future;
 extern crate parking_lot;
@@ -55,8 +58,10 @@ mod config;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread;
+use std::{thread, io};
+use parking_lot::Mutex;
 use futures::prelude::*;
+use slog::Drain;
 use tokio_core::reactor::Core;
 use codec::Slicable;
 use primitives::AuthorityId;
@@ -352,6 +357,52 @@ pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend<Bloc
 		config)
 }
 
+struct WebsocketWriter {
+	buffer: Vec<u8>,
+	out: Mutex<Option<ws::sync::Client<Box<ws::stream::sync::NetworkStream + Send>>>>,
+}
+impl WebsocketWriter {
+	fn new() -> Self {
+		WebsocketWriter { buffer: vec![], out: Mutex::new(None) }
+	}
+	
+	fn ensure_connected(&self) {
+		let mut client = self.out.lock();
+		if client.is_none() {
+			*client = ws::ClientBuilder::new("ws://127.0.0.1:1024").ok().and_then(|mut x| x.connect(None).ok());
+		}
+	}
+}
+
+impl io::Write for WebsocketWriter {
+	fn write(&mut self, msg: &[u8]) -> io::Result<usize> {
+		if msg == b"\n" {
+			let _ = self.flush();
+		} else {
+			self.buffer.extend_from_slice(msg);
+		}
+		Ok(msg.len())
+	}
+	fn flush(&mut self) -> io::Result<()> {
+		self.ensure_connected();
+		if if let Some(ref mut socket) = *self.out.lock() {
+			if let Ok(s) = ::std::str::from_utf8(&self.buffer[..]) {
+				socket.send_message(&ws::Message::text(s)).is_err()
+			} else { false }
+		} else { false } {
+			warn!("Stats server dropped connection!");
+			*self.out.lock() = None;
+		}
+		self.buffer.clear();
+		Ok(())
+	}
+}
+
+lazy_static!{
+	static ref SLOG_ROOT: slog::Logger = slog::Logger::root(slog_async::Async::new(slog_json::Json::default(
+		WebsocketWriter::new()).fuse()).build().fuse(), o!());
+}
+
 impl<B, E> Service<B, E>
 	where
 		B: Backend<Block> + Send + Sync + 'static,
@@ -433,15 +484,7 @@ impl<B, E> Service<B, E>
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
-		let mut maybe_stats = ws::ClientBuilder::new("ws://127.0.0.1:1024").ok()
-			.and_then(|mut x| x.connect_insecure().ok());
-		if let Some(ref mut stats) = maybe_stats {
-			let msg = format!("{{\"_type\": \"init\", \"version\": \"{}\", \"chain\": \"{:?}\", \"best\": {}}}",
-				crate_version!(),
-				config.chain_spec,
-				best_header.number);
-			let _ = stats.send_message(&ws::Message::text(msg));
-		}
+		slog_info!(SLOG_ROOT, "Starting version {version} (height is {best})", version = crate_version!(), best = best_header.number; "chain" => format!("{:?}", config.chain_spec));
 
 		let thread = {
 			let client = client.clone();
@@ -458,13 +501,10 @@ impl<B, E> Service<B, E>
 				// block notifications
 				let network1 = network.clone();
 				let txpool1 = txpool.clone();
+
 				let events = client.import_notification_stream()
 					.for_each(move |notification| {
-						if let Some(ref mut stats) = maybe_stats {
-							if let Err(e) = stats.send_message(&ws::Message::text(format!("{{\"_type\": \"importblock\", \"number\": {}}}", notification.header.number))) {
-								warn!("Stats server dropped connection! {}", e);
-							}
-						}
+						slog_info!(SLOG_ROOT, "Block imported"; "number" => notification.header.number);
 						network1.on_block_imported(notification.hash, &notification.header);
 						prune_imported(&*api, &*txpool1, notification.hash);
 						Ok(())
@@ -475,6 +515,8 @@ impl<B, E> Service<B, E>
 				let events = txpool.import_notification_stream()
 					// TODO [ToDr] Consider throttling?
 					.for_each(move |_| {
+						let status = txpool.light_status();
+						slog_info!(SLOG_ROOT, "New transactions"; "mem_usage" => status.mem_usage, "count" => status.transaction_count, "sender" => status.senders);
 						network.trigger_repropagate();
 						Ok(())
 					});
