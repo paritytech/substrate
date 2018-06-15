@@ -50,7 +50,8 @@ pub fn start<B, E>(service: &Service<B, E>, handle: reactor::Handle)
 				(SyncState::Downloading, None) => "Syncing".into(),
 				(SyncState::Downloading, Some(n)) => format!("Syncing, target=#{}", n),
 			};
-			info!(target: "polkadot", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_block.number, hash)
+			info!(target: "polkadot", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_block.number, hash);
+			telemetry!("Heartbeat"; "status" => status, "peers" => sync_status.num_peers, "height" => best_block.number, "best" => %hash);
 		} else {
 			warn!("Error getting best block information");
 		}
