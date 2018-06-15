@@ -120,7 +120,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	if let Some(name) = matches.value_of("name") {
 		config.name = name.into();
 	}
-	if matches.is_present("telemetry") {
+	if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
 		WebsocketWriter::enable(WebsocketWriterConfig {
 			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
 		})
