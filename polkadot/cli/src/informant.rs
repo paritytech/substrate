@@ -54,7 +54,7 @@ pub fn start<B, E>(service: &Service<B, E>, handle: reactor::Handle)
 			};
 			let txpool_status = txpool.light_status();
 			info!(target: "polkadot", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_block.number, hash);
-			telemetry!("system.interval"; "status" => status, "peers" => num_peers, "height" => best_block.number, "best" => %hash, "txcount" => txpool_status.transaction_count);
+			telemetry!("system.interval"; "status" => status, "peers" => num_peers, "height" => best_block.number, "best" => ?hash, "txcount" => txpool_status.transaction_count);
 		} else {
 			warn!("Error getting best block information");
 		}
@@ -64,7 +64,7 @@ pub fn start<B, E>(service: &Service<B, E>, handle: reactor::Handle)
 	let client = service.client();
 	let display_block_import = client.import_notification_stream().for_each(|n| {
 		info!(target: "polkadot", "Imported #{} ({})", n.header.number, n.hash);
-		telemetry!("block.import"; "height" => n.header.number, "best" => %n.hash);
+		telemetry!("block.import"; "height" => n.header.number, "best" => ?n.hash);
 		Ok(())
 	});
 
