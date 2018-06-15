@@ -1,0 +1,14 @@
+[package]
+name = "polkadot-telemetry"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Telemetry utils"
+
+[dependencies]
+parking_lot = "0.4"
+lazy_static = "1.0"
+slog = "^2"
+slog-json = "^2"
+slog-async = "^2"
+slog-scope = "*"
+websocket = "*"

@@ -12,10 +12,7 @@ error-chain = "0.11"
 lazy_static = "1.0"
 log = "0.3"
 slog = "^2"
-slog-json = "^2"
-slog-async = "^2"
 clap = "2.27"
-websocket = "*"
 tokio-core = "0.1.12"
 exit-future = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
@@ -26,6 +23,7 @@ polkadot-executor = { path = "../executor" }
 polkadot-api = { path = "../api" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
 polkadot-keystore = { path = "../keystore" }
+polkadot-telemetry = { path = "../telemetry" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }

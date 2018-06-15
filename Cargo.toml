@@ -24,6 +24,7 @@ members = [
 	"polkadot/runtime",
 	"polkadot/service",
 	"polkadot/statement-table",
+	"polkadot/telemetry",
 	"polkadot/transaction-pool",
 	"substrate/bft",
 	"substrate/client",

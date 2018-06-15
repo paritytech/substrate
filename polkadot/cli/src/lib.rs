@@ -38,8 +38,11 @@ extern crate substrate_network as network;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate polkadot_primitives;
-#[macro_use]
 extern crate polkadot_service as service;
+#[macro_use]
+extern crate slog;	// needed until we can reexport `slog_info` from `polkadot_telemetry`
+#[macro_use]
+extern crate polkadot_telemetry;
 extern crate polkadot_transaction_pool as txpool;
 
 #[macro_use]
@@ -48,8 +51,6 @@ extern crate lazy_static;
 extern crate clap;
 #[macro_use]
 extern crate error_chain;
-#[macro_use]
-extern crate slog;
 #[macro_use]
 extern crate log;
 
@@ -60,11 +61,12 @@ use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use polkadot_primitives::Block;
+use polkadot_telemetry::{TelemetryWriter, TelemetryConfig};
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::{ChainSpec, TelemetryWriter, TelemetryConfig};
+use service::ChainSpec;
 
 const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
