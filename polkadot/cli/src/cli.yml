@@ -80,6 +80,6 @@ args:
   - telemetry-url:
       long: telemetry-url
       value_name: TELEMETRY_URL
-      help: The URL of the telemetry server
+      help: The URL of the telemetry server. Implies --telemetry.
       takes_value: true
 subcommands:
