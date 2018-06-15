@@ -415,7 +415,7 @@ impl<B, E> Service<B, E>
 		let api = api_creator(client.clone());
 		let best_header = client.best_block_header()?;
 		info!("Best block is #{}", best_header.number);
-		telemetry!("node.start"; "height" => best_header.number, "best" => %best_header.hash());
+		telemetry!("node.start"; "height" => best_header.number, "best" => ?best_header.hash());
 		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			pool: transaction_pool.clone(),

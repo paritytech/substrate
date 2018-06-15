@@ -47,7 +47,14 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 	let log = slog::Logger::root(
 		slog_async::Async::new(
 			slog_json::Json::default(
-				TelemetryWriter::from_config(config)
+				TelemetryWriter {
+					buffer: vec![],
+					out: Mutex::new(
+						ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok())
+					),
+					config,
+					first_time: true,	// ensures that on_connect will be called.
+				}
 			).fuse()
 		).build().fuse(), o!()
 	);
@@ -64,20 +71,15 @@ struct TelemetryWriter {
 	buffer: Vec<u8>,
 	out: Mutex<Option<ws::sync::Client<Box<ws::stream::sync::NetworkStream + Send>>>>,
 	config: TelemetryConfig,
+	first_time: bool,
 }
 
 impl TelemetryWriter {
-	fn from_config(config: TelemetryConfig) -> Self {
-		TelemetryWriter {
-			buffer: vec![],
-			out: Mutex::new(
-				ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok())
-			),
-			config: config,
+	fn ensure_connected(&mut self) {
+		if self.first_time {
+			(self.config.on_connect)();
+			self.first_time = false;
 		}
-	}
-
-	fn ensure_connected(&self) {
 		let mut client = self.out.lock();
 		if client.is_none() {
 			*client = ws::ClientBuilder::new(&self.config.url).ok().and_then(|mut x| x.connect(None).ok());
