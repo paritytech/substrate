@@ -15,6 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate ed25519;
+extern crate substrate_client as client;
 extern crate substrate_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_primitives as substrate_primitives;
@@ -35,16 +36,14 @@ mod error;
 use std::{
 	cmp::Ordering,
 	collections::HashMap,
-	ops::Deref,
 	sync::Arc,
-	result
 };
 
 use codec::Slicable;
 use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
 use extrinsic_pool::api::ExtrinsicPool;
 use polkadot_api::PolkadotApi;
-use primitives::{AccountId, AccountIndex, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
+use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use runtime::{Address, UncheckedExtrinsic};
 use substrate_runtime_primitives::traits::{Bounded, Checkable, Hashing, BlakeTwo256};
 
@@ -107,8 +106,6 @@ impl VerifiedTransaction {
 	}
 }
 
-// TODO [ToDr] Use a bit different trait with alternative naming.
-// (avoid Sender)
 impl txpool::VerifiedTransaction for VerifiedTransaction {
 	type Hash = Hash;
 	type Sender = Option<AccountId>;
@@ -232,13 +229,14 @@ impl<'a, A: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, A
 	}
 }
 
-pub struct Verifier<A> {
-	api: A,
+pub struct Verifier<'a, A: 'a, B> {
+	api: &'a A,
+	at_block: B,
 }
 
-impl<A: PolkadotApi> txpool::Verifier<UncheckedExtrinsic> for Verifier<A> where
-	A: Send + Sync + 'static,
-	<A as PolkadotApi>::CheckedBlockId: Sync,
+impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A, A::CheckedBlockId> where
+	A: 'a + PolkadotApi + Send + Sync,
+	A::CheckedBlockId: Sync,
 {
 	type VerifiedTransaction = VerifiedTransaction;
 	type Error = Error;
@@ -247,8 +245,6 @@ impl<A: PolkadotApi> txpool::Verifier<UncheckedExtrinsic> for Verifier<A> where
 		const NO_ACCOUNT: &str = "Account not found.";
 
 		info!("Extrinsic Submitted: {:?}", uxt);
-		// TODO [ToDr] use different trait `extrinsic_pool::Verifier` and pass the `at_block`.
-		let at_block = unimplemented!();
 
 		if !uxt.is_signed() {
 			bail!(ErrorKind::IsInherent(uxt))
@@ -256,7 +252,7 @@ impl<A: PolkadotApi> txpool::Verifier<UncheckedExtrinsic> for Verifier<A> where
 
 		let (encoded_size, hash) = uxt.using_encoded(|e| (e.len(), BlakeTwo256::hash(e)));
 		// TODO [ToDr] Consider introducing a cache for this.
-		let lookup = move |address: Address| match self.api.lookup(at_block, address.clone()) {
+		let lookup = move |address: Address| match self.api.lookup(&self.at_block, address.clone()) {
 			Ok(Some(address)) => Ok(address),
 			Ok(None) => Err(NO_ACCOUNT.into()),
 			Err(e) => {
@@ -285,59 +281,52 @@ impl<A: PolkadotApi> txpool::Verifier<UncheckedExtrinsic> for Verifier<A> where
 /// The polkadot transaction pool.
 ///
 /// Wraps a `extrinsic_pool::Pool`.
-pub struct TransactionPool<A: PolkadotApi> where
-	A: Send + Sync + 'static,
-	<A as PolkadotApi>::CheckedBlockId: Sync,
-{
-	inner: Pool<UncheckedExtrinsic, Hash, Verifier<A>, Scoring, Error>,
+pub struct TransactionPool<A> {
+	inner: Pool<Hash, VerifiedTransaction, Scoring, Error>,
+	api: A,
 }
 
-impl<A: PolkadotApi> TransactionPool<A> where
-	A: Send + Sync + 'static,
-	<A as PolkadotApi>::CheckedBlockId: Sync,
+impl<A> TransactionPool<A> where
+	A: PolkadotApi + Send + Sync,
+	A::CheckedBlockId: Sync,
 {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, api: A) -> Self {
 		TransactionPool {
-			inner: Pool::new(options, Verifier { api }, Scoring),
+			inner: Pool::new(options, Scoring),
+			api,
 		}
 	}
 
-	pub fn import_unchecked_extrinsic(&self, uxt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
-		self.inner.submit(vec![uxt]).map(|mut v| v.swap_remove(0))
+	pub fn import_unchecked_extrinsic(&self, block: BlockId, uxt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
+		let verifier = Verifier {
+			api: &self.api,
+			at_block: self.api.check_id(block)?,
+		};
+		self.inner.submit(verifier, vec![uxt]).map(|mut v| v.swap_remove(0))
 	}
 
-	pub fn retry_verification(&self, at_block: A::CheckedBlockId) {
+	pub fn retry_verification(&self) {
 		// This function should get all transactions from `None` sender (not fully verified ones)
 		// and attempt to verify them again with current block number
 	}
 }
 
-impl<A: PolkadotApi> Deref for TransactionPool<A> where
+impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for TransactionPool<A> where
 	A: Send + Sync + 'static,
-	<A as PolkadotApi>::CheckedBlockId: Sync,
-{
-	type Target = Pool<UncheckedExtrinsic, Hash, Verifier<A>, Scoring, Error>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.inner
-	}
-}
-
-impl<A: PolkadotApi> ExtrinsicPool<FutureProofUncheckedExtrinsic, Hash> for TransactionPool<A> where
-	A: Send + Sync + 'static,
-	<A as PolkadotApi>::CheckedBlockId: Sync,
+	A: PolkadotApi,
+	A::CheckedBlockId: Sync,
 {
 	type Error = Error;
 
-	fn submit(&self, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
+	fn submit(&self, block: BlockId, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
 		// TODO: more general transaction pool, which can handle more kinds of vec-encoded transactions,
 		// even when runtime is out of date.
 		xts.into_iter()
 			.map(|xt| xt.encode())
 			.map(|encoded| {
 				let decoded = UncheckedExtrinsic::decode(&mut &encoded[..]).ok_or(ErrorKind::InvalidExtrinsicFormat)?;
-				let tx = self.import_unchecked_extrinsic(decoded)?;
+				let tx = self.import_unchecked_extrinsic(block, decoded)?;
 				Ok(*tx.hash())
 			})
 			.collect()
