@@ -31,6 +31,8 @@ extern crate fdlimit;
 extern crate ed25519;
 extern crate triehash;
 extern crate parking_lot;
+extern crate serde;
+extern crate serde_json;
 
 extern crate substrate_primitives;
 extern crate substrate_state_machine as state_machine;
@@ -68,12 +70,15 @@ pub use chain_spec::ChainSpec;
 pub use preset_config::PresetConfig;
 
 use std::io;
+use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::collections::HashMap;
 use substrate_primitives::hexdisplay::HexDisplay;
+use substrate_primitives::storage::{StorageData, StorageKey};
 use polkadot_primitives::Block;
 use polkadot_telemetry::{init_telemetry, TelemetryConfig};
-//use runtime_primitives::{BuildStorage, StorageMap};
+use runtime_primitives::StorageMap;
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
@@ -98,6 +103,12 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok(self.chain_name.clone())
 	}
+}
+
+fn read_storage_json(filename: &str) -> Option<StorageMap> {
+	let file = File::open(PathBuf::from(filename)).ok()?;
+	let h: HashMap<StorageKey, StorageData> = ::serde_json::from_reader(&file).ok()?;
+	Some(h.into_iter().map(|(k, v)| (k.0, v.0)).collect())
 }
 
 /// Parse command line arguments and start the node.
@@ -181,7 +192,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
 		.map(PresetConfig::deconstruct)
-		.unwrap_or_else(|_f| (Box::new(|| /* TODO read f as JSON and place in HashMap */ Default::default()), vec![]));
+		.unwrap_or_else(|f| (Box::new(move || 
+			read_storage_json(&f).unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
+		), vec![]));
 	
 	if matches.is_present("build-genesis") {
 		info!("Building genesis");
