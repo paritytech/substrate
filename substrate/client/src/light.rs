@@ -24,10 +24,11 @@ use state_machine::backend::Backend as StateBackend;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::StorageMap;
 use blockchain::{self, BlockStatus};
 use backend;
 use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
-use client::{Client, GenesisBuilder};
+use client::Client;
 use error;
 use in_mem::Blockchain as InMemBlockchain;
 
@@ -220,18 +221,17 @@ pub fn new_light_backend<B: BlockT>() -> Arc<Backend<B>> {
 }
 
 /// Create an instance of light client.
-pub fn new_light<F, B, Block>(
+pub fn new_light<F, Block>(
 	backend: Arc<Backend<Block>>,
 	fetcher: Arc<F>,
-	genesis_builder: B,
+	genesis_map: StorageMap,
 ) -> error::Result<Client<Backend<Block>, RemoteCallExecutor<Backend<Block>, F>, Block>>
 	where
 		F: Fetcher<Block>,
-		B: GenesisBuilder<Block>,
 		Block: BlockT,
 {
 	let executor = RemoteCallExecutor::new(backend.clone(), fetcher);
-	Client::new(backend, executor, genesis_builder)
+	Client::new(backend, executor, genesis_map)
 }
 
 /// Create an instance of fetch data checker.

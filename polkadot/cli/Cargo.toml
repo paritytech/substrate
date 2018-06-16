@@ -30,7 +30,9 @@ substrate-rpc = { path = "../../substrate/rpc" }
 substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-network = { path = "../../substrate/network" }
 substrate-primitives = { path = "../../substrate/primitives" }
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 polkadot-primitives = { path = "../primitives" }
+polkadot-runtime = { path = "../runtime" }
 polkadot-service = { path = "../service" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
 polkadot-telemetry = { path = "../telemetry" }

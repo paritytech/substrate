@@ -38,7 +38,9 @@ extern crate substrate_client as client;
 extern crate substrate_network as network;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate polkadot_primitives;
+extern crate polkadot_runtime;
 extern crate polkadot_service as service;
 #[macro_use]
 extern crate slog;	// needed until we can reexport `slog_info` from `polkadot_telemetry`
@@ -54,9 +56,16 @@ extern crate clap;
 extern crate error_chain;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate hex_literal;
 
 pub mod error;
 mod informant;
+mod chain_spec;
+mod preset_config;
+
+pub use chain_spec::ChainSpec;
+pub use preset_config::PresetConfig;
 
 use std::io;
 use std::net::SocketAddr;
@@ -68,7 +77,6 @@ use polkadot_telemetry::{init_telemetry, TelemetryConfig};
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::{OptionChainSpec, ChainSpec, ChainConfig};
 
 const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
@@ -84,7 +92,7 @@ impl substrate_rpc::system::SystemApi for Configuration {
 	}
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(<&'static str>::from(self.0.chain_spec).into())
+		Ok(self.0.chain_name.clone())
 	}
 }
 
@@ -129,9 +137,16 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		info!("Node name: {}", config.name);
 	}
 
+	let chain_spec = matches.value_of("chain")
+		.map(ChainSpec::from)
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
+	info!("Chain specification: {}", chain_spec);
+
+	config.chain_name = chain_spec.clone().into();
+
 	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
 		let name = config.name.clone();
-		let chain = config.chain_spec.clone();
+		let chain_name = config.chain_name.clone();
 		Some(init_telemetry(TelemetryConfig {
 			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
 			on_connect: Box::new(move || {
@@ -140,7 +155,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 					"implementation" => "parity-polkadot",
 					"version" => crate_version!(),
 					"config" => "",
-					"chain" => <&'static str>::from(chain)
+					"chain" => chain_name.clone(),
 				);
 			}),
 		}))
@@ -160,19 +175,18 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
 
-	if matches.is_present("dev") {
-		config.chain_spec = ChainSpec::Development;
-	}
-	match matches.value_of("chain") {
-		None => (),
-		Some(n) => config.chain_spec = OptionChainSpec::from(n).inner()
-			.unwrap_or_else(|| panic!("Invalid chain name: {}", n)),
-	}
-	info!("Chain specification: {}", config.chain_spec);
-
+	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
+		.map(PresetConfig::deconstruct)
+		.or_else(|f| {
+			info!("Custom Genesis file: {}", f);
+			// TODO: Read chain spec file `n`.
+			Ok((Box::new(move || Default::default()), vec![]))
+		})
+		.unwrap_or_else(|f: String| panic!("Cannot find chain specification file: {}", f));
+	
 	if matches.is_present("build-genesis") {
 		info!("Building genesis");
-		for (i, (k, v)) in ChainConfig::from(config.chain_spec).build_storage().iter().enumerate() {
+		for (i, (k, v)) in genesis_storage().iter().enumerate() {
 			print!("{}\n\"0x{}\": \"0x{}\"", if i > 0 {','} else {'{'}, HexDisplay::from(k), HexDisplay::from(v));
 		}
 		println!("\n}}");
@@ -199,6 +213,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		config.network.boot_nodes = matches
 			.values_of("bootnodes")
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
+		config.network.boot_nodes.extend(boot_nodes);
 		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 

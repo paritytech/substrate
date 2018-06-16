@@ -49,12 +49,9 @@ extern crate error_chain;
 extern crate slog;	// needed until we can reexport `slog_info` from `polkadot_telemetry`
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate hex_literal;
 
 mod error;
 mod config;
-mod chain_config;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -63,20 +60,19 @@ use futures::prelude::*;
 use tokio_core::reactor::Core;
 use codec::Slicable;
 use transaction_pool::TransactionPool;
+use runtime_primitives::StorageMap;
 use substrate_executor::NativeExecutor;
 use polkadot_executor::Executor as LocalDispatch;
 use keystore::Store as Keystore;
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Block, BlockId, Hash, Header};
-use polkadot_runtime::{GenesisConfig, BuildStorage};
+use polkadot_primitives::{Block, BlockId, Hash};
 use client::backend::Backend;
-use client::{genesis, Client, BlockchainEvents, CallExecutor};
+use client::{Client, BlockchainEvents, CallExecutor};
 use network::ManageNetwork;
 use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
-pub use config::{Configuration, Role, OptionChainSpec, ChainSpec};
-pub use chain_config::ChainConfig;
+pub use config::{Configuration, Role};
 
 type CodeExecutor = NativeExecutor<LocalDispatch>;
 
@@ -152,18 +148,6 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 	}
 }
 
-struct GenesisBuilder {
-	config: GenesisConfig,
-}
-
-impl client::GenesisBuilder<Block> for GenesisBuilder {
-	fn build(self) -> (Header, Vec<(Vec<u8>, Vec<u8>)>) {
-		let storage = self.config.build_storage();
-		let block = genesis::construct_genesis_block::<Block>(&storage);
-		(block.header, storage.into_iter().collect())
-	}
-}
-
 /// Creates light client and register protocol with the network service
 pub fn new_light(config: Configuration)
 	-> Result<
@@ -173,11 +157,11 @@ pub fn new_light(config: Configuration)
 		>,
 		error::Error,
 	> {
-	Service::new(move |_, executor, genesis_builder: GenesisBuilder| {
+	Service::new(move |_, executor, genesis_storage| {
 			let client_backend = client::light::new_light_backend();
 			let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));
 			let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
-			let client = client::light::new_light(client_backend, fetcher.clone(), genesis_builder)?;
+			let client = client::light::new_light(client_backend, fetcher.clone(), genesis_storage)?;
 			Ok((Arc::new(client), Some(fetcher)))
 		},
 		|client| Arc::new(polkadot_api::light::RemotePolkadotApiWrapper(client.clone())),
@@ -188,8 +172,8 @@ pub fn new_light(config: Configuration)
 /// Creates full client and register protocol with the network service
 pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend<Block>, client::LocalCallExecutor<client_db::Backend<Block>, CodeExecutor>>, error::Error> {
 	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
-	Service::new(|db_settings, executor, genesis_builder: GenesisBuilder|
-		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_builder)?), None)),
+	Service::new(|db_settings, executor, genesis_storage|
+		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_storage)?), None)),
 		|client| client,
 		|client, network, tx_pool, keystore| {
 			if !is_validator {
@@ -218,12 +202,12 @@ impl<B, E> Service<B, E>
 		client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {
 	/// Creates and register protocol with the network service
-	fn new<F, G, C, A>(client_creator: F, api_creator: G, consensus_creator: C, mut config: Configuration) -> Result<Self, error::Error>
+	fn new<F, G, C, A>(client_creator: F, api_creator: G, consensus_creator: C, config: Configuration) -> Result<Self, error::Error>
 		where
 			F: FnOnce(
 					client_db::DatabaseSettings,
 					CodeExecutor,
-					GenesisBuilder,
+					StorageMap,
 				) -> Result<(Arc<Client<B, E, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error>,
 			G: Fn(
 					Arc<Client<B, E, Block>>,
@@ -253,19 +237,12 @@ impl<B, E> Service<B, E>
 			info!("Generated a new keypair: {:?}", key.public());
 		}
 
-		let ChainConfig { genesis_config, boot_nodes } = ChainConfig::from(config.chain_spec);
-		config.network.boot_nodes.extend(boot_nodes);
-
-		let genesis_builder = GenesisBuilder {
-			config: genesis_config,
-		};
-
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: None,
 			path: config.database_path.into(),
 		};
 
-		let (client, on_demand) = client_creator(db_settings, executor, genesis_builder)?;
+		let (client, on_demand) = client_creator(db_settings, executor, config.genesis_storage)?;
 		let api = api_creator(client.clone());
 		let best_header = client.best_block_header()?;
 		info!("Best block is #{}", best_header.number);
@@ -288,7 +265,6 @@ impl<B, E> Service<B, E>
 		let network = network::Service::new(network_params)?;
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
-
 
 		let thread = {
 			let client = client.clone();

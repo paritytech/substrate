@@ -22,23 +22,18 @@ use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
+use runtime_primitives::StorageMap;
 use primitives::storage::{StorageKey, StorageData};
-use codec::{Slicable};
+use codec::Slicable;
 use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
 
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend};
 use call_executor::{CallExecutor, LocalCallExecutor};
-use {error, in_mem, block_builder, runtime_io, bft};
+use {error, in_mem, block_builder, runtime_io, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
-
-/// Polkadot Client genesis block builder.
-pub trait GenesisBuilder<B: BlockT> {
-	/// Build genesis block.
-	fn build(self) -> (B::Header, Vec<(Vec<u8>, Vec<u8>)>);
-}
 
 /// Polkadot Client
 pub struct Client<B, E, Block> where Block: BlockT {
@@ -146,18 +141,17 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 }
 
 /// Create an instance of in-memory client.
-pub fn new_in_mem<E, F, Block>(
+pub fn new_in_mem<E, Block>(
 	executor: E,
-	genesis_builder: F
+	genesis_map: StorageMap
 ) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
 	where
 		E: CodeExecutor,
-		F: GenesisBuilder<Block>,
 		Block: BlockT,
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, executor, genesis_builder)
+	Client::new(backend, executor, genesis_map)
 }
 
 impl<B, E, Block: BlockT> Client<B, E, Block> where
@@ -167,20 +161,17 @@ impl<B, E, Block: BlockT> Client<B, E, Block> where
 	error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	/// Creates new Polkadot Client with given blockchain and code executor.
-	pub fn new<F>(
+	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		genesis_builder: F,
-	) -> error::Result<Self>
-		where
-			F: GenesisBuilder<Block>
-	{
+		genesis_storage: StorageMap,
+	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			trace!("Empty database, writing genesis block");
-			let (genesis_header, genesis_store) = genesis_builder.build();
+			info!("Initialising genesis block & state in database...");
+			let genesis_block = genesis::construct_genesis_block::<Block>(&genesis_storage);
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
-			op.reset_storage(genesis_store.into_iter())?;
-			op.set_block_data(genesis_header, Some(vec![]), None, true)?;
+			op.reset_storage(genesis_storage.into_iter())?;
+			op.set_block_data(genesis_block.deconstruct().0, Some(vec![]), None, true)?;
 			backend.commit_operation(op)?;
 		}
 		Ok(Client {
