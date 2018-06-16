@@ -51,7 +51,7 @@ use std::sync::Arc;
 use client::genesis;
 use demo_primitives::Hash;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, BuildExternalities};
+	SessionConfig, StakingConfig, BuildStorage};
 use demo_runtime::{Block, Header, UncheckedExtrinsic};
 use futures::{Future, Sink, Stream};
 
@@ -154,7 +154,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 				}),
 			};
 
-			let storage = genesis_config.build_externalities();
+			let storage = genesis_config.build_storage();
 			let block = genesis::construct_genesis_block::<Block>(&storage);
 			(block.header, storage.into_iter().collect())
 		}

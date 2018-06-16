@@ -32,6 +32,7 @@ extern crate ed25519;
 extern crate triehash;
 extern crate parking_lot;
 
+extern crate substrate_primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_network as network;
@@ -60,13 +61,14 @@ mod informant;
 use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use substrate_primitives::hexdisplay::HexDisplay;
 use polkadot_primitives::Block;
 use polkadot_telemetry::{init_telemetry, TelemetryConfig};
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::{OptionChainSpec, ChainSpec};
+use service::{OptionChainSpec, ChainSpec, ChainConfig};
 
 const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
@@ -82,11 +84,7 @@ impl substrate_rpc::system::SystemApi for Configuration {
 	}
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(match self.0.chain_spec {
-			ChainSpec::Development => "dev",
-			ChainSpec::LocalTestnet => "local",
-			ChainSpec::PoC2Testnet => "poc-2",
-		}.into())
+		Ok(<&'static str>::from(self.0.chain_spec).into())
 	}
 }
 
@@ -162,26 +160,39 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
 
-	let mut role = service::Role::FULL;
-	if matches.is_present("collator") {
-		info!("Starting collator");
-		role = service::Role::COLLATOR;
-	} else if matches.is_present("validator") {
-		info!("Starting validator");
-		role = service::Role::VALIDATOR;
-	} else if matches.is_present("light") {
-		info!("Starting (light)");
-		role = service::Role::LIGHT;
-	} else {
-		info!("Starting (heavy)");
+	if matches.is_present("dev") {
+		config.chain_spec = ChainSpec::Development;
 	}
-
 	match matches.value_of("chain") {
 		None => (),
 		Some(n) => config.chain_spec = OptionChainSpec::from(n).inner()
 			.unwrap_or_else(|| panic!("Invalid chain name: {}", n)),
 	}
 	info!("Chain specification: {}", config.chain_spec);
+
+	if matches.is_present("build-genesis") {
+		info!("Building genesis");
+		for (i, (k, v)) in ChainConfig::from(config.chain_spec).build_storage().iter().enumerate() {
+			print!("{}\n\"0x{}\": \"0x{}\"", if i > 0 {','} else {'{'}, HexDisplay::from(k), HexDisplay::from(v));
+		}
+		println!("\n}}");
+		return Ok(())
+	}
+
+	let role =
+		if matches.is_present("collator") {
+			info!("Starting collator");
+			service::Role::COLLATOR
+		} else if matches.is_present("light") {
+			info!("Starting (light)");
+			service::Role::LIGHT
+		} else if matches.is_present("validator") || matches.is_present("dev") {
+			info!("Starting validator");
+			service::Role::VALIDATOR
+		} else {
+			info!("Starting (heavy)");
+			service::Role::FULL
+		};
 
 	config.roles = role;
 	{
@@ -206,6 +217,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
+	if matches.is_present("dev") {
+		config.keys.push("Alice".into());
+	}
 
 	match role == service::Role::LIGHT {
 		true => run_until_exit(core, service::new_light(config.clone())?, &matches, config),

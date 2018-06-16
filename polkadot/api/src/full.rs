@@ -190,7 +190,7 @@ mod tests {
 	use client::{self, LocalCallExecutor};
 	use client::in_mem::Backend as InMemory;
 	use substrate_executor::NativeExecutionDispatch;
-	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildExternalities};
+	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildStorage};
 
 	fn validators() -> Vec<AccountId> {
 		vec![
@@ -227,7 +227,7 @@ mod tests {
 					staking: Some(Default::default()),
 				};
 
-				let storage = genesis_config.build_externalities();
+				let storage = genesis_config.build_storage();
 				let block = ::client::genesis::construct_genesis_block::<Block>(&storage);
 				(block.header, storage.into_iter().collect())
 			}

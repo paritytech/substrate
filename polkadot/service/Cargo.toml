@@ -25,6 +25,7 @@ polkadot-transaction-pool = { path = "../transaction-pool" }
 polkadot-keystore = { path = "../keystore" }
 polkadot-telemetry = { path = "../telemetry" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
 substrate-client = { path = "../../substrate/client" }

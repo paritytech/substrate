@@ -53,11 +53,11 @@ pub mod bft;
 use traits::{Verify, Lazy};
 
 #[cfg(feature = "std")]
-pub type BuiltExternalities = HashMap<Vec<u8>, Vec<u8>>;
+pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;
 
 #[cfg(feature = "std")]
-pub trait BuildExternalities {
-	fn build_externalities(self) -> BuiltExternalities;
+pub trait BuildStorage {
+	fn build_storage(self) -> StorageMap;
 }
 
 /// Ed25519 signature verify.
@@ -227,12 +227,12 @@ macro_rules! impl_outer_config {
 			)*
 		}
 		#[cfg(any(feature = "std", test))]
-		impl $crate::BuildExternalities for $main {
-			fn build_externalities(self) -> $crate::BuiltExternalities {
-				let mut s = $crate::BuiltExternalities::new();
+		impl $crate::BuildStorage for $main {
+			fn build_storage(self) -> $crate::StorageMap {
+				let mut s = $crate::StorageMap::new();
 				$(
 					if let Some(extra) = self.$snake {
-						s.extend(extra.build_externalities());
+						s.extend(extra.build_storage());
 					}
 				)*
 				s
