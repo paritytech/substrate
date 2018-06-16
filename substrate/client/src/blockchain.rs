@@ -20,20 +20,24 @@ use primitives::block::{self, Id as BlockId};
 use primitives::{self, AuthorityId};
 use error::Result;
 
-/// Blockchain database backend. Does not perform any validation.
-pub trait Backend: Send + Sync {
+/// Blockchain database header backend. Does not perform any validation.
+pub trait HeaderBackend: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
 	fn header(&self, id: BlockId) -> Result<Option<block::Header>>;
-	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, id: BlockId) -> Result<Option<block::Body>>;
-	/// Get block justification. Returns `None` if justification does not exist.
-	fn justification(&self, id: BlockId) -> Result<Option<primitives::bft::Justification>>;
 	/// Get blockchain info.
 	fn info(&self) -> Result<Info>;
 	/// Get block status.
 	fn status(&self, id: BlockId) -> Result<BlockStatus>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>>;
+}
+
+/// Blockchain database backend. Does not perform any validation.
+pub trait Backend: HeaderBackend {
+	/// Get block body. Returns `None` if block is not found.
+	fn body(&self, id: BlockId) -> Result<Option<block::Body>>;
+	/// Get block justification. Returns `None` if justification does not exist.
+	fn justification(&self, id: BlockId) -> Result<Option<primitives::bft::Justification>>;
 
 	/// Returns data cache reference, if it is enabled on this backend.
 	fn cache(&self) -> Option<&Cache>;

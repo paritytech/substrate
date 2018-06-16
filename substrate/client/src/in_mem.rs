@@ -21,6 +21,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use error;
 use backend;
+use light;
 use runtime_support::Hashable;
 use primitives::{self, AuthorityId};
 use primitives::block::{self, Id as BlockId, HeaderHash};
@@ -135,17 +136,9 @@ impl Blockchain {
 	}
 }
 
-impl blockchain::Backend for Blockchain {
+impl blockchain::HeaderBackend for Blockchain {
 	fn header(&self, id: BlockId) -> error::Result<Option<block::Header>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).map(|b| b.header.clone())))
-	}
-
-	fn body(&self, id: BlockId) -> error::Result<Option<block::Body>> {
-		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.body.clone())))
-	}
-
-	fn justification(&self, id: BlockId) -> error::Result<Option<primitives::bft::Justification>> {
-		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.justification.clone())))
 	}
 
 	fn info(&self) -> error::Result<blockchain::Info> {
@@ -166,6 +159,32 @@ impl blockchain::Backend for Blockchain {
 
 	fn hash(&self, number: block::Number) -> error::Result<Option<block::HeaderHash>> {
 		Ok(self.id(BlockId::Number(number)))
+	}
+}
+
+impl blockchain::Backend for Blockchain {
+	fn body(&self, id: BlockId) -> error::Result<Option<block::Body>> {
+		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.body.clone())))
+	}
+
+	fn justification(&self, id: BlockId) -> error::Result<Option<primitives::bft::Justification>> {
+		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b| b.justification.clone())))
+	}
+
+	fn cache(&self) -> Option<&blockchain::Cache> {
+		Some(&self.cache)
+	}
+}
+
+impl light::blockchain::Storage for Blockchain {
+	fn import_header(&self, is_new_best: bool, header: block::Header, authorities: Option<Vec<AuthorityId>>) -> error::Result<()> {
+		let hash = header.blake2_256().into();
+		let parent_hash = header.parent_hash;
+		self.insert(hash, header, None, None, is_new_best);
+		if is_new_best {
+			self.cache.insert(parent_hash, authorities);
+		}
+		Ok(())
 	}
 
 	fn cache(&self) -> Option<&blockchain::Cache> {

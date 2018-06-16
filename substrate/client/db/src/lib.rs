@@ -36,19 +36,22 @@ extern crate serde_derive;
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
+pub mod light;
+
+mod utils;
+
 use std::sync::Arc;
 use std::path::PathBuf;
 
-use codec::{Slicable, Input};
-use hashdb::DBValue;
-use kvdb_rocksdb::{Database, DatabaseConfig};
+use codec::Slicable;
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
 use primitives::{blake2_256, AuthorityId};
-use primitives::block::{self, Id as BlockId, HeaderHash};
+use primitives::block::{self, Id as BlockId};
 use runtime_support::Hashable;
 use state_machine::{CodeExecutor, Backend as StateBackend};
+use utils::{Meta, db_err, meta_keys, number_to_db_key, open_database, read_db, read_id, read_meta};
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend;
@@ -66,7 +69,7 @@ pub fn new_backend(
 	settings: DatabaseSettings,
 ) -> Result<Backend, client::error::Error>
 {
-	Backend::new(&settings)
+	Backend::new(settings)
 }
 
 /// Create an instance of db-backed client.
@@ -91,17 +94,8 @@ mod columns {
 	pub const HEADER: Option<u32> = Some(3);
 	pub const BODY: Option<u32> = Some(4);
 	pub const JUSTIFICATION: Option<u32> = Some(5);
-	pub const AUTHORITIES: Option<u32> = Some(6);
-	pub const NUM_COLUMNS: u32 = 7;
+	pub const NUM_COLUMNS: u32 = 6;
 }
-
-mod meta {
-	pub const BEST_BLOCK: &[u8; 4] = b"best";
-	pub const BEST_AUTHORITIES: &[u8; 4] = b"auth";
-}
-
-/// Keep authorities for last 'AUTHORITIES_ENTRIES_TO_KEEP' blocks.
-const AUTHORITIES_ENTRIES_TO_KEEP: block::Number = 100;
 
 struct PendingBlock {
 	header: block::Header,
@@ -110,110 +104,18 @@ struct PendingBlock {
 	is_best: bool,
 }
 
-#[derive(Clone)]
-struct Meta {
-	best_hash: HeaderHash,
-	best_number: block::Number,
-	genesis_hash: HeaderHash,
-}
-
-#[derive(Clone, PartialEq, Debug)]
-struct BestAuthorities {
-	/// first block, when this set became actual
-	valid_from: block::Number,
-	/// None means that we do not know the set starting from `valid_from` block
-	authorities: Option<Vec<AuthorityId>>,
-}
-
-type BlockKey = [u8; 4];
-
-// Little endian
-fn number_to_db_key(n: block::Number) -> BlockKey {
-	[
-		(n >> 24) as u8,
-		((n >> 16) & 0xff) as u8,
-		((n >> 8) & 0xff) as u8,
-		(n & 0xff) as u8
-	]
-}
-
-fn db_key_to_number(key: &[u8]) -> Result<block::Number, client::error::Error> {
-	match key.len() {
-		4 => Ok((key[0] as block::Number) << 24
-			| (key[1] as block::Number) << 16
-			| (key[2] as block::Number) << 8
-			| (key[3] as block::Number)),
-		_ => Err(client::error::ErrorKind::Backend("Invalid block key".into()).into()),
-	}
-}
-
-// Maps database error to client error
-fn db_err(err: kvdb::Error) -> client::error::Error {
-	use std::error::Error;
-	match err.kind() {
-		&kvdb::ErrorKind::Io(ref err) => client::error::ErrorKind::Backend(err.description().into()).into(),
-		&kvdb::ErrorKind::Msg(ref m) => client::error::ErrorKind::Backend(m.clone()).into(),
-		_ => client::error::ErrorKind::Backend("Unknown backend error".into()).into(),
-	}
-}
-
 /// Block database
 pub struct BlockchainDb {
 	db: Arc<KeyValueDB>,
 	meta: RwLock<Meta>,
-	cache: DbCache,
 }
 
 impl BlockchainDb {
-	fn id(&self, id: BlockId) -> Result<Option<BlockKey>, client::error::Error> {
-		match id {
-			BlockId::Hash(h) => {
-				{
-					let meta = self.meta.read();
-					if meta.best_hash == h {
-						return Ok(Some(number_to_db_key(meta.best_number)));
-					}
-				}
-
-				read_id(&*self.db, BlockId::Hash(h))
-			},
-			BlockId::Number(n) => read_id(&*self.db, BlockId::Number(n)),
-		}
-	}
-
 	fn new(db: Arc<KeyValueDB>) -> Result<BlockchainDb, client::error::Error> {
-		let (best_hash, best_number) = if let Some(Some(header)) = db.get(columns::META, meta::BEST_BLOCK).and_then(|id|
-			match id {
-				Some(id) => db.get(columns::HEADER, &id).map(|h| h.map(|b| block::Header::decode(&mut &b[..]))),
-				None => Ok(None),
-			}).map_err(db_err)?
-		{
-			let hash = header.blake2_256().into();
-			debug!("DB Opened blockchain db, best {:?} ({})", hash, header.number);
-			(hash, header.number)
-		} else {
-			(Default::default(), Default::default())
-		};
-		let genesis_hash = db.get(columns::HEADER, &number_to_db_key(0)).map_err(db_err)?
-			.map(|b| blake2_256(&b)).unwrap_or_default().into();
-
-		let cache = DbCache::new(db.clone())?;
+		let meta = read_meta(&*db, columns::HEADER)?;
 		Ok(BlockchainDb {
 			db,
-			cache,
-			meta: RwLock::new(Meta {
-				best_hash,
-				best_number,
-				genesis_hash,
-			})
-		})
-	}
-
-	fn read_db(&self, id: BlockId, column: Option<u32>) -> Result<Option<DBValue>, client::error::Error> {
-		self.id(id).and_then(|key|
-		match key {
-			Some(key) => self.db.get(column, &key).map_err(db_err),
-			None => Ok(None),
+			meta: RwLock::new(meta)
 		})
 	}
 
@@ -229,32 +131,12 @@ impl BlockchainDb {
 	}
 }
 
-impl client::blockchain::Backend for BlockchainDb {
+impl client::blockchain::HeaderBackend for BlockchainDb {
 	fn header(&self, id: BlockId) -> Result<Option<block::Header>, client::error::Error> {
-		match self.read_db(id, columns::HEADER)? {
+		match read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, id)? {
 			Some(header) => match block::Header::decode(&mut &header[..]) {
 				Some(header) => Ok(Some(header)),
 				None => return Err(client::error::ErrorKind::Backend("Error decoding header".into()).into()),
-			}
-			None => Ok(None),
-		}
-	}
-
-	fn body(&self, id: BlockId) -> Result<Option<block::Body>, client::error::Error> {
-		match self.read_db(id, columns::BODY)? {
-			Some(body) => match block::Body::decode(&mut &body[..]) {
-				Some(body) => Ok(Some(body)),
-				None => return Err(client::error::ErrorKind::Backend("Error decoding body".into()).into()),
-			}
-			None => Ok(None),
-		}
-	}
-
-	fn justification(&self, id: BlockId) -> Result<Option<primitives::bft::Justification>, client::error::Error> {
-		match self.read_db(id, columns::JUSTIFICATION)? {
-			Some(justification) => match primitives::bft::Justification::decode(&mut &justification[..]) {
-				Some(justification) => Ok(Some(justification)),
-				None => return Err(client::error::ErrorKind::Backend("Error decoding justification".into()).into()),
 			}
 			None => Ok(None),
 		}
@@ -271,7 +153,7 @@ impl client::blockchain::Backend for BlockchainDb {
 
 	fn status(&self, id: BlockId) -> Result<client::blockchain::BlockStatus, client::error::Error> {
 		let exists = match id {
-			BlockId::Hash(_) => self.id(id)?.is_some(),
+			BlockId::Hash(_) => read_id(&*self.db, columns::BLOCK_INDEX, id)?.is_some(),
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
@@ -281,23 +163,42 @@ impl client::blockchain::Backend for BlockchainDb {
 	}
 
 	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>, client::error::Error> {
-		self.read_db(BlockId::Number(number), columns::HEADER).map(|x|
-			x.map(|raw| blake2_256(&raw[..])).map(Into::into)
-		)
+		read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number))
+			.map(|x| x.map(|raw| blake2_256(&raw[..])).map(Into::into))
+	}
+}
+
+impl client::blockchain::Backend for BlockchainDb {
+	fn body(&self, id: BlockId) -> Result<Option<block::Body>, client::error::Error> {
+		match read_db(&*self.db, columns::BLOCK_INDEX, columns::BODY, id)? {
+			Some(body) => match block::Body::decode(&mut &body[..]) {
+				Some(body) => Ok(Some(body)),
+				None => return Err(client::error::ErrorKind::Backend("Error decoding body".into()).into()),
+			}
+			None => Ok(None),
+		}
+	}
+
+	fn justification(&self, id: BlockId) -> Result<Option<primitives::bft::Justification>, client::error::Error> {
+		match read_db(&*self.db, columns::BLOCK_INDEX, columns::JUSTIFICATION, id)? {
+			Some(justification) => match primitives::bft::Justification::decode(&mut &justification[..]) {
+				Some(justification) => Ok(Some(justification)),
+				None => return Err(client::error::ErrorKind::Backend("Error decoding justification".into()).into()),
+			}
+			None => Ok(None),
+		}
 	}
 
 	fn cache(&self) -> Option<&client::blockchain::Cache> {
-		Some(&self.cache)
+		None
 	}
 }
 
 /// Database transaction
 pub struct BlockImportOperation {
-	cache_authorities: bool,
 	old_state: DbState,
 	updates: MemoryDB,
 	pending_block: Option<PendingBlock>,
-	pending_authorities: Option<Vec<AuthorityId>>,
 }
 
 impl client::backend::BlockImportOperation for BlockImportOperation {
@@ -318,11 +219,7 @@ impl client::backend::BlockImportOperation for BlockImportOperation {
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
-		if self.cache_authorities {
-			self.pending_authorities = Some(authorities);
-		}
-	}
+	fn update_authorities(&mut self, _authorities: Vec<AuthorityId>) { }
 
 	fn update_storage(&mut self, update: MemoryDB) -> Result<(), client::error::Error> {
 		self.updates = update;
@@ -347,12 +244,8 @@ pub struct Backend {
 
 impl Backend {
 	/// Create a new instance of database backend.
-	pub fn new(config: &DatabaseSettings) -> Result<Backend, client::error::Error> {
-		let mut db_config = DatabaseConfig::with_columns(Some(columns::NUM_COLUMNS));
-		db_config.memory_budget = config.cache_size;
-		db_config.wal = true;
-		let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
-		let db = Arc::new(Database::open(&db_config, &path).map_err(db_err)?);
+	pub fn new(config: DatabaseSettings) -> Result<Backend, client::error::Error> {
+		let db = open_database(config, columns::NUM_COLUMNS, b"full")?;
 
 		Backend::from_kvdb(db as Arc<_>, true)
 	}
@@ -383,9 +276,7 @@ impl client::backend::Backend for Backend {
 	fn begin_operation(&self, block: BlockId) -> Result<Self::BlockImportOperation, client::error::Error> {
 		let state = self.state_at(block)?;
 		Ok(BlockImportOperation {
-			cache_authorities: false,
 			pending_block: None,
-			pending_authorities: None,
 			old_state: state,
 			updates: MemoryDB::default(),
 		})
@@ -405,29 +296,9 @@ impl client::backend::Backend for Backend {
 				transaction.put(columns::JUSTIFICATION, &key, &justification.encode());
 			}
 			transaction.put(columns::BLOCK_INDEX, &hash, &key);
-			let (update_best_authorities, best_authorities) = if pending_block.is_best {
-				transaction.put(columns::META, meta::BEST_BLOCK, &key);
-
-				// save authorities for previous block
-				let pending_authorities = operation.pending_authorities;
-				let mut best_authorities = number.checked_sub(1)
-					.and_then(|previous_number| self.blockchain.cache
-						.commit_best_authorities(&mut transaction, previous_number, pending_authorities));
-
-				// prune authorities from 'ancient' blocks
-				// TODO: when there'll be proper removal criteria, change this condition
-				let mut update_best_authorities = best_authorities.is_some();
-				if let Some(ancient_number) = number.checked_sub(AUTHORITIES_ENTRIES_TO_KEEP) {
-					if self.blockchain.cache.prune_authorities(&mut transaction, ancient_number)?.1 {
-						update_best_authorities = true;
-						best_authorities = None;
-					}
-				}
-
-				(update_best_authorities, best_authorities)
-			} else {
-				(false, None)
-			};
+			if pending_block.is_best {
+				transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
+			}
 			for (key, (val, rc)) in operation.updates.drain() {
 				if rc > 0 {
 					transaction.put(columns::STATE, &key.0[..], &val);
@@ -439,9 +310,6 @@ impl client::backend::Backend for Backend {
 			debug!("DB Commit {:?} ({})", hash, number);
 			self.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
-			if update_best_authorities {
-				self.blockchain.cache.update_best_authorities(best_authorities);
-			}
 		}
 		Ok(())
 	}
@@ -451,7 +319,7 @@ impl client::backend::Backend for Backend {
 	}
 
 	fn state_at(&self, block: BlockId) -> Result<Self::State, client::error::Error> {
-		use client::blockchain::Backend as BcBackend;
+		use client::blockchain::HeaderBackend as BcHeaderBackend;
 
 		// special case for genesis initialization
 		match block {
@@ -468,242 +336,13 @@ impl client::backend::Backend for Backend {
 
 impl client::backend::LocalBackend for Backend {}
 
-/// Database-backed blockchain cache.
-struct DbCache {
-	db: Arc<KeyValueDB>,
-	/// Best authorities at the moent. None means that cache has no entries at all.
-	best_authorities: RwLock<Option<BestAuthorities>>,
-}
-
-impl DbCache {
-	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
-		let best_authorities = RwLock::new(db.get(columns::META, meta::BEST_AUTHORITIES)
-			.map_err(db_err)
-			.and_then(|block| match block {
-				Some(block) => {
-					let valid_from = db_key_to_number(&block)?;
-					Self::read_authorities_entry(&*db, valid_from)
-						.map(|entry| Some(BestAuthorities {
-							valid_from: valid_from,
-							authorities: entry
-								.expect("BEST_AUTHORITIES points to the block; authorities entry at block exists when referenced; qed")
-								.authorities,
-						}))
-				},
-				None => Ok(None),
-			})?);
-
-		Ok(DbCache {
-			db,
-			best_authorities,
-		})
-	}
-
-	fn best_authorities(&self) -> Option<BestAuthorities> {
-		self.best_authorities.read().clone()
-	}
-
-	fn commit_best_authorities(&self, transaction: &mut DBTransaction, valid_from: block::Number, pending_authorities: Option<Vec<AuthorityId>>) -> Option<BestAuthorities> {
-		let best_authorities = self.best_authorities();
-		let update_best_authorities = match (best_authorities.as_ref().and_then(|a| a.authorities.as_ref()), pending_authorities.as_ref()) {
-			(Some(best_authorities), Some(pending_authorities)) => best_authorities != pending_authorities,
-			(None, Some(_)) | (Some(_), None) => true,
-			(None, None) => false,
-		};
-		if !update_best_authorities {
-			return None;
-		}
-
-		let valid_from_key = number_to_db_key(valid_from);
-		transaction.put(columns::META, meta::BEST_AUTHORITIES, &valid_from_key);
-		transaction.put(columns::AUTHORITIES, &valid_from_key, &BestAuthoritiesEntry {
-			prev_valid_from: best_authorities.map(|b| b.valid_from),
-			authorities: pending_authorities.clone(),
-		}.encode());
-
-		Some(BestAuthorities {
-			valid_from,
-			authorities: pending_authorities,
-		})
-	}
-
-	fn update_best_authorities(&self, best_authorities: Option<BestAuthorities>) {
-		*self.best_authorities.write() = best_authorities;
-	}
-
-	fn read_authorities_entry(db: &KeyValueDB, number: block::Number) -> Result<Option<BestAuthoritiesEntry>, client::error::Error> {
-		db.get(columns::AUTHORITIES, &number_to_db_key(number))
-			.and_then(|authorities| match authorities {
-				Some(authorities) => Ok(BestAuthoritiesEntry::decode(&mut &authorities[..])),
-				None => Ok(None),
-			})
-		.map_err(db_err)
-	}
-
-	fn authorities_at_key(&self, key: BlockKey) -> Result<Option<Vec<AuthorityId>>, client::error::Error> {
-		let at = db_key_to_number(&key)?;
-		let best_authorities_valid_from = match self.best_authorities() {
-			// there are entries in cache
-			Some(best_authorities) => {
-				// we're looking for the current set
-				if at >= best_authorities.valid_from {
-					return Ok(best_authorities.authorities);
-				}
-
-				// we're looking for the set of older blocks
-				best_authorities.valid_from
-			},
-			// there are no entries in the cache
-			None => return Ok(None),
-		};
-
-		let mut authorities_entry = Self::read_authorities_entry(&*self.db, best_authorities_valid_from)?
-			.expect("self.best_authorities().is_some() if there's entry for valid_from; qed");
-		loop {
-			let prev_valid_from = match authorities_entry.prev_valid_from {
-				Some(prev_valid_from) => prev_valid_from,
-				None => return Ok(None),
-			};
-
-			let prev_authorities_entry = Self::read_authorities_entry(&*self.db, prev_valid_from)?
-				.expect("entry referenced from next blocks; entry exists when referenced; qed");
-			if at >= prev_valid_from {
-				return Ok(prev_authorities_entry.authorities);
-			}
-
-			authorities_entry = prev_authorities_entry;
-		}
-	}
-
-	/// Prune all authorities entries from the beginning up to the given key (including entry at the number).
-	fn prune_authorities(&self, transaction: &mut DBTransaction, last_to_prune: block::Number) -> Result<(usize, bool), client::error::Error> {
-		let mut last_entry_to_keep = match self.best_authorities() {
-			Some(best_authorities) => best_authorities.valid_from,
-			None => return Ok((0, false)),
-		};
-
-		// find the last entry we want to keep
-		let mut first_entry_to_remove = last_entry_to_keep;
-		while first_entry_to_remove > last_to_prune {
-			last_entry_to_keep = first_entry_to_remove;
-
-			let entry = Self::read_authorities_entry(&*self.db, first_entry_to_remove)?
-				.expect("entry referenced from next blocks; entry exists when referenced; qed");
-			first_entry_to_remove = match entry.prev_valid_from {
-				Some(prev_valid_from) => prev_valid_from,
-				None => return Ok((0, false)),
-			}
-		}
-
-		// remove all entries, starting from entry_to_remove
-		let mut pruned = 0;
-		let mut entry_to_remove = Some(first_entry_to_remove);
-		while let Some(current_entry) = entry_to_remove {
-			let entry = Self::read_authorities_entry(&*self.db, current_entry)?
-				.expect("referenced entry exists; entry_to_remove is a reference to the entry; qed");
-
-			transaction.delete(columns::AUTHORITIES, &number_to_db_key(current_entry));
-			entry_to_remove = entry.prev_valid_from;
-			pruned += 1;
-		}
-
-		// update last entry to keep if required
-		let clear_cache = if last_entry_to_keep > first_entry_to_remove {
-			let mut entry = Self::read_authorities_entry(&*self.db, last_entry_to_keep)?
-				.expect("last_entry_to_keep > first_entry_to_remove; that means that we're leaving this entry in the db; qed");
-			entry.prev_valid_from = None;
-			transaction.put(columns::AUTHORITIES, &number_to_db_key(last_entry_to_keep), &entry.encode());
-
-			false
-		} else {
-			true
-		};
-
-		Ok((pruned, clear_cache))
-	}
-}
-
-impl client::blockchain::Cache for DbCache {
-	fn authorities_at(&self, at: BlockId) -> Option<Vec<AuthorityId>> {
-		let authorities_at = read_id(&*self.db, at).and_then(|at| match at {
-			Some(at) => self.authorities_at_key(at),
-			None => Ok(None),
-		});
-		
-		match authorities_at {
-			Ok(authorities) => authorities,
-			Err(error) => {
-				warn!("Trying to read authorities from db cache has failed with: {}", error);
-				None
-			},
-		}
-	}
-}
-
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-struct BestAuthoritiesEntry {
-	/// None if valid from the beginning
-	prev_valid_from: Option<block::Number>,
-	/// None means that we do not know the set starting from `valid_from` block
-	authorities: Option<Vec<AuthorityId>>,
-}
-
-impl Slicable for BestAuthoritiesEntry {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		match self.prev_valid_from {
-			Some(ref prev_valid_from) => {
-				v.push(1);
-				v.extend(prev_valid_from.encode());
-			},
-			None => v.push(0),
-		}
-
-		match self.authorities {
-			Some(ref authorities) => {
-				v.push(1);
-				v.extend(authorities.encode());
-			},
-			None => v.push(0),
-		}
-
-		v
-	}
-
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(BestAuthoritiesEntry {
-			prev_valid_from: match input.read_byte() {
-				None | Some(0) => None,
-				_ => Slicable::decode(input),
-			},
-			authorities: match input.read_byte() {
-				None | Some(0) => None,
-				_ => Slicable::decode(input),
-			},
-		})
-	}
-}
-
-fn read_id(db: &KeyValueDB, id: BlockId) -> Result<Option<BlockKey>, client::error::Error> {
-	match id {
-		BlockId::Hash(h) => db.get(columns::BLOCK_INDEX, &h)
-			.map(|v| v.map(|v| {
-				let mut key: [u8; 4] = [0; 4];
-				key.copy_from_slice(&v);
-				key
-			})).map_err(db_err),
-		BlockId::Number(n) => Ok(Some(number_to_db_key(n))),
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use hashdb::HashDB;
 	use super::*;
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;
-	use client::blockchain::{Backend as BlockchainBackend, Cache as BlockchainCache};
+	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 
 	#[test]
 	fn block_hash_inserted_correctly() {
@@ -918,140 +557,5 @@ mod tests {
 
 			assert!(db.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
 		}
-	}
-
-	#[test]
-	fn best_authorities_serialized() {
-		let test_cases = vec![
-			BestAuthoritiesEntry { prev_valid_from: Some(42), authorities: Some(vec![[1u8; 32]]) },
-			BestAuthoritiesEntry { prev_valid_from: None, authorities: Some(vec![[1u8; 32], [2u8; 32]]) },
-			BestAuthoritiesEntry { prev_valid_from: None, authorities: None },
-		];
-
-		for expected in test_cases {
-			let serialized = expected.encode();
-			let deserialized = BestAuthoritiesEntry::decode(&mut &serialized[..]).unwrap();
-			assert_eq!(expected, deserialized);
-		}
-	}
-
-	#[test]
-	fn best_authorities_are_updated() {
-		let insert_block: Box<Fn(&Backend, &HeaderHash, u64, Option<Vec<AuthorityId>>) -> HeaderHash> = Box::new(|db, parent, number, authorities| {
-			let header = block::Header {
-				number: number,
-				parent_hash: *parent,
-				state_root: Default::default(),
-				digest: Default::default(),
-				extrinsics_root: Default::default(),
-			};
-			let hash = header.blake2_256().into();
-
-			let mut op = db.begin_operation(BlockId::Hash(*parent)).unwrap();
-			op.cache_authorities = true;
-			op.set_block_data(header, None, None, true).unwrap();
-			if let Some(authorities) = authorities {
-				op.update_authorities(authorities);
-			}
-			db.commit_operation(op).unwrap();
-			hash
-		});
-
-		let db = Backend::new_test();
-		let authorities_at = vec![
-			(0, None),
-			(0, None),
-			(1, Some(BestAuthorities { valid_from: 1, authorities: Some(vec![[2u8; 32]]) })),
-			(1, Some(BestAuthorities { valid_from: 1, authorities: Some(vec![[2u8; 32]]) })),
-			(2, Some(BestAuthorities { valid_from: 3, authorities: Some(vec![[4u8; 32]]) })),
-			(2, Some(BestAuthorities { valid_from: 3, authorities: Some(vec![[4u8; 32]]) })),
-			(3, Some(BestAuthorities { valid_from: 5, authorities: None })),
-			(3, Some(BestAuthorities { valid_from: 5, authorities: None })),
-		];
-
-		// before any block, there are no entries in cache
-		assert!(db.blockchain.cache.best_authorities().is_none());
-		assert_eq!(db.db.iter(columns::AUTHORITIES).count(), 0);
-
-		// insert blocks and check that best_authorities() returns correct result
-		let mut prev_hash = Default::default();
-		for number in 0..authorities_at.len() {
-			let authorities_at_number = authorities_at[number].1.clone().and_then(|e| e.authorities);
-			prev_hash = insert_block(&db, &prev_hash, number as u64, authorities_at_number);
-			assert_eq!(db.blockchain.cache.best_authorities(), authorities_at[number].1);
-			assert_eq!(db.db.iter(columns::AUTHORITIES).count(), authorities_at[number].0);
-		}
-
-		// check that authorities_at() returns correct results for all retrospective blocks
-		for number in 1..authorities_at.len() + 1 {
-			assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(number as u64)),
-				authorities_at.get(number + 1)
-					.or_else(|| authorities_at.last())
-					.unwrap().1.clone().and_then(|e| e.authorities));
-		}
-
-		// now check that cache entries are pruned when new blocks are inserted
-		let mut current_entries_count = authorities_at.last().unwrap().0;
-		let pruning_starts_at = AUTHORITIES_ENTRIES_TO_KEEP as usize;
-		for number in authorities_at.len()..authorities_at.len() + pruning_starts_at {
-			prev_hash = insert_block(&db, &prev_hash, number as u64, None);
-			if number > pruning_starts_at {
-				let prev_entries_count = authorities_at[number - pruning_starts_at].0;
-				let entries_count = authorities_at.get(number - pruning_starts_at + 1).map(|e| e.0)
-					.unwrap_or_else(|| authorities_at.last().unwrap().0);
-				current_entries_count -= entries_count - prev_entries_count;
-			}
-
-			assert_eq!(db.db.iter(columns::AUTHORITIES).count(), current_entries_count);
-		}
-	}
-
-	#[test]
-	fn best_authorities_are_pruned() {
-		let db = Backend::new_test();
-		let mut transaction = DBTransaction::new();
-		db.blockchain.cache.update_best_authorities(
-			db.blockchain.cache.commit_best_authorities(&mut transaction, 100, Some(vec![[1u8; 32]])));
-		db.db.write(transaction).unwrap();
-
-		let mut transaction = DBTransaction::new();
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 50).unwrap().0, 0);
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 100).unwrap().0, 1);
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 150).unwrap().0, 1);
-
-		let mut transaction = DBTransaction::new();
-		db.blockchain.cache.update_best_authorities(
-			db.blockchain.cache.commit_best_authorities(&mut transaction, 200, Some(vec![[2u8; 32]])));
-		db.db.write(transaction).unwrap();
-
-		let mut transaction = DBTransaction::new();
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 50).unwrap().0, 0);
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 100).unwrap().0, 1);
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 150).unwrap().0, 1);
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 200).unwrap().0, 2);
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 250).unwrap().0, 2);
-
-		let mut transaction = DBTransaction::new();
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 150).unwrap(), (1, false));
-		db.db.write(transaction).unwrap();
-
-		assert_eq!(db.blockchain.cache.best_authorities().unwrap().authorities, Some(vec![[2u8; 32]]));
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(50)), None);
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(100)), None);
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(150)), None);
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(200)), Some(vec![[2u8; 32]]));
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(250)), Some(vec![[2u8; 32]]));
-
-		let mut transaction = DBTransaction::new();
-		assert_eq!(db.blockchain.cache.prune_authorities(&mut transaction, 300).unwrap(), (1, true));
-		db.db.write(transaction).unwrap();
-		db.blockchain.cache.update_best_authorities(None);
-
-		assert_eq!(db.blockchain.cache.best_authorities(), None);
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(50)), None);
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(100)), None);
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(150)), None);
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(200)), None);
-		assert_eq!(db.blockchain.cache.authorities_at(BlockId::Number(250)), None);
 	}
 }

@@ -15,7 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use client::backend::Backend;
-use client::blockchain::Backend as BlockchainBackend;
+use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use sync::SyncState;
 use {Role};
 use super::*;

@@ -27,19 +27,21 @@ use state_machine::{Backend as StateBackend, TrieBackend as StateTrieBackend,
 	TryIntoTrieBackend as TryIntoStateTrieBackend};
 
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
-use blockchain::Backend as BlockchainBackend;
+use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::blockchain::Blockchain;
+use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::fetcher::{Fetcher, RemoteReadRequest};
 
 /// Light client backend.
-pub struct Backend<B, F> {
-	blockchain: Arc<Blockchain<B, F>>,
+pub struct Backend<S, F> {
+	blockchain: Arc<Blockchain<S, F>>,
 }
 
 /// Ligh block (header and justification) import operation.
-pub struct ImportOperation<O, F> {
-	operation: O,
+pub struct ImportOperation<F> {
+	is_new_best: bool,
+	header: Option<Header>,
+	authorities: Option<Vec<AuthorityId>>,
 	_phantom: ::std::marker::PhantomData<F>,
 }
 
@@ -49,42 +51,45 @@ pub struct OnDemandState<F> {
 	block: HeaderHash,
 }
 
-impl<B, F> Backend<B, F> where B: ClientBackend {
+impl<S, F> Backend<S, F> where S: BlockchainStorage, F: Fetcher {
 	/// Create new light backend.
-	pub fn new(blockchain: Arc<Blockchain<B, F>>) -> Self {
+	pub fn new(blockchain: Arc<Blockchain<S, F>>) -> Self {
 		Self { blockchain }
 	}
 
 	/// Get shared blockchain reference.
-	pub fn blockchain(&self) -> &Arc<Blockchain<B, F>> {
+	pub fn blockchain(&self) -> &Arc<Blockchain<S, F>> {
 		&self.blockchain
 	}
 
 	fn id(&self, id: BlockId) -> Option<HeaderHash> {
 		match id {
 			BlockId::Hash(h) => Some(h),
-			BlockId::Number(n) => self.blockchain.storage().blockchain().hash(n).unwrap_or_default(),
+			BlockId::Number(n) => self.blockchain.hash(n).unwrap_or_default(),
 		}
 	}
 }
 
-impl<B, F> ClientBackend for Backend<B, F> where B: ClientBackend, F: Fetcher {
-	type BlockImportOperation = ImportOperation<<B as ClientBackend>::BlockImportOperation, F>;
-	type Blockchain = Blockchain<B, F>;
+impl<S, F> ClientBackend for Backend<S, F> where S: BlockchainStorage, F: Fetcher {
+	type BlockImportOperation = ImportOperation<F>;
+	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<F>;
 
-	fn begin_operation(&self, block: BlockId) -> ClientResult<Self::BlockImportOperation> {
+	fn begin_operation(&self, _block: BlockId) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
-			operation: self.blockchain.storage().begin_operation(block)?,
+			is_new_best: false,
+			header: None,
+			authorities: None,
 			_phantom: Default::default(),
 		})
 	}
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
-		self.blockchain.storage().commit_operation(operation.operation)
+		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
+		self.blockchain.import_header(operation.is_new_best, header, operation.authorities)
 	}
 
-	fn blockchain(&self) -> &Blockchain<B, F> {
+	fn blockchain(&self) -> &Blockchain<S, F> {
 		&self.blockchain
 	}
 
@@ -96,9 +101,9 @@ impl<B, F> ClientBackend for Backend<B, F> where B: ClientBackend, F: Fetcher {
 	}
 }
 
-impl<B, F> RemoteBackend for Backend<B, F> where B: ClientBackend, F: Fetcher {}
+impl<S, F> RemoteBackend for Backend<S, F> where S: BlockchainStorage, F: Fetcher {}
 
-impl<O, F> BlockImportOperation for ImportOperation<O, F> where O: BlockImportOperation, F: Fetcher {
+impl<F> BlockImportOperation for ImportOperation<F> where F: Fetcher {
 	type State = OnDemandState<F>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
@@ -106,12 +111,14 @@ impl<O, F> BlockImportOperation for ImportOperation<O, F> where O: BlockImportOp
 		Ok(None)
 	}
 
-	fn set_block_data(&mut self, header: Header, _body: Option<Body>, justification: Option<Justification>, is_new_best: bool) -> ClientResult<()> {
-		self.operation.set_block_data(header, None, justification, is_new_best)
+	fn set_block_data(&mut self, header: Header, _body: Option<Body>, _justification: Option<Justification>, is_new_best: bool) -> ClientResult<()> {
+		self.is_new_best = is_new_best;
+		self.header = Some(header);
+		Ok(())
 	}
 
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
-		self.operation.update_authorities(authorities);
+		self.authorities = Some(authorities);
 	}
 
 	fn update_storage(&mut self, _update: <Self::State as StateBackend>::Transaction) -> ClientResult<()> {
@@ -173,8 +180,7 @@ pub mod tests {
 	use executor;
 	use error::Error as ClientError;
 	use test_client;
-	use backend::Backend;
-	use in_mem::{Backend as InMemoryBackend};
+	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::{new_fetch_checker, new_light_blockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker, RemoteCallRequest};
 	use super::*;
@@ -208,10 +214,10 @@ pub mod tests {
 		let remote_read_proof = remote_client.read_proof(&remote_block_id, b":auth:len").unwrap();
 
 		// check remote read proof locally
-		let local_storage = InMemoryBackend::new();
-		local_storage.blockchain().insert(remote_block_hash, remote_block_header, None, None, true);
+		let local_storage = InMemoryBlockchain::new();
+		local_storage.insert(remote_block_hash, remote_block_header, None, None, true);
 		let local_executor = test_client::NativeExecutor::new();
-		let local_checker: LightDataChecker<InMemoryBackend, executor::NativeExecutor<test_client::NativeExecutor>, OkCallFetcher> =
+		let local_checker: LightDataChecker<InMemoryBlockchain, executor::NativeExecutor<test_client::NativeExecutor>, OkCallFetcher> =
 			new_fetch_checker(new_light_blockchain(local_storage), local_executor);
 		assert_eq!(local_checker.check_read_proof(&RemoteReadRequest {
 			block: remote_block_hash,

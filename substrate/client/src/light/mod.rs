@@ -25,33 +25,32 @@ use std::sync::Arc;
 
 use state_machine::CodeExecutor;
 
-use backend::Backend as ClientBackend;
 use client::{Client, GenesisBuilder};
 use error::Result as ClientResult;
 use light::backend::Backend;
-use light::blockchain::Blockchain;
+use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::RemoteCallExecutor;
 use light::fetcher::{Fetcher, LightDataChecker};
 
 /// Create an instance of light client blockchain backend.
-pub fn new_light_blockchain<B: ClientBackend, F>(storage: B) -> Arc<Blockchain<B, F>> {
+pub fn new_light_blockchain<S: BlockchainStorage, F>(storage: S) -> Arc<Blockchain<S, F>> {
 	Arc::new(Blockchain::new(storage))
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B: ClientBackend, F>(blockchain: Arc<Blockchain<B, F>>, fetcher: Arc<F>) -> Arc<Backend<B, F>> {
+pub fn new_light_backend<S: BlockchainStorage, F: Fetcher>(blockchain: Arc<Blockchain<S, F>>, fetcher: Arc<F>) -> Arc<Backend<S, F>> {
 	blockchain.set_fetcher(Arc::downgrade(&fetcher));
 	Arc::new(Backend::new(blockchain))
 }
 
 /// Create an instance of light client.
-pub fn new_light<B, F, GB>(
-	backend: Arc<Backend<B, F>>,
+pub fn new_light<S, F, GB>(
+	backend: Arc<Backend<S, F>>,
 	fetcher: Arc<F>,
 	genesis_builder: GB,
-) -> ClientResult<Client<Backend<B, F>, RemoteCallExecutor<Blockchain<B, F>, F>>>
+) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F>>>
 	where
-		B: ClientBackend,
+		S: BlockchainStorage,
 		F: Fetcher,
 		GB: GenesisBuilder,
 {
@@ -60,12 +59,12 @@ pub fn new_light<B, F, GB>(
 }
 
 /// Create an instance of fetch data checker.
-pub fn new_fetch_checker<B, E, F>(
-	blockchain: Arc<Blockchain<B, F>>,
+pub fn new_fetch_checker<S, E, F>(
+	blockchain: Arc<Blockchain<S, F>>,
 	executor: E,
-) -> LightDataChecker<B, E, F>
+) -> LightDataChecker<S, E, F>
 	where
-		B: ClientBackend,
+		S: BlockchainStorage,
 		E: CodeExecutor,
 {
 	LightDataChecker::new(blockchain, executor)

@@ -23,11 +23,10 @@ use heapsize::HeapSizeOf;
 use primitives::block::{HeaderHash, Id as BlockId};
 use state_machine::{CodeExecutor, read_proof_check};
 
-use backend::Backend as ClientBackend;
-use blockchain::Backend as BlockchainBackend;
+use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use call_executor::CallResult;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::blockchain::Blockchain;
+use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::check_execution_proof;
 
 /// Remote storage read request.
@@ -77,14 +76,14 @@ pub trait FetchChecker: Send + Sync {
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<B, E, F> {
-	blockchain: Arc<Blockchain<B, F>>,
+pub struct LightDataChecker<S, E, F> {
+	blockchain: Arc<Blockchain<S, F>>,
 	executor: E,
 }
 
-impl<B, E, F> LightDataChecker<B, E, F> {
+impl<S, E, F> LightDataChecker<S, E, F> {
 	/// Create new light data checker.
-	pub fn new(blockchain: Arc<Blockchain<B, F>>, executor: E) -> Self {
+	pub fn new(blockchain: Arc<Blockchain<S, F>>, executor: E) -> Self {
 		Self {
 			blockchain,
 			executor,
@@ -92,14 +91,14 @@ impl<B, E, F> LightDataChecker<B, E, F> {
 	}
 
 	/// Get blockchain reference.
-	pub fn blockchain(&self) -> &Arc<Blockchain<B, F>> {
+	pub fn blockchain(&self) -> &Arc<Blockchain<S, F>> {
 		&self.blockchain
 	}
 }
 
-impl<B, E, F> FetchChecker for LightDataChecker<B, E, F>
+impl<S, E, F> FetchChecker for LightDataChecker<S, E, F>
 	where
-		B: ClientBackend,
+		S: BlockchainStorage,
 		E: CodeExecutor,
 		F: Fetcher,
 {

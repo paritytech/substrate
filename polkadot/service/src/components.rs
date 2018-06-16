@@ -132,16 +132,16 @@ impl Components for FullComponents {
 pub struct LightComponents;
 
 impl Components for LightComponents {
-	type Backend = client::light::backend::Backend<client_db::Backend, network::OnDemand<network::Service>>;
+	type Backend = client::light::backend::Backend<client_db::light::LightStorage, network::OnDemand<network::Service>>;
 	type Api = polkadot_api::light::RemotePolkadotApiWrapper<Self::Backend, Self::Executor>;
 	type Executor = client::light::call_executor::RemoteCallExecutor<
-		client::light::blockchain::Blockchain<client_db::Backend, network::OnDemand<network::Service>>,
+		client::light::blockchain::Blockchain<client_db::light::LightStorage, network::OnDemand<network::Service>>,
 		network::OnDemand<network::Service>>;
 
 	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis: GenesisBuilder)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor>>, Option<Arc<network::OnDemand<network::Service>>>), error::Error> {
-		let db_backend = client_db::new_backend(db_settings)?;
-		let light_blockchain = client::light::new_light_blockchain(db_backend);
+		let db_storage = client_db::light::LightStorage::new(db_settings)?;
+		let light_blockchain = client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());

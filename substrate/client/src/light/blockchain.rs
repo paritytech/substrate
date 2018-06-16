@@ -20,23 +20,33 @@
 use std::sync::Weak;
 use parking_lot::Mutex;
 
+use primitives::AuthorityId;
 use primitives::block::{Body, Header, HeaderHash, Id as BlockId, Number};
 use primitives::bft::Justification;
 
-use backend::Backend as ClientBackend;
-use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo};
+use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
+	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use error::Result as ClientResult;
 use light::fetcher::Fetcher;
 
-/// Light client blockchain.
-pub struct Blockchain<B, F> {
-	fetcher: Mutex<Weak<F>>,
-	storage: B,
+/// Light client blockchain storage.
+pub trait Storage: BlockchainHeaderBackend {
+	/// Store new header.
+	fn import_header(&self, is_new_best: bool, header: Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()>;
+
+	/// Get storage cache.
+	fn cache(&self) -> Option<&BlockchainCache>;
 }
 
-impl<B, F> Blockchain<B, F> {
-	/// Create new light blockchain.
-	pub fn new(storage: B) -> Self {
+/// Light client blockchain.
+pub struct Blockchain<S, F> {
+	fetcher: Mutex<Weak<F>>,
+	storage: S,
+}
+
+impl<S, F> Blockchain<S, F> where S: Storage {
+	/// Create new light blockchain backed with given storage.
+	pub fn new(storage: S) -> Self {
 		Self {
 			fetcher: Mutex::new(Default::default()),
 			storage,
@@ -53,39 +63,41 @@ impl<B, F> Blockchain<B, F> {
 		self.fetcher.lock().clone()
 	}
 
-	/// Get storage reference.
-	pub fn storage(&self) -> &B {
-		&self.storage
+	/// Import new header.
+	pub fn import_header(&self, is_new_best: bool, header: Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()> {
+		self.storage.import_header(is_new_best, header, authorities)
 	}
 }
 
-impl<B, F> BlockchainBackend for Blockchain<B, F> where B: ClientBackend, F: Fetcher {
+impl<S, F> BlockchainHeaderBackend for Blockchain<S, F> where S: Storage, F: Fetcher {
 	fn header(&self, id: BlockId) -> ClientResult<Option<Header>> {
-		self.storage.blockchain().header(id)
+		self.storage.header(id)
 	}
 
+	fn info(&self) -> ClientResult<BlockchainInfo> {
+		self.storage.info()
+	}
+
+	fn status(&self, id: BlockId) -> ClientResult<BlockStatus> {
+		self.storage.status(id)
+	}
+
+	fn hash(&self, number: Number) -> ClientResult<Option<HeaderHash>> {
+		self.storage.hash(number)
+	}
+}
+
+impl<S, F> BlockchainBackend for Blockchain<S, F> where S: Storage, F: Fetcher {
 	fn body(&self, _id: BlockId) -> ClientResult<Option<Body>> {
 		// TODO [light]: fetch from remote node
 		Ok(None)
 	}
 
-	fn justification(&self, id: BlockId) -> ClientResult<Option<Justification>> {
-		self.storage.blockchain().justification(id)
-	}
-
-	fn info(&self) -> ClientResult<BlockchainInfo> {
-		self.storage.blockchain().info()
-	}
-
-	fn status(&self, id: BlockId) -> ClientResult<BlockStatus> {
-		self.storage.blockchain().status(id)
-	}
-
-	fn hash(&self, number: Number) -> ClientResult<Option<HeaderHash>> {
-		self.storage.blockchain().hash(number)
+	fn justification(&self, _id: BlockId) -> ClientResult<Option<Justification>> {
+		Ok(None)
 	}
 
 	fn cache(&self) -> Option<&BlockchainCache> {
-		self.storage.blockchain().cache()
+		self.storage.cache()
 	}
 }
