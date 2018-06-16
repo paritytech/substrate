@@ -53,6 +53,7 @@ extern crate log;
 mod error;
 mod config;
 
+use runtime_primitives::MakeStorage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
@@ -60,7 +61,6 @@ use futures::prelude::*;
 use tokio_core::reactor::Core;
 use codec::Slicable;
 use transaction_pool::TransactionPool;
-use runtime_primitives::StorageMap;
 use substrate_executor::NativeExecutor;
 use polkadot_executor::Executor as LocalDispatch;
 use keystore::Store as Keystore;
@@ -157,7 +157,8 @@ pub fn new_light(config: Configuration)
 		>,
 		error::Error,
 	> {
-	Service::new(move |_, executor, genesis_storage| {
+	Service::new(
+		move |_, executor, genesis_storage: MakeStorage| {
 			let client_backend = client::light::new_light_backend();
 			let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));
 			let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
@@ -166,13 +167,14 @@ pub fn new_light(config: Configuration)
 		},
 		|client| Arc::new(polkadot_api::light::RemotePolkadotApiWrapper(client.clone())),
 		|_client, _network, _tx_pool, _keystore| Ok(None),
-		config)
+		config
+	)
 }
 
 /// Creates full client and register protocol with the network service
 pub fn new_full(config: Configuration) -> Result<Service<client_db::Backend<Block>, client::LocalCallExecutor<client_db::Backend<Block>, CodeExecutor>>, error::Error> {
 	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
-	Service::new(|db_settings, executor, genesis_storage|
+	Service::new(|db_settings, executor, genesis_storage: MakeStorage|
 		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_storage)?), None)),
 		|client| client,
 		|client, network, tx_pool, keystore| {
@@ -207,7 +209,7 @@ impl<B, E> Service<B, E>
 			F: FnOnce(
 					client_db::DatabaseSettings,
 					CodeExecutor,
-					StorageMap,
+					MakeStorage,
 				) -> Result<(Arc<Client<B, E, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error>,
 			G: Fn(
 					Arc<Client<B, E, Block>>,

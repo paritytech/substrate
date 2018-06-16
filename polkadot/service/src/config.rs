@@ -17,12 +17,11 @@
 //! Service configuration.
 
 use transaction_pool;
-use runtime_primitives::StorageMap;
+use runtime_primitives::MakeStorage;
 pub use network::Role;
 pub use network::NetworkConfiguration;
 
 /// Service configuration.
-#[derive(Clone)]
 pub struct Configuration {
 	/// Node roles.
 	pub roles: Role,
@@ -39,7 +38,7 @@ pub struct Configuration {
 	/// The name of the chain.
 	pub chain_name: String,
 	/// Chain configuration.
-	pub genesis_storage: StorageMap,
+	pub genesis_storage: MakeStorage,
 	/// Telemetry server URL, optional - only `Some` if telemetry reporting is enabled
 	pub telemetry: Option<String>,
 	/// Node name.
@@ -56,7 +55,7 @@ impl Default for Configuration {
 			database_path: Default::default(),
 			keys: Default::default(),
 			chain_name: Default::default(),
-			genesis_storage: Default::default(),
+			genesis_storage: Box::new(Default::default),
 			telemetry: Default::default(),
 			name: "Anonymous".into(),
 		}

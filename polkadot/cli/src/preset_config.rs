@@ -19,7 +19,7 @@
 use ed25519;
 use substrate_primitives::AuthorityId;
 use chain_spec::ChainSpec;
-use runtime_primitives::{BuildStorage, StorageMap};
+use runtime_primitives::{MakeStorage, BuildStorage};
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig};
 
@@ -42,9 +42,9 @@ impl PresetConfig {
 
 	/// Provide the boot nodes and a storage-builder function.
 	// TODO: Change return type to FnOnce as soon as Box<FnOnce> is callable or BoxFn is stablised.
-	pub fn deconstruct(self) -> (Box<FnMut() -> StorageMap>, Vec<String>) {
+	pub fn deconstruct(self) -> (MakeStorage, Vec<String>) {
 		let mut gc = Some(self.genesis_config);
-		let f = move || gc.take().map(GenesisConfig::build_storage).unwrap_or_default();
+		let f = move || gc.take().map(BuildStorage::build_storage).unwrap_or_default();
 		(Box::new(f), self.boot_nodes)
 	}
 

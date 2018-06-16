@@ -52,12 +52,24 @@ pub mod bft;
 
 use traits::{Verify, Lazy};
 
+/// A set of key value pairs for storage.
 #[cfg(feature = "std")]
 pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;
 
+/// A simple function allowing StorageMap to be created.
+#[cfg(feature = "std")]
+pub type MakeStorage = Box<FnMut() -> StorageMap>;
+
+/// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage {
 	fn build_storage(self) -> StorageMap;
+}
+
+impl BuildStorage for MakeStorage {
+	fn build_storage(mut self) -> StorageMap {
+		self()
+	}
 }
 
 /// Ed25519 signature verify.

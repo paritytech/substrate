@@ -73,6 +73,7 @@ use std::path::{Path, PathBuf};
 use substrate_primitives::hexdisplay::HexDisplay;
 use polkadot_primitives::Block;
 use polkadot_telemetry::{init_telemetry, TelemetryConfig};
+//use runtime_primitives::{BuildStorage, StorageMap};
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
@@ -80,9 +81,12 @@ use tokio_core::reactor;
 
 const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
-struct Configuration(service::Configuration);
+#[derive(Clone)]
+struct SystemConfiguration {
+	chain_name: String,
+}
 
-impl substrate_rpc::system::SystemApi for Configuration {
+impl substrate_rpc::system::SystemApi for SystemConfiguration {
 	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok("parity-polkadot".into())
 	}
@@ -92,7 +96,7 @@ impl substrate_rpc::system::SystemApi for Configuration {
 	}
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(self.0.chain_name.clone())
+		Ok(self.chain_name.clone())
 	}
 }
 
@@ -177,12 +181,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
 		.map(PresetConfig::deconstruct)
-		.or_else(|f| {
-			info!("Custom Genesis file: {}", f);
-			// TODO: Read chain spec file `n`.
-			Ok((Box::new(move || Default::default()), vec![]))
-		})
-		.unwrap_or_else(|f: String| panic!("Cannot find chain specification file: {}", f));
+		.unwrap_or_else(|_f| (Box::new(|| /* TODO read f as JSON and place in HashMap */ Default::default()), vec![]));
 	
 	if matches.is_present("build-genesis") {
 		info!("Building genesis");
@@ -192,6 +191,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		println!("\n}}");
 		return Ok(())
 	}
+
+	config.genesis_storage = genesis_storage;
 
 	let role =
 		if matches.is_present("collator") {
@@ -236,13 +237,17 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		config.keys.push("Alice".into());
 	}
 
+	let sys_conf = SystemConfiguration {
+		chain_name: config.chain_name.clone(),
+	};
+
 	match role == service::Role::LIGHT {
-		true => run_until_exit(core, service::new_light(config.clone())?, &matches, config),
-		false => run_until_exit(core, service::new_full(config.clone())?, &matches, config),
+		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf),
+		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf),
 	}
 }
 
-fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
+fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches, sys_conf: SystemConfiguration) -> error::Result<()>
 	where
 		B: client::backend::Backend<Block> + Send + Sync + 'static,
 		E: client::CallExecutor<Block> + Send + Sync + 'static,
@@ -270,7 +275,7 @@ fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>
 				service.client(),
 				chain,
 				service.transaction_pool(),
-				Configuration(config.clone()),
+				sys_conf.clone(),
 			)
 		};
 		(

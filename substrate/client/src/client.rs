@@ -22,7 +22,7 @@ use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
-use runtime_primitives::StorageMap;
+use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Slicable;
 use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
@@ -141,17 +141,18 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 }
 
 /// Create an instance of in-memory client.
-pub fn new_in_mem<E, Block>(
+pub fn new_in_mem<E, Block, S>(
 	executor: E,
-	genesis_map: StorageMap
+	genesis_storage: S
 ) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
 	where
 		E: CodeExecutor,
+		S: BuildStorage,
 		Block: BlockT,
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, executor, genesis_map)
+	Client::new(backend, executor, genesis_storage)
 }
 
 impl<B, E, Block: BlockT> Client<B, E, Block> where
@@ -161,13 +162,14 @@ impl<B, E, Block: BlockT> Client<B, E, Block> where
 	error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	/// Creates new Polkadot Client with given blockchain and code executor.
-	pub fn new(
+	pub fn new<S: BuildStorage>(
 		backend: Arc<B>,
 		executor: E,
-		genesis_storage: StorageMap,
+		build_genesis_storage: S,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			info!("Initialising genesis block & state in database...");
+			let genesis_storage = build_genesis_storage.build_storage();
 			let genesis_block = genesis::construct_genesis_block::<Block>(&genesis_storage);
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
 			op.reset_storage(genesis_storage.into_iter())?;
