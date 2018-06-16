@@ -187,7 +187,7 @@ impl<B: LocalBackend<Block>> LocalPolkadotApi for Client<B, LocalCallExecutor<B,
 mod tests {
 	use super::*;
 	use keyring::Keyring;
-	use client::{self, LocalCallExecutor};
+	use client::LocalCallExecutor;
 	use client::in_mem::Backend as InMemory;
 	use substrate_executor::NativeExecutionDispatch;
 	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildStorage};

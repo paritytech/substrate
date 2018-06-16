@@ -48,11 +48,10 @@ extern crate log;
 pub mod error;
 
 use std::sync::Arc;
-use client::genesis;
 use demo_primitives::Hash;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildStorage};
-use demo_runtime::{Block, Header, UncheckedExtrinsic};
+use demo_runtime::{Block, UncheckedExtrinsic};
 use futures::{Future, Sink, Stream};
 
 struct DummyPool;
@@ -150,7 +149,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		}),
 	}.build_storage();
 
-	let client = Arc::new(client::new_in_mem(executor, genesis_storage)?);
+	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_storage)?);
 	let mut core = ::tokio_core::reactor::Core::new().expect("Unable to spawn event loop.");
 
 	let _rpc_servers = {

@@ -491,7 +491,7 @@ mod tests {
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = test_client::new();
-		let genesis_hash = client.block_hash(0).unwrap().unwrap();
+		let _genesis_hash = client.block_hash(0).unwrap().unwrap();
 
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 1000);
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 0);

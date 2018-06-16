@@ -72,6 +72,12 @@ impl BuildStorage for MakeStorage {
 	}
 }
 
+impl BuildStorage for StorageMap {
+	fn build_storage(self) -> StorageMap {
+		self
+	}
+}
+
 /// Ed25519 signature verify.
 #[derive(Eq, PartialEq, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
