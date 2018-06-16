@@ -168,9 +168,9 @@ impl<B, E, Block: BlockT> Client<B, E, Block> where
 		build_genesis_storage: S,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			info!("Initialising genesis block & state in database...");
 			let genesis_storage = build_genesis_storage.build_storage();
 			let genesis_block = genesis::construct_genesis_block::<Block>(&genesis_storage);
+			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
 			op.reset_storage(genesis_storage.into_iter())?;
 			op.set_block_data(genesis_block.deconstruct().0, Some(vec![]), None, true)?;

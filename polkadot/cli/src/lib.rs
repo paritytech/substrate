@@ -193,7 +193,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
 		.map(PresetConfig::deconstruct)
 		.unwrap_or_else(|f| (Box::new(move || 
-			read_storage_json(&f).unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
+			read_storage_json(&f)
+				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
+				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
 		), vec![]));
 	
 	if matches.is_present("build-genesis") {
