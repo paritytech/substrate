@@ -19,7 +19,7 @@
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use service::Role as RoleFlags;
 
-pub use self::generic::{BlockAnnounce, RemoteCallRequest, ConsensusVote, SignedConsensusVote, FromBlock};
+pub use self::generic::{BlockAnnounce, RemoteCallRequest, ConsensusVote, SignedConsensusVote, FromBlock, Body};
 
 pub type RequestId = u64;
 
@@ -171,10 +171,37 @@ pub struct RemoteCallResponse {
 /// Generic types.
 pub mod generic {
 	use primitives::AuthorityId;
+	use codec::Slicable;
 	use runtime_primitives::bft::Justification;
 	use ed25519;
 
 	use super::{Role, BlockAttribute, RemoteCallResponse, RequestId, Transactions, Direction};
+
+	use primitives::bytes;
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct V1Extrinsic(#[serde(with="bytes")] pub Vec<u8>);
+	// Alternative block format for poc-1 compatibility.
+	// TODO: remove this after poc-2
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	#[serde(untagged)]
+	pub enum Body<Extrinsic> {
+		V1(Vec<V1Extrinsic>),
+		Extrinsics(Vec<Extrinsic>),
+	}
+
+	impl<Extrinsic> Body<Extrinsic> where Extrinsic: Slicable {
+		pub fn to_extrinsics(self) -> Vec<Extrinsic> {
+			match self {
+				Body::Extrinsics(e) => e,
+				Body::V1(e) => {
+					e.into_iter().filter_map(|bytes|
+						Slicable::decode(&mut bytes.0.as_slice())
+					).collect()
+				}
+			}
+		}
+	}
+
 	/// Block data sent in the response.
 	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 	pub struct BlockData<Header, Hash, Extrinsic> {
@@ -183,7 +210,7 @@ pub mod generic {
 		/// Block header if requested.
 		pub header: Option<Header>,
 		/// Block body if requested.
-		pub body: Option<Vec<Extrinsic>>,
+		pub body: Option<Body<Extrinsic>>,
 		/// Block receipt if requested.
 		pub receipt: Option<Vec<u8>>,
 		/// Block message queue if requested.
