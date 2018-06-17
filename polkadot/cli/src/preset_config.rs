@@ -16,23 +16,43 @@
 
 //! Polkadot chain configurations.
 
+use std::collections::HashMap;
 use ed25519;
-use substrate_primitives::AuthorityId;
-use chain_spec::ChainSpec;
-use runtime_primitives::{MakeStorage, BuildStorage};
+use serde_json;
+use substrate_primitives::{AuthorityId, storage::{StorageKey, StorageData}};
+use runtime_primitives::{MakeStorage, BuildStorage, StorageMap};
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig};
+use chain_spec::ChainSpec;
+
+enum Config {
+	Local(GenesisConfig),
+	Raw(&'static [u8]),
+}
 
 /// A configuration of a chain. Can be used to build a genesis block.
 pub struct PresetConfig {
-	pub(crate) genesis_config: GenesisConfig,
+	genesis_config: Config,
 	pub(crate) boot_nodes: Vec<String>,
+}
+
+impl BuildStorage for Config {
+	fn build_storage(self) -> StorageMap {
+		match self {
+			Config::Local(gc) => gc.build_storage(),
+			Config::Raw(json) => {
+				let h: HashMap<StorageKey, StorageData> = serde_json::from_slice(json).expect("Data is from an internal source and is guaranteed to be of the correct format");
+				h.into_iter().map(|(k, v)| (k.0, v.0)).collect()
+			}
+		}
+	}
 }
 
 impl PresetConfig {
 	/// Get a chain config from a spec, if it's predefined.
 	pub fn from_spec(chain_spec: ChainSpec) -> Result<Self, String> {
 		Ok(match chain_spec {
+			ChainSpec::PoC1Testnet => Self::poc_1_testnet_config(),
 			ChainSpec::Development => Self::development_config(),
 			ChainSpec::LocalTestnet => Self::local_testnet_config(),
 			ChainSpec::PoC2Testnet => Self::poc_2_testnet_config(),
@@ -48,6 +68,17 @@ impl PresetConfig {
 		(Box::new(f), self.boot_nodes)
 	}
 
+	/// PoC-1 testnet config.
+	fn poc_1_testnet_config() -> Self {
+		let genesis_config = Config::Raw(include_bytes!("../poc-1.json"));
+		let boot_nodes = vec![
+			"enode://a93a29fa68d965452bf0ff8c1910f5992fe2273a72a1ee8d3a3482f68512a61974211ba32bb33f051ceb1530b8ba3527fc36224ba6b9910329025e6d9153cf50@104.211.54.233:30333".into(),
+			"enode://051b18f63a316c4c5fef4631f8c550ae0adba179153588406fac3e5bbbbf534ebeda1bf475dceda27a531f6cdef3846ab6a010a269aa643a1fec7bff51af66bd@104.211.48.51:30333".into(),
+			"enode://c831ec9011d2c02d2c4620fc88db6d897a40d2f88fd75f47b9e4cf3b243999acb6f01b7b7343474650b34eeb1363041a422a91f1fc3850e43482983ee15aa582@104.211.48.247:30333".into(),
+		];
+		PresetConfig { genesis_config, boot_nodes }
+	}
+
 	/// PoC-2 testnet config.
 	fn poc_2_testnet_config() -> Self {
 		let initial_authorities = vec![
@@ -59,7 +90,7 @@ impl PresetConfig {
 		let endowed_accounts = vec![
 			hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),
 		];
-		let genesis_config = GenesisConfig {
+		let genesis_config = Config::Local(GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),	// TODO change
 				authorities: initial_authorities.clone(),
@@ -105,7 +136,7 @@ impl PresetConfig {
 				voting_period: 7 * 120 * 24, // 7 day voting period for council members.
 			}),
 			parachains: Some(Default::default()),
-		};
+		});
 		let boot_nodes = vec![
 			"enode://a93a29fa68d965452bf0ff8c1910f5992fe2273a72a1ee8d3a3482f68512a61974211ba32bb33f051ceb1530b8ba3527fc36224ba6b9910329025e6d9153cf50@104.211.54.233:30333".into(),
 			"enode://051b18f63a316c4c5fef4631f8c550ae0adba179153588406fac3e5bbbbf534ebeda1bf475dceda27a531f6cdef3846ab6a010a269aa643a1fec7bff51af66bd@104.211.48.51:30333".into(),
@@ -123,7 +154,7 @@ impl PresetConfig {
 			ed25519::Pair::from_seed(b"Eve                             ").public().0.into(),
 			ed25519::Pair::from_seed(b"Ferdie                          ").public().0.into(),
 		];
-		let genesis_config = GenesisConfig {
+		let genesis_config = Config::Local(GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm").to_vec(),
 				authorities: initial_authorities.clone(),
@@ -169,7 +200,7 @@ impl PresetConfig {
 				voting_period: 20,
 			}),
 			parachains: Some(Default::default()),
-		};
+		});
 		let boot_nodes = Vec::new();
 		PresetConfig { genesis_config, boot_nodes }
 	}
