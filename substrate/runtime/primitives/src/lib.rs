@@ -66,12 +66,14 @@ pub trait BuildStorage {
 	fn build_storage(self) -> StorageMap;
 }
 
+#[cfg(feature = "std")]
 impl BuildStorage for MakeStorage {
 	fn build_storage(mut self) -> StorageMap {
 		self()
 	}
 }
 
+#[cfg(feature = "std")]
 impl BuildStorage for StorageMap {
 	fn build_storage(self) -> StorageMap {
 		self
