@@ -178,25 +178,32 @@ pub mod generic {
 	use super::{Role, BlockAttribute, RemoteCallResponse, RequestId, Transactions, Direction};
 
 	use primitives::bytes;
+
+	/// Emulates Poc-1 extrinsic primitive.
 	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 	pub struct V1Extrinsic(#[serde(with="bytes")] pub Vec<u8>);
 	// Alternative block format for poc-1 compatibility.
 	// TODO: remove this after poc-2
 	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 	#[serde(untagged)]
+	/// Serialized block body type.
 	pub enum Body<Extrinsic> {
+		/// Poc-1. Extrinsics as bytes.
 		V1(Vec<V1Extrinsic>),
+		/// Poc-2 or later. A structured type.
 		Extrinsics(Vec<Extrinsic>),
 	}
 
 	impl<Extrinsic> Body<Extrinsic> where Extrinsic: Slicable {
+		/// Extracts extrinsic from the body.
 		pub fn to_extrinsics(self) -> Vec<Extrinsic> {
 			match self {
 				Body::Extrinsics(e) => e,
 				Body::V1(e) => {
-					e.into_iter().filter_map(|bytes|
-						Slicable::decode(&mut bytes.0.as_slice())
-					).collect()
+					e.into_iter().filter_map(|bytes| {
+						let bytes = bytes.0.encode();
+						Slicable::decode(&mut bytes.as_slice())
+					}).collect()
 				}
 			}
 		}
