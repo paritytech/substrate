@@ -193,6 +193,9 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait>(PhantomData<T>);
 
 #[cfg(any(feature = "std", test))]

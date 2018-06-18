@@ -16,6 +16,8 @@
 
 //! Predefined chains.
 
+use service;
+
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
 #[derive(Clone, Debug)]
@@ -30,6 +32,19 @@ pub enum ChainSpec {
 	PoC2Testnet,
 	/// Custom Genesis file.
 	Custom(String),
+}
+
+/// Get a chain config from a spec setting.
+impl ChainSpec {
+	pub(crate) fn load(self) -> Result<service::ChainSpec, String> {
+		Ok(match self {
+			ChainSpec::PoC1Testnet => service::ChainSpec::poc_1_testnet_config(),
+			ChainSpec::Development => service::ChainSpec::development_config(),
+			ChainSpec::LocalTestnet => service::ChainSpec::local_testnet_config(),
+			ChainSpec::PoC2Testnet => service::ChainSpec::poc_2_testnet_config(),
+			ChainSpec::Custom(f) => return Err(f),
+		})
+	}
 }
 
 impl<'a> From<&'a str> for ChainSpec {

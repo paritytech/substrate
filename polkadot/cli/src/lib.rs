@@ -58,23 +58,18 @@ extern crate clap;
 extern crate error_chain;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate hex_literal;
 
 pub mod error;
 mod informant;
 mod chain_spec;
-mod preset_config;
 
 pub use chain_spec::ChainSpec;
-pub use preset_config::PresetConfig;
 
 use std::io;
 use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
-use substrate_primitives::hexdisplay::HexDisplay;
 use substrate_primitives::storage::{StorageData, StorageKey};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
 use runtime_primitives::StorageMap;
@@ -190,23 +185,22 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
 
-	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
-		.map(PresetConfig::deconstruct)
+	if matches.is_present("build-spec") {
+		info!("Building chain spec");
+		let spec = chain_spec.load().expect("Error loading chain spec");
+		let json = spec.to_json();
+		print!("{}", json);
+		return Ok(())
+	}
+
+	let (genesis_storage, boot_nodes) = chain_spec.load()
+		.map(service::ChainSpec::deconstruct)
 		.unwrap_or_else(|f| (Box::new(move || 
 			read_storage_json(&f)
 				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
 				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
 		), vec![]));
 	
-	if matches.is_present("build-genesis") {
-		info!("Building genesis");
-		for (i, (k, v)) in genesis_storage().iter().enumerate() {
-			print!("{}\n\"0x{}\": \"0x{}\"", if i > 0 {','} else {'{'}, HexDisplay::from(k), HexDisplay::from(v));
-		}
-		println!("\n}}");
-		return Ok(())
-	}
-
 	config.genesis_storage = genesis_storage;
 
 	let role =

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Simply type for representing Vec<u8> with regards to serde.
+//! Simple type for representing Vec<u8> with regards to serde.
 
 use core::fmt;
 
@@ -155,4 +155,53 @@ pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Resul
 	// TODO [ToDr] Use raw bytes if we switch to RLP / binencoding
 	// (visit_bytes, visit_bytes_buf)
 	deserializer.deserialize_str(Visitor { len })
+}
+
+#[cfg(feature = "std")]
+/// Serialization helpers for AuthorityId.
+pub mod authority_vec {
+	use core::fmt;
+	use serde::{de, Serializer, Deserializer};
+	use {AuthorityId, H256};
+
+	/// Serializes a slice of byte vectors.
+	pub fn serialize<S>(elements: &[AuthorityId], serializer: S) -> Result<S::Ok, S::Error> where
+		S: Serializer,
+	{
+		use serde::ser::SerializeSeq;
+
+		let mut seq = serializer.serialize_seq(Some(elements.len()))?;
+		for e in elements {
+			let hex: String = ::rustc_hex::ToHex::to_hex(&e[..]);
+			seq.serialize_element(&format!("0x{}", hex))?;
+		}
+		seq.end()
+	}
+
+	/// Deserialize into vector of bytes.
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<AuthorityId>, D::Error> where
+		D: Deserializer<'de>,
+	{
+		struct Visitor;
+
+		impl<'a> de::Visitor<'a> for Visitor {
+			type Value = Vec<AuthorityId>;
+
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				write!(formatter, "a sequence of 0x-prefixed 32-byte hex strings")
+			}
+
+			fn visit_seq<S>(self, mut access: S) -> Result<Self::Value, S::Error>
+				where S: de::SeqAccess<'a>
+			{
+				let mut vec = Vec::with_capacity(access.size_hint().unwrap_or(0));
+				while let Some(value) = access.next_element::<H256>()? {
+					vec.push(value.0);
+				}
+				Ok(vec)
+			}
+		}
+
+		deserializer.deserialize_seq(Visitor)
+	}
 }

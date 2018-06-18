@@ -946,6 +946,9 @@ impl ContractAddressFor<u64> for DummyContractAddressFor {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	pub sessions_per_era: T::BlockNumber,
 	pub current_era: T::BlockNumber,

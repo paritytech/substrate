@@ -15,7 +15,6 @@ time = "0.1"
 slog = "^2"
 ansi_term = "0.10"
 lazy_static = "1.0"
-hex-literal = "0.1"
 triehash = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
 app_dirs = "1.2"

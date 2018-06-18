@@ -181,6 +181,9 @@ impl<T: Trait> Executable for Module<T> {
 
 /// Parachains module genesis configuration.
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	/// The initial parachains, mapped to code.
 	pub parachains: Vec<(Id, Vec<u8>)>,

@@ -45,9 +45,9 @@ args:
       long: dev
       help: Run in development mode; implies --chain=dev --validator --key Alice
       takes_value: false
-  - build-genesis:
-      long: build-genesis
-      help: Build a genesis.json file, outputing to stdout
+  - build-spec:
+      long: build-spec
+      help: Build a spec.json file, outputing to stdout
       takes_value: false
   - port:
       long: port

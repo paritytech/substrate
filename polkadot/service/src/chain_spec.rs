@@ -16,71 +16,66 @@
 
 //! Polkadot chain configurations.
 
-use std::collections::HashMap;
 use ed25519;
-use serde_json;
-use substrate_primitives::{AuthorityId, storage::{StorageKey, StorageData}};
+use std::collections::HashMap;
+use primitives::{AuthorityId, storage::{StorageKey, StorageData}};
 use runtime_primitives::{MakeStorage, BuildStorage, StorageMap};
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig};
-use chain_spec::ChainSpec;
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 enum Config {
 	Local(GenesisConfig),
-	Raw(&'static [u8]),
+	Raw(HashMap<StorageKey, StorageData>),
 }
 
 /// A configuration of a chain. Can be used to build a genesis block.
-pub struct PresetConfig {
-	genesis_config: Config,
-	pub(crate) boot_nodes: Vec<String>,
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct ChainSpec {
+	pub name: String,
+	genesis: Config,
+	pub boot_nodes: Vec<String>,
 }
 
 impl BuildStorage for Config {
 	fn build_storage(self) -> StorageMap {
 		match self {
 			Config::Local(gc) => gc.build_storage(),
-			Config::Raw(json) => {
-				let h: HashMap<StorageKey, StorageData> = serde_json::from_slice(json).expect("Data is from an internal source and is guaranteed to be of the correct format");
-				h.into_iter().map(|(k, v)| (k.0, v.0)).collect()
-			}
+			Config::Raw(map) => map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 		}
 	}
 }
 
-impl PresetConfig {
-	/// Get a chain config from a spec, if it's predefined.
-	pub fn from_spec(chain_spec: ChainSpec) -> Result<Self, String> {
-		Ok(match chain_spec {
-			ChainSpec::PoC1Testnet => Self::poc_1_testnet_config(),
-			ChainSpec::Development => Self::development_config(),
-			ChainSpec::LocalTestnet => Self::local_testnet_config(),
-			ChainSpec::PoC2Testnet => Self::poc_2_testnet_config(),
-			ChainSpec::Custom(f) => return Err(f),
-		})
-	}
-
+impl ChainSpec {
 	/// Provide the boot nodes and a storage-builder function.
 	// TODO: Change return type to FnOnce as soon as Box<FnOnce> is callable or BoxFn is stablised.
 	pub fn deconstruct(self) -> (MakeStorage, Vec<String>) {
-		let mut gc = Some(self.genesis_config);
+		let mut gc = Some(self.genesis);
 		let f = move || gc.take().map(BuildStorage::build_storage).unwrap_or_default();
 		(Box::new(f), self.boot_nodes)
 	}
 
+	/// Parse json content into a `ChainSpec`
+	pub fn from_json(json: &[u8]) -> Self {
+		::serde_json::from_slice(json).expect("Error parsing spec file.")
+	}
+
+	/// Dump to json string.
+	pub fn to_json(&self) -> String {
+		::serde_json::to_string_pretty(self).expect("Error generating spec file.")
+	}
+
 	/// PoC-1 testnet config.
-	fn poc_1_testnet_config() -> Self {
-		let genesis_config = Config::Raw(include_bytes!("../poc-1.json"));
-		let boot_nodes = vec![
-			"enode://a93a29fa68d965452bf0ff8c1910f5992fe2273a72a1ee8d3a3482f68512a61974211ba32bb33f051ceb1530b8ba3527fc36224ba6b9910329025e6d9153cf50@104.211.54.233:30333".into(),
-			"enode://051b18f63a316c4c5fef4631f8c550ae0adba179153588406fac3e5bbbbf534ebeda1bf475dceda27a531f6cdef3846ab6a010a269aa643a1fec7bff51af66bd@104.211.48.51:30333".into(),
-			"enode://c831ec9011d2c02d2c4620fc88db6d897a40d2f88fd75f47b9e4cf3b243999acb6f01b7b7343474650b34eeb1363041a422a91f1fc3850e43482983ee15aa582@104.211.48.247:30333".into(),
-		];
-		PresetConfig { genesis_config, boot_nodes }
+	pub fn poc_1_testnet_config() -> Self {
+		Self::from_json(include_bytes!("../res/poc-1.json"))
 	}
 
 	/// PoC-2 testnet config.
-	fn poc_2_testnet_config() -> Self {
+	pub fn poc_2_testnet_config() -> Self {
 		let initial_authorities = vec![
 			hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
 			hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
@@ -90,7 +85,7 @@ impl PresetConfig {
 		let endowed_accounts = vec![
 			hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),
 		];
-		let genesis_config = Config::Local(GenesisConfig {
+		let genesis = Config::Local(GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),	// TODO change
 				authorities: initial_authorities.clone(),
@@ -142,10 +137,11 @@ impl PresetConfig {
 			"enode://051b18f63a316c4c5fef4631f8c550ae0adba179153588406fac3e5bbbbf534ebeda1bf475dceda27a531f6cdef3846ab6a010a269aa643a1fec7bff51af66bd@104.211.48.51:30333".into(),
 			"enode://c831ec9011d2c02d2c4620fc88db6d897a40d2f88fd75f47b9e4cf3b243999acb6f01b7b7343474650b34eeb1363041a422a91f1fc3850e43482983ee15aa582@104.211.48.247:30333".into(),
 		];
-		PresetConfig { genesis_config, boot_nodes }
+		ChainSpec { name: "poc-2".to_owned(), genesis, boot_nodes }
 	}
 
-	fn testnet_config(initial_authorities: Vec<AuthorityId>) -> PresetConfig {
+	/// Local testnet config.
+	pub fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainSpec {
 		let endowed_accounts = vec![
 			ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
 			ed25519::Pair::from_seed(b"Bob                             ").public().0.into(),
@@ -154,7 +150,7 @@ impl PresetConfig {
 			ed25519::Pair::from_seed(b"Eve                             ").public().0.into(),
 			ed25519::Pair::from_seed(b"Ferdie                          ").public().0.into(),
 		];
-		let genesis_config = Config::Local(GenesisConfig {
+		let genesis = Config::Local(GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm").to_vec(),
 				authorities: initial_authorities.clone(),
@@ -202,18 +198,18 @@ impl PresetConfig {
 			parachains: Some(Default::default()),
 		});
 		let boot_nodes = Vec::new();
-		PresetConfig { genesis_config, boot_nodes }
+		ChainSpec { name: "testnet".to_owned(), genesis, boot_nodes }
 	}
 
 	/// Development config (single validator Alice)
-	fn development_config() -> Self {
+	pub fn development_config() -> Self {
 		Self::testnet_config(vec![
 			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
 		])
 	}
 
 	/// Local testnet config (multivalidator Alice + Bob)
-	fn local_testnet_config() -> Self {
+	pub fn local_testnet_config() -> Self {
 		Self::testnet_config(vec![
 			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
 			ed25519::Pair::from_seed(b"Bob                             ").public().into(),

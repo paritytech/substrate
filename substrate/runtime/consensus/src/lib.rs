@@ -42,7 +42,7 @@ use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::RefInto;
+use primitives::traits::{RefInto, MaybeSerializeDebug};
 use primitives::bft::MisbehaviorReport;
 
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
@@ -60,7 +60,7 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 pub trait Trait: system::Trait {
 	type PublicAux: RefInto<Self::AccountId>;
-	type SessionKey: Parameter + Default;
+	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 }
 
 decl_module! {
@@ -118,6 +118,9 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	pub authorities: Vec<T::SessionKey>,
 	pub code: Vec<u8>,

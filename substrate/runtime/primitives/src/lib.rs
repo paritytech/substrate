@@ -241,6 +241,9 @@ macro_rules! impl_outer_config {
 	( pub struct $main:ident for $concrete:ident { $( $config:ident => $snake:ident, )* } ) => {
 		__impl_outer_config_types! { $concrete $( $config $snake )* }
 		#[cfg(any(feature = "std", test))]
+		#[derive(Serialize, Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		#[serde(deny_unknown_fields)]
 		pub struct $main {
 			$(
 				pub $snake: Option<$config>,
