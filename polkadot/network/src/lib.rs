@@ -22,19 +22,23 @@ extern crate serde_json;
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_network;
-
 extern crate substrate_primitives;
+
+extern crate polkadot_api;
 extern crate polkadot_consensus;
 extern crate polkadot_primitives;
+
 extern crate ed25519;
 extern crate futures;
 extern crate tokio;
 
+#[macro_use]
+extern crate log;
+
 use codec::Slicable;
-use polkadot_consensus::Statement;
+use polkadot_consensus::SignedStatement;
 use polkadot_primitives::{Block, Hash};
 use polkadot_primitives::parachain::Id as ParaId;
-use substrate_primitives::{AuthorityId};
 use substrate_network::{PeerId, RequestId, Context};
 use substrate_network::consensus_gossip::ConsensusGossip;
 use substrate_network::{message, generic_message};
@@ -43,7 +47,7 @@ use substrate_network::StatusMessage as GenericFullStatus;
 
 use std::collections::HashMap;
 
-mod consensus;
+pub mod consensus;
 
 /// Polkadot protocol id.
 pub const DOT_PROTOCOL_ID: ::substrate_network::ProtocolId = *b"dot";
@@ -118,7 +122,7 @@ pub struct PolkadotProtocol {
 #[derive(Serialize, Deserialize)]
 pub enum Message {
 	/// signed statement and localized parent hash.
-	Statement(Hash, Statement),
+	Statement(Hash, SignedStatement),
 }
 
 impl Specialization<Block> for PolkadotProtocol {
@@ -174,10 +178,8 @@ impl Specialization<Block> for PolkadotProtocol {
 				};
 
 				match msg {
-					Message::Statement(parent_hash, statement) => {
-						// TODO: notify table routing instance
-						self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash);
-					}
+					Message::Statement(parent_hash, statement) =>
+						self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash),
 				}
 			}
 			_ => {}

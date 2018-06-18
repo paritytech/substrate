@@ -144,7 +144,7 @@ error_chain! {
 	}
 }
 
-/// Check whether a given collation is valid. Returns `Ok`  on success, error otherwise.
+/// Check whether a given collation is valid. Returns `Ok` on success, error otherwise.
 pub fn validate_collation<P: PolkadotApi>(client: &P, relay_parent: &P::CheckedBlockId, collation: &Collation) -> Result<(), Error> {
 	use parachain::{self, ValidationParams};
 

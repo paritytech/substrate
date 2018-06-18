@@ -17,38 +17,25 @@
 //! Implementation of the traits for consensus networking for the polkadot protocol.
 
 use bft;
+use ed25519;
 use substrate_network::{self as net, generic_message as msg};
 use substrate_network::consensus_gossip::ConsensusMessage;
-use polkadot_consensus::{Network, SharedTable, TableRouter, Statement, Error as ConsensusError};
+use polkadot_api::{PolkadotApi, LocalPolkadotApi};
+use polkadot_consensus::{Network, SharedTable, TableRouter, SignedStatement};
 use polkadot_primitives::{Block, Hash, Header, BlockId, SessionKey};
 use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
+
 use futures::{future, prelude::*};
+use futures::sync::mpsc;
+
+use std::sync::Arc;
+
 use tokio::runtime::TaskExecutor;
 
 use super::{Message, NetworkService,};
 
-/// Table routing implementation.
-pub struct Router;
-
-impl TableRouter for Router {
-	type Error = ();
-	type FetchCandidate = future::Empty<BlockData, Self::Error>;
-	type FetchExtrinsic = future::Empty<Extrinsic, Self::Error>;
-
-	fn local_candidate_data(&self, _hash: Hash, _block_data: BlockData, _extrinsic: Extrinsic) {
-
-	}
-
-	fn fetch_block_data(&self, _candidate: &CandidateReceipt) -> Self::FetchCandidate {
-		future::empty()
-	}
-
-	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
-		future::empty()
-	}
-}
-
-struct BftSink<E> {
+/// Sink for output BFT messages.
+pub struct BftSink<E> {
 	network: Arc<NetworkService>,
 	parent_hash: Hash,
 	_marker: ::std::marker::PhantomData<E>,
@@ -96,77 +83,6 @@ impl<E> Sink for BftSink<E> {
 	}
 }
 
-impl<E> Sink for BftSink<E> {
-	type SinkItem = bft::Communication<Block>;
-	// TODO: replace this with the ! type when that's stabilized
-	type SinkError = E;
-
-	fn start_send(&mut self, message: bft::Communication<Block>) -> ::futures::StartSend<bft::Communication<Block>, E> {
-		let network_message = msg::LocalizedBftMessage {
-			message: match message {
-				bft::generic::Communication::Consensus(c) => msg::BftMessage::Consensus(match c {
-					bft::generic::LocalizedMessage::Propose(proposal) => msg::SignedConsensusMessage::Propose(msg::SignedConsensusProposal {
-						round_number: proposal.round_number as u32,
-						proposal: proposal.proposal,
-						digest: proposal.digest,
-						sender: proposal.sender,
-						digest_signature: proposal.digest_signature.signature,
-						full_signature: proposal.full_signature.signature,
-					}),
-					bft::generic::LocalizedMessage::Vote(vote) => msg::SignedConsensusMessage::Vote(msg::SignedConsensusVote {
-						sender: vote.sender,
-						signature: vote.signature.signature,
-						vote: match vote.vote {
-							bft::generic::Vote::Prepare(r, h) => msg::ConsensusVote::Prepare(r as u32, h),
-							bft::generic::Vote::Commit(r, h) => msg::ConsensusVote::Commit(r as u32, h),
-							bft::generic::Vote::AdvanceRound(r) => msg::ConsensusVote::AdvanceRound(r as u32),
-						}
-					}),
-				}),
-				bft::generic::Communication::Auxiliary(justification) => msg::BftMessage::Auxiliary(justification.uncheck().into()),
-			},
-			parent_hash: self.parent_hash,
-		};
-		self.network.send_bft_message(network_message);
-		Ok(::futures::AsyncSink::Ready)
-	}
-
-	fn poll_complete(&mut self) -> ::futures::Poll<(), E> {
-		Ok(Async::Ready(()))
-	}
-}
-
-struct Messages {
-	network_stream: mpsc::UnboundedReceiver<bft::Communication<Block>>,
-	local_id: SessionKey,
-	authorities: Vec<SessionKey>,
-}
-
-impl Stream for Messages {
-	type Item = bft::Communication<Block>;
-	type Error = ConsensusError;
-
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		// check the network
-		loop {
-			match self.network_stream.poll() {
-				Err(_) => return Err(bft::Error::from(bft::InputStreamConcluded).into()),
-				Ok(Async::NotReady) => return Ok(Async::NotReady),
-				Ok(Async::Ready(None)) => return Ok(Async::NotReady), // the input stream for agreements is never meant to logically end.
-				Ok(Async::Ready(Some(message))) => {
-					match process_message(message, &self.local_id, &self.authorities) {
-						Ok(Some(message)) => return Ok(Async::Ready(Some(message))),
-						Ok(None) => {} // ignored local message.
-						Err(e) => {
-							debug!("Message validation failed: {:?}", e);
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
 // check signature and authority validity of message.
 fn process_bft_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &SessionKey, authorities: &[SessionKey]) -> Result<Option<bft::Communication<Block>>, bft::Error> {
 	Ok(Some(match msg.message {
@@ -206,7 +122,7 @@ fn process_bft_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &Se
 						msg::ConsensusVote::AdvanceRound(r) => bft::generic::Vote::AdvanceRound(r as usize),
 					}
 				};
-				bft::check_vote(authorities, &msg.parent_hash, &vote)?;
+				bft::check_vote::<Block>(authorities, &msg.parent_hash, &vote)?;
 
 				trace!(target: "bft", "importing vote {:?} from {}", vote.vote, Hash::from(vote.sender));
 				vote
@@ -215,27 +131,23 @@ fn process_bft_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &Se
 		msg::BftMessage::Auxiliary(a) => {
 			let justification = bft::UncheckedJustification::from(a);
 			// TODO: get proper error
-			let justification: Result<_, bft::Error> = bft::check_prepare_justification(authorities, msg.parent_hash, justification)
+			let justification: Result<_, bft::Error> = bft::check_prepare_justification::<Block>(authorities, msg.parent_hash, justification)
 				.map_err(|_| bft::ErrorKind::InvalidJustification.into());
 			bft::generic::Communication::Auxiliary(justification?)
 		},
 	}))
 }
 
-fn process_encoded_statement(raw_message: Vec<u8>) -> Option<generic_message::SignedStatement> {
-	match
-}
-
 // task that processes all gossipped consensus messages,
 // checking signatures
-struct MessageProcessTask {
+struct MessageProcessTask<P: PolkadotApi> {
 	inner_stream: mpsc::UnboundedReceiver<ConsensusMessage<Block>>,
 	bft_messages: mpsc::UnboundedSender<bft::Communication<Block>>,
-	authorities: Vec<SessionKey>,
-	local_id: SessionKey,
+	validators: Vec<SessionKey>,
+	table_router: Router<P>,
 }
 
-impl Future for MessageProcessTask {
+impl<P: LocalPolkadotApi + Send + Sync + 'static> Future for MessageProcessTask<P> where P::CheckedBlockId: Send {
 	type Item = ();
 	type Error = ();
 
@@ -244,13 +156,14 @@ impl Future for MessageProcessTask {
 			match self.inner_stream.poll() {
 				Ok(Async::Ready(Some(val))) => match val {
 					ConsensusMessage::Bft(msg) => {
-						match process_bft_message(msg, &self.authorities, &self.local_id) {
+						let local_id = self.table_router.table.session_key();
+						match process_bft_message(msg, &local_id, &self.validators[..]) {
 							Ok(Some(msg)) => {
 								if let Err(_) = self.bft_messages.unbounded_send(msg) {
 									// if the BFT receiving stream has ended then
 									// we should just bail.
 									trace!(target: "bft", "BFT message stream appears to have closed");
-									return Ok(());
+									return Ok(Async::Ready(()));
 								}
 							}
 							Ok(None) => {} // ignored local message
@@ -260,12 +173,14 @@ impl Future for MessageProcessTask {
 						}
 					}
 					ConsensusMessage::ChainSpecific(msg, _) => {
-						let statement = match ::serde_json::from_slice(&msg) {
-							Ok(Message::Statement)
+						if let Ok(Message::Statement(parent_hash, statement)) = ::serde_json::from_slice(&msg) {
+							if ::polkadot_consensus::check_statement(&statement.statement, &statement.signature, statement.sender, &parent_hash) {
+								self.table_router.import_statement(statement);
+							}
 						}
 					}
 				}
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(()))
+				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
 				Ok(Async::NotReady) => {},
 				Err(e) => debug!(target: "p_net", "Error getting consensus message: {:?}", e),
 			}
@@ -273,30 +188,47 @@ impl Future for MessageProcessTask {
 	}
 }
 
-/// Wrapper around the network service
-pub struct ConsensusNetwork {
-	network: Arc<NetworkService>,
+/// Input stream from the consensus network.
+pub struct InputAdapter {
+	input: mpsc::UnboundedReceiver<bft::Communication<Block>>,
 }
 
-impl ConsensusNetwork {
+impl Stream for InputAdapter {
+	type Item = bft::Communication<Block>;
+	type Error = ::polkadot_consensus::Error;
+
+	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+		match self.input.poll() {
+			Err(_) | Ok(Async::Ready(None)) => Err(bft::InputStreamConcluded.into()),
+			Ok(x) => Ok(x)
+		}
+	}
+}
+
+/// Wrapper around the network service
+pub struct ConsensusNetwork<P> {
+	network: Arc<NetworkService>,
+	api: Arc<P>,
+}
+
+impl<P> ConsensusNetwork<P> {
 	/// Create a new consensus networking object.
-	pub fn new(network: Arc<NetworkService>, ) -> Self {
-		ConsensusNetwork { network }
+	pub fn new(network: Arc<NetworkService>, api: Arc<P>) -> Self {
+		ConsensusNetwork { network, api }
 	}
 }
 
 /// A long-lived network which can create parachain statement and BFT message routing processes on demand.
-impl Network for ConsensusNetwork {
-	type TableRouter = TableRouter;
+impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P> where P::CheckedBlockId: Send {
+	type TableRouter = Router<P>;
 	/// The input stream of BFT messages. Should never logically conclude.
-	type Input = Messages;
+	type Input = InputAdapter;
 	/// The output sink of BFT messages. Messages sent here should eventually pass to all
-	/// current authorities.
-	type Output = BftSink<ConsensusError>;
+	/// current validators.
+	type Output = BftSink<::polkadot_consensus::Error>;
 
 	/// Instantiate a table router using the given shared table.
-	fn communication_for(&self, table: Arc<SharedTable>, task_executor: ) -> (Self::TableRouter, Self::Input, Self::Output) {
-		let table_router = TableRouter;
+	fn communication_for(&self, validators: &[SessionKey], table: Arc<SharedTable>, task_executor: TaskExecutor) -> (Self::TableRouter, Self::Input, Self::Output) {
 		let parent_hash = table.consensus_parent_hash().clone();
 
 		let sink = BftSink {
@@ -305,7 +237,120 @@ impl Network for ConsensusNetwork {
 			_marker: Default::default(),
 		};
 
+		let (bft_send, bft_recv) = mpsc::unbounded();
+
+		let checked_parent_hash = match self.api.check_id(BlockId::hash(parent_hash)) {
+			Ok(checked) => Some(checked),
+			Err(e) => {
+				warn!(target: "p_net", "Unable to evaluate candidates: unknown block ID: {}", e);
+				None
+			}
+		};
+
+		let table_router = Router {
+			table,
+			network: self.network.clone(),
+			api: self.api.clone(),
+			task_executor,
+			parent_hash: checked_parent_hash,
+		};
+
 		// spin up a task in the background that processes all incoming statements
-		//
+		// TODO: propagate statements on a timer?
+		let process_task = self.network.with_spec(|spec, _ctx| {
+			MessageProcessTask {
+				inner_stream: spec.consensus_gossip.messages_for(parent_hash),
+				bft_messages: bft_send,
+				validators: validators.to_vec(),
+				table_router: table_router.clone(),
+			}
+		});
+
+		match process_task {
+			Some(task) => table_router.task_executor.spawn(task),
+			None => warn!(target: "p_net", "Cannot process incoming messages: network appears to be down"),
+		}
+
+		(table_router, InputAdapter { input: bft_recv }, sink)
+	}
+}
+
+/// Table routing implementation.
+pub struct Router<P: PolkadotApi> {
+	table: Arc<SharedTable>,
+	network: Arc<NetworkService>,
+	api: Arc<P>,
+	task_executor: TaskExecutor,
+	parent_hash: Option<P::CheckedBlockId>,
+}
+
+impl<P: PolkadotApi> Clone for Router<P> {
+	fn clone(&self) -> Self {
+		Router {
+			table: self.table.clone(),
+			network: self.network.clone(),
+			api: self.api.clone(),
+			task_executor: self.task_executor.clone(),
+			parent_hash: self.parent_hash.clone(),
+		}
+	}
+}
+
+impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBlockId: Send {
+	fn import_statement(&self, statement: SignedStatement) {
+		let api = self.api.clone();
+		let parent_hash = self.parent_hash.clone();
+
+		let validate_collation = move |collation| -> Option<bool> {
+			let checked = parent_hash.clone()?;
+
+			match ::polkadot_consensus::validate_collation(&*api, &checked, &collation) {
+				Ok(()) => Some(true),
+				Err(e) => {
+					debug!(target: "p_net", "Encountered bad collation: {}", e);
+					Some(false)
+				}
+			}
+		};
+
+		let producer = self.table.import_remote_statement(
+			self,
+			statement,
+			None, // TODO: attach source to ConsensusMessage
+			validate_collation,
+		);
+
+		if !producer.is_blank() {
+			let table = self.table.clone();
+			self.task_executor.spawn(producer.map(move |produced| {
+				// TODO: import statements (which might spawn _more_ tasks)
+				// and ensure availability of block/extrinsic
+				if let Some(validity) = produced.validity {
+					table.sign_and_import(validity);
+				}
+
+				if let Some(availability) = produced.availability {
+					table.sign_and_import(availability);
+				}
+			}))
+		}
+	}
+}
+
+impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlockId: Send {
+	type Error = ();
+	type FetchCandidate = future::Empty<BlockData, Self::Error>;
+	type FetchExtrinsic = future::Empty<Extrinsic, Self::Error>;
+
+	fn local_candidate_data(&self, _hash: Hash, _block_data: BlockData, _extrinsic: Extrinsic) {
+		// give to network to make available and multicast
+	}
+
+	fn fetch_block_data(&self, _candidate: &CandidateReceipt) -> Self::FetchCandidate {
+		future::empty()
+	}
+
+	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
+		future::empty()
 	}
 }

@@ -22,9 +22,8 @@ use std::sync::Arc;
 
 use table::{self, Table, Context as TableContextTrait};
 use collation::Collation;
-use polkadot_primitives::Hash;
+use polkadot_primitives::{Hash, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
-use primitives::AuthorityId;
 
 use parking_lot::Mutex;
 use futures::{future, prelude::*};
@@ -35,7 +34,7 @@ use self::includable::IncludabilitySender;
 mod includable;
 
 pub use self::includable::Includable;
-pub use table::Statement as Statement;
+pub use table::{SignedStatement, Statement};
 pub use table::generic::Statement as GenericStatement;
 
 struct TableContext {
@@ -45,11 +44,11 @@ struct TableContext {
 }
 
 impl table::Context for TableContext {
-	fn is_member_of(&self, authority: &AuthorityId, group: &ParaId) -> bool {
+	fn is_member_of(&self, authority: &SessionKey, group: &ParaId) -> bool {
 		self.groups.get(group).map_or(false, |g| g.validity_guarantors.contains(authority))
 	}
 
-	fn is_availability_guarantor_of(&self, authority: &AuthorityId, group: &ParaId) -> bool {
+	fn is_availability_guarantor_of(&self, authority: &SessionKey, group: &ParaId) -> bool {
 		self.groups.get(group).map_or(false, |g| g.availability_guarantors.contains(authority))
 	}
 
@@ -62,7 +61,7 @@ impl table::Context for TableContext {
 }
 
 impl TableContext {
-	fn local_id(&self) -> AuthorityId {
+	fn local_id(&self) -> SessionKey {
 		self.key.public().0
 	}
 
@@ -78,14 +77,6 @@ impl TableContext {
 	}
 }
 
-/// Source of statements
-pub enum StatementSource {
-	/// Locally produced statement.
-	Local,
-	/// Received statement from remote source, with optional sender.
-	Remote(Option<AuthorityId>),
-}
-
 // A shared table object.
 struct SharedTableInner {
 	table: Table<TableContext>,
@@ -98,25 +89,21 @@ struct SharedTableInner {
 impl SharedTableInner {
 	// Import a single statement. Provide a handle to a table router and a function
 	// used to determine if a referenced candidate is valid.
-	fn import_statement<R: TableRouter, C: FnMut(Collation) -> bool>(
+	//
+	// The collation-checking function should return `true` if known to be valid,
+	// `false` if known to be invalid, and `None` if unable to determine.
+	fn import_remote_statement<R: TableRouter, C: FnMut(Collation) -> Option<bool>>(
 		&mut self,
 		context: &TableContext,
 		router: &R,
 		statement: table::SignedStatement,
-		statement_source: StatementSource,
+		received_from: Option<SessionKey>,
 		check_candidate: C,
 	) -> StatementProducer<
 		<R::FetchCandidate as IntoFuture>::Future,
 		<R::FetchExtrinsic as IntoFuture>::Future,
 		C,
 	> {
-		// this blank producer does nothing until we attach some futures
-		// and set a candidate digest.
-		let received_from = match statement_source {
-			StatementSource::Local => return Default::default(),
-			StatementSource::Remote(from) => from,
-		};
-
 		let summary = match self.table.import_statement(context, statement, received_from) {
 			Some(summary) => summary,
 			None => return Default::default(),
@@ -206,6 +193,13 @@ pub struct StatementProducer<D: Future, E: Future, C> {
 	work: Option<Work<D, E, C>>,
 }
 
+impl<D: Future, E: Future, C> StatementProducer<D, E, C> {
+	/// If this will not produce any statements, returns true.
+	pub fn is_blank(&self) -> bool {
+		self.work.is_none()
+	}
+}
+
 struct Work<D: Future, E: Future, C> {
 	candidate_receipt: CandidateReceipt,
 	fetch_block_data: future::Fuse<D>,
@@ -227,7 +221,7 @@ impl<D, E, C, Err> Future for StatementProducer<D, E, C>
 	where
 		D: Future<Item=BlockData,Error=Err>,
 		E: Future<Item=Extrinsic,Error=Err>,
-		C: FnMut(Collation) -> bool,
+		C: FnMut(Collation) -> Option<bool>,
 {
 	type Item = ProducedStatements;
 	type Error = Err;
@@ -247,11 +241,11 @@ impl<D, E, C, Err> Future for StatementProducer<D, E, C>
 				});
 
 				let hash = work.candidate_receipt.hash();
-				self.produced_statements.validity = Some(if is_good {
-					GenericStatement::Valid(hash)
-				} else {
-					GenericStatement::Invalid(hash)
-				});
+				self.produced_statements.validity = match is_good {
+					Some(true) => Some(GenericStatement::Valid(hash)),
+					Some(false) => Some(GenericStatement::Invalid(hash)),
+					None => None,
+				};
 			}
 		}
 
@@ -320,29 +314,32 @@ impl SharedTable {
 		&self.context.parent_hash
 	}
 
+	/// Get the local validator session key.
+	pub fn session_key(&self) -> SessionKey {
+		self.context.local_id()
+	}
+
 	/// Get group info.
 	pub fn group_info(&self) -> &HashMap<ParaId, GroupInfo> {
 		&self.context.groups
 	}
 
-	/// Import a single statement. Provide a handle to a table router
-	/// for dispatching any other requests which come up.
-	pub fn import_statement<R: TableRouter, C: FnMut(Collation) -> bool>(
+	/// Import a single statement with remote source, whose signature has already been checked.
+	///
+	/// The collation-checking function should return `true` if known to be valid,
+	/// `false` if known to be invalid, and `None` if unable to determine.
+	pub fn import_remote_statement<R: TableRouter, C: FnMut(Collation) -> Option<bool>>(
 		&self,
 		router: &R,
 		statement: table::SignedStatement,
-		received_from: StatementSource,
+		received_from: Option<SessionKey>,
 		check_candidate: C,
 	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future, C> {
-		self.inner.lock().import_statement(&*self.context, router, statement, received_from, check_candidate)
+		self.inner.lock().import_remote_statement(&*self.context, router, statement, received_from, check_candidate)
 	}
 
 	/// Sign and import a local statement.
-	pub fn sign_and_import<R: TableRouter>(
-		&self,
-		router: &R,
-		statement: table::Statement,
-	) {
+	pub fn sign_and_import(&self, statement: table::Statement) {
 		let proposed_digest = match statement {
 			GenericStatement::Candidate(ref c) => Some(c.hash()),
 			_ => None,
@@ -355,36 +352,7 @@ impl SharedTable {
 			inner.proposed_digest = proposed_digest;
 		}
 
-		let producer = inner.import_statement(
-			&*self.context,
-			router,
-			signed_statement,
-			StatementSource::Local,
-			|_| true,
-		);
-
-		assert!(producer.work.is_none(), "local statement import never leads to additional work; qed");
-	}
-
-	/// Import many statements at once.
-	///
-	/// Provide an iterator yielding pairs of (statement, statement_source).
-	pub fn import_statements<R, I, C, U>(&self, router: &R, iterable: I) -> U
-		where
-			R: TableRouter,
-			I: IntoIterator<Item=(table::SignedStatement, StatementSource, C)>,
-			C: FnMut(Collation) -> bool,
-			U: ::std::iter::FromIterator<StatementProducer<
-				<R::FetchCandidate as IntoFuture>::Future,
-				<R::FetchExtrinsic as IntoFuture>::Future,
-				C,
-			>>,
-	{
-		let mut inner = self.inner.lock();
-
-		iterable.into_iter().map(move |(statement, statement_source, check_candidate)| {
-			inner.import_statement(&*self.context, router, statement, statement_source, check_candidate)
-		}).collect()
+		inner.table.import_statement(&*self.context, signed_statement, None);
 	}
 
 	/// Execute a closure using a specific candidate.
@@ -413,7 +381,7 @@ impl SharedTable {
 	}
 
 	/// Get all witnessed misbehavior.
-	pub fn get_misbehavior(&self) -> HashMap<AuthorityId, table::Misbehavior> {
+	pub fn get_misbehavior(&self) -> HashMap<SessionKey, table::Misbehavior> {
 		self.inner.lock().table.get_misbehavior().clone()
 	}
 
@@ -508,11 +476,11 @@ mod tests {
 			sender: validity_other,
 		};
 
-		let producer = shared_table.import_statement(
+		let producer = shared_table.import_remote_statement(
 			&DummyRouter,
 			signed_statement,
-			StatementSource::Remote(None),
-			|_| true,
+			None,
+			|_| Some(true),
 		);
 
 		assert!(producer.work.is_some(), "candidate and local validity group are same");
@@ -558,11 +526,11 @@ mod tests {
 			sender: validity_other,
 		};
 
-		let producer = shared_table.import_statement(
+		let producer = shared_table.import_remote_statement(
 			&DummyRouter,
 			signed_statement,
-			StatementSource::Remote(None),
-			|_| true,
+			None,
+			|_| Some(true),
 		);
 
 		assert!(producer.work.is_some(), "candidate and local availability group are same");

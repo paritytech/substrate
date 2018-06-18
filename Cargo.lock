@@ -1337,6 +1337,8 @@ version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-api 0.1.0",
  "polkadot-consensus 0.1.0",
  "polkadot-primitives 0.1.0",
  "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
