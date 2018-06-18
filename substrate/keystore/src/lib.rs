@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Keystore (and session key management) for polkadot.
+//! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
 extern crate ethcore_crypto as crypto;
 extern crate subtle;
