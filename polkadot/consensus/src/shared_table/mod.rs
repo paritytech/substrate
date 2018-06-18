@@ -97,14 +97,13 @@ impl SharedTableInner {
 		context: &TableContext,
 		router: &R,
 		statement: table::SignedStatement,
-		received_from: Option<SessionKey>,
 		check_candidate: C,
 	) -> StatementProducer<
 		<R::FetchCandidate as IntoFuture>::Future,
 		<R::FetchExtrinsic as IntoFuture>::Future,
 		C,
 	> {
-		let summary = match self.table.import_statement(context, statement, received_from) {
+		let summary = match self.table.import_statement(context, statement) {
 			Some(summary) => summary,
 			None => return Default::default(),
 		};
@@ -332,10 +331,9 @@ impl SharedTable {
 		&self,
 		router: &R,
 		statement: table::SignedStatement,
-		received_from: Option<SessionKey>,
 		check_candidate: C,
 	) -> StatementProducer<<R::FetchCandidate as IntoFuture>::Future, <R::FetchExtrinsic as IntoFuture>::Future, C> {
-		self.inner.lock().import_remote_statement(&*self.context, router, statement, received_from, check_candidate)
+		self.inner.lock().import_remote_statement(&*self.context, router, statement, check_candidate)
 	}
 
 	/// Sign and import a local statement.
@@ -352,7 +350,7 @@ impl SharedTable {
 			inner.proposed_digest = proposed_digest;
 		}
 
-		inner.table.import_statement(&*self.context, signed_statement, None);
+		inner.table.import_statement(&*self.context, signed_statement);
 	}
 
 	/// Execute a closure using a specific candidate.
@@ -383,11 +381,6 @@ impl SharedTable {
 	/// Get all witnessed misbehavior.
 	pub fn get_misbehavior(&self) -> HashMap<SessionKey, table::Misbehavior> {
 		self.inner.lock().table.get_misbehavior().clone()
-	}
-
-	/// Fill a statement batch.
-	pub fn fill_batch<B: table::StatementBatch>(&self, batch: &mut B) {
-		self.inner.lock().table.fill_batch(batch);
 	}
 
 	/// Track includability  of a given set of candidate hashes.
@@ -479,7 +472,6 @@ mod tests {
 		let producer = shared_table.import_remote_statement(
 			&DummyRouter,
 			signed_statement,
-			None,
 			|_| Some(true),
 		);
 
@@ -529,7 +521,6 @@ mod tests {
 		let producer = shared_table.import_remote_statement(
 			&DummyRouter,
 			signed_statement,
-			None,
 			|_| Some(true),
 		);
 

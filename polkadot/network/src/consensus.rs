@@ -316,15 +316,14 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBloc
 		let producer = self.table.import_remote_statement(
 			self,
 			statement,
-			None, // TODO: attach source to ConsensusMessage
 			validate_collation,
 		);
 
 		if !producer.is_blank() {
 			let table = self.table.clone();
 			self.task_executor.spawn(producer.map(move |produced| {
-				// TODO: import statements (which might spawn _more_ tasks)
-				// and ensure availability of block/extrinsic
+				// TODO: ensure availability of block/extrinsic
+				// and propagate these statements.
 				if let Some(validity) = produced.validity {
 					table.sign_and_import(validity);
 				}
@@ -340,7 +339,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBloc
 impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlockId: Send {
 	type Error = ();
 	type FetchCandidate = future::Empty<BlockData, Self::Error>;
-	type FetchExtrinsic = future::Empty<Extrinsic, Self::Error>;
+	type FetchExtrinsic = Result<Extrinsic, Self::Error>;
 
 	fn local_candidate_data(&self, _hash: Hash, _block_data: BlockData, _extrinsic: Extrinsic) {
 		// give to network to make available and multicast
@@ -351,6 +350,6 @@ impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlock
 	}
 
 	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
-		future::empty()
+		Ok(Extrinsic)
 	}
 }

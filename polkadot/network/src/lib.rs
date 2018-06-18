@@ -123,6 +123,10 @@ pub struct PolkadotProtocol {
 pub enum Message {
 	/// signed statement and localized parent hash.
 	Statement(Hash, SignedStatement),
+	/// Requesting parachain block data by candidate hash.
+	RequestBlockData(RequestId, Hash),
+	/// Provide block data by candidate hash.
+	BlockData(RequestId, BlockData),
 }
 
 impl Specialization<Block> for PolkadotProtocol {

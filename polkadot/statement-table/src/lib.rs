@@ -87,27 +87,3 @@ impl<C: Context> generic::Context for C {
 		Context::requisite_votes(self, group)
 	}
 }
-
-/// A batch of statements to send out.
-pub trait StatementBatch {
-	/// Get the target authorities of these statements.
-	fn targets(&self) -> &[SessionKey];
-
-	/// If the batch is empty.
-	fn is_empty(&self) -> bool;
-
-	/// Push a statement onto the batch. Returns false when the batch is full.
-	///
-	/// This is meant to do work like incrementally serializing the statements
-	/// into a vector of bytes while making sure the length is below a certain
-	/// amount.
-	fn push(&mut self, statement: SignedStatement) -> bool;
-}
-
-impl<T: StatementBatch> generic::StatementBatch<SessionKey, SignedStatement> for T {
-	fn targets(&self) -> &[SessionKey] { StatementBatch::targets(self ) }
-	fn is_empty(&self) -> bool { StatementBatch::is_empty(self) }
-	fn push(&mut self, statement: SignedStatement) -> bool {
-		StatementBatch::push(self, statement)
-	}
-}
