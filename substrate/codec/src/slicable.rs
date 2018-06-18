@@ -20,6 +20,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use core::{mem, slice};
 use super::joiner::Joiner;
+use arrayvec::ArrayVec;
 
 /// Trait that allows reading of data into a slice.
 pub trait Input {
@@ -87,25 +88,75 @@ impl<T: Slicable, E: Slicable> Slicable for Result<T, E> {
 	}
 }
 
-impl Slicable for Option<bool> {
+/// Shim type because we can't do a specialised implementation for `Option<bool>` directly.
+pub struct OptionBool(pub Option<bool>);
+
+impl Slicable for OptionBool {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
-			0 => Some(Some(false)),
-			1 => Some(Some(true)),
-			2 => Some(None),
+			0 => Some(OptionBool(None)),
+			1 => Some(OptionBool(Some(true))),
+			2 => Some(OptionBool(Some(false))),
 			_ => None,
 		}
 	}
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[match *self {
-			Some(false) => 0u8,
-			Some(true) => 1u8,
-			None => 2u8,
+			OptionBool(None) => 0u8,
+			OptionBool(Some(true)) => 1u8,
+			OptionBool(Some(false)) => 2u8,
 		}])
 	}
 }
 
+impl<T: Slicable> Slicable for Option<T> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			0 => Some(None),
+			1 => Some(Some(T::decode(input)?)),
+			_ => None,
+		}
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+		match *self {
+			Some(ref t) => {
+				v.push(1);
+				t.using_encoded(|s| v.extend(s));
+			}
+			None => v.push(0),
+		}
+		v
+	}
+}
+
+macro_rules! impl_array {
+	( $( $n:expr )* ) => { $(
+		impl<T: Slicable> Slicable for [T; $n] {
+			fn decode<I: Input>(input: &mut I) -> Option<Self> {
+				let mut r = ArrayVec::new();
+				for _ in 0..$n {
+					r.push(T::decode(input)?);
+				}
+				r.into_inner().ok()
+			}
+
+			fn encode(&self) -> Vec<u8> {
+				use core::iter::Extend;
+				let mut r = Vec::new();
+				for item in self.iter() {
+					item.using_encoded(|e| r.extend(e));
+				}
+				r
+			}
+		}
+	)* }
+}
+
+impl_array!(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
+	40 48 56 64 72 96 128 160 192 224 256);
 
 impl<T: Slicable> Slicable for Box<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
@@ -145,12 +196,8 @@ impl<T: Slicable> Slicable for Vec<T> {
 		u32::decode(input).and_then(move |len| {
 			let mut r = Vec::with_capacity(len as usize);
 			for _ in 0..len {
-				r.push(match T::decode(input) {
-					Some(x) => x,
-					None => return None,
-				});
+				r.push(T::decode(input)?);
 			}
-
 			Some(r)
 		})
 	}
@@ -163,13 +210,11 @@ impl<T: Slicable> Slicable for Vec<T> {
 
 		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 		for item in self {
-			r.extend(item.encode());
+			item.using_encoded(|e| r.extend(e))
 		}
 		r
 	}
 }
-
-
 
 impl Slicable for () {
 	fn decode<I: Input>(_: &mut I) -> Option<()> {

@@ -26,6 +26,8 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate core;
 
+extern crate arrayvec;
+
 #[cfg(feature = "std")]
 pub mod alloc {
 	pub use std::boxed;

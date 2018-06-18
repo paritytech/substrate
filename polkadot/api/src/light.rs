@@ -22,6 +22,7 @@ use client::{Client, CallExecutor};
 use codec::Slicable;
 use state_machine;
 use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
+use runtime::Address;
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 use full::CheckedId;
 use {PolkadotApi, BlockBuilder, RemotePolkadotApi, CheckedBlockId, Result, ErrorKind};
@@ -81,6 +82,10 @@ impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotAp
 	}
 
 	fn index(&self, _at: &CheckedId, _account: AccountId) -> Result<Index> {
+		Err(ErrorKind::UnknownRuntime.into())
+	}
+
+	fn lookup(&self, _at: &CheckedId, _address: Address) -> Result<Option<AccountId>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 

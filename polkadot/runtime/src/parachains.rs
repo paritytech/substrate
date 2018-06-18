@@ -234,6 +234,7 @@ mod tests {
 	use runtime_primitives::testing::{Digest, Header};
 	use consensus;
 
+	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;

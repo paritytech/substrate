@@ -110,7 +110,7 @@ pub fn finalise_block() -> Header {
 }
 
 fn execute_transaction_backend(utx: &Extrinsic) {
-	use runtime_primitives::traits::Checkable;
+	use runtime_primitives::traits::BlindCheckable;
 
 	// check signature
 	let utx = match utx.clone().check() {

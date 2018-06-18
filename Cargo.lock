@@ -1233,6 +1233,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-runtime-executive 0.1.0",
  "substrate-runtime-io 0.1.0",
+ "substrate-runtime-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
 ]
 
@@ -1430,12 +1431,14 @@ dependencies = [
  "ed25519 0.1.0",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-extrinsic-pool 0.1.0",
+ "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-primitives 0.1.0",
 ]
@@ -1559,7 +1562,7 @@ dependencies = [
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1922,6 +1925,9 @@ dependencies = [
 [[package]]
 name = "substrate-codec"
 version = "0.1.0"
+dependencies = [
+ "arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "substrate-executor"
@@ -2141,6 +2147,7 @@ version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-consensus 0.1.0",
@@ -2267,6 +2274,7 @@ dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 0.1.0",
  "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",

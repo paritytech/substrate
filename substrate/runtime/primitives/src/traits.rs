@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd;
+use rstd::{self, result};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
@@ -40,15 +40,25 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
+/// Means of changing one type into another in a manner dependent on the source type.
+pub trait AuxLookup {
+	/// Type to lookup from.
+	type Source;
+	/// Type to lookup into.
+	type Target;
+	/// Attempt a lookup.
+	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+}
+
 /// Simple payment making trait, operating on a single generic `AccountId` type.
 pub trait MakePayment<AccountId> {
 	/// Make some sort of payment concerning `who` for an extrinsic (transaction) of encoded length
 	/// `encoded_len` bytes. Return true iff the payment was successful.
-	fn make_payment(who: &AccountId, encoded_len: usize) -> bool;
+	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
 }
 
 impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: usize) -> bool { true }
+	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
@@ -260,6 +270,16 @@ impl CheckEqual for substrate_primitives::H256 {
 }
 
 #[cfg(feature = "std")]
+pub trait MaybeSerializeDebugButNotDeserialize: Serialize + Debug {}
+#[cfg(feature = "std")]
+impl<T: Serialize + Debug> MaybeSerializeDebugButNotDeserialize for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeSerializeDebugButNotDeserialize {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeSerializeDebugButNotDeserialize for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
@@ -352,8 +372,30 @@ pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 pub trait Checkable: Sized + Send + Sync {
+	type Address: Member + MaybeDisplay;
+	type AccountId: Member + MaybeDisplay;
 	type Checked: Member;
-	fn check(self) -> Result<Self::Checked, Self>;
+	fn sender(&self) -> &Self::Address;
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
+}
+
+/// A "checkable" piece of information, used by the standard Substrate Executive in order to
+/// check the validity of a piece of extrinsic information, usually by verifying the signature.
+///
+/// This does that checking without requiring a lookup argument. 
+pub trait BlindCheckable: Sized + Send + Sync {
+	type Address: Member + MaybeDisplay;
+	type Checked: Member;
+	fn sender(&self) -> &Self::Address;
+	fn check(self) -> Result<Self::Checked, &'static str>;
+}
+
+impl<T: BlindCheckable> Checkable for T {
+	type Address = <Self as BlindCheckable>::Address;
+	type AccountId = <Self as BlindCheckable>::Address;
+	type Checked = <Self as BlindCheckable>::Checked;
+	fn sender(&self) -> &Self::Address { BlindCheckable::sender(self) }
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, _: ThisLookup) -> Result<Self::Checked, &'static str> { BlindCheckable::check(self) }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
@@ -367,5 +409,5 @@ pub trait Applyable: Sized + Send + Sync {
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
 	fn index(&self) -> &Self::Index;
 	fn sender(&self) -> &Self::AccountId;
-	fn apply(self);
+	fn apply(self) -> Result<(), &'static str>;
 }
