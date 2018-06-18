@@ -19,7 +19,6 @@ use sync::SyncState;
 use super::*;
 
 #[test]
-#[ignore]
 fn sync_from_two_peers_works() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(3);
@@ -32,7 +31,6 @@ fn sync_from_two_peers_works() {
 }
 
 #[test]
-#[ignore]
 fn sync_from_two_peers_with_ancestry_search_works() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(3);
@@ -45,7 +43,6 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 }
 
 #[test]
-#[ignore]
 fn sync_long_chain_works() {
 	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);
@@ -66,7 +63,6 @@ fn sync_no_common_longer_chain_fails() {
 }
 
 #[test]
-#[ignore]
 fn sync_after_fork_works() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(3);
