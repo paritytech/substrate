@@ -55,7 +55,7 @@ pub trait Fetcher<B: BlockT>: Send + Sync {
 /// Light client remote data checker.
 pub trait FetchChecker<B: BlockT>: Send + Sync {
 	/// Check remote method execution proof.
-	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult>;
+	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: Vec<Vec<u8>>) -> error::Result<CallResult>;
 }
 
 /// Light client backend.
@@ -215,7 +215,7 @@ impl<E, B> FetchChecker<B> for LightDataChecker<E, B>
 		B: BlockT,
 		<<B as BlockT>::Header as HeaderT>::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
 {
-	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult> {
+	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: Vec<Vec<u8>>) -> error::Result<CallResult> {
 		check_execution_proof(&*self.backend, &self.executor, request, remote_proof)
 	}
 }

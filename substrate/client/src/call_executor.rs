@@ -163,7 +163,7 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 }
 
 /// Check remote execution proof using given backend.
-pub fn check_execution_proof<B, E, Block>(backend: &B, executor: &E, request: &RemoteCallRequest<Block::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> Result<CallResult, error::Error>
+pub fn check_execution_proof<B, E, Block>(backend: &B, executor: &E, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> Result<CallResult, error::Error>
 	where
 		B: backend::RemoteBackend<Block>,
 		E: CodeExecutor,
@@ -178,13 +178,11 @@ pub fn check_execution_proof<B, E, Block>(backend: &B, executor: &E, request: &R
 }
 
 /// Check remote execution proof using given state root.
-fn do_check_execution_proof<E, H>(local_state_root: H, executor: &E, request: &RemoteCallRequest<H>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> Result<CallResult, error::Error>
+fn do_check_execution_proof<E, H>(local_state_root: H, executor: &E, request: &RemoteCallRequest<H>, remote_proof: Vec<Vec<u8>>) -> Result<CallResult, error::Error>
 	where
 		E: CodeExecutor,
 		H: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
 {
-	let (remote_result, remote_proof) = remote_proof;
-
 	let mut changes = OverlayedChanges::default();
 	let (local_result, _) = state_machine::proof_check(
 		local_state_root.into(),
@@ -193,10 +191,6 @@ fn do_check_execution_proof<E, H>(local_state_root: H, executor: &E, request: &R
 		executor,
 		&request.method,
 		&request.call_data)?;
-
-	if local_result != remote_result {
-		return Err(error::ErrorKind::InvalidExecutionProof.into());
-	}
 
 	Ok(CallResult { return_data: local_result, changes })
 }
@@ -218,7 +212,7 @@ mod tests {
 			.unwrap().storage_root(::std::iter::empty()).0;
 
 		// 'fetch' execution proof from remote node
-		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap();
+		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
 
 		// check remote execution proof locally
 		let local_executor = test_client::NativeExecutor::new();
