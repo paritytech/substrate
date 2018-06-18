@@ -18,7 +18,7 @@
 //! or core/alloc to be used with any code that depends on the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(lang_items))]
+#![cfg_attr(not(feature = "std"), feature(panic_implementation))]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 #![cfg_attr(not(feature = "std"), feature(use_extern_macros))]

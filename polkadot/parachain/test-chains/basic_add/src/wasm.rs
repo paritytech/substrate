@@ -16,15 +16,14 @@
 
 //! Defines WASM module logic.
 
-use core::intrinsics;
-
+use core::{intrinsics, panic};
 use parachain::{self, ValidationResult};
 use parachain::codec::Slicable;
 use super::{HeadData, BlockData};
 
 #[panic_implementation]
 #[no_mangle]
-pub fn rust_begin_panic(_info: &::core::panic::PanicInfo) -> ! {
+pub fn panic(_info: &panic::PanicInfo) -> ! {
 	unsafe {
 		intrinsics::abort()
 	}

@@ -58,11 +58,17 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
+#[cfg(feature = "std")]
+mod checked_block;
 mod parachains;
+mod utils;
 
-use rstd::prelude::*;
-use primitives::{AccountId, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
-use primitives::parachain::CandidateReceipt;
+#[cfg(feature = "std")]
+pub use checked_block::CheckedBlock;
+pub use utils::{inherent_extrinsics, check_extrinsic};
+pub use staking::address::Address as RawAddress;
+
+use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
 
 #[cfg(feature = "std")]
@@ -78,107 +84,23 @@ pub const TIMESTAMP_SET_POSITION: u32 = 0;
 /// The position of the parachains set extrinsic.
 pub const PARACHAINS_SET_POSITION: u32 = 1;
 
+/// The address format for describing accounts.
+pub type Address = staking::Address<Concrete>;
 /// Block Id type for this block.
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
-/// Extrinsic type as expected by this runtime.
-pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
-
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
+/// Extrinsic type as expected by this runtime. This is not the type that is signed.
+pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
+/// Extrinsic type that is signed.
+pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-/// Provides a type-safe wrapper around a structurally valid block.
-#[cfg(feature = "std")]
-pub struct CheckedBlock {
-	inner: Block,
-	file_line: Option<(&'static str, u32)>,
-}
-
-#[cfg(feature = "std")]
-impl CheckedBlock {
-	/// Create a new checked block. Fails if the block is not structurally valid.
-	pub fn new(block: Block) -> Result<Self, Block> {
-		let has_timestamp = block.extrinsics.get(TIMESTAMP_SET_POSITION as usize).map_or(false, |xt| {
-			!xt.is_signed() && match xt.extrinsic.function {
-				Call::Timestamp(TimestampCall::set(_)) => true,
-				_ => false,
-			}
-		});
-
-		if !has_timestamp { return Err(block) }
-
-		let has_heads = block.extrinsics.get(PARACHAINS_SET_POSITION as usize).map_or(false, |xt| {
-			!xt.is_signed() && match xt.extrinsic.function {
-				Call::Parachains(ParachainsCall::set_heads(_)) => true,
-				_ => false,
-			}
-		});
-
-		if !has_heads { return Err(block) }
-		Ok(CheckedBlock {
-			inner: block,
-			file_line: None,
-		})
-	}
-
-	// Creates a new checked block, asserting that it is valid.
-	#[doc(hidden)]
-	pub fn new_unchecked(block: Block, file: &'static str, line: u32) -> Self {
-		CheckedBlock {
-			inner: block,
-			file_line: Some((file, line)),
-		}
-	}
-
-	/// Extract the timestamp from the block.
-	pub fn timestamp(&self) -> ::primitives::Timestamp {
-		let x = self.inner.extrinsics.get(TIMESTAMP_SET_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
-			Call::Timestamp(TimestampCall::set(x)) => Some(x),
-			_ => None
-		});
-
-		match x {
-			Some(x) => x,
-			None => panic!("Invalid polkadot block asserted at {:?}", self.file_line),
-		}
-	}
-
-	/// Extract the parachain heads from the block.
-	pub fn parachain_heads(&self) -> &[CandidateReceipt] {
-		let x = self.inner.extrinsics.get(PARACHAINS_SET_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
-			Call::Parachains(ParachainsCall::set_heads(ref x)) => Some(&x[..]),
-			_ => None
-		});
-
-		match x {
-			Some(x) => x,
-			None => panic!("Invalid polkadot block asserted at {:?}", self.file_line),
-		}
-	}
-
-	/// Convert into inner block.
-	pub fn into_inner(self) -> Block { self.inner }
-}
-
-#[cfg(feature = "std")]
-impl ::std::ops::Deref for CheckedBlock {
-	type Target = Block;
-
-	fn deref(&self) -> &Block { &self.inner }
-}
-
-/// Assert that a block is structurally valid. May lead to panic in the future
-/// in case it isn't.
-#[cfg(feature = "std")]
-#[macro_export]
-macro_rules! assert_polkadot_block {
-	($block: expr) => {
-		$crate::CheckedBlock::new_unchecked($block, file!(), line!())
-	}
-}
-
 /// Concrete runtime type used to parameterize the various modules.
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Concrete;
 
 impl HasPublicAux for Concrete {
@@ -228,6 +150,7 @@ pub type Session = session::Module<Concrete>;
 impl staking::Trait for Concrete {
 	type Balance = Balance;
 	type DetermineContractAddress = BlakeTwo256;
+	type AccountIndex = AccountIndex;
 }
 /// Staking module for this concrete runtime.
 pub type Staking = staking::Module<Concrete>;
@@ -280,7 +203,7 @@ impl_outer_dispatch! {
 }
 
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Concrete, Block, Staking,
+pub type Executive = executive::Executive<Concrete, Block, Staking, Staking,
 	(((((((), Parachains), Council), Democracy), Staking), Session), Timestamp)>;
 
 impl_outer_config! {
@@ -293,35 +216,6 @@ impl_outer_config! {
 		CouncilConfig => council,
 		ParachainsConfig => parachains,
 	}
-}
-
-/// Produces the list of inherent extrinsics.
-pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: Vec<CandidateReceipt>) -> Vec<UncheckedExtrinsic> {
-	vec![
-		UncheckedExtrinsic {
-			extrinsic: Extrinsic {
-				signed: Default::default(),
-				function: Call::Timestamp(TimestampCall::set(timestamp)),
-				index: 0,
-			},
-			signature: Default::default(),
-		},
-		UncheckedExtrinsic {
-			extrinsic: Extrinsic {
-				signed: Default::default(),
-				function: Call::Parachains(ParachainsCall::set_heads(parachain_heads)),
-				index: 0,
-			},
-			signature: Default::default(),
-		},
-	]
-}
-
-/// Checks an unchecked extrinsic for validity.
-pub fn check_extrinsic(xt: UncheckedExtrinsic) -> bool {
-	use runtime_primitives::traits::Checkable;
-
-	xt.check().is_ok()
 }
 
 pub mod api {
@@ -378,14 +272,14 @@ mod tests {
 		let mut block = Block {
 			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default()),
 			extrinsics: vec![
-				UncheckedExtrinsic {
-					extrinsic: Extrinsic {
+				UncheckedExtrinsic::new(
+					generic::Extrinsic {
 						function: Call::Timestamp(timestamp::Call::set(100_000_000)),
 						signed: Default::default(),
 						index: Default::default(),
 					},
-					signature: Default::default(),
-				}
+					Default::default(),
+				)
 			],
 		};
 
@@ -394,14 +288,14 @@ mod tests {
 
 		assert_eq!(block, decoded);
 
-		block.extrinsics.push(UncheckedExtrinsic {
-			extrinsic: Extrinsic {
+		block.extrinsics.push(UncheckedExtrinsic::new(
+			generic::Extrinsic {
 				function: Call::Staking(staking::Call::stake()),
 				signed: Default::default(),
 				index: 10101,
 			},
-			signature: Default::default(),
-		});
+			Default::default(),
+		));
 
 		let raw = block.encode();
 		let decoded = Block::decode(&mut &raw[..]).unwrap();
@@ -414,25 +308,25 @@ mod tests {
 		let mut block = Block {
 			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default()),
 			extrinsics: vec![
-				UncheckedExtrinsic {
-					extrinsic: Extrinsic {
+				UncheckedExtrinsic::new(
+					generic::Extrinsic {
 						function: Call::Timestamp(timestamp::Call::set(100_000_000)),
 						signed: Default::default(),
 						index: Default::default(),
 					},
-					signature: Default::default(),
-				}
+					Default::default(),
+				)
 			],
 		};
 
-		block.extrinsics.push(UncheckedExtrinsic {
-			extrinsic: Extrinsic {
+		block.extrinsics.push(UncheckedExtrinsic::new(
+			generic::Extrinsic {
 				function: Call::Staking(staking::Call::stake()),
 				signed: Default::default(),
 				index: 10101,
 			},
-			signature: Default::default(),
-		});
+			Default::default()
+		));
 
 		let raw = block.encode();
 		let decoded_primitive = ::primitives::Block::decode(&mut &raw[..]).unwrap();
@@ -444,22 +338,24 @@ mod tests {
 
 	#[test]
 	fn serialize_unchecked() {
-		let tx = UncheckedExtrinsic {
-			extrinsic: Extrinsic {
-				signed: [1; 32].into(),
+		let tx = UncheckedExtrinsic::new(
+			Extrinsic {
+				signed: AccountId::from([1; 32]).into(),
 				index: 999,
 				function: Call::Timestamp(TimestampCall::set(135135)),
 			},
-			signature: runtime_primitives::Ed25519Signature(primitives::hash::H512([0; 64])).into(),
-		};
-		// 71000000
-		// 0101010101010101010101010101010101010101010101010101010101010101
-		// e703000000000000
-		// 00
+			runtime_primitives::Ed25519Signature(primitives::hash::H512([0; 64])).into()
+		);
+
+		// 6f000000
+		// ff0101010101010101010101010101010101010101010101010101010101010101
+		// e7030000
+		// 0300
 		// df0f0200
 		// 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
 		let v = Slicable::encode(&tx);
+		assert_eq!(&v[..], &hex!["6f000000ff0101010101010101010101010101010101010101010101010101010101010101e70300000300df0f02000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"][..]);
 		println!("{}", HexDisplay::from(&v));
 		assert_eq!(UncheckedExtrinsic::decode(&mut &v[..]).unwrap(), tx);
 	}
@@ -467,7 +363,7 @@ mod tests {
 	#[test]
 	fn serialize_checked() {
 		let xt = Extrinsic {
-			signed: hex!["0d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e"].into(),
+			signed: AccountId::from(hex!["0d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e"]).into(),
 			index: 0,
 			function: Call::CouncilVoting(council::voting::Call::propose(Box::new(
 				PrivCall::Consensus(consensus::PrivCall::set_code(
@@ -476,11 +372,6 @@ mod tests {
 			))),
 		};
 		let v = Slicable::encode(&xt);
-
-		let data = hex!["e00000000d71d1a9cad6f2ab773435a7dec1bac019994d05d1dd5eb3108211dcf25c9d1e0000000007000000000000006369D39D892B7B87A6769F90E14C618C2B84EBB293E2CC46640136E112C078C75619AC2E0815F2511568736623C055156C8FC427CE2AEE4AE2838F86EFE80208"];
-		let uxt: UncheckedExtrinsic = Slicable::decode(&mut &data[..]).unwrap();
-		assert_eq!(uxt.extrinsic, xt);
-
 		assert_eq!(Extrinsic::decode(&mut &v[..]).unwrap(), xt);
 	}
 }

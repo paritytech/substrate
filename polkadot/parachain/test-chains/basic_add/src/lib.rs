@@ -17,7 +17,7 @@
 //! Basic parachain that adds a number as part of its state.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc, core_intrinsics, lang_items, panic_implementation))]
+#![cfg_attr(not(feature = "std"), feature(alloc, core_intrinsics, global_allocator, lang_items, panic_implementation, core_panic_info))]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;

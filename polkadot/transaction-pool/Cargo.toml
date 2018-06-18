@@ -6,11 +6,13 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 log = "0.3.0"
 error-chain = "0.11"
+parking_lot = "0.4"
 polkadot-api = { path = "../api" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
 substrate-client = { path = "../../substrate/client" }
 substrate-codec = { path = "../../substrate/codec" }
+substrate-keyring = { path = "../../substrate/keyring" }
 substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }

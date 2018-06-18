@@ -84,4 +84,3 @@ fn sync_after_fork_works() {
 	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer1_chain));
 	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer1_chain));
 }
-
