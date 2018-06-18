@@ -33,12 +33,11 @@ mod transaction;
 
 use message::BlitzMessage;
 use codec::Slicable;
-use substrate_primitives::{AuthorityId, Hash};
+use substrate_primitives::{AuthorityId};
 use substrate_network::{PeerId, RequestId};
-use substrate_network::specialization::{Specialization, HandlerContext};
+use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as FullStatus;
-
-// use polkadot_primitives::parachain::Id as ParaId;
+use blitz_primitives::{Block, Hash};
 
 use std::collections::HashMap;
 
@@ -46,7 +45,7 @@ use std::collections::HashMap;
 pub const BLITZ_PROTOCOL_ID: ::substrate_network::ProtocolId = *b"blz";
 
 /// Specialization of the network service for the polkadot protocol.
-pub type NetworkService = ::substrate_network::Service<BlitzProtocol>;
+pub type NetworkService = ::substrate_network::Service<Block, BlitzProtocol>;
 
 /// Status of a Polkadot node.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -141,7 +140,7 @@ pub struct BlitzProtocol {
 	// collating_for: Option<ParaId>,
 }
 
-impl Specialization for BlitzProtocol {
+impl Specialization<Block> for BlitzProtocol {
 	fn status(&self) -> Vec<u8> {
 		Status { /*collating_for: self.collating_for.clone()*/ }.encode()
 	}
