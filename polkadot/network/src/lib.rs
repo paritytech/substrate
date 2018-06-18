@@ -30,6 +30,7 @@ extern crate polkadot_primitives;
 
 extern crate ed25519;
 extern crate futures;
+extern crate parking_lot;
 extern crate tokio;
 
 #[macro_use]

@@ -156,7 +156,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Future for MessageProcessTask<
 			match self.inner_stream.poll() {
 				Ok(Async::Ready(Some(val))) => match val {
 					ConsensusMessage::Bft(msg) => {
-						let local_id = self.table_router.table.session_key();
+						let local_id = self.table_router.session_key();
 						match process_bft_message(msg, &local_id, &self.validators[..]) {
 							Ok(Some(msg)) => {
 								if let Err(_) = self.bft_messages.unbounded_send(msg) {
@@ -247,13 +247,13 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 			}
 		};
 
-		let table_router = Router {
+		let table_router = Router::new(
 			table,
-			network: self.network.clone(),
-			api: self.api.clone(),
-			task_executor,
-			parent_hash: checked_parent_hash,
-		};
+			self.network.clone(),
+			self.api.clone(),
+			task_executor.clone(),
+			checked_parent_hash,
+		);
 
 		// spin up a task in the background that processes all incoming statements
 		// TODO: propagate statements on a timer?
@@ -267,7 +267,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 		});
 
 		match process_task {
-			Some(task) => table_router.task_executor.spawn(task),
+			Some(task) => task_executor.spawn(task),
 			None => warn!(target: "p_net", "Cannot process incoming messages: network appears to be down"),
 		}
 
