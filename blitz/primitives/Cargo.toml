@@ -10,6 +10,8 @@ substrate-codec = { path = "../../substrate/codec", default_features = false }
 substrate-primitives = { path = "../../substrate/primitives", default_features = false }
 substrate-runtime-std = { path = "../../substrate/runtime-std", default_features = false }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives", default_features = false }
+substrate-runtime-support = { path = "../../substrate/runtime-support" }
+substrate-runtime-io = { path = "../../substrate/runtime-io" }
 
 [dev-dependencies]
 substrate-serializer = { path = "../../substrate/serializer" }

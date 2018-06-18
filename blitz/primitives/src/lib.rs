@@ -23,6 +23,9 @@
 
 #[cfg(feature = "std")] extern crate serde;
 
+#[macro_use]
+extern crate substrate_runtime_support;
+
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_primitives as primitives;
