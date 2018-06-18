@@ -21,9 +21,8 @@ use ed25519;
 use substrate_network::{self as net, generic_message as msg};
 use substrate_network::consensus_gossip::ConsensusMessage;
 use polkadot_api::{PolkadotApi, LocalPolkadotApi};
-use polkadot_consensus::{Network, SharedTable, TableRouter, SignedStatement};
-use polkadot_primitives::{Block, Hash, Header, BlockId, SessionKey};
-use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
+use polkadot_consensus::{Network, SharedTable};
+use polkadot_primitives::{Block, Hash, BlockId, SessionKey};
 
 use futures::{future, prelude::*};
 use futures::sync::mpsc;
@@ -32,7 +31,8 @@ use std::sync::Arc;
 
 use tokio::runtime::TaskExecutor;
 
-use super::{Message, NetworkService,};
+use super::{Message, NetworkService};
+use router::Router;
 
 /// Sink for output BFT messages.
 pub struct BftSink<E> {
@@ -272,84 +272,5 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 		}
 
 		(table_router, InputAdapter { input: bft_recv }, sink)
-	}
-}
-
-/// Table routing implementation.
-pub struct Router<P: PolkadotApi> {
-	table: Arc<SharedTable>,
-	network: Arc<NetworkService>,
-	api: Arc<P>,
-	task_executor: TaskExecutor,
-	parent_hash: Option<P::CheckedBlockId>,
-}
-
-impl<P: PolkadotApi> Clone for Router<P> {
-	fn clone(&self) -> Self {
-		Router {
-			table: self.table.clone(),
-			network: self.network.clone(),
-			api: self.api.clone(),
-			task_executor: self.task_executor.clone(),
-			parent_hash: self.parent_hash.clone(),
-		}
-	}
-}
-
-impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBlockId: Send {
-	fn import_statement(&self, statement: SignedStatement) {
-		let api = self.api.clone();
-		let parent_hash = self.parent_hash.clone();
-
-		let validate_collation = move |collation| -> Option<bool> {
-			let checked = parent_hash.clone()?;
-
-			match ::polkadot_consensus::validate_collation(&*api, &checked, &collation) {
-				Ok(()) => Some(true),
-				Err(e) => {
-					debug!(target: "p_net", "Encountered bad collation: {}", e);
-					Some(false)
-				}
-			}
-		};
-
-		let producer = self.table.import_remote_statement(
-			self,
-			statement,
-			validate_collation,
-		);
-
-		if !producer.is_blank() {
-			let table = self.table.clone();
-			self.task_executor.spawn(producer.map(move |produced| {
-				// TODO: ensure availability of block/extrinsic
-				// and propagate these statements.
-				if let Some(validity) = produced.validity {
-					table.sign_and_import(validity);
-				}
-
-				if let Some(availability) = produced.availability {
-					table.sign_and_import(availability);
-				}
-			}))
-		}
-	}
-}
-
-impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlockId: Send {
-	type Error = ();
-	type FetchCandidate = future::Empty<BlockData, Self::Error>;
-	type FetchExtrinsic = Result<Extrinsic, Self::Error>;
-
-	fn local_candidate_data(&self, _hash: Hash, _block_data: BlockData, _extrinsic: Extrinsic) {
-		// give to network to make available and multicast
-	}
-
-	fn fetch_block_data(&self, _candidate: &CandidateReceipt) -> Self::FetchCandidate {
-		future::empty()
-	}
-
-	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
-		Ok(Extrinsic)
 	}
 }

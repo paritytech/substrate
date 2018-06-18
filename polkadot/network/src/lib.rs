@@ -38,7 +38,7 @@ extern crate log;
 use codec::Slicable;
 use polkadot_consensus::SignedStatement;
 use polkadot_primitives::{Block, Hash};
-use polkadot_primitives::parachain::Id as ParaId;
+use polkadot_primitives::parachain::{Id as ParaId, BlockData};
 use substrate_network::{PeerId, RequestId, Context};
 use substrate_network::consensus_gossip::ConsensusGossip;
 use substrate_network::{message, generic_message};
@@ -46,6 +46,8 @@ use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
 
 use std::collections::HashMap;
+
+mod router;
 
 pub mod consensus;
 
@@ -184,6 +186,7 @@ impl Specialization<Block> for PolkadotProtocol {
 				match msg {
 					Message::Statement(parent_hash, statement) =>
 						self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash),
+					_ => {},
 				}
 			}
 			_ => {}
