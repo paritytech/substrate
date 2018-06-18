@@ -21,7 +21,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg(feature = "std")] extern crate serde;
+#[cfg(feature = "std")]
+extern crate serde;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
 
 #[macro_use]
 extern crate substrate_runtime_support;
@@ -30,6 +35,14 @@ extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_primitives as primitives;
 extern crate substrate_codec as codec;
+
+use rstd::prelude::*;
+use runtime_primitives::traits::BlakeTwo256;
+use runtime_primitives::generic;
+use codec::{Input, Slicable};
+
+#[cfg(feature = "std")]
+use primitives::bytes;
 
 /// An index to a block.
 pub type BlockNumber = u64;
@@ -68,3 +81,31 @@ pub type Amount = u64;
 
 /// Address of an account within the Blitz network
 pub type AccountAddress = Hash;
+
+/// Block header type as expected by this runtime.
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
+
+/// Opaque, encoded, unchecked extrinsic.
+pub type UncheckedExtrinsic = Vec<u8>;
+
+/// A "future-proof" block type for Blitz. This will be resilient to upgrades in transaction
+/// format, because it doesn't attempt to decode extrinsics.
+///
+/// Specialized code needs to link to (at least one version of) the runtime directly
+/// in order to handle the extrinsics within.
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+
+/// A log entry in the block.
+#[derive(PartialEq, Eq, Clone, Default)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+impl Slicable for Log {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Vec::<u8>::decode(input).map(Log)
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
+	}
+}
