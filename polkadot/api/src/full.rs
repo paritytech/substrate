@@ -201,8 +201,8 @@ mod tests {
 
 	fn session_keys() -> Vec<SessionKey> {
 		vec![
-			Keyring::One.to_raw_public(),
-			Keyring::Two.to_raw_public(),
+			Keyring::One.to_raw_public().into(),
+			Keyring::Two.to_raw_public().into(),
 		]
 	}
 

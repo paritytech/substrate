@@ -498,9 +498,9 @@ mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_number, 0);
 		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
-			Keyring::Alice.to_raw_public(),
-			Keyring::Bob.to_raw_public(),
-			Keyring::Charlie.to_raw_public()
+			Keyring::Alice.to_raw_public().into(),
+			Keyring::Bob.to_raw_public().into(),
+			Keyring::Charlie.to_raw_public().into()
 		]);
 	}
 

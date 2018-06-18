@@ -188,6 +188,7 @@ pub struct GenesisConfig<T: Trait> {
 	/// The initial parachains, mapped to code.
 	pub parachains: Vec<(Id, Vec<u8>)>,
 	/// Phantom data.
+	#[serde(skip)]
 	pub phantom: PhantomData<T>,
 }
 

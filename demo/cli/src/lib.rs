@@ -104,7 +104,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let genesis_storage = GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: vec![],	// TODO
-			authorities: vec![god_key.clone()],
+			authorities: vec![god_key.clone().into()],
 		}),
 		system: None,
 	//		block_time: 5,			// 5 second block time.

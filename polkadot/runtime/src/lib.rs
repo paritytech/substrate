@@ -136,7 +136,7 @@ pub type Timestamp = timestamp::Module<Concrete>;
 pub struct SessionKeyConversion;
 impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 	fn convert(a: AccountId) -> SessionKey {
-		a.0
+		a.0.into()
 	}
 }
 

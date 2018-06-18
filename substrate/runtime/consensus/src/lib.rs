@@ -123,6 +123,7 @@ impl<T: Trait> Module<T> {
 #[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	pub authorities: Vec<T::SessionKey>,
+	#[serde(with = "substrate_primitives::bytes")]
 	pub code: Vec<u8>,
 }
 

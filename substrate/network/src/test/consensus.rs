@@ -31,7 +31,7 @@ fn bft_messages_include_those_sent_before_asking_for_stream() {
 	let mut io = TestIo::new(&peer.queue, None);
 	let bft_message = generic::BftMessage::Consensus(generic::SignedConsensusMessage::Vote(generic::SignedConsensusVote {
 		vote: generic::ConsensusVote::AdvanceRound(0),
-		sender: [0; 32],
+		sender: Default::default(),
 		signature: Default::default(),
 	}));
 

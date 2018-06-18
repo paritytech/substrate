@@ -82,7 +82,7 @@ impl<H> From<PrimitiveJustification<H>> for UncheckedJustification<H> {
 			round_number: just.round_number as usize,
 			digest: just.hash,
 			signatures: just.signatures.into_iter().map(|(from, sig)| LocalizedSignature {
-				signer: ed25519::Public(from),
+				signer: from.into(),
 				signature: sig,
 			}).collect(),
 		}
@@ -183,7 +183,7 @@ impl<B: Block, P: Proposer<B>> generic::Context for BftInstance<B, P>
 	type EvaluateProposal = <P::Evaluate as IntoFuture>::Future;
 
 	fn local_id(&self) -> AuthorityId {
-		self.key.public().0
+		self.key.public().into()
 	}
 
 	fn proposal(&self) -> Self::CreateProposal {
@@ -345,7 +345,7 @@ impl<B, P, I> BftService<B, P, I>
 	/// Get the local Authority ID.
 	pub fn local_id(&self) -> AuthorityId {
 		// TODO: based on a header and some keystore.
-		self.key.public().0
+		self.key.public().into()
 	}
 
 	/// Signal that a valid block with the given header has been imported.
@@ -445,7 +445,7 @@ fn check_justification_signed_message<H>(authorities: &[AuthorityId], message: &
 {
 	// TODO: return additional error information.
 	just.check(authorities.len() - max_faulty_of(authorities.len()), |_, _, sig| {
-		let auth_id = sig.signer.0;
+		let auth_id = sig.signer.clone().into();
 		if !authorities.contains(&auth_id) { return None }
 
 		if ed25519::verify_strong(&sig.signature, message, &sig.signer) {
@@ -565,7 +565,7 @@ pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, 
 				round_number: r,
 				proposal,
 				digest: header_hash,
-				sender: signer.0,
+				sender: signer.clone().into(),
 				digest_signature: sign_action(action_header),
 				full_signature: sign_action(action_propose),
 			})
@@ -579,7 +579,7 @@ pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, 
 
 			::generic::LocalizedMessage::Vote(::generic::LocalizedVote {
 				vote: vote,
-				sender: signer.0,
+				sender: signer.clone().into(),
 				signature: sign_action(action),
 			})
 		}
@@ -705,10 +705,10 @@ mod tests {
 	fn future_gets_preempted() {
 		let client = FakeClient {
 			authorities: vec![
-				Keyring::One.to_raw_public(),
-				Keyring::Two.to_raw_public(),
-				Keyring::Alice.to_raw_public(),
-				Keyring::Eve.to_raw_public(),
+				Keyring::One.to_raw_public().into(),
+				Keyring::Two.to_raw_public().into(),
+				Keyring::Alice.to_raw_public().into(),
+				Keyring::Eve.to_raw_public().into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -755,10 +755,10 @@ mod tests {
 		let hash = [0xff; 32].into();
 
 		let authorities = vec![
-			Keyring::One.to_raw_public(),
-			Keyring::Two.to_raw_public(),
-			Keyring::Alice.to_raw_public(),
-			Keyring::Eve.to_raw_public(),
+			Keyring::One.to_raw_public().into(),
+			Keyring::Two.to_raw_public().into(),
+			Keyring::Alice.to_raw_public().into(),
+			Keyring::Eve.to_raw_public().into(),
 		];
 
 		let authorities_keys = vec![
@@ -816,8 +816,8 @@ mod tests {
 		let parent_hash = Default::default();
 
 		let authorities = vec![
-			Keyring::Alice.to_raw_public(),
-			Keyring::Eve.to_raw_public(),
+			Keyring::Alice.to_raw_public().into(),
+			Keyring::Eve.to_raw_public().into(),
 		];
 
 		let block = TestBlock {
@@ -853,8 +853,8 @@ mod tests {
 		let hash: H256 = [0xff; 32].into();
 
 		let authorities = vec![
-			Keyring::Alice.to_raw_public(),
-			Keyring::Eve.to_raw_public(),
+			Keyring::Alice.to_raw_public().into(),
+			Keyring::Eve.to_raw_public().into(),
 		];
 
 		let vote = sign_message::<TestBlock>(::generic::Message::Vote(::generic::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;

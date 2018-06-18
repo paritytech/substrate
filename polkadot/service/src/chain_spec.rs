@@ -181,7 +181,7 @@ impl ChainSpec {
 				minimum_deposit: 10,
 			}),
 			council: Some(CouncilConfig {
-				active_council: endowed_accounts.iter().filter(|a| initial_authorities.iter().find(|&b| &a.0 == b).is_none()).map(|a| (a.clone(), 1000000)).collect(),
+				active_council: endowed_accounts.iter().filter(|a| initial_authorities.iter().find(|&b| a.0 == b.0).is_none()).map(|a| (a.clone(), 1000000)).collect(),
 				candidacy_bond: 10,
 				voter_bond: 2,
 				present_slash_per_voter: 1,
