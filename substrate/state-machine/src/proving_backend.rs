@@ -16,21 +16,19 @@
 
 //! Proving state machine backend.
 
-use std::collections::HashSet;
-use parking_lot::Mutex;
+use std::cell::RefCell;
 use ethereum_types::H256 as TrieH256;
-use hashdb::{HashDB, DBValue};
+use hashdb::HashDB;
 use memorydb::MemoryDB;
-use patricia_trie::{TrieDB, TrieError, Trie};
-use trie_backend::{TrieBackend, TrieLookupRecorder, Ephemeral};
+use patricia_trie::{TrieDB, TrieError, Trie, Recorder};
+use trie_backend::{TrieBackend, Ephemeral};
 use {Error, ExecutionError, Backend, TryIntoTrieBackend};
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-#[derive(Clone)]
 pub struct ProvingBackend {
 	backend: TrieBackend,
-	proof_recorder: ProofRecorder,
+	proof_recorder: RefCell<Recorder>,
 }
 
 impl ProvingBackend {
@@ -38,15 +36,16 @@ impl ProvingBackend {
 	pub fn new(backend: TrieBackend) -> Self {
 		ProvingBackend {
 			backend,
-			proof_recorder: ProofRecorder::default(),
+			proof_recorder: RefCell::new(Recorder::new()),
 		}
 	}
 
 	/// Consume the backend, extracting the gathered proof in lexicographical order
 	/// by value.
 	pub fn extract_proof(self) -> Vec<Vec<u8>> {
-		self.proof_recorder.proof.into_inner().into_iter()
-			.map(DBValue::into_vec)
+		self.proof_recorder.into_inner().drain()
+			.into_iter()
+			.map(|n| n.data.to_vec())
 			.collect()
 	}
 }
@@ -60,13 +59,14 @@ impl Backend for ProvingBackend {
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
 			&mut read_overlay,
-			&self.proof_recorder,
 		);
 
 		let map_e = |e: Box<TrieError>| format!("Trie lookup error: {}", e);
 
+		let mut proof_recorder = self.proof_recorder.try_borrow_mut()
+			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
 		TrieDB::new(&eph, &self.backend.root()).map_err(map_e)?
-			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
+			.get_with(key, &mut *proof_recorder).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -83,25 +83,6 @@ impl Backend for ProvingBackend {
 impl TryIntoTrieBackend for ProvingBackend {
 	fn try_into_trie_backend(self) -> Option<TrieBackend> {
 		None
-	}
-}
-
-#[derive(Debug, Default)]
-struct ProofRecorder {
-	proof: Mutex<HashSet<DBValue>>,
-}
-
-impl TrieLookupRecorder for ProofRecorder {
-	fn record(&self, value: &DBValue) {
-		self.proof.lock().insert(value.clone());
-	}
-}
-
-impl Clone for ProofRecorder {
-	fn clone(&self) -> Self {
-		ProofRecorder {
-			proof: Mutex::new(self.proof.lock().clone()),
-		}
 	}
 }
 
