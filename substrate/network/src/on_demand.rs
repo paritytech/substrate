@@ -243,7 +243,7 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 
 	fn on_remote_call_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteCallResponse) {
 		self.accept_response("call", io, peer, response.id, |request| match request.data {
-			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, (response.value, response.proof)) {
+			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, response.proof) {
 				Ok(response) => {
 					self.cache.cache_remote_call(request.clone(), response.clone());
 					// we do not bother if receiver has been dropped already
@@ -426,10 +426,10 @@ mod tests {
 			}
 		}
 
-		fn check_execution_proof(&self, _request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> client::error::Result<client::CallResult> {
+		fn check_execution_proof(&self, _request: &RemoteCallRequest, _remote_proof: Vec<Vec<u8>>) -> client::error::Result<client::CallResult> {
 			match self.ok {
 				true => Ok(client::CallResult {
-					return_data: remote_proof.0,
+					return_data: vec![42],
 					changes: Default::default(),
 				}),
 				false => Err(client::error::ErrorKind::Backend("Test error".into()).into()),
@@ -452,7 +452,6 @@ mod tests {
 	fn receive_call_response(on_demand: &OnDemand<DummyExecutor>, network: &mut TestIo, peer: PeerId, id: message::RequestId) {
 		on_demand.on_remote_call_response(network, peer, message::RemoteCallResponse {
 			id: id,
-			value: vec![1],
 			proof: vec![vec![2]],
 		});
 	}
@@ -603,7 +602,7 @@ mod tests {
 		let response = on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![], ..Default::default() });
 		let thread = ::std::thread::spawn(move || {
 			let result = response.wait().unwrap();
-			assert_eq!(result.return_data, vec![1]);
+			assert_eq!(result.return_data, vec![42]);
 		});
 
 		receive_call_response(&*on_demand, &mut network, 0, 0);

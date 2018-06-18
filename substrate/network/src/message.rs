@@ -346,8 +346,6 @@ pub struct RemoteCallRequest {
 pub struct RemoteCallResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
-	/// Method return value.
-	pub value: Vec<u8>,
 	/// Execution proof.
 	pub proof: Vec<Vec<u8>>,
 }

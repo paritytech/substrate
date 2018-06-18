@@ -72,7 +72,7 @@ pub trait FetchChecker: Send + Sync {
 	/// Check remote storage read proof.
 	fn check_read_proof(&self, request: &RemoteReadRequest, remote_proot: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>>;
 	/// Check remote method execution proof.
-	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> ClientResult<CallResult>;
+	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult>;
 }
 
 /// Remote data checker.
@@ -109,7 +109,7 @@ impl<S, E, F> FetchChecker for LightDataChecker<S, E, F>
 		read_proof_check(local_state_root.0, remote_proof, &request.key).map_err(Into::into)
 	}
 
-	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> ClientResult<CallResult> {
+	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult> {
 		check_execution_proof(&*self.blockchain, &self.executor, request, remote_proof)
 	}
 }
