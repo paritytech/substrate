@@ -193,6 +193,16 @@ impl LightBlockchainStorage for LightStorage {
 		Ok(())
 	}
 
+	fn cht(&self, block: BlockNumber) -> ClientResult<(HeaderHash, Vec<u8>)> {
+		let no_cht_for_block = || ClientErrorKind::Backend(format!("CHT for block {} not exists", block)).into();
+
+		let cht_number = cht::block_to_cht_number(block).ok_or_else(no_cht_for_block)?;
+		let cht_start = cht::start_number(cht_number);
+		self.db.get(columns::CHT, &number_to_db_key(cht_start)).map_err(db_err)?
+			.ok_or_else(no_cht_for_block)
+			.map(|root| (HeaderHash::from(&*root), number_to_db_key(block).to_vec()))
+	}
+
 	fn cache(&self) -> Option<&BlockchainCache> {
 		Some(&self.cache)
 	}

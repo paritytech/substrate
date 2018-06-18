@@ -86,7 +86,7 @@ impl<S, F> ClientBackend for Backend<S, F> where S: BlockchainStorage, F: Fetche
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
-		self.blockchain.import_header(operation.is_new_best, header, operation.authorities)
+		self.blockchain.storage().import_header(operation.is_new_best, header, operation.authorities)
 	}
 
 	fn blockchain(&self) -> &Blockchain<S, F> {
@@ -182,14 +182,19 @@ pub mod tests {
 	use test_client;
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::{new_fetch_checker, new_light_blockchain};
-	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker, RemoteCallRequest};
+	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker, RemoteHeaderRequest, RemoteCallRequest};
 	use super::*;
 
 	pub type OkCallFetcher = Mutex<CallResult>;
 
 	impl Fetcher for OkCallFetcher {
+		type RemoteHeaderResult = FutureResult<Header, ClientError>;
 		type RemoteReadResult = FutureResult<Option<Vec<u8>>, ClientError>;
 		type RemoteCallResult = FutureResult<CallResult, ClientError>;
+
+		fn remote_header(&self, _request: RemoteHeaderRequest) -> Self::RemoteHeaderResult {
+			err("Not implemented on test node".into())
+		}
 
 		fn remote_read(&self, _request: RemoteReadRequest) -> Self::RemoteReadResult {
 			err("Not implemented on test node".into())

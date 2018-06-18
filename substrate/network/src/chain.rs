@@ -44,6 +44,9 @@ pub trait Client: Send + Sync {
 	/// Get block justification.
 	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error>;
 
+	/// Get block header proof.
+	fn header_proof(&self, block: block::Number) -> Result<(block::Header, Vec<Vec<u8>>), Error>;
+
 	/// Get method execution proof.
 	fn execution_proof(&self, block: &block::HeaderHash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
 
@@ -85,6 +88,10 @@ impl<B, E> Client for PolkadotClient<B, E> where
 
 	fn justification(&self, id: &BlockId) -> Result<Option<Justification>, Error> {
 		(self as &PolkadotClient<B, E>).justification(id)
+	}
+
+	fn header_proof(&self, _block: block::Number) -> Result<(block::Header, Vec<Vec<u8>>), Error> {
+		unimplemented!("TODO")
 	}
 
 	fn execution_proof(&self, block: &block::HeaderHash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {

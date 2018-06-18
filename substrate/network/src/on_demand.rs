@@ -25,7 +25,9 @@ use linked_hash_map::LinkedHashMap;
 use linked_hash_map::Entry;
 use parking_lot::Mutex;
 use client;
-use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest};
+use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
+	RemoteCallRequest, RemoteReadRequest};
+use primitives::block::Header;
 use io::SyncIo;
 use message;
 use network::PeerId;
@@ -48,6 +50,9 @@ pub trait OnDemandService: Send + Sync {
 	/// Maintain peers requests.
 	fn maintain_peers(&self, io: &mut SyncIo);
 
+	/// When header response is received from remote node.
+	fn on_remote_header_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteHeaderProofResponse);
+
 	/// When read response is received from remote node.
 	fn on_remote_read_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteReadResponse);
 
@@ -60,6 +65,11 @@ pub struct OnDemand<E: service::ExecuteInContext> {
 	cache: OnDemandCache,
 	core: Mutex<OnDemandCore<E>>,
 	checker: Arc<FetchChecker>,
+}
+
+/// On-demand remote header response.
+pub struct RemoteHeaderResponse {
+	receiver: Receiver<Result<Header, client::error::Error>>,
 }
 
 /// On-demand remote call response.
@@ -89,6 +99,7 @@ struct Request {
 }
 
 enum RequestData {
+	RemoteHeader(RemoteHeaderRequest, Sender<Result<Header, client::error::Error>>),
 	RemoteRead(RemoteReadRequest, Sender<Result<Option<Vec<u8>>, client::error::Error>>),
 	RemoteCall(RemoteCallRequest, Sender<Result<client::CallResult, client::error::Error>>),
 }
@@ -97,6 +108,21 @@ enum Accept {
 	Ok,
 	CheckFailed(client::error::Error, RequestData),
 	Unexpected(RequestData),
+}
+
+impl Future for RemoteHeaderResponse {
+	type Item = Header;
+	type Error = client::error::Error;
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		self.receiver.poll()
+			.map_err(|_| client::error::ErrorKind::RemoteFetchCancelled.into())
+			.and_then(|r| match r {
+				Async::Ready(Ok(ready)) => Ok(Async::Ready(ready)),
+				Async::Ready(Err(error)) => Err(error),
+				Async::NotReady => Ok(Async::NotReady),
+			})
+	}
 }
 
 impl Future for RemoteReadResponse {
@@ -226,6 +252,21 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 		core.dispatch();
 	}
 
+	fn on_remote_header_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteHeaderProofResponse) {
+		self.accept_response("header", io, peer, response.id, |request| match request.data {
+			RequestData::RemoteHeader(request, sender) => match self.checker.check_header_proof(&request, response.header, response.proof) {
+				Ok(response) => {
+					self.cache.cache_remote_header(request.clone(), response.clone());
+					// we do not bother if receiver has been dropped already
+					let _ = sender.send(Ok(response));
+					Accept::Ok
+				},
+				Err(error) => Accept::CheckFailed(error, RequestData::RemoteHeader(request, sender)),
+			},
+			data @ _ => Accept::Unexpected(data),
+		})
+	}
+
 	fn on_remote_read_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteReadResponse) {
 		self.accept_response("read", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteRead(request, sender) => match self.checker.check_read_proof(&request, response.proof) {
@@ -258,8 +299,21 @@ impl<E> OnDemandService for OnDemand<E> where E: service::ExecuteInContext {
 }
 
 impl<E> Fetcher for OnDemand<E> where E: service::ExecuteInContext {
+	type RemoteHeaderResult = RemoteHeaderResponse;
 	type RemoteReadResult = RemoteReadResponse;
 	type RemoteCallResult = RemoteCallResponse;
+
+	fn remote_header(&self, request: RemoteHeaderRequest) -> Self::RemoteHeaderResult {
+		let (sender, receiver) = channel();
+		match self.cache.remote_header(&request) {
+			Some(response) => {
+				sender.send(Ok(response)).expect("receiver is NOT deallocated; qed");
+				RemoteHeaderResponse { receiver }
+			},
+			None => self.schedule_request(request.retry_count.clone(), RequestData::RemoteHeader(request, sender),
+				RemoteHeaderResponse { receiver }),
+		}
+	}
 
 	fn remote_read(&self, request: RemoteReadRequest) -> Self::RemoteReadResult {
 		let (sender, receiver) = channel();
@@ -369,6 +423,10 @@ impl<E> OnDemandCore<E> where E: service::ExecuteInContext {
 impl Request {
 	pub fn message(&self) -> message::Message {
 		match self.data {
+			RequestData::RemoteHeader(ref data, _) => message::Message::RemoteHeaderProofRequest(message::RemoteHeaderProofRequest {
+				id: self.id,
+				block: data.block,
+			}),
 			RequestData::RemoteCall(ref data, _) => message::Message::RemoteCallRequest(message::RemoteCallRequest {
 				id: self.id,
 				block: data.block,
@@ -388,6 +446,7 @@ impl RequestData {
 	pub fn fail(self, error: client::error::Error) {
 		// don't care if anyone is listening
 		match self {
+			RequestData::RemoteHeader(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteCall(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteRead(_, sender) => { let _ = sender.send(Err(error)); },
 		}
@@ -402,8 +461,10 @@ mod tests {
 	use futures::Future;
 	use parking_lot::RwLock;
 	use client;
-	use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest};
+	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
+		RemoteCallRequest, RemoteReadRequest};
 	use io::NetSyncIo;
+	use primitives::block::Header;
 	use message;
 	use network::PeerId;
 	use protocol::Protocol;
@@ -419,6 +480,13 @@ mod tests {
 	}
 
 	impl FetchChecker for DummyFetchChecker {
+		fn check_header_proof(&self, _request: &RemoteHeaderRequest, header: Header, _remote_proof: Vec<Vec<u8>>) -> client::error::Result<Header> {
+			match self.ok {
+				true => Ok(header),
+				false => Err(client::error::ErrorKind::Backend("Test error".into()).into()),
+			}
+		}
+
 		fn check_read_proof(&self, _request: &RemoteReadRequest, _remote_proof: Vec<Vec<u8>>) -> client::error::Result<Option<Vec<u8>>> {
 			match self.ok {
 				true => Ok(Some(vec![42])),

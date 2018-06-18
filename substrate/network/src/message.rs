@@ -255,6 +255,10 @@ pub enum Message {
 	RemoteReadRequest(RemoteReadRequest),
 	/// Remote storage read response.
 	RemoteReadResponse(RemoteReadResponse),
+	/// Remote header proof request.
+	RemoteHeaderProofRequest(RemoteHeaderProofRequest),
+	/// Remote header proof response.
+	RemoteHeaderProofResponse(RemoteHeaderProofResponse),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -367,5 +371,25 @@ pub struct RemoteReadResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
 	/// Read proof.
+	pub proof: Vec<Vec<u8>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+/// Remote header proof request.
+pub struct RemoteHeaderProofRequest {
+	/// Unique request id.
+	pub id: RequestId,
+	/// Block to request header for.
+	pub block: BlockNumber,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+/// Remote header proof response.
+pub struct RemoteHeaderProofResponse {
+	/// Id of a request this response was made for.
+	pub id: RequestId,
+	/// Header.
+	pub header: Header,
+	/// Header proof.
 	pub proof: Vec<Vec<u8>>,
 }

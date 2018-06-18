@@ -34,6 +34,9 @@ pub trait Storage: BlockchainHeaderBackend {
 	/// Store new header.
 	fn import_header(&self, is_new_best: bool, header: Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()>;
 
+	/// Get CHT root for given block and key of the block in this CHT. Fails if the block is not a part of CHT.
+	fn cht(&self, block: Number) -> ClientResult<(HeaderHash, Vec<u8>)>;
+
 	/// Get storage cache.
 	fn cache(&self) -> Option<&BlockchainCache>;
 }
@@ -63,9 +66,9 @@ impl<S, F> Blockchain<S, F> where S: Storage {
 		self.fetcher.lock().clone()
 	}
 
-	/// Import new header.
-	pub fn import_header(&self, is_new_best: bool, header: Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()> {
-		self.storage.import_header(is_new_best, header, authorities)
+	/// Get storage reference.
+	pub fn storage(&self) -> &S {
+		&self.storage
 	}
 }
 

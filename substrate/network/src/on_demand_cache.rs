@@ -21,13 +21,21 @@ use heapsize::HeapSizeOf;
 use linked_hash_map::LinkedHashMap;
 use parking_lot::RwLock;
 use client::CallResult;
-use client::light::fetcher::{RemoteCallRequest, RemoteReadRequest};
+use client::light::fetcher::{RemoteHeaderRequest, RemoteCallRequest, RemoteReadRequest};
+use primitives::block::Header;
 
 /// Total cache memory limit.
 const TOTAL_CACHE_LIMIT: usize = 1024 * 1024;
 
+/// Adding Header: HeapSizeOf requirement is undesirable => assume that header-s are not
+/// taking too much of the heap.
+/// TODO: the correct way is to use some constant overhead (from associated constant)?
+#[derive(Clone)]
+struct ZeroHeapHeader(pub Header);
+
 /// Cache for on-demand service responses.
 pub struct OnDemandCache {
+	remote_headers: RwLock<OnDemandCacheMap<RemoteHeaderRequest, ZeroHeapHeader>>,
 	remote_reads: RwLock<OnDemandCacheMap<RemoteReadRequest, Option<Vec<u8>>>>,
 	remote_calls: RwLock<OnDemandCacheMap<RemoteCallRequest, CallResult>>,
 }
@@ -44,9 +52,15 @@ impl OnDemandCache {
 	/// Creat new cache.
 	pub fn new() -> Self {
 		OnDemandCache {
-			remote_reads: RwLock::new(OnDemandCacheMap::new(TOTAL_CACHE_LIMIT / 2)),
-			remote_calls: RwLock::new(OnDemandCacheMap::new(TOTAL_CACHE_LIMIT / 2)),
+			remote_headers: RwLock::new(OnDemandCacheMap::new(TOTAL_CACHE_LIMIT / 3)),
+			remote_reads: RwLock::new(OnDemandCacheMap::new(TOTAL_CACHE_LIMIT / 3)),
+			remote_calls: RwLock::new(OnDemandCacheMap::new(TOTAL_CACHE_LIMIT / 3)),
 		}
+	}
+
+	/// Try to read remote header response from the cache.
+	pub fn remote_header(&self, request: &RemoteHeaderRequest) -> Option<Header> {
+		self.remote_headers.read().get(request).map(|h| h.0)
 	}
 
 	/// Try to read remote read response from the cache.
@@ -57,6 +71,11 @@ impl OnDemandCache {
 	/// Try to read remote call response from the cache.
 	pub fn remote_call(&self, request: &RemoteCallRequest) -> Option<CallResult> {
 		self.remote_calls.read().get(request)
+	}
+
+	/// Cache remote header response.
+	pub fn cache_remote_header(&self, request: RemoteHeaderRequest, response: Header) {
+		self.remote_headers.write().insert(request, ZeroHeapHeader(response));
 	}
 
 	/// Cache remote read response.
@@ -100,5 +119,11 @@ impl<K: Hash + Eq + HeapSizeOf, V: Clone + HeapSizeOf> OnDemandCacheMap<K, V> {
 			let size = key.heap_size_of_children() + value.heap_size_of_children();
 			self.mem_occupied -= size;
 		}
+	}
+}
+
+impl HeapSizeOf for ZeroHeapHeader {
+	fn heap_size_of_children(&self) -> usize {
+		0
 	}
 }

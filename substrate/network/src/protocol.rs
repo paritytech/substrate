@@ -183,7 +183,9 @@ impl Protocol {
 			Message::RemoteCallRequest(request) => self.on_remote_call_request(io, peer_id, request),
 			Message::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response),
 			Message::RemoteReadRequest(request) => self.on_remote_read_request(io, peer_id, request),
-			Message::RemoteReadResponse(response) => self.on_remote_read_response(io, peer_id, response)
+			Message::RemoteReadResponse(response) => self.on_remote_read_response(io, peer_id, response),
+			Message::RemoteHeaderProofRequest(request) => self.on_remote_header_proof_request(io, peer_id, request),
+			Message::RemoteHeaderProofResponse(response) => self.on_remote_header_proof_response(io, peer_id, response),
 		}
 	}
 
@@ -586,6 +588,28 @@ impl Protocol {
 	fn on_remote_read_response(&self, io: &mut SyncIo, peer_id: PeerId, response: message::RemoteReadResponse) {
 		trace!(target: "sync", "Remote read response {} from {}", response.id, peer_id);
 		self.on_demand.as_ref().map(|s| s.on_remote_read_response(io, peer_id, response));
+	}
+
+	fn on_remote_header_proof_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteHeaderProofRequest) {
+		trace!(target: "sync", "Remote header proof request {} from {} ({})", request.id, peer_id, request.block);
+		let (header, proof) = match self.chain.header_proof(request.block) {
+			Ok((header, proof)) => (header, proof),
+			Err(error) => {
+				trace!(target: "sync", "Remote read request {} from {} ({}) failed with: {}",
+					request.id, peer_id, request.block, error);
+				unimplemented!("TODO")
+				// TODO: (Default::default(), Default::default())
+			},
+		};
+
+		self.send_message(io, peer_id, message::Message::RemoteHeaderProofResponse(message::RemoteHeaderProofResponse {
+			id: request.id, header, proof,
+		}));
+	}
+
+	fn on_remote_header_proof_response(&self, io: &mut SyncIo, peer_id: PeerId, response: message::RemoteHeaderProofResponse) {
+		trace!(target: "sync", "Remote header proof response {} from {}", response.id, peer_id);
+		self.on_demand.as_ref().map(|s| s.on_remote_header_response(io, peer_id, response));
 	}
 
 	pub fn chain(&self) -> &Client {

@@ -54,7 +54,7 @@ pub fn compute_root<I: IntoIterator<Item=Option<HeaderHash>>>(cht_num: BlockNumb
 	let pairs = hashes.into_iter()
 		.take(SIZE as usize)
 		.enumerate()
-		.filter_map(|(i, hash)| hash.map(|hash| (number_to_db_key(start_num + i as u64).to_vec(), hash.to_vec())))
+		.filter_map(|(i, hash)| hash.map(|hash| (number_to_db_key(start_num + i as BlockNumber).to_vec(), hash.to_vec())))
 		.collect::<Vec<_>>();
 	if pairs.len() != SIZE as usize {
 		return None;
@@ -80,7 +80,7 @@ pub fn end_number(cht_num: BlockNumber) -> BlockNumber {
 
 /// Convert a block number to a CHT number.
 /// Returns `None` for `block_num` == 0, `Some` otherwise.
-pub fn block_to_cht_number(block_num: u64) -> Option<u64> {
+pub fn block_to_cht_number(block_num: BlockNumber) -> Option<BlockNumber> {
 	match block_num {
 		0 => None,
 		n => Some((n - 1) / SIZE),
