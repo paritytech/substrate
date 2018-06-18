@@ -1916,6 +1916,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-state-machine 0.1.0",
+ "triehash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

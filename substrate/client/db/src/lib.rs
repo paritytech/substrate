@@ -27,6 +27,7 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
+extern crate triehash;
 
 #[macro_use]
 extern crate log;
@@ -38,6 +39,7 @@ extern crate kvdb_memorydb;
 
 pub mod light;
 
+mod cht;
 mod utils;
 
 use std::sync::Arc;

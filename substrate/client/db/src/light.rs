@@ -21,6 +21,7 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
+use cht;
 use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
@@ -37,7 +38,7 @@ mod columns {
 	pub const BLOCK_INDEX: Option<u32> = Some(1);
 	pub const HEADER: Option<u32> = Some(2);
 	pub const AUTHORITIES: Option<u32> = Some(3);
-	pub const _CHT: Option<u32> = Some(4);
+	pub const CHT: Option<u32> = Some(4);
 	pub const NUM_COLUMNS: u32 = 5;
 }
 
@@ -168,6 +169,20 @@ impl LightBlockchainStorage for LightStorage {
 		} else {
 			(false, None)
 		};
+
+		// build new CHT if required
+		if let Some(new_cht_number) = cht::is_build_required(number) {
+			let new_cht_start = cht::start_number(new_cht_number);
+			let new_cht_root = cht::compute_root(new_cht_number, (new_cht_start..)
+				.map(|num| self.hash(num).unwrap_or_default()));
+
+			if let Some(new_cht_root) = new_cht_root {
+				transaction.put(columns::CHT, &number_to_db_key(new_cht_start), &*new_cht_root);
+				for prune_block in new_cht_start..cht::end_number(new_cht_number) + 1 {
+					transaction.delete(columns::HEADER, &number_to_db_key(prune_block));
+				}
+			}
+		}
 
 		debug!("Light DB Commit {:?} ({})", hash, number);
 		self.db.write(transaction).map_err(db_err)?;
@@ -405,7 +420,6 @@ impl Slicable for BestAuthoritiesEntry {
 mod tests {
 	use primitives::Header;
 	use super::*;
-	//use client::blockchain::{Backend as BlockchainBackend, HeaderBackend as BlockchainHeaderBackend, Cache as BlockchainCache};
 
 	#[test]
 	fn best_authorities_serialized() {
