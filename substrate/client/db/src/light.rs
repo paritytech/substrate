@@ -42,9 +42,8 @@ mod columns {
 	pub const NUM_COLUMNS: u32 = 5;
 }
 
-// TODO: the same as the number of recent blocks.
 /// Keep authorities for last 'AUTHORITIES_ENTRIES_TO_KEEP' blocks.
-const AUTHORITIES_ENTRIES_TO_KEEP: BlockNumber = 100;
+const AUTHORITIES_ENTRIES_TO_KEEP: BlockNumber = cht::SIZE;
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 pub struct LightStorage {
@@ -178,7 +177,7 @@ impl LightBlockchainStorage for LightStorage {
 
 			if let Some(new_cht_root) = new_cht_root {
 				transaction.put(columns::CHT, &number_to_db_key(new_cht_start), &*new_cht_root);
-				for prune_block in new_cht_start..cht::end_number(new_cht_number) + 1 {
+				for prune_block in new_cht_start..cht::end_number(new_cht_number) {
 					transaction.delete(columns::HEADER, &number_to_db_key(prune_block));
 				}
 			}
@@ -418,8 +417,23 @@ impl Slicable for BestAuthoritiesEntry {
 
 #[cfg(test)]
 mod tests {
+	use cht;
 	use primitives::Header;
 	use super::*;
+
+	fn insert_block(db: &LightStorage, parent: &HeaderHash, number: u64, authorities: Option<Vec<AuthorityId>>) -> HeaderHash {
+		let header = Header {
+			number,
+			parent_hash: *parent,
+			state_root: Default::default(),
+			digest: Default::default(),
+			extrinsics_root: Default::default(),
+		};
+
+		let hash = header.blake2_256().into();
+		db.import_header(true, header, authorities).unwrap();
+		hash
+	}
 
 	#[test]
 	fn best_authorities_serialized() {
@@ -438,20 +452,6 @@ mod tests {
 
 	#[test]
 	fn best_authorities_are_updated() {
-		let insert_block: Box<Fn(&LightStorage, &HeaderHash, u64, Option<Vec<AuthorityId>>) -> HeaderHash> = Box::new(|db, parent, number, authorities| {
-			let header = Header {
-				number: number,
-				parent_hash: *parent,
-				state_root: Default::default(),
-				digest: Default::default(),
-				extrinsics_root: Default::default(),
-			};
-
-			let hash = header.blake2_256().into();
-			db.import_header(true, header, authorities).unwrap();
-			hash
-		});
-
 		let db = LightStorage::new_test();
 		let authorities_at = vec![
 			(0, None),
@@ -548,5 +548,33 @@ mod tests {
 		assert_eq!(db.cache.authorities_at(BlockId::Number(150)), None);
 		assert_eq!(db.cache.authorities_at(BlockId::Number(200)), None);
 		assert_eq!(db.cache.authorities_at(BlockId::Number(250)), None);
+	}
+
+	#[test]
+	fn ancient_headers_are_replaced_with_cht() {
+		let db = LightStorage::new_test();
+
+		// insert genesis block header (never pruned)
+		let mut prev_hash = insert_block(&db, &Default::default(), 0, None);
+
+		// insert SIZE blocks && ensure that nothing is pruned
+		for number in 0..cht::SIZE {
+			prev_hash = insert_block(&db, &prev_hash, 1 + number, None);
+		}
+		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE) as usize);
+		assert_eq!(db.db.iter(columns::CHT).count(), 0);
+
+		// insert next SIZE blocks && ensure that nothing is pruned
+		for number in 0..cht::SIZE {
+			prev_hash = insert_block(&db, &prev_hash, 1 + cht::SIZE + number, None);
+		}
+		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + cht::SIZE) as usize);
+		assert_eq!(db.db.iter(columns::CHT).count(), 0);
+
+		// insert block #{2 * cht::SIZE + 1} && check that new CHT is created + headers of this CHT are pruned
+		insert_block(&db, &prev_hash, 1 + cht::SIZE + cht::SIZE, None);
+		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
+		assert_eq!(db.db.iter(columns::CHT).count(), 1);
+		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_db_key(1 + i)).unwrap().is_none()));
 	}
 }
