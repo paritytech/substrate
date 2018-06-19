@@ -36,7 +36,7 @@ pub use slog_scope::with_logger;
 
 /// Configuration for telemetry.
 pub struct TelemetryConfig {
-	/// URL of the telemetry WS server.
+	/// URL of the telemetry WebSocket server.
 	pub url: String,
 	/// What do do when we connect to the server.
 	pub on_connect: Box<Fn() + Send + 'static>,
