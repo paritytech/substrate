@@ -180,6 +180,23 @@ impl Slicable for ReturnValue {
 	}
 }
 
+impl ReturnValue {
+	/// Maximum number of bytes `ReturnValue` might occupy when serialized with
+	/// `Slicable`.
+	///
+	/// Breakdown:
+	///  1 byte for encoding unit/value variant
+	///  1 byte for encoding value type
+	///  8 bytes for encoding the biggest value types available in wasm: f64, i64.
+	pub const ENCODED_MAX_SIZE: usize = 10;
+}
+
+#[test]
+fn return_value_encoded_max_size() {
+	let encoded = ReturnValue::Value(TypedValue::I64(-1)).encode();
+	assert_eq!(encoded.len(), ReturnValue::ENCODED_MAX_SIZE);
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 #[repr(i8)]
