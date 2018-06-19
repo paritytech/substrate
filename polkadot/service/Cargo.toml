@@ -19,7 +19,7 @@ polkadot-consensus = { path = "../consensus" }
 polkadot-executor = { path = "../executor" }
 polkadot-api = { path = "../api" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
-polkadot-keystore = { path = "../keystore" }
+substrate-keystore = { path = "../../substrate/keystore" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }

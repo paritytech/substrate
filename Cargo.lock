@@ -1318,22 +1318,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "polkadot-keystore"
-version = "0.1.0"
-dependencies = [
- "ed25519 0.1.0",
- "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ethcore-crypto 0.1.0 (git+https://github.com/paritytech/parity.git)",
- "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.19 (registry+https://github.com/rust-lang/crates.io-index)",
- "subtle 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "polkadot-parachain"
 version = "0.1.0"
 dependencies = [
@@ -1400,7 +1384,6 @@ dependencies = [
  "polkadot-api 0.1.0",
  "polkadot-consensus 0.1.0",
  "polkadot-executor 0.1.0",
- "polkadot-keystore 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "polkadot-transaction-pool 0.1.0",
@@ -1408,6 +1391,7 @@ dependencies = [
  "substrate-client-db 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
+ "substrate-keystore 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
@@ -1970,6 +1954,22 @@ dependencies = [
  "ed25519 0.1.0",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-keystore"
+version = "0.1.0"
+dependencies = [
+ "ed25519 0.1.0",
+ "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ethcore-crypto 0.1.0 (git+https://github.com/paritytech/parity.git)",
+ "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "subtle 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
