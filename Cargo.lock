@@ -2199,6 +2199,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-std 0.1.0",
+ "wabt 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
