@@ -91,7 +91,7 @@ impl TelemetryWriter {
 
 impl io::Write for TelemetryWriter {
 	fn write(&mut self, msg: &[u8]) -> io::Result<usize> {
-		if msg == b"\n" {
+		if msg.iter().any(|x| *x == b'\n') {
 			let _ = self.flush();
 		} else {
 			self.buffer.extend_from_slice(msg);
@@ -101,12 +101,15 @@ impl io::Write for TelemetryWriter {
 
 	fn flush(&mut self) -> io::Result<()> {
 		self.ensure_connected();
-		if if let Some(ref mut socket) = *self.out.lock() {
+
+		let mut l = self.out.lock();
+		let socket_closed = if let Some(ref mut socket) = *l {
 			if let Ok(s) = ::std::str::from_utf8(&self.buffer[..]) {
-				socket.send_message(&ws::Message::text(s)).is_err()
+				socket.send_message(&ws::Message::text(s)).is_ok()
 			} else { false }
-		} else { false } {
-			*self.out.lock() = None;
+		} else { false };
+		if socket_closed {
+			*l = None;
 		}
 		self.buffer.clear();
 		Ok(())
