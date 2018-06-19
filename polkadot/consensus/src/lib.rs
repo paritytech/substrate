@@ -66,11 +66,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use codec::Slicable;
-use table::generic::Statement as GenericStatement;
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
-use polkadot_runtime::BareExtrinsic;
+use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt, CandidateSignature};
 use primitives::AuthorityId;
 use transaction_pool::{Ready, TransactionPool};
 use tokio::runtime::TaskExecutor;
@@ -81,17 +79,18 @@ use futures::future;
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
 
-pub use self::collation::{Collators, Collation};
+pub use self::collation::{validate_collation, Collators, Collation};
 pub use self::error::{ErrorKind, Error};
-pub use self::shared_table::{SharedTable, StatementSource, StatementProducer, ProducedStatements};
+pub use self::shared_table::{SharedTable, StatementProducer, ProducedStatements, Statement, SignedStatement, GenericStatement};
 pub use service::Service;
 
-mod collation;
 mod dynamic_inclusion;
 mod evaluation;
 mod error;
 mod service;
 mod shared_table;
+
+pub mod collation;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
@@ -128,8 +127,8 @@ pub trait Network {
 	/// current authorities.
 	type Output: Sink<SinkItem=bft::Communication<Block>,SinkError=Error>;
 
-	/// Instantiate a table router using the given shared table.
-	fn communication_for(&self, table: Arc<SharedTable>) -> (Self::TableRouter, Self::Input, Self::Output);
+	/// Instantiate a table router using the given shared table and task executor.
+	fn communication_for(&self, validators: &[SessionKey], table: Arc<SharedTable>, task_executor: TaskExecutor) -> (Self::TableRouter, Self::Input, Self::Output);
 }
 
 /// Information about a specific group.
@@ -148,20 +147,21 @@ pub struct GroupInfo {
 /// Sign a table statement against a parent hash.
 /// The actual message signed is the encoded statement concatenated with the
 /// parent hash.
-pub fn sign_table_statement(statement: &table::Statement, key: &ed25519::Pair, parent_hash: &Hash) -> ed25519::Signature {
-	use polkadot_primitives::parachain::Statement as RawStatement;
-
-	let raw = match *statement {
-		GenericStatement::Candidate(ref c) => RawStatement::Candidate(c.clone()),
-		GenericStatement::Valid(h) => RawStatement::Valid(h),
-		GenericStatement::Invalid(h) => RawStatement::Invalid(h),
-		GenericStatement::Available(h) => RawStatement::Available(h),
-	};
-
-	let mut encoded = raw.encode();
+pub fn sign_table_statement(statement: &Statement, key: &ed25519::Pair, parent_hash: &Hash) -> CandidateSignature {
+	let mut encoded = statement.encode();
 	encoded.extend(&parent_hash.0);
 
-	key.sign(&encoded)
+	key.sign(&encoded).into()
+}
+
+/// Check signature on table statement.
+pub fn check_statement(statement: &Statement, signature: &CandidateSignature, signer: SessionKey, parent_hash: &Hash) -> bool {
+	use runtime_primitives::traits::Verify;
+
+	let mut encoded = statement.encode();
+	encoded.extend(&parent_hash.0);
+
+	signature.verify(&encoded[..], &signer.into())
 }
 
 fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: AuthorityId) -> Result<(HashMap<ParaId, GroupInfo>, LocalDuty), Error> {
@@ -274,7 +274,12 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 
 		let n_parachains = active_parachains.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
-		let (router, input, output) = self.network.communication_for(table.clone());
+		let (router, input, output) = self.network.communication_for(
+			authorities,
+			table.clone(),
+			self.handle.clone()
+		);
+
 		let now = Instant::now();
 		let dynamic_inclusion = DynamicInclusion::new(
 			n_parachains,
@@ -337,7 +342,7 @@ fn dispatch_collation_work<R, C, P>(
 			router.local_candidate_data(hash, collation.block_data, extrinsic);
 
 			// TODO: if we are an availability guarantor also, we should produce an availability statement.
-			table.sign_and_import(&router, GenericStatement::Candidate(collation.receipt));
+			table.sign_and_import(GenericStatement::Candidate(collation.receipt));
 			Ok(())
 		}
 		Err(_e) => {
@@ -733,5 +738,23 @@ impl<C> Future for CreateProposal<C> where C: PolkadotApi {
 		});
 
 		self.propose_with(proposed_candidates).map(Async::Ready)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use substrate_keyring::Keyring;
+
+	#[test]
+	fn sign_and_check_statement() {
+		let statement: Statement = GenericStatement::Valid([1; 32].into());
+		let parent_hash = [2; 32].into();
+
+		let sig = sign_table_statement(&statement, &Keyring::Alice.pair(), &parent_hash);
+
+		assert!(check_statement(&statement, &sig, Keyring::Alice.to_raw_public(), &parent_hash));
+		assert!(!check_statement(&statement, &sig, Keyring::Alice.to_raw_public(), &[0xff; 32].into()));
+		assert!(!check_statement(&statement, &sig, Keyring::Bob.to_raw_public(), &parent_hash));
 	}
 }

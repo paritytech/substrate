@@ -49,7 +49,7 @@ bitflags! {
 	pub struct Role: u32 {
 		/// No network.
 		const NONE = 0b00000000;
-		/// Full node, doe not participate in consensus.
+		/// Full node, dose not participate in consensus.
 		const FULL = 0b00000001;
 		/// Light client node.
 		const LIGHT = 0b00000010;
