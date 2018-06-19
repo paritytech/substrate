@@ -106,8 +106,9 @@ pub trait TableRouter: Clone {
 	/// Future that resolves when extrinsic candidate data is fetched.
 	type FetchExtrinsic: IntoFuture<Item=ParachainExtrinsic,Error=Self::Error>;
 
-	/// Note local candidate data, making it available on the network to other validators.
-	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: ParachainExtrinsic);
+	/// Call with local candidate data. This will make the data available on the network,
+	/// and sign, import, and broadcast a statement about the candidate.
+	fn local_candidate(&self, candidate: CandidateReceipt, block_data: BlockData, extrinsic: ParachainExtrinsic);
 
 	/// Fetch block data for a specific candidate.
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> Self::FetchCandidate;
@@ -135,9 +136,9 @@ pub trait Network {
 #[derive(Debug, Clone, Default)]
 pub struct GroupInfo {
 	/// Authorities meant to check validity of candidates.
-	pub validity_guarantors: HashSet<AuthorityId>,
+	pub validity_guarantors: HashSet<SessionKey>,
 	/// Authorities meant to check availability of candidate data.
-	pub availability_guarantors: HashSet<AuthorityId>,
+	pub availability_guarantors: HashSet<SessionKey>,
 	/// Number of votes needed for validity.
 	pub needed_validity: usize,
 	/// Number of votes needed for availability.
@@ -292,7 +293,6 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 
 		let drop_signal = dispatch_collation_work(
 			router.clone(),
-			table.clone(),
 			&self.handle,
 			CollationFetch::new(
 				local_duty.validation,
@@ -325,7 +325,6 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 // that should fire when the collation work is no longer necessary (e.g. when the proposer object is dropped)
 fn dispatch_collation_work<R, C, P>(
 	router: R,
-	table: Arc<SharedTable>,
 	handle: &TaskExecutor,
 	work: CollationFetch<C, P>,
 ) -> exit_future::Signal where
@@ -338,11 +337,7 @@ fn dispatch_collation_work<R, C, P>(
 	let (signal, exit) = exit_future::signal();
 	let handled_work = work.then(move |result| match result {
 		Ok((collation, extrinsic)) => {
-			let hash = collation.receipt.hash();
-			router.local_candidate_data(hash, collation.block_data, extrinsic);
-
-			// TODO: if we are an availability guarantor also, we should produce an availability statement.
-			table.sign_and_import(GenericStatement::Candidate(collation.receipt));
+			router.local_candidate(collation.receipt, collation.block_data, extrinsic);
 			Ok(())
 		}
 		Err(_e) => {

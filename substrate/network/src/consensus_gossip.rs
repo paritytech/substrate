@@ -148,7 +148,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Multicast a chain-specific message to other authorities.
-	pub fn multicast_chain_specific(&mut self, protocol: &mut Context<B>, parent_hash: B::Hash, message: Vec<u8>) {
+	pub fn multicast_chain_specific(&mut self, protocol: &mut Context<B>, message: Vec<u8>, parent_hash: B::Hash) {
 		trace!(target:"gossip", "sending chain-specific message");
 		self.multicast(protocol, ConsensusMessage::ChainSpecific(message, parent_hash), None);
 	}

@@ -22,16 +22,17 @@ use substrate_network::{self as net, generic_message as msg};
 use substrate_network::consensus_gossip::ConsensusMessage;
 use polkadot_api::{PolkadotApi, LocalPolkadotApi};
 use polkadot_consensus::{Network, SharedTable};
-use polkadot_primitives::{Block, Hash, BlockId, SessionKey};
+use polkadot_primitives::{Block, Hash, SessionKey};
 
-use futures::{future, prelude::*};
+use futures::{prelude::*};
 use futures::sync::mpsc;
 
 use std::sync::Arc;
 
 use tokio::runtime::TaskExecutor;
+use parking_lot::Mutex;
 
-use super::{Message, NetworkService};
+use super::{Message, NetworkService, Knowledge, CurrentConsensus};
 use router::Router;
 
 /// Sink for output BFT messages.
@@ -239,25 +240,25 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 
 		let (bft_send, bft_recv) = mpsc::unbounded();
 
-		let checked_parent_hash = match self.api.check_id(BlockId::hash(parent_hash)) {
-			Ok(checked) => Some(checked),
-			Err(e) => {
-				warn!(target: "p_net", "Unable to evaluate candidates: unknown block ID: {}", e);
-				None
-			}
-		};
+		let knowledge = Arc::new(Mutex::new(Knowledge::new()));
 
 		let table_router = Router::new(
 			table,
 			self.network.clone(),
 			self.api.clone(),
 			task_executor.clone(),
-			checked_parent_hash,
+			parent_hash,
+			knowledge.clone(),
 		);
 
 		// spin up a task in the background that processes all incoming statements
 		// TODO: propagate statements on a timer?
 		let process_task = self.network.with_spec(|spec, _ctx| {
+			spec.live_consensus = Some(CurrentConsensus {
+				knowledge,
+				parent_hash,
+			});
+
 			MessageProcessTask {
 				inner_stream: spec.consensus_gossip.messages_for(parent_hash),
 				bft_messages: bft_send,
