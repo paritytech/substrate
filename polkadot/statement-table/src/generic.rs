@@ -166,6 +166,19 @@ pub enum ValidityDoubleVote<C, D, S> {
 	ValidityAndInvalidity(D, S, S),
 }
 
+/// Misbehavior: multiple signatures on same statement.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum DoubleSign<C, D, S> {
+	/// On candidate.
+	Candidate(C, S, S),
+	/// On validity.
+	Validity(D, S, S),
+	/// On invalidity.
+	Invalidity(D, S, S),
+	/// On availability.
+	Availability(D, S, S),
+}
+
 /// Misbehavior: declaring multiple candidates.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct MultipleCandidates<C, S> {
@@ -190,20 +203,14 @@ pub enum Misbehavior<C, D, V, S> {
 	ValidityDoubleVote(ValidityDoubleVote<C, D, S>),
 	/// Submitted multiple candidates.
 	MultipleCandidates(MultipleCandidates<C, S>),
-	/// Submitted a message withou
+	/// Submitted a message that was unauthorized.
 	UnauthorizedStatement(UnauthorizedStatement<C, D, V, S>),
+	/// Submitted two valid signatures for the same message.
+	DoubleSign(DoubleSign<C, D, S>),
 }
 
-/// Fancy work-around for a type alias of context-based misbehavior
-/// without producing compiler warnings.
-pub trait ResolveMisbehavior {
-	/// The misbehavior type.
-	type Misbehavior;
-}
-
-impl<C: Context + ?Sized> ResolveMisbehavior for C {
-	type Misbehavior = Misbehavior<C::Candidate, C::Digest, C::AuthorityId, C::Signature>;
-}
+/// Type alias for misbehavior corresponding to context type.
+pub type MisbehaviorFor<C> = Misbehavior<<C as Context>::Candidate, <C as Context>::Digest, <C as Context>::AuthorityId, <C as Context>::Signature>;
 
 // kinds of votes for validity
 #[derive(Clone, PartialEq, Eq)]
@@ -279,10 +286,16 @@ impl<C: Context> Default for AuthorityData<C> {
 	}
 }
 
+/// Type alias for the result of a statement import.
+pub type ImportResult<C> = Result<
+	Option<Summary<<C as Context>::Digest, <C as Context>::GroupId>>,
+	MisbehaviorFor<C>
+>;
+
 /// Stores votes
 pub struct Table<C: Context> {
 	authority_data: HashMap<C::AuthorityId, AuthorityData<C>>,
-	detected_misbehavior: HashMap<C::AuthorityId, <C as ResolveMisbehavior>::Misbehavior>,
+	detected_misbehavior: HashMap<C::AuthorityId, MisbehaviorFor<C>>,
 	candidate_votes: HashMap<C::Digest, CandidateData<C>>,
 	includable_count: HashMap<C::GroupId, usize>,
 }
@@ -344,10 +357,9 @@ impl<C: Context> Table<C> {
 	}
 
 	/// Import a signed statement. Signatures should be checked for validity, and the
-	/// sender should be checked to actually be a authority.
+	/// sender should be checked to actually be an authority.
 	///
-	/// This can note the origin of the statement to indicate that he has
-	/// seen it already.
+	/// If this returns `None`, the statement was either duplicate or invalid.
 	pub fn import_statement(
 		&mut self,
 		context: &C,
@@ -355,7 +367,7 @@ impl<C: Context> Table<C> {
 	) -> Option<Summary<C::Digest, C::GroupId>> {
 		let SignedStatement { statement, signature, sender: signer } = statement;
 
-		let (maybe_misbehavior, maybe_summary) = match statement {
+		let res = match statement {
 			Statement::Candidate(candidate) => self.import_candidate(
 				context,
 				signer.clone(),
@@ -382,13 +394,15 @@ impl<C: Context> Table<C> {
 			),
 		};
 
-		if let Some(misbehavior) = maybe_misbehavior {
-			// all misbehavior in agreement is provable and actively malicious.
-			// punishments are not cumulative.
-			self.detected_misbehavior.insert(signer, misbehavior);
+		match res {
+			Ok(maybe_summary) => maybe_summary,
+			Err(misbehavior) => {
+				// all misbehavior in agreement is provable and actively malicious.
+				// punishments are not cumulative.
+				self.detected_misbehavior.insert(signer, misbehavior);
+				None
+			}
 		}
-
-		maybe_summary
 	}
 
 	/// Get a candidate by digest.
@@ -398,7 +412,7 @@ impl<C: Context> Table<C> {
 
 	/// Access all witnessed misbehavior.
 	pub fn get_misbehavior(&self)
-		-> &HashMap<C::AuthorityId, <C as ResolveMisbehavior>::Misbehavior>
+		-> &HashMap<C::AuthorityId, MisbehaviorFor<C>>
 	{
 		&self.detected_misbehavior
 	}
@@ -414,19 +428,16 @@ impl<C: Context> Table<C> {
 		from: C::AuthorityId,
 		candidate: C::Candidate,
 		signature: C::Signature,
-	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
+	) -> ImportResult<C> {
 		let group = C::candidate_group(&candidate);
 		if !context.is_member_of(&from, &group) {
-			return (
-				Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
-					statement: SignedStatement {
-						signature,
-						statement: Statement::Candidate(candidate),
-						sender: from,
-					},
-				})),
-				None,
-			);
+			return Err(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
+				statement: SignedStatement {
+					signature,
+					statement: Statement::Candidate(candidate),
+					sender: from,
+				},
+			}));
 		}
 
 		// check that authority hasn't already specified another candidate.
@@ -450,13 +461,10 @@ impl<C: Context> Table<C> {
 							.candidate
 							.clone();
 
-						return (
-							Some(Misbehavior::MultipleCandidates(MultipleCandidates {
-								first: (old_candidate, old_sig.clone()),
-								second: (candidate, signature.clone()),
-							})),
-							None,
-						);
+						return Err(Misbehavior::MultipleCandidates(MultipleCandidates {
+							first: (old_candidate, old_sig.clone()),
+							second: (candidate, signature.clone()),
+						}));
 					}
 
 					false
@@ -499,9 +507,9 @@ impl<C: Context> Table<C> {
 		from: C::AuthorityId,
 		digest: C::Digest,
 		vote: ValidityVote<C::Signature>,
-	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
+	) -> ImportResult<C> {
 		let votes = match self.candidate_votes.get_mut(&digest) {
-			None => return (None, None), // TODO: queue up but don't get DoS'ed
+			None => return Ok(None),
 			Some(votes) => votes,
 		};
 
@@ -518,50 +526,56 @@ impl<C: Context> Table<C> {
 							checking group membership of issuer; qed"),
 			};
 
-			return (
-				Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
-					statement: SignedStatement {
-						signature: sig,
-						sender: from,
-						statement: if valid {
-							Statement::Valid(digest)
-						} else {
-							Statement::Invalid(digest)
-						}
+			return Err(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
+				statement: SignedStatement {
+					signature: sig,
+					sender: from,
+					statement: if valid {
+						Statement::Valid(digest)
+					} else {
+						Statement::Invalid(digest)
 					}
-				})),
-				None,
-			);
+				}
+			}));
 		}
 
 		// check for double votes.
 		match votes.validity_votes.entry(from.clone()) {
 			Entry::Occupied(occ) => {
-				if occ.get() != &vote {
-					let double_vote_proof = match (occ.get().clone(), vote) {
+				let make_vdv = |v| Misbehavior::ValidityDoubleVote(v);
+				let make_ds = |ds| Misbehavior::DoubleSign(ds);
+				return if occ.get() != &vote {
+					Err(match (occ.get().clone(), vote) {
+						// valid vote conflicting with candidate statement
 						(ValidityVote::Issued(iss), ValidityVote::Valid(good)) |
 						(ValidityVote::Valid(good), ValidityVote::Issued(iss)) =>
-							ValidityDoubleVote::IssuedAndValidity((votes.candidate.clone(), iss), (digest, good)),
+							make_vdv(ValidityDoubleVote::IssuedAndValidity((votes.candidate.clone(), iss), (digest, good))),
+
+						// invalid vote conflicting with candidate statement
 						(ValidityVote::Issued(iss), ValidityVote::Invalid(bad)) |
 						(ValidityVote::Invalid(bad), ValidityVote::Issued(iss)) =>
-							ValidityDoubleVote::IssuedAndInvalidity((votes.candidate.clone(), iss), (digest, bad)),
+							make_vdv(ValidityDoubleVote::IssuedAndInvalidity((votes.candidate.clone(), iss), (digest, bad))),
+
+						// valid vote conflicting with invalid vote
 						(ValidityVote::Valid(good), ValidityVote::Invalid(bad)) |
 						(ValidityVote::Invalid(bad), ValidityVote::Valid(good)) =>
-							ValidityDoubleVote::ValidityAndInvalidity(digest, good, bad),
-						_ => {
-							// this would occur if two different but valid signatures
-							// on the same kind of vote occurred.
-							return (None, None);
-						}
-					};
+							make_vdv(ValidityDoubleVote::ValidityAndInvalidity(digest, good, bad)),
 
-					return (
-						Some(Misbehavior::ValidityDoubleVote(double_vote_proof)),
-						None,
-					)
+						// two signatures on same candidate
+						(ValidityVote::Issued(a), ValidityVote::Issued(b)) =>
+							make_ds(DoubleSign::Candidate(votes.candidate.clone(), a, b)),
+
+						// two signatures on same validity vote
+						(ValidityVote::Valid(a), ValidityVote::Valid(b)) =>
+							make_ds(DoubleSign::Validity(digest, a, b)),
+
+						// two signature on same invalidity vote
+						(ValidityVote::Invalid(a), ValidityVote::Invalid(b)) =>
+							make_ds(DoubleSign::Invalidity(digest, a, b)),
+					})
+				} else {
+					Ok(None)
 				}
-
-				return (None, None);
 			}
 			Entry::Vacant(vacant) => {
 				if let ValidityVote::Invalid(_) = vote {
@@ -575,7 +589,7 @@ impl<C: Context> Table<C> {
 		let is_includable = votes.can_be_included(v_threshold, a_threshold);
 		update_includable_count(&mut self.includable_count, &votes.group_id, was_includable, is_includable);
 
-		(None, Some(votes.summary(digest)))
+		Ok(Some(votes.summary(digest)))
 	}
 
 	fn availability_vote(
@@ -584,9 +598,9 @@ impl<C: Context> Table<C> {
 		from: C::AuthorityId,
 		digest: C::Digest,
 		signature: C::Signature,
-	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
+	) -> ImportResult<C> {
 		let votes = match self.candidate_votes.get_mut(&digest) {
-			None => return (None, None), // TODO: queue up but don't get DoS'ed
+			None => return Ok(None),
 			Some(votes) => votes,
 		};
 
@@ -595,24 +609,26 @@ impl<C: Context> Table<C> {
 
 		// check that this authority actually can vote in this group.
 		if !context.is_availability_guarantor_of(&from, &votes.group_id) {
-			return (
-				Some(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
-					statement: SignedStatement {
-						signature: signature.clone(),
-						statement: Statement::Available(digest),
-						sender: from,
-					}
-				})),
-				None
-			);
+			return Err(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
+				statement: SignedStatement {
+					signature: signature.clone(),
+					statement: Statement::Available(digest),
+					sender: from,
+				}
+			}));
 		}
 
-		votes.availability_votes.insert(from, signature);
+		match votes.availability_votes.entry(from) {
+			Entry::Occupied(ref occ) if occ.get() != &signature => return Err(
+				Misbehavior::DoubleSign(DoubleSign::Availability(digest, signature, occ.get().clone()))
+			),
+			entry => { let _ = entry.or_insert(signature); },
+		}
 
 		let is_includable = votes.can_be_included(v_threshold, a_threshold);
 		update_includable_count(&mut self.includable_count, &votes.group_id, was_includable, is_includable);
 
-		(None, Some(votes.summary(digest)))
+		Ok(Some(votes.summary(digest)))
 	}
 }
 
@@ -891,6 +907,102 @@ mod tests {
 				Signature(2),
 			))
 		);
+	}
+
+	#[test]
+	fn candidate_double_signature_is_misbehavior() {
+		let context = TestContext {
+			authorities: {
+				let mut map = HashMap::new();
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(2), (GroupId(2), GroupId(246)));
+				map
+			}
+		};
+
+		let mut table = create();
+		let statement = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(1),
+			sender: AuthorityId(1),
+		};
+
+		table.import_statement(&context, statement);
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(1)));
+
+		let invalid_statement = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(999),
+			sender: AuthorityId(1),
+		};
+
+		table.import_statement(&context, invalid_statement);
+		assert!(table.detected_misbehavior.contains_key(&AuthorityId(1)));
+	}
+
+	#[test]
+	fn validity_invalidity_double_signature_is_misbehavior() {
+		let context = TestContext {
+			authorities: {
+				let mut map = HashMap::new();
+				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
+				map.insert(AuthorityId(2), (GroupId(2), GroupId(246)));
+				map.insert(AuthorityId(3), (GroupId(2), GroupId(222)));
+				map
+			}
+		};
+
+		let mut table = create();
+		let statement = SignedStatement {
+			statement: Statement::Candidate(Candidate(2, 100)),
+			signature: Signature(1),
+			sender: AuthorityId(1),
+		};
+
+		table.import_statement(&context, statement);
+		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(1)));
+
+		// insert two validity votes from authority 2 with different signatures
+		{
+			let statement = SignedStatement {
+				statement: Statement::Valid(Digest(100)),
+				signature: Signature(2),
+				sender: AuthorityId(2),
+			};
+
+			table.import_statement(&context, statement);
+			assert!(!table.detected_misbehavior.contains_key(&AuthorityId(2)));
+
+			let invalid_statement = SignedStatement {
+				statement: Statement::Valid(Digest(100)),
+				signature: Signature(222),
+				sender: AuthorityId(2),
+			};
+
+			table.import_statement(&context, invalid_statement);
+			assert!(table.detected_misbehavior.contains_key(&AuthorityId(2)));
+		}
+
+		// insert two invalidity votes from authority 2 with different signatures
+		{
+			let statement = SignedStatement {
+				statement: Statement::Invalid(Digest(100)),
+				signature: Signature(3),
+				sender: AuthorityId(3),
+			};
+
+			table.import_statement(&context, statement);
+			assert!(!table.detected_misbehavior.contains_key(&AuthorityId(3)));
+
+			let invalid_statement = SignedStatement {
+				statement: Statement::Invalid(Digest(100)),
+				signature: Signature(333),
+				sender: AuthorityId(3),
+			};
+
+			table.import_statement(&context, invalid_statement);
+			assert!(table.detected_misbehavior.contains_key(&AuthorityId(3)));
+		}
 	}
 
 	#[test]
