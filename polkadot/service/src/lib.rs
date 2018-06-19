@@ -513,6 +513,9 @@ pub fn prune_imported<A>(api: &A, pool: &TransactionPool, hash: Hash)
 		Ok(id) => {
 			let ready = transaction_pool::Ready::create(id, api);
 			pool.cull(None, ready);
+			if let Err(e) = pool.retry_verification(id) {
+				warn!("Re-verifying error: {:?}", e);
+			}
 		},
 		Err(e) => warn!("Failed to check block id: {:?}", e),
 	}

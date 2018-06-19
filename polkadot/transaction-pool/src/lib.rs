@@ -256,7 +256,6 @@ impl<'a, A> Verifier<'a, A, A::CheckedBlockId> where
 	const NO_ACCOUNT: &'static str = "Account not found.";
 
 	fn lookup(&self, address: Address) -> ::std::result::Result<AccountId, &'static str> {
-
 		// TODO [ToDr] Consider introducing a cache for this.
 		match self.api.lookup(&self.at_block, address.clone()) {
 			Ok(Some(address)) => Ok(address),
@@ -604,7 +603,7 @@ mod tests {
 		assert_eq!(pending, vec![]);
 
 		api.enable_lookup();
-		pool.retry_verification(BlockId::number(1)).unwrap();
+		pool.retry_verification(BlockId::number(0)).unwrap();
 
 		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![
@@ -643,7 +642,7 @@ mod tests {
 
 		// when
 		api.enable_lookup();
-		pool.retry_verification(BlockId::number(1)).unwrap();
+		pool.retry_verification(BlockId::number(0)).unwrap();
 
 		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
 		assert_eq!(pending, vec![
