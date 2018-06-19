@@ -26,8 +26,8 @@
 use triehash;
 
 use primitives::block::{HeaderHash, Number as BlockNumber};
-
-use utils::number_to_db_key;
+use state_machine::backend::InMemory as InMemoryState;
+use state_machine::prove_read;
 
 /// The size of each CHT.
 pub const SIZE: BlockNumber = 2048;
@@ -50,17 +50,34 @@ pub fn is_build_required(block_num: BlockNumber) -> Option<BlockNumber> {
 /// SIZE items. The items are assumed to proceed sequentially from `start_number(cht_num)`.
 /// Discards the trie's nodes.
 pub fn compute_root<I: IntoIterator<Item=Option<HeaderHash>>>(cht_num: BlockNumber, hashes: I) -> Option<HeaderHash> {
+	build_pairs(cht_num, hashes).map(|pairs| triehash::trie_root(pairs).0.into())
+}
+
+/// Build CHT-based header proof.
+pub fn build_proof<I: IntoIterator<Item=Option<HeaderHash>>>(cht_num: BlockNumber, block_num: BlockNumber, hashes: I) -> Option<Vec<Vec<u8>>> {
+	let transaction = build_pairs(cht_num, hashes)?
+		.into_iter()
+		.map(|(k, v)| (k, Some(v)))
+		.collect::<Vec<_>>();
+	let storage = InMemoryState::default().update(transaction);
+	prove_read(storage, &encode_cht_key(block_num)).ok()
+}
+
+/// Build CHT.
+fn build_pairs<I: IntoIterator<Item=Option<HeaderHash>>>(cht_num: BlockNumber, hashes: I) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
 	let start_num = start_number(cht_num);
 	let pairs = hashes.into_iter()
 		.take(SIZE as usize)
 		.enumerate()
-		.filter_map(|(i, hash)| hash.map(|hash| (number_to_db_key(start_num + i as BlockNumber).to_vec(), hash.to_vec())))
+		.filter_map(|(i, hash)| hash.map(|hash| (
+			encode_cht_key(start_num + i as BlockNumber).to_vec(),
+			encode_cht_value(hash)
+		)))
 		.collect::<Vec<_>>();
-	if pairs.len() != SIZE as usize {
-		return None;
+	match pairs.len() == SIZE as usize {
+		true => Some(pairs),
+		false => None,
 	}
-
-	Some(triehash::trie_root(pairs).0.into())
 }
 
 /// Get the starting block of a given CHT.
@@ -87,7 +104,22 @@ pub fn block_to_cht_number(block_num: BlockNumber) -> Option<BlockNumber> {
 	}
 }
 
-/// Convert CHT node value into block header hash.
+/// Convert header number into CHT key.
+fn encode_cht_key(number: BlockNumber) -> Vec<u8> {
+	vec![
+		(number >> 24) as u8,
+		((number >> 16) & 0xff) as u8,
+		((number >> 8) & 0xff) as u8,
+		(number & 0xff) as u8
+	]
+}
+
+/// Convert header hast into CHT value.
+fn encode_cht_value(hash: HeaderHash) -> Vec<u8> {
+	hash.to_vec()
+}
+
+/// Convert CHT value into block header hash.
 pub fn decode_cht_value(value: &[u8]) -> HeaderHash {
 	value.into()
 }

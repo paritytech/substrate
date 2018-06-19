@@ -39,7 +39,6 @@ extern crate kvdb_memorydb;
 
 pub mod light;
 
-mod cht;
 mod utils;
 
 use std::sync::Arc;

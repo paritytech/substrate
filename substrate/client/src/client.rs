@@ -29,6 +29,7 @@ use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeEx
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
 use call_executor::{CallExecutor, LocalCallExecutor};
+use cht;
 use {error, in_mem, block_builder, runtime_io, bft};
 
 /// Type that implements `futures::Stream` of block import events.
@@ -220,7 +221,7 @@ impl<B, E> Client<B, E> where
 			.and_then(|authorities_cache| authorities_cache.authorities_at(*id));
 		if let Some(authorities) = authorities_from_cache {
 			return Ok(authorities);
-		}
+		} 
 			
 		self.executor.call(id, "authorities",&[])
 			.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
@@ -243,6 +244,20 @@ impl<B, E> Client<B, E> where
 	/// Reads storage value at a given block + key, returning read proof.
 	pub fn read_proof(&self, id: &BlockId, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
 		self.state_at(id).and_then(|state| state_machine::prove_read(state, key).map_err(Into::into))
+	}
+
+	/// Reads given header and generates CHT-based header proof.
+	pub fn header_proof(&self, id: &BlockId) -> error::Result<(block::Header, Vec<Vec<u8>>)> {
+		let proof_error = || error::ErrorKind::Backend(format!("Failed to generate header proof for {:?}", id));
+
+		let header = self.header(id)?.ok_or_else(|| error::ErrorKind::UnknownBlock(id.clone()))?;
+		let block_num = header.number;
+		let cht_num = cht::block_to_cht_number(block_num).ok_or_else(proof_error)?;
+		let cht_start = cht::start_number(cht_num);
+		let proof = cht::build_proof(cht_num, block_num, (cht_start..)
+				.map(|num| self.block_hash(num).unwrap_or_default()))
+			.ok_or_else(proof_error)?;
+		Ok((header, proof))
 	}
 
 	/// Set up the native execution environment to call into a native runtime code.

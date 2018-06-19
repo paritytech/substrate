@@ -21,9 +21,9 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use cht;
 use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
+use client::cht;
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Slicable, Input};
@@ -431,7 +431,7 @@ impl Slicable for BestAuthoritiesEntry {
 
 #[cfg(test)]
 mod tests {
-	use cht;
+	use client::cht;
 	use primitives::Header;
 	use super::*;
 

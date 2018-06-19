@@ -90,8 +90,8 @@ impl<B, E> Client for PolkadotClient<B, E> where
 		(self as &PolkadotClient<B, E>).justification(id)
 	}
 
-	fn header_proof(&self, _block: block::Number) -> Result<(block::Header, Vec<Vec<u8>>), Error> {
-		unimplemented!("TODO")
+	fn header_proof(&self, block: block::Number) -> Result<(block::Header, Vec<Vec<u8>>), Error> {
+		(self as &PolkadotClient<B, E>).header_proof(&BlockId::Number(block))
 	}
 
 	fn execution_proof(&self, block: &block::HeaderHash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
