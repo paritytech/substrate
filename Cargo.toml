@@ -18,7 +18,6 @@ members = [
 	"polkadot/collator",
 	"polkadot/consensus",
 	"polkadot/executor",
-	"polkadot/keystore",
 	"polkadot/parachain",
 	"polkadot/primitives",
 	"polkadot/runtime",
@@ -55,6 +54,7 @@ members = [
 	"substrate/serializer",
 	"substrate/state-machine",
 	"substrate/test-runtime",
+	"substrate/keystore",
 
 	"demo/cli",
 	"demo/executor",

@@ -28,7 +28,7 @@ extern crate polkadot_executor;
 extern crate polkadot_api;
 extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
-extern crate polkadot_keystore as keystore;
+extern crate substrate_keystore as keystore;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
