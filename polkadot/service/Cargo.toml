@@ -23,7 +23,6 @@ polkadot-executor = { path = "../executor" }
 polkadot-api = { path = "../api" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
 polkadot-keystore = { path = "../keystore" }
-polkadot-telemetry = { path = "../telemetry" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
@@ -32,3 +31,4 @@ substrate-client-db = { path = "../../substrate/client/db" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
+substrate-telemetry = { path = "../../substrate/telemetry" }

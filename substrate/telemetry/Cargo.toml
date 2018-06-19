@@ -1,5 +1,5 @@
 [package]
-name = "polkadot-telemetry"
+name = "substrate-telemetry"
 version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
@@ -10,5 +10,5 @@ lazy_static = "1.0"
 slog = "^2"
 slog-json = "^2"
 slog-async = "^2"
-slog-scope = "*"
-websocket = "*"
+slog-scope = "^4"
+websocket = "^0.20"

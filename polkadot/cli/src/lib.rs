@@ -40,9 +40,9 @@ extern crate substrate_rpc_servers as rpc;
 extern crate polkadot_primitives;
 extern crate polkadot_service as service;
 #[macro_use]
-extern crate slog;	// needed until we can reexport `slog_info` from `polkadot_telemetry`
+extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 #[macro_use]
-extern crate polkadot_telemetry;
+extern crate substrate_telemetry;
 extern crate polkadot_transaction_pool as txpool;
 
 #[macro_use]
@@ -61,7 +61,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use polkadot_primitives::Block;
-use polkadot_telemetry::{init_telemetry, TelemetryConfig};
+use substrate_telemetry::{init_telemetry, TelemetryConfig};
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};

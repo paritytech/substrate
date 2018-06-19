@@ -41,11 +41,11 @@ extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 
 #[macro_use]
-extern crate polkadot_telemetry;
+extern crate substrate_telemetry;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
-extern crate slog;	// needed until we can reexport `slog_info` from `polkadot_telemetry`
+extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 #[macro_use]
 extern crate log;
 #[macro_use]
