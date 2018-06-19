@@ -34,8 +34,11 @@ pub trait Storage: BlockchainHeaderBackend {
 	/// Store new header.
 	fn import_header(&self, is_new_best: bool, header: Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()>;
 
-	/// Get CHT root for given block and key of the block in this CHT. Fails if the block is not a part of CHT.
+	/// Get CHT root for given block and key of the block in this CHT. Fails if the block is not a part of any CHT.
 	fn cht(&self, block: Number) -> ClientResult<(HeaderHash, Vec<u8>)>;
+
+	/// Decode block header hash from CHT node value.
+	fn cht_decode_header_hash(&self, cht_value: &[u8]) -> ClientResult<HeaderHash>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<&BlockchainCache>;

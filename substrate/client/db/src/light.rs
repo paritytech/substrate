@@ -203,6 +203,10 @@ impl LightBlockchainStorage for LightStorage {
 			.map(|root| (HeaderHash::from(&*root), number_to_db_key(block).to_vec()))
 	}
 
+	fn cht_decode_header_hash(&self, cht_value: &[u8]) -> ClientResult<HeaderHash> {
+		Ok(cht::decode_cht_value(cht_value))
+	}
+
 	fn cache(&self) -> Option<&BlockchainCache> {
 		Some(&self.cache)
 	}

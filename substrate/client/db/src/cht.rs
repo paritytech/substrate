@@ -86,3 +86,8 @@ pub fn block_to_cht_number(block_num: BlockNumber) -> Option<BlockNumber> {
 		n => Some((n - 1) / SIZE),
 	}
 }
+
+/// Convert CHT node value into block header hash.
+pub fn decode_cht_value(value: &[u8]) -> HeaderHash {
+	value.into()
+}

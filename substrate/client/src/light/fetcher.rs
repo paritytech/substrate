@@ -21,6 +21,7 @@ use futures::IntoFuture;
 use heapsize::HeapSizeOf;
 
 use primitives::block::{Header, HeaderHash, Id as BlockId, Number as BlockNumber};
+use runtime_support::Hashable;
 use state_machine::{CodeExecutor, read_proof_check};
 
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -117,10 +118,16 @@ impl<S, E, F> FetchChecker for LightDataChecker<S, E, F>
 		E: CodeExecutor,
 		F: Fetcher,
 {
-	fn check_header_proof(&self, _request: &RemoteHeaderRequest, _header: Header, _remote_proof: Vec<Vec<u8>>) -> ClientResult<Header> {
-//		let (cht_root, cht_key) = self.blockchain.storage().cht(request.block)?;
-//		read_proof_check(cht_root.into(), remote_proof, &cht_key).map_err(Into::into)?;
-		unimplemented!("TODO")
+	fn check_header_proof(&self, request: &RemoteHeaderRequest, header: Header, remote_proof: Vec<Vec<u8>>) -> ClientResult<Header> {
+		let (cht_root, cht_key) = self.blockchain.storage().cht(request.block)?;
+		let local_cht_value = read_proof_check(cht_root.into(), remote_proof, &cht_key).map_err(|e| ClientError::from(e))?;
+		let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
+		let local_hash = self.blockchain.storage().cht_decode_header_hash(&local_cht_value)?;
+		let remote_hash = header.blake2_256().into();
+		match local_hash == remote_hash {
+			true => Ok(header),
+			false => Err(ClientErrorKind::InvalidHeaderProof.into()),
+		}
 	}
 
 	fn check_read_proof(&self, request: &RemoteReadRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {

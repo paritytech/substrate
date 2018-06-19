@@ -191,6 +191,10 @@ impl light::blockchain::Storage for Blockchain {
 		Err(error::ErrorKind::Backend("CHT are not supported by InMemory backend".into()).into())
 	}
 
+	fn cht_decode_header_hash(&self, _cht_value: &[u8]) -> error::Result<HeaderHash> {
+		Err(error::ErrorKind::Backend("CHT are not supported by InMemory backend".into()).into())
+	}
+
 	fn cache(&self) -> Option<&blockchain::Cache> {
 		Some(&self.cache)
 	}

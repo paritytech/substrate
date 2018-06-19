@@ -597,8 +597,7 @@ impl Protocol {
 			Err(error) => {
 				trace!(target: "sync", "Remote read request {} from {} ({}) failed with: {}",
 					request.id, peer_id, request.block, error);
-				unimplemented!("TODO")
-				// TODO: (Default::default(), Default::default())
+				(Header::from_block_number(0), Default::default())
 			},
 		};
 

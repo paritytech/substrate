@@ -88,7 +88,13 @@ error_chain! {
 			display("This method is not currently available when running in light client mode"),
 		}
 
-		/// Invalid remote proof.
+		/// Invalid remote header proof.
+		InvalidHeaderProof {
+			description("invalid header proof"),
+			display("Remote node has responded with invalid header proof"),
+		}
+
+		/// Invalid remote execution proof.
 		InvalidExecutionProof {
 			description("invalid execution proof"),
 			display("Remote node has responded with invalid execution proof"),
