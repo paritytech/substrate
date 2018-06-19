@@ -28,8 +28,8 @@ extern crate polkadot_executor;
 extern crate polkadot_api;
 extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
-extern crate polkadot_keystore as keystore;
 extern crate polkadot_network;
+extern crate substrate_keystore as keystore;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
@@ -179,6 +179,11 @@ fn poc_2_testnet_config() -> ChainConfig {
 			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
 			transaction_base_fee: 100,
 			transaction_byte_fee: 1,
+			existential_deposit: 500,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u128 << 60)).collect(),
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
@@ -238,6 +243,11 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
 			transaction_base_fee: 1,
 			transaction_byte_fee: 0,
+			existential_deposit: 500,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
 			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60))).collect(),
 			validator_count: 2,
 			sessions_per_era: 5,

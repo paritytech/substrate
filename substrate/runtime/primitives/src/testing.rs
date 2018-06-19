@@ -159,12 +159,15 @@ impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + Deseri
 }
 impl<Call: 'static + AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Checkable for TestXt<Call> {
 	type Checked = Self;
-	fn check(self) -> Result<Self, Self> { Ok(self) }
+	type Address = u64;
+	type AccountId = u64;
+	fn sender(&self) -> &u64 { &(self.0).0 }
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, _lookup: ThisLookup) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
 impl<Call: AuxDispatchable<Aux = u64> + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
 	type AccountId = u64;
 	type Index = u64;
 	fn sender(&self) -> &u64 { &(self.0).0 }
 	fn index(&self) -> &u64 { &(self.0).1 }
-	fn apply(self) { (self.0).2.dispatch(&(self.0).0); }
+	fn apply(self) -> Result<(), &'static str> { (self.0).2.dispatch(&(self.0).0) }
 }

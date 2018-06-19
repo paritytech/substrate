@@ -5,6 +5,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
+arrayvec = { version = "0.4", default_features = false }
 
 [features]
 default = ["std"]

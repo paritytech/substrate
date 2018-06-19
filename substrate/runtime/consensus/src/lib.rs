@@ -60,7 +60,7 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 pub trait Trait: system::Trait {
 	type PublicAux: RefInto<Self::AccountId>;
- 	type SessionKey: Parameter + Default;
+	type SessionKey: Parameter + Default;
 }
 
 decl_module! {
