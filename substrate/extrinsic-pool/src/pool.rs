@@ -84,9 +84,10 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 	}
 
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub fn submit<V, Ex>(&self, verifier: V, xts: Vec<Ex>) -> Result<Vec<Arc<VEx>>, E> where
+	pub fn submit<V, Ex, T>(&self, verifier: V, xts: T) -> Result<Vec<Arc<VEx>>, E> where
 		V: txpool::Verifier<Ex, VerifiedTransaction=VEx>,
 		E: From<V::Error>,
+		T: IntoIterator<Item=Ex>
 	{
 		xts
 			.into_iter()
@@ -141,5 +142,14 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 	/// Returns light status of the pool.
 	pub fn light_status(&self) -> txpool::LightStatus {
 		self.pool.read().light_status()
+	}
+
+	/// Removes all transactions from given sender
+	pub fn remove_sender(&self, sender: VEx::Sender) -> Vec<Arc<VEx>> {
+		let mut pool = self.pool.write();
+		let pending = pool.pending_from_sender(|_: &VEx| txpool::Readiness::Ready, &sender).collect();
+		// remove all transactions from this sender
+		pool.cull(Some(&[sender]), |_: &VEx| txpool::Readiness::Stale);
+		pending
 	}
 }
