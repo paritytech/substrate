@@ -226,7 +226,7 @@ pub struct ProposerFactory<C, N, P> {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The transaction pool.
-	pub transaction_pool: Arc<TransactionPool>,
+	pub transaction_pool: Arc<TransactionPool<C>>,
 	/// The backing network handle.
 	pub network: N,
 	/// Parachain collators.
@@ -239,7 +239,8 @@ pub struct ProposerFactory<C, N, P> {
 
 impl<C, N, P> bft::ProposerFactory<Block> for ProposerFactory<C, N, P>
 	where
-		C: PolkadotApi,
+		C: PolkadotApi + Send + Sync,
+		C::CheckedBlockId: Sync,
 		N: Network,
 		P: Collators,
 {
@@ -319,12 +320,13 @@ pub struct Proposer<C: PolkadotApi, R, P> {
 	random_seed: Hash,
 	router: R,
 	table: Arc<SharedTable>,
-	transaction_pool: Arc<TransactionPool>,
+	transaction_pool: Arc<TransactionPool<C>>,
 }
 
 impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 	where
-		C: PolkadotApi,
+		C: PolkadotApi + Send + Sync,
+		C::CheckedBlockId: Sync,
 		R: TableRouter,
 		P: Collators,
 {
@@ -549,7 +551,7 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 			};
 			let uxt = UncheckedExtrinsic::new(extrinsic, signature);
 
-			self.transaction_pool.import_unchecked_extrinsic(uxt)
+			self.transaction_pool.import_unchecked_extrinsic(self.parent_id, uxt)
 				.expect("locally signed extrinsic is valid; qed");
 		}
 	}
@@ -618,7 +620,7 @@ pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
 	parent_number: BlockNumber,
 	parent_id: C::CheckedBlockId,
 	client: Arc<C>,
-	transaction_pool: Arc<TransactionPool>,
+	transaction_pool: Arc<TransactionPool<C>>,
 	collation: CollationFetch<P, C>,
 	router: R,
 	table: Arc<SharedTable>,

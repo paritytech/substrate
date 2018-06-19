@@ -382,7 +382,7 @@ pub trait Checkable: Sized + Send + Sync {
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 ///
-/// This does that checking without requiring a lookup argument. 
+/// This does that checking without requiring a lookup argument.
 pub trait BlindCheckable: Sized + Send + Sync {
 	type Address: Member + MaybeDisplay;
 	type Checked: Member;

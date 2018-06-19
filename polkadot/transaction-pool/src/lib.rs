@@ -250,8 +250,7 @@ pub struct Verifier<'a, A: 'a, B> {
 }
 
 impl<'a, A> Verifier<'a, A, A::CheckedBlockId> where
-	A: 'a + PolkadotApi + Send + Sync,
-	A::CheckedBlockId: Sync,
+	A: 'a + PolkadotApi,
 {
 	const NO_ACCOUNT: &'static str = "Account not found.";
 
@@ -269,8 +268,7 @@ impl<'a, A> Verifier<'a, A, A::CheckedBlockId> where
 }
 
 impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A, A::CheckedBlockId> where
-	A: 'a + PolkadotApi + Send + Sync,
-	A::CheckedBlockId: Sync,
+	A: 'a + PolkadotApi,
 {
 	type VerifiedTransaction = VerifiedTransaction;
 	type Error = Error;
@@ -310,8 +308,7 @@ pub struct TransactionPool<A> {
 }
 
 impl<A> TransactionPool<A> where
-	A: PolkadotApi + Send + Sync,
-	A::CheckedBlockId: Sync,
+	A: PolkadotApi,
 {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, api: A) -> Self {
