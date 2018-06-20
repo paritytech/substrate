@@ -45,6 +45,8 @@ pub trait Backend: HeaderBackend {
 
 /// Blockchain optional data cache.
 pub trait Cache: Send + Sync {
+	/// Returns the code that was active at given block or None if there's no entry in the cache.
+	fn code_at(&self, block: BlockId) -> Option<Vec<u8>>;
 	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
 	fn authorities_at(&self, block: BlockId) -> Option<Vec<AuthorityId>>;
 }

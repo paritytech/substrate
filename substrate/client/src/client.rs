@@ -212,20 +212,20 @@ impl<B, E> Client<B, E> where
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId) -> error::Result<Vec<u8>> {
-		self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0)
+		match self.backend.blockchain().cache().and_then(|cache| cache.code_at(*id)) {
+			Some(cached_value) => Ok(cached_value),
+			None => self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0),
+		}
 	}
 
 	/// Get the set of authorities at a given block.
 	pub fn authorities_at(&self, id: &BlockId) -> error::Result<Vec<AuthorityId>> {
-		let authorities_from_cache = self.backend.blockchain().cache()
-			.and_then(|authorities_cache| authorities_cache.authorities_at(*id));
-		if let Some(authorities) = authorities_from_cache {
-			return Ok(authorities);
-		} 
-			
-		self.executor.call(id, "authorities",&[])
-			.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
-				.ok_or(error::ErrorKind::AuthLenInvalid.into()))
+		match self.backend.blockchain().cache() .and_then(|cache| cache.authorities_at(*id)) {
+			Some(cached_value) => Ok(cached_value),
+			None => self.executor.call(id, "authorities",&[])
+				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
+					.ok_or(error::ErrorKind::AuthLenInvalid.into()))
+		}
 	}
 
 	/// Get call executor reference.

@@ -310,6 +310,10 @@ impl Cache {
 }
 
 impl blockchain::Cache for Cache {
+	fn code_at(&self, _at: BlockId) -> Option<Vec<u8>> {
+		None
+	}
+
 	fn authorities_at(&self, block: BlockId) -> Option<Vec<AuthorityId>> {
 		let hash = match block {
 			BlockId::Hash(hash) => hash,

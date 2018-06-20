@@ -31,14 +31,13 @@ extern crate triehash;
 
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate serde_derive;
 
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
 pub mod light;
 
+mod cache;
 mod utils;
 
 use std::sync::Arc;
