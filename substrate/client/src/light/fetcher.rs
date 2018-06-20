@@ -25,6 +25,7 @@ use runtime_support::Hashable;
 use state_machine::{CodeExecutor, read_proof_check};
 
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
+use cht;
 use call_executor::CallResult;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
@@ -119,15 +120,10 @@ impl<S, E, F> FetchChecker for LightDataChecker<S, E, F>
 		F: Fetcher,
 {
 	fn check_header_proof(&self, request: &RemoteHeaderRequest, header: Header, remote_proof: Vec<Vec<u8>>) -> ClientResult<Header> {
-		let (cht_root, cht_key) = self.blockchain.storage().cht(request.block)?;
-		let local_cht_value = read_proof_check(cht_root.into(), remote_proof, &cht_key).map_err(|e| ClientError::from(e))?;
-		let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
-		let local_hash = self.blockchain.storage().cht_decode_header_hash(&local_cht_value)?;
+		let local_cht_root = self.blockchain.storage().cht_root(request.block)?;
 		let remote_hash = header.blake2_256().into();
-		match local_hash == remote_hash {
-			true => Ok(header),
-			false => Err(ClientErrorKind::InvalidHeaderProof.into()),
-		}
+		cht::check_proof(local_cht_root, request.block, remote_hash, remote_proof)
+			.map(|_| header)
 	}
 
 	fn check_read_proof(&self, request: &RemoteReadRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
@@ -159,4 +155,9 @@ impl HeapSizeOf for RemoteCallRequest {
 		self.block.heap_size_of_children() + self.method.heap_size_of_children()
 			+ self.call_data.heap_size_of_children()
 	}
+}
+
+#[cfg(test)]
+mod tests {
+
 }

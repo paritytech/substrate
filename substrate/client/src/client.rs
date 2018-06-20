@@ -243,7 +243,7 @@ impl<B, E> Client<B, E> where
 
 	/// Reads storage value at a given block + key, returning read proof.
 	pub fn read_proof(&self, id: &BlockId, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
-		self.state_at(id).and_then(|state| state_machine::prove_read(state, key).map_err(Into::into))
+		self.state_at(id).and_then(|state| state_machine::prove_read(state, key).map(|(_, proof)| proof).map_err(Into::into))
 	}
 
 	/// Reads given header and generates CHT-based header proof.
@@ -577,5 +577,16 @@ mod tests {
 		let client = test_client::new();
 		test_client::client::in_mem::cache_authorities_at(client.backend().blockchain(), Default::default(), Some(vec![[1u8; 32]]));
 		assert_eq!(client.authorities_at(&BlockId::Hash(Default::default())).unwrap(), vec![[1u8; 32]]);
+	}
+
+	#[test]
+	fn header_proof_is_not_generated_until() {
+/*		let client = test_client::new();
+		for _ in 0..cht::SIZE / 2 {
+			let builder = client.new_block().unwrap();
+			client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		}
+
+		// insert CHT_SIZE / 2 blocks => not enough blocks to build CHT#0 => proof is not generated*/
 	}
 }

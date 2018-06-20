@@ -177,7 +177,7 @@ impl LightBlockchainStorage for LightStorage {
 
 			if let Some(new_cht_root) = new_cht_root {
 				transaction.put(columns::CHT, &number_to_db_key(new_cht_start), &*new_cht_root);
-				for prune_block in new_cht_start..cht::end_number(new_cht_number) {
+				for prune_block in new_cht_start..cht::end_number(new_cht_number) + 1 {
 					transaction.delete(columns::HEADER, &number_to_db_key(prune_block));
 				}
 			}
@@ -193,18 +193,14 @@ impl LightBlockchainStorage for LightStorage {
 		Ok(())
 	}
 
-	fn cht(&self, block: BlockNumber) -> ClientResult<(HeaderHash, Vec<u8>)> {
+	fn cht_root(&self, block: BlockNumber) -> ClientResult<HeaderHash> {
 		let no_cht_for_block = || ClientErrorKind::Backend(format!("CHT for block {} not exists", block)).into();
 
 		let cht_number = cht::block_to_cht_number(block).ok_or_else(no_cht_for_block)?;
 		let cht_start = cht::start_number(cht_number);
 		self.db.get(columns::CHT, &number_to_db_key(cht_start)).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
-			.map(|root| (HeaderHash::from(&*root), number_to_db_key(block).to_vec()))
-	}
-
-	fn cht_decode_header_hash(&self, cht_value: &[u8]) -> ClientResult<HeaderHash> {
-		Ok(cht::decode_cht_value(cht_value))
+			.map(|h| HeaderHash::from(&*h))
 	}
 
 	fn cache(&self) -> Option<&BlockchainCache> {
@@ -450,6 +446,68 @@ mod tests {
 	}
 
 	#[test]
+	fn returns_known_header() {
+		let db = LightStorage::new_test();
+		let known_hash = insert_block(&db, &Default::default(), 0, None);
+		let header_by_hash = db.header(BlockId::Hash(known_hash)).unwrap().unwrap();
+		let header_by_number = db.header(BlockId::Number(0)).unwrap().unwrap();
+		assert_eq!(header_by_hash, header_by_number);
+	}
+
+	#[test]
+	fn does_not_return_unknown_header() {
+		let db = LightStorage::new_test();
+		assert!(db.header(BlockId::Hash(1.into())).unwrap().is_none());
+		assert!(db.header(BlockId::Number(0)).unwrap().is_none());
+	}
+
+	#[test]
+	fn returns_info() {
+		let db = LightStorage::new_test();
+		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		let info = db.info().unwrap();
+		assert_eq!(info.best_hash, genesis_hash);
+		assert_eq!(info.best_number, 0);
+		assert_eq!(info.genesis_hash, genesis_hash);
+		let best_hash = insert_block(&db, &genesis_hash, 1, None);
+		let info = db.info().unwrap();
+		assert_eq!(info.best_hash, best_hash);
+		assert_eq!(info.best_number, 1);
+		assert_eq!(info.genesis_hash, genesis_hash);
+	}
+
+	#[test]
+	fn returns_block_status() {
+		let db = LightStorage::new_test();
+		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		assert_eq!(db.status(BlockId::Hash(genesis_hash)).unwrap(), BlockStatus::InChain);
+		assert_eq!(db.status(BlockId::Number(0)).unwrap(), BlockStatus::InChain);
+		assert_eq!(db.status(BlockId::Hash(1.into())).unwrap(), BlockStatus::Unknown);
+		assert_eq!(db.status(BlockId::Number(1)).unwrap(), BlockStatus::Unknown);
+	}
+
+	#[test]
+	fn returns_block_hash() {
+		let db = LightStorage::new_test();
+		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		assert_eq!(db.hash(0).unwrap(), Some(genesis_hash));
+		assert_eq!(db.hash(1).unwrap(), None);
+	}
+
+	#[test]
+	fn import_header_works() {
+		let db = LightStorage::new_test();
+
+		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		assert_eq!(db.db.iter(columns::HEADER).count(), 1);
+		assert_eq!(db.db.iter(columns::BLOCK_INDEX).count(), 1);
+
+		let _ = insert_block(&db, &genesis_hash, 1, None);
+		assert_eq!(db.db.iter(columns::HEADER).count(), 2);
+		assert_eq!(db.db.iter(columns::BLOCK_INDEX).count(), 2);
+	}
+
+	#[test]
 	fn best_authorities_serialized() {
 		let test_cases = vec![
 			BestAuthoritiesEntry { prev_valid_from: Some(42), authorities: Some(vec![[1u8; 32]]) },
@@ -590,5 +648,32 @@ mod tests {
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
 		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_db_key(1 + i)).unwrap().is_none()));
+	}
+
+	#[test]
+	fn get_cht_fails_for_genesis_block() {
+		assert!(LightStorage::new_test().cht_root(0).is_err());
+	}
+
+	#[test]
+	fn get_cht_fails_for_non_existant_cht() {
+		assert!(LightStorage::new_test().cht_root(cht::SIZE / 2).is_err());
+	}
+
+	#[test]
+	fn get_cht_works() {
+		let db = LightStorage::new_test();
+
+		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
+		let mut prev_hash = Default::default();
+		for i in 0..1 + cht::SIZE + cht::SIZE + 1 {
+			prev_hash = insert_block(&db, &prev_hash, i, None);
+		}
+
+		let cht_root_1 = db.cht_root(cht::start_number(0)).unwrap();
+		let cht_root_2 = db.cht_root(cht::start_number(0) + cht::SIZE / 2).unwrap();
+		let cht_root_3 = db.cht_root(cht::end_number(0)).unwrap();
+		assert_eq!(cht_root_1, cht_root_2);
+		assert_eq!(cht_root_2, cht_root_3);
 	}
 }
