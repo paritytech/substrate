@@ -12,6 +12,7 @@ log = "0.3"
 atty = "0.2"
 regex = "0.2"
 time = "0.1"
+slog = "^2"
 ansi_term = "0.10"
 lazy_static = "1.0"
 hex-literal = "0.1"
@@ -28,6 +29,7 @@ substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-rpc = { path = "../../substrate/rpc" }
 substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-network = { path = "../../substrate/network" }
+substrate-telemetry = { path = "../../substrate/telemetry" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-service = { path = "../service" }
 polkadot-transaction-pool = { path = "../transaction-pool" }

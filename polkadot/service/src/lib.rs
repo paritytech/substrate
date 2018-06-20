@@ -19,8 +19,8 @@
 
 extern crate futures;
 extern crate ed25519;
+extern crate clap;
 extern crate exit_future;
-extern crate parking_lot;
 extern crate tokio_timer;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
@@ -41,7 +41,11 @@ extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 
 #[macro_use]
+extern crate substrate_telemetry;
+#[macro_use]
 extern crate error_chain;
+#[macro_use]
+extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -71,7 +75,7 @@ use network::ManageNetwork;
 use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
-pub use config::{Configuration, Role, ChainSpec};
+pub use config::{Configuration, Role, OptionChainSpec, ChainSpec};
 
 type CodeExecutor = NativeExecutor<LocalDispatch>;
 
@@ -410,7 +414,8 @@ impl<B, E> Service<B, E>
 		let (client, on_demand) = client_creator(db_settings, executor, genesis_builder)?;
 		let api = api_creator(client.clone());
 		let best_header = client.best_block_header()?;
-		info!("Starting Polkadot. Best block is #{}", best_header.number);
+		info!("Best block is #{}", best_header.number);
+		telemetry!("node.start"; "height" => best_header.number, "best" => ?best_header.hash());
 		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			pool: transaction_pool.clone(),
@@ -430,6 +435,7 @@ impl<B, E> Service<B, E>
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
+
 		let thread = {
 			let client = client.clone();
 			let network = network.clone();
@@ -445,11 +451,11 @@ impl<B, E> Service<B, E>
 				// block notifications
 				let network1 = network.clone();
 				let txpool1 = txpool.clone();
+
 				let events = client.import_notification_stream()
 					.for_each(move |notification| {
 						network1.on_block_imported(notification.hash, &notification.header);
 						prune_imported(&*api, &*txpool1, notification.hash);
-
 						Ok(())
 					});
 				core.handle().spawn(events);
