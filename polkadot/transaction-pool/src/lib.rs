@@ -339,6 +339,23 @@ impl<A> TransactionPool<A> where
 		Ok(())
 	}
 
+	/// Reverify transaction that has been reported incorrect.
+	///
+	/// Returns `Ok(None)` in case the hash is missing, `Err(e)` in case of verification error and new transaction
+	/// reference otherwise.
+	///
+	/// TODO [ToDr] That method is currently unused, should be used together with BlockBuilder
+	/// when we detect that particular transaction has failed.
+	/// In such case we will attempt to remove or re-verify it.
+	pub fn reverify_transaction(&self, block: BlockId, hash: Hash) -> Result<Option<Arc<VerifiedTransaction>>> {
+		let result = self.inner.remove(&[hash], false).pop().expect("One hash passed; one result received; qed");
+		if let Some(tx) = result {
+			self.import_unchecked_extrinsic(block, tx.original.clone()).map(Some)
+		} else {
+			Ok(None)
+		}
+	}
+
 	/// Cull old transactions from the queue.
 	pub fn cull(&self, block: BlockId) -> Result<usize> {
 		let id = self.api.check_id(block)?;
@@ -663,7 +680,7 @@ mod tests {
 		let pool = pool(&api);
 		let block = BlockId::number(0);
 		pool.import_unchecked_extrinsic(block, uxt(Alice, 209, false)).unwrap();
-		pool.import_unchecked_extrinsic(block, uxt(Alice, 210, false)).unwrap();
+		let hash = *pool.import_unchecked_extrinsic(block, uxt(Alice, 210, false)).unwrap().hash();
 
 		let pending: Vec<_> = pool.cull_and_get_pending(block, |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![
@@ -679,12 +696,14 @@ mod tests {
 
 		// after this, a re-evaluation of the second's readiness should result in it being thrown
 		// out (or maybe placed in future queue).
-/*
-		// TODO: uncomment once the new queue design is in.
-		let ready = Ready::create(TestPolkadotApi::default().check_id(BlockId::number(1)).unwrap(),
-		&TestPolkadotApi::default());
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
+		let err = pool.reverify_transaction(BlockId::number(1), hash).unwrap_err();
+		match *err.kind() {
+			::error::ErrorKind::Msg(ref m) if m == "bad signature in extrinsic" => {},
+			ref e => assert!(false, "The transaction should be rejected with BadSignature error, got: {:?}", e),
+		}
+
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(1), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
-*/
+
 	}
 }
