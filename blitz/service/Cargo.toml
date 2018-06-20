@@ -19,7 +19,6 @@ blitz-runtime = { path = "../runtime" }
 blitz-executor = { path = "../executor" }
 # polkadot-api = { path = "../api" }
 # polkadot-transaction-pool = { path = "../transaction-pool" }
-blitz-keystore = { path = "../keystore" }
 blitz-network = { path = "../network" }
 blitz-state = { path = "../state" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
@@ -29,3 +28,4 @@ substrate-client = { path = "../../substrate/client" }
 substrate-client-db = { path = "../../substrate/client/db" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-executor = { path = "../../substrate/executor" }
+substrate-keystore = { path = "../../substrate/keystore" }

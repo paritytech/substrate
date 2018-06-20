@@ -25,7 +25,6 @@ extern crate blitz_primitives;
 extern crate blitz_runtime;
 extern crate blitz_executor;
 extern crate blitz_network;
-extern crate blitz_keystore as keystore;
 extern crate blitz_state;
 // extern crate polkadot_api;
 // extern crate polkadot_consensus as consensus;
@@ -37,6 +36,7 @@ extern crate substrate_network as network;
 extern crate substrate_codec as codec;
 extern crate substrate_client_db as client_db;
 extern crate substrate_executor;
+extern crate substrate_keystore as keystore;
 
 extern crate exit_future;
 extern crate tokio_core;

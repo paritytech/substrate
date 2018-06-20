@@ -69,7 +69,6 @@ members = [
 	"blitz/cli",
 	"blitz/network",
 	"blitz/service",
-	"blitz/keystore",
 	"blitz/state",
 
 	"safe-mix",
