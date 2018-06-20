@@ -74,7 +74,7 @@ use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
 use polkadot_runtime::BareExtrinsic;
 use primitives::AuthorityId;
-use transaction_pool::{Ready, TransactionPool};
+use transaction_pool::{TransactionPool};
 use tokio_core::reactor::{Handle, Timeout, Interval};
 
 use futures::prelude::*;
@@ -503,8 +503,7 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 
 		let local_id = self.local_key.public().0.into();
 		let mut next_index = {
-			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
-			let cur_index = self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending| pending
+			let cur_index = self.transaction_pool.cull_and_get_pending(BlockId::hash(self.parent_hash), |pending| pending
 				.filter(|tx| tx.sender().map(|s| s == local_id).unwrap_or(false))
 				.last()
 				.map(|tx| Ok(tx.index()))
@@ -512,7 +511,11 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 			);
 
 			match cur_index {
-				Ok(cur_index) => cur_index + 1,
+				Ok(Ok(cur_index)) => cur_index + 1,
+				Ok(Err(e)) => {
+					warn!(target: "consensus", "Error computing next transaction index: {}", e);
+					return;
+				}
 				Err(e) => {
 					warn!(target: "consensus", "Error computing next transaction index: {}", e);
 					return;
@@ -551,7 +554,7 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 			};
 			let uxt = UncheckedExtrinsic::new(extrinsic, signature);
 
-			self.transaction_pool.import_unchecked_extrinsic(self.parent_id, uxt)
+			self.transaction_pool.import_unchecked_extrinsic(BlockId::hash(self.parent_hash), uxt)
 				.expect("locally signed extrinsic is valid; qed");
 		}
 	}
@@ -642,9 +645,8 @@ impl<C, R, P> CreateProposal<C, R, P>
 		let mut block_builder = self.client.build_block(&self.parent_id, timestamp, candidates)?;
 
 		{
-			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 			let mut unqueue_invalid = Vec::new();
-			self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending_iterator| {
+			self.transaction_pool.cull_and_get_pending(BlockId::hash(self.parent_hash), |pending_iterator| {
 				let mut pending_size = 0;
 				for pending in pending_iterator {
 					// skip and cull transactions which are too large.

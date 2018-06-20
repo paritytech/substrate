@@ -376,7 +376,7 @@ pub trait Checkable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Checked: Member;
 	fn sender(&self) -> &Self::Address;
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -395,7 +395,7 @@ impl<T: BlindCheckable> Checkable for T {
 	type AccountId = <Self as BlindCheckable>::Address;
 	type Checked = <Self as BlindCheckable>::Checked;
 	fn sender(&self) -> &Self::Address { BlindCheckable::sender(self) }
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, _: ThisLookup) -> Result<Self::Checked, &'static str> { BlindCheckable::check(self) }
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, _: ThisLookup) -> Result<Self::Checked, &'static str> { BlindCheckable::check(self) }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to

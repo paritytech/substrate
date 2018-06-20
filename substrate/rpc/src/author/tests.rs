@@ -18,9 +18,8 @@ use super::*;
 
 use std::{fmt, sync::Arc};
 use extrinsic_pool::api;
-use test_client::{self, TestClient};
+use test_client;
 use parking_lot::Mutex;
-use runtime_primitives::generic::Block;
 
 type Extrinsic = u64;
 type Hash = u64;
@@ -62,7 +61,7 @@ impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 fn submit_transaction_should_not_cause_error() {
 	let p = Author {
 		client: Arc::new(test_client::new()),
-		pool: DummyTxPool::default(),
+		pool: Arc::new(DummyTxPool::default()),
 	};
 
 	assert_matches!(

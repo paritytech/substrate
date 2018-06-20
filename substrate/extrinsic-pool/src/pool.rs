@@ -124,16 +124,6 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 		self.pool.write().cull(senders, ready)
 	}
 
-	/// Cull transactions from the queue and then compute the pending set.
-	pub fn cull_and_get_pending<R, F, T>(&self, ready: R, f: F) -> T where
-		R: txpool::Ready<VEx> + Clone,
-		F: FnOnce(txpool::PendingIterator<VEx, R, S, Listener<Hash>>) -> T,
-	{
-		let mut pool = self.pool.write();
-		pool.cull(None, ready.clone());
-		f(pool.pending(ready))
-	}
-
 	/// Get the full status of the queue (including readiness)
 	pub fn status<R: txpool::Ready<VEx>>(&self, ready: R) -> txpool::Status {
 		self.pool.read().status(ready)
@@ -151,5 +141,13 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 		// remove all transactions from this sender
 		pool.cull(Some(&[sender]), |_: &VEx| txpool::Readiness::Stale);
 		pending
+	}
+
+	/// Retrieve the pending set. Be careful to not leak the pool `ReadGuard` to prevent deadlocks.
+	pub fn pending<R, F, T>(&self, ready: R, f: F) -> T where
+		R: txpool::Ready<VEx>,
+		F: FnOnce(txpool::PendingIterator<VEx, R, S, Listener<Hash>>) -> T,
+	{
+		f(self.pool.read().pending(ready))
 	}
 }

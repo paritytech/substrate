@@ -37,6 +37,7 @@ extern crate substrate_client as client;
 extern crate substrate_network as network;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
+extern crate polkadot_api;
 extern crate polkadot_primitives;
 extern crate polkadot_service as service;
 extern crate polkadot_transaction_pool as txpool;
@@ -177,13 +178,14 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 
 	match role == service::Role::LIGHT {
-		true => run_until_exit(core, service::new_light(config.clone())?, &matches, config),
-		false => run_until_exit(core, service::new_full(config.clone())?, &matches, config),
+		true => run_until_exit(core, service::light::new(config.clone())?, &matches, config),
+		false => run_until_exit(core, service::full::new(config.clone())?, &matches, config),
 	}
 }
 
-fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
+fn run_until_exit<B, E, A>(mut core: reactor::Core, service: service::Service<B, E, A>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
 	where
+		A: polkadot_api::PolkadotApi + Send + Sync + 'static,
 		B: client::backend::Backend<Block> + Send + Sync + 'static,
 		E: client::CallExecutor<Block> + Send + Sync + 'static,
 		client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>
@@ -206,10 +208,11 @@ fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
+			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
 			rpc::rpc_handler::<Block, _, _, _, _>(
 				service.client(),
 				chain,
-				service.transaction_pool(),
+				author,
 				Configuration(config.clone()),
 			)
 		};

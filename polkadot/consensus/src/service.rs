@@ -242,6 +242,7 @@ impl Service {
 		where
 			A: LocalPolkadotApi + Send + Sync + 'static,
 			C: BlockchainEvents<Block> + ChainHead<Block> + bft::BlockImport<Block> + bft::Authorities<Block> + Send + Sync + 'static,
+			A::CheckedBlockId: Sync,
 	{
 		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {

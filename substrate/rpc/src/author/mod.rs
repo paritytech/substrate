@@ -21,7 +21,7 @@ use std::sync::Arc;
 use client::{self, Client};
 use extrinsic_pool::api::{Error, ExtrinsicPool};
 
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::{generic, traits::Block as BlockT};
 use state_machine;
 
 pub mod error;
@@ -40,11 +40,19 @@ build_rpc_trait! {
 	}
 }
 
+/// Authoring API
 pub struct Author<B, E, Block: BlockT, P> {
 	/// Substrate client
 	client: Arc<Client<B, E, Block>>,
 	/// Extrinsic pool
-	pool: P,
+	pool: Arc<P>,
+}
+
+impl<B, E, Block: BlockT, P> Author<B, E, Block, P> {
+	/// Create new instance of Authoring API.
+	pub fn new(client: Arc<Client<B, E, Block>>, pool: Arc<P>) -> Self {
+		Author { client, pool }
+	}
 }
 
 
@@ -53,13 +61,13 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 	E: client::CallExecutor<Block> + Send + Sync + 'static,
 	Block: BlockT + 'static,
 	client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
-	P: ExtrinsicPool<Ex, Block::Hash, Hash>,
+	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash>,
 	P::Error: 'static,
 {
 	fn submit_extrinsic(&self, xt: Ex) -> Result<Hash> {
 		let best_block_hash = self.client.info().unwrap().chain.best_hash;
 		self.pool
-			.submit(best_block_hash, vec![xt])
+			.submit(generic::BlockId::hash(best_block_hash), vec![xt])
 			.map(|mut res| res.pop().expect("One extrinsic passed; one result back; qed"))
 			.map_err(|e| e.into_pool_error()
 				.map(Into::into)

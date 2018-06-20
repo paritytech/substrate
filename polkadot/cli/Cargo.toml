@@ -28,6 +28,7 @@ substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-rpc = { path = "../../substrate/rpc" }
 substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-network = { path = "../../substrate/network" }
+polkadot-api = { path = "../api" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-service = { path = "../service" }
 polkadot-transaction-pool = { path = "../transaction-pool" }

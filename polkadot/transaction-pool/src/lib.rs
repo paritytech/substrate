@@ -44,7 +44,7 @@ use std::{
 };
 
 use codec::Slicable;
-use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
+use extrinsic_pool::{Pool, Listener, txpool::{self, Readiness, scoring::{Change, Choice}}};
 use extrinsic_pool::api::ExtrinsicPool;
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
@@ -188,7 +188,7 @@ pub struct Ready<'a, A: 'a + PolkadotApi> {
 impl<'a, A: 'a + PolkadotApi> Ready<'a, A> {
 	/// Create a new readiness evaluator at the given block. Requires that
 	/// the ID has already been checked for local corresponding and available state.
-	pub fn create(at: A::CheckedBlockId, api: &'a A) -> Self {
+	fn create(at: A::CheckedBlockId, api: &'a A) -> Self {
 		Ready {
 			at_block: at,
 			api,
@@ -304,14 +304,14 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A, A::CheckedB
 /// Wraps a `extrinsic_pool::Pool`.
 pub struct TransactionPool<A> {
 	inner: Pool<Hash, VerifiedTransaction, Scoring, Error>,
-	api: A,
+	api: Arc<A>,
 }
 
 impl<A> TransactionPool<A> where
 	A: PolkadotApi,
 {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, api: A) -> Self {
+	pub fn new(options: Options, api: Arc<A>) -> Self {
 		TransactionPool {
 			inner: Pool::new(options, Scoring),
 			api,
@@ -321,7 +321,7 @@ impl<A> TransactionPool<A> where
 	/// Attempt to directly import `UncheckedExtrinsic` without going through serialization.
 	pub fn import_unchecked_extrinsic(&self, block: BlockId, uxt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
 		let verifier = Verifier {
-			api: &self.api,
+			api: &*self.api,
 			at_block: self.api.check_id(block)?,
 		};
 		self.inner.submit(verifier, vec![uxt]).map(|mut v| v.swap_remove(0))
@@ -331,12 +331,34 @@ impl<A> TransactionPool<A> where
 	pub fn retry_verification(&self, block: BlockId) -> Result<()> {
 		let to_reverify = self.inner.remove_sender(None);
 		let verifier = Verifier {
-			api: &self.api,
+			api: &*self.api,
 			at_block: self.api.check_id(block)?,
 		};
 
 		self.inner.submit(verifier, to_reverify.into_iter().map(|tx| tx.original.clone()))?;
 		Ok(())
+	}
+
+	/// Cull old transactions from the queue.
+	pub fn cull(&self, block: BlockId) -> Result<usize> {
+		let id = self.api.check_id(block)?;
+		let ready = Ready::create(id, &*self.api);
+		Ok(self.inner.cull(None, ready))
+	}
+
+	/// Cull transactions from the queue and then compute the pending set.
+	pub fn cull_and_get_pending<F, T>(&self, block: BlockId, f: F) -> Result<T> where
+		F: FnOnce(txpool::PendingIterator<VerifiedTransaction, Ready<A>, Scoring, Listener<Hash>>) -> T,
+	{
+		let id = self.api.check_id(block)?;
+		let ready = Ready::create(id, &*self.api);
+		self.inner.cull(None, ready.clone());
+		Ok(self.inner.pending(ready, f))
+	}
+
+	/// Remove a set of transactions idenitified by hashes.
+	pub fn remove(&self, hashes: &[Hash], is_valid: bool) -> Vec<Option<Arc<VerifiedTransaction>>> {
+		self.inner.remove(hashes, is_valid)
 	}
 }
 
@@ -351,7 +373,6 @@ impl<A> Deref for TransactionPool<A> {
 impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for TransactionPool<A> where
 	A: Send + Sync + 'static,
 	A: PolkadotApi,
-	A::CheckedBlockId: Sync,
 {
 	type Error = Error;
 
