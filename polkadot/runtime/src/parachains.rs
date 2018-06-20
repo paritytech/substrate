@@ -199,9 +199,9 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> runtime_primitives::BuildExternalities for GenesisConfig<T>
+impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_externalities(mut self) -> runtime_io::TestExternalities {
+	fn build_storage(mut self) -> runtime_io::TestExternalities {
 		use std::collections::HashMap;
 		use runtime_io::twox_128;
 		use codec::Slicable;
@@ -229,7 +229,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use runtime_primitives::BuildExternalities;
+	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 	use consensus;
@@ -264,19 +264,19 @@ mod tests {
 	type Parachains = Module<Test>;
 
 	fn new_test_ext(parachains: Vec<(Id, Vec<u8>)>) -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![1, 2, 3],
-		}.build_externalities());
+		}.build_storage());
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1000,
 			validators: vec![1, 2, 3, 4, 5, 6, 7, 8],
-		}.build_externalities());
+		}.build_storage());
 		t.extend(GenesisConfig::<Test>{
 			parachains: parachains,
 			phantom: PhantomData,
-		}.build_externalities());
+		}.build_storage());
 		t
 	}
 

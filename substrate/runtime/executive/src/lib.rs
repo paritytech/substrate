@@ -216,7 +216,7 @@ mod tests {
 	use staking::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::BuildExternalities;
+	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
 
@@ -262,7 +262,7 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage();
 		t.extend(staking::GenesisConfig::<Test> {
 			sessions_per_era: 0,
 			current_era: 0,
@@ -277,7 +277,7 @@ mod tests {
 			creation_fee: 0,
 			contract_fee: 0,
 			reclaim_rebate: 0,
-		}.build_externalities());
+		}.build_storage());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
@@ -288,10 +288,10 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
-		t.extend(consensus::GenesisConfig::<Test>::default().build_externalities());
-		t.extend(session::GenesisConfig::<Test>::default().build_externalities());
-		t.extend(staking::GenesisConfig::<Test>::default().build_externalities());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage();
+		t.extend(consensus::GenesisConfig::<Test>::default().build_storage());
+		t.extend(session::GenesisConfig::<Test>::default().build_storage());
+		t.extend(staking::GenesisConfig::<Test>::default().build_storage());
 		t
 	}
 
