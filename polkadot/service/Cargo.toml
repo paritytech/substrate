@@ -1,6 +1,6 @@
 [package]
 name = "polkadot-service"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
@@ -9,7 +9,10 @@ futures = "0.1.17"
 parking_lot = "0.4"
 tokio-timer = "0.1.2"
 error-chain = "0.11"
+lazy_static = "1.0"
 log = "0.3"
+slog = "^2"
+clap = "2.27"
 tokio-core = "0.1.12"
 exit-future = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
@@ -28,3 +31,4 @@ substrate-client-db = { path = "../../substrate/client/db" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
+substrate-telemetry = { path = "../../substrate/telemetry" }
