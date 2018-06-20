@@ -262,7 +262,7 @@ impl<B: BlockT> Protocol<B> where
 			let block_data = message::generic::BlockData {
 				hash: hash,
 				header: if get_header { Some(header) } else { None },
-				body: if get_body { self.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
+				body: (if get_body { self.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None }).map(|body| message::Body::Extrinsics(body)),
 				receipt: None,
 				message_queue: None,
 				justification: if get_justification { self.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None },

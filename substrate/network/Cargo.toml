@@ -29,9 +29,9 @@ substrate-serializer = { path = "../../substrate/serializer" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-bft = { path = "../../substrate/bft" }
+substrate-codec = { path = "../../substrate/codec" }
 
 [dev-dependencies]
 env_logger = "0.4"
-substrate-codec = { path = "../../substrate/codec" }
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-test-client = { path = "../../substrate/test-client" }

@@ -1519,6 +1519,7 @@ dependencies = [
  "polkadot-executor 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
+ "polkadot-telemetry 0.2.0",
  "polkadot-transaction-pool 0.1.0",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
@@ -1542,6 +1543,19 @@ version = "0.1.0"
 dependencies = [
  "polkadot-primitives 0.1.0",
  "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "polkadot-telemetry"
+version = "0.2.0"
+dependencies = [
+ "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "slog-async 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "slog-json 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "slog-scope 4.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "websocket 0.20.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
