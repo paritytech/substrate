@@ -1519,7 +1519,6 @@ dependencies = [
  "polkadot-executor 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
- "polkadot-telemetry 0.2.0",
  "polkadot-transaction-pool 0.1.0",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
