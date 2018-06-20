@@ -321,6 +321,7 @@ pub mod light {
 	/// Light client executor type
 	pub type Executor = client::RemoteCallExecutor<client::light::Backend<Block>, network::OnDemand<Block, network::Service<Block>>>;
 
+	/// Light client API
 	pub type Api = polkadot_api::light::RemotePolkadotApiWrapper<Backend, Executor>;
 
 	/// Creates light client and register protocol with the network service

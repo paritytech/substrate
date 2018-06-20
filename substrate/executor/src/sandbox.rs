@@ -25,8 +25,10 @@ use primitives::sandbox as sandbox_primitives;
 use wasm_utils::DummyUserError;
 use wasmi;
 use wasmi::memory_units::Pages;
-use wasmi::{Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
-            ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind};
+use wasmi::{
+	Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
+	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind
+};
 
 /// Index of a function inside the supervisor.
 ///
@@ -111,22 +113,26 @@ impl ImportResolver for Imports {
 
 	fn resolve_global(
 		&self,
-		_module_name: &str,
-		_field_name: &str,
+		module_name: &str,
+		field_name: &str,
 		_global_type: &::wasmi::GlobalDescriptor,
 	) -> Result<::wasmi::GlobalRef, ::wasmi::Error> {
-		// TODO:
-		unimplemented!()
+		Err(::wasmi::Error::Instantiation(format!(
+			"Export {}:{} not found",
+			module_name, field_name
+		)))
 	}
 
 	fn resolve_table(
 		&self,
-		_module_name: &str,
-		_field_name: &str,
+		module_name: &str,
+		field_name: &str,
 		_table_type: &::wasmi::TableDescriptor,
 	) -> Result<::wasmi::TableRef, ::wasmi::Error> {
-		// TODO:
-		unimplemented!()
+		Err(::wasmi::Error::Instantiation(format!(
+			"Export {}:{} not found",
+			module_name, field_name
+		)))
 	}
 }
 
@@ -259,7 +265,8 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		self.supervisor_externals
 			.deallocate(serialized_result_val_ptr);
 
-		// TODO: check the signature?
+		// We do not have to check the signature here, because it's automatically
+		// checked by wasmi.
 
 		deserialize_result(&serialized_result_val)
 	}
@@ -607,6 +614,62 @@ mod tests {
 
 		assert_eq!(
 			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox", &code).unwrap(),
+			vec![1],
+		);
+	}
+
+	#[test]
+	fn invoke_args() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(import "env" "assert" (func $assert (param i32)))
+
+			(func (export "call") (param $x i32) (param $y i64)
+				;; assert that $x = 0x12345678
+				(call $assert
+					(i32.eq
+						(get_local $x)
+						(i32.const 0x12345678)
+					)
+				)
+
+				(call $assert
+					(i64.eq
+						(get_local $y)
+						(i64.const 0x1234567887654321)
+					)
+				)
+			)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox_args", &code).unwrap(),
+			vec![1],
+		);
+	}
+
+	#[test]
+	fn return_val() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(func (export "call") (param $x i32) (result i32)
+				(i32.add
+					(get_local $x)
+					(i32.const 1)
+				)
+			)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
 			vec![1],
 		);
 	}
