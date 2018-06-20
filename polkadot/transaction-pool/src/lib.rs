@@ -393,7 +393,7 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 #[cfg(test)]
 mod tests {
 	use std::sync::{atomic::{self, AtomicBool}, Arc};
-	use super::{TransactionPool, Ready};
+	use super::TransactionPool;
 	use substrate_keyring::Keyring::{self, *};
 	use codec::Slicable;
 	use polkadot_api::{PolkadotApi, BlockBuilder, CheckedBlockId, Result};
@@ -505,11 +505,7 @@ mod tests {
 	}
 
 	fn pool(api: &TestPolkadotApi) -> TransactionPool<TestPolkadotApi> {
-		TransactionPool::new(Default::default(), api.clone())
-	}
-
-	fn ready(api: &TestPolkadotApi) -> Ready<TestPolkadotApi> {
-		Ready::create(api.check_id(BlockId::number(0)).unwrap(), api)
+		TransactionPool::new(Default::default(), Arc::new(api.clone()))
 	}
 
 	#[test]
@@ -518,8 +514,7 @@ mod tests {
 		let pool = pool(&api);
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
 
-		let ready = ready(&api);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
 	}
 
@@ -529,8 +524,7 @@ mod tests {
 		let pool = pool(&api);
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
 
-		let ready = ready(&api);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
 	}
 
@@ -541,8 +535,7 @@ mod tests {
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
 
-		let ready = ready(&api);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
@@ -553,8 +546,7 @@ mod tests {
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
 
-		let ready = ready(&api);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
@@ -564,8 +556,7 @@ mod tests {
 		let pool = pool(&api);
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, true)).unwrap();
 
-		let ready = ready(&api);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 	}
 
@@ -575,8 +566,7 @@ mod tests {
 		let pool = pool(&api);
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, false)).unwrap();
 
-		let ready = ready(&api);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 	}
 
@@ -586,11 +576,11 @@ mod tests {
 		let pool = pool(&api);
 
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
@@ -599,14 +589,12 @@ mod tests {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
 
-		let ready = || ready(&api);
-
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
@@ -617,13 +605,13 @@ mod tests {
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 
 		api.enable_lookup();
 		pool.retry_verification(BlockId::number(0)).unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![
 			(Some(Alice.to_raw_public().into()), 209),
 			(Some(Alice.to_raw_public().into()), 210)
@@ -637,12 +625,12 @@ mod tests {
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 
 		pool.retry_verification(BlockId::number(1)).unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 	}
 
@@ -653,7 +641,7 @@ mod tests {
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
 		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![
 			(Some(Alice.to_raw_public().into()), 209)
 		]);
@@ -662,7 +650,7 @@ mod tests {
 		api.enable_lookup();
 		pool.retry_verification(BlockId::number(0)).unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(&api), |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![
 			(Some(Alice.to_raw_public().into()), 209),
 			(Some(Alice.to_raw_public().into()), 210)
@@ -677,8 +665,7 @@ mod tests {
 		pool.import_unchecked_extrinsic(block, uxt(Alice, 209, false)).unwrap();
 		pool.import_unchecked_extrinsic(block, uxt(Alice, 210, false)).unwrap();
 
-		let ready = ready(&api);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(block, |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![
 			(Some(Alice.to_raw_public().into()), 209),
 			(Some(Alice.to_raw_public().into()), 210)

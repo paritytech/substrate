@@ -52,14 +52,14 @@ use client::genesis;
 use demo_primitives::Hash;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, BuildExternalities};
-use demo_runtime::{Block, Header, UncheckedExtrinsic};
+use demo_runtime::{Block, BlockId, Header, UncheckedExtrinsic};
 use futures::{Future, Sink, Stream};
 
 struct DummyPool;
-impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, Hash> for DummyPool {
+impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for DummyPool {
 	type Error = extrinsic_pool::txpool::Error;
 
-	fn submit(&self, _: Vec<UncheckedExtrinsic>)
+	fn submit(&self, _block: BlockId, _: Vec<UncheckedExtrinsic>)
 		-> Result<Vec<Hash>, Self::Error>
 	{
 		Err("unimplemented".into())
@@ -166,7 +166,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let _rpc_servers = {
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
-			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, Arc::new(DummyPool), DummySystem)
+			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool));
+			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, author, DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();
