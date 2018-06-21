@@ -2509,7 +2509,14 @@ name = "substrate-state-machine"
 version = "0.1.0"
 dependencies = [
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashdb 0.1.1 (git+https://github.com/paritytech/parity.git)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "kvdb 0.1.0 (git+https://github.com/paritytech/parity.git)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "memorydb 0.1.1 (git+https://github.com/paritytech/parity.git)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "patricia-trie 0.1.0 (git+https://github.com/paritytech/parity.git)",
  "substrate-primitives 0.1.0",
  "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
