@@ -1031,8 +1031,8 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T> {
-	fn build_externalities(self) -> runtime_io::TestExternalities {
+impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
+	fn build_storage(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
 		use codec::Slicable;
 

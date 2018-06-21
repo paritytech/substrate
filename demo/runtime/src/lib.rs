@@ -51,7 +51,7 @@ use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
 
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::BuildExternalities;
+pub use runtime_primitives::BuildStorage;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
