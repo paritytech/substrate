@@ -213,11 +213,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}
 }
 
-fn run_until_exit<B, E>(mut core: reactor::Core, service: service::Service<B, E>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
+fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
 	where
-		B: client::backend::Backend<Block> + Send + Sync + 'static,
-		E: client::CallExecutor<Block> + Send + Sync + 'static,
-		client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>
+		C: service::Components,
+		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
 	let exit = {
 		// can't use signal directly here because CtrlC takes only `Fn`.

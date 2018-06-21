@@ -226,16 +226,20 @@ impl TestNet {
 		};
 
 		for _ in 0..n {
-			let client = Arc::new(test_client::new());
-			let tx_pool = Arc::new(EmptyTransactionPool);
-			let sync = Protocol::new(config.clone(), client.clone(), None, tx_pool).unwrap();
-			net.peers.push(Arc::new(Peer {
-				sync: sync,
-				client: client,
-				queue: RwLock::new(VecDeque::new()),
-			}));
+			net.add_peer(&config);
 		}
 		net
+	}
+
+	pub fn add_peer(&mut self, config: &ProtocolConfig) {
+		let client = Arc::new(test_client::new());
+		let tx_pool = Arc::new(EmptyTransactionPool);
+		let sync = Protocol::new(config.clone(), client.clone(), None, tx_pool).unwrap();
+		self.peers.push(Arc::new(Peer {
+			sync: sync,
+			client: client,
+			queue: RwLock::new(VecDeque::new()),
+		}));
 	}
 
 	pub fn peer(&self, i: usize) -> &Peer {
