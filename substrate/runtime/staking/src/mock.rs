@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::BuildExternalities;
+use primitives::BuildStorage;
 use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
 use substrate_primitives::H256;
@@ -54,7 +54,7 @@ impl Trait for Test {
 }
 
 pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+	let mut t = system::GenesisConfig::<Test>::default().build_storage();
 	let balance_factor = if ext_deposit > 0 {
 		256
 	} else {
@@ -63,11 +63,11 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
 		authorities: vec![],
-	}.build_externalities());
+	}.build_storage());
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
 		validators: vec![10, 20],
-	}.build_externalities());
+	}.build_storage());
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,
 		current_era,
@@ -82,7 +82,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		creation_fee: 0,
 		contract_fee: 0,
 		reclaim_rebate: 0,
-	}.build_externalities());
+	}.build_storage());
 	t
 }
 

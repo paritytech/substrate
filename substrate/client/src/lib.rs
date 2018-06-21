@@ -53,7 +53,7 @@ pub use client::{
 	new_in_mem,
 	BlockStatus, BlockOrigin, BlockchainEventStream, BlockchainEvents,
 	Client, ClientInfo, ChainHead,
-	ImportResult, GenesisBuilder,
+	ImportResult,
 };
 pub use blockchain::Info as ChainInfo;
 pub use call_executor::{

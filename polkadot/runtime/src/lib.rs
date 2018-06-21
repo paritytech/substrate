@@ -71,7 +71,7 @@ use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
 
 #[cfg(feature = "std")]
-pub use runtime_primitives::BuildExternalities;
+pub use runtime_primitives::BuildStorage;
 
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;

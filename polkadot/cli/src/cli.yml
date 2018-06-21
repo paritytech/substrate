@@ -27,7 +27,7 @@ args:
   - node-key:
       long: node-key
       value_name: KEY
-      help: Specify node secret key (64-character hex string).
+      help: Specify node secret key (64-character hex string)
       takes_value: true
   - collator:
       long: collator
@@ -40,6 +40,14 @@ args:
   - light:
       long: light
       help: Run in light client mode
+      takes_value: false
+  - dev:
+      long: dev
+      help: Run in development mode; implies --chain=dev --validator --key Alice
+      takes_value: false
+  - build-genesis:
+      long: build-genesis
+      help: Build a genesis.json file, outputing to stdout
       takes_value: false
   - port:
       long: port
@@ -80,6 +88,6 @@ args:
   - telemetry-url:
       long: telemetry-url
       value_name: TELEMETRY_URL
-      help: The URL of the telemetry server. Implies --telemetry.
+      help: The URL of the telemetry server. Implies --telemetry
       takes_value: true
 subcommands:
