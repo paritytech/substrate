@@ -192,8 +192,10 @@ impl<B: BlockT> ChainSync<B> where
 							trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", n, block.hash, peer_id);
 							match protocol.chain().block_hash(n) {
 								Ok(Some(block_hash)) if block_hash == block.hash => {
-									peer.common_hash = block.hash;
-									peer.common_number = n;
+									if peer.common_number < n {
+										peer.common_hash = block.hash;
+										peer.common_number = n;
+									}
 									peer.state = PeerSyncState::Available;
 									trace!(target:"sync", "Found common ancestor for peer {}: {} ({})", peer_id, block.hash, n);
 									vec![]
