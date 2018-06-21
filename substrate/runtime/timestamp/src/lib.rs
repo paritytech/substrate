@@ -98,9 +98,9 @@ pub struct GenesisConfig<T: Trait> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> runtime_primitives::BuildExternalities for GenesisConfig<T>
+impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_externalities(self) -> runtime_primitives::BuiltExternalities {
+	fn build_storage(self) -> runtime_primitives::StorageMap {
 		use runtime_io::twox_128;
 		use codec::Slicable;
 		map![
@@ -116,7 +116,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use runtime_support::storage::StorageValue;
 	use substrate_primitives::H256;
-	use runtime_primitives::BuildExternalities;
+	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 
@@ -142,8 +142,8 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
-		t.extend(GenesisConfig::<Test> { now: 42 }.build_externalities());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage();
+		t.extend(GenesisConfig::<Test> { now: 42 }.build_storage());
 
 		with_externalities(&mut t, || {
 			assert_eq!(<Timestamp as Store>::Now::get(), 42);

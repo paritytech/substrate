@@ -22,23 +22,18 @@ use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
+use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
-use codec::{Slicable};
+use codec::Slicable;
 use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
 
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend};
 use call_executor::{CallExecutor, LocalCallExecutor};
-use {error, in_mem, block_builder, runtime_io, bft};
+use {error, in_mem, block_builder, runtime_io, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
-
-/// Polkadot Client genesis block builder.
-pub trait GenesisBuilder<B: BlockT> {
-	/// Build genesis block.
-	fn build(self) -> (B::Header, Vec<(Vec<u8>, Vec<u8>)>);
-}
 
 /// Polkadot Client
 pub struct Client<B, E, Block> where Block: BlockT {
@@ -146,18 +141,18 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 }
 
 /// Create an instance of in-memory client.
-pub fn new_in_mem<E, F, Block>(
+pub fn new_in_mem<E, Block, S>(
 	executor: E,
-	genesis_builder: F
+	genesis_storage: S
 ) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
 	where
 		E: CodeExecutor,
-		F: GenesisBuilder<Block>,
+		S: BuildStorage,
 		Block: BlockT,
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, executor, genesis_builder)
+	Client::new(backend, executor, genesis_storage)
 }
 
 impl<B, E, Block: BlockT> Client<B, E, Block> where
@@ -167,20 +162,18 @@ impl<B, E, Block: BlockT> Client<B, E, Block> where
 	error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	/// Creates new Polkadot Client with given blockchain and code executor.
-	pub fn new<F>(
+	pub fn new<S: BuildStorage>(
 		backend: Arc<B>,
 		executor: E,
-		genesis_builder: F,
-	) -> error::Result<Self>
-		where
-			F: GenesisBuilder<Block>
-	{
+		build_genesis_storage: S,
+	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			trace!("Empty database, writing genesis block");
-			let (genesis_header, genesis_store) = genesis_builder.build();
+			let genesis_storage = build_genesis_storage.build_storage();
+			let genesis_block = genesis::construct_genesis_block::<Block>(&genesis_storage);
+			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
-			op.reset_storage(genesis_store.into_iter())?;
-			op.set_block_data(genesis_header, Some(vec![]), None, true)?;
+			op.reset_storage(genesis_storage.into_iter())?;
+			op.set_block_data(genesis_block.deconstruct().0, Some(vec![]), None, true)?;
 			backend.commit_operation(op)?;
 		}
 		Ok(Client {
@@ -493,7 +486,7 @@ mod tests {
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = test_client::new();
-		let genesis_hash = client.block_hash(0).unwrap().unwrap();
+		let _genesis_hash = client.block_hash(0).unwrap().unwrap();
 
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 1000);
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 0);

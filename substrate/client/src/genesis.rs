@@ -16,14 +16,14 @@
 
 //! Tool for creating the genesis block.
 
-use std::collections::HashMap;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing as HashingT, Zero};
+use runtime_primitives::StorageMap;
 
 /// Create a genesis block, given the initial storage.
 pub fn construct_genesis_block<
 	Block: BlockT
 > (
-	storage: &HashMap<Vec<u8>, Vec<u8>>
+	storage: &StorageMap
 ) -> Block {
 	let state_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(storage.clone().into_iter());
 	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(::std::iter::empty::<(&[u8], &[u8])>());

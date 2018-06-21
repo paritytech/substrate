@@ -4,7 +4,6 @@ version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-hex-literal = "0.1"
 futures = "0.1.17"
 parking_lot = "0.4"
 tokio-timer = "0.1.2"
@@ -24,6 +23,7 @@ polkadot-api = { path = "../api" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
 substrate-keystore = { path = "../../substrate/keystore" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
 substrate-client = { path = "../../substrate/client" }

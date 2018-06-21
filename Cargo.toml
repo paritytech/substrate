@@ -56,7 +56,6 @@ members = [
 	"substrate/test-runtime",
 	"substrate/telemetry",
 	"substrate/keystore",
-
 	"demo/cli",
 	"demo/executor",
 	"demo/primitives",

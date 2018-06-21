@@ -46,6 +46,7 @@ use parking_lot::RwLock;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing, HashingFor, Zero};
+use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use state_machine::CodeExecutor;
 
@@ -61,21 +62,21 @@ pub struct DatabaseSettings {
 }
 
 /// Create an instance of db-backed client.
-pub fn new_client<E, F, Block>(
+pub fn new_client<E, S, Block>(
 	settings: DatabaseSettings,
 	executor: E,
-	genesis_builder: F,
+	genesis_storage: S,
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
 		<Block::Header as HeaderT>::Number: As<u32>,
 		Block::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
 		E: CodeExecutor,
-		F: client::GenesisBuilder<Block>,
+		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(&settings)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
-	Ok(client::Client::new(backend, executor, genesis_builder)?)
+	Ok(client::Client::new(backend, executor, genesis_storage)?)
 }
 
 mod columns {

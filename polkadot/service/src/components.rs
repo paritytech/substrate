@@ -18,16 +18,16 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use client::{self, genesis, Client};
+use client::{self, Client};
 use client_db;
 use codec::{self, Slicable};
 use consensus;
 use keystore::Store as Keystore;
 use network;
 use polkadot_api;
+use runtime_primitives::MakeStorage;
 use polkadot_executor::Executor as LocalDispatch;
-use polkadot_runtime::{GenesisConfig, BuildExternalities};
-use polkadot_primitives::{Block, BlockId, Hash, Header};
+use polkadot_primitives::{Block, BlockId, Hash};
 use state_machine;
 use substrate_executor::NativeExecutor;
 use transaction_pool::{self, TransactionPool};
@@ -48,7 +48,7 @@ pub trait Components {
 	type Executor: 'static + client::CallExecutor<Block> + Send + Sync;
 
 	/// Create client.
-	fn build_client(&self, settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis: GenesisBuilder)
+	fn build_client(&self, settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis_storage: MakeStorage)
 		-> Result<(Arc<Client<Self::Backend, Self::Executor, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error>;
 
 	/// Create api.
@@ -63,19 +63,6 @@ pub trait Components {
 		-> Result<Option<consensus::Service>, error::Error>;
 }
 
-/// Genesis block builder.
-pub struct GenesisBuilder {
-	pub config: GenesisConfig,
-}
-
-impl client::GenesisBuilder<Block> for GenesisBuilder {
-	fn build(self) -> (Header, Vec<(Vec<u8>, Vec<u8>)>) {
-		let storage = self.config.build_externalities();
-		let block = genesis::construct_genesis_block::<Block>(&storage);
-		(block.header, storage.into_iter().collect())
-	}
-}
-
 /// Components for full Polkadot service.
 pub struct FullComponents {
 	/// Is this a validator node?
@@ -87,9 +74,9 @@ impl Components for FullComponents {
 	type Api = Client<Self::Backend, Self::Executor, Block>;
 	type Executor = client::LocalCallExecutor<client_db::Backend<Block>, NativeExecutor<LocalDispatch>>;
 
-	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis: GenesisBuilder)
+	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis_storage: MakeStorage)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error> {
-		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis)?), None))
+		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_storage)?), None))
 	}
 
 	fn build_api(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>) -> Arc<Self::Api> {
@@ -134,12 +121,12 @@ impl Components for LightComponents {
 	type Api = polkadot_api::light::RemotePolkadotApiWrapper<Self::Backend, Self::Executor>;
 	type Executor = client::RemoteCallExecutor<client::light::Backend<Block>, network::OnDemand<Block, network::Service<Block>>>;
 
-	fn build_client(&self, _settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis: GenesisBuilder)
+	fn build_client(&self, _settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis_storage: MakeStorage)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error> {
 		let client_backend = client::light::new_light_backend();
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
-		let client = client::light::new_light(client_backend, fetcher.clone(), genesis)?;
+		let client = client::light::new_light(client_backend, fetcher.clone(), genesis_storage)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 

@@ -259,7 +259,7 @@ impl<B: BlockT> ChainSync<B> where
 						is_best,
 						header,
 						justification,
-						block.body
+						block.body.map(|b| b.to_extrinsics()),
 					);
 					match result {
 						Ok(ImportResult::AlreadyInChain) => {
