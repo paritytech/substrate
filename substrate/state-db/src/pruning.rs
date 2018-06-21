@@ -24,7 +24,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use codec::{Slicable, self};
-use {CommitSet, Error, KeyValueDb, to_meta_key, Hash};
+use {CommitSet, Error, MetaDb, to_meta_key, Hash};
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
@@ -72,7 +72,7 @@ fn to_journal_key(block: u64) -> Vec<u8> {
 }
 
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
-	pub fn new<D: KeyValueDb>(db: &D) -> Result<RefWindow<BlockHash, Key>, Error<D>> {
+	pub fn new<D: MetaDb>(db: &D) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
 		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &()))
 			.map_err(|e| Error::Db(e))?;
 		let pending_number: u64 = match last_pruned {

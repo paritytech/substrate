@@ -54,25 +54,33 @@ pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::De
 impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Slicable + std::hash::Hash + 'static> Hash for T {}
 
 /// Backend database trait. Read-only.
-pub trait KeyValueDb {
+pub trait MetaDb {
+	type Error: fmt::Debug;
+
+	/// Get meta value, such as the journal.
+	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
+}
+
+
+/// Backend database trait. Read-only.
+pub trait HashDb {
 	type Hash: Hash;
 	type Error: fmt::Debug;
 
 	/// Get state trie node.
 	fn get(&self, key: &Self::Hash) -> Result<Option<DBValue>, Self::Error>;
-	/// Get meta value, such as the journal.
-	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
 }
 
 /// Error type.
-pub enum Error<D: KeyValueDb> {
+/// Error type.
+pub enum Error<E: fmt::Debug> {
 	/// Database backend error.
-	Db(D::Error),
+	Db(E),
 	/// `Slicable` decoding error.
 	Decoding,
 }
 
-impl<D: KeyValueDb> fmt::Debug for Error<D> {
+impl<E: fmt::Debug> fmt::Debug for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		match self {
 			Error::Db(e) => e.fmt(f),
@@ -144,7 +152,7 @@ struct StateDbSync<BlockHash: Hash, Key: Hash> {
 }
 
 impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
-	pub fn new<D: KeyValueDb<Hash=Key>>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D>> {
+	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
 		trace!("StateDb settings: {:?}", mode);
 		let unfinalized: UnfinalizedOverlay<BlockHash, Key> = UnfinalizedOverlay::new(db)?;
 		let pruning: Option<RefWindow<BlockHash, Key>> = match mode {
@@ -235,7 +243,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		self.pinned.remove(hash);
 	}
 
-	pub fn get<D: KeyValueDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D>> {
+	pub fn get<D: HashDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>> {
 		if let Some(value) = self.unfinalized.get(key) {
 			return Ok(Some(value));
 		}
@@ -251,7 +259,7 @@ pub struct StateDb<BlockHash: Hash, Key: Hash> {
 
 impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	/// Creates a new instance. Does not expect any metadata in the database.
-	pub fn new<D: KeyValueDb<Hash=Key>>(mode: PruningMode, db: &D) -> Result<StateDb<BlockHash, Key>, Error<D>> {
+	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
 		Ok(StateDb {
 			db: RwLock::new(StateDbSync::new(mode, db)?)
 		})
@@ -278,7 +286,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from unfinalized/pruning overlay or the backing DB.
-	pub fn get<D: KeyValueDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D>> {
+	pub fn get<D: HashDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>> {
 		self.db.read().get(key, db)
 	}
 }

@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use primitives::H256;
-use {DBValue, ChangeSet, CommitSet, KeyValueDb};
+use {DBValue, ChangeSet, CommitSet, MetaDb, HashDb};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
@@ -26,16 +26,20 @@ pub struct TestDb {
 	pub meta: HashMap<Vec<u8>, DBValue>,
 }
 
-impl KeyValueDb for TestDb {
+impl MetaDb for TestDb {
+	type Error = ();
+
+	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, ()> {
+		Ok(self.meta.get(key).cloned())
+	}
+}
+
+impl HashDb for TestDb {
 	type Error = ();
 	type Hash = H256;
 
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
 		Ok(self.data.get(key).cloned())
-	}
-
-	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, ()> {
-		Ok(self.meta.get(key).cloned())
 	}
 }
 

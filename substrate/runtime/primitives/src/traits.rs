@@ -314,7 +314,7 @@ pub trait Digest {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
+pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'static {
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Slicable;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
 	type Hashing: Hashing<Output = Self::Hash>;
@@ -352,7 +352,7 @@ pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
+pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'static {
 	type Extrinsic: Member + Slicable;
 	type Header: Header<Hash=Self::Hash>;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;

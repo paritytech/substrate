@@ -18,7 +18,7 @@
 //! Maintains trees of block overlays and allows discarding trees/roots
 
 use std::collections::{HashMap, VecDeque};
-use super::{Error, DBValue, ChangeSet, CommitSet, KeyValueDb, Hash, to_meta_key};
+use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
 use codec::{self, Slicable};
 
 const UNFINALIZED_JOURNAL: &[u8] = b"unfinalized_journal";
@@ -72,7 +72,7 @@ struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 
 impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 	/// Creates a new instance. Does not expect any metadata to be present in the DB.
-	pub fn new<D: KeyValueDb<Hash=Key>>(db: &D) -> Result<UnfinalizedOverlay<BlockHash, Key>, Error<D>> {
+	pub fn new<D: MetaDb>(db: &D) -> Result<UnfinalizedOverlay<BlockHash, Key>, Error<D::Error>> {
 		let last_finalized = db.get_meta(&to_meta_key(LAST_FINALIZED, &()))
 			.map_err(|e| Error::Db(e))?;
 		let last_finalized = match last_finalized {
@@ -271,7 +271,7 @@ mod tests {
 	#[should_panic]
 	fn finalize_empty_panics() {
 		let db = make_db(&[]);
-		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		overlay.finalize(&H256::default());
 	}
 
@@ -281,7 +281,7 @@ mod tests {
 		let db = make_db(&[]);
 		let h1 = H256::random();
 		let h2 = H256::random();
-		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		overlay.insert(&h1, 2, &H256::default(), ChangeSet::default());
 		overlay.insert(&h2, 1, &h1, ChangeSet::default());
 	}
@@ -292,7 +292,7 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let db = make_db(&[]);
-		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default());
 		overlay.insert(&h2, 3, &h1, ChangeSet::default());
 	}
@@ -303,7 +303,7 @@ mod tests {
 		let db = make_db(&[]);
 		let h1 = H256::random();
 		let h2 = H256::random();
-		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default());
 		overlay.insert(&h2, 2, &H256::default(), ChangeSet::default());
 	}
@@ -314,7 +314,7 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let db = make_db(&[]);
-		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default());
 		overlay.finalize(&h2);
 	}
@@ -323,7 +323,7 @@ mod tests {
 	fn insert_finalize_one() {
 		let h1 = H256::random();
 		let mut db = make_db(&[1, 2]);
-		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset = make_changeset(&[3, 4], &[2]);
 		let insertion = overlay.insert(&h1, 1, &H256::default(), changeset.clone());
 		assert_eq!(insertion.data.inserted.len(), 0);
@@ -345,12 +345,12 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2]);
-		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2])));
 		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])));
 		assert_eq!(db.meta.len(), 3);
 
-		let overlay2 = UnfinalizedOverlay::new(&db).unwrap();
+		let overlay2 = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		assert_eq!(overlay.levels, overlay2.levels);
 		assert_eq!(overlay.parents, overlay2.parents);
 		assert_eq!(overlay.last_finalized, overlay2.last_finalized);
@@ -361,7 +361,7 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2, 3, 4]);
-		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset1 = make_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
 		db.commit(&overlay.insert(&h1, 1, &H256::default(), changeset1));
@@ -411,7 +411,7 @@ mod tests {
 		let (h_1_2_3, c_1_2_3) = (H256::random(), make_changeset(&[123], &[]));
 		let (h_2_1_1, c_2_1_1) = (H256::random(), make_changeset(&[211], &[]));
 
-		let mut overlay = UnfinalizedOverlay::new(&db).unwrap();
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1));
 
 		db.commit(&overlay.insert(&h_1_1, 2, &h_1, c_1_1));
@@ -439,7 +439,7 @@ mod tests {
 		assert_eq!(overlay.last_finalized, Some((H256::default(), 0)));
 
 		// check if restoration from journal results in the same tree
-		let overlay2 = UnfinalizedOverlay::new(&db).unwrap();
+		let overlay2 = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
 		assert_eq!(overlay.levels, overlay2.levels);
 		assert_eq!(overlay.parents, overlay2.parents);
 		assert_eq!(overlay.last_finalized, overlay2.last_finalized);
