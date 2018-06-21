@@ -111,10 +111,11 @@ pub trait Context<B: BlockT> {
 
 	/// Disable a peer
 	fn disable_peer(&mut self, peer_id: PeerId);
+
 	/// Disconnect peer
 	fn disconnect_peer(&mut self, peer_id: PeerId);
 
-		/// Get peer info.
+	/// Get peer info.
 	fn peer_info(&self, peer: PeerId) -> Option<PeerInfo<B>>;
 
 	/// Send a message to a peer.
