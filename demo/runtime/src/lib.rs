@@ -46,13 +46,16 @@ extern crate substrate_runtime_timestamp as timestamp;
 extern crate demo_primitives;
 
 use rstd::prelude::*;
-use demo_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
+use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildExternalities;
 
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
 
@@ -108,6 +111,7 @@ pub type Session = session::Module<Concrete>;
 impl staking::Trait for Concrete {
 	type Balance = Balance;
 	type DetermineContractAddress = BlakeTwo256;
+	type AccountIndex = AccountIndex;
 }
 
 /// Staking module for this concrete runtime.
@@ -152,16 +156,20 @@ impl_outer_dispatch! {
 	}
 }
 
+/// The address format for describing accounts.
+pub type Address = staking::Address<Concrete>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
-/// Extrinsic type as expected by this runtime.
-pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
+/// Extrinsic type as expected by this runtime. This is not the type that is signed.
+pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
+/// Extrinsic type that is signed.
+pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Concrete, Block, Staking,
+pub type Executive = executive::Executive<Concrete, Block, Staking, Staking,
 	(((((), Council), Democracy), Staking), Session)>;
 
 impl_outer_config! {

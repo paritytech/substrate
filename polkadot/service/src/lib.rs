@@ -19,8 +19,8 @@
 
 extern crate futures;
 extern crate ed25519;
+extern crate clap;
 extern crate exit_future;
-extern crate parking_lot;
 extern crate tokio_timer;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
@@ -28,7 +28,7 @@ extern crate polkadot_executor;
 extern crate polkadot_api;
 extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
-extern crate polkadot_keystore as keystore;
+extern crate substrate_keystore as keystore;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
@@ -41,7 +41,11 @@ extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 
 #[macro_use]
+extern crate substrate_telemetry;
+#[macro_use]
 extern crate error_chain;
+#[macro_use]
+extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -68,7 +72,7 @@ use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
 pub use self::components::{Components, FullComponents, LightComponents};
-pub use config::{Configuration, Role, ChainSpec};
+pub use config::{Configuration, Role, OptionChainSpec, ChainSpec};
 
 /// Polkadot service.
 pub struct Service<Components: components::Components> {
@@ -110,6 +114,11 @@ fn poc_2_testnet_config() -> ChainConfig {
 			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
 			transaction_base_fee: 100,
 			transaction_byte_fee: 1,
+			existential_deposit: 500,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u128 << 60)).collect(),
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
@@ -169,6 +178,11 @@ fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainConfig {
 			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
 			transaction_base_fee: 1,
 			transaction_byte_fee: 0,
+			existential_deposit: 500,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
 			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60))).collect(),
 			validator_count: 2,
 			sessions_per_era: 5,
@@ -267,7 +281,9 @@ impl<Components> Service<Components>
 		let (client, on_demand) = components.build_client(db_settings, executor, genesis_builder)?;
 		let api = components.build_api(client.clone());
 		let best_header = client.best_block_header()?;
-		info!("Starting Polkadot. Best block is #{}", best_header.number);
+
+		info!("Best block is #{}", best_header.number);
+		telemetry!("node.start"; "height" => best_header.number, "best" => ?best_header.hash());
 
 		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
 		let transaction_pool_adapter = components.build_network_tx_pool(client.clone(), api.clone(), transaction_pool.clone());
@@ -284,6 +300,7 @@ impl<Components> Service<Components>
 		let barrier = ::std::sync::Arc::new(Barrier::new(2));
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
+
 		let thread = {
 			let client = client.clone();
 			let network = network.clone();
@@ -299,11 +316,11 @@ impl<Components> Service<Components>
 				// block notifications
 				let network1 = network.clone();
 				let txpool1 = txpool.clone();
+
 				let events = client.import_notification_stream()
 					.for_each(move |notification| {
 						network1.on_block_imported(notification.hash, &notification.header);
 						prune_imported(&*api, &*txpool1, notification.hash);
-
 						Ok(())
 					});
 				core.handle().spawn(events);

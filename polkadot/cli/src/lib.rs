@@ -39,6 +39,10 @@ extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate polkadot_primitives;
 extern crate polkadot_service as service;
+#[macro_use]
+extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
+#[macro_use]
+extern crate substrate_telemetry;
 extern crate polkadot_transaction_pool as txpool;
 
 #[macro_use]
@@ -57,11 +61,14 @@ use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use polkadot_primitives::Block;
+use substrate_telemetry::{init_telemetry, TelemetryConfig};
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::ChainSpec;
+use service::{OptionChainSpec, ChainSpec};
+
+const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
 struct Configuration(service::Configuration);
 
@@ -113,7 +120,35 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
+	info!("Parity ·:· Polkadot");
+	info!("  version {}", crate_version!());
+	info!("  by Parity Technologies, 2017, 2018");
+
 	let mut config = service::Configuration::default();
+
+	if let Some(name) = matches.value_of("name") {
+		config.name = name.into();
+		info!("Node name: {}", config.name);
+	}
+
+	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+		let name = config.name.clone();
+		let chain = config.chain_spec.clone();
+		Some(init_telemetry(TelemetryConfig {
+			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
+			on_connect: Box::new(move || {
+				telemetry!("system.connected";
+					"name" => name.clone(),
+					"implementation" => "parity-polkadot",
+					"version" => crate_version!(),
+					"config" => "",
+					"chain" => <&'static str>::from(chain)
+				);
+			}),
+		}))
+	} else {
+		None
+	};
 
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
@@ -129,28 +164,24 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let mut role = service::Role::FULL;
 	if matches.is_present("collator") {
-		info!("Starting collator.");
+		info!("Starting collator");
 		role = service::Role::COLLATOR;
 	} else if matches.is_present("validator") {
-		info!("Starting validator.");
+		info!("Starting validator");
 		role = service::Role::VALIDATOR;
 	} else if matches.is_present("light") {
-		info!("Starting light.");
+		info!("Starting (light)");
 		role = service::Role::LIGHT;
+	} else {
+		info!("Starting (heavy)");
 	}
 
 	match matches.value_of("chain") {
-		Some("dev") => config.chain_spec = ChainSpec::Development,
-		Some("local") => config.chain_spec = ChainSpec::LocalTestnet,
-		Some("poc-2") => config.chain_spec = ChainSpec::PoC2Testnet,
 		None => (),
-		Some(unknown) => panic!("Invalid chain name: {}", unknown),
+		Some(n) => config.chain_spec = OptionChainSpec::from(n).inner()
+			.unwrap_or_else(|| panic!("Invalid chain name: {}", n)),
 	}
-	info!("Chain specification: {}", match config.chain_spec {
-		ChainSpec::Development => "Development",
-		ChainSpec::LocalTestnet => "Local Testnet",
-		ChainSpec::PoC2Testnet => "PoC-2 Testnet",
-	});
+	info!("Chain specification: {}", config.chain_spec);
 
 	config.roles = role;
 	{

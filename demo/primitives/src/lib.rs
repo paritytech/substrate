@@ -35,6 +35,10 @@ pub type BlockNumber = u64;
 /// certainly continue to be the same as the substrate's `AuthorityId`.
 pub type AccountId = ::primitives::H256;
 
+/// The type for looking up accounts. We don't expect more than 4 billion of them, but you
+/// never know...
+pub type AccountIndex = u32;
+
 /// Balance of an account.
 pub type Balance = u64;
 
@@ -49,4 +53,4 @@ pub type Index = u64;
 pub type Hash = primitives::H256;
 
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
-pub type Signature = runtime_primitives::Ed25519Signature;
+pub type Signature = runtime_primitives::MaybeUnsigned<runtime_primitives::Ed25519Signature>;

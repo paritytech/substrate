@@ -23,6 +23,8 @@ use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::{NativeExecutionDispatch, NativeExecutor};
 use state_machine;
 
+use runtime::Address;
+use runtime_primitives::traits::AuxLookup;
 use primitives::{AccountId, Block, Header, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 
@@ -135,7 +137,11 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn index(&self, at: &CheckedId, account: AccountId) -> Result<Index> {
-		with_runtime!(self, at, || ::runtime::System::account_index(account))
+		with_runtime!(self, at, || ::runtime::System::account_nonce(account))
+	}
+
+	fn lookup(&self, at: &Self::CheckedBlockId, address: Address) -> Result<Option<AccountId>> {
+		with_runtime!(self, at, || <::runtime::Staking as AuxLookup>::lookup(address).ok())
 	}
 
 	fn active_parachains(&self, at: &CheckedId) -> Result<Vec<ParaId>> {

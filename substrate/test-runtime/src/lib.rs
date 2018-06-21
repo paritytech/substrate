@@ -51,7 +51,7 @@ pub mod system;
 use rstd::prelude::*;
 use codec::Slicable;
 
-use runtime_primitives::traits::{Checkable, BlakeTwo256};
+use runtime_primitives::traits::{BlindCheckable, BlakeTwo256};
 use runtime_primitives::Ed25519Signature;
 pub use primitives::hash::H256;
 
@@ -101,14 +101,18 @@ impl Slicable for Extrinsic {
 	}
 }
 
-impl Checkable for Extrinsic {
+impl BlindCheckable for Extrinsic {
 	type Checked = Self;
+	type Address = AccountId;
 
-	fn check(self) -> Result<Self, Self> {
+	fn sender(&self) -> &Self::Address {
+		&self.transfer.from
+	}
+	fn check(self) -> Result<Self, &'static str> {
 		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
 			Ok(self)
 		} else {
-			Err(self)
+			Err("bad signature")
 		}
 	}
 }

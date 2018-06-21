@@ -20,6 +20,9 @@
 
 #[cfg(feature = "std")]
 extern crate serde;
+#[cfg(test)]
+#[macro_use]
+extern crate serde_derive;
 
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_support as runtime_support;
@@ -46,27 +49,45 @@ extern crate substrate_runtime_staking as staking;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
+use rstd::result;
 use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
-	MakePayment, Hashing};
+	MakePayment, Hashing, AuxLookup};
 use codec::Slicable;
 use system::extrinsics_root;
+use primitives::{ApplyOutcome, ApplyError};
+
+mod internal {
+	pub enum ApplyError {
+		BadSignature(&'static str),
+		Stale,
+		Future,
+		CantPay,
+	}
+
+	pub enum ApplyOutcome {
+		Success,
+		Fail(&'static str),
+	}
+}
 
 pub struct Executive<
 	System,
 	Block,
+	Lookup,
 	Payment,
 	Finalisation,
->(PhantomData<(System, Block, Payment, Finalisation)>);
+>(PhantomData<(System, Block, Lookup, Payment, Finalisation)>);
 
 impl<
 	System: system::Trait,
-	Block: traits::Block<Header = System::Header,Hash = System::Hash>,
+	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
+	Lookup: AuxLookup<Source=<Block::Extrinsic as Checkable>::Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
-> Executive<System, Block, Payment, Finalisation> where
-	Block::Extrinsic: Checkable + Slicable,
-	<Block::Extrinsic as Checkable>::Checked: Applyable<Index = System::Index, AccountId = System::AccountId>
+> Executive<System, Block, Lookup, Payment, Finalisation> where
+	Block::Extrinsic: Checkable<AccountId=System::AccountId> + Slicable,
+	<Block::Extrinsic as Checkable>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
 {
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
@@ -120,45 +141,59 @@ impl<
 	/// Apply extrinsic outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
-	pub fn apply_extrinsic(uxt: Block::Extrinsic) {
+	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> result::Result<ApplyOutcome, ApplyError> {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
 		<system::Module<System>>::note_extrinsic(encoded);
-		Self::apply_extrinsic_no_note_with_len(uxt, encoded_len);
+		match Self::apply_extrinsic_no_note_with_len(uxt, encoded_len) {
+			Ok(internal::ApplyOutcome::Success) => Ok(ApplyOutcome::Success),
+			Ok(internal::ApplyOutcome::Fail(_)) => Ok(ApplyOutcome::Fail),
+			Err(internal::ApplyError::CantPay) => Err(ApplyError::CantPay),
+			Err(internal::ApplyError::BadSignature(_)) => Err(ApplyError::BadSignature),
+			Err(internal::ApplyError::Stale) => Err(ApplyError::Stale),
+			Err(internal::ApplyError::Future) => Err(ApplyError::Future),
+		}
 	}
 
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
-		Self::apply_extrinsic_no_note_with_len(uxt, l);
+		match Self::apply_extrinsic_no_note_with_len(uxt, l) {
+			Ok(internal::ApplyOutcome::Success) => (),
+			Ok(internal::ApplyOutcome::Fail(e)) => runtime_io::print(e),
+			Err(internal::ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
+			Err(internal::ApplyError::BadSignature(_)) => panic!("All extrinsics should be properly signed"),
+			Err(internal::ApplyError::Stale) | Err(internal::ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
+		}
 	}
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
-	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) {
+	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
-		let xt = match uxt.check() {
-			Ok(xt) => xt,
-			Err(_) => panic!("All extrinsics should be properly signed"),
-		};
+		let xt = uxt.check(Lookup::lookup).map_err(internal::ApplyError::BadSignature)?;
 
 		if xt.sender() != &Default::default() {
 			// check index
-			let expected_index = <system::Module<System>>::account_index(xt.sender());
-			assert!(xt.index() == &expected_index, "All extrinsics should have the correct nonce");
+			let expected_index = <system::Module<System>>::account_nonce(xt.sender());
+			if xt.index() != &expected_index { return Err(
+				if xt.index() < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
+			) }
 
 			// pay any fees.
-			assert!(Payment::make_payment(xt.sender(), encoded_len), "All extrinsics should have sender able to pay their fees");
+			Payment::make_payment(xt.sender(), encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 
 			// increment nonce in storage
-			<system::Module<System>>::inc_account_index(xt.sender());
+			<system::Module<System>>::inc_account_nonce(xt.sender());
 		}
 
 		// decode parameters and dispatch
-		xt.apply();
+		let r = xt.apply();
 
 		<system::ExtrinsicIndex<System>>::put(<system::ExtrinsicIndex<System>>::get() + 1u32);
+
+		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
 	}
 
 	fn final_checks(header: &System::Header) {
@@ -182,9 +217,20 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildExternalities;
-	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256};
+	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
 
+	struct NullLookup;
+	impl AuxLookup for NullLookup {
+		type Source = u64;
+		type Target = u64;
+		fn lookup(s: Self::Source) -> Result<Self::Target, &'static str> {
+			Ok(s)
+		}
+	}
+
+	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;
@@ -208,10 +254,11 @@ mod tests {
 	impl staking::Trait for Test {
 		type Balance = u64;
 		type DetermineContractAddress = staking::DummyContractAddressFor;
+		type AccountIndex = u64;
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Test>>;
-	type Executive = super::Executive<Test, Block<TestXt>, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
+	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
@@ -225,13 +272,18 @@ mod tests {
 			bonding_duration: 0,
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,
+			existential_deposit: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
 		}.build_externalities());
-		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2, 69)));
+		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
-			Executive::apply_extrinsic(xt);
-			assert_eq!(<staking::Module<Test>>::balance(&1), 32);
-			assert_eq!(<staking::Module<Test>>::balance(&2), 69);
+			Executive::apply_extrinsic(xt).unwrap();
+			assert_eq!(<staking::Module<Test>>::voting_balance(&1), 32);
+			assert_eq!(<staking::Module<Test>>::voting_balance(&2), 69);
 		});
 	}
 
@@ -250,7 +302,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1d43ef0fcabb78d925093fe22e50cc9ca5d182d189a3407c778e5fca714177dd").into(),
+					state_root: hex!("4fd406d2d62a841f7e2f956b52ce9ed98111c9eb6b3a9051aa4667b470030832").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -284,7 +336,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1d43ef0fcabb78d925093fe22e50cc9ca5d182d189a3407c778e5fca714177dd").into(),
+					state_root: hex!("4fd406d2d62a841f7e2f956b52ce9ed98111c9eb6b3a9051aa4667b470030832").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

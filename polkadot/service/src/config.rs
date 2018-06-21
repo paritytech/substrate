@@ -22,7 +22,7 @@ pub use network::NetworkConfiguration;
 
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ChainSpec {
 	/// Whatever the current runtime is, with just Alice as an auth.
 	Development,
@@ -30,6 +30,47 @@ pub enum ChainSpec {
 	LocalTestnet,
 	/// The PoC-2 testnet.
 	PoC2Testnet,
+}
+
+/// Synonym for Option<ChainSpec> because we cannot `impl From<..> for Option<ChainSpec>`
+pub struct OptionChainSpec(Option<ChainSpec>);
+
+impl OptionChainSpec {
+	/// Return the inner part.
+	pub fn inner(self) -> Option<ChainSpec> {
+		self.0
+	}
+}
+
+impl<'a> From<&'a str> for OptionChainSpec {
+	fn from(s: &'a str) -> Self {
+		OptionChainSpec(Some(match s {
+			"dev" => ChainSpec::Development,
+			"local" => ChainSpec::LocalTestnet,
+			"poc-2" => ChainSpec::PoC2Testnet,
+			_ => return OptionChainSpec(None),
+		}))
+	}
+}
+
+impl From<ChainSpec> for &'static str {
+	fn from(s: ChainSpec) -> &'static str {
+		match s {
+			ChainSpec::Development => "dev",
+			ChainSpec::LocalTestnet => "local",
+			ChainSpec::PoC2Testnet => "poc-2",
+		}
+	}
+}
+
+impl ::std::fmt::Display for ChainSpec {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		write!(f, "{}", match *self {
+			ChainSpec::Development => "Development",
+			ChainSpec::LocalTestnet => "Local Testnet",
+			ChainSpec::PoC2Testnet => "PoC-2 Testnet",
+		})
+	}
 }
 
 /// Service configuration.
@@ -49,6 +90,10 @@ pub struct Configuration {
 	pub keys: Vec<String>,
 	/// Chain specification.
 	pub chain_spec: ChainSpec,
+	/// Telemetry server URL, optional - only `Some` if telemetry reporting is enabled
+	pub telemetry: Option<String>,
+	/// Node name.
+	pub name: String,
 }
 
 impl Default for Configuration {
@@ -61,6 +106,8 @@ impl Default for Configuration {
 			database_path: Default::default(),
 			keys: Default::default(),
 			chain_spec: ChainSpec::Development,
+			telemetry: Default::default(),
+			name: "Anonymous".into(),
 		}
 	}
 }

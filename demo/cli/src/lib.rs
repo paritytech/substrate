@@ -122,6 +122,11 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 					intentions: vec![],
 					transaction_base_fee: 100,
 					transaction_byte_fee: 1,
+					transfer_fee: 0,
+					creation_fee: 0,
+					contract_fee: 0,
+					reclaim_rebate: 0,
+					existential_deposit: 500,
 					balances: vec![(god_key.clone().into(), 1u64 << 63)].into_iter().collect(),
 					validator_count: 12,
 					sessions_per_era: 24,	// 24 hours per era.
