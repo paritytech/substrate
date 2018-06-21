@@ -150,18 +150,18 @@ pub fn with<T: ?Sized, R, F: FnOnce(&mut T) -> R>(
 /// trait Increment { fn increment(&mut self); }
 ///
 /// impl Increment for i32 {
-/// 	fn increment(&mut self) { *self += 1 }
+///	fn increment(&mut self) { *self += 1 }
 /// }
 ///
 /// environmental!(val: Increment + 'static);
 ///
 /// fn main() {
-/// 	let mut local = 0i32;
-/// 	val::using(&mut local, || {
-/// 		val::with(|v| for _ in 0..5 { v.increment() });
-/// 	});
+///	let mut local = 0i32;
+///	val::using(&mut local, || {
+///		val::with(|v| for _ in 0..5 { v.increment() });
+///	});
 ///
-/// 	assert_eq!(local, 5);
+///	assert_eq!(local, 5);
 /// }
 /// ```
 #[macro_export]

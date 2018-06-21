@@ -34,14 +34,18 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(lang_items))]
+#![cfg_attr(not(feature = "std"), feature(panic_implementation))]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_primitives as primitives;
+
+#[cfg(test)]
+extern crate wabt;
 
 use rstd::prelude::*;
 

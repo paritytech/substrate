@@ -52,12 +52,32 @@ pub mod bft;
 
 use traits::{Verify, Lazy};
 
+/// A set of key value pairs for storage.
 #[cfg(feature = "std")]
-pub type BuiltExternalities = HashMap<Vec<u8>, Vec<u8>>;
+pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;
+
+/// A simple function allowing StorageMap to be created.
+#[cfg(feature = "std")]
+pub type MakeStorage = Box<FnMut() -> StorageMap>;
+
+/// Complex storage builder stuff.
+#[cfg(feature = "std")]
+pub trait BuildStorage {
+	fn build_storage(self) -> StorageMap;
+}
 
 #[cfg(feature = "std")]
-pub trait BuildExternalities {
-	fn build_externalities(self) -> BuiltExternalities;
+impl BuildStorage for MakeStorage {
+	fn build_storage(mut self) -> StorageMap {
+		self()
+	}
+}
+
+#[cfg(feature = "std")]
+impl BuildStorage for StorageMap {
+	fn build_storage(self) -> StorageMap {
+		self
+	}
 }
 
 /// Ed25519 signature verify.
@@ -83,6 +103,61 @@ impl From<H512> for Ed25519Signature {
 	}
 }
 
+#[derive(Eq, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[repr(u8)]
+/// Outcome of a valid extrinsic application. Capable of being sliced.
+pub enum ApplyOutcome {
+	/// Successful application (extrinsic reported no issue).
+	Success = 0,
+	/// Failed application (extrinsic was probably a no-op other than fees).
+	Fail = 1,
+}
+impl codec::Slicable for ApplyOutcome {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			x if x == ApplyOutcome::Success as u8 => Some(ApplyOutcome::Success),
+			x if x == ApplyOutcome::Fail as u8 => Some(ApplyOutcome::Fail),
+			_ => None,
+		}
+	}
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&[*self as u8])
+	}
+}
+
+#[derive(Eq, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[repr(u8)]
+/// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
+pub enum ApplyError {
+	/// Bad signature.
+	BadSignature = 0,
+	/// Nonce too low.
+	Stale = 1,
+	/// Nonce too high.
+	Future = 2,
+	/// Sending account had too low a balance.
+	CantPay = 3,
+}
+impl codec::Slicable for ApplyError {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			x if x == ApplyError::BadSignature as u8 => Some(ApplyError::BadSignature),
+			x if x == ApplyError::Stale as u8 => Some(ApplyError::Stale),
+			x if x == ApplyError::Future as u8 => Some(ApplyError::Future),
+			x if x == ApplyError::CantPay as u8 => Some(ApplyError::CantPay),
+			_ => None,
+		}
+	}
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&[*self as u8])
+	}
+}
+
+/// Result from attempt to apply an extrinsic.
+pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
+
 /// Potentially "unsigned" signature verification.
 #[derive(Eq, PartialEq, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -92,8 +167,12 @@ impl<T: Verify> MaybeUnsigned<T> where
 	T: Default + Eq,
 	<T as Verify>::Signer: Default + Eq,
 {
-	fn is_signed(&self, signer: &<Self as Verify>::Signer) -> bool {
-		self.0 != T::default() || signer != &<Self as Verify>::Signer::default()
+	fn is_signed(&self) -> bool {
+		self.0 != T::default()
+	}
+
+	fn is_addressed(&self, signer: &<Self as Verify>::Signer) -> bool {
+		signer != &Default::default()
 	}
 }
 
@@ -103,8 +182,8 @@ impl<T: Verify> Verify for MaybeUnsigned<T> where
 {
 	type Signer = T::Signer;
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
-		if !self.is_signed(signer) {
-			true
+		if !self.is_signed() {
+			!self.is_addressed(signer)
 		} else {
 			self.0.verify(msg, signer)
 		}
@@ -168,12 +247,12 @@ macro_rules! impl_outer_config {
 			)*
 		}
 		#[cfg(any(feature = "std", test))]
-		impl $crate::BuildExternalities for $main {
-			fn build_externalities(self) -> $crate::BuiltExternalities {
-				let mut s = $crate::BuiltExternalities::new();
+		impl $crate::BuildStorage for $main {
+			fn build_storage(self) -> $crate::StorageMap {
+				let mut s = $crate::StorageMap::new();
 				$(
 					if let Some(extra) = self.$snake {
-						s.extend(extra.build_externalities());
+						s.extend(extra.build_storage());
 					}
 				)*
 				s

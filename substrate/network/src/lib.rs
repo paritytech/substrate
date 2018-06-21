@@ -32,6 +32,7 @@ extern crate substrate_client as client;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_bft;
+extern crate substrate_codec as codec;
 extern crate serde;
 extern crate serde_json;
 extern crate futures;
@@ -42,7 +43,6 @@ extern crate ed25519;
 #[macro_use] extern crate error_chain;
 
 #[cfg(test)] extern crate env_logger;
-#[cfg(test)] extern crate substrate_codec as codec;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_test_client as test_client;
 

@@ -67,6 +67,10 @@ pub type BlockNumber = u64;
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain.
 pub type AccountId = primitives::hash::H256;
 
+/// The type for looking up accounts. We don't expect more than 4 billion of them, but you
+/// never know...
+pub type AccountIndex = u64;
+
 /// The Ed25519 pub key of an session that belongs to an authority of the relay chain. This is
 /// exactly equivalent to what the substrate calls an "authority".
 pub type SessionKey = primitives::AuthorityId;

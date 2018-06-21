@@ -2,9 +2,6 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 #![no_std]
 #![crate_type = "rlib"]
-#![cfg_attr(feature = "nightly", feature(global_allocator))]
-#![cfg_attr(feature = "nightly", feature(alloc))]
-#![cfg_attr(feature = "nightly", feature(allocator_api))]
 
 //! Custom allocator crate for wasm
 
@@ -17,19 +14,18 @@ static ALLOCATOR: WasmAllocator = WasmAllocator;
 
 #[cfg(feature = "nightly")]
 mod __impl {
-	extern crate alloc;
 	extern crate pwasm_libc;
 
-	use self::alloc::heap::{GlobalAlloc, Layout, Opaque};
+	use core::alloc::{GlobalAlloc, Layout};
 
 	use super::WasmAllocator;
 
 	unsafe impl GlobalAlloc for WasmAllocator {
-		unsafe fn alloc(&self, layout: Layout) -> *mut Opaque {
-			pwasm_libc::malloc(layout.size()) as *mut Opaque
+		unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+			pwasm_libc::malloc(layout.size()) as *mut u8
 		}
 
-		unsafe fn dealloc(&self, ptr: *mut Opaque, _layout: Layout) {
+		unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
 			pwasm_libc::free(ptr as *mut u8)
 		}
 	}

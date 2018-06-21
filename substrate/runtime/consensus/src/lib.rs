@@ -60,7 +60,7 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 pub trait Trait: system::Trait {
 	type PublicAux: RefInto<Self::AccountId>;
- 	type SessionKey: Parameter + Default;
+	type SessionKey: Parameter + Default;
 }
 
 decl_module! {
@@ -134,9 +134,9 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
+impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_externalities(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> runtime_io::TestExternalities {
 		use codec::{Slicable, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
 		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|

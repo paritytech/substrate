@@ -529,15 +529,15 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 		use bft::generic::Misbehavior as GenericMisbehavior;
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use runtime_primitives::MaybeUnsigned;
-		use polkadot_runtime::{Call, Extrinsic, UncheckedExtrinsic, ConsensusCall};
+		use polkadot_runtime::{Call, Extrinsic, BareExtrinsic, UncheckedExtrinsic, ConsensusCall};
 
 		let local_id = self.local_key.public().0.into();
 		let mut next_index = {
 			let readiness_evaluator = Ready::create(self.parent_id.clone(), &*self.client);
 			let cur_index = self.transaction_pool.cull_and_get_pending(readiness_evaluator, |pending| pending
-				.filter(|tx| tx.as_ref().as_ref().signed == local_id)
+				.filter(|tx| tx.sender().map(|s| s == local_id).unwrap_or(false))
 				.last()
-				.map(|tx| Ok(tx.as_ref().as_ref().index))
+				.map(|tx| Ok(tx.index()))
 				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id))
 			);
 
@@ -564,7 +564,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1, s1.signature), (h2, s2.signature)),
 				}
 			};
-			let extrinsic = Extrinsic {
+			let extrinsic = BareExtrinsic {
 				signed: local_id,
 				index: next_index,
 				function: Call::Consensus(ConsensusCall::report_misbehavior(report)),
@@ -573,7 +573,13 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			next_index += 1;
 
 			let signature = MaybeUnsigned(self.local_key.sign(&extrinsic.encode()).into());
-			let uxt = UncheckedExtrinsic { extrinsic, signature };
+
+			let extrinsic = Extrinsic {
+				signed: extrinsic.signed.into(),
+				index: extrinsic.index,
+				function: extrinsic.function,
+			};
+			let uxt = UncheckedExtrinsic::new(extrinsic, signature);
 
 			self.transaction_pool.import_unchecked_extrinsic(uxt)
 				.expect("locally signed extrinsic is valid; qed");

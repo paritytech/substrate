@@ -109,7 +109,7 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _) if downloading < MAX_PARALLEL_DOWNLOADS  =>
 						(*start .. *start + *len, downloading),
 					&(Some((start, r)), Some((next_start, _))) if start + r.len() < *next_start =>
-						(*start + r.len() .. cmp::min(*next_start, *start + count), 0), // gap
+						(*start + r.len() .. cmp::min(*next_start, *start + r.len() + count), 0), // gap
 					&(Some((start, r)), None) =>
 						(start + r.len() .. start + r.len() + count, 0), // last range
 					&(None, None) =>
@@ -123,16 +123,17 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 				}
 			}
 		};
-
 		// crop to peers best
 		if range.start > peer_best {
 			trace!(target: "sync", "Out of range for peer {} ({} vs {})", peer_id, range.start, peer_best);
 			return None;
 		}
 		range.end = cmp::min(peer_best + 1, range.end);
-
 		self.peer_requests.insert(peer_id, range.start);
 		self.blocks.insert(range.start, BlockRangeState::Downloading{ len: range.end - range.start, downloading: downloading + 1 });
+		if range.end <= range.start {
+			panic!("Empty range {:?}, count={}, peer_best={}, common={}, blocks={:?}", range, count, peer_best, common, self.blocks);
+		}
 		Some(range)
 	}
 
@@ -189,7 +190,7 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 
 #[cfg(test)]
 mod test {
-	use super::{BlockCollection, BlockData};
+	use super::{BlockCollection, BlockData, BlockRangeState};
 	use message;
 	use runtime_primitives::testing::Block as RawBlock;
 	use primitives::H256;
@@ -263,5 +264,19 @@ mod test {
 		let drained = bc.drain(81);
 		assert_eq!(drained[..40], blocks[81..121].iter().map(|b| BlockData { block: b.clone(), origin: 2 }).collect::<Vec<_>>()[..]);
 		assert_eq!(drained[40..], blocks[121..150].iter().map(|b| BlockData { block: b.clone(), origin: 1 }).collect::<Vec<_>>()[..]);
+	}
+
+	#[test]
+	fn large_gap() {
+		let mut bc: BlockCollection<Block> = BlockCollection::new();
+		bc.blocks.insert(100, BlockRangeState::Downloading {
+			len: 128,
+			downloading: 1,
+		});
+		let blocks = generate_blocks(10).into_iter().map(|b| BlockData { block: b, origin: 0 }).collect();
+		bc.blocks.insert(114305, BlockRangeState::Complete(blocks));
+
+		assert_eq!(bc.needed_blocks(0, 128, 10000, 000), Some(1 .. 100));
+		assert_eq!(bc.needed_blocks(0, 128, 10000, 600), Some(100 + 128 .. 100 + 128 + 128));
 	}
 }

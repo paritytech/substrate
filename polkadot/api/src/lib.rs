@@ -26,6 +26,7 @@ extern crate substrate_client as client;
 extern crate substrate_executor as substrate_executor;
 extern crate substrate_runtime_executive;
 extern crate substrate_primitives;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
 
 #[macro_use]
@@ -37,7 +38,9 @@ extern crate substrate_keyring as keyring;
 pub mod full;
 pub mod light;
 
-use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
+use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp,
+	UncheckedExtrinsic};
+use runtime::Address;
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 
 error_chain! {
@@ -119,8 +122,11 @@ pub trait PolkadotApi {
 	/// Get the timestamp registered at a block.
 	fn timestamp(&self, at: &Self::CheckedBlockId) -> Result<Timestamp>;
 
-	/// Get the index of an account at a block.
+	/// Get the nonce (né index) of an account at a block.
 	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index>;
+
+	/// Get the account id of an address at a block.
+	fn lookup(&self, at: &Self::CheckedBlockId, address: Address) -> Result<Option<AccountId>>;
 
 	/// Get the active parachains at a block.
 	fn active_parachains(&self, at: &Self::CheckedBlockId) -> Result<Vec<ParaId>>;

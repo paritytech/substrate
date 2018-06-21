@@ -145,7 +145,7 @@ impl<T: Trait> Module<T> {
 	/// Get the voters for the current proposal.
 	pub fn tally(ref_index: ReferendumIndex) -> (T::Balance, T::Balance) {
 		Self::voters_for(ref_index).iter()
-			.map(|a| (<staking::Module<T>>::balance(a), Self::vote_of((ref_index, a.clone())).unwrap_or(false)/*defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed*/))
+			.map(|a| (<staking::Module<T>>::voting_balance(a), Self::vote_of((ref_index, a.clone())).unwrap_or(false)/*defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed*/))
 			.map(|(bal, vote)| if vote { (bal, Zero::zero()) } else { (Zero::zero(), bal) })
 			.fold((Zero::zero(), Zero::zero()), |(a, b), (c, d)| (a + c, b + d))
 	}
@@ -155,7 +155,7 @@ impl<T: Trait> Module<T> {
 	/// Propose a sensitive action to be taken.
 	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>, value: T::Balance) -> Result {
 		ensure!(value >= Self::minimum_deposit(), "value too low");
-		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), value)
+		<staking::Module<T>>::reserve(aux.ref_into(), value)
 			.map_err(|_| "proposer's balance too low")?;
 
 		let index = Self::public_prop_count();
@@ -172,7 +172,7 @@ impl<T: Trait> Module<T> {
 	fn second(aux: &T::PublicAux, proposal: PropIndex) -> Result {
 		let mut deposit = Self::deposit_of(proposal)
 			.ok_or("can only second an existing proposal")?;
-		<staking::Module<T>>::deduct_unbonded(aux.ref_into(), deposit.0)
+		<staking::Module<T>>::reserve(aux.ref_into(), deposit.0)
 			.map_err(|_| "seconder's balance too low")?;
 		deposit.1.push(aux.ref_into().clone());
 		<DepositOf<T>>::insert(proposal, deposit);
@@ -183,7 +183,7 @@ impl<T: Trait> Module<T> {
 	/// false would be a vote to keep the status quo..
 	fn vote(aux: &T::PublicAux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-		ensure!(!<staking::Module<T>>::balance(aux.ref_into()).is_zero(),
+		ensure!(!<staking::Module<T>>::voting_balance(aux.ref_into()).is_zero(),
 			"transactor must have balance to signal approval.");
 		if !<VoteOf<T>>::exists(&(ref_index, aux.ref_into().clone())) {
 			let mut voters = Self::voters_for(ref_index);
@@ -261,7 +261,7 @@ impl<T: Trait> Module<T> {
 				if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {//: (T::Balance, Vec<T::AccountId>) =
 					// refund depositors
 					for d in &depositors {
-						<staking::Module<T>>::refund(d, deposit);
+						<staking::Module<T>>::unreserve(d, deposit);
 					}
 					<PublicProps<T>>::put(public_props);
 					Self::inject_referendum(now + Self::voting_period(), proposal, VoteThreshold::SuperMajorityApprove)?;
@@ -331,9 +331,9 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
+impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_externalities(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> runtime_io::TestExternalities {
 		use codec::Slicable;
 		use runtime_io::twox_128;
 
@@ -353,7 +353,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::BuildExternalities;
+	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
@@ -366,6 +366,8 @@ mod tests {
 		}
 	}
 
+	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;
@@ -389,21 +391,22 @@ mod tests {
 	impl staking::Trait for Test {
 		type Balance = u64;
 		type DetermineContractAddress = staking::DummyContractAddressFor;
+		type AccountIndex = u64;
 	}
 	impl Trait for Test {
 		type Proposal = Proposal;
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![],
-		}.build_externalities());
+		}.build_storage());
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
-		}.build_externalities());
+		}.build_storage());
 		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,
 			current_era: 0,
@@ -413,12 +416,17 @@ mod tests {
 			bonding_duration: 3,
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
-		}.build_externalities());
+			existential_deposit: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
+		}.build_storage());
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 1,
 			minimum_deposit: 1,
-		}.build_externalities());
+		}.build_storage());
 		t
 	}
 
@@ -488,9 +496,9 @@ mod tests {
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
-			assert_eq!(Staking::balance(&1), 5);
-			assert_eq!(Staking::balance(&2), 15);
-			assert_eq!(Staking::balance(&5), 35);
+			assert_eq!(Staking::free_balance(&1), 5);
+			assert_eq!(Staking::free_balance(&2), 15);
+			assert_eq!(Staking::free_balance(&5), 35);
 		});
 	}
 
@@ -504,9 +512,9 @@ mod tests {
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			assert_eq!(Staking::balance(&1), 10);
-			assert_eq!(Staking::balance(&2), 20);
-			assert_eq!(Staking::balance(&5), 50);
+			assert_eq!(Staking::free_balance(&1), 10);
+			assert_eq!(Staking::free_balance(&2), 20);
+			assert_eq!(Staking::free_balance(&5), 50);
 		});
 	}
 

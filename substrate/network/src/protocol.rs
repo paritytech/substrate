@@ -340,7 +340,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 			let block_data = message::generic::BlockData {
 				hash: hash,
 				header: if get_header { Some(header) } else { None },
-				body: if get_body { self.context_data.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
+				body: (if get_body { self.context_data.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None }).map(|body| message::Body::Extrinsics(body)),
 				receipt: None,
 				message_queue: None,
 				justification: if get_justification { self.context_data.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
@@ -360,6 +360,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 			id: request.id,
 			blocks: blocks,
 		};
+		trace!(target: "sync", "Sending BlockResponse with {} blocks", response.blocks.len());
 		self.send_message(io, peer, GenericMessage::BlockResponse(response))
 	}
 
@@ -551,6 +552,12 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 
 	pub fn on_block_imported(&self, io: &mut SyncIo, hash: B::Hash, header: &B::Header) {
 		self.sync.write().update_chain_info(&header);
+
+		// blocks are not announced by light clients
+		if self.config.roles & Role::LIGHT == Role::LIGHT {
+			return;
+		}
+
 		// send out block announcements
 		let mut peers = self.context_data.peers.write();
 
@@ -566,17 +573,17 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 
 	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest<B::Hash>) {
 		trace!(target: "sync", "Remote request {} from {} ({} at {})", request.id, peer_id, request.method, request.block);
-		let (value, proof) = match self.context_data.chain.execution_proof(&request.block, &request.method, &request.data) {
-			Ok((value, proof)) => (value, proof),
+		let proof = match self.context_data.chain.execution_proof(&request.block, &request.method, &request.data) {
+			Ok((_, proof)) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote request {} from {} ({} at {}) failed with: {}",
 					request.id, peer_id, request.method, request.block, error);
-				(Default::default(), Default::default())
+				Default::default()
 			},
 		};
 
 		self.send_message(io, peer_id, GenericMessage::RemoteCallResponse(message::RemoteCallResponse {
-			id: request.id, value, proof,
+			id: request.id, proof,
 		}));
 	}
 
