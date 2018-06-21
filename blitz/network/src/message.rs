@@ -19,23 +19,31 @@
 use blitz_primitives::{Hash, RoundId, PublicKey, Signature};
 use transaction::{Transaction, SignedTransaction};
 
+/// This message is sent by a client to a locker when it wants to obtain
+/// a locker signature for an emerging transaction. It is performed
+/// privately between two nodes, so the rest of the network is unaffected.
 #[derive(Serialize, Deserialize)]
 pub struct SignTransactionQuery {
 	transaction: Transaction,
 }
 
+/// Reply to a sign transaction request.
 #[derive(Serialize, Deserialize)]
 pub struct SignTransactionResponse {
 	signed_transaction: SignedTransaction,
 }
 
+/// This message is used to query for transaction state.
+/// TODO It is used ...
 #[derive(Serialize, Deserialize)]
 pub struct TransactionStateQuery {
 	round_id: RoundId,
 	full_transaction: bool,
 	transaction_hash: Hash,
+	// TODO last_transaction_hash: Option<Hash>,
 }
 
+/// Reply to a transaction state request.
 #[derive(Serialize, Deserialize)]
 pub struct TransactionStateResponse {
 	transaction_hash: Hash,
@@ -45,11 +53,15 @@ pub struct TransactionStateResponse {
 	transaction: Transaction,
 }
 
+/// This message is part of transaction gossip protocol,
+/// where nodes broadcast new transactions to the network.
 #[derive(Serialize, Deserialize)]
 pub struct TransactionBroadcast {
 	transaction: Transaction,
 }
 
+/// This message is part of round synchronization protocol
+/// where nodes try to unify their transaction sets.
 #[derive(Serialize, Deserialize)]
 pub struct SyncState {
 	round_id: RoundId,
@@ -57,6 +69,9 @@ pub struct SyncState {
 	range_hashes: Vec<Hash>,
 }
 
+/// This message is part of round voting protocol where each node
+/// proposes its vision on the pending round and then votes for the
+/// version that is most present in the network.
 #[derive(Serialize, Deserialize)]
 pub struct RoundState {
 	round_id: RoundId,
@@ -66,7 +81,8 @@ pub struct RoundState {
 	signature: Signature,
 }
 
-/// Messages specific to the Blitz protocol
+/// Messages specific to the Blitz protocol.
+/// See the description of individual entries.
 #[derive(Serialize, Deserialize)]
 pub enum BlitzMessage {
 	SignTransactionQuery(SignTransactionQuery),
