@@ -232,12 +232,7 @@ impl<B, E, Block: BlockT> Client<B, E, Block> where
 	///
 	/// No changes are made.
 	pub fn execution_proof(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
-		use call_executor::state_to_execution_proof;
-
-		let result = self.executor.call(id, method, call_data);
-		let result = result?.return_data;
-		let proof = self.backend.state_at(*id).map(|state| state_to_execution_proof(&state))?;
-		Ok((result, proof))
+		self.state_at(id).and_then(|state| self.executor.prove_at_state(state, &mut Default::default(), method, call_data))
 	}
 
 	/// Set up the native execution environment to call into a native runtime code.
