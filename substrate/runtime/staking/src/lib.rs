@@ -104,12 +104,12 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize>;
+	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<usize> + Copy;
+	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
 }
 
 decl_module! {
