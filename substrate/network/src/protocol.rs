@@ -282,6 +282,7 @@ impl<B: BlockT> Protocol<B> where
 			id: request.id,
 			blocks: blocks,
 		};
+		trace!(target: "sync", "Sending BlockResponse with {} blocks", response.blocks.len());
 		self.send_message(io, peer, GenericMessage::BlockResponse(response))
 	}
 
