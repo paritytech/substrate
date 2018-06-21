@@ -19,7 +19,8 @@
 
 use std::sync::Arc;
 use futures::future::IntoFuture;
-use state_machine::CodeExecutor;
+use state_machine::{CodeExecutor, TryIntoTrieBackend as TryIntoStateTrieBackend,
+	TrieBackend as StateTrieBackend};
 use state_machine::backend::Backend as StateBackend;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
@@ -54,7 +55,7 @@ pub trait Fetcher<B: BlockT>: Send + Sync {
 /// Light client remote data checker.
 pub trait FetchChecker<B: BlockT>: Send + Sync {
 	/// Check remote method execution proof.
-	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult>;
+	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: Vec<Vec<u8>>) -> error::Result<CallResult>;
 }
 
 /// Light client backend.
@@ -202,12 +203,19 @@ impl<H: Clone> StateBackend for OnDemandState<H> {
 	}
 }
 
+impl<H> TryIntoStateTrieBackend for OnDemandState<H> {
+	fn try_into_trie_backend(self) -> Option<StateTrieBackend> {
+		None
+	}
+}
+
 impl<E, B> FetchChecker<B> for LightDataChecker<E, B>
 	where
 		E: CodeExecutor,
 		B: BlockT,
+		<<B as BlockT>::Header as HeaderT>::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
 {
-	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult> {
+	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: Vec<Vec<u8>>) -> error::Result<CallResult> {
 		check_execution_proof(&*self.backend, &self.executor, request, remote_proof)
 	}
 }

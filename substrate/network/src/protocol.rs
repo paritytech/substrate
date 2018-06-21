@@ -507,17 +507,17 @@ impl<B: BlockT> Protocol<B> where
 
 	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest<B::Hash>) {
 		trace!(target: "sync", "Remote request {} from {} ({} at {})", request.id, peer_id, request.method, request.block);
-		let (value, proof) = match self.chain.execution_proof(&request.block, &request.method, &request.data) {
-			Ok((value, proof)) => (value, proof),
+		let proof = match self.chain.execution_proof(&request.block, &request.method, &request.data) {
+			Ok((_, proof)) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote request {} from {} ({} at {}) failed with: {}",
 					request.id, peer_id, request.method, request.block, error);
-				(Default::default(), Default::default())
+				Default::default()
 			},
 		};
 
 		self.send_message(io, peer_id, GenericMessage::RemoteCallResponse(message::RemoteCallResponse {
-			id: request.id, value, proof,
+			id: request.id, proof,
 		}));
 	}
 
