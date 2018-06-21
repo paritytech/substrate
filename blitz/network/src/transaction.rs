@@ -146,5 +146,4 @@ pub struct TransactionContext {
 
 	/// ?
 	broadcast_timestamp: Timestamp,
-
 }

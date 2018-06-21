@@ -50,14 +50,14 @@ pub struct TransactionStateResponse {
 	full_transaction: bool,
 	seen: bool,
 	accepted: bool,
-	transaction: Transaction,
+	transaction: SignedTransaction,
 }
 
 /// This message is part of transaction gossip protocol,
 /// where nodes broadcast new transactions to the network.
 #[derive(Serialize, Deserialize)]
 pub struct TransactionBroadcast {
-	transaction: Transaction,
+	transaction: SignedTransaction,
 }
 
 /// This message is part of round synchronization protocol

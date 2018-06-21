@@ -28,15 +28,18 @@ extern crate futures;
 extern crate serde_derive;
 extern crate serde_json;
 
+#[macro_use]
+extern crate log;
+
 mod message;
 mod transaction;
 
 use message::BlitzMessage;
 use codec::Slicable;
 use substrate_primitives::{AuthorityId};
-use substrate_network::{PeerId, RequestId};
+use substrate_network::{PeerId, RequestId, Context};
 use substrate_network::specialization::Specialization;
-use substrate_network::StatusMessage as FullStatus;
+use substrate_network::StatusMessage as GenericFullStatus;
 use blitz_primitives::{Block, Hash};
 
 use std::collections::HashMap;
@@ -46,6 +49,8 @@ pub const BLITZ_PROTOCOL_ID: ::substrate_network::ProtocolId = *b"blz";
 
 /// Specialization of the network service for the polkadot protocol.
 pub type NetworkService = ::substrate_network::Service<Block, BlitzProtocol>;
+
+type FullStatus = GenericFullStatus<Block>;
 
 /// Status of a Polkadot node.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -145,7 +150,7 @@ impl Specialization<Block> for BlitzProtocol {
 		Status { /*collating_for: self.collating_for.clone()*/ }.encode()
 	}
 
-	fn on_peer_connected(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, status: FullStatus) {
+	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, status: FullStatus) {
 		let status = match Status::decode(&mut &status.chain_status[..]) {
 			Some(status) => status,
 			None => {
@@ -163,7 +168,7 @@ impl Specialization<Block> for BlitzProtocol {
 		self.peers.insert(peer_id, PeerInfo { status });
 	}
 
-	fn on_peer_disconnected(&mut self, _ctx: &mut HandlerContext, peer_id: PeerId) {
+	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, peer_id: PeerId) {
 		if let Some(info) = self.peers.remove(&peer_id) {
 			/*if let Some(collators) = info.status.collating_for.and_then(|id| self.collators.get_mut(&id)) {
 				if let Some(pos) = collators.iter().position(|x| x == &peer_id) {
@@ -173,30 +178,35 @@ impl Specialization<Block> for BlitzProtocol {
 		}
 	}
 
-	fn on_message(&mut self, ctx: &mut HandlerContext, peer_id: PeerId, message: Vec<u8>) {
-		let message: BlitzMessage = match serde_json::from_slice(&message) {
-			Ok(m) => m,
-			Err(e) => {
-				//debug!("Invalid packet from {}: {}", peer_id, e);
+	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, message: substrate_network::message::Message<Block>) {
+		use substrate_network::generic_message::Message;
 
-				ctx.disable_peer(peer_id);
-				return;
-			}
-		};
-
-		// TODO [dk] process incoming message
 		match message {
-			BlitzMessage::TransactionStateQuery(query) => {
-				
-			},
-			_ => {},
+			Message::BftMessage(bft_message) => {
+				// TODO
+			}
+
+			Message::ChainSpecific(raw_data) => {
+				let message: BlitzMessage = match serde_json::from_slice(&raw_data) {
+					Ok(m) => m,
+					Err(e) => {
+						trace!(target: "b_net", "Bad message from {}: {}", peer_id, e);
+						ctx.disable_peer(peer_id);
+						return;
+					}
+				};
+
+				// TODO process incoming blitz message
+			}
+
+			_ => {}
 		}
 	}
 }
 
 impl BlitzProtocol {
-	fn send_message(ctx: &mut HandlerContext, peer_id: PeerId, message: BlitzMessage) {
+	fn send_message(ctx: &mut Context<Block>, peer_id: PeerId, message: BlitzMessage) {
 		let data = serde_json::to_vec(&message).expect("serialization is infallible");
-		ctx.send(peer_id, data);
+		ctx.send_message(peer_id, substrate_network::generic_message::Message::ChainSpecific(data));
 	}
 }
