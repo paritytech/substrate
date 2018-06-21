@@ -66,13 +66,9 @@ mod chain_spec;
 pub use chain_spec::ChainSpec;
 
 use std::io;
-use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::collections::HashMap;
-use substrate_primitives::storage::{StorageData, StorageKey};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use runtime_primitives::StorageMap;
 use polkadot_primitives::Block;
 
 use futures::sync::mpsc;
@@ -100,10 +96,13 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 	}
 }
 
-fn read_storage_json(filename: &str) -> Option<StorageMap> {
-	let file = File::open(PathBuf::from(filename)).ok()?;
-	let h: HashMap<StorageKey, StorageData> = ::serde_json::from_reader(&file).ok()?;
-	Some(h.into_iter().map(|(k, v)| (k.0, v.0)).collect())
+fn load_spec(matches: &clap::ArgMatches) -> service::ChainSpec {
+	let chain_spec = matches.value_of("chain")
+		.map(ChainSpec::from)
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
+	let spec = chain_spec.load().expect("Error loading chain spec");
+	info!("Chain specification: {}", spec.name);
+	spec
 }
 
 /// Parse command line arguments and start the node.
@@ -118,8 +117,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
-	let core = reactor::Core::new().expect("tokio::Core could not be created");
-
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
 		Ok(m) => m,
@@ -140,6 +137,18 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	info!("  version {}", crate_version!());
 	info!("  by Parity Technologies, 2017, 2018");
 
+	if let Some(matches) = matches.subcommand_matches("build-spec") {
+		let spec = load_spec(&matches);
+		info!("Building chain spec");
+		let json =  if matches.is_present("raw") {
+			spec.to_json_raw()
+		} else {
+			spec.to_json()
+		};
+		print!("{}", json);
+		return Ok(())
+	}
+
 	let mut config = service::Configuration::default();
 
 	if let Some(name) = matches.value_of("name") {
@@ -147,12 +156,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		info!("Node name: {}", config.name);
 	}
 
-	let chain_spec = matches.value_of("chain")
-		.map(ChainSpec::from)
-		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
-	info!("Chain specification: {}", chain_spec);
-
-	config.chain_name = chain_spec.clone().into();
+	let spec = load_spec(&matches);
+	config.chain_name = spec.name.clone();
 
 	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
 		let name = config.name.clone();
@@ -184,23 +189,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.into();
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
-
-	if matches.is_present("build-spec") {
-		info!("Building chain spec");
-		let spec = chain_spec.load().expect("Error loading chain spec");
-		let json = spec.to_json();
-		print!("{}", json);
-		return Ok(())
-	}
-
-	let (genesis_storage, boot_nodes) = chain_spec.load()
-		.map(service::ChainSpec::deconstruct)
-		.unwrap_or_else(|f| (Box::new(move || 
-			read_storage_json(&f)
-				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
-				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
-		), vec![]));
-	
+	let (genesis_storage, boot_nodes) = spec.deconstruct();
 	config.genesis_storage = genesis_storage;
 
 	let role =
@@ -250,6 +239,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		chain_name: config.chain_name.clone(),
 	};
 
+	let core = reactor::Core::new().expect("tokio::Core could not be created");
 	match role == service::Role::LIGHT {
 		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf),
 		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf),

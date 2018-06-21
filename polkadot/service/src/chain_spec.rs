@@ -64,9 +64,32 @@ impl ChainSpec {
 		::serde_json::from_slice(json).expect("Error parsing spec file.")
 	}
 
+	/// Parse json file into a `ChainSpec`
+	pub fn from_json_file<R: ::std::io::Read>(json: R) -> Self {
+		::serde_json::from_reader(json).expect("Error parsing spec file.")
+	}
+
 	/// Dump to json string.
-	pub fn to_json(&self) -> String {
-		::serde_json::to_string_pretty(self).expect("Error generating spec file.")
+	pub fn to_json(self) -> String {
+		::serde_json::to_string_pretty(&self).expect("Error generating spec file.")
+	}
+
+	/// Dump to json with raw genesis storage.
+	pub fn to_json_raw(self) -> String {
+		match self.genesis {
+			Config::Raw(_) => self.to_json(),
+			Config::Local(gc) => {
+				let storage = gc.build_storage().into_iter()
+					.map(|(k, v)| (StorageKey(k), StorageData(v)))
+					.collect();
+
+				ChainSpec {
+					name: self.name.clone(),
+					boot_nodes: self.boot_nodes.clone(),
+					genesis: Config::Raw(storage),
+				}.to_json()
+			}
+		}
 	}
 
 	/// PoC-1 testnet config.
@@ -137,7 +160,7 @@ impl ChainSpec {
 			"enode://051b18f63a316c4c5fef4631f8c550ae0adba179153588406fac3e5bbbbf534ebeda1bf475dceda27a531f6cdef3846ab6a010a269aa643a1fec7bff51af66bd@104.211.48.51:30333".into(),
 			"enode://c831ec9011d2c02d2c4620fc88db6d897a40d2f88fd75f47b9e4cf3b243999acb6f01b7b7343474650b34eeb1363041a422a91f1fc3850e43482983ee15aa582@104.211.48.247:30333".into(),
 		];
-		ChainSpec { name: "poc-2".to_owned(), genesis, boot_nodes }
+		ChainSpec { name: "PoC-2 Testnet".to_owned(), genesis, boot_nodes }
 	}
 
 	/// Local testnet config.
@@ -198,14 +221,16 @@ impl ChainSpec {
 			parachains: Some(Default::default()),
 		});
 		let boot_nodes = Vec::new();
-		ChainSpec { name: "testnet".to_owned(), genesis, boot_nodes }
+		ChainSpec { name: "Local Testnet".to_owned(), genesis, boot_nodes }
 	}
 
 	/// Development config (single validator Alice)
 	pub fn development_config() -> Self {
-		Self::testnet_config(vec![
+		let mut config = Self::testnet_config(vec![
 			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-		])
+		]);
+		config.name = "Development".into();
+		config
 	}
 
 	/// Local testnet config (multivalidator Alice + Bob)

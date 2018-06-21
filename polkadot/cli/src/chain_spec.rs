@@ -17,6 +17,8 @@
 //! Predefined chains.
 
 use service;
+use std::fs::File;
+use std::path::PathBuf;
 
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
@@ -42,7 +44,10 @@ impl ChainSpec {
 			ChainSpec::Development => service::ChainSpec::development_config(),
 			ChainSpec::LocalTestnet => service::ChainSpec::local_testnet_config(),
 			ChainSpec::PoC2Testnet => service::ChainSpec::poc_2_testnet_config(),
-			ChainSpec::Custom(f) => return Err(f),
+			ChainSpec::Custom(f) => {
+					let file = File::open(PathBuf::from(f)).expect("Error opening spec file");
+					service::ChainSpec::from_json_file(file)
+				}
 		})
 	}
 }
@@ -67,22 +72,6 @@ impl From<ChainSpec> for String {
 			ChainSpec::PoC1Testnet => "poc-1".into(),
 			ChainSpec::PoC2Testnet => "poc-2".into(),
 			ChainSpec::Custom(f) => format!("custom ({})", f),
-		}
-	}
-}
-
-impl ::std::fmt::Display for ChainSpec {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		if let ChainSpec::Custom(n) = self {
-			write!(f, "Custom ({})", n)
-		} else {
-			write!(f, "{}", match *self {
-				ChainSpec::Development => "Development",
-				ChainSpec::LocalTestnet => "Local Testnet",
-				ChainSpec::PoC1Testnet => "PoC-1 Testnet",
-				ChainSpec::PoC2Testnet => "PoC-2 Testnet",
-				_ => unreachable!(),
-			})
 		}
 	}
 }
