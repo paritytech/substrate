@@ -101,7 +101,7 @@ pub struct CommitSet<H: Hash> {
 }
 
 /// Pruning contraints. If none are specified pruning is
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Constraints {
 	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only unfinalized states.
 	pub max_blocks: Option<u32>,
@@ -110,7 +110,7 @@ pub struct Constraints {
 }
 
 /// Pruning mode.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PruningMode {
 	/// Maintain a pruning window.
 	Constrained(Constraints),
@@ -118,6 +118,16 @@ pub enum PruningMode {
 	ArchiveAll,
 	/// Finalization discards unfinalized nodes. All the finalized nodes are kept in the DB.
 	ArchiveCanonical,
+}
+
+impl PruningMode {
+	/// Create a mode that keeps given number of blocks.
+	pub fn keep_blocks(n: u32) -> PruningMode {
+		PruningMode::Constrained(Constraints {
+			max_blocks: Some(n),
+			max_mem: None,
+		})
+	}
 }
 
 fn to_meta_key<S: Slicable>(suffix: &[u8], data: &S) -> Vec<u8> {
@@ -280,15 +290,15 @@ mod tests {
 	use test::{make_db, make_changeset, TestDb};
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
-		let mut db = make_db(&[91, 921, 922, 93]);
+		let mut db = make_db(&[91, 921, 922, 93, 94]);
 		let state_db = StateDb::new(settings, &db).unwrap();
 
 		db.commit(&state_db.insert_block(&H256::from(1), 1, &H256::from(0), make_changeset(&[1], &[91])));
 		db.commit(&state_db.insert_block(&H256::from(21), 2, &H256::from(1), make_changeset(&[21], &[921, 1])));
 		db.commit(&state_db.insert_block(&H256::from(22), 2, &H256::from(1), make_changeset(&[22], &[922])));
-		db.commit(&state_db.insert_block(&H256::from(3), 3, &H256::from(21), make_changeset(&[3], &[922])));
+		db.commit(&state_db.insert_block(&H256::from(3), 3, &H256::from(21), make_changeset(&[3], &[93])));
 		db.commit(&state_db.finalize_block(&H256::from(1)));
-		db.commit(&state_db.insert_block(&H256::from(4), 4, &H256::from(3), make_changeset(&[4], &[93])));
+		db.commit(&state_db.insert_block(&H256::from(4), 4, &H256::from(3), make_changeset(&[4], &[94])));
 		db.commit(&state_db.finalize_block(&H256::from(21)));
 		db.commit(&state_db.finalize_block(&H256::from(3)));
 
@@ -298,13 +308,22 @@ mod tests {
 	#[test]
 	fn full_archive_keeps_everything() {
 		let (db, _) = make_test_db(PruningMode::ArchiveAll);
-		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93])));
+		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
 	}
 
 	#[test]
 	fn canonical_archive_keeps_canonical() {
 		let (db, _) = make_test_db(PruningMode::ArchiveCanonical);
-		assert!(db.data_eq(&make_db(&[1, 21, 3, 91, 921, 922, 93])));
+		assert!(db.data_eq(&make_db(&[1, 21, 3, 91, 921, 922, 93, 94])));
+	}
+
+	#[test]
+	fn prune_window_0() {
+		let (db, _) = make_test_db(PruningMode::Constrained(Constraints {
+			max_blocks: Some(0),
+			max_mem: None,
+		}));
+		assert!(db.data_eq(&make_db(&[21, 3, 922, 94])));
 	}
 
 	#[test]
@@ -313,7 +332,7 @@ mod tests {
 			max_blocks: Some(1),
 			max_mem: None,
 		}));
-		assert!(db.data_eq(&make_db(&[21, 3, 922, 93])));
+		assert!(db.data_eq(&make_db(&[21, 3, 922, 93, 94])));
 	}
 
 	#[test]
@@ -322,6 +341,6 @@ mod tests {
 			max_blocks: Some(2),
 			max_mem: None,
 		}));
-		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93])));
+		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93, 94])));
 	}
 }

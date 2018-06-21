@@ -75,7 +75,7 @@ use network::ManageNetwork;
 use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
-pub use config::{Configuration, Role, OptionChainSpec, ChainSpec};
+pub use config::{Configuration, Role, OptionChainSpec, ChainSpec, PruningMode};
 
 type CodeExecutor = NativeExecutor<LocalDispatch>;
 
@@ -409,6 +409,7 @@ impl<B, E> Service<B, E>
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: None,
 			path: config.database_path.into(),
+			pruning: config.pruning,
 		};
 
 		let (client, on_demand) = client_creator(db_settings, executor, genesis_builder)?;

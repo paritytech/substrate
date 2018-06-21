@@ -66,7 +66,7 @@ use substrate_telemetry::{init_telemetry, TelemetryConfig};
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::{OptionChainSpec, ChainSpec};
+use service::{OptionChainSpec, ChainSpec, PruningMode};
 
 const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
@@ -161,6 +161,11 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.into();
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.pruning = match matches.value_of("pruning") {
+		Some("archive") => PruningMode::ArchiveAll,
+		None => PruningMode::keep_blocks(256),
+		Some(s) => PruningMode::keep_blocks(s.parse().expect("Invalid pruning mode specified")),
+	};
 
 	let mut role = service::Role::FULL;
 	if matches.is_present("collator") {

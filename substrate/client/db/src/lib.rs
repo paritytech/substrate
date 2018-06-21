@@ -56,8 +56,8 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing
 use state_machine::backend::Backend as StateBackend;
 use state_machine::CodeExecutor;
 use state_db::StateDb;
+pub use state_db::PruningMode;
 
-const PRUNING_WINDOW: u32 = 256;
 const FINALIZATION_WINDOW: u64 = 32;
 
 /// Database settings.
@@ -66,6 +66,8 @@ pub struct DatabaseSettings {
 	pub cache_size: Option<usize>,
 	/// Path to the database.
 	pub path: PathBuf,
+	/// Pruning mode.
+	pub pruning: PruningMode,
 }
 
 /// Create an instance of db-backed client.
@@ -81,7 +83,7 @@ pub fn new_client<E, F, Block>(
 		E: CodeExecutor,
 		F: client::GenesisBuilder<Block>,
 {
-	let backend = Arc::new(Backend::new(&settings)?);
+	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	Ok(client::Client::new(backend, executor, genesis_builder)?)
 }
@@ -485,43 +487,38 @@ pub struct Backend<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	state_db: Arc<StateDb<Block::Hash, H256>>,
 	blockchain: BlockchainDb<Block>,
+	finalization_window: u64,
 }
 
 impl<Block: BlockT> Backend<Block> where <Block::Header as HeaderT>::Number: As<u32> {
 	/// Create a new instance of database backend.
-	pub fn new(config: &DatabaseSettings) -> Result<Self, client::error::Error> {
+	pub fn new(config: DatabaseSettings, finalization_window: u64) -> Result<Self, client::error::Error> {
 		let mut db_config = DatabaseConfig::with_columns(Some(columns::NUM_COLUMNS));
 		db_config.memory_budget = config.cache_size;
 		db_config.wal = true;
 		let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
 		let db = Arc::new(Database::open(&db_config, &path).map_err(db_err)?);
 
-		Backend::from_kvdb(db as Arc<_>, false)
+		Backend::from_kvdb(db as Arc<_>, config.pruning, finalization_window)
 	}
 
 	#[cfg(test)]
 	fn new_test() -> Self {
 		let db = Arc::new(::kvdb_memorydb::create(columns::NUM_COLUMNS));
 
-		Backend::from_kvdb(db as Arc<_>, false).expect("failed to create test-db")
+		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(0), 0).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<KeyValueDB>, archive: bool) -> Result<Self, client::error::Error> {
+	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, finalization_window: u64) -> Result<Self, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
-		let pruning_mode = match archive {
-			true => state_db::PruningMode::ArchiveAll,
-			false => state_db::PruningMode::Constrained(state_db::Constraints {
-				max_mem: None,
-				max_blocks: Some(PRUNING_WINDOW),
-			}),
-		};
 		let map_e = |e: state_db::Error<BackingStateDb>| ::client::error::Error::from(format!("State database error: {:?}", e));
-		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning_mode, &BackingStateDb(&*db)).map_err(map_e)?;
+		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &BackingStateDb(&*db)).map_err(map_e)?;
 
 		Ok(Backend {
 			db,
 			state_db: Arc::new(state_db),
 			blockchain,
+			finalization_window,
 		})
 	}
 }
@@ -589,9 +586,14 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 			apply_state_commit(&mut transaction, commit);
 
 			//finalize an older block
-			if number_u64 > FINALIZATION_WINDOW {
-				if let Some(finalizing_hash) = self.blockchain.hash(As::sa((number_u64 - FINALIZATION_WINDOW) as u32))? {
-					trace!("Finalizing block #{} ({:?})", number_u64 - FINALIZATION_WINDOW, finalizing_hash);
+			if number_u64 > self.finalization_window {
+				let finalizing_hash = if self.finalization_window == 0 {
+					Some(hash)
+				} else {
+					self.blockchain.hash(As::sa((number_u64 - self.finalization_window) as u32))?
+				};
+				if let Some(finalizing_hash) = finalizing_hash {
+					trace!("Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
 					let commit = self.state_db.finalize_block(&finalizing_hash);
 					apply_state_commit(&mut transaction, commit);
 				}
@@ -764,11 +766,11 @@ mod tests {
 	}
 
 	#[test]
-	fn does_not_delete_when_negative_rc() {
+	fn delete_only_when_negative_rc() {
 		let key;
 		let db = Backend::<Block>::new_test();
 
-		{
+		let hash = {
 			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
 			let mut header = Header {
 				number: 0,
@@ -785,6 +787,7 @@ mod tests {
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))
 			).0.into();
+			let hash = header.hash();
 
 			op.reset_storage(storage.iter().cloned()).unwrap();
 
@@ -799,13 +802,14 @@ mod tests {
 			db.commit_operation(op).unwrap();
 
 			assert_eq!(db.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
-		}
+			hash
+		};
 
-		{
+		let hash = {
 			let mut op = db.begin_operation(BlockId::Number(0)).unwrap();
 			let mut header = Header {
 				number: 1,
-				parent_hash: Default::default(),
+				parent_hash: hash,
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
@@ -818,6 +822,7 @@ mod tests {
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))
 			).0.into();
+			let hash = header.hash();
 
 			op.updates.insert(b"hello");
 			op.updates.remove(&key);
@@ -831,13 +836,14 @@ mod tests {
 			db.commit_operation(op).unwrap();
 
 			assert_eq!(db.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
-		}
+			hash
+		};
 
 		{
 			let mut op = db.begin_operation(BlockId::Number(1)).unwrap();
 			let mut header = Header {
-				number: 1,
-				parent_hash: Default::default(),
+				number: 2,
+				parent_hash: hash,
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
@@ -861,7 +867,7 @@ mod tests {
 
 			db.commit_operation(op).unwrap();
 
-			assert!(db.db.get(::columns::STATE, &key.0[..]).unwrap().is_some());
+			assert!(db.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
 		}
 	}
 }

@@ -19,6 +19,7 @@
 use transaction_pool;
 pub use network::Role;
 pub use network::NetworkConfiguration;
+pub use client_db::PruningMode;
 
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
@@ -86,6 +87,8 @@ pub struct Configuration {
 	pub keystore_path: String,
 	/// Path to the database.
 	pub database_path: String,
+	/// Pruning settings.
+	pub pruning: PruningMode,
 	/// Additional key seeds.
 	pub keys: Vec<String>,
 	/// Chain specification.
@@ -108,6 +111,7 @@ impl Default for Configuration {
 			chain_spec: ChainSpec::Development,
 			telemetry: Default::default(),
 			name: "Anonymous".into(),
+			pruning: PruningMode::ArchiveAll,
 		}
 	}
 }
