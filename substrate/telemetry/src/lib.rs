@@ -105,7 +105,7 @@ impl io::Write for TelemetryWriter {
 		let mut l = self.out.lock();
 		let socket_closed = if let Some(ref mut socket) = *l {
 			if let Ok(s) = ::std::str::from_utf8(&self.buffer[..]) {
-				socket.send_message(&ws::Message::text(s)).is_ok()
+				socket.send_message(&ws::Message::text(s)).is_err()
 			} else { false }
 		} else { false };
 		if socket_closed {
