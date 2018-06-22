@@ -142,6 +142,40 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 			}
 		}
 	}
+	fn into_exec_result(self) -> ExecutionResult {
+		// TODO: implement ability to actually return data.
+		let return_data = Vec::new();
+		let gas_left = self.gas_limit - self.gas_used;
+		ExecutionResult {
+			return_data,
+			gas_left,
+		}
+	}
+}
+
+/// The result of execution of a smart-contract.
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct ExecutionResult {
+	return_data: Vec<u8>,
+	gas_left: u64,
+}
+
+impl ExecutionResult {
+	/// The result produced by the execution of the contract.
+	///
+	/// The contract can designate some buffer at the execution time via a special function.
+	/// If contract called this function with non-empty buffer it will be copied here.
+	///
+	/// Note that gas is already charged for returning the data.
+	pub fn return_data(&self) -> &[u8] {
+		&self.return_data
+	}
+
+	/// How much gas left after the execution of the contract.
+	pub fn gas_left(&self) -> u64 {
+		self.gas_left
+	}
 }
 
 /// Execute the given code as a contract.
@@ -149,7 +183,7 @@ pub fn execute<'a, T: Ext>(
 	code: &[u8],
 	ext: &'a mut T,
 	gas_limit: u64,
-) -> Result<(), Error> {
+) -> Result<ExecutionResult, Error> {
 	// ext_gas(amount: u32)
 	//
 	// Account for used gas. Traps if gas used is greater than gas limit.
@@ -294,10 +328,11 @@ pub fn execute<'a, T: Ext>(
 	let mut instance =
 		sandbox::Instance::new(&instrumented_code, &imports, &mut runtime)
 			.map_err(|_| Error::Instantiate)?;
-	instance
+	let _ = instance
 		.invoke(b"call", &[], &mut runtime)
-		.map(|_| ())
-		.map_err(|_| Error::Invoke)
+		.map_err(|_| Error::Invoke)?;
+
+	Ok(runtime.into_exec_result())
 }
 
 #[derive(Clone)]
