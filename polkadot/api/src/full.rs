@@ -221,6 +221,7 @@ mod tests {
 			democracy: Some(Default::default()),
 			parachains: Some(Default::default()),
 			staking: Some(Default::default()),
+			timestamp: Some(Default::default()),
 		};
 
 		::client::new_in_mem(LocalDispatch::new(), genesis_config.build_storage()).unwrap()
