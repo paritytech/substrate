@@ -166,16 +166,16 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Prune old or no longer relevant consensus messages.
-	pub fn collect_garbage(&mut self, best_header: Option<&B::Header>) {
+	pub fn collect_garbage(&mut self, best_hash: Option<&B::Hash>) {
 		let hashes = &mut self.message_hashes;
 		let before = self.messages.len();
 		let now = Instant::now();
 		self.messages.retain(|entry| {
 			if entry.instant + MESSAGE_LIFETIME >= now &&
-				best_header.map_or(true, |header|
+				best_hash.map_or(true, |parent_hash|
 					match entry.message {
-						ConsensusMessage::Bft(ref msg) => &msg.parent_hash != header.parent_hash(),
-						ConsensusMessage::ChainSpecific(_, ref h) => h != header.parent_hash(),
+						ConsensusMessage::Bft(ref msg) => &msg.parent_hash != parent_hash,
+						ConsensusMessage::ChainSpecific(_, ref h) => h != parent_hash,
 					})
 			{
 				true

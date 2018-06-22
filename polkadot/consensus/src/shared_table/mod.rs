@@ -475,6 +475,7 @@ mod tests {
 			balance_uploads: Vec::new(),
 			egress_queue_roots: Vec::new(),
 			fees: 1_000_000,
+			block_data_hash: [2, 32].into(),
 		};
 
 		let candidate_statement = GenericStatement::Candidate(candidate);
@@ -523,6 +524,7 @@ mod tests {
 			balance_uploads: Vec::new(),
 			egress_queue_roots: Vec::new(),
 			fees: 1_000_000,
+			block_data_hash: [2; 32].into(),
 		};
 
 		let candidate_statement = GenericStatement::Candidate(candidate);

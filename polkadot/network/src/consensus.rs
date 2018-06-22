@@ -242,6 +242,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 
 		let knowledge = Arc::new(Mutex::new(Knowledge::new()));
 
+		let local_session_key = table.session_key();
 		let table_router = Router::new(
 			table,
 			self.network.clone(),
@@ -253,10 +254,12 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 
 		// spin up a task in the background that processes all incoming statements
 		// TODO: propagate statements on a timer?
-		let process_task = self.network.with_spec(|spec, _ctx| {
-			spec.live_consensus = Some(CurrentConsensus {
+		let process_task = self.network.with_spec(|spec, ctx| {
+			spec.new_consensus(ctx, CurrentConsensus {
 				knowledge,
 				parent_hash,
+				local_session_key,
+				session_keys: Default::default(),
 			});
 
 			MessageProcessTask {

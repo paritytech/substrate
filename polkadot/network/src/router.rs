@@ -178,7 +178,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBloc
 
 impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlockId: Send {
 	type Error = ();
-	type FetchCandidate = future::Empty<BlockData, Self::Error>;
+	type FetchCandidate = BlockDataReceiver,
 	type FetchExtrinsic = Result<Extrinsic, Self::Error>;
 
 	fn local_candidate(&self, receipt: CandidateReceipt, block_data: BlockData, extrinsic: Extrinsic) {
@@ -191,12 +191,29 @@ impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlock
 		route_statement(&*self.network, &*self.table, para_id, self.parent_hash, signed);
 	}
 
-	fn fetch_block_data(&self, _candidate: &CandidateReceipt) -> Self::FetchCandidate {
-		future::empty()
+	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> BlockDataReceiver {
+		let rx = self.network.with_spec(|spec, ctx| { spec.fetch_data(ctx, candidate) });
 	}
 
 	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
 		Ok(Extrinsic)
+	}
+}
+
+/// Receiver for block data.
+pub struct BlockDataReceiver {
+	inner: Option<::futures::sync::oneshot::Receiver<BlockData>>,
+}
+
+impl Future for BlockDataReceiver {
+	type Item = BlockData;
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<BlockData, ()> {
+		match self.inner {
+			Some(ref mut inner) => self.inner.poll.map_err(|_| ()),
+			None => return Err(()),
+		}
 	}
 }
 
