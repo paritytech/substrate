@@ -110,11 +110,21 @@ pub enum Error {
 	Memory,
 }
 
+/// Enumerates all possible *special* trap conditions.
+///
+/// In this runtime traps used not only for signaling about errors but also
+/// to just terminate quickly in some cases.
+enum SpecialTrap {
+	/// Signals that trap was generated in response to call `ext_return` host function.
+	Return(Vec<u8>),
+}
+
 struct Runtime<'a, T: Ext + 'a> {
 	ext: &'a mut T,
 	memory: sandbox::Memory,
 	gas_used: u64,
 	gas_limit: u64,
+	special_trap: Option<SpecialTrap>,
 }
 impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	fn memory(&self) -> &sandbox::Memory {
@@ -142,15 +152,55 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 			}
 		}
 	}
-	fn into_exec_result(self) -> ExecutionResult {
-		// TODO: implement ability to actually return data.
-		let return_data = Vec::new();
-		let gas_left = self.gas_limit - self.gas_used;
-		ExecutionResult {
-			return_data,
-			gas_left,
+
+	/// Save a data buffer as a result of the execution.
+	///
+	/// This function also charges gas for the returning.
+	///
+	/// Returns `Err` if there is not enough gas.
+	fn return_(&mut self, data: Vec<u8>) -> Result<(), ()> {
+		// TODO: Appropriate calculation of price to return the result.
+		let price = data.len() as u64;
+		if self.charge_gas(price) {
+			self.special_trap = Some(SpecialTrap::Return(data));
+			Ok(())
+		} else {
+			Err(())
 		}
 	}
+}
+
+fn to_execution_result<T: Ext>(
+	runtime: Runtime<T>,
+	run_err: Option<sandbox::Error>,
+) -> Result<ExecutionResult, Error> {
+	let gas_left = runtime.gas_limit - runtime.gas_used;
+	let mut return_data = Vec::new();
+
+	// Check the exact type of the error. It could be plain trap or
+	// special runtime trap the we must recognize.
+	match (run_err, runtime.special_trap) {
+		// No traps were generated. Proceed normally.
+		(None, None) => {},
+		// Special case. The trap was the result of the execution `return` host function.
+		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(rd))) => {
+			return_data = rd
+		}
+		// Any other kind of a trap should result in a failure.
+		(Some(_), _) => {
+			return Err(Error::Invoke);
+		}
+		_ => {
+			// All possible cases should have been handled.
+			// If the control flow reached here, then it is a logic error.
+			panic!();
+		}
+	}
+
+	Ok(ExecutionResult {
+		gas_left,
+		return_data,
+	})
 }
 
 /// The result of execution of a smart-contract.
@@ -189,7 +239,10 @@ pub fn execute<'a, T: Ext>(
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
 	// - amount: How much gas is used.
-	fn ext_gas<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_gas<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let amount = args[0].as_i32().unwrap() as u32;
 		if e.charge_gas(amount as u64) {
 			Ok(sandbox::ReturnValue::Unit)
@@ -227,10 +280,7 @@ pub fn execute<'a, T: Ext>(
 		} else {
 			None
 		};
-		e.ext_mut().set_storage(
-			&location,
-			value,
-		);
+		e.ext_mut().set_storage(&location, value);
 
 		Ok(sandbox::ReturnValue::Unit)
 	}
@@ -245,7 +295,10 @@ pub fn execute<'a, T: Ext>(
 	//   memory where the location of the requested value is placed.
 	// - dest_ptr: pointer where contents of the specified storage location
 	//   should be placed.
-	fn ext_get_storage<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_get_storage<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let location_ptr = args[0].as_i32().unwrap() as u32;
 		let dest_ptr = args[1].as_i32().unwrap() as u32;
 
@@ -262,7 +315,10 @@ pub fn execute<'a, T: Ext>(
 	}
 
 	// ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_transfer<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_transfer<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let transfer_to_ptr = args[0].as_i32().unwrap() as u32;
 		let transfer_to_len = args[1].as_i32().unwrap() as u32;
 		let value_ptr = args[2].as_i32().unwrap() as u32;
@@ -284,7 +340,10 @@ pub fn execute<'a, T: Ext>(
 	}
 
 	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_create<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_create<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let code_ptr = args[0].as_i32().unwrap() as u32;
 		let code_len = args[1].as_i32().unwrap() as u32;
 		let value_ptr = args[2].as_i32().unwrap() as u32;
@@ -304,6 +363,27 @@ pub fn execute<'a, T: Ext>(
 		Ok(sandbox::ReturnValue::Unit)
 	}
 
+	// ext_return(data_ptr: u32, data_len: u32) -> !
+	fn ext_return<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+		let data_ptr = args[0].as_i32().unwrap() as u32;
+		let data_len = args[1].as_i32().unwrap() as u32;
+
+		let mut data_buf = Vec::new();
+		data_buf.resize(data_len as usize, 0);
+		e.memory().get(data_ptr, &mut data_buf)?;
+
+		e.return_(data_buf)
+			.map_err(|_| sandbox::HostError)?;
+
+		// The trap mechanism is used to immediately terminate the execution.
+		// This trap should be handled appropriate before returning the result
+		// to the user of this crate.
+		Err(sandbox::HostError)
+	}
+
 	let PreparedContract {
 		instrumented_code,
 		memory,
@@ -315,6 +395,7 @@ pub fn execute<'a, T: Ext>(
 	imports.add_host_func("env", "ext_get_storage", ext_get_storage::<T>);
 	imports.add_host_func("env", "ext_transfer", ext_transfer::<T>);
 	imports.add_host_func("env", "ext_create", ext_create::<T>);
+	imports.add_host_func("env", "ext_return", ext_return::<T>);
 	// TODO: ext_balance, ext_address, ext_callvalue, etc.
 	imports.add_memory("env", "memory", memory.clone());
 
@@ -323,16 +404,15 @@ pub fn execute<'a, T: Ext>(
 		memory,
 		gas_limit,
 		gas_used: 0,
+		special_trap: None,
 	};
 
-	let mut instance =
-		sandbox::Instance::new(&instrumented_code, &imports, &mut runtime)
-			.map_err(|_| Error::Instantiate)?;
-	let _ = instance
-		.invoke(b"call", &[], &mut runtime)
-		.map_err(|_| Error::Invoke)?;
+	let mut instance = sandbox::Instance::new(&instrumented_code, &imports, &mut runtime)
+		.map_err(|_| Error::Instantiate)?;
 
-	Ok(runtime.into_exec_result())
+	let run_result = instance.invoke(b"call", &[], &mut runtime);
+
+	to_execution_result(runtime, run_result.err())
 }
 
 #[derive(Clone)]
@@ -485,14 +565,11 @@ fn prepare_contract(original_code: &[u8]) -> Result<PreparedContract, Error> {
 					// Maximum number of pages should be always declared.
 					// This isn't a hard requirement and can be treated as a maxiumum set
 					// to configured maximum.
-					return Err(Error::Memory)
+					return Err(Error::Memory);
 				}
-				(initial, maximum) => sandbox::Memory::new(
-					initial,
-					maximum,
-				)
+				(initial, maximum) => sandbox::Memory::new(initial, maximum),
 			}
-		},
+		}
 
 		// If none memory imported then just crate an empty placeholder.
 		// Any access to it will lead to out of bounds trap.
@@ -677,9 +754,6 @@ r#"
 
 		let mut mock_ext = MockExt::default();
 
-		assert_matches!(
-			execute(&code_mem, &mut mock_ext, 100_000),
-			Err(_)
-		);
+		assert_matches!(execute(&code_mem, &mut mock_ext, 100_000), Err(_));
 	}
 }
