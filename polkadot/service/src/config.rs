@@ -17,23 +17,11 @@
 //! Service configuration.
 
 use transaction_pool;
+use runtime_primitives::MakeStorage;
 pub use network::Role;
 pub use network::NetworkConfiguration;
 
-/// The chain specification (this should eventually be replaced by a more general JSON-based chain
-/// specification).
-#[derive(Clone, Copy)]
-pub enum ChainSpec {
-	/// Whatever the current runtime is, with just Alice as an auth.
-	Development,
-	/// Whatever the current runtime is, with simple Alice/Bob auths.
-	LocalTestnet,
-	/// The PoC-2 testnet.
-	PoC2Testnet,
-}
-
 /// Service configuration.
-#[derive(Clone)]
 pub struct Configuration {
 	/// Node roles.
 	pub roles: Role,
@@ -47,8 +35,14 @@ pub struct Configuration {
 	pub database_path: String,
 	/// Additional key seeds.
 	pub keys: Vec<String>,
-	/// Chain specification.
-	pub chain_spec: ChainSpec,
+	/// The name of the chain.
+	pub chain_name: String,
+	/// Chain configuration.
+	pub genesis_storage: MakeStorage,
+	/// Telemetry server URL, optional - only `Some` if telemetry reporting is enabled
+	pub telemetry: Option<String>,
+	/// Node name.
+	pub name: String,
 }
 
 impl Default for Configuration {
@@ -60,7 +54,10 @@ impl Default for Configuration {
 			keystore_path: Default::default(),
 			database_path: Default::default(),
 			keys: Default::default(),
-			chain_spec: ChainSpec::Development,
+			chain_name: Default::default(),
+			genesis_storage: Box::new(Default::default),
+			telemetry: Default::default(),
+			name: "Anonymous".into(),
 		}
 	}
 }

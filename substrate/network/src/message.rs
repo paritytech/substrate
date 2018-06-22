@@ -19,7 +19,7 @@
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use service::Role as RoleFlags;
 
-pub use self::generic::{BlockAnnounce, RemoteCallRequest, ConsensusVote, SignedConsensusVote, FromBlock};
+pub use self::generic::{BlockAnnounce, RemoteCallRequest, ConsensusVote, SignedConsensusVote, FromBlock, Body};
 
 /// A unique ID of a request.
 pub type RequestId = u64;
@@ -157,8 +157,6 @@ pub enum Direction {
 pub struct RemoteCallResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
-	/// Method return value.
-	pub value: Vec<u8>,
 	/// Execution proof.
 	pub proof: Vec<Vec<u8>>,
 }
@@ -166,10 +164,44 @@ pub struct RemoteCallResponse {
 /// Generic types.
 pub mod generic {
 	use primitives::AuthorityId;
+	use codec::Slicable;
 	use runtime_primitives::bft::Justification;
 	use ed25519;
 
 	use super::{Role, BlockAttribute, RemoteCallResponse, RequestId, Transactions, Direction};
+
+	use primitives::bytes;
+
+	/// Emulates Poc-1 extrinsic primitive.
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	pub struct V1Extrinsic(#[serde(with="bytes")] pub Vec<u8>);
+	// Alternative block format for poc-1 compatibility.
+	// TODO: remove this after poc-2
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	#[serde(untagged)]
+	/// Serialized block body type.
+	pub enum Body<Extrinsic> {
+		/// Poc-1. Extrinsics as bytes.
+		V1(Vec<V1Extrinsic>),
+		/// Poc-2 or later. A structured type.
+		Extrinsics(Vec<Extrinsic>),
+	}
+
+	impl<Extrinsic> Body<Extrinsic> where Extrinsic: Slicable {
+		/// Extracts extrinsic from the body.
+		pub fn to_extrinsics(self) -> Vec<Extrinsic> {
+			match self {
+				Body::Extrinsics(e) => e,
+				Body::V1(e) => {
+					e.into_iter().filter_map(|bytes| {
+						let bytes = bytes.0.encode();
+						Slicable::decode(&mut bytes.as_slice())
+					}).collect()
+				}
+			}
+		}
+	}
+
 	/// Block data sent in the response.
 	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 	pub struct BlockData<Header, Hash, Extrinsic> {
@@ -178,7 +210,7 @@ pub mod generic {
 		/// Block header if requested.
 		pub header: Option<Header>,
 		/// Block body if requested.
-		pub body: Option<Vec<Extrinsic>>,
+		pub body: Option<Body<Extrinsic>>,
 		/// Block receipt if requested.
 		pub receipt: Option<Vec<u8>>,
 		/// Block message queue if requested.

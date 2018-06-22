@@ -11,3 +11,4 @@ substrate/pwasm-alloc/Cargo.lock
 substrate/pwasm-libc/Cargo.lock
 demo/runtime/wasm/target/
 **/._*
+.vscode

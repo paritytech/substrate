@@ -36,10 +36,14 @@ extern crate tokio;
 #[macro_use]
 extern crate log;
 
+mod router;
+pub mod consensus;
+
 use codec::Slicable;
-use polkadot_consensus::SignedStatement;
-use polkadot_primitives::{Block, Hash};
-use polkadot_primitives::parachain::{Id as ParaId, BlockData};
+use parking_lot::Mutex;
+use polkadot_consensus::{Statement, SignedStatement, GenericStatement};
+use polkadot_primitives::{Block, SessionKey, Hash};
+use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic};
 use substrate_network::{PeerId, RequestId, Context};
 use substrate_network::consensus_gossip::ConsensusGossip;
 use substrate_network::{message, generic_message};
@@ -47,10 +51,7 @@ use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
 
 use std::collections::HashMap;
-
-mod router;
-
-pub mod consensus;
+use std::sync::Arc;
 
 /// Polkadot protocol id.
 pub const DOT_PROTOCOL_ID: ::substrate_network::ProtocolId = *b"dot";
@@ -113,12 +114,68 @@ struct PeerInfo {
 	status: Status,
 }
 
-/// Polkadot protocol attachment for substrate.
-pub struct PolkadotProtocol {
-	peers: HashMap<PeerId, PeerInfo>,
-	consensus_gossip: ConsensusGossip<Block>,
-	collators: HashMap<ParaId, Vec<PeerId>>,
-	collating_for: Option<ParaId>,
+#[derive(Default)]
+struct KnowledgeEntry {
+	knows_block_data: Vec<SessionKey>,
+	knows_extrinsic: Vec<SessionKey>,
+	block_data: Option<BlockData>,
+	extrinsic: Option<Extrinsic>,
+}
+
+/// Tracks knowledge of peers.
+struct Knowledge {
+	candidates: HashMap<Hash, KnowledgeEntry>,
+}
+
+impl Knowledge {
+	pub fn new() -> Self {
+		Knowledge {
+			candidates: HashMap::new(),
+		}
+	}
+
+	fn note_statement(&mut self, from: SessionKey, statement: &Statement) {
+		match *statement {
+			GenericStatement::Candidate(ref c) => {
+				let mut entry = self.candidates.entry(c.hash()).or_insert_with(Default::default);
+				entry.knows_block_data.push(from);
+				entry.knows_extrinsic.push(from);
+			}
+			GenericStatement::Valid(ref hash) | GenericStatement::Invalid(ref hash) => self.candidates.entry(*hash)
+				.or_insert_with(Default::default)
+				.knows_block_data
+				.push(from),
+			GenericStatement::Available(ref hash) => self.candidates.entry(*hash)
+				.or_insert_with(Default::default)
+				.knows_extrinsic
+				.push(from),
+		}
+	}
+
+	fn note_candidate(&mut self, hash: Hash, block_data: Option<BlockData>, extrinsic: Option<Extrinsic>) {
+		let entry = self.candidates.entry(hash).or_insert_with(Default::default);
+		entry.block_data = entry.block_data.take().or(block_data);
+		entry.extrinsic = entry.extrinsic.take().or(extrinsic);
+	}
+}
+
+struct CurrentConsensus {
+	knowledge: Arc<Mutex<Knowledge>>,
+	parent_hash: Hash,
+}
+
+impl CurrentConsensus {
+	// get locally stored block data for a candidate.
+	fn block_data(&self, hash: &Hash) -> Option<BlockData> {
+		self.knowledge.lock().candidates.get(hash)
+			.and_then(|entry| entry.block_data.clone())
+	}
+
+	// get locally stored extrinsic data for a candidate.
+	fn extrinsic(&self, hash: &Hash) -> Option<Extrinsic> {
+		self.knowledge.lock().candidates.get(hash)
+			.and_then(|entry| entry.extrinsic.clone())
+	}
 }
 
 /// Polkadot-specific messages.
@@ -130,6 +187,26 @@ pub enum Message {
 	RequestBlockData(RequestId, Hash),
 	/// Provide block data by candidate hash.
 	BlockData(RequestId, BlockData),
+}
+
+/// Polkadot protocol attachment for substrate.
+pub struct PolkadotProtocol {
+	peers: HashMap<PeerId, PeerInfo>,
+	consensus_gossip: ConsensusGossip<Block>,
+	collators: HashMap<ParaId, Vec<PeerId>>,
+	collating_for: Option<ParaId>,
+	live_consensus: Option<CurrentConsensus>,
+}
+
+impl PolkadotProtocol {
+	/// Send a statement to a validator.
+	fn send_statement(&mut self, ctx: &mut Context<Block>, _val: SessionKey, parent_hash: Hash, statement: SignedStatement) {
+		// TODO: something more targeted than gossip.
+		let raw = ::serde_json::to_vec(&Message::Statement(parent_hash, statement))
+			.expect("message serialization infallible; qed");
+
+		self.consensus_gossip.multicast_chain_specific(ctx, raw, parent_hash);
+	}
 }
 
 impl Specialization<Block> for PolkadotProtocol {
@@ -185,7 +262,7 @@ impl Specialization<Block> for PolkadotProtocol {
 				};
 
 				match msg {
-					Message::Statement(parent_hash, statement) =>
+					Message::Statement(parent_hash, _statement) =>
 						self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash),
 					_ => {},
 				}

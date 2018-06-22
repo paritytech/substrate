@@ -19,15 +19,17 @@
 
 use std::sync::Arc;
 use futures::future::IntoFuture;
-use state_machine::CodeExecutor;
+use state_machine::{CodeExecutor, TryIntoTrieBackend as TryIntoStateTrieBackend,
+	TrieBackend as StateTrieBackend};
 use state_machine::backend::Backend as StateBackend;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::BuildStorage;
 use blockchain::{self, BlockStatus};
 use backend;
 use call_executor::{CallResult, RemoteCallExecutor, check_execution_proof};
-use client::{Client, GenesisBuilder};
+use client::Client;
 use error;
 use in_mem::Blockchain as InMemBlockchain;
 
@@ -54,7 +56,7 @@ pub trait Fetcher<B: BlockT>: Send + Sync {
 /// Light client remote data checker.
 pub trait FetchChecker<B: BlockT>: Send + Sync {
 	/// Check remote method execution proof.
-	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult>;
+	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: Vec<Vec<u8>>) -> error::Result<CallResult>;
 }
 
 /// Light client backend.
@@ -202,12 +204,19 @@ impl<H: Clone> StateBackend for OnDemandState<H> {
 	}
 }
 
+impl<H> TryIntoStateTrieBackend for OnDemandState<H> {
+	fn try_into_trie_backend(self) -> Option<StateTrieBackend> {
+		None
+	}
+}
+
 impl<E, B> FetchChecker<B> for LightDataChecker<E, B>
 	where
 		E: CodeExecutor,
 		B: BlockT,
+		<<B as BlockT>::Header as HeaderT>::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
 {
-	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> error::Result<CallResult> {
+	fn check_execution_proof(&self, request: &RemoteCallRequest<B::Hash>, remote_proof: Vec<Vec<u8>>) -> error::Result<CallResult> {
 		check_execution_proof(&*self.backend, &self.executor, request, remote_proof)
 	}
 }
@@ -220,18 +229,18 @@ pub fn new_light_backend<B: BlockT>() -> Arc<Backend<B>> {
 }
 
 /// Create an instance of light client.
-pub fn new_light<F, B, Block>(
+pub fn new_light<F, S, Block>(
 	backend: Arc<Backend<Block>>,
 	fetcher: Arc<F>,
-	genesis_builder: B,
+	genesis_storage: S,
 ) -> error::Result<Client<Backend<Block>, RemoteCallExecutor<Backend<Block>, F>, Block>>
 	where
 		F: Fetcher<Block>,
-		B: GenesisBuilder<Block>,
+		S: BuildStorage,
 		Block: BlockT,
 {
 	let executor = RemoteCallExecutor::new(backend.clone(), fetcher);
-	Client::new(backend, executor, genesis_builder)
+	Client::new(backend, executor, genesis_storage)
 }
 
 /// Create an instance of fetch data checker.

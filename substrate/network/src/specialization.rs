@@ -25,6 +25,9 @@ pub trait Specialization<B: BlockT>: Send + Sync + 'static {
 	/// Get the current specialization-status.
 	fn status(&self) -> Vec<u8>;
 
+	/// Called on start-up.
+	fn on_start(&mut self) { }
+
 	/// Called when a peer successfully handshakes.
 	fn on_connect(&mut self, ctx: &mut Context<B>, peer_id: PeerId, status: ::message::Status<B>);
 

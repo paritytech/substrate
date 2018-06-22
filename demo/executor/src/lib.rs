@@ -51,7 +51,7 @@ mod tests {
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
 	use {staking, system};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
-		BuildExternalities, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic};
+		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -203,7 +203,7 @@ mod tests {
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
-		}.build_externalities()
+		}.build_storage()
 	}
 
 	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<BareExtrinsic>) -> (Vec<u8>, Hash) {

@@ -187,10 +187,10 @@ impl<B: LocalBackend<Block>> LocalPolkadotApi for Client<B, LocalCallExecutor<B,
 mod tests {
 	use super::*;
 	use keyring::Keyring;
-	use client::{self, LocalCallExecutor};
+	use client::LocalCallExecutor;
 	use client::in_mem::Backend as InMemory;
 	use substrate_executor::NativeExecutionDispatch;
-	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildExternalities};
+	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildStorage};
 
 	fn validators() -> Vec<AccountId> {
 		vec![
@@ -207,33 +207,23 @@ mod tests {
 	}
 
 	fn client() -> Client<InMemory<Block>, LocalCallExecutor<InMemory<Block>, NativeExecutor<LocalDispatch>>, Block> {
-		struct GenesisBuilder;
+		let genesis_config = GenesisConfig {
+			consensus: Some(ConsensusConfig {
+				code: LocalDispatch::native_equivalent().to_vec(),
+				authorities: session_keys(),
+			}),
+			system: None,
+			session: Some(SessionConfig {
+				validators: validators(),
+				session_length: 100,
+			}),
+			council: Some(Default::default()),
+			democracy: Some(Default::default()),
+			parachains: Some(Default::default()),
+			staking: Some(Default::default()),
+		};
 
-		impl client::GenesisBuilder<Block> for GenesisBuilder {
-			fn build(self) -> (Header, Vec<(Vec<u8>, Vec<u8>)>) {
-				let genesis_config = GenesisConfig {
-					consensus: Some(ConsensusConfig {
-						code: LocalDispatch::native_equivalent().to_vec(),
-						authorities: session_keys(),
-					}),
-					system: None,
-					session: Some(SessionConfig {
-						validators: validators(),
-						session_length: 100,
-					}),
-					council: Some(Default::default()),
-					democracy: Some(Default::default()),
-					parachains: Some(Default::default()),
-					staking: Some(Default::default()),
-				};
-
-				let storage = genesis_config.build_externalities();
-				let block = ::client::genesis::construct_genesis_block::<Block>(&storage);
-				(block.header, storage.into_iter().collect())
-			}
-		}
-
-		::client::new_in_mem(LocalDispatch::new(), GenesisBuilder).unwrap()
+		::client::new_in_mem(LocalDispatch::new(), genesis_config.build_storage()).unwrap()
 	}
 
 	#[test]

@@ -4,7 +4,7 @@ path = "polkadot/src/main.rs"
 
 [package]
 name = "polkadot"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
@@ -18,7 +18,7 @@ members = [
 	"polkadot/collator",
 	"polkadot/consensus",
 	"polkadot/executor",
-	"polkadot/parachain",
+	"polkadot/network",
 	"polkadot/primitives",
 	"polkadot/runtime",
 	"polkadot/service",
@@ -56,11 +56,8 @@ members = [
 	"substrate/serializer",
 	"substrate/state-machine",
 	"substrate/test-runtime",
+	"substrate/telemetry",
 	"substrate/keystore",
-
-	"demo/runtime",
-	"demo/primitives",
-	"demo/executor",
 	"demo/cli",
 
 	"blitz/runtime",

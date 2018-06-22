@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Statement routing and consenuss table router implementation.
+//! Statement routing and consensus table router implementation.
 
 use polkadot_api::{PolkadotApi, LocalPolkadotApi};
-use polkadot_consensus::{SharedTable, TableRouter, SignedStatement, Statement, GenericStatement};
+use polkadot_consensus::{SharedTable, TableRouter, SignedStatement, GenericStatement, StatementProducer};
 use polkadot_primitives::{Hash, BlockId, SessionKey};
-use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt, Id as ParaId};
 
 use futures::{future, prelude::*};
 use tokio::runtime::TaskExecutor;
@@ -28,7 +28,7 @@ use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use super::NetworkService;
+use super::{NetworkService, Knowledge};
 
 /// Table routing implementation.
 pub struct Router<P: PolkadotApi> {
@@ -36,7 +36,8 @@ pub struct Router<P: PolkadotApi> {
 	network: Arc<NetworkService>,
 	api: Arc<P>,
 	task_executor: TaskExecutor,
-	parent_hash: Option<P::CheckedBlockId>,
+	parent_hash: Hash,
+	knowledge: Arc<Mutex<Knowledge>>,
 	deferred_statements: Arc<Mutex<DeferredStatements>>,
 }
 
@@ -46,7 +47,8 @@ impl<P: PolkadotApi> Router<P> {
 		network: Arc<NetworkService>,
 		api: Arc<P>,
 		task_executor: TaskExecutor,
-		parent_hash: Option<P::CheckedBlockId>,
+		parent_hash: Hash,
+		knowledge: Arc<Mutex<Knowledge>>,
 	) -> Self {
 		Router {
 			table,
@@ -54,6 +56,7 @@ impl<P: PolkadotApi> Router<P> {
 			api,
 			task_executor,
 			parent_hash,
+			knowledge,
 			deferred_statements: Arc::new(Mutex::new(DeferredStatements::new())),
 		}
 	}
@@ -72,6 +75,7 @@ impl<P: PolkadotApi> Clone for Router<P> {
 			task_executor: self.task_executor.clone(),
 			parent_hash: self.parent_hash.clone(),
 			deferred_statements: self.deferred_statements.clone(),
+			knowledge: self.knowledge.clone(),
 		}
 	}
 }
@@ -80,63 +84,95 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBloc
 	/// Import a statement whose signature has been checked already.
 	pub(crate) fn import_statement(&self, statement: SignedStatement) {
 		// defer any statements for which we haven't imported the candidate yet
-		let defer = match statement.statement {
-			GenericStatement::Candidate(_) => false,
-			GenericStatement::Valid(ref hash)
-				| GenericStatement::Invalid(ref hash)
-				| GenericStatement::Available(ref hash)
-				=> self.table.with_candidate(hash, |c| c.is_none()),
+		let (c_hash, parachain_index) = {
+			let candidate_data = match statement.statement {
+				GenericStatement::Candidate(ref c) => Some((c.hash(), c.parachain_index)),
+				GenericStatement::Valid(ref hash)
+					| GenericStatement::Invalid(ref hash)
+					| GenericStatement::Available(ref hash)
+					=> self.table.with_candidate(hash, |c| c.map(|c| (*hash, c.parachain_index))),
+			};
+			match candidate_data {
+				Some(x) => x,
+				None => {
+					self.deferred_statements.lock().push(statement);
+					return;
+				}
+			}
 		};
 
-		if defer {
-			self.deferred_statements.lock().push(statement);
-			return;
-		}
-
 		// import all statements pending on this candidate
-		let (pending, _traces) = if let GenericStatement::Candidate(ref candidate) = statement.statement {
-			self.deferred_statements.lock().get_deferred(&candidate.hash())
+		let (mut statements, _traces) = if let GenericStatement::Candidate(_) = statement.statement {
+			self.deferred_statements.lock().get_deferred(&c_hash)
 		} else {
 			(Vec::new(), Vec::new())
 		};
 
+		// prepend the candidate statement.
+		statements.insert(0, statement);
 		let producers: Vec<_> = self.table.import_remote_statements(
 			self,
-			::std::iter::once(statement).chain(pending),
+			statements.iter().cloned(),
 		);
-
 		// dispatch future work as necessary.
-		for producer in producers.into_iter().filter(|p| !p.is_blank()) {
-			let api = self.api.clone();
-			let parent_hash = self.parent_hash.clone();
+		for (producer, statement) in producers.into_iter().zip(statements) {
+			let producer = match producer {
+				Some(p) => p,
+				None => continue, // statement redundant
+			};
 
-			let validate = move |collation| -> Option<bool> {
-				let checked = parent_hash.clone()?;
+			self.knowledge.lock().note_statement(statement.sender, &statement.statement);
+			self.dispatch_work(c_hash, producer, parachain_index);
+		}
+	}
 
-				match ::polkadot_consensus::validate_collation(&*api, &checked, &collation) {
-					Ok(()) => Some(true),
-					Err(e) => {
-						debug!(target: "p_net", "Encountered bad collation: {}", e);
-						Some(false)
-					}
+	fn dispatch_work<D, E>(&self, candidate_hash: Hash, producer: StatementProducer<D, E>, parachain: ParaId) where
+		D: Future<Item=BlockData,Error=()> + Send + 'static,
+		E: Future<Item=Extrinsic,Error=()> + Send + 'static,
+	{
+		let parent_hash = self.parent_hash.clone();
+
+		let api = self.api.clone();
+		let validate = move |collation| -> Option<bool> {
+			// only do processing work if parent hash isn't unresolved.
+			let checked = match api.check_id(BlockId::hash(parent_hash)) {
+				Ok(checked) => checked,
+				Err(e) => {
+					warn!(target: "p_net", "Cannot validate candidate: unknown parent {}: {}", parent_hash, e);
+					return None;
 				}
 			};
 
-			let table = self.table.clone();
-			let work = producer.prime(validate).map(move |produced| {
-				// TODO: ensure availability of block/extrinsic
-				// and propagate these statements.
-				if let Some(validity) = produced.validity {
-					table.sign_and_import(validity);
+			match ::polkadot_consensus::validate_collation(&*api, &checked, &collation) {
+				Ok(()) => Some(true),
+				Err(e) => {
+					debug!(target: "p_net", "Encountered bad collation: {}", e);
+					Some(false)
 				}
+			}
+		};
 
-				if let Some(availability) = produced.availability {
-					table.sign_and_import(availability);
-				}
-			});
+		let table = self.table.clone();
+		let network = self.network.clone();
+		let knowledge = self.knowledge.clone();
 
-			self.task_executor.spawn(work);
-		}
+		let work = producer.prime(validate).map(move |produced| {
+			// store the data before broadcasting statements, so other peers can fetch.
+			knowledge.lock().note_candidate(candidate_hash, produced.block_data, produced.extrinsic);
+
+			// propagate the statements
+			if let Some(validity) = produced.validity {
+				let signed = table.sign_and_import(validity.clone());
+				route_statement(&*network, &*table, parachain, parent_hash, signed);
+			}
+
+			if let Some(availability) = produced.availability {
+				let signed = table.sign_and_import(availability);
+				route_statement(&*network, &*table, parachain, parent_hash, signed);
+			}
+		});
+
+		self.task_executor.spawn(work);
 	}
 }
 
@@ -145,8 +181,14 @@ impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlock
 	type FetchCandidate = future::Empty<BlockData, Self::Error>;
 	type FetchExtrinsic = Result<Extrinsic, Self::Error>;
 
-	fn local_candidate_data(&self, _hash: Hash, _block_data: BlockData, _extrinsic: Extrinsic) {
-		// give to network to make available and multicast
+	fn local_candidate(&self, receipt: CandidateReceipt, block_data: BlockData, extrinsic: Extrinsic) {
+		// give to network to make available.
+		let hash = receipt.hash();
+		let para_id = receipt.parachain_index;
+		let signed = self.table.sign_and_import(GenericStatement::Candidate(receipt));
+
+		self.knowledge.lock().note_candidate(hash, Some(block_data), Some(extrinsic));
+		route_statement(&*self.network, &*self.table, para_id, self.parent_hash, signed);
 	}
 
 	fn fetch_block_data(&self, _candidate: &CandidateReceipt) -> Self::FetchCandidate {
@@ -155,6 +197,32 @@ impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlock
 
 	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
 		Ok(Extrinsic)
+	}
+}
+
+// get statement to relevant validators.
+fn route_statement(network: &NetworkService, table: &SharedTable, para_id: ParaId, parent_hash: Hash, statement: SignedStatement) {
+	let broadcast = |i: &mut Iterator<Item=&SessionKey>| {
+		let local_key = table.session_key();
+		network.with_spec(|spec, ctx| {
+			for val in i.filter(|&x| x != &local_key) {
+				spec.send_statement(ctx, *val, parent_hash, statement.clone());
+			}
+		});
+	};
+
+	let g_info = table
+		.group_info()
+		.get(&para_id)
+		.expect("statements only produced about groups which exist");
+
+	match statement.statement {
+		GenericStatement::Candidate(_) =>
+			broadcast(&mut g_info.validity_guarantors.iter().chain(g_info.availability_guarantors.iter())),
+		GenericStatement::Valid(_) | GenericStatement::Invalid(_) =>
+			broadcast(&mut g_info.validity_guarantors.iter()),
+		GenericStatement::Available(_) =>
+			broadcast(&mut g_info.availability_guarantors.iter()),
 	}
 }
 
