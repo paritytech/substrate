@@ -646,7 +646,7 @@ impl<C, R, P> CreateProposal<C, R, P>
 
 		{
 			let mut unqueue_invalid = Vec::new();
-			self.transaction_pool.cull_and_get_pending(BlockId::hash(self.parent_hash), |pending_iterator| {
+			let result = self.transaction_pool.cull_and_get_pending(BlockId::hash(self.parent_hash), |pending_iterator| {
 				let mut pending_size = 0;
 				for pending in pending_iterator {
 					// skip and cull transactions which are too large.
@@ -668,6 +668,9 @@ impl<C, R, P> CreateProposal<C, R, P>
 					}
 				}
 			});
+			if let Err(e) = result {
+				warn!("Unable to get the pending set: {:?}", e);
+			}
 
 			self.transaction_pool.remove(&unqueue_invalid, false);
 		}
