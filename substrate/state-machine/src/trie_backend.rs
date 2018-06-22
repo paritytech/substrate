@@ -84,7 +84,6 @@ impl Backend for TrieBackend {
 		let eph = Ephemeral {
 			storage: &self.storage,
 			overlay: &mut read_overlay,
-			recorder: &DummyRecorder,
 		};
 
 		let map_e = |e: Box<TrieError>| format!("Trie lookup error: {}", e);
@@ -98,7 +97,6 @@ impl Backend for TrieBackend {
 		let eph = Ephemeral {
 			storage: &self.storage,
 			overlay: &mut read_overlay,
-			recorder: &DummyRecorder,
 		};
 
 		let collect_all = || -> Result<_, Box<TrieError>> {
@@ -130,7 +128,6 @@ impl Backend for TrieBackend {
 			let mut eph = Ephemeral {
 				storage: &self.storage,
 				overlay: &mut write_overlay,
-				recorder: &DummyRecorder,
 			};
 
 			let mut trie = TrieDBMut::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
@@ -156,34 +153,21 @@ impl TryIntoTrieBackend for TrieBackend {
 	}
 }
 
-pub struct Ephemeral<'a, R: 'a> {
+pub struct Ephemeral<'a> {
 	storage: &'a TrieBackendStorage,
 	overlay: &'a mut MemoryDB,
-	recorder: &'a R,
 }
 
-pub trait TrieLookupRecorder: Clone {
-	fn record(&self, value: &DBValue);
-}
-
-#[derive(Clone)]
-struct DummyRecorder;
-
-impl TrieLookupRecorder for DummyRecorder {
-	fn record(&self, _value: &DBValue) {}
-}
-
-impl<'a, R> Ephemeral<'a, R> {
-	pub fn new(storage: &'a TrieBackendStorage, overlay: &'a mut MemoryDB, recorder: &'a R) -> Self {
+impl<'a> Ephemeral<'a> {
+	pub fn new(storage: &'a TrieBackendStorage, overlay: &'a mut MemoryDB) -> Self {
 		Ephemeral {
 			storage,
 			overlay,
-			recorder,
 		}
 	}
 }
 
-impl<'a, R> HashDB for Ephemeral<'a, R> where R: 'a + TrieLookupRecorder + Send + Sync {
+impl<'a> HashDB for Ephemeral<'a> {
 	fn keys(&self) -> HashMap<TrieH256, i32> {
 		self.overlay.keys() // TODO: iterate backing
 	}
@@ -197,19 +181,13 @@ impl<'a, R> HashDB for Ephemeral<'a, R> where R: 'a + TrieLookupRecorder + Send 
 					Some(val)
 				}
 			}
-			None => {
-				match self.storage.get(&key.0[..]) {
-					Ok(Some(x)) => {
-						self.recorder.record(&x);
-						Some(x)
-					},
-					Ok(None) => None,
-					Err(e) => {
-						warn!(target: "trie", "Failed to read from DB: {}", e);
-						None
-					}
-				}
-			}
+			None => match self.storage.get(&key.0[..]) {
+				Ok(x) => x,
+				Err(e) => {
+					warn!(target: "trie", "Failed to read from DB: {}", e);
+					None
+				},
+			},
 		}
 	}
 

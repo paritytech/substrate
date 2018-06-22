@@ -16,16 +16,16 @@
 
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
-use polkadot_primitives;
+use primitives;
 use rstd::prelude::*;
 use codec::{Slicable, Joiner};
-use runtime_support::Hashable;
 
 use runtime_primitives::traits::{Executable, RefInto, MaybeEmpty};
-use polkadot_primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
+use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
 use {system, session};
 
-use runtime_support::{StorageValue, StorageMap};
+use substrate_runtime_support::{Hashable, StorageValue, StorageMap};
+use substrate_runtime_support::dispatch::Result;
 
 #[cfg(any(feature = "std", test))]
 use rstd::marker::PhantomData;
@@ -33,7 +33,7 @@ use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))]
 use {runtime_io, runtime_primitives};
 
-pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trait {
+pub trait Trait: system::Trait<Hash = primitives::Hash> + session::Trait {
 	/// The position of the set_heads call in the block.
 	const SET_POSITION: u32;
 
@@ -41,10 +41,14 @@ pub trait Trait: system::Trait<Hash = polkadot_primitives::Hash> + session::Trai
 }
 
 decl_module! {
+	/// Parachains module.
 	pub struct Module<T: Trait>;
+
+	/// Call type for parachains.
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: <T as Trait>::PublicAux {
 		// provide candidate receipts for parachains, in ascending order by id.
-		fn set_heads(aux, heads: Vec<CandidateReceipt>) = 0;
+		fn set_heads(aux, heads: Vec<CandidateReceipt>) -> Result = 0;
 	}
 }
 
@@ -137,13 +141,13 @@ impl<T: Trait> Module<T> {
 		<Parachains<T>>::put(parachains);
 	}
 
-	fn set_heads(aux: &<T as Trait>::PublicAux, heads: Vec<CandidateReceipt>) {
-		assert!(aux.is_empty());
-		assert!(!<DidUpdate<T>>::exists(), "Parachain heads must be updated only once in the block");
-		assert!(
+	fn set_heads(aux: &<T as Trait>::PublicAux, heads: Vec<CandidateReceipt>) -> Result {
+		ensure!(aux.is_empty(), "set_heads must not be signed");
+		ensure!(!<DidUpdate<T>>::exists(), "Parachain heads must be updated only once in the block");
+		ensure!(
 			<system::Module<T>>::extrinsic_index() == T::SET_POSITION,
-			"Parachain heads update extrinsic must be at position {} in the block",
-			T::SET_POSITION
+			"Parachain heads update extrinsic must be at position {} in the block"
+//			, T::SET_POSITION
 		);
 
 		let active_parachains = Self::active_parachains();
@@ -151,10 +155,10 @@ impl<T: Trait> Module<T> {
 
 		// perform this check before writing to storage.
 		for head in &heads {
-			assert!(
+			ensure!(
 				iter.find(|&p| p == &head.parachain_index).is_some(),
-				"Submitted candidate for unregistered or out-of-order parachain {}",
-				head.parachain_index.into_inner()
+				"Submitted candidate for unregistered or out-of-order parachain {}"
+//				, head.parachain_index.into_inner()
 			);
 		}
 
@@ -164,6 +168,8 @@ impl<T: Trait> Module<T> {
 		}
 
 		<DidUpdate<T>>::put(true);
+
+		Ok(())
 	}
 }
 
@@ -193,9 +199,9 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> runtime_primitives::BuildExternalities for GenesisConfig<T>
+impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_externalities(mut self) -> runtime_io::TestExternalities {
+	fn build_storage(mut self) -> runtime_io::TestExternalities {
 		use std::collections::HashMap;
 		use runtime_io::twox_128;
 		use codec::Slicable;
@@ -223,11 +229,12 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use runtime_primitives::BuildExternalities;
-	use runtime_primitives::traits::{HasPublicAux, Identity};
+	use runtime_primitives::BuildStorage;
+	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 	use consensus;
 
+	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;
@@ -240,7 +247,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Hashing = runtime_io::BlakeTwo256;
+		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
@@ -257,19 +264,19 @@ mod tests {
 	type Parachains = Module<Test>;
 
 	fn new_test_ext(parachains: Vec<(Id, Vec<u8>)>) -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![1, 2, 3],
-		}.build_externalities());
+		}.build_storage());
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1000,
 			validators: vec![1, 2, 3, 4, 5, 6, 7, 8],
-		}.build_externalities());
+		}.build_storage());
 		t.extend(GenesisConfig::<Test>{
 			parachains: parachains,
 			phantom: PhantomData,
-		}.build_externalities());
+		}.build_storage());
 		t
 	}
 

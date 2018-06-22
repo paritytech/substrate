@@ -19,12 +19,5 @@
 
 extern crate polkadot_runtime;
 #[macro_use] extern crate substrate_executor;
-extern crate substrate_codec as codec;
-extern crate substrate_state_machine as state_machine;
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_primitives as primitives;
-extern crate polkadot_primitives as polkadot_primitives;
-extern crate ed25519;
-extern crate triehash;
 
 native_executor_instance!(pub Executor, polkadot_runtime::api::dispatch, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm"));

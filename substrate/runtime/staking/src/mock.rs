@@ -18,14 +18,15 @@
 
 #![cfg(test)]
 
-
-use primitives::BuildExternalities;
+use primitives::BuildStorage;
 use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
 use substrate_primitives::H256;
 use runtime_io;
 use {DummyContractAddressFor, GenesisConfig, Module, Trait, consensus, session, system};
 
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Test;
 impl HasPublicAux for Test {
 	type PublicAux = u64;
@@ -38,7 +39,7 @@ impl system::Trait for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = runtime_io::BlakeTwo256;
+	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
 	type Header = Header;
@@ -49,28 +50,39 @@ impl session::Trait for Test {
 impl Trait for Test {
 	type Balance = u64;
 	type DetermineContractAddress = DummyContractAddressFor;
+	type AccountIndex = u64;
 }
 
-pub fn new_test_ext(session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
+	let mut t = system::GenesisConfig::<Test>::default().build_storage();
+	let balance_factor = if ext_deposit > 0 {
+		256
+	} else {
+		1
+	};
 	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
 		authorities: vec![],
-	}.build_externalities());
+	}.build_storage());
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
 		validators: vec![10, 20],
-	}.build_externalities());
+	}.build_storage());
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,
 		current_era,
-		balances: if monied { vec![(1, 10), (2, 20), (3, 30), (4, 40)] } else { vec![] },
+		balances: if monied { vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)] } else { vec![] },
 		intentions: vec![],
 		validator_count: 2,
 		bonding_duration: 3,
 		transaction_base_fee: 0,
 		transaction_byte_fee: 0,
-	}.build_externalities());
+		existential_deposit: ext_deposit,
+		transfer_fee: 0,
+		creation_fee: 0,
+		contract_fee: 0,
+		reclaim_rebate: 0,
+	}.build_storage());
 	t
 }
 

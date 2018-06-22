@@ -16,7 +16,7 @@
 
 //! Errors that can occur during the consensus process.
 
-use polkadot_primitives::AccountId;
+use primitives::AuthorityId;
 
 error_chain! {
 	links {
@@ -29,7 +29,7 @@ error_chain! {
 			description("Duty Roster had invalid length"),
 			display("Invalid duty roster length: expected {}, got {}", expected, got),
 		}
-		NotValidator(id: AccountId) {
+		NotValidator(id: AuthorityId) {
 			description("Local account ID not a validator at this block."),
 			display("Local account ID ({:?}) not a validator at this block.", id),
 		}

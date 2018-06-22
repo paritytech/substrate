@@ -16,39 +16,42 @@
 
 //! Polkadot blockchain trait
 
-use primitives::block::{self, Id as BlockId};
-use primitives::{self, AuthorityId};
+use primitives::AuthorityId;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::bft::Justification;
+
 use error::Result;
 
 /// Blockchain database header backend. Does not perform any validation.
-pub trait HeaderBackend: Send + Sync {
+pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
-	fn header(&self, id: BlockId) -> Result<Option<block::Header>>;
+	fn header(&self, id: BlockId<Block>) -> Result<Option<<Block as BlockT>::Header>>;
 	/// Get blockchain info.
-	fn info(&self) -> Result<Info>;
+	fn info(&self) -> Result<Info<Block>>;
 	/// Get block status.
-	fn status(&self, id: BlockId) -> Result<BlockStatus>;
+	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
-	fn hash(&self, number: block::Number) -> Result<Option<block::HeaderHash>>;
+	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Hash>>;
 }
 
 /// Blockchain database backend. Does not perform any validation.
-pub trait Backend: HeaderBackend {
+pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, id: BlockId) -> Result<Option<block::Body>>;
+	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
-	fn justification(&self, id: BlockId) -> Result<Option<primitives::bft::Justification>>;
+	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>>;
 
 	/// Returns data cache reference, if it is enabled on this backend.
-	fn cache(&self) -> Option<&Cache>;
+	fn cache(&self) -> Option<&Cache<Block>>;
 }
 
 /// Blockchain optional data cache.
-pub trait Cache: Send + Sync {
+pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Returns the code that was active at given block or None if there's no entry in the cache.
-	fn code_at(&self, block: BlockId) -> Option<Vec<u8>>;
+	fn code_at(&self, block: BlockId<Block>) -> Option<Vec<u8>>;
 	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
-	fn authorities_at(&self, block: BlockId) -> Option<Vec<AuthorityId>>;
+	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityId>>;
 }
 
 /// Block import outcome
@@ -65,13 +68,13 @@ pub enum ImportResult<E> {
 
 /// Blockchain info
 #[derive(Debug)]
-pub struct Info {
+pub struct Info<Block: BlockT> {
 	/// Best block hash.
-	pub best_hash: block::HeaderHash,
+	pub best_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
 	/// Best block number.
-	pub best_number: block::Number,
+	pub best_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	/// Genesis block hash.
-	pub genesis_hash: block::HeaderHash,
+	pub genesis_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
 }
 
 /// Block status.

@@ -25,17 +25,22 @@ use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
 use codec::{Slicable, Input};
 use primitives::AuthorityId;
-use primitives::block::{Id as BlockId, Number as BlockNumber};
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
 use utils::{COLUMN_META, BlockKey, db_err, meta_keys, read_id, db_key_to_number, number_to_db_key};
 
 /// Database-backed cache of blockchain data.
-pub struct DbCache {
+pub struct DbCache<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	block_index_column: Option<u32>,
-	authorities_at: DbCacheList<Vec<AuthorityId>>,
+	authorities_at: DbCacheList<Block, Vec<AuthorityId>>,
 }
 
-impl DbCache {
+impl<Block> DbCache<Block>
+	where
+		Block: BlockT,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+{
 	/// Create new cache.
 	pub fn new(db: Arc<KeyValueDB>, block_index_column: Option<u32>, authorities_column: Option<u32>) -> ClientResult<Self> {
 		Ok(DbCache {
@@ -46,22 +51,26 @@ impl DbCache {
 	}
 
 	/// Get authorities_cache.
-	pub fn authorities_at_cache(&self) -> &DbCacheList<Vec<AuthorityId>> {
+	pub fn authorities_at_cache(&self) -> &DbCacheList<Block, Vec<AuthorityId>> {
 		&self.authorities_at
 	}
 }
 
-impl BlockchainCache for DbCache {
-	fn code_at(&self, _at: BlockId) -> Option<Vec<u8>> {
+impl<Block> BlockchainCache<Block> for DbCache<Block>
+	where
+		Block: BlockT,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+{
+	fn code_at(&self, _at: BlockId<Block>) -> Option<Vec<u8>> {
 		None // TODO: cache code?
 	}
 
-	fn authorities_at(&self, at: BlockId) -> Option<Vec<AuthorityId>> {
+	fn authorities_at(&self, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
 		let authorities_at = read_id(&*self.db, self.block_index_column, at).and_then(|at| match at {
 			Some(at) => self.authorities_at.value_at_key(at),
 			None => Ok(None),
 		});
-		
+
 		match authorities_at {
 			Ok(authorities) => authorities,
 			Err(error) => {
@@ -75,20 +84,20 @@ impl BlockchainCache for DbCache {
 /// Database-backed blockchain cache which holds its entries as a list.
 /// The meta column holds the pointer to the best known cache entry and
 /// every entry points to the previous entry.
-pub struct DbCacheList<T: Clone> {
+pub struct DbCacheList<Block: BlockT, T: Clone> {
 	db: Arc<KeyValueDB>,
 	meta_key: &'static [u8],
 	column: Option<u32>,
 	/// Best entry at the moment. None means that cache has no entries at all.
-	best_entry: RwLock<Option<Entry<T>>>,
+	best_entry: RwLock<Option<Entry<<<Block as BlockT>::Header as HeaderT>::Number, T>>>,
 }
 
 /// Single cache entry.
 #[derive(Clone)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
-pub struct Entry<T: Clone> {
+pub struct Entry<N, T: Clone> {
 	/// first block, when this value became actual
-	valid_from: BlockNumber,
+	valid_from: N,
 	/// None means that we do not know the value starting from `valid_from` block
 	value: Option<T>,
 }
@@ -96,14 +105,19 @@ pub struct Entry<T: Clone> {
 /// Internal representation of the single cache entry. The entry points to the
 /// previous entry in the cache, allowing us to traverse back in time in list-style.
 #[cfg_attr(test, derive(Debug, PartialEq))]
-struct StorageEntry<T> {
+struct StorageEntry<N, T> {
 	/// None if valid from the beginning
-	prev_valid_from: Option<BlockNumber>,
+	prev_valid_from: Option<N>,
 	/// None means that we do not know the value starting from `valid_from` block
 	value: Option<T>,
 }
 
-impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
+impl<Block, T> DbCacheList<Block, T>
+	where
+		Block: BlockT,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+		T: Clone + PartialEq + Slicable,
+{
 	/// Creates new cache list.
 	fn new(db: Arc<KeyValueDB>, meta_key: &'static [u8], column: Option<u32>) -> ClientResult<Self> {
 		let best_entry = RwLock::new(db.get(COLUMN_META, meta_key)
@@ -111,7 +125,7 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 			.and_then(|block| match block {
 				Some(block) => {
 					let valid_from = db_key_to_number(&block)?;
-					read_storage_entry(&*db, column, valid_from)
+					read_storage_entry::<Block, T>(&*db, column, valid_from)
 						.map(|entry| Some(Entry {
 							valid_from,
 							value: entry
@@ -131,13 +145,13 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 	}
 
 	/// Gets the best known entry.
-	pub fn best_entry(&self) -> Option<Entry<T>> {
+	pub fn best_entry(&self) -> Option<Entry<<<Block as BlockT>::Header as HeaderT>::Number, T>> {
 		self.best_entry.read().clone()
 	}
 
 	/// Commits the new best pending value to the database. Returns Some if best entry must
 	/// be updated after transaction is committed.
-	pub fn commit_best_entry(&self, transaction: &mut DBTransaction, valid_from: BlockNumber, pending_value: Option<T>) -> Option<Entry<T>> {
+	pub fn commit_best_entry(&self, transaction: &mut DBTransaction, valid_from: <<Block as BlockT>::Header as HeaderT>::Number, pending_value: Option<T>) -> Option<Entry<<<Block as BlockT>::Header as HeaderT>::Number, T>> {
 		let best_entry = self.best_entry();
 		let update_best_entry = match (best_entry.as_ref().and_then(|a| a.value.as_ref()), pending_value.as_ref()) {
 			(Some(best_value), Some(pending_value)) => best_value != pending_value,
@@ -163,14 +177,14 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 
 	/// Updates the best in-memory cache entry. Must be called after transaction with changes
 	/// from commit_best_entry has been committed.
-	pub fn update_best_entry(&self, best_entry: Option<Entry<T>>) {
+	pub fn update_best_entry(&self, best_entry: Option<Entry<<<Block as BlockT>::Header as HeaderT>::Number, T>>) {
 		*self.best_entry.write() = best_entry;
 	}
 
 	/// Prune all entries from the beginning up to the block (including entry at the number). Returns
 	/// the number of pruned entries and the flag if the cache is clear after pruning (i.e.
 	/// update_best_entry(None) is required).
-	pub fn prune_entries(&self, transaction: &mut DBTransaction, last_to_prune: BlockNumber) -> ClientResult<(usize, bool)> {
+	pub fn prune_entries(&self, transaction: &mut DBTransaction, last_to_prune: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<(usize, bool)> {
 		// find the last entry we want to keep
 		let mut last_entry_to_keep = match self.best_entry() {
 			Some(best_entry) => best_entry.valid_from,
@@ -180,7 +194,7 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 		while first_entry_to_remove > last_to_prune {
 			last_entry_to_keep = first_entry_to_remove;
 
-			let entry = read_storage_entry::<T>(&*self.db, self.column, first_entry_to_remove)?
+			let entry = read_storage_entry::<Block, T>(&*self.db, self.column, first_entry_to_remove)?
 				.expect("entry referenced from the next entry; entry exists when referenced; qed");
 			first_entry_to_remove = match entry.prev_valid_from {
 				Some(prev_valid_from) => prev_valid_from,
@@ -192,7 +206,7 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 		let mut pruned = 0;
 		let mut entry_to_remove = Some(first_entry_to_remove);
 		while let Some(current_entry) = entry_to_remove {
-			let entry = read_storage_entry::<T>(&*self.db, self.column, current_entry)?
+			let entry = read_storage_entry::<Block, T>(&*self.db, self.column, current_entry)?
 				.expect("referenced entry exists; entry_to_remove is a reference to the entry; qed");
 
 			transaction.delete(self.column, &number_to_db_key(current_entry));
@@ -204,7 +218,7 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 		let clear_cache = match last_entry_to_keep <= first_entry_to_remove {
 			true => true,
 			false => {
-				let mut entry = read_storage_entry::<T>(&*self.db, self.column, last_entry_to_keep)?
+				let mut entry = read_storage_entry::<Block, T>(&*self.db, self.column, last_entry_to_keep)?
 					.expect("last_entry_to_keep > first_entry_to_remove; that means that we're leaving this entry in the db; qed");
 				entry.prev_valid_from = None;
 				transaction.put(self.column, &number_to_db_key(last_entry_to_keep), &entry.encode());
@@ -219,7 +233,7 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 	/// Reads the cached value, actual at given block. Returns None if the value was not cached
 	/// or if it has been pruned.
 	fn value_at_key(&self, key: BlockKey) -> ClientResult<Option<T>> {
-		let at = db_key_to_number(&key)?;
+		let at = db_key_to_number::<<<Block as BlockT>::Header as HeaderT>::Number>(&key)?;
 		let best_valid_from = match self.best_entry() {
 			// there are entries in cache
 			Some(best_entry) => {
@@ -235,7 +249,7 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 			None => return Ok(None),
 		};
 
-		let mut entry = read_storage_entry(&*self.db, self.column, best_valid_from)?
+		let mut entry = read_storage_entry::<Block, T>(&*self.db, self.column, best_valid_from)?
 			.expect("self.best_entry().is_some() if there's entry for best_valid_from; qed");
 		loop {
 			let prev_valid_from = match entry.prev_valid_from {
@@ -243,7 +257,7 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 				None => return Ok(None),
 			};
 
-			let prev_entry = read_storage_entry(&*self.db, self.column, prev_valid_from)?
+			let prev_entry = read_storage_entry::<Block, T>(&*self.db, self.column, prev_valid_from)?
 				.expect("entry referenced from the next entry; entry exists when referenced; qed");
 			if at >= prev_valid_from {
 				return Ok(prev_entry.value);
@@ -255,61 +269,50 @@ impl<T: Clone + PartialEq + Slicable> DbCacheList<T> {
 }
 
 /// Reads the entry at the block with given number.
-fn read_storage_entry<T: Slicable>(db: &KeyValueDB, column: Option<u32>, number: BlockNumber) -> ClientResult<Option<StorageEntry<T>>> {
+fn read_storage_entry<Block, T>(db: &KeyValueDB, column: Option<u32>, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<StorageEntry<<<Block as BlockT>::Header as HeaderT>::Number, T>>>
+	where
+		Block: BlockT,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+		T: Slicable,
+{
 	db.get(column, &number_to_db_key(number))
 		.and_then(|entry| match entry {
-			Some(entry) => Ok(StorageEntry::<T>::decode(&mut &entry[..])),
+			Some(entry) => Ok(StorageEntry::<<<Block as BlockT>::Header as HeaderT>::Number, T>::decode(&mut &entry[..])),
 			None => Ok(None),
 		})
 	.map_err(db_err)
 }
 
-impl<T: Slicable> Slicable for StorageEntry<T> {
+impl<N: Slicable, T: Slicable> Slicable for StorageEntry<N, T> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
-		match self.prev_valid_from {
-			Some(ref prev_valid_from) => {
-				v.push(1);
-				v.extend(prev_valid_from.encode());
-			},
-			None => v.push(0),
-		}
-
-		match self.value {
-			Some(ref value) => {
-				v.push(1);
-				v.extend(value.encode());
-			},
-			None => v.push(0),
-		}
+		self.prev_valid_from.using_encoded(|s| v.extend(s));
+		self.value.using_encoded(|s| v.extend(s));
 
 		v
 	}
 
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(StorageEntry {
-			prev_valid_from: match input.read_byte() {
-				None | Some(0) => None,
-				_ => Slicable::decode(input),
-			},
-			value: match input.read_byte() {
-				None | Some(0) => None,
-				_ => Slicable::decode(input),
-			},
+			prev_valid_from: Slicable::decode(input)?,
+			value: Slicable::decode(input)?,
 		})
 	}
 }
 
 #[cfg(test)]
 mod tests {
+	use runtime_primitives::testing::Block as RawBlock;
 	use light::{AUTHORITIES_ENTRIES_TO_KEEP, columns, LightStorage};
 	use light::tests::insert_block;
 	use super::*;
 
+	type Block = RawBlock<u64>;
+
 	#[test]
 	fn authorities_storage_entry_serialized() {
-		let test_cases: Vec<StorageEntry<Vec<AuthorityId>>> = vec![
+		let test_cases: Vec<StorageEntry<u64, Vec<AuthorityId>>> = vec![
 			StorageEntry { prev_valid_from: Some(42), value: Some(vec![[1u8; 32]]) },
 			StorageEntry { prev_valid_from: None, value: Some(vec![[1u8; 32], [2u8; 32]]) },
 			StorageEntry { prev_valid_from: None, value: None },
@@ -325,7 +328,7 @@ mod tests {
 	#[test]
 	fn best_authorities_are_updated() {
 		let db = LightStorage::new_test();
-		let authorities_at: Vec<(usize, Option<Entry<Vec<AuthorityId>>>)> = vec![
+		let authorities_at: Vec<(usize, Option<Entry<u64, Vec<AuthorityId>>>)> = vec![
 			(0, None),
 			(0, None),
 			(1, Some(Entry { valid_from: 1, value: Some(vec![[2u8; 32]]) })),
@@ -344,7 +347,7 @@ mod tests {
 		let mut prev_hash = Default::default();
 		for number in 0..authorities_at.len() {
 			let authorities_at_number = authorities_at[number].1.clone().and_then(|e| e.value);
-			prev_hash = insert_block(&db, &prev_hash, number as u64, authorities_at_number);
+			prev_hash = insert_block(&db, &prev_hash, number as u32, authorities_at_number);
 			assert_eq!(db.cache().authorities_at_cache().best_entry(), authorities_at[number].1);
 			assert_eq!(db.db().iter(columns::AUTHORITIES).count(), authorities_at[number].0);
 		}
@@ -361,7 +364,7 @@ mod tests {
 		let mut current_entries_count = authorities_at.last().unwrap().0;
 		let pruning_starts_at = AUTHORITIES_ENTRIES_TO_KEEP as usize;
 		for number in authorities_at.len()..authorities_at.len() + pruning_starts_at {
-			prev_hash = insert_block(&db, &prev_hash, number as u64, None);
+			prev_hash = insert_block(&db, &prev_hash, number as u32, None);
 			if number > pruning_starts_at {
 				let prev_entries_count = authorities_at[number - pruning_starts_at].0;
 				let entries_count = authorities_at.get(number - pruning_starts_at + 1).map(|e| e.0)
@@ -375,7 +378,7 @@ mod tests {
 
 	#[test]
 	fn best_authorities_are_pruned() {
-		let db = LightStorage::new_test();
+		let db = LightStorage::<Block>::new_test();
 		let mut transaction = DBTransaction::new();
 		db.cache().authorities_at_cache().update_best_entry(
 			db.cache().authorities_at_cache().commit_best_entry(&mut transaction, 100, Some(vec![[1u8; 32]])));

@@ -20,8 +20,8 @@ use std::sync::Arc;
 use futures::IntoFuture;
 use heapsize::HeapSizeOf;
 
-use primitives::block::{Header, HeaderHash, Id as BlockId, Number as BlockNumber};
-use runtime_support::Hashable;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
 use state_machine::{CodeExecutor, read_proof_check};
 
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -32,19 +32,19 @@ use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::check_execution_proof;
 
 /// Remote canonical header request.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct RemoteHeaderRequest {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RemoteHeaderRequest<Number: ::std::fmt::Display> {
 	/// Number of the header to query.
-	pub block: BlockNumber,
+	pub block: Number,
 	/// Request retry count before failing. If None, default value is used.
 	pub retry_count: Option<usize>,
 }
 
 /// Remote storage read request.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct RemoteReadRequest {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RemoteReadRequest<Hash: ::std::fmt::Display> {
 	/// Read at state of given block.
-	pub block: HeaderHash,
+	pub block: Hash,
 	/// Storage key to read.
 	pub key: Vec<u8>,
 	/// Request retry count before failing. If None, default value is used.
@@ -52,10 +52,10 @@ pub struct RemoteReadRequest {
 }
 
 /// Remote call request.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct RemoteCallRequest {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RemoteCallRequest<Hash: ::std::fmt::Display> {
 	/// Call at state of given block.
-	pub block: HeaderHash,
+	pub block: Hash,
 	/// Method to call.
 	pub method: String,
 	/// Call data.
@@ -66,30 +66,30 @@ pub struct RemoteCallRequest {
 
 /// Light client data fetcher. Implementations of this trait must check if remote data
 /// is correct (see FetchedDataChecker) and return already checked data.
-pub trait Fetcher: Send + Sync {
+pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote header future.
-	type RemoteHeaderResult: IntoFuture<Item=Header, Error=ClientError>;
+	type RemoteHeaderResult: IntoFuture<Item=Block::Header, Error=ClientError>;
 	/// Remote storage read future.
 	type RemoteReadResult: IntoFuture<Item=Option<Vec<u8>>, Error=ClientError>;
 	/// Remote call result future.
 	type RemoteCallResult: IntoFuture<Item=CallResult, Error=ClientError>;
 
 	/// Fetch remote header.
-	fn remote_header(&self, request: RemoteHeaderRequest) -> Self::RemoteHeaderResult;
+	fn remote_header(&self, request: RemoteHeaderRequest<<<Block as BlockT>::Header as HeaderT>::Number>) -> Self::RemoteHeaderResult;
 	/// Fetch remote storage value.
-	fn remote_read(&self, request: RemoteReadRequest) -> Self::RemoteReadResult;
+	fn remote_read(&self, request: RemoteReadRequest<Block::Hash>) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
-	fn remote_call(&self, request: RemoteCallRequest) -> Self::RemoteCallResult;
+	fn remote_call(&self, request: RemoteCallRequest<Block::Hash>) -> Self::RemoteCallResult;
 }
 
 /// Light client remote data checker.
-pub trait FetchChecker: Send + Sync {
+pub trait FetchChecker<Block: BlockT>: Send + Sync {
 	/// Check remote header proof.
-	fn check_header_proof(&self, request: &RemoteHeaderRequest, header: Header, remote_proof: Vec<Vec<u8>>) -> ClientResult<Header>;
+	fn check_header_proof(&self, request: &RemoteHeaderRequest<<<Block as BlockT>::Header as HeaderT>::Number>, header: Block::Header, remote_proof: Vec<Vec<u8>>) -> ClientResult<Block::Header>;
 	/// Check remote storage read proof.
-	fn check_read_proof(&self, request: &RemoteReadRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>>;
+	fn check_read_proof(&self, request: &RemoteReadRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>>;
 	/// Check remote method execution proof.
-	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult>;
+	fn check_execution_proof(&self, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult>;
 }
 
 /// Remote data checker.
@@ -113,51 +113,51 @@ impl<S, E, F> LightDataChecker<S, E, F> {
 	}
 }
 
-impl<S, E, F> FetchChecker for LightDataChecker<S, E, F>
+impl<S, E, F, Block> FetchChecker<Block> for LightDataChecker<S, E, F>
 	where
-		S: BlockchainStorage,
+		Block: BlockT,
+		<Block as BlockT>::Hash: From<[u8; 32]> + Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+		S: BlockchainStorage<Block>,
 		E: CodeExecutor,
-		F: Fetcher,
+		F: Fetcher<Block>,
 {
-	fn check_header_proof(&self, request: &RemoteHeaderRequest, header: Header, remote_proof: Vec<Vec<u8>>) -> ClientResult<Header> {
+	fn check_header_proof(&self, request: &RemoteHeaderRequest<<<Block as BlockT>::Header as HeaderT>::Number>, header: Block::Header, remote_proof: Vec<Vec<u8>>) -> ClientResult<Block::Header> {
 		let local_cht_root = self.blockchain.storage().cht_root(request.block)?;
-		let remote_hash = header.blake2_256().into();
-		cht::check_proof(local_cht_root, request.block, remote_hash, remote_proof)
+		let remote_hash = header.hash();
+		cht::check_proof::<Block::Header>(local_cht_root, request.block, remote_hash, remote_proof)
 			.map(|_| header)
 	}
 
-	fn check_read_proof(&self, request: &RemoteReadRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
+	fn check_read_proof(&self, request: &RemoteReadRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
 		let local_header = self.blockchain.header(BlockId::Hash(request.block))?;
-		let local_header = local_header.ok_or_else(|| ClientErrorKind::UnknownBlock(BlockId::Hash(request.block)))?;
-		let local_state_root = local_header.state_root;
-		read_proof_check(local_state_root.0, remote_proof, &request.key).map_err(Into::into)
+		let local_header = local_header.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", request.block)))?;
+		let local_state_root = *local_header.state_root();
+		read_proof_check(local_state_root.into(), remote_proof, &request.key).map_err(Into::into)
 	}
 
-	fn check_execution_proof(&self, request: &RemoteCallRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult> {
+	fn check_execution_proof(&self, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult> {
 		check_execution_proof(&*self.blockchain, &self.executor, request, remote_proof)
 	}
 }
 
-impl HeapSizeOf for RemoteHeaderRequest {
+impl<Number: ::std::fmt::Display> HeapSizeOf for RemoteHeaderRequest<Number> {
 	fn heap_size_of_children(&self) -> usize {
 		0
 	}
 }
 
-impl HeapSizeOf for RemoteReadRequest {
+impl<Hash: ::std::fmt::Display> HeapSizeOf for RemoteReadRequest<Hash> {
 	fn heap_size_of_children(&self) -> usize {
-		self.block.heap_size_of_children() + self.key.heap_size_of_children()
+		// TODO: self.block.heap_size_of_children() +
+		self.key.heap_size_of_children()
 	}
 }
 
-impl HeapSizeOf for RemoteCallRequest {
+impl<Hash: ::std::fmt::Display> HeapSizeOf for RemoteCallRequest<Hash> {
 	fn heap_size_of_children(&self) -> usize {
-		self.block.heap_size_of_children() + self.method.heap_size_of_children()
+		// TODO: self.block.heap_size_of_children() +
+		self.method.heap_size_of_children()
 			+ self.call_data.heap_size_of_children()
 	}
-}
-
-#[cfg(test)]
-mod tests {
-
 }

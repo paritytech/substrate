@@ -18,8 +18,6 @@
 
 #![warn(missing_docs)]
 
-extern crate substrate_primitives as primitives;
-
 #[cfg_attr(test, macro_use)]
 extern crate hex_literal;
 

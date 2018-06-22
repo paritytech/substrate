@@ -21,8 +21,8 @@ use std::sync::Arc;
 use futures::{IntoFuture, Future};
 use heapsize::HeapSizeOf;
 
-use primitives::Hash;
-use primitives::block::Id as BlockId;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges, execution_proof_check};
 
 use blockchain::Backend as ChainBackend;
@@ -44,25 +44,26 @@ impl<B, F> RemoteCallExecutor<B, F> {
 	}
 }
 
-impl<B, F> CallExecutor for RemoteCallExecutor<B, F>
+impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 	where
-		B: ChainBackend,
-		F: Fetcher,
+		Block: BlockT,
+		B: ChainBackend<Block>,
+		F: Fetcher<Block>,
 {
 	type Error = ClientError;
 
-	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> ClientResult<CallResult> {
+	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> ClientResult<CallResult> {
 		let block_hash = match *id {
 			BlockId::Hash(hash) => hash,
 			BlockId::Number(number) => self.blockchain.hash(number)?
-				.ok_or_else(|| ClientErrorKind::UnknownBlock(BlockId::Number(number)))?,
+				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", number)))?,
 		};
 
 		self.fetcher.remote_call(RemoteCallRequest {
 			block: block_hash.clone(),
 			method: method.into(),
 			call_data: call_data.to_vec(),
-			..Default::default()
+			retry_count: None,
 		}).into_future().wait()
 	}
 
@@ -76,25 +77,38 @@ impl<B, F> CallExecutor for RemoteCallExecutor<B, F>
 }
 
 /// Check remote execution proof using given backend.
-pub fn check_execution_proof<B, E>(blockchain: &B, executor: &E, request: &RemoteCallRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult>
+pub fn check_execution_proof<Block, B, E>(
+	blockchain: &B,
+	executor: &E,
+	request: &RemoteCallRequest<Block::Hash>,
+	remote_proof: Vec<Vec<u8>>
+) -> ClientResult<CallResult>
 	where
-		B: ChainBackend,
+		Block: BlockT,
+		<Block as BlockT>::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
+		B: ChainBackend<Block>,
 		E: CodeExecutor,
 {
 	let local_header = blockchain.header(BlockId::Hash(request.block))?;
-	let local_header = local_header.ok_or_else(|| ClientErrorKind::UnknownBlock(BlockId::Hash(request.block)))?;
-	let local_state_root = local_header.state_root;
-	do_check_execution_proof(local_state_root, executor, request, remote_proof)
+	let local_header = local_header.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", request.block)))?;
+	let local_state_root = *local_header.state_root();
+	do_check_execution_proof(local_state_root.into(), executor, request, remote_proof)
 }
 
 /// Check remote execution proof using given state root.
-fn do_check_execution_proof<E>(local_state_root: Hash, executor: &E, request: &RemoteCallRequest, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult>
+fn do_check_execution_proof<Hash, E>(
+	local_state_root: [u8; 32],
+	executor: &E,
+	request: &RemoteCallRequest<Hash>,
+	remote_proof: Vec<Vec<u8>>,
+) -> ClientResult<CallResult>
 	where
+		Hash: ::std::fmt::Display,
 		E: CodeExecutor,
 {
 	let mut changes = OverlayedChanges::default();
 	let (local_result, _) = execution_proof_check(
-		local_state_root.into(),
+		local_state_root,
 		remote_proof,
 		&mut changes,
 		executor,
@@ -112,11 +126,8 @@ impl HeapSizeOf for CallResult {
 
 #[cfg(test)]
 mod tests {
-	use primitives::block::Id as BlockId;
-	use state_machine::Backend;
 	use test_client;
-	use light::fetcher::RemoteCallRequest;
-	use super::do_check_execution_proof;
+	use super::*;
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
@@ -132,10 +143,10 @@ mod tests {
 		// check remote execution proof locally
 		let local_executor = test_client::NativeExecutor::new();
 		do_check_execution_proof(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
-			block: Default::default(),
+			block: test_client::runtime::Hash::default(),
 			method: "authorities".into(),
 			call_data: vec![],
-			..Default::default()
+			retry_count: None,
 		}, remote_execution_proof).unwrap();
 	}
 }

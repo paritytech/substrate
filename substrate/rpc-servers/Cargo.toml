@@ -10,3 +10,4 @@ jsonrpc-pubsub = { git = "https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-ws-server = { git = "https://github.com/paritytech/jsonrpc.git" }
 log = "0.3"
 substrate-rpc = { path = "../rpc", version = "0.1" }
+substrate-runtime-primitives = { path = "../runtime/primitives" }

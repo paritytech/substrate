@@ -25,9 +25,8 @@ use kvdb_rocksdb::{Database, DatabaseConfig};
 use client;
 use codec::Slicable;
 use hashdb::DBValue;
-use primitives::blake2_256;
-use primitives::block::{self, Id as BlockId, HeaderHash};
-use runtime_support::Hashable;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hashing, HashingFor, Zero};
 use DatabaseSettings;
 
 /// Meta column. Thes set of keys in the column is shared by full && light storages.
@@ -45,20 +44,22 @@ pub mod meta_keys {
 }
 
 /// Database metadata.
-pub struct Meta {
+pub struct Meta<N, H> {
 	/// Hash of the best known block.
-	pub best_hash: HeaderHash,
+	pub best_hash: H,
 	/// Number of the best known block.
-	pub best_number: block::Number,
+	pub best_number: N,
 	/// Hash of the genesis block.
-	pub genesis_hash: HeaderHash,
+	pub genesis_hash: H,
 }
 
 /// Type of block key in the database (LE block number).
 pub type BlockKey = [u8; 4];
 
 /// Convert block number into key (LE representation).
-pub fn number_to_db_key(n: block::Number) -> BlockKey {
+pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u32> {
+	let n: u32 = n.as_();
+
 	[
 		(n >> 24) as u8,
 		((n >> 16) & 0xff) as u8,
@@ -68,12 +69,12 @@ pub fn number_to_db_key(n: block::Number) -> BlockKey {
 }
 
 /// Convert block key into block number.
-pub fn db_key_to_number(key: &[u8]) -> client::error::Result<block::Number> {
+pub fn db_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u32> {
 	match key.len() {
-		4 => Ok((key[0] as block::Number) << 24
-			| (key[1] as block::Number) << 16
-			| (key[2] as block::Number) << 8
-			| (key[3] as block::Number)),
+		4 => Ok((key[0] as u32) << 24
+			| (key[1] as u32) << 16
+			| (key[2] as u32) << 8
+			| (key[3] as u32)).map(As::sa),
 		_ => Err(client::error::ErrorKind::Backend("Invalid block key".into()).into()),
 	}
 }
@@ -115,9 +116,13 @@ pub fn open_database(config: DatabaseSettings, num_columns: u32, db_type: &[u8])
 }
 
 /// Convert block id to block key, reading number from db if required.
-pub fn read_id(db: &KeyValueDB, col_index: Option<u32>, id: BlockId) -> Result<Option<BlockKey>, client::error::Error> {
+pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block>) -> Result<Option<BlockKey>, client::error::Error>
+	where
+		Block: BlockT,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+{
 	match id {
-		BlockId::Hash(h) => db.get(col_index, &h)
+		BlockId::Hash(h) => db.get(col_index, h.as_ref())
 			.map(|v| v.map(|v| {
 				let mut key: [u8; 4] = [0; 4];
 				key.copy_from_slice(&v);
@@ -128,7 +133,11 @@ pub fn read_id(db: &KeyValueDB, col_index: Option<u32>, id: BlockId) -> Result<O
 }
 
 /// Read database column entry for the given block.
-pub fn read_db(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>, id: BlockId) -> client::error::Result<Option<DBValue>> {
+pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>, id: BlockId<Block>) -> client::error::Result<Option<DBValue>>
+	where
+		Block: BlockT,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+{
 	read_id(db, col_index, id).and_then(|key| match key {
 		Some(key) => db.get(col, &key).map_err(db_err),
 		None => Ok(None),
@@ -136,21 +145,30 @@ pub fn read_db(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>, id: Bl
 }
 
 /// Read meta from the database.
-pub fn read_meta(db: &KeyValueDB, col_header: Option<u32>) -> Result<Meta, client::error::Error> {
+pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>, client::error::Error>
+	where
+		Block: BlockT,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+{
+	let genesis_number = <<Block as BlockT>::Header as HeaderT>::Number::zero();
 	let (best_hash, best_number) = if let Some(Some(header)) = db.get(COLUMN_META, meta_keys::BEST_BLOCK).and_then(|id|
 		match id {
-			Some(id) => db.get(col_header, &id).map(|h| h.map(|b| block::Header::decode(&mut &b[..]))),
+			Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]))),
 			None => Ok(None),
 		}).map_err(db_err)?
 	{
-		let hash = header.blake2_256().into();
-		debug!("DB Opened blockchain db, best {:?} ({})", hash, header.number);
-		(hash, header.number)
+		let hash = header.hash();
+		debug!("DB Opened blockchain db, best {:?} ({})", hash, header.number());
+		(hash, *header.number())
 	} else {
-		(Default::default(), Default::default())
+		(Default::default(), genesis_number)
 	};
-	let genesis_hash = db.get(col_header, &number_to_db_key(0)).map_err(db_err)?
-		.map(|b| blake2_256(&b)).unwrap_or_default().into();
+
+	let genesis_hash = db.get(col_header, &number_to_db_key(genesis_number))
+		.map_err(db_err)?
+		.map(|raw| HashingFor::<Block>::hash(&raw[..]))
+		.unwrap_or_default()
+		.into();
 
 	Ok(Meta {
 		best_hash,

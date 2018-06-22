@@ -28,14 +28,18 @@ extern crate substrate_runtime_support as runtime_support;
 #[cfg(feature = "std")]
 extern crate serde;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
-use runtime_io::Hashing;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded};
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
+	Hashing, Member, MaybeDisplay};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -58,14 +62,19 @@ pub fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::enumerated_trie_root(&xts)
 }
 
-pub trait Trait {
-	type Index: Parameter + Default + SimpleArithmetic + Copy;
-	type BlockNumber: Parameter + SimpleArithmetic + Default + Bounded + Copy;
-	type Hash: Parameter + SimpleBitOps + Default + Copy + CheckEqual;
+pub trait Trait: Eq + Clone {
+	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
+	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
+	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
 	type Hashing: Hashing<Output = Self::Hash>;
-	type Digest: Parameter + Default + traits::Digest;
-	type AccountId: Parameter + Ord + Default;
-	type Header: traits::Header<Number = Self::BlockNumber, Hash = Self::Hash, Digest = Self::Digest>;
+	type Digest: Parameter + Member + Default + traits::Digest;
+	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
+	type Header: Parameter + traits::Header<
+		Number = Self::BlockNumber,
+		Hashing = Self::Hashing,
+		Hash = Self::Hash,
+		Digest = Self::Digest
+	>;
 }
 
 decl_module! {
@@ -75,7 +84,7 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait>;
 
-	pub AccountIndex get(account_index): b"sys:non" => default map [ T::AccountId => T::Index ];
+	pub AccountNonce get(account_nonce): b"sys:non" => default map [ T::AccountId => T::Index ];
 	pub BlockHash get(block_hash): b"sys:old" => required map [ T::BlockNumber => T::Hash ];
 
 	pub ExtrinsicIndex get(extrinsic_index): b"sys:xti" => required u32;
@@ -165,8 +174,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Increment a particular account's nonce by 1.
-	pub fn inc_account_index(who: &T::AccountId) {
-		<AccountIndex<T>>::insert(who, Self::account_index(who) + T::Index::one());
+	pub fn inc_account_nonce(who: &T::AccountId) {
+		<AccountNonce<T>>::insert(who, Self::account_nonce(who) + T::Index::one());
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
@@ -194,9 +203,9 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
+impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_externalities(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> runtime_io::TestExternalities {
 		use runtime_io::twox_128;
 		use codec::Slicable;
 

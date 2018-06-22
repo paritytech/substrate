@@ -19,11 +19,13 @@ use super::*;
 use std::{fmt, sync::Arc};
 use extrinsic_pool::api;
 use parking_lot::Mutex;
-use primitives::block;
+
+type Extrinsic = u64;
+type Hash = u64;
 
 #[derive(Default)]
 struct DummyTxPool {
-	submitted: Mutex<Vec<block::Extrinsic>>,
+	submitted: Mutex<Vec<Extrinsic>>,
 }
 
 #[derive(Debug)]
@@ -38,14 +40,14 @@ impl fmt::Display for Error {
 	}
 }
 
-impl api::ExtrinsicPool for DummyTxPool {
+impl api::ExtrinsicPool<Extrinsic, Hash> for DummyTxPool {
 	type Error = Error;
 
 	/// Submit extrinsic for inclusion in block.
-	fn submit(&self, xt: Vec<Extrinsic>) -> ::std::result::Result<Vec<ExtrinsicHash>, Self::Error> {
+	fn submit(&self, xt: Vec<Extrinsic>) -> ::std::result::Result<Vec<Hash>, Self::Error> {
 		let mut submitted = self.submitted.lock();
 		if submitted.len() < 1 {
-			let hashes = xt.iter().map(|_xt| 1.into()).collect();
+			let hashes = xt.iter().map(|_xt| 1).collect();
 			submitted.extend(xt);
 			Ok(hashes)
 		} else {
@@ -57,13 +59,12 @@ impl api::ExtrinsicPool for DummyTxPool {
 #[test]
 fn submit_transaction_should_not_cause_error() {
 	let p = Arc::new(DummyTxPool::default());
-	let hash: ExtrinsicHash = 1.into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, block::Extrinsic(vec![])),
-		Ok(hash)
+		AuthorApi::submit_extrinsic(&p, 5),
+		Ok(1)
 	);
 	assert!(
-		AuthorApi::submit_extrinsic(&p, block::Extrinsic(vec![])).is_err()
+		AuthorApi::submit_extrinsic(&p, 5).is_err()
 	);
 }

@@ -29,6 +29,7 @@ pub use core::cell;
 pub use core::clone;
 pub use core::cmp;
 pub use core::fmt;
+pub use core::hash;
 pub use core::intrinsics;
 pub use core::iter;
 pub use core::marker;
@@ -37,6 +38,7 @@ pub use core::num;
 pub use core::ops;
 pub use core::ptr;
 pub use core::slice;
+pub use core::result;
 
 pub mod collections {
 	pub use alloc::btree_map;

@@ -23,17 +23,17 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client;
 use client::block_builder::BlockBuilder;
-use primitives::block::{Id as BlockId, ExtrinsicHash, HeaderHash};
-use primitives;
+use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::generic::BlockId;
 use io::SyncIo;
 use protocol::Protocol;
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network::{PeerId, SessionInfo, Error as NetworkError};
-use runtime_support::Hashable;
 use keyring::Keyring;
 use codec::Slicable;
 use test_client::{self, TestClient};
+use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 
 pub struct TestIo<'p> {
 	pub queue: &'p RwLock<VecDeque<TestPacket>>,
@@ -100,8 +100,8 @@ pub struct TestPacket {
 }
 
 pub struct Peer {
-	client: Arc<client::Client<test_client::Backend, test_client::Executor>>,
-	pub sync: Protocol,
+	client: Arc<client::Client<test_client::Backend, test_client::Executor, Block>>,
+	pub sync: Protocol<Block>,
 	pub queue: RwLock<VecDeque<TestPacket>>,
 }
 
@@ -158,12 +158,12 @@ impl Peer {
 	fn flush(&self) {
 	}
 
-	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor>) {
+	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block>) {
 		for _ in 0 .. count {
 			let mut builder = self.client.new_block().unwrap();
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
-			trace!("Generating {}, (#{})", primitives::block::HeaderHash::from(block.header.blake2_256()), block.header.number);
+			trace!("Generating {}, (#{})", block.hash(), block.header.number);
 			self.client.justify_and_import(client::BlockOrigin::File, block).unwrap();
 		}
 	}
@@ -172,15 +172,14 @@ impl Peer {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks(count, |builder| {
-				let tx = test_client::runtime::Transaction {
-					from: Keyring::Alice.to_raw_public(),
-					to: Keyring::Alice.to_raw_public(),
+				let transfer = Transfer {
+					from: Keyring::Alice.to_raw_public().into(),
+					to: Keyring::Alice.to_raw_public().into(),
 					amount: 1,
-					nonce: nonce,
+					nonce,
 				};
-				let signature = Keyring::from_raw_public(tx.from.clone()).unwrap().sign(&tx.encode());
-				let tx = primitives::block::Extrinsic::decode(&mut test_client::runtime::UncheckedTransaction { signature, tx: tx }.encode().as_ref()).unwrap();
-				builder.push(tx).unwrap();
+				let signature = Keyring::from_raw_public(transfer.from.0).unwrap().sign(&transfer.encode()).into();
+				builder.push(Extrinsic { transfer, signature }).unwrap();
 				nonce = nonce + 1;
 			});
 		} else {
@@ -188,7 +187,7 @@ impl Peer {
 		}
 	}
 
-	pub fn genesis_hash(&self) -> HeaderHash {
+	pub fn genesis_hash(&self) -> Hash {
 		let info = self.client.info().expect("In-mem client does not fail");
 		info.chain.genesis_hash
 	}
@@ -196,16 +195,16 @@ impl Peer {
 
 struct EmptyTransactionPool;
 
-impl TransactionPool for EmptyTransactionPool {
-	fn transactions(&self) -> Vec<(ExtrinsicHash, Vec<u8>)> {
+impl TransactionPool<Block> for EmptyTransactionPool {
+	fn transactions(&self) -> Vec<(Hash, Extrinsic)> {
 		Vec::new()
 	}
 
-	fn import(&self, _transaction: &[u8]) -> Option<ExtrinsicHash> {
+	fn import(&self, _transaction: &Extrinsic) -> Option<Hash> {
 		None
 	}
 
-	fn on_broadcasted(&self, _: HashMap<ExtrinsicHash, Vec<String>>) {}
+	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 }
 
 pub struct TestNet {

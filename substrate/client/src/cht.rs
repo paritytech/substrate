@@ -27,39 +27,61 @@
 
 use triehash;
 
-use primitives::block::{HeaderHash, Number as BlockNumber};
+use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
 use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{prove_read, read_proof_check};
 
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 
-/// The size of each CHT.
-pub const SIZE: BlockNumber = 2048;
+/// The size of each CHT. Can't be larger than minmal HeaderT::Number (u32?).
+pub const SIZE: usize = 2048;
 
 /// Returns Some(cht_number) if CHT is need to be built when the block with given number is canonized.
-pub fn is_build_required(block_num: BlockNumber) -> Option<BlockNumber> {
-	let block_cht_num = block_to_cht_number(block_num)?;
-	if block_cht_num < 2 {
+pub fn is_build_required<N>(block_num: N) -> Option<N>
+	where
+		N: Clone + SimpleArithmetic,
+{
+	let block_cht_num = block_to_cht_number(block_num.clone())?;
+	let two = N::one() + N::one();
+	if block_cht_num < two {
 		return None;
 	}
-	let cht_start = start_number(block_cht_num);
+	let cht_start = start_number(block_cht_num.clone());
 	if cht_start != block_num {
 		return None;
 	}
 
-	Some(block_cht_num - 2)
+	Some(block_cht_num - two)
 }
 
 /// Compute a CHT root from an iterator of block hashes. Fails if shorter than
 /// SIZE items. The items are assumed to proceed sequentially from `start_number(cht_num)`.
 /// Discards the trie's nodes.
-pub fn compute_root<I: IntoIterator<Item=Option<HeaderHash>>>(cht_num: BlockNumber, hashes: I) -> Option<HeaderHash> {
-	build_pairs(cht_num, hashes).map(|pairs| triehash::trie_root(pairs).0.into())
+pub fn compute_root<Header, I>(
+	cht_num: <Header as HeaderT>::Number,
+	hashes: I,
+) -> Option<<Header as HeaderT>::Hash>
+	where
+		Header: HeaderT,
+		Header::Hash: From<[u8; 32]> + Into<[u8; 32]>,
+		I: IntoIterator<Item=Option<Header::Hash>>,
+{
+	build_pairs::<Header, I>(cht_num, hashes)
+		.map(|pairs| triehash::trie_root(pairs).0.into())
 }
 
 /// Build CHT-based header proof.
-pub fn build_proof<I: IntoIterator<Item=Option<HeaderHash>>>(cht_num: BlockNumber, block_num: BlockNumber, hashes: I) -> Option<Vec<Vec<u8>>> {
-	let transaction = build_pairs(cht_num, hashes)?
+pub fn build_proof<Header, I>(
+	cht_num: <Header as HeaderT>::Number,
+	block_num: <Header as HeaderT>::Number,
+	hashes: I
+) -> Option<Vec<Vec<u8>>>
+	where
+		Header: HeaderT,
+		Header::Hash: From<[u8; 32]> + Into<[u8; 32]>,
+		I: IntoIterator<Item=Option<Header::Hash>>,
+{
+	let transaction = build_pairs::<Header, I>(cht_num, hashes)?
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
@@ -73,11 +95,20 @@ pub fn build_proof<I: IntoIterator<Item=Option<HeaderHash>>>(cht_num: BlockNumbe
 }
 
 /// Check CHT-based header proof.
-pub fn check_proof(local_root: HeaderHash, local_number: BlockNumber, remote_hash: HeaderHash, remote_proof: Vec<Vec<u8>>) -> ClientResult<()> {
+pub fn check_proof<Header>(
+	local_root: Header::Hash,
+	local_number: Header::Number,
+	remote_hash: Header::Hash,
+	remote_proof: Vec<Vec<u8>>
+) -> ClientResult<()>
+	where
+		Header: HeaderT,
+		Header::Hash: From<[u8; 32]> + Into<[u8; 32]>,
+{
 	let local_cht_key = encode_cht_key(local_number);
 	let local_cht_value = read_proof_check(local_root.into(), remote_proof, &local_cht_key).map_err(|e| ClientError::from(e))?;
 	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
-	let local_hash = decode_cht_value(&local_cht_value);
+	let local_hash: Header::Hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
 	match local_hash == remote_hash {
 		true => Ok(()),
 		false => Err(ClientErrorKind::InvalidHeaderProof.into()),
@@ -85,19 +116,29 @@ pub fn check_proof(local_root: HeaderHash, local_number: BlockNumber, remote_has
 }
 
 /// Build CHT.
-fn build_pairs<I: IntoIterator<Item=Option<HeaderHash>>>(cht_num: BlockNumber, hashes: I) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
+fn build_pairs<Header, I>(
+	cht_num: Header::Number,
+	hashes: I
+) -> Option<Vec<(Vec<u8>, Vec<u8>)>>
+	where
+		Header: HeaderT,
+		Header::Hash: Into<[u8; 32]>,
+		I: IntoIterator<Item=Option<Header::Hash>>,
+{
 	let start_num = start_number(cht_num);
-	let pairs = hashes.into_iter()
-		.take(SIZE as usize)
-		.enumerate()
-		.filter_map(|(i, hash)| hash.map(|hash| (
-			encode_cht_key(start_num + i as BlockNumber).to_vec(),
+	let mut pairs = Vec::new();
+	let mut hash_number = start_num;
+	for hash in hashes.into_iter().take(SIZE as usize) {
+		pairs.push(hash.map(|hash| (
+			encode_cht_key(hash_number).to_vec(),
 			encode_cht_value(hash)
-		)))
-		.collect::<Vec<_>>();
-	match pairs.len() == SIZE as usize {
-		true => Some(pairs),
-		false => None,
+		))?);
+		hash_number += Header::Number::one();
+	}
+
+	match pairs.len() {
+		SIZE => Some(pairs),
+		_ => None,
 	}
 }
 
@@ -107,26 +148,28 @@ fn build_pairs<I: IntoIterator<Item=Option<HeaderHash>>>(cht_num: BlockNumber, h
 /// More generally: CHT N includes block (1 + N*SIZE)...((N+1)*SIZE).
 /// This is because the genesis hash is assumed to be known
 /// and including it would be redundant.
-pub fn start_number(cht_num: BlockNumber) -> BlockNumber {
-	(cht_num * SIZE) + 1
+pub fn start_number<N: SimpleArithmetic>(cht_num: N) -> N {
+	(cht_num * As::sa(SIZE)) + N::one()
 }
 
 /// Get the ending block of a given CHT.
-pub fn end_number(cht_num: BlockNumber) -> BlockNumber {
-	(cht_num + 1) * SIZE
+pub fn end_number<N: SimpleArithmetic>(cht_num: N) -> N {
+	(cht_num + N::one()) * As::sa(SIZE)
 }
 
 /// Convert a block number to a CHT number.
 /// Returns `None` for `block_num` == 0, `Some` otherwise.
-pub fn block_to_cht_number(block_num: BlockNumber) -> Option<BlockNumber> {
-	match block_num {
-		0 => None,
-		n => Some((n - 1) / SIZE),
+pub fn block_to_cht_number<N: SimpleArithmetic>(block_num: N) -> Option<N> {
+	if block_num == N::zero() {
+		None
+	} else {
+		Some((block_num - N::one()) / As::sa(SIZE))
 	}
 }
 
 /// Convert header number into CHT key.
-pub fn encode_cht_key(number: BlockNumber) -> Vec<u8> {
+pub fn encode_cht_key<N: As<usize>>(number: N) -> Vec<u8> {
+	let number: usize = number.as_();
 	vec![
 		(number >> 24) as u8,
 		((number >> 16) & 0xff) as u8,
@@ -136,17 +179,26 @@ pub fn encode_cht_key(number: BlockNumber) -> Vec<u8> {
 }
 
 /// Convert header hast into CHT value.
-fn encode_cht_value(hash: HeaderHash) -> Vec<u8> {
-	hash.to_vec()
+fn encode_cht_value<Hash: Into<[u8; 32]>>(hash: Hash) -> Vec<u8> {
+	hash.into().to_vec()
 }
 
 /// Convert CHT value into block header hash.
-pub fn decode_cht_value(value: &[u8]) -> HeaderHash {
-	value.into()
+pub fn decode_cht_value<Hash: From<[u8; 32]>>(value: &[u8]) -> Option<Hash> {
+	match value.len() {
+		32 => {
+			let mut hash_array: [u8; 32] = Default::default();
+			hash_array.clone_from_slice(&value[0..32]);
+			Some(hash_array.into())
+		},
+		_ => None,
+	}
+	
 }
 
 #[cfg(test)]
 mod tests {
+	use test_client::runtime::Header;
 	use super::*;
 
 	#[test]
@@ -177,28 +229,28 @@ mod tests {
 
 	#[test]
 	fn build_pairs_fails_when_no_enough_blocks() {
-		assert!(build_pairs(0, vec![Some(1.into()); SIZE as usize / 2]).is_none());
+		assert!(build_pairs::<Header, _>(0, vec![Some(1.into()); SIZE as usize / 2]).is_none());
 	}
 
 	#[test]
 	fn build_pairs_fails_when_missing_block() {
-		assert!(build_pairs(0, ::std::iter::repeat(Some(1.into())).take(SIZE as usize / 2)
+		assert!(build_pairs::<Header, _>(0, ::std::iter::repeat(Some(1.into())).take(SIZE as usize / 2)
 			.chain(::std::iter::once(None))
 			.chain(::std::iter::repeat(Some(2.into())).take(SIZE as usize / 2 - 1))).is_none());
 	}
 
 	#[test]
 	fn compute_root_works() {
-		assert!(compute_root(42, vec![Some(1.into()); SIZE as usize]).is_some());
+		assert!(compute_root::<Header, _>(42, vec![Some(1.into()); SIZE as usize]).is_some());
 	}
 
 	#[test]
 	fn build_proof_fails_when_querying_wrong_block() {
-		assert!(build_proof(0, SIZE * 1000, vec![Some(1.into()); SIZE as usize]).is_none());
+		assert!(build_proof::<Header, _>(0, (SIZE * 1000) as u64, vec![Some(1.into()); SIZE as usize]).is_none());
 	}
 
 	#[test]
 	fn build_proof_works() {
-		assert!(build_proof(0, SIZE / 2, vec![Some(1.into()); SIZE as usize]).is_some());
+		assert!(build_proof::<Header, _>(0, (SIZE / 2) as u64, vec![Some(1.into()); SIZE as usize]).is_some());
 	}
 }

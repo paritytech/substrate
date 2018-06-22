@@ -14,6 +14,7 @@ substrate-client = { path = "../client" }
 substrate-executor = { path = "../executor" }
 substrate-extrinsic-pool = { path = "../extrinsic-pool" }
 substrate-primitives = { path = "../primitives" }
+substrate-runtime-primitives = { path = "../runtime/primitives" }
 substrate-state-machine = { path = "../state-machine" }
 tokio-core = "0.1.12"
 

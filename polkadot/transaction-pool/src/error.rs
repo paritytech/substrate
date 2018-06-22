@@ -16,7 +16,7 @@
 
 use extrinsic_pool::{self, txpool};
 use primitives::Hash;
-use runtime::UncheckedExtrinsic;
+use runtime::{Address, UncheckedExtrinsic};
 
 error_chain! {
 	links {
@@ -34,9 +34,9 @@ error_chain! {
 			display("Inehrent transactions cannot be queued."),
 		}
 		/// Attempted to queue a transaction with bad signature.
-		BadSignature(xt: UncheckedExtrinsic) {
+		BadSignature(e: &'static str) {
 			description("Transaction had bad signature."),
-			display("Transaction had bad signature."),
+			display("Transaction had bad signature: {}", e),
 		}
 		/// Attempted to queue a transaction that is already in the pool.
 		AlreadyImported(hash: Hash) {
@@ -47,6 +47,16 @@ error_chain! {
 		Import(err: Box<::std::error::Error + Send>) {
 			description("Error importing transaction"),
 			display("Error importing transaction: {}", err.description()),
+		}
+		/// Runtime failure.
+		UnrecognisedAddress(who: Address) {
+			description("Unrecognised address in extrinsic"),
+			display("Unrecognised address in extrinsic: {}", who),
+		}
+		/// Extrinsic is not yet checked.
+		NotReady {
+			description("Indexed address is unverified"),
+			display("Indexed address is unverified"),
 		}
 	}
 }

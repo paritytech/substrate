@@ -16,6 +16,7 @@
 
 use std::{
 	collections::HashMap,
+	fmt,
 	marker::PhantomData,
 	sync::{Arc, Weak},
 };
@@ -23,28 +24,29 @@ use std::{
 use futures::sync::mpsc;
 use parking_lot::{RwLock, Mutex};
 use txpool;
-use primitives::{Hash, block::Extrinsic};
 
 use listener::Listener;
 use watcher::Watcher;
 
 /// Extrinsics pool.
-pub struct Pool<V, S, E> where
-	V: txpool::Verifier<Extrinsic>,
+pub struct Pool<Ex, Hash, V, S, E> where
+	Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex,
+	V: txpool::Verifier<Ex>,
 	S: txpool::Scoring<V::VerifiedTransaction>,
 {
 	_error: Mutex<PhantomData<E>>,
 	pool: RwLock<txpool::Pool<
 		V::VerifiedTransaction,
 		S,
-		Listener,
+		Listener<Hash>,
 	>>,
 	verifier: V,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<Weak<V::VerifiedTransaction>>>>,
 }
 
-impl<V, S, E> Pool<V, S, E> where
-	V: txpool::Verifier<Extrinsic>,
+impl<Ex, Hash, V, S, E> Pool<Ex, Hash, V, S, E> where
+	Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default,
+	V: txpool::Verifier<Ex>,
 	S: txpool::Scoring<V::VerifiedTransaction>,
 	V::VerifiedTransaction: txpool::VerifiedTransaction<Hash=Hash>,
 	E: From<V::Error>,
@@ -86,7 +88,7 @@ impl<V, S, E> Pool<V, S, E> where
 	}
 
 	/// Imports a bunch of extrinsics to the pool
-	pub fn submit(&self, xts: Vec<Extrinsic>) -> Result<Vec<Arc<V::VerifiedTransaction>>, E> {
+	pub fn submit(&self, xts: Vec<Ex>) -> Result<Vec<Arc<V::VerifiedTransaction>>, E> {
 		xts
 			.into_iter()
 			.map(|xt| self.verifier.verify_transaction(xt))
@@ -97,7 +99,7 @@ impl<V, S, E> Pool<V, S, E> where
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
-	pub fn submit_and_watch(&self, xt: Extrinsic) -> Result<Watcher, E> {
+	pub fn submit_and_watch(&self, xt: Ex) -> Result<Watcher<Hash>, E> {
 		let xt = self.submit(vec![xt])?.pop().expect("One extrinsic passed; one result returned; qed");
 		Ok(self.pool.write().listener_mut().create_watcher(xt))
 	}
@@ -122,7 +124,7 @@ impl<V, S, E> Pool<V, S, E> where
 	/// Cull transactions from the queue and then compute the pending set.
 	pub fn cull_and_get_pending<R, F, T>(&self, ready: R, f: F) -> T where
 		R: txpool::Ready<V::VerifiedTransaction> + Clone,
-		F: FnOnce(txpool::PendingIterator<V::VerifiedTransaction, R, S, Listener>) -> T,
+		F: FnOnce(txpool::PendingIterator<V::VerifiedTransaction, R, S, Listener<Hash>>) -> T,
 	{
 		let mut pool = self.pool.write();
 		pool.cull(None, ready.clone());

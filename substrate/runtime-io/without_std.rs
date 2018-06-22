@@ -23,17 +23,19 @@ pub extern crate substrate_runtime_std as rstd;
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
 
-use rstd::intrinsics;
+use core::intrinsics;
 use rstd::vec::Vec;
 pub use rstd::{mem, slice};
 
-#[lang = "panic_fmt"]
+#[panic_implementation]
 #[no_mangle]
-pub extern fn panic_fmt(_fmt: ::core::fmt::Arguments, _file: &'static str, _line: u32, _col: u32) {
+pub fn panic(info: &::core::panic::PanicInfo) -> ! {
 	unsafe {
-		ext_print_utf8(_file.as_ptr() as *const u8, _file.len() as u32);
-		ext_print_num(_line as u64);
-		ext_print_num(_col as u64);
+		if let Some(loc) = info.location() {
+			ext_print_utf8(loc.file().as_ptr() as *const u8, loc.file().len() as u32);
+			ext_print_num(loc.line() as u64);
+			ext_print_num(loc.column() as u64);
+		}
 		intrinsics::abort()
 	}
 }
@@ -134,6 +136,27 @@ pub fn enumerated_trie_root(values: &[&[u8]]) -> [u8; 32] {
 		);
 	}
 	result
+}
+
+/// A trie root formed from the iterated items.
+pub fn trie_root<
+	I: IntoIterator<Item = (A, B)>,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
+>(_input: I) -> [u8; 32] {
+	unimplemented!()
+	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
+	// implemneted natively and compile the trie logic as wasm).
+}
+
+/// A trie root formed from the enumerated items.
+pub fn ordered_trie_root<
+	I: IntoIterator<Item = A>,
+	A: AsRef<[u8]>
+>(_input: I) -> [u8; 32] {
+	unimplemented!()
+	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
+	// implemneted natively and compile the trie logic as wasm).
 }
 
 /// The current relay chain identifier.

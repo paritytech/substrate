@@ -23,9 +23,11 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
+use runtime_primitives::BuildStorage;
+use runtime_primitives::traits::Block as BlockT;
 use state_machine::CodeExecutor;
 
-use client::{Client, GenesisBuilder};
+use client::Client;
 use error::Result as ClientResult;
 use light::backend::Backend;
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
@@ -33,38 +35,40 @@ use light::call_executor::RemoteCallExecutor;
 use light::fetcher::{Fetcher, LightDataChecker};
 
 /// Create an instance of light client blockchain backend.
-pub fn new_light_blockchain<S: BlockchainStorage, F>(storage: S) -> Arc<Blockchain<S, F>> {
+pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>, F>(storage: S) -> Arc<Blockchain<S, F>> {
 	Arc::new(Blockchain::new(storage))
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<S: BlockchainStorage, F: Fetcher>(blockchain: Arc<Blockchain<S, F>>, fetcher: Arc<F>) -> Arc<Backend<S, F>> {
+pub fn new_light_backend<B: BlockT, S: BlockchainStorage<B>, F: Fetcher<B>>(blockchain: Arc<Blockchain<S, F>>, fetcher: Arc<F>) -> Arc<Backend<S, F>> {
 	blockchain.set_fetcher(Arc::downgrade(&fetcher));
 	Arc::new(Backend::new(blockchain))
 }
 
 /// Create an instance of light client.
-pub fn new_light<S, F, GB>(
+pub fn new_light<B, S, F, GS>(
 	backend: Arc<Backend<S, F>>,
 	fetcher: Arc<F>,
-	genesis_builder: GB,
-) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F>>>
+	genesis_storage: GS,
+) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F>, B>>
 	where
-		S: BlockchainStorage,
-		F: Fetcher,
-		GB: GenesisBuilder,
+		B: BlockT,
+		S: BlockchainStorage<B>,
+		F: Fetcher<B>,
+		GS: BuildStorage,
 {
 	let executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
-	Client::new(backend, executor, genesis_builder)
+	Client::new(backend, executor, genesis_storage)
 }
 
 /// Create an instance of fetch data checker.
-pub fn new_fetch_checker<S, E, F>(
+pub fn new_fetch_checker<B, S, E, F>(
 	blockchain: Arc<Blockchain<S, F>>,
 	executor: E,
 ) -> LightDataChecker<S, E, F>
 	where
-		S: BlockchainStorage,
+		B: BlockT,
+		S: BlockchainStorage<B>,
 		E: CodeExecutor,
 {
 	LightDataChecker::new(blockchain, executor)

@@ -15,8 +15,8 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
-
-use primitives::block::Id as BlockId;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::Block as BlockT;
 use state_machine::{self, OverlayedChanges, Backend as StateBackend, CodeExecutor};
 
 use backend;
@@ -32,14 +32,14 @@ pub struct CallResult {
 }
 
 /// Method call executor.
-pub trait CallExecutor {
+pub trait CallExecutor<B: BlockT> {
 	/// Externalities error type.
 	type Error: state_machine::Error;
 
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error>;
+	fn call(&self, id: &BlockId<B>, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error>;
 
 	/// Execute a call to a contract on top of given state.
 	///
@@ -75,15 +75,16 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 	}
 }
 
-impl<B, E> CallExecutor for LocalCallExecutor<B, E>
+impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 	where
-		B: backend::LocalBackend,
+		B: backend::LocalBackend<Block>,
 		E: CodeExecutor,
-		error::Error: From<<<B as backend::Backend>::State as StateBackend>::Error>,
+		Block: BlockT,
+		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	type Error = E::Error;
 
-	fn call(&self, id: &BlockId, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
+	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
 		let mut changes = OverlayedChanges::default();
 		let (return_data, _) = self.call_at_state(&self.backend.state_at(*id)?, &mut changes, method, call_data)?;
 		Ok(CallResult{ return_data, changes })

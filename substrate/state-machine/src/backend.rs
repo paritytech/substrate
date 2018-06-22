@@ -24,8 +24,8 @@ use trie_backend::{TryIntoTrieBackend, TrieBackend};
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///
-/// The clone operation should be cheap.
-pub trait Backend: TryIntoTrieBackend + Clone {
+/// The clone operation (if implemented) should be cheap.
+pub trait Backend: TryIntoTrieBackend {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 

@@ -31,19 +31,23 @@ extern crate fdlimit;
 extern crate ed25519;
 extern crate triehash;
 extern crate parking_lot;
+extern crate serde;
+extern crate serde_json;
 
-extern crate substrate_codec as codec;
+extern crate substrate_primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
-extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
-extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate polkadot_primitives;
-extern crate polkadot_executor;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
+#[macro_use]
+extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
+#[macro_use]
+extern crate substrate_telemetry;
 extern crate polkadot_transaction_pool as txpool;
 
 #[macro_use]
@@ -54,22 +58,40 @@ extern crate clap;
 extern crate error_chain;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate hex_literal;
 
 pub mod error;
 mod informant;
+mod chain_spec;
+mod preset_config;
+
+pub use chain_spec::ChainSpec;
+pub use preset_config::PresetConfig;
 
 use std::io;
+use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use substrate_primitives::hexdisplay::HexDisplay;
+use substrate_primitives::storage::{StorageData, StorageKey};
+use substrate_telemetry::{init_telemetry, TelemetryConfig};
+use runtime_primitives::StorageMap;
+use polkadot_primitives::Block;
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
-use service::ChainSpec;
 
-struct Configuration(service::Configuration);
+const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
 
-impl substrate_rpc::system::SystemApi for Configuration {
+#[derive(Clone)]
+struct SystemConfiguration {
+	chain_name: String,
+}
+
+impl substrate_rpc::system::SystemApi for SystemConfiguration {
 	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok("parity-polkadot".into())
 	}
@@ -79,12 +101,14 @@ impl substrate_rpc::system::SystemApi for Configuration {
 	}
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(match self.0.chain_spec {
-			ChainSpec::Development => "dev",
-			ChainSpec::LocalTestnet => "local",
-			ChainSpec::PoC2Testnet => "poc-2",
-		}.into())
+		Ok(self.chain_name.clone())
 	}
+}
+
+fn read_storage_json(filename: &str) -> Option<StorageMap> {
+	let file = File::open(PathBuf::from(filename)).ok()?;
+	let h: HashMap<StorageKey, StorageData> = ::serde_json::from_reader(&file).ok()?;
+	Some(h.into_iter().map(|(k, v)| (k.0, v.0)).collect())
 }
 
 /// Parse command line arguments and start the node.
@@ -117,7 +141,42 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
+	info!("Parity ·:· Polkadot");
+	info!("  version {}", crate_version!());
+	info!("  by Parity Technologies, 2017, 2018");
+
 	let mut config = service::Configuration::default();
+
+	if let Some(name) = matches.value_of("name") {
+		config.name = name.into();
+		info!("Node name: {}", config.name);
+	}
+
+	let chain_spec = matches.value_of("chain")
+		.map(ChainSpec::from)
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
+	info!("Chain specification: {}", chain_spec);
+
+	config.chain_name = chain_spec.clone().into();
+
+	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+		let name = config.name.clone();
+		let chain_name = config.chain_name.clone();
+		Some(init_telemetry(TelemetryConfig {
+			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
+			on_connect: Box::new(move || {
+				telemetry!("system.connected";
+					"name" => name.clone(),
+					"implementation" => "parity-polkadot",
+					"version" => crate_version!(),
+					"config" => "",
+					"chain" => chain_name.clone(),
+				);
+			}),
+		}))
+	} else {
+		None
+	};
 
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
@@ -131,36 +190,46 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
 
-	let mut role = service::Role::FULL;
-	if matches.is_present("collator") {
-		info!("Starting collator.");
-		role = service::Role::COLLATOR;
-	} else if matches.is_present("validator") {
-		info!("Starting validator.");
-		role = service::Role::VALIDATOR;
-	} else if matches.is_present("light") {
-		info!("Starting light.");
-		role = service::Role::LIGHT;
+	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
+		.map(PresetConfig::deconstruct)
+		.unwrap_or_else(|f| (Box::new(move || 
+			read_storage_json(&f)
+				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
+				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
+		), vec![]));
+	
+	if matches.is_present("build-genesis") {
+		info!("Building genesis");
+		for (i, (k, v)) in genesis_storage().iter().enumerate() {
+			print!("{}\n\"0x{}\": \"0x{}\"", if i > 0 {','} else {'{'}, HexDisplay::from(k), HexDisplay::from(v));
+		}
+		println!("\n}}");
+		return Ok(())
 	}
 
-	match matches.value_of("chain") {
-		Some("dev") => config.chain_spec = ChainSpec::Development,
-		Some("local") => config.chain_spec = ChainSpec::LocalTestnet,
-		Some("poc-2") => config.chain_spec = ChainSpec::PoC2Testnet,
-		None => (),
-		Some(unknown) => panic!("Invalid chain name: {}", unknown),
-	}
-	info!("Chain specification: {}", match config.chain_spec {
-		ChainSpec::Development => "Development",
-		ChainSpec::LocalTestnet => "Local Testnet",
-		ChainSpec::PoC2Testnet => "PoC-2 Testnet",
-	});
+	config.genesis_storage = genesis_storage;
+
+	let role =
+		if matches.is_present("collator") {
+			info!("Starting collator");
+			service::Role::COLLATOR
+		} else if matches.is_present("light") {
+			info!("Starting (light)");
+			service::Role::LIGHT
+		} else if matches.is_present("validator") || matches.is_present("dev") {
+			info!("Starting validator");
+			service::Role::VALIDATOR
+		} else {
+			info!("Starting (heavy)");
+			service::Role::FULL
+		};
 
 	config.roles = role;
 	{
 		config.network.boot_nodes = matches
 			.values_of("bootnodes")
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
+		config.network.boot_nodes.extend(boot_nodes);
 		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 
@@ -179,17 +248,24 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
+	if matches.is_present("dev") {
+		config.keys.push("Alice".into());
+	}
+
+	let sys_conf = SystemConfiguration {
+		chain_name: config.chain_name.clone(),
+	};
 
 	match role == service::Role::LIGHT {
-		true => run_until_exit(core, service::new_light(config.clone())?, &matches, config),
-		false => run_until_exit(core, service::new_full(config.clone())?, &matches, config),
+		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf),
+		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf),
 	}
 }
 
-fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matches: &clap::ArgMatches, config: service::Configuration) -> error::Result<()>
+fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matches: &clap::ArgMatches, sys_conf: SystemConfiguration) -> error::Result<()>
 	where
 		C: service::Components,
-		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend>::State as state_machine::Backend>::Error>,
+		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
 	let exit = {
 		// can't use signal directly here because CtrlC takes only `Fn`.
@@ -209,11 +285,11 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
-			rpc::rpc_handler(
+			rpc::rpc_handler::<Block, _, _, _, _>(
 				service.client(),
 				chain,
 				service.transaction_pool(),
-				Configuration(config.clone()),
+				sys_conf.clone(),
 			)
 		};
 		(

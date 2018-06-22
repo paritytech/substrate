@@ -22,7 +22,7 @@ use linked_hash_map::LinkedHashMap;
 use parking_lot::RwLock;
 use client::CallResult;
 use client::light::fetcher::{RemoteHeaderRequest, RemoteCallRequest, RemoteReadRequest};
-use primitives::block::Header;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
 /// Total cache memory limit.
 const TOTAL_CACHE_LIMIT: usize = 1024 * 1024;
@@ -31,13 +31,13 @@ const TOTAL_CACHE_LIMIT: usize = 1024 * 1024;
 /// taking too much of the heap.
 /// TODO: the correct way is to use some constant overhead (from associated constant)?
 #[derive(Clone)]
-struct ZeroHeapHeader(pub Header);
+struct ZeroHeapHeader<Header>(pub Header);
 
 /// Cache for on-demand service responses.
-pub struct OnDemandCache {
-	remote_headers: RwLock<OnDemandCacheMap<RemoteHeaderRequest, ZeroHeapHeader>>,
-	remote_reads: RwLock<OnDemandCacheMap<RemoteReadRequest, Option<Vec<u8>>>>,
-	remote_calls: RwLock<OnDemandCacheMap<RemoteCallRequest, CallResult>>,
+pub struct OnDemandCache<Block: BlockT> {
+	remote_headers: RwLock<OnDemandCacheMap<RemoteHeaderRequest<<<Block as BlockT>::Header as HeaderT>::Number>, ZeroHeapHeader<Block::Header>>>,
+	remote_reads: RwLock<OnDemandCacheMap<RemoteReadRequest<Block::Hash>, Option<Vec<u8>>>>,
+	remote_calls: RwLock<OnDemandCacheMap<RemoteCallRequest<Block::Hash>, CallResult>>,
 }
 
 /// Cache for single type of on-demand service responses.
@@ -48,7 +48,7 @@ struct OnDemandCacheMap<K: Hash + Eq + HeapSizeOf, V: Clone + HeapSizeOf> {
 	data: LinkedHashMap<K, V>,
 }
 
-impl OnDemandCache {
+impl<Block: BlockT> OnDemandCache<Block> {
 	/// Creat new cache.
 	pub fn new() -> Self {
 		OnDemandCache {
@@ -59,32 +59,32 @@ impl OnDemandCache {
 	}
 
 	/// Try to read remote header response from the cache.
-	pub fn remote_header(&self, request: &RemoteHeaderRequest) -> Option<Header> {
+	pub fn remote_header(&self, request: &RemoteHeaderRequest<<<Block as BlockT>::Header as HeaderT>::Number>) -> Option<Block::Header> {
 		self.remote_headers.read().get(request).map(|h| h.0)
 	}
 
 	/// Try to read remote read response from the cache.
-	pub fn remote_read(&self, request: &RemoteReadRequest) -> Option<Option<Vec<u8>>> {
+	pub fn remote_read(&self, request: &RemoteReadRequest<Block::Hash>) -> Option<Option<Vec<u8>>> {
 		self.remote_reads.read().get(request)
 	}
 
 	/// Try to read remote call response from the cache.
-	pub fn remote_call(&self, request: &RemoteCallRequest) -> Option<CallResult> {
+	pub fn remote_call(&self, request: &RemoteCallRequest<Block::Hash>) -> Option<CallResult> {
 		self.remote_calls.read().get(request)
 	}
 
 	/// Cache remote header response.
-	pub fn cache_remote_header(&self, request: RemoteHeaderRequest, response: Header) {
+	pub fn cache_remote_header(&self, request: RemoteHeaderRequest<<<Block as BlockT>::Header as HeaderT>::Number>, response: Block::Header) {
 		self.remote_headers.write().insert(request, ZeroHeapHeader(response));
 	}
 
 	/// Cache remote read response.
-	pub fn cache_remote_read(&self, request: RemoteReadRequest, response: Option<Vec<u8>>) {
+	pub fn cache_remote_read(&self, request: RemoteReadRequest<Block::Hash>, response: Option<Vec<u8>>) {
 		self.remote_reads.write().insert(request, response);
 	}
 
 	/// Cache remote call response.
-	pub fn cache_remote_call(&self, request: RemoteCallRequest, response: CallResult) {
+	pub fn cache_remote_call(&self, request: RemoteCallRequest<Block::Hash>, response: CallResult) {
 		self.remote_calls.write().insert(request, response);
 	}
 }
@@ -122,7 +122,7 @@ impl<K: Hash + Eq + HeapSizeOf, V: Clone + HeapSizeOf> OnDemandCacheMap<K, V> {
 	}
 }
 
-impl HeapSizeOf for ZeroHeapHeader {
+impl<Header> HeapSizeOf for ZeroHeapHeader<Header> {
 	fn heap_size_of_children(&self) -> usize {
 		0
 	}
