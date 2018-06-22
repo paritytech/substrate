@@ -756,4 +756,48 @@ r#"
 
 		assert_matches!(execute(&code_mem, &mut mock_ext, 100_000), Err(_));
 	}
+
+	const CODE_RETURN: &str =
+r#"
+(module
+	;; ext_return(data_ptr: i32, data_len: i32) -> !
+	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_return
+			(i32.const 0)
+			(i32.const 8)
+		)
+
+		;; ext_return is diverging, so this shouldn't be execute. If it were,
+		;; then it will generate a plain trap.
+		unreachable
+	)
+
+	(data (i32.const 0) "\00asm\01\00\00\00")
+)
+"#;
+
+	#[test]
+	fn contract_return() {
+		let code_mem = wabt::wat2wasm(CODE_RETURN).unwrap();
+
+		let mut mock_ext = MockExt::default();
+
+		let exec_result = assert_matches!(
+			execute(&code_mem, &mut mock_ext, 100_000),
+			Ok(r) => r
+		);
+
+		assert_eq!(
+			&*exec_result.return_data,
+			&b"\x00asm\x01\x00\x00\x00"[..]
+		);
+		assert_eq!(
+			exec_result.gas_left,
+			99_987,
+		);
+	}
 }
