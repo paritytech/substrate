@@ -39,13 +39,13 @@ extern crate substrate_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{HasPublicAux, Executable, MaybeEmpty, SimpleArithmetic};
+use runtime_primitives::traits::{HasPublicAux, Executable, MaybeEmpty};
 
 pub trait Trait: HasPublicAux + system::Trait {
 	// the position of the required timestamp-set extrinsic.
 	const SET_POSITION: u32;
 
-	type Value: Parameter + Default + SimpleArithmetic;
+	type Value: Parameter + Default;
 }
 
 decl_module! {
@@ -60,8 +60,6 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait>;
 	pub Now get(now): b"tim:val" => required T::Value;
-	// The minimum (and advised) period between blocks.
-	pub BlockPeriod get(block_period): b"tim:block_period" => required T::Value;
 
 	// Did the timestamp get updated in this block?
 	DidUpdate: b"tim:did" => default bool;
@@ -81,10 +79,6 @@ impl<T: Trait> Module<T> {
 			"Timestamp extrinsic must be at position {} in the block",
 			T::SET_POSITION
 		);
-		assert!(
-			now >= Self::get() + Self::block_period(),
-			"Timestamp but increment by at least <BlockPeriod> between sequential blocks"
-		);
 		<Self as Store>::Now::put(now);
 		<Self as Store>::DidUpdate::put(true);
 		Ok(())
@@ -98,18 +92,9 @@ impl<T: Trait> Executable for Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Default)]
 pub struct GenesisConfig<T: Trait> {
 	pub now: T::Value,
-	pub period: T::Value,
-}
-
-impl<T: Trait> Default for GenesisConfig<T> {
-	fn default() -> Self {
-		GenesisConfig {
-			now: T::Value::default(),
-			period: T::Value::default(),
-		}
-	}
 }
 
 #[cfg(any(feature = "std", test))]
@@ -119,8 +104,7 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 		use runtime_io::twox_128;
 		use codec::Slicable;
 		map![
-			twox_128(<Now<T>>::key()).to_vec() => self.now.encode(),
-			twox_128(<BlockPeriod<T>>::key()).to_vec() => self.period.encode()
+			twox_128(<Now<T>>::key()).to_vec() => self.now.encode()
 		]
 	}
 }
@@ -159,35 +143,12 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage();
-		t.extend(GenesisConfig::<Test> { now: 42, period: 0 }.build_storage());
+		t.extend(GenesisConfig::<Test> { now: 42 }.build_storage());
 
 		with_externalities(&mut t, || {
 			assert_eq!(<Timestamp as Store>::Now::get(), 42);
 			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
 			assert_eq!(Timestamp::now(), 69);
-		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Timestamp must be updated only once in the block")]
-	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage();
-		t.extend(GenesisConfig::<Test> { now: 42, period: 5 }.build_storage());
-
-		with_externalities(&mut t, || {
-			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
-			let _ = Timestamp::aux_dispatch(Call::set(70), &0);
-		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Timestamp but increment by at least <BlockPeriod> between sequential blocks")]
-	fn block_period_is_enforced() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage();
-		t.extend(GenesisConfig::<Test> { now: 42, period: 5 }.build_storage());
-
-		with_externalities(&mut t, || {
-			let _ = Timestamp::aux_dispatch(Call::set(46), &0);
 		});
 	}
 }
