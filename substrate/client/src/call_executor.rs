@@ -17,9 +17,8 @@
 use std::sync::Arc;
 use futures::{IntoFuture, Future};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{self, OverlayedChanges, Backend as StateBackend, CodeExecutor};
-use state_machine::backend::InMemory as InMemoryStateBackend;
 
 use backend;
 use blockchain::Backend as ChainBackend;
@@ -49,6 +48,11 @@ pub trait CallExecutor<B: BlockT> {
 	///
 	/// No changes are made.
 	fn call_at_state<S: state_machine::Backend>(&self, state: &S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, S::Transaction), error::Error>;
+
+	/// Execute a call to a contract on top of given state, gathering execution proof.
+	///
+	/// No changes are made.
+	fn prove_at_state<S: state_machine::Backend>(&self, state: S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
 }
 
 /// Call executor that executes methods locally, querying all required
@@ -105,6 +109,18 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 			call_data,
 		).map_err(Into::into)
 	}
+
+	fn prove_at_state<S: state_machine::Backend>(&self, state: S, changes: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+		state_machine::prove(
+			state,
+			changes,
+			&self.executor,
+			method,
+			call_data,
+		)
+		.map(|(result, proof, _)| (result, proof))
+		.map_err(Into::into)
+	}
 }
 
 impl<B, F> RemoteCallExecutor<B, F> {
@@ -140,69 +156,70 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 	fn call_at_state<S: state_machine::Backend>(&self, _state: &S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> error::Result<(Vec<u8>, S::Transaction)> {
 		Err(error::ErrorKind::NotAvailableOnLightClient.into())
 	}
+
+	fn prove_at_state<S: state_machine::Backend>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+		Err(error::ErrorKind::NotAvailableOnLightClient.into())
+	}
 }
 
-/// Check remote execution proof.
-pub fn check_execution_proof<B, E, Block>(backend: &B, executor: &E, request: &RemoteCallRequest<Block::Hash>, remote_proof: (Vec<u8>, Vec<Vec<u8>>)) -> Result<CallResult, error::Error>
+/// Check remote execution proof using given backend.
+pub fn check_execution_proof<B, E, Block>(backend: &B, executor: &E, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> Result<CallResult, error::Error>
 	where
 		B: backend::RemoteBackend<Block>,
 		E: CodeExecutor,
 		Block: BlockT,
+		<<Block as BlockT>::Header as HeaderT>::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
 		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
-	use runtime_primitives::traits::{Header, Hashing, HashingFor};
-
-	let (remote_result, remote_proof) = remote_proof;
-
-	let remote_state = state_from_execution_proof(remote_proof);
-	let remote_state_root = HashingFor::<Block>::trie_root(remote_state.pairs().into_iter());
-
 	let local_header = backend.blockchain().header(BlockId::Hash(request.block))?;
-	let local_header = local_header.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", request.block)))?;
+	let local_header = local_header.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", request.block)))?;
 	let local_state_root = local_header.state_root().clone();
+	do_check_execution_proof(local_state_root, executor, request, remote_proof)
+}
 
-	if remote_state_root != local_state_root {
-		return Err(error::ErrorKind::InvalidExecutionProof.into());
-	}
-
+/// Check remote execution proof using given state root.
+fn do_check_execution_proof<E, H>(local_state_root: H, executor: &E, request: &RemoteCallRequest<H>, remote_proof: Vec<Vec<u8>>) -> Result<CallResult, error::Error>
+	where
+		E: CodeExecutor,
+		H: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
+{
 	let mut changes = OverlayedChanges::default();
-	let (local_result, _) = state_machine::execute(
-		&remote_state,
+	let (local_result, _) = state_machine::proof_check(
+		local_state_root.into(),
+		remote_proof,
 		&mut changes,
 		executor,
 		&request.method,
-		&request.call_data,
-	)?;
-
-	if local_result != remote_result {
-		return Err(error::ErrorKind::InvalidExecutionProof.into());
-	}
+		&request.call_data)?;
 
 	Ok(CallResult { return_data: local_result, changes })
 }
 
-/// Convert state to execution proof. Proof is simple the whole state (temporary).
-// TODO [light]: this method must be removed after trie-based proofs are landed.
-pub fn state_to_execution_proof<B: state_machine::Backend>(state: &B) -> Vec<Vec<u8>> {
-	state.pairs().into_iter()
-		.flat_map(|(k, v)| ::std::iter::once(k).chain(::std::iter::once(v)))
-		.collect()
-}
+#[cfg(test)]
+mod tests {
+	use runtime_primitives::generic::BlockId;
+	use state_machine::Backend;
+	use test_client;
+	use light::RemoteCallRequest;
+	use super::do_check_execution_proof;
 
-/// Convert execution proof to in-memory state for check. Reverse function for state_to_execution_proof.
-// TODO [light]: this method must be removed after trie-based proofs are landed.
-fn state_from_execution_proof(proof: Vec<Vec<u8>>) -> InMemoryStateBackend {
-	let mut changes = Vec::new();
-	let mut proof_iter = proof.into_iter();
-	loop {
-		let key = proof_iter.next();
-		let value = proof_iter.next();
-		if let (Some(key), Some(value)) = (key, value) {
-			changes.push((key, Some(value)));
-		} else {
-			break;
-		}
+	#[test]
+	fn execution_proof_is_generated_and_checked() {
+		// prepare remote client
+		let remote_client = test_client::new();
+		let remote_block_id = BlockId::Number(0);
+		let remote_block_storage_root = remote_client.state_at(&remote_block_id)
+			.unwrap().storage_root(::std::iter::empty()).0;
+
+		// 'fetch' execution proof from remote node
+		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
+
+		// check remote execution proof locally
+		let local_executor = test_client::NativeExecutor::new();
+		do_check_execution_proof(remote_block_storage_root, &local_executor, &RemoteCallRequest {
+			block: Default::default(),
+			method: "authorities".into(),
+			call_data: vec![],
+		}, remote_execution_proof).unwrap();
 	}
-
-	InMemoryStateBackend::default().update(changes)
 }

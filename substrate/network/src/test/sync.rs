@@ -15,7 +15,9 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use client::backend::Backend;
+use client::blockchain::Backend as BlockchainBackend;
 use sync::SyncState;
+use {Role};
 use super::*;
 
 #[test]
@@ -87,4 +89,37 @@ fn sync_after_fork_works() {
 	assert!(net.peer(0).client.backend().blockchain().canon_equals_to(&peer1_chain));
 	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer1_chain));
 	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer1_chain));
+}
+
+#[test]
+fn blocks_are_not_announced_by_light_nodes() {
+	::env_logger::init().ok();
+	let mut net = TestNet::new(0);
+
+	// full peer0 is connected to light peer
+	// light peer1 is connected to full peer2
+	let mut light_config = ProtocolConfig::default();
+	light_config.roles = Role::LIGHT;
+	net.add_peer(&ProtocolConfig::default());
+	net.add_peer(&light_config);
+	net.add_peer(&ProtocolConfig::default());
+
+	net.peer(0).push_blocks(1, false);
+	net.peer(0).start();
+	net.peer(1).start();
+	net.peer(2).start();
+	net.peer(0).on_connect(1);
+	net.peer(1).on_connect(2);
+
+	// generate block at peer0 && run sync
+	while !net.done() {
+		net.sync_step();
+	}
+
+	// peer 0 has the best chain
+	// peer 1 has the best chain
+	// peer 2 has genesis-chain only
+	assert_eq!(net.peer(0).client.backend().blockchain().info().unwrap().best_number, 1);
+	assert_eq!(net.peer(1).client.backend().blockchain().info().unwrap().best_number, 1);
+	assert_eq!(net.peer(2).client.backend().blockchain().info().unwrap().best_number, 0);
 }

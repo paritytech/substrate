@@ -331,9 +331,9 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildExternalities for GenesisConfig<T>
+impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_externalities(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> runtime_io::TestExternalities {
 		use codec::Slicable;
 		use runtime_io::twox_128;
 
@@ -353,7 +353,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::BuildExternalities;
+	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
@@ -398,15 +398,15 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_externalities();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![],
-		}.build_externalities());
+		}.build_storage());
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
-		}.build_externalities());
+		}.build_storage());
 		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,
 			current_era: 0,
@@ -421,12 +421,12 @@ mod tests {
 			creation_fee: 0,
 			contract_fee: 0,
 			reclaim_rebate: 0,
-		}.build_externalities());
+		}.build_storage());
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 1,
 			minimum_deposit: 1,
-		}.build_externalities());
+		}.build_storage());
 		t
 	}
 
