@@ -30,6 +30,8 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_system as system;
+#[cfg(test)]
+extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(test)]
 #[macro_use]
@@ -256,6 +258,10 @@ mod tests {
 		type DetermineContractAddress = staking::DummyContractAddressFor;
 		type AccountIndex = u64;
 	}
+	impl timestamp::Trait for Test {
+		const TIMESTAMP_SET_POSITION: u32 = 0;
+		type Value = u64;
+	}
 
 	type TestXt = primitives::testing::TestXt<Call<Test>>;
 	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
@@ -292,6 +298,7 @@ mod tests {
 		t.extend(consensus::GenesisConfig::<Test>::default().build_storage());
 		t.extend(session::GenesisConfig::<Test>::default().build_storage());
 		t.extend(staking::GenesisConfig::<Test>::default().build_storage());
+		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
 		t
 	}
 
@@ -302,7 +309,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("4fd406d2d62a841f7e2f956b52ce9ed98111c9eb6b3a9051aa4667b470030832").into(),
+					state_root: hex!("b09827bc78c2af6e6c326bb38076a50fc29f325ffe35e0f6e4a274a2231da304").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -336,7 +343,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("4fd406d2d62a841f7e2f956b52ce9ed98111c9eb6b3a9051aa4667b470030832").into(),
+					state_root: hex!("b09827bc78c2af6e6c326bb38076a50fc29f325ffe35e0f6e4a274a2231da304").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

@@ -85,7 +85,7 @@ impl consensus::Trait for Concrete {
 pub type Consensus = consensus::Module<Concrete>;
 
 impl timestamp::Trait for Concrete {
-	const SET_POSITION: u32 = 0;
+	const TIMESTAMP_SET_POSITION: u32 = 0;
 
 	type Value = u64;
 }
@@ -180,6 +180,7 @@ impl_outer_config! {
 		StakingConfig => staking,
 		DemocracyConfig => democracy,
 		CouncilConfig => council,
+		TimestampConfig => timestamp,
 	}
 }
 

@@ -50,7 +50,7 @@ pub mod error;
 use std::sync::Arc;
 use demo_primitives::Hash;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, BuildStorage};
+	SessionConfig, StakingConfig, TimestampConfig, BuildStorage};
 use demo_runtime::{Block, UncheckedExtrinsic};
 use futures::{Future, Sink, Stream};
 
@@ -146,6 +146,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 			cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
 			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
+		}),
+		timestamp: Some(TimestampConfig {
+			now: 0,
+			period: 5,
 		}),
 	}.build_storage();
 

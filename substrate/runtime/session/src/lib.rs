@@ -43,13 +43,14 @@ extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_system as system;
+extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, Executable, Convert};
+use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
-pub trait Trait: consensus::Trait {
+pub trait Trait: timestamp::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
 }
 
@@ -76,6 +77,8 @@ decl_storage! {
 	pub SessionLength get(length): b"ses:len" => required T::BlockNumber;
 	// Current index of the session.
 	pub CurrentIndex get(current_index): b"ses:ind" => required T::BlockNumber;
+	// Timestamp when current session started.
+	pub CurrentStart get(current_start): b"ses:current_start" => required T::Value;
 
 	// Block at which the session length last changed.
 	LastLengthChange: b"ses:llc" => T::BlockNumber;
@@ -135,7 +138,7 @@ impl<T: Trait> Module<T> {
 		// new set.
 		// check block number and call next_session if necessary.
 		let block_number = <system::Module<T>>::block_number();
-		if ((block_number - Self::last_length_change()) % Self::length()).is_zero() {
+		if ((block_number - Self::last_length_change()) % Self::length()).is_zero() || Self::broken_validation() {
 			Self::rotate_session();
 		}
 	}
@@ -144,6 +147,7 @@ impl<T: Trait> Module<T> {
 	pub fn rotate_session() {
 		// Increment current session index.
 		<CurrentIndex<T>>::put(<CurrentIndex<T>>::get() + One::one());
+		<CurrentStart<T>>::put(<timestamp::Module<T>>::get());
 
 		// Enact era length change.
 		if let Some(next_len) = <NextSessionLength<T>>::take() {
@@ -158,6 +162,20 @@ impl<T: Trait> Module<T> {
 				<consensus::Module<T>>::set_authority(i as u32, &n);
 			}
 		});
+	}
+
+	/// Returns `true` if the current validator set is taking took long to validate blocks.
+	pub fn broken_validation() -> bool {
+		let now = <timestamp::Module<T>>::get();
+		let block_period = <timestamp::Module<T>>::block_period();
+		let block_number = <system::Module<T>>::block_number();
+		let blocks_remaining = Self::length() - One::one() - (block_number - Self::last_length_change()) % Self::length();
+		if blocks_remaining.is_zero() {
+			false
+		} else {
+			let blocks_remaining = <T::Value as As<T::BlockNumber>>::sa(blocks_remaining);
+			Self::current_start() + blocks_remaining * block_period > now
+		}
 	}
 }
 
@@ -194,6 +212,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 		map![
 			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
 			twox_128(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
+			twox_128(<CurrentStart<T>>::key()).to_vec() => T::Value::zero().encode(),
 			twox_128(<Validators<T>>::key()).to_vec() => self.validators.encode()
 		]
 	}
@@ -226,6 +245,10 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 	}
+	impl timestamp::Trait for Test {
+		const TIMESTAMP_SET_POSITION: u32 = 0;
+		type Value = u64;
+	}
 	impl Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
 	}
@@ -240,6 +263,7 @@ mod tests {
 			code: vec![],
 			authorities: vec![1, 2, 3],
 		}.build_storage());
+		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],

@@ -41,6 +41,8 @@ extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
+#[cfg(test)]
+extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
 use rstd::result;
@@ -393,6 +395,10 @@ mod tests {
 		type DetermineContractAddress = staking::DummyContractAddressFor;
 		type AccountIndex = u64;
 	}
+	impl timestamp::Trait for Test {
+		const TIMESTAMP_SET_POSITION: u32 = 0;
+		type Value = u64;
+	}
 	impl Trait for Test {
 		type Proposal = Proposal;
 	}
@@ -427,6 +433,7 @@ mod tests {
 			voting_period: 1,
 			minimum_deposit: 1,
 		}.build_storage());
+		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
 		t
 	}
 

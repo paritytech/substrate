@@ -23,7 +23,7 @@ use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
 use substrate_primitives::H256;
 use runtime_io;
-use {DummyContractAddressFor, GenesisConfig, Module, Trait, consensus, session, system};
+use {DummyContractAddressFor, GenesisConfig, Module, Trait, consensus, session, system, timestamp};
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -46,6 +46,10 @@ impl system::Trait for Test {
 }
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = Identity;
+}
+impl timestamp::Trait for Test {
+	const TIMESTAMP_SET_POSITION: u32 = 0;
+	type Value = u64;
 }
 impl Trait for Test {
 	type Balance = u64;
@@ -83,6 +87,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		contract_fee: 0,
 		reclaim_rebate: 0,
 	}.build_storage());
+	t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
 	t
 }
 

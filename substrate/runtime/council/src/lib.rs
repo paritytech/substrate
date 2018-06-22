@@ -38,6 +38,8 @@ extern crate substrate_runtime_democracy as democracy;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
+#[cfg(test)]
+extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, As, AuxLookup};
@@ -655,6 +657,10 @@ mod tests {
 	impl democracy::Trait for Test {
 		type Proposal = Proposal;
 	}
+	impl timestamp::Trait for Test {
+		const TIMESTAMP_SET_POSITION: u32 = 0;
+		type Value = u64;
+	}
 	impl Trait for Test {}
 
 	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities {
@@ -705,6 +711,7 @@ mod tests {
 			cooloff_period: 2,
 			voting_period: 1,
 		}.build_storage());
+		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
 		t
 	}
 

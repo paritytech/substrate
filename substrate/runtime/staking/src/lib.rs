@@ -43,6 +43,7 @@ extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
+extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;

@@ -35,17 +35,20 @@ extern crate serde_derive;
 extern crate substrate_primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_system as system;
+extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{HasPublicAux, Executable, MaybeEmpty, SimpleArithmetic};
+use runtime_primitives::traits::{Executable, MaybeEmpty, SimpleArithmetic, As};
 
-pub trait Trait: HasPublicAux + system::Trait {
+pub trait Trait: consensus::Trait where
+	<Self as consensus::Trait>::PublicAux: MaybeEmpty
+{
 	// the position of the required timestamp-set extrinsic.
-	const SET_POSITION: u32;
+	const TIMESTAMP_SET_POSITION: u32;
 
-	type Value: Parameter + Default + SimpleArithmetic;
+	type Value: Parameter + Default + SimpleArithmetic + As<Self::BlockNumber>;
 }
 
 decl_module! {
@@ -77,9 +80,9 @@ impl<T: Trait> Module<T> {
 		assert!(aux.is_empty());
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
-			<system::Module<T>>::extrinsic_index() == T::SET_POSITION,
+			<system::Module<T>>::extrinsic_index() == T::TIMESTAMP_SET_POSITION,
 			"Timestamp extrinsic must be at position {} in the block",
-			T::SET_POSITION
+			T::TIMESTAMP_SET_POSITION
 		);
 		assert!(
 			now >= Self::get() + Self::block_period(),
@@ -103,6 +106,7 @@ pub struct GenesisConfig<T: Trait> {
 	pub period: T::Value,
 }
 
+#[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
@@ -150,8 +154,12 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 	}
+	impl consensus::Trait for Test {
+		type PublicAux = u64;
+		type SessionKey = u64;
+	}
 	impl Trait for Test {
-		const SET_POSITION: u32 = 0;
+		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Value = u64;
 	}
 	type Timestamp = Module<Test>;

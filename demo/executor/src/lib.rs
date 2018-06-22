@@ -203,6 +203,7 @@ mod tests {
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
+			timestamp: Some(Default::default()),
 		}.build_storage()
 	}
 
@@ -238,7 +239,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("4f7a61bceecddc19d49fbee53f82402c2a8727c1b2aeb5e5070a59f0777a203b").into(),
+			hex!("00fa0defe8b76a8e6bf536a9d685271b9dcd8cf097d9bd139ea2525b62014061").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -251,7 +252,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("67c588603dd727601263cf8d6138a2003ffc0df793c5ea34e7defc945da24bf0").into(),
+			hex!("edea2f16095ee40d52ee18a8f9ee5d5d96e30429ef914ee2b75b406681fcd9b5").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
