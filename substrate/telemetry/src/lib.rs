@@ -25,6 +25,8 @@ extern crate parking_lot;
 extern crate websocket as ws;
 extern crate slog_async;
 extern crate slog_json;
+#[macro_use]
+extern crate log;
 #[macro_use(o, kv)]
 extern crate slog;
 extern crate slog_scope;
@@ -77,6 +79,7 @@ struct TelemetryWriter {
 impl TelemetryWriter {
 	fn ensure_connected(&mut self) {
 		if self.first_time {
+			info!("Connected to telemetry server: {}", self.config.url);
 			(self.config.on_connect)();
 			self.first_time = false;
 		}
