@@ -136,7 +136,6 @@ impl PresetConfig {
 				voting_period: 7 * 120 * 24, // 7 day voting period for council members.
 			}),
 			parachains: Some(Default::default()),
-			timestamp: Some(Default::default()),
 		});
 		let boot_nodes = vec![
 			"enode://a93a29fa68d965452bf0ff8c1910f5992fe2273a72a1ee8d3a3482f68512a61974211ba32bb33f051ceb1530b8ba3527fc36224ba6b9910329025e6d9153cf50@104.211.54.233:30333".into(),
@@ -201,7 +200,6 @@ impl PresetConfig {
 				voting_period: 20,
 			}),
 			parachains: Some(Default::default()),
-			timestamp: Some(Default::default()),
 		});
 		let boot_nodes = Vec::new();
 		PresetConfig { genesis_config, boot_nodes }
