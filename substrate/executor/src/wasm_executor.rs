@@ -360,7 +360,25 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.sandbox_store.instance_teardown(instance_idx)?;
 		Ok(())
 	},
-	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
+	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, state: usize) -> u32 => {
+		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
+		let export = this.memory.get(export_ptr, export_len as usize)
+			.map_err(|_| DummyUserError)
+			.and_then(|b|
+				String::from_utf8(b)
+					.map_err(|_| DummyUserError)
+			)?;
+
+		let instance = this.sandbox_store.instance(instance_idx)?;
+		let result = instance.invoke(&export, &[], this, state);
+		match result {
+			Ok(None) => Ok(sandbox_primitives::ERR_OK),
+			Ok(_) => unimplemented!(),
+			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
+		}
+	},
+	// TODO: Remove the old 'ext_sandbox_invoke' and rename this to it.
+	ext_sandbox_invoke_poc2(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
 		use codec::Slicable;
 
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
