@@ -16,14 +16,22 @@
 
 //! Test utilities
 
-#![cfg(test)]
+#![cfg(feature = "std")]
 
 use primitives::BuildStorage;
 use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
 use substrate_primitives::H256;
 use runtime_io;
-use {DummyContractAddressFor, GenesisConfig, Module, Trait, consensus, session, system, timestamp};
+use {GenesisConfig, Module, Trait, consensus, session, system, timestamp};
+use super::ContractAddressFor;
+
+pub struct DummyContractAddressFor;
+impl ContractAddressFor<u64> for DummyContractAddressFor {
+	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
+		origin + 1
+	}
+}
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]

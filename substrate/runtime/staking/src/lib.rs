@@ -46,10 +46,10 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(test)] use std::fmt::Debug;
+use account_db::State;
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use rstd::cell::RefCell;
-use rstd::collections::btree_map::{BTreeMap, Entry};
+use rstd::collections::btree_map::BTreeMap;
 use codec::{Input, Slicable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
@@ -58,10 +58,19 @@ use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executab
 use address::Address as RawAddress;
 
 pub mod address;
-#[cfg(test)]
+#[cfg(feature = "std")]
 mod mock;
 #[cfg(test)]
 mod tests;
+mod genesis_config;
+mod account_db;
+
+#[cfg(feature = "std")]
+pub use genesis_config::GenesisConfig;
+#[cfg(feature = "std")]
+pub use mock::DummyContractAddressFor;
+
+pub use account_db::*;
 
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: usize = 64;
@@ -602,203 +611,7 @@ impl<T: Trait> Module<T> {
 			<system::AccountNonce<T>>::remove(who);
 		}
 	}
-}
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
-		Self::check_new_era();
-	}
-}
-
-impl<T: Trait> AuxLookup for Module<T> {
-	type Source = address::Address<T::AccountId, T::AccountIndex>;
-	type Target = T::AccountId;
-	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		match a {
-			address::Address::Id(i) => Ok(i),
-			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
-		}
-	}
-}
-
-// Each identity's stake may be in one of three bondage states, given by an integer:
-// - n | n <= <CurrentEra<T>>::get(): inactive: free to be transferred.
-// - ~0: active: currently representing a validator.
-// - n | n > <CurrentEra<T>>::get(): deactivating: recently representing a validator and not yet
-//   ready for transfer.
-
-struct ChangeEntry<T: Trait> {
-	balance: Option<T::Balance>,
-	code: Option<Vec<u8>>,
-	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
-}
-
-// Cannot derive(Default) since it erroneously bounds T by Default.
-impl<T: Trait> Default for ChangeEntry<T> {
-	fn default() -> Self {
-		ChangeEntry {
-			balance: Default::default(),
-			code: Default::default(),
-			storage: Default::default(),
-		}
-	}
-}
-
-impl<T: Trait> ChangeEntry<T> {
-	pub fn contract_created(b: T::Balance, c: Vec<u8>) -> Self {
-		ChangeEntry { balance: Some(b), code: Some(c), storage: Default::default() }
-	}
-	pub fn balance_changed(b: T::Balance) -> Self {
-		ChangeEntry { balance: Some(b), code: None, storage: Default::default() }
-	}
-}
-
-type State<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
-
-trait AccountDb<T: Trait> {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
-
-	fn merge(&mut self, state: State<T>);
-}
-
-struct DirectAccountDb;
-impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		<StorageOf<T>>::get(&(account.clone(), location.to_vec()))
-	}
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		<CodeOf<T>>::get(account)
-	}
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
-		<FreeBalance<T>>::get(account)
-	}
-	fn merge(&mut self, s: State<T>) {
-		let ed = <Module<T>>::existential_deposit();
-		for (address, changed) in s.into_iter() {
-			if let Some(balance) = changed.balance {
-				// If the balance is too low, then the account is reaped.
-				// NOTE: There are two balances for every account: `reserved_balance` and
-				// `free_balance`. This contract subsystem only cares about the latter: whenever
-				// the term "balance" is used *here* it should be assumed to mean "free balance"
-				// in the rest of the module.
-				// Free balance can never be less than ED. If that happens, it gets reduced to zero
-				// and the account information relevant to this subsystem is deleted (i.e. the
-				// account is reaped).
-				// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
-				// value of which makes even the `free_balance` unspendable.
-				// TODO: enforce this for the other balance-altering functions.
-				if balance < ed {
-					<Module<T>>::on_free_too_low(&address);
-					continue;
-				} else {
-					if !<FreeBalance<T>>::exists(&address) {
-						let outcome = <Module<T>>::new_account(&address, balance);
-						let credit = match outcome {
-							NewAccountOutcome::GoodHint => balance + <Module<T>>::reclaim_rebate(),
-							_ => balance,
-						};
-						<FreeBalance<T>>::insert(&address, credit);
-					} else {
-						<FreeBalance<T>>::insert(&address, balance);
-					}
-				}
-			}
-			if let Some(code) = changed.code {
-				<CodeOf<T>>::insert(&address, &code);
-			}
-			for (k, v) in changed.storage.into_iter() {
-				if let Some(value) = v {
-					<StorageOf<T>>::insert((address.clone(), k), &value);
-				} else {
-					<StorageOf<T>>::remove((address.clone(), k));
-				}
-			}
-		}
-	}
-}
-
-struct OverlayAccountDb<'a, T: Trait + 'a> {
-	local: RefCell<State<T>>,
-	underlying: &'a AccountDb<T>,
-}
-impl<'a, T: Trait> OverlayAccountDb<'a, T> {
-	fn new(underlying: &'a AccountDb<T>) -> OverlayAccountDb<'a, T> {
-		OverlayAccountDb {
-			local: RefCell::new(State::new()),
-			underlying,
-		}
-	}
-
-	fn into_state(self) -> State<T> {
-		self.local.into_inner()
-	}
-
-	fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.storage
-			.insert(location, value);
-	}
-	fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.balance = Some(balance);
-	}
-}
-
-impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		self.local
-			.borrow()
-			.get(account)
-			.and_then(|a| a.storage.get(location))
-			.cloned()
-			.unwrap_or_else(|| self.underlying.get_storage(account, location))
-	}
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		self.local
-			.borrow()
-			.get(account)
-			.and_then(|a| a.code.clone())
-			.unwrap_or_else(|| self.underlying.get_code(account))
-	}
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
-		self.local
-			.borrow()
-			.get(account)
-			.and_then(|a| a.balance)
-			.unwrap_or_else(|| self.underlying.get_balance(account))
-	}
-	fn merge(&mut self, s: State<T>) {
-		let mut local = self.local.borrow_mut();
-
-		for (address, changed) in s.into_iter() {
-			match local.entry(address) {
-				Entry::Occupied(e) => {
-					let mut value = e.into_mut();
-					if changed.balance.is_some() {
-						value.balance = changed.balance;
-					}
-					if changed.code.is_some() {
-						value.code = changed.code;
-					}
-					value.storage.extend(changed.storage.into_iter());
-				}
-				Entry::Vacant(e) => {
-					e.insert(changed);
-				}
-			}
-		}
-	}
-}
-
-impl<T: Trait> Module<T> {
 	fn effect_create<DB: AccountDb<T>>(
 		transactor: &T::AccountId,
 		code: &[u8],
@@ -895,32 +708,19 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-struct StakingExt<'a, 'b: 'a, T: Trait + 'b> {
-	account_db: &'a mut OverlayAccountDb<'b, T>,
-	account: T::AccountId,
+impl<T: Trait> Executable for Module<T> {
+	fn execute() {
+		Self::check_new_era();
+	}
 }
-impl<'a, 'b: 'a, T: Trait> contract::Ext for StakingExt<'a, 'b, T> {
-	type AccountId = T::AccountId;
-	type Balance = T::Balance;
 
-	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.account_db.get_storage(&self.account, key)
-	}
-	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
-		self.account_db.set_storage(&self.account, key.to_vec(), value);
-	}
-	fn create(&mut self, code: &[u8], value: Self::Balance) {
-		if let Ok(Some(commit_state)) =
-			Module::<T>::effect_create(&self.account, code, value, self.account_db)
-		{
-			self.account_db.merge(commit_state);
-		}
-	}
-	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
-		if let Ok(Some(commit_state)) =
-			Module::<T>::effect_transfer(&self.account, to, value, self.account_db)
-		{
-			self.account_db.merge(commit_state);
+impl<T: Trait> AuxLookup for Module<T> {
+	type Source = address::Address<T::AccountId, T::AccountIndex>;
+	type Target = T::AccountId;
+	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
+		match a {
+			address::Address::Id(i) => Ok(i),
+			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
 		}
 	}
 }
@@ -934,136 +734,5 @@ impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 		}
 		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
 		Ok(())
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-pub struct DummyContractAddressFor;
-#[cfg(any(feature = "std", test))]
-impl ContractAddressFor<u64> for DummyContractAddressFor {
-	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
-		origin + 1
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-pub struct GenesisConfig<T: Trait> {
-	pub sessions_per_era: T::BlockNumber,
-	pub current_era: T::BlockNumber,
-	pub balances: Vec<(T::AccountId, T::Balance)>,
-	pub intentions: Vec<T::AccountId>,
-	pub validator_count: u64,
-	pub bonding_duration: T::BlockNumber,
-	pub transaction_base_fee: T::Balance,
-	pub transaction_byte_fee: T::Balance,
-	pub transfer_fee: T::Balance,
-	pub creation_fee: T::Balance,
-	pub contract_fee: T::Balance,
-	pub reclaim_rebate: T::Balance,
-	pub existential_deposit: T::Balance,
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
-	pub fn simple() -> Self {
-		GenesisConfig {
-			sessions_per_era: T::BlockNumber::sa(2),
-			current_era: T::BlockNumber::sa(0),
-			balances: vec![(T::AccountId::from(1), T::Balance::sa(111))],
-			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
-			validator_count: 3,
-			bonding_duration: T::BlockNumber::sa(0),
-			transaction_base_fee: T::Balance::sa(0),
-			transaction_byte_fee: T::Balance::sa(0),
-			transfer_fee: T::Balance::sa(0),
-			creation_fee: T::Balance::sa(0),
-			contract_fee: T::Balance::sa(0),
-			existential_deposit: T::Balance::sa(0),
-			reclaim_rebate: T::Balance::sa(0),
-		}
-	}
-
-	pub fn extended() -> Self {
-		GenesisConfig {
-			sessions_per_era: T::BlockNumber::sa(3),
-			current_era: T::BlockNumber::sa(1),
-			balances: vec![
-				(T::AccountId::from(1), T::Balance::sa(10)),
-				(T::AccountId::from(2), T::Balance::sa(20)),
-				(T::AccountId::from(3), T::Balance::sa(30)),
-				(T::AccountId::from(4), T::Balance::sa(40)),
-				(T::AccountId::from(5), T::Balance::sa(50)),
-				(T::AccountId::from(6), T::Balance::sa(60)),
-				(T::AccountId::from(7), T::Balance::sa(1))
-			],
-			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
-			validator_count: 3,
-			bonding_duration: T::BlockNumber::sa(0),
-			transaction_base_fee: T::Balance::sa(1),
-			transaction_byte_fee: T::Balance::sa(0),
-			transfer_fee: T::Balance::sa(0),
-			creation_fee: T::Balance::sa(0),
-			contract_fee: T::Balance::sa(0),
-			existential_deposit: T::Balance::sa(0),
-			reclaim_rebate: T::Balance::sa(0),
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for GenesisConfig<T> {
-	fn default() -> Self {
-		GenesisConfig {
-			sessions_per_era: T::BlockNumber::sa(1000),
-			current_era: T::BlockNumber::sa(0),
-			balances: vec![],
-			intentions: vec![],
-			validator_count: 0,
-			bonding_duration: T::BlockNumber::sa(1000),
-			transaction_base_fee: T::Balance::sa(0),
-			transaction_byte_fee: T::Balance::sa(0),
-			transfer_fee: T::Balance::sa(0),
-			creation_fee: T::Balance::sa(0),
-			contract_fee: T::Balance::sa(0),
-			existential_deposit: T::Balance::sa(0),
-			reclaim_rebate: T::Balance::sa(0),
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> runtime_io::TestExternalities {
-		use runtime_io::twox_128;
-		use codec::Slicable;
-
-		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
-
-		let mut r: runtime_io::TestExternalities = map![
-			twox_128(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
-			twox_128(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
-			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
-			twox_128(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
-			twox_128(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
-			twox_128(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
-			twox_128(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
-			twox_128(<TransferFee<T>>::key()).to_vec() => self.transfer_fee.encode(),
-			twox_128(<CreationFee<T>>::key()).to_vec() => self.creation_fee.encode(),
-			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
-			twox_128(<ExistentialDeposit<T>>::key()).to_vec() => self.existential_deposit.encode(),
-			twox_128(<ReclaimRebate<T>>::key()).to_vec() => self.reclaim_rebate.encode(),
-			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
-			twox_128(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
-		];
-
-		let ids: Vec<_> = self.balances.iter().map(|x| x.0.clone()).collect();
-		for i in 0..(ids.len() + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE {
-			r.insert(twox_128(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
-				ids[i * ENUM_SET_SIZE..ids.len().min((i + 1) * ENUM_SET_SIZE)].to_owned().encode());
-		}
-		for (who, value) in self.balances.into_iter() {
-			r.insert(twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
-		}
-		r
 	}
 }
