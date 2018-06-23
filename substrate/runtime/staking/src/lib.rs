@@ -53,14 +53,13 @@ use rstd::collections::btree_map::BTreeMap;
 use codec::{Input, Slicable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
+use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
 	As, AuxLookup, Hashing as HashingT, Member};
 use address::Address as RawAddress;
 
 pub mod address;
-#[cfg(feature = "std")]
 mod mock;
-#[cfg(test)]
 mod tests;
 mod genesis_config;
 mod account_db;
@@ -166,6 +165,11 @@ decl_storage! {
 	pub CreationFee get(creation_fee): b"sta:creation_fee" => required T::Balance;
 	// The fee required to create a contract. At least as big as ReclaimRebate.
 	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
+
+	// Maximum reward, per validator, that is provided per acceptable session.
+	pub SessionReward get(session_reward): b"sta:session_reward" => required T::Balance;
+	// Slash, per validator that is taken per abnormal era end.
+	pub EarlyEraSlash get(early_era_slash): b"sta:early_era_slash" => required T::Balance;
 
 	// The current era index.
 	pub CurrentEra get(current_era): b"sta:era" => required T::BlockNumber;
@@ -337,8 +341,7 @@ impl<T: Trait> Module<T> {
 
 	/// Force there to be a new era. This also forces a new session immediately after.
 	fn force_new_era() -> Result {
-		Self::new_era();
-		<session::Module<T>>::rotate_session();
+		<session::Module<T>>::rotate_session(false);
 		Ok(())
 	}
 
@@ -387,6 +390,17 @@ impl<T: Trait> Module<T> {
 		} else {
 			None
 		}
+	}
+
+	/// Adds up to `value` to the free balance of `who`.
+	///
+	/// If `who` doesn't exist, nothing is done and an Err returned.
+	pub fn reward(who: &T::AccountId, value: T::Balance) -> Result {
+		if Self::voting_balance(who).is_zero() {
+			return Err("beneficiary account must pre-exist");
+		}
+		Self::set_free_balance(who, Self::free_balance(who) + value);
+		Ok(())
 	}
 
 	/// Moves `value` from balance to reserved balance.
@@ -463,10 +477,28 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Hook to be called after to transaction processing.
-	pub fn check_new_era() {
-		// check block number and call new_era if necessary.
-		if (<system::Module<T>>::block_number() - Self::last_era_length_change()) % Self::era_length() == Zero::zero() {
+	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
+	/// move to a new era.
+	fn new_session(normal_rotation: bool, actual_elapsed: T::Value) {
+		let session_index = <session::Module<T>>::current_index();
+
+		if normal_rotation {
+			// reward
+			let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
+			let percent: usize = (T::Value::sa(100usize) * ideal_elapsed / actual_elapsed).as_();
+			let reward = Self::session_reward() * T::Balance::sa(percent) / T::Balance::sa(100usize);
+			// apply good session reward
+			for v in <session::Module<T>>::validators().iter() {
+				let _ = Self::reward(v, reward);	// will never fail as validator accounts must be created, but even if it did, it's just a missed reward.
+			}
+		} else {
+			// slash
+			let early_era_slash = Self::early_era_slash();
+			for v in <session::Module<T>>::validators().iter() {
+				Self::slash(v, early_era_slash);
+			}
+		}
+		if (session_index % Self::era_length()).is_zero() || !normal_rotation {
 			Self::new_era();
 		}
 	}
@@ -710,7 +742,12 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> Executable for Module<T> {
 	fn execute() {
-		Self::check_new_era();
+	}
+}
+
+impl<T: Trait> OnSessionChange<T::Value> for Module<T> {
+	fn on_session_change(normal_rotation: bool, elapsed: T::Value) {
+		Self::new_session(normal_rotation, elapsed);
 	}
 }
 

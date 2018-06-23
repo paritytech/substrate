@@ -50,8 +50,19 @@ use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
+/// A session has changed.
+pub trait OnSessionChange<T> {
+	/// Session has changed.
+	fn on_session_change(normal_rotation: bool, time_elapsed: T);
+}
+
+impl<T> OnSessionChange<T> for () {
+	fn on_session_change(_: bool, _: T) {}
+}
+
 pub trait Trait: timestamp::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
+	type OnSessionChange: OnSessionChange<Self::Value>;
 }
 
 decl_module! {
@@ -65,7 +76,7 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
-		fn force_new_session() -> Result = 1;
+		fn force_new_session(normal_rotation: bool) -> Result = 1;
 	}
 }
 decl_storage! {
@@ -114,8 +125,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Forces a new session.
-	fn force_new_session() -> Result {
-		Self::rotate_session();
+	fn force_new_session(normal_rotation: bool) -> Result {
+		Self::rotate_session(normal_rotation);
 		Ok(())
 	}
 
@@ -138,16 +149,20 @@ impl<T: Trait> Module<T> {
 		// new set.
 		// check block number and call next_session if necessary.
 		let block_number = <system::Module<T>>::block_number();
-		if ((block_number - Self::last_length_change()) % Self::length()).is_zero() || Self::broken_validation() {
-			Self::rotate_session();
+		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
+		if is_final_block || Self::broken_validation() {
+			Self::rotate_session(is_final_block);
 		}
 	}
 
 	/// Move onto next session: register the new authority set.
-	pub fn rotate_session() {
+	pub fn rotate_session(normal_rotation: bool) {
+		let now = <timestamp::Module<T>>::get();
+		let time_elapsed = now.clone() - Self::current_start();
+
 		// Increment current session index.
 		<CurrentIndex<T>>::put(<CurrentIndex<T>>::get() + One::one());
-		<CurrentStart<T>>::put(<timestamp::Module<T>>::get());
+		<CurrentStart<T>>::put(now);
 
 		// Enact era length change.
 		if let Some(next_len) = <NextSessionLength<T>>::take() {
@@ -156,12 +171,21 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
+		T::OnSessionChange::on_session_change(normal_rotation, time_elapsed);
+
 		// Update any changes in session keys.
 		Self::validators().iter().enumerate().for_each(|(i, v)| {
 			if let Some(n) = <NextKeyFor<T>>::take(v) {
 				<consensus::Module<T>>::set_authority(i as u32, &n);
 			}
 		});
+	}
+
+	/// Get the time that should have elapsed over a session if everything was working perfectly.
+	pub fn ideal_session_duration() -> T::Value {
+		let block_period = <timestamp::Module<T>>::block_period();
+		let session_length = <T::Value as As<T::BlockNumber>>::sa(Self::length());
+		session_length * block_period
 	}
 
 	/// Returns `true` if the current validator set is taking took long to validate blocks.
@@ -174,7 +198,7 @@ impl<T: Trait> Module<T> {
 			false
 		} else {
 			let blocks_remaining = <T::Value as As<T::BlockNumber>>::sa(blocks_remaining);
-			Self::current_start() + blocks_remaining * block_period > now
+			now + blocks_remaining * block_period > Self::current_start() + Self::ideal_session_duration() * T::Value::sa(13) / T::Value::sa(10)	// if we're 30% behind schedule then end abnormally
 		}
 	}
 }
@@ -251,6 +275,7 @@ mod tests {
 	}
 	impl Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
+		type OnSessionChange = ();
 	}
 
 	type System = system::Module<Test>;

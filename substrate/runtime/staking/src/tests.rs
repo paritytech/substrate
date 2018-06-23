@@ -16,6 +16,8 @@
 
 //! Tests for the module.
 
+#![cfg(test)]
+
 use super::*;
 use runtime_io::with_externalities;
 use mock::*;
@@ -111,44 +113,44 @@ fn staking_should_work() {
 		assert_ok!(Staking::stake(&1));
 		assert_ok!(Staking::stake(&2));
 		assert_ok!(Staking::stake(&4));
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![10, 20]);
 
 		// Block 2: New validator set now.
 		System::set_block_number(2);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![4, 2]);
 
 		// Block 3: Unstake highest, introduce another staker. No change yet.
 		System::set_block_number(3);
 		assert_ok!(Staking::stake(&3));
 		assert_ok!(Staking::unstake(&4));
-		Staking::check_new_era();
+		Session::check_rotate_session();
 
 		// Block 4: New era - validators change.
 		System::set_block_number(4);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![3, 2]);
 
 		// Block 5: Transfer stake from highest to lowest. No change yet.
 		System::set_block_number(5);
 		assert_ok!(Staking::transfer(&4, 1.into(), 40));
-		Staking::check_new_era();
+		Session::check_rotate_session();
 
 		// Block 6: Lowest now validator.
 		System::set_block_number(6);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![1, 3]);
 
 		// Block 7: Unstake three. No change yet.
 		System::set_block_number(7);
 		assert_ok!(Staking::unstake(&3));
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![1, 3]);
 
 		// Block 8: Back to one and two.
 		System::set_block_number(8);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![1, 2]);
 	});
 }
@@ -163,14 +165,14 @@ fn staking_eras_work() {
 
 		// Block 1: No change.
 		System::set_block_number(1);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 0);
 
 		// Block 2: Simple era change.
 		System::set_block_number(2);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 1);
@@ -178,35 +180,35 @@ fn staking_eras_work() {
 		// Block 3: Schedule an era length change; no visible changes.
 		System::set_block_number(3);
 		assert_ok!(Staking::set_sessions_per_era(3));
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 1);
 
 		// Block 4: Era change kicks in.
 		System::set_block_number(4);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 5: No change.
 		System::set_block_number(5);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 6: No change.
 		System::set_block_number(6);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 7: Era increment.
 		System::set_block_number(7);
-		Staking::check_new_era();
+		Session::check_rotate_session();
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 3);

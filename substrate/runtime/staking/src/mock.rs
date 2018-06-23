@@ -54,6 +54,7 @@ impl system::Trait for Test {
 }
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = Identity;
+	type OnSessionChange = Staking;
 }
 impl timestamp::Trait for Test {
 	const TIMESTAMP_SET_POSITION: u32 = 0;
