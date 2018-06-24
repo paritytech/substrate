@@ -8,6 +8,10 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=$RUST_TOOLCHAIN -y
 # Load cargo environment. Specifically, put cargo into PATH.
 source ~/.cargo/env
 
+rustc --version
+rustup --version
+cargo --version
+
 case $TARGET in
 	"native")
 		sudo apt-get -y update
