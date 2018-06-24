@@ -11,7 +11,6 @@ branches:
 
 env:
   global:
-    - CARGO_TARGET_DIR=/tmp/polkadot-target
     - RUST_BACKTRACE=1
   matrix:
     - RUST_TOOLCHAIN=stable TARGET=wasm
