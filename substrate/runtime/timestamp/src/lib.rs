@@ -62,7 +62,7 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait>;
-	pub Now get(now): b"tim:val" => required T::Value;
+	pub Now get(now): b"tim:val" => T::Value;
 	// The minimum (and advised) period between blocks.
 	pub BlockPeriod get(block_period): b"tim:block_period" => required T::Value;
 
@@ -72,7 +72,7 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
 	pub fn get() -> T::Value {
-		<Self as Store>::Now::get()
+		Self::now().expect("This must always exist apart from before the first call to `set`; `set` happens prior to anything else; qed")
 	}
 
 	/// Set the current time.
@@ -84,13 +84,21 @@ impl<T: Trait> Module<T> {
 			"Timestamp extrinsic must be at position {} in the block",
 			T::TIMESTAMP_SET_POSITION
 		);
-		assert!(
-			now >= Self::get() + Self::block_period(),
-			"Timestamp but increment by at least <BlockPeriod> between sequential blocks"
-		);
+		if let Some(t) = Self::now() {
+			assert!(
+				now >= t + Self::block_period(),
+				"Timestamp but increment by at least <BlockPeriod> between sequential blocks"
+			);
+		}
 		<Self as Store>::Now::put(now);
 		<Self as Store>::DidUpdate::put(true);
 		Ok(())
+	}
+
+	/// Set the timestamp to something in particular. Only used for tests.
+	#[cfg(any(feature = "std", test))]
+	pub fn set_timestamp(now: T::Value) {
+		<Self as Store>::Now::put(now);
 	}
 }
 
@@ -102,7 +110,6 @@ impl<T: Trait> Executable for Module<T> {
 
 #[cfg(any(feature = "std", test))]
 pub struct GenesisConfig<T: Trait> {
-	pub now: T::Value,
 	pub period: T::Value,
 }
 
@@ -110,7 +117,6 @@ pub struct GenesisConfig<T: Trait> {
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
-			now: T::Value::default(),
 			period: T::Value::default(),
 		}
 	}
@@ -123,7 +129,6 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 		use runtime_io::twox_128;
 		use codec::Slicable;
 		map![
-			twox_128(<Now<T>>::key()).to_vec() => self.now.encode(),
 			twox_128(<BlockPeriod<T>>::key()).to_vec() => self.period.encode()
 		]
 	}
@@ -167,10 +172,10 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage();
-		t.extend(GenesisConfig::<Test> { now: 42, period: 0 }.build_storage());
+		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage());
 
 		with_externalities(&mut t, || {
-			assert_eq!(<Timestamp as Store>::Now::get(), 42);
+			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
 			assert_eq!(Timestamp::now(), 69);
 		});
@@ -180,9 +185,10 @@ mod tests {
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage();
-		t.extend(GenesisConfig::<Test> { now: 42, period: 5 }.build_storage());
+		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage());
 
 		with_externalities(&mut t, || {
+			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
 			let _ = Timestamp::aux_dispatch(Call::set(70), &0);
 		});
@@ -195,6 +201,7 @@ mod tests {
 		t.extend(GenesisConfig::<Test> { now: 42, period: 5 }.build_storage());
 
 		with_externalities(&mut t, || {
+			Timestamp::set_timestamp(42);
 			let _ = Timestamp::aux_dispatch(Call::set(46), &0);
 		});
 	}

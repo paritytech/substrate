@@ -22,7 +22,7 @@ use serde_json;
 use substrate_primitives::{AuthorityId, storage::{StorageKey, StorageData}};
 use runtime_primitives::{MakeStorage, BuildStorage, StorageMap};
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig};
+	SessionConfig, StakingConfig, TimestampConfig};
 use chain_spec::ChainSpec;
 
 enum Config {
@@ -99,6 +99,7 @@ impl PresetConfig {
 			session: Some(SessionConfig {
 				validators: initial_authorities.iter().cloned().map(Into::into).collect(),
 				session_length: 720,	// that's 1 hour per session.
+				broken_percent_late: 30,
 			}),
 			staking: Some(StakingConfig {
 				current_era: 0,
@@ -136,7 +137,9 @@ impl PresetConfig {
 				voting_period: 7 * 120 * 24, // 7 day voting period for council members.
 			}),
 			parachains: Some(Default::default()),
-			timestamp: Some(Default::default()),
+			timestamp: Some(TimestampConfig {
+				period: 5,					// 5 second block time.
+			}),
 		});
 		let boot_nodes = vec![
 			"enode://a93a29fa68d965452bf0ff8c1910f5992fe2273a72a1ee8d3a3482f68512a61974211ba32bb33f051ceb1530b8ba3527fc36224ba6b9910329025e6d9153cf50@104.211.54.233:30333".into(),
@@ -164,6 +167,7 @@ impl PresetConfig {
 			session: Some(SessionConfig {
 				validators: initial_authorities.iter().cloned().map(Into::into).collect(),
 				session_length: 10,
+				broken_percent_late: 30,
 			}),
 			staking: Some(StakingConfig {
 				current_era: 0,
@@ -201,7 +205,9 @@ impl PresetConfig {
 				voting_period: 20,
 			}),
 			parachains: Some(Default::default()),
-			timestamp: Some(Default::default()),
+			timestamp: Some(TimestampConfig {
+				period: 5,					// 5 second block time.
+			}),
 		});
 		let boot_nodes = Vec::new();
 		PresetConfig { genesis_config, boot_nodes }

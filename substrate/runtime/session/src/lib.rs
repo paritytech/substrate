@@ -90,6 +90,8 @@ decl_storage! {
 	pub CurrentIndex get(current_index): b"ses:ind" => required T::BlockNumber;
 	// Timestamp when current session started.
 	pub CurrentStart get(current_start): b"ses:current_start" => required T::Value;
+	// Percent by which the session must necessarily finish late before we early-exit the session.
+	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Value;
 
 	// Block at which the session length last changed.
 	LastLengthChange: b"ses:llc" => T::BlockNumber;
@@ -188,17 +190,34 @@ impl<T: Trait> Module<T> {
 		session_length * block_period
 	}
 
+	/// Number of blocks remaining in this session, not counting this one. If the session is
+	/// due to rotate at the end of this block, then it will return 0. If the just began, then
+	/// it will return `Self::length() - 1`.
+	pub fn blocks_remaining() -> T::BlockNumber {
+		// 2 0 2 0 2   0 0
+		// 3 2 3 2 0   1 1
+		// 4 - - 1 1   2 2
+		// 5 - - 0 2   3 0
+		// 6 5 - 2 0   4 1
+		// 7 - - 1 1   5 2
+		let length = Self::length();
+		let length_minus_1 = length - One::one();
+		let block_number = <system::Module<T>>::block_number();
+		length_minus_1 - (block_number - Self::last_length_change() + length_minus_1) % length
+	}
+
 	/// Returns `true` if the current validator set is taking took long to validate blocks.
 	pub fn broken_validation() -> bool {
 		let now = <timestamp::Module<T>>::get();
 		let block_period = <timestamp::Module<T>>::block_period();
-		let block_number = <system::Module<T>>::block_number();
-		let blocks_remaining = Self::length() - One::one() - (block_number - Self::last_length_change()) % Self::length();
+		let blocks_remaining = Self::blocks_remaining();
 		if blocks_remaining.is_zero() {
 			false
 		} else {
 			let blocks_remaining = <T::Value as As<T::BlockNumber>>::sa(blocks_remaining);
-			now + blocks_remaining * block_period > Self::current_start() + Self::ideal_session_duration() * T::Value::sa(13) / T::Value::sa(10)	// if we're 30% behind schedule then end abnormally
+			now + blocks_remaining * block_period >
+				Self::current_start() + Self::ideal_session_duration() *
+					(T::Value::sa(100) + Self::broken_percent_late()) / T::Value::sa(100)
 		}
 	}
 }
@@ -213,6 +232,7 @@ impl<T: Trait> Executable for Module<T> {
 pub struct GenesisConfig<T: Trait> {
 	pub session_length: T::BlockNumber,
 	pub validators: Vec<T::AccountId>,
+	pub broken_percent_late: T::Value,
 }
 
 #[cfg(any(feature = "std", test))]
@@ -222,6 +242,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 		GenesisConfig {
 			session_length: T::BlockNumber::sa(1000),
 			validators: vec![],
+			broken_percent_late: T::Value::sa(30),
 		}
 	}
 }
@@ -237,7 +258,8 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
 			twox_128(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
 			twox_128(<CurrentStart<T>>::key()).to_vec() => T::Value::zero().encode(),
-			twox_128(<Validators<T>>::key()).to_vec() => self.validators.encode()
+			twox_128(<Validators<T>>::key()).to_vec() => self.validators.encode(),
+			twox_128(<BrokenPercentLate<T>>::key()).to_vec() => self.broken_percent_late.encode()
 		]
 	}
 }
@@ -280,6 +302,7 @@ mod tests {
 
 	type System = system::Module<Test>;
 	type Consensus = consensus::Module<Test>;
+	type Timestamp = timestamp::Module<Test>;
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
@@ -288,10 +311,13 @@ mod tests {
 			code: vec![],
 			authorities: vec![1, 2, 3],
 		}.build_storage());
-		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
+		t.extend(timestamp::GenesisConfig::<Test>{
+			period: 5,
+		}.build_storage());
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
+			broken_percent_late: 30,
 		}.build_storage());
 		t
 	}
@@ -302,6 +328,36 @@ mod tests {
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
+		});
+	}
+
+	#[test]
+	fn should_identify_broken_validation() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(2);
+			assert_eq!(Session::blocks_remaining(), 0);
+			Timestamp::set_timestamp(0);
+			assert_ok!(Session::set_length(3));
+			Session::check_rotate_session();
+			assert_eq!(Session::current_index(), 1);
+			assert_eq!(Session::length(), 3);
+			assert_eq!(Session::current_start(), 0);
+			assert_eq!(Session::ideal_session_duration(), 15);
+			// ideal end = 0 + 15 * 3 = 15
+			// broken_limit = 15 * 130 / 100 = 19
+		
+			System::set_block_number(3);
+			assert_eq!(Session::blocks_remaining(), 2);
+			Timestamp::set_timestamp(9);				// earliest end = 9 + 2 * 5 = 19; OK.
+			assert!(!Session::broken_validation());
+			Session::check_rotate_session();
+
+			System::set_block_number(4);
+			assert_eq!(Session::blocks_remaining(), 1);
+			Timestamp::set_timestamp(15);				// another 1 second late. earliest end = 15 + 1 * 5 = 20; broken.
+			assert!(Session::broken_validation());
+			Session::check_rotate_session();
+			assert_eq!(Session::current_index(), 2);
 		});
 	}
 

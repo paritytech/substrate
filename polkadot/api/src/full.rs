@@ -112,7 +112,7 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn timestamp(&self, at: &CheckedId) -> Result<Timestamp> {
-		with_runtime!(self, at, ::runtime::Timestamp::now)
+		with_runtime!(self, at, ::runtime::Timestamp::get)
 	}
 
 	fn evaluate_block(&self, at: &CheckedId, block: Block) -> Result<bool> {

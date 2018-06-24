@@ -142,6 +142,7 @@ impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 
 impl session::Trait for Concrete {
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
+	type OnSessionChange = Staking;
 }
 /// Session module for this concrete runtime.
 pub type Session = session::Module<Concrete>;

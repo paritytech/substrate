@@ -80,6 +80,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
 		validators: vec![10, 20],
+		broken_percent_late: 30,
 	}.build_storage());
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,

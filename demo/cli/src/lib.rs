@@ -107,10 +107,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			authorities: vec![god_key.clone()],
 		}),
 		system: None,
-	//		block_time: 5,			// 5 second block time.
 		session: Some(SessionConfig {
 			validators: vec![god_key.clone().into()],
 			session_length: 720,	// that's 1 hour per session.
+			broken_percent_late: 30,
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -148,8 +148,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
 		}),
 		timestamp: Some(TimestampConfig {
-			now: 0,
-			period: 5,
+			period: 5,					// 5 second block time.
 		}),
 	}.build_storage();
 
