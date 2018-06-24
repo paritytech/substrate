@@ -25,6 +25,8 @@ extern crate parking_lot;
 extern crate websocket as ws;
 extern crate slog_async;
 extern crate slog_json;
+#[macro_use]
+extern crate log;
 #[macro_use(o, kv)]
 extern crate slog;
 extern crate slog_scope;
@@ -77,6 +79,7 @@ struct TelemetryWriter {
 impl TelemetryWriter {
 	fn ensure_connected(&mut self) {
 		if self.first_time {
+			info!("Connected to telemetry server: {}", self.config.url);
 			(self.config.on_connect)();
 			self.first_time = false;
 		}
@@ -105,7 +108,7 @@ impl io::Write for TelemetryWriter {
 		let mut l = self.out.lock();
 		let socket_closed = if let Some(ref mut socket) = *l {
 			if let Ok(s) = ::std::str::from_utf8(&self.buffer[..]) {
-				socket.send_message(&ws::Message::text(s)).is_ok()
+				socket.send_message(&ws::Message::text(s)).is_err()
 			} else { false }
 		} else { false };
 		if socket_closed {
