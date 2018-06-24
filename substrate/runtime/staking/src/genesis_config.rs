@@ -27,7 +27,7 @@ use {runtime_io, primitives};
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	BondingDuration, ContractFee, CreationFee, TransferFee, ReclaimRebate,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
-	SessionsPerEra, ValidatorCount, FreeBalance};
+	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash};
 
 pub struct GenesisConfig<T: Trait> {
 	pub sessions_per_era: T::BlockNumber,
@@ -43,6 +43,8 @@ pub struct GenesisConfig<T: Trait> {
 	pub contract_fee: T::Balance,
 	pub reclaim_rebate: T::Balance,
 	pub existential_deposit: T::Balance,
+	pub session_reward: T::Balance,
+	pub early_era_slash: T::Balance,
 }
 
 impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
@@ -61,6 +63,8 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			contract_fee: T::Balance::sa(0),
 			existential_deposit: T::Balance::sa(0),
 			reclaim_rebate: T::Balance::sa(0),
+			session_reward: T::Balance::sa(0),
+			early_era_slash: T::Balance::sa(0),
 		}
 	}
 
@@ -87,6 +91,8 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			contract_fee: T::Balance::sa(0),
 			existential_deposit: T::Balance::sa(0),
 			reclaim_rebate: T::Balance::sa(0),
+			session_reward: T::Balance::sa(0),
+			early_era_slash: T::Balance::sa(0),
 		}
 	}
 }
@@ -107,6 +113,8 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			contract_fee: T::Balance::sa(0),
 			existential_deposit: T::Balance::sa(0),
 			reclaim_rebate: T::Balance::sa(0),
+			session_reward: T::Balance::sa(0),
+			early_era_slash: T::Balance::sa(0),
 		}
 	}
 }
@@ -129,6 +137,8 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			twox_128(<ExistentialDeposit<T>>::key()).to_vec() => self.existential_deposit.encode(),
 			twox_128(<ReclaimRebate<T>>::key()).to_vec() => self.reclaim_rebate.encode(),
 			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
+			twox_128(<SessionReward<T>>::key()).to_vec() => self.session_reward.encode(),
+			twox_128(<EarlyEraSlash<T>>::key()).to_vec() => self.early_era_slash.encode(),
 			twox_128(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
 		];
 

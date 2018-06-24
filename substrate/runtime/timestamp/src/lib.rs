@@ -40,7 +40,7 @@ extern crate substrate_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{Executable, MaybeEmpty, SimpleArithmetic, As};
+use runtime_primitives::traits::{Executable, MaybeEmpty, SimpleArithmetic, As, Zero};
 
 pub trait Trait: consensus::Trait where
 	<Self as consensus::Trait>::PublicAux: MaybeEmpty
@@ -62,7 +62,7 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait>;
-	pub Now get(now): b"tim:val" => T::Value;
+	pub Now get(now): b"tim:val" => required T::Value;
 	// The minimum (and advised) period between blocks.
 	pub BlockPeriod get(block_period): b"tim:block_period" => required T::Value;
 
@@ -72,7 +72,7 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
 	pub fn get() -> T::Value {
-		Self::now().expect("This must always exist apart from before the first call to `set`; `set` happens prior to anything else; qed")
+		Self::now()
 	}
 
 	/// Set the current time.
@@ -84,12 +84,10 @@ impl<T: Trait> Module<T> {
 			"Timestamp extrinsic must be at position {} in the block",
 			T::TIMESTAMP_SET_POSITION
 		);
-		if let Some(t) = Self::now() {
-			assert!(
-				now >= t + Self::block_period(),
-				"Timestamp but increment by at least <BlockPeriod> between sequential blocks"
-			);
-		}
+		assert!(
+			Self::now().is_zero() || now >= Self::now() + Self::block_period(),
+			"Timestamp but increment by at least <BlockPeriod> between sequential blocks"
+		);
 		<Self as Store>::Now::put(now);
 		<Self as Store>::DidUpdate::put(true);
 		Ok(())
@@ -129,7 +127,8 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 		use runtime_io::twox_128;
 		use codec::Slicable;
 		map![
-			twox_128(<BlockPeriod<T>>::key()).to_vec() => self.period.encode()
+			twox_128(<BlockPeriod<T>>::key()).to_vec() => self.period.encode(),
+			twox_128(<Now<T>>::key()).to_vec() => T::Value::sa(0).encode()
 		]
 	}
 }

@@ -162,10 +162,12 @@ fn staking_eras_work() {
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 0);
 
 		// Block 1: No change.
 		System::set_block_number(1);
 		Session::check_rotate_session();
+		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 0);
@@ -173,6 +175,7 @@ fn staking_eras_work() {
 		// Block 2: Simple era change.
 		System::set_block_number(2);
 		Session::check_rotate_session();
+		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 1);
@@ -181,6 +184,7 @@ fn staking_eras_work() {
 		System::set_block_number(3);
 		assert_ok!(Staking::set_sessions_per_era(3));
 		Session::check_rotate_session();
+		assert_eq!(Session::current_index(), 3);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 1);
@@ -188,6 +192,7 @@ fn staking_eras_work() {
 		// Block 4: Era change kicks in.
 		System::set_block_number(4);
 		Session::check_rotate_session();
+		assert_eq!(Session::current_index(), 4);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 2);
@@ -195,13 +200,16 @@ fn staking_eras_work() {
 		// Block 5: No change.
 		System::set_block_number(5);
 		Session::check_rotate_session();
+		assert_eq!(Session::current_index(), 5);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 6: No change.
 		System::set_block_number(6);
+		assert!(!Session::broken_validation());
 		Session::check_rotate_session();
+		assert_eq!(Session::current_index(), 6);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 2);
@@ -209,6 +217,7 @@ fn staking_eras_work() {
 		// Block 7: Era increment.
 		System::set_block_number(7);
 		Session::check_rotate_session();
+		assert_eq!(Session::current_index(), 7);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 3);

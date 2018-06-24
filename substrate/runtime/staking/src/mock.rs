@@ -96,8 +96,12 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		creation_fee: 0,
 		contract_fee: 0,
 		reclaim_rebate: 0,
+		session_reward: 0,
+		early_era_slash: 0,
 	}.build_storage());
-	t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
+	t.extend(timestamp::GenesisConfig::<Test>{
+		period: 5
+	}.build_storage());
 	t
 }
 

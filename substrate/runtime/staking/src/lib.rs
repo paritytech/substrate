@@ -485,8 +485,8 @@ impl<T: Trait> Module<T> {
 		if normal_rotation {
 			// reward
 			let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
-			let percent: usize = (T::Value::sa(100usize) * ideal_elapsed / actual_elapsed).as_();
-			let reward = Self::session_reward() * T::Balance::sa(percent) / T::Balance::sa(100usize);
+			let percent: usize = (T::Value::sa(65536usize) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
+			let reward = Self::session_reward() * T::Balance::sa(percent) / T::Balance::sa(65536usize);
 			// apply good session reward
 			for v in <session::Module<T>>::validators().iter() {
 				let _ = Self::reward(v, reward);	// will never fail as validator accounts must be created, but even if it did, it's just a missed reward.
@@ -498,7 +498,7 @@ impl<T: Trait> Module<T> {
 				Self::slash(v, early_era_slash);
 			}
 		}
-		if (session_index % Self::era_length()).is_zero() || !normal_rotation {
+		if ((session_index - Self::last_era_length_change()) % Self::era_length()).is_zero() || !normal_rotation {
 			Self::new_era();
 		}
 	}
