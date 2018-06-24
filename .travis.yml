@@ -1,16 +1,24 @@
-sudo: false
-language: rust
+# Request an environment that provides sudo (that goes with larger containers)
+# and a minimal language environment.
+
+# sudo: true
+
+language: minimal
+
 branches:
   only:
   - master
 
-cache: cargo
-
-matrix:
-  fast_finish: false
-  include:
-    - rust: stable
-
+before_install:
+  # Check how much space we've got on this machine.
+  - df -h
+install:
+  - sudo apt-get -y update
+  - sudo apt-get install -y clang cmake pkg-config libssl-dev
+  # Install rustup and stable rust toolchain.
+  - curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=stable
+  # Load cargo environment. Specifically, put cargo into PATH.
+  - source ~/.cargo/env
 script:
   - cargo test --all
   - cargo clean
@@ -19,3 +27,6 @@ script:
   - if [ "$TRAVIS_PULL_REQUEST" != "true" ] && [ "$TRAVIS_BRANCH" == "master" ]; then
       ./publish-wasm.sh;
     fi
+after_script:
+  # Check how much free disk space left after the build
+  - df -h
