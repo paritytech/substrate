@@ -7,6 +7,7 @@ description = "Telemetry utils"
 [dependencies]
 parking_lot = "0.4"
 lazy_static = "1.0"
+log = "0.3"
 slog = "^2"
 slog-json = "^2"
 slog-async = "^2"
