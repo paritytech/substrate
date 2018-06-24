@@ -13,8 +13,8 @@ env:
   global:
     - RUST_BACKTRACE=1
   matrix:
-    - RUST_TOOLCHAIN=stable TARGET=wasm
-    - RUST_TOOLCHAIN=nightly TARGET=native
+    - RUST_TOOLCHAIN=nightly TARGET=wasm
+    - RUST_TOOLCHAIN=stable TARGET=native
 
 before_install:
   # Check how much space we've got on this machine.
