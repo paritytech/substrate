@@ -16,7 +16,7 @@ install:
   - sudo apt-get -y update
   - sudo apt-get install -y clang cmake pkg-config libssl-dev
   # Install rustup and stable rust toolchain.
-  - curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=stable
+  - curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=stable -y
   # Load cargo environment. Specifically, put cargo into PATH.
   - source ~/.cargo/env
 script:
