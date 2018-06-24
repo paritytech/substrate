@@ -3,7 +3,7 @@
 
 # sudo: true
 
-language: minimal
+language: generic
 
 branches:
   only:
