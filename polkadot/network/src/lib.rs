@@ -167,12 +167,6 @@ impl CurrentConsensus {
 			.and_then(|entry| entry.block_data.clone())
 	}
 
-	// get locally stored extrinsic data for a candidate.
-	fn extrinsic(&self, hash: &Hash) -> Option<Extrinsic> {
-		self.knowledge.lock().candidates.get(hash)
-			.and_then(|entry| entry.extrinsic.clone())
-	}
-
 	fn peer_disconnected(&mut self, peer: &PeerInfo) {
 		if let Some(key) = peer.session_keys.get(&self.parent_hash) {
 			self.session_keys.remove(key);
@@ -231,8 +225,9 @@ impl PolkadotProtocol {
 			candidate_hash: candidate.hash(),
 			block_data_hash: candidate.block_data_hash,
 			sender: tx,
-		})
+		});
 
+		self.dispatch_pending_requests(ctx);
 		rx
 	}
 
@@ -241,7 +236,7 @@ impl PolkadotProtocol {
 		let parent_hash = consensus.parent_hash;
 		let old_parent = self.live_consensus.as_ref().map(|c| c.parent_hash);
 
-		for (id, info) in self.peers.iter_mut().filter(|&(ref id, ref info)| info.validator) {
+		for (id, info) in self.peers.iter_mut().filter(|&(_, ref info)| info.validator) {
 			send_polkadot_message(
 				ctx,
 				*id,
@@ -270,22 +265,22 @@ impl PolkadotProtocol {
 			}
 		};
 
-		let mut knowledge = consensus.knowledge.lock();
+		let knowledge = consensus.knowledge.lock();
 		let mut new_pending = Vec::new();
-		for pending in ::std::mem::replace(&mut self.pending, Vec::new()) {
+		for mut pending in ::std::mem::replace(&mut self.pending, Vec::new()) {
 			if pending.consensus_parent != consensus.parent_hash { continue }
 
-			if let Some(entry) = knowledge.get(&pending.candidate_hash) {
+			if let Some(entry) = knowledge.candidates.get(&pending.candidate_hash) {
 				// answer locally
 				if let Some(ref data) = entry.block_data {
-					pending.sender.send(data.clone());
+					let _ = pending.sender.send(data.clone());
 					continue;
 				}
 
 				let next_peer = entry.knows_block_data.iter()
-					.filter(|x| consensus.session_keys.get(x).map_or(false, |key| pending.attempted_peers.insert(*x)))
-					.cloned()
-					.next();
+					.filter_map(|x| consensus.session_keys.get(x).map(|id| (*x, *id)))
+					.find(|&(ref key, _)| pending.attempted_peers.insert(*key))
+					.map(|(_, id)| id);
 
 				// dispatch to peer
 				if let Some(peer_id) = next_peer {
@@ -310,23 +305,18 @@ impl PolkadotProtocol {
 		self.pending = new_pending;
 	}
 
-	fn on_block_data(&mut self, ctx: &mut Context<Block>, from: PeerId, req_id: RequestId, data: Option<BlockData>) {
-		match self.in_flight.remove(&(r_id, peer_id)) {
-			Some(mut req) => {
-				match block_data {
-					None => {
-						self.pending.push(req);
-						self.dispatch_pending_requests(ctx);
-						return;
-					}
-					Some(data) => {
-						if data.hash() != req.block_data_hash {
-							ctx.disable_peer(from);
-						} else {
-							req.sender.send(data);
-						}
+	fn on_block_data(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, req_id: RequestId, data: Option<BlockData>) {
+		match self.in_flight.remove(&(req_id, peer_id)) {
+			Some(req) => {
+				if let Some(data) = data {
+					if data.hash() == req.block_data_hash {
+						let _ = req.sender.send(data);
+						return
 					}
 				}
+
+				self.pending.push(req);
+				self.dispatch_pending_requests(ctx);
 			}
 			None => ctx.disable_peer(peer_id),
 		}
@@ -383,17 +373,12 @@ impl Specialization<Block> for PolkadotProtocol {
 				consensus.peer_disconnected(&info);
 			}
 
-			self.in_flight.retain(|(_, peer)| peer != &peer_id);
+			self.in_flight.retain(|&(_, ref peer), _| peer != &peer_id);
 			self.consensus_gossip.peer_disconnected(ctx, peer_id);
 		}
 	}
 
 	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, message: message::Message<Block>) {
-		let info = match self.peers.get_mut(&peer_id) {
-			Some(peer) => peer,
-			None => return,
-		};
-
 		match message {
 			generic_message::Message::BftMessage(msg) => {
 				// TODO: check signature here? what if relevant block is unknown?
@@ -413,6 +398,11 @@ impl Specialization<Block> for PolkadotProtocol {
 					Message::Statement(parent_hash, _statement) =>
 						self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash),
 					Message::SessionKey(parent_hash, key) => {
+						let info = match self.peers.get_mut(&peer_id) {
+							Some(peer) => peer,
+							None => return,
+						};
+
 						if !info.validator {
 							ctx.disable_peer(peer_id);
 							return;
@@ -427,16 +417,13 @@ impl Specialization<Block> for PolkadotProtocol {
 
 						info.session_keys.insert(parent_hash, key);
 					}
-					Message::RequestBlockData(r_id, hash) => {
+					Message::RequestBlockData(req_id, hash) => {
 						let block_data = self.live_consensus.as_ref()
-							.map(|c| c.knowledge.lock())
-							.map(|k| k.candidates.get(&hash))
-							.and_then(|can| can.block_data.clone());
+							.and_then(|c| c.block_data(&hash));
 
-						send_polkadot_message(ctx, peer_id, Message::BlockData(r_id, block_data));
+						send_polkadot_message(ctx, peer_id, Message::BlockData(req_id, block_data));
 					}
-					Message::BlockData(r_id, data) => self.on_block_data(ctx, peer_id, req_id, data)
-					_ => {},
+					Message::BlockData(req_id, data) => self.on_block_data(ctx, peer_id, req_id, data),
 				}
 			}
 			_ => {}

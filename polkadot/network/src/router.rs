@@ -21,7 +21,7 @@ use polkadot_consensus::{SharedTable, TableRouter, SignedStatement, GenericState
 use polkadot_primitives::{Hash, BlockId, SessionKey};
 use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt, Id as ParaId};
 
-use futures::{future, prelude::*};
+use futures::prelude::*;
 use tokio::runtime::TaskExecutor;
 use parking_lot::Mutex;
 
@@ -178,7 +178,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBloc
 
 impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlockId: Send {
 	type Error = ();
-	type FetchCandidate = BlockDataReceiver,
+	type FetchCandidate = BlockDataReceiver;
 	type FetchExtrinsic = Result<Extrinsic, Self::Error>;
 
 	fn local_candidate(&self, receipt: CandidateReceipt, block_data: BlockData, extrinsic: Extrinsic) {
@@ -192,7 +192,9 @@ impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlock
 	}
 
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> BlockDataReceiver {
-		let rx = self.network.with_spec(|spec, ctx| { spec.fetch_data(ctx, candidate) });
+		let parent_hash = self.parent_hash;
+		let rx = self.network.with_spec(|spec, ctx| { spec.fetch_block_data(ctx, candidate, parent_hash) });
+		BlockDataReceiver { inner: rx }
 	}
 
 	fn fetch_extrinsic_data(&self, _candidate: &CandidateReceipt) -> Self::FetchExtrinsic {
@@ -211,7 +213,7 @@ impl Future for BlockDataReceiver {
 
 	fn poll(&mut self) -> Poll<BlockData, ()> {
 		match self.inner {
-			Some(ref mut inner) => self.inner.poll.map_err(|_| ()),
+			Some(ref mut inner) => inner.poll().map_err(|_| ()),
 			None => return Err(()),
 		}
 	}
