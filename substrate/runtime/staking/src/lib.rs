@@ -177,7 +177,7 @@ decl_storage! {
 	pub Intentions: b"sta:wil:" => default Vec<T::AccountId>;
 	// The next value of sessions per era.
 	pub NextSessionsPerEra get(next_sessions_per_era): b"sta:nse" => T::BlockNumber;
-	// The block number at which the era length last changed.
+	// The session index at which the era length last changed.
 	pub LastEraLengthChange get(last_era_length_change): b"sta:lec" => default T::BlockNumber;
 
 	// The next free enumeration set.
@@ -498,7 +498,8 @@ impl<T: Trait> Module<T> {
 				Self::slash(v, early_era_slash);
 			}
 		}
-		if ((session_index - Self::last_era_length_change()) % Self::era_length()).is_zero() || !normal_rotation {
+		println!("{}, {}, {}", session_index, Self::last_era_length_change(), Self::sessions_per_era());
+		if ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero() || !normal_rotation {
 			Self::new_era();
 		}
 	}
@@ -515,7 +516,7 @@ impl<T: Trait> Module<T> {
 		if let Some(next_spe) = Self::next_sessions_per_era() {
 			if next_spe != Self::sessions_per_era() {
 				<SessionsPerEra<T>>::put(&next_spe);
-				<LastEraLengthChange<T>>::put(&<system::Module<T>>::block_number());
+				<LastEraLengthChange<T>>::put(&<session::Module<T>>::current_index());
 			}
 		}
 

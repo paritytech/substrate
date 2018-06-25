@@ -85,7 +85,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,
 		current_era,
-		balances: if monied { vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)] } else { vec![] },
+		balances: if monied { vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor), (10, balance_factor), (20, balance_factor)] } else { vec![(10, balance_factor), (20, balance_factor)] },
 		intentions: vec![],
 		validator_count: 2,
 		bonding_duration: 3,
@@ -96,8 +96,8 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		creation_fee: 0,
 		contract_fee: 0,
 		reclaim_rebate: 0,
-		session_reward: 0,
-		early_era_slash: 0,
+		session_reward: if monied { 10 } else { 0 },
+		early_era_slash: if monied { 10 } else { 0 },
 	}.build_storage());
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5
