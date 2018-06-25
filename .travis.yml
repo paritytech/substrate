@@ -1,21 +1,33 @@
-sudo: false
-language: rust
+# Request an environment that provides sudo (that goes with larger containers)
+# and a minimal language environment.
+sudo: true
+language: minimal
+
+cache: cargo
+
 branches:
   only:
   - master
 
-cache: cargo
+env:
+  global:
+    - RUST_BACKTRACE=1
+  matrix:
+    - RUST_TOOLCHAIN=nightly TARGET=wasm
+    - RUST_TOOLCHAIN=stable TARGET=native
 
-matrix:
-  fast_finish: false
-  include:
-    - rust: stable
+before_install:
+  # Check how much space we've got on this machine.
+  - df -h
 
 script:
-  - cargo test --all
-  - cargo clean
-  - ./init.sh
-  - ./build.sh
-  - if [ "$TRAVIS_PULL_REQUEST" != "true" ] && [ "$TRAVIS_BRANCH" == "master" ]; then
-      ./publish-wasm.sh;
+  - ./ci/script.sh
+
+after_success:
+  - if [ "$TARGET" == "wasm" ] && [ "$TRAVIS_PULL_REQUEST" != "true" ] && [ "$TRAVIS_BRANCH" == "master" ]; then
+      ./ci/publish-wasm.sh;
     fi
+
+after_script:
+  # Check how much free disk space left after the build
+  - df -h

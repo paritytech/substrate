@@ -84,7 +84,7 @@ use futures::sync::oneshot;
 use futures::Future;
 use tokio::runtime::Runtime;
 
-const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
+const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
 
 #[derive(Clone)]
 struct SystemConfiguration {
