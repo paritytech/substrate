@@ -8,7 +8,7 @@ futures = "0.1.17"
 parking_lot = "0.4"
 tokio-core = "0.1.12"
 ed25519 = { path = "../../substrate/ed25519" }
-error-chain = "0.11"
+error-chain = "0.12"
 log = "0.3"
 exit-future = "0.1"
 polkadot-api = { path = "../api" }
