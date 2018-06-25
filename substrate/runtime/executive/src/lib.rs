@@ -252,6 +252,7 @@ mod tests {
 	}
 	impl session::Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
+		type OnSessionChange = staking::Module<Test>;
 	}
 	impl staking::Trait for Test {
 		type Balance = u64;
@@ -283,6 +284,8 @@ mod tests {
 			creation_fee: 0,
 			contract_fee: 0,
 			reclaim_rebate: 0,
+			early_era_slash: 0,
+			session_reward: 0,
 		}.build_storage());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		with_externalities(&mut t, || {

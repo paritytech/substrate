@@ -648,6 +648,7 @@ mod tests {
 	}
 	impl session::Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
+		type OnSessionChange = staking::Module<Test>;
 	}
 	impl staking::Trait for Test {
 		type Balance = u64;
@@ -672,6 +673,7 @@ mod tests {
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
+			broken_percent_late: 0,
 		}.build_storage());
 		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,
@@ -687,6 +689,8 @@ mod tests {
 			creation_fee: 0,
 			contract_fee: 0,
 			reclaim_rebate: 0,
+			early_era_slash: 0,
+			session_reward: 0,
 		}.build_storage());
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,

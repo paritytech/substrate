@@ -115,7 +115,7 @@ pub struct GenesisConfig<T: Trait> {
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
-			period: T::Value::default(),
+			period: T::Value::sa(5),
 		}
 	}
 }
@@ -138,7 +138,6 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use runtime_support::storage::StorageValue;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
@@ -197,7 +196,7 @@ mod tests {
 	#[should_panic(expected = "Timestamp but increment by at least <BlockPeriod> between sequential blocks")]
 	fn block_period_is_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage();
-		t.extend(GenesisConfig::<Test> { now: 42, period: 5 }.build_storage());
+		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage());
 
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);

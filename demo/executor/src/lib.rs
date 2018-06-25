@@ -185,6 +185,7 @@ mod tests {
 			session: Some(SessionConfig {
 				session_length: 2,
 				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
+				broken_percent_late: 100,
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
@@ -200,6 +201,8 @@ mod tests {
 				creation_fee: 0,
 				contract_fee: 0,
 				reclaim_rebate: 0,
+				early_era_slash: 0,
+				session_reward: 0,
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
@@ -239,7 +242,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("00fa0defe8b76a8e6bf536a9d685271b9dcd8cf097d9bd139ea2525b62014061").into(),
+			hex!("786071057714fdd6ea4595eecd4a0f327908d65f462ff5bca0f700fafce588c9").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -252,7 +255,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("edea2f16095ee40d52ee18a8f9ee5d5d96e30429ef914ee2b75b406681fcd9b5").into(),
+			hex!("a7f1259cc6b2fa758542f2996e737f8f0de9dec3a9d32641da348178f48b9fc2").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),

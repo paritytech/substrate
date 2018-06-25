@@ -358,6 +358,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
+	use session::OnSessionChange;
 
 	impl_outer_dispatch! {
 		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
@@ -389,6 +390,7 @@ mod tests {
 	}
 	impl session::Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
+		type OnSessionChange = staking::Module<Test>;
 	}
 	impl staking::Trait for Test {
 		type Balance = u64;
@@ -412,6 +414,7 @@ mod tests {
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
+			broken_percent_late: 100,
 		}.build_storage());
 		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,
@@ -427,6 +430,8 @@ mod tests {
 			creation_fee: 0,
 			contract_fee: 0,
 			reclaim_rebate: 0,
+			early_era_slash: 0,
+			session_reward: 0,
 		}.build_storage());
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,
@@ -488,7 +493,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (10, 0));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 
 			assert_eq!(Staking::era_length(), 2);
 		});
@@ -566,19 +571,19 @@ mod tests {
 			System::set_block_number(1);
 			assert_ok!(Democracy::vote(&1, 0, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 			assert_eq!(Staking::bonding_duration(), 4);
 
 			System::set_block_number(2);
 			assert_ok!(Democracy::vote(&1, 1, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 			assert_eq!(Staking::bonding_duration(), 3);
 
 			System::set_block_number(3);
 			assert_ok!(Democracy::vote(&1, 2, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 			assert_eq!(Staking::bonding_duration(), 2);
 		});
 	}
@@ -599,7 +604,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (10, 0));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 
 			assert_eq!(Staking::era_length(), 2);
 		});
@@ -614,7 +619,7 @@ mod tests {
 			assert_ok!(Democracy::cancel_referendum(r));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 
 			assert_eq!(Staking::era_length(), 1);
 		});
@@ -632,7 +637,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (0, 10));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 
 			assert_eq!(Staking::era_length(), 1);
 		});
@@ -653,7 +658,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (110, 100));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 
 			assert_eq!(Staking::era_length(), 2);
 		});
@@ -670,7 +675,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (60, 50));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 
 			assert_eq!(Staking::era_length(), 1);
 		});
@@ -691,7 +696,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (100, 50));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::check_new_era();
+			Staking::on_session_change(true, 0);
 
 			assert_eq!(Staking::era_length(), 2);
 		});

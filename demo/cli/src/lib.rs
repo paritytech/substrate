@@ -126,6 +126,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
 			bonding_duration: 90,	// 90 days per bond.
+			early_era_slash: 10000,
+			session_reward: 100,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum

@@ -254,6 +254,7 @@ mod tests {
 	}
 	impl session::Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
+		type OnSessionChange = ();
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
@@ -276,6 +277,7 @@ mod tests {
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1000,
 			validators: vec![1, 2, 3, 4, 5, 6, 7, 8],
+			broken_percent_late: 100,
 		}.build_storage());
 		t.extend(GenesisConfig::<Test>{
 			parachains: parachains,
