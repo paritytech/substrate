@@ -185,6 +185,8 @@ decl_storage! {
 	pub NextSessionsPerEra get(next_sessions_per_era): b"sta:nse" => T::BlockNumber;
 	// The session index at which the era length last changed.
 	pub LastEraLengthChange get(last_era_length_change): b"sta:lec" => default T::BlockNumber;
+	// The current era stake threshold
+	pub StakeThreshold get(stake_threshold): b"sta:stake_threshold" => required T::Balance;
 
 	// The next free enumeration set.
 	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required T::AccountIndex;
@@ -552,13 +554,30 @@ impl<T: Trait> Module<T> {
 			let reward = Self::session_reward() * T::Balance::sa(percent) / T::Balance::sa(65536usize);
 			// apply good session reward
 			for v in <session::Module<T>>::validators().iter() {
+				let noms = Self::nominators_for(v);
+				let total = noms.iter().map(Self::voting_balance).fold(Self::voting_balance(v), |acc, x| acc + x);
+				for n in noms.iter() {
+					//let r = Self::voting_balance(n) * reward / total;	// correct formula, but might overflow with large reard * total.
+					let quant = T::Balance::sa(1usize << 31);
+					let r = (Self::voting_balance(n) * quant / total) * reward / quant; // avoid overflow by using quant as a denominator.
+					let _ = Self::reward(n, r);	// will never fail as nominator accounts must be created, but even if it did, it's just a missed reward.
+				}
 				let _ = Self::reward(v, reward);	// will never fail as validator accounts must be created, but even if it did, it's just a missed reward.
 			}
 		} else {
 			// slash
 			let early_era_slash = Self::early_era_slash();
 			for v in <session::Module<T>>::validators().iter() {
-				Self::slash(v, early_era_slash);
+				if let Some(rem) = Self::slash(v, early_era_slash) {
+					let noms = Self::nominators_for(v);
+					let total = noms.iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x);
+					for n in noms.iter() {
+						//let r = Self::voting_balance(n) * reward / total;	// correct formula, but might overflow with large reard * total.
+						let quant = T::Balance::sa(1usize << 31);
+						let s = (Self::voting_balance(n) * quant / total) * rem / quant; // avoid overflow by using quant as a denominator.
+						let _ = Self::slash(n, s);	// will never fail as nominator accounts must be created, but even if it did, it's just a missed reward.
+					}
+				}
 			}
 		}
 		if ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero() || !normal_rotation {
@@ -596,6 +615,13 @@ impl<T: Trait> Module<T> {
 			.map(|v| (Self::voting_balance(&v) + Self::nomination_balance(&v), v))
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
+		
+		<StakeThreshold<T>>::put(
+			if intentions.len() > 0 {
+				let i = (<ValidatorCount<T>>::get() as usize).min(intentions.len() - 1);
+				intentions[i].0.clone()
+			} else { Zero::zero() }
+		);
 		<session::Module<T>>::set_validators(
 			&intentions.into_iter()
 				.map(|(_, v)| v)
