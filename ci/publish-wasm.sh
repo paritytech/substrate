@@ -6,7 +6,7 @@
 
 set -e
 
-source `dirname "$0"`/common.sh
+source ./common.sh
 
 if [ -z ${GH_TOKEN+x} ]; then
 	echo "GH_TOKEN environment variable is not set"
