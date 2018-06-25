@@ -181,6 +181,8 @@ decl_storage! {
 	pub Nominating get(nominating): b"sta:nominating" => map [ T::AccountId => T::AccountId ];
 	// Nominators for a particular account.
 	pub NominatorsFor get(nominators_for): b"sta:nominators_for" => default map [ T::AccountId => Vec<T::AccountId> ];
+	// Nominators for a particular account that is in action right now.
+	pub CurrentNominatorsFor get(current_nominators_for): b"sta:current_nominators_for" => default map [ T::AccountId => Vec<T::AccountId> ];
 	// The next value of sessions per era.
 	pub NextSessionsPerEra get(next_sessions_per_era): b"sta:nse" => T::BlockNumber;
 	// The session index at which the era length last changed.
@@ -382,8 +384,6 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	// TODO: force_unnominate and max_nominators
-
 	// PRIV DISPATCH
 
 	/// Set the number of sessions in an era.
@@ -554,22 +554,22 @@ impl<T: Trait> Module<T> {
 			let reward = Self::session_reward() * T::Balance::sa(percent) / T::Balance::sa(65536usize);
 			// apply good session reward
 			for v in <session::Module<T>>::validators().iter() {
-				let noms = Self::nominators_for(v);
+				let noms = Self::current_nominators_for(v);
 				let total = noms.iter().map(Self::voting_balance).fold(Self::voting_balance(v), |acc, x| acc + x);
-				for n in noms.iter() {
-					//let r = Self::voting_balance(n) * reward / total;	// correct formula, but might overflow with large reard * total.
-					let quant = T::Balance::sa(1usize << 31);
-					let r = (Self::voting_balance(n) * quant / total) * reward / quant; // avoid overflow by using quant as a denominator.
-					let _ = Self::reward(n, r);	// will never fail as nominator accounts must be created, but even if it did, it's just a missed reward.
+				if !total.is_zero() {
+					let safe_mul_rational = |b| b * reward / total;// TODO: avoid overflow
+					for n in noms.iter() {
+						let _ = Self::reward(n, safe_mul_rational(Self::voting_balance(n)));
+					}
+					let _ = Self::reward(v, safe_mul_rational(Self::voting_balance(v)));
 				}
-				let _ = Self::reward(v, reward);	// will never fail as validator accounts must be created, but even if it did, it's just a missed reward.
 			}
 		} else {
 			// slash
 			let early_era_slash = Self::early_era_slash();
 			for v in <session::Module<T>>::validators().iter() {
 				if let Some(rem) = Self::slash(v, early_era_slash) {
-					let noms = Self::nominators_for(v);
+					let noms = Self::current_nominators_for(v);
 					let total = noms.iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x);
 					for n in noms.iter() {
 						//let r = Self::voting_balance(n) * reward / total;	// correct formula, but might overflow with large reard * total.
@@ -585,6 +585,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Balance of a (potential) validator that includes all nominators.
 	fn nomination_balance(who: &T::AccountId) -> T::Balance {
 		Self::nominators_for(who).iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x)
 	}
@@ -622,12 +623,17 @@ impl<T: Trait> Module<T> {
 				intentions[i].0.clone()
 			} else { Zero::zero() }
 		);
-		<session::Module<T>>::set_validators(
-			&intentions.into_iter()
+		let vals = &intentions.into_iter()
 				.map(|(_, v)| v)
 				.take(<ValidatorCount<T>>::get() as usize)
-				.collect::<Vec<_>>()
-		);
+				.collect::<Vec<_>>();
+		for v in <session::Module<T>>::validators().iter() {
+			<CurrentNominatorsFor<T>>::remove(v);
+		}
+		for v in vals.iter() {
+			<CurrentNominatorsFor<T>>::insert(v, Self::nominators_for(v));
+		}
+		<session::Module<T>>::set_validators(vals);
 	}
 
 	fn enum_set_size() -> T::AccountIndex {
