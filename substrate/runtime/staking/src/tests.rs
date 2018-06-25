@@ -24,7 +24,7 @@ use mock::{Session, Staking, System, Timestamp, Test, new_test_ext};
 
 #[test]
 fn reward_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true), || {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		assert_eq!(Staking::voting_balance(&10), 1);
 		assert_ok!(Staking::reward(&10, 10));
 		assert_eq!(Staking::voting_balance(&10), 11);
@@ -33,7 +33,7 @@ fn reward_should_work() {
 
 #[test]
 fn rewards_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true), || {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		assert_eq!(Staking::era_length(), 9);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -64,7 +64,7 @@ fn rewards_should_work() {
 
 #[test]
 fn slashing_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true), || {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		assert_eq!(Staking::era_length(), 9);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -90,7 +90,7 @@ fn slashing_should_work() {
 
 #[test]
 fn indexing_lookup_should_work() {
-	with_externalities(&mut new_test_ext(10, 1, 2, 0, true), || {
+	with_externalities(&mut new_test_ext(10, 1, 2, 0, true, 0), || {
 		assert_eq!(Staking::lookup_index(0), Some(1));
 		assert_eq!(Staking::lookup_index(1), Some(2));
 		assert_eq!(Staking::lookup_index(2), Some(3));
@@ -101,7 +101,7 @@ fn indexing_lookup_should_work() {
 
 #[test]
 fn default_indexing_on_new_accounts_should_work() {
-	with_externalities(&mut new_test_ext(10, 1, 2, 0, true), || {
+	with_externalities(&mut new_test_ext(10, 1, 2, 0, true, 0), || {
 		assert_eq!(Staking::lookup_index(4), None);
 		assert_ok!(Staking::transfer(&1, 5.into(), 10));
 		assert_eq!(Staking::lookup_index(4), Some(5));
@@ -110,7 +110,7 @@ fn default_indexing_on_new_accounts_should_work() {
 
 #[test]
 fn dust_account_removal_should_work() {
-	with_externalities(&mut new_test_ext(256 * 10, 1, 2, 0, true), || {
+	with_externalities(&mut new_test_ext(256 * 10, 1, 2, 0, true, 0), || {
 		System::inc_account_nonce(&2);
 		assert_eq!(System::account_nonce(&2), 1);
 		assert_eq!(Staking::voting_balance(&2), 256 * 20);
@@ -124,7 +124,7 @@ fn dust_account_removal_should_work() {
 
 #[test]
 fn reclaim_indexing_on_new_accounts_should_work() {
-	with_externalities(&mut new_test_ext(256 * 1, 1, 2, 0, true), || {
+	with_externalities(&mut new_test_ext(256 * 1, 1, 2, 0, true, 0), || {
 		assert_eq!(Staking::lookup_index(1), Some(2));
 		assert_eq!(Staking::lookup_index(4), None);
 		assert_eq!(Staking::voting_balance(&2), 256 * 20);
@@ -140,7 +140,7 @@ fn reclaim_indexing_on_new_accounts_should_work() {
 
 #[test]
 fn reserved_balance_should_prevent_reclaim_count() {
-	with_externalities(&mut new_test_ext(256 * 1, 1, 2, 0, true), || {
+	with_externalities(&mut new_test_ext(256 * 1, 1, 2, 0, true, 0), || {
 		System::inc_account_nonce(&2);
 		assert_eq!(Staking::lookup_index(1), Some(2));
 		assert_eq!(Staking::lookup_index(4), None);
@@ -168,7 +168,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 
 #[test]
 fn staking_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 2, 0, true), || {
+	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
 		assert_eq!(Staking::era_length(), 2);
 		assert_eq!(Staking::validator_count(), 2);
 		assert_eq!(Staking::bonding_duration(), 3);
@@ -180,22 +180,26 @@ fn staking_should_work() {
 		assert_ok!(Staking::stake(&2));
 		assert_ok!(Staking::stake(&4));
 		Session::check_rotate_session();
+		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::validators(), vec![10, 20]);
 
 		// Block 2: New validator set now.
 		System::set_block_number(2);
 		Session::check_rotate_session();
+		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::validators(), vec![4, 2]);
 
 		// Block 3: Unstake highest, introduce another staker. No change yet.
 		System::set_block_number(3);
 		assert_ok!(Staking::stake(&3));
 		assert_ok!(Staking::unstake(&4));
+		assert_eq!(Staking::current_era(), 1);
 		Session::check_rotate_session();
 
 		// Block 4: New era - validators change.
 		System::set_block_number(4);
 		Session::check_rotate_session();
+		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::validators(), vec![3, 2]);
 
 		// Block 5: Transfer stake from highest to lowest. No change yet.
@@ -223,7 +227,7 @@ fn staking_should_work() {
 
 #[test]
 fn staking_eras_work() {
-	with_externalities(&mut new_test_ext(0, 1, 2, 0, true), || {
+	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
 		assert_eq!(Staking::era_length(), 2);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -292,7 +296,7 @@ fn staking_eras_work() {
 
 #[test]
 fn staking_balance_works() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 42);
 		assert_eq!(Staking::free_balance(&1), 42);
 		assert_eq!(Staking::reserved_balance(&1), 0);
@@ -305,7 +309,7 @@ fn staking_balance_works() {
 
 #[test]
 fn staking_balance_transfer_works() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::transfer(&1, 2.into(), 69));
 		assert_eq!(Staking::voting_balance(&1), 42);
@@ -315,7 +319,7 @@ fn staking_balance_transfer_works() {
 
 #[test]
 fn staking_balance_transfer_when_bonded_should_not_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::stake(&1));
 		assert_noop!(Staking::transfer(&1, 2.into(), 69), "bondage too high to send value");
@@ -324,7 +328,7 @@ fn staking_balance_transfer_when_bonded_should_not_work() {
 
 #[test]
 fn reserving_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 
 		assert_eq!(Staking::voting_balance(&1), 111);
@@ -341,7 +345,7 @@ fn reserving_balance_should_work() {
 
 #[test]
 fn staking_balance_transfer_when_reserved_should_not_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve(&1, 69));
 		assert_noop!(Staking::transfer(&1, 2.into(), 69), "balance too low to send value");
@@ -350,7 +354,7 @@ fn staking_balance_transfer_when_reserved_should_not_work() {
 
 #[test]
 fn deducting_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve(&1, 69));
 		assert_eq!(Staking::free_balance(&1), 42);
@@ -359,7 +363,7 @@ fn deducting_balance_should_work() {
 
 #[test]
 fn deducting_balance_when_bonded_should_not_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		<Bondage<Test>>::insert(1, 2);
 		System::set_block_number(1);
@@ -370,7 +374,7 @@ fn deducting_balance_when_bonded_should_not_work() {
 
 #[test]
 fn refunding_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 42);
 		<ReservedBalance<Test>>::insert(1, 69);
 		Staking::unreserve(&1, 69);
@@ -381,7 +385,7 @@ fn refunding_balance_should_work() {
 
 #[test]
 fn slashing_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve(&1, 69));
 		assert!(Staking::slash(&1, 69).is_none());
@@ -392,7 +396,7 @@ fn slashing_balance_should_work() {
 
 #[test]
 fn slashing_incomplete_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 42);
 		assert_ok!(Staking::reserve(&1, 21));
 		assert!(Staking::slash(&1, 69).is_some());
@@ -403,7 +407,7 @@ fn slashing_incomplete_balance_should_work() {
 
 #[test]
 fn unreserving_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve(&1, 111));
 		Staking::unreserve(&1, 42);
@@ -414,7 +418,7 @@ fn unreserving_balance_should_work() {
 
 #[test]
 fn slashing_reserved_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve(&1, 111));
 		assert!(Staking::slash_reserved(&1, 42).is_none());
@@ -425,7 +429,7 @@ fn slashing_reserved_balance_should_work() {
 
 #[test]
 fn slashing_incomplete_reserved_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve(&1, 42));
 		assert!(Staking::slash_reserved(&1, 69).is_some());
@@ -436,7 +440,7 @@ fn slashing_incomplete_reserved_balance_should_work() {
 
 #[test]
 fn transferring_reserved_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 110);
 		<FreeBalance<Test>>::insert(2, 1);
 		assert_ok!(Staking::reserve(&1, 110));
@@ -450,7 +454,7 @@ fn transferring_reserved_balance_should_work() {
 
 #[test]
 fn transferring_reserved_balance_to_nonexistent_should_fail() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve(&1, 111));
 		assert_noop!(Staking::transfer_reserved(&1, &2, 42), "beneficiary account must pre-exist");
@@ -459,7 +463,7 @@ fn transferring_reserved_balance_to_nonexistent_should_fail() {
 
 #[test]
 fn transferring_incomplete_reserved_balance_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 110);
 		<FreeBalance<Test>>::insert(2, 1);
 		assert_ok!(Staking::reserve(&1, 41));
