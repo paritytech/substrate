@@ -157,12 +157,12 @@ dependencies = [
 [[package]]
 name = "ethcore-bytes"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 
 [[package]]
 name = "ethcore-logger"
 version = "1.12.0"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 dependencies = [
  "ansi_term 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -239,7 +239,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "hashdb"
 version = "0.1.1"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -288,7 +288,7 @@ dependencies = [
 [[package]]
 name = "keccak-hash"
 version = "0.1.2"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 dependencies = [
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -297,7 +297,7 @@ dependencies = [
 [[package]]
 name = "kvdb"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -356,7 +356,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "memorydb"
 version = "0.1.1"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -435,7 +435,7 @@ dependencies = [
 [[package]]
 name = "patricia-trie"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethcore-bytes 0.1.0 (git+https://github.com/paritytech/parity.git)",
@@ -453,7 +453,7 @@ dependencies = [
 [[package]]
 name = "plain_hasher"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 dependencies = [
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -588,7 +588,7 @@ dependencies = [
 [[package]]
 name = "rlp"
 version = "0.2.1"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 dependencies = [
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -827,7 +827,7 @@ dependencies = [
 [[package]]
 name = "triehash"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity.git#458afcd2303539867e2e549ab0a5356415142b97"
+source = "git+https://github.com/paritytech/parity.git#dec390a89fe038337399315daf15e628ffbb4d8e"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
