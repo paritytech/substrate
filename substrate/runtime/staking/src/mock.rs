@@ -107,4 +107,5 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 
 pub type System = system::Module<Test>;
 pub type Session = session::Module<Test>;
+pub type Timestamp = timestamp::Module<Test>;
 pub type Staking = Module<Test>;

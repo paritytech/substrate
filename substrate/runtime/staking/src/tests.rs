@@ -20,7 +20,7 @@
 
 use super::*;
 use runtime_io::with_externalities;
-use mock::{Session, Staking, System, Test, new_test_ext};
+use mock::{Session, Staking, System, Timestamp, Test, new_test_ext};
 
 #[test]
 fn reward_should_work() {
@@ -42,20 +42,49 @@ fn rewards_should_work() {
 		assert_eq!(Staking::voting_balance(&10), 1);
 
 		System::set_block_number(3);
+		Timestamp::set_timestamp(15);	// on time.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::voting_balance(&10), 11);
 		System::set_block_number(6);
+		Timestamp::set_timestamp(31);	// a little late
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
-		assert_eq!(Staking::voting_balance(&10), 21);
+		assert_eq!(Staking::voting_balance(&10), 20);	// less reward
 		System::set_block_number(9);
+		Timestamp::set_timestamp(50);	// very late
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
-		assert_eq!(Staking::voting_balance(&10), 31);
+		assert_eq!(Staking::voting_balance(&10), 27);	// much less reward
+	});
+}
+
+#[test]
+fn slashing_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true), || {
+		assert_eq!(Staking::era_length(), 9);
+		assert_eq!(Staking::sessions_per_era(), 3);
+		assert_eq!(Staking::last_era_length_change(), 0);
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+		assert_eq!(Staking::voting_balance(&10), 1);
+
+		System::set_block_number(3);
+		Timestamp::set_timestamp(15);	// on time.
+		Session::check_rotate_session();
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 1);
+		assert_eq!(Staking::voting_balance(&10), 11);
+
+		System::set_block_number(4);
+		Timestamp::set_timestamp(100);	// way too late - early exit.
+		Session::check_rotate_session();
+		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Staking::voting_balance(&10), 1);
 	});
 }
 
