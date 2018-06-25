@@ -63,7 +63,7 @@ pub fn compute_root<Header, I>(
 ) -> Option<<Header as HeaderT>::Hash>
 	where
 		Header: HeaderT,
-		Header::Hash: From<[u8; 32]> + Into<[u8; 32]>,
+		Header::Hash: From<[u8; 32]>,
 		I: IntoIterator<Item=Option<Header::Hash>>,
 {
 	build_pairs::<Header, I>(cht_num, hashes)
@@ -78,7 +78,6 @@ pub fn build_proof<Header, I>(
 ) -> Option<Vec<Vec<u8>>>
 	where
 		Header: HeaderT,
-		Header::Hash: From<[u8; 32]> + Into<[u8; 32]>,
 		I: IntoIterator<Item=Option<Header::Hash>>,
 {
 	let transaction = build_pairs::<Header, I>(cht_num, hashes)?
@@ -122,7 +121,6 @@ fn build_pairs<Header, I>(
 ) -> Option<Vec<(Vec<u8>, Vec<u8>)>>
 	where
 		Header: HeaderT,
-		Header::Hash: Into<[u8; 32]>,
 		I: IntoIterator<Item=Option<Header::Hash>>,
 {
 	let start_num = start_number(cht_num);
@@ -178,9 +176,9 @@ pub fn encode_cht_key<N: As<usize>>(number: N) -> Vec<u8> {
 	]
 }
 
-/// Convert header hast into CHT value.
-fn encode_cht_value<Hash: Into<[u8; 32]>>(hash: Hash) -> Vec<u8> {
-	hash.into().to_vec()
+/// Convert header hash into CHT value.
+fn encode_cht_value<Hash: AsRef<[u8]>>(hash: Hash) -> Vec<u8> {
+	hash.as_ref().to_vec()
 }
 
 /// Convert CHT value into block header hash.
