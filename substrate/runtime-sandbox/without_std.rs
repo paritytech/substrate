@@ -57,7 +57,8 @@ mod ffi {
 			imports_len: usize,
 			state: usize,
 		) -> u32;
-		pub fn ext_sandbox_invoke(
+		// TODO: Rename it back to 'ext_sandbox_invoke'.
+		pub fn ext_sandbox_invoke_poc2(
 			instance_idx: u32,
 			export_ptr: *const u8,
 			export_len: usize,
@@ -271,7 +272,7 @@ impl<T> Instance<T> {
 		let mut return_val = vec![0u8; sandbox_primitives::ReturnValue::ENCODED_MAX_SIZE];
 
 		let result = unsafe {
-			ffi::ext_sandbox_invoke(
+			ffi::ext_sandbox_invoke_poc2(
 				self.instance_idx,
 				name.as_ptr(),
 				name.len(),
