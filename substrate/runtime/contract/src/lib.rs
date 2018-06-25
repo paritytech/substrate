@@ -121,6 +121,7 @@ enum SpecialTrap {
 
 struct Runtime<'a, T: Ext + 'a> {
 	ext: &'a mut T,
+	config: Config,
 	memory: sandbox::Memory,
 	gas_used: u64,
 	gas_limit: u64,
@@ -158,9 +159,10 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	/// This function also charges gas for the returning.
 	///
 	/// Returns `Err` if there is not enough gas.
-	fn return_(&mut self, data: Vec<u8>) -> Result<(), ()> {
-		// TODO: Appropriate calculation of price to return the result.
-		let price = data.len() as u64;
+	fn store_return_data(&mut self, data: Vec<u8>) -> Result<(), ()> {
+		let price = (self.config.return_data_per_byte_cost as u64)
+			.checked_mul(data.len() as u64)
+			.ok_or_else(|| ())?;
 		if self.charge_gas(price) {
 			self.special_trap = Some(SpecialTrap::Return(data));
 			Ok(())
@@ -375,7 +377,7 @@ pub fn execute<'a, T: Ext>(
 		data_buf.resize(data_len as usize, 0);
 		e.memory().get(data_ptr, &mut data_buf)?;
 
-		e.return_(data_buf)
+		e.store_return_data(data_buf)
 			.map_err(|_| sandbox::HostError)?;
 
 		// The trap mechanism is used to immediately terminate the execution.
@@ -384,10 +386,12 @@ pub fn execute<'a, T: Ext>(
 		Err(sandbox::HostError)
 	}
 
+	let config = Config::default();
+
 	let PreparedContract {
 		instrumented_code,
 		memory,
-	} = prepare_contract(code)?;
+	} = prepare_contract(code, &config)?;
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
 	imports.add_host_func("env", "gas", ext_gas::<T>);
@@ -401,6 +405,7 @@ pub fn execute<'a, T: Ext>(
 
 	let mut runtime = Runtime {
 		ext,
+		config,
 		memory,
 		gas_limit,
 		gas_used: 0,
@@ -423,6 +428,9 @@ struct Config {
 	/// Gas cost of a regular operation.
 	regular_op_cost: u32,
 
+	/// Gas cost per one byte returned.
+	return_data_per_byte_cost: u32,
+
 	/// How tall the stack is allowed to grow?
 	///
 	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
@@ -439,6 +447,7 @@ impl Default for Config {
 		Config {
 			grow_mem_cost: 1,
 			regular_op_cost: 1,
+			return_data_per_byte_cost: 1,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
 		}
@@ -540,9 +549,7 @@ struct PreparedContract {
 	memory: sandbox::Memory,
 }
 
-fn prepare_contract(original_code: &[u8]) -> Result<PreparedContract, Error> {
-	let config = Config::default();
-
+fn prepare_contract(original_code: &[u8], config: &Config) -> Result<PreparedContract, Error> {
 	let mut contract_module = ContractModule::new(original_code, config.clone())?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.inject_gas_metering()?;
@@ -644,7 +651,8 @@ mod tests {
 			.validate(false)
 			.convert(wat)
 			.unwrap();
-		prepare_contract(wasm.as_ref())
+		let config = Config::default();
+		prepare_contract(wasm.as_ref(), &config)
 	}
 
 	#[test]
