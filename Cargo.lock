@@ -321,7 +321,7 @@ dependencies = [
  "substrate-rpc-servers 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-state-machine 0.1.0",
- "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

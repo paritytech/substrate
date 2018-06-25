@@ -22,7 +22,7 @@ extern crate ctrlc;
 extern crate ed25519;
 extern crate env_logger;
 extern crate futures;
-extern crate tokio_core;
+extern crate tokio;
 extern crate triehash;
 extern crate substrate_client as client;
 extern crate substrate_codec as codec;
@@ -53,6 +53,7 @@ use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfi
 	SessionConfig, StakingConfig, BuildStorage};
 use demo_runtime::{Block, UncheckedExtrinsic};
 use futures::{Future, Sink, Stream};
+use tokio::runtime::Runtime;
 
 struct DummyPool;
 impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, Hash> for DummyPool {
@@ -150,11 +151,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}.build_storage();
 
 	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_storage)?);
-	let mut core = ::tokio_core::reactor::Core::new().expect("Unable to spawn event loop.");
-
+	let mut runtime = Runtime::new()?;
 	let _rpc_servers = {
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
+			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
 			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, Arc::new(DummyPool), DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
@@ -172,7 +172,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		ctrlc::CtrlC::set_handler(move || {
 			exit_send.clone().send(()).wait().expect("Error sending exit notification");
 		});
-		core.run(exit.into_future()).expect("Error running informant event loop");
+
+		runtime.block_on(exit.into_future()).expect("Error running informant event loop");
 		return Ok(())
 	}
 
