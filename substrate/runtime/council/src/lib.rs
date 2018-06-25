@@ -673,7 +673,7 @@ mod tests {
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
-			broken_percent_late: 0,
+			broken_percent_late: 100,
 		}.build_storage());
 		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,
