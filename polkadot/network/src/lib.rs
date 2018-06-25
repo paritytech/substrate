@@ -206,6 +206,20 @@ pub struct PolkadotProtocol {
 }
 
 impl PolkadotProtocol {
+	/// Instantiate a polkadot protocol handler.
+	pub fn new() -> Self {
+		PolkadotProtocol {
+			peers: HashMap::new(),
+			consensus_gossip: ConsensusGossip::new(),
+			collators: HashMap::new(),
+			collating_for: None,
+			live_consensus: None,
+			in_flight: HashMap::new(),
+			pending: Vec::new(),
+			next_req_id: 1,
+		}
+	}
+
 	/// Send a statement to a validator.
 	fn send_statement(&mut self, ctx: &mut Context<Block>, _val: SessionKey, parent_hash: Hash, statement: SignedStatement) {
 		// TODO: something more targeted than gossip.

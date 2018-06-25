@@ -21,10 +21,11 @@ use ed25519;
 use substrate_network::{self as net, generic_message as msg};
 use substrate_network::consensus_gossip::ConsensusMessage;
 use polkadot_api::{PolkadotApi, LocalPolkadotApi};
-use polkadot_consensus::{Network, SharedTable};
-use polkadot_primitives::{Block, Hash, SessionKey};
+use polkadot_consensus::{Network, SharedTable, Collators, Collation};
+use polkadot_primitives::{AccountId, Block, Hash, SessionKey};
+use polkadot_primitives::parachain::Id as ParaId;
 
-use futures::{prelude::*};
+use futures::{future, prelude::*};
 use futures::sync::mpsc;
 
 use std::sync::Arc;
@@ -219,6 +220,15 @@ impl<P> ConsensusNetwork<P> {
 	}
 }
 
+impl<P> Clone for ConsensusNetwork<P> {
+	fn clone(&self) -> Self {
+		ConsensusNetwork {
+			network: self.network.clone(),
+			api: self.api.clone(),
+		}
+	}
+}
+
 /// A long-lived network which can create parachain statement and BFT message routing processes on demand.
 impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P> where P::CheckedBlockId: Send {
 	type TableRouter = Router<P>;
@@ -277,4 +287,15 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 
 		(table_router, InputAdapter { input: bft_recv }, sink)
 	}
+}
+
+impl<P: LocalPolkadotApi + Send + Sync + 'static> Collators for ConsensusNetwork<P> {
+	type Error = ();
+	type Collation = future::Empty<Collation, ()>;
+
+	fn collate(&self, _parachain: ParaId, _relay_parent: Hash) -> Self::Collation {
+		future::empty()
+	}
+
+	fn note_bad_collator(&self, _collator: AccountId) { }
 }
