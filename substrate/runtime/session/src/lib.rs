@@ -194,12 +194,6 @@ impl<T: Trait> Module<T> {
 	/// due to rotate at the end of this block, then it will return 0. If the just began, then
 	/// it will return `Self::length() - 1`.
 	pub fn blocks_remaining() -> T::BlockNumber {
-		// 2 0 2 0 2   0 0
-		// 3 2 3 2 0   1 1
-		// 4 - - 1 1   2 2
-		// 5 - - 0 2   3 0
-		// 6 5 - 2 0   4 1
-		// 7 - - 1 1   5 2
 		let length = Self::length();
 		let length_minus_1 = length - One::one();
 		let block_number = <system::Module<T>>::block_number();
