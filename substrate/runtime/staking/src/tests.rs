@@ -53,8 +53,8 @@ fn rewards_should_work() {
 		assert_eq!(Staking::voting_balance(&10), 21);
 		System::set_block_number(9);
 		Session::check_rotate_session();
-		assert_eq!(Session::current_index(), 0);
 		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Session::current_index(), 3);
 		assert_eq!(Staking::voting_balance(&10), 31);
 	});
 }

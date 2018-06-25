@@ -498,7 +498,6 @@ impl<T: Trait> Module<T> {
 				Self::slash(v, early_era_slash);
 			}
 		}
-		println!("{}, {}, {}", session_index, Self::last_era_length_change(), Self::sessions_per_era());
 		if ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero() || !normal_rotation {
 			Self::new_era();
 		}
