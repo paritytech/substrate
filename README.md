@@ -74,7 +74,7 @@ rustup target add wasm32-unknown-unknown --toolchain nightly
 rustup update stable
 cargo install --git https://github.com/alexcrichton/wasm-gc
 cargo install --git https://github.com/pepyakin/wasm-export-table.git
-sudo apt install make clang
+sudo apt install cmake pkg-config libssl-dev
 ```
 
 Then, grab the Polkadot source code:
