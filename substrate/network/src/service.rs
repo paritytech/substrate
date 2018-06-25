@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::io;
 use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
-use network::{NetworkProtocolHandler, NetworkContext, HostInfo, PeerId, ProtocolId,
+use network::{NetworkProtocolHandler, NetworkContext, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_devp2p::{NetworkService};
 use core_io::{TimerToken};
@@ -175,9 +175,9 @@ impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	fn start(&self) {
-		match self.network.start().map_err(Into::into) {
+		match self.network.start().map_err(|e| e.0.into()) {
 			Err(ErrorKind::Io(ref e)) if  e.kind() == io::ErrorKind::AddrInUse =>
-				warn!("Network port {:?} is already in use, make sure that another instance of Polkadot client is not running or change the port using the --port option.", self.network.config().listen_address.expect("Listen address is not set.")),
+				warn!("Network port is already in use, make sure that another instance of Polkadot client is not running or change the port using the --port option."),
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
@@ -257,7 +257,7 @@ impl<B: BlockT + 'static> ConsensusService<B> for Service<B> where B::Header: He
 }
 
 impl<B: BlockT + 'static> NetworkProtocolHandler for ProtocolHandler<B> where B::Header: HeaderT<Number=u64> {
-	fn initialize(&self, io: &NetworkContext, _host_info: &HostInfo) {
+	fn initialize(&self, io: &NetworkContext) {
 		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
 			.expect("Error registering sync timer");
 
