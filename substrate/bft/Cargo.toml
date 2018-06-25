@@ -12,7 +12,7 @@ substrate-runtime-primitives = { path = "../runtime/primitives" }
 ed25519 = { path = "../ed25519" }
 tokio-timer = "0.1.2"
 parking_lot = "0.4"
-error-chain = "0.11"
+error-chain = "0.12"
 log = "0.3"
 
 [dev-dependencies]
