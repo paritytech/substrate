@@ -88,16 +88,22 @@ error_chain! {
 			display("This method is not currently available when running in light client mode"),
 		}
 
-		/// Invalid remote proof.
+		/// Invalid remote execution proof.
 		InvalidExecutionProof {
 			description("invalid execution proof"),
 			display("Remote node has responded with invalid execution proof"),
 		}
 
-		/// Invalid remote proof.
+		/// Remote fetch has been cancelled.
 		RemoteFetchCancelled {
 			description("remote fetch cancelled"),
 			display("Remote data fetch has been cancelled"),
+		}
+
+		/// Remote fetch has been failed.
+		RemoteFetchFailed {
+			description("remote fetch failed"),
+			display("Remote data fetch has been failed"),
 		}
 	}
 }
