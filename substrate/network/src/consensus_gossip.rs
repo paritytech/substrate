@@ -166,6 +166,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Prune old or no longer relevant consensus messages.
+	/// Supply an optional block hash where consensus is known to have concluded.
 	pub fn collect_garbage(&mut self, best_hash: Option<&B::Hash>) {
 		let hashes = &mut self.message_hashes;
 		let before = self.messages.len();
@@ -326,13 +327,13 @@ mod tests {
 			digest: Default::default(),
 		};
 
-		consensus.collect_garbage(Some(&header));
+		consensus.collect_garbage(Some(&H256::default()));
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);
 
 		// header that matches one of the messages
 		header.parent_hash = prev_hash;
-		consensus.collect_garbage(Some(&header));
+		consensus.collect_garbage(Some(&prev_hash));
 		assert_eq!(consensus.messages.len(), 1);
 		assert_eq!(consensus.message_hashes.len(), 1);
 		assert!(consensus.message_hashes.contains(&m2_hash));

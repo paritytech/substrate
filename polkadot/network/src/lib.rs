@@ -267,7 +267,7 @@ impl PolkadotProtocol {
 		}
 
 		self.live_consensus = Some(consensus);
-		self.consensus_gossip.collect_garbage(Some(&parent_hash));
+		self.consensus_gossip.collect_garbage(old_parent.as_ref());
 	}
 
 	fn dispatch_pending_requests(&mut self, ctx: &mut Context<Block>) {
