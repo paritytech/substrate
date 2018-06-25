@@ -128,7 +128,9 @@ decl_module! {
 	pub enum Call where aux: T::PublicAux {
 		fn transfer(aux, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
-		fn unstake(aux) -> Result = 2;
+		fn unstake(aux, index: u32) -> Result = 2;
+		fn nominate(aux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result = 3;
+		fn unnominate(aux, target_index: u32) -> Result = 4;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -150,6 +152,7 @@ decl_storage! {
 	// The length of a staking era in sessions.
 	pub SessionsPerEra get(sessions_per_era): b"sta:spe" => required T::BlockNumber;
 	// The total amount of stake on the system.
+	// TODO: this doesn't actually track total stake yet - it should do.
 	pub TotalStake get(total_stake): b"sta:tot" => required T::Balance;
 	// The fee to be paid for making a transaction; the base.
 	pub TransactionBaseFee get(transaction_base_fee): b"sta:basefee" => required T::Balance;
@@ -165,7 +168,6 @@ decl_storage! {
 	pub CreationFee get(creation_fee): b"sta:creation_fee" => required T::Balance;
 	// The fee required to create a contract. At least as big as ReclaimRebate.
 	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
-
 	// Maximum reward, per validator, that is provided per acceptable session.
 	pub SessionReward get(session_reward): b"sta:session_reward" => required T::Balance;
 	// Slash, per validator that is taken per abnormal era end.
@@ -174,7 +176,11 @@ decl_storage! {
 	// The current era index.
 	pub CurrentEra get(current_era): b"sta:era" => required T::BlockNumber;
 	// All the accounts with a desire to stake.
-	pub Intentions: b"sta:wil:" => default Vec<T::AccountId>;
+	pub Intentions get(intentions): b"sta:wil:" => default Vec<T::AccountId>;
+	// All nominator -> nominee relationships.
+	pub Nominating get(nominating): b"sta:nominating" => map [ T::AccountId => T::AccountId ];
+	// Nominators for a particular account.
+	pub NominatorsFor get(nominators_for): b"sta:nominators_for" => default map [ T::AccountId => Vec<T::AccountId> ];
 	// The next value of sessions per era.
 	pub NextSessionsPerEra get(next_sessions_per_era): b"sta:nse" => T::BlockNumber;
 	// The session index at which the era length last changed.
@@ -310,14 +316,71 @@ impl<T: Trait> Module<T> {
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake(aux: &T::PublicAux) -> Result {
+	fn unstake(aux: &T::PublicAux, position: u32) -> Result {
+		let aux = aux.ref_into();
+		let position = position as usize;
 		let mut intentions = <Intentions<T>>::get();
-		let position = intentions.iter().position(|t| t == aux.ref_into()).ok_or("Cannot unstake if not already staked.")?;
+//		let position = intentions.iter().position(|t| t == aux.ref_into()).ok_or("Cannot unstake if not already staked.")?;
+		if intentions.get(position) != Some(aux) {
+			return Err("Invalid index")
+		}
 		intentions.swap_remove(position);
 		<Intentions<T>>::put(intentions);
 		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
 		Ok(())
 	}
+
+	fn nominate(aux: &T::PublicAux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result {
+		let target = Self::lookup(target)?;
+		let aux = aux.ref_into();
+
+		if Self::nominating(aux).is_some() {
+			// already nominating someone - denominate first.
+			return Err("Cannot nominate when already nominating");
+		}
+
+		// update nominators_for
+		let mut t = Self::nominators_for(&target);
+		t.push(aux.clone());
+		<NominatorsFor<T>>::insert(&target, t);
+
+		// update nominating
+		<Nominating<T>>::insert(aux, &target);
+
+		// Update bondage
+		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
+
+		Ok(())
+	}
+
+	/// Will panic if called when source isn't currently nominating target.
+	/// Updates Nominating, NominatorsFor and NominationBalance.
+	fn unnominate(aux: &T::PublicAux, target_index: u32) -> Result {
+		let source = aux.ref_into();
+		let target_index = target_index as usize;
+
+		let target = <Nominating<T>>::get(source).ok_or("Account must be nominating")?;
+
+		let mut t = Self::nominators_for(&target);
+		if t.get(target_index) != Some(source) {
+			return Err("Invalid target index")
+		}
+
+		// Ok - all valid.
+
+		// update nominators_for
+		t.swap_remove(target_index);
+		<NominatorsFor<T>>::insert(&target, t);
+
+		// update nominating
+		<Nominating<T>>::remove(source);
+
+		// update bondage
+		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
+		Ok(())
+	}
+
+	// TODO: force_unnominate and max_nominators
 
 	// PRIV DISPATCH
 
@@ -503,6 +566,10 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	fn nomination_balance(who: &T::AccountId) -> T::Balance {
+		Self::nominators_for(who).iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x)
+	}
+
 	/// The era has changed - enact new staking set.
 	///
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
@@ -523,9 +590,10 @@ impl<T: Trait> Module<T> {
 		// combination of validators, then use session::internal::set_validators().
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
 		// <ValidatorCount<T>>::get() of them.
+		// TODO: this is not sound. this should be moved to an off-chain solution mechanism.
 		let mut intentions = <Intentions<T>>::get()
 			.into_iter()
-			.map(|v| (Self::voting_balance(&v), v))
+			.map(|v| (Self::voting_balance(&v) + Self::nomination_balance(&v), v))
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 		<session::Module<T>>::set_validators(

@@ -192,7 +192,7 @@ fn staking_should_work() {
 		// Block 3: Unstake highest, introduce another staker. No change yet.
 		System::set_block_number(3);
 		assert_ok!(Staking::stake(&3));
-		assert_ok!(Staking::unstake(&4));
+		assert_ok!(Staking::unstake(&4, Staking::intentions().iter().position(|&x| x == 4).unwrap() as u32));
 		assert_eq!(Staking::current_era(), 1);
 		Session::check_rotate_session();
 
@@ -214,7 +214,7 @@ fn staking_should_work() {
 
 		// Block 7: Unstake three. No change yet.
 		System::set_block_number(7);
-		assert_ok!(Staking::unstake(&3));
+		assert_ok!(Staking::unstake(&3, Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
 		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![1, 3]);
 
