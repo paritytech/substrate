@@ -195,7 +195,7 @@ fn to_execution_result<T: Ext>(
 		_ => {
 			// All possible cases should have been handled.
 			// If the control flow reached here, then it is a logic error.
-			panic!();
+			unreachable!();
 		}
 	}
 
