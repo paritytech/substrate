@@ -889,23 +889,18 @@ impl<T: Trait> Module<T> {
 		}
 
 		let dest_code = overlay.get_code(dest);
-		let should_commit = if dest_code.is_empty() {
-			true
-		} else {
+		if !dest_code.is_empty() {
 			// TODO: logging (logs are just appended into a notable storage-based vector and
 			// cleared every block).
 			let mut staking_ext = StakingExt {
 				account_db: &mut overlay,
 				account: dest.clone(),
 			};
-			contract::execute(&dest_code, &mut staking_ext, gas_limit).is_ok()
-		};
+			let _exec_result = contract::execute(&dest_code, &mut staking_ext, gas_limit)
+				.map_err(|_| "smart-contract execution failed")?;
+		}
 
-		Ok(if should_commit {
-			Some(overlay.into_state())
-		} else {
-			None
-		})
+		Ok(Some(overlay.into_state()))
 	}
 }
 

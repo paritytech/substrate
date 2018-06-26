@@ -526,7 +526,7 @@ fn contract_internal_mem() {
 		<CodeOf<Test>>::insert(1, code_mem.to_vec());
 
 		// Transfer some balance from 0 to 1.
-		assert_ok!(Staking::transfer(&0, 1.into(), 11));
+		assert_err!(Staking::transfer(&0, 1.into(), 11), "smart-contract execution failed");
 
 		// The balance should remain unchanged since we are expecting
 		// validation error caused by internal memory declaration.
