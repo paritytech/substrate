@@ -176,7 +176,6 @@ fn fetches_from_those_with_knowledge() {
 		assert!(ctx.has_message(peer_a, Message::RequestBlockData(1, candidate_hash)));
 	}
 
-
 	knowledge.lock().note_statement(b_key, &GenericStatement::Valid(candidate_hash));
 
 	// peer B connects and sends session key. request already assigned to A
