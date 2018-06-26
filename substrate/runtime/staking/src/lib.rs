@@ -832,24 +832,20 @@ impl<T: Trait> Module<T> {
 
 		// TODO: an additional fee, based upon gaslimit/gasprice.
 		let gas_limit = 100_000;
-		match {
+
+		let exec_result = {
 			let mut staking_ext = StakingExt {
 				account_db: &mut overlay,
 				account: dest.clone(),
 			};
 			contract::execute(constructor_code, &mut staking_ext, gas_limit)
-		} {
-			Ok(exec_result) => {
-				let code = exec_result.return_data();
-				overlay.set_code(&dest, code.to_vec());
+				.map_err(|_| "execution of contract constructor failed")?
+		};
 
-				Ok(Some(overlay.into_state()))
-			}
-			Err(_) => {
-				// TODO: Err?
-				Ok(None)
-			}
-		}
+		let code = exec_result.return_data();
+		overlay.set_code(&dest, code.to_vec());
+
+		Ok(Some(overlay.into_state()))
 	}
 
 	fn effect_transfer<DB: AccountDb<T>>(
