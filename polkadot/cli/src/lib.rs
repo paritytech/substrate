@@ -126,12 +126,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let core = reactor::Core::new().expect("tokio::Core could not be created");
 
 	let yaml = load_yaml!("./cli.yml");
-	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
+	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
 		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
-		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed || e.kind == clap::ErrorKind::VersionDisplayed => {
+		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed => {
 			let _ = clap::App::from_yaml(yaml).print_long_help();
-			return Ok(());
+			return Ok(())
 		}
 		Err(e) => return Err(e.into()),
 	};
