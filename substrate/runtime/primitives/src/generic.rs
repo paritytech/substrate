@@ -115,7 +115,7 @@ where
 	}
 
 	fn check<ThisLookup>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str> where
-		ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str> + Send + Sync,
+		ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str>,
 	{
 		if !self.is_signed() {
 			Ok(CheckedExtrinsic(Extrinsic {

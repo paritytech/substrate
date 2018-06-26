@@ -72,7 +72,7 @@ pub use config::{Configuration, Role};
 pub struct Service<Components: components::Components> {
 	client: Arc<Client<Components::Backend, Components::Executor, Block>>,
 	network: Arc<NetworkService>,
-	transaction_pool: Arc<TransactionPool>,
+	transaction_pool: Arc<TransactionPool<Components::Api>>,
 	signal: Option<Signal>,
 	_consensus: Option<consensus::Service>,
 }
@@ -122,8 +122,8 @@ impl<Components> Service<Components>
 		info!("Best block is #{}", best_header.number);
 		telemetry!("node.start"; "height" => best_header.number, "best" => ?best_header.hash());
 
-		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool));
-		let transaction_pool_adapter = components.build_network_tx_pool(client.clone(), api.clone(), transaction_pool.clone());
+		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool, api.clone()));
+		let transaction_pool_adapter = components.build_network_tx_pool(client.clone(), transaction_pool.clone());
 		let network_params = network::Params {
 			config: network::ProtocolConfig {
 				roles: config.roles,
@@ -148,7 +148,7 @@ impl<Components> Service<Components>
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
 					network.on_block_imported(notification.hash, &notification.header);
-					prune_imported(&*api, &*txpool, notification.hash);
+					prune_imported(&*txpool, notification.hash);
 					Ok(())
 				})
 				.select(exit.clone())
@@ -200,22 +200,22 @@ impl<Components> Service<Components>
 	}
 
 	/// Get shared transaction pool instance.
-	pub fn transaction_pool(&self) -> Arc<TransactionPool> {
+	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::Api>> {
 		self.transaction_pool.clone()
 	}
 }
 
 /// Produce a task which prunes any finalized transactions from the pool.
-pub fn prune_imported<A>(api: &A, pool: &TransactionPool, hash: Hash)
-	where
-		A: PolkadotApi,
+pub fn prune_imported<A>(pool: &TransactionPool<A>, hash: Hash)
+	where A: PolkadotApi,
 {
-	match api.check_id(BlockId::hash(hash)) {
-		Ok(id) => {
-			let ready = transaction_pool::Ready::create(id, api);
-			pool.cull(None, ready);
-		},
-		Err(e) => warn!("Failed to check block id: {:?}", e),
+	let block = BlockId::hash(hash);
+	if let Err(e) = pool.cull(block) {
+		warn!("Culling error: {:?}", e);
+	}
+
+	if let Err(e) = pool.retry_verification(block) {
+		warn!("Re-verifying error: {:?}", e);
 	}
 }
 
