@@ -16,6 +16,7 @@
 
 //! Polkadot blockchain trait
 
+use primitives::AuthorityId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
@@ -40,6 +41,15 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
 	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>>;
+
+	/// Returns data cache reference, if it is enabled on this backend.
+	fn cache(&self) -> Option<&Cache<Block>>;
+}
+
+/// Blockchain optional data cache.
+pub trait Cache<Block: BlockT>: Send + Sync {
+	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
+	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityId>>;
 }
 
 /// Block import outcome

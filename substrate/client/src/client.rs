@@ -131,12 +131,13 @@ pub struct BlockImportNotification<Block: BlockT> {
 pub struct JustifiedHeader<Block: BlockT> {
 	header: <Block as BlockT>::Header,
 	justification: ::bft::Justification<Block::Hash>,
+	authorities: Vec<AuthorityId>,
 }
 
 impl<Block: BlockT> JustifiedHeader<Block> {
 	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>) {
-		(self.header, self.justification)
+	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>, Vec<AuthorityId>) {
+		(self.header, self.justification, self.authorities)
 	}
 }
 
@@ -210,9 +211,12 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get the set of authorities at a given block.
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
-		self.executor.call(id, "authorities",&[])
-			.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
-				.ok_or(error::ErrorKind::AuthLenInvalid.into()))
+		match self.backend.blockchain().cache() .and_then(|cache| cache.authorities_at(*id)) {
+			Some(cached_value) => Ok(cached_value),
+			None => self.executor.call(id, "authorities",&[])
+				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
+					.ok_or(error::ErrorKind::AuthLenInvalid.into()))
+		}
 	}
 
 	/// Get call executor reference.
@@ -272,6 +276,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok(JustifiedHeader {
 			header,
 			justification: just,
+			authorities,
 		})
 	}
 
@@ -282,7 +287,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		header: JustifiedHeader<Block>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 	) -> error::Result<ImportResult> {
-		let (header, justification) = header.into_inner();
+		let (header, justification, authorities) = header.into_inner();
 		let parent_hash = header.parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
 			blockchain::BlockStatus::InChain => {},
@@ -291,7 +296,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		let hash = header.hash();
 		let _import_lock = self.import_lock.lock();
 		*self.importing_block.write() = Some(hash);
-		let result = self.execute_and_import_block(origin, hash, header, justification, body);
+		let result = self.execute_and_import_block(origin, hash, header, justification, body, authorities);
 		*self.importing_block.write() = None;
 		result
 	}
@@ -303,6 +308,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		header: Block::Header,
 		justification: bft::Justification<Block::Hash>,
 		body: Option<Vec<Block::Extrinsic>>,
+		authorities: Vec<AuthorityId>,
 	) -> error::Result<ImportResult> {
 		let parent_hash = header.parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
@@ -329,6 +335,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
 		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
+		transaction.update_authorities(authorities);
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}
@@ -420,11 +427,12 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 		Block: BlockT,
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
-	fn import_block(&self, block: Block, justification: ::bft::Justification<Block::Hash>) {
+	fn import_block(&self, block: Block, justification: ::bft::Justification<Block::Hash>, authorities: &[AuthorityId]) {
 		let (header, extrinsics) = block.deconstruct();
 		let justified_header = JustifiedHeader {
 			header: header,
 			justification,
+			authorities: authorities.to_vec(),
 		};
 
 		let _ = self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics));
@@ -480,6 +488,7 @@ mod tests {
 	use keyring::Keyring;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
+	use test_client::client::backend::Backend as TestBackend;
 	use test_client::runtime as test_runtime;
 	use test_client::runtime::{Transfer, Extrinsic};
 
@@ -538,5 +547,12 @@ mod tests {
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 958);
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 42);
+	}
+
+	#[test]
+	fn client_uses_authorities_from_blockchain_cache() {
+		let client = test_client::new();
+		test_client::client::in_mem::cache_authorities_at(client.backend().blockchain(), Default::default(), Some(vec![[1u8; 32]]));
+		assert_eq!(client.authorities_at(&BlockId::Hash(Default::default())).unwrap(), vec![[1u8; 32]]);
 	}
 }
