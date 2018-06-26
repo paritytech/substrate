@@ -66,8 +66,6 @@ mod account_db;
 
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
-#[cfg(feature = "std")]
-pub use mock::DummyContractAddressFor;
 
 pub use account_db::*;
 
@@ -97,6 +95,15 @@ pub enum LockStatus<BlockNumber: PartialEq + Clone> {
 
 pub trait ContractAddressFor<AccountId: Sized> {
 	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
+}
+
+#[cfg(feature = "std")]
+pub struct DummyContractAddressFor;
+#[cfg(feature = "std")]
+impl ContractAddressFor<u64> for DummyContractAddressFor {
+	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
+		origin + 1
+	}
 }
 
 impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where

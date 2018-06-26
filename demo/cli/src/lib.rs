@@ -49,9 +49,9 @@ pub mod error;
 
 use std::sync::Arc;
 use demo_primitives::Hash;
-use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, TimestampConfig, BuildStorage};
-use demo_runtime::{Block, BlockId, UncheckedExtrinsic, BuildStorage};
+use demo_runtime::{Block, BlockId, UncheckedExtrinsic, BuildStorage, GenesisConfig,
+	ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
+	TimestampConfig};
 use futures::{Future, Sink, Stream};
 
 struct DummyPool;
