@@ -273,10 +273,10 @@ impl<T: Trait> Module<T> {
 	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
 		let dest = Self::lookup(dest)?;
+
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
-			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
-		}
+		let commit = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)?;
+		<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		Ok(())
 	}
 
@@ -853,7 +853,7 @@ impl<T: Trait> Module<T> {
 		dest: &T::AccountId,
 		value: T::Balance,
 		account_db: &DB,
-	) -> result::Result<Option<State<T>>, &'static str> {
+	) -> result::Result<State<T>, &'static str> {
 		let would_create = account_db.get_balance(transactor).is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
 		let liability = value + fee;
@@ -900,7 +900,7 @@ impl<T: Trait> Module<T> {
 				.map_err(|_| "smart-contract execution failed")?;
 		}
 
-		Ok(Some(overlay.into_state()))
+		Ok(overlay.into_state())
 	}
 }
 
@@ -926,7 +926,7 @@ impl<'a, 'b: 'a, T: Trait> contract::Ext for StakingExt<'a, 'b, T> {
 		}
 	}
 	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
-		if let Ok(Some(commit_state)) =
+		if let Ok(commit_state) =
 			Module::<T>::effect_transfer(&self.account, to, value, self.account_db)
 		{
 			self.account_db.merge(commit_state);
