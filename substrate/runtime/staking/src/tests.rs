@@ -447,14 +447,15 @@ fn contract_transfer() {
 		result
 	}
 
-	/// Returns code of the constructor for the specified code.
+	/// Create a constructor for the specified code.
 	///
-	/// When executed, it will call `ext_return` with code that
+	/// When constructor is executed, it will call `ext_return` with code that
 	/// specified in `child_bytecode`.
 	fn code_ctor(child_bytecode: &[u8]) -> String {
 		format!(
 r#"
 (module
+	;; ext_return(data_ptr: u32, data_len: u32) -> !
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
 
 	(import "env" "memory" (memory 1 1))
@@ -502,7 +503,7 @@ r#"
 	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
 
 	;; Embedded wasm code.
-    (data (i32.const 12) "{escaped_constructor}")
+	(data (i32.const 12) "{escaped_constructor}")
 )
 "#,
 			escaped_constructor = escaped_bytestring(constructor),
