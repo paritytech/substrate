@@ -18,6 +18,7 @@ use super::*;
 
 use std::{fmt, sync::Arc};
 use extrinsic_pool::api;
+use test_client;
 use parking_lot::Mutex;
 
 type Extrinsic = u64;
@@ -40,11 +41,11 @@ impl fmt::Display for Error {
 	}
 }
 
-impl api::ExtrinsicPool<Extrinsic, Hash> for DummyTxPool {
+impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 	type Error = Error;
 
 	/// Submit extrinsic for inclusion in block.
-	fn submit(&self, xt: Vec<Extrinsic>) -> ::std::result::Result<Vec<Hash>, Self::Error> {
+	fn submit(&self, _block: BlockHash, xt: Vec<Extrinsic>) -> ::std::result::Result<Vec<Hash>, Self::Error> {
 		let mut submitted = self.submitted.lock();
 		if submitted.len() < 1 {
 			let hashes = xt.iter().map(|_xt| 1).collect();
@@ -58,7 +59,10 @@ impl api::ExtrinsicPool<Extrinsic, Hash> for DummyTxPool {
 
 #[test]
 fn submit_transaction_should_not_cause_error() {
-	let p = Arc::new(DummyTxPool::default());
+	let p = Author {
+		client: Arc::new(test_client::new()),
+		pool: Arc::new(DummyTxPool::default()),
+	};
 
 	assert_matches!(
 		AuthorApi::submit_extrinsic(&p, 5),
