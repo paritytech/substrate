@@ -39,4 +39,7 @@ pub trait Specialization<B: BlockT>: Send + Sync + 'static {
 
 	/// Called on abort.
 	fn on_abort(&mut self) { }
+
+	/// Called periodically to maintain peers and handle timeouts.
+	fn maintain_peers(&mut self, _ctx: &mut Context<B>) { }
 }

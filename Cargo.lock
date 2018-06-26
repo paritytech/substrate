@@ -470,7 +470,7 @@ dependencies = [
  "substrate-rpc-servers 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-state-machine 0.1.0",
- "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1546,7 +1546,7 @@ dependencies = [
  "substrate-state-machine 0.1.0",
  "substrate-telemetry 0.2.0",
  "time 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1702,8 +1702,7 @@ dependencies = [
  "substrate-runtime-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-telemetry 0.2.0",
- "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio-timer 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2426,7 +2425,7 @@ dependencies = [
  "substrate-runtime-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-test-client 0.1.0",
- "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2703,6 +2702,7 @@ name = "substrate-telemetry"
 version = "0.2.0"
 dependencies = [
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog-async 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",

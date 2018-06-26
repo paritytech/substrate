@@ -19,7 +19,8 @@
 use std::time::{Duration, Instant};
 use futures::stream::Stream;
 use service::{Service, Components};
-use tokio_core::reactor;
+use tokio::runtime::TaskExecutor;
+use tokio::timer::Interval;
 use network::{SyncState, SyncProvider};
 use polkadot_primitives::Block;
 use state_machine;
@@ -28,13 +29,12 @@ use client::{self, BlockchainEvents};
 const TIMER_INTERVAL_MS: u64 = 5000;
 
 /// Spawn informant on the event loop
-pub fn start<C>(service: &Service<C>, handle: reactor::Handle)
+pub fn start<C>(service: &Service<C>, handle: TaskExecutor)
 	where
 		C: Components,
 		client::error::Error: From<<<<C as Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
-	let interval = reactor::Interval::new_at(Instant::now(), Duration::from_millis(TIMER_INTERVAL_MS), &handle)
-		.expect("Error creating informant timer");
+	let interval = Interval::new(Instant::now(), Duration::from_millis(TIMER_INTERVAL_MS));
 
 	let network = service.network();
 	let client = service.client();

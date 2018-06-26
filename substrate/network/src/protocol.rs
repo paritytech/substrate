@@ -392,6 +392,8 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 				}
 			}
 		}
+
+		self.specialization.write().maintain_peers(&mut ProtocolContext::new(&self.context_data, io));
 		for p in aborting {
 			self.on_peer_disconnected(io, p);
 		}

@@ -21,10 +21,11 @@ use ed25519;
 use substrate_network::{self as net, generic_message as msg};
 use substrate_network::consensus_gossip::ConsensusMessage;
 use polkadot_api::{PolkadotApi, LocalPolkadotApi};
-use polkadot_consensus::{Network, SharedTable};
-use polkadot_primitives::{Block, Hash, SessionKey};
+use polkadot_consensus::{Network, SharedTable, Collators, Collation};
+use polkadot_primitives::{AccountId, Block, Hash, SessionKey};
+use polkadot_primitives::parachain::Id as ParaId;
 
-use futures::{prelude::*};
+use futures::{future, prelude::*};
 use futures::sync::mpsc;
 
 use std::sync::Arc;
@@ -219,6 +220,15 @@ impl<P> ConsensusNetwork<P> {
 	}
 }
 
+impl<P> Clone for ConsensusNetwork<P> {
+	fn clone(&self) -> Self {
+		ConsensusNetwork {
+			network: self.network.clone(),
+			api: self.api.clone(),
+		}
+	}
+}
+
 /// A long-lived network which can create parachain statement and BFT message routing processes on demand.
 impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P> where P::CheckedBlockId: Send {
 	type TableRouter = Router<P>;
@@ -242,6 +252,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 
 		let knowledge = Arc::new(Mutex::new(Knowledge::new()));
 
+		let local_session_key = table.session_key();
 		let table_router = Router::new(
 			table,
 			self.network.clone(),
@@ -253,10 +264,12 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 
 		// spin up a task in the background that processes all incoming statements
 		// TODO: propagate statements on a timer?
-		let process_task = self.network.with_spec(|spec, _ctx| {
-			spec.live_consensus = Some(CurrentConsensus {
+		let process_task = self.network.with_spec(|spec, ctx| {
+			spec.new_consensus(ctx, CurrentConsensus {
 				knowledge,
 				parent_hash,
+				local_session_key,
+				session_keys: Default::default(),
 			});
 
 			MessageProcessTask {
@@ -274,4 +287,15 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 
 		(table_router, InputAdapter { input: bft_recv }, sink)
 	}
+}
+
+impl<P: LocalPolkadotApi + Send + Sync + 'static> Collators for ConsensusNetwork<P> {
+	type Error = ();
+	type Collation = future::Empty<Collation, ()>;
+
+	fn collate(&self, _parachain: ParaId, _relay_parent: Hash) -> Self::Collation {
+		future::empty()
+	}
+
+	fn note_bad_collator(&self, _collator: AccountId) { }
 }

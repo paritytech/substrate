@@ -172,6 +172,8 @@ pub struct CandidateReceipt {
 	pub egress_queue_roots: Vec<(Id, Hash)>,
 	/// Fees paid from the chain to the relay chain validators
 	pub fees: u64,
+	/// blake2-256 Hash of block data.
+	pub block_data_hash: Hash,
 }
 
 impl Slicable for CandidateReceipt {
@@ -184,6 +186,7 @@ impl Slicable for CandidateReceipt {
 		self.balance_uploads.using_encoded(|s| v.extend(s));
 		self.egress_queue_roots.using_encoded(|s| v.extend(s));
 		self.fees.using_encoded(|s| v.extend(s));
+		self.block_data_hash.using_encoded(|s| v.extend(s));
 
 		v
 	}
@@ -196,6 +199,7 @@ impl Slicable for CandidateReceipt {
 			balance_uploads: Slicable::decode(input)?,
 			egress_queue_roots: Slicable::decode(input)?,
 			fees: Slicable::decode(input)?,
+			block_data_hash: Slicable::decode(input)?,
 		})
 	}
 }
@@ -242,6 +246,15 @@ pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct BlockData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+impl BlockData {
+	/// Compute hash of block data.
+	#[cfg(feature = "std")]
+	pub fn hash(&self) -> Hash {
+		use runtime_primitives::traits::{BlakeTwo256, Hashing};
+		BlakeTwo256::hash(&self.0[..])
+	}
+}
 
 /// Parachain header raw bytes wrapper type.
 #[derive(PartialEq, Eq)]

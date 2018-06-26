@@ -25,7 +25,7 @@ extern crate ansi_term;
 extern crate regex;
 extern crate time;
 extern crate futures;
-extern crate tokio_core;
+extern crate tokio;
 extern crate ctrlc;
 extern crate fdlimit;
 extern crate ed25519;
@@ -80,11 +80,11 @@ use substrate_telemetry::{init_telemetry, TelemetryConfig};
 use runtime_primitives::StorageMap;
 use polkadot_primitives::Block;
 
-use futures::sync::mpsc;
-use futures::{Sink, Future, Stream};
-use tokio_core::reactor;
+use futures::sync::oneshot;
+use futures::Future;
+use tokio::runtime::Runtime;
 
-const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
+const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
 
 #[derive(Clone)]
 struct SystemConfiguration {
@@ -123,8 +123,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
-	let core = reactor::Core::new().expect("tokio::Core could not be created");
-
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
 		Ok(m) => m,
@@ -192,12 +190,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
 		.map(PresetConfig::deconstruct)
-		.unwrap_or_else(|f| (Box::new(move || 
+		.unwrap_or_else(|f| (Box::new(move ||
 			read_storage_json(&f)
 				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
 				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
 		), vec![]));
-	
+
 	if matches.is_present("build-genesis") {
 		info!("Building genesis");
 		for (i, (k, v)) in genesis_storage().iter().enumerate() {
@@ -212,13 +210,14 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let role =
 		if matches.is_present("collator") {
 			info!("Starting collator");
-			service::Role::COLLATOR
+			// TODO [rob]: collation node implementation
+			service::Role::FULL
 		} else if matches.is_present("light") {
 			info!("Starting (light)");
 			service::Role::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
 			info!("Starting validator");
-			service::Role::VALIDATOR
+			service::Role::AUTHORITY
 		} else {
 			info!("Starting (heavy)");
 			service::Role::FULL
@@ -256,35 +255,49 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		chain_name: config.chain_name.clone(),
 	};
 
+	let mut runtime = Runtime::new()?;
+	let executor = runtime.executor();
 	match role == service::Role::LIGHT {
-		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf),
-		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf),
+		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, &matches, sys_conf)?,
+		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, &matches, sys_conf)?,
 	}
+
+	// TODO: hard exit if this stalls?
+	runtime.shutdown_on_idle().wait().expect("failed to shut down event loop");
+	Ok(())
 }
 
-fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matches: &clap::ArgMatches, sys_conf: SystemConfiguration) -> error::Result<()>
+fn run_until_exit<C>(runtime: &mut Runtime, service: service::Service<C>, matches: &clap::ArgMatches, sys_conf: SystemConfiguration) -> error::Result<()>
 	where
 		C: service::Components,
 		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
 	let exit = {
-		// can't use signal directly here because CtrlC takes only `Fn`.
-		let (exit_send, exit) = mpsc::channel(1);
+		let (exit_send, exit) = oneshot::channel();
+		let exit_send = ::std::cell::RefCell::new(Some(exit_send));
 		ctrlc::CtrlC::set_handler(move || {
-			exit_send.clone().send(()).wait().expect("Error sending exit notification");
+			let exit_send = exit_send
+				.try_borrow_mut()
+				.expect("only borrowed in non-reetrant signal handler; qed")
+				.take();
+
+			if let Some(sender) = exit_send {
+				sender.send(()).expect("Error sending exit notification");
+			}
 		});
 
-		exit
+		exit.then(|_| Ok(()))
 	};
 
-	informant::start(&service, core.handle());
+	let executor = runtime.executor();
+	informant::start(&service, executor.clone());
 
 	let _rpc_servers = {
 		let http_address = parse_address("127.0.0.1:9933", "rpc-port", matches)?;
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", matches)?;
 
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
+			let chain = rpc::apis::chain::Chain::new(service.client(), executor.clone());
 			rpc::rpc_handler::<Block, _, _, _, _>(
 				service.client(),
 				chain,
@@ -298,8 +311,7 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 		)
 	};
 
-	core.run(exit.into_future()).expect("Error running informant event loop");
-	Ok(())
+	runtime.block_on(exit)
 }
 
 fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error> where
