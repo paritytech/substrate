@@ -393,3 +393,143 @@ fn transferring_incomplete_reserved_balance_should_work() {
 		assert_eq!(Staking::free_balance(&2), 42);
 	});
 }
+
+const CODE_TRANSFER: &str = r#"
+(module
+	;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(call $ext_transfer
+			(i32.const 4)  ;; Pointer to "Transfer to" address.
+			(i32.const 8)  ;; Length of "Transfer to" address.
+			(i32.const 12)  ;; Pointer to the buffer with value to transfer
+			(i32.const 8)   ;; Length of the buffer with value to transfer.
+		)
+	)
+	;; Destination AccountId to transfer the funds.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\02\00\00\00\00\00\00\00")
+	;; Amount of value to transfer.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
+)
+"#;
+
+#[test]
+fn contract_transfer() {
+	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+		<FreeBalance<Test>>::insert(0, 111);
+		<FreeBalance<Test>>::insert(1, 0);
+		<FreeBalance<Test>>::insert(2, 30);
+
+		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+		assert_ok!(Staking::transfer(&0, 1.into(), 11));
+
+		assert_eq!(Staking::free_balance(&0), 100);
+		assert_eq!(Staking::free_balance(&1), 5);
+		assert_eq!(Staking::free_balance(&2), 36);
+	});
+}
+
+	/// Returns code that uses `ext_create` runtime call.
+	///
+	/// Takes bytecode of the contract that needs to be deployed.
+	fn code_create(child_bytecode: &[u8]) -> String {
+		/// Convert a byte slice to a string with hex values.
+		///
+		/// Each value is preceeded with a `\` character.
+		fn escaped_bytestring(bytes: &[u8]) -> String {
+			use std::fmt::Write;
+			let mut result = String::new();
+			for b in bytes {
+				write!(result, "\\{:02x}", b).unwrap();
+			}
+			result
+		}
+
+		format!(
+r#"
+(module
+    ;; ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
+    (import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32)))
+
+    (import "env" "memory" (memory 1 1))
+
+    (func (export "call")
+        (call $ext_create
+            (i32.const 12)   ;; Pointer to `code`
+            (i32.const {code_len}) ;; Length of `code`
+            (i32.const 4)   ;; Pointer to the buffer with value to transfer
+			(i32.const 8)   ;; Length of the buffer with value to transfer
+        )
+    )
+	;; Amount of value to transfer.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
+
+	;; Embedded wasm code.
+    (data (i32.const 12) "{escaped_bytecode}")
+)
+"#,
+			escaped_bytecode = escaped_bytestring(&child_bytecode),
+			code_len = child_bytecode.len(),
+		)
+	}
+
+	#[test]
+	fn contract_create() {
+		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+		let code_create = wabt::wat2wasm(&code_create(&code_transfer)).unwrap();
+
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+			<FreeBalance<Test>>::insert(0, 111);
+			<FreeBalance<Test>>::insert(1, 0);
+
+			<CodeOf<Test>>::insert(1, code_create.to_vec());
+
+			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
+			assert_ok!(Staking::transfer(&0, 1.into(), 11));
+
+			let derived_address =
+				<Test as Trait>::DetermineContractAddress::contract_address_for(&code_transfer, &1);
+
+			assert_eq!(Staking::free_balance(&0), 100);
+			assert_eq!(Staking::free_balance(&1), 8);
+			assert_eq!(Staking::free_balance(&derived_address), 3);
+		});
+	}
+
+const CODE_MEM: &str =
+r#"
+(module
+	;; Internal memory is not allowed.
+	(memory 1 1)
+	(func (export "call")
+		nop
+	)
+)
+"#;
+
+#[test]
+fn contract_internal_mem() {
+	let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
+
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false), || {
+		// Set initial balances.
+		<FreeBalance<Test>>::insert(0, 111);
+		<FreeBalance<Test>>::insert(1, 0);
+
+		<CodeOf<Test>>::insert(1, code_mem.to_vec());
+
+		// Transfer some balance from 0 to 1.
+		assert_ok!(Staking::transfer(&0, 1.into(), 11));
+
+		// The balance should remain unchanged since we are expecting
+		// validation error caused by internal memory declaration.
+		assert_eq!(Staking::free_balance(&0), 111);
+	});
+}
