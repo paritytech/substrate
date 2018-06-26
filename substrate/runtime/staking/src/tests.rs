@@ -485,19 +485,19 @@ r#"
 		format!(
 r#"
 (module
-    ;; ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
-    (import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32)))
+	;; ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
+	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32)))
 
-    (import "env" "memory" (memory 1 1))
+	(import "env" "memory" (memory 1 1))
 
-    (func (export "call")
-        (call $ext_create
-            (i32.const 12)   ;; Pointer to `code`
-            (i32.const {code_len}) ;; Length of `code`
-            (i32.const 4)   ;; Pointer to the buffer with value to transfer
+	(func (export "call")
+		(call $ext_create
+			(i32.const 12)   ;; Pointer to `code`
+			(i32.const {code_len}) ;; Length of `code`
+			(i32.const 4)   ;; Pointer to the buffer with value to transfer
 			(i32.const 8)   ;; Length of the buffer with value to transfer
-        )
-    )
+		)
+	)
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
