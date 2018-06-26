@@ -34,13 +34,13 @@ extern crate parking_lot;
 extern crate serde;
 extern crate serde_json;
 
-extern crate substrate_primitives;
-extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_state_machine as state_machine;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
@@ -192,12 +192,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
 		.map(PresetConfig::deconstruct)
-		.unwrap_or_else(|f| (Box::new(move || 
+		.unwrap_or_else(|f| (Box::new(move ||
 			read_storage_json(&f)
 				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
 				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
 		), vec![]));
-	
+
 	if matches.is_present("build-genesis") {
 		info!("Building genesis");
 		for (i, (k, v)) in genesis_storage().iter().enumerate() {
@@ -285,10 +285,11 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
+			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
 			rpc::rpc_handler::<Block, _, _, _, _>(
 				service.client(),
 				chain,
-				service.transaction_pool(),
+				author,
 				sys_conf.clone(),
 			)
 		};

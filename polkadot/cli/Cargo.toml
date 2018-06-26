@@ -27,12 +27,12 @@ parking_lot = "0.4"
 serde_json = "1.0"
 serde = "1.0"
 substrate-client = { path = "../../substrate/client" }
-substrate-state-machine = { path = "../../substrate/state-machine" }
-substrate-rpc = { path = "../../substrate/rpc" }
-substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-network = { path = "../../substrate/network" }
 substrate-primitives = { path = "../../substrate/primitives" }
+substrate-rpc = { path = "../../substrate/rpc" }
+substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
+substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-telemetry = { path = "../../substrate/telemetry" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
