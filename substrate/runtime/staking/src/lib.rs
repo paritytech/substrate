@@ -643,15 +643,6 @@ impl<T: Trait> Default for ChangeEntry<T> {
 	}
 }
 
-impl<T: Trait> ChangeEntry<T> {
-	pub fn contract_created(b: T::Balance, c: Vec<u8>) -> Self {
-		ChangeEntry { balance: Some(b), code: Some(c), storage: Default::default() }
-	}
-	pub fn balance_changed(b: T::Balance) -> Self {
-		ChangeEntry { balance: Some(b), code: None, storage: Default::default() }
-	}
-}
-
 type State<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
 trait AccountDb<T: Trait> {
@@ -749,6 +740,13 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.or_insert(Default::default())
 			.balance = Some(balance);
 	}
+	fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>) {
+		self.local
+			.borrow_mut()
+			.entry(account.clone())
+			.or_insert(Default::default())
+			.code = Some(code);
+	}
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
@@ -800,7 +798,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 impl<T: Trait> Module<T> {
 	fn effect_create<DB: AccountDb<T>>(
 		transactor: &T::AccountId,
-		code: &[u8],
+		constructor_code: &[u8],
 		value: T::Balance,
 		account_db: &DB,
 	) -> result::Result<Option<State<T>>, &'static str> {
@@ -818,19 +816,40 @@ impl<T: Trait> Module<T> {
 			return Err("bondage too high to send value");
 		}
 
-		let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
+		let dest = T::DetermineContractAddress::contract_address_for(constructor_code, transactor);
 
 		// early-out if degenerate.
 		if &dest == transactor {
 			return Ok(None);
 		}
 
-		let mut local = BTreeMap::new();
-		// two inserts are safe
+		let mut overlay = OverlayAccountDb::new(account_db);
+
+		// update balances of the sender and the created account.
 		// note that we now know that `&dest != transactor` due to early-out before.
-		local.insert(dest, ChangeEntry::contract_created(value, code.to_vec()));
-		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - liability));
-		Ok(Some(local))
+		overlay.set_balance(&dest, value);
+		overlay.set_balance(transactor, from_balance - liability);
+
+		// TODO: an additional fee, based upon gaslimit/gasprice.
+		let gas_limit = 100_000;
+		match {
+			let mut staking_ext = StakingExt {
+				account_db: &mut overlay,
+				account: dest.clone(),
+			};
+			contract::execute(constructor_code, &mut staking_ext, gas_limit)
+		} {
+			Ok(exec_result) => {
+				let code = exec_result.return_data();
+				overlay.set_code(&dest, code.to_vec());
+
+				Ok(Some(overlay.into_state()))
+			}
+			Err(_) => {
+				// TODO: Err?
+				Ok(None)
+			}
+		}
 	}
 
 	fn effect_transfer<DB: AccountDb<T>>(
