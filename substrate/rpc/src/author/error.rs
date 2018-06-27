@@ -25,6 +25,11 @@ error_chain! {
 	}
 	errors {
 		/// Not implemented yet
+		BadFormat {
+			description("bad format"),
+			display("Invalid transaction format"),
+		}
+		/// Not implemented yet
 		Unimplemented {
 			description("not yet implemented"),
 			display("Method Not Implemented"),
