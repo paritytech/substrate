@@ -30,6 +30,7 @@ use error::Error;
 use chain::Client;
 use message::LocalizedBftMessage;
 use on_demand::OnDemandService;
+use import_queue::AsyncImportQueue;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
 /// Polkadot devp2p protocol id
@@ -149,13 +150,20 @@ pub struct Service<B: BlockT + 'static> where B::Header: HeaderT<Number=u64> {
 impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params<B>) -> Result<Arc<Service<B>>, Error> {
+		let chain = params.chain.clone();
 		let service = NetworkService::new(params.network_config.clone(), None)?;
+		let import_queue = Arc::new(AsyncImportQueue::new());
 		let sync = Arc::new(Service {
 			network: service,
 			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(params.config, params.chain, params.on_demand, params.transaction_pool)?,
+				protocol: Protocol::new(params.config, params.chain, import_queue, params.on_demand, params.transaction_pool)?,
 			}),
 		});
+
+		sync.handler.protocol.sync().read().queue().start(
+			Arc::downgrade(&sync),
+			Arc::downgrade(&chain)
+		)?;
 
 		Ok(sync)
 	}

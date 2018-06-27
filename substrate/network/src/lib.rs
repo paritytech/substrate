@@ -56,6 +56,7 @@ mod chain;
 mod blocks;
 mod consensus;
 mod on_demand;
+mod import_queue;
 pub mod error;
 
 #[cfg(test)] mod test;

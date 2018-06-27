@@ -32,6 +32,7 @@ use service::TransactionPool;
 use network::{PeerId, SessionInfo, Error as NetworkError};
 use keyring::Keyring;
 use codec::Slicable;
+use import_queue::tests::SyncImportQueue;
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 
@@ -234,7 +235,8 @@ impl TestNet {
 	pub fn add_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
-		let sync = Protocol::new(config.clone(), client.clone(), None, tx_pool).unwrap();
+		let import_queue = Arc::new(SyncImportQueue);
+		let sync = Protocol::new(config.clone(), client.clone(), import_queue, None, tx_pool).unwrap();
 		self.peers.push(Arc::new(Peer {
 			sync: sync,
 			client: client,

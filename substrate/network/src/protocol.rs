@@ -29,6 +29,7 @@ use message::generic::Message as GenericMessage;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use consensus::Consensus;
 use service::{Role, TransactionPool, BftMessageStream};
+use import_queue::ImportQueue;
 use config::ProtocolConfig;
 use chain::Client;
 use on_demand::OnDemandService;
@@ -108,11 +109,12 @@ impl<B: BlockT> Protocol<B> where
 	pub fn new(
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
+		import_queue: Arc<ImportQueue<B>>,
 		on_demand: Option<Arc<OnDemandService>>,
 		transaction_pool: Arc<TransactionPool<B>>
 	) -> error::Result<Self>  {
 		let info = chain.info()?;
-		let sync = ChainSync::new(config.roles, &info);
+		let sync = ChainSync::new(config.roles, &info, import_queue);
 		let protocol = Protocol {
 			config: config,
 			chain: chain,
@@ -534,5 +536,9 @@ impl<B: BlockT> Protocol<B> where
 
 	pub fn chain(&self) -> &Client<B> {
 		&*self.chain
+	}
+
+	pub fn sync(&self) -> &RwLock<ChainSync<B>> {
+		&self.sync
 	}
 }
