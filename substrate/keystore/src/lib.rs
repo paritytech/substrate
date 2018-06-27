@@ -84,7 +84,7 @@ impl EncryptedKey {
 
 		// two parts of derived key
 		// DK = [ DK[0..15] DK[16..31] ] = [derived_left_bits, derived_right_bits]
-		let (derived_left_bits, derived_right_bits) = crypto::derive_key_iterations(password, &salt, iterations);
+		let (derived_left_bits, derived_right_bits) = crypto::derive_key_iterations(password.as_bytes(), &salt, iterations);
 
 		// preallocated (on-stack in case of `Secret`) buffer to hold cipher
 		// length = length(plain) as we are using CTR-approach
@@ -108,7 +108,7 @@ impl EncryptedKey {
 
 	fn decrypt(&self, password: &str) -> Result<[u8; PKCS_LEN]> {
 		let (derived_left_bits, derived_right_bits) =
-			crypto::derive_key_iterations(password, &self.salt, self.iterations);
+			crypto::derive_key_iterations(password.as_bytes(), &self.salt, self.iterations);
 
 		let mac = crypto::derive_mac(&derived_right_bits, &self.ciphertext).keccak256();
 

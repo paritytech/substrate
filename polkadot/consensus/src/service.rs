@@ -235,7 +235,7 @@ impl Service {
 		client: Arc<C>,
 		api: Arc<A>,
 		network: Arc<net::ConsensusService<Block>>,
-		transaction_pool: Arc<TransactionPool>,
+		transaction_pool: Arc<TransactionPool<A>>,
 		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
 	) -> Service

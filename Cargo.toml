@@ -8,7 +8,7 @@ version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-error-chain = "0.11"
+error-chain = "0.12"
 polkadot-cli = { path = "polkadot/cli" }
 
 [workspace]
