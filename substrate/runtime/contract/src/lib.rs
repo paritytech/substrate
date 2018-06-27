@@ -123,8 +123,7 @@ struct Runtime<'a, T: Ext + 'a> {
 	ext: &'a mut T,
 	config: Config,
 	memory: sandbox::Memory,
-	gas_used: u64,
-	gas_limit: u64,
+	gas_meter: GasMeter,
 	special_trap: Option<SpecialTrap>,
 }
 impl<'a, T: Ext + 'a> Runtime<'a, T> {
@@ -137,23 +136,6 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	fn ext_mut(&mut self) -> &mut T {
 		self.ext
 	}
-	/// Account for used gas.
-	///
-	/// Returns `false` if there is not enough gas or addition of the specified
-	/// amount of gas has lead to overflow. On success returns `true`.
-	///
-	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
-	fn charge_gas(&mut self, amount: u64) -> bool {
-		match self.gas_used.checked_add(amount) {
-			None => false,
-			Some(val) if val > self.gas_limit => false,
-			Some(val) => {
-				self.gas_used = val;
-				true
-			}
-		}
-	}
-
 	/// Save a data buffer as a result of the execution.
 	///
 	/// This function also charges gas for the returning.
@@ -163,7 +145,7 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 		let price = (self.config.return_data_per_byte_cost as u64)
 			.checked_mul(data.len() as u64)
 			.ok_or_else(|| ())?;
-		if self.charge_gas(price) {
+		if self.gas_meter.charge(price) {
 			self.special_trap = Some(SpecialTrap::Return(data));
 			Ok(())
 		} else {
@@ -172,11 +154,51 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	}
 }
 
+struct GasMeter {
+	gas_used: u64,
+	gas_limit: u64,
+}
+impl GasMeter {
+	fn new(gas_limit: u64) -> GasMeter {
+		GasMeter {
+			gas_limit,
+			gas_used: 0,
+		}
+	}
+	/// Account for used gas.
+	///
+	/// Returns `false` if there is not enough gas or addition of the specified
+	/// amount of gas has lead to overflow. On success returns `true`.
+	///
+	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
+	fn charge(&mut self, amount: u64) -> bool {
+		match self.gas_used.checked_add(amount) {
+			None => false,
+			Some(val) if val > self.gas_limit => false,
+			Some(val) => {
+				self.gas_used = val;
+				true
+			}
+		}
+	}
+	/// Returns how much gas left from the initial budget.
+	fn gas_left(&self) -> u64 {
+		self.gas_limit
+			.checked_sub(self.gas_used)
+			.expect(
+				"gas_used is always incremented via Self::charge;
+				Self::charge ensures that gas_used is always less than or equal to gas_limit;
+				this substraction can never underflow;
+				qed;
+				"
+			)
+	}
+}
+
 fn to_execution_result<T: Ext>(
 	runtime: Runtime<T>,
 	run_err: Option<sandbox::Error>,
 ) -> Result<ExecutionResult, Error> {
-	let gas_left = runtime.gas_limit - runtime.gas_used;
 	let mut return_data = Vec::new();
 
 	// Check the exact type of the error. It could be plain trap or
@@ -200,7 +222,7 @@ fn to_execution_result<T: Ext>(
 	}
 
 	Ok(ExecutionResult {
-		gas_left,
+		gas_left: runtime.gas_meter.gas_left(),
 		return_data,
 	})
 }
@@ -246,7 +268,7 @@ pub fn execute<'a, T: Ext>(
 		args: &[sandbox::TypedValue],
 	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let amount = args[0].as_i32().unwrap() as u32;
-		if e.charge_gas(amount as u64) {
+		if e.gas_meter.charge(amount as u64) {
 			Ok(sandbox::ReturnValue::Unit)
 		} else {
 			Err(sandbox::HostError)
@@ -407,8 +429,7 @@ pub fn execute<'a, T: Ext>(
 		ext,
 		config,
 		memory,
-		gas_limit,
-		gas_used: 0,
+		gas_meter: GasMeter::new(gas_limit),
 		special_trap: None,
 	};
 
