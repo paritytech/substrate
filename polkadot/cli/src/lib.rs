@@ -189,28 +189,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.into();
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
-<<<<<<< HEAD
 	let (genesis_storage, boot_nodes) = spec.deconstruct();
-=======
-
-	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
-		.map(PresetConfig::deconstruct)
-		.unwrap_or_else(|f| (Box::new(move ||
-			read_storage_json(&f)
-				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
-				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
-		), vec![]));
-
-	if matches.is_present("build-genesis") {
-		info!("Building genesis");
-		for (i, (k, v)) in genesis_storage().iter().enumerate() {
-			print!("{}\n\"0x{}\": \"0x{}\"", if i > 0 {','} else {'{'}, HexDisplay::from(k), HexDisplay::from(v));
-		}
-		println!("\n}}");
-		return Ok(())
-	}
-
->>>>>>> 4343b3f18757befd3ac54de90143dda1b84a2b99
 	config.genesis_storage = genesis_storage;
 
 	let role =
