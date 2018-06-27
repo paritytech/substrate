@@ -61,7 +61,6 @@ pub trait Slicable: Sized {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&self.encode())
 	}
-
 }
 
 /// Encode a bytes slice as `Slicable` that can be decoded into a vector.
