@@ -102,7 +102,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		Ok(pruning)
 	}
 
-	fn import<I: Iterator<Item=Key>>(&mut self, hash: &BlockHash, journal_key: Vec<u8>, inserted: I, deleted: Vec<Key>) {
+	fn import<I: IntoIterator<Item=Key>>(&mut self, hash: &BlockHash, journal_key: Vec<u8>, inserted: I, deleted: Vec<Key>) {
 		// remove all re-inserted keys from death rows
 		for k in inserted {
 			if let Some(block) = self.death_index.remove(&k) {
