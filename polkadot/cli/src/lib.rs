@@ -193,7 +193,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	config.pruning = match matches.value_of("pruning") {
 		Some("archive") => PruningMode::ArchiveAll,
 		None => PruningMode::keep_blocks(256),
-		Some(s) => PruningMode::keep_blocks(s.parse().expect("Invalid pruning mode specified")),
+		Some(s) => PruningMode::keep_blocks(s.parse()
+			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
 	};
 
 	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
