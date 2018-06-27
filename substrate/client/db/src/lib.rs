@@ -27,6 +27,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_codec as codec;
+extern crate substrate_executor as executor;
 
 #[macro_use]
 extern crate log;
@@ -49,6 +50,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use state_machine::CodeExecutor;
+use executor::RuntimeInfo;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend;
@@ -71,7 +73,7 @@ pub fn new_client<E, S, Block>(
 		Block: BlockT,
 		<Block::Header as HeaderT>::Number: As<u32>,
 		Block::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
-		E: CodeExecutor,
+		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(&settings)?);

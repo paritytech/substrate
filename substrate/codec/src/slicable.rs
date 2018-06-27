@@ -61,6 +61,17 @@ pub trait Slicable: Sized {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&self.encode())
 	}
+
+}
+
+/// Encode a bytes slice as `Slicable` that can be decoded into a vector.
+pub fn encode_slice(bytes: &[u8]) -> Vec<u8> {
+	let len = bytes.len();
+	assert!(len <= u32::max_value() as usize, "Attempted to serialize a collection with too many elements.");
+
+	let mut r: Vec<u8> = Vec::new().and(&(len as u32));
+	r.extend_from_slice(bytes);
+	r
 }
 
 impl<T: Slicable, E: Slicable> Slicable for Result<T, E> {
@@ -182,12 +193,7 @@ impl Slicable for Vec<u8> {
 	}
 
 	fn encode(&self) -> Vec<u8> {
-		let len = self.len();
-		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
-
-		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
-		r.extend_from_slice(self);
-		r
+		encode_slice(&self)
 	}
 }
 

@@ -220,13 +220,9 @@ pub fn prune_imported<A>(api: &A, pool: &TransactionPool, hash: Hash)
 	where
 		A: PolkadotApi,
 {
-	match api.check_id(BlockId::hash(hash)) {
-		Ok(id) => {
-			let ready = transaction_pool::Ready::create(id, api);
-			pool.cull(None, ready);
-		},
-		Err(e) => warn!("Failed to check block id: {:?}", e),
-	}
+	let id = BlockId::hash(hash);
+	let ready = transaction_pool::Ready::create(id, api);
+	pool.cull(None, ready);
 }
 
 impl<Components> Drop for Service<Components> where Components: components::Components {

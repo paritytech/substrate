@@ -19,6 +19,7 @@ use futures::{IntoFuture, Future};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{self, OverlayedChanges, Backend as StateBackend, CodeExecutor};
+use executor::{RuntimeVersion, RuntimeInfo};
 
 use backend;
 use blockchain::Backend as ChainBackend;
@@ -53,6 +54,9 @@ pub trait CallExecutor<B: BlockT> {
 	///
 	/// No changes are made.
 	fn prove_at_state<S: state_machine::Backend>(&self, state: S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
+
+	/// Get runtime version if supported.
+	fn native_runtime_version(&self) -> Option<RuntimeVersion>;
 }
 
 /// Call executor that executes methods locally, querying all required
@@ -88,7 +92,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 	where
 		B: backend::LocalBackend<Block>,
-		E: CodeExecutor,
+		E: CodeExecutor + RuntimeInfo,
 		Block: BlockT,
 		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
@@ -120,6 +124,10 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 		)
 		.map(|(result, proof, _)| (result, proof))
 		.map_err(Into::into)
+	}
+
+	fn native_runtime_version(&self) -> Option<RuntimeVersion> {
+		<E as RuntimeInfo>::NATIVE_VERSION
 	}
 }
 
@@ -159,6 +167,10 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 
 	fn prove_at_state<S: state_machine::Backend>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
 		Err(error::ErrorKind::NotAvailableOnLightClient.into())
+	}
+
+	fn native_runtime_version(&self) -> Option<RuntimeVersion> {
+		None
 	}
 }
 

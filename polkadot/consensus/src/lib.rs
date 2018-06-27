@@ -253,9 +253,9 @@ impl<C, N, P> bft::ProposerFactory<Block> for ProposerFactory<C, N, P>
 
 		let parent_hash = parent_header.blake2_256().into();
 
-		let checked_id = self.client.check_id(BlockId::hash(parent_hash))?;
-		let duty_roster = self.client.duty_roster(&checked_id)?;
-		let random_seed = self.client.random_seed(&checked_id)?;
+		let id = BlockId::hash(parent_hash);
+		let duty_roster = self.client.duty_roster(&id)?;
+		let random_seed = self.client.random_seed(&id)?;
 
 		let (group_info, local_duty) = make_group_info(
 			duty_roster,
@@ -263,7 +263,7 @@ impl<C, N, P> bft::ProposerFactory<Block> for ProposerFactory<C, N, P>
 			sign_with.public().0,
 		)?;
 
-		let active_parachains = self.client.active_parachains(&checked_id)?;
+		let active_parachains = self.client.active_parachains(&id)?;
 
 		let n_parachains = active_parachains.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
@@ -290,7 +290,7 @@ impl<C, N, P> bft::ProposerFactory<Block> for ProposerFactory<C, N, P>
 			local_duty,
 			local_key: sign_with,
 			parent_hash,
-			parent_id: checked_id,
+			parent_id: id,
 			parent_number: parent_header.number,
 			random_seed,
 			router,
@@ -314,7 +314,7 @@ pub struct Proposer<C: PolkadotApi, R, P> {
 	local_duty: LocalDuty,
 	local_key: Arc<ed25519::Pair>,
 	parent_hash: Hash,
-	parent_id: C::CheckedBlockId,
+	parent_id: BlockId,
 	parent_number: BlockNumber,
 	random_seed: Hash,
 	router: R,
@@ -616,7 +616,7 @@ impl ProposalTiming {
 pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
 	parent_hash: Hash,
 	parent_number: BlockNumber,
-	parent_id: C::CheckedBlockId,
+	parent_id: BlockId,
 	client: Arc<C>,
 	transaction_pool: Arc<TransactionPool>,
 	collation: CollationFetch<P, C>,

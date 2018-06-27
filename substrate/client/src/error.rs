@@ -71,6 +71,12 @@ error_chain! {
 		}
 
 		/// Invalid state data.
+		VersionInvalid {
+			description("Runtime version error"),
+			display("On-chain runtime does not specify version"),
+		}
+
+		/// Invalid state data.
 		AuthInvalid(i: u32) {
 			description("authority value state error"),
 			display("Current state of blockchain has invalid authority value for index {}", i),
