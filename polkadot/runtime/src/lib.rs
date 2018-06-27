@@ -127,7 +127,7 @@ pub type Consensus = consensus::Module<Concrete>;
 
 impl timestamp::Trait for Concrete {
 	const TIMESTAMP_SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
-	type Value = u64;
+	type Moment = u64;
 }
 /// Timestamp module for this concrete runtime.
 pub type Timestamp = timestamp::Module<Concrete>;
