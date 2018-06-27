@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Version module for runtime; Provide a function that returns runtime verion.
+//! Version module for runtime; Provide a function that returns runtime version.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -40,9 +40,9 @@ use codec::Slicable;
 use std::borrow::Cow;
 
 #[cfg(feature = "std")]
-pub type MaybeCowString = ::std::borrow::Cow<'static, str>;
+pub type VersionString = ::std::borrow::Cow<'static, str>;
 #[cfg(not(feature = "std"))]
-pub type MaybeCowString = &'static str;
+pub type VersionString = &'static str;
 
 #[cfg(feature = "std")]
 #[macro_export]
@@ -59,10 +59,15 @@ macro_rules! ver_str {
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct RuntimeVersion {
-	pub spec_name: MaybeCowString,
-	pub impl_name: MaybeCowString,
+	/// Runtime name. This must be the same in native runtime and on-chain.
+	pub spec_name: VersionString,
+	/// Implementation name. Used for information only.
+	pub impl_name: VersionString,
+	/// Version of the authorship interface. An authoring node will not attempt to author blocks unless this is equal to its native runtime.
 	pub authoring_version: u32,
+	/// Version of the runtime specification. This must match native runtime for any call go through.
 	pub spec_version: u32,
+	/// Implementation version. Used for information only.
 	pub impl_version: u32,
 }
 
@@ -100,8 +105,8 @@ impl Slicable for RuntimeVersion {
 	#[cfg(feature = "std")]
 	fn decode<I: codec::Input>(value: &mut I) -> Option<Self> {
 		Some(RuntimeVersion {
-			spec_name: Cow::Owned(String::from_utf8(Slicable::decode(value)?).expect("Invalid utf-8 version string")),
-			impl_name: Cow::Owned(String::from_utf8(Slicable::decode(value)?).expect("Invalid utf-8 version string")),
+			spec_name: Cow::Owned(String::from_utf8_lossy(&Vec::decode(value)?).into()),
+			impl_name: Cow::Owned(String::from_utf8_lossy(&Vec::decode(value)?).into()),
 			authoring_version: Slicable::decode(value)?,
 			spec_version: Slicable::decode(value)?,
 			impl_version: Slicable::decode(value)?,
@@ -118,7 +123,7 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Get runtime verions
+	/// Get runtime version.
 	pub fn version() -> RuntimeVersion {
 		T::VERSION.clone()
 	}

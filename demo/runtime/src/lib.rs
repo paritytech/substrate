@@ -62,7 +62,7 @@ pub use runtime_primitives::BuildStorage;
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
 
-/// Polkadot runtime version.
+/// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("demo"),
 	impl_name: ver_str!("parity-demo"),

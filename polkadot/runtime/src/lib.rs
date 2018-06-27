@@ -107,7 +107,7 @@ pub struct Concrete;
 
 /// Polkadot runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: ver_str!("polkatot"),
+	spec_name: ver_str!("polkadot"),
 	impl_name: ver_str!("parity-polkadot"),
 	authoring_version: 0,
 	spec_version: 0,
