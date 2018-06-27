@@ -34,13 +34,13 @@ extern crate parking_lot;
 extern crate serde;
 extern crate serde_json;
 
-extern crate substrate_primitives;
-extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_state_machine as state_machine;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
@@ -75,7 +75,7 @@ use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
 
-const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io:443";
+const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
 
 #[derive(Clone)]
 struct SystemConfiguration {
@@ -118,12 +118,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	T: Into<std::ffi::OsString> + Clone,
 {
 	let yaml = load_yaml!("./cli.yml");
-	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
+	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
 		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
-		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed || e.kind == clap::ErrorKind::VersionDisplayed => {
+		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed => {
 			let _ = clap::App::from_yaml(yaml).print_long_help();
-			return Ok(());
+			return Ok(())
 		}
 		Err(e) => return Err(e.into()),
 	};
@@ -189,7 +189,28 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.into();
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
+<<<<<<< HEAD
 	let (genesis_storage, boot_nodes) = spec.deconstruct();
+=======
+
+	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
+		.map(PresetConfig::deconstruct)
+		.unwrap_or_else(|f| (Box::new(move ||
+			read_storage_json(&f)
+				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
+				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
+		), vec![]));
+
+	if matches.is_present("build-genesis") {
+		info!("Building genesis");
+		for (i, (k, v)) in genesis_storage().iter().enumerate() {
+			print!("{}\n\"0x{}\": \"0x{}\"", if i > 0 {','} else {'{'}, HexDisplay::from(k), HexDisplay::from(v));
+		}
+		println!("\n}}");
+		return Ok(())
+	}
+
+>>>>>>> 4343b3f18757befd3ac54de90143dda1b84a2b99
 	config.genesis_storage = genesis_storage;
 
 	let role =
@@ -269,10 +290,11 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
+			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
 			rpc::rpc_handler::<Block, _, _, _, _>(
 				service.client(),
 				chain,
-				service.transaction_pool(),
+				author,
 				sys_conf.clone(),
 			)
 		};

@@ -29,41 +29,37 @@ use listener::Listener;
 use watcher::Watcher;
 
 /// Extrinsics pool.
-pub struct Pool<Ex, Hash, V, S, E> where
+pub struct Pool<Hash, VEx, S, E> where
 	Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex,
-	V: txpool::Verifier<Ex>,
-	S: txpool::Scoring<V::VerifiedTransaction>,
+	S: txpool::Scoring<VEx>,
+	VEx: txpool::VerifiedTransaction<Hash=Hash>,
 {
 	_error: Mutex<PhantomData<E>>,
 	pool: RwLock<txpool::Pool<
-		V::VerifiedTransaction,
+		VEx,
 		S,
 		Listener<Hash>,
 	>>,
-	verifier: V,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<Weak<V::VerifiedTransaction>>>>,
+	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<Weak<VEx>>>>,
 }
 
-impl<Ex, Hash, V, S, E> Pool<Ex, Hash, V, S, E> where
+impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 	Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default,
-	V: txpool::Verifier<Ex>,
-	S: txpool::Scoring<V::VerifiedTransaction>,
-	V::VerifiedTransaction: txpool::VerifiedTransaction<Hash=Hash>,
-	E: From<V::Error>,
+	S: txpool::Scoring<VEx>,
+	VEx: txpool::VerifiedTransaction<Hash=Hash>,
 	E: From<txpool::Error>,
 {
 	/// Create a new transaction pool.
-	pub fn new(options: txpool::Options, verifier: V, scoring: S) -> Self {
+	pub fn new(options: txpool::Options, scoring: S) -> Self {
 		Pool {
 			_error: Default::default(),
 			pool: RwLock::new(txpool::Pool::new(Listener::default(), scoring, options)),
-			verifier,
 			import_notification_sinks: Default::default(),
 		}
 	}
 
 	/// Imports a pre-verified extrinsic to the pool.
-	pub fn import(&self, xt: V::VerifiedTransaction) -> Result<Arc<V::VerifiedTransaction>, E> {
+	pub fn import(&self, xt: VEx) -> Result<Arc<VEx>, E> {
 		let result = self.pool.write().import(xt)?;
 
 		let weak = Arc::downgrade(&result);
@@ -74,7 +70,7 @@ impl<Ex, Hash, V, S, E> Pool<Ex, Hash, V, S, E> where
 	}
 
 	/// Return an event stream of transactions imported to the pool.
-	pub fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<Weak<V::VerifiedTransaction>> {
+	pub fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<Weak<VEx>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
@@ -87,11 +83,15 @@ impl<Ex, Hash, V, S, E> Pool<Ex, Hash, V, S, E> where
 		}
 	}
 
-	/// Imports a bunch of extrinsics to the pool
-	pub fn submit(&self, xts: Vec<Ex>) -> Result<Vec<Arc<V::VerifiedTransaction>>, E> {
+	/// Imports a bunch of unverified extrinsics to the pool
+	pub fn submit<V, Ex, T>(&self, verifier: V, xts: T) -> Result<Vec<Arc<VEx>>, E> where
+		V: txpool::Verifier<Ex, VerifiedTransaction=VEx>,
+		E: From<V::Error>,
+		T: IntoIterator<Item=Ex>
+	{
 		xts
 			.into_iter()
-			.map(|xt| self.verifier.verify_transaction(xt))
+			.map(|xt| verifier.verify_transaction(xt))
 			.map(|xt| {
 				Ok(self.pool.write().import(xt?)?)
 			})
@@ -99,13 +99,16 @@ impl<Ex, Hash, V, S, E> Pool<Ex, Hash, V, S, E> where
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
-	pub fn submit_and_watch(&self, xt: Ex) -> Result<Watcher<Hash>, E> {
-		let xt = self.submit(vec![xt])?.pop().expect("One extrinsic passed; one result returned; qed");
+	pub fn submit_and_watch<V, Ex>(&self, verifier: V, xt: Ex) -> Result<Watcher<Hash>, E> where
+		V: txpool::Verifier<Ex, VerifiedTransaction=VEx>,
+		E: From<V::Error>,
+	{
+		let xt = self.submit(verifier, vec![xt])?.pop().expect("One extrinsic passed; one result returned; qed");
 		Ok(self.pool.write().listener_mut().create_watcher(xt))
 	}
 
 	/// Remove from the pool.
-	pub fn remove(&self, hashes: &[Hash], is_valid: bool) -> Vec<Option<Arc<V::VerifiedTransaction>>> {
+	pub fn remove(&self, hashes: &[Hash], is_valid: bool) -> Vec<Option<Arc<VEx>>> {
 		let mut pool = self.pool.write();
 		let mut results = Vec::with_capacity(hashes.len());
 		for hash in hashes {
@@ -115,29 +118,36 @@ impl<Ex, Hash, V, S, E> Pool<Ex, Hash, V, S, E> where
 	}
 
 	/// Cull transactions from the queue.
-	pub fn cull<R>(&self, senders: Option<&[<V::VerifiedTransaction as txpool::VerifiedTransaction>::Sender]>, ready: R) -> usize where
-		R: txpool::Ready<V::VerifiedTransaction>,
+	pub fn cull<R>(&self, senders: Option<&[<VEx as txpool::VerifiedTransaction>::Sender]>, ready: R) -> usize where
+		R: txpool::Ready<VEx>,
 	{
 		self.pool.write().cull(senders, ready)
 	}
 
-	/// Cull transactions from the queue and then compute the pending set.
-	pub fn cull_and_get_pending<R, F, T>(&self, ready: R, f: F) -> T where
-		R: txpool::Ready<V::VerifiedTransaction> + Clone,
-		F: FnOnce(txpool::PendingIterator<V::VerifiedTransaction, R, S, Listener<Hash>>) -> T,
-	{
-		let mut pool = self.pool.write();
-		pool.cull(None, ready.clone());
-		f(pool.pending(ready))
-	}
-
 	/// Get the full status of the queue (including readiness)
-	pub fn status<R: txpool::Ready<V::VerifiedTransaction>>(&self, ready: R) -> txpool::Status {
+	pub fn status<R: txpool::Ready<VEx>>(&self, ready: R) -> txpool::Status {
 		self.pool.read().status(ready)
 	}
 
 	/// Returns light status of the pool.
 	pub fn light_status(&self) -> txpool::LightStatus {
 		self.pool.read().light_status()
+	}
+
+	/// Removes all transactions from given sender
+	pub fn remove_sender(&self, sender: VEx::Sender) -> Vec<Arc<VEx>> {
+		let mut pool = self.pool.write();
+		let pending = pool.pending_from_sender(|_: &VEx| txpool::Readiness::Ready, &sender).collect();
+		// remove all transactions from this sender
+		pool.cull(Some(&[sender]), |_: &VEx| txpool::Readiness::Stale);
+		pending
+	}
+
+	/// Retrieve the pending set. Be careful to not leak the pool `ReadGuard` to prevent deadlocks.
+	pub fn pending<R, F, T>(&self, ready: R, f: F) -> T where
+		R: txpool::Ready<VEx>,
+		F: FnOnce(txpool::PendingIterator<VEx, R, S, Listener<Hash>>) -> T,
+	{
+		f(self.pool.read().pending(ready))
 	}
 }

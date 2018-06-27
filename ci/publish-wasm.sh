@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Publish wasm binaries into the special repository.
 # This script assumes that wasm binaries have already been built.
@@ -6,7 +6,7 @@
 
 set -e
 
-source `dirname "$0"`/common.sh
+source ./common.sh
 
 if [ -z ${GH_TOKEN+x} ]; then
 	echo "GH_TOKEN environment variable is not set"

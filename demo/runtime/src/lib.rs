@@ -162,6 +162,8 @@ pub type Address = staking::Address<Concrete>;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+/// BlockId type as expected by this runtime.
+pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
 /// Extrinsic type as expected by this runtime. This is not the type that is signed.

@@ -155,7 +155,7 @@ pub fn new_in_mem<E, Block, S>(
 	Client::new(backend, executor, genesis_storage)
 }
 
-impl<B, E, Block: BlockT> Client<B, E, Block> where
+impl<B, E, Block> Client<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
