@@ -152,8 +152,9 @@ impl<T: Trait> Module<T> {
 		// check block number and call next_session if necessary.
 		let block_number = <system::Module<T>>::block_number();
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
-		if is_final_block || Self::broken_validation() {
-			Self::rotate_session(is_final_block);
+		let broken_validation = Self::broken_validation();
+		if is_final_block || broken_validation {
+			Self::rotate_session(!broken_validation);
 		}
 	}
 
@@ -205,14 +206,10 @@ impl<T: Trait> Module<T> {
 		let now = <timestamp::Module<T>>::get();
 		let block_period = <timestamp::Module<T>>::block_period();
 		let blocks_remaining = Self::blocks_remaining();
-		if blocks_remaining.is_zero() {
-			false
-		} else {
-			let blocks_remaining = <T::Moment as As<T::BlockNumber>>::sa(blocks_remaining);
-			now + blocks_remaining * block_period >
-				Self::current_start() + Self::ideal_session_duration() *
-					(T::Moment::sa(100) + Self::broken_percent_late()) / T::Moment::sa(100)
-		}
+		let blocks_remaining = <T::Moment as As<T::BlockNumber>>::sa(blocks_remaining);
+		now + blocks_remaining * block_period >
+			Self::current_start() + Self::ideal_session_duration() *
+				(T::Moment::sa(100) + Self::broken_percent_late()) / T::Moment::sa(100)
 	}
 }
 
