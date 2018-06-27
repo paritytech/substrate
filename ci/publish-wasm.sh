@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Publish wasm binaries into the special repository.
 # This script assumes that wasm binaries have already been built.

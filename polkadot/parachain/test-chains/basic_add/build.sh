@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # Make LLD produce a binary that imports memory from the outside environment.
