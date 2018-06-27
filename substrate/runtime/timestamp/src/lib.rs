@@ -48,7 +48,7 @@ pub trait Trait: consensus::Trait where
 	// the position of the required timestamp-set extrinsic.
 	const TIMESTAMP_SET_POSITION: u32;
 
-	type Value: Parameter + Default + SimpleArithmetic + As<Self::BlockNumber>;
+	type Moment: Parameter + Default + SimpleArithmetic + As<Self::BlockNumber>;
 }
 
 decl_module! {
@@ -56,27 +56,27 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn set(aux, now: T::Value) -> Result = 0;
+		fn set(aux, now: T::Moment) -> Result = 0;
 	}
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait>;
-	pub Now get(now): b"tim:val" => required T::Value;
+	pub Now get(now): b"tim:val" => required T::Moment;
 	// The minimum (and advised) period between blocks.
-	pub BlockPeriod get(block_period): b"tim:block_period" => required T::Value;
+	pub BlockPeriod get(block_period): b"tim:block_period" => required T::Moment;
 
 	// Did the timestamp get updated in this block?
 	DidUpdate: b"tim:did" => default bool;
 }
 
 impl<T: Trait> Module<T> {
-	pub fn get() -> T::Value {
+	pub fn get() -> T::Moment {
 		Self::now()
 	}
 
 	/// Set the current time.
-	fn set(aux: &T::PublicAux, now: T::Value) -> Result {
+	fn set(aux: &T::PublicAux, now: T::Moment) -> Result {
 		assert!(aux.is_empty());
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
@@ -95,7 +95,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the timestamp to something in particular. Only used for tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_timestamp(now: T::Value) {
+	pub fn set_timestamp(now: T::Moment) {
 		<Self as Store>::Now::put(now);
 	}
 }
@@ -108,14 +108,14 @@ impl<T: Trait> Executable for Module<T> {
 
 #[cfg(any(feature = "std", test))]
 pub struct GenesisConfig<T: Trait> {
-	pub period: T::Value,
+	pub period: T::Moment,
 }
 
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
-			period: T::Value::sa(5),
+			period: T::Moment::sa(5),
 		}
 	}
 }
@@ -128,7 +128,7 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 		use codec::Slicable;
 		map![
 			twox_128(<BlockPeriod<T>>::key()).to_vec() => self.period.encode(),
-			twox_128(<Now<T>>::key()).to_vec() => T::Value::sa(0).encode()
+			twox_128(<Now<T>>::key()).to_vec() => T::Moment::sa(0).encode()
 		]
 	}
 }
@@ -163,7 +163,7 @@ mod tests {
 	}
 	impl Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
-		type Value = u64;
+		type Moment = u64;
 	}
 	type Timestamp = Module<Test>;
 

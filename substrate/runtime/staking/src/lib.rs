@@ -486,13 +486,13 @@ impl<T: Trait> Module<T> {
 
 	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
 	/// move to a new era.
-	fn new_session(normal_rotation: bool, actual_elapsed: T::Value) {
+	fn new_session(normal_rotation: bool, actual_elapsed: T::Moment) {
 		let session_index = <session::Module<T>>::current_index();
 
 		if normal_rotation {
 			// reward
 			let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
-			let percent: usize = (T::Value::sa(65536usize) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
+			let percent: usize = (T::Moment::sa(65536usize) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
 			let reward = Self::session_reward() * T::Balance::sa(percent) / T::Balance::sa(65536usize);
 			// apply good session reward
 			for v in <session::Module<T>>::validators().iter() {
@@ -752,8 +752,8 @@ impl<T: Trait> Executable for Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionChange<T::Value> for Module<T> {
-	fn on_session_change(normal_rotation: bool, elapsed: T::Value) {
+impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
+	fn on_session_change(normal_rotation: bool, elapsed: T::Moment) {
 		Self::new_session(normal_rotation, elapsed);
 	}
 }

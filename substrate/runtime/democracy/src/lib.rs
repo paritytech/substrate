@@ -399,7 +399,7 @@ mod tests {
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
-		type Value = u64;
+		type Moment = u64;
 	}
 	impl Trait for Test {
 		type Proposal = Proposal;

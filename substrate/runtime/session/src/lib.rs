@@ -62,7 +62,7 @@ impl<T> OnSessionChange<T> for () {
 
 pub trait Trait: timestamp::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
-	type OnSessionChange: OnSessionChange<Self::Value>;
+	type OnSessionChange: OnSessionChange<Self::Moment>;
 }
 
 decl_module! {
@@ -89,9 +89,9 @@ decl_storage! {
 	// Current index of the session.
 	pub CurrentIndex get(current_index): b"ses:ind" => required T::BlockNumber;
 	// Timestamp when current session started.
-	pub CurrentStart get(current_start): b"ses:current_start" => required T::Value;
+	pub CurrentStart get(current_start): b"ses:current_start" => required T::Moment;
 	// Percent by which the session must necessarily finish late before we early-exit the session.
-	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Value;
+	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Moment;
 
 	// Block at which the session length last changed.
 	LastLengthChange: b"ses:llc" => T::BlockNumber;
@@ -184,9 +184,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
-	pub fn ideal_session_duration() -> T::Value {
+	pub fn ideal_session_duration() -> T::Moment {
 		let block_period = <timestamp::Module<T>>::block_period();
-		let session_length = <T::Value as As<T::BlockNumber>>::sa(Self::length());
+		let session_length = <T::Moment as As<T::BlockNumber>>::sa(Self::length());
 		session_length * block_period
 	}
 
@@ -208,10 +208,10 @@ impl<T: Trait> Module<T> {
 		if blocks_remaining.is_zero() {
 			false
 		} else {
-			let blocks_remaining = <T::Value as As<T::BlockNumber>>::sa(blocks_remaining);
+			let blocks_remaining = <T::Moment as As<T::BlockNumber>>::sa(blocks_remaining);
 			now + blocks_remaining * block_period >
 				Self::current_start() + Self::ideal_session_duration() *
-					(T::Value::sa(100) + Self::broken_percent_late()) / T::Value::sa(100)
+					(T::Moment::sa(100) + Self::broken_percent_late()) / T::Moment::sa(100)
 		}
 	}
 }
@@ -226,7 +226,7 @@ impl<T: Trait> Executable for Module<T> {
 pub struct GenesisConfig<T: Trait> {
 	pub session_length: T::BlockNumber,
 	pub validators: Vec<T::AccountId>,
-	pub broken_percent_late: T::Value,
+	pub broken_percent_late: T::Moment,
 }
 
 #[cfg(any(feature = "std", test))]
@@ -236,7 +236,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 		GenesisConfig {
 			session_length: T::BlockNumber::sa(1000),
 			validators: vec![],
-			broken_percent_late: T::Value::sa(30),
+			broken_percent_late: T::Moment::sa(30),
 		}
 	}
 }
@@ -251,7 +251,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 		map![
 			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
 			twox_128(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
-			twox_128(<CurrentStart<T>>::key()).to_vec() => T::Value::zero().encode(),
+			twox_128(<CurrentStart<T>>::key()).to_vec() => T::Moment::zero().encode(),
 			twox_128(<Validators<T>>::key()).to_vec() => self.validators.encode(),
 			twox_128(<BrokenPercentLate<T>>::key()).to_vec() => self.broken_percent_late.encode()
 		]
@@ -287,7 +287,7 @@ mod tests {
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
-		type Value = u64;
+		type Moment = u64;
 	}
 	impl Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
