@@ -273,10 +273,10 @@ impl<T: Trait> Module<T> {
 	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
 		let dest = Self::lookup(dest)?;
+
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
-			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
-		}
+		let commit = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)?;
+		<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		Ok(())
 	}
 
@@ -643,15 +643,6 @@ impl<T: Trait> Default for ChangeEntry<T> {
 	}
 }
 
-impl<T: Trait> ChangeEntry<T> {
-	pub fn contract_created(b: T::Balance, c: Vec<u8>) -> Self {
-		ChangeEntry { balance: Some(b), code: Some(c), storage: Default::default() }
-	}
-	pub fn balance_changed(b: T::Balance) -> Self {
-		ChangeEntry { balance: Some(b), code: None, storage: Default::default() }
-	}
-}
-
 type State<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
 trait AccountDb<T: Trait> {
@@ -749,6 +740,13 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.or_insert(Default::default())
 			.balance = Some(balance);
 	}
+	fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>) {
+		self.local
+			.borrow_mut()
+			.entry(account.clone())
+			.or_insert(Default::default())
+			.code = Some(code);
+	}
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
@@ -800,7 +798,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 impl<T: Trait> Module<T> {
 	fn effect_create<DB: AccountDb<T>>(
 		transactor: &T::AccountId,
-		code: &[u8],
+		constructor_code: &[u8],
 		value: T::Balance,
 		account_db: &DB,
 	) -> result::Result<Option<State<T>>, &'static str> {
@@ -818,19 +816,36 @@ impl<T: Trait> Module<T> {
 			return Err("bondage too high to send value");
 		}
 
-		let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
+		let dest = T::DetermineContractAddress::contract_address_for(constructor_code, transactor);
 
 		// early-out if degenerate.
 		if &dest == transactor {
 			return Ok(None);
 		}
 
-		let mut local = BTreeMap::new();
-		// two inserts are safe
+		let mut overlay = OverlayAccountDb::new(account_db);
+
+		// update balances of the sender and the created account.
 		// note that we now know that `&dest != transactor` due to early-out before.
-		local.insert(dest, ChangeEntry::contract_created(value, code.to_vec()));
-		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - liability));
-		Ok(Some(local))
+		overlay.set_balance(&dest, value);
+		overlay.set_balance(transactor, from_balance - liability);
+
+		// TODO: an additional fee, based upon gaslimit/gasprice.
+		let gas_limit = 100_000;
+
+		let exec_result = {
+			let mut staking_ext = StakingExt {
+				account_db: &mut overlay,
+				account: dest.clone(),
+			};
+			contract::execute(constructor_code, &mut staking_ext, gas_limit)
+				.map_err(|_| "execution of contract constructor failed")?
+		};
+
+		let code = exec_result.return_data();
+		overlay.set_code(&dest, code.to_vec());
+
+		Ok(Some(overlay.into_state()))
 	}
 
 	fn effect_transfer<DB: AccountDb<T>>(
@@ -838,7 +853,7 @@ impl<T: Trait> Module<T> {
 		dest: &T::AccountId,
 		value: T::Balance,
 		account_db: &DB,
-	) -> result::Result<Option<State<T>>, &'static str> {
+	) -> result::Result<State<T>, &'static str> {
 		let would_create = account_db.get_balance(transactor).is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
 		let liability = value + fee;
@@ -874,23 +889,18 @@ impl<T: Trait> Module<T> {
 		}
 
 		let dest_code = overlay.get_code(dest);
-		let should_commit = if dest_code.is_empty() {
-			true
-		} else {
+		if !dest_code.is_empty() {
 			// TODO: logging (logs are just appended into a notable storage-based vector and
 			// cleared every block).
 			let mut staking_ext = StakingExt {
 				account_db: &mut overlay,
 				account: dest.clone(),
 			};
-			contract::execute(&dest_code, &mut staking_ext, gas_limit).is_ok()
-		};
+			let _exec_result = contract::execute(&dest_code, &mut staking_ext, gas_limit)
+				.map_err(|_| "smart-contract execution failed")?;
+		}
 
-		Ok(if should_commit {
-			Some(overlay.into_state())
-		} else {
-			None
-		})
+		Ok(overlay.into_state())
 	}
 }
 
@@ -916,7 +926,7 @@ impl<'a, 'b: 'a, T: Trait> contract::Ext for StakingExt<'a, 'b, T> {
 		}
 	}
 	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
-		if let Ok(Some(commit_state)) =
+		if let Ok(commit_state) =
 			Module::<T>::effect_transfer(&self.account, to, value, self.account_db)
 		{
 			self.account_db.merge(commit_state);
