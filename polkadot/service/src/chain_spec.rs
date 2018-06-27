@@ -27,7 +27,7 @@ use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyC
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 enum Config {
-	Local(GenesisConfig),
+	Runtime(GenesisConfig),
 	Raw(HashMap<StorageKey, StorageData>),
 }
 
@@ -44,7 +44,7 @@ pub struct ChainSpec {
 impl BuildStorage for Config {
 	fn build_storage(self) -> StorageMap {
 		match self {
-			Config::Local(gc) => gc.build_storage(),
+			Config::Runtime(gc) => gc.build_storage(),
 			Config::Raw(map) => map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 		}
 	}
@@ -78,7 +78,7 @@ impl ChainSpec {
 	pub fn to_json_raw(self) -> String {
 		match self.genesis {
 			Config::Raw(_) => self.to_json(),
-			Config::Local(gc) => {
+			Config::Runtime(gc) => {
 				let storage = gc.build_storage().into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
@@ -108,7 +108,7 @@ impl ChainSpec {
 		let endowed_accounts = vec![
 			hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),
 		];
-		let genesis = Config::Local(GenesisConfig {
+		let genesis = Config::Runtime(GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),	// TODO change
 				authorities: initial_authorities.clone(),
@@ -173,7 +173,7 @@ impl ChainSpec {
 			ed25519::Pair::from_seed(b"Eve                             ").public().0.into(),
 			ed25519::Pair::from_seed(b"Ferdie                          ").public().0.into(),
 		];
-		let genesis = Config::Local(GenesisConfig {
+		let genesis = Config::Runtime(GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm").to_vec(),
 				authorities: initial_authorities.clone(),
