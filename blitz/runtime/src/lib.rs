@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Substrate Demo runtime. This can be compiled with ``#[no_std]`, ready for Wasm.
+//! The Blitz runtime. This can be compiled with ``#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -22,7 +22,7 @@
 extern crate substrate_runtime_io as runtime_io;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate substrate_runtime_support;
 
 #[macro_use]
 extern crate substrate_runtime_primitives as runtime_primitives;
@@ -46,13 +46,16 @@ extern crate substrate_runtime_timestamp as timestamp;
 extern crate blitz_primitives;
 
 use rstd::prelude::*;
-use blitz_primitives::{AccountId, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
+use blitz_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
 
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::BuildExternalities;
+pub use runtime_primitives::BuildStorage;
 
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
 
@@ -108,6 +111,7 @@ pub type Session = session::Module<Concrete>;
 impl staking::Trait for Concrete {
 	type Balance = Balance;
 	type DetermineContractAddress = BlakeTwo256;
+	type AccountIndex = AccountIndex;
 }
 
 /// Staking module for this concrete runtime.
@@ -128,7 +132,6 @@ pub type Council = council::Module<Concrete>;
 pub type CouncilVoting = council::voting::Module<Concrete>;
 
 impl_outer_dispatch! {
-	/// Call type for Blitz transactions.
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
@@ -141,7 +144,6 @@ impl_outer_dispatch! {
 		CouncilVoting = 7,
 	}
 
-	/// Internal calls.
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum PrivCall {
@@ -154,16 +156,20 @@ impl_outer_dispatch! {
 	}
 }
 
+/// The address format for describing accounts.
+pub type Address = staking::Address<Concrete>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<AccountId, Index, Call, Signature>;
-/// Extrinsic type as expected by this runtime.
-pub type Extrinsic = generic::Extrinsic<AccountId, Index, Call>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
+/// Extrinsic type as expected by this runtime. This is not the type that is signed.
+pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
+/// Extrinsic type that is signed.
+pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Concrete, Block, Staking,
+pub type Executive = executive::Executive<Concrete, Block, Staking, Staking,
 	(((((), Council), Democracy), Staking), Session)>;
 
 impl_outer_config! {
