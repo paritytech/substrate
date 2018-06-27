@@ -153,7 +153,7 @@ impl<Components> Service<Components>
 				})
 				.select(exit.clone())
 				.then(|_| Ok(()));
-			tokio::spawn(events);
+			task_executor.spawn(events);
 		}
 
 		{
@@ -168,7 +168,7 @@ impl<Components> Service<Components>
 				.select(exit.clone())
 				.then(|_| Ok(()));
 
-			tokio::spawn(events);
+			task_executor.spawn(events);
 		}
 
 		// Spin consensus service if configured
