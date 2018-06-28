@@ -22,7 +22,7 @@ use serde_json;
 use substrate_primitives::{AuthorityId, storage::{StorageKey, StorageData}};
 use runtime_primitives::{MakeStorage, BuildStorage, StorageMap};
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig};
+	SessionConfig, StakingConfig, TimestampConfig};
 use chain_spec::ChainSpec;
 
 enum Config {
@@ -98,7 +98,8 @@ impl PresetConfig {
 			system: None,
 			session: Some(SessionConfig {
 				validators: initial_authorities.iter().cloned().map(Into::into).collect(),
-				session_length: 720,	// that's 1 hour per session.
+				session_length: 60,	// that's 5 minutes per session.
+				broken_percent_late: 50,
 			}),
 			staking: Some(StakingConfig {
 				current_era: 0,
@@ -110,32 +111,37 @@ impl PresetConfig {
 				creation_fee: 0,
 				contract_fee: 0,
 				reclaim_rebate: 0,
+				early_era_slash: 10000,
+				session_reward: 100,
 				balances: endowed_accounts.iter().map(|&k|(k, 1u128 << 60)).collect(),
 				validator_count: 12,
-				sessions_per_era: 24,	// 24 hours per era.
-				bonding_duration: 90,	// 90 days per bond.
+				sessions_per_era: 12,	// 1 hour per era
+				bonding_duration: 24,	// 1 day per bond.
 			}),
 			democracy: Some(DemocracyConfig {
-				launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
-				voting_period: 120 * 24 * 28,	// 4 weeks to discuss & vote on an active referendum
-				minimum_deposit: 1000,	// 1000 as the minimum deposit for a referendum
+				launch_period: 12 * 60 * 24,	// 1 day per public referendum
+				voting_period: 12 * 60 * 24 * 3,	// 3 days to discuss & vote on an active referendum
+				minimum_deposit: 5000,	// 12000 as the minimum deposit for a referendum
 			}),
 			council: Some(CouncilConfig {
 				active_council: vec![],
-				candidacy_bond: 1000,	// 1000 to become a council candidate
-				voter_bond: 100,		// 100 down to vote for a candidate
+				candidacy_bond: 5000,	// 5000 to become a council candidate
+				voter_bond: 1000,		// 1000 down to vote for a candidate
 				present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
-				carry_count: 24,		// carry over the 24 runners-up to the next council election
-				presentation_duration: 120 * 24,	// one day for presenting winners.
-				approval_voting_period: 7 * 120 * 24,	// one week period between possible council elections.
-				term_duration: 180 * 120 * 24,	// 180 day term duration for the council.
+				carry_count: 6,		// carry over the 6 runners-up to the next council election
+				presentation_duration: 12 * 60 * 24,	// one day for presenting winners.
+				approval_voting_period: 12 * 60 * 24 * 2,	// two days period between possible council elections.
+				term_duration: 12 * 60 * 24 * 24,	// 24 day term duration for the council.
 				desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
 				inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
 
-				cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
-				voting_period: 7 * 120 * 24, // 7 day voting period for council members.
+				cooloff_period: 12 * 60 * 24 * 4, // 4 day cooling off period if council member vetoes a proposal.
+				voting_period: 12 * 60 * 24, // 1 day voting period for council members.
 			}),
 			parachains: Some(Default::default()),
+			timestamp: Some(TimestampConfig {
+				period: 5,					// 5 second block time.
+			}),
 		});
 		let boot_nodes = vec![
 			"enode://a93a29fa68d965452bf0ff8c1910f5992fe2273a72a1ee8d3a3482f68512a61974211ba32bb33f051ceb1530b8ba3527fc36224ba6b9910329025e6d9153cf50@104.211.54.233:30333".into(),
@@ -163,6 +169,7 @@ impl PresetConfig {
 			session: Some(SessionConfig {
 				validators: initial_authorities.iter().cloned().map(Into::into).collect(),
 				session_length: 10,
+				broken_percent_late: 30,
 			}),
 			staking: Some(StakingConfig {
 				current_era: 0,
@@ -178,6 +185,8 @@ impl PresetConfig {
 				validator_count: 2,
 				sessions_per_era: 5,
 				bonding_duration: 2,
+				early_era_slash: 0,
+				session_reward: 0,
 			}),
 			democracy: Some(DemocracyConfig {
 				launch_period: 9,
@@ -200,6 +209,9 @@ impl PresetConfig {
 				voting_period: 20,
 			}),
 			parachains: Some(Default::default()),
+			timestamp: Some(TimestampConfig {
+				period: 5,					// 5 second block time.
+			}),
 		});
 		let boot_nodes = Vec::new();
 		PresetConfig { genesis_config, boot_nodes }
