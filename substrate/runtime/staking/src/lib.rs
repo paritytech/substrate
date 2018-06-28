@@ -579,10 +579,10 @@ impl<T: Trait> Module<T> {
 					let noms = Self::current_nominators_for(v);
 					let total = noms.iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x);
 					for n in noms.iter() {
-						//let r = Self::voting_balance(n) * reward / total;	// correct formula, but might overflow with large reard * total.
+						//let r = Self::voting_balance(n) * reward / total;	// correct formula, but might overflow with large slash * total.
 						let quant = T::Balance::sa(1usize << 31);
 						let s = (Self::voting_balance(n) * quant / total) * rem / quant; // avoid overflow by using quant as a denominator.
-						let _ = Self::slash(n, s);	// will never fail as nominator accounts must be created, but even if it did, it's just a missed reward.
+						let _ = Self::slash(n, s);	// best effort - not much that can be done on fail.
 					}
 				}
 			}
