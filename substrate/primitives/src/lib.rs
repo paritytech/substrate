@@ -90,7 +90,7 @@ pub type AuthorityId = [u8; 32];
 /// A 512-bit value interpreted as a signature.
 pub type Signature = hash::H512;
 
-/// Contract storage key.
+/// Hex-serialised shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
 pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);

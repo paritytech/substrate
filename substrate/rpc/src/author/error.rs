@@ -24,7 +24,7 @@ error_chain! {
 		Pool(txpool::Error, txpool::ErrorKind) #[doc = "Pool error"];
 	}
 	errors {
-		/// Not implemented yet
+		/// Incorrect transaction format.
 		BadFormat {
 			description("bad format"),
 			display("Invalid transaction format"),
