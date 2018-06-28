@@ -83,6 +83,7 @@ use polkadot_primitives::Block;
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
+use service::PruningMode;
 
 const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
 
@@ -189,6 +190,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.into();
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.pruning = match matches.value_of("pruning") {
+		Some("archive") => PruningMode::ArchiveAll,
+		None => PruningMode::keep_blocks(256),
+		Some(s) => PruningMode::keep_blocks(s.parse()
+			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
+	};
 
 	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
 		.map(PresetConfig::deconstruct)

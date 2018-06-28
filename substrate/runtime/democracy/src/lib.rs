@@ -117,7 +117,7 @@ impl<T: Trait> Module<T> {
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
 	pub fn locked_for(proposal: PropIndex) -> Option<T::Balance> {
-		Self::deposit_of(proposal).map(|(d, l)| d * T::Balance::sa(l.len()))
+		Self::deposit_of(proposal).map(|(d, l)| d * T::Balance::sa(l.len() as u64))
 	}
 
 	/// Return true if `ref_index` is an on-going referendum.

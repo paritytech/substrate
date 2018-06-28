@@ -18,12 +18,18 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use ethereum_types::H256 as TrieH256;
-use hashdb::{DBValue, HashDB};
-use kvdb::KeyValueDB;
+use hashdb::HashDB;
 use memorydb::MemoryDB;
 use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut};
 use {Backend};
+pub use ethereum_types::H256 as TrieH256;
+pub use hashdb::DBValue;
+
+/// Backend trie storage trait.
+pub trait Storage: Send + Sync {
+	/// Get a trie node.
+	fn get(&self, key: &TrieH256) -> Result<Option<DBValue>, String>;
+}
 
 /// Try convert into trie-based backend.
 pub trait TryIntoTrieBackend {
@@ -40,20 +46,20 @@ pub struct TrieBackend {
 
 impl TrieBackend {
 	/// Create new trie-based backend.
-	pub fn with_kvdb(db: Arc<KeyValueDB>, storage_column: Option<u32>, root: TrieH256) -> Self {
+	pub fn with_storage(db: Arc<Storage>, root: TrieH256) -> Self {
 		TrieBackend {
-			storage: TrieBackendStorage::KeyValueDb(db, storage_column),
+			storage: TrieBackendStorage::Storage(db),
 			root,
 		}
 	}
 
 	/// Create new trie-based backend for genesis block.
-	pub fn with_kvdb_for_genesis(db: Arc<KeyValueDB>, storage_column: Option<u32>) -> Self {
+	pub fn with_storage_for_genesis(db: Arc<Storage>) -> Self {
 		let mut root = TrieH256::default();
 		let mut mdb = MemoryDB::default();
 		TrieDBMut::new(&mut mdb, &mut root);
 
-		Self::with_kvdb(db, storage_column, root)
+		Self::with_storage(db, root)
 	}
 
 	/// Create new trie-based backend backed by MemoryDb storage.
@@ -182,7 +188,7 @@ impl<'a> HashDB for Ephemeral<'a> {
 					Some(val)
 				}
 			}
-			None => match self.storage.get(&key.0[..]) {
+			None => match self.storage.get(&key) {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -212,19 +218,19 @@ impl<'a> HashDB for Ephemeral<'a> {
 #[derive(Clone)]
 pub enum TrieBackendStorage {
 	/// Key value db + storage column.
-	KeyValueDb(Arc<KeyValueDB>, Option<u32>),
+	Storage(Arc<Storage>),
 	/// Hash db.
 	MemoryDb(MemoryDB),
 }
 
 impl TrieBackendStorage {
-	pub fn get(&self, key: &[u8]) -> Result<Option<DBValue>, String> {
+	pub fn get(&self, key: &TrieH256) -> Result<Option<DBValue>, String> {
 		match *self {
-			TrieBackendStorage::KeyValueDb(ref db, storage_column) =>
-				db.get(storage_column, key)
+			TrieBackendStorage::Storage(ref db) =>
+				db.get(key)
 					.map_err(|e| format!("Trie lookup error: {}", e)),
 			TrieBackendStorage::MemoryDb(ref db) =>
-				Ok(db.get(&TrieH256::from_slice(key))),
+				Ok(db.get(key)),
 		}
 	}
 }
