@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Blitz Demo CLI library.
+//! Blitz demo CLI library.
 
 #![warn(missing_docs)]
 
@@ -22,7 +22,7 @@ extern crate ctrlc;
 extern crate ed25519;
 extern crate env_logger;
 extern crate futures;
-extern crate tokio_core;
+extern crate tokio;
 extern crate triehash;
 extern crate substrate_client as client;
 extern crate substrate_codec as codec;
@@ -31,6 +31,7 @@ extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate blitz_executor;
 extern crate blitz_primitives;
 extern crate blitz_runtime;
@@ -47,17 +48,34 @@ extern crate log;
 pub mod error;
 
 use std::sync::Arc;
-use client::genesis;
-use codec::Slicable;
+use blitz_primitives::Hash;
 use blitz_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, BuildExternalities};
+	SessionConfig, StakingConfig, BuildStorage};
+use blitz_runtime::{Block, UncheckedExtrinsic};
 use futures::{Future, Sink, Stream};
-
+use tokio::runtime::Runtime;
 
 struct DummyPool;
-impl substrate_rpc::author::AuthorApi for DummyPool {
-	fn submit_extrinsic(&self, _: primitives::block::Extrinsic) -> substrate_rpc::author::error::Result<()> {
-		Err(substrate_rpc::author::error::ErrorKind::Unimplemented.into())
+impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, Hash> for DummyPool {
+	type Error = extrinsic_pool::txpool::Error;
+
+	fn submit(&self, _: Vec<UncheckedExtrinsic>)
+		-> Result<Vec<Hash>, Self::Error>
+	{
+		Err("unimplemented".into())
+	}
+}
+
+struct DummySystem;
+impl substrate_rpc::system::SystemApi for DummySystem {
+	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok("blitz-demo".into())
+	}
+	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(crate_version!().into())
+	}
+	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok("default".into())
 	}
 }
 
@@ -82,25 +100,30 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	// Create client
 	let executor = blitz_executor::Executor::new();
-	let mut storage = Default::default();
-	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
 
-	let genesis_config = GenesisConfig {
+	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
+	let genesis_storage = GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: vec![],	// TODO
 			authorities: vec![god_key.clone()],
 		}),
 		system: None,
-//		block_time: 5,			// 5 second block time.
+		// block_time: 5,			// 5 second block time.
 		session: Some(SessionConfig {
-			validators: vec![god_key.clone()],
+			validators: vec![god_key.clone().into()],
 			session_length: 720,	// that's 1 hour per session.
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: vec![],
-			transaction_fee: 100,
-			balances: vec![(god_key.clone(), 1u64 << 63)].into_iter().collect(),
+			transaction_base_fee: 100,
+			transaction_byte_fee: 1,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
+			existential_deposit: 500,
+			balances: vec![(god_key.clone().into(), 1u64 << 63)].into_iter().collect(),
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
 			bonding_duration: 90,	// 90 days per bond.
@@ -125,19 +148,14 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
 			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
 		}),
-	};
-	let prepare_genesis = || {
-		storage = genesis_config.build_externalities();
-		let block = genesis::construct_genesis_block(&storage);
-		(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
-	};
-	let client = Arc::new(client::new_in_mem(executor, prepare_genesis)?);
-	let mut core = ::tokio_core::reactor::Core::new().expect("Unable to spawn event loop.");
+	}.build_storage();
 
+	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_storage)?);
+	let mut runtime = Runtime::new()?;
 	let _rpc_servers = {
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
-			rpc::rpc_handler(client.clone(), chain, DummyPool)
+			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
+			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, Arc::new(DummyPool), DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();
@@ -154,7 +172,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		ctrlc::CtrlC::set_handler(move || {
 			exit_send.clone().send(()).wait().expect("Error sending exit notification");
 		});
-		core.run(exit.into_future()).expect("Error running informant event loop");
+
+		runtime.block_on(exit.into_future()).expect("Error running informant event loop");
 		return Ok(())
 	}
 
