@@ -33,7 +33,7 @@ use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))]
 use {runtime_io, runtime_primitives};
 
-pub trait Trait: system::Trait<Hash = primitives::Hash> + session::Trait {
+pub trait Trait: session::Trait<Hash = primitives::Hash> {
 	/// The position of the set_heads call in the block.
 	const SET_POSITION: u32;
 
@@ -232,7 +232,7 @@ mod tests {
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
-	use consensus;
+	use {consensus, timestamp};
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
@@ -254,6 +254,11 @@ mod tests {
 	}
 	impl session::Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
+		type OnSessionChange = ();
+	}
+	impl timestamp::Trait for Test {
+		const TIMESTAMP_SET_POSITION: u32 = 0;
+		type Moment = u64;
 	}
 	impl Trait for Test {
 		const SET_POSITION: u32 = 0;
@@ -272,6 +277,7 @@ mod tests {
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1000,
 			validators: vec![1, 2, 3, 4, 5, 6, 7, 8],
+			broken_percent_late: 100,
 		}.build_storage());
 		t.extend(GenesisConfig::<Test>{
 			parachains: parachains,

@@ -23,7 +23,8 @@ use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
 use substrate_primitives::H256;
 use runtime_io;
-use {DummyContractAddressFor, GenesisConfig, Module, Trait, consensus, session, system};
+use {GenesisConfig, Module, Trait, consensus, session, system, timestamp};
+use super::DummyContractAddressFor;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -46,6 +47,11 @@ impl system::Trait for Test {
 }
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = Identity;
+	type OnSessionChange = Staking;
+}
+impl timestamp::Trait for Test {
+	const TIMESTAMP_SET_POSITION: u32 = 0;
+	type Moment = u64;
 }
 impl Trait for Test {
 	type Balance = u64;
@@ -53,7 +59,7 @@ impl Trait for Test {
 	type AccountIndex = u64;
 }
 
-pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool) -> runtime_io::TestExternalities {
+pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool, reward: u64) -> runtime_io::TestExternalities {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage();
 	let balance_factor = if ext_deposit > 0 {
 		256
@@ -67,11 +73,20 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
 		validators: vec![10, 20],
+		broken_percent_late: 30,
 	}.build_storage());
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,
 		current_era,
-		balances: if monied { vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)] } else { vec![] },
+		balances: if monied {
+			if reward > 0 {
+				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor), (10, balance_factor), (20, balance_factor)]
+			} else {
+				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
+			}
+		} else {
+			vec![(10, balance_factor), (20, balance_factor)]
+		},
 		intentions: vec![],
 		validator_count: 2,
 		bonding_duration: 3,
@@ -82,10 +97,16 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		creation_fee: 0,
 		contract_fee: 0,
 		reclaim_rebate: 0,
+		session_reward: reward,
+		early_era_slash: if monied { 10 } else { 0 },
+	}.build_storage());
+	t.extend(timestamp::GenesisConfig::<Test>{
+		period: 5
 	}.build_storage());
 	t
 }
 
 pub type System = system::Module<Test>;
 pub type Session = session::Module<Test>;
+pub type Timestamp = timestamp::Module<Test>;
 pub type Staking = Module<Test>;

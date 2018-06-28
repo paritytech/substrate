@@ -38,6 +38,8 @@ extern crate substrate_runtime_democracy as democracy;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
+#[cfg(test)]
+extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, As, AuxLookup};
@@ -646,6 +648,7 @@ mod tests {
 	}
 	impl session::Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
+		type OnSessionChange = staking::Module<Test>;
 	}
 	impl staking::Trait for Test {
 		type Balance = u64;
@@ -654,6 +657,10 @@ mod tests {
 	}
 	impl democracy::Trait for Test {
 		type Proposal = Proposal;
+	}
+	impl timestamp::Trait for Test {
+		const TIMESTAMP_SET_POSITION: u32 = 0;
+		type Moment = u64;
 	}
 	impl Trait for Test {}
 
@@ -666,6 +673,7 @@ mod tests {
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
+			broken_percent_late: 100,
 		}.build_storage());
 		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,
@@ -681,6 +689,8 @@ mod tests {
 			creation_fee: 0,
 			contract_fee: 0,
 			reclaim_rebate: 0,
+			early_era_slash: 0,
+			session_reward: 0,
 		}.build_storage());
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,
@@ -705,6 +715,7 @@ mod tests {
 			cooloff_period: 2,
 			voting_period: 1,
 		}.build_storage());
+		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
 		t
 	}
 
