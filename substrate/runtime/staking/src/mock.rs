@@ -98,7 +98,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		contract_fee: 0,
 		reclaim_rebate: 0,
 		session_reward: reward,
-		early_era_slash: if monied { 10 } else { 0 },
+		early_era_slash: if monied { 20 } else { 0 },
 	}.build_storage());
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5
