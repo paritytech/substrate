@@ -79,11 +79,18 @@ fn slashing_should_work() {
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::voting_balance(&10), 11);
 
-		System::set_block_number(4);
+		System::set_block_number(6);
+		Timestamp::set_timestamp(30);	// on time.
+		Session::check_rotate_session();
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Staking::voting_balance(&10), 21);
+
+		System::set_block_number(7);
 		Timestamp::set_timestamp(100);	// way too late - early exit.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Session::current_index(), 3);
 		assert_eq!(Staking::voting_balance(&10), 1);
 	});
 }
@@ -192,7 +199,7 @@ fn staking_should_work() {
 		// Block 3: Unstake highest, introduce another staker. No change yet.
 		System::set_block_number(3);
 		assert_ok!(Staking::stake(&3));
-		assert_ok!(Staking::unstake(&4));
+		assert_ok!(Staking::unstake(&4, Staking::intentions().iter().position(|&x| x == 4).unwrap() as u32));
 		assert_eq!(Staking::current_era(), 1);
 		Session::check_rotate_session();
 
@@ -214,7 +221,7 @@ fn staking_should_work() {
 
 		// Block 7: Unstake three. No change yet.
 		System::set_block_number(7);
-		assert_ok!(Staking::unstake(&3));
+		assert_ok!(Staking::unstake(&3, Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
 		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![1, 3]);
 
@@ -222,6 +229,110 @@ fn staking_should_work() {
 		System::set_block_number(8);
 		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![1, 2]);
+	});
+}
+
+#[test]
+fn nominating_and_rewards_should_work() {
+	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
+		assert_eq!(Staking::era_length(), 1);
+		assert_eq!(Staking::validator_count(), 2);
+		assert_eq!(Staking::bonding_duration(), 3);
+		assert_eq!(Session::validators(), vec![10, 20]);
+
+		System::set_block_number(1);
+		assert_ok!(Staking::stake(&1));
+		assert_ok!(Staking::stake(&2));
+		assert_ok!(Staking::stake(&3));
+		assert_ok!(Staking::nominate(&4, 1.into()));
+		Session::check_rotate_session();
+		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
+		assert_eq!(Staking::voting_balance(&1), 10);
+		assert_eq!(Staking::voting_balance(&2), 20);
+		assert_eq!(Staking::voting_balance(&3), 30);
+		assert_eq!(Staking::voting_balance(&4), 40);
+
+		System::set_block_number(2);
+		assert_ok!(Staking::unnominate(&4, 0));
+		Session::check_rotate_session();
+		assert_eq!(Staking::current_era(), 2);
+		assert_eq!(Session::validators(), vec![3, 2]);
+		assert_eq!(Staking::voting_balance(&1), 12);
+		assert_eq!(Staking::voting_balance(&2), 20);
+		assert_eq!(Staking::voting_balance(&3), 40);
+		assert_eq!(Staking::voting_balance(&4), 48);
+
+		System::set_block_number(3);
+		assert_ok!(Staking::stake(&4));
+		assert_ok!(Staking::unstake(&3, Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
+		assert_ok!(Staking::nominate(&3, 1.into()));
+		Session::check_rotate_session();
+		assert_eq!(Session::validators(), vec![1, 4]);
+		assert_eq!(Staking::voting_balance(&1), 12);
+		assert_eq!(Staking::voting_balance(&2), 30);
+		assert_eq!(Staking::voting_balance(&3), 50);
+		assert_eq!(Staking::voting_balance(&4), 48);
+
+		System::set_block_number(4);
+		Session::check_rotate_session();
+		assert_eq!(Staking::voting_balance(&1), 13);
+		assert_eq!(Staking::voting_balance(&2), 30);
+		assert_eq!(Staking::voting_balance(&3), 58);
+		assert_eq!(Staking::voting_balance(&4), 58);
+	});
+}
+
+#[test]
+fn nominating_slashes_should_work() {
+	with_externalities(&mut new_test_ext(0, 2, 2, 0, true, 10), || {
+		assert_eq!(Staking::era_length(), 4);
+		assert_eq!(Staking::validator_count(), 2);
+		assert_eq!(Staking::bonding_duration(), 3);
+		assert_eq!(Session::validators(), vec![10, 20]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session();
+
+		Timestamp::set_timestamp(15);
+		System::set_block_number(4);
+		assert_ok!(Staking::stake(&1));
+		assert_ok!(Staking::stake(&3));
+		assert_ok!(Staking::nominate(&2, 3.into()));
+		assert_ok!(Staking::nominate(&4, 1.into()));
+		Session::check_rotate_session();
+
+		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 4, 3 + 2
+		assert_eq!(Staking::voting_balance(&1), 10);
+		assert_eq!(Staking::voting_balance(&2), 20);
+		assert_eq!(Staking::voting_balance(&3), 30);
+		assert_eq!(Staking::voting_balance(&4), 40);
+
+		System::set_block_number(5);
+		Timestamp::set_timestamp(100);	// late
+		assert_eq!(Session::blocks_remaining(), 1);
+		assert!(Session::broken_validation());
+		Session::check_rotate_session();
+
+		assert_eq!(Staking::current_era(), 2);
+		assert_eq!(Staking::voting_balance(&1), 0);
+		assert_eq!(Staking::voting_balance(&2), 20);
+		assert_eq!(Staking::voting_balance(&3), 10);
+		assert_eq!(Staking::voting_balance(&4), 30);
+	});
+}
+
+#[test]
+fn double_staking_should_fail() {
+	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
+		System::set_block_number(1);
+		assert_ok!(Staking::stake(&1));
+		assert_noop!(Staking::stake(&1), "Cannot stake if already staked.");
+		assert_noop!(Staking::nominate(&1, 1.into()), "Cannot nominate if already staked.");
+		assert_ok!(Staking::nominate(&2, 1.into()));
+		assert_noop!(Staking::stake(&2), "Cannot stake if already nominating.");
+		assert_noop!(Staking::nominate(&2, 1.into()), "Cannot nominate if already nominating.");
 	});
 }
 
