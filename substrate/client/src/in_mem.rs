@@ -113,7 +113,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				genesis_hash: Default::default(),
 			}));
 		Blockchain {
-			storage: storage.clone(),
+			storage: storage,
 		}
 	}
 

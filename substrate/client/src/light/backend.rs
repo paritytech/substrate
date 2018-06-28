@@ -35,7 +35,7 @@ pub struct Backend<S, F> {
 	blockchain: Arc<Blockchain<S, F>>,
 }
 
-/// Ligh block (header and justification) import operation.
+/// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, F> {
 	is_new_best: bool,
 	header: Option<Block::Header>,
