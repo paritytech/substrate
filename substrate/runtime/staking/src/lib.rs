@@ -315,12 +315,14 @@ impl<T: Trait> Module<T> {
 	///
 	/// Effects will be felt at the beginning of the next era.
 	fn stake(aux: &T::PublicAux) -> Result {
+		let aux = aux.ref_into();
+		ensure!(Self::nominating(aux).is_none(), "Cannot stake if already nominating.");
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
-		ensure!(intentions.iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot stake if already staked.");
-		intentions.push(aux.ref_into().clone());
+		ensure!(intentions.iter().find(|&t| t == aux).is_none(), "Cannot stake if already staked.");
+		intentions.push(aux.clone());
 		<Intentions<T>>::put(intentions);
-		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
+		<Bondage<T>>::insert(aux, T::BlockNumber::max_value());
 		Ok(())
 	}
 
@@ -345,10 +347,8 @@ impl<T: Trait> Module<T> {
 		let target = Self::lookup(target)?;
 		let aux = aux.ref_into();
 
-		if Self::nominating(aux).is_some() {
-			// already nominating someone - denominate first.
-			return Err("Cannot nominate when already nominating");
-		}
+		ensure!(Self::nominating(aux).is_none(), "Cannot nominate if already nominating.");
+		ensure!(Self::intentions().iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot nominate if already staked.");
 
 		// update nominators_for
 		let mut t = Self::nominators_for(&target);

@@ -324,6 +324,19 @@ fn nominating_slashes_should_work() {
 }
 
 #[test]
+fn double_staking_should_fail() {
+	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
+		System::set_block_number(1);
+		assert_ok!(Staking::stake(&1));
+		assert_noop!(Staking::stake(&1), "Cannot stake if already staked.");
+		assert_noop!(Staking::nominate(&1, 1.into()), "Cannot nominate if already staked.");
+		assert_ok!(Staking::nominate(&2, 1.into()));
+		assert_noop!(Staking::stake(&2), "Cannot stake if already nominating.");
+		assert_noop!(Staking::nominate(&2, 1.into()), "Cannot nominate if already nominating.");
+	});
+}
+
+#[test]
 fn staking_eras_work() {
 	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
 		assert_eq!(Staking::era_length(), 2);
