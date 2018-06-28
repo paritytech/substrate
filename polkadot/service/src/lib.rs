@@ -68,7 +68,7 @@ use exit_future::Signal;
 
 pub use self::error::{ErrorKind, Error};
 pub use self::components::{Components, FullComponents, LightComponents};
-pub use config::{Configuration, Role};
+pub use config::{Configuration, Role, PruningMode};
 
 /// Polkadot service.
 pub struct Service<Components: components::Components> {
@@ -118,6 +118,7 @@ impl<Components> Service<Components>
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: None,
 			path: config.database_path.into(),
+			pruning: config.pruning,
 		};
 
 		let (client, on_demand) = components.build_client(db_settings, executor, config.genesis_storage)?;

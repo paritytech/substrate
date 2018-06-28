@@ -361,7 +361,7 @@ impl<T: Trait> Module<T> {
 		let (_, _, expiring) = Self::next_finalise().ok_or("cannot present outside of presentation period")?;
 		let stakes = Self::snapshoted_stakes();
 		let voters = Self::voters();
-		let bad_presentation_punishment = Self::present_slash_per_voter() * T::Balance::sa(voters.len());
+		let bad_presentation_punishment = Self::present_slash_per_voter() * T::Balance::sa(voters.len() as u64);
 		ensure!(<staking::Module<T>>::can_slash(aux.ref_into(), bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
 		let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;

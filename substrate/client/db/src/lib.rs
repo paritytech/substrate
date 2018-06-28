@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Client backend that uses RocksDB database as storage. State is still kept in memory.
+//! Client backend that uses RocksDB database as storage.
 
 extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
@@ -27,6 +27,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_codec as codec;
+extern crate substrate_state_db as state_db;
 
 #[macro_use]
 extern crate log;
@@ -38,17 +39,21 @@ use std::sync::Arc;
 use std::path::PathBuf;
 
 use codec::Slicable;
-use hashdb::DBValue;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
+use primitives::H256;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing, HashingFor, Zero};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
-use state_machine::CodeExecutor;
+use state_machine::{CodeExecutor, TrieH256, DBValue};
+use state_db::StateDb;
+pub use state_db::PruningMode;
+
+const FINALIZATION_WINDOW: u64 = 32;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend;
@@ -59,6 +64,8 @@ pub struct DatabaseSettings {
 	pub cache_size: Option<usize>,
 	/// Path to the database.
 	pub path: PathBuf,
+	/// Pruning mode.
+	pub pruning: PruningMode,
 }
 
 /// Create an instance of db-backed client.
@@ -74,7 +81,7 @@ pub fn new_client<E, S, Block>(
 		E: CodeExecutor,
 		S: BuildStorage,
 {
-	let backend = Arc::new(Backend::new(&settings)?);
+	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	Ok(client::Client::new(backend, executor, genesis_storage)?)
 }
@@ -82,11 +89,12 @@ pub fn new_client<E, S, Block>(
 mod columns {
 	pub const META: Option<u32> = Some(0);
 	pub const STATE: Option<u32> = Some(1);
-	pub const BLOCK_INDEX: Option<u32> = Some(2);
-	pub const HEADER: Option<u32> = Some(3);
-	pub const BODY: Option<u32> = Some(4);
-	pub const JUSTIFICATION: Option<u32> = Some(5);
-	pub const NUM_COLUMNS: u32 = 6;
+	pub const STATE_META: Option<u32> = Some(2);
+	pub const BLOCK_INDEX: Option<u32> = Some(3);
+	pub const HEADER: Option<u32> = Some(4);
+	pub const BODY: Option<u32> = Some(5);
+	pub const JUSTIFICATION: Option<u32> = Some(6);
+	pub const NUM_COLUMNS: u32 = 7;
 }
 
 mod meta {
@@ -128,6 +136,17 @@ fn db_err(err: kvdb::Error) -> client::error::Error {
 		&kvdb::ErrorKind::Io(ref err) => client::error::ErrorKind::Backend(err.description().into()).into(),
 		&kvdb::ErrorKind::Msg(ref m) => client::error::ErrorKind::Backend(m.clone()).into(),
 		_ => client::error::ErrorKind::Backend("Unknown backend error".into()).into(),
+	}
+}
+
+// wrapper that implements trait required for state_db
+struct StateMetaDb<'a>(&'a KeyValueDB);
+
+impl<'a> state_db::MetaDb for StateMetaDb<'a> {
+	type Error = kvdb::Error;
+
+	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.get(columns::STATE_META, key).map(|r| r.map(|v| v.to_vec()))
 	}
 }
 
@@ -299,41 +318,84 @@ impl<Block: BlockT> client::backend::BlockImportOperation<Block> for BlockImport
 	}
 }
 
+struct StorageDb<Block: BlockT> {
+	pub db: Arc<KeyValueDB>,
+	pub state_db: StateDb<Block::Hash, H256>,
+}
+
+impl<Block: BlockT> state_machine::Storage for StorageDb<Block> {
+	fn get(&self, key: &TrieH256) -> Result<Option<DBValue>, String> {
+		self.state_db.get(&key.0.into(), self).map(|r| r.map(|v| DBValue::from_slice(&v)))
+			.map_err(|e| format!("Database backend error: {:?}", e))
+	}
+}
+
+impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
+	type Error = kvdb::Error;
+	type Hash = H256;
+
+	fn get(&self, key: &H256) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.db.get(columns::STATE, &key[..]).map(|r| r.map(|v| v.to_vec()))
+	}
+}
+
+
 /// Disk backend. Keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
 /// Otherwise, trie nodes are kept only from the most recent block.
 pub struct Backend<Block: BlockT> {
-	db: Arc<KeyValueDB>,
+	storage: Arc<StorageDb<Block>>,
 	blockchain: BlockchainDb<Block>,
-	archive: bool,
+	finalization_window: u64,
 }
 
 impl<Block: BlockT> Backend<Block> where <Block::Header as HeaderT>::Number: As<u32> {
 	/// Create a new instance of database backend.
-	pub fn new(config: &DatabaseSettings) -> Result<Self, client::error::Error> {
+	pub fn new(config: DatabaseSettings, finalization_window: u64) -> Result<Self, client::error::Error> {
 		let mut db_config = DatabaseConfig::with_columns(Some(columns::NUM_COLUMNS));
 		db_config.memory_budget = config.cache_size;
 		db_config.wal = true;
 		let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
 		let db = Arc::new(Database::open(&db_config, &path).map_err(db_err)?);
 
-		Backend::from_kvdb(db as Arc<_>, true)
+		Backend::from_kvdb(db as Arc<_>, config.pruning, finalization_window)
 	}
 
 	#[cfg(test)]
 	fn new_test() -> Self {
 		let db = Arc::new(::kvdb_memorydb::create(columns::NUM_COLUMNS));
 
-		Backend::from_kvdb(db as Arc<_>, false).expect("failed to create test-db")
+		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(0), 0).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<KeyValueDB>, archive: bool) -> Result<Self, client::error::Error> {
+	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, finalization_window: u64) -> Result<Self, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
+		let map_e = |e: state_db::Error<kvdb::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
+		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
+		let storage_db = StorageDb {
+			db,
+			state_db,
+		};
 
 		Ok(Backend {
-			db,
+			storage: Arc::new(storage_db),
 			blockchain,
-			archive
+			finalization_window,
 		})
+	}
+}
+
+fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitSet<H256>) {
+	for (key, val) in commit.data.inserted.into_iter() {
+		transaction.put(columns::STATE, &key[..], &val);
+	}
+	for key in commit.data.deleted.into_iter() {
+		transaction.delete(columns::STATE, &key[..]);
+	}
+	for (key, val) in commit.meta.inserted.into_iter() {
+		transaction.put(columns::STATE_META, &key[..], &val);
+	}
+	for key in commit.meta.deleted.into_iter() {
+		transaction.delete(columns::STATE_META, &key[..]);
 	}
 }
 
@@ -355,6 +417,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 	}
 
 	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> Result<(), client::error::Error> {
+		use client::blockchain::Backend;
 		let mut transaction = DBTransaction::new();
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
@@ -371,15 +434,34 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 			if pending_block.is_best {
 				transaction.put(columns::META, meta::BEST_BLOCK, &key);
 			}
+			let mut changeset: state_db::ChangeSet<H256> = state_db::ChangeSet::default();
 			for (key, (val, rc)) in operation.updates.drain() {
 				if rc > 0 {
-					transaction.put(columns::STATE, &key.0[..], &val);
-				} else if rc < 0 && !self.archive {
-					transaction.delete(columns::STATE, &key.0[..]);
+					changeset.inserted.push((key.0.into(), val.to_vec()));
+				} else if rc < 0 {
+					changeset.deleted.push(key.0.into());
 				}
 			}
+			let number_u64 = number.as_().into();
+			let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset);
+			apply_state_commit(&mut transaction, commit);
+
+			//finalize an older block
+			if number_u64 > self.finalization_window {
+				let finalizing_hash = if self.finalization_window == 0 {
+					Some(hash)
+				} else {
+					self.blockchain.hash(As::sa((number_u64 - self.finalization_window) as u32))?
+				};
+				if let Some(finalizing_hash) = finalizing_hash {
+					trace!("Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
+					let commit = self.storage.state_db.finalize_block(&finalizing_hash);
+					apply_state_commit(&mut transaction, commit);
+				}
+			}
+
 			debug!("DB Commit {:?} ({})", hash, number);
-			self.db.write(transaction).map_err(db_err)?;
+			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
 		}
 		Ok(())
@@ -395,13 +477,13 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 		// special case for genesis initialization
 		match block {
 			BlockId::Hash(h) if h == Default::default() =>
-				return Ok(DbState::with_kvdb_for_genesis(self.db.clone(), ::columns::STATE)),
+				return Ok(DbState::with_storage_for_genesis(self.storage.clone())),
 			_ => {}
 		}
 
 		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
 			let root: [u8; 32] = hdr.state_root().clone().into();
-			DbState::with_kvdb(self.db.clone(), ::columns::STATE, root.into())
+			DbState::with_storage(self.storage.clone(), root.into())
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
 	}
 }
@@ -438,7 +520,11 @@ mod tests {
 				let mut op = db.begin_operation(id).unwrap();
 				let header = Header {
 					number: i,
-					parent_hash: Default::default(),
+					parent_hash: if i == 0 {
+						Default::default()
+					} else {
+						db.blockchain.hash(i - 1).unwrap().unwrap()
+					},
 					state_root: Default::default(),
 					digest: Default::default(),
 					extrinsics_root: Default::default(),
@@ -538,10 +624,10 @@ mod tests {
 	#[test]
 	fn delete_only_when_negative_rc() {
 		let key;
-		let db = Backend::<Block>::new_test();
+		let backend = Backend::<Block>::new_test();
 
-		{
-			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
+		let hash = {
+			let mut op = backend.begin_operation(BlockId::Hash(Default::default())).unwrap();
 			let mut header = Header {
 				number: 0,
 				parent_hash: Default::default(),
@@ -557,6 +643,7 @@ mod tests {
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))
 			).0.into();
+			let hash = header.hash();
 
 			op.reset_storage(storage.iter().cloned()).unwrap();
 
@@ -568,16 +655,17 @@ mod tests {
 				true
 			).unwrap();
 
-			db.commit_operation(op).unwrap();
+			backend.commit_operation(op).unwrap();
 
-			assert_eq!(db.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
-		}
+			assert_eq!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
+			hash
+		};
 
-		{
-			let mut op = db.begin_operation(BlockId::Number(0)).unwrap();
+		let hash = {
+			let mut op = backend.begin_operation(BlockId::Number(0)).unwrap();
 			let mut header = Header {
 				number: 1,
-				parent_hash: Default::default(),
+				parent_hash: hash,
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
@@ -590,6 +678,7 @@ mod tests {
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))
 			).0.into();
+			let hash = header.hash();
 
 			op.updates.insert(b"hello");
 			op.updates.remove(&key);
@@ -600,16 +689,17 @@ mod tests {
 				true
 			).unwrap();
 
-			db.commit_operation(op).unwrap();
+			backend.commit_operation(op).unwrap();
 
-			assert_eq!(db.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
-		}
+			assert_eq!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
+			hash
+		};
 
 		{
-			let mut op = db.begin_operation(BlockId::Number(1)).unwrap();
+			let mut op = backend.begin_operation(BlockId::Number(1)).unwrap();
 			let mut header = Header {
-				number: 1,
-				parent_hash: Default::default(),
+				number: 2,
+				parent_hash: hash,
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
@@ -631,9 +721,9 @@ mod tests {
 				true
 			).unwrap();
 
-			db.commit_operation(op).unwrap();
+			backend.commit_operation(op).unwrap();
 
-			assert!(db.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
+			assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
 		}
 	}
 }
