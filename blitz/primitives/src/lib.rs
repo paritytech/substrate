@@ -69,7 +69,8 @@ pub type Index = u64;
 pub type Hash = primitives::H256;
 
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
-pub type Signature = runtime_primitives::Ed25519Signature;
+/// Equipped with logic for possibly "unsigned" messages.
+pub type Signature = runtime_primitives::MaybeUnsigned<runtime_primitives::Ed25519Signature>;
 
 /// Round id of the Blitz protocol
 pub type RoundId = u64;
@@ -98,6 +99,10 @@ pub type UncheckedExtrinsic = Vec<u8>;
 /// Specialized code needs to link to (at least one version of) the runtime directly
 /// in order to handle the extrinsics within.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+
+/// "generic" block ID for the future-proof block type.
+// TODO: parameterize blockid only as necessary.
+pub type BlockId = generic::BlockId<Block>;
 
 /// A log entry in the block.
 #[derive(PartialEq, Eq, Clone, Default)]

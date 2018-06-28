@@ -43,12 +43,11 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
-extern crate blitz_primitives;
+extern crate blitz_primitives as primitives;
 
 use rstd::prelude::*;
-use blitz_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
-use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
+use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
+use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;

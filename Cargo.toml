@@ -21,7 +21,6 @@ members = [
 	"polkadot/network",
 	"polkadot/primitives",
 	"polkadot/runtime",
-	"polkadot/service",
 	"polkadot/statement-table",
 	"polkadot/transaction-pool",
 	"polkadot/service",
