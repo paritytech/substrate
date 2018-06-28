@@ -23,6 +23,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 
+/// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
 	fn import(&self, is_best: bool, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error>;

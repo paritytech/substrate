@@ -34,13 +34,13 @@ extern crate parking_lot;
 extern crate serde;
 extern crate serde_json;
 
-extern crate substrate_primitives;
-extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_state_machine as state_machine;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
@@ -49,6 +49,7 @@ extern crate slog;	// needed until we can reexport `slog_info` from `substrate_t
 #[macro_use]
 extern crate substrate_telemetry;
 extern crate polkadot_transaction_pool as txpool;
+extern crate exit_future;
 
 #[macro_use]
 extern crate lazy_static;
@@ -80,7 +81,6 @@ use substrate_telemetry::{init_telemetry, TelemetryConfig};
 use runtime_primitives::StorageMap;
 use polkadot_primitives::Block;
 
-use futures::sync::oneshot;
 use futures::Future;
 use tokio::runtime::Runtime;
 
@@ -124,12 +124,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	T: Into<std::ffi::OsString> + Clone,
 {
 	let yaml = load_yaml!("./cli.yml");
-	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
+	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
 		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
-		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed || e.kind == clap::ErrorKind::VersionDisplayed => {
+		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed => {
 			let _ = clap::App::from_yaml(yaml).print_long_help();
-			return Ok(());
+			return Ok(())
 		}
 		Err(e) => return Err(e.into()),
 	};
@@ -273,7 +273,7 @@ fn run_until_exit<C>(runtime: &mut Runtime, service: service::Service<C>, matche
 		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
 	let exit = {
-		let (exit_send, exit) = oneshot::channel();
+		let (exit_send, exit) = exit_future::signal();
 		let exit_send = ::std::cell::RefCell::new(Some(exit_send));
 		ctrlc::CtrlC::set_handler(move || {
 			let exit_send = exit_send
@@ -281,16 +281,16 @@ fn run_until_exit<C>(runtime: &mut Runtime, service: service::Service<C>, matche
 				.expect("only borrowed in non-reetrant signal handler; qed")
 				.take();
 
-			if let Some(sender) = exit_send {
-				sender.send(()).expect("Error sending exit notification");
+			if let Some(signal) = exit_send {
+				signal.fire();
 			}
 		});
 
-		exit.then(|_| Ok(()))
+		exit
 	};
 
 	let executor = runtime.executor();
-	informant::start(&service, executor.clone());
+	informant::start(&service, exit.clone(), executor.clone());
 
 	let _rpc_servers = {
 		let http_address = parse_address("127.0.0.1:9933", "rpc-port", matches)?;
@@ -298,10 +298,11 @@ fn run_until_exit<C>(runtime: &mut Runtime, service: service::Service<C>, matche
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), executor.clone());
+			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
 			rpc::rpc_handler::<Block, _, _, _, _>(
 				service.client(),
 				chain,
-				service.transaction_pool(),
+				author,
 				sys_conf.clone(),
 			)
 		};
@@ -311,7 +312,8 @@ fn run_until_exit<C>(runtime: &mut Runtime, service: service::Service<C>, matche
 		)
 	};
 
-	runtime.block_on(exit)
+	runtime.block_on(exit).expect("exit future does not fail; qed");
+	Ok(())
 }
 
 fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error> where

@@ -54,6 +54,9 @@ use substrate_network::StatusMessage as GenericFullStatus;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+#[cfg(test)]
+mod tests;
+
 /// Polkadot protocol id.
 pub const DOT_PROTOCOL_ID: ::substrate_network::ProtocolId = *b"dot";
 
@@ -373,6 +376,8 @@ impl Specialization<Block> for PolkadotProtocol {
 				Message::SessionKey(consensus.parent_hash, consensus.local_session_key)
 			);
 		}
+
+		self.dispatch_pending_requests(ctx);
 	}
 
 	fn on_disconnect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId) {
@@ -387,8 +392,26 @@ impl Specialization<Block> for PolkadotProtocol {
 				consensus.peer_disconnected(&info);
 			}
 
-			self.in_flight.retain(|&(_, ref peer), _| peer != &peer_id);
+			{
+				let pending = &mut self.pending;
+				self.in_flight.retain(|&(_, ref peer), val| {
+					let retain = peer != &peer_id;
+					if !retain {
+						let (sender, _) = oneshot::channel();
+						pending.push(::std::mem::replace(val, BlockDataRequest {
+							attempted_peers: Default::default(),
+							consensus_parent: Default::default(),
+							candidate_hash: Default::default(),
+							block_data_hash: Default::default(),
+							sender,
+						}));
+					}
+
+					retain
+				});
+			}
 			self.consensus_gossip.peer_disconnected(ctx, peer_id);
+			self.dispatch_pending_requests(ctx);
 		}
 	}
 
@@ -412,24 +435,27 @@ impl Specialization<Block> for PolkadotProtocol {
 					Message::Statement(parent_hash, _statement) =>
 						self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash),
 					Message::SessionKey(parent_hash, key) => {
-						let info = match self.peers.get_mut(&peer_id) {
-							Some(peer) => peer,
-							None => return,
-						};
+						{
+							let info = match self.peers.get_mut(&peer_id) {
+								Some(peer) => peer,
+								None => return,
+							};
 
-						if !info.validator {
-							ctx.disable_peer(peer_id);
-							return;
-						}
-
-						match self.live_consensus {
-							Some(ref mut consensus) if consensus.parent_hash == parent_hash => {
-								consensus.session_keys.insert(key, peer_id);
+							if !info.validator {
+								ctx.disable_peer(peer_id);
+								return;
 							}
-							_ => {}
-						}
 
-						info.session_keys.insert(parent_hash, key);
+							match self.live_consensus {
+								Some(ref mut consensus) if consensus.parent_hash == parent_hash => {
+									consensus.session_keys.insert(key, peer_id);
+								}
+								_ => {}
+							}
+
+							info.session_keys.insert(parent_hash, key);
+						}
+						self.dispatch_pending_requests(ctx);
 					}
 					Message::RequestBlockData(req_id, hash) => {
 						let block_data = self.live_consensus.as_ref()

@@ -79,14 +79,14 @@ impl Service {
 		client: Arc<C>,
 		api: Arc<A>,
 		network: N,
-		transaction_pool: Arc<TransactionPool>,
+		transaction_pool: Arc<TransactionPool<A>>,
 		thread_pool: ThreadPoolHandle,
 		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
 	) -> Service
 		where
 			A: LocalPolkadotApi + Send + Sync + 'static,
-			A::CheckedBlockId: Send + 'static,
+			A::CheckedBlockId: Send + Sync + 'static,
 			C: BlockchainEvents<Block> + ChainHead<Block> + bft::BlockImport<Block> + bft::Authorities<Block> + Send + Sync + 'static,
 			N: Network + Collators + Send + 'static,
 			N::TableRouter: Send + 'static,

@@ -15,12 +15,14 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use extrinsic_pool::{self, txpool};
+use polkadot_api;
 use primitives::Hash;
 use runtime::{Address, UncheckedExtrinsic};
 
 error_chain! {
 	links {
 		Pool(txpool::Error, txpool::ErrorKind);
+		Api(polkadot_api::Error, polkadot_api::ErrorKind);
 	}
 	errors {
 		/// Unexpected extrinsic format submitted
@@ -52,11 +54,6 @@ error_chain! {
 		UnrecognisedAddress(who: Address) {
 			description("Unrecognised address in extrinsic"),
 			display("Unrecognised address in extrinsic: {}", who),
-		}
-		/// Extrinsic is not yet checked.
-		NotReady {
-			description("Indexed address is unverified"),
-			display("Indexed address is unverified"),
 		}
 	}
 }

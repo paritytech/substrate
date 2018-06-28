@@ -17,7 +17,7 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use std::time::{Duration, Instant};
-use futures::stream::Stream;
+use futures::{Future, Stream};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Interval;
@@ -29,7 +29,7 @@ use client::{self, BlockchainEvents};
 const TIMER_INTERVAL_MS: u64 = 5000;
 
 /// Spawn informant on the event loop
-pub fn start<C>(service: &Service<C>, handle: TaskExecutor)
+pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor)
 	where
 		C: Components,
 		client::error::Error: From<<<<C as Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
@@ -73,8 +73,8 @@ pub fn start<C>(service: &Service<C>, handle: TaskExecutor)
 		telemetry!("txpool.import"; "mem_usage" => status.mem_usage, "count" => status.transaction_count, "sender" => status.senders);
 		Ok(())
 	});
-	handle.spawn(display_notifications);
-	handle.spawn(display_block_import);
-	handle.spawn(display_txpool_import);
+
+	let informant_work = display_notifications.join3(display_block_import, display_txpool_import);
+	handle.spawn(exit.until(informant_work).map(|_| ()));
 }
 

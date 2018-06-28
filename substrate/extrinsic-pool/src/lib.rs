@@ -32,5 +32,6 @@ mod listener;
 mod pool;
 mod watcher;
 
+pub use self::listener::Listener;
 pub use self::pool::Pool;
 pub use self::watcher::Watcher;

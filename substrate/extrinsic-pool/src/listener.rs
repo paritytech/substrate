@@ -23,17 +23,22 @@ use txpool;
 
 use watcher;
 
+/// Extrinsic pool default listener.
 #[derive(Default)]
 pub struct Listener<H: ::std::hash::Hash + Eq> {
 	watchers: HashMap<H, watcher::Sender<H>>
 }
 
 impl<H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default> Listener<H> {
+	/// Creates a new watcher for given verified extrinsic.
+	///
+	/// The watcher can be used to subscribe to lifecycle events of that extrinsic.
 	pub fn create_watcher<T: txpool::VerifiedTransaction<Hash=H>>(&mut self, xt: Arc<T>) -> watcher::Watcher<H> {
 		let sender = self.watchers.entry(*xt.hash()).or_insert_with(watcher::Sender::default);
 		sender.new_watcher()
 	}
 
+	/// Notify the listeners about extrinsic broadcast.
 	pub fn broadcasted(&mut self, hash: &H, peers: Vec<String>) {
 		self.fire(hash, |watcher| watcher.broadcast(peers));
 	}

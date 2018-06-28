@@ -7,7 +7,7 @@ description = "Polkadot node implementation in Rust."
 [dependencies]
 clap = { version = "2.27", features = ["yaml"] }
 env_logger = "0.4"
-error-chain = "0.11"
+error-chain = "0.12"
 log = "0.3"
 atty = "0.2"
 regex = "0.2"
@@ -26,13 +26,14 @@ fdlimit = "0.1"
 parking_lot = "0.4"
 serde_json = "1.0"
 serde = "1.0"
+exit-future = "0.1"
 substrate-client = { path = "../../substrate/client" }
-substrate-state-machine = { path = "../../substrate/state-machine" }
-substrate-rpc = { path = "../../substrate/rpc" }
-substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-network = { path = "../../substrate/network" }
 substrate-primitives = { path = "../../substrate/primitives" }
+substrate-rpc = { path = "../../substrate/rpc" }
+substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
+substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-telemetry = { path = "../../substrate/telemetry" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }

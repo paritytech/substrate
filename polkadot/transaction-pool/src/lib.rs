@@ -15,6 +15,7 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate ed25519;
+extern crate substrate_client as client;
 extern crate substrate_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_primitives as substrate_primitives;
@@ -37,19 +38,17 @@ mod error;
 
 use std::{
 	cmp::Ordering,
-	collections::{hash_map::Entry, HashMap},
+	collections::HashMap,
 	ops::Deref,
 	sync::Arc,
-	result
 };
-use parking_lot::Mutex;
 
 use codec::Slicable;
-use extrinsic_pool::{Pool, txpool::{self, Readiness, scoring::{Change, Choice}}};
+use extrinsic_pool::{Pool, Listener, txpool::{self, Readiness, scoring::{Change, Choice}}};
 use extrinsic_pool::api::ExtrinsicPool;
 use polkadot_api::PolkadotApi;
-use primitives::{AccountId, AccountIndex, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
-use runtime::{Address, RawAddress, UncheckedExtrinsic};
+use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
+use runtime::{Address, UncheckedExtrinsic};
 use substrate_runtime_primitives::traits::{Bounded, Checkable, Hashing, BlakeTwo256};
 
 pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
@@ -59,65 +58,16 @@ pub use error::{Error, ErrorKind, Result};
 pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable>::Checked;
 
 /// A verified transaction which should be includable and non-inherent.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VerifiedTransaction {
 	original: UncheckedExtrinsic,
-	// `create()` will leave this as `Some` only if the `Address` is an `AccountId`, otherwise a
-	// call to `polish` is needed.
-	inner: Mutex<Option<CheckedExtrinsic>>,
+	inner: Option<CheckedExtrinsic>,
+	sender: Option<AccountId>,
 	hash: Hash,
 	encoded_size: usize,
 }
 
-impl Clone for VerifiedTransaction {
-	fn clone(&self) -> Self {
-		VerifiedTransaction {
-			original: self.original.clone(),
-			inner: Mutex::new(self.inner.lock().clone()),
-			hash: self.hash.clone(),
-			encoded_size: self.encoded_size.clone(),
-		}
-	}
-}
-
 impl VerifiedTransaction {
-	/// Attempt to verify a transaction.
-	fn create(original: UncheckedExtrinsic) -> Result<Self> {
-		if !original.is_signed() {
-			bail!(ErrorKind::IsInherent(original))
-		}
-		const UNAVAILABLE_MESSAGE: &'static str = "chain state not available";
-		let (encoded_size, hash) = original.using_encoded(|e| (e.len(), BlakeTwo256::hash(e)));
-		let lookup = |a| match a {
-			RawAddress::Id(i) => Ok(i),
-			_ => Err(UNAVAILABLE_MESSAGE),
-		};
-		let inner = Mutex::new(match original.clone().check(lookup) {
-			Ok(xt) => Some(xt),
-			Err(e) if e == UNAVAILABLE_MESSAGE => None,
-			Err(e) => bail!(ErrorKind::BadSignature(e)),
-		});
-		Ok(VerifiedTransaction { original, inner, hash, encoded_size })
-	}
-
-	/// If this transaction isn't really verified, verify it and morph it into a really verified
-	/// transaction.
-	pub fn polish<F>(&self, lookup: F) -> Result<()> where
-	 	F: FnOnce(Address) -> result::Result<AccountId, &'static str> + Send + Sync
-	{
-		let inner: result::Result<CheckedExtrinsic, Error> = self.original
-			.clone()
-			.check(lookup)
-			.map_err(|e| ErrorKind::BadSignature(e).into());
-		*self.inner.lock() = Some(inner?);
-		Ok(())
-	}
-
-	/// Is this transaction *really* verified?
-	pub fn is_really_verified(&self) -> bool {
-		self.inner.lock().is_some()
-	}
-
 	/// Access the underlying transaction.
 	pub fn as_transaction(&self) -> &UncheckedExtrinsic {
 		&self.original
@@ -129,9 +79,9 @@ impl VerifiedTransaction {
 			.expect("UncheckedExtrinsic shares repr with Vec<u8>; qed")
 	}
 
-	/// Consume the verified transaciton, yielding the unchecked counterpart.
-	pub fn into_inner(self) -> Result<CheckedExtrinsic> {
-		self.inner.lock().clone().ok_or_else(|| ErrorKind::NotReady.into())
+	/// Consume the verified transaction, yielding the checked counterpart.
+	pub fn into_inner(self) -> Option<CheckedExtrinsic> {
+		self.inner
 	}
 
 	/// Get the 256-bit hash of this transaction.
@@ -140,8 +90,8 @@ impl VerifiedTransaction {
 	}
 
 	/// Get the account ID of the sender of this transaction.
-	pub fn sender(&self) -> Result<AccountId> {
-		self.inner.lock().as_ref().map(|i| i.signed.clone()).ok_or_else(|| ErrorKind::NotReady.into())
+	pub fn sender(&self) -> Option<AccountId> {
+		self.sender
 	}
 
 	/// Get the account ID of the sender of this transaction.
@@ -153,22 +103,27 @@ impl VerifiedTransaction {
 	pub fn encoded_size(&self) -> usize {
 		self.encoded_size
 	}
+
+	/// Returns `true` if the transaction is not yet fully verified.
+	pub fn is_fully_verified(&self) -> bool {
+		self.inner.is_some()
+	}
 }
 
 impl txpool::VerifiedTransaction for VerifiedTransaction {
 	type Hash = Hash;
-	type Sender = Address;
+	type Sender = Option<AccountId>;
 
 	fn hash(&self) -> &Self::Hash {
 		&self.hash
 	}
 
 	fn sender(&self) -> &Self::Sender {
-		self.original.sender()
+		&self.sender
 	}
 
 	fn mem_usage(&self) -> usize {
-		1 // TODO
+		self.encoded_size // TODO
 	}
 }
 
@@ -184,7 +139,19 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 		old.index().cmp(&other.index())
 	}
 
-	fn choose(&self, _old: &VerifiedTransaction, _new: &VerifiedTransaction) -> Choice {
+	fn choose(&self, old: &VerifiedTransaction, new: &VerifiedTransaction) -> Choice {
+		if old.is_fully_verified() {
+			assert!(new.is_fully_verified(), "Scoring::choose called with transactions from different senders");
+			if old.index() == new.index() {
+				// TODO [ToDr] Do we allow replacement? If yes then it should be Choice::ReplaceOld
+				return Choice::RejectNew;
+			}
+		}
+
+		// This will keep both transactions, even though they have the same indices.
+		// It's fine for not fully verified transactions, we might also allow it for
+		// verified transactions but it would mean that only one of the two is actually valid
+		// (most likely the first to be included in the block).
 		Choice::InsertNew
 	}
 
@@ -195,33 +162,37 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 		_change: Change<()>
 	) {
 		for i in 0..xts.len() {
-			// all the same score since there are no fees.
-			// TODO: prioritize things like misbehavior or fishermen reports
-			scores[i] = 1;
+			if !xts[i].is_fully_verified() {
+				scores[i] = 0;
+			} else {
+				// all the same score since there are no fees.
+				// TODO: prioritize things like misbehavior or fishermen reports
+				scores[i] = 1;
+			}
 		}
 	}
-	fn should_replace(&self, _old: &VerifiedTransaction, _new: &VerifiedTransaction) -> bool {
-		false // no fees to determine which is better.
+
+	fn should_replace(&self, old: &VerifiedTransaction, _new: &VerifiedTransaction) -> bool {
+		// Always replace not fully verified transactions.
+		!old.is_fully_verified()
 	}
 }
 
 /// Readiness evaluator for polkadot transactions.
-pub struct Ready<'a, T: 'a + PolkadotApi> {
-	at_block: T::CheckedBlockId,
-	api: &'a T,
-	known_nonces: HashMap<AccountId, (::primitives::Index, bool)>,
-	known_indexes: HashMap<AccountIndex, AccountId>,
+pub struct Ready<'a, A: 'a + PolkadotApi> {
+	at_block: A::CheckedBlockId,
+	api: &'a A,
+	known_nonces: HashMap<AccountId, ::primitives::Index>,
 }
 
-impl<'a, T: 'a + PolkadotApi> Ready<'a, T> {
+impl<'a, A: 'a + PolkadotApi> Ready<'a, A> {
 	/// Create a new readiness evaluator at the given block. Requires that
 	/// the ID has already been checked for local corresponding and available state.
-	pub fn create(at: T::CheckedBlockId, api: &'a T) -> Self {
+	fn create(at: A::CheckedBlockId, api: &'a A) -> Self {
 		Ready {
 			at_block: at,
 			api,
 			known_nonces: HashMap::new(),
-			known_indexes: HashMap::new(),
 		}
 	}
 }
@@ -232,136 +203,214 @@ impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
 			at_block: self.at_block.clone(),
 			api: self.api,
 			known_nonces: self.known_nonces.clone(),
-			known_indexes: self.known_indexes.clone(),
 		}
 	}
 }
 
-impl<'a, T: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, T>
+impl<'a, A: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, A>
 {
 	fn is_ready(&mut self, xt: &VerifiedTransaction) -> Readiness {
-		if !xt.is_really_verified() {
-			let id = match xt.original.extrinsic.signed.clone() {
-				RawAddress::Id(id) => id.clone(),	// should never happen, since we're not verified.
-				RawAddress::Index(i) => match self.known_indexes.entry(i) {
-					Entry::Occupied(e) => e.get().clone(),
-					Entry::Vacant(e) => {
-						let (api, at_block) = (&self.api, &self.at_block);
-						if let Some(id) = api.lookup(at_block, RawAddress::Index(i))
-							.ok()
-							.and_then(|o| o)
-						{
-							e.insert(id.clone());
-							id
-						} else {
-							// Invalid index.
-							// return stale in order to get the pool to throw it away.
-							return Readiness::Stale
-						}
-					}
-				},
-			};
-			if VerifiedTransaction::polish(xt, move |_| Ok(id)).is_err() {
-				// Invalid signature.
-				// return stale in order to get the pool to throw it away.
-				return Readiness::Stale
-			}
-		}
+		let sender = match xt.sender() {
+			Some(sender) => sender,
+			None => return Readiness::Future
+		};
 
-		// guaranteed to be properly verified at this point.
-
-		let sender = xt.sender().expect("only way to get here is `is_really_verified` or successful `polish`; either guarantees `is_really_verified`; `sender` is `Ok` if `is_really_verified`; qed");
 		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.hash, Hash::from(sender));
-
-		let is_index_sender = match xt.original.extrinsic.signed { RawAddress::Index(_) => false, _ => true };
 
 		// TODO: find a way to handle index error properly -- will need changes to
 		// transaction-pool trait.
 		let (api, at_block) = (&self.api, &self.at_block);
-		let get_nonce = || api.index(at_block, sender).ok().unwrap_or_else(Bounded::max_value);
-		let (next_nonce, was_index_sender) = self.known_nonces.entry(sender).or_insert_with(|| (get_nonce(), is_index_sender));
+		let next_index = self.known_nonces.entry(sender)
+			.or_insert_with(|| api.index(at_block, sender).ok().unwrap_or_else(Bounded::max_value));
 
-		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_nonce, xt.original.extrinsic.index);
+		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.original.extrinsic.index);
 
-		if *was_index_sender == is_index_sender || get_nonce() == *next_nonce {
-			match xt.original.extrinsic.index.cmp(&next_nonce) {
-				Ordering::Greater => Readiness::Future,
-				Ordering::Less => Readiness::Stale,
-				Ordering::Equal => {
-					// remember to increment `next_nonce`
-					// TODO: this won't work perfectly since accounts can now be killed, returning the nonce
-					// to zero.
-					*next_nonce = next_nonce.saturating_add(1);
-					Readiness::Ready
-				}
-			}
-		} else {
-			// ignore for now.
-			Readiness::Future
+		let result = match xt.original.extrinsic.index.cmp(&next_index) {
+			// TODO: this won't work perfectly since accounts can now be killed, returning the nonce
+			// to zero.
+			// We should detect if the index was reset and mark all transactions as `Stale` for cull to work correctly.
+			// Otherwise those transactions will keep occupying the queue.
+			// Perhaps we could mark as stale if `index - state_index` > X?
+			Ordering::Greater => Readiness::Future,
+			Ordering::Equal => Readiness::Ready,
+			// TODO [ToDr] Should mark transactions referrencing too old blockhash as `Stale` as well.
+			Ordering::Less => Readiness::Stale,
+		};
+
+		// remember to increment `next_index`
+		*next_index = next_index.saturating_add(1);
+
+		result
+	}
+}
+
+pub struct Verifier<'a, A: 'a, B> {
+	api: &'a A,
+	at_block: B,
+}
+
+impl<'a, A> Verifier<'a, A, A::CheckedBlockId> where
+	A: 'a + PolkadotApi,
+{
+	const NO_ACCOUNT: &'static str = "Account not found.";
+
+	fn lookup(&self, address: Address) -> ::std::result::Result<AccountId, &'static str> {
+		// TODO [ToDr] Consider introducing a cache for this.
+		match self.api.lookup(&self.at_block, address.clone()) {
+			Ok(Some(address)) => Ok(address),
+			Ok(None) => Err(Self::NO_ACCOUNT.into()),
+			Err(e) => {
+				error!("Error looking up address: {:?}: {:?}", address, e);
+				Err("API error.")
+			},
 		}
 	}
 }
 
-pub struct Verifier;
-
-impl txpool::Verifier<UncheckedExtrinsic> for Verifier {
+impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A, A::CheckedBlockId> where
+	A: 'a + PolkadotApi,
+{
 	type VerifiedTransaction = VerifiedTransaction;
 	type Error = Error;
 
 	fn verify_transaction(&self, uxt: UncheckedExtrinsic) -> Result<Self::VerifiedTransaction> {
 		info!("Extrinsic Submitted: {:?}", uxt);
-		VerifiedTransaction::create(uxt)
+
+		if !uxt.is_signed() {
+			bail!(ErrorKind::IsInherent(uxt))
+		}
+
+		let (encoded_size, hash) = uxt.using_encoded(|e| (e.len(), BlakeTwo256::hash(e)));
+		let inner = match uxt.clone().check(|a| self.lookup(a)) {
+			Ok(xt) => Some(xt),
+			// keep the transaction around in the future pool and attempt to promote it later.
+			Err(Self::NO_ACCOUNT) => None,
+			Err(e) => bail!(e),
+		};
+		let sender = inner.as_ref().map(|x| x.signed.clone());
+
+		Ok(VerifiedTransaction {
+			original: uxt,
+			inner,
+			sender,
+			hash,
+			encoded_size
+		})
 	}
 }
 
 /// The polkadot transaction pool.
 ///
 /// Wraps a `extrinsic_pool::Pool`.
-pub struct TransactionPool {
-	inner: Pool<UncheckedExtrinsic, Hash, Verifier, Scoring, Error>,
+pub struct TransactionPool<A> {
+	inner: Pool<Hash, VerifiedTransaction, Scoring, Error>,
+	api: Arc<A>,
 }
 
-impl TransactionPool {
+impl<A> TransactionPool<A> where
+	A: PolkadotApi,
+{
 	/// Create a new transaction pool.
-	pub fn new(options: Options) -> Self {
+	pub fn new(options: Options, api: Arc<A>) -> Self {
 		TransactionPool {
-			inner: Pool::new(options, Verifier, Scoring),
+			inner: Pool::new(options, Scoring),
+			api,
 		}
 	}
 
-	// TODO: remove. This is pointless - just use `submit()` directly.
-	pub fn import_unchecked_extrinsic(&self, uxt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
-		self.inner.submit(vec![uxt]).map(|mut v| v.swap_remove(0))
+	/// Attempt to directly import `UncheckedExtrinsic` without going through serialization.
+	pub fn import_unchecked_extrinsic(&self, block: BlockId, uxt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
+		let verifier = Verifier {
+			api: &*self.api,
+			at_block: self.api.check_id(block)?,
+		};
+		self.inner.submit(verifier, vec![uxt]).map(|mut v| v.swap_remove(0))
+	}
+
+	/// Retry to import all semi-verified transactions (unknown account indices)
+	pub fn retry_verification(&self, block: BlockId) -> Result<()> {
+		let to_reverify = self.inner.remove_sender(None);
+		let verifier = Verifier {
+			api: &*self.api,
+			at_block: self.api.check_id(block)?,
+		};
+
+		self.inner.submit(verifier, to_reverify.into_iter().map(|tx| tx.original.clone()))?;
+		Ok(())
+	}
+
+	/// Reverify transaction that has been reported incorrect.
+	///
+	/// Returns `Ok(None)` in case the hash is missing, `Err(e)` in case of verification error and new transaction
+	/// reference otherwise.
+	///
+	/// TODO [ToDr] That method is currently unused, should be used together with BlockBuilder
+	/// when we detect that particular transaction has failed.
+	/// In such case we will attempt to remove or re-verify it.
+	pub fn reverify_transaction(&self, block: BlockId, hash: Hash) -> Result<Option<Arc<VerifiedTransaction>>> {
+		let result = self.inner.remove(&[hash], false).pop().expect("One hash passed; one result received; qed");
+		if let Some(tx) = result {
+			self.import_unchecked_extrinsic(block, tx.original.clone()).map(Some)
+		} else {
+			Ok(None)
+		}
+	}
+
+	/// Cull old transactions from the queue.
+	pub fn cull(&self, block: BlockId) -> Result<usize> {
+		let id = self.api.check_id(block)?;
+		let ready = Ready::create(id, &*self.api);
+		Ok(self.inner.cull(None, ready))
+	}
+
+	/// Cull transactions from the queue and then compute the pending set.
+	pub fn cull_and_get_pending<F, T>(&self, block: BlockId, f: F) -> Result<T> where
+		F: FnOnce(txpool::PendingIterator<VerifiedTransaction, Ready<A>, Scoring, Listener<Hash>>) -> T,
+	{
+		let id = self.api.check_id(block)?;
+		let ready = Ready::create(id, &*self.api);
+		self.inner.cull(None, ready.clone());
+		Ok(self.inner.pending(ready, f))
+	}
+
+	/// Remove a set of transactions idenitified by hashes.
+	pub fn remove(&self, hashes: &[Hash], is_valid: bool) -> Vec<Option<Arc<VerifiedTransaction>>> {
+		self.inner.remove(hashes, is_valid)
 	}
 }
 
-impl Deref for TransactionPool {
-	type Target = Pool<UncheckedExtrinsic, Hash, Verifier, Scoring, Error>;
+impl<A> Deref for TransactionPool<A> {
+	type Target = Pool<Hash, VerifiedTransaction, Scoring, Error>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
 	}
 }
 
-impl ExtrinsicPool<FutureProofUncheckedExtrinsic, Hash> for TransactionPool {
+impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for TransactionPool<A> where
+	A: Send + Sync + 'static,
+	A: PolkadotApi,
+{
 	type Error = Error;
 
-	fn submit(&self, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
+	fn submit(&self, block: BlockId, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
 		// TODO: more general transaction pool, which can handle more kinds of vec-encoded transactions,
 		// even when runtime is out of date.
 		xts.into_iter()
 			.map(|xt| xt.encode())
-			.map(|encoded| UncheckedExtrinsic::decode(&mut &encoded[..]))
-			.map(|maybe_decoded| maybe_decoded.ok_or_else(|| ErrorKind::InvalidExtrinsicFormat.into()))
-			.map(|x| x.and_then(|x| self.import_unchecked_extrinsic(x)))
-			.map(|x| x.map(|x| x.hash().clone()))
+			.map(|encoded| {
+				let decoded = UncheckedExtrinsic::decode(&mut &encoded[..]).ok_or(ErrorKind::InvalidExtrinsicFormat)?;
+				let tx = self.import_unchecked_extrinsic(block, decoded)?;
+				Ok(*tx.hash())
+			})
 			.collect()
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{TransactionPool, Ready};
+	use std::sync::{atomic::{self, AtomicBool}, Arc};
+	use super::TransactionPool;
 	use substrate_keyring::Keyring::{self, *};
 	use codec::Slicable;
 	use polkadot_api::{PolkadotApi, BlockBuilder, CheckedBlockId, Result};
@@ -390,8 +439,23 @@ mod tests {
 		}
 	}
 
-	#[derive(Clone)]
-	struct TestPolkadotApi;
+	#[derive(Default, Clone)]
+	struct TestPolkadotApi {
+		no_lookup: Arc<AtomicBool>,
+	}
+
+	impl TestPolkadotApi {
+		fn without_lookup() -> Self {
+			TestPolkadotApi {
+				no_lookup: Arc::new(AtomicBool::new(true)),
+			}
+		}
+
+		pub fn enable_lookup(&self) {
+			self.no_lookup.store(false, atomic::Ordering::SeqCst);
+		}
+	}
+
 	impl PolkadotApi for TestPolkadotApi {
 		type CheckedBlockId = TestCheckedBlockId;
 		type BlockBuilder = TestBlockBuilder;
@@ -415,6 +479,7 @@ mod tests {
 		fn lookup(&self, _at: &TestCheckedBlockId, _address: RawAddress<AccountId, AccountIndex>) -> Result<Option<AccountId>> {
 			match _address {
 				RawAddress::Id(i) => Ok(Some(i)),
+				RawAddress::Index(_) if self.no_lookup.load(atomic::Ordering::SeqCst) => Ok(None),
 				RawAddress::Index(i) => Ok(match (i < 8, i + (number_of(_at) as u64) % 8) {
 					(false, _) => None,
 					(_, 0) => Some(Alice.to_raw_public().into()),
@@ -456,130 +521,168 @@ mod tests {
 		}, MaybeUnsigned(sig.into())).using_encoded(|e| UncheckedExtrinsic::decode(&mut &e[..])).unwrap()
 	}
 
+	fn pool(api: &TestPolkadotApi) -> TransactionPool<TestPolkadotApi> {
+		TransactionPool::new(Default::default(), Arc::new(api.clone()))
+	}
+
 	#[test]
 	fn id_submission_should_work() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
 
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
 	}
 
 	#[test]
 	fn index_submission_should_work() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
 
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
 	}
 
 	#[test]
 	fn multiple_id_submission_should_work() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, true)]).unwrap();
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
 
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
 	#[test]
 	fn multiple_index_submission_should_work() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
 
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
 	#[test]
 	fn id_based_early_nonce_should_be_culled() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 208, true)]).unwrap();
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, true)).unwrap();
 
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 	}
 
 	#[test]
 	fn index_based_early_nonce_should_be_culled() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 208, false)]).unwrap();
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, false)).unwrap();
 
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 	}
 
 	#[test]
 	fn id_based_late_nonce_should_be_queued() {
-		let pool = TransactionPool::new(Default::default());
-		let ready = || Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
 
-		pool.submit(vec![uxt(Alice, 210, true)]).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 
-		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
 	#[test]
 	fn index_based_late_nonce_should_be_queued() {
-		let pool = TransactionPool::new(Default::default());
-		let ready = || Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
 
-		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
 
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(ready(), |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
 	}
 
 	#[test]
 	fn index_then_id_submission_should_make_progress() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, true)]).unwrap();
+		let api = TestPolkadotApi::without_lookup();
+		let pool = pool(&api);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
 
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		assert_eq!(pending, vec![]);
+
+		api.enable_lookup();
+		pool.retry_verification(BlockId::number(0)).unwrap();
+
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![
-			(Some(Alice.to_raw_public().into()), 209)
+			(Some(Alice.to_raw_public().into()), 209),
+			(Some(Alice.to_raw_public().into()), 210)
 		]);
 	}
 
 	#[test]
-	fn id_then_index_submission_should_make_progress() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, true)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+	fn retrying_verification_might_not_change_anything() {
+		let api = TestPolkadotApi::without_lookup();
+		let pool = pool(&api);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
 
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		assert_eq!(pending, vec![]);
+
+		pool.retry_verification(BlockId::number(1)).unwrap();
+
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		assert_eq!(pending, vec![]);
+	}
+
+	#[test]
+	fn id_then_index_submission_should_make_progress() {
+		let api = TestPolkadotApi::without_lookup();
+		let pool = pool(&api);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
+
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![
 			(Some(Alice.to_raw_public().into()), 209)
+		]);
+
+		// when
+		api.enable_lookup();
+		pool.retry_verification(BlockId::number(0)).unwrap();
+
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		assert_eq!(pending, vec![
+			(Some(Alice.to_raw_public().into()), 209),
+			(Some(Alice.to_raw_public().into()), 210)
 		]);
 	}
 
 	#[test]
 	fn index_change_should_result_in_second_tx_culled_or_future() {
-		let pool = TransactionPool::new(Default::default());
-		pool.submit(vec![uxt(Alice, 209, false)]).unwrap();
-		pool.submit(vec![uxt(Alice, 210, false)]).unwrap();
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
+		let block = BlockId::number(0);
+		pool.import_unchecked_extrinsic(block, uxt(Alice, 209, false)).unwrap();
+		let hash = *pool.import_unchecked_extrinsic(block, uxt(Alice, 210, false)).unwrap().hash();
 
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(0)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let pending: Vec<_> = pool.cull_and_get_pending(block, |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![
 			(Some(Alice.to_raw_public().into()), 209),
 			(Some(Alice.to_raw_public().into()), 210)
@@ -593,11 +696,14 @@ mod tests {
 
 		// after this, a re-evaluation of the second's readiness should result in it being thrown
 		// out (or maybe placed in future queue).
-/*
-		// TODO: uncomment once the new queue design is in.
-		let ready = Ready::create(TestPolkadotApi.check_id(BlockId::number(1)).unwrap(), &TestPolkadotApi);
-		let pending: Vec<_> = pool.cull_and_get_pending(ready, |p| p.map(|a| (a.sender().ok(), a.index())).collect());
+		let err = pool.reverify_transaction(BlockId::number(1), hash).unwrap_err();
+		match *err.kind() {
+			::error::ErrorKind::Msg(ref m) if m == "bad signature in extrinsic" => {},
+			ref e => assert!(false, "The transaction should be rejected with BadSignature error, got: {:?}", e),
+		}
+
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(1), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
-*/
+
 	}
 }

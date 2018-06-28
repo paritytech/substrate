@@ -57,7 +57,7 @@ pub trait Components {
 	fn build_api(&self, client: Arc<Client<Self::Backend, Self::Executor, Block>>) -> Arc<Self::Api>;
 
 	/// Create network transaction pool adapter.
-	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, api: Arc<Self::Api>, tx_pool: Arc<TransactionPool>)
+	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, tx_pool: Arc<TransactionPool<Self::Api>>)
 		-> Arc<network::TransactionPool<Block>>;
 
 	/// Create consensus service.
@@ -65,7 +65,7 @@ pub trait Components {
 		&self,
 		client: Arc<Client<Self::Backend, Self::Executor, Block>>,
 		network: Arc<NetworkService>,
-		tx_pool: Arc<TransactionPool>,
+		tx_pool: Arc<TransactionPool<Self::Api>>,
 		keystore: &Keystore,
 		task_executor: TaskExecutor,
 	)
@@ -92,13 +92,12 @@ impl Components for FullComponents {
 		client
 	}
 
-	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, api: Arc<Self::Api>, pool: Arc<TransactionPool>)
+	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, pool: Arc<TransactionPool<Self::Api>>)
 		-> Arc<network::TransactionPool<Block>> {
 		Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: true,
 			pool,
 			client,
-			api,
 		})
 	}
 
@@ -106,7 +105,7 @@ impl Components for FullComponents {
 		&self,
 		client: Arc<client::Client<Self::Backend, Self::Executor, Block>>,
 		network: Arc<NetworkService>,
-		tx_pool: Arc<TransactionPool>,
+		tx_pool: Arc<TransactionPool<Self::Api>>,
 		keystore: &Keystore,
 		task_executor: TaskExecutor,
 	)
@@ -154,13 +153,12 @@ impl Components for LightComponents {
 		Arc::new(polkadot_api::light::RemotePolkadotApiWrapper(client.clone()))
 	}
 
-	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, api: Arc<Self::Api>, pool: Arc<TransactionPool>)
+	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, pool: Arc<TransactionPool<Self::Api>>)
 		-> Arc<network::TransactionPool<Block>> {
 		Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: false,
 			pool,
 			client,
-			api,
 		})
 	}
 
@@ -168,11 +166,12 @@ impl Components for LightComponents {
 		&self,
 		_client: Arc<client::Client<Self::Backend, Self::Executor, Block>>,
 		_network: Arc<NetworkService>,
-		_tx_pool: Arc<TransactionPool>,
+		_tx_pool: Arc<TransactionPool<Self::Api>>,
 		_keystore: &Keystore,
 		_task_executor: TaskExecutor,
 	)
-		-> Result<Option<consensus::Service>, error::Error> {
+		-> Result<Option<consensus::Service>, error::Error>
+	{
 		Ok(None)
 	}
 }
@@ -180,9 +179,25 @@ impl Components for LightComponents {
 /// Transaction pool adapter.
 pub struct TransactionPoolAdapter<B, E, A> where A: Send + Sync, E: Send + Sync {
 	imports_external_transactions: bool,
-	pool: Arc<TransactionPool>,
+	pool: Arc<TransactionPool<A>>,
 	client: Arc<Client<B, E, Block>>,
-	api: Arc<A>,
+}
+
+impl<B, E, A> TransactionPoolAdapter<B, E, A>
+	where
+		A: Send + Sync,
+		B: client::backend::Backend<Block> + Send + Sync,
+		E: client::CallExecutor<Block> + Send + Sync,
+		client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
+{
+	fn best_block_id(&self) -> Option<BlockId> {
+		self.client.info()
+			.map(|info| BlockId::hash(info.chain.best_hash))
+			.map_err(|e| {
+				debug!("Error getting best block: {:?}", e);
+			})
+			.ok()
+	}
 }
 
 impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A>
@@ -193,28 +208,20 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 		A: polkadot_api::PolkadotApi + Send + Sync,
 {
 	fn transactions(&self) -> Vec<(Hash, Vec<u8>)> {
-		let best_block = match self.client.info() {
-			Ok(info) => info.chain.best_hash,
-			Err(e) => {
-				debug!("Error getting best block: {:?}", e);
-				return Vec::new();
-			}
+		let best_block_id = match self.best_block_id() {
+			Some(id) => id,
+			None => return vec![],
 		};
-
-		let id = match self.api.check_id(BlockId::hash(best_block)) {
-			Ok(id) => id,
-			Err(_) => return Vec::new(),
-		};
-
-		let ready = transaction_pool::Ready::create(id, &*self.api);
-
-		self.pool.cull_and_get_pending(ready, |pending| pending
+		self.pool.cull_and_get_pending(best_block_id, |pending| pending
 			.map(|t| {
 				let hash = t.hash().clone();
 				(hash, t.primitive_extrinsic())
 			})
 			.collect()
-		)
+		).unwrap_or_else(|e| {
+			warn!("Error retrieving pending set: {}", e);
+			vec![]
+		})
 	}
 
 	fn import(&self, transaction: &Vec<u8>) -> Option<Hash> {
@@ -224,7 +231,8 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 
 		let encoded = transaction.encode();
 		if let Some(uxt) = codec::Slicable::decode(&mut &encoded[..]) {
-			match self.pool.import_unchecked_extrinsic(uxt) {
+			let best_block_id = self.best_block_id()?;
+			match self.pool.import_unchecked_extrinsic(best_block_id, uxt) {
 				Ok(xt) => Some(*xt.hash()),
 				Err(e) => match *e.kind() {
 					transaction_pool::ErrorKind::AlreadyImported(hash) => Some(hash[..].into()),

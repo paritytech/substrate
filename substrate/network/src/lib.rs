@@ -61,6 +61,7 @@ pub mod specialization;
 
 #[cfg(test)] mod test;
 
+pub use chain::Client as ClientHandle;
 pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 	TransactionPool, Params, ManageNetwork, SyncProvider};
 pub use protocol::{ProtocolStatus, PeerInfo, Context};
