@@ -17,6 +17,7 @@ substrate-runtime-support = { path = "../../runtime-support", default_features =
 substrate-runtime-primitives = { path = "../primitives", default_features = false }
 substrate-runtime-consensus = { path = "../consensus", default_features = false }
 substrate-runtime-system = { path = "../system", default_features = false }
+substrate-runtime-timestamp = { path = "../timestamp", default_features = false }
 
 [features]
 default = ["std"]
