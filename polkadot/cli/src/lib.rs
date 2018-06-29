@@ -160,25 +160,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.chain_name = chain_spec.clone().into();
 
-	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
-		let name = config.name.clone();
-		let chain_name = config.chain_name.clone();
-		Some(init_telemetry(TelemetryConfig {
-			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
-			on_connect: Box::new(move || {
-				telemetry!("system.connected";
-					"name" => name.clone(),
-					"implementation" => "parity-polkadot",
-					"version" => crate_version!(),
-					"config" => "",
-					"chain" => chain_name.clone(),
-				);
-			}),
-		}))
-	} else {
-		None
-	};
-
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(default_base_path);
@@ -261,6 +242,25 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let sys_conf = SystemConfiguration {
 		chain_name: config.chain_name.clone(),
+	};
+
+	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+		let name = config.name.clone();
+		let chain_name = config.chain_name.clone();
+		Some(init_telemetry(TelemetryConfig {
+			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
+			on_connect: Box::new(move || {
+				telemetry!("system.connected";
+					"name" => name.clone(),
+					"implementation" => "parity-polkadot",
+					"version" => crate_version!(),
+					"config" => "",
+					"chain" => chain_name.clone(),
+				);
+			}),
+		}))
+	} else {
+		None
 	};
 
 	match role == service::Role::LIGHT {
