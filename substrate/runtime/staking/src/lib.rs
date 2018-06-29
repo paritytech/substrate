@@ -557,8 +557,8 @@ impl<T: Trait> Module<T> {
 		if normal_rotation {
 			// reward
 			let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
-			let percent: usize = (T::Moment::sa(65536usize) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
-			let reward = Self::session_reward() * T::Balance::sa(percent) / T::Balance::sa(65536usize);
+			let percent: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
+			let reward = Self::session_reward() * T::Balance::sa(percent) / T::Balance::sa(65536u64);
 			// apply good session reward
 			for v in <session::Module<T>>::validators().iter() {
 				let noms = Self::current_nominators_for(v);
@@ -580,7 +580,7 @@ impl<T: Trait> Module<T> {
 					let total = noms.iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x);
 					for n in noms.iter() {
 						//let r = Self::voting_balance(n) * reward / total;	// correct formula, but might overflow with large slash * total.
-						let quant = T::Balance::sa(1usize << 31);
+						let quant = T::Balance::sa(1u64 << 31);
 						let s = (Self::voting_balance(n) * quant / total) * rem / quant; // avoid overflow by using quant as a denominator.
 						let _ = Self::slash(n, s);	// best effort - not much that can be done on fail.
 					}
