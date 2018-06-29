@@ -49,9 +49,9 @@ pub mod error;
 
 use std::sync::Arc;
 use demo_primitives::Hash;
-use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig};
-use demo_runtime::{Block, BlockId, UncheckedExtrinsic, BuildStorage};
+use demo_runtime::{Block, BlockId, UncheckedExtrinsic, BuildStorage, GenesisConfig,
+	ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
+	TimestampConfig};
 use futures::{Future, Sink, Stream};
 
 struct DummyPool;
@@ -107,10 +107,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			authorities: vec![god_key.clone()],
 		}),
 		system: None,
-	//		block_time: 5,			// 5 second block time.
 		session: Some(SessionConfig {
 			validators: vec![god_key.clone().into()],
 			session_length: 720,	// that's 1 hour per session.
+			broken_percent_late: 30,
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -126,6 +126,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
 			bonding_duration: 90,	// 90 days per bond.
+			early_era_slash: 10000,
+			session_reward: 100,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
@@ -146,6 +148,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 			cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
 			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
+		}),
+		timestamp: Some(TimestampConfig {
+			period: 5,					// 5 second block time.
 		}),
 	}.build_storage();
 

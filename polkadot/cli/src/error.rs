@@ -28,5 +28,10 @@ error_chain! {
 		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
     }
 	errors {
+		/// Input error.
+		Input(m: String) {
+			description("Invalid input"),
+			display("{}", m),
+		}
 	}
 }

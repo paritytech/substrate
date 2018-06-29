@@ -65,10 +65,26 @@ fn submit_transaction_should_not_cause_error() {
 	};
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, 5),
+		AuthorApi::submit_extrinsic(&p, u64::encode(&5).into()),
 		Ok(1)
 	);
 	assert!(
-		AuthorApi::submit_extrinsic(&p, 5).is_err()
+		AuthorApi::submit_extrinsic(&p, u64::encode(&5).into()).is_err()
+	);
+}
+
+#[test]
+fn submit_rich_transaction_should_not_cause_error() {
+	let p = Author {
+		client: Arc::new(test_client::new()),
+		pool: Arc::new(DummyTxPool::default()),
+	};
+
+	assert_matches!(
+		AuthorApi::submit_rich_extrinsic(&p, 5),
+		Ok(1)
+	);
+	assert!(
+		AuthorApi::submit_rich_extrinsic(&p, 5).is_err()
 	);
 }

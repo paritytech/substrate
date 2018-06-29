@@ -42,7 +42,7 @@ use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::RefInto;
+use primitives::traits::{RefInto, MaybeEmpty};
 use primitives::bft::MisbehaviorReport;
 
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
@@ -59,7 +59,7 @@ pub const CODE: &'static [u8] = b":code";
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 pub trait Trait: system::Trait {
-	type PublicAux: RefInto<Self::AccountId>;
+	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;		// MaybeEmpty is for Timestamp's usage.
 	type SessionKey: Parameter + Default;
 }
 

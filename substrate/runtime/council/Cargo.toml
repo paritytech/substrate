@@ -22,6 +22,9 @@ substrate-runtime-session = { path = "../session", default_features = false }
 substrate-runtime-staking = { path = "../staking", default_features = false }
 substrate-runtime-system = { path = "../system", default_features = false }
 
+[dev-dependencies]
+substrate-runtime-timestamp = { path = "../timestamp" }
+
 [features]
 default = ["std"]
 std = [
