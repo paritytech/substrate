@@ -74,6 +74,13 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 		let _ = self.storage_root();
 		self.transaction.expect("transaction always set after calling storage root; qed").0
 	}
+
+	/// Invalidates the currently cached storage root and the db transaction.
+	///
+	/// Called when there are changes that likely will invalidate the storage root.
+	fn mark_dirty(&mut self) {
+		self.transaction = None;
+	}
 }
 
 #[cfg(test)]
@@ -101,8 +108,16 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
-		self.transaction = None; // wipe out the transaction since root will no longer be the same.
+		self.mark_dirty();
 		self.overlay.set_storage(key, value);
+	}
+
+	fn remove_prefix(&mut self, prefix: &[u8]) {
+		self.mark_dirty();
+
+		
+
+		// TODO: iterate over a key range.
 	}
 
 	fn chain_id(&self) -> u64 {

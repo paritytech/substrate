@@ -225,6 +225,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_storage(&key);
 		Ok(())
 	},
+	ext_remove_prefix(prefix_data: *const u8, prefix_len: u32) => {
+		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| DummyUserError)?;
+		this.ext.remove_prefix(&prefix);
+		Ok(())
+	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
