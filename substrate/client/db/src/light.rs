@@ -184,7 +184,8 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			// prune authorities from 'ancient' blocks
 			let mut update_best_authorities = best_authorities.is_some();
 			if let Some(ancient_number) = number.checked_sub(AUTHORITIES_ENTRIES_TO_KEEP) {
-				if self.cache.authorities_at_cache().prune_entries(&mut transaction, As::sa(ancient_number))?.1 {
+				let (_, clear_best_entry) = self.cache.authorities_at_cache().prune_entries(&mut transaction, As::sa(ancient_number))?.1;
+				if clear_best_entry {
 					update_best_authorities = true;
 					best_authorities = None;
 				}
