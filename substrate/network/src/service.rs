@@ -133,7 +133,7 @@ pub struct Params<B: BlockT> {
 	/// Polkadot relay chain access point.
 	pub chain: Arc<Client<B>>,
 	/// On-demand service reference.
-	pub on_demand: Option<Arc<OnDemandService>>,
+	pub on_demand: Option<Arc<OnDemandService<B>>>,
 	/// Transaction pool.
 	pub transaction_pool: Arc<TransactionPool<B>>,
 }
