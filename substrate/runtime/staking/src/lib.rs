@@ -577,7 +577,7 @@ impl<T: Trait> Module<T> {
 			for v in <session::Module<T>>::validators().iter() {
 				if let Some(rem) = Self::slash(v, early_era_slash) {
 					let noms = Self::current_nominators_for(v);
-					let total = noms.iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x);
+					let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
 					if !total.is_zero() {
 						let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
 						for n in noms.iter() {
