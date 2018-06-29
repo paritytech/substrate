@@ -36,10 +36,15 @@ use sync::ChainSync;
 
 /// Blocks import queue API.
 pub trait ImportQueue<B: BlockT>: Send + Sync where B::Header: HeaderT<Number=u64> {
+	/// Start operating (if required).
 	fn start(&self, service: Weak<Service<B>>, chain: Weak<Client<B>>) -> Result<(), Error>;
+	/// Clear the queue when sync is restarting.
 	fn clear(&self);
+	/// Get queue status.
 	fn status(&self) -> ImportQueueStatus<B>;
+	/// Is block with given hash is currently in the queue.
 	fn is_importing(&self, hash: &B::Hash) -> bool;
+	/// Import bunch of blocks.
 	fn import_blocks(&self, sync: &mut ChainSync<B>, io: &mut SyncIo, protocol: &Protocol<B>, blocks: (BlockOrigin, Vec<BlockData<B>>));
 }
 
