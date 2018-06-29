@@ -45,7 +45,7 @@ const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 pub struct Protocol<B: BlockT> {
 	config: ProtocolConfig,
 	chain: Arc<Client<B>>,
-	on_demand: Option<Arc<OnDemandService>>,
+	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
 	sync: RwLock<ChainSync<B>>,
 	consensus: Mutex<Consensus<B>>,
@@ -108,7 +108,7 @@ impl<B: BlockT> Protocol<B> where
 	pub fn new(
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		on_demand: Option<Arc<OnDemandService>>,
+		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<B>>
 	) -> error::Result<Self>  {
 		let info = chain.info()?;
@@ -182,7 +182,7 @@ impl<B: BlockT> Protocol<B> where
 			GenericMessage::BftMessage(m) => self.on_bft_message(io, peer_id, m, HashingFor::<B>::hash(data)),
 			GenericMessage::Transactions(m) => self.on_transactions(io, peer_id, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(io, peer_id, request),
-			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response)
+			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(io, peer_id, response),
 		}
 	}
 
@@ -512,11 +512,11 @@ impl<B: BlockT> Protocol<B> where
 	}
 
 	fn on_remote_call_request(&self, io: &mut SyncIo, peer_id: PeerId, request: message::RemoteCallRequest<B::Hash>) {
-		trace!(target: "sync", "Remote request {} from {} ({} at {})", request.id, peer_id, request.method, request.block);
+		trace!(target: "sync", "Remote call request {} from {} ({} at {})", request.id, peer_id, request.method, request.block);
 		let proof = match self.chain.execution_proof(&request.block, &request.method, &request.data) {
 			Ok((_, proof)) => proof,
 			Err(error) => {
-				trace!(target: "sync", "Remote request {} from {} ({} at {}) failed with: {}",
+				trace!(target: "sync", "Remote call request {} from {} ({} at {}) failed with: {}",
 					request.id, peer_id, request.method, request.block, error);
 				Default::default()
 			},
@@ -528,8 +528,8 @@ impl<B: BlockT> Protocol<B> where
 	}
 
 	fn on_remote_call_response(&self, io: &mut SyncIo, peer_id: PeerId, response: message::RemoteCallResponse) {
-		trace!(target: "sync", "Remote response {} from {}", response.id, peer_id);
-		self.on_demand.as_ref().map(|s| s.on_remote_response(io, peer_id, response));
+		trace!(target: "sync", "Remote call response {} from {}", response.id, peer_id);
+		self.on_demand.as_ref().map(|s| s.on_remote_call_response(io, peer_id, response));
 	}
 
 	pub fn chain(&self) -> &Client<B> {

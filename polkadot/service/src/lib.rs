@@ -136,7 +136,7 @@ impl<Components> Service<Components>
 			},
 			network_config: config.network,
 			chain: client.clone(),
-			on_demand: on_demand.clone().map(|d| d as Arc<network::OnDemandService>),
+			on_demand: on_demand.clone().map(|d| d as Arc<network::OnDemandService<Block>>),
 			transaction_pool: transaction_pool_adapter,
 		};
 		let network = network::Service::new(network_params)?;

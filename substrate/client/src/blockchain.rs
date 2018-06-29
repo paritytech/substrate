@@ -22,20 +22,24 @@ use runtime_primitives::bft::Justification;
 
 use error::Result;
 
-/// Blockchain database backend. Does not perform any validation.
-pub trait Backend<Block: BlockT>: Send + Sync {
+/// Blockchain database header backend. Does not perform any validation.
+pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
 	fn header(&self, id: BlockId<Block>) -> Result<Option<<Block as BlockT>::Header>>;
-	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
-	/// Get block justification. Returns `None` if justification does not exist.
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>>;
 	/// Get blockchain info.
 	fn info(&self) -> Result<Info<Block>>;
 	/// Get block status.
 	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Hash>>;
+}
+
+/// Blockchain database backend. Does not perform any validation.
+pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
+	/// Get block body. Returns `None` if block is not found.
+	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+	/// Get block justification. Returns `None` if justification does not exist.
+	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>>;
 }
 
 /// Block import outcome
