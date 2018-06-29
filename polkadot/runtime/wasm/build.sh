@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 cargo +nightly build --target=wasm32-unknown-unknown --release

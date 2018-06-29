@@ -75,6 +75,11 @@ args:
       value_name: CHAIN_SPEC
       help: Specify the chain specification (one of dev, local or poc-2)
       takes_value: true
+  - pruning:
+      long: pruning
+      value_name: PRUNING_MODE
+      help: Specify the pruning mode. (a number of blocks to keep or "archive"). Default is 256.
+      takes_value: true
   - name:
       long: name
       value_name: NAME

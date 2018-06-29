@@ -25,7 +25,6 @@ extern crate hex_literal;
 extern crate log;
 
 extern crate ethereum_types;
-extern crate kvdb;
 extern crate hashdb;
 extern crate memorydb;
 extern crate triehash;
@@ -47,7 +46,7 @@ mod trie_backend;
 pub use testing::TestExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
-pub use trie_backend::{TryIntoTrieBackend, TrieBackend};
+pub use trie_backend::{TryIntoTrieBackend, TrieBackend, TrieH256, Storage, DBValue};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///

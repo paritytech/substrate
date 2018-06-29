@@ -31,7 +31,7 @@ use DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
-pub const NUM_COLUMNS: u32 = 6;
+pub const NUM_COLUMNS: u32 = 7;
 /// Meta column. Thes set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: Option<u32> = Some(0);
 
@@ -79,7 +79,7 @@ pub fn db_err(err: kvdb::Error) -> client::error::Error {
 }
 
 /// Open RocksDB database.
-pub fn open_database(config: DatabaseSettings, db_type: &str) -> client::error::Result<Arc<KeyValueDB>> {
+pub fn open_database(config: &DatabaseSettings, db_type: &str) -> client::error::Result<Arc<KeyValueDB>> {
 	let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
 	db_config.memory_budget = config.cache_size;
 	db_config.wal = true;

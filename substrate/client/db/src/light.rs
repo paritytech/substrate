@@ -59,7 +59,7 @@ impl<Block> LightStorage<Block>
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		let db = open_database(config, "light")?;
+		let db = open_database(&config, "light")?;
 
 		Self::from_kvdb(db as Arc<_>)
 	}

@@ -30,6 +30,8 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_system as system;
+#[cfg(test)]
+extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(test)]
 #[macro_use]
@@ -250,11 +252,16 @@ mod tests {
 	}
 	impl session::Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
+		type OnSessionChange = staking::Module<Test>;
 	}
 	impl staking::Trait for Test {
 		type Balance = u64;
 		type DetermineContractAddress = staking::DummyContractAddressFor;
 		type AccountIndex = u64;
+	}
+	impl timestamp::Trait for Test {
+		const TIMESTAMP_SET_POSITION: u32 = 0;
+		type Moment = u64;
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Test>>;
@@ -277,6 +284,8 @@ mod tests {
 			creation_fee: 0,
 			contract_fee: 0,
 			reclaim_rebate: 0,
+			early_era_slash: 0,
+			session_reward: 0,
 		}.build_storage());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		with_externalities(&mut t, || {
@@ -292,6 +301,7 @@ mod tests {
 		t.extend(consensus::GenesisConfig::<Test>::default().build_storage());
 		t.extend(session::GenesisConfig::<Test>::default().build_storage());
 		t.extend(staking::GenesisConfig::<Test>::default().build_storage());
+		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
 		t
 	}
 
@@ -302,7 +312,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("4fd406d2d62a841f7e2f956b52ce9ed98111c9eb6b3a9051aa4667b470030832").into(),
+					state_root: hex!("b47a0bfc249af6e00c71a45fcd5619c47b6f71cb4d5c62ab7bf1fe9601d5efc4").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -336,7 +346,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("4fd406d2d62a841f7e2f956b52ce9ed98111c9eb6b3a9051aa4667b470030832").into(),
+					state_root: hex!("b47a0bfc249af6e00c71a45fcd5619c47b6f71cb4d5c62ab7bf1fe9601d5efc4").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

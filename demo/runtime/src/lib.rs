@@ -85,9 +85,9 @@ impl consensus::Trait for Concrete {
 pub type Consensus = consensus::Module<Concrete>;
 
 impl timestamp::Trait for Concrete {
-	const SET_POSITION: u32 = 0;
+	const TIMESTAMP_SET_POSITION: u32 = 0;
 
-	type Value = u64;
+	type Moment = u64;
 }
 
 /// Timestamp module for this concrete runtime.
@@ -103,6 +103,7 @@ impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 
 impl session::Trait for Concrete {
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
+	type OnSessionChange = Staking;
 }
 
 /// Session module for this concrete runtime.
@@ -162,6 +163,8 @@ pub type Address = staking::Address<Concrete>;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+/// BlockId type as expected by this runtime.
+pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
 /// Extrinsic type as expected by this runtime. This is not the type that is signed.
@@ -180,6 +183,7 @@ impl_outer_config! {
 		StakingConfig => staking,
 		DemocracyConfig => democracy,
 		CouncilConfig => council,
+		TimestampConfig => timestamp,
 	}
 }
 

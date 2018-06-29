@@ -155,7 +155,7 @@ pub fn new_in_mem<E, Block, S>(
 	Client::new(backend, executor, genesis_storage)
 }
 
-impl<B, E, Block: BlockT> Client<B, E, Block> where
+impl<B, E, Block> Client<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
@@ -486,7 +486,6 @@ mod tests {
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = test_client::new();
-		let _genesis_hash = client.block_hash(0).unwrap().unwrap();
 
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 1000);
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 0);

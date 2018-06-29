@@ -49,16 +49,16 @@ pub mod error;
 
 use std::sync::Arc;
 use demo_primitives::Hash;
-use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, BuildStorage};
-use demo_runtime::{Block, UncheckedExtrinsic};
+use demo_runtime::{Block, BlockId, UncheckedExtrinsic, BuildStorage, GenesisConfig,
+	ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
+	TimestampConfig};
 use futures::{Future, Sink, Stream};
 
 struct DummyPool;
-impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, Hash> for DummyPool {
+impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for DummyPool {
 	type Error = extrinsic_pool::txpool::Error;
 
-	fn submit(&self, _: Vec<UncheckedExtrinsic>)
+	fn submit(&self, _block: BlockId, _: Vec<UncheckedExtrinsic>)
 		-> Result<Vec<Hash>, Self::Error>
 	{
 		Err("unimplemented".into())
@@ -107,10 +107,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			authorities: vec![god_key.clone()],
 		}),
 		system: None,
-	//		block_time: 5,			// 5 second block time.
 		session: Some(SessionConfig {
 			validators: vec![god_key.clone().into()],
 			session_length: 720,	// that's 1 hour per session.
+			broken_percent_late: 30,
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -126,6 +126,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
 			bonding_duration: 90,	// 90 days per bond.
+			early_era_slash: 10000,
+			session_reward: 100,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
@@ -147,6 +149,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
 			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
 		}),
+		timestamp: Some(TimestampConfig {
+			period: 5,					// 5 second block time.
+		}),
 	}.build_storage();
 
 	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_storage)?);
@@ -155,7 +160,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let _rpc_servers = {
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
-			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, Arc::new(DummyPool), DummySystem)
+			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool));
+			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, author, DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();
