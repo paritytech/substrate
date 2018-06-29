@@ -100,7 +100,7 @@ impl Components for FullComponents {
 
 		// Load the first available key
 		let key = keystore.load(&keystore.contents()?[0], "")?;
-		info!("Using authority key {:?}", key.public());
+		info!("Using authority key: {}", key.public());
 		Ok(Some(consensus::Service::new(
 			client.clone(),
 			client.clone(),

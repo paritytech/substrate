@@ -125,7 +125,7 @@ impl<Components> Service<Components>
 		let api = components.build_api(client.clone());
 		let best_header = client.best_block_header()?;
 
-		info!("Best block is #{}", best_header.number);
+		info!("Best block: #{}", best_header.number);
 		telemetry!("node.start"; "height" => best_header.number, "best" => ?best_header.hash());
 
 		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool, api.clone()));
