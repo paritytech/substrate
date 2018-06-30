@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-#![type_length_limit = "67108864"]
+#![type_length_limit = "268435456"]
 
 extern crate parking_lot;
 extern crate fnv;

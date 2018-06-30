@@ -284,6 +284,25 @@ impl NetworkState {
 		}
 	}
 
+	/// Signals that an address doesn't match the corresponding node ID.
+	/// This removes the address from the peer store, so that it is not returned by `addrs_of_peer`
+	/// again in the future.
+	pub fn set_invalid_kad_address(&self, node_id: &PeerstorePeerId, addr: &Multiaddr) {
+		// TODO: blacklist the address?
+		match self.peerstore {
+			PeersStorage::Memory(ref mem) => {
+				if let Some(mut peer) = mem.peer(node_id) {
+					peer.rm_addr(addr.clone())		// TODO: cloning necessary?
+				}
+			}
+			PeersStorage::Json(ref json) => {
+				if let Some(mut peer) = json.peer(node_id) {
+					peer.rm_addr(addr.clone())		// TODO: cloning necessary?
+				}
+			}
+		}
+	}
+
 	/// Returns the known multiaddresses of a peer.
 	pub fn addrs_of_peer(&self, node_id: &PeerstorePeerId) -> Vec<Multiaddr> {
 		match self.peerstore {
