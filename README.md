@@ -56,8 +56,7 @@ polkadot --chain=local --validator --key Alice -d /tmp/alice
 and in the other, run:
 
 ```
-polkadot --chain=local --validator --key Bob -d /tmp/bob --port 30334
-    --bootnodes '/ip4/127.0.0.1/tcp/30333/p2p/ALICE_BOOTNODE_ID_HERE'
+polkadot --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes '/ip4/127.0.0.1/tcp/30333/p2p/ALICE_BOOTNODE_ID_HERE'
 ```
 
 Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of

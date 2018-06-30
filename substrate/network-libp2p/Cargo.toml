@@ -10,7 +10,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 bytes = "0.4"
 fnv = "1.0"
 futures = "0.1"
-libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "322769ee562442215518e4fcfdb727a5dd971bc8", default-features = false, features = ["libp2p-secio"] }
+libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "a2da724c9f3a935b4fc6b99a852ecb8a5cf27b49", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
 ethcore-network = { git = "https://github.com/paritytech/parity.git" }
 ethkey = { git = "https://github.com/paritytech/parity.git" }
 parking_lot = "0.5"

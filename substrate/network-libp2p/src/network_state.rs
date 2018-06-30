@@ -25,14 +25,18 @@ use libp2p::secio;
 use network::{Error, ErrorKind, NetworkConfiguration, NonReservedPeerMode};
 use network::{PeerId, ProtocolId, SessionInfo};
 use parking_lot::{Mutex, RwLock};
+use rand::{self, Rng};
 use std::cmp;
-use std::io::{Error as IoError, ErrorKind as IoErrorKind};
+use std::fs::File;
+use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
 use std::path::Path;
 use std::sync::atomic;
 use std::time::Duration;
 
 // File where the peers are stored.
 const NODES_FILE: &str = "nodes.json";
+// File where the private key is stored.
+const SECRET_FILE: &str = "secret";
 
 // Common struct shared throughout all the components of the service.
 pub struct NetworkState {
@@ -112,9 +116,7 @@ struct PeerConnectionInfo {
 impl NetworkState {
 	pub fn new(config: &NetworkConfiguration) -> Result<NetworkState, Error> {
 		// Private and public keys configuration.
-		// TODO: use key from the config ; however that requires supporting secp256k1 in libp2p
-		// 		 see https://github.com/libp2p/rust-libp2p/issues/228
-		let local_private_key = secio::SecioKeyPair::ed25519_generated().unwrap();
+		let local_private_key = obtain_private_key(&config)?;
 		let local_public_key = local_private_key.to_public_key();
 
 		// Build the storage for peers, including the bootstrap nodes.
@@ -529,6 +531,47 @@ fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 	}
 	
 	Ok(peer_id)
+}
+
+// Obtains or generates the private key.
+fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPair, IoError> {
+	Ok(if let Some(ref secret) = config.use_secret {
+		secio::SecioKeyPair::secp256k1_raw_key(&secret[..])
+			.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?
+	} else {
+		if let Some(ref path) = config.net_config_path {
+			let secret_path = Path::new(path).join(SECRET_FILE);
+			let loaded_secret = File::open(&secret_path)
+				.and_then(|mut file| {
+					// We are in 2018 and there is still no method on `std::io::Read` that
+					// directly returns a `Vec`.
+					let mut buf = Vec::new();
+					file.read_to_end(&mut buf).map(|_| buf)
+				})
+				.and_then(|content| {
+					secio::SecioKeyPair::secp256k1_raw_key(&content)
+						.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))
+				});
+
+			if let Ok(loaded_secret) = loaded_secret {
+				loaded_secret
+			} else {
+				let raw_key: [u8; 32] = rand::rngs::EntropyRng::new().gen();
+				let secio_key = secio::SecioKeyPair::secp256k1_raw_key(&raw_key)
+					.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?;
+				if let Ok(mut file) = File::create(&secret_path) {
+					let _ = file.write_all(&raw_key);
+				}
+				secio_key
+			}
+
+		} else {
+			let mut key: [u8; 32] = [0; 32];
+			rand::rngs::EntropyRng::new().fill(&mut key);
+			secio::SecioKeyPair::secp256k1_raw_key(&key)
+				.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?
+		}
+	})
 }
 
 #[cfg(test)]
