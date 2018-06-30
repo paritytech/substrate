@@ -339,11 +339,7 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 			timeouts_register_rx: mpsc::UnboundedReceiver<(Instant, (Arc<NetworkProtocolHandler + Send + Sync + 'static>, ProtocolId, TimerToken))>,
 			close_rx: oneshot::Receiver<()>) -> Result<impl Future<Item = (), Error = IoError>, Error>
 {
-	// TODO: use key from the config ; however that requires supporting secp256k1 in libp2p
-	// 		 see https://github.com/libp2p/rust-libp2p/issues/228
-	let local_private_key = secio::SecioKeyPair::ed25519_generated().unwrap();
-	let local_public_key = local_private_key.to_public_key();
-	let local_peer_id = local_public_key.clone().into_peer_id();
+	let local_peer_id = shared.network_state.local_public_key().clone().into_peer_id();
 	info!(target: "sub-libp2p", "Local node id = {:?}", local_peer_id);	// TODO: debug! instead?
 
 	// Configuration for Kademlia DHT.
@@ -429,7 +425,7 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 		libp2p::core::swarm(
 			upgraded_transport,
 			move |(upgrade, endpoint), client_addr| {
-				listener_handle(shared.clone(), upgrade, endpoint, local_public_key.clone(), client_addr)
+				listener_handle(shared.clone(), upgrade, endpoint, client_addr)
 			},
 		)
 	};
@@ -497,7 +493,6 @@ enum FinalUpgrade<C> {
 
 // Called whenever we successfully open a multistream with a remote.
 fn listener_handle<'a, C>(shared: Arc<Shared>, upgrade: FinalUpgrade<C>, endpoint: Endpoint,
-					local_public_key: libp2p::core::PublicKey,
 					client_addr: impl Future<Item = Multiaddr, Error = IoError> + 'a,
 					/*listener_upgrade: impl ConnectionUpgrade<C, Box<Future<Item = Multiaddr, Error = IoError>>>*/)
 					-> Box<Future<Item = (), Error = IoError> + 'a>
@@ -540,7 +535,7 @@ where C: AsyncRead + AsyncWrite + 'a
 				.collect();*/
 			sender.send(
 				IdentifyInfo {
-					public_key: local_public_key.clone(),
+					public_key: shared.network_state.local_public_key().clone(),
 					protocol_version: concat!("substrate/", env!("CARGO_PKG_VERSION")).to_owned(),
 					agent_version: "rust-libp2p/1.0.0".to_owned(),
 					listen_addrs: shared.listened_addrs.read().clone(),

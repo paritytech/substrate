@@ -17,10 +17,11 @@
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::sync::mpsc;
-use libp2p::core::{Multiaddr, AddrComponent, Endpoint, PeerId as PeerstorePeerId};
+use libp2p::core::{Multiaddr, AddrComponent, Endpoint, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::peerstore::{Peerstore, PeerAccess};
 use libp2p::peerstore::json_peerstore::JsonPeerstore;
 use libp2p::peerstore::memory_peerstore::MemoryPeerstore;
+use libp2p::secio;
 use network::{Error, ErrorKind, NetworkConfiguration, NonReservedPeerMode};
 use network::{PeerId, ProtocolId, SessionInfo};
 use parking_lot::{Mutex, RwLock};
@@ -56,6 +57,11 @@ pub struct NetworkState {
 
 	// List of the IDs of the disabled peers. These peers will see their connections refused.
 	disabled_peers: RwLock<FnvHashSet<PeerstorePeerId>>,
+
+	// Local private key.
+	local_private_key: secio::SecioKeyPair,
+	// Local public key.
+	local_public_key: PublicKey,
 }
 
 enum PeersStorage {
@@ -105,6 +111,12 @@ struct PeerConnectionInfo {
 
 impl NetworkState {
 	pub fn new(config: &NetworkConfiguration) -> Result<NetworkState, Error> {
+		// Private and public keys configuration.
+		// TODO: use key from the config ; however that requires supporting secp256k1 in libp2p
+		// 		 see https://github.com/libp2p/rust-libp2p/issues/228
+		let local_private_key = secio::SecioKeyPair::ed25519_generated().unwrap();
+		let local_public_key = local_private_key.to_public_key();
+
 		// Build the storage for peers, including the bootstrap nodes.
 		let peerstore = if let Some(ref path) = config.net_config_path {
 			let path = Path::new(path).join(NODES_FILE);
@@ -148,7 +160,19 @@ impl NetworkState {
 			reserved_peers,
 			next_peer_id: atomic::AtomicUsize::new(0),
 			disabled_peers: RwLock::new(Default::default()),
+			local_private_key,
+			local_public_key,
 		})
+	}
+
+	/// Returns the private key of the local node.
+	pub fn local_private_key(&self) -> &secio::SecioKeyPair {
+		&self.local_private_key
+	}
+
+	/// Returns the public key of the local node.
+	pub fn local_public_key(&self) -> &PublicKey {
+		&self.local_public_key
 	}
 
 	/// Returns all the IDs of the peer we have knowledge of.
