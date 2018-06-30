@@ -104,9 +104,9 @@ impl consensus::Trait for Concrete {
 pub type Consensus = consensus::Module<Concrete>;
 
 impl timestamp::Trait for Concrete {
-	const SET_POSITION: u32 = 0;
+	const TIMESTAMP_SET_POSITION: u32 = 0;
 
-	type Value = u64;
+	type Moment = u64;
 }
 
 /// Timestamp module for this concrete runtime.
@@ -122,6 +122,7 @@ impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 
 impl session::Trait for Concrete {
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
+	type OnSessionChange = Staking;
 }
 
 /// Session module for this concrete runtime.
@@ -201,6 +202,7 @@ impl_outer_config! {
 		StakingConfig => staking,
 		DemocracyConfig => democracy,
 		CouncilConfig => council,
+		TimestampConfig => timestamp,
 	}
 }
 

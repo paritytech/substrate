@@ -68,4 +68,4 @@ pub use network::{NonReservedPeerMode, NetworkConfiguration, ConnectionFilter, C
 pub use message::{generic as generic_message, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
-pub use on_demand::{OnDemand, OnDemandService, Response as OnDemandResponse};
+pub use on_demand::{OnDemand, OnDemandService, RemoteCallResponse};

@@ -19,6 +19,7 @@ substrate-state-machine = { path = "../../../substrate/state-machine" }
 substrate-runtime-support = { path = "../../../substrate/runtime-support" }
 substrate-codec = { path = "../../../substrate/codec" }
 substrate-executor = { path = "../../../substrate/executor" }
+substrate-state-db = { path = "../../../substrate/state-db" }
 
 [dev-dependencies]
 kvdb-memorydb = { git = "https://github.com/paritytech/parity.git" }

@@ -92,7 +92,7 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn timestamp(&self, at: &BlockId) -> Result<Timestamp> {
-		with_runtime!(self, at, ::runtime::Timestamp::now)
+		with_runtime!(self, at, ::runtime::Timestamp::get)
 	}
 
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool> {
@@ -196,11 +196,13 @@ mod tests {
 			session: Some(SessionConfig {
 				validators: validators(),
 				session_length: 100,
+				broken_percent_late: 100,
 			}),
 			council: Some(Default::default()),
 			democracy: Some(Default::default()),
 			parachains: Some(Default::default()),
 			staking: Some(Default::default()),
+			timestamp: Some(Default::default()),
 		};
 
 		::client::new_in_mem(LocalDispatch::new(), genesis_config.build_storage()).unwrap()
