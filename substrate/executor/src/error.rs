@@ -63,12 +63,6 @@ error_chain! {
 			display("Runtime error"),
 		}
 
-		/// Runtime interface does not match native.
-		RuntimeVersionMismatch {
-			description("runtime version does not match native"),
-			display("Runtime version does not match native."),
-		}
-
 		/// Runtime failed.
 		InvalidMemoryReference {
 			description("invalid memory reference"),

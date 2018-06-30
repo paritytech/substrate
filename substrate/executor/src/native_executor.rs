@@ -94,10 +94,9 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 		} else {
 			let version = WasmExecutor.call(ext, code, "version", &[])?;
 			let version = RuntimeVersion::decode(&mut version.as_slice());
-			if !version.map_or(false, |v| D::VERSION.can_call_with(&v)) {
-				return Err(ErrorKind::RuntimeVersionMismatch.into());
+			if version.map_or(false, |v| D::VERSION.can_call_with(&v)) {
+				return D::dispatch(ext, method, data)
 			}
-			// TODO: cache
 			// call into wasm.
 			WasmExecutor.call(ext, code, method, data)
 		}

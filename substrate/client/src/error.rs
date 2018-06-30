@@ -70,7 +70,7 @@ error_chain! {
 			display("Current state of blockchain has invalid authority count value"),
 		}
 
-		/// Invalid state data.
+		/// Cound not get runtime version.
 		VersionInvalid {
 			description("Runtime version error"),
 			display("On-chain runtime does not specify version"),

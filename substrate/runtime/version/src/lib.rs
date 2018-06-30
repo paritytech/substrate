@@ -56,19 +56,42 @@ macro_rules! ver_str {
 	( $y:expr ) => {{ $y }}
 }
 
+/// Runtime version.
+/// This should not be thought of as classic Semver (major/minor/tiny).
+/// This triplet have different semantics and mis-interpretation could cause problems.
+/// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
+/// absolutely not `impl_version` since they change the semantics of the runtime.
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct RuntimeVersion {
-	/// Runtime name. This must be the same in native runtime and on-chain.
+	/// Identifies the different Substrate runtimes. There'll be at least polkadot and demo. A different on-chain spec_name to that of the native runtime would normally result in node not attempting to sync further.
 	pub spec_name: VersionString,
-	/// Implementation name. Used for information only.
+	/// Name of the implementation of the spec. This is of little consequence for the node and serves only to differentiate code of different implementation teams. For this codebase, it will be parity-polkadot.
+	/// If there were a non-Rust implementation of the Polkadot runtime (e.g. C++), then it would identify itself with an accordingly different impl_name.
 	pub impl_name: VersionString,
-	/// Version of the authorship interface. An authoring node will not attempt to author blocks unless this is equal to its native runtime.
+	/// `authoring_version` is the version of the authorship interface. An authoring node will not attempt to author blocks unless this is equal to its native runtime.
 	pub authoring_version: u32,
-	/// Version of the runtime specification. This must match native runtime for any call go through.
+	/// Version of the runtime specification. A full-node will not attempt to use its native runtime in substitute for the on-chain Wasm runtime unless all of `spec_name`, `spec_version` and `authoring_version`
+	/// are the same between Wasm and native.
 	pub spec_version: u32,
-	/// Implementation version. Used for information only.
+	/// Version of the implementation of the specification. Nodes are free to ignore this; it serves only as an indication that the code is different;
+	/// as long as the other two versions are the same then while the code may be different, it is nonetheless required to do the same thing.
+	/// Non-consensus-breaking optimisations are about the only changes that could be made which would result in only the impl_version changing.
 	pub impl_version: u32,
+}
+
+// TODO: remove this after PoC-2
+#[cfg(feature = "std")]
+impl Default for RuntimeVersion {
+	fn default() -> RuntimeVersion {
+		RuntimeVersion {
+			spec_name: ver_str!("polkadot"),
+			impl_name: ver_str!("parity-polkadot"),
+			authoring_version: 0,
+			spec_version: 0,
+			impl_version: 0,
+		}
+	}
 }
 
 #[cfg(feature = "std")]
@@ -76,12 +99,12 @@ impl RuntimeVersion {
 	/// Check if this version matches other version for calling into runtime.
 	pub fn can_call_with(&self, other: &RuntimeVersion) -> bool {
 		self.spec_version == other.spec_version &&
-		self.spec_name == other.spec_name
+		self.spec_name == other.spec_name &&
+		self.authoring_version == other.authoring_version
 	}
 
 	/// Check if this version matches other version for authoring blocks.
 	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
-		self.can_call_with(other) &&
 		self.authoring_version == other.authoring_version
 	}
 }

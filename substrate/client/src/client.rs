@@ -218,9 +218,11 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get the set of authorities at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
-		self.executor.call(id, "version", &[])
+		// TODO: Post Poc-2 return an error if version is missing
+		Ok(self.executor.call(id, "version", &[])
 			.and_then(|r| RuntimeVersion::decode(&mut &r.return_data[..])
 				.ok_or(error::ErrorKind::VersionInvalid.into()))
+			.unwrap_or_default())
 	}
 
 	/// Get call executor reference.
