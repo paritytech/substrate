@@ -74,6 +74,7 @@ use polkadot_primitives::Block;
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
+use service::PruningMode;
 
 const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
 
@@ -159,25 +160,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let spec = load_spec(&matches);
 	config.chain_name = spec.name.clone();
 
-	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
-		let name = config.name.clone();
-		let chain_name = config.chain_name.clone();
-		Some(init_telemetry(TelemetryConfig {
-			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
-			on_connect: Box::new(move || {
-				telemetry!("system.connected";
-					"name" => name.clone(),
-					"implementation" => "parity-polkadot",
-					"version" => crate_version!(),
-					"config" => "",
-					"chain" => chain_name.clone(),
-				);
-			}),
-		}))
-	} else {
-		None
-	};
-
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(default_base_path);
@@ -189,6 +171,14 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.into();
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
+
+	config.pruning = match matches.value_of("pruning") {
+		Some("archive") => PruningMode::ArchiveAll,
+		None => PruningMode::keep_blocks(256),
+		Some(s) => PruningMode::keep_blocks(s.parse()
+			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
+	};
+
 	let (genesis_storage, boot_nodes) = spec.deconstruct();
 	config.genesis_storage = genesis_storage;
 
@@ -237,6 +227,25 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let sys_conf = SystemConfiguration {
 		chain_name: config.chain_name.clone(),
+	};
+
+	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+		let name = config.name.clone();
+		let chain_name = config.chain_name.clone();
+		Some(init_telemetry(TelemetryConfig {
+			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
+			on_connect: Box::new(move || {
+				telemetry!("system.connected";
+					"name" => name.clone(),
+					"implementation" => "parity-polkadot",
+					"version" => crate_version!(),
+					"config" => "",
+					"chain" => chain_name.clone(),
+				);
+			}),
+		}))
+	} else {
+		None
 	};
 
 	let core = reactor::Core::new().expect("tokio::Core could not be created");

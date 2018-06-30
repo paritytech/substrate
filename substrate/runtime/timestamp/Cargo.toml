@@ -14,6 +14,7 @@ substrate-runtime-primitives = { path = "../primitives", default_features = fals
 substrate-codec = { path = "../../codec", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-system = { path = "../system", default_features = false }
+substrate-runtime-consensus = { path = "../consensus", default_features = false }
 
 [dev-dependencies]
 substrate-runtime-io = { path = "../../runtime-io", default_features = true }

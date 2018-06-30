@@ -2138,6 +2138,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-support 0.1.0",
+ "substrate-state-db 0.1.0",
  "substrate-state-machine 0.1.0",
 ]
 
@@ -2282,6 +2283,7 @@ dependencies = [
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
+ "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-extrinsic-pool 0.1.0",
  "substrate-primitives 0.1.0",
@@ -2354,6 +2356,7 @@ dependencies = [
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
+ "substrate-runtime-timestamp 0.1.0",
 ]
 
 [[package]]
@@ -2374,6 +2377,7 @@ dependencies = [
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
+ "substrate-runtime-timestamp 0.1.0",
 ]
 
 [[package]]
@@ -2393,6 +2397,7 @@ dependencies = [
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
+ "substrate-runtime-timestamp 0.1.0",
 ]
 
 [[package]]
@@ -2455,6 +2460,7 @@ dependencies = [
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
+ "substrate-runtime-timestamp 0.1.0",
 ]
 
 [[package]]
@@ -2477,6 +2483,7 @@ dependencies = [
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
+ "substrate-runtime-timestamp 0.1.0",
  "wabt 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2528,6 +2535,7 @@ dependencies = [
  "serde_derive 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-std 0.1.0",
@@ -2544,6 +2552,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-state-db"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "substrate-state-machine"
 version = "0.1.0"
 dependencies = [
@@ -2551,7 +2570,6 @@ dependencies = [
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.1.1 (git+https://github.com/paritytech/parity.git)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "kvdb 0.1.0 (git+https://github.com/paritytech/parity.git)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "memorydb 0.1.1 (git+https://github.com/paritytech/parity.git)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
