@@ -56,6 +56,7 @@ extern "C" {
 	fn ext_print_num(value: u64);
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
+	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
@@ -80,7 +81,7 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 	}
 }
 
-/// Set the storage to some particular key.
+/// Set the storage of some particular key to Some value.
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	unsafe {
 		ext_set_storage(
@@ -90,11 +91,21 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 	}
 }
 
-/// Set the storage to some particular key.
+/// Clear the storage of some particular key.
 pub fn clear_storage(key: &[u8]) {
 	unsafe {
 		ext_clear_storage(
 			key.as_ptr(), key.len() as u32
+		);
+	}
+}
+
+/// Clear the storage entries key of which starts with the given prefix.
+pub fn clear_prefix(prefix: &[u8]) {
+	unsafe {
+		ext_clear_prefix(
+			prefix.as_ptr(),
+			prefix.len() as u32
 		);
 	}
 }

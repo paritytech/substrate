@@ -182,48 +182,6 @@ pub trait StorageMap<K: codec::Slicable, V: codec::Slicable> {
 	}
 }
 
-/// A strongly-typed double-map in storage.
-pub trait StorageDoubleMap<K1: codec::Slicable, K2: codec::Slicable, V: codec::Slicable> {
-	/// The type that get/take returns.
-	type Query;
-
-	/// Get the prefix key in storage.
-	fn prefix() -> &'static [u8];
-
-	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for(k1: &K1, k2: &K2) -> Vec<u8>;
-
-	/// Get the
-	fn partial_key_for(k1: &K1) -> Vec<u8>;
-
-	/// true if the value is defined in storage.
-	fn exists<S: Storage>(k1: &K1, k2: &K2, storage: &S) -> bool {
-		storage.exists(&Self::key_for(k1, k2)[..])
-	}
-
-	/// Load the value associated with the given key from the map.
-	fn get<S: Storage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
-
-	/// Take the value under a key.
-	fn take<S: Storage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
-
-	/// Store a value to be associated with the given key from the map.
-	fn insert<S: Storage>(k1: &K1, k2: &K2, val: &V, storage: &S) {
-		storage.put(&Self::key_for(k1, k2)[..], val);
-	}
-
-	/// Remove the value under a key.
-	fn remove<S: Storage>(k1: &K1, k2: &K2, storage: &S) {
-		storage.kill(&Self::key_for(k1, k2)[..]);
-	}
-
-	/// Remove the value under a key.
-	fn remove_all<S: Storage>(k1: &K1, storage: &S) {
-		// todo: storage.remove_prefix(Self::partial_key_for(k1));
-		// storage.kill(&Self::key_for(k1, k2)[..]);
-	}
-}
-
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __storage_items_internal {

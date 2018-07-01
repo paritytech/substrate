@@ -68,6 +68,13 @@ pub fn clear_storage(key: &[u8]) {
 	);
 }
 
+/// Clear the storage entries key of which starts with the given prefix.
+pub fn clear_prefix(prefix: &[u8]) {
+	ext::with(|ext|
+		ext.clear_prefix(prefix)
+	);
+}
+
 /// The current relay chain identifier.
 pub fn chain_id() -> u64 {
 	ext::with(|ext|
