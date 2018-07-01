@@ -112,12 +112,11 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		self.overlay.set_storage(key, value);
 	}
 
-	fn remove_prefix(&mut self, prefix: &[u8]) {
+	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.mark_dirty();
-
-		
-
-		// TODO: iterate over a key range.
+		self.backend.for_keys_with_prefix(prefix, |key| {
+			self.overlay.set_storage(key.to_vec(), None);
+		});
 	}
 
 	fn chain_id(&self) -> u64 {

@@ -35,7 +35,7 @@ impl Externalities for TestExternalities {
 		}
 	}
 
-	fn remove_prefix(&mut self, prefix: &[u8]) {
+	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.retain(|key, _|
 			!key.starts_with(prefix)
 		)

@@ -99,6 +99,37 @@ impl Backend for TrieBackend {
 			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
 
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
+		let mut read_overlay = MemoryDB::default();
+		let eph = Ephemeral {
+			storage: &self.storage,
+			overlay: &mut read_overlay,
+		};
+
+		let mut iter = move || -> Result<(), Box<TrieError>> {
+			let trie = TrieDB::new(&eph, &self.root)?;
+			let mut iter = trie.iter()?;
+
+			iter.seek(prefix)?;
+
+			for x in iter {
+				let (key, _) = x?;
+
+				if !key.starts_with(prefix) {
+					break;
+				}
+
+				f(&key);
+			}
+
+			Ok(())
+		};
+
+		if let Err(e) = iter() {
+			debug!(target: "trie", "Error while iterating by prefix: {}", e);
+		}
+	}
+
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		let mut read_overlay = MemoryDB::default();
 		let eph = Ephemeral {
