@@ -28,7 +28,7 @@ use network::{PeerId, ProtocolId, SessionInfo};
 use parking_lot::{Mutex, RwLock};
 use rand::{self, Rng};
 use std::cmp;
-use std::fs::File;
+use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
 use std::path::Path;
 use std::sync::atomic;
@@ -682,7 +682,7 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 	} else {
 		if let Some(ref path) = config.net_config_path {
 			let secret_path = Path::new(path).join(SECRET_FILE);
-			let loaded_secret = File::open(&secret_path)
+			let loaded_secret = fs::File::open(&secret_path)
 				.and_then(|mut file| {
 					// We are in 2018 and there is still no method on `std::io::Read` that
 					// directly returns a `Vec`.
@@ -700,10 +700,9 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 				let raw_key: [u8; 32] = rand::rngs::EntropyRng::new().gen();
 				let secio_key = secio::SecioKeyPair::secp256k1_raw_key(&raw_key)
 					.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?;
-				if let Ok(mut file) = File::create(&secret_path) {
+				if let Ok(mut file) = open_priv_key_file(&secret_path) {
 					let _ = file.write_all(&raw_key);
 				}
-				// TODO: chmod the file
 				secio_key
 			}
 
@@ -714,6 +713,24 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 				.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?
 		}
 	})
+}
+
+// Opens a file containing a private key in write mode.
+#[cfg(unix)]
+fn open_priv_key_file(path: impl AsRef<Path>) -> Result<fs::File, IoError> {
+	use std::os::unix::fs::OpenOptionsExt;
+	fs::OpenOptions::new()
+		.write(true)
+		.create_new(true)
+		.mode(600)
+		.open(path)
+}
+#[cfg(not(unix))]
+fn open_priv_key_file(path: impl AsRef<Path>) -> Result<fs::File, IoError> {
+	fs::OpenOptions::new()
+		.write(true)
+		.create_new(true)
+		.open(path)
 }
 
 #[cfg(test)]
