@@ -1713,7 +1713,7 @@ dependencies = [
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2155,6 +2155,7 @@ dependencies = [
  "ed25519 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2164,6 +2165,7 @@ dependencies = [
  "substrate-runtime-io 0.1.0",
  "substrate-serializer 0.1.0",
  "substrate-state-machine 0.1.0",
+ "transient-hashmap 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wabt 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2914,6 +2916,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "transient-hashmap"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "triehash"
 version = "0.1.0"
 source = "git+https://github.com/paritytech/parity.git#4145be863bec10038fc0ac5d36a41365b5087344"
@@ -3436,6 +3443,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum trace-time 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5aea07da6582e957c6e737eeb63a5af79e648eeeaaaba8fd9a417f1124bafa41"
 "checksum traitobject 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 "checksum transaction-pool 1.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "be1efb673ddf49ab4a99893eb3af02f6563636033fb832c2b7f937641ad62b17"
+"checksum transient-hashmap 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "aeb4b191d033a35edfce392a38cdcf9790b6cebcb30fa690c312c29da4dc433e"
 "checksum triehash 0.1.0 (git+https://github.com/paritytech/parity.git)" = "<none>"
 "checksum triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "2033893a813c70e7d8a739ca6c36dc0a7a2c913ec718d7cbf84a3837bbe3c7ce"
 "checksum try-lock 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ee2aa4715743892880f70885373966c83d73ef1b0838a664ef0c76fffd35e7c2"

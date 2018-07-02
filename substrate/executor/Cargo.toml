@@ -10,6 +10,8 @@ substrate-runtime-io = { path = "../runtime-io" }
 substrate-primitives = { path = "../primitives" }
 substrate-serializer = { path = "../serializer" }
 substrate-state-machine = { path = "../state-machine"  }
+lazy_static = "1.0"
+transient-hashmap = "0.4.1"
 ed25519 = { path = "../ed25519" }
 serde = "1.0"
 serde_derive = "1.0"
