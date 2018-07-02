@@ -312,7 +312,7 @@ fn run_until_exit<C>(runtime: &mut Runtime, service: service::Service<C>, matche
 		)
 	};
 
-	runtime.block_on(exit).expect("exit future does not fail; qed");
+	let _ = exit.wait();
 	Ok(())
 }
 
