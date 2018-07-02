@@ -21,7 +21,7 @@ use network::{NetworkContext, PeerId, ProtocolId};
 use parking_lot::{Mutex, RwLock};
 use libp2p;
 use libp2p::multiaddr::{AddrComponent, Multiaddr};
-use libp2p::kad::{KademliaSystem, KademliaServerConfig, KademliaConfig, KademliaIncomingRequest, KademliaServerController, Peer, ConnectionType, QueryEvent};
+use libp2p::kad::{KadSystem, KadConnecConfig, KadSystemConfig, KadIncomingRequest, KadConnecController, KadPeer, KadConnectionType, KadQueryEvent};
 use libp2p::identify::{IdentifyInfo, IdentifyOutput, IdentifyTransportOutcome, IdentifyProtocolConfig, PeerIdTransport};
 use libp2p::core::{upgrade, Transport, MuxedTransport, ConnectionUpgrade, Endpoint, PeerId as PeerstorePeerId, PublicKey, SwarmController};
 use libp2p::{ping, secio};
@@ -65,13 +65,13 @@ struct Shared {
 	network_state: NetworkState,
 
 	// Kademlia system. Contains the DHT.
-	kad_system: KademliaSystem,
+	kad_system: KadSystem,
 
 	// Configuration for the Kademlia upgrade.
-	kad_upgrade: KademliaServerConfig,
+	kad_upgrade: KadConnecConfig,
 
 	// List of open Kademlia connections.
-	kad_connections: RwLock<FnvHashMap<PeerstorePeerId, future::Shared<Box<Future<Item = KademliaServerController, Error = IoError>>>>>,
+	kad_connections: RwLock<FnvHashMap<PeerstorePeerId, future::Shared<Box<Future<Item = KadConnecController, Error = IoError>>>>>,
 
 	// List of protocols available on the network. It is a logic error to remote protocols from
 	// this list, and the code may assume that protocols stay at the same index forever.
@@ -102,7 +102,7 @@ impl NetworkService {
 		let local_peer_id = network_state.local_public_key().clone().into_peer_id();
 		info!(target: "sub-libp2p", "Local node id = {:?}", local_peer_id);	// TODO: debug! instead?
 
-		let kad_system = KademliaSystem::without_init(KademliaConfig {
+		let kad_system = KadSystem::without_init(KadSystemConfig {
 			parallelism: 3,
 			local_peer_id: local_peer_id.clone(),
 			kbuckets_timeout: Duration::from_secs(10),
@@ -115,7 +115,7 @@ impl NetworkService {
 			kad_connections: RwLock::new(Default::default()),
 			protocols: RwLock::new(Default::default()),
 			kad_system,
-			kad_upgrade: KademliaServerConfig::new(),
+			kad_upgrade: KadConnecConfig::new(),
 			config,
 			timeouts_register_tx: RwLock::new(mpsc::unbounded().0),
 			listened_addrs,
@@ -494,7 +494,7 @@ struct TransportOutput<S> {
 
 // Enum of all the possible protocols our service handles.
 enum FinalUpgrade<C> {
-	Kad((KademliaServerController, Box<Stream<Item = KademliaIncomingRequest, Error = IoError>>)),
+	Kad((KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>)),
 	// The remote identification system, and the multiaddress we see the remote as.
 	Identify(IdentifyOutput<C>, Multiaddr),
 	Ping(ping::Pinger, Box<Future<Item = (), Error = IoError>>),
@@ -523,7 +523,7 @@ where C: AsyncRead + AsyncWrite + 'a
 					let shared = shared.clone();
 					shared.kad_system.update_kbuckets(node_id.clone());
 					match req {
-						KademliaIncomingRequest::FindNode { searched, responder } => {
+						KadIncomingRequest::FindNode { searched, responder } => {
 							responder.respond(shared
 								.kad_system
 								.known_closest_peers(&searched)
@@ -531,13 +531,13 @@ where C: AsyncRead + AsyncWrite + 'a
 									let addrs = shared.network_state.addrs_of_peer(&peer_id);
 									let connec_ty = if shared.network_state.has_connection(&peer_id) {
 										// TODO: this only checks connections with substrate ; but what
-										//       if we're connected through Kad only?
-										ConnectionType::Connected
+										//       if we're connected through Kademlia only?
+										KadConnectionType::Connected
 									} else {
-										ConnectionType::NotConnected
+										KadConnectionType::NotConnected
 									};
 
-									Peer {
+									KadPeer {
 										node_id: peer_id.clone(),
 										multiaddrs: addrs,
 										connection_ty: connec_ty,
@@ -545,7 +545,7 @@ where C: AsyncRead + AsyncWrite + 'a
 								})
 								.collect::<Vec<_>>())
 						},
-						KademliaIncomingRequest::PingPong => {},
+						KadIncomingRequest::PingPong => {},
 					}
 					Ok(())
 				})
@@ -715,7 +715,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 						})
 						.filter_map(move |event| {
 							match event {
-								QueryEvent::NewKnownMultiaddrs(peers) => {
+								KadQueryEvent::NewKnownMultiaddrs(peers) => {
 									for (peer, addrs) in peers {
 										trace!(target: "sub-libp2p", "Peer store: adding addresses {:?} for {:?}",
 											addrs, peer);
@@ -725,7 +725,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 									}
 									None
 								},
-								QueryEvent::Finished(out) => Some(out),
+								KadQueryEvent::Finished(out) => Some(out),
 							}
 						})
 						.into_future()
@@ -811,7 +811,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 // Obtain a Kademlia connection to the given peer.
 fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>, peer_id: &PeerstorePeerId, transport: T,
 						swarm_controller: SwarmController<St>)
-	-> impl Future<Item = KademliaServerController, Error = IoError>
+	-> impl Future<Item = KadConnecController, Error = IoError>
 where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 	T::MultiaddrFuture: 'static,
 	To: AsyncRead + AsyncWrite + 'static,
