@@ -681,6 +681,8 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 			.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?
 	} else {
 		if let Some(ref path) = config.net_config_path {
+			fs::create_dir_all(Path::new(path))?;
+
 			let secret_path = Path::new(path).join(SECRET_FILE);
 			let loaded_secret = fs::File::open(&secret_path)
 				.and_then(|mut file| {
@@ -694,16 +696,31 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 						.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))
 				});
 
-			if let Ok(loaded_secret) = loaded_secret {
-				loaded_secret
-			} else {
-				let raw_key: [u8; 32] = rand::rngs::EntropyRng::new().gen();
-				let secio_key = secio::SecioKeyPair::secp256k1_raw_key(&raw_key)
-					.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?;
-				if let Ok(mut file) = open_priv_key_file(&secret_path) {
-					let _ = file.write_all(&raw_key);
+			match loaded_secret {
+				Ok(s) => s,
+				Err(err) => {
+					trace!(target: "sub-libp2p", "Failed to load existing secret key file {:?}, \
+						generating new key ; err = {:?}", secret_path, err);
+					let raw_key: [u8; 32] = rand::rngs::EntropyRng::new().gen();
+					let secio_key = secio::SecioKeyPair::secp256k1_raw_key(&raw_key)
+						.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?;
+					match open_priv_key_file(&secret_path) {
+						Ok(mut file) => {
+							match file.write_all(&raw_key) {
+								Ok(()) => (),
+								Err(err) => {
+									warn!(target: "sub-libp2p", "Failed to write secret key in \
+										file {:?} ; err = {:?}", secret_path, err);
+								}
+							}
+						},
+						Err(err) => {
+							warn!(target: "sub-libp2p", "Failed to store secret key in file {:?} \
+								; err = {:?}", secret_path, err);
+						}
+					}
+					secio_key
 				}
-				secio_key
 			}
 
 		} else {
@@ -722,7 +739,7 @@ fn open_priv_key_file(path: impl AsRef<Path>) -> Result<fs::File, IoError> {
 	fs::OpenOptions::new()
 		.write(true)
 		.create_new(true)
-		.mode(600)
+		.mode(256 | 128)		// 0o600 in decimal
 		.open(path)
 }
 #[cfg(not(unix))]
