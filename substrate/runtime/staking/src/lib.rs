@@ -57,6 +57,7 @@ use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
 	As, AuxLookup, Hashing as HashingT, Member};
 use address::Address as RawAddress;
+use double_map::StorageDoubleMap;
 
 pub mod address;
 mod mock;
@@ -745,7 +746,7 @@ impl<T: Trait> Module<T> {
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
 		<CodeOf<T>>::remove(who);
-		// TODO: <StorageOf<T>>::remove_prefix(address.clone());
+		<StorageOf<T>>::remove_prefix(who.clone());
 
 		if Self::reserved_balance(who).is_zero() {
 			<system::AccountNonce<T>>::remove(who);
