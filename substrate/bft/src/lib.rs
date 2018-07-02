@@ -279,10 +279,8 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 			return Ok(Async::Ready(()))
 		}
 
-		// TODO: handle this error, at least by logging.
-		let committed = try_ready!(self.inner.poll().map_err(|e| {
-			warn!(target: "bft", "Error in BFT agreement: {}", e);
-		}));
+		// TODO: handle and log this error in a way which isn't noisy on exit.
+		let committed = try_ready!(self.inner.poll().map_err(|_| ()));
 
 		// If we didn't see the proposal (very unlikely),
 		// we will get the block from the network later.
