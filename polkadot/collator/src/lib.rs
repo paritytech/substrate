@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Collation Logic.
+//! Collation node logic.
 //!
 //! A collator node lives on a distinct parachain and submits a proposal for
 //! a state transition, along with a proof for its validity
@@ -28,7 +28,7 @@
 //! destination B as egress(X)[A -> B]
 //!
 //! On every block, each parachain will be intended to route messages from some
-//! subset of all the other parachains.
+//! subset of all the other parachains. (NOTE: in practice this is not done until PoC-3)
 //!
 //! Since the egress information is unique to every block, when routing from a
 //! parachain a collator must gather all egress posts from that parachain
@@ -47,13 +47,20 @@
 extern crate futures;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
+
+extern crate polkadot_api;
+extern crate polkadot_cli;
 extern crate polkadot_runtime;
 extern crate polkadot_primitives;
+extern crate polkadot_service;
 
 use std::collections::{BTreeSet, BTreeMap};
 
 use futures::{stream, Stream, Future, IntoFuture};
-use polkadot_primitives::parachain::{self, CandidateSignature, ConsolidatedIngress, Message, Id as ParaId};
+use polkadot_api::PolkadotApi;
+use polkadot_primitives::BlockId;
+use polkadot_primitives::parachain::{self, CandidateReceipt, CandidateSignature, ConsolidatedIngress, Collation, Message, Id as ParaId};
+use polkadot_service::{Components, Application};
 
 /// Parachain context needed for collation.
 ///
@@ -63,7 +70,7 @@ pub trait ParachainContext {
 	fn produce_candidate<I: IntoIterator<Item=(ParaId, Message)>>(
 		&self,
 		ingress: I,
-	) -> (parachain::BlockData, polkadot_primitives::AccountId, CandidateSignature);
+	) -> Collation;
 }
 
 /// Relay chain context needed to collate.
@@ -122,7 +129,7 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 
 /// Produce a candidate for the parachain.
 pub fn collate<'a, R, P>(local_id: ParaId, relay_context: R, para_context: P)
-	-> Box<Future<Item=parachain::Candidate, Error=R::Error> + 'a>
+	-> Box<Future<Item=parachain::Collation, Error=R::Error> + 'a>
 	where
 		R: RelayChainContext,
 	    R::Error: 'a,
@@ -141,6 +148,52 @@ pub fn collate<'a, R, P>(local_id: ParaId, relay_context: R, para_context: P)
 			unprocessed_ingress: ingress,
 		}
 	}))
+}
+
+/// Polkadot-api context.
+struct ApiContext<A> {
+	api: A,
+	block_id: BlockId,
+}
+
+impl<A: PolkadotApi> RelayChainContext for ApiContext<A> {
+	type Error = ();
+	type FutureEgress = Result<Vec<Vec<Message>>, Self::Error>;
+
+	fn routing_parachains(&self) -> BTreeMap<ParaId> {
+		BTreeMap::new()
+	}
+
+	fn unrouted_egress(&self, id: ParaId) -> Self::FutureEgress {
+		Ok(Vec::new())
+	}
+}
+
+struct CollationNode<P, E> {
+	parachain_context: P,
+	exit: E,
+}
+
+impl<E: Future<Item=(),Error=()>> cli::Application for CollationNode<E> {
+	type Work = Box<Future<Item=(),Error=()>>;
+
+	fn work<C: Components>(self, service: &service::Service<C>) -> Self::Work {
+		let client = service.client();
+		unimplemented!()
+	}
+}
+
+/// Run a collator node with the given `RelayChainContext` and `ParachainContext` and
+/// arguments to the underlying polkadot node.
+///
+/// Provide a future which resolves when the node should exit.
+/// This function blocks until done.
+pub fn run_collator<P, E>(parachain_context: P, exit: E, args: Vec<::std::ffi::OsStr>) -> cli::error::Result<()> where
+	P: ParachainContext,
+	E: IntoFuture<Item=(),Error=()>
+{
+	let node_logic = CollationNode { parachain_context, exit: exit.into_future() };
+	cli::run(args, node_logic)
 }
 
 #[cfg(test)]

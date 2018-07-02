@@ -23,17 +23,9 @@ use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, AccountId};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, Collation, BlockData, Extrinsic, CandidateReceipt};
 
 use futures::prelude::*;
-
-/// A full collation.
-pub struct Collation {
-	/// Block data.
-	pub block_data: BlockData,
-	/// The candidate receipt itself.
-	pub receipt: CandidateReceipt,
-}
 
 /// Encapsulates connections to collators and allows collation on any parachain.
 ///

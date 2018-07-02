@@ -71,7 +71,7 @@ use table::generic::Statement as GenericStatement;
 use runtime_support::Hashable;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, Collation, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
 use polkadot_runtime::BareExtrinsic;
 use primitives::AuthorityId;
 use transaction_pool::{TransactionPool};
@@ -82,7 +82,7 @@ use futures::future::{self, Shared};
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
 
-pub use self::collation::{Collators, Collation};
+pub use self::collation::Collators;
 pub use self::error::{ErrorKind, Error};
 pub use self::shared_table::{SharedTable, StatementSource, StatementProducer, ProducedStatements};
 pub use service::Service;

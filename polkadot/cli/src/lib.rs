@@ -112,6 +112,19 @@ fn read_storage_json(filename: &str) -> Option<StorageMap> {
 	Some(h.into_iter().map(|(k, v)| (k.0, v.0)).collect())
 }
 
+/// Additional application logic making use of the ndoe, to run asynchronously before shutdown.
+///
+/// This will be invoked with the service and spawn a future that resolves
+/// when complete.
+pub trait Application {
+	/// A future that resolves when the application work is done.
+	/// This should be `Clone`able and shared and will be run on a tokio runtime.
+	type Done: IntoFuture<Item=(),Error=()>;
+
+	/// Do application work.
+	fn work<C: Components>(self, service: &Service<C>) -> Self::Done;
+}
+
 /// Parse command line arguments and start the node.
 ///
 /// IANA unassigned port ranges that we could use:
@@ -120,9 +133,10 @@ fn read_storage_json(filename: &str) -> Option<StorageMap> {
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T>(args: I) -> error::Result<()> where
+pub fn run<I, T, A>(args: I, app: A) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
+	A: Application,
 {
 	let core = reactor::Core::new().expect("tokio::Core could not be created");
 
@@ -264,26 +278,23 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	};
 
 	match role == service::Role::LIGHT {
-		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf),
-		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf),
+		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf, app),
+		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf, app),
 	}
 }
 
-fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matches: &clap::ArgMatches, sys_conf: SystemConfiguration) -> error::Result<()>
+fn run_until_exit<C, A>(
+	mut core: reactor::Core,
+	service: service::Service<C>,
+	matches: &clap::ArgMatches,
+	sys_conf: SystemConfiguration,
+	application: A,
+) -> error::Result<()>
 	where
 		C: service::Components,
+		A: Application,
 		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
-	let exit = {
-		// can't use signal directly here because CtrlC takes only `Fn`.
-		let (exit_send, exit) = mpsc::channel(1);
-		ctrlc::CtrlC::set_handler(move || {
-			exit_send.clone().send(()).wait().expect("Error sending exit notification");
-		});
-
-		exit
-	};
-
 	informant::start(&service, core.handle());
 
 	let _rpc_servers = {
@@ -306,7 +317,7 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 		)
 	};
 
-	core.run(exit.into_future()).expect("Error running informant event loop");
+	core.run(application.work(&service)).expect("Error running informant event loop");
 	Ok(())
 }
 

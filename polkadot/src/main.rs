@@ -19,6 +19,27 @@
 #![warn(missing_docs)]
 
 extern crate polkadot_cli as cli;
+extern crate polkadot_service as service;
+extern crate ctrlc;
+extern crate futures;
+
+use futures::mpsc;
+
+// the regular polkadot application simply runs until ctrl-c
+struct Application;
+impl cli::Application for Application {
+	type Work = mpsc::Receiver<()>;
+
+	fn work<C: service::Components>(self, _service: Service<C>) -> Self::Work {
+		// can't use signal directly here because CtrlC takes only `Fn`.
+		let (exit_send, exit) = mpsc::channel(1);
+		ctrlc::CtrlC::set_handler(move || {
+			exit_send.clone().send(()).wait().expect("Error sending exit notification");
+		});
+
+		exit
+	}
+}
 
 #[macro_use]
 extern crate error_chain;
