@@ -218,4 +218,23 @@ mod std_tests {
 			assert_eq!(&w, b"Hello world");
 		});
 	}
+
+	#[test]
+	fn clear_prefix_works() {
+		let mut t: TestExternalities = map![
+			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+			b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
+		];
+
+		with_externalities(&mut t, || {
+			clear_prefix(b":abc");
+
+			assert!(storage(b":a").is_some());
+			assert!(storage(b":abdd").is_some());
+			assert!(storage(b":abcd").is_none());
+			assert!(storage(b":abc").is_none());
+		});
+	}
 }
