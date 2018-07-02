@@ -145,6 +145,10 @@ impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: 
 		Err(ClientErrorKind::NotAvailableOnLightClient.into()) // TODO: fetch from remote node
 	}
 
+	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, _prefix: &[u8], _action: A) {
+		// whole state is not available on light node
+	}
+
 	fn storage_root<I>(&self, _delta: I) -> ([u8; 32], Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
 		([0; 32], ())
