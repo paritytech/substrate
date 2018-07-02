@@ -16,8 +16,9 @@
 
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
-use futures::sync::mpsc;
+use futures::{future, Future, Stream, sync::mpsc};
 use libp2p::core::{Multiaddr, AddrComponent, Endpoint, PeerId as PeerstorePeerId, PublicKey};
+use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
 use libp2p::peerstore::json_peerstore::JsonPeerstore;
 use libp2p::peerstore::memory_peerstore::MemoryPeerstore;
@@ -90,6 +91,20 @@ struct PeerConnectionInfo {
 	// inside the `Bytes`.
 	// Closing the sender will drop the substream of this protocol.
 	senders: Vec<(ProtocolId, mpsc::UnboundedSender<Bytes>, u8)>,
+
+	// True if we dialed a Kad connection towards this peer.
+	// This indicates that `kad_connec` should eventually resolve, even without doing anything.
+	opened_kad: bool,
+
+	// When a Kad connection is received, we send it on this channel so that it will be received
+	// by `kad_connec`.
+	incoming_kad_channel: mpsc::UnboundedSender<KadConnecController>,
+
+	// The Kademlia connection to this node.
+	// Contains the receiving end of `incoming_kad_channel`. If `opened_kad` is true, we are
+	// guaranteed to finish.
+	// TODO: proper error handling if a kad connection is closed
+	kad_connec: future::Shared<Box<Future<Item = KadConnecController, Error = IoError>>>,
 
 	// Id of the peer.
 	id: PeerstorePeerId,
@@ -380,6 +395,67 @@ impl NetworkState {
 		connections.peer_by_nodeid.contains_key(node_id)
 	}
 
+	/// Returns true if we are connected to the given node with the given protocol.
+	pub fn has_protocol_connection(&self, node_id: &PeerstorePeerId, protocol_id: ProtocolId) -> bool {
+		let connections = self.connections.read();
+		if let Some(peer) = connections.peer_by_nodeid.get(node_id) {
+			let info = match connections.info_by_peer.get(&peer) {
+				Some(peer) => peer,
+				None => return false,
+			};
+
+			info.senders.iter().any(|p| p.0 == protocol_id)
+		} else {
+			false
+		}
+	}
+
+	/// Call this when a Kademlia connection has been opened from a remote.
+	pub fn incoming_kad_connection(&self, node_id: PeerstorePeerId, ctrl: KadConnecController) -> Result<PeerId, IoError> {
+		// TODO: check that the peer is disabled? should disabling a peer also prevent
+		//		 kad from working?
+		let mut connections = self.connections.write();
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id, Endpoint::Listener)?;
+		let mut infos = connections.info_by_peer.get_mut(&peer_id)
+			.expect("Newly-created peer id is always valid");
+		let _ = infos.incoming_kad_channel.unbounded_send(ctrl);
+		Ok(peer_id)
+	}
+
+	/// Obtain a Kademlia connection to the given peer.
+	pub fn obtain_kad_connection<F, Fut>(&self, node_id: PeerstorePeerId, opener: F)
+		-> Result<(PeerId, impl Future<Item = KadConnecController, Error = IoError>), IoError>
+	where F: FnOnce() -> Fut, Fut: Future<Item = KadConnecController, Error = IoError>
+	{
+		let mut connections = self.connections.write();
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id, Endpoint::Dialer)?;
+		let mut infos = connections.info_by_peer.get_mut(&peer_id)
+			.expect("Newly-created peer id is always valid");
+
+		let future_to_process = if !infos.opened_kad {
+			let tx = infos.incoming_kad_channel.clone();
+			let new_kad = opener().and_then(move |ctrl| {
+				tx.unbounded_send(ctrl.clone())
+					.map_err(|err| IoError::new(IoErrorKind::ConnectionAborted, err))?;
+				Ok(ctrl)
+			});
+			infos.opened_kad = true;
+			future::Either::A(new_kad)
+		} else {
+			future::Either::B(future::empty())
+		};
+
+		let fut = infos.kad_connec
+			.clone()
+			.map(|ctrl| (*ctrl).clone())
+			.map_err(|err| IoError::new(IoErrorKind::ConnectionAborted, err))
+			.select(future_to_process)
+			.map(|(item, _)| item)
+			.map_err(|(err, _)| err);
+
+		Ok((peer_id, fut))
+	}
+
 	/// Try to add a new connection to a node in the list.
 	///
 	/// Returns a `PeerId` to allow further interfacing with this connection. Note that all
@@ -392,19 +468,23 @@ impl NetworkState {
 	///
 	/// The various methods of the `NetworkState` that close a connection do so by dropping this
 	/// sender.
-	pub fn accept_connection(&self, node_id: PeerstorePeerId, protocol_id: ProtocolId, protocol_version: u8, endpoint: Endpoint, msg_tx: mpsc::UnboundedSender<Bytes>) -> Result<PeerId, IoError> {
+	pub fn accept_custom_proto(&self, node_id: PeerstorePeerId, protocol_id: ProtocolId, protocol_version: u8, endpoint: Endpoint, msg_tx: mpsc::UnboundedSender<Bytes>) -> Result<PeerId, IoError> {
+		let mut connections = self.connections.write();
+
 		if self.disabled_peers.read().contains(&node_id) {
 			debug!(target: "sub-libp2p", "Refusing node {:?} because it was disabled", node_id);
 			return Err(IoError::new(IoErrorKind::PermissionDenied, "disabled peer"));
 		}
 
-		let node_is_reserved = self.reserved_peers.read().contains(&node_id);
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id.clone(), endpoint)?;
 
-		let mut connections = self.connections.write();
-		let connections = &mut *connections;
-		let peer_by_nodeid = &mut connections.peer_by_nodeid;
-		let info_by_peer = &mut connections.info_by_peer;
+		let mut connections = &mut *connections;
+		let mut info_by_peer = &mut connections.info_by_peer;
+		let mut peer_by_nodeid = &mut connections.peer_by_nodeid;
+		let mut infos = info_by_peer.get_mut(&peer_id)
+			.expect("Newly-created peer id is always valid");
 
+		let node_is_reserved = self.reserved_peers.read().contains(&infos.id);
 		if !node_is_reserved {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
 				peer_by_nodeid.len() >= self.max_peers as usize
@@ -415,29 +495,14 @@ impl NetworkState {
 			}
 		}
 
-		let peer_id = *peer_by_nodeid.entry(node_id.clone()).or_insert_with(|| {
-			let new_id = self.next_peer_id.fetch_add(1, atomic::Ordering::Relaxed);
-			info_by_peer.insert(new_id, PeerConnectionInfo {
-				senders: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
-				id: node_id.clone(),
-				originated: endpoint == Endpoint::Dialer,
-				ping: Mutex::new(None),
-				client_version: None,
-				local_address: None,
-				remote_address: None,
-			});
-			new_id
-		});
-
-		let senders = &mut info_by_peer.get_mut(&peer_id).expect("network state inconsistency").senders;
-		if !senders.iter().any(|&(prot, _, _)| prot == protocol_id) {
-			senders.push((protocol_id.clone(), msg_tx, protocol_version));
+		if !infos.senders.iter().any(|&(prot, _, _)| prot == protocol_id) {
+			infos.senders.push((protocol_id.clone(), msg_tx, protocol_version));
 		}
 
 		Ok(peer_id)
 	}
 
-	/// Sends some data to the given peer, using the sender that was passed to `accept_connection`.
+	/// Sends some data to the given peer, using the sender that was passed to `accept_custom_proto`.
 	pub fn send(&self, protocol: ProtocolId, peer_id: PeerId, message: Bytes) -> Result<(), Error> {
 		if let Some(peer) = self.connections.read().info_by_peer.get(&peer_id) {
 			if let Some(sender) = peer.senders.iter().find(|elem| elem.0 == protocol).map(|e| &e.1) {
@@ -459,8 +524,8 @@ impl NetworkState {
 		}
 	}
 
-	/// Disconnects a peer, if a connection exists (ie. drops the sender that was passed to
-	/// `accept_connection`).
+	/// Disconnects a peer, if a connection exists (ie. drops the Kademlia controller, and the
+	/// senders that were passed to `accept_custom_proto`).
 	pub fn disconnect_peer(&self, peer_id: PeerId) {
 		let mut connections = self.connections.write();
 		if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
@@ -470,7 +535,8 @@ impl NetworkState {
 	}
 
 	/// Disconnects all the peers.
-	/// This destroys all the senders that were passed to `accept_connection`.
+	/// This destroys all the Kademlia controllers and the senders that were passed to
+	/// `accept_custom_proto`.
 	pub fn disconnect_all(&self) {
 		let mut connec = self.connections.write();
 		*connec = Connections {
@@ -480,7 +546,7 @@ impl NetworkState {
 	}
 
 	/// Disables a peer. This adds the peer to the list of disabled peers, and drops any existing
-	/// connections if necessary (ie. drops the sender that was passed to `accept_connection`).
+	/// connections if necessary (ie. drops the sender that was passed to `accept_custom_proto`).
 	pub fn disable_peer(&self, peer_id: PeerId) {
 		// TODO: what do we do if the peer is reserved?
 		let mut connections = self.connections.write();
@@ -519,6 +585,44 @@ impl Drop for NetworkState {
 			}
 		}
 	}
+}
+
+// Assigns a `PeerId` to a node, or returns an existing ID if any exists.
+//
+// Takes as parameter an already-locked `Connections`.
+fn accept_connection(connections: &mut Connections, next_peer_id: &atomic::AtomicUsize,
+					 node_id: PeerstorePeerId, endpoint: Endpoint)
+	-> Result<PeerId, IoError>
+{
+	let peer_by_nodeid = &mut connections.peer_by_nodeid;
+	let info_by_peer = &mut connections.info_by_peer;
+
+	let peer_id = *peer_by_nodeid.entry(node_id.clone()).or_insert_with(|| {
+		let new_id = next_peer_id.fetch_add(1, atomic::Ordering::Relaxed);
+
+		let (tx, rx) = mpsc::unbounded();
+		let rx = rx
+			.into_future()
+			.map_err(|_| -> IoError { unreachable!() })
+			.and_then(|i| i.0.ok_or(IoError::new(IoErrorKind::ConnectionAborted, "kad aborted")));
+		let kad_connec = Box::new(rx) as Box<Future<Item = _, Error = _>>;
+
+		info_by_peer.insert(new_id, PeerConnectionInfo {
+			senders: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
+			opened_kad: false,
+			incoming_kad_channel: tx,
+			kad_connec: kad_connec.shared(),
+			id: node_id.clone(),
+			originated: endpoint == Endpoint::Dialer,
+			ping: Mutex::new(None),
+			client_version: None,
+			local_address: None,
+			remote_address: None,
+		});
+		new_id
+	});
+
+	Ok(peer_id)
 }
 
 // Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it to the given
@@ -581,6 +685,7 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 				if let Ok(mut file) = File::create(&secret_path) {
 					let _ = file.write_all(&raw_key);
 				}
+				// TODO: chmod the file
 				secio_key
 			}
 
@@ -604,9 +709,9 @@ mod tests {
 		let state = NetworkState::new(&Default::default()).unwrap();
 		let example_peer = PublicKey::Rsa(vec![1, 2, 3, 4]).into_peer_id();
 
-		let peer_id = state.accept_connection(example_peer.clone(), [1, 2, 3], 1, Endpoint::Dialer, mpsc::unbounded().0).unwrap();
+		let peer_id = state.accept_custom_proto(example_peer.clone(), [1, 2, 3], 1, Endpoint::Dialer, mpsc::unbounded().0).unwrap();
 		state.disable_peer(peer_id);
 
-		assert!(state.accept_connection(example_peer.clone(), [1, 2, 3], 1, Endpoint::Dialer, mpsc::unbounded().0).is_err());
+		assert!(state.accept_custom_proto(example_peer.clone(), [1, 2, 3], 1, Endpoint::Dialer, mpsc::unbounded().0).is_err());
 	}
 }

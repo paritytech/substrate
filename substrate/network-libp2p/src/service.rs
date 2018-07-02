@@ -34,7 +34,7 @@ use std::sync::Arc;
 use std::sync::mpsc as sync_mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use futures::{future, Future, Stream};
+use futures::{future, Future, Stream, IntoFuture};
 use futures::sync::{mpsc, oneshot};
 use tokio_core::reactor::{Core, Handle};
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -69,9 +69,6 @@ struct Shared {
 
 	// Configuration for the Kademlia upgrade.
 	kad_upgrade: KadConnecConfig,
-
-	// List of open Kademlia connections.
-	kad_connections: RwLock<FnvHashMap<PeerstorePeerId, future::Shared<Box<Future<Item = KadConnecController, Error = IoError>>>>>,
 
 	// List of protocols available on the network. It is a logic error to remote protocols from
 	// this list, and the code may assume that protocols stay at the same index forever.
@@ -112,7 +109,6 @@ impl NetworkService {
 
 		let shared = Arc::new(Shared {
 			network_state,
-			kad_connections: RwLock::new(Default::default()),
 			protocols: RwLock::new(Default::default()),
 			kad_system,
 			kad_upgrade: KadConnecConfig::new(),
@@ -511,13 +507,13 @@ fn listener_handle<'a, C>(shared: Arc<Shared>, upgrade: FinalUpgrade<C>, endpoin
 where C: AsyncRead + AsyncWrite + 'a
 {
 	match upgrade {
-		FinalUpgrade::Kad((controller, kademlia_stream)) => {		// TODO: use the controller
+		FinalUpgrade::Kad((controller, kademlia_stream)) => {
 			trace!(target: "sub-libp2p", "Opened kademlia substream with remote as {:?}", endpoint);
 
 			let shared = shared.clone();
 			Box::new(client_addr.and_then(move |client_addr| {
 				let node_id = p2p_multiaddr_to_node_id(client_addr);
-				//shared.kad_connections.write().insert(node_id.clone(), );
+				shared.network_state.incoming_kad_connection(node_id.clone(), controller);
 
 				kademlia_stream.for_each(move |req| {
 					let shared = shared.clone();
@@ -593,7 +589,7 @@ where C: AsyncRead + AsyncWrite + 'a
 				// TODO: is there a better way to refuse connections than to drop the
 				//		 newly-opened substream? should we refuse the connection
 				//		 beforehand?
-				let peer_id = match shared.network_state.accept_connection(node_id.clone(), protocol_id, custom_proto_out.protocol_version, endpoint, custom_proto_out.outgoing) {
+				let peer_id = match shared.network_state.accept_custom_proto(node_id.clone(), protocol_id, custom_proto_out.protocol_version, endpoint, custom_proto_out.outgoing) {
 					Ok(peer_id) => peer_id,
 					Err(err) => return future::Either::A(future::err(err.into())),
 				};
@@ -680,7 +676,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		let transport = transport.clone();
 		let swarm_controller = swarm_controller.clone();
 		move |peer_id| {
-			obtain_kad_connection(shared.clone(), peer_id, transport.clone(), swarm_controller.clone())
+			obtain_kad_connection(shared.clone(), peer_id.clone(), transport.clone(), swarm_controller.clone())
 		}
 	});
 
@@ -709,7 +705,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 							let shared = shared.clone();
 							let transport = transport.clone();
 							let swarm_controller = swarm_controller.clone();
-							move |peer_id| obtain_kad_connection(shared.clone(), peer_id,
+							move |peer_id| obtain_kad_connection(shared.clone(), peer_id.clone(),
 																transport.clone(),
 																swarm_controller.clone())
 						})
@@ -750,7 +746,6 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 					// TODO: better API in network_state
 					if !shared.network_state.should_open_outgoing_connecs() ||
 						discovered_peer == local_peer_id ||
-						shared.network_state.has_connection(&discovered_peer) ||
 						shared.network_state.is_peer_disabled(&discovered_peer)
 					{
 						trace!(target: "sub-libp2p", "Skipping discovered node {:?}", discovered_peer);
@@ -763,6 +758,10 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 					let addr: Multiaddr = AddrComponent::P2P(discovered_peer.clone().into_bytes()).into();
 					trace!(target: "sub-libp2p", "Dialing discovered node {:?} for each protocol", addr);
 					for proto in shared.protocols.read().0.clone().into_iter() {
+						if shared.network_state.has_protocol_connection(&discovered_peer, proto.id()) {
+							continue;
+						}
+
 						// TODO: check that the secio key matches the id given by kademlia
 						let proto_id = proto.id();
 						let discovered_peer = discovered_peer.clone();
@@ -809,7 +808,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 }
 
 // Obtain a Kademlia connection to the given peer.
-fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>, peer_id: &PeerstorePeerId, transport: T,
+fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>, peer_id: PeerstorePeerId, transport: T,
 						swarm_controller: SwarmController<St>)
 	-> impl Future<Item = KadConnecController, Error = IoError>
 where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
@@ -819,10 +818,8 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 	C: 'static,
 {
 	let kad_upgrade = shared.kad_upgrade.clone();
-	let mut kad_connec = shared.kad_connections.write();
-
-	let final_future = kad_connec.entry(peer_id.clone())
-		.or_insert_with(move || {
+	let final_future = shared.network_state
+		.obtain_kad_connection(peer_id.clone(), move || {
 			let addr: Multiaddr = AddrComponent::P2P(peer_id.clone().into_bytes()).into();
 			trace!(target: "sub-libp2p", "Opening new kademlia connection to {}", addr);
 			let (tx, rx) = oneshot::channel();
@@ -840,11 +837,10 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 					})
 				)
 				.expect("cannot dial");
-			(Box::new(rx.map_err(|err| IoError::new(IoErrorKind::Other, err))) as Box<Future<Item = _, Error = _>>).shared()
+			rx.map_err(|err| IoError::new(IoErrorKind::ConnectionAborted, err))
 		})
-		.clone()
-		.map(|ctrl| (*ctrl).clone())
-		.map_err(|err| IoError::new(IoErrorKind::ConnectionAborted, err));
+		.into_future()
+		.and_then(|(_peer_id, kad_ctrl)| kad_ctrl);
 
 	// Note that we use a Box in order to speed compilation time.
 	Box::new(final_future) as Box<Future<Item = _, Error = _>>
