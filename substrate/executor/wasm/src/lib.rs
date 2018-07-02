@@ -11,7 +11,7 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_sandbox as sandbox;
 
 use runtime_io::{
-	set_storage, storage, print, blake2_256,
+	set_storage, storage, clear_prefix, print, blake2_256,
 	twox_128, twox_256, ed25519_verify, enumerated_trie_root
 };
 
@@ -27,6 +27,10 @@ impl_stubs!(
 		set_storage(b"baz", &foo);
 
 		print("finished!");
+		b"all ok!".to_vec()
+	},
+	test_clear_prefix NO_DECODE => |input| {
+		clear_prefix(input);
 		b"all ok!".to_vec()
 	},
 	test_empty_return NO_DECODE => |_| Vec::new(),

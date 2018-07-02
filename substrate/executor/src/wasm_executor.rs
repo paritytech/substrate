@@ -583,6 +583,29 @@ mod tests {
 	}
 
 	#[test]
+	fn clear_prefix_should_work() {
+		let mut ext = TestExternalities::default();
+		ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
+		ext.set_storage(b"aab".to_vec(), b"2".to_vec());
+		ext.set_storage(b"aba".to_vec(), b"3".to_vec());
+		ext.set_storage(b"abb".to_vec(), b"4".to_vec());
+		ext.set_storage(b"bbb".to_vec(), b"5".to_vec());
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		// This will clear all entries which prefix is "ab".
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_clear_prefix", b"ab").unwrap();
+
+		assert_eq!(output, b"all ok!".to_vec());
+
+		let expected: HashMap<_, _> = map![
+			b"aaa".to_vec() => b"1".to_vec(),
+			b"aab".to_vec() => b"2".to_vec(),
+			b"bbb".to_vec() => b"5".to_vec()
+		];
+		assert_eq!(expected, ext);
+	}
+
+	#[test]
 	fn blake2_256_should_work() {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
