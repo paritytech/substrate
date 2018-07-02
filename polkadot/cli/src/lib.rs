@@ -97,13 +97,13 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 	}
 }
 
-fn load_spec(matches: &clap::ArgMatches) -> service::ChainSpec {
+fn load_spec(matches: &clap::ArgMatches) -> Result<service::ChainSpec, String> {
 	let chain_spec = matches.value_of("chain")
 		.map(ChainSpec::from)
 		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
-	let spec = chain_spec.load().expect("Error loading chain spec");
-	info!("Chain specification: {}", spec.name);
-	spec
+	let spec = chain_spec.load()?;
+	info!("Chain specification: {}", spec.name());
+	Ok(spec)
 }
 
 /// Parse command line arguments and start the node.
@@ -139,26 +139,20 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	info!("  by Parity Technologies, 2017, 2018");
 
 	if let Some(matches) = matches.subcommand_matches("build-spec") {
-		let spec = load_spec(&matches);
+		let spec = load_spec(&matches)?;
 		info!("Building chain spec");
-		let json =  if matches.is_present("raw") {
-			spec.to_json_raw()
-		} else {
-			spec.to_json()
-		};
+		let json = spec.to_json(matches.is_present("raw"))?;
 		print!("{}", json);
 		return Ok(())
 	}
 
-	let mut config = service::Configuration::default();
+	let spec = load_spec(&matches)?;
+	let mut config = service::Configuration::default_with_spec(spec);
 
 	if let Some(name) = matches.value_of("name") {
 		config.name = name.into();
 		info!("Node name: {}", config.name);
 	}
-
-	let spec = load_spec(&matches);
-	config.chain_name = spec.name.clone();
 
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
@@ -179,9 +173,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
 	};
 
-	let (genesis_storage, boot_nodes) = spec.deconstruct();
-	config.genesis_storage = genesis_storage;
-
 	let role =
 		if matches.is_present("collator") {
 			info!("Starting collator");
@@ -199,10 +190,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.roles = role;
 	{
-		config.network.boot_nodes = matches
+		config.network.boot_nodes.extend(matches
 			.values_of("bootnodes")
-			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
-		config.network.boot_nodes.extend(boot_nodes);
+			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
 		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 
@@ -226,12 +216,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}
 
 	let sys_conf = SystemConfiguration {
-		chain_name: config.chain_name.clone(),
+		chain_name: config.chain_spec.name().to_owned(),
 	};
 
 	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
 		let name = config.name.clone();
-		let chain_name = config.chain_name.clone();
+		let chain_name = config.chain_spec.name().to_owned();
 		Some(init_telemetry(TelemetryConfig {
 			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
 			on_connect: Box::new(move || {

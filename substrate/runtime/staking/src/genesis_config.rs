@@ -123,7 +123,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
 		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
 		let mut r: runtime_io::TestExternalities = map![
@@ -153,6 +153,6 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 		for (who, value) in self.balances.into_iter() {
 			r.insert(twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
 		}
-		r
+		Ok(r)
 	}
 }

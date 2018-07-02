@@ -17,7 +17,6 @@
 //! Predefined chains.
 
 use service;
-use std::fs::File;
 use std::path::PathBuf;
 
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
@@ -40,13 +39,12 @@ pub enum ChainSpec {
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<service::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::PoC1Testnet => service::ChainSpec::poc_1_testnet_config(),
+			ChainSpec::PoC1Testnet => service::ChainSpec::poc_1_testnet_config()?,
 			ChainSpec::Development => service::ChainSpec::development_config(),
 			ChainSpec::LocalTestnet => service::ChainSpec::local_testnet_config(),
 			ChainSpec::PoC2Testnet => service::ChainSpec::poc_2_testnet_config(),
 			ChainSpec::Custom(f) => {
-					let file = File::open(PathBuf::from(f)).expect("Error opening spec file");
-					service::ChainSpec::from_json_file(file)
+					service::ChainSpec::from_json_file(PathBuf::from(f))?
 				}
 		})
 	}

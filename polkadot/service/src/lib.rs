@@ -129,7 +129,7 @@ impl<Components> Service<Components>
 			pruning: config.pruning,
 		};
 
-		let (client, on_demand) = components.build_client(db_settings, executor, config.genesis_storage)?;
+		let (client, on_demand) = components.build_client(db_settings, executor, &config.chain_spec)?;
 		let api = components.build_api(client.clone());
 		let best_header = client.best_block_header()?;
 

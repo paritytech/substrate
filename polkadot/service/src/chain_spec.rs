@@ -18,87 +18,125 @@
 
 use ed25519;
 use std::collections::HashMap;
+use std::fs::File;
+use std::path::PathBuf;
 use primitives::{AuthorityId, storage::{StorageKey, StorageData}};
-use runtime_primitives::{MakeStorage, BuildStorage, StorageMap};
+use runtime_primitives::{BuildStorage, StorageMap};
 use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig};
+use serde_json as json;
+
+enum GenesisSource {
+	File(PathBuf),
+	Embedded(&'static [u8]),
+	Factory(fn() -> Genesis),
+}
+
+impl GenesisSource {
+	fn resolve(&self) -> Result<Genesis, String> {
+		#[derive(Serialize, Deserialize)]
+		struct GenesisContainer {
+			genesis: Genesis,
+		}
+
+		match *self {
+			GenesisSource::File(ref path) => {
+				let file = File::open(path).map_err(|e| format!("Error opening spec file: {}", e))?;
+				let genesis: GenesisContainer = json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
+				Ok(genesis.genesis)
+			},
+			GenesisSource::Embedded(buf) => {
+				let genesis: GenesisContainer = json::from_reader(buf).map_err(|e| format!("Error parsing embedded file: {}", e))?;
+				Ok(genesis.genesis)
+			},
+			GenesisSource::Factory(f) => Ok(f()),
+		}
+	}
+}
+
+impl<'a> BuildStorage for &'a ChainSpec {
+	fn build_storage(self) -> Result<StorageMap, String> {
+		match self.genesis.resolve()? {
+			Genesis::Runtime(gc) => gc.build_storage(),
+			Genesis::Raw(map) => Ok(map.into_iter().map(|(k, v)| (k.0, v.0)).collect()),
+		}
+	}
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-enum Config {
+enum Genesis {
 	Runtime(GenesisConfig),
 	Raw(HashMap<StorageKey, StorageData>),
 }
 
-/// A configuration of a chain. Can be used to build a genesis block.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct ChainSpec {
+struct ChainSpecFile {
 	pub name: String,
-	genesis: Config,
 	pub boot_nodes: Vec<String>,
 }
 
-impl BuildStorage for Config {
-	fn build_storage(self) -> StorageMap {
-		match self {
-			Config::Runtime(gc) => gc.build_storage(),
-			Config::Raw(map) => map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-		}
-	}
+/// A configuration of a chain. Can be used to build a genesis block.
+pub struct ChainSpec {
+	spec: ChainSpecFile,
+	genesis: GenesisSource,
 }
 
 impl ChainSpec {
-	/// Provide the boot nodes and a storage-builder function.
-	// TODO: Change return type to FnOnce as soon as Box<FnOnce> is callable or BoxFn is stablised.
-	pub fn deconstruct(self) -> (MakeStorage, Vec<String>) {
-		let mut gc = Some(self.genesis);
-		let f = move || gc.take().map(BuildStorage::build_storage).unwrap_or_default();
-		(Box::new(f), self.boot_nodes)
+	pub fn boot_nodes(&self) -> &[String] {
+		&self.spec.boot_nodes
+	}
+
+	pub fn name(&self) -> &str {
+		&self.spec.name
 	}
 
 	/// Parse json content into a `ChainSpec`
-	pub fn from_json(json: &[u8]) -> Self {
-		::serde_json::from_slice(json).expect("Error parsing spec file.")
+	pub fn from_embedded(json: &'static [u8]) -> Result<Self, String> {
+		let spec = json::from_slice(json).map_err(|e| format!("Error parsing spec file: {}", e))?;
+		Ok(ChainSpec {
+			spec,
+			genesis: GenesisSource::Embedded(json),
+		})
 	}
 
 	/// Parse json file into a `ChainSpec`
-	pub fn from_json_file<R: ::std::io::Read>(json: R) -> Self {
-		::serde_json::from_reader(json).expect("Error parsing spec file.")
+	pub fn from_json_file(path: PathBuf) -> Result<Self, String> {
+		let file = File::open(&path).map_err(|e| format!("Error opening spec file: {}", e))?;
+		let spec = json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
+		Ok(ChainSpec {
+			spec,
+			genesis: GenesisSource::File(path),
+		})
 	}
 
 	/// Dump to json string.
-	pub fn to_json(self) -> String {
-		::serde_json::to_string_pretty(&self).expect("Error generating spec file.")
-	}
-
-	/// Dump to json with raw genesis storage.
-	pub fn to_json_raw(self) -> String {
-		match self.genesis {
-			Config::Raw(_) => self.to_json(),
-			Config::Runtime(gc) => {
-				let storage = gc.build_storage().into_iter()
+	pub fn to_json(self, raw: bool) -> Result<String, String> {
+		let genesis = match (raw, self.genesis.resolve()?) {
+			(true, Genesis::Runtime(g)) => {
+				let storage = g.build_storage()?.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
 
-				ChainSpec {
-					name: self.name.clone(),
-					boot_nodes: self.boot_nodes.clone(),
-					genesis: Config::Raw(storage),
-				}.to_json()
-			}
+				Genesis::Raw(storage)
+			},
+			(_, genesis) => genesis,
+		};
+		let mut spec = json::to_value(self.spec).map_err(|e| format!("Error generating spec json: {}", e))?;
+		{
+			let map = spec.as_object_mut().expect("spec is an object");
+			map.insert("genesis".to_owned(), json::to_value(genesis).map_err(|e| format!("Error generating genesis json: {}", e))?);
 		}
+		json::to_string_pretty(&spec).map_err(|e| format!("Error generating spec json: {}", e))
 	}
 
-	/// PoC-1 testnet config.
-	pub fn poc_1_testnet_config() -> Self {
-		Self::from_json(include_bytes!("../res/poc-1.json"))
+	pub fn poc_1_testnet_config() -> Result<Self, String> {
+		Self::from_embedded(include_bytes!("../res/poc-1.json"))
 	}
 
-	/// PoC-2 testnet config.
-	pub fn poc_2_testnet_config() -> Self {
+	fn poc_2_testnet_config_genesis() -> Genesis {
 		let initial_authorities = vec![
 			hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
 			hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
@@ -108,7 +146,7 @@ impl ChainSpec {
 		let endowed_accounts = vec![
 			hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),
 		];
-		let genesis = Config::Runtime(GenesisConfig {
+		Genesis::Runtime(GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),	// TODO change
 				authorities: initial_authorities.clone(),
@@ -160,17 +198,22 @@ impl ChainSpec {
 			timestamp: Some(TimestampConfig {
 				period: 5,					// 5 second block time.
 			}),
-		});
+		})
+	}
+	/// PoC-2 testnet config.
+	pub fn poc_2_testnet_config() -> Self {
 		let boot_nodes = vec![
 			"enode://a93a29fa68d965452bf0ff8c1910f5992fe2273a72a1ee8d3a3482f68512a61974211ba32bb33f051ceb1530b8ba3527fc36224ba6b9910329025e6d9153cf50@104.211.54.233:30333".into(),
 			"enode://051b18f63a316c4c5fef4631f8c550ae0adba179153588406fac3e5bbbbf534ebeda1bf475dceda27a531f6cdef3846ab6a010a269aa643a1fec7bff51af66bd@104.211.48.51:30333".into(),
 			"enode://c831ec9011d2c02d2c4620fc88db6d897a40d2f88fd75f47b9e4cf3b243999acb6f01b7b7343474650b34eeb1363041a422a91f1fc3850e43482983ee15aa582@104.211.48.247:30333".into(),
 		];
-		ChainSpec { name: "PoC-2 Testnet".to_owned(), genesis, boot_nodes }
+		ChainSpec {
+			spec: ChainSpecFile { name: "PoC-2 Testnet".to_owned(), boot_nodes },
+			genesis: GenesisSource::Factory(Self::poc_2_testnet_config_genesis),
+		}
 	}
 
-	/// Local testnet config.
-	pub fn testnet_config(initial_authorities: Vec<AuthorityId>) -> ChainSpec {
+	fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> Genesis {
 		let endowed_accounts = vec![
 			ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
 			ed25519::Pair::from_seed(b"Bob                             ").public().0.into(),
@@ -179,7 +222,7 @@ impl ChainSpec {
 			ed25519::Pair::from_seed(b"Eve                             ").public().0.into(),
 			ed25519::Pair::from_seed(b"Ferdie                          ").public().0.into(),
 		];
-		let genesis = Config::Runtime(GenesisConfig {
+		Genesis::Runtime(GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm").to_vec(),
 				authorities: initial_authorities.clone(),
@@ -231,25 +274,35 @@ impl ChainSpec {
 			timestamp: Some(TimestampConfig {
 				period: 5,					// 5 second block time.
 			}),
-		});
-		let boot_nodes = Vec::new();
-		ChainSpec { name: "Local Testnet".to_owned(), genesis, boot_nodes }
+		})
+	}
+
+	fn development_config_genesis() -> Genesis {
+		Self::testnet_genesis(vec![
+			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+		])
 	}
 
 	/// Development config (single validator Alice)
 	pub fn development_config() -> Self {
-		let mut config = Self::testnet_config(vec![
+		ChainSpec {
+			spec: ChainSpecFile { name: "Development".to_owned(), boot_nodes: vec![] },
+			genesis: GenesisSource::Factory(Self::development_config_genesis),
+		}
+	}
+
+	fn local_testnet_genesis() -> Genesis {
+		Self::testnet_genesis(vec![
 			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-		]);
-		config.name = "Development".into();
-		config
+			ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+		])
 	}
 
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn local_testnet_config() -> Self {
-		Self::testnet_config(vec![
-			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-			ed25519::Pair::from_seed(b"Bob                             ").public().into(),
-		])
+		ChainSpec {
+			spec: ChainSpecFile { name: "Local Testnet".to_owned(), boot_nodes: vec![] },
+			genesis: GenesisSource::Factory(Self::local_testnet_genesis),
+		}
 	}
 }
