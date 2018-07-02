@@ -512,8 +512,15 @@ where C: AsyncRead + AsyncWrite + 'a
 
 			let shared = shared.clone();
 			Box::new(client_addr.and_then(move |client_addr| {
+				// We add the Kademlia controller to the network state, and use a guard to remove
+				// it later.
+				struct KadDisconnectGuard(Arc<Shared>, PeerId);
+				impl Drop for KadDisconnectGuard {
+					fn drop(&mut self) { self.0.network_state.disconnect_kademlia(self.1); }
+				}
 				let node_id = p2p_multiaddr_to_node_id(client_addr);
 				let peer_id = shared.network_state.incoming_kad_connection(node_id.clone(), controller)?;
+				let kad_live_guard = KadDisconnectGuard(shared.clone(), peer_id);
 
 				Ok(kademlia_stream.for_each({
 					let shared = shared.clone();
@@ -549,7 +556,8 @@ where C: AsyncRead + AsyncWrite + 'a
 						Ok(())
 					}
 				}).then(move |val| {
-					shared.network_state.disconnect_kademlia(peer_id);
+					// Makes sure that `kad_live_guard` is kept alive until here.
+					drop(kad_live_guard);
 					val
 				}))
 			}).flatten())
@@ -610,35 +618,39 @@ where C: AsyncRead + AsyncWrite + 'a
 					current_peer: Some(peer_id),
 				}, &peer_id);
 
-				future::Either::B(custom_proto_out
-					.incoming
-					.for_each({
-						let handler = handler.clone();
-						let shared = shared.clone();
-						let node_id = node_id.clone();
-						move |(packet_id, data)| {
-							shared.kad_system.update_kbuckets(node_id.clone());
-							handler.read(&NetworkContextImpl {
-								inner: shared.clone(),
-								protocol: protocol_id,
-								current_peer: Some(peer_id.clone()),
-							}, &peer_id, packet_id, &data);
-							Ok(())
-						}
-					})
-					.then(move |val| {
+				struct KadDisconnectGuard(Arc<Shared>, PeerId, PeerstorePeerId, Arc<NetworkProtocolHandler + Send + Sync>, ProtocolId);
+				impl Drop for KadDisconnectGuard {
+					fn drop(&mut self) {
 						debug!(target: "sub-libp2p", "Node {:?} with peer ID {} \
-							through protocol {:?} disconnected", node_id, peer_id,
-							protocol_id);
-						handler.disconnected(&NetworkContextImpl {
-							inner: shared.clone(),
-							protocol: protocol_id,
-							current_peer: Some(peer_id),
-						}, &peer_id);
+							through protocol {:?} disconnected", self.2, self.1,
+							self.4);
+						self.3.disconnected(&NetworkContextImpl {
+							inner: self.0.clone(),
+							protocol: self.4,
+							current_peer: Some(self.1),
+						}, &self.1);
 
 						// When any custom protocol drops, we drop the peer entirely.
 						// TODO: is this correct?
-						shared.network_state.disconnect_peer(peer_id);
+						self.0.network_state.disconnect_peer(self.1);
+					}
+				}
+				let dc_guard = KadDisconnectGuard(shared.clone(), peer_id, node_id.clone(), handler.clone(), protocol_id);
+
+				future::Either::B(custom_proto_out
+					.incoming
+					.for_each(move |(packet_id, data)| {
+						shared.kad_system.update_kbuckets(node_id.clone());
+						handler.read(&NetworkContextImpl {
+							inner: shared.clone(),
+							protocol: protocol_id,
+							current_peer: Some(peer_id.clone()),
+						}, &peer_id, packet_id, &data);
+						Ok(())
+					})
+					.then(move |val| {
+						// Makes sure that `dc_guard` is kept alive until here.
+						drop(dc_guard);
 						val
 					}))
 			})) as Box<_>
@@ -687,16 +699,14 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		}
 	});
 
-	let discovery = tokio_timer::wheel()
-		.build()
-		.interval_at(Instant::now(), Duration::from_secs(30))
+	let discovery = tokio_timer::Interval::new(Instant::now(), Duration::from_secs(30))
 		// TODO: add a timeout to the lookups
 		.map_err(|_| -> IoError { unreachable!() })
 		.and_then({
 			let shared = shared.clone();
 			let transport = transport.clone();
 			let swarm_controller = swarm_controller.clone();
-			move |()| {
+			move |_| {
 				// Note that this is a small hack. We flush the caches here so that we don't need
 				// to run a timer just for flushing.
 				let _ = shared.network_state.flush_caches_to_disk();

@@ -18,7 +18,7 @@ log = "0.3"
 rand = "0.5.0"
 tokio-core = "0.1"
 tokio-io = "0.1"
-tokio-timer = "0.1"
+tokio-timer = "0.2"
 varint = { git = "https://github.com/libp2p/rust-libp2p" }
 
 [dev-dependencies]
