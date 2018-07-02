@@ -234,18 +234,11 @@ decl_storage! {
 
 	// The code associated with an account.
 	pub CodeOf: b"sta:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
-
-	// The storage items associated with an account/key.
-	// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
-	// TODO: This will need to be stored as a double-map, with `T::AccountId` using the usual XX hash
-	// function, and then the output of this concatenated onto a separate blake2 hash of the `Vec<u8>`
-	// key. We will then need a `remove_prefix` in addition to `set_storage` which removes all
-	// storage items with a particular prefix otherwise we'll suffer leakage with the removal
-	// of smart contracts.
-//	pub StorageOf: b"sta:sto:" => map [ T::AccountId => map(blake2) Vec<u8> => Vec<u8> ];
-//	pub StorageOf: b"sta:sto:" => map [ (T::AccountId, Vec<u8>) => Vec<u8> ];
 }
 
+/// The storage items associated with an account/key.
+///
+/// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
 pub(crate) struct StorageOf<T>(::rstd::marker::PhantomData<T>);
 impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 	type Key1 = T::AccountId;
