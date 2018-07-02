@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
+//! An implementation of double map backed by storage.
 //!
+//! This implementation is somewhat specialized to the tracking of the storage of accounts.
 
 use rstd::prelude::*;
 use codec::Slicable;
@@ -44,6 +46,19 @@ fn full_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1, k2: M::Key2) -> Vec<u8> {
 	k
 }
 
+/// An implementation of a map with a two keys.
+///
+/// It provides an important ability to efficiently remove all entries
+/// that have a common first key.
+///
+/// # Mapping of keys to a storage path
+///
+/// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
+/// The first part is a XX hash of a concatenation of the `PREFIX` and `Key1`. And the second part
+/// is a blake2 hash of a `Key2`.
+///
+/// Blake2 is used for `Key2` is because it will be used as a for a key for contract's storage and
+/// thus will be susceptible for a untrusted input.
 pub trait StorageDoubleMap {
 	type Key1: Slicable;
 	type Key2: Slicable;
@@ -51,18 +66,24 @@ pub trait StorageDoubleMap {
 
 	const PREFIX: &'static [u8];
 
+	/// Insert an entry into this map.
 	fn insert(k1: Self::Key1, k2: Self::Key2, val: Self::Value) {
 		unhashed::put(&full_key::<Self>(k1, k2)[..], &val);
 	}
 
+	/// Remove an entry from this map.
 	fn remove(k1: Self::Key1, k2: Self::Key2) {
 		unhashed::kill(&full_key::<Self>(k1, k2)[..]);
 	}
 
+	/// Get an entry from this map.
+	///
+	/// If there is entry stored under the given keys, returns `None`.
 	fn get(k1: Self::Key1, k2: Self::Key2) -> Option<Self::Value> {
 		unhashed::get(&full_key::<Self>(k1, k2)[..])
 	}
 
+	/// Removes all entries that shares the `k1` as the first key.
 	fn remove_prefix(k1: Self::Key1) {
 		unhashed::kill_prefix(&first_part_of_key::<Self>(k1))
 	}
