@@ -513,39 +513,46 @@ where C: AsyncRead + AsyncWrite + 'a
 			let shared = shared.clone();
 			Box::new(client_addr.and_then(move |client_addr| {
 				let node_id = p2p_multiaddr_to_node_id(client_addr);
-				shared.network_state.incoming_kad_connection(node_id.clone(), controller);
+				let peer_id = shared.network_state.incoming_kad_connection(node_id.clone(), controller)?;
 
-				kademlia_stream.for_each(move |req| {
+				Ok(kademlia_stream.for_each({
 					let shared = shared.clone();
-					shared.kad_system.update_kbuckets(node_id.clone());
-					match req {
-						KadIncomingRequest::FindNode { searched, responder } => {
-							responder.respond(shared
-								.kad_system
-								.known_closest_peers(&searched)
-								.map(move |peer_id| {
-									let addrs = shared.network_state.addrs_of_peer(&peer_id);
-									let connec_ty = if shared.network_state.has_connection(&peer_id) {
-										// TODO: this only checks connections with substrate ; but what
-										//       if we're connected through Kademlia only?
-										KadConnectionType::Connected
-									} else {
-										KadConnectionType::NotConnected
-									};
+					move |req| {
+						let shared = shared.clone();
+						shared.kad_system.update_kbuckets(node_id.clone());
+						match req {
+							KadIncomingRequest::FindNode { searched, responder } => {
+								responder.respond(shared
+									.kad_system
+									// TODO the iter of `known_closest_peers` should be infinite
+									.known_closest_peers(&searched)
+									.map(move |peer_id| {
+										let addrs = shared.network_state.addrs_of_peer(&peer_id);
+										let connec_ty = if shared.network_state.has_connection(&peer_id) {
+											// TODO: this only checks connections with substrate ; but what
+											//       if we're connected through Kademlia only?
+											KadConnectionType::Connected
+										} else {
+											KadConnectionType::NotConnected
+										};
 
-									KadPeer {
-										node_id: peer_id.clone(),
-										multiaddrs: addrs,
-										connection_ty: connec_ty,
-									}
-								})
-								.collect::<Vec<_>>())
-						},
-						KadIncomingRequest::PingPong => {},
+										KadPeer {
+											node_id: peer_id.clone(),
+											multiaddrs: addrs,
+											connection_ty: connec_ty,
+										}
+									})
+									.collect::<Vec<_>>())
+							},
+							KadIncomingRequest::PingPong => {},
+						}
+						Ok(())
 					}
-					Ok(())
-				})
-			}))
+				}).then(move |val| {
+					shared.network_state.disconnect_kademlia(peer_id);
+					val
+				}))
+			}).flatten())
 		},
 
 		FinalUpgrade::Identify(IdentifyOutput::Sender { sender }, original_addr) => {

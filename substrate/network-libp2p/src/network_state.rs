@@ -456,6 +456,24 @@ impl NetworkState {
 		Ok((peer_id, fut))
 	}
 
+	/// Disconnect the Kademlia controller with the peer.
+	pub fn disconnect_kademlia(&self, peer_id: PeerId) {
+		let mut connections = self.connections.write();
+		if let Some(mut peer) = connections.info_by_peer.get_mut(&peer_id) {
+			// TODO: that's code duplication
+			let (tx, rx) = mpsc::unbounded();
+			let rx = rx
+				.into_future()
+				.map_err(|_| -> IoError { unreachable!() })
+				.and_then(|i| i.0.ok_or(IoError::new(IoErrorKind::ConnectionAborted, "kad aborted")));
+			let kad_connec = Box::new(rx) as Box<Future<Item = _, Error = _>>;
+
+			peer.incoming_kad_channel = tx;
+			peer.kad_connec = kad_connec.shared();
+			peer.opened_kad = false;
+		}
+	}
+
 	/// Try to add a new connection to a node in the list.
 	///
 	/// Returns a `PeerId` to allow further interfacing with this connection. Note that all
