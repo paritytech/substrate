@@ -604,7 +604,7 @@ fn account_removal_removes_storage() {
 		// the balance of account 1 is will be below than exsistential threshold.
 		//
 		// This should lead to the removal of all storage associated with this account.
-		Staking::transfer(&1, 2.into(), 20);
+		assert_ok!(Staking::transfer(&1, 2.into(), 20));
 
 		// Verify that all entries from account 1 is removed, while
 		// entries from account 2 is in place.
