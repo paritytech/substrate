@@ -63,6 +63,7 @@ mod mock;
 mod tests;
 mod genesis_config;
 mod account_db;
+mod double_map;
 
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
@@ -241,7 +242,15 @@ decl_storage! {
 	// storage items with a particular prefix otherwise we'll suffer leakage with the removal
 	// of smart contracts.
 //	pub StorageOf: b"sta:sto:" => map [ T::AccountId => map(blake2) Vec<u8> => Vec<u8> ];
-	pub StorageOf: b"sta:sto:" => map [ (T::AccountId, Vec<u8>) => Vec<u8> ];
+//	pub StorageOf: b"sta:sto:" => map [ (T::AccountId, Vec<u8>) => Vec<u8> ];
+}
+
+pub(crate) struct StorageOf<T>(::rstd::marker::PhantomData<T>);
+impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
+	type Key1 = T::AccountId;
+	type Key2 = Vec<u8>;
+	type Value = Vec<u8>;
+	const PREFIX: &'static [u8] = b"sta:sto:";
 }
 
 enum NewAccountOutcome {
@@ -623,7 +632,7 @@ impl<T: Trait> Module<T> {
 			.map(|v| (Self::voting_balance(&v) + Self::nomination_balance(&v), v))
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
-		
+
 		<StakeThreshold<T>>::put(
 			if intentions.len() > 0 {
 				let i = (<ValidatorCount<T>>::get() as usize).min(intentions.len() - 1);
