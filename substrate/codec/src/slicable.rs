@@ -38,12 +38,20 @@ pub trait Input {
 	}
 }
 
+#[cfg(not(feature = "std"))]
 impl<'a> Input for &'a [u8] {
 	fn read(&mut self, into: &mut [u8]) -> usize {
 		let len = ::core::cmp::min(into.len(), self.len());
 		into[..len].copy_from_slice(&self[..len]);
 		*self = &self[len..];
 		len
+	}
+}
+
+#[cfg(feature = "std")]
+impl<R: ::std::io::Read> Input for R {
+	fn read(&mut self, into: &mut [u8]) -> usize {
+		(self as &mut ::std::io::Read).read(into).unwrap_or(0)
 	}
 }
 
