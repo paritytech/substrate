@@ -25,6 +25,3 @@ varint = { git = "https://github.com/libp2p/rust-libp2p" }
 ethcore-bytes = { git = "https://github.com/paritytech/parity.git" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ethcore-logger = { git = "https://github.com/paritytech/parity.git" }
-
-[features]
-default = []

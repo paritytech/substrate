@@ -24,7 +24,7 @@ use libp2p::multiaddr::{AddrComponent, Multiaddr};
 use libp2p::kad::{KadSystem, KadConnecConfig, KadSystemConfig, KadIncomingRequest, KadConnecController, KadPeer, KadConnectionType, KadQueryEvent};
 use libp2p::identify::{IdentifyInfo, IdentifyOutput, IdentifyTransportOutcome, IdentifyProtocolConfig, PeerIdTransport};
 use libp2p::core::{upgrade, Transport, MuxedTransport, ConnectionUpgrade, Endpoint, PeerId as PeerstorePeerId, PublicKey, SwarmController};
-use libp2p::{ping, secio};
+use libp2p::ping;
 use network::{PacketId, SessionInfo, ConnectionFilter, TimerToken};
 use rand;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
@@ -366,7 +366,7 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 {
 	// Build the transport layer.
 	let transport = {
-		let base = transport::build_transport(core.clone());
+		let base = transport::build_transport(core.clone(), shared.network_state.local_private_key().clone());
 
 		let addr_resolver = {
 			let shared = shared.clone();
