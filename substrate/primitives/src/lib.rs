@@ -61,6 +61,8 @@ macro_rules! map {
 	)
 }
 
+use rstd::prelude::*;
+use rstd::ops::Deref;
 
 #[cfg(feature = "std")]
 pub mod bytes;
@@ -87,3 +89,17 @@ pub type AuthorityId = [u8; 32];
 
 /// A 512-bit value interpreted as a signature.
 pub type Signature = hash::H512;
+
+/// Hex-serialised shim for `Vec<u8>`.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
+pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+impl From<Vec<u8>> for Bytes {
+	fn from(s: Vec<u8>) -> Self { Bytes(s) }
+}
+
+impl Deref for Bytes {
+	type Target = [u8];
+	fn deref(&self) -> &[u8] { &self.0[..] }
+}

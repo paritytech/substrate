@@ -20,6 +20,7 @@ use transaction_pool;
 use runtime_primitives::MakeStorage;
 pub use network::Role;
 pub use network::NetworkConfiguration;
+pub use client_db::PruningMode;
 
 /// Service configuration.
 pub struct Configuration {
@@ -33,6 +34,8 @@ pub struct Configuration {
 	pub keystore_path: String,
 	/// Path to the database.
 	pub database_path: String,
+	/// Pruning settings.
+	pub pruning: PruningMode,
 	/// Additional key seeds.
 	pub keys: Vec<String>,
 	/// The name of the chain.
@@ -58,6 +61,7 @@ impl Default for Configuration {
 			genesis_storage: Box::new(Default::default),
 			telemetry: Default::default(),
 			name: "Anonymous".into(),
+			pruning: PruningMode::ArchiveAll,
 		}
 	}
 }

@@ -43,24 +43,31 @@ extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
+extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(test)] use std::fmt::Debug;
+use account_db::State;
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use rstd::cell::RefCell;
-use rstd::collections::btree_map::{BTreeMap, Entry};
+use rstd::collections::btree_map::BTreeMap;
 use codec::{Input, Slicable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
+use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
 	As, AuxLookup, Hashing as HashingT, Member};
 use address::Address as RawAddress;
 
 pub mod address;
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
+mod genesis_config;
+mod account_db;
+
+#[cfg(feature = "std")]
+pub use genesis_config::GenesisConfig;
+
+pub use account_db::*;
 
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: usize = 64;
@@ -90,6 +97,15 @@ pub trait ContractAddressFor<AccountId: Sized> {
 	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
 }
 
+#[cfg(feature = "std")]
+pub struct DummyContractAddressFor;
+#[cfg(feature = "std")]
+impl ContractAddressFor<u64> for DummyContractAddressFor {
+	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
+		origin + 1
+	}
+}
+
 impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 	Hashing: HashingT,
 	AccountId: Sized + Slicable + From<Hashing::Output>,
@@ -104,12 +120,12 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize>;
+	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<usize> + Copy;
+	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
 }
 
 decl_module! {
@@ -119,7 +135,9 @@ decl_module! {
 	pub enum Call where aux: T::PublicAux {
 		fn transfer(aux, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
-		fn unstake(aux) -> Result = 2;
+		fn unstake(aux, index: u32) -> Result = 2;
+		fn nominate(aux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result = 3;
+		fn unnominate(aux, target_index: u32) -> Result = 4;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -141,6 +159,7 @@ decl_storage! {
 	// The length of a staking era in sessions.
 	pub SessionsPerEra get(sessions_per_era): b"sta:spe" => required T::BlockNumber;
 	// The total amount of stake on the system.
+	// TODO: this doesn't actually track total stake yet - it should do.
 	pub TotalStake get(total_stake): b"sta:tot" => required T::Balance;
 	// The fee to be paid for making a transaction; the base.
 	pub TransactionBaseFee get(transaction_base_fee): b"sta:basefee" => required T::Balance;
@@ -156,15 +175,27 @@ decl_storage! {
 	pub CreationFee get(creation_fee): b"sta:creation_fee" => required T::Balance;
 	// The fee required to create a contract. At least as big as ReclaimRebate.
 	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
+	// Maximum reward, per validator, that is provided per acceptable session.
+	pub SessionReward get(session_reward): b"sta:session_reward" => required T::Balance;
+	// Slash, per validator that is taken per abnormal era end.
+	pub EarlyEraSlash get(early_era_slash): b"sta:early_era_slash" => required T::Balance;
 
 	// The current era index.
 	pub CurrentEra get(current_era): b"sta:era" => required T::BlockNumber;
 	// All the accounts with a desire to stake.
-	pub Intentions: b"sta:wil:" => default Vec<T::AccountId>;
+	pub Intentions get(intentions): b"sta:wil:" => default Vec<T::AccountId>;
+	// All nominator -> nominee relationships.
+	pub Nominating get(nominating): b"sta:nominating" => map [ T::AccountId => T::AccountId ];
+	// Nominators for a particular account.
+	pub NominatorsFor get(nominators_for): b"sta:nominators_for" => default map [ T::AccountId => Vec<T::AccountId> ];
+	// Nominators for a particular account that is in action right now.
+	pub CurrentNominatorsFor get(current_nominators_for): b"sta:current_nominators_for" => default map [ T::AccountId => Vec<T::AccountId> ];
 	// The next value of sessions per era.
 	pub NextSessionsPerEra get(next_sessions_per_era): b"sta:nse" => T::BlockNumber;
-	// The block number at which the era length last changed.
+	// The session index at which the era length last changed.
 	pub LastEraLengthChange get(last_era_length_change): b"sta:lec" => default T::BlockNumber;
+	// The current era stake threshold
+	pub StakeThreshold get(stake_threshold): b"sta:stake_threshold" => required T::Balance;
 
 	// The next free enumeration set.
 	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required T::AccountIndex;
@@ -284,23 +315,78 @@ impl<T: Trait> Module<T> {
 	///
 	/// Effects will be felt at the beginning of the next era.
 	fn stake(aux: &T::PublicAux) -> Result {
+		let aux = aux.ref_into();
+		ensure!(Self::nominating(aux).is_none(), "Cannot stake if already nominating.");
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
-		ensure!(intentions.iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot stake if already staked.");
-		intentions.push(aux.ref_into().clone());
+		ensure!(intentions.iter().find(|&t| t == aux).is_none(), "Cannot stake if already staked.");
+		intentions.push(aux.clone());
 		<Intentions<T>>::put(intentions);
-		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
+		<Bondage<T>>::insert(aux, T::BlockNumber::max_value());
 		Ok(())
 	}
 
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake(aux: &T::PublicAux) -> Result {
+	fn unstake(aux: &T::PublicAux, position: u32) -> Result {
+		let aux = aux.ref_into();
+		let position = position as usize;
 		let mut intentions = <Intentions<T>>::get();
-		let position = intentions.iter().position(|t| t == aux.ref_into()).ok_or("Cannot unstake if not already staked.")?;
+//		let position = intentions.iter().position(|t| t == aux.ref_into()).ok_or("Cannot unstake if not already staked.")?;
+		if intentions.get(position) != Some(aux) {
+			return Err("Invalid index")
+		}
 		intentions.swap_remove(position);
 		<Intentions<T>>::put(intentions);
+		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
+		Ok(())
+	}
+
+	fn nominate(aux: &T::PublicAux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result {
+		let target = Self::lookup(target)?;
+		let aux = aux.ref_into();
+
+		ensure!(Self::nominating(aux).is_none(), "Cannot nominate if already nominating.");
+		ensure!(Self::intentions().iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot nominate if already staked.");
+
+		// update nominators_for
+		let mut t = Self::nominators_for(&target);
+		t.push(aux.clone());
+		<NominatorsFor<T>>::insert(&target, t);
+
+		// update nominating
+		<Nominating<T>>::insert(aux, &target);
+
+		// Update bondage
+		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
+
+		Ok(())
+	}
+
+	/// Will panic if called when source isn't currently nominating target.
+	/// Updates Nominating, NominatorsFor and NominationBalance.
+	fn unnominate(aux: &T::PublicAux, target_index: u32) -> Result {
+		let source = aux.ref_into();
+		let target_index = target_index as usize;
+
+		let target = <Nominating<T>>::get(source).ok_or("Account must be nominating")?;
+
+		let mut t = Self::nominators_for(&target);
+		if t.get(target_index) != Some(source) {
+			return Err("Invalid target index")
+		}
+
+		// Ok - all valid.
+
+		// update nominators_for
+		t.swap_remove(target_index);
+		<NominatorsFor<T>>::insert(&target, t);
+
+		// update nominating
+		<Nominating<T>>::remove(source);
+
+		// update bondage
 		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
 		Ok(())
 	}
@@ -327,8 +413,7 @@ impl<T: Trait> Module<T> {
 
 	/// Force there to be a new era. This also forces a new session immediately after.
 	fn force_new_era() -> Result {
-		Self::new_era();
-		<session::Module<T>>::rotate_session();
+		<session::Module<T>>::rotate_session(false);
 		Ok(())
 	}
 
@@ -377,6 +462,17 @@ impl<T: Trait> Module<T> {
 		} else {
 			None
 		}
+	}
+
+	/// Adds up to `value` to the free balance of `who`.
+	///
+	/// If `who` doesn't exist, nothing is done and an Err returned.
+	pub fn reward(who: &T::AccountId, value: T::Balance) -> Result {
+		if Self::voting_balance(who).is_zero() {
+			return Err("beneficiary account must pre-exist");
+		}
+		Self::set_free_balance(who, Self::free_balance(who) + value);
+		Ok(())
 	}
 
 	/// Moves `value` from balance to reserved balance.
@@ -453,12 +549,52 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Hook to be called after to transaction processing.
-	pub fn check_new_era() {
-		// check block number and call new_era if necessary.
-		if (<system::Module<T>>::block_number() - Self::last_era_length_change()) % Self::era_length() == Zero::zero() {
+	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
+	/// move to a new era.
+	fn new_session(normal_rotation: bool, actual_elapsed: T::Moment) {
+		let session_index = <session::Module<T>>::current_index();
+
+		if normal_rotation {
+			// reward
+			let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
+			let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
+			let reward = Self::session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64);
+			// apply good session reward
+			for v in <session::Module<T>>::validators().iter() {
+				let noms = Self::current_nominators_for(v);
+				let total = noms.iter().map(Self::voting_balance).fold(Self::voting_balance(v), |acc, x| acc + x);
+				if !total.is_zero() {
+					let safe_mul_rational = |b| b * reward / total;// TODO: avoid overflow
+					for n in noms.iter() {
+						let _ = Self::reward(n, safe_mul_rational(Self::voting_balance(n)));
+					}
+					let _ = Self::reward(v, safe_mul_rational(Self::voting_balance(v)));
+				}
+			}
+		} else {
+			// slash
+			let early_era_slash = Self::early_era_slash();
+			for v in <session::Module<T>>::validators().iter() {
+				if let Some(rem) = Self::slash(v, early_era_slash) {
+					let noms = Self::current_nominators_for(v);
+					let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
+					if !total.is_zero() {
+						let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
+						for n in noms.iter() {
+							let _ = Self::slash(n, safe_mul_rational(Self::voting_balance(n)));	// best effort - not much that can be done on fail.
+						}
+					}
+				}
+			}
+		}
+		if ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero() || !normal_rotation {
 			Self::new_era();
 		}
+	}
+
+	/// Balance of a (potential) validator that includes all nominators.
+	fn nomination_balance(who: &T::AccountId) -> T::Balance {
+		Self::nominators_for(who).iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x)
 	}
 
 	/// The era has changed - enact new staking set.
@@ -473,7 +609,7 @@ impl<T: Trait> Module<T> {
 		if let Some(next_spe) = Self::next_sessions_per_era() {
 			if next_spe != Self::sessions_per_era() {
 				<SessionsPerEra<T>>::put(&next_spe);
-				<LastEraLengthChange<T>>::put(&<system::Module<T>>::block_number());
+				<LastEraLengthChange<T>>::put(&<session::Module<T>>::current_index());
 			}
 		}
 
@@ -481,17 +617,30 @@ impl<T: Trait> Module<T> {
 		// combination of validators, then use session::internal::set_validators().
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
 		// <ValidatorCount<T>>::get() of them.
+		// TODO: this is not sound. this should be moved to an off-chain solution mechanism.
 		let mut intentions = <Intentions<T>>::get()
 			.into_iter()
-			.map(|v| (Self::voting_balance(&v), v))
+			.map(|v| (Self::voting_balance(&v) + Self::nomination_balance(&v), v))
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
-		<session::Module<T>>::set_validators(
-			&intentions.into_iter()
+		
+		<StakeThreshold<T>>::put(
+			if intentions.len() > 0 {
+				let i = (<ValidatorCount<T>>::get() as usize).min(intentions.len() - 1);
+				intentions[i].0.clone()
+			} else { Zero::zero() }
+		);
+		let vals = &intentions.into_iter()
 				.map(|(_, v)| v)
 				.take(<ValidatorCount<T>>::get() as usize)
-				.collect::<Vec<_>>()
-		);
+				.collect::<Vec<_>>();
+		for v in <session::Module<T>>::validators().iter() {
+			<CurrentNominatorsFor<T>>::remove(v);
+		}
+		for v in vals.iter() {
+			<CurrentNominatorsFor<T>>::insert(v, Self::nominators_for(v));
+		}
+		<session::Module<T>>::set_validators(vals);
 	}
 
 	fn enum_set_size() -> T::AccountIndex {
@@ -601,203 +750,7 @@ impl<T: Trait> Module<T> {
 			<system::AccountNonce<T>>::remove(who);
 		}
 	}
-}
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
-		Self::check_new_era();
-	}
-}
-
-impl<T: Trait> AuxLookup for Module<T> {
-	type Source = address::Address<T::AccountId, T::AccountIndex>;
-	type Target = T::AccountId;
-	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		match a {
-			address::Address::Id(i) => Ok(i),
-			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
-		}
-	}
-}
-
-// Each identity's stake may be in one of three bondage states, given by an integer:
-// - n | n <= <CurrentEra<T>>::get(): inactive: free to be transferred.
-// - ~0: active: currently representing a validator.
-// - n | n > <CurrentEra<T>>::get(): deactivating: recently representing a validator and not yet
-//   ready for transfer.
-
-struct ChangeEntry<T: Trait> {
-	balance: Option<T::Balance>,
-	code: Option<Vec<u8>>,
-	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
-}
-
-// Cannot derive(Default) since it erroneously bounds T by Default.
-impl<T: Trait> Default for ChangeEntry<T> {
-	fn default() -> Self {
-		ChangeEntry {
-			balance: Default::default(),
-			code: Default::default(),
-			storage: Default::default(),
-		}
-	}
-}
-
-impl<T: Trait> ChangeEntry<T> {
-	pub fn contract_created(b: T::Balance, c: Vec<u8>) -> Self {
-		ChangeEntry { balance: Some(b), code: Some(c), storage: Default::default() }
-	}
-	pub fn balance_changed(b: T::Balance) -> Self {
-		ChangeEntry { balance: Some(b), code: None, storage: Default::default() }
-	}
-}
-
-type State<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
-
-trait AccountDb<T: Trait> {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
-
-	fn merge(&mut self, state: State<T>);
-}
-
-struct DirectAccountDb;
-impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		<StorageOf<T>>::get(&(account.clone(), location.to_vec()))
-	}
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		<CodeOf<T>>::get(account)
-	}
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
-		<FreeBalance<T>>::get(account)
-	}
-	fn merge(&mut self, s: State<T>) {
-		let ed = <Module<T>>::existential_deposit();
-		for (address, changed) in s.into_iter() {
-			if let Some(balance) = changed.balance {
-				// If the balance is too low, then the account is reaped.
-				// NOTE: There are two balances for every account: `reserved_balance` and
-				// `free_balance`. This contract subsystem only cares about the latter: whenever
-				// the term "balance" is used *here* it should be assumed to mean "free balance"
-				// in the rest of the module.
-				// Free balance can never be less than ED. If that happens, it gets reduced to zero
-				// and the account information relevant to this subsystem is deleted (i.e. the
-				// account is reaped).
-				// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
-				// value of which makes even the `free_balance` unspendable.
-				// TODO: enforce this for the other balance-altering functions.
-				if balance < ed {
-					<Module<T>>::on_free_too_low(&address);
-					continue;
-				} else {
-					if !<FreeBalance<T>>::exists(&address) {
-						let outcome = <Module<T>>::new_account(&address, balance);
-						let credit = match outcome {
-							NewAccountOutcome::GoodHint => balance + <Module<T>>::reclaim_rebate(),
-							_ => balance,
-						};
-						<FreeBalance<T>>::insert(&address, credit);
-					} else {
-						<FreeBalance<T>>::insert(&address, balance);
-					}
-				}
-			}
-			if let Some(code) = changed.code {
-				<CodeOf<T>>::insert(&address, &code);
-			}
-			for (k, v) in changed.storage.into_iter() {
-				if let Some(value) = v {
-					<StorageOf<T>>::insert((address.clone(), k), &value);
-				} else {
-					<StorageOf<T>>::remove((address.clone(), k));
-				}
-			}
-		}
-	}
-}
-
-struct OverlayAccountDb<'a, T: Trait + 'a> {
-	local: RefCell<State<T>>,
-	underlying: &'a AccountDb<T>,
-}
-impl<'a, T: Trait> OverlayAccountDb<'a, T> {
-	fn new(underlying: &'a AccountDb<T>) -> OverlayAccountDb<'a, T> {
-		OverlayAccountDb {
-			local: RefCell::new(State::new()),
-			underlying,
-		}
-	}
-
-	fn into_state(self) -> State<T> {
-		self.local.into_inner()
-	}
-
-	fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.storage
-			.insert(location, value);
-	}
-	fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.balance = Some(balance);
-	}
-}
-
-impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		self.local
-			.borrow()
-			.get(account)
-			.and_then(|a| a.storage.get(location))
-			.cloned()
-			.unwrap_or_else(|| self.underlying.get_storage(account, location))
-	}
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		self.local
-			.borrow()
-			.get(account)
-			.and_then(|a| a.code.clone())
-			.unwrap_or_else(|| self.underlying.get_code(account))
-	}
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
-		self.local
-			.borrow()
-			.get(account)
-			.and_then(|a| a.balance)
-			.unwrap_or_else(|| self.underlying.get_balance(account))
-	}
-	fn merge(&mut self, s: State<T>) {
-		let mut local = self.local.borrow_mut();
-
-		for (address, changed) in s.into_iter() {
-			match local.entry(address) {
-				Entry::Occupied(e) => {
-					let mut value = e.into_mut();
-					if changed.balance.is_some() {
-						value.balance = changed.balance;
-					}
-					if changed.code.is_some() {
-						value.code = changed.code;
-					}
-					value.storage.extend(changed.storage.into_iter());
-				}
-				Entry::Vacant(e) => {
-					e.insert(changed);
-				}
-			}
-		}
-	}
-}
-
-impl<T: Trait> Module<T> {
 	fn effect_create<DB: AccountDb<T>>(
 		transactor: &T::AccountId,
 		code: &[u8],
@@ -894,32 +847,24 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-struct StakingExt<'a, 'b: 'a, T: Trait + 'b> {
-	account_db: &'a mut OverlayAccountDb<'b, T>,
-	account: T::AccountId,
+impl<T: Trait> Executable for Module<T> {
+	fn execute() {
+	}
 }
-impl<'a, 'b: 'a, T: Trait> contract::Ext for StakingExt<'a, 'b, T> {
-	type AccountId = T::AccountId;
-	type Balance = T::Balance;
 
-	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.account_db.get_storage(&self.account, key)
+impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
+	fn on_session_change(normal_rotation: bool, elapsed: T::Moment) {
+		Self::new_session(normal_rotation, elapsed);
 	}
-	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
-		self.account_db.set_storage(&self.account, key.to_vec(), value);
-	}
-	fn create(&mut self, code: &[u8], value: Self::Balance) {
-		if let Ok(Some(commit_state)) =
-			Module::<T>::effect_create(&self.account, code, value, self.account_db)
-		{
-			self.account_db.merge(commit_state);
-		}
-	}
-	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
-		if let Ok(Some(commit_state)) =
-			Module::<T>::effect_transfer(&self.account, to, value, self.account_db)
-		{
-			self.account_db.merge(commit_state);
+}
+
+impl<T: Trait> AuxLookup for Module<T> {
+	type Source = address::Address<T::AccountId, T::AccountIndex>;
+	type Target = T::AccountId;
+	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
+		match a {
+			address::Address::Id(i) => Ok(i),
+			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
 		}
 	}
 }
@@ -927,142 +872,11 @@ impl<'a, 'b: 'a, T: Trait> contract::Ext for StakingExt<'a, 'b, T> {
 impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let b = Self::free_balance(transactor);
-		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<usize>>::sa(encoded_len);
+		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
 		if b < transaction_fee {
 			return Err("not enough funds for transaction fee");
 		}
 		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
 		Ok(())
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-pub struct DummyContractAddressFor;
-#[cfg(any(feature = "std", test))]
-impl ContractAddressFor<u64> for DummyContractAddressFor {
-	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
-		origin + 1
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-pub struct GenesisConfig<T: Trait> {
-	pub sessions_per_era: T::BlockNumber,
-	pub current_era: T::BlockNumber,
-	pub balances: Vec<(T::AccountId, T::Balance)>,
-	pub intentions: Vec<T::AccountId>,
-	pub validator_count: u64,
-	pub bonding_duration: T::BlockNumber,
-	pub transaction_base_fee: T::Balance,
-	pub transaction_byte_fee: T::Balance,
-	pub transfer_fee: T::Balance,
-	pub creation_fee: T::Balance,
-	pub contract_fee: T::Balance,
-	pub reclaim_rebate: T::Balance,
-	pub existential_deposit: T::Balance,
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
-	pub fn simple() -> Self {
-		GenesisConfig {
-			sessions_per_era: T::BlockNumber::sa(2),
-			current_era: T::BlockNumber::sa(0),
-			balances: vec![(T::AccountId::from(1), T::Balance::sa(111))],
-			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
-			validator_count: 3,
-			bonding_duration: T::BlockNumber::sa(0),
-			transaction_base_fee: T::Balance::sa(0),
-			transaction_byte_fee: T::Balance::sa(0),
-			transfer_fee: T::Balance::sa(0),
-			creation_fee: T::Balance::sa(0),
-			contract_fee: T::Balance::sa(0),
-			existential_deposit: T::Balance::sa(0),
-			reclaim_rebate: T::Balance::sa(0),
-		}
-	}
-
-	pub fn extended() -> Self {
-		GenesisConfig {
-			sessions_per_era: T::BlockNumber::sa(3),
-			current_era: T::BlockNumber::sa(1),
-			balances: vec![
-				(T::AccountId::from(1), T::Balance::sa(10)),
-				(T::AccountId::from(2), T::Balance::sa(20)),
-				(T::AccountId::from(3), T::Balance::sa(30)),
-				(T::AccountId::from(4), T::Balance::sa(40)),
-				(T::AccountId::from(5), T::Balance::sa(50)),
-				(T::AccountId::from(6), T::Balance::sa(60)),
-				(T::AccountId::from(7), T::Balance::sa(1))
-			],
-			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
-			validator_count: 3,
-			bonding_duration: T::BlockNumber::sa(0),
-			transaction_base_fee: T::Balance::sa(1),
-			transaction_byte_fee: T::Balance::sa(0),
-			transfer_fee: T::Balance::sa(0),
-			creation_fee: T::Balance::sa(0),
-			contract_fee: T::Balance::sa(0),
-			existential_deposit: T::Balance::sa(0),
-			reclaim_rebate: T::Balance::sa(0),
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for GenesisConfig<T> {
-	fn default() -> Self {
-		GenesisConfig {
-			sessions_per_era: T::BlockNumber::sa(1000),
-			current_era: T::BlockNumber::sa(0),
-			balances: vec![],
-			intentions: vec![],
-			validator_count: 0,
-			bonding_duration: T::BlockNumber::sa(1000),
-			transaction_base_fee: T::Balance::sa(0),
-			transaction_byte_fee: T::Balance::sa(0),
-			transfer_fee: T::Balance::sa(0),
-			creation_fee: T::Balance::sa(0),
-			contract_fee: T::Balance::sa(0),
-			existential_deposit: T::Balance::sa(0),
-			reclaim_rebate: T::Balance::sa(0),
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> runtime_io::TestExternalities {
-		use runtime_io::twox_128;
-		use codec::Slicable;
-
-		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
-
-		let mut r: runtime_io::TestExternalities = map![
-			twox_128(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
-			twox_128(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
-			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
-			twox_128(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
-			twox_128(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
-			twox_128(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
-			twox_128(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
-			twox_128(<TransferFee<T>>::key()).to_vec() => self.transfer_fee.encode(),
-			twox_128(<CreationFee<T>>::key()).to_vec() => self.creation_fee.encode(),
-			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
-			twox_128(<ExistentialDeposit<T>>::key()).to_vec() => self.existential_deposit.encode(),
-			twox_128(<ReclaimRebate<T>>::key()).to_vec() => self.reclaim_rebate.encode(),
-			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
-			twox_128(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
-		];
-
-		let ids: Vec<_> = self.balances.iter().map(|x| x.0.clone()).collect();
-		for i in 0..(ids.len() + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE {
-			r.insert(twox_128(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
-				ids[i * ENUM_SET_SIZE..ids.len().min((i + 1) * ENUM_SET_SIZE)].to_owned().encode());
-		}
-		for (who, value) in self.balances.into_iter() {
-			r.insert(twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
-		}
-		r
 	}
 }
