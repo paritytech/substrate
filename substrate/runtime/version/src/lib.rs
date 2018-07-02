@@ -105,7 +105,8 @@ impl RuntimeVersion {
 
 	/// Check if this version matches other version for authoring blocks.
 	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
-		self.authoring_version == other.authoring_version
+		self.authoring_version == other.authoring_version &&
+		self.spec_name == other.spec_name
 	}
 }
 
