@@ -43,9 +43,7 @@ impl ChainSpec {
 			ChainSpec::Development => service::ChainSpec::development_config(),
 			ChainSpec::LocalTestnet => service::ChainSpec::local_testnet_config(),
 			ChainSpec::PoC2Testnet => service::ChainSpec::poc_2_testnet_config(),
-			ChainSpec::Custom(f) => {
-					service::ChainSpec::from_json_file(PathBuf::from(f))?
-				}
+			ChainSpec::Custom(f) => service::ChainSpec::from_json_file(PathBuf::from(f))?,
 		})
 	}
 }

@@ -47,7 +47,7 @@ pub struct Configuration {
 }
 
 impl Configuration {
-	/// Create default condif for given chain spec.
+	/// Create default config for given chain spec.
 	pub fn default_with_spec(chain_spec: ChainSpec) -> Configuration {
 		let mut configuration = Configuration {
 			chain_spec,
