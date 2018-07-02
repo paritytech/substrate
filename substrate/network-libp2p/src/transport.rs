@@ -34,7 +34,9 @@ pub fn build_transport(core: Handle, local_private_key: secio::SecioKeyPair)
             // TODO: this `EitherOutput` thing shows that libp2p's API could be improved
             upgrade::or(
                 upgrade::map(plaintext, |out| (either::EitherOutput::First(out), None)), 
-                upgrade::map(secio, |(out, priv_key)| (either::EitherOutput::Second(out), Some(priv_key))),
+                upgrade::map(secio, |out: secio::SecioOutput<_>| {
+                    (either::EitherOutput::Second(out.stream), Some(out.remote_key))
+                }),
             )
         })
         .map(|(socket, _key), _| {

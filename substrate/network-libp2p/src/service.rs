@@ -697,6 +697,10 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 			let transport = transport.clone();
 			let swarm_controller = swarm_controller.clone();
 			move |()| {
+				// Note that this is a small hack. We flush the caches here so that we don't need
+				// to run a timer just for flushing.
+				let _ = shared.network_state.flush_caches_to_disk();
+
 				if shared.network_state.should_open_outgoing_connecs() {
 					// Query the node IDs that are closest to a random ID.
 					// Note that the randomness doesn't have to be secure, as this only influences

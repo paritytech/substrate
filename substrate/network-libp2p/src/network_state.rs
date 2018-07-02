@@ -584,20 +584,23 @@ impl NetworkState {
 	pub fn is_peer_disabled(&self, node_id: &PeerstorePeerId) -> bool {
 		self.disabled_peers.read().contains(&node_id)
 	}
-}
 
-impl Drop for NetworkState {
-	fn drop(&mut self) {
+	/// Flushes the caches to the disk.
+	///
+	/// This is done in an atomical way, so that an error doesn't corrupt anything.
+	pub fn flush_caches_to_disk(&self) -> Result<(), IoError> {
 		match self.peerstore {
-			PeersStorage::Memory(_) => (),
+			PeersStorage::Memory(_) => Ok(()),
 			PeersStorage::Json(ref json) => {
 				match json.flush() {
 					Ok(()) => {
 						debug!(target: "sub-libp2p", "Flushed JSON peer store to disk");
+						Ok(())
 					}
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to flush changes to JSON \
 													peer store: {}", err);
+						Err(err)
 					}
 				}
 			}
@@ -605,9 +608,15 @@ impl Drop for NetworkState {
 	}
 }
 
+impl Drop for NetworkState {
+	fn drop(&mut self) {
+		let _ = self.flush_caches_to_disk();
+	}
+}
+
 // Assigns a `PeerId` to a node, or returns an existing ID if any exists.
 //
-// Takes as parameter an already-locked `Connections`.
+// The function only accepts already-locked structs, so that we don't risk any deadlock.
 fn accept_connection(connections: &mut Connections, next_peer_id: &atomic::AtomicUsize,
 					 node_id: PeerstorePeerId, endpoint: Endpoint)
 	-> Result<PeerId, IoError>
@@ -674,15 +683,18 @@ fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 	Ok(peer_id)
 }
 
-// Obtains or generates the private key.
+// Obtains or generates the local private key using the configuration.
 fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPair, IoError> {
 	Ok(if let Some(ref secret) = config.use_secret {
+		// Key was specified in the configuration.
 		secio::SecioKeyPair::secp256k1_raw_key(&secret[..])
 			.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?
+
 	} else {
 		if let Some(ref path) = config.net_config_path {
 			fs::create_dir_all(Path::new(path))?;
 
+			// Try fetch the key from a the file containing th esecret.
 			let secret_path = Path::new(path).join(SECRET_FILE);
 			let loaded_secret = fs::File::open(&secret_path)
 				.and_then(|mut file| {
@@ -699,11 +711,15 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 			match loaded_secret {
 				Ok(s) => s,
 				Err(err) => {
+					// Failed to fetch existing file ; generate a new key
 					trace!(target: "sub-libp2p", "Failed to load existing secret key file {:?}, \
 						generating new key ; err = {:?}", secret_path, err);
 					let raw_key: [u8; 32] = rand::rngs::EntropyRng::new().gen();
 					let secio_key = secio::SecioKeyPair::secp256k1_raw_key(&raw_key)
-						.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?;
+						.expect("randomly-generated key with correct len should always be valid");
+
+					// And store the newly-generated key in the file if possible.
+					// Errors that happen while doing so are ignored.
 					match open_priv_key_file(&secret_path) {
 						Ok(mut file) => {
 							match file.write_all(&raw_key) {
@@ -724,10 +740,11 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 			}
 
 		} else {
+			// No path in the configuration, nothing we can do except generate a new key.
 			let mut key: [u8; 32] = [0; 32];
 			rand::rngs::EntropyRng::new().fill(&mut key);
 			secio::SecioKeyPair::secp256k1_raw_key(&key)
-				.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?
+				.expect("randomly-generated key with correct len should always be valid")
 		}
 	})
 }
