@@ -34,13 +34,13 @@ extern crate parking_lot;
 extern crate serde;
 extern crate serde_json;
 
-extern crate substrate_primitives;
-extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_state_machine as state_machine;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
@@ -83,6 +83,7 @@ use polkadot_primitives::Block;
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
 use tokio_core::reactor;
+use service::PruningMode;
 
 const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
 
@@ -126,12 +127,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let core = reactor::Core::new().expect("tokio::Core could not be created");
 
 	let yaml = load_yaml!("./cli.yml");
-	let matches = match clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args) {
+	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
 		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
-		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed || e.kind == clap::ErrorKind::VersionDisplayed => {
+		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed => {
 			let _ = clap::App::from_yaml(yaml).print_long_help();
-			return Ok(());
+			return Ok(())
 		}
 		Err(e) => return Err(e.into()),
 	};
@@ -159,25 +160,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.chain_name = chain_spec.clone().into();
 
-	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
-		let name = config.name.clone();
-		let chain_name = config.chain_name.clone();
-		Some(init_telemetry(TelemetryConfig {
-			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
-			on_connect: Box::new(move || {
-				telemetry!("system.connected";
-					"name" => name.clone(),
-					"implementation" => "parity-polkadot",
-					"version" => crate_version!(),
-					"config" => "",
-					"chain" => chain_name.clone(),
-				);
-			}),
-		}))
-	} else {
-		None
-	};
-
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(default_base_path);
@@ -189,15 +171,21 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.into();
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.pruning = match matches.value_of("pruning") {
+		Some("archive") => PruningMode::ArchiveAll,
+		None => PruningMode::keep_blocks(256),
+		Some(s) => PruningMode::keep_blocks(s.parse()
+			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
+	};
 
 	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
 		.map(PresetConfig::deconstruct)
-		.unwrap_or_else(|f| (Box::new(move || 
+		.unwrap_or_else(|f| (Box::new(move ||
 			read_storage_json(&f)
 				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
 				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
 		), vec![]));
-	
+
 	if matches.is_present("build-genesis") {
 		info!("Building genesis");
 		for (i, (k, v)) in genesis_storage().iter().enumerate() {
@@ -256,6 +244,25 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		chain_name: config.chain_name.clone(),
 	};
 
+	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+		let name = config.name.clone();
+		let chain_name = config.chain_name.clone();
+		Some(init_telemetry(TelemetryConfig {
+			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
+			on_connect: Box::new(move || {
+				telemetry!("system.connected";
+					"name" => name.clone(),
+					"implementation" => "parity-polkadot",
+					"version" => crate_version!(),
+					"config" => "",
+					"chain" => chain_name.clone(),
+				);
+			}),
+		}))
+	} else {
+		None
+	};
+
 	match role == service::Role::LIGHT {
 		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf),
 		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf),
@@ -285,10 +292,11 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
+			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
 			rpc::rpc_handler::<Block, _, _, _, _>(
 				service.client(),
 				chain,
-				service.transaction_pool(),
+				author,
 				sys_conf.clone(),
 			)
 		};

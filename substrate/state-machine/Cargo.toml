@@ -15,6 +15,5 @@ triehash = "0.1"
 substrate-primitives = { path = "../primitives", version = "0.1.0" }
 
 hashdb = { git = "https://github.com/paritytech/parity.git" }
-kvdb = { git = "https://github.com/paritytech/parity.git" }
 memorydb = { git = "https://github.com/paritytech/parity.git" }
 patricia-trie = { git = "https://github.com/paritytech/parity.git" }

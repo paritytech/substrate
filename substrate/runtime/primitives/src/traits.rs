@@ -121,7 +121,7 @@ impl<T> RefInto<T> for T {
 }
 
 pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot + As<usize> +
+	Zero + One + IntegerSquareRoot + As<u64> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
@@ -130,7 +130,7 @@ pub trait SimpleArithmetic:
 	PartialOrd<Self> + Ord
 {}
 impl<T:
-	Zero + One + IntegerSquareRoot + As<usize> +
+	Zero + One + IntegerSquareRoot + As<u64> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
@@ -314,7 +314,7 @@ pub trait Digest {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
+pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'static {
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Slicable;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
 	type Hashing: Hashing<Output = Self::Hash>;
@@ -352,7 +352,7 @@ pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug {
+pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'static {
 	type Extrinsic: Member + Slicable;
 	type Header: Header<Hash=Self::Hash>;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
@@ -376,13 +376,13 @@ pub trait Checkable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Checked: Member;
 	fn sender(&self) -> &Self::Address;
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 ///
-/// This does that checking without requiring a lookup argument. 
+/// This does that checking without requiring a lookup argument.
 pub trait BlindCheckable: Sized + Send + Sync {
 	type Address: Member + MaybeDisplay;
 	type Checked: Member;
@@ -395,7 +395,7 @@ impl<T: BlindCheckable> Checkable for T {
 	type AccountId = <Self as BlindCheckable>::Address;
 	type Checked = <Self as BlindCheckable>::Checked;
 	fn sender(&self) -> &Self::Address { BlindCheckable::sender(self) }
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str> + Send + Sync>(self, _: ThisLookup) -> Result<Self::Checked, &'static str> { BlindCheckable::check(self) }
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, _: ThisLookup) -> Result<Self::Checked, &'static str> { BlindCheckable::check(self) }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
