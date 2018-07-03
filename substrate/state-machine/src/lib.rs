@@ -132,6 +132,9 @@ pub trait Externalities {
 		self.place_storage(key.to_vec(), None);
 	}
 
+	/// Clear storage entries which keys are start with the given prefix.
+	fn clear_prefix(&mut self, prefix: &[u8]);
+
 	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
