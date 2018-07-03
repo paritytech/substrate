@@ -338,6 +338,21 @@ impl NetworkState {
 		}
 	}
 
+	/// Sets information about a peer.
+	pub fn set_peer_info(&self, node_id: PeerstorePeerId, endpoint: Endpoint, client_version: String,
+						local_addr: Multiaddr, remote_addr: Multiaddr) -> Result<PeerId, IoError> {
+		let mut connections = self.connections.write();
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id.clone(), endpoint)?;
+		let infos = connections.info_by_peer.get_mut(&peer_id)
+			.expect("Newly-created peer id is always valid");
+
+		infos.client_version = Some(client_version);
+		infos.remote_address = Some(remote_addr);
+		infos.local_address = Some(local_addr);
+
+		Ok(peer_id)
+	}
+
 	/// Adds a reserved peer to the list of reserved peers.
 	/// Returns an error if the peer address is invalid.
 	pub fn add_reserved_peer(&self, peer: &str) -> Result<(), Error> {

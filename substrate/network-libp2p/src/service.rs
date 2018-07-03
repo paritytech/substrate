@@ -377,9 +377,14 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 		PeerIdTransport::new(base.clone(), addr_resolver)
 			.and_then({
 				let shared = shared.clone();
-				move |out, _, remote_addr| {
-					let info = out.info.map(move |info| {
-						let peer_id = info.info.public_key.clone().into_peer_id();
+				move |out, endpoint, remote_addr| {
+					let original_addr = out.original_addr.clone();
+					let info = out.info.and_then(move |info| {
+						let node_id = info.info.public_key.clone().into_peer_id();
+						let _peer_id = shared.network_state.set_peer_info(node_id.clone(), endpoint,
+													info.info.agent_version.clone(),
+													original_addr.clone(), original_addr.clone())?;	// TODO: wrong
+
 						// TODO: this is expensive, but eventually the multiaddr will be directly
 						// 		 part of the configuration, so we don't really care
 						let original_listened_addr = config_to_listen_addr(&shared.config);
@@ -394,11 +399,11 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 						}
 						for addr in info.info.listen_addrs.iter() {
 							trace!(target: "sub-libp2p", "Peer store: adding address {} for {:?}",
-								addr, peer_id);
-							shared.network_state.add_kad_discovered_addr(&peer_id, addr.clone());
+								addr, node_id);
+							shared.network_state.add_kad_discovered_addr(&node_id, addr.clone());
 						}
 
-						info
+						Ok(info)
 					});
 
 					let out = TransportOutput {
@@ -571,8 +576,8 @@ where C: AsyncRead + AsyncWrite + 'a
 			sender.send(
 				IdentifyInfo {
 					public_key: shared.network_state.local_public_key().clone(),
-					protocol_version: concat!("substrate/", env!("CARGO_PKG_VERSION")).to_owned(),
-					agent_version: "rust-libp2p/1.0.0".to_owned(),
+					protocol_version: concat!("substrate/", env!("CARGO_PKG_VERSION")).to_owned(),		// TODO: ?
+					agent_version: concat!("substrate/", env!("CARGO_PKG_VERSION")).to_owned(),
 					listen_addrs: shared.listened_addrs.read().clone(),
 					protocols: Vec::new(),		// TODO: protocols_to_report,
 				},
