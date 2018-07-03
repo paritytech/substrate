@@ -269,6 +269,7 @@ impl TrieBackendStorage {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
+	use std::collections::HashSet;
 
 	fn test_db() -> (MemoryDB, TrieH256) {
 		let mut root = TrieH256::default();
@@ -323,5 +324,21 @@ pub mod tests {
 		let (new_root, mut tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
 		assert!(!tx.drain().is_empty());
 		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
+	}
+
+	#[test]
+	fn prefix_walking_works() {
+		let trie = test_trie();
+
+		let mut seen = HashSet::new();
+		trie.for_keys_with_prefix(b"value", |key| {
+			let for_first_time = seen.insert(key.to_vec());
+			assert!(for_first_time, "Seen key '{:?}' more than once", key);
+		});
+
+		let mut expected = HashSet::new();
+		expected.insert(b"value1".to_vec());
+		expected.insert(b"value2".to_vec());
+		assert_eq!(seen, expected);
 	}
 }
