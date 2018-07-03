@@ -36,6 +36,7 @@ extern crate serde_json;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
@@ -65,11 +66,15 @@ mod chain_spec;
 
 pub use chain_spec::ChainSpec;
 
-use std::io;
+use std::io::{self, Write, Read, stdin, stdout};
+use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use polkadot_primitives::Block;
+use polkadot_primitives::{Block, BlockId};
+use codec::Slicable;
+use client::BlockOrigin;
+use runtime_primitives::generic::SignedBlock;
 
 use futures::sync::mpsc;
 use futures::{Sink, Future, Stream};
@@ -106,6 +111,12 @@ fn load_spec(matches: &clap::ArgMatches) -> Result<service::ChainSpec, String> {
 	Ok(spec)
 }
 
+fn base_path(matches: &clap::ArgMatches) -> PathBuf {
+	matches.value_of("base-path")
+		.map(|x| Path::new(x).to_owned())
+		.unwrap_or_else(default_base_path)
+}
+
 /// Parse command line arguments and start the node.
 ///
 /// IANA unassigned port ranges that we could use:
@@ -123,10 +134,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		Ok(m) => m,
 		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
 		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed => {
-			let _ = clap::App::from_yaml(yaml).print_long_help();
+			print!("{}", e);
 			return Ok(())
 		}
-		Err(e) => return Err(e.into()),
+		Err(e) => e.exit(),
 	};
 
 	// TODO [ToDr] Split parameters parsing from actual execution.
@@ -139,11 +150,15 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	info!("  by Parity Technologies, 2017, 2018");
 
 	if let Some(matches) = matches.subcommand_matches("build-spec") {
-		let spec = load_spec(&matches)?;
-		info!("Building chain spec");
-		let json = spec.to_json(matches.is_present("raw"))?;
-		print!("{}", json);
-		return Ok(())
+		return build_spec(matches);
+	}
+
+	if let Some(matches) = matches.subcommand_matches("export-blocks") {
+		return export_blocks(matches);
+	}
+
+	if let Some(matches) = matches.subcommand_matches("import-blocks") {
+		return import_blocks(matches);
 	}
 
 	let spec = load_spec(&matches)?;
@@ -154,10 +169,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		info!("Node name: {}", config.name);
 	}
 
-	let base_path = matches.value_of("base-path")
-		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(default_base_path);
-
+	let base_path = base_path(&matches);
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(|| keystore_path(&base_path))
@@ -243,6 +255,119 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf),
 		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf),
 	}
+}
+
+fn build_spec(matches: &clap::ArgMatches) -> error::Result<()> {
+	let spec = load_spec(&matches)?;
+	info!("Building chain spec");
+	let json = spec.to_json(matches.is_present("raw"))?;
+	print!("{}", json);
+	Ok(())
+}
+
+fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
+	let base_path = base_path(matches);
+	let spec = load_spec(&matches)?;
+	let mut config = service::Configuration::default_with_spec(spec);
+	config.database_path = db_path(&base_path).to_string_lossy().into();
+	info!("DB path: {}", config.database_path);
+	let client = service::new_client(config)?;
+	let (exit_send, exit) = std::sync::mpsc::channel();
+	ctrlc::CtrlC::set_handler(move || {
+		exit_send.clone().send(()).expect("Error sending exit notification");
+	});
+	info!("Exporting blocks");
+	let mut block: u32 = match matches.value_of("from") {
+		Some(v) => v.parse().map_err(|_| "Invalid --from argument")?,
+		None => 1,
+	};
+
+	let last = match matches.value_of("to") {
+		Some(v) => v.parse().map_err(|_| "Invalid --to argument")?,
+		None => client.info()?.chain.best_number as u32,
+	};
+
+	if last < block {
+		return Err("Invalid block range specified".into());
+	}
+
+	let json = matches.is_present("json");
+
+	let mut file: Box<Write> = match matches.value_of("OUTPUT") {
+		Some(filename) => Box::new(File::open(filename)?),
+		None => Box::new(stdout()),
+	};
+
+	if !json {
+		file.write(&(last - block + 1).encode())?;
+	}
+
+	loop {
+		if exit.try_recv().is_ok() {
+			break;
+		}
+		match client.block(&BlockId::number(block as u64))? {
+			Some(block) => {
+				if json {
+					serde_json::to_writer(&mut *file, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
+				} else {
+					file.write(&block.encode())?;
+				}
+			},
+			None => break,
+		}
+		if block % 10000 == 0 {
+			info!("#{}", block);
+		}
+		if block == last {
+			break;
+		}
+		block += 1;
+	}
+	Ok(())
+}
+
+fn import_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
+	let spec = load_spec(&matches)?;
+	let base_path = base_path(matches);
+	let mut config = service::Configuration::default_with_spec(spec);
+	config.database_path = db_path(&base_path).to_string_lossy().into();
+	let client = service::new_client(config)?;
+	let (exit_send, exit) = std::sync::mpsc::channel();
+	ctrlc::CtrlC::set_handler(move || {
+		exit_send.clone().send(()).expect("Error sending exit notification");
+	});
+
+	let mut file: Box<Read> = match matches.value_of("INPUT") {
+		Some(filename) => Box::new(File::open(filename)?),
+		None => Box::new(stdin()),
+	};
+
+	info!("Importing blocks");
+	let count: u32 = Slicable::decode(&mut file).ok_or("Error reading file")?;
+	let mut block = 0;
+	for _ in 0 .. count {
+		if exit.try_recv().is_ok() {
+			break;
+		}
+		match SignedBlock::decode(&mut file) {
+			Some(block) => {
+				let header = client.check_justification(block.block.header, block.justification.into())?;
+				client.import_block(BlockOrigin::File, header, Some(block.block.extrinsics))?;
+			},
+			None => {
+				warn!("Error reading block data.");
+				break;
+			}
+		}
+		block += 1;
+		if block % 10000 == 0 {
+			info!("#{}", block);
+		}
+	}
+	info!("Imported {} blocks. Best: #{}", block, client.info()?.chain.best_number);
+
+	Ok(())
 }
 
 fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matches: &clap::ArgMatches, sys_conf: SystemConfiguration) -> error::Result<()>

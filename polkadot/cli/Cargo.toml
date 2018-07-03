@@ -26,6 +26,7 @@ parking_lot = "0.4"
 serde_json = "1.0"
 serde = "1.0"
 substrate-client = { path = "../../substrate/client" }
+substrate-codec = { path = "../../substrate/codec" }
 substrate-network = { path = "../../substrate/network" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-rpc = { path = "../../substrate/rpc" }

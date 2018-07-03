@@ -20,7 +20,7 @@ use std::sync::Arc;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::BlockId};
+use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
@@ -414,6 +414,15 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// Get block justification set by id.
 	pub fn justification(&self, id: &BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
 		self.backend.blockchain().justification(*id)
+	}
+
+	/// Get full block by id.
+	pub fn block(&self, id: &BlockId<Block>) -> error::Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
+			(Some(header), Some(extrinsics), Some(justification)) =>
+				Some(SignedBlock { block: RuntimeBlock { header, extrinsics }, justification }),
+			_ => None,
+		})
 	}
 
 	/// Get best block header.
