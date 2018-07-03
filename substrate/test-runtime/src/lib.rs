@@ -43,6 +43,8 @@ extern crate substrate_keyring as keyring;
 extern crate substrate_primitives as primitives;
 #[macro_use]
 extern crate substrate_runtime_io as runtime_io;
+#[macro_use]
+extern crate substrate_runtime_version as runtime_version;
 
 
 #[cfg(feature = "std")] pub mod genesismap;
@@ -53,7 +55,21 @@ use codec::Slicable;
 
 use runtime_primitives::traits::{BlindCheckable, BlakeTwo256};
 use runtime_primitives::Ed25519Signature;
+use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
+
+/// Test runtime version.
+pub const VERSION: RuntimeVersion = RuntimeVersion {
+	spec_name: ver_str!("test"),
+	impl_name: ver_str!("parity-test"),
+	authoring_version: 1,
+	spec_version: 1,
+	impl_version: 1,
+};
+
+fn version() -> RuntimeVersion {
+	VERSION
+}
 
 /// Calls in transactions.
 #[derive(Clone, PartialEq, Eq)]
@@ -146,8 +162,8 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 
 pub mod api {
 	use system;
-
 	impl_stubs!(
+		version => |()| super::version(),
 		authorities => |()| system::authorities(),
 		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),

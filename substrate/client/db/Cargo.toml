@@ -18,6 +18,7 @@ substrate-client = { path = "../../../substrate/client" }
 substrate-state-machine = { path = "../../../substrate/state-machine" }
 substrate-runtime-support = { path = "../../../substrate/runtime-support" }
 substrate-codec = { path = "../../../substrate/codec" }
+substrate-executor = { path = "../../../substrate/executor" }
 substrate-state-db = { path = "../../../substrate/state-db" }
 
 [dev-dependencies]
