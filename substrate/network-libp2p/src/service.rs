@@ -15,7 +15,6 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
 use bytes::Bytes;
-use fnv::FnvHashMap;
 use network::{Error, ErrorKind, NetworkConfiguration, NetworkProtocolHandler, NonReservedPeerMode};
 use network::{NetworkContext, PeerId, ProtocolId};
 use parking_lot::{Mutex, RwLock};
@@ -362,7 +361,8 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 {
 	// Build the transport layer.
 	let transport = {
-		let base = transport::build_transport(core.clone(), shared.network_state.local_private_key().clone());
+		let base = transport::build_transport(core.clone(), transport::UnecryptedAllowed::Denied,
+											shared.network_state.local_private_key().clone());
 
 		let addr_resolver = {
 			let shared = shared.clone();

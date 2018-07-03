@@ -377,11 +377,6 @@ impl NetworkState {
 		}
 	}
 
-	/// Returns true if reserved mode is enabled.
-	pub fn is_reserved_only(&self) -> bool {
-		self.reserved_only.load(atomic::Ordering::Relaxed)
-	}
-
 	/// Returns true if we should open a new outgoing connection to a peer.
 	/// This takes into account the number of active peers.
 	pub fn should_open_outgoing_connecs(&self) -> bool {
@@ -416,7 +411,7 @@ impl NetworkState {
 		//		 kad from working?
 		let mut connections = self.connections.write();
 		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id, Endpoint::Listener)?;
-		let mut infos = connections.info_by_peer.get_mut(&peer_id)
+		let infos = connections.info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
 		let _ = infos.incoming_kad_channel.unbounded_send(ctrl);
 		Ok(peer_id)
@@ -429,7 +424,7 @@ impl NetworkState {
 	{
 		let mut connections = self.connections.write();
 		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id, Endpoint::Dialer)?;
-		let mut infos = connections.info_by_peer.get_mut(&peer_id)
+		let infos = connections.info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
 
 		let future_to_process = if !infos.opened_kad {
@@ -459,7 +454,7 @@ impl NetworkState {
 	/// Disconnect the Kademlia controller with the peer.
 	pub fn disconnect_kademlia(&self, peer_id: PeerId) {
 		let mut connections = self.connections.write();
-		if let Some(mut peer) = connections.info_by_peer.get_mut(&peer_id) {
+		if let Some(peer) = connections.info_by_peer.get_mut(&peer_id) {
 			// TODO: that's code duplication
 			let (tx, rx) = mpsc::unbounded();
 			let rx = rx
@@ -496,10 +491,10 @@ impl NetworkState {
 
 		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id.clone(), endpoint)?;
 
-		let mut connections = &mut *connections;
-		let mut info_by_peer = &mut connections.info_by_peer;
-		let mut peer_by_nodeid = &mut connections.peer_by_nodeid;
-		let mut infos = info_by_peer.get_mut(&peer_id)
+		let connections = &mut *connections;
+		let info_by_peer = &mut connections.info_by_peer;
+		let peer_by_nodeid = &mut connections.peer_by_nodeid;
+		let infos = info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
 
 		let node_is_reserved = self.reserved_peers.read().contains(&infos.id);
