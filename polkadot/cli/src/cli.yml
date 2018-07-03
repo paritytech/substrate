@@ -109,8 +109,8 @@ subcommands:
       args:
           - OUTPUT:
               index: 1
-              help: Output file name.
-              required: true
+              help: Output file name or stdout if unspecified.
+              required: false
           - chain:
               long: chain
               value_name: CHAIN_SPEC
@@ -141,8 +141,8 @@ subcommands:
       args:
           - INPUT:
               index: 1
-              help: Input file.
-              required: true
+              help: Input file or stdin if unspecified.
+              required: false
           - chain:
               long: chain
               value_name: CHAIN_SPEC

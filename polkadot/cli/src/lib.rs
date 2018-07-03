@@ -66,7 +66,7 @@ mod chain_spec;
 
 pub use chain_spec::ChainSpec;
 
-use std::io::{self, Write};
+use std::io::{self, Write, Read, stdin, stdout};
 use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -292,8 +292,11 @@ fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 	}
 
 	let json = matches.is_present("json");
-	let filename = matches.value_of("OUTPUT").expect("OUTPUT is mandatory");
-	let mut file = File::create(filename)?;
+
+	let mut file: Box<Write> = match matches.value_of("OUTPUT") {
+		Some(filename) => Box::new(File::open(filename)?),
+		None => Box::new(stdout()),
+	};
 
 	if !json {
 		file.write(&(last - block + 1).encode())?;
@@ -306,7 +309,7 @@ fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 		match client.block(&BlockId::number(block as u64))? {
 			Some(block) => {
 				if json {
-					serde_json::to_writer(&file, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
+					serde_json::to_writer(&mut *file, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
 				} else {
 					file.write(&block.encode())?;
 				}
@@ -334,8 +337,11 @@ fn import_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 	ctrlc::CtrlC::set_handler(move || {
 		exit_send.clone().send(()).expect("Error sending exit notification");
 	});
-	let filename = matches.value_of("INPUT").expect("INPUT is mandatory");
-	let mut file = File::open(filename)?;
+
+	let mut file: Box<Read> = match matches.value_of("INPUT") {
+		Some(filename) => Box::new(File::open(filename)?),
+		None => Box::new(stdin()),
+	};
 
 	info!("Importing blocks");
 	let count: u32 = Slicable::decode(&mut file).ok_or("Error reading file")?;
