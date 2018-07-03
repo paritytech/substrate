@@ -25,13 +25,13 @@ use consensus;
 use keystore::Store as Keystore;
 use network;
 use polkadot_api;
-use runtime_primitives::MakeStorage;
 use polkadot_executor::Executor as LocalDispatch;
 use polkadot_primitives::{Block, BlockId, Hash};
 use state_machine;
 use substrate_executor::NativeExecutor;
 use transaction_pool::{self, TransactionPool};
 use error;
+use chain_spec::ChainSpec;
 
 /// Code executor.
 pub type CodeExecutor = NativeExecutor<LocalDispatch>;
@@ -48,7 +48,7 @@ pub trait Components {
 	type Executor: 'static + client::CallExecutor<Block> + Send + Sync;
 
 	/// Create client.
-	fn build_client(&self, settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis_storage: MakeStorage)
+	fn build_client(&self, settings: client_db::DatabaseSettings, executor: CodeExecutor, chain_spec: &ChainSpec)
 		-> Result<(Arc<Client<Self::Backend, Self::Executor, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error>;
 
 	/// Create api.
@@ -74,9 +74,9 @@ impl Components for FullComponents {
 	type Api = Client<Self::Backend, Self::Executor, Block>;
 	type Executor = client::LocalCallExecutor<client_db::Backend<Block>, NativeExecutor<LocalDispatch>>;
 
-	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis_storage: MakeStorage)
+	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, chain_spec: &ChainSpec)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error> {
-		Ok((Arc::new(client_db::new_client(db_settings, executor, genesis_storage)?), None))
+		Ok((Arc::new(client_db::new_client(db_settings, executor, chain_spec)?), None))
 	}
 
 	fn build_api(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>) -> Arc<Self::Api> {
@@ -122,14 +122,14 @@ impl Components for LightComponents {
 		client::light::blockchain::Blockchain<client_db::light::LightStorage<Block>, network::OnDemand<Block, network::Service<Block>>>,
 		network::OnDemand<Block, network::Service<Block>>>;
 
-	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis_storage: MakeStorage)
+	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, spec: &ChainSpec)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error> {
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
-		let client = client::light::new_light(client_backend, fetcher.clone(), genesis_storage)?;
+		let client = client::light::new_light(client_backend, fetcher.clone(), spec)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 

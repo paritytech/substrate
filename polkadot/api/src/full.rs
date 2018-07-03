@@ -190,7 +190,7 @@ mod tests {
 	use client::LocalCallExecutor;
 	use client::in_mem::Backend as InMemory;
 	use substrate_executor::NativeExecutionDispatch;
-	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig, BuildStorage};
+	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig};
 
 	fn validators() -> Vec<AccountId> {
 		vec![
@@ -201,8 +201,8 @@ mod tests {
 
 	fn session_keys() -> Vec<SessionKey> {
 		vec![
-			Keyring::One.to_raw_public(),
-			Keyring::Two.to_raw_public(),
+			Keyring::One.to_raw_public().into(),
+			Keyring::Two.to_raw_public().into(),
 		]
 	}
 
@@ -225,7 +225,7 @@ mod tests {
 			timestamp: Some(Default::default()),
 		};
 
-		::client::new_in_mem(LocalDispatch::new(), genesis_config.build_storage()).unwrap()
+		::client::new_in_mem(LocalDispatch::new(), genesis_config).unwrap()
 	}
 
 	#[test]
