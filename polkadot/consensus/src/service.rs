@@ -92,16 +92,16 @@ fn process_message(msg: net::LocalizedBftMessage<Block>, local_id: &AuthorityId,
 					sender: proposal.sender,
 					digest_signature: ed25519::LocalizedSignature {
 						signature: proposal.digest_signature,
-						signer: ed25519::Public(proposal.sender),
+						signer: proposal.sender.into(),
 					},
 					full_signature: ed25519::LocalizedSignature {
 						signature: proposal.full_signature,
-						signer: ed25519::Public(proposal.sender),
+						signer: proposal.sender.into(),
 					}
 				};
 				bft::check_proposal(authorities, &msg.parent_hash, &proposal)?;
 
-				trace!(target: "bft", "importing proposal message for round {} from {}", proposal.round_number, Hash::from(proposal.sender));
+				trace!(target: "bft", "importing proposal message for round {} from {}", proposal.round_number, proposal.sender);
 				proposal
 			}),
 			net::generic_message::SignedConsensusMessage::Vote(vote) => bft::generic::LocalizedMessage::Vote({
@@ -110,7 +110,7 @@ fn process_message(msg: net::LocalizedBftMessage<Block>, local_id: &AuthorityId,
 					sender: vote.sender,
 					signature: ed25519::LocalizedSignature {
 						signature: vote.signature,
-						signer: ed25519::Public(vote.sender),
+						signer: vote.sender.into(),
 					},
 					vote: match vote.vote {
 						net::generic_message::ConsensusVote::Prepare(r, h) => bft::generic::Vote::Prepare(r as usize, h),
@@ -120,7 +120,7 @@ fn process_message(msg: net::LocalizedBftMessage<Block>, local_id: &AuthorityId,
 				};
 				bft::check_vote::<Block>(authorities, &msg.parent_hash, &vote)?;
 
-				trace!(target: "bft", "importing vote {:?} from {}", vote.vote, Hash::from(vote.sender));
+				trace!(target: "bft", "importing vote {:?} from {}", vote.vote, vote.sender);
 				vote
 			}),
 		}),

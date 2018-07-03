@@ -181,10 +181,14 @@ impl<T: Trait> Executable for Module<T> {
 
 /// Parachains module genesis configuration.
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	/// The initial parachains, mapped to code.
 	pub parachains: Vec<(Id, Vec<u8>)>,
 	/// Phantom data.
+	#[serde(skip)]
 	pub phantom: PhantomData<T>,
 }
 
@@ -201,7 +205,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(mut self) -> runtime_io::TestExternalities {
+	fn build_storage(mut self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use std::collections::HashMap;
 		use runtime_io::twox_128;
 		use codec::Slicable;
@@ -220,7 +224,7 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 			map.insert(key, code.encode());
 		}
 
-		map.into()
+		Ok(map.into())
 	}
 }
 
@@ -269,20 +273,20 @@ mod tests {
 	type Parachains = Module<Test>;
 
 	fn new_test_ext(parachains: Vec<(Id, Vec<u8>)>) -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![1, 2, 3],
-		}.build_storage());
+		}.build_storage().unwrap());
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1000,
 			validators: vec![1, 2, 3, 4, 5, 6, 7, 8],
 			broken_percent_late: 100,
-		}.build_storage());
+		}.build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
 			parachains: parachains,
 			phantom: PhantomData,
-		}.build_storage());
+		}.build_storage().unwrap());
 		t
 	}
 

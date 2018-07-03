@@ -23,7 +23,7 @@ extern crate untrusted;
 extern crate blake2_rfc;
 
 use ring::{rand, signature};
-use primitives::hash::H512;
+use primitives::{hash::H512, AuthorityId};
 use base58::{ToBase58, FromBase58};
 
 #[cfg(test)]
@@ -163,6 +163,18 @@ impl AsRef<Public> for Public {
 impl AsRef<Pair> for Pair {
 	fn as_ref(&self) -> &Pair {
 		&self
+	}
+}
+
+impl Into<AuthorityId> for Public {
+	fn into(self) -> AuthorityId {
+		AuthorityId(self.0)
+	}
+}
+
+impl From<AuthorityId> for Public {
+	fn from(id: AuthorityId) -> Self {
+		Public(id.0)
 	}
 }
 
