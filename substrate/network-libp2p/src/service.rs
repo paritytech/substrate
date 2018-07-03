@@ -386,8 +386,8 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 					let info = out.info.and_then(move |info| {
 						let node_id = info.info.public_key.clone().into_peer_id();
 						let _peer_id = shared.network_state.set_peer_info(node_id.clone(), endpoint,
-													info.info.agent_version.clone(),
-													original_addr.clone(), original_addr.clone())?;	// TODO: wrong
+							info.info.agent_version.clone(), original_addr.clone(),
+							original_addr.clone())?;	// TODO: wrong local addr
 
 						if let Some(ref original_listened_addr) = *shared.original_listened_addr.read() {
 							if let Some(ext_addr) = base.nat_traversal(original_listened_addr, &info.observed_addr) {
@@ -514,10 +514,13 @@ enum FinalUpgrade<C> {
 }
 
 // Called whenever we successfully open a multistream with a remote.
-fn listener_handle<'a, C>(shared: Arc<Shared>, upgrade: FinalUpgrade<C>, endpoint: Endpoint,
-					client_addr: impl Future<Item = Multiaddr, Error = IoError> + 'a,
-					/*listener_upgrade: impl ConnectionUpgrade<C, Box<Future<Item = Multiaddr, Error = IoError>>>*/)
-					-> Box<Future<Item = (), Error = IoError> + 'a>
+fn listener_handle<'a, C>(
+	shared: Arc<Shared>,
+	upgrade: FinalUpgrade<C>,
+	endpoint: Endpoint,
+	client_addr: impl Future<Item = Multiaddr, Error = IoError> + 'a,
+	/*listener_upgrade: impl ConnectionUpgrade<C, Box<Future<Item = Multiaddr, Error = IoError>>>*/
+) -> Box<Future<Item = (), Error = IoError> + 'a>
 where C: AsyncRead + AsyncWrite + 'a
 {
 	match upgrade {
@@ -694,8 +697,8 @@ fn config_to_listen_addr(config: &NetworkConfiguration) -> Multiaddr {
 // When we are over `min_peers`, we stop trying to dial nodes and only accept incoming
 // connections.
 fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
-											swarm_controller: SwarmController<St>)
-	-> impl Future<Item = (), Error = IoError>
+	swarm_controller: SwarmController<St>
+) -> impl Future<Item = (), Error = IoError>
 where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 	T::MultiaddrFuture: 'static,
 	To: AsyncRead + AsyncWrite + 'static,
@@ -709,7 +712,12 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		let transport = transport.clone();
 		let swarm_controller = swarm_controller.clone();
 		move |peer_id| {
-			obtain_kad_connection(shared.clone(), peer_id.clone(), transport.clone(), swarm_controller.clone())
+			obtain_kad_connection(
+				shared.clone(),
+				peer_id.clone(),
+				transport.clone(),
+				swarm_controller.clone()
+			)
 		}
 	});
 
@@ -725,7 +733,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 				// to run a timer just for flushing.
 				let _ = shared.network_state.flush_caches_to_disk();
 
-				if shared.network_state.should_open_outgoing_connecs() {
+				if shared.network_state.should_open_outgoing_connections() {
 					// Query the node IDs that are closest to a random ID.
 					// Note that the randomness doesn't have to be secure, as this only influences
 					// which nodes we end up being connected to.
@@ -779,7 +787,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 					// Skip if we reach `min_peers`.
 					// Also skip nodes we are already connected to, in order to not connect twice.
 					// TODO: better API in network_state
-					if !shared.network_state.should_open_outgoing_connecs() ||
+					if !shared.network_state.should_open_outgoing_connections() ||
 						discovered_peer == local_peer_id ||
 						shared.network_state.is_peer_disabled(&discovered_peer)
 					{

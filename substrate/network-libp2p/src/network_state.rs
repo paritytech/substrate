@@ -339,8 +339,14 @@ impl NetworkState {
 	}
 
 	/// Sets information about a peer.
-	pub fn set_peer_info(&self, node_id: PeerstorePeerId, endpoint: Endpoint, client_version: String,
-						local_addr: Multiaddr, remote_addr: Multiaddr) -> Result<PeerId, IoError> {
+	pub fn set_peer_info(
+		&self,
+		node_id: PeerstorePeerId,
+		endpoint: Endpoint,
+		client_version: String,
+		local_addr: Multiaddr,
+		remote_addr: Multiaddr
+	) -> Result<PeerId, IoError> {
 		let mut connections = self.connections.write();
 		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id.clone(), endpoint)?;
 		let infos = connections.info_by_peer.get_mut(&peer_id)
@@ -394,7 +400,7 @@ impl NetworkState {
 
 	/// Returns true if we should open a new outgoing connection to a peer.
 	/// This takes into account the number of active peers.
-	pub fn should_open_outgoing_connecs(&self) -> bool {
+	pub fn should_open_outgoing_connections(&self) -> bool {
 		!self.reserved_only.load(atomic::Ordering::Relaxed) &&
 			self.connections.read().peer_by_nodeid.len() < self.min_peers as usize
 	}
@@ -539,7 +545,6 @@ impl NetworkState {
 						ErrorKind::Io(IoError::new(IoErrorKind::Other, err))
 					})?;
 				Ok(())
-
 			} else {
 				// We are connected to this peer, but not with the current protocol.
 				debug!(target: "sub-libp2p", "Tried to send message to peer {} for which we aren't \
@@ -583,7 +588,7 @@ impl NetworkState {
 			debug_assert_eq!(old, Some(peer_id));
 			peer_info
 		} else {
-			return;
+			return
 		};
 
 		drop(connections);
@@ -609,7 +614,7 @@ impl NetworkState {
 					}
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to flush changes to JSON \
-													peer store: {}", err);
+							peer store: {}", err);
 						Err(err)
 					}
 				}
@@ -627,10 +632,12 @@ impl Drop for NetworkState {
 // Assigns a `PeerId` to a node, or returns an existing ID if any exists.
 //
 // The function only accepts already-locked structs, so that we don't risk any deadlock.
-fn accept_connection(connections: &mut Connections, next_peer_id: &atomic::AtomicUsize,
-					 node_id: PeerstorePeerId, endpoint: Endpoint)
-	-> Result<PeerId, IoError>
-{
+fn accept_connection(
+	connections: &mut Connections,
+	next_peer_id: &atomic::AtomicUsize,
+	node_id: PeerstorePeerId,
+	endpoint: Endpoint
+) -> Result<PeerId, IoError> {
 	let peer_by_nodeid = &mut connections.peer_by_nodeid;
 	let info_by_peer = &mut connections.info_by_peer;
 
@@ -695,10 +702,10 @@ fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 
 // Obtains or generates the local private key using the configuration.
 fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPair, IoError> {
-	Ok(if let Some(ref secret) = config.use_secret {
+	if let Some(ref secret) = config.use_secret {
 		// Key was specified in the configuration.
 		secio::SecioKeyPair::secp256k1_raw_key(&secret[..])
-			.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))?
+			.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))
 
 	} else {
 		if let Some(ref path) = config.net_config_path {
@@ -719,7 +726,7 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 				});
 
 			match loaded_secret {
-				Ok(s) => s,
+				Ok(s) => Ok(s),
 				Err(err) => {
 					// Failed to fetch existing file ; generate a new key
 					trace!(target: "sub-libp2p", "Failed to load existing secret key file {:?}, \
@@ -745,7 +752,7 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 								; err = {:?}", secret_path, err);
 						}
 					}
-					secio_key
+					Ok(secio_key)
 				}
 			}
 
@@ -753,10 +760,10 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 			// No path in the configuration, nothing we can do except generate a new key.
 			let mut key: [u8; 32] = [0; 32];
 			rand::rngs::EntropyRng::new().fill(&mut key);
-			secio::SecioKeyPair::secp256k1_raw_key(&key)
-				.expect("randomly-generated key with correct len should always be valid")
+			Ok(secio::SecioKeyPair::secp256k1_raw_key(&key)
+				.expect("randomly-generated key with correct len should always be valid"))
 		}
-	})
+	}
 }
 
 // Opens a file containing a private key in write mode.
