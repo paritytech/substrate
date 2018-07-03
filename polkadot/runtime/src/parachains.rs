@@ -125,7 +125,7 @@ impl<T: Trait> Module<T> {
 	pub fn register_parachain(id: Id, code: Vec<u8>, initial_head_data: Vec<u8>) -> Result {
 		let mut parachains = Self::active_parachains();
 		match parachains.binary_search(&id) {
-			Ok(_) => fail!("Parachain with given already exists"),
+			Ok(_) => fail!("Parachain already exists"),
 			Err(idx) => parachains.insert(idx, id),
 		}
 

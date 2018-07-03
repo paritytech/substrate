@@ -611,7 +611,7 @@ impl<C: Context> Table<C> {
 		if !context.is_availability_guarantor_of(&from, &votes.group_id) {
 			return Err(Misbehavior::UnauthorizedStatement(UnauthorizedStatement {
 				statement: SignedStatement {
-					signature: signature.clone(),
+					signature: signature,
 					statement: Statement::Available(digest),
 					sender: from,
 				}
