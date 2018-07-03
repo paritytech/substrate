@@ -23,7 +23,7 @@ extern crate polkadot_service as service;
 extern crate ctrlc;
 extern crate futures;
 
-use futures::mpsc;
+use futures::sync::mpsc;
 
 // the regular polkadot application simply runs until ctrl-c
 struct Application;

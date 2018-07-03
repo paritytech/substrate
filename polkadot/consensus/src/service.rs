@@ -337,7 +337,7 @@ struct NoCollators;
 
 impl ::collation::Collators for NoCollators {
 	type Error = ();
-	type Collation = future::Empty<::collation::Collation, ()>;
+	type Collation = future::Empty<::polkadot_primitives::parachain::Collation, ()>;
 
 	fn collate(&self, _parachain: ParaId, _relay_parent: Hash) -> Self::Collation {
 		future::empty()

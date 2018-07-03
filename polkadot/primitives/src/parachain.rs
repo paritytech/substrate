@@ -174,6 +174,14 @@ pub struct CandidateReceipt {
 	pub fees: u64,
 }
 
+/// A full collation.
+pub struct Collation {
+	/// Block data.
+	pub block_data: BlockData,
+	/// The candidate receipt itself.
+	pub receipt: CandidateReceipt,
+}
+
 impl Slicable for CandidateReceipt {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();

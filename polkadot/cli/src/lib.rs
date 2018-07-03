@@ -26,7 +26,6 @@ extern crate regex;
 extern crate time;
 extern crate futures;
 extern crate tokio_core;
-extern crate ctrlc;
 extern crate fdlimit;
 extern crate ed25519;
 extern crate triehash;
@@ -80,8 +79,7 @@ use substrate_telemetry::{init_telemetry, TelemetryConfig};
 use runtime_primitives::StorageMap;
 use polkadot_primitives::Block;
 
-use futures::sync::mpsc;
-use futures::{Sink, Future, Stream};
+use futures::prelude::*;
 use tokio_core::reactor;
 use service::PruningMode;
 
@@ -122,7 +120,8 @@ pub trait Application {
 	type Done: IntoFuture<Item=(),Error=()>;
 
 	/// Do application work.
-	fn work<C: Components>(self, service: &Service<C>) -> Self::Done;
+	fn work<C: service::Components>(self, service: &service::Service<C>) -> Self::Done
+		where client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>;
 }
 
 /// Parse command line arguments and start the node.
@@ -317,7 +316,7 @@ fn run_until_exit<C, A>(
 		)
 	};
 
-	core.run(application.work(&service)).expect("Error running informant event loop");
+	core.run(application.work(&service).into_future()).expect("Error running informant event loop");
 	Ok(())
 }
 

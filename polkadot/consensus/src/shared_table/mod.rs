@@ -22,9 +22,8 @@ use std::sync::Arc;
 
 use table::{self, Table, Context as TableContextTrait};
 use table::generic::Statement as GenericStatement;
-use collation::Collation;
 use polkadot_primitives::Hash;
-use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, BlockData, Collation, Extrinsic, CandidateReceipt};
 use primitives::AuthorityId;
 
 use parking_lot::Mutex;

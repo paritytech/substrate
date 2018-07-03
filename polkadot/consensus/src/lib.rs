@@ -32,7 +32,6 @@
 extern crate ed25519;
 extern crate parking_lot;
 extern crate polkadot_api;
-extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
 extern crate polkadot_transaction_pool as transaction_pool;
@@ -71,7 +70,7 @@ use table::generic::Statement as GenericStatement;
 use runtime_support::Hashable;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, Collation, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
 use polkadot_runtime::BareExtrinsic;
 use primitives::AuthorityId;
 use transaction_pool::{TransactionPool};

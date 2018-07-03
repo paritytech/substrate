@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, AccountId};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, Collation, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, Chain, Collation, Extrinsic};
 
 use futures::prelude::*;
 
