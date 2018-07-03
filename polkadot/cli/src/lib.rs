@@ -58,26 +58,17 @@ extern crate clap;
 extern crate error_chain;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate hex_literal;
 
 pub mod error;
 mod informant;
 mod chain_spec;
-mod preset_config;
 
 pub use chain_spec::ChainSpec;
-pub use preset_config::PresetConfig;
 
 use std::io;
-use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::collections::HashMap;
-use substrate_primitives::hexdisplay::HexDisplay;
-use substrate_primitives::storage::{StorageData, StorageKey};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use runtime_primitives::StorageMap;
 use polkadot_primitives::Block;
 
 use futures::sync::mpsc;
@@ -106,10 +97,13 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 	}
 }
 
-fn read_storage_json(filename: &str) -> Option<StorageMap> {
-	let file = File::open(PathBuf::from(filename)).ok()?;
-	let h: HashMap<StorageKey, StorageData> = ::serde_json::from_reader(&file).ok()?;
-	Some(h.into_iter().map(|(k, v)| (k.0, v.0)).collect())
+fn load_spec(matches: &clap::ArgMatches) -> Result<service::ChainSpec, String> {
+	let chain_spec = matches.value_of("chain")
+		.map(ChainSpec::from)
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
+	let spec = chain_spec.load()?;
+	info!("Chain specification: {}", spec.name());
+	Ok(spec)
 }
 
 /// Parse command line arguments and start the node.
@@ -124,8 +118,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
-	let core = reactor::Core::new().expect("tokio::Core could not be created");
-
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
@@ -146,19 +138,21 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	info!("  version {}", crate_version!());
 	info!("  by Parity Technologies, 2017, 2018");
 
-	let mut config = service::Configuration::default();
+	if let Some(matches) = matches.subcommand_matches("build-spec") {
+		let spec = load_spec(&matches)?;
+		info!("Building chain spec");
+		let json = spec.to_json(matches.is_present("raw"))?;
+		print!("{}", json);
+		return Ok(())
+	}
+
+	let spec = load_spec(&matches)?;
+	let mut config = service::Configuration::default_with_spec(spec);
 
 	if let Some(name) = matches.value_of("name") {
 		config.name = name.into();
 		info!("Node name: {}", config.name);
 	}
-
-	let chain_spec = matches.value_of("chain")
-		.map(ChainSpec::from)
-		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
-	info!("Chain specification: {}", chain_spec);
-
-	config.chain_name = chain_spec.clone().into();
 
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
@@ -171,31 +165,13 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.into();
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
+
 	config.pruning = match matches.value_of("pruning") {
 		Some("archive") => PruningMode::ArchiveAll,
 		None => PruningMode::keep_blocks(256),
 		Some(s) => PruningMode::keep_blocks(s.parse()
 			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
 	};
-
-	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
-		.map(PresetConfig::deconstruct)
-		.unwrap_or_else(|f| (Box::new(move ||
-			read_storage_json(&f)
-				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
-				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
-		), vec![]));
-
-	if matches.is_present("build-genesis") {
-		info!("Building genesis");
-		for (i, (k, v)) in genesis_storage().iter().enumerate() {
-			print!("{}\n\"0x{}\": \"0x{}\"", if i > 0 {','} else {'{'}, HexDisplay::from(k), HexDisplay::from(v));
-		}
-		println!("\n}}");
-		return Ok(())
-	}
-
-	config.genesis_storage = genesis_storage;
 
 	let role =
 		if matches.is_present("collator") {
@@ -214,10 +190,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.roles = role;
 	{
-		config.network.boot_nodes = matches
+		config.network.boot_nodes.extend(matches
 			.values_of("bootnodes")
-			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
-		config.network.boot_nodes.extend(boot_nodes);
+			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
 		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 
@@ -241,12 +216,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}
 
 	let sys_conf = SystemConfiguration {
-		chain_name: config.chain_name.clone(),
+		chain_name: config.chain_spec.name().to_owned(),
 	};
 
 	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
 		let name = config.name.clone();
-		let chain_name = config.chain_name.clone();
+		let chain_name = config.chain_spec.name().to_owned();
 		Some(init_telemetry(TelemetryConfig {
 			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
 			on_connect: Box::new(move || {
@@ -263,6 +238,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		None
 	};
 
+	let core = reactor::Core::new().expect("tokio::Core could not be created");
 	match role == service::Role::LIGHT {
 		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf),
 		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf),

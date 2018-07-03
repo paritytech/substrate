@@ -126,7 +126,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_native() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 1000
+			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
 		).genesis_map();
 		let block = construct_genesis_block::<Block>(&storage);
 		let genesis_hash = block.header.hash();
@@ -148,7 +148,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 1000
+			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
 		).genesis_map();
 		let block = construct_genesis_block::<Block>(&storage);
 		let genesis_hash = block.header.hash();
@@ -171,7 +171,7 @@ mod tests {
 	#[should_panic]
 	fn construct_genesis_with_bad_transaction_should_panic() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public(), Keyring::Two.to_raw_public()], 68
+			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 68
 		).genesis_map();
 		let block = construct_genesis_block::<Block>(&storage);
 		let genesis_hash = block.header.hash();

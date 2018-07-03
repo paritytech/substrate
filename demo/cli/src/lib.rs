@@ -49,7 +49,7 @@ pub mod error;
 
 use std::sync::Arc;
 use demo_primitives::Hash;
-use demo_runtime::{Block, BlockId, UncheckedExtrinsic, BuildStorage, GenesisConfig,
+use demo_runtime::{Block, BlockId, UncheckedExtrinsic, GenesisConfig,
 	ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
 	TimestampConfig};
 use futures::{Future, Sink, Stream};
@@ -101,10 +101,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let executor = demo_executor::Executor::new();
 
 	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
-	let genesis_storage = GenesisConfig {
+	let genesis_config = GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: vec![],	// TODO
-			authorities: vec![god_key.clone()],
+			authorities: vec![god_key.clone().into()],
 		}),
 		system: None,
 		session: Some(SessionConfig {
@@ -152,9 +152,9 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		timestamp: Some(TimestampConfig {
 			period: 5,					// 5 second block time.
 		}),
-	}.build_storage();
+	};
 
-	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_storage)?);
+	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_config)?);
 	let mut core = ::tokio_core::reactor::Core::new().expect("Unable to spawn event loop.");
 
 	let _rpc_servers = {
