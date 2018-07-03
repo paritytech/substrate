@@ -17,7 +17,11 @@
 //! Rust implementation of Substrate contracts.
 
 use std::cmp::Ordering;
+use std::sync::Mutex;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
+use transient_hashmap::TransientHashMap;
 use wasmi::{
 	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder,
 };
@@ -463,6 +467,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 #[derive(Debug, Default, Clone)]
 pub struct WasmExecutor;
 
+lazy_static! {
+    static ref MODULE_CACHE: Mutex<TransientHashMap<u64, Module>> = Mutex::new({ TransientHashMap::new(60) });
+}
+
+
 impl CodeExecutor for WasmExecutor {
 	type Error = Error;
 
@@ -473,7 +482,15 @@ impl CodeExecutor for WasmExecutor {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		let module = Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
+
+		let mut cache = MODULE_CACHE.lock().unwrap();
+		let module = cache.entry({
+				let mut h = DefaultHasher::new();
+				h.write(code);
+				h.finish()
+			}).or_insert_with(|| Module::from_buffer(code)
+								.expect("all modules compiled with rustc are valid wasm code; qed")
+							);
 
 		// start module instantiation. Don't run 'start' function yet.
 		let intermediate_instance = ModuleInstance::new(
