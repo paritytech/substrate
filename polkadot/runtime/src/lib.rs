@@ -56,6 +56,8 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
+#[macro_use]
+extern crate substrate_runtime_version as version;
 
 #[cfg(feature = "std")]
 mod checked_block;
@@ -69,6 +71,7 @@ pub use staking::address::Address as RawAddress;
 
 use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
+use version::RuntimeVersion;
 
 #[cfg(feature = "std")]
 pub use runtime_primitives::BuildStorage;
@@ -101,6 +104,22 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Concrete;
+
+/// Polkadot runtime version.
+pub const VERSION: RuntimeVersion = RuntimeVersion {
+	spec_name: ver_str!("polkadot"),
+	impl_name: ver_str!("parity-polkadot"),
+	authoring_version: 0,
+	spec_version: 0,
+	impl_version: 0,
+};
+
+impl version::Trait for Concrete {
+	const VERSION: RuntimeVersion = VERSION;
+}
+
+/// Version module for this concrete runtime.
+pub type Version = version::Module<Concrete>;
 
 impl HasPublicAux for Concrete {
 	type PublicAux = AccountId;	// TODO: Option<AccountId>
@@ -221,6 +240,7 @@ impl_outer_config! {
 
 pub mod api {
 	impl_stubs!(
+		version => |()| super::Version::version(),
 		authorities => |()| super::Consensus::authorities(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),

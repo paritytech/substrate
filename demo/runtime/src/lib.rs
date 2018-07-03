@@ -43,12 +43,15 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
+#[macro_use]
+extern crate substrate_runtime_version as version;
 extern crate demo_primitives;
 
 use rstd::prelude::*;
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
+use version::RuntimeVersion;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -58,6 +61,22 @@ pub use runtime_primitives::BuildStorage;
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
+
+/// Runtime version.
+pub const VERSION: RuntimeVersion = RuntimeVersion {
+	spec_name: ver_str!("demo"),
+	impl_name: ver_str!("parity-demo"),
+	authoring_version: 0,
+	spec_version: 0,
+	impl_version: 0,
+};
+
+/// Version module for this concrete runtime.
+pub type Version = version::Module<Concrete>;
+
+impl version::Trait for Concrete {
+	const VERSION: RuntimeVersion = VERSION;
+}
 
 impl HasPublicAux for Concrete {
 	type PublicAux = AccountId;
@@ -189,6 +208,7 @@ impl_outer_config! {
 
 pub mod api {
 	impl_stubs!(
+		version => |()| super::Version::version(),
 		authorities => |()| super::Consensus::authorities(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),

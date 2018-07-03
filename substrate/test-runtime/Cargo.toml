@@ -16,6 +16,7 @@ substrate-runtime-io = { path = "../runtime-io", default-features = false }
 substrate-runtime-support = { path = "../runtime-support", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
 substrate-runtime-primitives = { path = "../runtime/primitives", default-features = false }
+substrate-runtime-version = { path = "../runtime/version", default-features = false }
 
 [features]
 default = ["std"]
@@ -31,5 +32,6 @@ std = [
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
 	"substrate-primitives/std",
-	"substrate-runtime-primitives/std"
+	"substrate-runtime-primitives/std",
+	"substrate-runtime-version/std"
 ]

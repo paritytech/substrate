@@ -51,6 +51,7 @@ members = [
 	"substrate/runtime/staking",
 	"substrate/runtime/system",
 	"substrate/runtime/timestamp",
+	"substrate/runtime/version",
 	"substrate/serializer",
 	"substrate/state-db",
 	"substrate/state-machine",

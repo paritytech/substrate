@@ -28,6 +28,7 @@ use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::fetcher::{Fetcher, RemoteCallRequest};
+use executor::RuntimeVersion;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -71,6 +72,10 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 
 	fn prove_at_state<S: StateBackend>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+	}
+
+	fn native_runtime_version(&self) -> Option<RuntimeVersion> {
+		None
 	}
 }
 

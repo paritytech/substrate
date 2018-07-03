@@ -37,7 +37,7 @@ mod native_executor {
 	#![allow(missing_docs)]
 	use super::runtime;
 
-	native_executor_instance!(pub NativeExecutor, runtime::api::dispatch, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+	native_executor_instance!(pub NativeExecutor, runtime::api::dispatch, runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 }
 
 /// Native executor used for tests.
