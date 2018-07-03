@@ -168,7 +168,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		build_genesis_storage: S,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			let genesis_storage = build_genesis_storage.build_storage();
+			let genesis_storage = build_genesis_storage.build_storage()?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(&genesis_storage);
 			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
@@ -497,9 +497,9 @@ mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_number, 0);
 		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
-			Keyring::Alice.to_raw_public(),
-			Keyring::Bob.to_raw_public(),
-			Keyring::Charlie.to_raw_public()
+			Keyring::Alice.to_raw_public().into(),
+			Keyring::Bob.to_raw_public().into(),
+			Keyring::Charlie.to_raw_public().into()
 		]);
 	}
 

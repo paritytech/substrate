@@ -62,17 +62,16 @@ impl table::Context for TableContext {
 
 impl TableContext {
 	fn local_id(&self) -> AuthorityId {
-		self.key.public().0
+		self.key.public().into()
 	}
 
 	fn sign_statement(&self, statement: table::Statement) -> table::SignedStatement {
 		let signature = ::sign_table_statement(&statement, &self.key, &self.parent_hash).into();
-		let local_id = self.key.public().0;
 
 		table::SignedStatement {
 			statement,
 			signature,
-			sender: local_id,
+			sender: self.local_id(),
 		}
 	}
 }
@@ -468,10 +467,10 @@ mod tests {
 		let mut groups = HashMap::new();
 
 		let para_id = ParaId::from(1);
-		let local_id = Keyring::Alice.to_raw_public();
+		let local_id = Keyring::Alice.to_raw_public().into();
 		let local_key = Arc::new(Keyring::Alice.pair());
 
-		let validity_other = Keyring::Bob.to_raw_public();
+		let validity_other = Keyring::Bob.to_raw_public().into();
 		let validity_other_key = Keyring::Bob.pair();
 		let parent_hash = Default::default();
 
@@ -518,10 +517,10 @@ mod tests {
 		let mut groups = HashMap::new();
 
 		let para_id = ParaId::from(1);
-		let local_id = Keyring::Alice.to_raw_public();
+		let local_id = Keyring::Alice.to_raw_public().into();
 		let local_key = Arc::new(Keyring::Alice.pair());
 
-		let validity_other = Keyring::Bob.to_raw_public();
+		let validity_other = Keyring::Bob.to_raw_public().into();
 		let validity_other_key = Keyring::Bob.pair();
 		let parent_hash = Default::default();
 

@@ -261,7 +261,7 @@ impl<C, N, P> bft::ProposerFactory<Block> for ProposerFactory<C, N, P>
 		let (group_info, local_duty) = make_group_info(
 			duty_roster,
 			authorities,
-			sign_with.public().0,
+			sign_with.public().into(),
 		)?;
 
 		let active_parachains = self.client.active_parachains(&checked_id)?;
@@ -490,7 +490,7 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 		let offset = offset.low_u64() as usize + round_number;
 
 		let proposer = authorities[offset % authorities.len()].clone();
-		trace!(target: "bft", "proposer for round {} is {}", round_number, Hash::from(proposer));
+		trace!(target: "bft", "proposer for round {} is {}", round_number, proposer);
 
 		proposer
 	}

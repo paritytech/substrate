@@ -193,6 +193,9 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait>(PhantomData<T>);
 
 #[cfg(any(feature = "std", test))]
@@ -205,16 +208,16 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
 		use runtime_io::twox_128;
 		use codec::Slicable;
 
-		map![
+		Ok(map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => 1u64.encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
 			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
 			twox_128(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
-		]
+		])
 	}
 }

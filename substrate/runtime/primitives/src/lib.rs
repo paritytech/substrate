@@ -56,27 +56,16 @@ use traits::{Verify, Lazy};
 #[cfg(feature = "std")]
 pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;
 
-/// A simple function allowing StorageMap to be created.
-#[cfg(feature = "std")]
-pub type MakeStorage = Box<FnMut() -> StorageMap>;
-
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage {
-	fn build_storage(self) -> StorageMap;
-}
-
-#[cfg(feature = "std")]
-impl BuildStorage for MakeStorage {
-	fn build_storage(mut self) -> StorageMap {
-		self()
-	}
+	fn build_storage(self) -> Result<StorageMap, String>;
 }
 
 #[cfg(feature = "std")]
 impl BuildStorage for StorageMap {
-	fn build_storage(self) -> StorageMap {
-		self
+	fn build_storage(self) -> Result<StorageMap, String> {
+		Ok(self)
 	}
 }
 
@@ -241,6 +230,9 @@ macro_rules! impl_outer_config {
 	( pub struct $main:ident for $concrete:ident { $( $config:ident => $snake:ident, )* } ) => {
 		__impl_outer_config_types! { $concrete $( $config $snake )* }
 		#[cfg(any(feature = "std", test))]
+		#[derive(Serialize, Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		#[serde(deny_unknown_fields)]
 		pub struct $main {
 			$(
 				pub $snake: Option<$config>,
@@ -248,14 +240,14 @@ macro_rules! impl_outer_config {
 		}
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildStorage for $main {
-			fn build_storage(self) -> $crate::StorageMap {
+			fn build_storage(self) -> ::std::result::Result<$crate::StorageMap, String> {
 				let mut s = $crate::StorageMap::new();
 				$(
 					if let Some(extra) = self.$snake {
-						s.extend(extra.build_storage());
+						s.extend(extra.build_storage()?);
 					}
 				)*
-				s
+				Ok(s)
 			}
 		}
 	}

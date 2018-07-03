@@ -42,7 +42,7 @@ use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{RefInto, MaybeEmpty};
+use primitives::traits::{RefInto, MaybeSerializeDebug, MaybeEmpty};
 use primitives::bft::MisbehaviorReport;
 
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
@@ -60,7 +60,7 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 pub trait Trait: system::Trait {
 	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;		// MaybeEmpty is for Timestamp's usage.
-	type SessionKey: Parameter + Default;
+	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 }
 
 decl_module! {
@@ -118,8 +118,12 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	pub authorities: Vec<T::SessionKey>,
+	#[serde(with = "substrate_primitives::bytes")]
 	pub code: Vec<u8>,
 }
 
@@ -136,7 +140,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use codec::{Slicable, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
 		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|
@@ -144,6 +148,6 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 		).collect();
 		r.insert(AUTHORITY_COUNT.to_vec(), auth_count.encode());
 		r.insert(CODE.to_vec(), self.code);
-		r
+		Ok(r)
 	}
 }

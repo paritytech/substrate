@@ -88,9 +88,9 @@ fn fake_justify(header: &runtime::Header) -> bft::UncheckedJustification<runtime
 
 fn genesis_config() -> GenesisConfig {
 	GenesisConfig::new_simple(vec![
-		Keyring::Alice.to_raw_public(),
-		Keyring::Bob.to_raw_public(),
-		Keyring::Charlie.to_raw_public()
+		Keyring::Alice.to_raw_public().into(),
+		Keyring::Bob.to_raw_public().into(),
+		Keyring::Charlie.to_raw_public().into(),
 	], 1000)
 }
 
