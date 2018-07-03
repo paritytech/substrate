@@ -28,6 +28,7 @@ use runtime_support::AuxDispatchable;
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Block as BlockT,
 	Header as HeaderT, Hashing as HashingT};
 use rstd::ops;
+use bft::Justification;
 
 /// Definition of something that the external world might want to say.
 #[derive(PartialEq, Eq, Clone)]
@@ -473,6 +474,34 @@ where
 	}
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
 		Block { header, extrinsics }
+	}
+}
+
+/// Abstraction over a substrate block and justification.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub struct SignedBlock<Header, Extrinsic, Hash> {
+	/// Full block.
+	pub block: Block<Header, Extrinsic>,
+	/// Block header justification.
+	pub justification: Justification<Hash>,
+}
+
+impl<Header: Slicable, Extrinsic: Slicable, Hash: Slicable> Slicable for SignedBlock<Header, Extrinsic, Hash> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(SignedBlock {
+			block: Slicable::decode(input)?,
+			justification: Slicable::decode(input)?,
+		})
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		let mut v: Vec<u8> = Vec::new();
+		v.extend(self.block.encode());
+		v.extend(self.justification.encode());
+		v
 	}
 }
 
