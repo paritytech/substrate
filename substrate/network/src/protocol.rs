@@ -49,11 +49,11 @@ const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: Specialization<B>> {
 	config: ProtocolConfig,
-	context_data: ContextData<B>,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
 	sync: RwLock<ChainSync<B>>,
 	specialization: RwLock<S>,
+	context_data: ContextData<B>,
 	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<PeerId, time::Instant>>,
 	transaction_pool: Arc<TransactionPool<B>>,
