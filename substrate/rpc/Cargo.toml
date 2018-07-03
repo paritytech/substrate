@@ -10,6 +10,7 @@ jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-pubsub = { git="https://github.com/paritytech/jsonrpc.git" }
 log = "0.3"
 parking_lot = "0.4"
+substrate-codec = { path = "../codec" }
 substrate-client = { path = "../client" }
 substrate-executor = { path = "../executor" }
 substrate-extrinsic-pool = { path = "../extrinsic-pool" }

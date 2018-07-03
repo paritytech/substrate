@@ -117,7 +117,7 @@ impl Components for FullComponents {
 
 		// Load the first available key
 		let key = keystore.load(&keystore.contents()?[0], "")?;
-		info!("Using authority key {:?}", key.public());
+		info!("Using authority key {}", key.public());
 
 		let consensus_net = ::polkadot_network::consensus::ConsensusNetwork::new(network, client.clone());
 		Ok(Some(consensus::Service::new(
@@ -136,15 +136,19 @@ impl Components for FullComponents {
 pub struct LightComponents;
 
 impl Components for LightComponents {
-	type Backend = client::light::Backend<Block>;
+	type Backend = client::light::backend::Backend<client_db::light::LightStorage<Block>, network::OnDemand<Block, NetworkService>>;
 	type Api = polkadot_api::light::RemotePolkadotApiWrapper<Self::Backend, Self::Executor>;
-	type Executor = client::RemoteCallExecutor<client::light::Backend<Block>, OnDemand<Block, NetworkService>>;
+	type Executor = client::light::call_executor::RemoteCallExecutor<
+		client::light::blockchain::Blockchain<client_db::light::LightStorage<Block>, network::OnDemand<Block, NetworkService>>,
+		network::OnDemand<Block, NetworkService>>;
 
-	fn build_client(&self, _settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis_storage: MakeStorage)
+	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, genesis_storage: MakeStorage)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor, Block>>, Option<Arc<OnDemand<Block, NetworkService>>>), error::Error> {
-		let client_backend = client::light::new_light_backend();
-		let fetch_checker = Arc::new(client::light::new_fetch_checker(client_backend.clone(), executor));
-		let fetcher = Arc::new(OnDemand::new(fetch_checker));
+		let db_storage = client_db::light::LightStorage::new(db_settings)?;
+		let light_blockchain = client::light::new_light_blockchain(db_storage);
+		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor));
+		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
+		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
 		let client = client::light::new_light(client_backend, fetcher.clone(), genesis_storage)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}

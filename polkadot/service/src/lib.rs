@@ -66,7 +66,7 @@ use tokio::runtime::TaskExecutor;
 
 pub use self::error::{ErrorKind, Error};
 pub use self::components::{Components, FullComponents, LightComponents};
-pub use config::{Configuration, Role};
+pub use config::{Configuration, Role, PruningMode};
 
 /// Polkadot service.
 pub struct Service<Components: components::Components> {
@@ -113,13 +113,14 @@ impl<Components> Service<Components>
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: None,
 			path: config.database_path.into(),
+			pruning: config.pruning,
 		};
 
 		let (client, on_demand) = components.build_client(db_settings, executor, config.genesis_storage)?;
 		let api = components.build_api(client.clone());
 		let best_header = client.best_block_header()?;
 
-		info!("Best block is #{}", best_header.number);
+		info!("Best block: #{}", best_header.number);
 		telemetry!("node.start"; "height" => best_header.number, "best" => ?best_header.hash());
 
 		let transaction_pool = Arc::new(TransactionPool::new(config.transaction_pool, api.clone()));
@@ -130,7 +131,7 @@ impl<Components> Service<Components>
 			},
 			network_config: config.network,
 			chain: client.clone(),
-			on_demand: on_demand.clone().map(|d| d as Arc<network::OnDemandService>),
+			on_demand: on_demand.clone().map(|d| d as Arc<network::OnDemandService<Block>>),
 			transaction_pool: transaction_pool_adapter,
 			specialization: PolkadotProtocol::new(),
 		};

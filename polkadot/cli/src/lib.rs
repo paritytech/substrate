@@ -83,6 +83,7 @@ use polkadot_primitives::Block;
 
 use futures::Future;
 use tokio::runtime::Runtime;
+use service::PruningMode;
 
 const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
 
@@ -157,25 +158,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	config.chain_name = chain_spec.clone().into();
 
-	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
-		let name = config.name.clone();
-		let chain_name = config.chain_name.clone();
-		Some(init_telemetry(TelemetryConfig {
-			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
-			on_connect: Box::new(move || {
-				telemetry!("system.connected";
-					"name" => name.clone(),
-					"implementation" => "parity-polkadot",
-					"version" => crate_version!(),
-					"config" => "",
-					"chain" => chain_name.clone(),
-				);
-			}),
-		}))
-	} else {
-		None
-	};
-
 	let base_path = matches.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(default_base_path);
@@ -187,6 +169,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		.into();
 
 	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.pruning = match matches.value_of("pruning") {
+		Some("archive") => PruningMode::ArchiveAll,
+		None => PruningMode::keep_blocks(256),
+		Some(s) => PruningMode::keep_blocks(s.parse()
+			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
+	};
 
 	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
 		.map(PresetConfig::deconstruct)
@@ -257,6 +245,26 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 
 	let mut runtime = Runtime::new()?;
 	let executor = runtime.executor();
+
+	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+		let name = config.name.clone();
+		let chain_name = config.chain_name.clone();
+		Some(init_telemetry(TelemetryConfig {
+			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
+			on_connect: Box::new(move || {
+				telemetry!("system.connected";
+					"name" => name.clone(),
+					"implementation" => "parity-polkadot",
+					"version" => crate_version!(),
+					"config" => "",
+					"chain" => chain_name.clone(),
+				);
+			}),
+		}))
+	} else {
+		None
+	};
+
 	match role == service::Role::LIGHT {
 		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, &matches, sys_conf)?,
 		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, &matches, sys_conf)?,
@@ -312,7 +320,7 @@ fn run_until_exit<C>(runtime: &mut Runtime, service: service::Service<C>, matche
 		)
 	};
 
-	runtime.block_on(exit).expect("exit future does not fail; qed");
+	let _ = exit.wait();
 	Ok(())
 }
 
