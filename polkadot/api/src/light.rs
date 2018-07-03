@@ -24,8 +24,7 @@ use state_machine;
 use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
 use runtime::Address;
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
-use full::CheckedId;
-use {PolkadotApi, BlockBuilder, RemotePolkadotApi, CheckedBlockId, Result, ErrorKind};
+use {PolkadotApi, BlockBuilder, RemotePolkadotApi, Result, ErrorKind};
 
 /// Light block builder. TODO: make this work (efficiently)
 #[derive(Clone, Copy)]
@@ -47,65 +46,60 @@ pub struct RemotePolkadotApiWrapper<B: Backend<Block>, E: CallExecutor<Block>>(p
 impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotApiWrapper<B, E>
 	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {
-	type CheckedBlockId = CheckedId;
 	type BlockBuilder = LightBlockBuilder;
 
-	fn check_id(&self, id: BlockId) -> Result<CheckedId> {
-		Ok(CheckedId(id))
-	}
-
-	fn session_keys(&self, at: &CheckedId) -> Result<Vec<SessionKey>> {
-		self.0.executor().call(at.block_id(), "authorities", &[])
+	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
+		self.0.executor().call(at, "authorities", &[])
 			.and_then(|r| Vec::<SessionKey>::decode(&mut &r.return_data[..])
 				.ok_or("error decoding session keys".into()))
 			.map_err(Into::into)
 	}
 
-	fn validators(&self, _at: &CheckedId) -> Result<Vec<AccountId>> {
+	fn validators(&self, _at: &BlockId) -> Result<Vec<AccountId>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn random_seed(&self, _at: &Self::CheckedBlockId) -> Result<Hash> {
+	fn random_seed(&self, _at: &BlockId) -> Result<Hash> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn duty_roster(&self, _at: &CheckedId) -> Result<DutyRoster> {
+	fn duty_roster(&self, _at: &BlockId) -> Result<DutyRoster> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn timestamp(&self, _at: &CheckedId) -> Result<Timestamp> {
+	fn timestamp(&self, _at: &BlockId) -> Result<Timestamp> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn evaluate_block(&self, _at: &CheckedId, _block: Block) -> Result<bool> {
+	fn evaluate_block(&self, _at: &BlockId, _block: Block) -> Result<bool> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn index(&self, _at: &CheckedId, _account: AccountId) -> Result<Index> {
+	fn index(&self, _at: &BlockId, _account: AccountId) -> Result<Index> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn lookup(&self, _at: &CheckedId, _address: Address) -> Result<Option<AccountId>> {
+	fn lookup(&self, _at: &BlockId, _address: Address) -> Result<Option<AccountId>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn active_parachains(&self, _at: &Self::CheckedBlockId) -> Result<Vec<ParaId>> {
+	fn active_parachains(&self, _at: &BlockId) -> Result<Vec<ParaId>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn parachain_code(&self, _at: &Self::CheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
+	fn parachain_code(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn parachain_head(&self, _at: &Self::CheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
+	fn parachain_head(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn build_block(&self, _at: &Self::CheckedBlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
+	fn build_block(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn inherent_extrinsics(&self, _at: &Self::CheckedBlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> {
+	fn inherent_extrinsics(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 }

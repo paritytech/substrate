@@ -29,6 +29,9 @@ use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
 	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash};
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	pub sessions_per_era: T::BlockNumber,
 	pub current_era: T::BlockNumber,
@@ -120,7 +123,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
 		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
 		let mut r: runtime_io::TestExternalities = map![
@@ -150,6 +153,6 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 		for (who, value) in self.balances.into_iter() {
 			r.insert(twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
 		}
-		r
+		Ok(r)
 	}
 }

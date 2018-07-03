@@ -127,7 +127,7 @@ mod tests {
 		let hash_2 = [1; 32].into();
 
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&key.public().0,
+			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
 				1,
@@ -139,7 +139,7 @@ mod tests {
 		// same signature twice is not misbehavior.
 		let signed = sign_prepare(&key, 1, hash_1, parent_hash);
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&key.public().0,
+			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
 				1,
@@ -150,7 +150,7 @@ mod tests {
 
 		// misbehavior has wrong target.
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&Keyring::Two.to_raw_public(),
+			&Keyring::Two.to_raw_public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
 				1,
@@ -168,7 +168,7 @@ mod tests {
 		let hash_2 = [1; 32].into();
 
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&key.public().0,
+			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
 				1,
@@ -180,7 +180,7 @@ mod tests {
 		// same signature twice is not misbehavior.
 		let signed = sign_commit(&key, 1, hash_1, parent_hash);
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&key.public().0,
+			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
 				1,
@@ -191,7 +191,7 @@ mod tests {
 
 		// misbehavior has wrong target.
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&Keyring::Two.to_raw_public(),
+			&Keyring::Two.to_raw_public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
 				1,

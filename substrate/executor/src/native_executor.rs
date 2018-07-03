@@ -17,6 +17,9 @@
 use error::{Error, ErrorKind, Result};
 use state_machine::{CodeExecutor, Externalities};
 use wasm_executor::WasmExecutor;
+use runtime_version::RuntimeVersion;
+use codec::Slicable;
+use RuntimeInfo;
 
 fn safe_call<F, U>(f: F) -> Result<U>
 	where F: ::std::panic::UnwindSafe + FnOnce() -> U
@@ -41,20 +44,38 @@ pub trait NativeExecutionDispatch {
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
 	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+
+	/// Get native runtime version.
+	const VERSION: RuntimeVersion;
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
-	pub _dummy: ::std::marker::PhantomData<D>,
+	_dummy: ::std::marker::PhantomData<D>,
+}
+
+impl<D: NativeExecutionDispatch + Sync + Send> NativeExecutor<D> {
+	/// Create new instance.
+	pub fn new() -> Self {
+		NativeExecutor {
+			_dummy: Default::default(),
+		}
+	}
 }
 
 impl<D: NativeExecutionDispatch + Sync + Send> Clone for NativeExecutor<D> {
 	fn clone(&self) -> Self {
-		NativeExecutor { _dummy: Default::default() }
+		NativeExecutor {
+			_dummy: Default::default(),
+		}
 	}
+}
+
+impl<D: NativeExecutionDispatch + Sync + Send> RuntimeInfo for NativeExecutor<D> {
+	const NATIVE_VERSION: Option<RuntimeVersion> = Some(D::VERSION);
 }
 
 impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D> {
@@ -71,6 +92,11 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 			// call native
 			D::dispatch(ext, method, data)
 		} else {
+			let version = WasmExecutor.call(ext, code, "version", &[])?;
+			let version = RuntimeVersion::decode(&mut version.as_slice());
+			if version.map_or(false, |v| D::VERSION.can_call_with(&v)) {
+				return D::dispatch(ext, method, data)
+			}
 			// call into wasm.
 			WasmExecutor.call(ext, code, method, data)
 		}
@@ -79,17 +105,18 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 
 #[macro_export]
 macro_rules! native_executor_instance {
-	(pub $name:ident, $dispatcher:path, $code:expr) => {
+	(pub $name:ident, $dispatcher:path, $version:path, $code:expr) => {
 		pub struct $name;
-		native_executor_instance!(IMPL $name, $dispatcher, $code);
+		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
-	($name:ident, $dispatcher:path, $code:expr) => {
+	($name:ident, $dispatcher:path, $version:path, $code:expr) => {
 		/// A unit struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
 		struct $name;
-		native_executor_instance!(IMPL $name, $dispatcher, $code);
+		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
-	(IMPL $name:ident, $dispatcher:path, $code:expr) => {
+	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
 		impl $crate::NativeExecutionDispatch for $name {
+			const VERSION: $crate::RuntimeVersion = $version;
 			fn native_equivalent() -> &'static [u8] {
 				// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
@@ -104,9 +131,8 @@ macro_rules! native_executor_instance {
 
 		impl $name {
 			pub fn new() -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor { _dummy: Default::default() }
+				$crate::NativeExecutor::new()
 			}
 		}
 	}
-
 }

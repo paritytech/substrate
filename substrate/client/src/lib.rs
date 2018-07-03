@@ -36,7 +36,7 @@ extern crate triehash;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
-#[cfg(test)] #[macro_use] extern crate substrate_executor as executor;
+#[cfg_attr(test, macro_use)] extern crate substrate_executor as executor;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
 pub mod error;

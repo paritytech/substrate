@@ -54,6 +54,12 @@ error_chain! {
 			display("Message sender {:?} is not a valid authority.", a),
 		}
 
+		/// Authoring interface does not match the runtime.
+		InvalidRuntime {
+			description("Authoring for current runtime is not supported"),
+			display("Authoring for current runtime is not supported."),
+		}
+
 		/// Justification requirements not met.
 		InvalidJustification {
 			description("Invalid justification"),

@@ -245,7 +245,6 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		P: PolkadotApi + Send + Sync + 'static,
 		<C::Collation as IntoFuture>::Future: Send + 'static,
 		N::TableRouter: Send + 'static,
-		P::CheckedBlockId: Send + Sync + 'static,
 {
 	type Proposer = Proposer<P>;
 	type Input = N::Input;
@@ -261,17 +260,17 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 
 		let parent_hash = parent_header.hash().into();
 
-		let checked_id = self.client.check_id(BlockId::hash(parent_hash))?;
-		let duty_roster = self.client.duty_roster(&checked_id)?;
-		let random_seed = self.client.random_seed(&checked_id)?;
+		let id = BlockId::hash(parent_hash);
+		let duty_roster = self.client.duty_roster(&id)?;
+		let random_seed = self.client.random_seed(&id)?;
 
 		let (group_info, local_duty) = make_group_info(
 			duty_roster,
 			authorities,
-			sign_with.public().0,
+			sign_with.public().into(),
 		)?;
 
-		let active_parachains = self.client.active_parachains(&checked_id)?;
+		let active_parachains = self.client.active_parachains(&id)?;
 
 		let n_parachains = active_parachains.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
@@ -298,7 +297,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 
 		let collation_work = validation_para.map(|para| CollationFetch::new(
 			para,
-			checked_id.clone(),
+			id.clone(),
 			parent_hash.clone(),
 			self.collators.clone(),
 			self.client.clone(),
@@ -315,7 +314,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			local_key: sign_with,
 			minimum_delay: now + DELAY_UNTIL,
 			parent_hash,
-			parent_id: checked_id,
+			parent_id: id,
 			parent_number: parent_header.number,
 			random_seed,
 			table,
@@ -338,7 +337,6 @@ fn dispatch_collation_work<R, C, P>(
 	P: PolkadotApi + Send + Sync + 'static,
 	<C::Collation as IntoFuture>::Future: Send + 'static,
 	R: TableRouter + Send + 'static,
-	P::CheckedBlockId: Send + 'static,
 {
 	let (signal, exit) = exit_future::signal();
 	let handled_work = work.then(move |result| match result {
@@ -371,7 +369,7 @@ pub struct Proposer<C: PolkadotApi> {
 	local_key: Arc<ed25519::Pair>,
 	minimum_delay: Instant,
 	parent_hash: Hash,
-	parent_id: C::CheckedBlockId,
+	parent_id: BlockId,
 	parent_number: BlockNumber,
 	random_seed: Hash,
 	table: Arc<SharedTable>,
@@ -382,7 +380,6 @@ pub struct Proposer<C: PolkadotApi> {
 impl<C> bft::Proposer<Block> for Proposer<C>
 	where
 		C: PolkadotApi + Send + Sync,
-		C::CheckedBlockId: Sync,
 {
 	type Error = Error;
 	type Create = future::Either<
@@ -528,7 +525,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 		let offset = offset.low_u64() as usize + round_number;
 
 		let proposer = authorities[offset % authorities.len()].clone();
-		trace!(target: "bft", "proposer for round {} is {}", round_number, Hash::from(proposer));
+		trace!(target: "bft", "proposer for round {} is {}", round_number, proposer);
 
 		proposer
 	}
@@ -654,7 +651,7 @@ impl ProposalTiming {
 pub struct CreateProposal<C: PolkadotApi>  {
 	parent_hash: Hash,
 	parent_number: BlockNumber,
-	parent_id: C::CheckedBlockId,
+	parent_id: BlockId,
 	client: Arc<C>,
 	transaction_pool: Arc<TransactionPool<C>>,
 	table: Arc<SharedTable>,
@@ -761,8 +758,8 @@ mod tests {
 
 		let sig = sign_table_statement(&statement, &Keyring::Alice.pair(), &parent_hash);
 
-		assert!(check_statement(&statement, &sig, Keyring::Alice.to_raw_public(), &parent_hash));
-		assert!(!check_statement(&statement, &sig, Keyring::Alice.to_raw_public(), &[0xff; 32].into()));
-		assert!(!check_statement(&statement, &sig, Keyring::Bob.to_raw_public(), &parent_hash));
+		assert!(check_statement(&statement, &sig, Keyring::Alice.to_raw_public().into(), &parent_hash));
+		assert!(!check_statement(&statement, &sig, Keyring::Alice.to_raw_public().into(), &[0xff; 32].into()));
+		assert!(!check_statement(&statement, &sig, Keyring::Bob.to_raw_public().into(), &parent_hash));
 	}
 }

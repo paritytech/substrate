@@ -354,7 +354,7 @@ mod tests {
 
 		let bft_message = generic::BftMessage::Consensus(generic::SignedConsensusMessage::Vote(generic::SignedConsensusVote {
 			vote: generic::ConsensusVote::AdvanceRound(0),
-			sender: [0; 32],
+			sender: [0; 32].into(),
 			signature: Default::default(),
 		}));
 

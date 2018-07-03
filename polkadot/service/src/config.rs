@@ -17,7 +17,7 @@
 //! Service configuration.
 
 use transaction_pool;
-use runtime_primitives::MakeStorage;
+use chain_spec::ChainSpec;
 pub use network::Role;
 pub use network::NetworkConfiguration;
 pub use client_db::PruningMode;
@@ -38,30 +38,30 @@ pub struct Configuration {
 	pub pruning: PruningMode,
 	/// Additional key seeds.
 	pub keys: Vec<String>,
-	/// The name of the chain.
-	pub chain_name: String,
 	/// Chain configuration.
-	pub genesis_storage: MakeStorage,
+	pub chain_spec: ChainSpec,
 	/// Telemetry server URL, optional - only `Some` if telemetry reporting is enabled
 	pub telemetry: Option<String>,
 	/// Node name.
 	pub name: String,
 }
 
-impl Default for Configuration {
-	fn default() -> Configuration {
-		Configuration {
+impl Configuration {
+	/// Create default config for given chain spec.
+	pub fn default_with_spec(chain_spec: ChainSpec) -> Configuration {
+		let mut configuration = Configuration {
+			chain_spec,
+			name: Default::default(),
 			roles: Role::FULL,
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
 			database_path: Default::default(),
 			keys: Default::default(),
-			chain_name: Default::default(),
-			genesis_storage: Box::new(Default::default),
 			telemetry: Default::default(),
-			name: "Anonymous".into(),
 			pruning: PruningMode::ArchiveAll,
-		}
+		};
+		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
+		configuration
 	}
 }

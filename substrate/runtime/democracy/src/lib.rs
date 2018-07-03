@@ -296,6 +296,9 @@ impl<T: Trait> Executable for Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	pub launch_period: T::BlockNumber,
 	pub voting_period: T::BlockNumber,
@@ -335,18 +338,18 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use codec::Slicable;
 		use runtime_io::twox_128;
 
-		map![
+		Ok(map![
 			twox_128(<LaunchPeriod<T>>::key()).to_vec() => self.launch_period.encode(),
 			twox_128(<VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
 			twox_128(<MinimumDeposit<T>>::key()).to_vec() => self.minimum_deposit.encode(),
 			twox_128(<ReferendumCount<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
 			twox_128(<NextTally<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
 			twox_128(<PublicPropCount<T>>::key()).to_vec() => (0 as PropIndex).encode()
-		]
+		])
 	}
 }
 
@@ -406,16 +409,16 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![],
-		}.build_storage());
+		}.build_storage().unwrap());
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
 			broken_percent_late: 100,
-		}.build_storage());
+		}.build_storage().unwrap());
 		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,
 			current_era: 0,
@@ -432,13 +435,13 @@ mod tests {
 			reclaim_rebate: 0,
 			early_era_slash: 0,
 			session_reward: 0,
-		}.build_storage());
+		}.build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 1,
 			minimum_deposit: 1,
-		}.build_storage());
-		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
+		}.build_storage().unwrap());
+		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t
 	}
 
