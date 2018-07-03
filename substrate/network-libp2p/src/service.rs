@@ -79,6 +79,10 @@ struct Shared {
 	// every time we start the service.
 	timeouts_register_tx: RwLock<mpsc::UnboundedSender<(Instant, (Arc<NetworkProtocolHandler + Send + Sync>, ProtocolId, TimerToken))>>,
 
+	// Original address from the configuration, after being adjusted by the `Transport`.
+	// Contains `None` if the network hasn't started yet.
+	original_listened_addr: RwLock<Option<Multiaddr>>,
+
 	// Contains the addresses we known about ourselves.
 	listened_addrs: RwLock<Vec<Multiaddr>>,
 }
@@ -88,10 +92,6 @@ impl NetworkService {
 	pub fn new(config: NetworkConfiguration, filter: Option<Arc<ConnectionFilter>>) -> Result<NetworkService, Error> {
 		// TODO: for now `filter` is always `None` ; remove it from the code or implement it
 		assert!(filter.is_none());
-
-		let listened_addrs = RwLock::new(vec![
-			config_to_listen_addr(&config)
-		]);
 
 		let network_state = NetworkState::new(&config)?;
 
@@ -113,7 +113,8 @@ impl NetworkService {
 			kad_upgrade: KadConnecConfig::new(),
 			config,
 			timeouts_register_tx: RwLock::new(mpsc::unbounded().0),
-			listened_addrs,
+			original_listened_addr: RwLock::new(None),
+			listened_addrs: RwLock::new(Vec::new()),
 		});
 
 		Ok(NetworkService {
@@ -148,7 +149,10 @@ impl NetworkService {
 	pub fn external_url(&self) -> Option<String> {
 		// TODO: in the context of libp2p, it is hard to define what an external URL is, as
 		//		 different nodes can have multiple different ways to reach us
-		None
+		self.shared.original_listened_addr.read().as_ref()
+			.map(|addr| {
+				format!("{}/p2p/{}", addr, self.shared.kad_system.local_peer_id().to_base58())
+			})
 	}
 
 	/// Start network IO
@@ -385,16 +389,15 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 													info.info.agent_version.clone(),
 													original_addr.clone(), original_addr.clone())?;	// TODO: wrong
 
-						// TODO: this is expensive, but eventually the multiaddr will be directly
-						// 		 part of the configuration, so we don't really care
-						let original_listened_addr = config_to_listen_addr(&shared.config);
-						if let Some(ext_addr) = base.nat_traversal(&original_listened_addr, &info.observed_addr) {
-							let mut listened_addrs = shared.listened_addrs.write();
-							if !listened_addrs.iter().any(|a| a == &ext_addr) {
-								trace!(target: "sub-libp2p", "NAT traversal: remote observes us as \
-									{} ; registering {} as one of our own addresses",
-									info.observed_addr, ext_addr);
-								listened_addrs.push(ext_addr);
+						if let Some(ref original_listened_addr) = *shared.original_listened_addr.read() {
+							if let Some(ext_addr) = base.nat_traversal(original_listened_addr, &info.observed_addr) {
+								let mut listened_addrs = shared.listened_addrs.write();
+								if !listened_addrs.iter().any(|a| a == &ext_addr) {
+									trace!(target: "sub-libp2p", "NAT traversal: remote observes us as \
+										{} ; registering {} as one of our own addresses",
+										info.observed_addr, ext_addr);
+									listened_addrs.push(ext_addr);
+								}
 							}
 						}
 						for addr in info.info.listen_addrs.iter() {
@@ -449,9 +452,15 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 	{
 		let listen_addr = config_to_listen_addr(&shared.config);
 		debug!(target: "sub-libp2p", "Libp2p listening on {}", listen_addr);
-		if let Err(_) = swarm_controller.listen_on(listen_addr.clone()) {
-			warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported", listen_addr);
-			return Err(ErrorKind::BadProtocol.into());
+		match swarm_controller.listen_on(listen_addr.clone()) {
+			Ok(new_addr) => {
+				*shared.original_listened_addr.write() = Some(new_addr.clone());
+				shared.listened_addrs.write().push(new_addr);
+			},
+			Err(_) => {
+				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported", listen_addr);
+				return Err(ErrorKind::BadProtocol.into());
+			},
 		}
 	}
 
