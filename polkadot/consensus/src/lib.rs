@@ -291,16 +291,22 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
 			DELAY_UNTIL);
 
+		let validation_para = match local_duty.validation {
+			Chain::Relay => None,
+			Chain::Parachain(id) => Some(id),
+		};
+
+		let collation_work = validation_para.map(|para| CollationFetch::new(
+			para,
+			checked_id.clone(),
+			parent_hash.clone(),
+			self.collators.clone(),
+			self.client.clone(),
+		));
 		let drop_signal = dispatch_collation_work(
 			router.clone(),
 			&self.handle,
-			CollationFetch::new(
-				local_duty.validation,
-				checked_id.clone(),
-				parent_hash.clone(),
-				self.collators.clone(),
-				self.client.clone()
-			),
+			collation_work,
 		);
 
 		let proposer = Proposer {
@@ -326,7 +332,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 fn dispatch_collation_work<R, C, P>(
 	router: R,
 	handle: &TaskExecutor,
-	work: CollationFetch<C, P>,
+	work: Option<CollationFetch<C, P>>,
 ) -> exit_future::Signal where
 	C: Collators + Send + 'static,
 	P: PolkadotApi + Send + Sync + 'static,
@@ -336,10 +342,11 @@ fn dispatch_collation_work<R, C, P>(
 {
 	let (signal, exit) = exit_future::signal();
 	let handled_work = work.then(move |result| match result {
-		Ok((collation, extrinsic)) => {
+		Ok(Some((collation, extrinsic))) => {
 			router.local_candidate(collation.receipt, collation.block_data, extrinsic);
 			Ok(())
 		}
+		Ok(None) => Ok(()),
 		Err(_e) => {
 			warn!(target: "consensus", "Failed to collate candidate");
 			Ok(())
