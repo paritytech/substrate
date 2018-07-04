@@ -468,21 +468,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 #[derive(Debug, Default, Clone)]
 pub struct WasmExecutor;
 
-impl CodeExecutor for WasmExecutor {
-	type Error = Error;
+impl WasmExecutor {
 
-	fn call<E: Externalities>(
+	/// Call a given method in the given wasm-module runtime.
+	pub fn call_in_wasm_module<E: Externalities>(
 		&self,
 		ext: &mut E,
-		code: &[u8],
+		module: &Module,
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		let module = Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-
 		// start module instantiation. Don't run 'start' function yet.
 		let intermediate_instance = ModuleInstance::new(
-			&module,
+			module,
 			&ImportsBuilder::new()
 				.with_resolver("env", FunctionExecutor::<E>::resolver())
 		)?;
@@ -526,6 +524,21 @@ impl CodeExecutor for WasmExecutor {
 		} else {
 			Err(ErrorKind::InvalidReturn.into())
 		}
+	}
+}
+
+impl CodeExecutor for WasmExecutor {
+	type Error = Error;
+
+	fn call<E: Externalities>(
+		&self,
+		ext: &mut E,
+		code: &[u8],
+		method: &str,
+		data: &[u8],
+	) -> Result<Vec<u8>> {
+		let module = Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
+		self.call_in_wasm_module(ext, &module, method, data)
 	}
 }
 
