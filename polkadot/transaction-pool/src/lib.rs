@@ -180,7 +180,7 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 
 /// Readiness evaluator for polkadot transactions.
 pub struct Ready<'a, A: 'a + PolkadotApi> {
-	at_block: A::CheckedBlockId,
+	at_block: BlockId,
 	api: &'a A,
 	known_nonces: HashMap<AccountId, ::primitives::Index>,
 }
@@ -188,7 +188,7 @@ pub struct Ready<'a, A: 'a + PolkadotApi> {
 impl<'a, A: 'a + PolkadotApi> Ready<'a, A> {
 	/// Create a new readiness evaluator at the given block. Requires that
 	/// the ID has already been checked for local corresponding and available state.
-	fn create(at: A::CheckedBlockId, api: &'a A) -> Self {
+	fn create(at: BlockId, api: &'a A) -> Self {
 		Ready {
 			at_block: at,
 			api,
@@ -244,12 +244,12 @@ impl<'a, A: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, A
 	}
 }
 
-pub struct Verifier<'a, A: 'a, B> {
+pub struct Verifier<'a, A: 'a> {
 	api: &'a A,
-	at_block: B,
+	at_block: BlockId,
 }
 
-impl<'a, A> Verifier<'a, A, A::CheckedBlockId> where
+impl<'a, A> Verifier<'a, A> where
 	A: 'a + PolkadotApi,
 {
 	const NO_ACCOUNT: &'static str = "Account not found.";
@@ -267,7 +267,7 @@ impl<'a, A> Verifier<'a, A, A::CheckedBlockId> where
 	}
 }
 
-impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A, A::CheckedBlockId> where
+impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 	A: 'a + PolkadotApi,
 {
 	type VerifiedTransaction = VerifiedTransaction;
@@ -322,7 +322,7 @@ impl<A> TransactionPool<A> where
 	pub fn import_unchecked_extrinsic(&self, block: BlockId, uxt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
 		let verifier = Verifier {
 			api: &*self.api,
-			at_block: self.api.check_id(block)?,
+			at_block: block,
 		};
 		self.inner.submit(verifier, vec![uxt]).map(|mut v| v.swap_remove(0))
 	}
@@ -332,7 +332,7 @@ impl<A> TransactionPool<A> where
 		let to_reverify = self.inner.remove_sender(None);
 		let verifier = Verifier {
 			api: &*self.api,
-			at_block: self.api.check_id(block)?,
+			at_block: block,
 		};
 
 		self.inner.submit(verifier, to_reverify.into_iter().map(|tx| tx.original.clone()))?;
@@ -358,8 +358,7 @@ impl<A> TransactionPool<A> where
 
 	/// Cull old transactions from the queue.
 	pub fn cull(&self, block: BlockId) -> Result<usize> {
-		let id = self.api.check_id(block)?;
-		let ready = Ready::create(id, &*self.api);
+		let ready = Ready::create(block, &*self.api);
 		Ok(self.inner.cull(None, ready))
 	}
 
@@ -367,8 +366,7 @@ impl<A> TransactionPool<A> where
 	pub fn cull_and_get_pending<F, T>(&self, block: BlockId, f: F) -> Result<T> where
 		F: FnOnce(txpool::PendingIterator<VerifiedTransaction, Ready<A>, Scoring, Listener<Hash>>) -> T,
 	{
-		let id = self.api.check_id(block)?;
-		let ready = Ready::create(id, &*self.api);
+		let ready = Ready::create(block, &*self.api);
 		self.inner.cull(None, ready.clone());
 		Ok(self.inner.pending(ready, f))
 	}
@@ -413,7 +411,7 @@ mod tests {
 	use super::TransactionPool;
 	use substrate_keyring::Keyring::{self, *};
 	use codec::Slicable;
-	use polkadot_api::{PolkadotApi, BlockBuilder, CheckedBlockId, Result};
+	use polkadot_api::{PolkadotApi, BlockBuilder, Result};
 	use primitives::{AccountId, AccountIndex, Block, BlockId, Hash, Index, SessionKey, Timestamp,
 		UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 	use runtime::{RawAddress, Call, TimestampCall, BareExtrinsic, Extrinsic, UncheckedExtrinsic};
@@ -426,15 +424,9 @@ mod tests {
 		fn bake(self) -> Result<Block> { unimplemented!() }
 	}
 
-	#[derive(Clone)]
-	struct TestCheckedBlockId(pub BlockId);
-	impl CheckedBlockId for TestCheckedBlockId {
-		fn block_id(&self) -> &BlockId { &self.0 }
-	}
-
-	fn number_of(at: &TestCheckedBlockId) -> u32 {
-		match at.0 {
-			generic::BlockId::Number(n) => n as u32,
+	fn number_of(at: &BlockId) -> u32 {
+		match at {
+			generic::BlockId::Number(n) => *n as u32,
 			_ => 0,
 		}
 	}
@@ -457,26 +449,24 @@ mod tests {
 	}
 
 	impl PolkadotApi for TestPolkadotApi {
-		type CheckedBlockId = TestCheckedBlockId;
 		type BlockBuilder = TestBlockBuilder;
 
-		fn check_id(&self, id: BlockId) -> Result<TestCheckedBlockId> { Ok(TestCheckedBlockId(id)) }
-		fn session_keys(&self, _at: &TestCheckedBlockId) -> Result<Vec<SessionKey>> { unimplemented!() }
-		fn validators(&self, _at: &TestCheckedBlockId) -> Result<Vec<AccountId>> { unimplemented!() }
-		fn random_seed(&self, _at: &TestCheckedBlockId) -> Result<Hash> { unimplemented!() }
-		fn duty_roster(&self, _at: &TestCheckedBlockId) -> Result<DutyRoster> { unimplemented!() }
-		fn timestamp(&self, _at: &TestCheckedBlockId) -> Result<u64> { unimplemented!() }
-		fn evaluate_block(&self, _at: &TestCheckedBlockId, _block: Block) -> Result<bool> { unimplemented!() }
-		fn active_parachains(&self, _at: &TestCheckedBlockId) -> Result<Vec<ParaId>> { unimplemented!() }
-		fn parachain_code(&self, _at: &TestCheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
-		fn parachain_head(&self, _at: &TestCheckedBlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
-		fn build_block(&self, _at: &TestCheckedBlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> { unimplemented!() }
-		fn inherent_extrinsics(&self, _at: &TestCheckedBlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> { unimplemented!() }
+		fn session_keys(&self, _at: &BlockId) -> Result<Vec<SessionKey>> { unimplemented!() }
+		fn validators(&self, _at: &BlockId) -> Result<Vec<AccountId>> { unimplemented!() }
+		fn random_seed(&self, _at: &BlockId) -> Result<Hash> { unimplemented!() }
+		fn duty_roster(&self, _at: &BlockId) -> Result<DutyRoster> { unimplemented!() }
+		fn timestamp(&self, _at: &BlockId) -> Result<u64> { unimplemented!() }
+		fn evaluate_block(&self, _at: &BlockId, _block: Block) -> Result<bool> { unimplemented!() }
+		fn active_parachains(&self, _at: &BlockId) -> Result<Vec<ParaId>> { unimplemented!() }
+		fn parachain_code(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
+		fn parachain_head(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
+		fn build_block(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> { unimplemented!() }
+		fn inherent_extrinsics(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> { unimplemented!() }
 
-		fn index(&self, _at: &TestCheckedBlockId, _account: AccountId) -> Result<Index> {
+		fn index(&self, _at: &BlockId, _account: AccountId) -> Result<Index> {
 			Ok((_account[0] as u32) + number_of(_at))
 		}
-		fn lookup(&self, _at: &TestCheckedBlockId, _address: RawAddress<AccountId, AccountIndex>) -> Result<Option<AccountId>> {
+		fn lookup(&self, _at: &BlockId, _address: RawAddress<AccountId, AccountIndex>) -> Result<Option<AccountId>> {
 			match _address {
 				RawAddress::Id(i) => Ok(Some(i)),
 				RawAddress::Index(_) if self.no_lookup.load(atomic::Ordering::SeqCst) => Ok(None),

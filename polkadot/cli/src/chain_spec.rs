@@ -16,6 +16,9 @@
 
 //! Predefined chains.
 
+use service;
+use std::path::PathBuf;
+
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
 #[derive(Clone, Debug)]
@@ -30,6 +33,19 @@ pub enum ChainSpec {
 	PoC2Testnet,
 	/// Custom Genesis file.
 	Custom(String),
+}
+
+/// Get a chain config from a spec setting.
+impl ChainSpec {
+	pub(crate) fn load(self) -> Result<service::ChainSpec, String> {
+		Ok(match self {
+			ChainSpec::PoC1Testnet => service::ChainSpec::poc_1_testnet_config()?,
+			ChainSpec::Development => service::ChainSpec::development_config(),
+			ChainSpec::LocalTestnet => service::ChainSpec::local_testnet_config(),
+			ChainSpec::PoC2Testnet => service::ChainSpec::poc_2_testnet_config(),
+			ChainSpec::Custom(f) => service::ChainSpec::from_json_file(PathBuf::from(f))?,
+		})
+	}
 }
 
 impl<'a> From<&'a str> for ChainSpec {
@@ -52,22 +68,6 @@ impl From<ChainSpec> for String {
 			ChainSpec::PoC1Testnet => "poc-1".into(),
 			ChainSpec::PoC2Testnet => "poc-2".into(),
 			ChainSpec::Custom(f) => format!("custom ({})", f),
-		}
-	}
-}
-
-impl ::std::fmt::Display for ChainSpec {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		if let ChainSpec::Custom(n) = self {
-			write!(f, "Custom ({})", n)
-		} else {
-			write!(f, "{}", match *self {
-				ChainSpec::Development => "Development",
-				ChainSpec::LocalTestnet => "Local Testnet",
-				ChainSpec::PoC1Testnet => "PoC-1 Testnet",
-				ChainSpec::PoC2Testnet => "PoC-2 Testnet",
-				_ => unreachable!(),
-			})
 		}
 	}
 }

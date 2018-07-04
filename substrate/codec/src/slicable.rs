@@ -38,12 +38,20 @@ pub trait Input {
 	}
 }
 
+#[cfg(not(feature = "std"))]
 impl<'a> Input for &'a [u8] {
 	fn read(&mut self, into: &mut [u8]) -> usize {
 		let len = ::core::cmp::min(into.len(), self.len());
 		into[..len].copy_from_slice(&self[..len]);
 		*self = &self[len..];
 		len
+	}
+}
+
+#[cfg(feature = "std")]
+impl<R: ::std::io::Read> Input for R {
+	fn read(&mut self, into: &mut [u8]) -> usize {
+		(self as &mut ::std::io::Read).read(into).unwrap_or(0)
 	}
 }
 
@@ -61,6 +69,16 @@ pub trait Slicable: Sized {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&self.encode())
 	}
+}
+
+/// Encode a bytes slice as `Slicable` that can be decoded into a vector.
+pub fn encode_slice(bytes: &[u8]) -> Vec<u8> {
+	let len = bytes.len();
+	assert!(len <= u32::max_value() as usize, "Attempted to serialize a collection with too many elements.");
+
+	let mut r: Vec<u8> = Vec::new().and(&(len as u32));
+	r.extend_from_slice(bytes);
+	r
 }
 
 impl<T: Slicable, E: Slicable> Slicable for Result<T, E> {
@@ -182,12 +200,7 @@ impl Slicable for Vec<u8> {
 	}
 
 	fn encode(&self) -> Vec<u8> {
-		let len = self.len();
-		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
-
-		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
-		r.extend_from_slice(self);
-		r
+		encode_slice(&self)
 	}
 }
 

@@ -459,6 +459,11 @@ pub mod unhashed {
 		runtime_io::clear_storage(key);
 	}
 
+	/// Ensure keys with the given `prefix` have no entries in storage.
+	pub fn kill_prefix(prefix: &[u8]) {
+		runtime_io::clear_prefix(prefix);
+	}
+
 	/// Get a Vec of bytes from storage.
 	pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
 		runtime_io::storage(key)

@@ -27,6 +27,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_codec as codec;
+extern crate substrate_executor as executor;
 extern crate substrate_state_db as state_db;
 
 #[macro_use]
@@ -52,6 +53,7 @@ use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing, HashingFor, Zero};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
+use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, TrieH256, DBValue};
 use utils::{Meta, db_err, meta_keys, number_to_db_key, open_database, read_db, read_id, read_meta};
 use state_db::StateDb;
@@ -82,7 +84,7 @@ pub fn new_client<E, S, Block>(
 		Block: BlockT,
 		<Block::Header as HeaderT>::Number: As<u32>,
 		Block::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
-		E: CodeExecutor,
+		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);

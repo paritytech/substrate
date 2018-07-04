@@ -22,8 +22,8 @@
 use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Hash, AccountId};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, Collation, Extrinsic};
+use polkadot_primitives::{Hash, AccountId, BlockId};
+use polkadot_primitives::parachain::{Id as ParaId, Collation, Chain, Extrinsic};
 
 use futures::prelude::*;
 
@@ -49,7 +49,7 @@ pub trait Collators: Clone {
 pub struct CollationFetch<C: Collators, P: PolkadotApi> {
 	parachain: Option<ParaId>,
 	relay_parent_hash: Hash,
-	relay_parent: P::CheckedBlockId,
+	relay_parent: BlockId,
 	collators: C,
 	live_fetch: Option<<C::Collation as IntoFuture>::Future>,
 	client: Arc<P>,
@@ -57,7 +57,7 @@ pub struct CollationFetch<C: Collators, P: PolkadotApi> {
 
 impl<C: Collators, P: PolkadotApi> CollationFetch<C, P> {
 	/// Create a new collation fetcher for the given chain.
-	pub fn new(parachain: Chain, relay_parent: P::CheckedBlockId, relay_parent_hash: Hash, collators: C, client: Arc<P>) -> Self {
+	pub fn new(parachain: Chain, relay_parent: BlockId, relay_parent_hash: Hash, collators: C, client: Arc<P>) -> Self {
 		CollationFetch {
 			relay_parent_hash,
 			relay_parent,
@@ -137,7 +137,7 @@ error_chain! {
 }
 
 /// Check whether a given collation is valid. Returns `Ok`  on success, error otherwise.
-pub fn validate_collation<P: PolkadotApi>(client: &P, relay_parent: &P::CheckedBlockId, collation: &Collation) -> Result<(), Error> {
+pub fn validate_collation<P: PolkadotApi>(client: &P, relay_parent: &BlockId, collation: &Collation) -> Result<(), Error> {
 	use parachain::{self, ValidationParams};
 
 	let para_id = collation.receipt.parachain_index;

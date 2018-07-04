@@ -220,6 +220,9 @@ impl<T: Trait> Executable for Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	pub session_length: T::BlockNumber,
 	pub validators: Vec<T::AccountId>,
@@ -241,17 +244,17 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> runtime_io::TestExternalities {
+	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use runtime_io::twox_128;
 		use codec::Slicable;
 		use primitives::traits::As;
-		map![
+		Ok(map![
 			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
 			twox_128(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
 			twox_128(<CurrentStart<T>>::key()).to_vec() => T::Moment::zero().encode(),
 			twox_128(<Validators<T>>::key()).to_vec() => self.validators.encode(),
 			twox_128(<BrokenPercentLate<T>>::key()).to_vec() => self.broken_percent_late.encode()
-		]
+		])
 	}
 }
 
@@ -297,19 +300,19 @@ mod tests {
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![1, 2, 3],
-		}.build_storage());
+		}.build_storage().unwrap());
 		t.extend(timestamp::GenesisConfig::<Test>{
 			period: 5,
-		}.build_storage());
+		}.build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
 			broken_percent_late: 30,
-		}.build_storage());
+		}.build_storage().unwrap());
 		t
 	}
 

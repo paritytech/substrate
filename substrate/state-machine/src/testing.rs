@@ -35,6 +35,12 @@ impl Externalities for TestExternalities {
 		}
 	}
 
+	fn clear_prefix(&mut self, prefix: &[u8]) {
+		self.retain(|key, _|
+			!key.starts_with(prefix)
+		)
+	}
+
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> [u8; 32] {

@@ -20,6 +20,7 @@ use rstd::prelude::*;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use runtime_support::StorageMap;
+use double_map::StorageDoubleMap;
 use super::*;
 
 pub struct ChangeEntry<T: Trait> {
@@ -61,7 +62,7 @@ pub trait AccountDb<T: Trait> {
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		<StorageOf<T>>::get(&(account.clone(), location.to_vec()))
+		<StorageOf<T>>::get(account.clone(), location.to_vec())
 	}
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
 		<CodeOf<T>>::get(account)
@@ -105,9 +106,9 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 			}
 			for (k, v) in changed.storage.into_iter() {
 				if let Some(value) = v {
-					<StorageOf<T>>::insert((address.clone(), k), &value);
+					<StorageOf<T>>::insert(address.clone(), k, value);
 				} else {
-					<StorageOf<T>>::remove((address.clone(), k));
+					<StorageOf<T>>::remove(address.clone(), k);
 				}
 			}
 		}

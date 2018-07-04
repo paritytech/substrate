@@ -22,6 +22,8 @@ extern crate ed25519;
 extern crate clap;
 extern crate exit_future;
 extern crate tokio_timer;
+extern crate serde;
+extern crate serde_json;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_executor;
@@ -49,10 +51,15 @@ extern crate error_chain;
 extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate hex_literal;
 
 mod components;
 mod error;
 mod config;
+mod chain_spec;
 
 use std::sync::Arc;
 use std::thread;
@@ -69,6 +76,7 @@ use exit_future::Signal;
 pub use self::error::{ErrorKind, Error};
 pub use self::components::{Components, FullComponents, LightComponents};
 pub use config::{Configuration, Role, PruningMode};
+pub use chain_spec::ChainSpec;
 
 /// Polkadot service.
 pub struct Service<Components: components::Components> {
@@ -90,6 +98,25 @@ pub fn new_light(config: Configuration) -> Result<Service<components::LightCompo
 pub fn new_full(config: Configuration) -> Result<Service<components::FullComponents>, error::Error> {
 	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
 	Service::new(components::FullComponents { is_validator }, config)
+}
+
+/// Creates bare client without any networking.
+pub fn new_client(config: Configuration) -> Result<Arc<Client<
+		<components::FullComponents as Components>::Backend,
+		<components::FullComponents as Components>::Executor,
+		Block>>,
+	error::Error>
+{
+	let db_settings = client_db::DatabaseSettings {
+		cache_size: None,
+		path: config.database_path.into(),
+		pruning: config.pruning,
+	};
+	let executor = polkadot_executor::Executor::new();
+	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
+	let components = components::FullComponents { is_validator };
+	let (client, _) = components.build_client(db_settings, executor, &config.chain_spec)?;
+	Ok(client)
 }
 
 impl<Components> Service<Components>
@@ -122,7 +149,7 @@ impl<Components> Service<Components>
 			pruning: config.pruning,
 		};
 
-		let (client, on_demand) = components.build_client(db_settings, executor, config.genesis_storage)?;
+		let (client, on_demand) = components.build_client(db_settings, executor, &config.chain_spec)?;
 		let api = components.build_api(client.clone());
 		let best_header = client.best_block_header()?;
 

@@ -26,6 +26,7 @@ substrate-runtime-session = { path = "../../substrate/runtime/session" }
 substrate-runtime-staking = { path = "../../substrate/runtime/staking" }
 substrate-runtime-system = { path = "../../substrate/runtime/system" }
 substrate-runtime-timestamp = { path = "../../substrate/runtime/timestamp" }
+substrate-runtime-version = { path = "../../substrate/runtime/version" }
 
 [dev-dependencies]
 hex-literal = "0.1.0"
@@ -48,6 +49,7 @@ std = [
 	"substrate-runtime-staking/std",
 	"substrate-runtime-system/std",
 	"substrate-runtime-timestamp/std",
+	"substrate-runtime-version/std",
 	"serde_derive",
 	"serde/std",
 	"log",
