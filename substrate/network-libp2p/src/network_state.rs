@@ -142,7 +142,7 @@ impl NetworkState {
 				PeersStorage::Json(peerstore)
 			} else {
 				warn!(target: "sub-libp2p", "Failed to open peer storage {:?} ; peers won't \
-											be saved", path);
+					be saved", path);
 				PeersStorage::Memory(MemoryPeerstore::empty())
 			}
 		} else {
@@ -246,10 +246,6 @@ impl NetworkState {
 			None => return None,
 		};
 
-		/*let node_id = self.peer_by_nodeid.read().iter()
-			.find(|&(_, &p)| p == peer)
-			.map(|n| n.clone());*/
-
 		let ping = info.ping.lock().clone();
 
 		Some(SessionInfo {
@@ -288,14 +284,12 @@ impl NetworkState {
 	/// Note that we don't have to be connected to a peer to add an address to it.
 	pub fn add_kad_discovered_addr(&self, node_id: &PeerstorePeerId, addr: Multiaddr) {
 		match self.peerstore {
-			PeersStorage::Memory(ref mem) => {
+			PeersStorage::Memory(ref mem) =>
 				mem.peer_or_create(node_id)
-					.add_addr(addr, Duration::from_secs(3600))
-			}
-			PeersStorage::Json(ref json) => {
+					.add_addr(addr, Duration::from_secs(3600)),
+			PeersStorage::Json(ref json) =>
 				json.peer_or_create(node_id)
-					.add_addr(addr, Duration::from_secs(3600))
-			}
+					.add_addr(addr, Duration::from_secs(3600)),
 		}
 	}
 
@@ -305,36 +299,32 @@ impl NetworkState {
 	pub fn set_invalid_kad_address(&self, node_id: &PeerstorePeerId, addr: &Multiaddr) {
 		// TODO: blacklist the address?
 		match self.peerstore {
-			PeersStorage::Memory(ref mem) => {
+			PeersStorage::Memory(ref mem) =>
 				if let Some(mut peer) = mem.peer(node_id) {
 					peer.rm_addr(addr.clone())		// TODO: cloning necessary?
-				}
-			}
-			PeersStorage::Json(ref json) => {
+				},
+			PeersStorage::Json(ref json) =>
 				if let Some(mut peer) = json.peer(node_id) {
 					peer.rm_addr(addr.clone())		// TODO: cloning necessary?
-				}
-			}
+				},
 		}
 	}
 
 	/// Returns the known multiaddresses of a peer.
 	pub fn addrs_of_peer(&self, node_id: &PeerstorePeerId) -> Vec<Multiaddr> {
 		match self.peerstore {
-			PeersStorage::Memory(ref mem) => {
+			PeersStorage::Memory(ref mem) =>
 				mem
 					.peer(node_id)
 					.into_iter()
 					.flat_map(|p| p.addrs())
-					.collect::<Vec<_>>()
-			}
-			PeersStorage::Json(ref json) => {
+					.collect::<Vec<_>>(),
+			PeersStorage::Json(ref json) =>
 				json
 					.peer(node_id)
 					.into_iter()
 					.flat_map(|p| p.addrs())
-					.collect::<Vec<_>>()
-			}
+					.collect::<Vec<_>>(),
 		}
 	}
 
@@ -388,13 +378,11 @@ impl NetworkState {
 	/// Set the non-reserved peer mode.
 	pub fn set_non_reserved_mode(&self, mode: NonReservedPeerMode) {
 		match mode {
-			NonReservedPeerMode::Accept => {
-				self.reserved_only.store(false, atomic::Ordering::SeqCst);
-			},
-			NonReservedPeerMode::Deny => {
-				self.reserved_only.store(true, atomic::Ordering::SeqCst);
+			NonReservedPeerMode::Accept =>
+				self.reserved_only.store(false, atomic::Ordering::SeqCst),
+			NonReservedPeerMode::Deny =>
 				// TODO: drop existing peers?
-			},
+				self.reserved_only.store(true, atomic::Ordering::SeqCst),
 		}
 	}
 
@@ -419,7 +407,6 @@ impl NetworkState {
 				Some(peer) => peer,
 				None => return false,
 			};
-
 			info.senders.iter().any(|p| p.0 == protocol_id)
 		} else {
 			false
@@ -441,7 +428,7 @@ impl NetworkState {
 	/// Obtain a Kademlia connection to the given peer.
 	pub fn obtain_kad_connection<F, Fut>(&self, node_id: PeerstorePeerId, opener: F)
 		-> Result<(PeerId, impl Future<Item = KadConnecController, Error = IoError>), IoError>
-	where F: FnOnce() -> Fut, Fut: Future<Item = KadConnecController, Error = IoError>
+		where F: FnOnce() -> Fut, Fut: Future<Item = KadConnecController, Error = IoError>
 	{
 		let mut connections = self.connections.write();
 		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id, Endpoint::Dialer)?;
@@ -524,7 +511,7 @@ impl NetworkState {
 				peer_by_nodeid.len() >= self.max_peers as usize
 			{
 				debug!(target: "sub-libp2p", "Refusing node {:?} because we reached the max \
-												number of peers", node_id);
+					number of peers", node_id);
 				return Err(IoError::new(IoErrorKind::PermissionDenied, "maximum number of peers reached"));
 			}
 		}
@@ -541,9 +528,7 @@ impl NetworkState {
 		if let Some(peer) = self.connections.read().info_by_peer.get(&peer_id) {
 			if let Some(sender) = peer.senders.iter().find(|elem| elem.0 == protocol).map(|e| &e.1) {
 				sender.unbounded_send(message)
-					.map_err(|err| {
-						ErrorKind::Io(IoError::new(IoErrorKind::Other, err))
-					})?;
+					.map_err(|err| ErrorKind::Io(IoError::new(IoErrorKind::Other, err)))?;
 				Ok(())
 			} else {
 				// We are connected to this peer, but not with the current protocol.
@@ -677,24 +662,21 @@ fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 	let mut addr: Multiaddr = addr_str.parse().map_err(|_| ErrorKind::AddressParse)?;
 	let p2p_component = addr.pop().ok_or(ErrorKind::AddressParse)?;
 	let peer_id = match p2p_component {
-		AddrComponent::P2P(key) | AddrComponent::IPFS(key) => {
-			PeerstorePeerId::from_bytes(key).map_err(|_| ErrorKind::AddressParse)?
-		}
+		AddrComponent::P2P(key) | AddrComponent::IPFS(key) =>
+			PeerstorePeerId::from_bytes(key).map_err(|_| ErrorKind::AddressParse)?,
 		_ => return Err(ErrorKind::BadProtocol.into()),
 	};
 
 	// Registering the bootstrap node with a TTL of 100000 years   TODO: wrong
 	match peerstore {
-		PeersStorage::Memory(ref peerstore) => {
+		PeersStorage::Memory(ref peerstore) =>
 			peerstore
 				.peer_or_create(&peer_id)
-				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600));
-		}
-		PeersStorage::Json(ref peerstore) => {
+				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
+		PeersStorage::Json(ref peerstore) =>
 			peerstore
 				.peer_or_create(&peer_id)
-				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600));
-		}
+				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 	}
 	
 	Ok(peer_id)
@@ -742,10 +724,10 @@ fn load_private_key_from_file(path: impl AsRef<Path>) -> Result<secio::SecioKeyP
 			let mut buf = Vec::new();
 			file.read_to_end(&mut buf).map(|_| buf)
 		})
-		.and_then(|content| {
+		.and_then(|content|
 			secio::SecioKeyPair::secp256k1_raw_key(&content)
 				.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))
-		})
+		)
 }
 
 // Generates a new secret key and tries to write it to the given file.
@@ -758,19 +740,15 @@ fn gen_key_and_try_write_to_file(path: impl AsRef<Path>) -> secio::SecioKeyPair 
 	// And store the newly-generated key in the file if possible.
 	// Errors that happen while doing so are ignored.
 	match open_priv_key_file(&path) {
-		Ok(mut file) => {
+		Ok(mut file) =>
 			match file.write_all(&raw_key) {
 				Ok(()) => (),
-				Err(err) => {
-					warn!(target: "sub-libp2p", "Failed to write secret key in \
-						file {:?} ; err = {:?}", path.as_ref(), err);
-				}
-			}
-		},
-		Err(err) => {
-			warn!(target: "sub-libp2p", "Failed to store secret key in file {:?} ; \
-				err = {:?}", path.as_ref(), err);
-		}
+				Err(err) => warn!(target: "sub-libp2p", "Failed to write secret key in \
+					file {:?} ; err = {:?}", path.as_ref(), err),
+			},
+		Err(err) =>
+			warn!(target: "sub-libp2p", "Failed to store secret key in file {:?} ; err = {:?}",
+				path.as_ref(), err),
 	}
 
 	secio_key

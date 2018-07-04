@@ -42,8 +42,8 @@ pub use service::NetworkService;
 
 /// Check if node url is valid
 pub fn validate_node_url(url: &str) -> Result<(), network::Error> {
-    match url.parse::<libp2p::multiaddr::Multiaddr>() {
-        Ok(_) => Ok(()),
-        Err(_) => Err(network::ErrorKind::InvalidNodeId.into()),
-    }
+	match url.parse::<libp2p::multiaddr::Multiaddr>() {
+		Ok(_) => Ok(()),
+		Err(_) => Err(network::ErrorKind::InvalidNodeId.into()),
+	}
 }

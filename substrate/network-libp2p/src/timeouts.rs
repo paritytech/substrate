@@ -25,51 +25,49 @@ use tokio_core::reactor::{Handle, Timeout};
 /// Returns a stream that produces items as their timeout elapses.
 /// `T` can be anything you want, as it is transparently passed from the input to the output.
 pub fn build_timeouts_stream<T>(core: Handle, timeouts_rx: impl Stream<Item = (Instant, T), Error = ()>)
-    -> impl Stream<Item = T, Error = IoError>
+	-> impl Stream<Item = T, Error = IoError>
 {
-    let next_timeout = next_in_timeouts_stream(timeouts_rx);
+	let next_timeout = next_in_timeouts_stream(timeouts_rx);
 
-    // The `unfold` function is essentially a loop turned into a stream. The first parameter is
-    // the initial state, and the closure returns the new state and an item.
-    stream::unfold(vec![future::Either::A(next_timeout)], move |timeouts| {
-        // `timeouts` is a `Vec` of futures that produce an `Out`.
+	// The `unfold` function is essentially a loop turned into a stream. The first parameter is
+	// the initial state, and the closure returns the new state and an item.
+	stream::unfold(vec![future::Either::A(next_timeout)], move |timeouts| {
+		// `timeouts` is a `Vec` of futures that produce an `Out`.
 
-        let core = core.clone();
+		let core = core.clone();
 
-        // `select_ok` panics if `timeouts` is empty anyway.
-        if timeouts.is_empty() {
-            return None;
-        }
+		// `select_ok` panics if `timeouts` is empty anyway.
+		if timeouts.is_empty() {
+			return None;
+		}
 
-        Some(future::select_ok(timeouts.into_iter())
-            .and_then(move |(item, mut timeouts)| {
-                match item {
-                    Out::NewTimeout((Some((at, item)), next_timeouts)) => {
-                        // Received a new timeout request on the channel.
-                        let next_timeout = next_in_timeouts_stream(next_timeouts);
-                        let timeout = Timeout::new_at(at, &core)?
-                            .map(move |()| Out::Timeout(item));
-                        timeouts.push(future::Either::B(timeout));
-                        timeouts.push(future::Either::A(next_timeout));
-                        Ok((None, timeouts))
-                    },
-                    Out::NewTimeout((None, _)) => {
-                        // The channel has been closed.
-                        Ok((None, timeouts))
-                    },
-                    Out::Timeout(item) => {
-                        // A timeout has happened.
-                        Ok((Some(item), timeouts))
-                    },
-                }
-            }))
-    }).filter_map(|item| item)
+		Some(future::select_ok(timeouts.into_iter())
+			.and_then(move |(item, mut timeouts)| {
+				match item {
+					Out::NewTimeout((Some((at, item)), next_timeouts)) => {
+						// Received a new timeout request on the channel.
+						let next_timeout = next_in_timeouts_stream(next_timeouts);
+						let timeout = Timeout::new_at(at, &core)?
+							.map(move |()| Out::Timeout(item));
+						timeouts.push(future::Either::B(timeout));
+						timeouts.push(future::Either::A(next_timeout));
+						Ok((None, timeouts))
+					},
+					Out::NewTimeout((None, _)) =>
+						// The channel has been closed.
+						Ok((None, timeouts)),
+					Out::Timeout(item) =>
+						// A timeout has happened.
+						Ok((Some(item), timeouts)),
+				}
+			}))
+	}).filter_map(|item| item)
 }
 
 // Local enum representing the output of the selection.
 enum Out<A, B> {
-    NewTimeout(A),
-    Timeout(B),
+	NewTimeout(A),
+	Timeout(B),
 }
 
 // Convenience function that calls `.into_future()` on the timeouts stream, and applies some
@@ -77,11 +75,11 @@ enum Out<A, B> {
 // This function is necessary. Otherwise if we copy-paste its content we run into errors because
 // the type of the copy-pasted closures differs.
 fn next_in_timeouts_stream<S, B>(stream: S)
-    -> impl Future<Item = Out<(Option<S::Item>, S), B>, Error = IoError>
+	-> impl Future<Item = Out<(Option<S::Item>, S), B>, Error = IoError>
 where S: Stream<Error = ()>
 {
-    stream
-        .into_future()
-        .map(Out::NewTimeout)
-        .map_err(|_| unreachable!())
+	stream
+		.into_future()
+		.map(Out::NewTimeout)
+		.map_err(|_| unreachable!())
 }

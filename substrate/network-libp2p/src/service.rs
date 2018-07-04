@@ -497,8 +497,8 @@ fn init_thread(core: Handle, shared: Arc<Shared>,
 
 // Output of the common transport layer.
 struct TransportOutput<S> {
-    socket: S,
-    info: Box<Future<Item = IdentifyTransportOutcome, Error = IoError>>,
+	socket: S,
+	info: Box<Future<Item = IdentifyTransportOutcome, Error = IoError>>,
 	original_addr: Multiaddr,
 }
 

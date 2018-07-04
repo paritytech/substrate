@@ -20,42 +20,40 @@ use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Builds the transport that serves as a common ground for all connections.
 pub fn build_transport(core: Handle, unencrypted_allowed: UnecryptedAllowed,
-                        local_private_key: secio::SecioKeyPair)
-    -> impl MuxedTransport<Output = impl AsyncRead + AsyncWrite> + Clone
+	local_private_key: secio::SecioKeyPair)
+	-> impl MuxedTransport<Output = impl AsyncRead + AsyncWrite> + Clone
 {
-    libp2p::CommonTransport::new(core)
-        .with_upgrade({
-            let secio = secio::SecioConfig {
-                key: local_private_key,
-            };
+	libp2p::CommonTransport::new(core)
+		.with_upgrade({
+			let secio = secio::SecioConfig {
+				key: local_private_key,
+			};
 
-            let mut plaintext = upgrade::toggleable(upgrade::PlainTextConfig);
-            match unencrypted_allowed {
-                UnecryptedAllowed::Allowed => plaintext.disable(),
-                UnecryptedAllowed::Denied => (),
-            };
+			let mut plaintext = upgrade::toggleable(upgrade::PlainTextConfig);
+			match unencrypted_allowed {
+				UnecryptedAllowed::Allowed => plaintext.disable(),
+				UnecryptedAllowed::Denied => (),
+			};
 
-            // TODO: this `EitherOutput` thing shows that libp2p's API could be improved
-            upgrade::or(
-                upgrade::map(plaintext, |out| {
-                    (either::EitherOutput::First(out), None)
-                }),
-                upgrade::map(secio, |out: secio::SecioOutput<_>| {
-                    (either::EitherOutput::Second(out.stream), Some(out.remote_key))
-                }),
-            )
-        })
-        .map(|(socket, _key), _| {
-            // TODO: check that the public key matches what is reported by identify
-            socket
-        })
-        .with_upgrade(libp2p::mplex::MultiplexConfig::new())
-        .into_connection_reuse()
+			// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
+			upgrade::or(
+				upgrade::map(plaintext, |out| {
+					(either::EitherOutput::First(out), None)
+				}),
+				upgrade::map(secio, |out: secio::SecioOutput<_>| {
+					(either::EitherOutput::Second(out.stream), Some(out.remote_key))
+				}),
+			)
+		})
+		// TODO: check that the public key matches what is reported by identify
+		.map(|(socket, _key), _| socket)
+		.with_upgrade(libp2p::mplex::MultiplexConfig::new())
+		.into_connection_reuse()
 }
 
 /// Specifies whether unencrypted communications are allowed or deny.
 #[derive(Debug, Copy, Clone)]
 pub enum UnecryptedAllowed {
-    Allowed,
-    Denied,
+	Allowed,
+	Denied,
 }
