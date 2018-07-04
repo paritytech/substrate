@@ -8,6 +8,7 @@ serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 substrate-codec = { path = "../../codec", default_features = false }
 substrate-runtime-primitives = { path = "../../runtime/primitives" }
+substrate-runtime-io = { path = "../../runtime-io", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-sandbox = { path = "../../runtime-sandbox", default_features = false }
 substrate-runtime-staking = { path = "../../runtime/staking", default_features = false }
@@ -27,6 +28,7 @@ std = [
 	"serde/std",
 	"substrate-codec/std",
 	"substrate-runtime-primitives/std",
+	"substrate-runtime-io/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-sandbox/std",
 	"substrate-runtime-staking/std",

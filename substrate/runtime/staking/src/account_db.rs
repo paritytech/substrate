@@ -20,12 +20,10 @@ use rstd::prelude::*;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use runtime_support::StorageMap;
-use double_map::StorageDoubleMap;
 use super::*;
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
-	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
 // Cannot derive(Default) since it erroneously bounds T by Default.
@@ -33,21 +31,19 @@ impl<T: Trait> Default for ChangeEntry<T> {
 	fn default() -> Self {
 		ChangeEntry {
 			balance: Default::default(),
-			storage: Default::default(),
 		}
 	}
 }
 
 impl<T: Trait> ChangeEntry<T> {
 	pub fn balance_changed(b: T::Balance) -> Self {
-		ChangeEntry { balance: Some(b), storage: Default::default() }
+		ChangeEntry { balance: Some(b) }
 	}
 }
 
 pub type State<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
 pub trait AccountDb<T: Trait> {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 
 	fn merge(&mut self, state: State<T>);
@@ -55,9 +51,6 @@ pub trait AccountDb<T: Trait> {
 
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		<StorageOf<T>>::get(account.clone(), location.to_vec())
-	}
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		<FreeBalance<T>>::get(account)
 	}
@@ -92,13 +85,6 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					}
 				}
 			}
-			for (k, v) in changed.storage.into_iter() {
-				if let Some(value) = v {
-					<StorageOf<T>>::insert(address.clone(), k, value);
-				} else {
-					<StorageOf<T>>::remove(address.clone(), k);
-				}
-			}
 		}
 	}
 }
@@ -118,15 +104,6 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 	pub fn into_state(self) -> State<T> {
 		self.local.into_inner()
 	}
-
-	fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.storage
-			.insert(location, value);
-	}
 	pub fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
 		self.local
 			.borrow_mut()
@@ -137,14 +114,6 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		self.local
-			.borrow()
-			.get(account)
-			.and_then(|a| a.storage.get(location))
-			.cloned()
-			.unwrap_or_else(|| self.underlying.get_storage(account, location))
-	}
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		self.local
 			.borrow()
@@ -162,7 +131,6 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 					if changed.balance.is_some() {
 						value.balance = changed.balance;
 					}
-					value.storage.extend(changed.storage.into_iter());
 				}
 				Entry::Vacant(e) => {
 					e.insert(changed);

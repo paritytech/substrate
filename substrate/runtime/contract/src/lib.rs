@@ -32,6 +32,7 @@ extern crate serde;
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
+extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_codec as codec;
@@ -90,9 +91,10 @@ impl<T: Trait> Module<T> {
 // TODO: on removal of an account call:
 //
 // - <CodeOf<T>>::remove(who);
+// - <StorageOf<T>>::remove_prefix(who.clone());
 
 mod runtime;
-
+mod double_map;
 
 pub use runtime::Ext;
 pub use runtime::execute;

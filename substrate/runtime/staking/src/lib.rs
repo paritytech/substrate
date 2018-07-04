@@ -56,14 +56,12 @@ use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
 	As, AuxLookup, Hash as HashT, Member};
 use address::Address as RawAddress;
-use double_map::StorageDoubleMap;
 
 pub mod address;
 mod mock;
 mod tests;
 mod genesis_config;
 mod account_db;
-mod double_map;
 
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
@@ -231,17 +229,6 @@ decl_storage! {
 
 	// The block at which the `who`'s funds become entirely liquid.
 	pub Bondage get(bondage): b"sta:bon:" => default map [ T::AccountId => T::BlockNumber ];
-}
-
-/// The storage items associated with an account/key.
-///
-/// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
-pub(crate) struct StorageOf<T>(::rstd::marker::PhantomData<T>);
-impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
-	type Key1 = T::AccountId;
-	type Key2 = Vec<u8>;
-	type Value = Vec<u8>;
-	const PREFIX: &'static [u8] = b"sta:sto:";
 }
 
 enum NewAccountOutcome {
@@ -735,7 +722,6 @@ impl<T: Trait> Module<T> {
 	fn on_free_too_low(who: &T::AccountId) {
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
-		<StorageOf<T>>::remove_prefix(who.clone());
 
 		if Self::reserved_balance(who).is_zero() {
 			<system::AccountNonce<T>>::remove(who);
