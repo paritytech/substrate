@@ -36,7 +36,10 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_codec as codec;
+
 extern crate substrate_runtime_system as system;
+extern crate substrate_runtime_staking as staking;
+extern crate substrate_runtime_consensus as consensus;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
@@ -57,12 +60,11 @@ mod double_map;
 pub use runtime::Ext;
 pub use runtime::execute;
 
+use staking::Address;
 use runtime_support::dispatch::Result;
-
 use runtime_primitives::traits::{RefInto, MaybeEmpty};
 
-pub trait Trait: system::Trait {
-	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;
+pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
 }
 
 decl_module! {
@@ -71,7 +73,7 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn call(aux, gas_price: u64, gas_limit: u64) -> Result = 0;
+		fn call(aux, dest: Address<T>, gas_price: u64, gas_limit: u64) -> Result = 0;
 	}
 }
 
@@ -94,7 +96,7 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 }
 
 impl<T: Trait> Module<T> {
-	fn call(aux: &<T as Trait>::PublicAux, gas_price: u64, gas_limit: u64) -> Result {
+	fn call(aux: &<T as consensus::Trait>::PublicAux, dest: Address<T>, gas_price: u64, gas_limit: u64) -> Result {
 		// TODO: an additional fee, based upon gaslimit/gasprice.
 
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
