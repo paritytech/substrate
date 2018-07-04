@@ -71,7 +71,7 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn call(aux) -> Result = 0;
+		fn call(aux, gas_price: u64, gas_limit: u64) -> Result = 0;
 	}
 }
 
@@ -94,9 +94,8 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 }
 
 impl<T: Trait> Module<T> {
-	fn call(aux: &<T as Trait>::PublicAux) -> Result {
+	fn call(aux: &<T as Trait>::PublicAux, gas_price: u64, gas_limit: u64) -> Result {
 		// TODO: an additional fee, based upon gaslimit/gasprice.
-		let gas_limit = 100_000;
 
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
