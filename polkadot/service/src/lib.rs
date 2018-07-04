@@ -99,6 +99,25 @@ pub fn new_full(config: Configuration) -> Result<Service<components::FullCompone
 	Service::new(components::FullComponents { is_validator }, config)
 }
 
+/// Creates bare client without any networking.
+pub fn new_client(config: Configuration) -> Result<Arc<Client<
+		<components::FullComponents as Components>::Backend,
+		<components::FullComponents as Components>::Executor,
+		Block>>,
+	error::Error>
+{
+	let db_settings = client_db::DatabaseSettings {
+		cache_size: None,
+		path: config.database_path.into(),
+		pruning: config.pruning,
+	};
+	let executor = polkadot_executor::Executor::new();
+	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
+	let components = components::FullComponents { is_validator };
+	let (client, _) = components.build_client(db_settings, executor, &config.chain_spec)?;
+	Ok(client)
+}
+
 impl<Components> Service<Components>
 	where
 		Components: components::Components,

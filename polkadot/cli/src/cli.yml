@@ -104,3 +104,53 @@ subcommands:
             value_name: CHAIN_SPEC
             help: Specify the chain specification (one of dev, local or poc-2)
             takes_value: true
+  - export-blocks:
+      about: Export blocks to a file
+      args:
+          - OUTPUT:
+              index: 1
+              help: Output file name or stdout if unspecified.
+              required: false
+          - chain:
+              long: chain
+              value_name: CHAIN_SPEC
+              help: Specify the chain specification.
+              takes_value: true
+          - base-path:
+              long: base-path
+              short: d
+              value_name: PATH
+              help: Specify custom base path.
+              takes_value: true
+          - from:
+              long: from
+              value_name: BLOCK
+              help: Specify starting block number. 1 by default.
+              takes_value: true
+          - to:
+              long: to
+              value_name: BLOCK
+              help: Specify last block number. Best block by default.
+              takes_value: true
+          - json:
+              long: json
+              help: Use JSON output rather than binary.
+              takes_value: false
+  - import-blocks:
+      about: Import blocks from file.
+      args:
+          - INPUT:
+              index: 1
+              help: Input file or stdin if unspecified.
+              required: false
+          - chain:
+              long: chain
+              value_name: CHAIN_SPEC
+              help: Specify the chain specification.
+              takes_value: true
+          - base-path:
+              long: base-path
+              short: d
+              value_name: PATH
+              help: Specify custom base path.
+              takes_value: true

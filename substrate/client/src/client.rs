@@ -20,7 +20,7 @@ use std::sync::Arc;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::BlockId};
+use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
@@ -30,12 +30,13 @@ use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeEx
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
 use call_executor::{CallExecutor, LocalCallExecutor};
+use executor::{RuntimeVersion, RuntimeInfo};
 use {error, in_mem, block_builder, runtime_io, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 
-/// Polkadot Client
+/// Substrate Client
 pub struct Client<B, E, Block> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
@@ -146,7 +147,7 @@ pub fn new_in_mem<E, Block, S>(
 	genesis_storage: S
 ) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
 	where
-		E: CodeExecutor,
+		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT,
 {
@@ -161,7 +162,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	Block: BlockT,
 	error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
-	/// Creates new Polkadot Client with given blockchain and code executor.
+	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new<S: BuildStorage>(
 		backend: Arc<B>,
 		executor: E,
@@ -210,9 +211,18 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get the set of authorities at a given block.
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
-		self.executor.call(id, "authorities",&[])
+		self.executor.call(id, "authorities", &[])
 			.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
 				.ok_or(error::ErrorKind::AuthLenInvalid.into()))
+	}
+
+	/// Get the set of authorities at a given block.
+	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+		// TODO: Post Poc-2 return an error if version is missing
+		Ok(self.executor.call(id, "version", &[])
+			.and_then(|r| RuntimeVersion::decode(&mut &r.return_data[..])
+				.ok_or(error::ErrorKind::VersionInvalid.into()))
+			.unwrap_or_default())
 	}
 
 	/// Get call executor reference.
@@ -406,6 +416,15 @@ impl<B, E, Block> Client<B, E, Block> where
 		self.backend.blockchain().justification(*id)
 	}
 
+	/// Get full block by id.
+	pub fn block(&self, id: &BlockId<Block>) -> error::Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
+			(Some(header), Some(extrinsics), Some(justification)) =>
+				Some(SignedBlock { block: RuntimeBlock { header, extrinsics }, justification }),
+			_ => None,
+		})
+	}
+
 	/// Get best block header.
 	pub fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
@@ -439,6 +458,11 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 		error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
+		let version: Result<_, bft::Error> = self.runtime_version_at(at).map_err(|_| bft::ErrorKind::InvalidRuntime.into());
+		let version = version?;
+		if !self.executor.native_runtime_version().map_or(true, |v| v.can_author_with(&version)) {
+			return Err(bft::ErrorKind::InvalidRuntime.into())
+		}
 		self.authorities_at(at).map_err(|_| {
 			let descriptor = format!("{:?}", at);
 			bft::ErrorKind::StateUnavailable(descriptor).into()

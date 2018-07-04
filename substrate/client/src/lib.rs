@@ -36,7 +36,7 @@ extern crate triehash;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
-#[cfg(test)] #[macro_use] extern crate substrate_executor as executor;
+#[cfg_attr(test, macro_use)] extern crate substrate_executor as executor;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
 pub mod error;
@@ -53,7 +53,7 @@ pub use client::{
 	new_in_mem,
 	BlockStatus, BlockOrigin, BlockchainEventStream, BlockchainEvents,
 	Client, ClientInfo, ChainHead,
-	ImportResult,
+	ImportResult, JustifiedHeader,
 };
 pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};

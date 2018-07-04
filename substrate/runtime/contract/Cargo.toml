@@ -11,7 +11,7 @@ parity-wasm = { version = "0.30", default_features = false }
 pwasm-utils = { version = "0.2", default_features = false }
 
 [dev-dependencies]
-wabt = "0.1.7"
+wabt = "0.4"
 assert_matches = "1.1"
 
 [features]

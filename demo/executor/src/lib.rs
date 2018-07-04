@@ -34,7 +34,7 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_runtime_system as system;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
-native_executor_instance!(pub Executor, demo_runtime::api::dispatch, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm"));
+native_executor_instance!(pub Executor, demo_runtime::api::dispatch, demo_runtime::VERSION, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm"));
 
 #[cfg(test)]
 mod tests {

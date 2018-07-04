@@ -734,44 +734,11 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 				let _ = shared.network_state.flush_caches_to_disk();
 
 				if shared.network_state.should_open_outgoing_connections() {
-					// Query the node IDs that are closest to a random ID.
-					// Note that the randomness doesn't have to be secure, as this only influences
-					// which nodes we end up being connected to.
-					let random_key = PublicKey::Ed25519((0 .. 32).map(|_| -> u8 { rand::random() }).collect());
-					let random_peer_id = random_key.into_peer_id();
-					trace!(target: "sub-libp2p", "Start kademlia discovery for {:?}",
-						  random_peer_id);
-					let shared = shared.clone();
-					future::Either::A(shared
-						.kad_system
-						.find_node(random_peer_id, {
-							let shared = shared.clone();
-							let transport = transport.clone();
-							let swarm_controller = swarm_controller.clone();
-							move |peer_id| obtain_kad_connection(shared.clone(), peer_id.clone(),
-																transport.clone(),
-																swarm_controller.clone())
-						})
-						.filter_map(move |event| {
-							match event {
-								KadQueryEvent::NewKnownMultiaddrs(peers) => {
-									for (peer, addrs) in peers {
-										trace!(target: "sub-libp2p", "Peer store: adding addresses {:?} for {:?}",
-											addrs, peer);
-										for addr in addrs {
-											shared.network_state.add_kad_discovered_addr(&peer, addr);
-										}
-									}
-									None
-								},
-								KadQueryEvent::Finished(out) => Some(out),
-							}
-						})
-						.into_future()
-						.map_err(|(err, _)| err)
-						.map(|(out, _)| out.unwrap()))
+					future::Either::A(perform_kademlia_query(shared.clone(), transport.clone(),
+						swarm_controller.clone()))
 				} else {
-					// If we reached `min_peers`, pretend we did a lookup but with an empty result.
+					// If we shouldn't open connections (eg. we reached `min_peers`), pretend we
+					// did a lookup but with an empty result.
 					trace!(target: "sub-libp2p", "Bypassing kademlia discovery");
 					future::Either::B(future::ok(Vec::new()))
 				}
@@ -780,63 +747,8 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		.for_each({
 			let shared = shared.clone();
 			move |results| {
-				trace!(target: "sub-libp2p", "Processing Kademlia discovery results (len = {})",
-											results.len());
-
-				for discovered_peer in results {
-					// Skip if we reach `min_peers`.
-					// Also skip nodes we are already connected to, in order to not connect twice.
-					// TODO: better API in network_state
-					if !shared.network_state.should_open_outgoing_connections() ||
-						discovered_peer == local_peer_id ||
-						shared.network_state.is_peer_disabled(&discovered_peer)
-					{
-						trace!(target: "sub-libp2p", "Skipping discovered node {:?}", discovered_peer);
-						continue;
-					}
-
-					// Try to dial that node for each registered protocol. Since dialing upgrades
-					// the connection to use multiplexing, dialing multiple times should
-					// automatically open multiple substreams.
-					let addr: Multiaddr = AddrComponent::P2P(discovered_peer.clone().into_bytes()).into();
-					trace!(target: "sub-libp2p", "Dialing discovered node {:?} for each protocol", addr);
-					for proto in shared.protocols.read().0.clone().into_iter() {
-						if shared.network_state.has_protocol_connection(&discovered_peer, proto.id()) {
-							continue;
-						}
-
-						// TODO: check that the secio key matches the id given by kademlia
-						let proto_id = proto.id();
-						let discovered_peer = discovered_peer.clone();
-						let shared = shared.clone();
-						let with_proto = transport.clone()
-							.and_then(move |out, endpoint, client_addr| {
-								let socket = out.socket;
-								let original_addr = out.original_addr;
-								out.info
-									.and_then(move |info| {
-										if info.info.public_key.into_peer_id() == discovered_peer {
-											Ok(socket)
-										} else {
-											debug!(target: "sub-libp2p", "Public key mismatch for node {:?} with proto {:?}", discovered_peer, proto_id);
-											trace!(target: "sub-libp2p", "Removing addr {} for {:?}", original_addr, discovered_peer);
-											shared.network_state.set_invalid_kad_address(&discovered_peer, &original_addr);
-											Err(IoErrorKind::InvalidData.into())		// TODO: correct err
-										}
-									})
-									.and_then(move |socket| {
-										upgrade::apply(socket, proto, endpoint, client_addr)
-									})
-							})
-							.and_then(move |out, endpoint, client_addr| {
-								future::ok(((FinalUpgrade::Custom(out), endpoint), client_addr))
-							});
-						if let Err(err) = swarm_controller.dial(addr.clone(), with_proto) {
-							warn!(target: "sub-libp2p", "Error while dialing {}: {:?}", addr, err);
-						}
-					}
-				}
-
+				process_kad_results(shared.clone(), transport.clone(), swarm_controller.clone(),
+					results, &local_peer_id);
 				Ok(())
 			}
 		});
@@ -848,6 +760,121 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 
 	// Note that we use a Box in order to speed compilation time.
 	Box::new(final_future) as Box<Future<Item = _, Error = _>>
+}
+
+// Performs a kademlia request to a random node, and returns the results.
+fn perform_kademlia_query<T, To, St, C>(shared: Arc<Shared>, transport: T,
+	swarm_controller: SwarmController<St>) -> impl Future<Item = Vec<PeerstorePeerId>, Error = IoError>
+where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	T::MultiaddrFuture: 'static,
+	To: AsyncRead + AsyncWrite + 'static,
+	St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+	C: 'static,
+{
+	// Query the node IDs that are closest to a random ID.
+	// Note that the randomness doesn't have to be secure, as this only influences
+	// which nodes we end up being connected to.
+	let random_key = PublicKey::Ed25519((0 .. 32).map(|_| -> u8 { rand::random() }).collect());
+	let random_peer_id = random_key.into_peer_id();
+	trace!(target: "sub-libp2p", "Start kademlia discovery for {:?}", random_peer_id);
+
+	shared.clone()
+		.kad_system
+		.find_node(random_peer_id, {
+			let shared = shared.clone();
+			let transport = transport.clone();
+			let swarm_controller = swarm_controller.clone();
+			move |peer_id| {
+				obtain_kad_connection(shared.clone(), peer_id.clone(),
+					transport.clone(), swarm_controller.clone())
+			}
+		})
+		.filter_map(move |event| {
+			match event {
+				KadQueryEvent::NewKnownMultiaddrs(peers) => {
+					for (peer, addrs) in peers {
+						trace!(target: "sub-libp2p", "Peer store: adding addresses {:?} for {:?}",
+							addrs, peer);
+						for addr in addrs {
+							shared.network_state.add_kad_discovered_addr(&peer, addr);
+						}
+					}
+					None
+				},
+				KadQueryEvent::Finished(out) => Some(out),
+			}
+		})
+		.into_future()
+		.map_err(|(err, _)| err)
+		.map(|(out, _)| out.unwrap())
+}
+
+// Processes the results of a Kademlia discovery.
+fn process_kad_results<T, To, St, C>(shared: Arc<Shared>, transport: T,
+	swarm_controller: SwarmController<St>, results: Vec<PeerstorePeerId>,
+	local_peer_id: &PeerstorePeerId)
+where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	T::MultiaddrFuture: 'static,
+	To: AsyncRead + AsyncWrite + 'static,
+	St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+	C: 'static,
+{
+	trace!(target: "sub-libp2p", "Processing Kademlia discovery results (len = {})",
+		results.len());
+
+	for discovered_peer in results {
+		// Skip if we reach `min_peers`.
+		// Also skip nodes we are already connected to, in order to not connect twice.
+		// TODO: better API in network_state
+		if !shared.network_state.should_open_outgoing_connections() ||
+			discovered_peer == *local_peer_id ||
+			shared.network_state.is_peer_disabled(&discovered_peer)
+		{
+			trace!(target: "sub-libp2p", "Skipping discovered node {:?}", discovered_peer);
+			continue;
+		}
+
+		// Try to dial that node for each registered protocol. Since dialing upgrades
+		// the connection to use multiplexing, dialing multiple times should
+		// automatically open multiple substreams.
+		let addr: Multiaddr = AddrComponent::P2P(discovered_peer.clone().into_bytes()).into();
+		trace!(target: "sub-libp2p", "Dialing discovered node {:?} for each protocol", addr);
+		for proto in shared.protocols.read().0.clone().into_iter() {
+			if shared.network_state.has_protocol_connection(&discovered_peer, proto.id()) {
+				continue;
+			}
+
+			// TODO: check that the secio key matches the id given by kademlia
+			let proto_id = proto.id();
+			let discovered_peer = discovered_peer.clone();
+			let shared = shared.clone();
+			let with_proto = transport.clone()
+				.and_then(move |out, endpoint, client_addr| {
+					let socket = out.socket;
+					let original_addr = out.original_addr;
+					out.info
+						.and_then(move |info| {
+							if info.info.public_key.into_peer_id() == discovered_peer {
+								Ok(socket)
+							} else {
+								debug!(target: "sub-libp2p", "Public key mismatch for node {:?} with proto {:?}", discovered_peer, proto_id);
+								trace!(target: "sub-libp2p", "Removing addr {} for {:?}", original_addr, discovered_peer);
+								shared.network_state.set_invalid_kad_address(&discovered_peer, &original_addr);
+								Err(IoErrorKind::InvalidData.into())		// TODO: correct err
+							}
+						})
+						.and_then(move |socket| {
+							upgrade::apply(socket, proto, endpoint, client_addr)
+						})
+				})
+				.and_then(move |out, endpoint, client_addr| {
+					future::ok(((FinalUpgrade::Custom(out), endpoint), client_addr))
+				});
+			if let Err(err) = swarm_controller.dial(addr.clone(), with_proto) {
+				warn!(target: "sub-libp2p", "Error while dialing {}: {:?}", addr, err);
+			}
+		}
+	}
 }
 
 // Obtain a Kademlia connection to the given peer.
