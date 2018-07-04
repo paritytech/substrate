@@ -36,7 +36,6 @@ extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
-extern crate substrate_runtime_contract as contract;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
@@ -815,12 +814,6 @@ impl<T: Trait> Module<T> {
 			return Err("destination balance too high to receive value");
 		}
 
-		// TODO: an additional fee, based upon gaslimit/gasprice.
-		let gas_limit = 100_000;
-
-		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
-		// code in contract itself and use that.
-
 		// Our local overlay: Should be used for any transfers and creates that happen internally.
 		let mut overlay = OverlayAccountDb::new(account_db);
 
@@ -829,24 +822,7 @@ impl<T: Trait> Module<T> {
 			overlay.set_balance(dest, to_balance + value);
 		}
 
-		let dest_code = overlay.get_code(dest);
-		let should_commit = if dest_code.is_empty() {
-			true
-		} else {
-			// TODO: logging (logs are just appended into a notable storage-based vector and
-			// cleared every block).
-			let mut staking_ext = StakingExt {
-				account_db: &mut overlay,
-				account: dest.clone(),
-			};
-			contract::execute(&dest_code, &mut staking_ext, gas_limit).is_ok()
-		};
-
-		Ok(if should_commit {
-			Some(overlay.into_state())
-		} else {
-			None
-		})
+		Ok(Some(overlay.into_state()))
 	}
 }
 

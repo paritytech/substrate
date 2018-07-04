@@ -193,33 +193,3 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 		}
 	}
 }
-
-pub(crate) struct StakingExt<'a, 'b: 'a, T: Trait + 'b> {
-	pub account_db: &'a mut OverlayAccountDb<'b, T>,
-	pub account: T::AccountId,
-}
-impl<'a, 'b: 'a, T: Trait> contract::Ext for StakingExt<'a, 'b, T> {
-	type AccountId = T::AccountId;
-	type Balance = T::Balance;
-
-	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.account_db.get_storage(&self.account, key)
-	}
-	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
-		self.account_db.set_storage(&self.account, key.to_vec(), value);
-	}
-	fn create(&mut self, code: &[u8], value: Self::Balance) {
-		if let Ok(Some(commit_state)) =
-			Module::<T>::effect_create(&self.account, code, value, self.account_db)
-		{
-			self.account_db.merge(commit_state);
-		}
-	}
-	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
-		if let Ok(Some(commit_state)) =
-			Module::<T>::effect_transfer(&self.account, to, value, self.account_db)
-		{
-			self.account_db.merge(commit_state);
-		}
-	}
-}

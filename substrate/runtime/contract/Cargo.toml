@@ -10,6 +10,7 @@ substrate-codec = { path = "../../codec", default_features = false }
 substrate-runtime-primitives = { path = "../../runtime/primitives" }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-sandbox = { path = "../../runtime-sandbox", default_features = false }
+substrate-runtime-staking = { path = "../../runtime/staking", default_features = false }
 substrate-runtime-support = { path = "../../runtime-support", default_features = false }
 substrate-runtime-system = { path = "../../runtime/system", default_features = false }
 parity-wasm = { version = "0.31", default_features = false }
@@ -28,6 +29,7 @@ std = [
 	"substrate-runtime-primitives/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-sandbox/std",
+	"substrate-runtime-staking/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-system/std",
 	"parity-wasm/std",
