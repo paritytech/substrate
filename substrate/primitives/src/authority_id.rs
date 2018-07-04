@@ -26,6 +26,7 @@ pub struct AuthorityId(pub [u8; 32]);
 
 impl AuthorityId {
 	/// Create an id from a 32-byte slice. Panics with other lengths.
+	#[cfg(feature = "std")]
 	fn from_slice(data: &[u8]) -> Self {
 		let mut r = [0u8; 32];
 		r.copy_from_slice(data);
