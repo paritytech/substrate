@@ -713,46 +713,13 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 
 			// Try fetch the key from a the file containing th esecret.
 			let secret_path = Path::new(path).join(SECRET_FILE);
-			let loaded_secret = fs::File::open(&secret_path)
-				.and_then(|mut file| {
-					// We are in 2018 and there is still no method on `std::io::Read` that
-					// directly returns a `Vec`.
-					let mut buf = Vec::new();
-					file.read_to_end(&mut buf).map(|_| buf)
-				})
-				.and_then(|content| {
-					secio::SecioKeyPair::secp256k1_raw_key(&content)
-						.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))
-				});
-
-			match loaded_secret {
+			match load_private_key_from_file(&secret_path) {
 				Ok(s) => Ok(s),
 				Err(err) => {
 					// Failed to fetch existing file ; generate a new key
 					trace!(target: "sub-libp2p", "Failed to load existing secret key file {:?}, \
 						generating new key ; err = {:?}", secret_path, err);
-					let raw_key: [u8; 32] = rand::rngs::EntropyRng::new().gen();
-					let secio_key = secio::SecioKeyPair::secp256k1_raw_key(&raw_key)
-						.expect("randomly-generated key with correct len should always be valid");
-
-					// And store the newly-generated key in the file if possible.
-					// Errors that happen while doing so are ignored.
-					match open_priv_key_file(&secret_path) {
-						Ok(mut file) => {
-							match file.write_all(&raw_key) {
-								Ok(()) => (),
-								Err(err) => {
-									warn!(target: "sub-libp2p", "Failed to write secret key in \
-										file {:?} ; err = {:?}", secret_path, err);
-								}
-							}
-						},
-						Err(err) => {
-							warn!(target: "sub-libp2p", "Failed to store secret key in file {:?} \
-								; err = {:?}", secret_path, err);
-						}
-					}
-					Ok(secio_key)
+					Ok(gen_key_and_try_write_to_file(&secret_path))
 				}
 			}
 
@@ -764,6 +731,49 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 				.expect("randomly-generated key with correct len should always be valid"))
 		}
 	}
+}
+
+// Tries to load a private key from a file located at the given path.
+fn load_private_key_from_file(path: impl AsRef<Path>) -> Result<secio::SecioKeyPair, IoError> {
+	fs::File::open(path)
+		.and_then(|mut file| {
+			// We are in 2018 and there is still no method on `std::io::Read` that
+			// directly returns a `Vec`.
+			let mut buf = Vec::new();
+			file.read_to_end(&mut buf).map(|_| buf)
+		})
+		.and_then(|content| {
+			secio::SecioKeyPair::secp256k1_raw_key(&content)
+				.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))
+		})
+}
+
+// Generates a new secret key and tries to write it to the given file.
+// Doesn't error if we couldn't open or write to the file.
+fn gen_key_and_try_write_to_file(path: impl AsRef<Path>) -> secio::SecioKeyPair {
+	let raw_key: [u8; 32] = rand::rngs::EntropyRng::new().gen();
+	let secio_key = secio::SecioKeyPair::secp256k1_raw_key(&raw_key)
+		.expect("randomly-generated key with correct len should always be valid");
+
+	// And store the newly-generated key in the file if possible.
+	// Errors that happen while doing so are ignored.
+	match open_priv_key_file(&path) {
+		Ok(mut file) => {
+			match file.write_all(&raw_key) {
+				Ok(()) => (),
+				Err(err) => {
+					warn!(target: "sub-libp2p", "Failed to write secret key in \
+						file {:?} ; err = {:?}", path.as_ref(), err);
+				}
+			}
+		},
+		Err(err) => {
+			warn!(target: "sub-libp2p", "Failed to store secret key in file {:?} ; \
+				err = {:?}", path.as_ref(), err);
+		}
+	}
+
+	secio_key
 }
 
 // Opens a file containing a private key in write mode.
