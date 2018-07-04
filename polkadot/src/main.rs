@@ -19,33 +19,47 @@
 #![warn(missing_docs)]
 
 extern crate polkadot_cli as cli;
-extern crate polkadot_service as service;
 extern crate ctrlc;
 extern crate futures;
-
-use futures::sync::mpsc;
-
-// the regular polkadot application simply runs until ctrl-c
-struct Application;
-impl cli::Application for Application {
-	type Work = mpsc::Receiver<()>;
-
-	fn work<C: service::Components>(self, _service: Service<C>) -> Self::Work {
-		// can't use signal directly here because CtrlC takes only `Fn`.
-		let (exit_send, exit) = mpsc::channel(1);
-		ctrlc::CtrlC::set_handler(move || {
-			exit_send.clone().send(()).wait().expect("Error sending exit notification");
-		});
-
-		exit
-	}
-}
 
 #[macro_use]
 extern crate error_chain;
 
+use cli::{ClientError, ServiceComponents, ClientBackend, PolkadotBlock, StateMachineBackend, Service};
+use futures::sync::oneshot;
+use futures::{future, Future};
+
+use std::cell::RefCell;
+
+// the regular polkadot application simply runs until ctrl-c
+struct Application;
+impl cli::Application for Application {
+	type Work = future::Empty<(), ()>;
+	type Exit = future::MapErr<oneshot::Receiver<()>, fn(oneshot::Canceled) -> ()>;
+
+	fn exit(&mut self) -> Self::Exit {
+		// can't use signal directly here because CtrlC takes only `Fn`.
+		let (exit_send, exit) = oneshot::channel();
+
+		let exit_send_cell = RefCell::new(Some(exit_send));
+		ctrlc::CtrlC::set_handler(move || {
+			if let Some(exit_send) = exit_send_cell.try_borrow_mut().expect("signal handler not reentrant; qed").take() {
+				exit_send.send(()).expect("Error sending exit notification");
+			}
+		});
+
+		exit.map_err(drop)
+	}
+
+	fn work<C: ServiceComponents>(self, _service: &Service<C>) -> Self::Work
+		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>,
+	{
+		future::empty()
+	}
+}
+
 quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args())
+	cli::run(::std::env::args(), Application)
 }

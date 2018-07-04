@@ -64,6 +64,11 @@ mod informant;
 mod chain_spec;
 
 pub use chain_spec::ChainSpec;
+pub use client::error::Error as ClientError;
+pub use client::backend::Backend as ClientBackend;
+pub use state_machine::Backend as StateMachineBackend;
+pub use polkadot_primitives::Block as PolkadotBlock;
+pub use service::{Components as ServiceComponents, Service};
 
 use std::io::{self, Write, Read, stdin, stdout};
 use std::fs::File;
@@ -121,12 +126,18 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 /// when complete.
 pub trait Application {
 	/// A future that resolves when the application work is done.
-	/// This should be `Clone`able and shared and will be run on a tokio runtime.
-	type Done: IntoFuture<Item=(),Error=()>;
+	/// This will be run on a tokio runtime.
+	type Work: Future<Item=(),Error=()>;
+
+	/// A future that resolves when the node should exit.
+	type Exit: Future<Item=(),Error=()> + Send + 'static;
+
+	/// Create exit future.
+	fn exit(&mut self) -> Self::Exit;
 
 	/// Do application work.
-	fn work<C: service::Components>(self, service: &service::Service<C>) -> Self::Done
-		where client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>;
+	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
+		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>;
 }
 
 /// Parse command line arguments and start the node.
@@ -137,7 +148,7 @@ pub trait Application {
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T, A>(args: I, app: A) -> error::Result<()> where
+pub fn run<I, T, A>(args: I, mut app: A) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 	A: Application,
@@ -167,11 +178,11 @@ pub fn run<I, T, A>(args: I, app: A) -> error::Result<()> where
 	}
 
 	if let Some(matches) = matches.subcommand_matches("export-blocks") {
-		return export_blocks(matches);
+		return export_blocks(matches, app.exit());
 	}
 
 	if let Some(matches) = matches.subcommand_matches("import-blocks") {
-		return import_blocks(matches);
+		return import_blocks(matches, app.exit());
 	}
 
 	let spec = load_spec(&matches)?;
@@ -278,16 +289,19 @@ fn build_spec(matches: &clap::ArgMatches) -> error::Result<()> {
 	Ok(())
 }
 
-fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
+fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
+	where E: Future<Item=(),Error=()> + Send + 'static
+{
 	let base_path = base_path(matches);
 	let spec = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path).to_string_lossy().into();
 	info!("DB path: {}", config.database_path);
 	let client = service::new_client(config)?;
-	let (exit_send, exit) = std::sync::mpsc::channel();
-	ctrlc::CtrlC::set_handler(move || {
-		exit_send.clone().send(()).expect("Error sending exit notification");
+	let (exit_send, exit_recv) = std::sync::mpsc::channel();
+	::std::thread::spawn(move || {
+		let _ = exit.wait();
+		let _ = exit_send.send(());
 	});
 	info!("Exporting blocks");
 	let mut block: u32 = match matches.value_of("from") {
@@ -316,7 +330,7 @@ fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 	}
 
 	loop {
-		if exit.try_recv().is_ok() {
+		if exit_recv.try_recv().is_ok() {
 			break;
 		}
 		match client.block(&BlockId::number(block as u64))? {
@@ -340,15 +354,19 @@ fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 	Ok(())
 }
 
-fn import_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
+fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
+	where E: Future<Item=(),Error=()> + Send + 'static
+{
 	let spec = load_spec(&matches)?;
 	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path).to_string_lossy().into();
 	let client = service::new_client(config)?;
-	let (exit_send, exit) = std::sync::mpsc::channel();
-	ctrlc::CtrlC::set_handler(move || {
-		exit_send.clone().send(()).expect("Error sending exit notification");
+	let (exit_send, exit_recv) = std::sync::mpsc::channel();
+
+	::std::thread::spawn(move || {
+		let _ = exit.wait();
+		let _ = exit_send.send(());
 	});
 
 	let mut file: Box<Read> = match matches.value_of("INPUT") {
@@ -360,7 +378,7 @@ fn import_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 	let count: u32 = Slicable::decode(&mut file).ok_or("Error reading file")?;
 	let mut block = 0;
 	for _ in 0 .. count {
-		if exit.try_recv().is_ok() {
+		if exit_recv.try_recv().is_ok() {
 			break;
 		}
 		match SignedBlock::decode(&mut file) {
@@ -388,7 +406,7 @@ fn run_until_exit<C, A>(
 	service: service::Service<C>,
 	matches: &clap::ArgMatches,
 	sys_conf: SystemConfiguration,
-	application: A,
+	mut application: A,
 ) -> error::Result<()>
 	where
 		C: service::Components,
@@ -417,8 +435,9 @@ fn run_until_exit<C, A>(
 		)
 	};
 
-	core.run(application.work(&service).into_future()).expect("Error running informant event loop");
-	Ok(())
+	let exit = application.exit();
+	let until_exit = application.work(&service).select(exit).then(|_| Ok(()));
+	core.run(until_exit)
 }
 
 fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error> where
