@@ -25,7 +25,6 @@ use super::*;
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
-	code: Option<Vec<u8>>,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -34,18 +33,14 @@ impl<T: Trait> Default for ChangeEntry<T> {
 	fn default() -> Self {
 		ChangeEntry {
 			balance: Default::default(),
-			code: Default::default(),
 			storage: Default::default(),
 		}
 	}
 }
 
 impl<T: Trait> ChangeEntry<T> {
-	pub fn contract_created(b: T::Balance, c: Vec<u8>) -> Self {
-		ChangeEntry { balance: Some(b), code: Some(c), storage: Default::default() }
-	}
 	pub fn balance_changed(b: T::Balance) -> Self {
-		ChangeEntry { balance: Some(b), code: None, storage: Default::default() }
+		ChangeEntry { balance: Some(b), storage: Default::default() }
 	}
 }
 
@@ -53,7 +48,6 @@ pub type State<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
 pub trait AccountDb<T: Trait> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 
 	fn merge(&mut self, state: State<T>);
@@ -63,9 +57,6 @@ pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
 		<StorageOf<T>>::get(account.clone(), location.to_vec())
-	}
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		<CodeOf<T>>::get(account)
 	}
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		<FreeBalance<T>>::get(account)
@@ -100,9 +91,6 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						<FreeBalance<T>>::insert(&address, balance);
 					}
 				}
-			}
-			if let Some(code) = changed.code {
-				<CodeOf<T>>::insert(&address, &code);
 			}
 			for (k, v) in changed.storage.into_iter() {
 				if let Some(value) = v {
@@ -157,13 +145,6 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.cloned()
 			.unwrap_or_else(|| self.underlying.get_storage(account, location))
 	}
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		self.local
-			.borrow()
-			.get(account)
-			.and_then(|a| a.code.clone())
-			.unwrap_or_else(|| self.underlying.get_code(account))
-	}
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		self.local
 			.borrow()
@@ -180,9 +161,6 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 					let mut value = e.into_mut();
 					if changed.balance.is_some() {
 						value.balance = changed.balance;
-					}
-					if changed.code.is_some() {
-						value.code = changed.code;
 					}
 					value.storage.extend(changed.storage.into_iter());
 				}

@@ -68,11 +68,28 @@ decl_module! {
 
 }
 
+decl_storage! {
+	trait Store for Module<T: Trait>;
+
+	// The code associated with an account.
+	pub CodeOf: b"sta:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+}
+
 impl<T: Trait> Module<T> {
 	fn call(aux: &<T as Trait>::PublicAux) -> DispatchResult {
+		// TODO: an additional fee, based upon gaslimit/gasprice.
+		let gas_limit = 100_000;
+
+		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
+		// code in contract itself and use that.
+
 		Ok(())
 	}
 }
+
+// TODO: on removal of an account call:
+//
+// - <CodeOf<T>>::remove(who);
 
 mod runtime;
 

@@ -94,6 +94,7 @@ pub enum LockStatus<BlockNumber: PartialEq + Clone> {
 	Staked,
 }
 
+// TODO: Move to contract?
 pub trait ContractAddressFor<AccountId: Sized> {
 	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
 }
@@ -208,7 +209,7 @@ decl_storage! {
 	// This is the only balance that matters in terms of most operations on tokens. It is
 	// alone used to determine the balance when in the contract execution environment. When this
 	// balance falls below the value of `ExistentialDeposit`, then the "current account" is
-	// deleted: specifically, `Bondage`, `StorageOf`, `CodeOf` and `FreeBalance`.
+	// deleted: specifically, `Bondage`, `StorageOf` and `FreeBalance`.
 	//
 	// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 	// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
@@ -230,9 +231,6 @@ decl_storage! {
 
 	// The block at which the `who`'s funds become entirely liquid.
 	pub Bondage get(bondage): b"sta:bon:" => default map [ T::AccountId => T::BlockNumber ];
-
-	// The code associated with an account.
-	pub CodeOf: b"sta:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
 }
 
 /// The storage items associated with an account/key.
@@ -737,7 +735,6 @@ impl<T: Trait> Module<T> {
 	fn on_free_too_low(who: &T::AccountId) {
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
-		<CodeOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());
 
 		if Self::reserved_balance(who).is_zero() {
@@ -755,7 +752,7 @@ impl<T: Trait> Module<T> {
 
 	fn effect_create<DB: AccountDb<T>>(
 		transactor: &T::AccountId,
-		code: &[u8],
+		code: &[u8], // TODO: remove
 		value: T::Balance,
 		account_db: &DB,
 	) -> result::Result<Option<State<T>>, &'static str> {
@@ -783,7 +780,6 @@ impl<T: Trait> Module<T> {
 		let mut local = BTreeMap::new();
 		// two inserts are safe
 		// note that we now know that `&dest != transactor` due to early-out before.
-		local.insert(dest, ChangeEntry::contract_created(value, code.to_vec()));
 		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - liability));
 		Ok(Some(local))
 	}
