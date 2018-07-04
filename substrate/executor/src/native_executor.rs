@@ -37,6 +37,9 @@ lazy_static! {
 }
 
 // helper function to generate low-over-head caching_keys
+// it is asserted that part of the audit process that any potential on-chain code change
+// will have done is to ensure that the two-x hash is different to that of any other
+// :code value from the same chain
 fn gen_cache_key(code: &[u8]) -> u64 {
 	let mut h = XxHash::with_seed(0);
 	h.write(code);
@@ -117,7 +120,7 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 	) -> Result<Vec<u8>> {
 		match RUNTIMES_CACHE.lock().entry(gen_cache_key(code)).or_insert_with(|| {
 					let wasm_module = WasmModule::from_buffer(code)
-																.expect("all modules compiled with rustc are valid wasm code; qed");
+						.expect("all modules compiled with rustc are valid wasm code; qed");
 
 					match WasmExecutor.call_in_wasm_module(ext, &wasm_module, "version", &[]) {
 						Ok(version) => {
