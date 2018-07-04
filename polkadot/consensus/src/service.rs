@@ -86,7 +86,6 @@ impl Service {
 	) -> Service
 		where
 			A: LocalPolkadotApi + Send + Sync + 'static,
-			A::CheckedBlockId: Send + Sync + 'static,
 			C: BlockchainEvents<Block> + ChainHead<Block> + bft::BlockImport<Block> + bft::Authorities<Block> + Send + Sync + 'static,
 			N: Network + Collators + Send + 'static,
 			N::TableRouter: Send + 'static,

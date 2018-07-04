@@ -45,10 +45,6 @@ args:
       long: dev
       help: Run in development mode; implies --chain=dev --validator --key Alice
       takes_value: false
-  - build-genesis:
-      long: build-genesis
-      help: Build a genesis.json file, outputing to stdout
-      takes_value: false
   - port:
       long: port
       value_name: PORT
@@ -96,3 +92,15 @@ args:
       help: The URL of the telemetry server. Implies --telemetry
       takes_value: true
 subcommands:
+  - build-spec:
+      about: Build a spec.json file, outputing to stdout
+      args:
+        - raw:
+            long: raw
+            help: Force raw genesis storage output.
+            takes_value: false
+        - chain:
+            long: chain
+            value_name: CHAIN_SPEC
+            help: Specify the chain specification (one of dev, local or poc-2)
+            takes_value: true

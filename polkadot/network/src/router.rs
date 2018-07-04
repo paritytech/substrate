@@ -80,7 +80,7 @@ impl<P: PolkadotApi> Clone for Router<P> {
 	}
 }
 
-impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBlockId: Send {
+impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 	/// Import a statement whose signature has been checked already.
 	pub(crate) fn import_statement(&self, statement: SignedStatement) {
 		// defer any statements for which we haven't imported the candidate yet
@@ -134,16 +134,8 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBloc
 
 		let api = self.api.clone();
 		let validate = move |collation| -> Option<bool> {
-			// only do processing work if parent hash isn't unresolved.
-			let checked = match api.check_id(BlockId::hash(parent_hash)) {
-				Ok(checked) => checked,
-				Err(e) => {
-					warn!(target: "p_net", "Cannot validate candidate: unknown parent {}: {}", parent_hash, e);
-					return None;
-				}
-			};
-
-			match ::polkadot_consensus::validate_collation(&*api, &checked, &collation) {
+			let id = BlockId::hash(parent_hash);
+			match ::polkadot_consensus::validate_collation(&*api, &id, &collation) {
 				Ok(()) => Some(true),
 				Err(e) => {
 					debug!(target: "p_net", "Encountered bad collation: {}", e);
@@ -176,7 +168,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> where P::CheckedBloc
 	}
 }
 
-impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> where P::CheckedBlockId: Send {
+impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> {
 	type Error = ();
 	type FetchCandidate = BlockDataReceiver;
 	type FetchExtrinsic = Result<Extrinsic, Self::Error>;

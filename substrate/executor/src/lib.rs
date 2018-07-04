@@ -26,12 +26,14 @@
 //! I leave it as is for now as it might be removed before this is ever done.
 
 #![warn(missing_docs)]
+#![recursion_limit="128"]
 
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_serializer as serializer;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_runtime_version as runtime_version;
 extern crate ed25519;
 
 extern crate serde;
@@ -61,3 +63,11 @@ pub mod error;
 pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
 pub use state_machine::Externalities;
+pub use runtime_version::RuntimeVersion;
+pub use codec::Slicable;
+
+/// Provides runtime information.
+pub trait RuntimeInfo {
+	/// Native runtime information if any.
+	const NATIVE_VERSION: Option<RuntimeVersion>;
+}

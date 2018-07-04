@@ -98,16 +98,16 @@ fn process_bft_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &Se
 					sender: proposal.sender,
 					digest_signature: ed25519::LocalizedSignature {
 						signature: proposal.digest_signature,
-						signer: ed25519::Public(proposal.sender),
+						signer: ed25519::Public(proposal.sender.into()),
 					},
 					full_signature: ed25519::LocalizedSignature {
 						signature: proposal.full_signature,
-						signer: ed25519::Public(proposal.sender),
+						signer: ed25519::Public(proposal.sender.into()),
 					}
 				};
 				bft::check_proposal(authorities, &msg.parent_hash, &proposal)?;
 
-				trace!(target: "bft", "importing proposal message for round {} from {}", proposal.round_number, Hash::from(proposal.sender));
+				trace!(target: "bft", "importing proposal message for round {} from {}", proposal.round_number, Hash::from(proposal.sender.0));
 				proposal
 			}),
 			msg::SignedConsensusMessage::Vote(vote) => bft::generic::LocalizedMessage::Vote({
@@ -116,7 +116,7 @@ fn process_bft_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &Se
 					sender: vote.sender,
 					signature: ed25519::LocalizedSignature {
 						signature: vote.signature,
-						signer: ed25519::Public(vote.sender),
+						signer: ed25519::Public(vote.sender.0),
 					},
 					vote: match vote.vote {
 						msg::ConsensusVote::Prepare(r, h) => bft::generic::Vote::Prepare(r as usize, h),
@@ -126,7 +126,7 @@ fn process_bft_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &Se
 				};
 				bft::check_vote::<Block>(authorities, &msg.parent_hash, &vote)?;
 
-				trace!(target: "bft", "importing vote {:?} from {}", vote.vote, Hash::from(vote.sender));
+				trace!(target: "bft", "importing vote {:?} from {}", vote.vote, Hash::from(vote.sender.0));
 				vote
 			}),
 		}),
@@ -149,7 +149,7 @@ struct MessageProcessTask<P: PolkadotApi> {
 	table_router: Router<P>,
 }
 
-impl<P: LocalPolkadotApi + Send + Sync + 'static> Future for MessageProcessTask<P> where P::CheckedBlockId: Send {
+impl<P: LocalPolkadotApi + Send + Sync + 'static> Future for MessageProcessTask<P> {
 	type Item = ();
 	type Error = ();
 
@@ -230,7 +230,7 @@ impl<P> Clone for ConsensusNetwork<P> {
 }
 
 /// A long-lived network which can create parachain statement and BFT message routing processes on demand.
-impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P> where P::CheckedBlockId: Send {
+impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P> {
 	type TableRouter = Router<P>;
 	/// The input stream of BFT messages. Should never logically conclude.
 	type Input = InputAdapter;

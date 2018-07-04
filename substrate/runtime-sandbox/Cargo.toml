@@ -15,7 +15,7 @@ substrate-runtime-io = { path = "../runtime-io", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
 
 [dev-dependencies]
-wabt = "0.1.7"
+wabt = "0.4"
 
 [features]
 default = ["std"]
