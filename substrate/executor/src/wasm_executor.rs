@@ -225,6 +225,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_storage(&key);
 		Ok(())
 	},
+	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
+		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| DummyUserError)?;
+		this.ext.clear_prefix(&prefix);
+		Ok(())
+	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
@@ -573,6 +578,29 @@ mod tests {
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
+		];
+		assert_eq!(expected, ext);
+	}
+
+	#[test]
+	fn clear_prefix_should_work() {
+		let mut ext = TestExternalities::default();
+		ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
+		ext.set_storage(b"aab".to_vec(), b"2".to_vec());
+		ext.set_storage(b"aba".to_vec(), b"3".to_vec());
+		ext.set_storage(b"abb".to_vec(), b"4".to_vec());
+		ext.set_storage(b"bbb".to_vec(), b"5".to_vec());
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		// This will clear all entries which prefix is "ab".
+		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_clear_prefix", b"ab").unwrap();
+
+		assert_eq!(output, b"all ok!".to_vec());
+
+		let expected: HashMap<_, _> = map![
+			b"aaa".to_vec() => b"1".to_vec(),
+			b"aab".to_vec() => b"2".to_vec(),
+			b"bbb".to_vec() => b"5".to_vec()
 		];
 		assert_eq!(expected, ext);
 	}
