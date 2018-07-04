@@ -118,23 +118,22 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		match RUNTIMES_CACHE.lock().entry(gen_cache_key(code)).or_insert_with(|| {
-					let wasm_module = WasmModule::from_buffer(code)
-						.expect("all modules compiled with rustc are valid wasm code; qed");
+		let mut cache = RUNTIMES_CACHE.lock();
+		let r = cache.entry(gen_cache_key(code))
+			.or_insert_with(|| {
+				let wasm_module = WasmModule::from_buffer(code)
+					.expect("all modules compiled with rustc are valid wasm code; qed");
 
-					match WasmExecutor.call_in_wasm_module(ext, &wasm_module, "version", &[]) {
-						Ok(version) => {
-							let version = RuntimeVersion::decode(&mut version.as_slice());
-							if version.map_or(false, |v| D::VERSION.can_call_with(&v)) {
-								RunWith::NativeRuntime
-							} else {
-								RunWith::WasmRuntime(wasm_module)
-							}
-						},
-						// broken or old runtime, run with native
-						_ => RunWith::NativeRuntime
-					}
-				}) {
+				if WasmExecutor.call_in_wasm_module(ext, &wasm_module, "version", &[]).ok()
+					.and_then(|version| RuntimeVersion::decode(&mut version.as_slice()))
+					.map_or(false, |v| D::VERSION.can_call_with(&v))
+				{
+					RunWith::NativeRuntime
+				} else {
+					RunWith::WasmRuntime(wasm_module)
+				}
+			});
+		match r {
 			RunWith::NativeRuntime => D::dispatch(ext, method, data),
 			RunWith::WasmRuntime(module) => WasmExecutor.call_in_wasm_module(ext, &module, method, data)
 		}
