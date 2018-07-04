@@ -485,6 +485,7 @@ mod tests {
 		let candidate = CandidateReceipt {
 			parachain_index: para_id,
 			collator: [1; 32].into(),
+			signature: Default::default(),
 			head_data: ::polkadot_primitives::parachain::HeadData(vec![1, 2, 3, 4]),
 			balance_uploads: Vec::new(),
 			egress_queue_roots: Vec::new(),
@@ -535,6 +536,7 @@ mod tests {
 		let candidate = CandidateReceipt {
 			parachain_index: para_id,
 			collator: [1; 32].into(),
+			signature: Default::default(),
 			head_data: ::polkadot_primitives::parachain::HeadData(vec![1, 2, 3, 4]),
 			balance_uploads: Vec::new(),
 			egress_queue_roots: Vec::new(),

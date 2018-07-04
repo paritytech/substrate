@@ -46,15 +46,14 @@
 
 extern crate futures;
 extern crate substrate_client as client;
-extern crate substrate_state_machine as state_machine;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
+extern crate ed25519;
 
 extern crate polkadot_api;
 extern crate polkadot_cli;
 extern crate polkadot_runtime;
 extern crate polkadot_primitives;
-extern crate polkadot_service;
 
 #[macro_use]
 extern crate log;
@@ -63,10 +62,11 @@ use std::collections::{BTreeSet, BTreeMap};
 use std::sync::Arc;
 
 use futures::{future, stream, Stream, Future, IntoFuture};
+use client::BlockchainEvents;
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Block, BlockId};
-use polkadot_primitives::parachain::{self, HeadData, CandidateReceipt, CandidateSignature, ConsolidatedIngress, Collation, Message, Id as ParaId};
-use polkadot_service::{Service, Components};
+use polkadot_primitives::BlockId;
+use polkadot_primitives::parachain::{self, BlockData, HeadData, ConsolidatedIngress, Collation, Message, Id as ParaId};
+use polkadot_cli::{ClientError, ServiceComponents, ClientBackend, PolkadotBlock, StateMachineBackend, Service};
 use polkadot_cli::Application;
 
 /// Parachain context needed for collation.
@@ -78,7 +78,7 @@ pub trait ParachainContext: Clone {
 		&self,
 		last_head: HeadData,
 		ingress: I,
-	) -> Collation;
+	) -> (BlockData, HeadData);
 }
 
 /// Relay chain context needed to collate.
@@ -135,37 +135,51 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 		.map(ConsolidatedIngress)
 }
 
-/// Produce a candidate for the parachain.
-pub fn collate<'a, R, P>(local_id: ParaId, last_head: HeadData, relay_context: R, para_context: P)
+/// Produce a candidate for the parachain, with given signing key.
+pub fn collate<'a, R, P>(
+	local_id: ParaId,
+	last_head: HeadData,
+	relay_context: R,
+	para_context: P,
+	key: Arc<ed25519::Pair>,
+)
 	-> impl Future<Item=parachain::Collation, Error=R::Error> + 'a
 	where
-		R: RelayChainContext,
+		R: RelayChainContext + 'a,
 	    R::Error: 'a,
 		R::FutureEgress: 'a,
 		P: ParachainContext + 'a,
 {
 	collate_ingress(relay_context).map(move |ingress| {
-		let (block_data, _, signature) = para_context.produce_candidate(
+		let (block_data, head_data) = para_context.produce_candidate(
 			last_head,
 			ingress.0.iter().flat_map(|&(id, ref msgs)| msgs.iter().cloned().map(move |msg| (id, msg)))
 		);
 
-		parachain::Candidate {
+		let signature = key.sign(&block_data.0[..]).into();
+		let pubkey_bytes: [u8; 32] = key.public().into();
+
+		let receipt = parachain::CandidateReceipt {
 			parachain_index: local_id,
-			collator_signature: signature,
-			block: block_data,
-			unprocessed_ingress: ingress,
+			collator: pubkey_bytes.into(),
+			signature,
+			head_data,
+			balance_uploads: Vec::new(),
+			egress_queue_roots: Vec::new(),
+			fees: 0,
+		};
+
+		parachain::Collation {
+			receipt,
+			block_data,
 		}
 	})
 }
 
 /// Polkadot-api context.
-struct ApiContext<A: PolkadotApi> {
-	api: Arc<A>,
-	id: A::CheckedBlockId,
-}
+struct ApiContext;
 
-impl<A: PolkadotApi> RelayChainContext for ApiContext<A> {
+impl RelayChainContext for ApiContext {
 	type Error = ();
 	type FutureEgress = Result<Vec<Vec<Message>>, Self::Error>;
 
@@ -173,54 +187,72 @@ impl<A: PolkadotApi> RelayChainContext for ApiContext<A> {
 		BTreeSet::new()
 	}
 
-	fn unrouted_egress(&self, id: ParaId) -> Self::FutureEgress {
+	fn unrouted_egress(&self, _id: ParaId) -> Self::FutureEgress {
 		Ok(Vec::new())
 	}
 }
 
 struct CollationNode<P, E> {
 	parachain_context: P,
-	exit: E,
+	exit: Option<E>,
 	para_id: ParaId,
+	key: Arc<ed25519::Pair>,
 }
 
-impl<P: ParachainContext, E: Future<Item=(),Error=()>> Application for CollationNode<P, E> {
-	type Done = Box<Future<Item=(),Error=()>>;
+impl<P, E> Application for CollationNode<P, E> where
+	P: ParachainContext + 'static,
+	E: Future<Item=(),Error=()> + Send + 'static
+{
+	type Work = Box<Future<Item=(),Error=()>>;
+	type Exit = future::Either<E, future::Empty<(),()>>;
 
-	fn work<C: Components>(self, service: &Service<C>) -> Self::Done
-		where client::error::Error: From<<<<C as Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
+	fn exit(&mut self) -> Self::Exit {
+		match self.exit.take() {
+			Some(exit) => future::Either::A(exit),
+			None => future::Either::B(future::empty()),
+		}
+	}
+
+	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
+		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>,
 	{
-		let CollationNode { parachain_context, exit, para_id } = self;
+		let CollationNode { parachain_context, exit, para_id, key } = self;
+		let _ = exit;
 		let client = service.client();
 		let api = service.api();
 
 		let work = client.import_notification_stream()
-			.map(move |notification| {
+			.and_then(move |notification| {
 				let id = BlockId::hash(notification.hash);
 
-				let checked_id = api.check_id(id).expect("block from import notification always known; qed");
-				match api.parachain_head(&checked_id, para_id) {
+				match api.parachain_head(&id, para_id) {
 					Ok(Some(last_head)) => {
-						let context = ApiContext { api: api.clone(), id: checked_id };
-						let collation_work = collate(para_id, last_head, context, parachain_context.clone()).map(Some);
+						let collation_work = collate(
+							para_id,
+							HeadData(last_head),
+							ApiContext,
+							parachain_context.clone(),
+							key.clone(),
+						).map(Some);
+
 						future::Either::A(collation_work)
 					}
 					Ok(None) => {
 						info!("Parachain {:?} appears to be inactive. Cannot collate.", id);
-						future::Either::B(None)
+						future::Either::B(future::ok(None))
 					}
 					Err(e) => {
 						info!("Could not collate for parachain {:?}: {:?}", id, e);
-						future::Either::B(None) // returning error would shut down the collation node
+						future::Either::B(future::ok(None)) // returning error would shut down the collation node
 					}
 				}
 			})
-			.for_each(|collation| {
+			.for_each(|_collation: Option<Collation>| {
 				// TODO: import into network.
 				Ok(())
 			});
 
-		Box::new(work.select(exit).then(|_| Ok(())))
+		Box::new(work) as Box<_>
 	}
 }
 
@@ -229,11 +261,18 @@ impl<P: ParachainContext, E: Future<Item=(),Error=()>> Application for Collation
 ///
 /// Provide a future which resolves when the node should exit.
 /// This function blocks until done.
-pub fn run_collator<P, E>(parachain_context: P, para_id: ParaId, exit: E, args: Vec<::std::ffi::OsString>) -> polkadot_cli::error::Result<()> where
-	P: ParachainContext,
-	E: IntoFuture<Item=(),Error=()>
+pub fn run_collator<P, E>(
+	parachain_context: P,
+	para_id: ParaId,
+	exit: E,
+	key: Arc<ed25519::Pair>,
+	args: Vec<::std::ffi::OsString>
+) -> polkadot_cli::error::Result<()> where
+	P: ParachainContext + 'static,
+	E: IntoFuture<Item=(),Error=()>,
+	E::Future: Send + 'static,
 {
-	let node_logic = CollationNode { parachain_context, exit: exit.into_future(), para_id };
+	let node_logic = CollationNode { parachain_context, exit: Some(exit.into_future()), para_id, key };
 	polkadot_cli::run(args, node_logic)
 }
 

@@ -236,7 +236,7 @@ impl<Components> Service<Components>
 	}
 
 	/// Get shared polkadot-api instance. usually the same as the client.
-	pub fn clent(&self) -> Arc<Components::Api> {
+	pub fn api(&self) -> Arc<Components::Api> {
 		self.api.clone()
 	}
 

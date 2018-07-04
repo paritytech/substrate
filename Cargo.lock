@@ -1438,6 +1438,7 @@ dependencies = [
 name = "polkadot-collator"
 version = "0.1.0"
 dependencies = [
+ "ed25519 0.1.0",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
@@ -1445,11 +1446,9 @@ dependencies = [
  "polkadot-parachain 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
- "polkadot-service 0.2.0",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-state-machine 0.1.0",
 ]
 
 [[package]]
