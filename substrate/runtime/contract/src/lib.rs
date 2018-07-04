@@ -50,7 +50,14 @@ extern crate assert_matches;
 #[cfg(test)]
 extern crate wabt;
 
-use runtime_support::dispatch::Result as DispatchResult;
+mod runtime;
+mod double_map;
+
+// TODO: Remove this
+pub use runtime::Ext;
+pub use runtime::execute;
+
+use runtime_support::dispatch::Result;
 
 use runtime_primitives::traits::{RefInto, MaybeEmpty};
 
@@ -64,20 +71,30 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn call(aux) -> DispatchResult = 0;
+		fn call(aux) -> Result = 0;
 	}
-
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait>;
 
 	// The code associated with an account.
-	pub CodeOf: b"sta:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+	pub CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+}
+
+/// The storage items associated with an account/key.
+///
+/// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
+pub(crate) struct StorageOf<T>(::rstd::marker::PhantomData<T>);
+impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
+	const PREFIX: &'static [u8] = b"con:sto:";
+	type Key1 = T::AccountId;
+	type Key2 = Vec<u8>;
+	type Value = Vec<u8>;
 }
 
 impl<T: Trait> Module<T> {
-	fn call(aux: &<T as Trait>::PublicAux) -> DispatchResult {
+	fn call(aux: &<T as Trait>::PublicAux) -> Result {
 		// TODO: an additional fee, based upon gaslimit/gasprice.
 		let gas_limit = 100_000;
 
@@ -92,9 +109,3 @@ impl<T: Trait> Module<T> {
 //
 // - <CodeOf<T>>::remove(who);
 // - <StorageOf<T>>::remove_prefix(who.clone());
-
-mod runtime;
-mod double_map;
-
-pub use runtime::Ext;
-pub use runtime::execute;
