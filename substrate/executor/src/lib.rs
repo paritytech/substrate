@@ -41,7 +41,12 @@ extern crate wasmi;
 extern crate byteorder;
 extern crate rustc_hex;
 extern crate triehash;
+extern crate parking_lot;
+extern crate twox_hash;
 #[macro_use] extern crate log;
+
+#[macro_use]
+extern crate lazy_static;
 
 #[macro_use]
 extern crate error_chain;
