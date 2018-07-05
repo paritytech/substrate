@@ -60,7 +60,6 @@ mod double_map;
 pub use vm::Ext;
 pub use vm::execute;
 
-use staking::Address;
 use runtime_support::dispatch::Result;
 use runtime_primitives::traits::{RefInto, MaybeEmpty};
 
@@ -74,7 +73,14 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		// TODO: Change AccountId to staking::Address
-		fn transact(aux, dest: T::AccountId, value: T::Balance, gas_price: u64, gas_limit: u64) -> Result = 0;
+		fn transact(
+			aux,
+			dest: T::AccountId,
+			value: T::Balance,
+			gas_price: u64,
+			gas_limit: u64,
+			data: Vec<u8>
+		) -> Result = 0;
 	}
 }
 
@@ -97,15 +103,20 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 }
 
 impl<T: Trait> Module<T> {
-	fn transact(aux: &<T as consensus::Trait>::PublicAux, dest: T::AccountId, value: T::Balance, gas_price: u64, gas_limit: u64) -> Result {
+	fn transact(
+		aux: &<T as consensus::Trait>::PublicAux,
+		dest: T::AccountId,
+		value: T::Balance,
+		gas_price: u64,
+		gas_limit: u64,
+		data: Vec<u8>,
+	) -> Result {
 		// TODO: an additional fee, based upon gaslimit/gasprice.
 
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
 
 		// TODO: Get code and runtime::execute it.
-
-
 
 		Ok(())
 	}
