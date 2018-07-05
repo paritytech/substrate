@@ -124,6 +124,8 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 				let wasm_module = WasmModule::from_buffer(code)
 					.expect("all modules compiled with rustc are valid wasm code; qed");
 
+				// Missing version export is allowed in Poc-2 for Poc-1 compatibility.
+				// TODO: return an error on missing version.
 				if WasmExecutor.call_in_wasm_module(ext, &wasm_module, "version", &[]).ok()
 					.and_then(|version| RuntimeVersion::decode(&mut version.as_slice()))
 					.map_or(false, |v| D::VERSION.can_call_with(&v))
