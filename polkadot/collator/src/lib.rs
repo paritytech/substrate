@@ -72,8 +72,9 @@ use polkadot_cli::Application;
 /// Parachain context needed for collation.
 ///
 /// This can be implemented through an externally attached service or a stub.
+/// This is expected to be a lightweight, shared type like an Arc.
 pub trait ParachainContext: Clone {
-	/// Produce a candidate, given the latest ingress queue information.
+	/// Produce a candidate, given the latest ingress queue information and the last parachain head.
 	fn produce_candidate<I: IntoIterator<Item=(ParaId, Message)>>(
 		&self,
 		last_head: HeadData,
@@ -135,7 +136,7 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 		.map(ConsolidatedIngress)
 }
 
-/// Produce a candidate for the parachain, with given signing key.
+/// Produce a candidate for the parachain, with given contexts, parent head, and signing key.
 pub fn collate<'a, R, P>(
 	local_id: ParaId,
 	last_head: HeadData,
