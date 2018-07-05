@@ -219,10 +219,10 @@ pub mod generic {
 		pub signatures: Vec<([u8; 32], Signature)>
 	}
 
-	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-	#[serde(untagged)]
 	// TODO: remove this after poc-2
 	/// Justification back compat
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	#[serde(untagged)]
 	pub enum BlockJustification<H> {
 		/// Poc-1 format.
 		V1(V1Justification<H>),
