@@ -149,6 +149,39 @@ struct MessageProcessTask<P: PolkadotApi> {
 	table_router: Router<P>,
 }
 
+impl<P: LocalPolkadotApi + Send + Sync + 'static> MessageProcessTask<P> {
+	fn process_message(&self, msg: ConsensusMessage<Block>) -> Option<Async<()>> {
+		match msg {
+			ConsensusMessage::Bft(msg) => {
+				let local_id = self.table_router.session_key();
+				match process_bft_message(msg, &local_id, &self.validators[..]) {
+					Ok(Some(msg)) => {
+						if let Err(_) = self.bft_messages.unbounded_send(msg) {
+							// if the BFT receiving stream has ended then
+							// we should just bail.
+							trace!(target: "bft", "BFT message stream appears to have closed");
+							return Some(Async::Ready(()));
+						}
+					}
+					Ok(None) => {} // ignored local message
+					Err(e) => {
+						debug!("Message validation failed: {:?}", e);
+					}
+				}
+			}
+			ConsensusMessage::ChainSpecific(msg, _) => {
+				if let Ok(Message::Statement(parent_hash, statement)) = ::serde_json::from_slice(&msg) {
+					if ::polkadot_consensus::check_statement(&statement.statement, &statement.signature, statement.sender, &parent_hash) {
+						self.table_router.import_statement(statement);
+					}
+				}
+			}
+		}
+
+		None
+	}
+}
+
 impl<P: LocalPolkadotApi + Send + Sync + 'static> Future for MessageProcessTask<P> {
 	type Item = ();
 	type Error = ();
@@ -156,34 +189,11 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Future for MessageProcessTask<
 	fn poll(&mut self) -> Poll<(), ()> {
 		loop {
 			match self.inner_stream.poll() {
-				Ok(Async::Ready(Some(val))) => match val {
-					ConsensusMessage::Bft(msg) => {
-						let local_id = self.table_router.session_key();
-						match process_bft_message(msg, &local_id, &self.validators[..]) {
-							Ok(Some(msg)) => {
-								if let Err(_) = self.bft_messages.unbounded_send(msg) {
-									// if the BFT receiving stream has ended then
-									// we should just bail.
-									trace!(target: "bft", "BFT message stream appears to have closed");
-									return Ok(Async::Ready(()));
-								}
-							}
-							Ok(None) => {} // ignored local message
-							Err(e) => {
-								debug!("Message validation failed: {:?}", e);
-							}
-						}
-					}
-					ConsensusMessage::ChainSpecific(msg, _) => {
-						if let Ok(Message::Statement(parent_hash, statement)) = ::serde_json::from_slice(&msg) {
-							if ::polkadot_consensus::check_statement(&statement.statement, &statement.signature, statement.sender, &parent_hash) {
-								self.table_router.import_statement(statement);
-							}
-						}
-					}
-				}
+				Ok(Async::Ready(Some(val))) => if let Some(async) = self.process_message(val) {
+					return Ok(async);
+				},
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
-				Ok(Async::NotReady) => {},
+				Ok(Async::NotReady) => (),
 				Err(e) => debug!(target: "p_net", "Error getting consensus message: {:?}", e),
 			}
 		}
