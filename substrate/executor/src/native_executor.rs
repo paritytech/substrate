@@ -17,9 +17,34 @@
 use error::{Error, ErrorKind, Result};
 use state_machine::{CodeExecutor, Externalities};
 use wasm_executor::WasmExecutor;
+use wasmi::Module as WasmModule;
 use runtime_version::RuntimeVersion;
+use std::collections::HashMap;
 use codec::Slicable;
+use twox_hash::XxHash;
+use std::hash::Hasher;
+use parking_lot::Mutex;
 use RuntimeInfo;
+
+// For the internal Runtime Cache
+enum RunWith {
+	NativeRuntime,
+	WasmRuntime(WasmModule)
+}
+
+lazy_static! {
+	static ref RUNTIMES_CACHE: Mutex<HashMap<u64, RunWith>> = Mutex::new(HashMap::new());
+}
+
+// helper function to generate low-over-head caching_keys
+// it is asserted that part of the audit process that any potential on-chain code change
+// will have done is to ensure that the two-x hash is different to that of any other
+// :code value from the same chain
+fn gen_cache_key(code: &[u8]) -> u64 {
+	let mut h = XxHash::with_seed(0);
+	h.write(code);
+	h.finish()
+}
 
 fn safe_call<F, U>(f: F) -> Result<U>
 	where F: ::std::panic::UnwindSafe + FnOnce() -> U
@@ -60,6 +85,11 @@ pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
 impl<D: NativeExecutionDispatch + Sync + Send> NativeExecutor<D> {
 	/// Create new instance.
 	pub fn new() -> Self {
+		// FIXME: set this entry at compile time
+		RUNTIMES_CACHE.lock().insert(
+			gen_cache_key(D::native_equivalent()),
+			RunWith::NativeRuntime);
+
 		NativeExecutor {
 			_dummy: Default::default(),
 		}
@@ -88,17 +118,24 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		if code == D::native_equivalent() {
-			// call native
-			D::dispatch(ext, method, data)
-		} else {
-			let version = WasmExecutor.call(ext, code, "version", &[])?;
-			let version = RuntimeVersion::decode(&mut version.as_slice());
-			if version.map_or(false, |v| D::VERSION.can_call_with(&v)) {
-				return D::dispatch(ext, method, data)
-			}
-			// call into wasm.
-			WasmExecutor.call(ext, code, method, data)
+		let mut cache = RUNTIMES_CACHE.lock();
+		let r = cache.entry(gen_cache_key(code))
+			.or_insert_with(|| {
+				let wasm_module = WasmModule::from_buffer(code)
+					.expect("all modules compiled with rustc are valid wasm code; qed");
+
+				if WasmExecutor.call_in_wasm_module(ext, &wasm_module, "version", &[]).ok()
+					.and_then(|version| RuntimeVersion::decode(&mut version.as_slice()))
+					.map_or(false, |v| D::VERSION.can_call_with(&v))
+				{
+					RunWith::NativeRuntime
+				} else {
+					RunWith::WasmRuntime(wasm_module)
+				}
+			});
+		match r {
+			RunWith::NativeRuntime => D::dispatch(ext, method, data),
+			RunWith::WasmRuntime(module) => WasmExecutor.call_in_wasm_module(ext, &module, method, data)
 		}
 	}
 }
