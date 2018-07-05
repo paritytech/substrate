@@ -258,7 +258,7 @@ impl<B: BlockT> ChainSync<B> where
 					let result = protocol.chain().import(
 						is_best,
 						header,
-						justification,
+						justification.to_justification(),
 						block.body.map(|b| b.to_extrinsics()),
 					);
 					match result {

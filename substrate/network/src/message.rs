@@ -172,6 +172,7 @@ pub mod generic {
 	use codec::Slicable;
 	use runtime_primitives::bft::Justification;
 	use ed25519;
+	use primitives::Signature;
 
 	use super::{Role, BlockAttribute, RemoteCallResponse, RequestId, Transactions, Direction};
 
@@ -207,6 +208,44 @@ pub mod generic {
 		}
 	}
 
+	/// Emulates Poc-1 justification format.
+	#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+	pub struct V1Justification<H> {
+		/// The round consensus was reached in.
+		pub round_number: u32,
+		/// The hash of the header justified.
+		pub hash: H,
+		/// The signatures and signers of the hash.
+		pub signatures: Vec<([u8; 32], Signature)>
+	}
+
+	// TODO: remove this after poc-2
+	/// Justification back compat
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	#[serde(untagged)]
+	pub enum BlockJustification<H> {
+		/// Poc-1 format.
+		V1(V1Justification<H>),
+		/// Poc-2 format.
+		V2(Justification<H>),
+	}
+
+	impl<H> BlockJustification<H> {
+		/// Convert to PoC-2 justification format.
+		pub fn to_justification(self) -> Justification<H> {
+			match self {
+				BlockJustification::V2(j) => j,
+				BlockJustification::V1(j) => {
+					Justification {
+						round_number: j.round_number,
+						hash: j.hash,
+						signatures: j.signatures.into_iter().map(|(a, s)| (a.into(), s)).collect(),
+					}
+				}
+			}
+		}
+	}
+
 	/// Block data sent in the response.
 	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 	pub struct BlockData<Header, Hash, Extrinsic> {
@@ -221,7 +260,7 @@ pub mod generic {
 		/// Block message queue if requested.
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
-		pub justification: Option<Justification<Hash>>,
+		pub justification: Option<BlockJustification<Hash>>,
 	}
 
 	/// Identifies starting point of a block sequence.
