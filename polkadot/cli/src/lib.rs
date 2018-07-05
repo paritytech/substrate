@@ -120,7 +120,7 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 		.unwrap_or_else(default_base_path)
 }
 
-/// Additional application logic making use of the ndoe, to run asynchronously before shutdown.
+/// Additional application logic making use of the node, to run asynchronously before shutdown.
 ///
 /// This will be invoked with the service and spawn a future that resolves
 /// when complete.
