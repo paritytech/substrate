@@ -17,7 +17,8 @@
 use std::sync::Arc;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::{self, OverlayedChanges, Backend as StateBackend, CodeExecutor};
+use state_machine::{self, OverlayedChanges, Ext, Backend as StateBackend, CodeExecutor};
+use runtime_io::Externalities;
 use executor::{RuntimeVersion, RuntimeInfo};
 
 use backend;
@@ -41,6 +42,11 @@ pub trait CallExecutor<B: BlockT> {
 	///
 	/// No changes are made.
 	fn call(&self, id: &BlockId<B>, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error>;
+
+	/// Extract RuntimeVersion of given block
+	///
+	/// No changes are made.
+	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, error::Error>;
 
 	/// Execute a call to a contract on top of given state.
 	///
@@ -92,6 +98,17 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 		let mut changes = OverlayedChanges::default();
 		let (return_data, _) = self.call_at_state(&self.backend.state_at(*id)?, &mut changes, method, call_data)?;
 		Ok(CallResult{ return_data, changes })
+	}
+
+	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+		let mut overlay = OverlayedChanges::default();
+		let state = self.backend.state_at(*id)?;
+		let mut externalities = Ext::new(&mut overlay, &state);
+		let code = externalities.storage(b":code").ok_or(error::ErrorKind::VersionInvalid)?
+			.to_vec();
+
+		self.executor.runtime_version(&mut externalities, &code)
+			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<S: state_machine::Backend>(&self, state: &S, changes: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, S::Transaction)> {
