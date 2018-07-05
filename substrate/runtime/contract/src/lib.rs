@@ -102,6 +102,44 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 	type Value = Vec<u8>;
 }
 
+struct ExecutionContext<T: Trait> {
+	_marker: ::rstd::marker::PhantomData<T>,
+	gas_price: u64,
+}
+
+impl<T: Trait> ExecutionContext<T> {
+	/// Make a call to the specified address.
+	fn call(&mut self, dest: T::AccountId) {
+		
+	}
+}
+
+struct CallExternalities<T: Trait> {
+	_marker: ::rstd::marker::PhantomData<T>,
+}
+
+impl<T: Trait> Ext for CallExternalities<T> {
+	type AccountId = T::AccountId;
+	type Balance = T::Balance;
+
+	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		panic!()
+	}
+
+	/// Sets the storage entry by the given key to the specified value.
+	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
+		panic!()
+	}
+
+	fn create(&mut self, code: &[u8], value: Self::Balance) {
+		panic!()
+	}
+
+	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
+		panic!()
+	}
+}
+
 impl<T: Trait> Module<T> {
 	fn transact(
 		aux: &<T as consensus::Trait>::PublicAux,
