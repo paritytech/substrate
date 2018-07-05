@@ -146,7 +146,7 @@ pub fn collate<'a, R, P>(
 	-> impl Future<Item=parachain::Collation, Error=R::Error> + 'a
 	where
 		R: RelayChainContext + 'a,
-	    R::Error: 'a,
+		R::Error: 'a,
 		R::FutureEgress: 'a,
 		P: ParachainContext + 'a,
 {
@@ -303,7 +303,7 @@ mod tests {
 		}
 	}
 
-    #[test]
+	#[test]
 	fn collates_ingress() {
 		let route_from = |x: &[ParaId]| {
 			 let mut set = BTreeSet::new();
