@@ -371,31 +371,29 @@ pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-pub trait Checkable: Sized + Send + Sync {
-	type Address: Member + MaybeDisplay;
-	type AccountId: Member + MaybeDisplay;
-	type Checked: Member;
-	fn sender(&self) -> &Self::Address;
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
+/// for things that can be checked by providing additional context `Ctx`
+pub trait Checkable<Ctx>: Sized {
+    type Checked;
+
+    fn check_with(self, ctx: Ctx) -> Result<Self::Checked, Self>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-///
-/// This does that checking without requiring a lookup argument.
-pub trait BlindCheckable: Sized + Send + Sync {
-	type Address: Member + MaybeDisplay;
-	type Checked: Member;
-	fn sender(&self) -> &Self::Address;
-	fn check(self) -> Result<Self::Checked, &'static str>;
+/// for things that can be checked without additional context.
+pub trait BlindCheckable: Sized {
+    type Checked;
+
+    /// gives back in case of an error.
+    fn check(self) -> Result<Self::Checked, Self>;
 }
 
-impl<T: BlindCheckable> Checkable for T {
-	type Address = <Self as BlindCheckable>::Address;
-	type AccountId = <Self as BlindCheckable>::Address;
+// every BlindCheckable is also a Checkable for arbitrary context `Ctx`
+impl<T: BlindCheckable, Ctx> Checkable<Ctx> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
-	fn sender(&self) -> &Self::Address { BlindCheckable::sender(self) }
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, _: ThisLookup) -> Result<Self::Checked, &'static str> { BlindCheckable::check(self) }
+	fn check_with(self, _: Ctx) -> Result<Self::Checked, Self> {
+        BlindCheckable::check(self)
+    }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
