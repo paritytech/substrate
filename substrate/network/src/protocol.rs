@@ -142,7 +142,8 @@ impl<B: BlockT> Protocol<B> where
 		let message: Message<B> = match serde_json::from_slice(data) {
 			Ok(m) => m,
 			Err(e) => {
-				debug!("Invalid packet from {}: {}", peer_id, e);
+				debug!(target: "sync", "Invalid packet from {}: {}", peer_id, e);
+				trace!(target: "sync", "Invalid packet: {}", String::from_utf8_lossy(data));
 				io.disable_peer(peer_id);
 				return;
 			}
@@ -159,13 +160,13 @@ impl<B: BlockT> Protocol<B> where
 						match mem::replace(&mut peer.block_request, None) {
 							Some(r) => r,
 							None => {
-								debug!("Unexpected response packet from {}", peer_id);
+								debug!(target: "sync", "Unexpected response packet from {}", peer_id);
 								io.disable_peer(peer_id);
 								return;
 							}
 						}
 					} else {
-						debug!("Unexpected packet from {}", peer_id);
+						debug!(target: "sync", "Unexpected packet from {}", peer_id);
 						io.disable_peer(peer_id);
 						return;
 					}
@@ -259,13 +260,14 @@ impl<B: BlockT> Protocol<B> where
 			}
 			let number = header.number().clone();
 			let hash = header.hash();
+			let justification = if get_justification { self.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None };
 			let block_data = message::generic::BlockData {
 				hash: hash,
 				header: if get_header { Some(header) } else { None },
 				body: (if get_body { self.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None }).map(|body| message::Body::Extrinsics(body)),
 				receipt: None,
 				message_queue: None,
-				justification: if get_justification { self.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
+				justification: justification.map(|j| message::generic::BlockJustification::V2(j)),
 			};
 			blocks.push(block_data);
 			match request.direction {
