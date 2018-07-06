@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Parachain statement table meant to to shared with a message router
+//! Parachain statement table meant to be shared with a message router
 //! and a consensus proposer.
 
 use std::collections::{HashMap, HashSet};
