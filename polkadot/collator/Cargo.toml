@@ -11,7 +11,6 @@ substrate-codec = { path = "../../substrate/codec", version = "0.1" }
 substrate-primitives = { path = "../../substrate/primitives", version = "0.1" }
 polkadot-api = { path = "../api" }
 polkadot-runtime = { path = "../runtime", version = "0.1" }
-polkadot-parachain = { path = "../parachain", version = "0.1" }
 polkadot-primitives = { path = "../primitives", version = "0.1" }
 polkadot-cli = { path = "../cli" }
 log = "0.4"

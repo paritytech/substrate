@@ -168,6 +168,7 @@ pub fn collate<'a, R, P>(
 			balance_uploads: Vec::new(),
 			egress_queue_roots: Vec::new(),
 			fees: 0,
+			block_data_hash: block_data.hash(),
 		};
 
 		parachain::Collation {

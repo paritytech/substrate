@@ -15,6 +15,20 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! BFT Agreement based on a rotating proposer in different rounds.
+//!
+//! Where this crate refers to input stream, should never logically conclude.
+//! The logic in this crate assumes that messages flushed to the output stream
+//! will eventually reach other nodes and that our own messages are not included
+//! in the input stream.
+//!
+//! Note that it is possible to witness agreement being reached without ever
+//! seeing the candidate. Any candidates seen will be checked for validity.
+//!
+//! Although technically the agreement will always complete (given the eventual
+//! delivery of messages), in practice it is possible for this future to
+//! conclude without having witnessed the conclusion.
+//! In general, this future should be pre-empted by the import of a justification
+//! set for this block height.
 
 pub mod error;
 pub mod generic;
@@ -24,7 +38,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate ed25519;
-extern crate tokio_timer;
+extern crate tokio;
 extern crate parking_lot;
 
 #[macro_use]
@@ -49,7 +63,7 @@ use primitives::AuthorityId;
 
 use futures::{task, Async, Stream, Sink, Future, IntoFuture};
 use futures::sync::oneshot;
-use tokio_timer::Timer;
+use tokio::timer::Delay;
 use parking_lot::Mutex;
 
 pub use generic::InputStreamConcluded;
@@ -108,16 +122,22 @@ pub type Communication<B> = generic::Communication<B, <B as Block>::Hash, Author
 /// Misbehavior observed from BFT participants.
 pub type Misbehavior<H> = generic::Misbehavior<H, LocalizedSignature>;
 
-/// Proposer factory. Can be used to create a proposer instance.
-pub trait ProposerFactory<B: Block> {
+/// Environment producer for a BFT instance. Creates proposer instance and communication streams.
+pub trait Environment<B: Block> {
 	/// The proposer type this creates.
 	type Proposer: Proposer<B>;
+	/// The input stream type.
+	type Input: Stream<Item=Communication<B>, Error=<Self::Proposer as Proposer<B>>::Error>;
+	/// The output stream type.
+	type Output: Sink<SinkItem=Communication<B>, SinkError=<Self::Proposer as Proposer<B>>::Error>;
 	/// Error which can occur upon creation.
 	type Error: From<Error>;
 
 	/// Initialize the proposal logic on top of a specific header.
+	/// Produces the proposer and message streams for this instance of BFT agreement.
 	// TODO: provide state context explicitly?
-	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Self::Error>;
+	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>)
+		-> Result<(Self::Proposer, Self::Input, Self::Output), Self::Error>;
 }
 
 /// Logic for a proposer.
@@ -163,7 +183,6 @@ struct BftInstance<B: Block, P> {
 	key: Arc<ed25519::Pair>,
 	authorities: Vec<AuthorityId>,
 	parent_hash: B::Hash,
-	timer: Timer,
 	round_timeout_multiplier: u64,
 	proposer: P,
 }
@@ -178,7 +197,7 @@ impl<B: Block, P: Proposer<B>> generic::Context for BftInstance<B, P>
 	type Digest = B::Hash;
 	type Signature = LocalizedSignature;
 	type Candidate = B;
-	type RoundTimeout = Box<Future<Item=(),Error=Self::Error> + Send>;
+	type RoundTimeout = Box<Future<Item=(),Error=Self::Error>>;
 	type CreateProposal = <P::Create as IntoFuture>::Future;
 	type EvaluateProposal = <P::Evaluate as IntoFuture>::Future;
 
@@ -207,16 +226,18 @@ impl<B: Block, P: Proposer<B>> generic::Context for BftInstance<B, P>
 	}
 
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
-		use std::time::Duration;
+		use std::time::{Instant, Duration};
 
 		let round = ::std::cmp::min(63, round) as u32;
 		let timeout = 1u64.checked_shl(round)
 			.unwrap_or_else(u64::max_value)
 			.saturating_mul(self.round_timeout_multiplier);
 
-		Box::new(self.timer.sleep(Duration::from_secs(timeout))
-			.map_err(|_| Error::from(ErrorKind::FaultyTimer))
-			.map_err(Into::into))
+		let fut = Delay::new(Instant::now() + Duration::from_secs(timeout))
+			.map_err(|e| Error::from(ErrorKind::FaultyTimer(e)))
+			.map_err(Into::into);
+
+		Box::new(fut)
 	}
 }
 
@@ -258,10 +279,8 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 			return Ok(Async::Ready(()))
 		}
 
-		// TODO: handle this error, at least by logging.
-		let committed = try_ready!(self.inner.poll().map_err(|e| {
-			warn!(target: "bft", "Error in BFT agreement: {}", e);
-		}));
+		// TODO: handle and log this error in a way which isn't noisy on exit.
+		let committed = try_ready!(self.inner.poll().map_err(|_| ()));
 
 		// If we didn't see the proposal (very unlikely),
 		// we will get the block from the network later.
@@ -312,10 +331,11 @@ impl Drop for AgreementHandle {
 
 /// The BftService kicks off the agreement process on top of any blocks it
 /// is notified of.
+///
+/// This assumes that it is being run in the context of a tokio runtime.
 pub struct BftService<B: Block, P, I> {
 	client: Arc<I>,
 	live_agreement: Mutex<Option<(B::Hash, AgreementHandle)>>,
-	timer: Timer,
 	round_timeout_multiplier: u64,
 	key: Arc<ed25519::Pair>, // TODO: key changing over time.
 	factory: P,
@@ -324,8 +344,7 @@ pub struct BftService<B: Block, P, I> {
 impl<B, P, I> BftService<B, P, I>
 	where
 		B: Block + Clone + Eq,
-		B::Hash: ::std::hash::Hash,
-		P: ProposerFactory<B>,
+		P: Environment<B>,
 		<P::Proposer as Proposer<B>>::Error: ::std::fmt::Display,
 		I: BlockImport<B> + Authorities<B>,
 {
@@ -335,7 +354,6 @@ impl<B, P, I> BftService<B, P, I>
 		BftService {
 			client: client,
 			live_agreement: Mutex::new(None),
-			timer: Timer::default(),
 			round_timeout_multiplier: 4,
 			key: key, // TODO: key changing over time.
 			factory: factory,
@@ -353,10 +371,16 @@ impl<B, P, I> BftService<B, P, I>
 	/// If the local signing key is an authority, this will begin the consensus process to build a
 	/// block on top of it. If the executor fails to run the future, an error will be returned.
 	/// Returns `None` if the agreement on the block with given parent is already in progress.
-	pub fn build_upon<InStream, OutSink>(&self, header: &B::Header, input: InStream, output: OutSink)
-		-> Result<Option<BftFuture<B, <P as ProposerFactory<B>>::Proposer, I, InStream, OutSink>>, P::Error> where
-		InStream: Stream<Item=Communication<B>, Error=<<P as ProposerFactory<B>>::Proposer as Proposer<B>>::Error>,
-		OutSink: Sink<SinkItem=Communication<B>, SinkError=<<P as ProposerFactory<B>>::Proposer as Proposer<B>>::Error>,
+	pub fn build_upon(&self, header: &B::Header)
+		-> Result<Option<
+			BftFuture<
+				B,
+				<P as Environment<B>>::Proposer,
+				I,
+				<P as Environment<B>>::Input,
+				<P as Environment<B>>::Output,
+			>>, P::Error>
+		where
 	{
 		let hash = header.hash();
 		if self.live_agreement.lock().as_ref().map_or(false, |&(ref h, _)| h == &hash) {
@@ -377,13 +401,12 @@ impl<B, P, I> BftService<B, P, I>
 			Err(From::from(ErrorKind::InvalidAuthority(local_id)))?;
 		}
 
-		let proposer = self.factory.init(header, &authorities, self.key.clone())?;
+		let (proposer, input, output) = self.factory.init(header, &authorities, self.key.clone())?;
 
 		let bft_instance = BftInstance {
 			proposer,
 			parent_hash: hash.clone(),
 			round_timeout_multiplier: self.round_timeout_multiplier,
-			timer: self.timer.clone(),
 			key: self.key.clone(),
 			authorities: authorities,
 		};
@@ -592,13 +615,11 @@ mod tests {
 	use std::collections::HashSet;
 	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
-	use self::tokio_core::reactor::{Core};
 	use self::keyring::Keyring;
 	use futures::stream;
-	use futures::future::Executor;
+	use tokio::executor::current_thread;
 
 	extern crate substrate_keyring as keyring;
-	extern crate tokio_core;
 
 	type TestBlock = GenericTestBlock<()>;
 
@@ -638,12 +659,16 @@ mod tests {
 	struct DummyFactory;
 	struct DummyProposer(u64);
 
-	impl ProposerFactory<TestBlock> for DummyFactory {
+	impl Environment<TestBlock> for DummyFactory {
 		type Proposer = DummyProposer;
+		type Input = stream::Empty<Communication<TestBlock>, Error>;
+		type Output = Output<Error>;
 		type Error = Error;
 
-		fn init(&self, parent_header: &TestHeader, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>) -> Result<DummyProposer, Error> {
-			Ok(DummyProposer(parent_header.number + 1))
+		fn init(&self, parent_header: &TestHeader, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
+			-> Result<(DummyProposer, Self::Input, Self::Output), Error>
+		{
+			Ok((DummyProposer(parent_header.number + 1), stream::empty(), Output(::std::marker::PhantomData)))
 		}
 	}
 
@@ -677,7 +702,6 @@ mod tests {
 		BftService {
 			client: Arc::new(client),
 			live_agreement: Mutex::new(None),
-			timer: Timer::default(),
 			round_timeout_multiplier: 4,
 			key: Arc::new(Keyring::One.into()),
 			factory: DummyFactory
@@ -713,8 +737,6 @@ mod tests {
 			imported_heights: Mutex::new(HashSet::new()),
 		};
 
-		let mut core = Core::new().unwrap();
-
 		let service = make_service(client);
 
 		let first = from_block_number(2);
@@ -724,19 +746,21 @@ mod tests {
 		second.parent_hash = first_hash;
 		let second_hash = second.hash();
 
-		let bft = service.build_upon(&first, stream::empty(), Output(Default::default())).unwrap();
+		let bft = service.build_upon(&first).unwrap();
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first_hash);
+
+		let mut core = current_thread::CurrentThread::new();
 
 		// turn the core so the future gets polled and sends its task to the
 		// service. otherwise it deadlocks.
-		core.handle().execute(bft.unwrap()).unwrap();
-		core.turn(Some(::std::time::Duration::from_millis(100)));
-		let bft = service.build_upon(&second, stream::empty(), Output(Default::default())).unwrap();
+		core.spawn(bft.unwrap());
+		core.run_timeout(::std::time::Duration::from_millis(100)).unwrap();
+		let bft = service.build_upon(&second).unwrap();
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 != first_hash);
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 == second_hash);
 
-		core.handle().execute(bft.unwrap()).unwrap();
-		core.turn(Some(::std::time::Duration::from_millis(100)));
+		core.spawn(bft.unwrap());
+		core.run_timeout(::std::time::Duration::from_millis(100)).unwrap();
 	}
 
 	#[test]
