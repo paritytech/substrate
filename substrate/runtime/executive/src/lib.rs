@@ -84,12 +84,12 @@ pub struct Executive<
 impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Lookup: AuxLookup<Source=<Block::Extrinsic as Checkable>::Address, Target=System::AccountId>,
+	Lookup: AuxLookup<Source=System::Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
-	Block::Extrinsic: Checkable<AccountId=System::AccountId> + Slicable,
-	<Block::Extrinsic as Checkable>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
+	Block::Extrinsic: Checkable<fn(System::Address) -> Result<System::AccountId, &'static str>> + Slicable,
+	<Block::Extrinsic as Checkable<fn(System::Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
 {
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
