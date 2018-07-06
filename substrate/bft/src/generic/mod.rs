@@ -812,17 +812,7 @@ impl<C: Context, I, O> Agreement<C, I, O> {
 /// `max_faulty` is the maximum number of faulty nodes. Should be less than
 /// 1/3 of `nodes`, otherwise agreement may never be reached.
 ///
-/// The input stream should never logically conclude. The logic here assumes
-/// that messages flushed to the output stream will eventually reach other nodes.
-///
-/// Note that it is possible to witness agreement being reached without ever
-/// seeing the candidate. Any candidates seen will be checked for validity.
-///
-/// Although technically the agreement will always complete (given the eventual
-/// delivery of messages), in practice it is possible for this future to
-/// conclude without having witnessed the conclusion.
-/// In general, this future should be pre-empted by the import of a justification
-/// set for this block height.
+/// The input and output streams should follow the constraints documented in the crate root.
 pub fn agree<C: Context, I, O>(context: C, nodes: usize, max_faulty: usize, input: I, output: O)
 	-> Agreement<C, I, O>
 	where

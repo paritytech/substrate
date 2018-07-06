@@ -218,6 +218,7 @@ impl_outer_dispatch! {
 		Democracy = 5,
 		Council = 6,
 		CouncilVoting = 7,
+		Parachains = 8,
 	}
 }
 
@@ -394,5 +395,11 @@ mod tests {
 		};
 		let v = Slicable::encode(&xt);
 		assert_eq!(Extrinsic::decode(&mut &v[..]).unwrap(), xt);
+	}
+
+	#[test]
+	fn parachain_calls_are_privcall() {
+		let _register = PrivCall::Parachains(parachains::PrivCall::register_parachain(0.into(), vec![1, 2, 3], vec![]));
+		let _deregister = PrivCall::Parachains(parachains::PrivCall::deregister_parachain(0.into()));
 	}
 }

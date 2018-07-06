@@ -85,7 +85,7 @@ pub trait RelayChainContext {
 
 /// Collate the necessary ingress queue using the given context.
 pub fn collate_ingress<'a, R>(relay_context: R)
-	-> Box<Future<Item=ConsolidatedIngress, Error=R::Error> + 'a>
+	-> impl Future<Item=ConsolidatedIngress, Error=R::Error> + 'a
 	where
 		R: RelayChainContext,
 		R::Error: 'a,
@@ -106,7 +106,7 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 	// and then by the parachain ID.
 	//
 	// then transform that into the consolidated egress queue.
-	Box::new(stream::futures_unordered(egress_fetch)
+	stream::futures_unordered(egress_fetch)
 		.fold(BTreeMap::new(), |mut map, (routing_id, egresses)| {
 			for (depth, egress) in egresses.into_iter().rev().enumerate() {
 				let depth = -(depth as i64);
@@ -117,19 +117,19 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 		})
 		.map(|ordered| ordered.into_iter().map(|((_, id), egress)| (id, egress)))
 		.map(|i| i.collect::<Vec<_>>())
-		.map(ConsolidatedIngress))
+		.map(ConsolidatedIngress)
 }
 
 /// Produce a candidate for the parachain.
-pub fn collate<'a, R, P>(local_id: ParaId, relay_context: R, para_context: P)
-	-> Box<Future<Item=parachain::Candidate, Error=R::Error> + 'a>
+pub fn collate<'a, R: 'a, P>(local_id: ParaId, relay_context: R, para_context: P)
+	-> impl Future<Item=parachain::Candidate, Error=R::Error> + 'a
 	where
 		R: RelayChainContext,
 	    R::Error: 'a,
 		R::FutureEgress: 'a,
 		P: ParachainContext + 'a,
 {
-	Box::new(collate_ingress(relay_context).map(move |ingress| {
+	collate_ingress(relay_context).map(move |ingress| {
 		let (block_data, _, signature) = para_context.produce_candidate(
 			ingress.0.iter().flat_map(|&(id, ref msgs)| msgs.iter().cloned().map(move |msg| (id, msg)))
 		);
@@ -140,7 +140,7 @@ pub fn collate<'a, R, P>(local_id: ParaId, relay_context: R, para_context: P)
 			block: block_data,
 			unprocessed_ingress: ingress,
 		}
-	}))
+	})
 }
 
 #[cfg(test)]

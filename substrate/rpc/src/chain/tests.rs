@@ -22,8 +22,8 @@ use test_client::runtime::Header;
 
 #[test]
 fn should_return_header() {
-	let core = ::tokio_core::reactor::Core::new().unwrap();
-	let remote = core.remote();
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
 
 	let client = Chain {
 		client: Arc::new(test_client::new()),
@@ -48,8 +48,8 @@ fn should_return_header() {
 
 #[test]
 fn should_notify_about_latest_block() {
-	let mut core = ::tokio_core::reactor::Core::new().unwrap();
-	let remote = core.remote();
+	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
 	let (subscriber, id, transport) = pubsub::Subscriber::new_test("test");
 
 	{
@@ -61,17 +61,17 @@ fn should_notify_about_latest_block() {
 		api.subscribe_new_head(Default::default(), subscriber);
 
 		// assert id assigned
-		assert_eq!(core.run(id), Ok(Ok(SubscriptionId::Number(0))));
+		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(0))));
 
 		let builder = api.client.new_block().unwrap();
 		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
 	// assert notification send to transport
-	let (notification, next) = core.run(transport.into_future()).unwrap();
+	let (notification, next) = core.block_on(transport.into_future()).unwrap();
 	assert_eq!(notification, Some(
 		r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"digest":{"logs":[]},"extrinsicsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","number":1,"parentHash":"0x50fb1e7f32e8ad17f553846f4338861e17eb95132e7c3b433e0429ffab2f8f13","stateRoot":"0x17dccc74bd9200b7ce5a2f6a1bf379f1cdcf91bca3d19c3d17e1478b8d404703"},"subscription":0}}"#.to_owned()
 	));
 	// no more notifications on this channel
-	assert_eq!(core.run(next.into_future()).unwrap().0, None);
+	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
 }
