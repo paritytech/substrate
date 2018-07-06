@@ -248,10 +248,10 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 
 	fn protocol_names(&self) -> Self::NamesIter {
 		// We concat the lists of `RegisteredProtocol::protocol_names` for each protocol.
-		self.0.iter().enumerate().flat_map(|(n, proto)| {
+		self.0.iter().enumerate().flat_map(|(n, proto)|
 			ConnectionUpgrade::<C, Maf>::protocol_names(proto)
 				.map(move |(name, id)| (name, (n, id)))
-		}).collect::<Vec<_>>().into_iter()
+		).collect::<Vec<_>>().into_iter()
 	}
 
 	type Output = <RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::Output;
