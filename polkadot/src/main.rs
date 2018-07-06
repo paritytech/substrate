@@ -31,9 +31,9 @@ use futures::{future, Future};
 
 use std::cell::RefCell;
 
-// the regular polkadot application simply runs until ctrl-c
-struct Application;
-impl cli::Application for Application {
+// the regular polkadot worker simply does nothing until ctrl-c
+struct Worker;
+impl cli::Worker for Worker {
 	type Work = future::Empty<(), ()>;
 	type Exit = future::MapErr<oneshot::Receiver<()>, fn(oneshot::Canceled) -> ()>;
 
@@ -54,6 +54,7 @@ impl cli::Application for Application {
 	fn work<C: ServiceComponents>(self, _service: &Service<C>) -> Self::Work
 		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>,
 	{
+		// NOTE: future::empty is more like future::never: it never resolves
 		future::empty()
 	}
 }
@@ -61,5 +62,5 @@ impl cli::Application for Application {
 quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args(), Application)
+	cli::run(::std::env::args(), Worker)
 }

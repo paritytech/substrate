@@ -120,12 +120,12 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 		.unwrap_or_else(default_base_path)
 }
 
-/// Additional application logic making use of the node, to run asynchronously before shutdown.
+/// Additional worker making use of the node, to run asynchronously before shutdown.
 ///
 /// This will be invoked with the service and spawn a future that resolves
 /// when complete.
-pub trait Application {
-	/// A future that resolves when the application work is done.
+pub trait Worker {
+	/// A future that resolves when the work is done.
 	/// This will be run on a tokio runtime.
 	type Work: Future<Item=(),Error=()>;
 
@@ -135,7 +135,7 @@ pub trait Application {
 	/// Create exit future.
 	fn exit(&mut self) -> Self::Exit;
 
-	/// Do application work.
+	/// Do work.
 	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
 		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>;
 }
@@ -148,10 +148,10 @@ pub trait Application {
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T, A>(args: I, mut app: A) -> error::Result<()> where
+pub fn run<I, T, W>(args: I, mut worker: W) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
-	A: Application,
+	W: Worker,
 {
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
@@ -178,11 +178,11 @@ pub fn run<I, T, A>(args: I, mut app: A) -> error::Result<()> where
 	}
 
 	if let Some(matches) = matches.subcommand_matches("export-blocks") {
-		return export_blocks(matches, app.exit());
+		return export_blocks(matches, worker.exit());
 	}
 
 	if let Some(matches) = matches.subcommand_matches("import-blocks") {
-		return import_blocks(matches, app.exit());
+		return import_blocks(matches, worker.exit());
 	}
 
 	let spec = load_spec(&matches)?;
@@ -276,8 +276,8 @@ pub fn run<I, T, A>(args: I, mut app: A) -> error::Result<()> where
 
 	let core = reactor::Core::new().expect("tokio::Core could not be created");
 	match role == service::Role::LIGHT {
-		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf, app),
-		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf, app),
+		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf, worker),
+		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf, worker),
 	}
 }
 
@@ -401,16 +401,16 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	Ok(())
 }
 
-fn run_until_exit<C, A>(
+fn run_until_exit<C, W>(
 	mut core: reactor::Core,
 	service: service::Service<C>,
 	matches: &clap::ArgMatches,
 	sys_conf: SystemConfiguration,
-	mut application: A,
+	mut worker: W,
 ) -> error::Result<()>
 	where
 		C: service::Components,
-		A: Application,
+		W: Worker,
 		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
 	informant::start(&service, core.handle());
@@ -435,8 +435,8 @@ fn run_until_exit<C, A>(
 		)
 	};
 
-	let exit = application.exit();
-	let until_exit = application.work(&service).select(exit).then(|_| Ok(()));
+	let exit = worker.exit();
+	let until_exit = worker.work(&service).select(exit).then(|_| Ok(()));
 	core.run(until_exit)
 }
 
