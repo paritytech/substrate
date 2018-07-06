@@ -12,7 +12,6 @@ error-chain = "0.12"
 log = "0.3"
 exit-future = "0.1"
 polkadot-api = { path = "../api" }
-polkadot-collator = { path = "../collator" }
 polkadot-parachain = { path = "../parachain" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }

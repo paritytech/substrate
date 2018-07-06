@@ -134,26 +134,6 @@ impl Slicable for DutyRoster {
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Extrinsic;
 
-/// Candidate parachain block.
-///
-/// https://github.com/w3f/polkadot-spec/blob/master/spec.md#candidate-para-chain-block
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Candidate {
-	/// The ID of the parachain this is a proposal for.
-	pub parachain_index: Id,
-	/// Collator's signature
-	pub collator_signature: CandidateSignature,
-	/// Unprocessed ingress queue.
-	///
-	/// Ordered by parachain ID and block number.
-	pub unprocessed_ingress: ConsolidatedIngress,
-	/// Block data
-	pub block: BlockData,
-}
-
 /// Candidate receipt type.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -164,6 +144,8 @@ pub struct CandidateReceipt {
 	pub parachain_index: Id,
 	/// The collator's relay-chain account ID
 	pub collator: super::AccountId,
+	/// Signature on block data by collator.
+	pub signature: CandidateSignature,
 	/// The head-data
 	pub head_data: HeadData,
 	/// Balance uploads to the relay chain.
@@ -182,6 +164,7 @@ impl Slicable for CandidateReceipt {
 
 		self.parachain_index.using_encoded(|s| v.extend(s));
 		self.collator.using_encoded(|s| v.extend(s));
+		self.signature.using_encoded(|s| v.extend(s));
 		self.head_data.0.using_encoded(|s| v.extend(s));
 		self.balance_uploads.using_encoded(|s| v.extend(s));
 		self.egress_queue_roots.using_encoded(|s| v.extend(s));
@@ -195,6 +178,7 @@ impl Slicable for CandidateReceipt {
 		Some(CandidateReceipt {
 			parachain_index: Slicable::decode(input)?,
 			collator: Slicable::decode(input)?,
+			signature: Slicable::decode(input)?,
 			head_data: Slicable::decode(input).map(HeadData)?,
 			balance_uploads: Slicable::decode(input)?,
 			egress_queue_roots: Slicable::decode(input)?,
@@ -225,6 +209,18 @@ impl Ord for CandidateReceipt {
 		self.parachain_index.cmp(&other.parachain_index)
 			.then_with(|| self.head_data.cmp(&other.head_data))
 	}
+}
+
+/// A full collation.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub struct Collation {
+	/// Block data.
+	pub block_data: BlockData,
+	/// Candidate receipt itself.
+	pub receipt: CandidateReceipt,
 }
 
 /// Parachain ingress queue message.

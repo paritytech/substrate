@@ -23,9 +23,9 @@ use ed25519;
 use substrate_network::{self as net, generic_message as msg};
 use substrate_network::consensus_gossip::ConsensusMessage;
 use polkadot_api::{PolkadotApi, LocalPolkadotApi};
-use polkadot_consensus::{Network, SharedTable, Collators, Collation};
+use polkadot_consensus::{Network, SharedTable, Collators};
 use polkadot_primitives::{AccountId, Block, Hash, SessionKey};
-use polkadot_primitives::parachain::Id as ParaId;
+use polkadot_primitives::parachain::{Id as ParaId, Collation};
 
 use futures::{future, prelude::*};
 use futures::sync::mpsc;

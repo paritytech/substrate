@@ -79,6 +79,7 @@ pub use chain_spec::ChainSpec;
 /// Polkadot service.
 pub struct Service<Components: components::Components> {
 	client: Arc<Client<Components::Backend, Components::Executor, Block>>,
+	api: Arc<Components::Api>,
 	network: Arc<NetworkService>,
 	transaction_pool: Arc<TransactionPool<Components::Api>>,
 	signal: Option<Signal>,
@@ -213,6 +214,7 @@ impl<Components> Service<Components>
 			network: network,
 			transaction_pool: transaction_pool,
 			signal: Some(signal),
+			api: api,
 			_consensus: consensus_service,
 		})
 	}
@@ -220,6 +222,11 @@ impl<Components> Service<Components>
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<Client<Components::Backend, Components::Executor, Block>> {
 		self.client.clone()
+	}
+
+	/// Get shared polkadot-api instance. usually the same as the client.
+	pub fn api(&self) -> Arc<Components::Api> {
+		self.api.clone()
 	}
 
 	/// Get shared network instance.
