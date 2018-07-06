@@ -22,6 +22,7 @@ use parking_lot::Mutex;
 use polkadot_consensus::GenericStatement;
 use polkadot_primitives::{Block, Hash, SessionKey};
 use polkadot_primitives::parachain::{CandidateReceipt, HeadData, BlockData};
+use substrate_primitives::H512;
 use codec::Slicable;
 use substrate_network::{PeerId, PeerInfo, ClientHandle, Context, message::Message as SubstrateMessage, message::Role, specialization::Specialization, generic_message::Message as GenericMessage};
 
@@ -144,6 +145,7 @@ fn fetches_from_those_with_knowledge() {
 		parachain_index: 5.into(),
 		collator: [255; 32].into(),
 		head_data: HeadData(vec![9, 9, 9]),
+		signature: H512::from([1; 64]).into(),
 		balance_uploads: Vec::new(),
 		egress_queue_roots: Vec::new(),
 		fees: 1_000_000,

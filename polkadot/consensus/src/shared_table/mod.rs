@@ -21,9 +21,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use table::{self, Table, Context as TableContextTrait};
-use collation::Collation;
 use polkadot_primitives::{Hash, SessionKey};
-use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{Id as ParaId, BlockData, Collation, Extrinsic, CandidateReceipt};
 
 use parking_lot::Mutex;
 use futures::{future, prelude::*};
@@ -470,6 +469,7 @@ mod tests {
 		let candidate = CandidateReceipt {
 			parachain_index: para_id,
 			collator: [1; 32].into(),
+			signature: Default::default(),
 			head_data: ::polkadot_primitives::parachain::HeadData(vec![1, 2, 3, 4]),
 			balance_uploads: Vec::new(),
 			egress_queue_roots: Vec::new(),
@@ -519,6 +519,7 @@ mod tests {
 		let candidate = CandidateReceipt {
 			parachain_index: para_id,
 			collator: [1; 32].into(),
+			signature: Default::default(),
 			head_data: ::polkadot_primitives::parachain::HeadData(vec![1, 2, 3, 4]),
 			balance_uploads: Vec::new(),
 			egress_queue_roots: Vec::new(),

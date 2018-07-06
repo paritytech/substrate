@@ -32,7 +32,6 @@
 extern crate ed25519;
 extern crate parking_lot;
 extern crate polkadot_api;
-extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
 extern crate polkadot_transaction_pool as transaction_pool;
@@ -79,7 +78,7 @@ use futures::future;
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
 
-pub use self::collation::{validate_collation, Collators, Collation};
+pub use self::collation::{validate_collation, Collators};
 pub use self::error::{ErrorKind, Error};
 pub use self::shared_table::{SharedTable, StatementProducer, ProducedStatements, Statement, SignedStatement, GenericStatement};
 pub use service::Service;
