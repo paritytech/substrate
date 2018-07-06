@@ -106,7 +106,7 @@ where
 	AccountId: Member + Default + MaybeDisplay,
 	::MaybeUnsigned<Signature>: Member,
 	Extrinsic<AccountId, Index, Call>: Slicable,
-	ThisLookup: FnOnce(&Address) -> Result<AccountId, &'static str>,
+	ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 
@@ -120,7 +120,7 @@ where
 		} else {
 			let extrinsic: Extrinsic<AccountId, Index, Call>
 				= Extrinsic {
-					signed: match lookup(&self.extrinsic.signed) {
+					signed: match lookup(self.extrinsic.signed.clone()) {
 						Ok(x) => x,
 						Err(_) => return Err(self)
 					},
