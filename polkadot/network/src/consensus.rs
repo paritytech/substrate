@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implementation of the traits for consensus networking for the polkadot protocol.
+//! The "consensus" networking code built on top of the base network service.
+//! This fulfills the `polkadot_consensus::Network` trait, providing a hook to be called
+//! each time consensus begins on a new chain head.
 
 use bft;
 use ed25519;

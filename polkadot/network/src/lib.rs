@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Polkadot-specific network implementation.
+//!
+//! This manages gossip of consensus messages for BFT and for parachain statements,
+//! parachain block and extrinsic data fetching, communication between collators and validators,
+//! and more.
+
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
