@@ -93,7 +93,7 @@ pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
 /// Checked extrinsic type as expected by this runtime.
-pub type CheckedExtrinsic = generic::CheckedExtrinsic<Address, Index, Call>;
+pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Extrinsic type as expected by this runtime. This is not the type that is signed.
 pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
 /// Extrinsic type that is signed.
