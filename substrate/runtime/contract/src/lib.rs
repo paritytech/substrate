@@ -63,6 +63,8 @@ pub use vm::execute;
 use runtime_support::dispatch::Result;
 use runtime_primitives::traits::{RefInto, MaybeEmpty};
 
+use rstd::collections::btree_map::{BTreeMap, Entry};
+
 pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
 }
 
@@ -109,12 +111,25 @@ struct ExecutionContext<T: Trait> {
 
 impl<T: Trait> ExecutionContext<T> {
 	/// Make a call to the specified address.
-	fn call(&mut self, dest: T::AccountId) {
-		
+	fn call(
+		&mut self,
+		dest: T::AccountId,
+		value: T::Balance,
+		gas_price: u64,
+		gas_limit: u64,
+		data: Vec<u8>,
+	) {
+
 	}
 }
 
+/// Call externalities provide an interface for the VM
+/// to interact with and query the state.
+///
+/// Should be able to create `ExecutionContext` since it can be used for nested
+/// calls.
 struct CallExternalities<T: Trait> {
+	self_account_id: T::AccountId,
 	_marker: ::rstd::marker::PhantomData<T>,
 }
 
@@ -135,8 +150,40 @@ impl<T: Trait> Ext for CallExternalities<T> {
 		panic!()
 	}
 
-	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
+	fn call(&mut self, to: &Self::AccountId, value: Self::Balance) {
+		// TODO: check call depth.
+		// TODO: calculate how much gas is available
 		panic!()
+	}
+}
+
+struct Account {
+	code: Option<Vec<u8>>,
+	storage: BTreeMap<Vec<u8>, Vec<u8>>,
+	
+}
+
+struct AccountDb<T: Trait> {
+	/// Current world state view.
+	///
+	/// If the account db is flushed, then all entries will be
+	/// written into the db.
+	world_state: BTreeMap<T::AccountId, Account>,
+
+	///
+	backups: Vec<BTreeMap<T::AccountId, Account>>,
+}
+
+impl<T: Trait> AccountDb<T> {
+	fn new() -> AccountDb<T> {
+		AccountDb {
+			world_state: BTreeMap::new(),
+			backups: Vec::new(),
+		}
+	}
+
+	fn flush(self) {
+
 	}
 }
 
@@ -155,6 +202,9 @@ impl<T: Trait> Module<T> {
 		// code in contract itself and use that.
 
 		// TODO: Get code and runtime::execute it.
+
+		let account_db = AccountDb::new();
+
 
 		Ok(())
 	}

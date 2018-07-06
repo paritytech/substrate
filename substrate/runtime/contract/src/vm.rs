@@ -29,8 +29,8 @@ pub trait Ext {
 	/// transfered from this to the newly created account.
 	fn create(&mut self, code: &[u8], value: Self::Balance);
 
-	/// Transfer some funds to the specified account.
-	fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance);
+	/// Call (possibly transfering some amount of funds) into the specified account.
+	fn call(&mut self, to: &Self::AccountId, value: Self::Balance);
 }
 
 /// Error that can occur while preparing or executing wasm smart-contract.
@@ -207,7 +207,7 @@ pub fn execute<'a, T: Ext>(
 		e.memory().get(value_ptr, &mut value_buf)?;
 		let value = T::Balance::decode(&mut &value_buf[..]).unwrap();
 
-		e.ext_mut().transfer(&transfer_to, value);
+		e.ext_mut().call(&transfer_to, value);
 
 		Ok(sandbox::ReturnValue::Unit)
 	}
@@ -242,6 +242,7 @@ pub fn execute<'a, T: Ext>(
 	imports.add_host_func("env", "gas", ext_gas::<T>);
 	imports.add_host_func("env", "ext_set_storage", ext_set_storage::<T>);
 	imports.add_host_func("env", "ext_get_storage", ext_get_storage::<T>);
+	// TODO: Rename it to ext_call.
 	imports.add_host_func("env", "ext_transfer", ext_transfer::<T>);
 	imports.add_host_func("env", "ext_create", ext_create::<T>);
 	// TODO: ext_balance, ext_address, ext_callvalue, etc.
