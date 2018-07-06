@@ -1,0 +1,75 @@
+# SEE https://github.com/rust-lang-nursery/rustfmt/blob/master/Configurations.md
+# activate unstable features, so we can configure a few of them
+unstable_features = true
+
+
+# everything without a comment is at the default value, but we could
+# also always pin the rustfmt version with the following line
+# (at the time of writing):
+#
+# required_version = "0.8.2"
+#
+
+indent_style = "Block"
+use_small_heuristics = "Default"
+binop_separator = "Front"
+combine_control_expr = true
+comment_width = 100
+condense_wildcard_suffixes = false
+control_brace_style = "AlwaysSameLine"
+disable_all_formatting = false
+error_on_line_overflow = false
+error_on_unformatted = false
+fn_args_density = "Tall"
+brace_style = "SameLineWhere"
+empty_item_single_line = true
+fn_single_line = false
+where_single_line = false
+force_explicit_abi = true
+format_strings = false
+# use tabs not spaces
+hard_tabs = true
+imports_indent = "Block"
+imports_layout = "Mixed"
+# do keep imports as they were written
+merge_imports = false
+# put a trailing comma in match block
+match_block_trailing_comma = true
+max_width = 100
+merge_derives = true
+force_multiline_blocks = false
+newline_style = "Unix"
+normalize_comments = false
+remove_nested_parens = true
+reorder_imports = true
+# our module order is intentional
+reorder_modules = false
+reorder_impl_items =  false
+report_todo = "Never"
+report_fixme = "Never"
+skip_children = false
+space_after_colon = true
+space_before_colon = false
+struct_field_align_threshold = 0
+spaces_around_ranges = false
+struct_lit_single_line = true
+tab_spaces = 4
+trailing_comma = "Vertical"
+# do not leave unneeded semicolons around
+trailing_semicolon = false
+type_punctuation_density = "Wide"
+# we use field shorthands 
+use_field_init_shorthand = true
+# we prefer `?` over `try!`
+use_try_shorthand = true
+# we prefer to have a block over long lines
+# even in comments :D
+wrap_comments = true
+# do not create unnaccesary arm blocks
+match_arm_blocks = false
+blank_lines_upper_bound = 1
+blank_lines_lower_bound = 0
+hide_parse_errors = false
+color = "Auto"
+# license_template_path = ""
+ignore = []
