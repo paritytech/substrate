@@ -68,22 +68,22 @@ fn fake_justify(header: &runtime::Header) -> bft::UncheckedJustification<runtime
 		Keyring::Charlie.into(),
 	];
 
-	bft::UncheckedJustification {
-		digest: hash,
-		signatures: authorities.iter().map(|key| {
+	bft::UncheckedJustification::new(
+		hash,
+		authorities.iter().map(|key| {
 			let msg = bft::sign_message::<runtime::Block>(
-				bft::generic::Vote::Commit(1, hash).into(),
+				::rhododendron::Vote::Commit(1, hash).into(),
 				key,
 				header.parent_hash
 			);
 
 			match msg {
-				bft::generic::LocalizedMessage::Vote(vote) => vote.signature,
+				::rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
 				_ => panic!("signing vote leads to signed vote"),
 			}
 		}).collect(),
-		round_number: 1,
-	}
+		1,
+	)
 }
 
 fn genesis_config() -> GenesisConfig {
