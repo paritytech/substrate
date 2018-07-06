@@ -281,8 +281,8 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 		let inner = match uxt.clone().check_with(|a| self.lookup(a)) {
 			Ok(xt) => Some(xt),
 			// keep the transaction around in the future pool and attempt to promote it later.
-			Err(Self::NO_ACCOUNT) => None,
-			Err(e) => bail!(e),
+			Err((_, Self::NO_ACCOUNT)) => None,
+			Err((_, e)) => bail!(e),
 		};
 		let sender = inner.as_ref().map(|x| x.signed.clone());
 
