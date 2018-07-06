@@ -34,16 +34,16 @@ type Id = u64;
 pub struct Subscriptions {
 	next_id: AtomicUsize,
 	active_subscriptions: Mutex<HashMap<Id, oneshot::Sender<()>>>,
-	event_loop: TaskExecutor,
+	executor: TaskExecutor,
 }
 
 impl Subscriptions {
 	/// Creates new `Subscriptions` object.
-	pub fn new(event_loop: TaskExecutor) -> Self {
+	pub fn new(executor: TaskExecutor) -> Self {
 		Subscriptions {
 			next_id: Default::default(),
 			active_subscriptions: Default::default(),
-			event_loop,
+			executor,
 		}
 	}
 
@@ -66,7 +66,7 @@ impl Subscriptions {
 				.then(|_| Ok(()));
 
 			self.active_subscriptions.lock().insert(id, tx);
-			self.event_loop.spawn(future);
+			self.executor.spawn(future);
 		}
 	}
 
