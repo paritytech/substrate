@@ -89,6 +89,7 @@ impl system::Trait for Concrete {
 	type Hashing = BlakeTwo256;
 	type Digest = generic::Digest<Vec<u8>>;
 	type AccountId = AccountId;
+	type Address = Address;
 	type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 }
 
