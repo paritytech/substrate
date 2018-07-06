@@ -195,7 +195,7 @@ impl RelayChainContext for ApiContext {
 
 struct CollationNode<P, E> {
 	parachain_context: P,
-	exit: Option<E>,
+	exit: E,
 	para_id: ParaId,
 	key: Arc<ed25519::Pair>,
 }
@@ -205,20 +205,16 @@ impl<P, E> Worker for CollationNode<P, E> where
 	E: Future<Item=(),Error=()> + Send + 'static
 {
 	type Work = Box<Future<Item=(),Error=()>>;
-	type Exit = future::Either<E, future::Empty<(),()>>;
+	type Exit = E;
 
-	fn exit(&mut self) -> Self::Exit {
-		match self.exit.take() {
-			Some(exit) => future::Either::A(exit),
-			None => future::Either::B(future::empty()),
-		}
+	fn exit_only(self) -> Self::Exit {
+		self.exit
 	}
 
 	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
 		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>,
 	{
 		let CollationNode { parachain_context, exit, para_id, key } = self;
-		let _ = exit;
 		let client = service.client();
 		let api = service.api();
 
@@ -243,7 +239,7 @@ impl<P, E> Worker for CollationNode<P, E> where
 						future::Either::B(future::ok(None))
 					}
 					Err(e) => {
-						info!("Could not collate for parachain {:?}: {:?}", id, e);
+						warn!("Could not collate for parachain {:?}: {:?}", id, e);
 						future::Either::B(future::ok(None)) // returning error would shut down the collation node
 					}
 				}
@@ -253,7 +249,8 @@ impl<P, E> Worker for CollationNode<P, E> where
 				Ok(())
 			});
 
-		Box::new(work) as Box<_>
+		let work_and_exit = work.select(exit).then(|_| Ok(()));
+		Box::new(work_and_exit) as Box<_>
 	}
 }
 
@@ -273,7 +270,7 @@ pub fn run_collator<P, E>(
 	E: IntoFuture<Item=(),Error=()>,
 	E::Future: Send + 'static,
 {
-	let node_logic = CollationNode { parachain_context, exit: Some(exit.into_future()), para_id, key };
+	let node_logic = CollationNode { parachain_context, exit: exit.into_future(), para_id, key };
 	polkadot_cli::run(args, node_logic)
 }
 

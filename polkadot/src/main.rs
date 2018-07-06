@@ -34,10 +34,10 @@ use std::cell::RefCell;
 // the regular polkadot worker simply does nothing until ctrl-c
 struct Worker;
 impl cli::Worker for Worker {
-	type Work = future::Empty<(), ()>;
+	type Work = Self::Exit;
 	type Exit = future::MapErr<oneshot::Receiver<()>, fn(oneshot::Canceled) -> ()>;
 
-	fn exit(&mut self) -> Self::Exit {
+	fn exit_only(self) -> Self::Exit {
 		// can't use signal directly here because CtrlC takes only `Fn`.
 		let (exit_send, exit) = oneshot::channel();
 
@@ -51,11 +51,10 @@ impl cli::Worker for Worker {
 		exit.map_err(drop)
 	}
 
-	fn work<C: ServiceComponents>(self, _service: &Service<C>) -> Self::Work
+	fn work<C: ServiceComponents>(self, _service: &Service<C>) -> Self::Exit
 		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>,
 	{
-		// NOTE: future::empty is more like future::never: it never resolves
-		future::empty()
+		self.exit_only()
 	}
 }
 

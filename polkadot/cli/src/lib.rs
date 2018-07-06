@@ -125,17 +125,17 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 /// This will be invoked with the service and spawn a future that resolves
 /// when complete.
 pub trait Worker {
-	/// A future that resolves when the work is done.
+	/// A future that resolves when the work is done or the node should exit.
 	/// This will be run on a tokio runtime.
 	type Work: Future<Item=(),Error=()>;
 
-	/// A future that resolves when the node should exit.
+	/// An exit scheduled for the future.
 	type Exit: Future<Item=(),Error=()> + Send + 'static;
 
-	/// Create exit future.
-	fn exit(&mut self) -> Self::Exit;
+	/// Don't work, but schedule an exit.
+	fn exit_only(self) -> Self::Exit;
 
-	/// Do work.
+	/// Do work and schedule exit.
 	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
 		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>;
 }
@@ -148,7 +148,7 @@ pub trait Worker {
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T, W>(args: I, mut worker: W) -> error::Result<()> where
+pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 	W: Worker,
@@ -178,11 +178,11 @@ pub fn run<I, T, W>(args: I, mut worker: W) -> error::Result<()> where
 	}
 
 	if let Some(matches) = matches.subcommand_matches("export-blocks") {
-		return export_blocks(matches, worker.exit());
+		return export_blocks(matches, worker.exit_only());
 	}
 
 	if let Some(matches) = matches.subcommand_matches("import-blocks") {
-		return import_blocks(matches, worker.exit());
+		return import_blocks(matches, worker.exit_only());
 	}
 
 	let spec = load_spec(&matches)?;
@@ -406,7 +406,7 @@ fn run_until_exit<C, W>(
 	service: service::Service<C>,
 	matches: &clap::ArgMatches,
 	sys_conf: SystemConfiguration,
-	mut worker: W,
+	worker: W,
 ) -> error::Result<()>
 	where
 		C: service::Components,
@@ -435,9 +435,7 @@ fn run_until_exit<C, W>(
 		)
 	};
 
-	let exit = worker.exit();
-	let until_exit = worker.work(&service).select(exit).then(|_| Ok(()));
-	core.run(until_exit)
+	core.run(worker.work(&service).then(|_| Ok(())))
 }
 
 fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error> where
