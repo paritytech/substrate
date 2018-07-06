@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -24,18 +24,14 @@ NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_devp2p::{NetworkService};
 use core_io::{TimerToken};
 use io::NetSyncIo;
-use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
+use protocol::{Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
 use message::LocalizedBftMessage;
+use specialization::Specialization;
 use on_demand::OnDemandService;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-
-/// Polkadot devp2p protocol id
-pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
-
-const V0_PACKET_COUNT: u8 = 1;
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
@@ -53,14 +49,12 @@ bitflags! {
 	pub struct Role: u32 {
 		/// No network.
 		const NONE = 0b00000000;
-		/// Full node, doe not participate in consensus.
+		/// Full node, does not participate in consensus.
 		const FULL = 0b00000001;
 		/// Light client node.
 		const LIGHT = 0b00000010;
-		/// Act as a validator.
-		const VALIDATOR = 0b00000100;
-		/// Act as a collator.
-		const COLLATOR = 0b00001000;
+		/// Act as an authority
+		const AUTHORITY = 0b00000100;
 	}
 }
 
@@ -99,12 +93,12 @@ pub trait ConsensusService<B: BlockT>: Send + Sync {
 /// Service able to execute closure in the network context.
 pub trait ExecuteInContext<B: BlockT>: Send + Sync {
 	/// Execute closure in network context.
-	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol<B>)>(&self, closure: F);
+	fn execute_in_context<F: Fn(&mut Context<B>)>(&self, closure: F);
 }
 
 /// devp2p Protocol handler
-struct ProtocolHandler<B: BlockT> {
-	protocol: Protocol<B>,
+struct ProtocolHandler<B: BlockT, S: Specialization<B>> {
+	protocol: Protocol<B, S>,
 }
 
 /// Peer connection information
@@ -125,7 +119,7 @@ pub struct PeerInfo<B: BlockT> {
 }
 
 /// Service initialization parameters.
-pub struct Params<B: BlockT> {
+pub struct Params<B: BlockT, S> {
 	/// Configuration.
 	pub config: ProtocolConfig,
 	/// Network layer configuration.
@@ -136,24 +130,35 @@ pub struct Params<B: BlockT> {
 	pub on_demand: Option<Arc<OnDemandService<B>>>,
 	/// Transaction pool.
 	pub transaction_pool: Arc<TransactionPool<B>>,
+	/// Protocol specialization.
+	pub specialization: S,
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static> where B::Header: HeaderT<Number=u64> {
+pub struct Service<B: BlockT + 'static, S: Specialization<B>> where B::Header: HeaderT<Number=u64> {
 	/// Network service
 	network: NetworkService,
 	/// Devp2p protocol handler
-	handler: Arc<ProtocolHandler<B>>,
+	handler: Arc<ProtocolHandler<B, S>>,
+	/// Devp2p protocol ID.
+	protocol_id: ProtocolId,
 }
 
-impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> where B::Header: HeaderT<Number=u64> {
 	/// Creates and register protocol with the network service
-	pub fn new(params: Params<B>) -> Result<Arc<Service<B>>, Error> {
+	pub fn new(params: Params<B, S>, protocol_id: ProtocolId) -> Result<Arc<Service<B, S>>, Error> {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
 		let sync = Arc::new(Service {
 			network: service,
+			protocol_id,
 			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(params.config, params.chain, params.on_demand, params.transaction_pool)?,
+				protocol: Protocol::new(
+					params.config,
+					params.chain.clone(),
+					params.on_demand,
+					params.transaction_pool,
+					params.specialization
+				)?,
 			}),
 		});
 
@@ -162,16 +167,29 @@ impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Called when a new block is imported by the client.
 	pub fn on_block_imported(&self, hash: B::Hash, header: &B::Header) {
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
+		self.network.with_context(self.protocol_id, |context| {
 			self.handler.protocol.on_block_imported(&mut NetSyncIo::new(context), hash, header)
 		});
 	}
 
 	/// Called when new transactons are imported by the client.
 	pub fn trigger_repropagate(&self) {
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context));
+		self.network.with_context(self.protocol_id, |context| {
+			self.handler.protocol.propagate_extrinsics(&mut NetSyncIo::new(context));
 		});
+	}
+
+	/// Execute a closure with the chain-specific network specialization.
+	/// If the network is unavailable, this will return `None`.
+	pub fn with_spec<F, U>(&self, f: F) -> Option<U>
+		where F: FnOnce(&mut S, &mut Context<B>) -> U
+	{
+		let mut res = None;
+		self.network.with_context(self.protocol_id, |context| {
+			res = Some(self.handler.protocol.with_spec(&mut NetSyncIo::new(context), f))
+		});
+
+		res
 	}
 
 	fn start(&self) {
@@ -181,7 +199,7 @@ impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, &[(0, V0_PACKET_COUNT)])
+		self.network.register_protocol(self.handler.clone(), self.protocol_id, &[(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)])
 			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}
 
@@ -191,21 +209,21 @@ impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 	}
 }
 
-impl<B: BlockT + 'static> Drop for Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> Drop for Service<B, S> where B::Header: HeaderT<Number=u64> {
 	fn drop(&mut self) {
 		self.stop();
 	}
 }
 
-impl<B: BlockT + 'static> ExecuteInContext<B> for Service<B> where B::Header: HeaderT<Number=u64> {
-	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol<B>)>(&self, closure: F) {
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			closure(&mut NetSyncIo::new(context), &self.handler.protocol)
+impl<B: BlockT + 'static, S: Specialization<B>> ExecuteInContext<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
+	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F) {
+		self.network.with_context(self.protocol_id, |context| {
+			closure(&mut ProtocolContext::new(self.handler.protocol.context_data(), &mut NetSyncIo::new(context)))
 		});
 	}
 }
 
-impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.protocol.status()
@@ -213,7 +231,7 @@ impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: Header
 
 	/// Get sync peers
 	fn peers(&self) -> Vec<PeerInfo<B>> {
-		self.network.with_context_eval(DOT_PROTOCOL_ID, |ctx| {
+		self.network.with_context_eval(self.protocol_id, |ctx| {
 			let peer_ids = self.network.connected_peers();
 
 			peer_ids.into_iter().filter_map(|peer_id| {
@@ -239,24 +257,7 @@ impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: Header
 	}
 }
 
-/// ConsensusService
-impl<B: BlockT + 'static> ConsensusService<B> for Service<B> where B::Header: HeaderT<Number=u64> {
-	fn connect_to_authorities(&self, _addresses: &[String]) {
-		//TODO: implement me
-	}
-
-	fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B> {
-		self.handler.protocol.bft_messages(parent_hash)
-	}
-
-	fn send_bft_message(&self, message: LocalizedBftMessage<B>) {
-		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
-		});
-	}
-}
-
-impl<B: BlockT + 'static> NetworkProtocolHandler for ProtocolHandler<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> NetworkProtocolHandler for ProtocolHandler<B, S> where B::Header: HeaderT<Number=u64> {
 	fn initialize(&self, io: &NetworkContext) {
 		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
 			.expect("Error registering sync timer");
@@ -280,7 +281,7 @@ impl<B: BlockT + 'static> NetworkProtocolHandler for ProtocolHandler<B> where B:
 	fn timeout(&self, io: &NetworkContext, timer: TimerToken) {
 		match timer {
 			TICK_TOKEN => self.protocol.tick(&mut NetSyncIo::new(io)),
-			PROPAGATE_TOKEN => self.protocol.propagate_transactions(&mut NetSyncIo::new(io)),
+			PROPAGATE_TOKEN => self.protocol.propagate_extrinsics(&mut NetSyncIo::new(io)),
 			_ => {}
 		}
 	}
@@ -303,7 +304,7 @@ pub trait ManageNetwork: Send + Sync {
 }
 
 
-impl<B: BlockT + 'static> ManageNetwork for Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> ManageNetwork for Service<B, S> where B::Header: HeaderT<Number=u64> {
 	fn accept_unreserved_peers(&self) {
 		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}

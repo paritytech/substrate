@@ -10,7 +10,7 @@ substrate-primitives = { path = "../primitives" }
 substrate-runtime-support = { path = "../runtime-support" }
 substrate-runtime-primitives = { path = "../runtime/primitives" }
 ed25519 = { path = "../ed25519" }
-tokio-timer = "0.1.2"
+tokio = "0.1.7"
 parking_lot = "0.4"
 error-chain = "0.12"
 log = "0.3"
@@ -18,4 +18,3 @@ log = "0.3"
 [dev-dependencies]
 substrate-keyring = { path = "../keyring" }
 substrate-executor = { path = "../executor" }
-tokio-core = "0.1.12"

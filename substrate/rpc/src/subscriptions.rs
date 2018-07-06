@@ -22,7 +22,7 @@ use jsonrpc_pubsub::SubscriptionId;
 use parking_lot::Mutex;
 use rpc::futures::sync::oneshot;
 use rpc::futures::{Future, future};
-use tokio_core::reactor::Remote;
+use tokio::runtime::TaskExecutor;
 
 type Id = u64;
 
@@ -34,16 +34,16 @@ type Id = u64;
 pub struct Subscriptions {
 	next_id: AtomicUsize,
 	active_subscriptions: Mutex<HashMap<Id, oneshot::Sender<()>>>,
-	event_loop: Remote,
+	executor: TaskExecutor,
 }
 
 impl Subscriptions {
 	/// Creates new `Subscriptions` object.
-	pub fn new(event_loop: Remote) -> Self {
+	pub fn new(executor: TaskExecutor) -> Self {
 		Subscriptions {
 			next_id: Default::default(),
 			active_subscriptions: Default::default(),
-			event_loop,
+			executor,
 		}
 	}
 
@@ -63,11 +63,10 @@ impl Subscriptions {
 			let future = into_future(sink)
 				.into_future()
 				.select(rx.map_err(|e| warn!("Error timeing out: {:?}", e)))
-				.map(|_| ())
-				.map_err(|_| ());
+				.then(|_| Ok(()));
 
 			self.active_subscriptions.lock().insert(id, tx);
-			self.event_loop.spawn(|_| future);
+			self.executor.spawn(future);
 		}
 	}
 

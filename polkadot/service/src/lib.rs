@@ -21,7 +21,6 @@ extern crate futures;
 extern crate ed25519;
 extern crate clap;
 extern crate exit_future;
-extern crate tokio_timer;
 extern crate serde;
 extern crate serde_json;
 extern crate polkadot_primitives;
@@ -30,18 +29,17 @@ extern crate polkadot_executor;
 extern crate polkadot_api;
 extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
+extern crate polkadot_network;
 extern crate substrate_keystore as keystore;
-extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
 extern crate substrate_executor;
 extern crate substrate_state_machine as state_machine;
-
-extern crate tokio_core;
 extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
+extern crate tokio;
 
 #[macro_use]
 extern crate substrate_telemetry;
@@ -62,9 +60,7 @@ mod config;
 mod chain_spec;
 
 use std::sync::Arc;
-use std::thread;
 use futures::prelude::*;
-use tokio_core::reactor::Core;
 use transaction_pool::TransactionPool;
 use keystore::Store as Keystore;
 use polkadot_api::PolkadotApi;
@@ -72,6 +68,8 @@ use polkadot_primitives::{Block, BlockId, Hash};
 use client::{Client, BlockchainEvents};
 use network::ManageNetwork;
 use exit_future::Signal;
+use polkadot_network::{NetworkService, PolkadotProtocol};
+use tokio::runtime::TaskExecutor;
 
 pub use self::error::{ErrorKind, Error};
 pub use self::components::{Components, FullComponents, LightComponents};
@@ -80,23 +78,22 @@ pub use chain_spec::ChainSpec;
 
 /// Polkadot service.
 pub struct Service<Components: components::Components> {
-	thread: Option<thread::JoinHandle<()>>,
 	client: Arc<Client<Components::Backend, Components::Executor, Block>>,
-	network: Arc<network::Service<Block>>,
+	network: Arc<NetworkService>,
 	transaction_pool: Arc<TransactionPool<Components::Api>>,
 	signal: Option<Signal>,
 	_consensus: Option<consensus::Service>,
 }
 
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration) -> Result<Service<components::LightComponents>, error::Error> {
-	Service::new(components::LightComponents, config)
+pub fn new_light(config: Configuration, executor: TaskExecutor) -> Result<Service<components::LightComponents>, error::Error> {
+	Service::new(components::LightComponents, config, executor)
 }
 
 /// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration) -> Result<Service<components::FullComponents>, error::Error> {
-	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
-	Service::new(components::FullComponents { is_validator }, config)
+pub fn new_full(config: Configuration, executor: TaskExecutor) -> Result<Service<components::FullComponents>, error::Error> {
+	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
+	Service::new(components::FullComponents { is_validator }, config, executor)
 }
 
 /// Creates bare client without any networking.
@@ -112,7 +109,7 @@ pub fn new_client(config: Configuration) -> Result<Arc<Client<
 		pruning: config.pruning,
 	};
 	let executor = polkadot_executor::Executor::new();
-	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
+	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
 	let components = components::FullComponents { is_validator };
 	let (client, _) = components.build_client(db_settings, executor, &config.chain_spec)?;
 	Ok(client)
@@ -124,9 +121,7 @@ impl<Components> Service<Components>
 		client::error::Error: From<<<<Components as components::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
 	/// Creates and register protocol with the network service
-	fn new(components: Components, config: Configuration) -> Result<Self, error::Error> {
-		use std::sync::Barrier;
-
+	fn new(components: Components, config: Configuration, task_executor: TaskExecutor) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
@@ -165,61 +160,55 @@ impl<Components> Service<Components>
 			chain: client.clone(),
 			on_demand: on_demand.clone().map(|d| d as Arc<network::OnDemandService<Block>>),
 			transaction_pool: transaction_pool_adapter,
+			specialization: PolkadotProtocol::new(),
 		};
-		let network = network::Service::new(network_params)?;
-		let barrier = ::std::sync::Arc::new(Barrier::new(2));
+
+		let network = network::Service::new(network_params, ::polkadot_network::DOT_PROTOCOL_ID)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
-		let thread = {
-			let client = client.clone();
+		network.start_network();
+
+		{
+			// block notifications
 			let network = network.clone();
 			let txpool = transaction_pool.clone();
 
-			let thread_barrier = barrier.clone();
-			thread::spawn(move || {
-				network.start_network();
+			let events = client.import_notification_stream()
+				.for_each(move |notification| {
+					network.on_block_imported(notification.hash, &notification.header);
+					prune_imported(&*txpool, notification.hash);
+					Ok(())
+				})
+				.select(exit.clone())
+				.then(|_| Ok(()));
+			task_executor.spawn(events);
+		}
 
-				thread_barrier.wait();
-				let mut core = Core::new().expect("tokio::Core could not be created");
+		{
+			// transaction notifications
+			let network = network.clone();
+			let events = transaction_pool.import_notification_stream()
+				// TODO [ToDr] Consider throttling?
+				.for_each(move |_| {
+					network.trigger_repropagate();
+					Ok(())
+				})
+				.select(exit.clone())
+				.then(|_| Ok(()));
 
-				// block notifications
-				let network1 = network.clone();
-				let txpool1 = txpool.clone();
-
-				let events = client.import_notification_stream()
-					.for_each(move |notification| {
-						network1.on_block_imported(notification.hash, &notification.header);
-						prune_imported(&*txpool1, notification.hash);
-
-						Ok(())
-					});
-				core.handle().spawn(events);
-
-				// transaction notifications
-				let events = txpool.import_notification_stream()
-					// TODO [ToDr] Consider throttling?
-					.for_each(move |_| {
-						network.trigger_repropagate();
-						Ok(())
-					});
-				core.handle().spawn(events);
-
-				if let Err(e) = core.run(exit) {
-					debug!("Polkadot service event loop shutdown with {:?}", e);
-				}
-				debug!("Polkadot service shutdown");
-			})
-		};
-
-		// wait for the network to start up before starting the consensus
-		// service.
-		barrier.wait();
+			task_executor.spawn(events);
+		}
 
 		// Spin consensus service if configured
-		let consensus_service = components.build_consensus(client.clone(), network.clone(), transaction_pool.clone(), &keystore)?;
+		let consensus_service = components.build_consensus(
+			client.clone(),
+			network.clone(),
+			transaction_pool.clone(),
+			&keystore,
+			task_executor,
+		)?;
 
 		Ok(Service {
-			thread: Some(thread),
 			client: client,
 			network: network,
 			transaction_pool: transaction_pool,
@@ -234,7 +223,7 @@ impl<Components> Service<Components>
 	}
 
 	/// Get shared network instance.
-	pub fn network(&self) -> Arc<network::Service<Block>> {
+	pub fn network(&self) -> Arc<NetworkService> {
 		self.network.clone()
 	}
 
@@ -260,14 +249,12 @@ pub fn prune_imported<A>(pool: &TransactionPool<A>, hash: Hash)
 
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
+		debug!(target: "service", "Polkadot service shutdown");
+
 		self.network.stop_network();
 
 		if let Some(signal) = self.signal.take() {
 			signal.fire();
-		}
-
-		if let Some(thread) = self.thread.take() {
-			thread.join().expect("The service thread has panicked");
 		}
 	}
 }

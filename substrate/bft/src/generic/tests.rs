@@ -21,13 +21,14 @@ use super::*;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Instant, Duration};
 
-use futures::prelude::*;
-use futures::sync::{oneshot, mpsc};
-use futures::future::FutureResult;
+use futures::sync::mpsc;
+use futures::future::{self, FutureResult};
 
-use tokio_timer::{self, Timer};
+use tokio::timer::Delay;
+use tokio::runtime;
+use tokio::prelude::*;
 
 const ROUND_DURATION: Duration = Duration::from_millis(50);
 
@@ -60,8 +61,8 @@ impl<T: Clone + Send + 'static> Network<T> {
 		(network, inputs, outputs)
 	}
 
-	fn route_on_thread(self) {
-		::std::thread::spawn(move || { let _ = self.wait(); });
+	fn route_in_background(self) {
+		::tokio::executor::spawn(self);
 	}
 }
 
@@ -94,7 +95,7 @@ impl<T: Clone> Future for Network<T> {
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 struct Candidate(usize);
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 struct Digest(usize);
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -117,7 +118,6 @@ struct TestContext {
 	proposal: Mutex<usize>,
 	node_count: usize,
 	current_round: Arc<AtomicUsize>,
-	timer: Timer,
 	evaluated: Mutex<BTreeSet<usize>>,
 }
 
@@ -194,7 +194,7 @@ impl Context for TestContext {
 			}
 
 			let current_round = self.current_round.clone();
-			let timeout = self.timer.sleep(round_duration)
+			let timeout = Delay::new(Instant::now() + round_duration)
 				.map(move |_| {
 					current_round.compare_and_swap(round, round + 1, Ordering::SeqCst);
 				})
@@ -205,278 +205,37 @@ impl Context for TestContext {
 	}
 }
 
-fn timeout_in(t: Duration) -> oneshot::Receiver<()> {
-	let (tx, rx) = oneshot::channel();
-	::std::thread::spawn(move || {
-		::std::thread::sleep(t);
-		let _ = tx.send(());
-	});
-
-	rx
+fn test_harness<F, X, T, U>(f: F) -> Result<T, U> where
+	F: FnOnce() -> X,
+	X: IntoFuture<Item=T,Error=U>,
+{
+	let mut runtime = runtime::current_thread::Runtime::new().unwrap();
+	runtime.block_on(future::lazy(f))
 }
 
 #[test]
 fn consensus_completes_with_minimum_good() {
-	let node_count = 10;
-	let max_faulty = 3;
+	let results = test_harness(|| {
+		let node_count = 10;
+		let max_faulty = 3;
 
-	let timer = tokio_timer::wheel().tick_duration(ROUND_DURATION).build();
+		let (network, net_send, net_recv) = Network::new(node_count);
+		network.route_in_background();
 
-	let (network, net_send, net_recv) = Network::new(node_count);
-	network.route_on_thread();
+		let nodes = net_send
+			.into_iter()
+			.zip(net_recv)
+			.take(node_count - max_faulty)
+			.enumerate()
+			.map(|(i, (tx, rx))| {
+				let ctx = TestContext {
+					local_id: AuthorityId(i),
+					proposal: Mutex::new(i),
+					current_round: Arc::new(AtomicUsize::new(0)),
+					evaluated: Mutex::new(BTreeSet::new()),
+					node_count,
+				};
 
-	let nodes = net_send
-		.into_iter()
-		.zip(net_recv)
-		.take(node_count - max_faulty)
-		.enumerate()
-		.map(|(i, (tx, rx))| {
-			let ctx = TestContext {
-				local_id: AuthorityId(i),
-				proposal: Mutex::new(i),
-				current_round: Arc::new(AtomicUsize::new(0)),
-				timer: timer.clone(),
-				evaluated: Mutex::new(BTreeSet::new()),
-				node_count,
-			};
-
-			agree(
-				ctx,
-				node_count,
-				max_faulty,
-				rx.map_err(|_| Error),
-				tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
-			)
-		})
-		.collect::<Vec<_>>();
-
-	let timeout = timeout_in(Duration::from_millis(500)).map_err(|_| Error);
-	let results = ::futures::future::join_all(nodes)
-		.map(Some)
-		.select(timeout.map(|_| None))
-		.wait()
-		.map(|(i, _)| i)
-		.map_err(|(e, _)| e)
-		.expect("to complete")
-		.expect("to not time out");
-
-	for result in &results {
-		assert_eq!(&result.justification.digest, &results[0].justification.digest);
-	}
-}
-
-#[test]
-fn consensus_completes_with_minimum_good_all_initial_proposals_bad() {
-	let node_count = 10;
-	let max_faulty = 3;
-
-	let timer = tokio_timer::wheel().tick_duration(ROUND_DURATION).build();
-
-	let (network, net_send, net_recv) = Network::new(node_count);
-	network.route_on_thread();
-
-	let nodes = net_send
-		.into_iter()
-		.zip(net_recv)
-		.take(node_count - max_faulty)
-		.enumerate()
-		.map(|(i, (tx, rx))| {
-			// the first 5 proposals are going to be bad.
-			let proposal = if i < 5 {
-				i * 3 // proposals considered bad in the tests if they are % 3
-			} else {
-				(i * 3) + 1
-			};
-
-			let ctx = TestContext {
-				local_id: AuthorityId(i),
-				proposal: Mutex::new(proposal),
-				current_round: Arc::new(AtomicUsize::new(0)),
-				timer: timer.clone(),
-				evaluated: Mutex::new(BTreeSet::new()),
-				node_count,
-			};
-
-			agree(
-				ctx,
-				node_count,
-				max_faulty,
-				rx.map_err(|_| Error),
-				tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
-			)
-		})
-		.collect::<Vec<_>>();
-
-	let timeout = timeout_in(Duration::from_millis(500)).map_err(|_| Error);
-	let results = ::futures::future::join_all(nodes)
-		.map(Some)
-		.select(timeout.map(|_| None))
-		.wait()
-		.map(|(i, _)| i)
-		.map_err(|(e, _)| e)
-		.expect("to complete")
-		.expect("to not time out");
-
-	for result in &results {
-		assert_eq!(&result.justification.digest, &results[0].justification.digest);
-	}
-}
-
-#[test]
-fn consensus_does_not_complete_without_enough_nodes() {
-	let node_count = 10;
-	let max_faulty = 3;
-
-	let timer = tokio_timer::wheel().tick_duration(ROUND_DURATION).build();
-
-	let (network, net_send, net_recv) = Network::new(node_count);
-	network.route_on_thread();
-
-	let nodes = net_send
-		.into_iter()
-		.zip(net_recv)
-		.take(node_count - max_faulty - 1)
-		.enumerate()
-		.map(|(i, (tx, rx))| {
-			let ctx = TestContext {
-				local_id: AuthorityId(i),
-				proposal: Mutex::new(i),
-				current_round: Arc::new(AtomicUsize::new(0)),
-				timer: timer.clone(),
-				evaluated: Mutex::new(BTreeSet::new()),
-				node_count,
-			};
-
-			agree(
-				ctx,
-				node_count,
-				max_faulty,
-				rx.map_err(|_| Error),
-				tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
-			)
-		})
-		.collect::<Vec<_>>();
-
-	let timeout = timeout_in(Duration::from_millis(500)).map_err(|_| Error);
-	let result = ::futures::future::join_all(nodes)
-		.map(Some)
-		.select(timeout.map(|_| None))
-		.wait()
-		.map(|(i, _)| i)
-		.map_err(|(e, _)| e)
-		.expect("to complete");
-
-	assert!(result.is_none(), "not enough online nodes");
-}
-
-#[test]
-fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
-	let node_count = 10;
-	let max_faulty = 3;
-
-	let locked_proposal = Candidate(999_999_999);
-	let locked_digest = Digest(999_999_999);
-	let locked_round = 1;
-	let justification = UncheckedJustification {
-		round_number: locked_round,
-		digest: locked_digest.clone(),
-		signatures: (0..7)
-			.map(|i| Signature(Message::Vote(Vote::Prepare(locked_round, locked_digest.clone())), AuthorityId(i)))
-			.collect()
-	}.check(7, |_, _, s| Some(s.1.clone())).unwrap();
-
-	let timer = tokio_timer::wheel().tick_duration(ROUND_DURATION).build();
-
-	let (network, net_send, net_recv) = Network::new(node_count);
-	network.route_on_thread();
-
-	let nodes = net_send
-		.into_iter()
-		.zip(net_recv)
-		.enumerate()
-		.map(|(i, (tx, rx))| {
-			let ctx = TestContext {
-				local_id: AuthorityId(i),
-				proposal: Mutex::new(i),
-				current_round: Arc::new(AtomicUsize::new(locked_round + 1)),
-				timer: timer.clone(),
-				evaluated: Mutex::new(BTreeSet::new()),
-				node_count,
-			};
-			let mut agreement = agree(
-				ctx,
-				node_count,
-				max_faulty,
-				rx.map_err(|_| Error),
-				tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
-			);
-
-			agreement.strategy.advance_to_round(
-				&agreement.context,
-				locked_round + 1
-			);
-
-			if i <= max_faulty {
-				agreement.strategy.locked = Some(Locked {
-					justification: justification.clone(),
-				})
-			}
-
-			if i == max_faulty {
-				agreement.strategy.notable_candidates.insert(
-					locked_digest.clone(),
-					locked_proposal.clone(),
-				);
-			}
-
-			agreement
-		})
-		.collect::<Vec<_>>();
-
-	let timeout = timeout_in(Duration::from_millis(1000)).map_err(|_| Error);
-	let results = ::futures::future::join_all(nodes)
-		.map(Some)
-		.select(timeout.map(|_| None))
-		.wait()
-		.map(|(i, _)| i)
-		.map_err(|(e, _)| e)
-		.expect("to complete")
-		.expect("to not time out");
-
-	for result in &results {
-		assert_eq!(&result.justification.digest, &locked_digest);
-	}
-}
-
-#[test]
-fn consensus_completes_even_when_nodes_start_with_a_delay() {
-	let node_count = 10;
-	let max_faulty = 3;
-	let base_sleep = Duration::from_millis(75);
-
-	let timer = tokio_timer::wheel().tick_duration(ROUND_DURATION).build();
-
-	let (network, net_send, net_recv) = Network::new(node_count);
-	network.route_on_thread();
-
-	let nodes = net_send
-		.into_iter()
-		.zip(net_recv)
-		.take(node_count - max_faulty)
-		.enumerate()
-		.map(|(i, (tx, rx))| {
-			let ctx = TestContext {
-				local_id: AuthorityId(i),
-				proposal: Mutex::new(i),
-				current_round: Arc::new(AtomicUsize::new(0)),
-				timer: timer.clone(),
-				evaluated: Mutex::new(BTreeSet::new()),
-				node_count,
-			};
-
-			let sleep_duration = base_sleep * i as u32;
-
-			timer.sleep(sleep_duration).map_err(|_| Error).and_then(move |_| {
 				agree(
 					ctx,
 					node_count,
@@ -485,18 +244,224 @@ fn consensus_completes_even_when_nodes_start_with_a_delay() {
 					tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
 				)
 			})
-		})
-		.collect::<Vec<_>>();
+			.collect::<Vec<_>>();
 
-	let timeout = timeout_in(Duration::from_millis(750)).map_err(|_| Error);
-	let results = ::futures::future::join_all(nodes)
-		.map(Some)
-		.select(timeout.map(|_| None))
-		.wait()
-		.map(|(i, _)| i)
-		.map_err(|(e, _)| e)
-		.expect("to complete")
-		.expect("to not time out");
+		::futures::future::join_all(nodes)
+			.deadline(Instant::now() + Duration::from_millis(500))
+	}).unwrap();
+
+	for result in &results {
+		assert_eq!(&result.justification.digest, &results[0].justification.digest);
+	}
+}
+
+#[test]
+fn consensus_completes_with_minimum_good_all_initial_proposals_bad() {
+	let results = test_harness(|| {
+		let node_count = 10;
+		let max_faulty = 3;
+
+		let (network, net_send, net_recv) = Network::new(node_count);
+		network.route_in_background();
+
+		let nodes = net_send
+			.into_iter()
+			.zip(net_recv)
+			.take(node_count - max_faulty)
+			.enumerate()
+			.map(|(i, (tx, rx))| {
+				// the first 5 proposals are going to be bad.
+				let proposal = if i < 5 {
+					i * 3 // proposals considered bad in the tests if they are % 3
+				} else {
+					(i * 3) + 1
+				};
+
+				let ctx = TestContext {
+					local_id: AuthorityId(i),
+					proposal: Mutex::new(proposal),
+					current_round: Arc::new(AtomicUsize::new(0)),
+					evaluated: Mutex::new(BTreeSet::new()),
+					node_count,
+				};
+
+				agree(
+					ctx,
+					node_count,
+					max_faulty,
+					rx.map_err(|_| Error),
+					tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
+				)
+			})
+			.collect::<Vec<_>>();
+
+		::futures::future::join_all(nodes)
+			.deadline(Instant::now() + Duration::from_millis(500))
+	}).unwrap();
+
+	for result in &results {
+		assert_eq!(&result.justification.digest, &results[0].justification.digest);
+	}
+}
+
+#[test]
+fn consensus_does_not_complete_without_enough_nodes() {
+	let result = test_harness(|| {
+		let node_count = 10;
+		let max_faulty = 3;
+
+		let (network, net_send, net_recv) = Network::new(node_count);
+		network.route_in_background();
+
+		let nodes = net_send
+			.into_iter()
+			.zip(net_recv)
+			.take(node_count - max_faulty - 1)
+			.enumerate()
+			.map(|(i, (tx, rx))| {
+				let ctx = TestContext {
+					local_id: AuthorityId(i),
+					proposal: Mutex::new(i),
+					current_round: Arc::new(AtomicUsize::new(0)),
+					evaluated: Mutex::new(BTreeSet::new()),
+					node_count,
+				};
+
+				agree(
+					ctx,
+					node_count,
+					max_faulty,
+					rx.map_err(|_| Error),
+					tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
+				)
+			})
+			.collect::<Vec<_>>();
+
+		::futures::future::join_all(nodes)
+			.deadline(Instant::now() + Duration::from_millis(500))
+	});
+
+	match result {
+		Ok(_) => panic!("completed wrongly"),
+		Err(ref e) if e.is_inner() => panic!("failed for wrong reason"),
+		Err(_) => {},
+	}
+}
+
+#[test]
+fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
+	let locked_digest = Digest(999_999_999);
+
+	let results = test_harness(move || {
+		let node_count = 10;
+		let max_faulty = 3;
+
+		let locked_proposal = Candidate(999_999_999);
+		let locked_round = 1;
+		let justification = UncheckedJustification {
+			round_number: locked_round,
+			digest: locked_digest.clone(),
+			signatures: (0..7)
+				.map(|i| Signature(Message::Vote(Vote::Prepare(locked_round, locked_digest.clone())), AuthorityId(i)))
+				.collect()
+		}.check(7, |_, _, s| Some(s.1.clone())).unwrap();
+
+		let (network, net_send, net_recv) = Network::new(node_count);
+		network.route_in_background();
+
+		let nodes = net_send
+			.into_iter()
+			.zip(net_recv)
+			.enumerate()
+			.map(|(i, (tx, rx))| {
+				let ctx = TestContext {
+					local_id: AuthorityId(i),
+					proposal: Mutex::new(i),
+					current_round: Arc::new(AtomicUsize::new(locked_round + 1)),
+					evaluated: Mutex::new(BTreeSet::new()),
+					node_count,
+				};
+				let mut agreement = agree(
+					ctx,
+					node_count,
+					max_faulty,
+					rx.map_err(|_| Error),
+					tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
+				);
+
+				agreement.strategy.advance_to_round(
+					&agreement.context,
+					locked_round + 1
+				);
+
+				if i <= max_faulty {
+					agreement.strategy.locked = Some(Locked {
+						justification: justification.clone(),
+					})
+				}
+
+				if i == max_faulty {
+					agreement.strategy.notable_candidates.insert(
+						locked_digest.clone(),
+						locked_proposal.clone(),
+					);
+				}
+
+				agreement
+			})
+			.collect::<Vec<_>>();
+
+		::futures::future::join_all(nodes)
+			.deadline(Instant::now() + Duration::from_millis(1000))
+	}).unwrap();
+
+	for result in &results {
+		assert_eq!(&result.justification.digest, &locked_digest);
+	}
+}
+
+#[test]
+fn consensus_completes_even_when_nodes_start_with_a_delay() {
+	let results = test_harness(|| {
+		let node_count = 10;
+		let max_faulty = 3;
+		let base_sleep = Duration::from_millis(75);
+
+		let now = Instant::now();
+		let (network, net_send, net_recv) = Network::new(node_count);
+		network.route_in_background();
+
+		let nodes = net_send
+			.into_iter()
+			.zip(net_recv)
+			.take(node_count - max_faulty)
+			.enumerate()
+			.map(move |(i, (tx, rx))| {
+				let ctx = TestContext {
+					local_id: AuthorityId(i),
+					proposal: Mutex::new(i),
+					current_round: Arc::new(AtomicUsize::new(0)),
+					evaluated: Mutex::new(BTreeSet::new()),
+					node_count,
+				};
+
+				let sleep_duration = base_sleep * i as u32;
+
+				Delay::new(now + sleep_duration).map_err(|_| Error).and_then(move |_| {
+					agree(
+						ctx,
+						node_count,
+						max_faulty,
+						rx.map_err(|_| Error),
+						tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
+					)
+				})
+			})
+			.collect::<Vec<_>>();
+
+		::futures::future::join_all(nodes)
+			.deadline(now + Duration::from_millis(750))
+	}).unwrap();
 
 	for result in &results {
 		assert_eq!(&result.justification.digest, &results[0].justification.digest);

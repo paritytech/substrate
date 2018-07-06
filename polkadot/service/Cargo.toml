@@ -6,13 +6,12 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 futures = "0.1.17"
 parking_lot = "0.4"
-tokio-timer = "0.1.2"
 error-chain = "0.12"
 lazy_static = "1.0"
 log = "0.3"
 slog = "^2"
 clap = "2.27"
-tokio-core = "0.1.12"
+tokio = "0.1.7"
 exit-future = "0.1"
 serde = "1.0"
 serde_json = "1.0"
@@ -25,6 +24,7 @@ polkadot-consensus = { path = "../consensus" }
 polkadot-executor = { path = "../executor" }
 polkadot-api = { path = "../api" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
+polkadot-network = { path = "../network" }
 substrate-keystore = { path = "../../substrate/keystore" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
