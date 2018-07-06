@@ -549,7 +549,7 @@ impl<T: Trait> Module<T> {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
-	// for the voting onto the  council
+	// for the voting onto the council
 	pub candidacy_bond: T::Balance,
 	pub voter_bond: T::Balance,
 	pub present_slash_per_voter: T::Balance,
