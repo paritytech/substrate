@@ -18,10 +18,10 @@
 //!
 //! This implementation is somewhat specialized to the tracking of the storage of accounts.
 
-use rstd::prelude::*;
 use codec::Slicable;
-use runtime_support::storage::unhashed;
+use rstd::prelude::*;
 use runtime_io::{blake2_256, twox_128};
+use runtime_support::storage::unhashed;
 
 /// Returns only a first part of the storage key.
 ///

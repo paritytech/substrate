@@ -31,19 +31,20 @@ extern crate substrate_runtime_io as runtime_io;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate substrate_codec as codec;
 #[cfg(test)]
 extern crate substrate_primitives;
+extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_system as system;
-extern crate substrate_runtime_consensus as consensus;
-extern crate substrate_codec as codec;
 
-use runtime_support::{StorageValue, Parameter};
+use runtime_primitives::traits::{As, Executable, MaybeEmpty, SimpleArithmetic, Zero};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{Executable, MaybeEmpty, SimpleArithmetic, As, Zero};
+use runtime_support::{Parameter, StorageValue};
 
-pub trait Trait: consensus::Trait where
-	<Self as consensus::Trait>::PublicAux: MaybeEmpty
+pub trait Trait: consensus::Trait
+where
+	<Self as consensus::Trait>::PublicAux: MaybeEmpty,
 {
 	// the position of the required timestamp-set extrinsic.
 	const TIMESTAMP_SET_POSITION: u32;
@@ -78,7 +79,10 @@ impl<T: Trait> Module<T> {
 	/// Set the current time.
 	fn set(aux: &T::PublicAux, now: T::Moment) -> Result {
 		assert!(aux.is_empty());
-		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
+		assert!(
+			!<Self as Store>::DidUpdate::exists(),
+			"Timestamp must be updated only once in the block"
+		);
 		assert!(
 			<system::Module<T>>::extrinsic_index() == T::TIMESTAMP_SET_POSITION,
 			"Timestamp extrinsic must be at position {} in the block",
@@ -102,7 +106,10 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> Executable for Module<T> {
 	fn execute() {
-		assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+		assert!(
+			<Self as Store>::DidUpdate::take(),
+			"Timestamp must be updated once in the block"
+		);
 	}
 }
 
@@ -124,11 +131,10 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
-{
+impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
-		use runtime_io::twox_128;
 		use codec::Slicable;
+		use runtime_io::twox_128;
 		Ok(map![
 			twox_128(<BlockPeriod<T>>::key()).to_vec() => self.period.encode(),
 			twox_128(<Now<T>>::key()).to_vec() => T::Moment::sa(0).encode()
@@ -141,10 +147,10 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
-	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
+	use runtime_primitives::traits::{BlakeTwo256, HasPublicAux};
+	use runtime_primitives::BuildStorage;
+	use substrate_primitives::H256;
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
@@ -172,7 +178,9 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default()
+			.build_storage()
+			.unwrap();
 		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
 
 		with_externalities(&mut t, || {
@@ -185,7 +193,9 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default()
+			.build_storage()
+			.unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
 
 		with_externalities(&mut t, || {
@@ -196,9 +206,13 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Timestamp but increment by at least <BlockPeriod> between sequential blocks")]
+	#[should_panic(
+		expected = "Timestamp but increment by at least <BlockPeriod> between sequential blocks"
+	)]
 	fn block_period_is_enforced() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default()
+			.build_storage()
+			.unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
 
 		with_externalities(&mut t, || {

@@ -22,9 +22,14 @@
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 #![cfg_attr(not(feature = "std"), feature(use_extern_macros))]
-
-#![cfg_attr(feature = "std", doc = "Polkadot runtime standard library as compiled when linked with Rust's standard library.")]
-#![cfg_attr(not(feature = "std"), doc = "Polkadot's runtime standard library as compiled without Rust's standard library.")]
+#![cfg_attr(
+	feature = "std",
+	doc = "Polkadot runtime standard library as compiled when linked with Rust's standard library."
+)]
+#![cfg_attr(
+	not(feature = "std"),
+	doc = "Polkadot's runtime standard library as compiled without Rust's standard library."
+)]
 
 #[macro_export]
 macro_rules! map {
@@ -43,8 +48,8 @@ include!("../without_std.rs");
 ///
 /// This should include only things which are in the normal std prelude.
 pub mod prelude {
-	pub use ::vec::Vec;
-	pub use ::boxed::Box;
-	pub use ::cmp::{Eq, PartialEq};
-	pub use ::clone::Clone;
+	pub use boxed::Box;
+	pub use clone::Clone;
+	pub use cmp::{Eq, PartialEq};
+	pub use vec::Vec;
 }

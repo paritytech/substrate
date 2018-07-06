@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use network::{NetworkContext, PeerId, Error as NetworkError, SessionInfo};
+use network::{Error as NetworkError, NetworkContext, PeerId, SessionInfo};
 
 /// IO interface for the syncing handler.
 /// Provides peer connection management and an interface to the blockchain client.
@@ -43,9 +43,7 @@ pub struct NetSyncIo<'s> {
 impl<'s> NetSyncIo<'s> {
 	/// Creates a new instance from the `NetworkContext` and the blockchain client reference.
 	pub fn new(network: &'s NetworkContext) -> NetSyncIo<'s> {
-		NetSyncIo {
-			network: network,
-		}
+		NetSyncIo { network }
 	}
 }
 
@@ -58,7 +56,7 @@ impl<'s> SyncIo for NetSyncIo<'s> {
 		self.network.disconnect_peer(peer_id);
 	}
 
-	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) -> Result<(), NetworkError>{
+	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) -> Result<(), NetworkError> {
 		self.network.send(peer_id, 0, data)
 	}
 
@@ -74,5 +72,3 @@ impl<'s> SyncIo for NetSyncIo<'s> {
 		self.network.peer_client_version(peer_id)
 	}
 }
-
-

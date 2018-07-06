@@ -19,8 +19,8 @@
 use std::sync::Arc;
 
 use client::{self, Client};
-use extrinsic_pool::api::{Error, ExtrinsicPool};
 use codec::Slicable;
+use extrinsic_pool::api::{Error, ExtrinsicPool};
 
 use primitives::Bytes;
 use runtime_primitives::{generic, traits::Block as BlockT};
@@ -60,27 +60,36 @@ impl<B, E, Block: BlockT, P> Author<B, E, Block, P> {
 	}
 }
 
-impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> where
+impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P>
+where
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
 	E: client::CallExecutor<Block> + Send + Sync + 'static,
 	Block: BlockT + 'static,
-	client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
+	client::error::Error: From<
+		<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error,
+	>,
 	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash>,
 	P::Error: 'static,
 	Ex: Slicable,
 {
 	fn submit_extrinsic(&self, xt: Bytes) -> Result<Hash> {
-		self.submit_rich_extrinsic(Ex::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?)
+		self.submit_rich_extrinsic(
+			Ex::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?,
+		)
 	}
 
 	fn submit_rich_extrinsic(&self, xt: Ex) -> Result<Hash> {
 		let best_block_hash = self.client.info().unwrap().chain.best_hash;
 		self.pool
 			.submit(generic::BlockId::hash(best_block_hash), vec![xt])
-			.map(|mut res| res.pop().expect("One extrinsic passed; one result back; qed"))
-			.map_err(|e| e.into_pool_error()
-				.map(Into::into)
-				.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
-			)
+			.map(|mut res| {
+				res.pop()
+					.expect("One extrinsic passed; one result back; qed")
+			})
+			.map_err(|e| {
+				e.into_pool_error()
+					.map(Into::into)
+					.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
+			})
 	}
 }

@@ -17,12 +17,11 @@
 //! Shareable Polkadot types.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate rustc_hex;
 extern crate byteorder;
+extern crate rustc_hex;
 #[macro_use]
 extern crate crunchy;
 #[macro_use]
@@ -32,11 +31,11 @@ extern crate uint as uint_crate;
 extern crate substrate_codec as codec;
 
 #[cfg(feature = "std")]
+extern crate blake2_rfc;
+#[cfg(feature = "std")]
 extern crate serde;
 #[cfg(feature = "std")]
 extern crate twox_hash;
-#[cfg(feature = "std")]
-extern crate blake2_rfc;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
@@ -61,8 +60,8 @@ macro_rules! map {
 	)
 }
 
-use rstd::prelude::*;
 use rstd::ops::Deref;
+use rstd::prelude::*;
 
 #[cfg(feature = "std")]
 pub mod bytes;
@@ -92,13 +91,17 @@ pub type Signature = hash::H512;
 /// Hex-serialised shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
-pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Bytes(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
-	fn from(s: Vec<u8>) -> Self { Bytes(s) }
+	fn from(s: Vec<u8>) -> Self {
+		Bytes(s)
+	}
 }
 
 impl Deref for Bytes {
 	type Target = [u8];
-	fn deref(&self) -> &[u8] { &self.0[..] }
+	fn deref(&self) -> &[u8] {
+		&self.0[..]
+	}
 }

@@ -16,10 +16,10 @@
 
 //! Stuff to do with the runtime's storage.
 
-use rstd::prelude::*;
+use codec::{Input, KeyedVec, Slicable};
 use rstd::borrow::Borrow;
+use rstd::prelude::*;
 use runtime_io::{self, twox_128};
-use codec::{Slicable, KeyedVec, Input};
 
 pub mod generator;
 
@@ -39,7 +39,7 @@ impl<'a> Input for IncrementalInput<'a> {
 	}
 }
 
- /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
+/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 	let key = twox_128(key);
 	runtime_io::read_storage(&key[..], &mut [0; 0][..], 0).map(|_| {
@@ -175,7 +175,10 @@ pub trait StorageValue<T: Slicable> {
 	fn take() -> Self::Query;
 }
 
-impl<T: Slicable, U> StorageValue<T> for U where U: generator::StorageValue<T> {
+impl<T: Slicable, U> StorageValue<T> for U
+where
+	U: generator::StorageValue<T>,
+{
 	type Query = U::Query;
 
 	fn key() -> &'static [u8] {
@@ -228,7 +231,10 @@ pub trait StorageList<T: Slicable> {
 	fn clear();
 }
 
-impl<T: Slicable, U> StorageList<T> for U where U: generator::StorageList<T> {
+impl<T: Slicable, U> StorageList<T> for U
+where
+	U: generator::StorageList<T>,
+{
 	fn prefix() -> &'static [u8] {
 		<U as generator::StorageList<T>>::prefix()
 	}
@@ -293,7 +299,10 @@ pub trait StorageMap<K: Slicable, V: Slicable> {
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 }
 
-impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::StorageMap<K, V> {
+impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U
+where
+	U: generator::StorageMap<K, V>,
+{
 	type Query = U::Query;
 
 	fn prefix() -> &'static [u8] {
@@ -337,15 +346,17 @@ pub trait StorageVec {
 
 	/// Set the current set of items.
 	fn set_items<I, T>(items: I)
-		where
-			I: IntoIterator<Item=T>,
-			T: Borrow<Self::Item>,
+	where
+		I: IntoIterator<Item = T>,
+		T: Borrow<Self::Item>,
 	{
 		let mut count: u32 = 0;
 
 		for i in items.into_iter() {
 			put(&count.to_keyed_vec(Self::PREFIX), i.borrow());
-			count = count.checked_add(1).expect("exceeded runtime storage capacity");
+			count = count
+				.checked_add(1)
+				.expect("exceeded runtime storage capacity");
 		}
 
 		Self::set_count(count);
@@ -385,17 +396,16 @@ pub trait StorageVec {
 }
 
 pub mod unhashed {
+	use super::{runtime_io, IncrementalInput, KeyedVec, Slicable, Vec};
 	use rstd::borrow::Borrow;
-	use super::{runtime_io, Slicable, KeyedVec, Vec, IncrementalInput};
 
-	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
+	/// Return the value of the item in storage under `key`, or `None` if there is no explicit
+	/// entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 		runtime_io::read_storage(key, &mut [0; 0][..], 0).map(|_| {
-			let mut input = IncrementalInput {
-				key,
-				pos: 0,
-			};
-			Slicable::decode(&mut input).expect("stroage is not null, therefore must be a valid type")
+			let mut input = IncrementalInput { key, pos: 0 };
+			Slicable::decode(&mut input)
+				.expect("stroage is not null, therefore must be a valid type")
 		})
 	}
 
@@ -422,7 +432,8 @@ pub mod unhashed {
 		value.using_encoded(|slice| runtime_io::set_storage(key, slice));
 	}
 
-	/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
+	/// Remove `key` from storage, returning its value if it had an explicit entry or `None`
+	/// otherwise.
 	pub fn take<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 		let r = get(key);
 		if r.is_some() {
@@ -431,8 +442,8 @@ pub mod unhashed {
 		r
 	}
 
-	/// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
-	/// the default for its type.
+	/// Remove `key` from storage, returning its value, or, if there was no explicit entry in
+	/// storage, the default for its type.
 	pub fn take_or_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
 		take(key).unwrap_or_else(Default::default)
 	}
@@ -451,7 +462,7 @@ pub mod unhashed {
 
 	/// Check to see if `key` has an explicit entry in storage.
 	pub fn exists(key: &[u8]) -> bool {
-		runtime_io::read_storage(key, &mut [0;0][..], 0).is_some()
+		runtime_io::read_storage(key, &mut [0; 0][..], 0).is_some()
 	}
 
 	/// Ensure `key` has no explicit entry in storage.
@@ -486,15 +497,17 @@ pub mod unhashed {
 
 		/// Set the current set of items.
 		fn set_items<I, T>(items: I)
-			where
-				I: IntoIterator<Item=T>,
-				T: Borrow<Self::Item>,
+		where
+			I: IntoIterator<Item = T>,
+			T: Borrow<Self::Item>,
 		{
 			let mut count: u32 = 0;
 
 			for i in items.into_iter() {
 				put(&count.to_keyed_vec(Self::PREFIX), i.borrow());
-				count = count.checked_add(1).expect("exceeded runtime storage capacity");
+				count = count
+					.checked_add(1)
+					.expect("exceeded runtime storage capacity");
 			}
 
 			Self::set_count(count);
@@ -530,7 +543,7 @@ pub mod unhashed {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::{twox_128, TestExternalities, with_externalities};
+	use runtime_io::{twox_128, with_externalities, TestExternalities};
 
 	#[test]
 	fn integers_can_be_stored() {
@@ -575,7 +588,6 @@ mod tests {
 			let x = b"Hello world".to_vec();
 			let y = get::<Vec<u8>>(b":test").unwrap();
 			assert_eq!(x, y);
-
 		});
 	}
 

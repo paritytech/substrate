@@ -16,9 +16,9 @@
 
 //! Polkadot blockchain trait
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
 use error::Result;
 
@@ -31,7 +31,10 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block status.
 	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Hash>>;
+	fn hash(
+		&self,
+		number: <<Block as BlockT>::Header as HeaderT>::Number,
+	) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Hash>>;
 }
 
 /// Blockchain database backend. Does not perform any validation.

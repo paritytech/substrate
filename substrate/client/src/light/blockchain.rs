@@ -17,14 +17,16 @@
 //! Light client blockchin backend. Only stores headers and justifications of recent
 //! blocks. CHT roots are stored for headers of ancient blocks.
 
-use std::sync::Weak;
 use parking_lot::Mutex;
+use std::sync::Weak;
 
-use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::{bft::Justification, generic::BlockId};
 
-use blockchain::{Backend as BlockchainBackend, BlockStatus,
-	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
+use blockchain::{
+	Backend as BlockchainBackend, BlockStatus, HeaderBackend as BlockchainHeaderBackend,
+	Info as BlockchainInfo,
+};
 use error::Result as ClientResult;
 use light::fetcher::Fetcher;
 
@@ -65,7 +67,12 @@ impl<S, F> Blockchain<S, F> {
 	}
 }
 
-impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Block: BlockT, S: Storage<Block>, F: Fetcher<Block> {
+impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F>
+where
+	Block: BlockT,
+	S: Storage<Block>,
+	F: Fetcher<Block>,
+{
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		self.storage.header(id)
 	}
@@ -78,18 +85,29 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 		self.storage.status(id)
 	}
 
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
+	fn hash(
+		&self,
+		number: <<Block as BlockT>::Header as HeaderT>::Number,
+	) -> ClientResult<Option<Block::Hash>> {
 		self.storage.hash(number)
 	}
 }
 
-impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: BlockT, S: Storage<Block>, F: Fetcher<Block> {
+impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F>
+where
+	Block: BlockT,
+	S: Storage<Block>,
+	F: Fetcher<Block>,
+{
 	fn body(&self, _id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		// TODO [light]: fetch from remote node
 		Ok(None)
 	}
 
-	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification<Block::Hash>>> {
+	fn justification(
+		&self,
+		_id: BlockId<Block>,
+	) -> ClientResult<Option<Justification<Block::Hash>>> {
 		Ok(None)
 	}
 }

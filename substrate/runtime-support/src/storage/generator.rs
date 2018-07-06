@@ -35,23 +35,23 @@
 //! pub type SessionKey = [u8; 32];
 //!
 //! storage_items! {
-//!     // public value
-//!     pub Value: b"putd_key" => SessionKey;
-//!     // private map.
-//!     Balances: b"private_map:" => map [AuthorityId => Balance];
-//!     // private list.
-//!     Authorities: b"auth:" => list [AuthorityId];
-//! }
+//! // public value
+//! pub Value: b"putd_key" => SessionKey;
+//! // private map.
+//! Balances: b"private_map:" => map [AuthorityId => Balance];
+//! // private list.
+//! Authorities: b"auth:" => list [AuthorityId];
+//! 			}
 //!
-//!# fn main() { }
+//! # fn main() { }
 //! ```
 
 use codec;
-use rstd::vec::Vec;
 #[doc(hidden)]
 pub use rstd::borrow::Borrow;
 #[doc(hidden)]
 pub use rstd::marker::PhantomData;
+use rstd::vec::Vec;
 
 /// Abstraction around storage.
 pub trait Storage {
@@ -63,11 +63,15 @@ pub trait Storage {
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect. Will panic if
 	/// it's not there.
-	fn require<T: codec::Slicable>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
+	fn require<T: codec::Slicable>(&self, key: &[u8]) -> T {
+		self.get(key).expect("Required values must be in storage")
+	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect. The type's
 	/// default is returned if it's not there.
-	fn get_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
+	fn get_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T {
+		self.get(key).unwrap_or_default()
+	}
 
 	/// Put a value in under a key.
 	fn put<T: codec::Slicable>(&self, key: &[u8], val: &T);
@@ -83,10 +87,14 @@ pub trait Storage {
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_panic<T: codec::Slicable>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
+	fn take_or_panic<T: codec::Slicable>(&self, key: &[u8]) -> T {
+		self.take(key).expect("Required values must be in storage")
+	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+	fn take_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T {
+		self.take(key).unwrap_or_default()
+	}
 }
 
 /// A strongly-typed value kept in storage.
@@ -516,9 +524,9 @@ macro_rules! __decl_storage_item {
 }
 
 // TODO: revisit this idiom once we get `type`s in `impl`s.
-/*impl<T: Trait> Module<T> {
-	type Now = super::Now<T>;
-}*/
+// impl<T: Trait> Module<T> {
+// type Now = super::Now<T>;
+// }
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 ///
@@ -654,16 +662,26 @@ macro_rules! __decl_store_items {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __impl_store_fn {
-	($traitinstance:ident $name:ident $get_fn:ident ($gettype:ty) $key:expr => $ty:ty) => {
+	($traitinstance:ident $name:ident $get_fn:ident($gettype:ty) $key:expr => $ty:ty) => {
 		pub fn $get_fn() -> $gettype {
-			<$name<$traitinstance> as $crate::storage::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage)
+			<$name<$traitinstance> as $crate::storage::generator::StorageValue<$ty>>::get(
+				&$crate::storage::RuntimeStorage,
+			)
 		}
 	};
-	($traitinstance:ident $name:ident $get_fn:ident ($gettype:ty) $prefix:expr => map [$kty:ty => $ty:ty]) => {
+	(
+		$traitinstance:ident
+		$name:ident
+		$get_fn:ident($gettype:ty)
+		$prefix:expr => map[$kty:ty => $ty:ty]
+	) => {
 		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
-			<$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
+			<$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::get(
+				key.borrow(),
+				&$crate::storage::RuntimeStorage,
+			)
 		}
-	}
+	};
 }
 
 #[macro_export]
@@ -766,7 +784,9 @@ macro_rules! __impl_store_fns {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __impl_store_item {
-	($name:ident $traitinstance:ident) => { type $name = $name<$traitinstance>; }
+	($name:ident $traitinstance:ident) => {
+		type $name = $name<$traitinstance>;
+	};
 }
 
 #[macro_export]
@@ -989,10 +1009,10 @@ macro_rules! __decl_storage_items {
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
-	use std::cell::RefCell;
-	use codec::Slicable;
 	use super::*;
+	use codec::Slicable;
+	use std::cell::RefCell;
+	use std::collections::HashMap;
 
 	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
 		fn exists(&self, key: &[u8]) -> bool {
@@ -1000,7 +1020,9 @@ mod tests {
 		}
 
 		fn get<T: Slicable>(&self, key: &[u8]) -> Option<T> {
-			self.borrow_mut().get(key).map(|v| T::decode(&mut &v[..]).unwrap())
+			self.borrow_mut()
+				.get(key)
+				.map(|v| T::decode(&mut &v[..]).unwrap())
 		}
 
 		fn put<T: Slicable>(&self, key: &[u8], val: &T) {

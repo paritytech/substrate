@@ -16,10 +16,10 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use std::{error, fmt};
 use std::collections::HashMap;
 use std::sync::Arc;
-use trie_backend::{TryIntoTrieBackend, TrieBackend};
+use std::{error, fmt};
+use trie_backend::{TrieBackend, TryIntoTrieBackend};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -42,7 +42,8 @@ pub trait Backend: TryIntoTrieBackend {
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
 	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
+	where
+		I: IntoIterator<Item = (Vec<u8>, Option<Vec<u8>>)>;
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
@@ -60,7 +61,9 @@ impl fmt::Display for Void {
 }
 
 impl error::Error for Void {
-	fn description(&self) -> &str { "unreachable error" }
+	fn description(&self) -> &str {
+		"unreachable error"
+	}
 }
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
@@ -84,8 +87,12 @@ impl InMemory {
 		let mut inner: HashMap<_, _> = (&*self.inner).clone();
 		for (key, val) in changes {
 			match val {
-				Some(v) => { inner.insert(key, v); },
-				None => { inner.remove(&key); },
+				Some(v) => {
+					inner.insert(key, v);
+				},
+				None => {
+					inner.remove(&key);
+				},
 			}
 		}
 
@@ -110,26 +117,36 @@ impl Backend for InMemory {
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.inner.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
+		self.inner
+			.keys()
+			.filter(|key| key.starts_with(prefix))
+			.map(|k| &**k)
+			.for_each(f);
 	}
 
 	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	where
+		I: IntoIterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 	{
 		let existing_pairs = self.inner.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = ::triehash::trie_root(existing_pairs.chain(transaction.iter().cloned())
-			.collect::<HashMap<_, _>>()
-			.into_iter()
-			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+		let root = ::triehash::trie_root(
+			existing_pairs
+				.chain(transaction.iter().cloned())
+				.collect::<HashMap<_, _>>()
+				.into_iter()
+				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val))),
 		).0;
 
 		(root, transaction)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.inner.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+		self.inner
+			.iter()
+			.map(|(k, v)| (k.clone(), v.clone()))
+			.collect()
 	}
 }
 
@@ -146,7 +163,7 @@ impl TryIntoTrieBackend for InMemory {
 			for (key, value) in self.inner.iter() {
 				if let Err(e) = trie.insert(&key, &value) {
 					warn!(target: "trie", "Failed to write to trie: {}", e);
-					return None;
+					return None
 				}
 			}
 		}

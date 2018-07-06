@@ -25,8 +25,6 @@ pub struct ProtocolConfig {
 
 impl Default for ProtocolConfig {
 	fn default() -> ProtocolConfig {
-		ProtocolConfig {
-			roles: Role::FULL,
-		}
+		ProtocolConfig { roles: Role::FULL }
 	}
 }

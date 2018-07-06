@@ -16,13 +16,15 @@
 
 //! Support code for the runtime.
 
-#[macro_use] extern crate hex_literal;
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate hex_literal;
+#[macro_use]
+extern crate lazy_static;
 pub extern crate ed25519;
 
+use ed25519::{Pair, Public, Signature};
 use std::collections::HashMap;
 use std::ops::Deref;
-use ed25519::{Pair, Public, Signature};
 
 /// Set of test accounts.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -78,7 +80,9 @@ impl Keyring {
 			Keyring::Eve => Pair::from_seed(b"Eve                             "),
 			Keyring::Ferdie => Pair::from_seed(b"Ferdie                          "),
 			Keyring::One => Pair::from_seed(b"12345678901234567890123456789012"),
-			Keyring::Two => Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")),
+			Keyring::Two => Pair::from_seed(&hex!(
+				"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+			)),
 		}
 	}
 }
@@ -109,11 +113,15 @@ lazy_static! {
 			Keyring::Ferdie,
 			Keyring::One,
 			Keyring::Two,
-		].iter().map(|&i| (i, i.pair())).collect()
+		].iter()
+			.map(|&i| (i, i.pair()))
+			.collect()
 	};
-
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
-		PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect()
+		PRIVATE_KEYS
+			.iter()
+			.map(|(&name, pair)| (name, pair.public()))
+			.collect()
 	};
 }
 
@@ -167,8 +175,20 @@ mod tests {
 
 	#[test]
 	fn should_work() {
-		assert!(Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", Keyring::Alice));
-		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Bob!", Keyring::Alice));
-		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", Keyring::Bob));
+		assert!(
+			Keyring::Alice
+				.sign(b"I am Alice!")
+				.verify(b"I am Alice!", Keyring::Alice)
+		);
+		assert!(
+			!Keyring::Alice
+				.sign(b"I am Alice!")
+				.verify(b"I am Bob!", Keyring::Alice)
+		);
+		assert!(
+			!Keyring::Alice
+				.sign(b"I am Alice!")
+				.verify(b"I am Alice!", Keyring::Bob)
+		);
 	}
 }

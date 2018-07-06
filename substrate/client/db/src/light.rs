@@ -16,20 +16,25 @@
 
 //! RocksDB-based light client blockchain storage.
 
-use std::sync::Arc;
 use parking_lot::RwLock;
+use std::sync::Arc;
 
-use kvdb::{KeyValueDB, DBTransaction};
+use kvdb::{DBTransaction, KeyValueDB};
 
-use client::blockchain::{BlockStatus, HeaderBackend as BlockchainHeaderBackend,
-	Info as BlockchainInfo};
+use client::blockchain::{
+	BlockStatus, HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo,
+};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::Slicable;
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing, HashingFor, Zero};
-use utils::{meta_keys, Meta, db_err, number_to_db_key, open_database, read_db, read_id, read_meta};
+use runtime_primitives::traits::{
+	As, Block as BlockT, Hashing, HashingFor, Header as HeaderT, Zero,
+};
+use utils::{
+	db_err, meta_keys, number_to_db_key, open_database, read_db, read_id, read_meta, Meta,
+};
 use DatabaseSettings;
 
 pub(crate) mod columns {
@@ -53,9 +58,9 @@ struct BestAuthorities<N> {
 }
 
 impl<Block> LightStorage<Block>
-	where
-		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+where
+	Block: BlockT,
+	<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
@@ -76,13 +81,15 @@ impl<Block> LightStorage<Block>
 	fn from_kvdb(db: Arc<KeyValueDB>) -> ClientResult<Self> {
 		let meta = RwLock::new(read_meta::<Block>(&*db, columns::HEADER)?);
 
-		Ok(LightStorage {
-			db,
-			meta,
-		})
+		Ok(LightStorage { db, meta })
 	}
 
-	fn update_meta(&self, hash: Block::Hash, number: <<Block as BlockT>::Header as HeaderT>::Number, is_best: bool) {
+	fn update_meta(
+		&self,
+		hash: Block::Hash,
+		number: <<Block as BlockT>::Header as HeaderT>::Number,
+		is_best: bool,
+	) {
 		if is_best {
 			let mut meta = self.meta.write();
 			if number == <<Block as BlockT>::Header as HeaderT>::Number::zero() {
@@ -96,16 +103,16 @@ impl<Block> LightStorage<Block>
 }
 
 impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
-	where
-		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+where
+	Block: BlockT,
+	<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, id)? {
 			Some(header) => match Block::Header::decode(&mut &header[..]) {
 				Some(header) => Ok(Some(header)),
 				None => return Err(ClientErrorKind::Backend("Error decoding header".into()).into()),
-			}
+			},
 			None => Ok(None),
 		}
 	}
@@ -130,18 +137,27 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		}
 	}
 
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
-		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
-			x.map(|raw| HashingFor::<Block>::hash(&raw[..])).map(Into::into)
-		)
+	fn hash(
+		&self,
+		number: <<Block as BlockT>::Header as HeaderT>::Number,
+	) -> ClientResult<Option<Block::Hash>> {
+		read_db::<Block>(
+			&*self.db,
+			columns::BLOCK_INDEX,
+			columns::HEADER,
+			BlockId::Number(number),
+		).map(|x| {
+			x.map(|raw| HashingFor::<Block>::hash(&raw[..]))
+				.map(Into::into)
+		})
 	}
 }
 
 impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
-	where
-		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
-		<Block as BlockT>::Hash: From<[u8; 32]> + Into<[u8; 32]>,
+where
+	Block: BlockT,
+	<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+	<Block as BlockT>::Hash: From<[u8; 32]> + Into<[u8; 32]>,
 {
 	fn import_header(&self, is_new_best: bool, header: Block::Header) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();
@@ -167,8 +183,8 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock};
 	use super::*;
+	use runtime_primitives::testing::{Block as RawBlock, H256 as Hash, Header};
 
 	type Block = RawBlock<u32>;
 
@@ -221,9 +237,15 @@ pub(crate) mod tests {
 	fn returns_block_status() {
 		let db = LightStorage::new_test();
 		let genesis_hash = insert_block(&db, &Default::default(), 0);
-		assert_eq!(db.status(BlockId::Hash(genesis_hash)).unwrap(), BlockStatus::InChain);
+		assert_eq!(
+			db.status(BlockId::Hash(genesis_hash)).unwrap(),
+			BlockStatus::InChain
+		);
 		assert_eq!(db.status(BlockId::Number(0)).unwrap(), BlockStatus::InChain);
-		assert_eq!(db.status(BlockId::Hash(1.into())).unwrap(), BlockStatus::Unknown);
+		assert_eq!(
+			db.status(BlockId::Hash(1.into())).unwrap(),
+			BlockStatus::Unknown
+		);
 		assert_eq!(db.status(BlockId::Number(1)).unwrap(), BlockStatus::Unknown);
 	}
 

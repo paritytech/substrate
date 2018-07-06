@@ -16,15 +16,15 @@
 
 //! Consensus related bits of the network service.
 
-use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
-use std::time::{Instant, Duration};
 use io::SyncIo;
-use protocol::Protocol;
-use network::PeerId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
+use network::PeerId;
+use protocol::Protocol;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 // TODO: Add additional spam/DoS attack protection.
 const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
@@ -36,12 +36,18 @@ struct PeerConsensus<H> {
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct Consensus<B: BlockT> {
 	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
-	bft_message_sink: Option<(mpsc::UnboundedSender<message::LocalizedBftMessage<B>>, B::Hash)>,
+	bft_message_sink: Option<(
+		mpsc::UnboundedSender<message::LocalizedBftMessage<B>>,
+		B::Hash,
+	)>,
 	messages: Vec<(B::Hash, Instant, message::Message<B>)>,
 	message_hashes: HashSet<B::Hash>,
 }
 
-impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT> Consensus<B>
+where
+	B::Header: HeaderT<Number = u64>,
+{
 	/// Create a new instance.
 	pub fn new() -> Self {
 		Consensus {
@@ -58,7 +64,13 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, io: &mut SyncIo, protocol: &Protocol<B>, peer_id: PeerId, roles: &[message::Role]) {
+	pub fn new_peer(
+		&mut self,
+		io: &mut SyncIo,
+		protocol: &Protocol<B>,
+		peer_id: PeerId,
+		roles: &[message::Role],
+	) {
 		if roles.iter().any(|r| *r == message::Role::Validator) {
 			trace!(target:"sync", "Registering validator {}", peer_id);
 			// Send out all known messages.
@@ -68,13 +80,17 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 				known_messages.insert(hash.clone());
 				protocol.send_message(io, peer_id, message.clone());
 			}
-			self.peers.insert(peer_id, PeerConsensus {
-				known_messages,
-			});
+			self.peers.insert(peer_id, PeerConsensus { known_messages });
 		}
 	}
 
-	fn propagate(&mut self, io: &mut SyncIo, protocol: &Protocol<B>, message: message::Message<B>, hash: B::Hash) {
+	fn propagate(
+		&mut self,
+		io: &mut SyncIo,
+		protocol: &Protocol<B>,
+		message: message::Message<B>,
+		hash: B::Hash,
+	) {
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.known_messages.insert(hash.clone()) {
 				protocol.send_message(io, *id, message.clone());
@@ -88,22 +104,30 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 		}
 	}
 
-	pub fn on_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol<B>, peer_id: PeerId, message: message::LocalizedBftMessage<B>, hash: B::Hash) {
+	pub fn on_bft_message(
+		&mut self,
+		io: &mut SyncIo,
+		protocol: &Protocol<B>,
+		peer_id: PeerId,
+		message: message::LocalizedBftMessage<B>,
+		hash: B::Hash,
+	) {
 		if self.message_hashes.contains(&hash) {
 			trace!(target:"sync", "Ignored already known BFT message from {}", peer_id);
-			return;
+			return
 		}
 
-		match (protocol.chain().info(), protocol.chain().header(&BlockId::Hash(message.parent_hash))) {
+		match (
+			protocol.chain().info(),
+			protocol.chain().header(&BlockId::Hash(message.parent_hash)),
+		) {
 			(_, Err(e)) | (Err(e), _) => {
 				debug!(target:"sync", "Error reading blockchain: {:?}", e);
-				return;
+				return
 			},
-			(Ok(info), Ok(Some(header))) => {
-				if header.number() < &info.chain.best_number {
-					trace!(target:"sync", "Ignored ancient BFT message from {}, hash={}", peer_id, message.parent_hash);
-					return;
-				}
+			(Ok(info), Ok(Some(header))) => if header.number() < &info.chain.best_number {
+				trace!(target:"sync", "Ignored ancient BFT message from {}, hash={}", peer_id, message.parent_hash);
+				return
 			},
 			(Ok(_), Ok(None)) => {},
 		}
@@ -122,7 +146,7 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 			}
 		} else {
 			trace!(target:"sync", "Ignored BFT statement from unregistered peer {}", peer_id);
-			return;
+			return
 		}
 
 		let message = GenericMessage::BftMessage(message);
@@ -131,7 +155,10 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 		self.propagate(io, protocol, message, hash);
 	}
 
-	pub fn bft_messages(&mut self, parent_hash: B::Hash) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage<B>> {
+	pub fn bft_messages(
+		&mut self,
+		parent_hash: B::Hash,
+	) -> mpsc::UnboundedReceiver<message::LocalizedBftMessage<B>> {
 		let (sink, stream) = mpsc::unbounded();
 
 		for &(_, _, ref message) in self.messages.iter() {
@@ -141,7 +168,8 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 			};
 
 			if bft_message.parent_hash == parent_hash {
-				sink.unbounded_send(bft_message.clone()).expect("receiving end known to be open; qed");
+				sink.unbounded_send(bft_message.clone())
+					.expect("receiving end known to be open; qed");
 			}
 		}
 
@@ -149,7 +177,12 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 		stream
 	}
 
-	pub fn send_bft_message(&mut self, io: &mut SyncIo, protocol: &Protocol<B>, message: message::LocalizedBftMessage<B>) {
+	pub fn send_bft_message(
+		&mut self,
+		io: &mut SyncIo,
+		protocol: &Protocol<B>,
+		message: message::LocalizedBftMessage<B>,
+	) {
 		// Broadcast message to all validators.
 		trace!(target:"sync", "Broadcasting BFT message {:?}", message);
 		let message = GenericMessage::BftMessage(message);
@@ -158,7 +191,12 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 		self.propagate(io, protocol, message, hash);
 	}
 
-	pub fn peer_disconnected(&mut self, _io: &mut SyncIo, _protocol: &Protocol<B>, peer_id: PeerId) {
+	pub fn peer_disconnected(
+		&mut self,
+		_io: &mut SyncIo,
+		_protocol: &Protocol<B>,
+		peer_id: PeerId,
+	) {
 		self.peers.remove(&peer_id);
 	}
 
@@ -167,13 +205,12 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 		let before = self.messages.len();
 		let now = Instant::now();
 		self.messages.retain(|&(ref hash, timestamp, ref message)| {
-			if timestamp >= now - MESSAGE_LIFETIME &&
-				best_header.map_or(true, |header|
-					match *message {
-						GenericMessage::BftMessage(ref msg) => &msg.parent_hash != header.parent_hash(),
-						_ => true,
-					})
-			{
+			if timestamp >= now - MESSAGE_LIFETIME && best_header.map_or(true, |header| {
+				match *message {
+					GenericMessage::BftMessage(ref msg) => &msg.parent_hash != header.parent_hash(),
+					_ => true,
+				}
+			}) {
 				true
 			} else {
 				hashes.remove(hash);
@@ -191,11 +228,11 @@ impl<B: BlockT> Consensus<B> where B::Header: HeaderT<Number=u64> {
 
 #[cfg(test)]
 mod tests {
-	use runtime_primitives::bft::Justification;
-	use runtime_primitives::testing::{H256, Header, Block as RawBlock};
-	use std::time::Instant;
-	use message::{self, generic::Message as GenericMessage};
 	use super::{Consensus, MESSAGE_LIFETIME};
+	use message::{self, generic::Message as GenericMessage};
+	use runtime_primitives::bft::Justification;
+	use runtime_primitives::testing::{Block as RawBlock, H256, Header};
+	use std::time::Instant;
 
 	type Block = RawBlock<u64>;
 
@@ -255,7 +292,9 @@ mod tests {
 
 		// make timestamp expired
 		consensus.messages.clear();
-		consensus.messages.push((m2_hash, now - MESSAGE_LIFETIME, m2));
+		consensus
+			.messages
+			.push((m2_hash, now - MESSAGE_LIFETIME, m2));
 		consensus.collect_garbage(None);
 		assert!(consensus.messages.is_empty());
 		assert!(consensus.message_hashes.is_empty());

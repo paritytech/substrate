@@ -17,23 +17,29 @@
 //! A fixed hash type.
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "std")]
 use bytes;
 
 macro_rules! impl_rest {
-	($name: ident, $len: expr) => {
+	($name:ident, $len:expr) => {
 		#[cfg(feature = "std")]
 		impl Serialize for $name {
-			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+			where
+				S: Serializer,
+			{
 				bytes::serialize(&self.0, serializer)
 			}
 		}
 
 		#[cfg(feature = "std")]
 		impl<'de> Deserialize<'de> for $name {
-			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+			where
+				D: Deserializer<'de>,
+			{
 				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Exact($len))
 					.map(|x| (&*x).into())
 			}
@@ -48,7 +54,7 @@ macro_rules! impl_rest {
 				self.0.using_encoded(f)
 			}
 		}
-	}
+	};
 }
 
 construct_hash!(H160, 20);
@@ -66,13 +72,25 @@ mod tests {
 	#[test]
 	fn test_h160() {
 		let tests = vec![
-			(Default::default(), "0x0000000000000000000000000000000000000000"),
+			(
+				Default::default(),
+				"0x0000000000000000000000000000000000000000",
+			),
 			(H160::from(2), "0x0000000000000000000000000000000000000002"),
 			(H160::from(15), "0x000000000000000000000000000000000000000f"),
 			(H160::from(16), "0x0000000000000000000000000000000000000010"),
-			(H160::from(1_000), "0x00000000000000000000000000000000000003e8"),
-			(H160::from(100_000), "0x00000000000000000000000000000000000186a0"),
-			(H160::from(u64::max_value()), "0x000000000000000000000000ffffffffffffffff"),
+			(
+				H160::from(1_000),
+				"0x00000000000000000000000000000000000003e8",
+			),
+			(
+				H160::from(100_000),
+				"0x00000000000000000000000000000000000186a0",
+			),
+			(
+				H160::from(u64::max_value()),
+				"0x000000000000000000000000ffffffffffffffff",
+			),
 		];
 
 		for (number, expected) in tests {
@@ -84,13 +102,34 @@ mod tests {
 	#[test]
 	fn test_h256() {
 		let tests = vec![
-			(Default::default(), "0x0000000000000000000000000000000000000000000000000000000000000000"),
-			(H256::from(2), "0x0000000000000000000000000000000000000000000000000000000000000002"),
-			(H256::from(15), "0x000000000000000000000000000000000000000000000000000000000000000f"),
-			(H256::from(16), "0x0000000000000000000000000000000000000000000000000000000000000010"),
-			(H256::from(1_000), "0x00000000000000000000000000000000000000000000000000000000000003e8"),
-			(H256::from(100_000), "0x00000000000000000000000000000000000000000000000000000000000186a0"),
-			(H256::from(u64::max_value()), "0x000000000000000000000000000000000000000000000000ffffffffffffffff"),
+			(
+				Default::default(),
+				"0x0000000000000000000000000000000000000000000000000000000000000000",
+			),
+			(
+				H256::from(2),
+				"0x0000000000000000000000000000000000000000000000000000000000000002",
+			),
+			(
+				H256::from(15),
+				"0x000000000000000000000000000000000000000000000000000000000000000f",
+			),
+			(
+				H256::from(16),
+				"0x0000000000000000000000000000000000000000000000000000000000000010",
+			),
+			(
+				H256::from(1_000),
+				"0x00000000000000000000000000000000000000000000000000000000000003e8",
+			),
+			(
+				H256::from(100_000),
+				"0x00000000000000000000000000000000000000000000000000000000000186a0",
+			),
+			(
+				H256::from(u64::max_value()),
+				"0x000000000000000000000000000000000000000000000000ffffffffffffffff",
+			),
 		];
 
 		for (number, expected) in tests {
@@ -101,9 +140,24 @@ mod tests {
 
 	#[test]
 	fn test_invalid() {
-		assert!(ser::from_str::<H256>("\"0x000000000000000000000000000000000000000000000000000000000000000\"").unwrap_err().is_data());
-		assert!(ser::from_str::<H256>("\"0x000000000000000000000000000000000000000000000000000000000000000g\"").unwrap_err().is_data());
-		assert!(ser::from_str::<H256>("\"0x00000000000000000000000000000000000000000000000000000000000000000\"").unwrap_err().is_data());
+		assert!(
+			ser::from_str::<H256>(
+				"\"0x000000000000000000000000000000000000000000000000000000000000000\""
+			).unwrap_err()
+				.is_data()
+		);
+		assert!(
+			ser::from_str::<H256>(
+				"\"0x000000000000000000000000000000000000000000000000000000000000000g\""
+			).unwrap_err()
+				.is_data()
+		);
+		assert!(
+			ser::from_str::<H256>(
+				"\"0x00000000000000000000000000000000000000000000000000000000000000000\""
+			).unwrap_err()
+				.is_data()
+		);
 		assert!(ser::from_str::<H256>("\"\"").unwrap_err().is_data());
 		assert!(ser::from_str::<H256>("\"0\"").unwrap_err().is_data());
 		assert!(ser::from_str::<H256>("\"10\"").unwrap_err().is_data());

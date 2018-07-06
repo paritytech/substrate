@@ -16,8 +16,8 @@
 
 //! Test implementation for Externalities.
 
-use std::collections::HashMap;
 use super::Externalities;
+use std::collections::HashMap;
 use triehash::trie_root;
 
 /// Simple HashMap based Externalities impl.
@@ -30,18 +30,22 @@ impl Externalities for TestExternalities {
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		match maybe_value {
-			Some(value) => { self.insert(key, value); }
-			None => { self.remove(&key); }
+			Some(value) => {
+				self.insert(key, value);
+			},
+			None => {
+				self.remove(&key);
+			},
 		}
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.retain(|key, _|
-			!key.starts_with(prefix)
-		)
+		self.retain(|key, _| !key.starts_with(prefix))
 	}
 
-	fn chain_id(&self) -> u64 { 42 }
+	fn chain_id(&self) -> u64 {
+		42
+	}
 
 	fn storage_root(&mut self) -> [u8; 32] {
 		trie_root(self.clone()).0
@@ -58,7 +62,8 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+		const ROOT: [u8; 32] =
+			hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
 		assert_eq!(ext.storage_root(), ROOT);
 	}
 }

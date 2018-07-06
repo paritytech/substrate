@@ -38,17 +38,17 @@ extern crate substrate_runtime_std as rstd;
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
-extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
-extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
+use primitives::traits::{As, Convert, Executable, One, RefInto, Zero};
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
-use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
+use runtime_support::{StorageMap, StorageValue};
 
 /// A session has changed.
 pub trait OnSessionChange<T> {
@@ -104,7 +104,7 @@ decl_storage! {
 impl<T: Trait> Module<T> {
 	/// The number of validators currently.
 	pub fn validator_count() -> u32 {
-		<Validators<T>>::get().len() as u32	// TODO: can probably optimised
+		<Validators<T>>::get().len() as u32 // TODO: can probably optimised
 	}
 
 	/// The last length change, if there was one, zero if not.
@@ -139,19 +139,23 @@ impl<T: Trait> Module<T> {
 	/// Called by `staking::next_era()` only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
-		<Validators<T>>::put(&new.to_vec());			// TODO: optimise.
+		<Validators<T>>::put(&new.to_vec()); // TODO: optimise.
 		<consensus::Module<T>>::set_authorities(
-			&new.iter().cloned().map(T::ConvertAccountIdToSessionKey::convert).collect::<Vec<_>>()
+			&new.iter()
+				.cloned()
+				.map(T::ConvertAccountIdToSessionKey::convert)
+				.collect::<Vec<_>>(),
 		);
 	}
 
 	/// Hook to be called after transaction processing.
 	pub fn check_rotate_session() {
-		// do this last, after the staking system has had chance to switch out the authorities for the
-		// new set.
+		// do this last, after the staking system has had chance to switch out the authorities for
+		// the new set.
 		// check block number and call next_session if necessary.
 		let block_number = <system::Module<T>>::block_number();
-		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
+		let is_final_block =
+			((block_number - Self::last_length_change()) % Self::length()).is_zero();
 		let broken_validation = Self::broken_validation();
 		if is_final_block || broken_validation {
 			Self::rotate_session(!broken_validation);
@@ -207,9 +211,10 @@ impl<T: Trait> Module<T> {
 		let block_period = <timestamp::Module<T>>::block_period();
 		let blocks_remaining = Self::blocks_remaining();
 		let blocks_remaining = <T::Moment as As<T::BlockNumber>>::sa(blocks_remaining);
-		now + blocks_remaining * block_period >
-			Self::current_start() + Self::ideal_session_duration() *
-				(T::Moment::sa(100) + Self::broken_percent_late()) / T::Moment::sa(100)
+		now + blocks_remaining * block_period
+			> Self::current_start()
+				+ Self::ideal_session_duration()
+					* (T::Moment::sa(100) + Self::broken_percent_late()) / T::Moment::sa(100)
 	}
 }
 
@@ -242,12 +247,11 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
-{
+impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use runtime_io::twox_128;
 		use codec::Slicable;
 		use primitives::traits::As;
+		use runtime_io::twox_128;
 		Ok(map![
 			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
 			twox_128(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
@@ -261,11 +265,11 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use primitives::testing::{Digest, Header};
+	use primitives::traits::{BlakeTwo256, HasPublicAux, Identity};
+	use primitives::BuildStorage;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
-	use primitives::testing::{Digest, Header};
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
@@ -300,19 +304,29 @@ mod tests {
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(consensus::GenesisConfig::<Test>{
-			code: vec![],
-			authorities: vec![1, 2, 3],
-		}.build_storage().unwrap());
-		t.extend(timestamp::GenesisConfig::<Test>{
-			period: 5,
-		}.build_storage().unwrap());
-		t.extend(GenesisConfig::<Test>{
-			session_length: 2,
-			validators: vec![1, 2, 3],
-			broken_percent_late: 30,
-		}.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default()
+			.build_storage()
+			.unwrap();
+		t.extend(
+			consensus::GenesisConfig::<Test> {
+				code: vec![],
+				authorities: vec![1, 2, 3],
+			}.build_storage()
+				.unwrap(),
+		);
+		t.extend(
+			timestamp::GenesisConfig::<Test> { period: 5 }
+				.build_storage()
+				.unwrap(),
+		);
+		t.extend(
+			GenesisConfig::<Test> {
+				session_length: 2,
+				validators: vec![1, 2, 3],
+				broken_percent_late: 30,
+			}.build_storage()
+				.unwrap(),
+		);
 		t
 	}
 
@@ -339,16 +353,16 @@ mod tests {
 			assert_eq!(Session::ideal_session_duration(), 15);
 			// ideal end = 0 + 15 * 3 = 15
 			// broken_limit = 15 * 130 / 100 = 19
-		
+
 			System::set_block_number(3);
 			assert_eq!(Session::blocks_remaining(), 2);
-			Timestamp::set_timestamp(9);				// earliest end = 9 + 2 * 5 = 19; OK.
+			Timestamp::set_timestamp(9); // earliest end = 9 + 2 * 5 = 19; OK.
 			assert!(!Session::broken_validation());
 			Session::check_rotate_session();
 
 			System::set_block_number(4);
 			assert_eq!(Session::blocks_remaining(), 1);
-			Timestamp::set_timestamp(15);				// another 1 second late. earliest end = 15 + 1 * 5 = 20; broken.
+			Timestamp::set_timestamp(15); // another 1 second late. earliest end = 15 + 1 * 5 = 20; broken.
 			assert!(Session::broken_validation());
 			Session::check_rotate_session();
 			assert_eq!(Session::current_index(), 2);

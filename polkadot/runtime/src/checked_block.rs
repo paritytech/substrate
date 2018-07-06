@@ -16,10 +16,10 @@
 
 //! Typesafe block interaction.
 
-use super::{Call, Block, TIMESTAMP_SET_POSITION, PARACHAINS_SET_POSITION};
-use timestamp::Call as TimestampCall;
+use super::{Block, Call, PARACHAINS_SET_POSITION, TIMESTAMP_SET_POSITION};
 use parachains::Call as ParachainsCall;
 use primitives::parachain::CandidateReceipt;
+use timestamp::Call as TimestampCall;
 
 /// Provides a type-safe wrapper around a structurally valid block.
 pub struct CheckedBlock {
@@ -30,23 +30,33 @@ pub struct CheckedBlock {
 impl CheckedBlock {
 	/// Create a new checked block. Fails if the block is not structurally valid.
 	pub fn new(block: Block) -> Result<Self, Block> {
-		let has_timestamp = block.extrinsics.get(TIMESTAMP_SET_POSITION as usize).map_or(false, |xt| {
-			!xt.is_signed() && match xt.extrinsic.function {
-				Call::Timestamp(TimestampCall::set(_)) => true,
-				_ => false,
-			}
-		});
+		let has_timestamp = block
+			.extrinsics
+			.get(TIMESTAMP_SET_POSITION as usize)
+			.map_or(false, |xt| {
+				!xt.is_signed() && match xt.extrinsic.function {
+					Call::Timestamp(TimestampCall::set(_)) => true,
+					_ => false,
+				}
+			});
 
-		if !has_timestamp { return Err(block) }
+		if !has_timestamp {
+			return Err(block)
+		}
 
-		let has_heads = block.extrinsics.get(PARACHAINS_SET_POSITION as usize).map_or(false, |xt| {
-			!xt.is_signed() && match xt.extrinsic.function {
-				Call::Parachains(ParachainsCall::set_heads(_)) => true,
-				_ => false,
-			}
-		});
+		let has_heads = block
+			.extrinsics
+			.get(PARACHAINS_SET_POSITION as usize)
+			.map_or(false, |xt| {
+				!xt.is_signed() && match xt.extrinsic.function {
+					Call::Parachains(ParachainsCall::set_heads(_)) => true,
+					_ => false,
+				}
+			});
 
-		if !has_heads { return Err(block) }
+		if !has_heads {
+			return Err(block)
+		}
 		Ok(CheckedBlock {
 			inner: block,
 			file_line: None,
@@ -64,10 +74,14 @@ impl CheckedBlock {
 
 	/// Extract the timestamp from the block.
 	pub fn timestamp(&self) -> ::primitives::Timestamp {
-		let x = self.inner.extrinsics.get(TIMESTAMP_SET_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
-			Call::Timestamp(TimestampCall::set(x)) => Some(x),
-			_ => None
-		});
+		let x = self
+			.inner
+			.extrinsics
+			.get(TIMESTAMP_SET_POSITION as usize)
+			.and_then(|xt| match xt.extrinsic.function {
+				Call::Timestamp(TimestampCall::set(x)) => Some(x),
+				_ => None,
+			});
 
 		match x {
 			Some(x) => x,
@@ -77,10 +91,14 @@ impl CheckedBlock {
 
 	/// Extract the parachain heads from the block.
 	pub fn parachain_heads(&self) -> &[CandidateReceipt] {
-		let x = self.inner.extrinsics.get(PARACHAINS_SET_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
-			Call::Parachains(ParachainsCall::set_heads(ref x)) => Some(&x[..]),
-			_ => None
-		});
+		let x = self
+			.inner
+			.extrinsics
+			.get(PARACHAINS_SET_POSITION as usize)
+			.and_then(|xt| match xt.extrinsic.function {
+				Call::Parachains(ParachainsCall::set_heads(ref x)) => Some(&x[..]),
+				_ => None,
+			});
 
 		match x {
 			Some(x) => x,
@@ -89,20 +107,24 @@ impl CheckedBlock {
 	}
 
 	/// Convert into inner block.
-	pub fn into_inner(self) -> Block { self.inner }
+	pub fn into_inner(self) -> Block {
+		self.inner
+	}
 }
 
 impl ::std::ops::Deref for CheckedBlock {
 	type Target = Block;
 
-	fn deref(&self) -> &Block { &self.inner }
+	fn deref(&self) -> &Block {
+		&self.inner
+	}
 }
 
 /// Assert that a block is structurally valid. May lead to panic in the future
 /// in case it isn't.
 #[macro_export]
 macro_rules! assert_polkadot_block {
-	($block: expr) => {
+	($block:expr) => {
 		$crate::CheckedBlock::new_unchecked($block, file!(), line!())
-	}
+	};
 }

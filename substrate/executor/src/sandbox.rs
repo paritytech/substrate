@@ -18,16 +18,16 @@
 
 //! This module implements sandboxing support in the runtime.
 
-use std::collections::HashMap;
-use std::rc::Rc;
 use codec::Slicable;
 use primitives::sandbox as sandbox_primitives;
+use std::collections::HashMap;
+use std::rc::Rc;
 use wasm_utils::DummyUserError;
 use wasmi;
 use wasmi::memory_units::Pages;
 use wasmi::{
 	Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
-	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind
+	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind,
 };
 
 /// Index of a function inside the supervisor.
@@ -99,7 +99,8 @@ impl ImportResolver for Imports {
 			module_name.as_bytes().to_vec(),
 			field_name.as_bytes().to_vec(),
 		);
-		let mem = self.memories_map
+		let mem = self
+			.memories_map
 			.get(&key)
 			.ok_or_else(|| {
 				::wasmi::Error::Instantiation(format!(
@@ -209,18 +210,20 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		let index = GuestFuncIndex(index);
 
 		let dispatch_thunk = self.sandbox_instance.dispatch_thunk.clone();
-		let func_idx = self.sandbox_instance
+		let func_idx = self
+			.sandbox_instance
 			.guest_to_supervisor_mapping
 			.func_by_guest_index(index)
 			.expect(
 				"`invoke_index` is called with indexes registered via `FuncInstance::alloc_host`;
 					`FuncInstance::alloc_host` is called with indexes that was obtained from `guest_to_supervisor_mapping`;
 					`func_by_guest_index` called with `index` can't return `None`;
-					qed"
+					qed",
 			);
 
 		// Serialize arguments into a byte vector.
-		let invoke_args_data: Vec<u8> = args.as_ref()
+		let invoke_args_data: Vec<u8> = args
+			.as_ref()
 			.iter()
 			.cloned()
 			.map(sandbox_primitives::TypedValue::from)
@@ -231,7 +234,8 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 
 		// Move serialized arguments inside the memory and invoke dispatch thunk and
 		// then free allocated memory.
-		let invoke_args_ptr = self.supervisor_externals
+		let invoke_args_ptr = self
+			.supervisor_externals
 			.allocate(invoke_args_data.len() as u32);
 		self.supervisor_externals
 			.write_memory(invoke_args_ptr, &invoke_args_data)?;
@@ -256,11 +260,12 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 				let ptr = (v as u64 >> 32) as u32;
 				let len = (v & 0xFFFFFFFF) as u32;
 				(ptr, len)
-			}
+			},
 			_ => return Err(trap()),
 		};
 
-		let serialized_result_val = self.supervisor_externals
+		let serialized_result_val = self
+			.supervisor_externals
 			.read_memory(serialized_result_val_ptr, serialized_result_val_len)?;
 		self.supervisor_externals
 			.deallocate(serialized_result_val_ptr);
@@ -323,15 +328,10 @@ impl SandboxInstance {
 		supervisor_externals: &mut FE,
 		state: u32,
 	) -> Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
-		with_guest_externals(
-			supervisor_externals,
-			self,
-			state,
-			|guest_externals| {
-				self.instance
-					.invoke_export(export_name, args, guest_externals)
-			},
-		)
+		with_guest_externals(supervisor_externals, self, state, |guest_externals| {
+			self.instance
+				.invoke_export(export_name, args, guest_externals)
+		})
 	}
 }
 
@@ -339,7 +339,8 @@ fn decode_environment_definition(
 	raw_env_def: &[u8],
 	memories: &[Option<MemoryRef>],
 ) -> Result<(Imports, GuestToSupervisorFunctionMapping), DummyUserError> {
-	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..]).ok_or_else(|| DummyUserError)?;
+	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..])
+		.ok_or_else(|| DummyUserError)?;
 
 	let mut func_map = HashMap::new();
 	let mut memories_map = HashMap::new();
@@ -354,7 +355,7 @@ fn decode_environment_definition(
 				let externals_idx =
 					guest_to_supervisor_mapping.define(SupervisorFuncIndex(func_idx as usize));
 				func_map.insert((module, field), externals_idx);
-			}
+			},
 			sandbox_primitives::ExternEntity::Memory(memory_idx) => {
 				let memory_ref = memories
 					.get(memory_idx as usize)
@@ -362,7 +363,7 @@ fn decode_environment_definition(
 					.ok_or_else(|| DummyUserError)?
 					.ok_or_else(|| DummyUserError)?;
 				memories_map.insert((module, field), memory_ref);
-			}
+			},
 		}
 	}
 
@@ -499,7 +500,7 @@ impl Store {
 	/// Returns `Err` if `memory_idx` isn't a valid index of an memory.
 	pub fn memory_teardown(&mut self, memory_idx: u32) -> Result<(), DummyUserError> {
 		if memory_idx as usize >= self.memories.len() {
-			return Err(DummyUserError);
+			return Err(DummyUserError)
 		}
 		self.memories[memory_idx as usize] = None;
 		Ok(())
@@ -508,7 +509,7 @@ impl Store {
 	/// Teardown the instance at the specified index.
 	pub fn instance_teardown(&mut self, instance_idx: u32) -> Result<(), DummyUserError> {
 		if instance_idx as usize >= self.instances.len() {
-			return Err(DummyUserError);
+			return Err(DummyUserError)
 		}
 		self.instances[instance_idx as usize] = None;
 		Ok(())
@@ -523,16 +524,19 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
-	use wasm_executor::WasmExecutor;
-	use state_machine::{TestExternalities, CodeExecutor};
+	use state_machine::{CodeExecutor, TestExternalities};
 	use wabt;
+	use wasm_executor::WasmExecutor;
 
 	#[test]
 	fn sandbox_should_work() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 
-		let code = wabt::wat2wasm(r#"
+		let code = wabt::wat2wasm(
+			r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(import "env" "inc_counter" (func $inc_counter (param i32) (result i32)))
@@ -551,10 +555,13 @@ mod tests {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#,
+		).unwrap();
 
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox", &code).unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_sandbox", &code)
+				.unwrap(),
 			vec![1],
 		);
 	}
@@ -562,9 +569,12 @@ mod tests {
 	#[test]
 	fn sandbox_trap() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 
-		let code = wabt::wat2wasm(r#"
+		let code = wabt::wat2wasm(
+			r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(func (export "call")
@@ -572,10 +582,13 @@ mod tests {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#,
+		).unwrap();
 
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox", &code).unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_sandbox", &code)
+				.unwrap(),
 			vec![0],
 		);
 	}
@@ -583,9 +596,12 @@ mod tests {
 	#[test]
 	fn start_called() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 
-		let code = wabt::wat2wasm(r#"
+		let code = wabt::wat2wasm(
+			r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(import "env" "inc_counter" (func $inc_counter (param i32) (result i32)))
@@ -610,10 +626,13 @@ mod tests {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#,
+		).unwrap();
 
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox", &code).unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_sandbox", &code)
+				.unwrap(),
 			vec![1],
 		);
 	}
@@ -621,9 +640,12 @@ mod tests {
 	#[test]
 	fn invoke_args() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 
-		let code = wabt::wat2wasm(r#"
+		let code = wabt::wat2wasm(
+			r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 
@@ -644,10 +666,13 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#,
+		).unwrap();
 
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox_args", &code).unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_sandbox_args", &code)
+				.unwrap(),
 			vec![1],
 		);
 	}
@@ -655,9 +680,12 @@ mod tests {
 	#[test]
 	fn return_val() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 
-		let code = wabt::wat2wasm(r#"
+		let code = wabt::wat2wasm(
+			r#"
 		(module
 			(func (export "call") (param $x i32) (result i32)
 				(i32.add
@@ -666,10 +694,13 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#,
+		).unwrap();
 
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_sandbox_return_val", &code)
+				.unwrap(),
 			vec![1],
 		);
 	}

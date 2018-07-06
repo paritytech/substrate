@@ -26,24 +26,25 @@
 //! I leave it as is for now as it might be removed before this is ever done.
 
 #![warn(missing_docs)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
+extern crate ed25519;
 extern crate substrate_codec as codec;
-extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_version as runtime_version;
 extern crate substrate_serializer as serializer;
 extern crate substrate_state_machine as state_machine;
-extern crate substrate_runtime_version as runtime_version;
-extern crate ed25519;
 
-extern crate serde;
-extern crate wasmi;
 extern crate byteorder;
-extern crate rustc_hex;
-extern crate triehash;
 extern crate parking_lot;
+extern crate rustc_hex;
+extern crate serde;
+extern crate triehash;
 extern crate twox_hash;
-#[macro_use] extern crate log;
+extern crate wasmi;
+#[macro_use]
+extern crate log;
 
 #[macro_use]
 extern crate lazy_static;
@@ -65,11 +66,11 @@ mod native_executor;
 mod sandbox;
 
 pub mod error;
-pub use wasm_executor::WasmExecutor;
-pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
-pub use state_machine::Externalities;
-pub use runtime_version::RuntimeVersion;
 pub use codec::Slicable;
+pub use native_executor::{with_native_environment, NativeExecutionDispatch, NativeExecutor};
+pub use runtime_version::RuntimeVersion;
+pub use state_machine::Externalities;
+pub use wasm_executor::WasmExecutor;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
@@ -77,9 +78,6 @@ pub trait RuntimeInfo {
 	const NATIVE_VERSION: Option<RuntimeVersion>;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities> (
-		&self,
-		ext: &mut E,
-		code: &[u8]
-	) -> Option<RuntimeVersion>;
+	fn runtime_version<E: Externalities>(&self, ext: &mut E, code: &[u8])
+		-> Option<RuntimeVersion>;
 }

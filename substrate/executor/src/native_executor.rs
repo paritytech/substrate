@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use codec::Slicable;
 use error::{Error, ErrorKind, Result};
+use parking_lot::{Mutex, MutexGuard};
+use runtime_version::RuntimeVersion;
 use state_machine::{CodeExecutor, Externalities};
+use std::collections::HashMap;
+use std::hash::Hasher;
+use twox_hash::XxHash;
 use wasm_executor::WasmExecutor;
 use wasmi::Module as WasmModule;
-use runtime_version::RuntimeVersion;
-use std::collections::HashMap;
-use codec::Slicable;
-use twox_hash::XxHash;
-use std::hash::Hasher;
-use parking_lot::{Mutex, MutexGuard};
 use RuntimeInfo;
 
 // For the internal Runtime Cache:
@@ -31,7 +31,7 @@ use RuntimeInfo;
 enum RunWith {
 	InvalidVersion(WasmModule),
 	NativeRuntime(RuntimeVersion),
-	WasmRuntime(RuntimeVersion, WasmModule)
+	WasmRuntime(RuntimeVersion, WasmModule),
 }
 
 type CacheType = HashMap<u64, RunWith>;
@@ -57,29 +57,31 @@ fn fetch_cached_runtime_version<'a, E: Externalities>(
 	cache: &'a mut MutexGuard<CacheType>,
 	ext: &mut E,
 	code: &[u8],
-	ref_version: RuntimeVersion
+	ref_version: RuntimeVersion,
 ) -> &'a RunWith {
-	cache.entry(gen_cache_key(code))
-		.or_insert_with(|| {
-			let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-			let version = WasmExecutor.call_in_wasm_module(ext, &module, "version", &[]).ok()
-				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
+	cache.entry(gen_cache_key(code)).or_insert_with(|| {
+		let module = WasmModule::from_buffer(code)
+			.expect("all modules compiled with rustc are valid wasm code; qed");
+		let version = WasmExecutor
+			.call_in_wasm_module(ext, &module, "version", &[])
+			.ok()
+			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
 
-
-			if let Some(v) = version {
-				if ref_version.can_call_with(&v) {
-					RunWith::NativeRuntime(v)
-				} else {
-					RunWith::WasmRuntime(v, module)
-				}
+		if let Some(v) = version {
+			if ref_version.can_call_with(&v) {
+				RunWith::NativeRuntime(v)
 			} else {
-				RunWith::InvalidVersion(module)
+				RunWith::WasmRuntime(v, module)
 			}
+		} else {
+			RunWith::InvalidVersion(module)
+		}
 	})
 }
 
 fn safe_call<F, U>(f: F) -> Result<U>
-	where F: ::std::panic::UnwindSafe + FnOnce() -> U
+where
+	F: ::std::panic::UnwindSafe + FnOnce() -> U,
 {
 	::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into())
 }
@@ -88,7 +90,8 @@ fn safe_call<F, U>(f: F) -> Result<U>
 ///
 /// If the inner closure panics, it will be caught and return an error.
 pub fn with_native_environment<F, U>(ext: &mut Externalities, f: F) -> Result<U>
-	where F: ::std::panic::UnwindSafe + FnOnce() -> U
+where
+	F: ::std::panic::UnwindSafe + FnOnce() -> U,
 {
 	::runtime_io::with_externalities(ext, move || safe_call(f))
 }
@@ -120,7 +123,8 @@ impl<D: NativeExecutionDispatch + Sync + Send> NativeExecutor<D> {
 		// FIXME: set this entry at compile time
 		RUNTIMES_CACHE.lock().insert(
 			gen_cache_key(D::native_equivalent()),
-			RunWith::NativeRuntime(D::VERSION));
+			RunWith::NativeRuntime(D::VERSION),
+		);
 
 		NativeExecutor {
 			_dummy: Default::default(),
@@ -147,7 +151,7 @@ impl<D: NativeExecutionDispatch + Sync + Send> RuntimeInfo for NativeExecutor<D>
 		let mut c = RUNTIMES_CACHE.lock();
 		match fetch_cached_runtime_version(&mut c, ext, code, D::VERSION) {
 			RunWith::NativeRuntime(v) | RunWith::WasmRuntime(v, _) => Some(v.clone()),
-			RunWith::InvalidVersion(_m) => None
+			RunWith::InvalidVersion(_m) => None,
 		}
 	}
 }
@@ -165,7 +169,8 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 		let mut c = RUNTIMES_CACHE.lock();
 		match fetch_cached_runtime_version(&mut c, ext, code, D::VERSION) {
 			RunWith::NativeRuntime(_v) => D::dispatch(ext, method, data),
-			RunWith::WasmRuntime(_, m) | RunWith::InvalidVersion(m) => WasmExecutor.call_in_wasm_module(ext, m, method, data)
+			RunWith::WasmRuntime(_, m) | RunWith::InvalidVersion(m) =>
+				WasmExecutor.call_in_wasm_module(ext, m, method, data),
 		}
 	}
 }

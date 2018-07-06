@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::*;
 use super::error::*;
+use super::*;
 
 impl SystemApi for () {
 	fn system_name(&self) -> Result<String> {
@@ -39,10 +39,7 @@ fn system_name_works() {
 
 #[test]
 fn system_version_works() {
-	assert_eq!(
-		SystemApi::system_version(&()).unwrap(),
-		"0.2.0".to_owned()
-	);
+	assert_eq!(SystemApi::system_version(&()).unwrap(), "0.2.0".to_owned());
 }
 
 #[test]

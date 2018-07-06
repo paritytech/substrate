@@ -16,13 +16,13 @@
 
 //! Proving state machine backend.
 
-use std::cell::RefCell;
 use ethereum_types::H256 as TrieH256;
 use hashdb::HashDB;
 use memorydb::MemoryDB;
-use patricia_trie::{TrieDB, TrieError, Trie, Recorder};
-use trie_backend::{TrieBackend, Ephemeral};
-use {Error, ExecutionError, Backend, TryIntoTrieBackend};
+use patricia_trie::{Recorder, Trie, TrieDB, TrieError};
+use std::cell::RefCell;
+use trie_backend::{Ephemeral, TrieBackend};
+use {Backend, Error, ExecutionError, TryIntoTrieBackend};
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -43,7 +43,9 @@ impl ProvingBackend {
 	/// Consume the backend, extracting the gathered proof in lexicographical order
 	/// by value.
 	pub fn extract_proof(self) -> Vec<Vec<u8>> {
-		self.proof_recorder.into_inner().drain()
+		self.proof_recorder
+			.into_inner()
+			.drain()
 			.into_iter()
 			.map(|n| n.data.to_vec())
 			.collect()
@@ -56,17 +58,19 @@ impl Backend for ProvingBackend {
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let mut read_overlay = MemoryDB::default();
-		let eph = Ephemeral::new(
-			self.backend.backend_storage(),
-			&mut read_overlay,
-		);
+		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
 
 		let map_e = |e: Box<TrieError>| format!("Trie lookup error: {}", e);
 
-		let mut proof_recorder = self.proof_recorder.try_borrow_mut()
+		let mut proof_recorder = self
+			.proof_recorder
+			.try_borrow_mut()
 			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
-		TrieDB::new(&eph, &self.backend.root()).map_err(map_e)?
-			.get_with(key, &mut *proof_recorder).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
+		TrieDB::new(&eph, &self.backend.root())
+			.map_err(map_e)?
+			.get_with(key, &mut *proof_recorder)
+			.map(|x| x.map(|val| val.to_vec()))
+			.map_err(map_e)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -78,7 +82,8 @@ impl Backend for ProvingBackend {
 	}
 
 	fn storage_root<I>(&self, delta: I) -> ([u8; 32], MemoryDB)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	where
+		I: IntoIterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 	{
 		self.backend.storage_root(delta)
 	}
@@ -91,25 +96,27 @@ impl TryIntoTrieBackend for ProvingBackend {
 }
 
 /// Create proof check backend.
-pub fn create_proof_check_backend(root: TrieH256, proof: Vec<Vec<u8>>) -> Result<TrieBackend, Box<Error>> {
+pub fn create_proof_check_backend(
+	root: TrieH256,
+	proof: Vec<Vec<u8>>,
+) -> Result<TrieBackend, Box<Error>> {
 	let mut db = MemoryDB::new();
 	for item in proof {
 		db.insert(&item);
 	}
 
 	if !db.contains(&root) {
-		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
+		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>)
 	}
-
 
 	Ok(TrieBackend::with_memorydb(db, root))
 }
 
 #[cfg(test)]
 mod tests {
-	use backend::{InMemory};
-	use trie_backend::tests::test_trie;
 	use super::*;
+	use backend::InMemory;
+	use trie_backend::tests::test_trie;
 
 	fn test_proving() -> ProvingBackend {
 		ProvingBackend::new(test_trie())
@@ -136,7 +143,10 @@ mod tests {
 	fn passes_throgh_backend_calls() {
 		let trie_backend = test_trie();
 		let proving_backend = test_proving();
-		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
+		assert_eq!(
+			trie_backend.storage(b"key").unwrap(),
+			proving_backend.storage(b"key").unwrap()
+		);
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
@@ -147,7 +157,9 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked() {
-		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
+		let contents = (0..64)
+			.map(|i| (vec![i], Some(vec![i])))
+			.collect::<Vec<_>>();
 		let in_memory = InMemory::default();
 		let in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;

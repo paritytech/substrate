@@ -22,31 +22,29 @@ use std::{
 };
 
 use futures::sync::mpsc;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 use txpool;
 
 use listener::Listener;
 use watcher::Watcher;
 
 /// Extrinsics pool.
-pub struct Pool<Hash, VEx, S, E> where
+pub struct Pool<Hash, VEx, S, E>
+where
 	Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex,
 	S: txpool::Scoring<VEx>,
-	VEx: txpool::VerifiedTransaction<Hash=Hash>,
+	VEx: txpool::VerifiedTransaction<Hash = Hash>,
 {
 	_error: Mutex<PhantomData<E>>,
-	pool: RwLock<txpool::Pool<
-		VEx,
-		S,
-		Listener<Hash>,
-	>>,
+	pool: RwLock<txpool::Pool<VEx, S, Listener<Hash>>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<Weak<VEx>>>>,
 }
 
-impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
+impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E>
+where
 	Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default,
 	S: txpool::Scoring<VEx>,
-	VEx: txpool::VerifiedTransaction<Hash=Hash>,
+	VEx: txpool::VerifiedTransaction<Hash = Hash>,
 	E: From<txpool::Error>,
 {
 	/// Create a new transaction pool.
@@ -63,7 +61,8 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 		let result = self.pool.write().import(xt)?;
 
 		let weak = Arc::downgrade(&result);
-		self.import_notification_sinks.lock()
+		self.import_notification_sinks
+			.lock()
 			.retain(|sink| sink.unbounded_send(weak.clone()).is_ok());
 
 		Ok(result)
@@ -84,26 +83,28 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 	}
 
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub fn submit<V, Ex, T>(&self, verifier: V, xts: T) -> Result<Vec<Arc<VEx>>, E> where
-		V: txpool::Verifier<Ex, VerifiedTransaction=VEx>,
+	pub fn submit<V, Ex, T>(&self, verifier: V, xts: T) -> Result<Vec<Arc<VEx>>, E>
+	where
+		V: txpool::Verifier<Ex, VerifiedTransaction = VEx>,
 		E: From<V::Error>,
-		T: IntoIterator<Item=Ex>
+		T: IntoIterator<Item = Ex>,
 	{
-		xts
-			.into_iter()
+		xts.into_iter()
 			.map(|xt| verifier.verify_transaction(xt))
-			.map(|xt| {
-				Ok(self.pool.write().import(xt?)?)
-			})
+			.map(|xt| Ok(self.pool.write().import(xt?)?))
 			.collect()
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
-	pub fn submit_and_watch<V, Ex>(&self, verifier: V, xt: Ex) -> Result<Watcher<Hash>, E> where
-		V: txpool::Verifier<Ex, VerifiedTransaction=VEx>,
+	pub fn submit_and_watch<V, Ex>(&self, verifier: V, xt: Ex) -> Result<Watcher<Hash>, E>
+	where
+		V: txpool::Verifier<Ex, VerifiedTransaction = VEx>,
 		E: From<V::Error>,
 	{
-		let xt = self.submit(verifier, vec![xt])?.pop().expect("One extrinsic passed; one result returned; qed");
+		let xt = self
+			.submit(verifier, vec![xt])?
+			.pop()
+			.expect("One extrinsic passed; one result returned; qed");
 		Ok(self.pool.write().listener_mut().create_watcher(xt))
 	}
 
@@ -118,7 +119,12 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 	}
 
 	/// Cull transactions from the queue.
-	pub fn cull<R>(&self, senders: Option<&[<VEx as txpool::VerifiedTransaction>::Sender]>, ready: R) -> usize where
+	pub fn cull<R>(
+		&self,
+		senders: Option<&[<VEx as txpool::VerifiedTransaction>::Sender]>,
+		ready: R,
+	) -> usize
+	where
 		R: txpool::Ready<VEx>,
 	{
 		self.pool.write().cull(senders, ready)
@@ -137,14 +143,17 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 	/// Removes all transactions from given sender
 	pub fn remove_sender(&self, sender: VEx::Sender) -> Vec<Arc<VEx>> {
 		let mut pool = self.pool.write();
-		let pending = pool.pending_from_sender(|_: &VEx| txpool::Readiness::Ready, &sender).collect();
+		let pending = pool
+			.pending_from_sender(|_: &VEx| txpool::Readiness::Ready, &sender)
+			.collect();
 		// remove all transactions from this sender
 		pool.cull(Some(&[sender]), |_: &VEx| txpool::Readiness::Stale);
 		pending
 	}
 
 	/// Retrieve the pending set. Be careful to not leak the pool `ReadGuard` to prevent deadlocks.
-	pub fn pending<R, F, T>(&self, ready: R, f: F) -> T where
+	pub fn pending<R, F, T>(&self, ready: R, f: F) -> T
+	where
 		R: txpool::Ready<VEx>,
 		F: FnOnce(txpool::PendingIterator<VEx, R, S, Listener<Hash>>) -> T,
 	{

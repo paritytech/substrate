@@ -17,7 +17,8 @@
 //! Crate for executing smart-contracts.
 //!
 //! It provides an means for executing contracts represented in WebAssembly (Wasm for short).
-//! Contracts are able to create other contracts, transfer funds to each other and operate on a simple key-value storage.
+//! Contracts are able to create other contracts, transfer funds to each other and operate on a
+//! simple key-value storage.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
@@ -25,9 +26,9 @@
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
-extern crate substrate_runtime_std as rstd;
-extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_codec as codec;
+extern crate substrate_runtime_sandbox as sandbox;
+extern crate substrate_runtime_std as rstd;
 
 #[cfg(test)]
 #[macro_use]
@@ -36,8 +37,8 @@ extern crate assert_matches;
 #[cfg(test)]
 extern crate wabt;
 
-use rstd::prelude::*;
 use codec::Slicable;
+use rstd::prelude::*;
 
 use parity_wasm::elements::{self, External, MemoryType};
 use pwasm_utils::rules;
@@ -62,8 +63,8 @@ pub trait Ext {
 	// TODO: Return the address of the created contract.
 	/// Create a new account for a contract.
 	///
-	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
-	/// transfered from this to the newly created account.
+	/// The newly created account will be associated with the `code`. `value` specifies the amount
+	/// of value transfered from this to the newly created account.
 	fn create(&mut self, code: &[u8], value: Self::Balance);
 
 	/// Transfer some funds to the specified account.
@@ -131,7 +132,8 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	/// Returns `false` if there is not enough gas or addition of the specified
 	/// amount of gas has lead to overflow. On success returns `true`.
 	///
-	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
+	/// Intuition about the return value sense is to answer the question 'are we allowed to
+	/// continue?'
 	fn charge_gas(&mut self, amount: u64) -> bool {
 		match self.gas_used.checked_add(amount) {
 			None => false,
@@ -139,23 +141,22 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 			Some(val) => {
 				self.gas_used = val;
 				true
-			}
+			},
 		}
 	}
 }
 
 /// Execute the given code as a contract.
-pub fn execute<'a, T: Ext>(
-	code: &[u8],
-	ext: &'a mut T,
-	gas_limit: u64,
-) -> Result<(), Error> {
+pub fn execute<'a, T: Ext>(code: &[u8], ext: &'a mut T, gas_limit: u64) -> Result<(), Error> {
 	// ext_gas(amount: u32)
 	//
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
 	// - amount: How much gas is used.
-	fn ext_gas<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_gas<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let amount = args[0].as_i32().unwrap() as u32;
 		if e.charge_gas(amount as u64) {
 			Ok(sandbox::ReturnValue::Unit)
@@ -173,7 +174,8 @@ pub fn execute<'a, T: Ext>(
 	// - value_non_null: if set to 0, then the entry
 	//   at the given location will be removed.
 	// - value_ptr: pointer into the linear memory
-	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
+	// where the value to set is placed. If `value_non_null` is set to 0, then this parameter is
+	// ignored.
 	fn ext_set_storage<T: Ext>(
 		e: &mut Runtime<T>,
 		args: &[sandbox::TypedValue],
@@ -193,10 +195,7 @@ pub fn execute<'a, T: Ext>(
 		} else {
 			None
 		};
-		e.ext_mut().set_storage(
-			&location,
-			value,
-		);
+		e.ext_mut().set_storage(&location, value);
 
 		Ok(sandbox::ReturnValue::Unit)
 	}
@@ -211,7 +210,10 @@ pub fn execute<'a, T: Ext>(
 	//   memory where the location of the requested value is placed.
 	// - dest_ptr: pointer where contents of the specified storage location
 	//   should be placed.
-	fn ext_get_storage<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_get_storage<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let location_ptr = args[0].as_i32().unwrap() as u32;
 		let dest_ptr = args[1].as_i32().unwrap() as u32;
 
@@ -228,7 +230,10 @@ pub fn execute<'a, T: Ext>(
 	}
 
 	// ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_transfer<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_transfer<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let transfer_to_ptr = args[0].as_i32().unwrap() as u32;
 		let transfer_to_len = args[1].as_i32().unwrap() as u32;
 		let value_ptr = args[2].as_i32().unwrap() as u32;
@@ -250,7 +255,10 @@ pub fn execute<'a, T: Ext>(
 	}
 
 	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_create<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_create<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let code_ptr = args[0].as_i32().unwrap() as u32;
 		let code_len = args[1].as_i32().unwrap() as u32;
 		let value_ptr = args[2].as_i32().unwrap() as u32;
@@ -291,9 +299,8 @@ pub fn execute<'a, T: Ext>(
 		gas_used: 0,
 	};
 
-	let mut instance =
-		sandbox::Instance::new(&instrumented_code, &imports, &mut runtime)
-			.map_err(|_| Error::Instantiate)?;
+	let mut instance = sandbox::Instance::new(&instrumented_code, &imports, &mut runtime)
+		.map_err(|_| Error::Instantiate)?;
 	instance
 		.invoke(b"call", &[], &mut runtime)
 		.map(|_| ())
@@ -354,14 +361,15 @@ impl ContractModule {
 	/// Memory section contains declarations of internal linear memories, so if we find one
 	/// we reject such a module.
 	fn ensure_no_internal_memory(&self) -> Result<(), Error> {
-		let module = self.module
+		let module = self
+			.module
 			.as_ref()
 			.expect("On entry to the function `module` can't be None; qed");
 		if module
 			.memory_section()
 			.map_or(false, |ms| ms.entries().len() > 0)
 		{
-			return Err(Error::InternalMemoryDeclared);
+			return Err(Error::InternalMemoryDeclared)
 		}
 		Ok(())
 	}
@@ -371,7 +379,8 @@ impl ContractModule {
 			.with_grow_cost(self.config.grow_mem_cost)
 			.with_forbidden_floats();
 
-		let module = self.module
+		let module = self
+			.module
 			.take()
 			.expect("On entry to the function `module` can't be `None`; qed");
 
@@ -383,7 +392,8 @@ impl ContractModule {
 	}
 
 	fn inject_stack_height_metering(&mut self) -> Result<(), Error> {
-		let module = self.module
+		let module = self
+			.module
 			.take()
 			.expect("On entry to the function `module` can't be `None`; qed");
 
@@ -397,7 +407,8 @@ impl ContractModule {
 
 	/// Find the memory import entry and return it's descriptor.
 	fn find_mem_import(&self) -> Option<&MemoryType> {
-		let import_section = self.module
+		let import_section = self
+			.module
 			.as_ref()
 			.expect("On entry to the function `module` can't be `None`; qed")
 			.import_section()?;
@@ -405,7 +416,7 @@ impl ContractModule {
 			if let ("env", "memory", &External::Memory(ref memory_type)) =
 				(import.module(), import.field(), import.external())
 			{
-				return Some(memory_type);
+				return Some(memory_type)
 			}
 		}
 		None
@@ -440,22 +451,19 @@ fn prepare_contract(original_code: &[u8]) -> Result<PreparedContract, Error> {
 			match (limits.initial(), limits.maximum()) {
 				(initial, Some(maximum)) if initial > maximum => {
 					// Requested initial number of pages should not exceed the requested maximum.
-					return Err(Error::Memory);
-				}
+					return Err(Error::Memory)
+				},
 				(_, Some(maximum)) if maximum > config.max_memory_pages => {
 					// Maximum number of pages should not exceed the configured maximum.
-					return Err(Error::Memory);
-				}
+					return Err(Error::Memory)
+				},
 				(_, None) => {
 					// Maximum number of pages should be always declared.
 					// This isn't a hard requirement and can be treated as a maxiumum set
 					// to configured maximum.
 					return Err(Error::Memory)
-				}
-				(initial, maximum) => sandbox::Memory::new(
-					initial,
-					maximum,
-				)
+				},
+				(initial, maximum) => sandbox::Memory::new(initial, maximum),
 			}
 		},
 
@@ -473,9 +481,9 @@ fn prepare_contract(original_code: &[u8]) -> Result<PreparedContract, Error> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::collections::HashMap;
 	use std::fmt;
 	use wabt;
-	use std::collections::HashMap;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
@@ -504,20 +512,13 @@ mod tests {
 			*self.storage.entry(key.to_vec()).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
 		}
 		fn create(&mut self, code: &[u8], value: Self::Balance) {
-			self.creates.push(
-				CreateEntry {
-					code: code.to_vec(),
-					endownment: value,
-				}
-			);
+			self.creates.push(CreateEntry {
+				code: code.to_vec(),
+				endownment: value,
+			});
 		}
 		fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
-			self.transfers.push(
-				TransferEntry {
-					to: *to,
-					value,
-				}
-			);
+			self.transfers.push(TransferEntry { to: *to, value });
 		}
 	}
 
@@ -528,18 +529,13 @@ mod tests {
 	}
 
 	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
-		let wasm = wabt::Wat2Wasm::new()
-			.validate(false)
-			.convert(wat)
-			.unwrap();
+		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
 		prepare_contract(wasm.as_ref())
 	}
 
 	#[test]
 	fn internal_memory_declaration() {
-		let r = parse_and_prepare_wat(
-			r#"(module (memory 1 1))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (memory 1 1))"#);
 		assert_matches!(r, Err(Error::InternalMemoryDeclared));
 	}
 
@@ -548,40 +544,28 @@ mod tests {
 		// This test assumes that maximum page number is configured to a certain number.
 		assert_eq!(Config::default().max_memory_pages, 16);
 
-		let r = parse_and_prepare_wat(
-			r#"(module (import "env" "memory" (memory 1 1)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 1)))"#);
 		assert_matches!(r, Ok(_));
 
 		// No memory import
-		let r = parse_and_prepare_wat(
-			r#"(module)"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module)"#);
 		assert_matches!(r, Ok(_));
 
 		// incorrect import name. That's kinda ok, since this will fail
 		// at later stage when imports will be resolved.
-		let r = parse_and_prepare_wat(
-			r#"(module (import "vne" "memory" (memory 1 1)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "vne" "memory" (memory 1 1)))"#);
 		assert_matches!(r, Ok(_));
 
 		// initial exceed maximum
-		let r = parse_and_prepare_wat(
-			r#"(module (import "env" "memory" (memory 16 1)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 16 1)))"#);
 		assert_matches!(r, Err(Error::Memory));
 
 		// no maximum
-		let r = parse_and_prepare_wat(
-			r#"(module (import "env" "memory" (memory 1)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1)))"#);
 		assert_matches!(r, Err(Error::Memory));
 
 		// requested maximum exceed configured maximum
-		let r = parse_and_prepare_wat(
-			r#"(module (import "env" "memory" (memory 1 17)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 17)))"#);
 		assert_matches!(r, Err(Error::Memory));
 	}
 
@@ -618,14 +602,10 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 		execute(&code_transfer, &mut mock_ext, 50_000).unwrap();
 
-		assert_eq!(&mock_ext.transfers, &[TransferEntry {
-			to: 2,
-			value: 6,
-		}]);
+		assert_eq!(&mock_ext.transfers, &[TransferEntry { to: 2, value: 6 }]);
 	}
 
-	const CODE_MEM: &str =
-r#"
+	const CODE_MEM: &str = r#"
 (module
 	;; Internal memory is not allowed.
 	(memory 1 1)
@@ -642,9 +622,6 @@ r#"
 
 		let mut mock_ext = MockExt::default();
 
-		assert_matches!(
-			execute(&code_mem, &mut mock_ext, 100_000),
-			Err(_)
-		);
+		assert_matches!(execute(&code_mem, &mut mock_ext, 100_000), Err(_));
 	}
 }

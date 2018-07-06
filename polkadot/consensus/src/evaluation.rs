@@ -19,9 +19,9 @@
 use super::MAX_TRANSACTIONS_SIZE;
 
 use codec::Slicable;
-use polkadot_runtime::{Block as PolkadotGenericBlock, CheckedBlock};
-use polkadot_primitives::{Block, Hash, BlockNumber, Timestamp};
 use polkadot_primitives::parachain::Id as ParaId;
+use polkadot_primitives::{Block, BlockNumber, Hash, Timestamp};
+use polkadot_runtime::{Block as PolkadotGenericBlock, CheckedBlock};
 
 error_chain! {
 	links {
@@ -83,20 +83,27 @@ pub fn evaluate_initial(
 		.and_then(|b| CheckedBlock::new(b).ok())
 		.ok_or_else(|| ErrorKind::ProposalNotForPolkadot)?;
 
-	let transactions_size = proposal.extrinsics.iter().fold(0, |a, tx| {
-		a + Slicable::encode(tx).len()
-	});
+	let transactions_size = proposal
+		.extrinsics
+		.iter()
+		.fold(0, |a, tx| a + Slicable::encode(tx).len());
 
 	if transactions_size > MAX_TRANSACTIONS_SIZE {
 		bail!(ErrorKind::ProposalTooLarge(transactions_size))
 	}
 
 	if proposal.header.parent_hash != *parent_hash {
-		bail!(ErrorKind::WrongParentHash(*parent_hash, proposal.header.parent_hash));
+		bail!(ErrorKind::WrongParentHash(
+			*parent_hash,
+			proposal.header.parent_hash
+		));
 	}
 
 	if proposal.header.number != parent_number + 1 {
-		bail!(ErrorKind::WrongNumber(parent_number + 1, proposal.header.number));
+		bail!(ErrorKind::WrongNumber(
+			parent_number + 1,
+			proposal.header.number
+		));
 	}
 
 	let block_timestamp = proposal.timestamp();
@@ -109,14 +116,20 @@ pub fn evaluate_initial(
 	{
 		let n_parachains = active_parachains.len();
 		if proposal.parachain_heads().len() > n_parachains {
-			bail!(ErrorKind::TooManyCandidates(n_parachains, proposal.parachain_heads().len()));
+			bail!(ErrorKind::TooManyCandidates(
+				n_parachains,
+				proposal.parachain_heads().len()
+			));
 		}
 
 		let mut last_id = None;
 		let mut iter = active_parachains.iter();
 		for head in proposal.parachain_heads() {
 			// proposed heads must be ascending order by parachain ID without duplicate.
-			if last_id.as_ref().map_or(false, |x| x >= &head.parachain_index) {
+			if last_id
+				.as_ref()
+				.map_or(false, |x| x >= &head.parachain_index)
+			{
 				bail!(ErrorKind::ParachainOutOfOrder);
 			}
 

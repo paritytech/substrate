@@ -18,16 +18,18 @@
 
 #![cfg(feature = "std")]
 
+use super::{
+	BondingDuration, ContractFee, CreationFee, CurrentEra, EarlyEraSlash, EnumSet,
+	ExistentialDeposit, FreeBalance, Intentions, NextEnumSet, ReclaimRebate, SessionReward,
+	SessionsPerEra, TotalStake, Trait, TransactionBaseFee, TransactionByteFee, TransferFee,
+	ValidatorCount, ENUM_SET_SIZE,
+};
+use codec::Slicable;
+use primitives::traits::{As, Zero};
 use rstd::prelude::*;
 use runtime_io::twox_128;
-use codec::Slicable;
-use runtime_support::{StorageValue, StorageMap};
-use primitives::traits::{Zero, As};
-use {runtime_io, primitives};
-use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
-	BondingDuration, ContractFee, CreationFee, TransferFee, ReclaimRebate,
-	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
-	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash};
+use runtime_support::{StorageMap, StorageValue};
+use {primitives, runtime_io};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,13 +52,20 @@ pub struct GenesisConfig<T: Trait> {
 	pub early_era_slash: T::Balance,
 }
 
-impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
+impl<T: Trait> GenesisConfig<T>
+where
+	T::AccountId: From<u64>,
+{
 	pub fn simple() -> Self {
 		GenesisConfig {
 			sessions_per_era: T::BlockNumber::sa(2),
 			current_era: T::BlockNumber::sa(0),
 			balances: vec![(T::AccountId::from(1), T::Balance::sa(111))],
-			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
+			intentions: vec![
+				T::AccountId::from(1),
+				T::AccountId::from(2),
+				T::AccountId::from(3),
+			],
 			validator_count: 3,
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_base_fee: T::Balance::sa(0),
@@ -82,9 +91,13 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 				(T::AccountId::from(4), T::Balance::sa(40)),
 				(T::AccountId::from(5), T::Balance::sa(50)),
 				(T::AccountId::from(6), T::Balance::sa(60)),
-				(T::AccountId::from(7), T::Balance::sa(1))
+				(T::AccountId::from(7), T::Balance::sa(1)),
 			],
-			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
+			intentions: vec![
+				T::AccountId::from(1),
+				T::AccountId::from(2),
+				T::AccountId::from(3),
+			],
 			validator_count: 3,
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_base_fee: T::Balance::sa(1),
@@ -124,7 +137,10 @@ impl<T: Trait> Default for GenesisConfig<T> {
 
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
-		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
+		let total_stake: T::Balance = self
+			.balances
+			.iter()
+			.fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
 		let mut r: runtime_io::TestExternalities = map![
 			twox_128(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
@@ -147,11 +163,18 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 
 		let ids: Vec<_> = self.balances.iter().map(|x| x.0.clone()).collect();
 		for i in 0..(ids.len() + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE {
-			r.insert(twox_128(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
-				ids[i * ENUM_SET_SIZE..ids.len().min((i + 1) * ENUM_SET_SIZE)].to_owned().encode());
+			r.insert(
+				twox_128(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
+				ids[i * ENUM_SET_SIZE..ids.len().min((i + 1) * ENUM_SET_SIZE)]
+					.to_owned()
+					.encode(),
+			);
 		}
 		for (who, value) in self.balances.into_iter() {
-			r.insert(twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
+			r.insert(
+				twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(),
+				value.encode(),
+			);
 		}
 		Ok(r)
 	}

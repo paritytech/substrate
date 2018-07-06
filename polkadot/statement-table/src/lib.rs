@@ -14,15 +14,15 @@
 //! propose and attest to validity of candidates, and those who can only attest
 //! to availability.
 
-extern crate substrate_primitives;
 extern crate polkadot_primitives as primitives;
+extern crate substrate_primitives;
 
 pub mod generic;
 
 pub use generic::Table;
 
-use primitives::parachain::{Id, CandidateReceipt, CandidateSignature as Signature};
-use primitives::{SessionKey, Hash};
+use primitives::parachain::{CandidateReceipt, CandidateSignature as Signature, Id};
+use primitives::{Hash, SessionKey};
 
 /// Statements about candidates on the network.
 pub type Statement = generic::Statement<CandidateReceipt, Hash>;
@@ -45,11 +45,7 @@ pub trait Context {
 	/// Whether a authority is an availability guarantor of a group.
 	/// Guarantors are meant to vote on availability for candidates submitted
 	/// in a group.
-	fn is_availability_guarantor_of(
-		&self,
-		authority: &SessionKey,
-		group: &Id,
-	) -> bool;
+	fn is_availability_guarantor_of(&self, authority: &SessionKey, group: &Id) -> bool;
 
 	// requisite number of votes for validity and availability respectively from a group.
 	fn requisite_votes(&self, group: &Id) -> (usize, usize);
@@ -100,8 +96,12 @@ pub trait StatementBatch {
 }
 
 impl<T: StatementBatch> generic::StatementBatch<SessionKey, SignedStatement> for T {
-	fn targets(&self) -> &[SessionKey] { StatementBatch::targets(self ) }
-	fn is_empty(&self) -> bool { StatementBatch::is_empty(self) }
+	fn targets(&self) -> &[SessionKey] {
+		StatementBatch::targets(self)
+	}
+	fn is_empty(&self) -> bool {
+		StatementBatch::is_empty(self)
+	}
 	fn push(&mut self, statement: SignedStatement) -> bool {
 		StatementBatch::push(self, statement)
 	}

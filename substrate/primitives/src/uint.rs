@@ -17,16 +17,19 @@
 //! An unsigned fixed-size integer.
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "std")]
 use bytes;
 
 macro_rules! impl_serde {
-	($name: ident, $len: expr) => {
+	($name:ident, $len:expr) => {
 		#[cfg(feature = "std")]
 		impl Serialize for $name {
-			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+			where
+				S: Serializer,
+			{
 				let mut bytes = [0u8; $len * 8];
 				self.to_big_endian(&mut bytes);
 				bytes::serialize_uint(&bytes, serializer)
@@ -35,12 +38,15 @@ macro_rules! impl_serde {
 
 		#[cfg(feature = "std")]
 		impl<'de> Deserialize<'de> for $name {
-			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+			where
+				D: Deserializer<'de>,
+			{
 				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Between(0, $len * 8))
 					.map(|x| (&*x).into())
 			}
 		}
-	}
+	};
 }
 
 construct_uint!(U256, 4);
@@ -54,7 +60,7 @@ mod tests {
 	use substrate_serializer as ser;
 
 	macro_rules! test {
-		($name: ident, $test_name: ident) => {
+		($name:ident, $test_name:ident) => {
 			#[test]
 			fn $test_name() {
 				let tests = vec![
@@ -68,7 +74,10 @@ mod tests {
 					($name::from(1_000), "0x3e8"),
 					($name::from(100_000), "0x186a0"),
 					($name::from(u64::max_value()), "0xffffffffffffffff"),
-					($name::from(u64::max_value()) + 1.into(), "0x10000000000000000"),
+					(
+						$name::from(u64::max_value()) + 1.into(),
+						"0x10000000000000000",
+					),
 				];
 
 				for (number, expected) in tests {
@@ -83,7 +92,7 @@ mod tests {
 				assert!(ser::from_str::<$name>("\"10\"").unwrap_err().is_data());
 				assert!(ser::from_str::<$name>("\"0\"").unwrap_err().is_data());
 			}
-		}
+		};
 	}
 
 	test!(U256, test_u256);
@@ -96,7 +105,10 @@ mod tests {
 			"\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\""
 		);
 		assert!(
-			ser::from_str::<U256>("\"0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"").unwrap_err().is_data()
+			ser::from_str::<U256>(
+				"\"0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\""
+			).unwrap_err()
+				.is_data()
 		);
 	}
 }

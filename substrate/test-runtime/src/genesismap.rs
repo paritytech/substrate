@@ -16,11 +16,11 @@
 
 //! Tool for creating the genesis block.
 
-use std::collections::HashMap;
-use runtime_io::twox_128;
-use codec::{KeyedVec, Joiner};
+use codec::{Joiner, KeyedVec};
 use primitives::AuthorityId;
+use runtime_io::twox_128;
 use runtime_primitives::traits::Block;
+use std::collections::HashMap;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
@@ -38,16 +38,24 @@ impl GenesisConfig {
 
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
 		let wasm_runtime = include_bytes!("../wasm/genesis.wasm").to_vec();
-		self.balances.iter()
+		self.balances
+			.iter()
 			.map(|&(account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
-			.chain(vec![
-				(b":code"[..].into(), wasm_runtime),
-				(b":auth:len"[..].into(), vec![].and(&(self.authorities.len() as u32))),
-			].into_iter())
-			.chain(self.authorities.iter()
-				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].and(account)))
+			.chain(
+				vec![
+					(b":code"[..].into(), wasm_runtime),
+					(
+						b":auth:len"[..].into(),
+						vec![].and(&(self.authorities.len() as u32)),
+					),
+				].into_iter(),
+			)
+			.chain(
+				self.authorities
+					.iter()
+					.enumerate()
+					.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].and(account))),
 			)
 			.collect()
 	}

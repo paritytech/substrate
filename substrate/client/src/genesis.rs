@@ -16,55 +16,78 @@
 
 //! Tool for creating the genesis block.
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing as HashingT, Zero};
+use runtime_primitives::traits::{Block as BlockT, Hashing as HashingT, Header as HeaderT, Zero};
 use runtime_primitives::StorageMap;
 
 /// Create a genesis block, given the initial storage.
-pub fn construct_genesis_block<
-	Block: BlockT
-> (
-	storage: &StorageMap
-) -> Block {
-	let state_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(storage.clone().into_iter());
-	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(::std::iter::empty::<(&[u8], &[u8])>());
+pub fn construct_genesis_block<Block: BlockT>(storage: &StorageMap) -> Block {
+	let state_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(
+		storage.clone().into_iter(),
+	);
+	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashingT>::trie_root(
+		::std::iter::empty::<(&[u8], &[u8])>(),
+	);
 	Block::new(
 		<<Block as BlockT>::Header as HeaderT>::new(
 			Zero::zero(),
 			extrinsics_root,
 			state_root,
 			Default::default(),
-			Default::default()
+			Default::default(),
 		),
-		Default::default()
+		Default::default(),
 	)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Slicable, Joiner};
-	use keyring::Keyring;
+	use codec::{Joiner, Slicable};
+	use ed25519::{Pair, Public};
 	use executor::WasmExecutor;
-	use state_machine::{execute, OverlayedChanges};
+	use keyring::Keyring;
 	use state_machine::backend::InMemory;
+	use state_machine::{execute, OverlayedChanges};
 	use test_client;
-	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
-	use ed25519::{Public, Pair};
+	use test_client::runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
+	use test_client::runtime::{Block, BlockNumber, Digest, Extrinsic, Hash, Header, Transfer};
 
-	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+	native_executor_instance!(
+		Executor,
+		test_client::runtime::api::dispatch,
+		test_client::runtime::VERSION,
+		include_bytes!(
+			"../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"
+		)
+	);
 
-	fn construct_block(backend: &InMemory, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transfer>) -> (Vec<u8>, Hash) {
+	fn construct_block(
+		backend: &InMemory,
+		number: BlockNumber,
+		parent_hash: Hash,
+		state_root: Hash,
+		txs: Vec<Transfer>,
+	) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
-		let transactions = txs.into_iter().map(|tx| {
-			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.0)).unwrap())
-				.sign(&tx.encode()).into();
+		let transactions = txs
+			.into_iter()
+			.map(|tx| {
+				let signature = Pair::from(
+					Keyring::from_public(Public::from_raw(tx.from.0)).unwrap(),
+				).sign(&tx.encode())
+					.into();
 
-			Extrinsic { transfer: tx, signature }
-		}).collect::<Vec<_>>();
+				Extrinsic {
+					transfer: tx,
+					signature,
+				}
+			})
+			.collect::<Vec<_>>();
 
-		let extrinsics_root = ordered_trie_root(transactions.iter().map(Slicable::encode)).0.into();
+		let extrinsics_root = ordered_trie_root(transactions.iter().map(Slicable::encode))
+			.0
+			.into();
 
 		println!("root before: {:?}", extrinsics_root);
 		let mut header = Header {
@@ -72,7 +95,7 @@ mod tests {
 			number,
 			state_root,
 			extrinsics_root,
-			digest: Digest { logs: vec![], },
+			digest: Digest { logs: vec![] },
 		};
 		let hash = header.hash();
 		let mut overlay = OverlayedChanges::default();
@@ -100,12 +123,18 @@ mod tests {
 			&mut overlay,
 			&Executor::new(),
 			"finalise_block",
-			&[]
+			&[],
 		).unwrap();
 		header = Header::decode(&mut &ret_data[..]).unwrap();
 		println!("root after: {:?}", header.extrinsics_root);
 
-		(vec![].and(&Block { header, extrinsics: transactions }), hash)
+		(
+			vec![].and(&Block {
+				header,
+				extrinsics: transactions,
+			}),
+			hash,
+		)
 	}
 
 	fn block1(genesis_hash: Hash, backend: &InMemory) -> (Vec<u8>, Hash) {
@@ -119,14 +148,18 @@ mod tests {
 				to: Keyring::Two.to_raw_public().into(),
 				amount: 69,
 				nonce: 0,
-			}]
+			}],
 		)
 	}
 
 	#[test]
 	fn construct_genesis_should_work_with_native() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
+			vec![
+				Keyring::One.to_raw_public().into(),
+				Keyring::Two.to_raw_public().into(),
+			],
+			1000,
 		).genesis_map();
 		let block = construct_genesis_block::<Block>(&storage);
 		let genesis_hash = block.header.hash();
@@ -141,14 +174,18 @@ mod tests {
 			&mut overlay,
 			&Executor::new(),
 			"execute_block",
-			&b1data
+			&b1data,
 		).unwrap();
 	}
 
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
+			vec![
+				Keyring::One.to_raw_public().into(),
+				Keyring::Two.to_raw_public().into(),
+			],
+			1000,
 		).genesis_map();
 		let block = construct_genesis_block::<Block>(&storage);
 		let genesis_hash = block.header.hash();
@@ -163,7 +200,7 @@ mod tests {
 			&mut overlay,
 			&WasmExecutor,
 			"execute_block",
-			&b1data
+			&b1data,
 		).unwrap();
 	}
 
@@ -171,7 +208,11 @@ mod tests {
 	#[should_panic]
 	fn construct_genesis_with_bad_transaction_should_panic() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 68
+			vec![
+				Keyring::One.to_raw_public().into(),
+				Keyring::Two.to_raw_public().into(),
+			],
+			68,
 		).genesis_map();
 		let block = construct_genesis_block::<Block>(&storage);
 		let genesis_hash = block.header.hash();
@@ -186,7 +227,7 @@ mod tests {
 			&mut overlay,
 			&Executor::new(),
 			"execute_block",
-			&b1data
+			&b1data,
 		).unwrap();
 	}
 }

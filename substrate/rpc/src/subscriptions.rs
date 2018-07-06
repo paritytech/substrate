@@ -21,7 +21,7 @@ use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use parking_lot::Mutex;
 use rpc::futures::sync::oneshot;
-use rpc::futures::{Future, future};
+use rpc::futures::{future, Future};
 use tokio_core::reactor::Remote;
 
 type Id = u64;
@@ -52,10 +52,11 @@ impl Subscriptions {
 	/// Second parameter is a function that converts Subscriber sink into a future.
 	/// This future will be driven to completion bu underlying event loop
 	/// or will be cancelled in case #cancel is invoked.
-	pub fn add<T, E, G, R, F>(&self, subscriber: pubsub::Subscriber<T, E>, into_future: G) where
+	pub fn add<T, E, G, R, F>(&self, subscriber: pubsub::Subscriber<T, E>, into_future: G)
+	where
 		G: FnOnce(pubsub::Sink<T, E>) -> R,
-		R: future::IntoFuture<Future=F, Item=(), Error=()>,
-		F: future::Future<Item=(), Error=()> + Send + 'static,
+		R: future::IntoFuture<Future = F, Item = (), Error = ()>,
+		F: future::Future<Item = (), Error = ()> + Send + 'static,
 	{
 		let id = self.next_id.fetch_add(1, atomic::Ordering::AcqRel) as u64;
 		if let Ok(sink) = subscriber.assign_id(id.into()) {
@@ -78,7 +79,7 @@ impl Subscriptions {
 		if let SubscriptionId::Number(id) = id {
 			if let Some(tx) = self.active_subscriptions.lock().remove(&id) {
 				let _ = tx.send(());
-				return true;
+				return true
 			}
 		}
 		false

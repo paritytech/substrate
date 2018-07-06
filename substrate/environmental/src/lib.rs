@@ -27,17 +27,17 @@
 //! // create a place for the global reference to exist.
 //! environmental!(counter: u32);
 //! fn stuff() {
-//!   // do some stuff, accessing the named reference as desired.
-//!   counter::with(|i| *i += 1);
-//! }
+//! 	// do some stuff, accessing the named reference as desired.
+//! 	counter::with(|i| *i += 1);
+//! 	}
 //! fn main() {
-//!   // declare a stack variable of the same type as our global declaration.
-//!   let mut counter_value = 41u32;
-//!   // call stuff, setting up our `counter` environment as a refrence to our counter_value var.
-//!   counter::using(&mut counter_value, stuff);
-//!   println!("The answer is {:?}", counter_value); // will print 42!
-//!   stuff();	// safe! doesn't do anything.
-//! }
+//! 	// declare a stack variable of the same type as our global declaration.
+//! 	let mut counter_value = 41u32;
+//! 	// call stuff, setting up our `counter` environment as a refrence to our counter_value var.
+//! 	counter::using(&mut counter_value, stuff);
+//! 	println!("The answer is {:?}", counter_value); // will print 42!
+//! 	stuff(); // safe! doesn't do anything.
+//! 	}
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -53,7 +53,7 @@ include!("../without_std.rs");
 pub fn using<T: ?Sized, R, F: FnOnce() -> R>(
 	global: &'static imp::LocalKey<imp::RefCell<Option<*mut T>>>,
 	protected: &mut T,
-	f: F
+	f: F,
 ) -> R {
 	// store the `protected` reference as a pointer so we can provide it to logic running within
 	// `f`.
@@ -101,7 +101,7 @@ pub fn with<T: ?Sized, R, F: FnOnce(&mut T) -> R>(
 				// safe because it's only non-zero when it's being called from using, which
 				// is holding on to the underlying reference (and not using it itself) safely.
 				Some(mutator(&mut *ptr))
-			}
+			},
 			None => None,
 		}
 	})
@@ -127,19 +127,28 @@ pub fn with<T: ?Sized, R, F: FnOnce(&mut T) -> R>(
 /// #[macro_use] extern crate environmental;
 /// environmental!(counter: u32);
 /// fn main() {
-///   let mut counter_value = 41u32;
-///   counter::using(&mut counter_value, || {
-///     let odd = counter::with(|value|
-///       if *value % 2 == 1 {
-///         *value += 1; true
-///       } else {
-///         *value -= 3; false
-///       }).unwrap();	// safe because we're inside a counter::using
-///     println!("counter was {}", match odd { true => "odd", _ => "even" });
-///   });
+/// 	let mut counter_value = 41u32;
+/// 	counter::using(&mut counter_value, || {
+/// 		let odd = counter::with(|value| {
+/// 			if *value % 2 == 1 {
+/// 				*value += 1;
+/// 				true
+/// 			} else {
+/// 				*value -= 3;
+/// 				false
+/// 			}
+/// 		}).unwrap(); // safe because we're inside a counter::using
+/// 		println!(
+/// 			"counter was {}",
+/// 			match odd {
+/// 				true => "odd",
+/// 				_ => "even",
+/// 			}
+/// 		);
+/// 	});
 ///
-///   println!("The answer is {:?}", counter_value); // 42
-/// }
+/// 	println!("The answer is {:?}", counter_value); // 42
+/// 	}
 /// ```
 ///
 /// Roughly the same, but with a trait object:
@@ -150,18 +159,18 @@ pub fn with<T: ?Sized, R, F: FnOnce(&mut T) -> R>(
 /// trait Increment { fn increment(&mut self); }
 ///
 /// impl Increment for i32 {
-///	fn increment(&mut self) { *self += 1 }
+/// 	fn increment(&mut self) { *self += 1 }
 /// }
 ///
 /// environmental!(val: Increment + 'static);
 ///
 /// fn main() {
-///	let mut local = 0i32;
-///	val::using(&mut local, || {
-///		val::with(|v| for _ in 0..5 { v.increment() });
-///	});
+/// 	let mut local = 0i32;
+/// 	val::using(&mut local, || {
+/// 		val::with(|v| for _ in 0..5 { v.increment() });
+/// 	});
 ///
-///	assert_eq!(local, 5);
+/// 	assert_eq!(local, 5);
 /// }
 /// ```
 #[macro_export]
@@ -226,7 +235,9 @@ mod tests {
 	fn simple_works() {
 		environmental!(counter: u32);
 
-		fn stuff() { counter::with(|value| *value += 1); };
+		fn stuff() {
+			counter::with(|value| *value += 1);
+		};
 
 		// declare a stack variable of the same type as our global declaration.
 		let mut local = 41u32;
@@ -234,7 +245,7 @@ mod tests {
 		// call stuff, setting up our `counter` environment as a refrence to our local counter var.
 		counter::using(&mut local, stuff);
 		assert_eq!(local, 42);
-		stuff();	// safe! doesn't do anything.
+		stuff(); // safe! doesn't do anything.
 	}
 
 	#[test]
@@ -258,8 +269,12 @@ mod tests {
 		}
 
 		impl Foo for i32 {
-			fn get(&self) -> i32 { *self }
-			fn set(&mut self, x: i32) { *self = x }
+			fn get(&self) -> i32 {
+				*self
+			}
+			fn set(&mut self, x: i32) {
+				*self = x
+			}
 		}
 
 		environmental!(foo: Foo + 'static);
@@ -306,7 +321,9 @@ mod tests {
 
 	#[test]
 	fn use_non_static_trait() {
-		trait Sum { fn sum(&self) -> usize; }
+		trait Sum {
+			fn sum(&self) -> usize;
+		}
 		impl<'a> Sum for &'a [usize] {
 			fn sum(&self) -> usize {
 				self.iter().fold(0, |a, c| a + c)
@@ -316,9 +333,7 @@ mod tests {
 		environmental!(sum: trait Sum);
 		let numbers = vec![1, 2, 3, 4, 5];
 		let mut numbers = &numbers[..];
-		let got_sum = sum::using(&mut numbers, || {
-			sum::with(|x| x.sum())
-		}).unwrap();
+		let got_sum = sum::using(&mut numbers, || sum::with(|x| x.sum())).unwrap();
 
 		assert_eq!(got_sum, 15);
 	}

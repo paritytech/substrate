@@ -17,17 +17,17 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
-use rstd::prelude::*;
-use runtime_io::{storage_root, enumerated_trie_root};
-use runtime_support::storage::{self, StorageValue, StorageMap};
-use runtime_primitives::traits::{Hashing, BlakeTwo256};
+use super::{AccountId, Block, BlockNumber, Extrinsic, H256 as Hash, Header};
 use codec::{KeyedVec, Slicable};
-use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
+use rstd::prelude::*;
+use runtime_io::{enumerated_trie_root, storage_root};
+use runtime_primitives::traits::{BlakeTwo256, Hashing};
+use runtime_support::storage::{self, StorageMap, StorageValue};
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
-const AUTHORITY_AT: &'static[u8] = b":auth:";
-const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
+const AUTHORITY_AT: &'static [u8] = b":auth:";
+const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
 
 storage_items! {
 	ExtrinsicIndex: b"sys:xti" => required u32;
@@ -47,9 +47,13 @@ pub fn nonce_of(who: AccountId) -> u64 {
 
 /// Get authorities ar given block.
 pub fn authorities() -> Vec<::primitives::AuthorityId> {
-	let len: u32 = storage::unhashed::get(AUTHORITY_COUNT).expect("There are always authorities in test-runtime");
+	let len: u32 = storage::unhashed::get(AUTHORITY_COUNT)
+		.expect("There are always authorities in test-runtime");
 	(0..len)
-		.map(|i| storage::unhashed::get(&i.to_keyed_vec(AUTHORITY_AT)).expect("Authority is properly encoded in test-runtime"))
+		.map(|i| {
+			storage::unhashed::get(&i.to_keyed_vec(AUTHORITY_AT))
+				.expect("Authority is properly encoded in test-runtime")
+		})
 		.collect()
 }
 
@@ -65,19 +69,32 @@ pub fn execute_block(block: Block) {
 	let ref header = block.header;
 
 	// check transaction trie root represents the transactions.
-	let txs = block.extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
+	let txs = block
+		.extrinsics
+		.iter()
+		.map(Slicable::encode)
+		.collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
 	info_expect_equal_hash(&header.extrinsics_root, &txs_root);
-	assert!(header.extrinsics_root == txs_root, "Transaction trie root must be valid.");
+	assert!(
+		header.extrinsics_root == txs_root,
+		"Transaction trie root must be valid."
+	);
 
 	// execute transactions
-	block.extrinsics.iter().for_each(execute_transaction_backend);
+	block
+		.extrinsics
+		.iter()
+		.for_each(execute_transaction_backend);
 
 	// check storage root.
 	let storage_root = storage_root().into();
 	info_expect_equal_hash(&header.state_root, &storage_root);
-	assert!(header.state_root == storage_root, "Storage root must match that calculated.");
+	assert!(
+		header.state_root == storage_root,
+		"Storage root must match that calculated."
+	);
 }
 
 /// Execute a transaction outside of the block execution function.
@@ -123,7 +140,10 @@ fn execute_transaction_backend(utx: &Extrinsic) {
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
-	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
+	assert!(
+		tx.nonce == expected_nonce,
+		"All transactions should have the correct nonce"
+	);
 
 	// increment nonce in storage
 	storage::put(&nonce_key, &(expected_nonce + 1));
@@ -133,7 +153,10 @@ fn execute_transaction_backend(utx: &Extrinsic) {
 	let from_balance: u64 = storage::get_or(&from_balance_key, 0);
 
 	// enact transfer
-	assert!(tx.amount <= from_balance, "All transactions should transfer at most the sender balance");
+	assert!(
+		tx.amount <= from_balance,
+		"All transactions should transfer at most the sender balance"
+	);
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
 	let to_balance: u64 = storage::get_or(&to_balance_key, 0);
 	storage::put(&from_balance_key, &(from_balance - tx.amount));
@@ -144,7 +167,11 @@ fn execute_transaction_backend(utx: &Extrinsic) {
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	use primitives::hexdisplay::HexDisplay;
 	if given != expected {
-		println!("Hash: given={}, expected={}", HexDisplay::from(&given.0), HexDisplay::from(&expected.0));
+		println!(
+			"Hash: given={}, expected={}",
+			HexDisplay::from(&given.0),
+			HexDisplay::from(&expected.0)
+		);
 	}
 }
 
@@ -161,10 +188,10 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
-	use ::{Header, Digest, Extrinsic, Transfer};
+	use runtime_io::{twox_128, with_externalities, TestExternalities};
+	use {Digest, Extrinsic, Header, Transfer};
 
 	fn new_test_ext() -> TestExternalities {
 		map![
@@ -178,8 +205,14 @@ mod tests {
 	}
 
 	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
-		let signature = Keyring::from_raw_public(tx.from.0).unwrap().sign(&tx.encode()).into();
-		Extrinsic { transfer: tx, signature }
+		let signature = Keyring::from_raw_public(tx.from.0)
+			.unwrap()
+			.sign(&tx.encode())
+			.into();
+		Extrinsic {
+			transfer: tx,
+			signature,
+		}
 	}
 
 	#[test]
@@ -189,9 +222,12 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("97dfcd1f8cbf8845fcb544f89332f1a94c1137f7d1b199ef0b0a6ed217015c3e").into(),
-			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
-			digest: Digest { logs: vec![], },
+			state_root: hex!("97dfcd1f8cbf8845fcb544f89332f1a94c1137f7d1b199ef0b0a6ed217015c3e")
+				.into(),
+			extrinsics_root: hex!(
+				"56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+			).into(),
+			digest: Digest { logs: vec![] },
 		};
 
 		let b = Block {
@@ -217,18 +253,20 @@ mod tests {
 			header: Header {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
-				state_root: hex!("0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1").into(),
-				extrinsics_root: hex!("951508f2cc0071500a74765ab0fb2f280fdcdd329d5f989dda675010adee99d6").into(),
-				digest: Digest { logs: vec![], },
+				state_root: hex!(
+					"0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1"
+				).into(),
+				extrinsics_root: hex!(
+					"951508f2cc0071500a74765ab0fb2f280fdcdd329d5f989dda675010adee99d6"
+				).into(),
+				digest: Digest { logs: vec![] },
 			},
-			extrinsics: vec![
-				construct_signed_tx(Transfer {
-					from: Keyring::Alice.to_raw_public().into(),
-					to: Keyring::Bob.to_raw_public().into(),
-					amount: 69,
-					nonce: 0,
-				})
-			],
+			extrinsics: vec![construct_signed_tx(Transfer {
+				from: Keyring::Alice.to_raw_public().into(),
+				to: Keyring::Bob.to_raw_public().into(),
+				amount: 69,
+				nonce: 0,
+			})],
 		};
 
 		with_externalities(&mut t, || {
@@ -242,9 +280,13 @@ mod tests {
 			header: Header {
 				parent_hash: b.header.hash(),
 				number: 2,
-				state_root: hex!("c93f2fd494c386fa32ee76b6198a7ccf5db12c02c3a79755fd2d4646ec2bf8d7").into(),
-				extrinsics_root: hex!("3563642676d7e042c894eedc579ba2d6eeedf9a6c66d9d557599effc9f674372").into(),
-				digest: Digest { logs: vec![], },
+				state_root: hex!(
+					"c93f2fd494c386fa32ee76b6198a7ccf5db12c02c3a79755fd2d4646ec2bf8d7"
+				).into(),
+				extrinsics_root: hex!(
+					"3563642676d7e042c894eedc579ba2d6eeedf9a6c66d9d557599effc9f674372"
+				).into(),
+				digest: Digest { logs: vec![] },
 			},
 			extrinsics: vec![
 				construct_signed_tx(Transfer {

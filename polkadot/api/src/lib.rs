@@ -20,12 +20,12 @@
 extern crate polkadot_executor;
 extern crate polkadot_primitives as primitives;
 extern crate polkadot_runtime as runtime;
-extern crate substrate_codec as codec;
-extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_client as client;
+extern crate substrate_codec as codec;
 extern crate substrate_executor as substrate_executor;
-extern crate substrate_runtime_executive;
 extern crate substrate_primitives;
+extern crate substrate_runtime_executive;
+extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
 
@@ -38,10 +38,11 @@ extern crate substrate_keyring as keyring;
 pub mod full;
 pub mod light;
 
-use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp,
-	UncheckedExtrinsic};
-use runtime::Address;
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
+use primitives::{
+	AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic,
+};
+use runtime::Address;
 
 error_chain! {
 	errors {
@@ -71,7 +72,8 @@ error_chain! {
 impl From<client::error::Error> for Error {
 	fn from(e: client::error::Error) -> Error {
 		match e {
-			client::error::Error(client::error::ErrorKind::UnknownBlock(b), _) => Error::from_kind(ErrorKind::UnknownBlock(b)),
+			client::error::Error(client::error::ErrorKind::UnknownBlock(b), _) =>
+				Error::from_kind(ErrorKind::UnknownBlock(b)),
 			other => Error::from_kind(ErrorKind::Other(Box::new(other) as Box<_>)),
 		}
 	}
@@ -117,10 +119,12 @@ pub trait PolkadotApi {
 	/// Get the active parachains at a block.
 	fn active_parachains(&self, at: &BlockId) -> Result<Vec<ParaId>>;
 
-	/// Get the validation code of a parachain at a block. If the parachain is active, this will always return `Some`.
+	/// Get the validation code of a parachain at a block. If the parachain is active, this will
+	/// always return `Some`.
 	fn parachain_code(&self, at: &BlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
 
-	/// Get the chain head of a parachain. If the parachain is active, this will always return `Some`.
+	/// Get the chain head of a parachain. If the parachain is active, this will always return
+	/// `Some`.
 	fn parachain_head(&self, at: &BlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
 
 	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
@@ -128,15 +132,26 @@ pub trait PolkadotApi {
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool>;
 
 	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
-	fn build_block(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
+	fn build_block(
+		&self,
+		at: &BlockId,
+		timestamp: Timestamp,
+		new_heads: Vec<CandidateReceipt>,
+	) -> Result<Self::BlockBuilder>;
 
 	/// Attempt to produce the (encoded) inherent extrinsics for a block being built upon the given.
 	/// This may vary by runtime and will fail if a runtime doesn't follow the same API.
-	fn inherent_extrinsics(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>>;
+	fn inherent_extrinsics(
+		&self,
+		at: &BlockId,
+		timestamp: Timestamp,
+		new_heads: Vec<CandidateReceipt>,
+	) -> Result<Vec<UncheckedExtrinsic>>;
 }
 
 /// Mark for all Polkadot API implementations, that are making use of state data, stored locally.
 pub trait LocalPolkadotApi: PolkadotApi {}
 
-/// Mark for all Polkadot API implementations, that are fetching required state data from remote nodes.
+/// Mark for all Polkadot API implementations, that are fetching required state data from remote
+/// nodes.
 pub trait RemotePolkadotApi: PolkadotApi {}

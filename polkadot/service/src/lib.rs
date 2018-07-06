@@ -17,38 +17,38 @@
 //! Polkadot service. Starts a thread that spins the network, the client and the transaction pool.
 //! Manages communication between them.
 
-extern crate futures;
-extern crate ed25519;
 extern crate clap;
+extern crate ed25519;
 extern crate exit_future;
-extern crate tokio_timer;
-extern crate serde;
-extern crate serde_json;
-extern crate polkadot_primitives;
-extern crate polkadot_runtime;
-extern crate polkadot_executor;
+extern crate futures;
 extern crate polkadot_api;
 extern crate polkadot_consensus as consensus;
+extern crate polkadot_executor;
+extern crate polkadot_primitives;
+extern crate polkadot_runtime;
 extern crate polkadot_transaction_pool as transaction_pool;
-extern crate substrate_keystore as keystore;
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_primitives as primitives;
-extern crate substrate_runtime_primitives as runtime_primitives;
-extern crate substrate_network as network;
+extern crate serde;
+extern crate serde_json;
 extern crate substrate_codec as codec;
 extern crate substrate_executor;
+extern crate substrate_keystore as keystore;
+extern crate substrate_network as network;
+extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
+extern crate tokio_timer;
 
-extern crate tokio_core;
 extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
+extern crate tokio_core;
 
 #[macro_use]
 extern crate substrate_telemetry;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
-extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
+extern crate slog; // needed until we can reexport `slog_info` from `substrate_telemetry`
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -61,22 +61,22 @@ mod error;
 mod config;
 mod chain_spec;
 
-use std::sync::Arc;
-use std::thread;
+use client::{BlockchainEvents, Client};
+use exit_future::Signal;
 use futures::prelude::*;
-use tokio_core::reactor::Core;
-use transaction_pool::TransactionPool;
 use keystore::Store as Keystore;
+use network::ManageNetwork;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Block, BlockId, Hash};
-use client::{Client, BlockchainEvents};
-use network::ManageNetwork;
-use exit_future::Signal;
+use std::sync::Arc;
+use std::thread;
+use tokio_core::reactor::Core;
+use transaction_pool::TransactionPool;
 
-pub use self::error::{ErrorKind, Error};
 pub use self::components::{Components, FullComponents, LightComponents};
-pub use config::{Configuration, Role, PruningMode};
+pub use self::error::{Error, ErrorKind};
 pub use chain_spec::ChainSpec;
+pub use config::{Configuration, PruningMode, Role};
 
 /// Polkadot service.
 pub struct Service<Components: components::Components> {
@@ -89,23 +89,33 @@ pub struct Service<Components: components::Components> {
 }
 
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration) -> Result<Service<components::LightComponents>, error::Error> {
+pub fn new_light(
+	config: Configuration,
+) -> Result<Service<components::LightComponents>, error::Error> {
 	Service::new(components::LightComponents, config)
 }
 
 /// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration) -> Result<Service<components::FullComponents>, error::Error> {
+pub fn new_full(
+	config: Configuration,
+) -> Result<Service<components::FullComponents>, error::Error> {
 	let is_validator = (config.roles & Role::VALIDATOR) == Role::VALIDATOR;
 	Service::new(components::FullComponents { is_validator }, config)
 }
 
 /// Creates bare client without any networking.
-pub fn new_client(config: Configuration) -> Result<Arc<Client<
-		<components::FullComponents as Components>::Backend,
-		<components::FullComponents as Components>::Executor,
-		Block>>,
-	error::Error>
-{
+pub fn new_client(
+	config: Configuration,
+) -> Result<
+	Arc<
+		Client<
+			<components::FullComponents as Components>::Backend,
+			<components::FullComponents as Components>::Executor,
+			Block,
+		>,
+	>,
+	error::Error,
+> {
 	let db_settings = client_db::DatabaseSettings {
 		cache_size: None,
 		path: config.database_path.into(),
@@ -246,7 +256,8 @@ impl<Components> Service<Components>
 
 /// Produce a task which prunes any finalized transactions from the pool.
 pub fn prune_imported<A>(pool: &TransactionPool<A>, hash: Hash)
-	where A: PolkadotApi,
+where
+	A: PolkadotApi,
 {
 	let block = BlockId::hash(hash);
 	if let Err(e) = pool.cull(block) {
@@ -258,7 +269,10 @@ pub fn prune_imported<A>(pool: &TransactionPool<A>, hash: Hash)
 	}
 }
 
-impl<Components> Drop for Service<Components> where Components: components::Components {
+impl<Components> Drop for Service<Components>
+where
+	Components: components::Components,
+{
 	fn drop(&mut self) {
 		self.network.stop_network();
 

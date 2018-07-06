@@ -19,14 +19,16 @@
 
 use std::sync::Arc;
 
-use kvdb::{self, KeyValueDB, DBTransaction};
+use kvdb::{self, DBTransaction, KeyValueDB};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 
 use client;
 use codec::Slicable;
 use hashdb::DBValue;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hashing, HashingFor, Zero};
+use runtime_primitives::traits::{
+	As, Block as BlockT, Hashing, HashingFor, Header as HeaderT, Zero,
+};
 use DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
@@ -57,14 +59,17 @@ pub struct Meta<N, H> {
 pub type BlockKey = [u8; 4];
 
 /// Convert block number into key (LE representation).
-pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u32> {
+pub fn number_to_db_key<N>(n: N) -> BlockKey
+where
+	N: As<u32>,
+{
 	let n: u32 = n.as_();
 
 	[
 		(n >> 24) as u8,
 		((n >> 16) & 0xff) as u8,
 		((n >> 8) & 0xff) as u8,
-		(n & 0xff) as u8
+		(n & 0xff) as u8,
 	]
 }
 
@@ -72,27 +77,34 @@ pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u32> {
 pub fn db_err(err: kvdb::Error) -> client::error::Error {
 	use std::error::Error;
 	match err.kind() {
-		&kvdb::ErrorKind::Io(ref err) => client::error::ErrorKind::Backend(err.description().into()).into(),
+		&kvdb::ErrorKind::Io(ref err) =>
+			client::error::ErrorKind::Backend(err.description().into()).into(),
 		&kvdb::ErrorKind::Msg(ref m) => client::error::ErrorKind::Backend(m.clone()).into(),
 		_ => client::error::ErrorKind::Backend("Unknown backend error".into()).into(),
 	}
 }
 
 /// Open RocksDB database.
-pub fn open_database(config: &DatabaseSettings, db_type: &str) -> client::error::Result<Arc<KeyValueDB>> {
+pub fn open_database(
+	config: &DatabaseSettings,
+	db_type: &str,
+) -> client::error::Result<Arc<KeyValueDB>> {
 	let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
 	db_config.memory_budget = config.cache_size;
 	db_config.wal = true;
-	let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
+	let path = config
+		.path
+		.to_str()
+		.ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
 	let db = Database::open(&db_config, &path).map_err(db_err)?;
 
 	// check database type
 	match db.get(COLUMN_META, meta_keys::TYPE).map_err(db_err)? {
-		Some(stored_type) => {
-			if db_type.as_bytes() != &*stored_type {
-				return Err(client::error::ErrorKind::Backend(
-					format!("Unexpected database type. Expected: {}", db_type)).into());
-			}
+		Some(stored_type) => if db_type.as_bytes() != &*stored_type {
+			return Err(client::error::ErrorKind::Backend(format!(
+				"Unexpected database type. Expected: {}",
+				db_type
+			)).into())
 		},
 		None => {
 			let mut transaction = DBTransaction::new();
@@ -105,27 +117,40 @@ pub fn open_database(config: &DatabaseSettings, db_type: &str) -> client::error:
 }
 
 /// Convert block id to block key, reading number from db if required.
-pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block>) -> Result<Option<BlockKey>, client::error::Error>
-	where
-		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+pub fn read_id<Block>(
+	db: &KeyValueDB,
+	col_index: Option<u32>,
+	id: BlockId<Block>,
+) -> Result<Option<BlockKey>, client::error::Error>
+where
+	Block: BlockT,
+	<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	match id {
-		BlockId::Hash(h) => db.get(col_index, h.as_ref())
-			.map(|v| v.map(|v| {
-				let mut key: [u8; 4] = [0; 4];
-				key.copy_from_slice(&v);
-				key
-			})).map_err(db_err),
+		BlockId::Hash(h) => db
+			.get(col_index, h.as_ref())
+			.map(|v| {
+				v.map(|v| {
+					let mut key: [u8; 4] = [0; 4];
+					key.copy_from_slice(&v);
+					key
+				})
+			})
+			.map_err(db_err),
 		BlockId::Number(n) => Ok(Some(number_to_db_key(n))),
 	}
 }
 
 /// Read database column entry for the given block.
-pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>, id: BlockId<Block>) -> client::error::Result<Option<DBValue>>
-	where
-		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+pub fn read_db<Block>(
+	db: &KeyValueDB,
+	col_index: Option<u32>,
+	col: Option<u32>,
+	id: BlockId<Block>,
+) -> client::error::Result<Option<DBValue>>
+where
+	Block: BlockT,
+	<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	read_id(db, col_index, id).and_then(|key| match key {
 		Some(key) => db.get(col, &key).map_err(db_err),
@@ -134,26 +159,38 @@ pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>,
 }
 
 /// Read meta from the database.
-pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>, client::error::Error>
-	where
-		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+pub fn read_meta<Block>(
+	db: &KeyValueDB,
+	col_header: Option<u32>,
+) -> Result<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>, client::error::Error>
+where
+	Block: BlockT,
+	<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	let genesis_number = <<Block as BlockT>::Header as HeaderT>::Number::zero();
-	let (best_hash, best_number) = if let Some(Some(header)) = db.get(COLUMN_META, meta_keys::BEST_BLOCK).and_then(|id|
-		match id {
-			Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]))),
+	let (best_hash, best_number) = if let Some(Some(header)) = db
+		.get(COLUMN_META, meta_keys::BEST_BLOCK)
+		.and_then(|id| match id {
+			Some(id) => db
+				.get(col_header, &id)
+				.map(|h| h.map(|b| Block::Header::decode(&mut &b[..]))),
 			None => Ok(None),
-		}).map_err(db_err)?
+		})
+		.map_err(db_err)?
 	{
 		let hash = header.hash();
-		debug!("DB Opened blockchain db, best {:?} ({})", hash, header.number());
+		debug!(
+			"DB Opened blockchain db, best {:?} ({})",
+			hash,
+			header.number()
+		);
 		(hash, *header.number())
 	} else {
 		(Default::default(), genesis_number)
 	};
 
-	let genesis_hash = db.get(col_header, &number_to_db_key(genesis_number))
+	let genesis_hash = db
+		.get(col_header, &number_to_db_key(genesis_number))
 		.map_err(db_err)?
 		.map(|raw| HashingFor::<Block>::hash(&raw[..]))
 		.unwrap_or_default()

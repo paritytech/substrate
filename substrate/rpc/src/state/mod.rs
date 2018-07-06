@@ -21,13 +21,13 @@ mod error;
 #[cfg(test)]
 mod tests;
 
+use client::{self, CallExecutor, Client};
 use std::sync::Arc;
-use client::{self, Client, CallExecutor};
 
+use primitives::hexdisplay::HexDisplay;
+use primitives::storage::{StorageData, StorageKey};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
-use primitives::storage::{StorageKey, StorageData};
-use primitives::hexdisplay::HexDisplay;
 use state_machine;
 
 use self::error::Result;
@@ -69,11 +69,14 @@ build_rpc_trait! {
 	}
 }
 
-impl<B, E, Block> StateApi<Block::Hash> for Arc<Client<B, E, Block>> where
+impl<B, E, Block> StateApi<Block::Hash> for Arc<Client<B, E, Block>>
+where
 	Block: BlockT + 'static,
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
+	client::error::Error: From<
+		<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error,
+	>,
 {
 	fn storage_at(&self, key: StorageKey, block: Block::Hash) -> Result<StorageData> {
 		trace!(target: "rpc", "Querying storage at {:?} for key {}", block, HexDisplay::from(&key.0));
@@ -82,12 +85,17 @@ impl<B, E, Block> StateApi<Block::Hash> for Arc<Client<B, E, Block>> where
 
 	fn call_at(&self, method: String, data: Vec<u8>, block: Block::Hash) -> Result<Vec<u8>> {
 		trace!(target: "rpc", "Calling runtime at {:?} for method {} ({})", block, method, HexDisplay::from(&data));
-		Ok(self.as_ref().executor().call(&BlockId::Hash(block), &method, &data)?.return_data)
+		Ok(self
+			.as_ref()
+			.executor()
+			.call(&BlockId::Hash(block), &method, &data)?
+			.return_data)
 	}
 
 	fn storage_hash_at(&self, key: StorageKey, block: Block::Hash) -> Result<Block::Hash> {
 		use runtime_primitives::traits::{Hashing, Header as HeaderT};
-		self.storage_at(key, block).map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0))
+		self.storage_at(key, block)
+			.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0))
 	}
 
 	fn storage_size_at(&self, key: StorageKey, block: Block::Hash) -> Result<u64> {

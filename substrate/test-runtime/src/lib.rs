@@ -18,9 +18,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate substrate_runtime_std as rstd;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_runtime_std as rstd;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -46,17 +46,17 @@ extern crate substrate_runtime_io as runtime_io;
 #[macro_use]
 extern crate substrate_runtime_version as runtime_version;
 
-
-#[cfg(feature = "std")] pub mod genesismap;
+#[cfg(feature = "std")]
+pub mod genesismap;
 pub mod system;
 
-use rstd::prelude::*;
 use codec::Slicable;
+use rstd::prelude::*;
 
-use runtime_primitives::traits::{BlindCheckable, BlakeTwo256};
+pub use primitives::hash::H256;
+use runtime_primitives::traits::{BlakeTwo256, BlindCheckable};
 use runtime_primitives::Ed25519Signature;
 use runtime_version::RuntimeVersion;
-pub use primitives::hash::H256;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -92,7 +92,12 @@ impl Slicable for Transfer {
 	}
 
 	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Slicable::decode(input).map(|(from, to, amount, nonce)| Transfer { from, to, amount, nonce })
+		Slicable::decode(input).map(|(from, to, amount, nonce)| Transfer {
+			from,
+			to,
+			amount,
+			nonce,
+		})
 	}
 }
 
@@ -113,7 +118,10 @@ impl Slicable for Extrinsic {
 	}
 
 	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Slicable::decode(input).map(|(transfer, signature)| Extrinsic { transfer, signature })
+		Slicable::decode(input).map(|(transfer, signature)| Extrinsic {
+			transfer,
+			signature,
+		})
 	}
 }
 
@@ -125,7 +133,11 @@ impl BlindCheckable for Extrinsic {
 		&self.transfer.from
 	}
 	fn check(self) -> Result<Self, &'static str> {
-		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
+		if ::runtime_primitives::verify_encoded_lazy(
+			&self.signature,
+			&self.transfer,
+			&self.transfer.from,
+		) {
 			Ok(self)
 		} else {
 			Err("bad signature")
@@ -155,7 +167,11 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
 	print("deserialised block.");
-	let stxs = block.extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
+	let stxs = block
+		.extrinsics
+		.iter()
+		.map(Slicable::encode)
+		.collect::<Vec<_>>();
 	print("reserialised transactions.");
 	[stxs.len() as u8].encode()
 }

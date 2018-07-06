@@ -48,9 +48,7 @@ impl<H: Clone> Sender<H> {
 	pub fn new_watcher(&mut self) -> Watcher<H> {
 		let (tx, receiver) = mpsc::unbounded();
 		self.receivers.push(tx);
-		Watcher {
-			receiver,
-		}
+		Watcher { receiver }
 	}
 
 	/// Some state change (perhaps another extrinsic was included) rendered this extrinsic invalid.
@@ -80,6 +78,7 @@ impl<H: Clone> Sender<H> {
 	}
 
 	fn send(&mut self, status: Status<H>) {
-		self.receivers.retain(|sender| sender.unbounded_send(status.clone()).is_ok())
+		self.receivers
+			.retain(|sender| sender.unbounded_send(status.clone()).is_ok())
 	}
 }

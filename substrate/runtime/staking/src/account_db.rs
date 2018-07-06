@@ -16,12 +16,12 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use rstd::prelude::*;
+use super::*;
+use double_map::StorageDoubleMap;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
+use rstd::prelude::*;
 use runtime_support::StorageMap;
-use double_map::StorageDoubleMap;
-use super::*;
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -42,10 +42,18 @@ impl<T: Trait> Default for ChangeEntry<T> {
 
 impl<T: Trait> ChangeEntry<T> {
 	pub fn contract_created(b: T::Balance, c: Vec<u8>) -> Self {
-		ChangeEntry { balance: Some(b), code: Some(c), storage: Default::default() }
+		ChangeEntry {
+			balance: Some(b),
+			code: Some(c),
+			storage: Default::default(),
+		}
 	}
 	pub fn balance_changed(b: T::Balance) -> Self {
-		ChangeEntry { balance: Some(b), code: None, storage: Default::default() }
+		ChangeEntry {
+			balance: Some(b),
+			code: None,
+			storage: Default::default(),
+		}
 	}
 }
 
@@ -87,7 +95,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				// TODO: enforce this for the other balance-altering functions.
 				if balance < ed {
 					<Module<T>>::on_free_too_low(&address);
-					continue;
+					continue
 				} else {
 					if !<FreeBalance<T>>::exists(&address) {
 						let outcome = <Module<T>>::new_account(&address, balance);
@@ -185,10 +193,10 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 						value.code = changed.code;
 					}
 					value.storage.extend(changed.storage.into_iter());
-				}
+				},
 				Entry::Vacant(e) => {
 					e.insert(changed);
-				}
+				},
 			}
 		}
 	}
@@ -206,7 +214,8 @@ impl<'a, 'b: 'a, T: Trait> contract::Ext for StakingExt<'a, 'b, T> {
 		self.account_db.get_storage(&self.account, key)
 	}
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
-		self.account_db.set_storage(&self.account, key.to_vec(), value);
+		self.account_db
+			.set_storage(&self.account, key.to_vec(), value);
 	}
 	fn create(&mut self, code: &[u8], value: Self::Balance) {
 		if let Ok(Some(commit_state)) =

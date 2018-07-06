@@ -22,8 +22,8 @@
 use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Hash, AccountId, BlockId};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{BlockData, CandidateReceipt, Chain, Extrinsic, Id as ParaId};
+use polkadot_primitives::{AccountId, BlockId, Hash};
 
 use futures::prelude::*;
 
@@ -42,7 +42,7 @@ pub trait Collators: Clone {
 	/// Errors when producing collations.
 	type Error;
 	/// A full collation.
-	type Collation: IntoFuture<Item=Collation,Error=Self::Error>;
+	type Collation: IntoFuture<Item = Collation, Error = Self::Error>;
 
 	/// Collate on a specific parachain, building on a given relay chain parent hash.
 	fn collate(&self, parachain: ParaId, relay_parent: Hash) -> Self::Collation;
@@ -65,7 +65,13 @@ pub struct CollationFetch<C: Collators, P: PolkadotApi> {
 
 impl<C: Collators, P: PolkadotApi> CollationFetch<C, P> {
 	/// Create a new collation fetcher for the given chain.
-	pub fn new(parachain: Chain, relay_parent: BlockId, relay_parent_hash: Hash, collators: C, client: Arc<P>) -> Self {
+	pub fn new(
+		parachain: Chain,
+		relay_parent: BlockId,
+		relay_parent_hash: Hash,
+		collators: C,
+		client: Arc<P>,
+	) -> Self {
 		CollationFetch {
 			relay_parent_hash,
 			relay_parent,
@@ -92,12 +98,15 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 
 		loop {
 			let x = {
-				let (r, c)  = (self.relay_parent_hash, &self.collators);
-				let poll = self.live_fetch
+				let (r, c) = (self.relay_parent_hash, &self.collators);
+				let poll = self
+					.live_fetch
 					.get_or_insert_with(move || c.collate(parachain, r).into_future())
 					.poll();
 
-				if let Err(_) = poll { self.parachain = None }
+				if let Err(_) = poll {
+					self.parachain = None
+				}
 				try_ready!(poll)
 			};
 
@@ -106,15 +115,15 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 					self.parachain = None;
 
 					// TODO: generate extrinsic while verifying.
-					return Ok(Async::Ready((x, Extrinsic)));
-				}
+					return Ok(Async::Ready((x, Extrinsic)))
+				},
 				Err(e) => {
 					debug!("Failed to validate parachain due to API error: {}", e);
 
 					// just continue if we got a bad collation or failed to validate
 					self.live_fetch = None;
 					self.collators.note_bad_collator(x.receipt.collator)
-				}
+				},
 			}
 		}
 	}
@@ -145,14 +154,20 @@ error_chain! {
 }
 
 /// Check whether a given collation is valid. Returns `Ok`  on success, error otherwise.
-pub fn validate_collation<P: PolkadotApi>(client: &P, relay_parent: &BlockId, collation: &Collation) -> Result<(), Error> {
+pub fn validate_collation<P: PolkadotApi>(
+	client: &P,
+	relay_parent: &BlockId,
+	collation: &Collation,
+) -> Result<(), Error> {
 	use parachain::{self, ValidationParams};
 
 	let para_id = collation.receipt.parachain_index;
-	let validation_code = client.parachain_code(relay_parent, para_id)?
+	let validation_code = client
+		.parachain_code(relay_parent, para_id)?
 		.ok_or_else(|| ErrorKind::InactiveParachain(para_id))?;
 
-	let chain_head = client.parachain_head(relay_parent, para_id)?
+	let chain_head = client
+		.parachain_head(relay_parent, para_id)?
 		.ok_or_else(|| ErrorKind::InactiveParachain(para_id))?;
 
 	let params = ValidationParams {
@@ -161,16 +176,14 @@ pub fn validate_collation<P: PolkadotApi>(client: &P, relay_parent: &BlockId, co
 	};
 
 	match parachain::wasm::validate_candidate(&validation_code, params) {
-		Ok(result) => {
-			if result.head_data == collation.receipt.head_data.0 {
-				Ok(())
-			} else {
-				Err(ErrorKind::WrongHeadData(
-					collation.receipt.head_data.0.clone(),
-					result.head_data
-				).into())
-			}
-		}
-		Err(_) => Err(ErrorKind::ValidationFailure.into())
+		Ok(result) => if result.head_data == collation.receipt.head_data.0 {
+			Ok(())
+		} else {
+			Err(
+				ErrorKind::WrongHeadData(collation.receipt.head_data.0.clone(), result.head_data)
+					.into(),
+			)
+		},
+		Err(_) => Err(ErrorKind::ValidationFailure.into()),
 	}
 }

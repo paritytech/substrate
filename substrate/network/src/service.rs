@@ -14,23 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::io;
-use std::time::Duration;
-use futures::sync::{oneshot, mpsc};
-use network::{NetworkProtocolHandler, NetworkContext, PeerId, ProtocolId,
-NetworkConfiguration , NonReservedPeerMode, ErrorKind};
-use network_devp2p::{NetworkService};
-use core_io::{TimerToken};
-use io::NetSyncIo;
-use protocol::{Protocol, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
-use config::{ProtocolConfig};
-use error::Error;
 use chain::Client;
+use config::ProtocolConfig;
+use core_io::TimerToken;
+use error::Error;
+use futures::sync::{mpsc, oneshot};
+use io::NetSyncIo;
 use message::LocalizedBftMessage;
+use network::{
+	ErrorKind, NetworkConfiguration, NetworkContext, NetworkProtocolHandler, NonReservedPeerMode,
+	PeerId, ProtocolId,
+};
+use network_devp2p::NetworkService;
 use on_demand::OnDemandService;
+use protocol::{PeerInfo as ProtocolPeerInfo, Protocol, ProtocolStatus};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use std::collections::HashMap;
+use std::io;
+use std::sync::Arc;
+use std::time::Duration;
 
 /// Polkadot devp2p protocol id
 pub const DOT_PROTOCOL_ID: ProtocolId = *b"dot";
@@ -139,21 +141,32 @@ pub struct Params<B: BlockT> {
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static> where B::Header: HeaderT<Number=u64> {
+pub struct Service<B: BlockT + 'static>
+where
+	B::Header: HeaderT<Number = u64>,
+{
 	/// Network service
 	network: NetworkService,
 	/// Devp2p protocol handler
 	handler: Arc<ProtocolHandler<B>>,
 }
 
-impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static> Service<B>
+where
+	B::Header: HeaderT<Number = u64>,
+{
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params<B>) -> Result<Arc<Service<B>>, Error> {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
 		let sync = Arc::new(Service {
 			network: service,
 			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(params.config, params.chain, params.on_demand, params.transaction_pool)?,
+				protocol: Protocol::new(
+					params.config,
+					params.chain,
+					params.on_demand,
+					params.transaction_pool,
+				)?,
 			}),
 		});
 
@@ -163,14 +176,18 @@ impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 	/// Called when a new block is imported by the client.
 	pub fn on_block_imported(&self, hash: B::Hash, header: &B::Header) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.on_block_imported(&mut NetSyncIo::new(context), hash, header)
+			self.handler
+				.protocol
+				.on_block_imported(&mut NetSyncIo::new(context), hash, header)
 		});
 	}
 
 	/// Called when new transactons are imported by the client.
 	pub fn trigger_repropagate(&self) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.propagate_transactions(&mut NetSyncIo::new(context));
+			self.handler
+				.protocol
+				.propagate_transactions(&mut NetSyncIo::new(context));
 		});
 	}
 
@@ -181,7 +198,12 @@ impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), DOT_PROTOCOL_ID, &[(0, V0_PACKET_COUNT)])
+		self.network
+			.register_protocol(
+				self.handler.clone(),
+				DOT_PROTOCOL_ID,
+				&[(0, V0_PACKET_COUNT)],
+			)
 			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}
 
@@ -191,13 +213,19 @@ impl<B: BlockT + 'static> Service<B> where B::Header: HeaderT<Number=u64> {
 	}
 }
 
-impl<B: BlockT + 'static> Drop for Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static> Drop for Service<B>
+where
+	B::Header: HeaderT<Number = u64>,
+{
 	fn drop(&mut self) {
 		self.stop();
 	}
 }
 
-impl<B: BlockT + 'static> ExecuteInContext<B> for Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static> ExecuteInContext<B> for Service<B>
+where
+	B::Header: HeaderT<Number = u64>,
+{
 	fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol<B>)>(&self, closure: F) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
 			closure(&mut NetSyncIo::new(context), &self.handler.protocol)
@@ -205,7 +233,10 @@ impl<B: BlockT + 'static> ExecuteInContext<B> for Service<B> where B::Header: He
 	}
 }
 
-impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static> SyncProvider<B> for Service<B>
+where
+	B::Header: HeaderT<Number = u64>,
+{
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.protocol.status()
@@ -213,25 +244,34 @@ impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: Header
 
 	/// Get sync peers
 	fn peers(&self) -> Vec<PeerInfo<B>> {
-		self.network.with_context_eval(DOT_PROTOCOL_ID, |ctx| {
-			let peer_ids = self.network.connected_peers();
+		self.network
+			.with_context_eval(DOT_PROTOCOL_ID, |ctx| {
+				let peer_ids = self.network.connected_peers();
 
-			peer_ids.into_iter().filter_map(|peer_id| {
-				let session_info = match ctx.session_info(peer_id) {
-					None => return None,
-					Some(info) => info,
-				};
+				peer_ids
+					.into_iter()
+					.filter_map(|peer_id| {
+						let session_info = match ctx.session_info(peer_id) {
+							None => return None,
+							Some(info) => info,
+						};
 
-				Some(PeerInfo {
-					id: session_info.id.map(|id| format!("{:x}", id)),
-					client_version: session_info.client_version,
-					capabilities: session_info.peer_capabilities.into_iter().map(|c| c.to_string()).collect(),
-					remote_address: session_info.remote_address,
-					local_address: session_info.local_address,
-					dot_info: self.handler.protocol.peer_info(peer_id),
-				})
-			}).collect()
-		}).unwrap_or_else(Vec::new)
+						Some(PeerInfo {
+							id: session_info.id.map(|id| format!("{:x}", id)),
+							client_version: session_info.client_version,
+							capabilities: session_info
+								.peer_capabilities
+								.into_iter()
+								.map(|c| c.to_string())
+								.collect(),
+							remote_address: session_info.remote_address,
+							local_address: session_info.local_address,
+							dot_info: self.handler.protocol.peer_info(peer_id),
+						})
+					})
+					.collect()
+			})
+			.unwrap_or_else(Vec::new)
 	}
 
 	fn node_id(&self) -> Option<String> {
@@ -240,9 +280,12 @@ impl<B: BlockT + 'static> SyncProvider<B> for Service<B> where B::Header: Header
 }
 
 /// ConsensusService
-impl<B: BlockT + 'static> ConsensusService<B> for Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static> ConsensusService<B> for Service<B>
+where
+	B::Header: HeaderT<Number = u64>,
+{
 	fn connect_to_authorities(&self, _addresses: &[String]) {
-		//TODO: implement me
+		// TODO: implement me
 	}
 
 	fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B> {
@@ -251,12 +294,17 @@ impl<B: BlockT + 'static> ConsensusService<B> for Service<B> where B::Header: He
 
 	fn send_bft_message(&self, message: LocalizedBftMessage<B>) {
 		self.network.with_context(DOT_PROTOCOL_ID, |context| {
-			self.handler.protocol.send_bft_message(&mut NetSyncIo::new(context), message);
+			self.handler
+				.protocol
+				.send_bft_message(&mut NetSyncIo::new(context), message);
 		});
 	}
 }
 
-impl<B: BlockT + 'static> NetworkProtocolHandler for ProtocolHandler<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static> NetworkProtocolHandler for ProtocolHandler<B>
+where
+	B::Header: HeaderT<Number = u64>,
+{
 	fn initialize(&self, io: &NetworkContext) {
 		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
 			.expect("Error registering sync timer");
@@ -266,22 +314,27 @@ impl<B: BlockT + 'static> NetworkProtocolHandler for ProtocolHandler<B> where B:
 	}
 
 	fn read(&self, io: &NetworkContext, peer: &PeerId, _packet_id: u8, data: &[u8]) {
-		self.protocol.handle_packet(&mut NetSyncIo::new(io), *peer, data);
+		self.protocol
+			.handle_packet(&mut NetSyncIo::new(io), *peer, data);
 	}
 
 	fn connected(&self, io: &NetworkContext, peer: &PeerId) {
-		self.protocol.on_peer_connected(&mut NetSyncIo::new(io), *peer);
+		self.protocol
+			.on_peer_connected(&mut NetSyncIo::new(io), *peer);
 	}
 
 	fn disconnected(&self, io: &NetworkContext, peer: &PeerId) {
-		self.protocol.on_peer_disconnected(&mut NetSyncIo::new(io), *peer);
+		self.protocol
+			.on_peer_disconnected(&mut NetSyncIo::new(io), *peer);
 	}
 
 	fn timeout(&self, io: &NetworkContext, timer: TimerToken) {
 		match timer {
 			TICK_TOKEN => self.protocol.tick(&mut NetSyncIo::new(io)),
-			PROPAGATE_TOKEN => self.protocol.propagate_transactions(&mut NetSyncIo::new(io)),
-			_ => {}
+			PROPAGATE_TOKEN => self
+				.protocol
+				.propagate_transactions(&mut NetSyncIo::new(io)),
+			_ => {},
 		}
 	}
 }
@@ -302,22 +355,30 @@ pub trait ManageNetwork: Send + Sync {
 	fn stop_network(&self);
 }
 
-
-impl<B: BlockT + 'static> ManageNetwork for Service<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static> ManageNetwork for Service<B>
+where
+	B::Header: HeaderT<Number = u64>,
+{
 	fn accept_unreserved_peers(&self) {
-		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
+		self.network
+			.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}
 
 	fn deny_unreserved_peers(&self) {
-		self.network.set_non_reserved_mode(NonReservedPeerMode::Deny);
+		self.network
+			.set_non_reserved_mode(NonReservedPeerMode::Deny);
 	}
 
 	fn remove_reserved_peer(&self, peer: String) -> Result<(), String> {
-		self.network.remove_reserved_peer(&peer).map_err(|e| format!("{:?}", e))
+		self.network
+			.remove_reserved_peer(&peer)
+			.map_err(|e| format!("{:?}", e))
 	}
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		self.network.add_reserved_peer(&peer).map_err(|e| format!("{:?}", e))
+		self.network
+			.add_reserved_peer(&peer)
+			.map_err(|e| format!("{:?}", e))
 	}
 
 	fn start_network(&self) {

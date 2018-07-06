@@ -16,11 +16,11 @@
 
 //! Polkadot Client data backend
 
-use state_machine::backend::Backend as StateBackend;
 use error;
 use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::Block as BlockT;
+use state_machine::backend::Backend as StateBackend;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block: BlockT> {
@@ -35,13 +35,19 @@ pub trait BlockImportOperation<Block: BlockT> {
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
 		justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool
+		is_new_best: bool,
 	) -> error::Result<()>;
 
 	/// Inject storage data into the database.
-	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
+	fn update_storage(
+		&mut self,
+		update: <Self::State as StateBackend>::Transaction,
+	) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
+	fn reset_storage<I: Iterator<Item = (Vec<u8>, Vec<u8>)>>(
+		&mut self,
+		iter: I,
+	) -> error::Result<()>;
 }
 
 /// Client backend. Manages the data layer.
@@ -50,8 +56,8 @@ pub trait BlockImportOperation<Block: BlockT> {
 /// should not be pruned. The backend should internally reference-count
 /// its state objects.
 ///
-/// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
-/// is alive, the state for `P` should not be pruned.
+/// The same applies for live `BlockImportOperation`s: while an import operation building on a
+/// parent `P` is alive, the state for `P` should not be pruned.
 pub trait Backend<Block: BlockT>: Send + Sync {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block>;

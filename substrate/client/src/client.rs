@@ -16,39 +16,50 @@
 
 //! Substrate Client
 
-use std::sync::Arc;
+use codec::Slicable;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
+use primitives::storage::{StorageData, StorageKey};
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, One, Zero};
 use runtime_primitives::BuildStorage;
-use primitives::storage::{StorageKey, StorageData};
-use codec::Slicable;
-use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
+use runtime_primitives::{
+	bft::Justification,
+	generic::{Block as RuntimeBlock, BlockId, SignedBlock},
+};
+use state_machine::{self, Backend as StateBackend, CodeExecutor, Ext, OverlayedChanges};
+use std::sync::Arc;
 
 use backend::{self, BlockImportOperation};
-use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
+use blockchain::{
+	self, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend, Info as ChainInfo,
+};
 use call_executor::{CallExecutor, LocalCallExecutor};
-use executor::{RuntimeVersion, RuntimeInfo};
-use {error, in_mem, block_builder, runtime_io, bft, genesis};
+use executor::{RuntimeInfo, RuntimeVersion};
+use {bft, block_builder, error, genesis, in_mem, runtime_io};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 
 /// Substrate Client
-pub struct Client<B, E, Block> where Block: BlockT {
+pub struct Client<B, E, Block>
+where
+	Block: BlockT,
+{
 	backend: Arc<B>,
 	executor: E,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	import_lock: Mutex<()>,
-	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
+	importing_block: RwLock<Option<Block::Hash>>, /* holds the block hash currently being
+	                                               * imported. TODO: replace this with block
+	                                               * queue */
 }
 
 /// A source of blockchain evenets.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
+	fn import_notification_stream(&self)
+		-> mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 }
 
 /// Chain head information.
@@ -144,19 +155,22 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 /// Create an instance of in-memory client.
 pub fn new_in_mem<E, Block, S>(
 	executor: E,
-	genesis_storage: S
-) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
-	where
-		E: CodeExecutor + RuntimeInfo,
-		S: BuildStorage,
-		Block: BlockT,
+	genesis_storage: S,
+) -> error::Result<
+	Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>,
+>
+where
+	E: CodeExecutor + RuntimeInfo,
+	S: BuildStorage,
+	Block: BlockT,
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, executor, genesis_storage)
 }
 
-impl<B, E, Block> Client<B, E, Block> where
+impl<B, E, Block> Client<B, E, Block>
+where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
@@ -168,10 +182,18 @@ impl<B, E, Block> Client<B, E, Block> where
 		executor: E,
 		build_genesis_storage: S,
 	) -> error::Result<Self> {
-		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
+		if backend
+			.blockchain()
+			.header(BlockId::Number(Zero::zero()))?
+			.is_none()
+		{
 			let genesis_storage = build_genesis_storage.build_storage()?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(&genesis_storage);
-			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
+			info!(
+				"Initialising Genesis block/state (state: {}, header-hash: {})",
+				genesis_block.header().state_root(),
+				genesis_block.header().hash()
+			);
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
 			op.reset_storage(genesis_storage.into_iter())?;
 			op.set_block_data(genesis_block.deconstruct().0, Some(vec![]), None, true)?;
@@ -196,24 +218,29 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self.backend
 	}
 
-	/// Return single storage entry of contract under given address in state in a block of given hash.
+	/// Return single storage entry of contract under given address in state in a block of given
+	/// hash.
 	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<StorageData> {
-		Ok(StorageData(self.state_at(id)?
-			.storage(&key.0)?
-			.ok_or_else(|| error::ErrorKind::NoValueForKey(key.0.clone()))?
-			.to_vec()))
+		Ok(StorageData(
+			self.state_at(id)?
+				.storage(&key.0)?
+				.ok_or_else(|| error::ErrorKind::NoValueForKey(key.0.clone()))?
+				.to_vec(),
+		))
 	}
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0)
+		self.storage(id, &StorageKey(b":code".to_vec()))
+			.map(|data| data.0)
 	}
 
 	/// Get the set of authorities at a given block.
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
-		self.executor.call(id, "authorities", &[])
-			.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
-				.ok_or(error::ErrorKind::AuthLenInvalid.into()))
+		self.executor.call(id, "authorities", &[]).and_then(|r| {
+			Vec::<AuthorityId>::decode(&mut &r.return_data[..])
+				.ok_or(error::ErrorKind::AuthLenInvalid.into())
+		})
 	}
 
 	/// Get the RuntimeVersion at a given block.
@@ -231,15 +258,25 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// AND returning execution proof.
 	///
 	/// No changes are made.
-	pub fn execution_proof(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
-		self.state_at(id).and_then(|state| self.executor.prove_at_state(state, &mut Default::default(), method, call_data))
+	pub fn execution_proof(
+		&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8],
+	) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
+		self.state_at(id).and_then(|state| {
+			self.executor
+				.prove_at_state(state, &mut Default::default(), method, call_data)
+		})
 	}
 
 	/// Set up the native execution environment to call into a native runtime code.
-	pub fn using_environment<F: FnOnce() -> T, T>(
-		&self, f: F
-	) -> error::Result<T> {
-		self.using_environment_at(&BlockId::Number(self.info()?.chain.best_number), &mut Default::default(), f)
+	pub fn using_environment<F: FnOnce() -> T, T>(&self, f: F) -> error::Result<T> {
+		self.using_environment_at(
+			&BlockId::Number(self.info()?.chain.best_number),
+			&mut Default::default(),
+			f,
+		)
 	}
 
 	/// Set up the native execution environment to call into a native runtime code.
@@ -247,18 +284,30 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self,
 		id: &BlockId<Block>,
 		overlay: &mut OverlayedChanges,
-		f: F
+		f: F,
 	) -> error::Result<T> {
-		Ok(runtime_io::with_externalities(&mut Ext::new(overlay, &self.state_at(id)?), f))
+		Ok(runtime_io::with_externalities(
+			&mut Ext::new(overlay, &self.state_at(id)?),
+			f,
+		))
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block>>
+	where
+		E: Clone,
+	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
+	pub fn new_block_at(
+		&self,
+		parent: &BlockId<Block>,
+	) -> error::Result<block_builder::BlockBuilder<B, E, Block>>
+	where
+		E: Clone,
+	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
@@ -270,12 +319,9 @@ impl<B, E, Block> Client<B, E, Block> where
 	) -> error::Result<JustifiedHeader<Block>> {
 		let parent_hash = header.parent_hash().clone();
 		let authorities = self.authorities_at(&BlockId::Hash(parent_hash))?;
-		let just = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
-			.map_err(|_|
-				error::ErrorKind::BadJustification(
-					format!("{}", header.hash())
-				)
-			)?;
+		let just =
+			::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
+				.map_err(|_| error::ErrorKind::BadJustification(format!("{}", header.hash())))?;
 		Ok(JustifiedHeader {
 			header,
 			justification: just,
@@ -291,7 +337,11 @@ impl<B, E, Block> Client<B, E, Block> where
 	) -> error::Result<ImportResult> {
 		let (header, justification) = header.into_inner();
 		let parent_hash = header.parent_hash().clone();
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
+		match self
+			.backend
+			.blockchain()
+			.status(BlockId::Hash(parent_hash))?
+		{
 			blockchain::BlockStatus::InChain => {},
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
@@ -325,7 +375,8 @@ impl<B, E, Block> Client<B, E, Block> where
 					transaction_state,
 					&mut overlay,
 					"execute_block",
-					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode()
+					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default())
+						.encode(),
 				)?;
 
 				Some(storage_update)
@@ -333,21 +384,37 @@ impl<B, E, Block> Client<B, E, Block> where
 			None => None,
 		};
 
-		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
-		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
-		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
+		let is_new_best =
+			header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
+		trace!(
+			"Imported {}, (#{}), best={}, origin={:?}",
+			hash,
+			header.number(),
+			is_new_best,
+			origin
+		);
+		transaction.set_block_data(
+			header.clone(),
+			body,
+			Some(justification.uncheck().into()),
+			is_new_best,
+		)?;
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}
 		self.backend.commit_operation(transaction)?;
-		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
+		if origin == BlockOrigin::NetworkBroadcast
+			|| origin == BlockOrigin::Own
+			|| origin == BlockOrigin::ConsensusBroadcast
+		{
 			let notification = BlockImportNotification::<Block> {
-				hash: hash,
-				origin: origin,
-				header: header,
-				is_new_best: is_new_best,
+				hash,
+				origin,
+				header,
+				is_new_best,
 			};
-			self.import_notification_sinks.lock()
+			self.import_notification_sinks
+				.lock()
 				.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 		}
 		Ok(ImportResult::Queued)
@@ -355,7 +422,11 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get blockchain info.
 	pub fn info(&self) -> error::Result<ClientInfo<Block>> {
-		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
+		let info = self
+			.backend
+			.blockchain()
+			.info()
+			.map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
 		Ok(ClientInfo {
 			chain: info,
 			best_queued_hash: None,
@@ -367,18 +438,32 @@ impl<B, E, Block> Client<B, E, Block> where
 	pub fn block_status(&self, id: &BlockId<Block>) -> error::Result<BlockStatus> {
 		// TODO: more efficient implementation
 		if let BlockId::Hash(ref h) = id {
-			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
-				return Ok(BlockStatus::Queued);
+			if self
+				.importing_block
+				.read()
+				.as_ref()
+				.map_or(false, |importing| h == importing)
+			{
+				return Ok(BlockStatus::Queued)
 			}
 		}
-		match self.backend.blockchain().header(*id).map_err(|e| error::Error::from_blockchain(Box::new(e)))?.is_some() {
+		match self
+			.backend
+			.blockchain()
+			.header(*id)
+			.map_err(|e| error::Error::from_blockchain(Box::new(e)))?
+			.is_some()
+		{
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),
 		}
 	}
 
 	/// Get block hash by number.
-	pub fn block_hash(&self, block_number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
+	pub fn block_hash(
+		&self,
+		block_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	) -> error::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(block_number)
 	}
 
@@ -391,7 +476,10 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Convert an arbitrary block ID into a block hash.
-	pub fn block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+	pub fn block_number_from_id(
+		&self,
+		id: &BlockId<Block>,
+	) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
 		match *id {
 			BlockId::Hash(_) => Ok(self.header(id)?.map(|h| h.number().clone())),
 			BlockId::Number(n) => Ok(Some(n)),
@@ -404,60 +492,89 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Get block body by id.
-	pub fn body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
+	pub fn body(
+		&self,
+		id: &BlockId<Block>,
+	) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.backend.blockchain().body(*id)
 	}
 
 	/// Get block justification set by id.
-	pub fn justification(&self, id: &BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
+	pub fn justification(
+		&self,
+		id: &BlockId<Block>,
+	) -> error::Result<Option<Justification<Block::Hash>>> {
 		self.backend.blockchain().justification(*id)
 	}
 
 	/// Get full block by id.
-	pub fn block(&self, id: &BlockId<Block>) -> error::Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
-		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
-			(Some(header), Some(extrinsics), Some(justification)) =>
-				Some(SignedBlock { block: RuntimeBlock { header, extrinsics }, justification }),
-			_ => None,
-		})
+	pub fn block(
+		&self,
+		id: &BlockId<Block>,
+	) -> error::Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+		Ok(
+			match (self.header(id)?, self.body(id)?, self.justification(id)?) {
+				(Some(header), Some(extrinsics), Some(justification)) => Some(SignedBlock {
+					block: RuntimeBlock { header, extrinsics },
+					justification,
+				}),
+				_ => None,
+			},
+		)
 	}
 
 	/// Get best block header.
 	pub fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
-		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
-		Ok(self.header(&BlockId::Hash(info.best_hash))?.expect("Best block header must always exist"))
+		let info = self
+			.backend
+			.blockchain()
+			.info()
+			.map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
+		Ok(self
+			.header(&BlockId::Hash(info.best_hash))?
+			.expect("Best block header must always exist"))
 	}
 }
 
 impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
-		Block: BlockT,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+	error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
 	fn import_block(&self, block: Block, justification: ::bft::Justification<Block::Hash>) {
 		let (header, extrinsics) = block.deconstruct();
 		let justified_header = JustifiedHeader {
-			header: header,
+			header,
 			justification,
 		};
 
-		let _ = self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics));
+		let _ = self.import_block(
+			BlockOrigin::ConsensusBroadcast,
+			justified_header,
+			Some(extrinsics),
+		);
 	}
 }
 
 impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
-		Block: BlockT,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
+where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+	error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
-		let version: Result<_, bft::Error> = self.runtime_version_at(at).map_err(|_| bft::ErrorKind::InvalidRuntime.into());
+		let version: Result<_, bft::Error> = self
+			.runtime_version_at(at)
+			.map_err(|_| bft::ErrorKind::InvalidRuntime.into());
 		let version = version?;
-		if !self.executor.native_runtime_version().map_or(true, |v| v.can_author_with(&version)) {
+		if !self
+			.executor
+			.native_runtime_version()
+			.map_or(true, |v| v.can_author_with(&version))
+		{
 			return Err(bft::ErrorKind::InvalidRuntime.into())
 		}
 		self.authorities_at(at).map_err(|_| {
@@ -468,14 +585,16 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 }
 
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
-		Block: BlockT,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+	error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>> {
+	fn import_notification_stream(
+		&self,
+	) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
@@ -483,11 +602,11 @@ impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 }
 
 impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
-		Block: BlockT,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
+where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+	error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
@@ -499,17 +618,31 @@ mod tests {
 	use super::*;
 	use codec::Slicable;
 	use keyring::Keyring;
-	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::runtime as test_runtime;
-	use test_client::runtime::{Transfer, Extrinsic};
+	use test_client::runtime::{Extrinsic, Transfer};
+	use test_client::{self, TestClient};
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = test_client::new();
 
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 1000);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 0);
+		assert_eq!(
+			client
+				.using_environment(|| test_runtime::system::balance_of(
+					Keyring::Alice.to_raw_public().into()
+				))
+				.unwrap(),
+			1000
+		);
+		assert_eq!(
+			client
+				.using_environment(|| test_runtime::system::balance_of(
+					Keyring::Ferdie.to_raw_public().into()
+				))
+				.unwrap(),
+			0
+		);
 	}
 
 	#[test]
@@ -517,11 +650,14 @@ mod tests {
 		let client = test_client::new();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 0);
-		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
-			Keyring::Alice.to_raw_public().into(),
-			Keyring::Bob.to_raw_public().into(),
-			Keyring::Charlie.to_raw_public().into()
-		]);
+		assert_eq!(
+			client.authorities_at(&BlockId::Number(0)).unwrap(),
+			vec![
+				Keyring::Alice.to_raw_public().into(),
+				Keyring::Bob.to_raw_public().into(),
+				Keyring::Charlie.to_raw_public().into(),
+			]
+		);
 	}
 
 	#[test]
@@ -530,14 +666,22 @@ mod tests {
 
 		let builder = client.new_block().unwrap();
 
-		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client
+			.justify_and_import(BlockOrigin::Own, builder.bake().unwrap())
+			.unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 	}
 
 	fn sign_tx(tx: Transfer) -> Extrinsic {
-		let signature = Keyring::from_raw_public(tx.from.0.clone()).unwrap().sign(&tx.encode()).into();
-		Extrinsic { transfer: tx, signature }
+		let signature = Keyring::from_raw_public(tx.from.0.clone())
+			.unwrap()
+			.sign(&tx.encode())
+			.into();
+		Extrinsic {
+			transfer: tx,
+			signature,
+		}
 	}
 
 	#[test]
@@ -546,18 +690,39 @@ mod tests {
 
 		let mut builder = client.new_block().unwrap();
 
-		builder.push(sign_tx(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
-			amount: 42,
-			nonce: 0,
-		})).unwrap();
+		builder
+			.push(sign_tx(Transfer {
+				from: Keyring::Alice.to_raw_public().into(),
+				to: Keyring::Ferdie.to_raw_public().into(),
+				amount: 42,
+				nonce: 0,
+			}))
+			.unwrap();
 
-		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client
+			.justify_and_import(BlockOrigin::Own, builder.bake().unwrap())
+			.unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
-		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 958);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 42);
+		assert!(
+			client.state_at(&BlockId::Number(1)).unwrap()
+				!= client.state_at(&BlockId::Number(0)).unwrap()
+		);
+		assert_eq!(
+			client
+				.using_environment(|| test_runtime::system::balance_of(
+					Keyring::Alice.to_raw_public().into()
+				))
+				.unwrap(),
+			958
+		);
+		assert_eq!(
+			client
+				.using_environment(|| test_runtime::system::balance_of(
+					Keyring::Ferdie.to_raw_public().into()
+				))
+				.unwrap(),
+			42
+		);
 	}
 }

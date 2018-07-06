@@ -27,8 +27,9 @@
 //! `validate` accepts as input two `i32` values, representing a pointer/length pair
 //! respectively, that encodes `ValidationParams`.
 //!
-//! `validate` returns an `i32` which is a pointer to a little-endian 32-bit integer denoting a length.
-//! Subtracting the length from the initial pointer will give a new pointer to the actual return data,
+//! `validate` returns an `i32` which is a pointer to a little-endian 32-bit integer denoting a
+//! length. Subtracting the length from the initial pointer will give a new pointer to the actual
+//! return data,
 //!
 //! ASCII-diagram demonstrating the return data format:
 //!
@@ -101,7 +102,7 @@ impl Slicable for ValidationParams {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidationResult {
 	/// New head data that should be included in the relay chain state.
-	pub head_data: Vec<u8>
+	pub head_data: Vec<u8>,
 }
 
 impl Slicable for ValidationResult {
@@ -134,7 +135,10 @@ pub fn write_result(result: ValidationResult) -> usize {
 	let mut encoded = result.encode();
 	let len = encoded.len();
 
-	assert!(len <= u32::max_value() as usize, "Len too large for parachain-WASM abi");
+	assert!(
+		len <= u32::max_value() as usize,
+		"Len too large for parachain-WASM abi"
+	);
 	(len as u32).using_encoded(|s| encoded.extend(s));
 
 	// do not alter `encoded` beyond this point. may reallocate.

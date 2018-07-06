@@ -19,10 +19,12 @@
 
 use std::sync::{Arc, Weak};
 
-use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::{Backend as StateBackend, TrieBackend as StateTrieBackend,
-	TryIntoTrieBackend as TryIntoStateTrieBackend};
+use runtime_primitives::{bft::Justification, generic::BlockId};
+use state_machine::{
+	Backend as StateBackend, TrieBackend as StateTrieBackend,
+	TryIntoTrieBackend as TryIntoStateTrieBackend,
+};
 
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -60,7 +62,12 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {
+impl<S, F, Block> ClientBackend<Block> for Backend<S, F>
+where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>,
+{
 	type BlockImportOperation = ImportOperation<Block, F>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<Block, F>;
@@ -74,8 +81,12 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S:
 	}
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
-		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
-		self.blockchain.storage().import_header(operation.is_new_best, header)
+		let header = operation
+			.header
+			.expect("commit is called after set_block_data; set_block_data sets header; qed");
+		self.blockchain
+			.storage()
+			.import_header(operation.is_new_best, header)
 	}
 
 	fn blockchain(&self) -> &Blockchain<S, F> {
@@ -95,9 +106,18 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S:
 	}
 }
 
-impl<S, F, Block> RemoteBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {}
+impl<S, F, Block> RemoteBackend<Block> for Backend<S, F>
+where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>,
+{}
 
-impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where Block: BlockT, F: Fetcher<Block> {
+impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+{
 	type State = OnDemandState<Block, F>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
@@ -110,19 +130,25 @@ impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where B
 		header: Block::Header,
 		_body: Option<Vec<Block::Extrinsic>>,
 		_justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool
+		is_new_best: bool,
 	) -> ClientResult<()> {
 		self.is_new_best = is_new_best;
 		self.header = Some(header);
 		Ok(())
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend>::Transaction) -> ClientResult<()> {
+	fn update_storage(
+		&mut self,
+		_update: <Self::State as StateBackend>::Transaction,
+	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
 
-	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, _iter: I) -> ClientResult<()> {
+	fn reset_storage<I: Iterator<Item = (Vec<u8>, Vec<u8>)>>(
+		&mut self,
+		_iter: I,
+	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -137,7 +163,11 @@ impl<Block: BlockT, F> Clone for OnDemandState<Block, F> {
 	}
 }
 
-impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: Fetcher<Block> {
+impl<Block, F> StateBackend for OnDemandState<Block, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+{
 	type Error = ClientError;
 	type Transaction = ();
 
@@ -150,7 +180,9 @@ impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: 
 	}
 
 	fn storage_root<I>(&self, _delta: I) -> ([u8; 32], Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
+	where
+		I: IntoIterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
+	{
 		([0; 32], ())
 	}
 
@@ -160,7 +192,11 @@ impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: 
 	}
 }
 
-impl<Block, F> TryIntoStateTrieBackend for OnDemandState<Block, F> where Block: BlockT, F: Fetcher<Block> {
+impl<Block, F> TryIntoStateTrieBackend for OnDemandState<Block, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+{
 	fn try_into_trie_backend(self) -> Option<StateTrieBackend> {
 		None
 	}
@@ -168,12 +204,12 @@ impl<Block, F> TryIntoStateTrieBackend for OnDemandState<Block, F> where Block: 
 
 #[cfg(test)]
 pub mod tests {
-	use futures::future::{ok, FutureResult};
-	use parking_lot::Mutex;
 	use call_executor::CallResult;
 	use error::Error as ClientError;
-	use test_client::runtime::{Hash, Block};
+	use futures::future::{ok, FutureResult};
 	use light::fetcher::{Fetcher, RemoteCallRequest};
+	use parking_lot::Mutex;
+	use test_client::runtime::{Block, Hash};
 
 	pub type OkCallFetcher = Mutex<CallResult>;
 

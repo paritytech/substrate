@@ -22,9 +22,9 @@
 //! the death list.
 //! The changes are journaled in the DB.
 
+use codec::{self, Slicable};
 use std::collections::{HashMap, HashSet, VecDeque};
-use codec::{Slicable, self};
-use {CommitSet, Error, MetaDb, to_meta_key, Hash};
+use {to_meta_key, CommitSet, Error, Hash, MetaDb};
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
@@ -73,7 +73,8 @@ fn to_journal_key(block: u64) -> Vec<u8> {
 
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 	pub fn new<D: MetaDb>(db: &D) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
-		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &()))
+		let last_pruned = db
+			.get_meta(&to_meta_key(LAST_PRUNED, &()))
 			.map_err(|e| Error::Db(e))?;
 		let pending_number: u64 = match last_pruned {
 			Some(buffer) => u64::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)? + 1,
@@ -83,7 +84,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		let mut pruning = RefWindow {
 			death_rows: Default::default(),
 			death_index: Default::default(),
-			pending_number: pending_number,
+			pending_number,
 		};
 		// read the journal
 		trace!(target: "state-db", "Reading pruning journal. Last pruned #{}", pending_number - 1);
@@ -91,9 +92,15 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			let journal_key = to_journal_key(block);
 			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 				Some(record) => {
-					let record: JournalRecord<BlockHash, Key> = Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
+					let record: JournalRecord<BlockHash, Key> =
+						Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
 					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
-					pruning.import(&record.hash, journal_key, record.inserted.into_iter(), record.deleted);
+					pruning.import(
+						&record.hash,
+						journal_key,
+						record.inserted.into_iter(),
+						record.deleted,
+					);
 				},
 				None => break,
 			}
@@ -102,11 +109,19 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		Ok(pruning)
 	}
 
-	fn import<I: IntoIterator<Item=Key>>(&mut self, hash: &BlockHash, journal_key: Vec<u8>, inserted: I, deleted: Vec<Key>) {
+	fn import<I: IntoIterator<Item = Key>>(
+		&mut self,
+		hash: &BlockHash,
+		journal_key: Vec<u8>,
+		inserted: I,
+		deleted: Vec<Key>,
+	) {
 		// remove all re-inserted keys from death rows
 		for k in inserted {
 			if let Some(block) = self.death_index.remove(&k) {
-				self.death_rows[(block - self.pending_number) as usize].deleted.remove(&k);
+				self.death_rows[(block - self.pending_number) as usize]
+					.deleted
+					.remove(&k);
 			}
 		}
 
@@ -115,13 +130,11 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		for k in deleted.iter() {
 			self.death_index.insert(k.clone(), imported_block);
 		}
-		self.death_rows.push_back(
-			DeathRow {
-				hash: hash.clone(),
-				deleted: deleted.into_iter().collect(),
-				journal_key: journal_key,
-			}
-		);
+		self.death_rows.push_back(DeathRow {
+			hash: hash.clone(),
+			deleted: deleted.into_iter().collect(),
+			journal_key,
+		});
 	}
 
 	pub fn window_size(&self) -> u64 {
@@ -138,13 +151,19 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 
 	/// Prune next block. Expects at least one block in the window. Adds changes to `commit`.
 	pub fn prune_one(&mut self, commit: &mut CommitSet<Key>) {
-		let pruned = self.death_rows.pop_front().expect("prune_one is only called with a non-empty window");
+		let pruned = self
+			.death_rows
+			.pop_front()
+			.expect("prune_one is only called with a non-empty window");
 		trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 		for k in pruned.deleted.iter() {
 			self.death_index.remove(&k);
 		}
 		commit.data.deleted.extend(pruned.deleted.into_iter());
-		commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), self.pending_number.encode()));
+		commit
+			.meta
+			.inserted
+			.push((to_meta_key(LAST_PRUNED, &()), self.pending_number.encode()));
 		commit.meta.deleted.push(pruned.journal_key);
 		self.pending_number += 1;
 	}
@@ -152,7 +171,12 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 	/// Add a change set to the window. Creates a journal record and pushes it to `commit`
 	pub fn note_finalized(&mut self, hash: &BlockHash, commit: &mut CommitSet<Key>) {
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
-		let inserted = commit.data.inserted.iter().map(|(k, _)| k.clone()).collect();
+		let inserted = commit
+			.data
+			.inserted
+			.iter()
+			.map(|(k, _)| k.clone())
+			.collect();
 		let deleted = ::std::mem::replace(&mut commit.data.deleted, Vec::new());
 		let journal_record = JournalRecord {
 			hash: hash.clone(),
@@ -161,9 +185,17 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		};
 		let block = self.pending_number + self.window_size();
 		let journal_key = to_journal_key(block);
-		commit.meta.inserted.push((journal_key.clone(), journal_record.encode()));
+		commit
+			.meta
+			.inserted
+			.push((journal_key.clone(), journal_record.encode()));
 
-		self.import(hash, journal_key, journal_record.inserted.into_iter(), journal_record.deleted);
+		self.import(
+			hash,
+			journal_key,
+			journal_record.inserted.into_iter(),
+			journal_record.deleted,
+		);
 	}
 }
 
@@ -171,8 +203,8 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 mod tests {
 	use super::RefWindow;
 	use primitives::H256;
-	use {CommitSet};
-	use test::{make_db, make_commit, TestDb};
+	use test::{make_commit, make_db, TestDb};
+	use CommitSet;
 
 	fn check_journal(pruning: &RefWindow<H256, H256>, db: &TestDb) {
 		let restored: RefWindow<H256, H256> = RefWindow::new(db).unwrap();

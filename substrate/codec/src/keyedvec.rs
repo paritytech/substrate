@@ -16,9 +16,9 @@
 
 //! Serialiser and prepender.
 
-use slicable::Slicable;
-use core::iter::Extend;
 use alloc::vec::Vec;
+use core::iter::Extend;
+use slicable::Slicable;
 
 /// Trait to allow itselg to be serialised and prepended by a given slice.
 pub trait KeyedVec {

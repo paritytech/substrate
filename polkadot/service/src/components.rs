@@ -16,22 +16,22 @@
 
 //! Polkadot service components.
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use chain_spec::ChainSpec;
 use client::{self, Client};
 use client_db;
 use codec::{self, Slicable};
 use consensus;
+use error;
 use keystore::Store as Keystore;
 use network;
 use polkadot_api;
 use polkadot_executor::Executor as LocalDispatch;
 use polkadot_primitives::{Block, BlockId, Hash};
 use state_machine;
+use std::collections::HashMap;
+use std::sync::Arc;
 use substrate_executor::NativeExecutor;
 use transaction_pool::{self, TransactionPool};
-use error;
-use chain_spec::ChainSpec;
 
 /// Code executor.
 pub type CodeExecutor = NativeExecutor<LocalDispatch>;
@@ -48,19 +48,40 @@ pub trait Components {
 	type Executor: 'static + client::CallExecutor<Block> + Send + Sync;
 
 	/// Create client.
-	fn build_client(&self, settings: client_db::DatabaseSettings, executor: CodeExecutor, chain_spec: &ChainSpec)
-		-> Result<(Arc<Client<Self::Backend, Self::Executor, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error>;
+	fn build_client(
+		&self,
+		settings: client_db::DatabaseSettings,
+		executor: CodeExecutor,
+		chain_spec: &ChainSpec,
+	) -> Result<
+		(
+			Arc<Client<Self::Backend, Self::Executor, Block>>,
+			Option<Arc<network::OnDemand<Block, network::Service<Block>>>>,
+		),
+		error::Error,
+	>;
 
 	/// Create api.
-	fn build_api(&self, client: Arc<Client<Self::Backend, Self::Executor, Block>>) -> Arc<Self::Api>;
+	fn build_api(
+		&self,
+		client: Arc<Client<Self::Backend, Self::Executor, Block>>,
+	) -> Arc<Self::Api>;
 
 	/// Create network transaction pool adapter.
-	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, tx_pool: Arc<TransactionPool<Self::Api>>)
-		-> Arc<network::TransactionPool<Block>>;
+	fn build_network_tx_pool(
+		&self,
+		client: Arc<client::Client<Self::Backend, Self::Executor, Block>>,
+		tx_pool: Arc<TransactionPool<Self::Api>>,
+	) -> Arc<network::TransactionPool<Block>>;
 
 	/// Create consensus service.
-	fn build_consensus(&self, client: Arc<Client<Self::Backend, Self::Executor, Block>>, network: Arc<network::Service<Block>>, tx_pool: Arc<TransactionPool<Self::Api>>, keystore: &Keystore)
-		-> Result<Option<consensus::Service>, error::Error>;
+	fn build_consensus(
+		&self,
+		client: Arc<Client<Self::Backend, Self::Executor, Block>>,
+		network: Arc<network::Service<Block>>,
+		tx_pool: Arc<TransactionPool<Self::Api>>,
+		keystore: &Keystore,
+	) -> Result<Option<consensus::Service>, error::Error>;
 }
 
 /// Components for full Polkadot service.
@@ -72,19 +93,39 @@ pub struct FullComponents {
 impl Components for FullComponents {
 	type Backend = client_db::Backend<Block>;
 	type Api = Client<Self::Backend, Self::Executor, Block>;
-	type Executor = client::LocalCallExecutor<client_db::Backend<Block>, NativeExecutor<LocalDispatch>>;
+	type Executor =
+		client::LocalCallExecutor<client_db::Backend<Block>, NativeExecutor<LocalDispatch>>;
 
-	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, chain_spec: &ChainSpec)
-		-> Result<(Arc<client::Client<Self::Backend, Self::Executor, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error> {
-		Ok((Arc::new(client_db::new_client(db_settings, executor, chain_spec)?), None))
+	fn build_client(
+		&self,
+		db_settings: client_db::DatabaseSettings,
+		executor: CodeExecutor,
+		chain_spec: &ChainSpec,
+	) -> Result<
+		(
+			Arc<client::Client<Self::Backend, Self::Executor, Block>>,
+			Option<Arc<network::OnDemand<Block, network::Service<Block>>>>,
+		),
+		error::Error,
+	> {
+		Ok((
+			Arc::new(client_db::new_client(db_settings, executor, chain_spec)?),
+			None,
+		))
 	}
 
-	fn build_api(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>) -> Arc<Self::Api> {
+	fn build_api(
+		&self,
+		client: Arc<client::Client<Self::Backend, Self::Executor, Block>>,
+	) -> Arc<Self::Api> {
 		client
 	}
 
-	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, pool: Arc<TransactionPool<Self::Api>>)
-		-> Arc<network::TransactionPool<Block>> {
+	fn build_network_tx_pool(
+		&self,
+		client: Arc<client::Client<Self::Backend, Self::Executor, Block>>,
+		pool: Arc<TransactionPool<Self::Api>>,
+	) -> Arc<network::TransactionPool<Block>> {
 		Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: true,
 			pool,
@@ -92,10 +133,15 @@ impl Components for FullComponents {
 		})
 	}
 
-	fn build_consensus(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, network: Arc<network::Service<Block>>, tx_pool: Arc<TransactionPool<Self::Api>>, keystore: &Keystore)
-		-> Result<Option<consensus::Service>, error::Error> {
+	fn build_consensus(
+		&self,
+		client: Arc<client::Client<Self::Backend, Self::Executor, Block>>,
+		network: Arc<network::Service<Block>>,
+		tx_pool: Arc<TransactionPool<Self::Api>>,
+		keystore: &Keystore,
+	) -> Result<Option<consensus::Service>, error::Error> {
 		if !self.is_validator {
-			return Ok(None);
+			return Ok(None)
 		}
 
 		// Load the first available key
@@ -116,29 +162,57 @@ impl Components for FullComponents {
 pub struct LightComponents;
 
 impl Components for LightComponents {
-	type Backend = client::light::backend::Backend<client_db::light::LightStorage<Block>, network::OnDemand<Block, network::Service<Block>>>;
+	type Backend = client::light::backend::Backend<
+		client_db::light::LightStorage<Block>,
+		network::OnDemand<Block, network::Service<Block>>,
+	>;
 	type Api = polkadot_api::light::RemotePolkadotApiWrapper<Self::Backend, Self::Executor>;
 	type Executor = client::light::call_executor::RemoteCallExecutor<
-		client::light::blockchain::Blockchain<client_db::light::LightStorage<Block>, network::OnDemand<Block, network::Service<Block>>>,
-		network::OnDemand<Block, network::Service<Block>>>;
+		client::light::blockchain::Blockchain<
+			client_db::light::LightStorage<Block>,
+			network::OnDemand<Block, network::Service<Block>>,
+		>,
+		network::OnDemand<Block, network::Service<Block>>,
+	>;
 
-	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, spec: &ChainSpec)
-		-> Result<(Arc<client::Client<Self::Backend, Self::Executor, Block>>, Option<Arc<network::OnDemand<Block, network::Service<Block>>>>), error::Error> {
+	fn build_client(
+		&self,
+		db_settings: client_db::DatabaseSettings,
+		executor: CodeExecutor,
+		spec: &ChainSpec,
+	) -> Result<
+		(
+			Arc<client::Client<Self::Backend, Self::Executor, Block>>,
+			Option<Arc<network::OnDemand<Block, network::Service<Block>>>>,
+		),
+		error::Error,
+	> {
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor));
+		let fetch_checker = Arc::new(client::light::new_fetch_checker(
+			light_blockchain.clone(),
+			executor,
+		));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
 		let client = client::light::new_light(client_backend, fetcher.clone(), spec)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 
-	fn build_api(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>) -> Arc<Self::Api> {
-		Arc::new(polkadot_api::light::RemotePolkadotApiWrapper(client.clone()))
+	fn build_api(
+		&self,
+		client: Arc<client::Client<Self::Backend, Self::Executor, Block>>,
+	) -> Arc<Self::Api> {
+		Arc::new(polkadot_api::light::RemotePolkadotApiWrapper(
+			client.clone(),
+		))
 	}
 
-	fn build_network_tx_pool(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, pool: Arc<TransactionPool<Self::Api>>)
-		-> Arc<network::TransactionPool<Block>> {
+	fn build_network_tx_pool(
+		&self,
+		client: Arc<client::Client<Self::Backend, Self::Executor, Block>>,
+		pool: Arc<TransactionPool<Self::Api>>,
+	) -> Arc<network::TransactionPool<Block>> {
 		Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: false,
 			pool,
@@ -146,28 +220,40 @@ impl Components for LightComponents {
 		})
 	}
 
-	fn build_consensus(&self, _client: Arc<client::Client<Self::Backend, Self::Executor, Block>>, _network: Arc<network::Service<Block>>, _tx_pool: Arc<TransactionPool<Self::Api>>, _keystore: &Keystore)
-		-> Result<Option<consensus::Service>, error::Error> {
+	fn build_consensus(
+		&self,
+		_client: Arc<client::Client<Self::Backend, Self::Executor, Block>>,
+		_network: Arc<network::Service<Block>>,
+		_tx_pool: Arc<TransactionPool<Self::Api>>,
+		_keystore: &Keystore,
+	) -> Result<Option<consensus::Service>, error::Error> {
 		Ok(None)
 	}
 }
 
 /// Transaction pool adapter.
-pub struct TransactionPoolAdapter<B, E, A> where A: Send + Sync, E: Send + Sync {
+pub struct TransactionPoolAdapter<B, E, A>
+where
+	A: Send + Sync,
+	E: Send + Sync,
+{
 	imports_external_transactions: bool,
 	pool: Arc<TransactionPool<A>>,
 	client: Arc<Client<B, E, Block>>,
 }
 
 impl<B, E, A> TransactionPoolAdapter<B, E, A>
-	where
-		A: Send + Sync,
-		B: client::backend::Backend<Block> + Send + Sync,
-		E: client::CallExecutor<Block> + Send + Sync,
-		client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
+where
+	A: Send + Sync,
+	B: client::backend::Backend<Block> + Send + Sync,
+	E: client::CallExecutor<Block> + Send + Sync,
+	client::error::Error: From<
+		<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error,
+	>,
 {
 	fn best_block_id(&self) -> Option<BlockId> {
-		self.client.info()
+		self.client
+			.info()
 			.map(|info| BlockId::hash(info.chain.best_hash))
 			.map_err(|e| {
 				debug!("Error getting best block: {:?}", e);
@@ -177,32 +263,37 @@ impl<B, E, A> TransactionPoolAdapter<B, E, A>
 }
 
 impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A>
-	where
-		B: client::backend::Backend<Block> + Send + Sync,
-		E: client::CallExecutor<Block> + Send + Sync,
-		client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
-		A: polkadot_api::PolkadotApi + Send + Sync,
+where
+	B: client::backend::Backend<Block> + Send + Sync,
+	E: client::CallExecutor<Block> + Send + Sync,
+	client::error::Error: From<
+		<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error,
+	>,
+	A: polkadot_api::PolkadotApi + Send + Sync,
 {
 	fn transactions(&self) -> Vec<(Hash, Vec<u8>)> {
 		let best_block_id = match self.best_block_id() {
 			Some(id) => id,
 			None => return vec![],
 		};
-		self.pool.cull_and_get_pending(best_block_id, |pending| pending
-			.map(|t| {
-				let hash = t.hash().clone();
-				(hash, t.primitive_extrinsic())
+		self.pool
+			.cull_and_get_pending(best_block_id, |pending| {
+				pending
+					.map(|t| {
+						let hash = t.hash().clone();
+						(hash, t.primitive_extrinsic())
+					})
+					.collect()
 			})
-			.collect()
-		).unwrap_or_else(|e| {
-			warn!("Error retrieving pending set: {}", e);
-			vec![]
-		})
+			.unwrap_or_else(|e| {
+				warn!("Error retrieving pending set: {}", e);
+				vec![]
+			})
 	}
 
 	fn import(&self, transaction: &Vec<u8>) -> Option<Hash> {
 		if !self.imports_external_transactions {
-			return None;
+			return None
 		}
 
 		let encoded = transaction.encode();
@@ -216,7 +307,7 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 						debug!("Error adding transaction to the pool: {:?}", e);
 						None
 					},
-				}
+				},
 			}
 		} else {
 			debug!("Error decoding transaction");

@@ -1,17 +1,17 @@
 extern crate ed25519;
-extern crate substrate_primitives;
 extern crate rand;
+extern crate substrate_primitives;
 
+use ed25519::Pair;
 use rand::{OsRng, Rng};
 use std::env::args;
-use ed25519::Pair;
 use substrate_primitives::hexdisplay::HexDisplay;
 
 fn good_waypoint(done: u64) -> u64 {
 	match done {
-		0 ... 1_000_000 => 100_000,
-		0 ... 10_000_000 => 1_000_000,
-		0 ... 100_000_000 => 10_000_000,
+		0...1_000_000 => 100_000,
+		0...10_000_000 => 1_000_000,
+		0...100_000_000 => 10_000_000,
 		_ => 100_000_000,
 	}
 }
@@ -19,17 +19,22 @@ fn good_waypoint(done: u64) -> u64 {
 fn next_seed(mut seed: [u8; 32]) -> [u8; 32] {
 	for i in 0..32 {
 		match seed[i] {
-			255 => { seed[i] = 0; }
-			_ => { seed[i] += 1; break; }
+			255 => {
+				seed[i] = 0;
+			},
+			_ => {
+				seed[i] += 1;
+				break
+			},
 		}
 	}
-	return seed;
+	return seed
 }
 
 fn main() {
 	if args().len() != 2 {
 		println!("Usage: subkey <search string>");
-		return;
+		return
 	}
 	let desired = args().last().unwrap();
 	let score = |s: &str| {
@@ -37,7 +42,7 @@ fn main() {
 			let snip_size = desired.len() - truncate;
 			let truncated = &desired[0..snip_size];
 			if let Some(pos) = s.find(truncated) {
-				return (31 - pos) + (snip_size * 32);
+				return (31 - pos) + (snip_size * 32)
 			}
 		}
 		0
@@ -56,10 +61,15 @@ fn main() {
 		let ss58 = p.public().to_ss58check();
 		let s = score(&ss58);
 		if s > best {
-			println!("{}: {} ({}% complete)", ss58, HexDisplay::from(&seed), s * 100 / top);
+			println!(
+				"{}: {} ({}% complete)",
+				ss58,
+				HexDisplay::from(&seed),
+				s * 100 / top
+			);
 			best = s;
 			if best == top {
-				break;
+				break
 			}
 		}
 		seed = next_seed(seed);

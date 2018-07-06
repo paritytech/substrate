@@ -29,16 +29,18 @@ use core::ops::{BitAnd, BitOr};
 
 pub const MAX_DEPTH: usize = 17;
 
-fn sub_mix<T>(seeds: &[T]) -> T where
-	T: BitAnd<Output = T> + BitOr<Output = T> + Copy
+fn sub_mix<T>(seeds: &[T]) -> T
+where
+	T: BitAnd<Output = T> + BitOr<Output = T> + Copy,
 {
 	(seeds[0] & seeds[1]) | (seeds[1] & seeds[2]) | (seeds[0] & seeds[2])
 }
 
 /// Mix a slice.
-pub fn triplet_mix<T>(seeds: &[T]) -> Result<T, ()> where
+pub fn triplet_mix<T>(seeds: &[T]) -> Result<T, ()>
+where
 	T: BitAnd<Output = T> + BitOr<Output = T>,
-	T: Default + Copy
+	T: Default + Copy,
 {
 	Ok(seeds.iter().cloned().triplet_mix())
 }
@@ -53,9 +55,10 @@ pub trait TripletMix {
 	fn triplet_mix(self) -> Self::Item;
 }
 
-impl<I, T> TripletMix for I where
+impl<I, T> TripletMix for I
+where
 	I: Iterator<Item = T>,
-	T: BitAnd<Output = T> + BitOr<Output = T> + Default + Copy
+	T: BitAnd<Output = T> + BitOr<Output = T> + Default + Copy,
 {
 	type Item = T;
 	fn triplet_mix(self) -> Self::Item {
@@ -66,7 +69,7 @@ impl<I, T> TripletMix for I where
 			let mut index_at_depth = i;
 			for depth in 0..MAX_DEPTH {
 				if index_at_depth % 3 != 2 {
-					break;
+					break
 				}
 				index_at_depth /= 3;
 				result = sub_mix(&accum[depth]);
@@ -74,7 +77,7 @@ impl<I, T> TripletMix for I where
 				// end of the threesome at depth.
 				if depth == MAX_DEPTH - 1 {
 					// end of our stack - bail with result.
-					break;
+					break
 				} else {
 					// save in the stack for parent computation
 					accum[depth + 1][index_at_depth % 3] = result;
@@ -140,6 +143,12 @@ mod tests {
 
 	#[test]
 	fn triplet_mix_works_on_third_level() {
-		assert_eq!(triplet_mix(&[0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0][..]).unwrap(), 1);
+		assert_eq!(
+			triplet_mix(
+				&[0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0]
+					[..]
+			).unwrap(),
+			1
+		);
 	}
 }

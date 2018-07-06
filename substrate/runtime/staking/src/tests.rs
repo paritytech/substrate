@@ -19,8 +19,8 @@
 #![cfg(test)]
 
 use super::*;
+use mock::{new_test_ext, Session, Staking, System, Test, Timestamp};
 use runtime_io::with_externalities;
-use mock::{Session, Staking, System, Timestamp, Test, new_test_ext};
 
 #[test]
 fn reward_should_work() {
@@ -42,23 +42,23 @@ fn rewards_should_work() {
 		assert_eq!(Staking::voting_balance(&10), 1);
 
 		System::set_block_number(3);
-		Timestamp::set_timestamp(15);	// on time.
+		Timestamp::set_timestamp(15); // on time.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::voting_balance(&10), 11);
 		System::set_block_number(6);
-		Timestamp::set_timestamp(31);	// a little late
+		Timestamp::set_timestamp(31); // a little late
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
-		assert_eq!(Staking::voting_balance(&10), 20);	// less reward
+		assert_eq!(Staking::voting_balance(&10), 20); // less reward
 		System::set_block_number(9);
-		Timestamp::set_timestamp(50);	// very late
+		Timestamp::set_timestamp(50); // very late
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
-		assert_eq!(Staking::voting_balance(&10), 27);	// much less reward
+		assert_eq!(Staking::voting_balance(&10), 27); // much less reward
 	});
 }
 
@@ -73,21 +73,21 @@ fn slashing_should_work() {
 		assert_eq!(Staking::voting_balance(&10), 1);
 
 		System::set_block_number(3);
-		Timestamp::set_timestamp(15);	// on time.
+		Timestamp::set_timestamp(15); // on time.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::voting_balance(&10), 11);
 
 		System::set_block_number(6);
-		Timestamp::set_timestamp(30);	// on time.
+		Timestamp::set_timestamp(30); // on time.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Staking::voting_balance(&10), 21);
 
 		System::set_block_number(7);
-		Timestamp::set_timestamp(100);	// way too late - early exit.
+		Timestamp::set_timestamp(100); // way too late - early exit.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
@@ -122,7 +122,7 @@ fn dust_account_removal_should_work() {
 		assert_eq!(System::account_nonce(&2), 1);
 		assert_eq!(Staking::voting_balance(&2), 256 * 20);
 
-		assert_ok!(Staking::transfer(&2, 5.into(), 256 * 10 + 1));	// index 1 (account 2) becomes zombie
+		assert_ok!(Staking::transfer(&2, 5.into(), 256 * 10 + 1)); // index 1 (account 2) becomes zombie
 		assert_eq!(Staking::voting_balance(&2), 0);
 		assert_eq!(Staking::voting_balance(&5), 256 * 10 + 1);
 		assert_eq!(System::account_nonce(&2), 0);
@@ -136,10 +136,10 @@ fn reclaim_indexing_on_new_accounts_should_work() {
 		assert_eq!(Staking::lookup_index(4), None);
 		assert_eq!(Staking::voting_balance(&2), 256 * 20);
 
-		assert_ok!(Staking::transfer(&2, 5.into(), 256 * 20));	// account 2 becomes zombie freeing index 1 for reclaim)
+		assert_ok!(Staking::transfer(&2, 5.into(), 256 * 20)); // account 2 becomes zombie freeing index 1 for reclaim)
 		assert_eq!(Staking::voting_balance(&2), 0);
 
-		assert_ok!(Staking::transfer(&5, 6.into(), 256 * 1 + 0x69));	// account 6 takes index 1.
+		assert_ok!(Staking::transfer(&5, 6.into(), 256 * 1 + 0x69)); // account 6 takes index 1.
 		assert_eq!(Staking::voting_balance(&6), 256 * 1 + 0x69);
 		assert_eq!(Staking::lookup_index(1), Some(6));
 	});
@@ -153,23 +153,23 @@ fn reserved_balance_should_prevent_reclaim_count() {
 		assert_eq!(Staking::lookup_index(4), None);
 		assert_eq!(Staking::voting_balance(&2), 256 * 20);
 
-		assert_ok!(Staking::reserve(&2, 256 * 19 + 1));					// account 2 becomes mostly reserved
-		assert_eq!(Staking::free_balance(&2), 0);						// "free" account deleted."
-		assert_eq!(Staking::voting_balance(&2), 256 * 19 + 1);			// reserve still exists.
+		assert_ok!(Staking::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
+		assert_eq!(Staking::free_balance(&2), 0); // "free" account deleted."
+		assert_eq!(Staking::voting_balance(&2), 256 * 19 + 1); // reserve still exists.
 		assert_eq!(System::account_nonce(&2), 1);
 
-		assert_ok!(Staking::transfer(&4, 5.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 for account 5.
+		assert_ok!(Staking::transfer(&4, 5.into(), 256 * 1 + 0x69)); // account 4 tries to take index 1 for account 5.
 		assert_eq!(Staking::voting_balance(&5), 256 * 1 + 0x69);
-		assert_eq!(Staking::lookup_index(1), Some(2));					// but fails.
+		assert_eq!(Staking::lookup_index(1), Some(2)); // but fails.
 		assert_eq!(System::account_nonce(&2), 1);
 
-		assert_eq!(Staking::slash(&2, 256 * 18 + 2), None);				// account 2 gets slashed
-		assert_eq!(Staking::voting_balance(&2), 0);						// "free" account deleted."
+		assert_eq!(Staking::slash(&2, 256 * 18 + 2), None); // account 2 gets slashed
+		assert_eq!(Staking::voting_balance(&2), 0); // "free" account deleted."
 		assert_eq!(System::account_nonce(&2), 0);
 
-		assert_ok!(Staking::transfer(&4, 6.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 again for account 6.
+		assert_ok!(Staking::transfer(&4, 6.into(), 256 * 1 + 0x69)); // account 4 tries to take index 1 again for account 6.
 		assert_eq!(Staking::voting_balance(&6), 256 * 1 + 0x69);
-		assert_eq!(Staking::lookup_index(1), Some(6));					// and succeeds.
+		assert_eq!(Staking::lookup_index(1), Some(6)); // and succeeds.
 	});
 }
 
@@ -199,7 +199,10 @@ fn staking_should_work() {
 		// Block 3: Unstake highest, introduce another staker. No change yet.
 		System::set_block_number(3);
 		assert_ok!(Staking::stake(&3));
-		assert_ok!(Staking::unstake(&4, Staking::intentions().iter().position(|&x| x == 4).unwrap() as u32));
+		assert_ok!(Staking::unstake(
+			&4,
+			Staking::intentions().iter().position(|&x| x == 4).unwrap() as u32
+		));
 		assert_eq!(Staking::current_era(), 1);
 		Session::check_rotate_session();
 
@@ -221,7 +224,10 @@ fn staking_should_work() {
 
 		// Block 7: Unstake three. No change yet.
 		System::set_block_number(7);
-		assert_ok!(Staking::unstake(&3, Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
+		assert_ok!(Staking::unstake(
+			&3,
+			Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32
+		));
 		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![1, 3]);
 
@@ -247,7 +253,7 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::nominate(&4, 1.into()));
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
+		assert_eq!(Session::validators(), vec![1, 3]); // 4 + 1, 3
 		assert_eq!(Staking::voting_balance(&1), 10);
 		assert_eq!(Staking::voting_balance(&2), 20);
 		assert_eq!(Staking::voting_balance(&3), 30);
@@ -265,7 +271,10 @@ fn nominating_and_rewards_should_work() {
 
 		System::set_block_number(3);
 		assert_ok!(Staking::stake(&4));
-		assert_ok!(Staking::unstake(&3, Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
+		assert_ok!(Staking::unstake(
+			&3,
+			Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32
+		));
 		assert_ok!(Staking::nominate(&3, 1.into()));
 		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![1, 4]);
@@ -303,14 +312,14 @@ fn nominating_slashes_should_work() {
 		Session::check_rotate_session();
 
 		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 4, 3 + 2
+		assert_eq!(Session::validators(), vec![1, 3]); // 1 + 4, 3 + 2
 		assert_eq!(Staking::voting_balance(&1), 10);
 		assert_eq!(Staking::voting_balance(&2), 20);
 		assert_eq!(Staking::voting_balance(&3), 30);
 		assert_eq!(Staking::voting_balance(&4), 40);
 
 		System::set_block_number(5);
-		Timestamp::set_timestamp(100);	// late
+		Timestamp::set_timestamp(100); // late
 		assert_eq!(Session::blocks_remaining(), 1);
 		assert!(Session::broken_validation());
 		Session::check_rotate_session();
@@ -329,10 +338,16 @@ fn double_staking_should_fail() {
 		System::set_block_number(1);
 		assert_ok!(Staking::stake(&1));
 		assert_noop!(Staking::stake(&1), "Cannot stake if already staked.");
-		assert_noop!(Staking::nominate(&1, 1.into()), "Cannot nominate if already staked.");
+		assert_noop!(
+			Staking::nominate(&1, 1.into()),
+			"Cannot nominate if already staked."
+		);
 		assert_ok!(Staking::nominate(&2, 1.into()));
 		assert_noop!(Staking::stake(&2), "Cannot stake if already nominating.");
-		assert_noop!(Staking::nominate(&2, 1.into()), "Cannot nominate if already nominating.");
+		assert_noop!(
+			Staking::nominate(&2, 1.into()),
+			"Cannot nominate if already nominating."
+		);
 	});
 }
 
@@ -433,7 +448,10 @@ fn staking_balance_transfer_when_bonded_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::stake(&1));
-		assert_noop!(Staking::transfer(&1, 2.into(), 69), "bondage too high to send value");
+		assert_noop!(
+			Staking::transfer(&1, 2.into(), 69),
+			"bondage too high to send value"
+		);
 	});
 }
 
@@ -459,7 +477,10 @@ fn staking_balance_transfer_when_reserved_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve(&1, 69));
-		assert_noop!(Staking::transfer(&1, 2.into(), 69), "balance too low to send value");
+		assert_noop!(
+			Staking::transfer(&1, 2.into(), 69),
+			"balance too low to send value"
+		);
 	});
 }
 
@@ -568,7 +589,10 @@ fn transferring_reserved_balance_to_nonexistent_should_fail() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		<FreeBalance<Test>>::insert(1, 111);
 		assert_ok!(Staking::reserve(&1, 111));
-		assert_noop!(Staking::transfer_reserved(&1, &2, 42), "beneficiary account must pre-exist");
+		assert_noop!(
+			Staking::transfer_reserved(&1, &2, 42),
+			"beneficiary account must pre-exist"
+		);
 	});
 }
 
@@ -612,8 +636,14 @@ fn account_removal_removes_storage() {
 			assert_eq!(<StorageOf<Test>>::get(1, b"foo".to_vec()), None);
 			assert_eq!(<StorageOf<Test>>::get(1, b"bar".to_vec()), None);
 
-			assert_eq!(<StorageOf<Test>>::get(2, b"hello".to_vec()), Some(b"3".to_vec()));
-			assert_eq!(<StorageOf<Test>>::get(2, b"world".to_vec()), Some(b"4".to_vec()));
+			assert_eq!(
+				<StorageOf<Test>>::get(2, b"hello".to_vec()),
+				Some(b"3".to_vec())
+			);
+			assert_eq!(
+				<StorageOf<Test>>::get(2, b"world".to_vec()),
+				Some(b"4".to_vec())
+			);
 		}
 	});
 }

@@ -20,45 +20,55 @@ use client::backend::{Backend, LocalBackend};
 use client::block_builder::BlockBuilder as ClientBlockBuilder;
 use client::{Client, LocalCallExecutor};
 use polkadot_executor::Executor as LocalDispatch;
-use substrate_executor::NativeExecutor;
 use state_machine;
+use substrate_executor::NativeExecutor;
 
+use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
+use primitives::{
+	AccountId, Block, BlockId, Hash, Header, Index, SessionKey, Timestamp, UncheckedExtrinsic,
+};
 use runtime::Address;
 use runtime_primitives::traits::AuxLookup;
-use primitives::{AccountId, Block, Header, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
-use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 
-use {BlockBuilder, PolkadotApi, LocalPolkadotApi, ErrorKind, Error, Result};
+use {BlockBuilder, Error, ErrorKind, LocalPolkadotApi, PolkadotApi, Result};
 
 // set up the necessary scaffolding to execute a set of calls to the runtime.
 // this creates a new block on top of the given ID and initialises it.
 macro_rules! with_runtime {
-	($client: ident, $at: expr, $exec: expr) => {{
+	($client:ident, $at:expr, $exec:expr) => {{
 		let parent = $at;
 		let header = Header {
-			parent_hash: $client.block_hash_from_id(&parent)?
+			parent_hash: $client
+				.block_hash_from_id(&parent)?
 				.ok_or_else(|| ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
-			number: $client.block_number_from_id(&parent)?
+			number: $client
+				.block_number_from_id(&parent)?
 				.ok_or_else(|| ErrorKind::UnknownBlock(format!("{:?}", parent)))? + 1,
 			state_root: Default::default(),
 			extrinsics_root: Default::default(),
 			digest: Default::default(),
-		};
+			};
 
-		$client.state_at(&parent).map_err(Error::from).and_then(|state| {
-			let mut changes = Default::default();
-			let mut ext = state_machine::Ext::new(&mut changes, &state);
+		$client
+			.state_at(&parent)
+			.map_err(Error::from)
+			.and_then(|state| {
+				let mut changes = Default::default();
+				let mut ext = state_machine::Ext::new(&mut changes, &state);
 
-			::substrate_executor::with_native_environment(&mut ext, || {
-				::runtime::Executive::initialise_block(&header);
-				($exec)()
-			}).map_err(Into::into)
-		})
-	}}
+				::substrate_executor::with_native_environment(&mut ext, || {
+					::runtime::Executive::initialise_block(&header);
+					($exec)()
+				}).map_err(Into::into)
+			})
+		}};
 }
 
-impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
+impl<B: LocalBackend<Block>> BlockBuilder
+	for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
+where
+	::client::error::Error:
+		From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
 		self.push(extrinsic).map_err(Into::into)
@@ -70,10 +80,14 @@ impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExe
 	}
 }
 
-impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
+impl<B: LocalBackend<Block>> PolkadotApi
+	for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
+where
+	::client::error::Error:
+		From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
-	type BlockBuilder = ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>;
+	type BlockBuilder =
+		ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>;
 
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
 		with_runtime!(self, at, ::runtime::Consensus::authorities)
@@ -96,9 +110,9 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool> {
-		use substrate_executor::error::ErrorKind as ExecErrorKind;
 		use codec::Slicable;
 		use runtime::Block as RuntimeBlock;
+		use substrate_executor::error::ErrorKind as ExecErrorKind;
 
 		let encoded = block.encode();
 		let runtime_block = match RuntimeBlock::decode(&mut &encoded[..]) {
@@ -106,13 +120,15 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 			None => return Ok(false),
 		};
 
-		let res = with_runtime!(self, at, || ::runtime::Executive::execute_block(runtime_block));
+		let res = with_runtime!(self, at, || ::runtime::Executive::execute_block(
+			runtime_block
+		));
 		match res {
 			Ok(()) => Ok(true),
 			Err(err) => match err.kind() {
 				&ErrorKind::Executor(ExecErrorKind::Runtime) => Ok(false),
-				_ => Err(err)
-			}
+				_ => Err(err),
+			},
 		}
 	}
 
@@ -121,7 +137,9 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn lookup(&self, at: &BlockId, address: Address) -> Result<Option<AccountId>> {
-		with_runtime!(self, at, || <::runtime::Staking as AuxLookup>::lookup(address).ok())
+		with_runtime!(self, at, || <::runtime::Staking as AuxLookup>::lookup(
+			address
+		).ok())
 	}
 
 	fn active_parachains(&self, at: &BlockId) -> Result<Vec<ParaId>> {
@@ -129,14 +147,23 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn parachain_code(&self, at: &BlockId, parachain: ParaId) -> Result<Option<Vec<u8>>> {
-		with_runtime!(self, at, || ::runtime::Parachains::parachain_code(parachain))
+		with_runtime!(self, at, || ::runtime::Parachains::parachain_code(
+			parachain
+		))
 	}
 
 	fn parachain_head(&self, at: &BlockId, parachain: ParaId) -> Result<Option<Vec<u8>>> {
-		with_runtime!(self, at, || ::runtime::Parachains::parachain_head(parachain))
+		with_runtime!(self, at, || ::runtime::Parachains::parachain_head(
+			parachain
+		))
 	}
 
-	fn build_block(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
+	fn build_block(
+		&self,
+		at: &BlockId,
+		timestamp: Timestamp,
+		new_heads: Vec<CandidateReceipt>,
+	) -> Result<Self::BlockBuilder> {
 		let mut block_builder = self.new_block_at(at)?;
 		for inherent in self.inherent_extrinsics(at, timestamp, new_heads)? {
 			block_builder.push(inherent)?;
@@ -145,7 +172,12 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 		Ok(block_builder)
 	}
 
-	fn inherent_extrinsics(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>> {
+	fn inherent_extrinsics(
+		&self,
+		at: &BlockId,
+		timestamp: Timestamp,
+		new_heads: Vec<CandidateReceipt>,
+	) -> Result<Vec<UncheckedExtrinsic>> {
 		use codec::Slicable;
 
 		with_runtime!(self, at, || {
@@ -159,18 +191,21 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 }
 
-impl<B: LocalBackend<Block>> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
+impl<B: LocalBackend<Block>> LocalPolkadotApi
+	for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
+where
+	::client::error::Error:
+		From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {}
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use keyring::Keyring;
-	use client::LocalCallExecutor;
 	use client::in_mem::Backend as InMemory;
+	use client::LocalCallExecutor;
+	use keyring::Keyring;
+	use runtime::{ConsensusConfig, GenesisConfig, SessionConfig};
 	use substrate_executor::NativeExecutionDispatch;
-	use runtime::{GenesisConfig, ConsensusConfig, SessionConfig};
 
 	fn validators() -> Vec<AccountId> {
 		vec![
@@ -186,7 +221,11 @@ mod tests {
 		]
 	}
 
-	fn client() -> Client<InMemory<Block>, LocalCallExecutor<InMemory<Block>, NativeExecutor<LocalDispatch>>, Block> {
+	fn client() -> Client<
+		InMemory<Block>,
+		LocalCallExecutor<InMemory<Block>, NativeExecutor<LocalDispatch>>,
+		Block,
+	> {
 		let genesis_config = GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: LocalDispatch::native_equivalent().to_vec(),
@@ -233,7 +272,9 @@ mod tests {
 		let client = client();
 
 		let id = BlockId::number(0);
-		let inherent = client.inherent_extrinsics(&id, 1_000_000, Vec::new()).unwrap();
+		let inherent = client
+			.inherent_extrinsics(&id, 1_000_000, Vec::new())
+			.unwrap();
 
 		let mut block_builder = client.new_block_at(&id).unwrap();
 		for extrinsic in inherent {

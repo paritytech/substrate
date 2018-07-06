@@ -18,15 +18,15 @@
 
 use std::sync::Arc;
 
-use runtime_primitives::traits::Block as BlockT;
+use client::{self, BlockchainEvents, Client};
 use runtime_primitives::generic::BlockId;
-use client::{self, Client, BlockchainEvents};
+use runtime_primitives::traits::Block as BlockT;
 use state_machine;
 
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
-use rpc::Result as RpcResult;
 use rpc::futures::{Future, Sink, Stream};
+use rpc::Result as RpcResult;
 use tokio_core::reactor::Remote;
 
 use subscriptions::Subscriptions;
@@ -80,25 +80,41 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	}
 }
 
-impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> where
+impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block>
+where
 	Block: BlockT + 'static,
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
 	E: client::CallExecutor<Block> + Send + Sync + 'static,
-	client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
+	client::error::Error: From<
+		<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error,
+	>,
 {
 	type Metadata = ::metadata::Metadata;
 
 	fn header(&self, hash: Block::Hash) -> Result<Option<Block::Header>> {
-		self.client.header(&BlockId::Hash(hash)).chain_err(|| "Blockchain error")
+		self.client
+			.header(&BlockId::Hash(hash))
+			.chain_err(|| "Blockchain error")
 	}
 
 	fn head(&self) -> Result<Block::Hash> {
-		Ok(self.client.info().chain_err(|| "Blockchain error")?.chain.best_hash)
+		Ok(self
+			.client
+			.info()
+			.chain_err(|| "Blockchain error")?
+			.chain
+			.best_hash)
 	}
 
-	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
+	fn subscribe_new_head(
+		&self,
+		_metadata: Self::Metadata,
+		subscriber: pubsub::Subscriber<Block::Header>,
+	) {
 		self.subscriptions.add(subscriber, |sink| {
-			let stream = self.client.import_notification_stream()
+			let stream = self
+				.client
+				.import_notification_stream()
 				.filter(|notification| notification.is_new_best)
 				.map(|notification| Ok(notification.header))
 				.map_err(|e| warn!("Block notification stream error: {:?}", e));

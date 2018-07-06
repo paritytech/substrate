@@ -16,8 +16,8 @@
 
 //! Message formats for the BFT consensus layer.
 
+use codec::{Input, Slicable};
 use rstd::prelude::*;
-use codec::{Slicable, Input};
 use substrate_primitives::{AuthorityId, Signature};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -59,26 +59,26 @@ impl<Block: Slicable, Hash: Slicable> Slicable for Action<Block, Hash> {
 				v.push(ActionKind::Propose as u8);
 				round.using_encoded(|s| v.extend(s));
 				block.using_encoded(|s| v.extend(s));
-			}
+			},
 			Action::ProposeHeader(ref round, ref hash) => {
 				v.push(ActionKind::ProposeHeader as u8);
 				round.using_encoded(|s| v.extend(s));
 				hash.using_encoded(|s| v.extend(s));
-			}
+			},
 			Action::Prepare(ref round, ref hash) => {
 				v.push(ActionKind::Prepare as u8);
 				round.using_encoded(|s| v.extend(s));
 				hash.using_encoded(|s| v.extend(s));
-			}
+			},
 			Action::Commit(ref round, ref hash) => {
 				v.push(ActionKind::Commit as u8);
 				round.using_encoded(|s| v.extend(s));
 				hash.using_encoded(|s| v.extend(s));
-			}
+			},
 			Action::AdvanceRound(ref round) => {
 				v.push(ActionKind::AdvanceRound as u8);
 				round.using_encoded(|s| v.extend(s));
-			}
+			},
 		}
 
 		v
@@ -89,22 +89,21 @@ impl<Block: Slicable, Hash: Slicable> Slicable for Action<Block, Hash> {
 			Some(x) if x == ActionKind::Propose as i8 => {
 				let (round, block) = Slicable::decode(value)?;
 				Some(Action::Propose(round, block))
-			}
+			},
 			Some(x) if x == ActionKind::ProposeHeader as i8 => {
 				let (round, hash) = Slicable::decode(value)?;
 				Some(Action::ProposeHeader(round, hash))
-			}
+			},
 			Some(x) if x == ActionKind::Prepare as i8 => {
 				let (round, hash) = Slicable::decode(value)?;
 				Some(Action::Prepare(round, hash))
-			}
+			},
 			Some(x) if x == ActionKind::Commit as i8 => {
 				let (round, hash) = Slicable::decode(value)?;
 				Some(Action::Commit(round, hash))
-			}
-			Some(x) if x == ActionKind::AdvanceRound as i8 => {
-				Slicable::decode(value).map(Action::AdvanceRound)
-			}
+			},
+			Some(x) if x == ActionKind::AdvanceRound as i8 =>
+				Slicable::decode(value).map(Action::AdvanceRound),
 			_ => None,
 		}
 	}
@@ -147,7 +146,7 @@ pub struct Justification<H> {
 	/// The hash of the header justified.
 	pub hash: H,
 	/// The signatures and signers of the hash.
-	pub signatures: Vec<(AuthorityId, Signature)>
+	pub signatures: Vec<(AuthorityId, Signature)>,
 }
 
 impl<H: Slicable> Slicable for Justification<H> {
@@ -221,14 +220,18 @@ impl<Hash: Slicable, Number: Slicable> Slicable for MisbehaviorReport<Hash, Numb
 		self.target.using_encoded(|s| v.extend(s));
 
 		match self.misbehavior {
-			MisbehaviorKind::BftDoublePrepare(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
+			MisbehaviorKind::BftDoublePrepare(
+				ref round,
+				(ref h_a, ref s_a),
+				(ref h_b, ref s_b),
+			) => {
 				(MisbehaviorCode::BftDoublePrepare as i8).using_encoded(|s| v.extend(s));
 				round.using_encoded(|s| v.extend(s));
 				h_a.using_encoded(|s| v.extend(s));
 				s_a.using_encoded(|s| v.extend(s));
 				h_b.using_encoded(|s| v.extend(s));
 				s_b.using_encoded(|s| v.extend(s));
-			}
+			},
 			MisbehaviorKind::BftDoubleCommit(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
 				(MisbehaviorCode::BftDoubleCommit as i8).using_encoded(|s| v.extend(s));
 				round.using_encoded(|s| v.extend(s));
@@ -236,7 +239,7 @@ impl<Hash: Slicable, Number: Slicable> Slicable for MisbehaviorReport<Hash, Numb
 				s_a.using_encoded(|s| v.extend(s));
 				h_b.using_encoded(|s| v.extend(s));
 				s_b.using_encoded(|s| v.extend(s));
-			}
+			},
 		}
 
 		v
@@ -248,20 +251,16 @@ impl<Hash: Slicable, Number: Slicable> Slicable for MisbehaviorReport<Hash, Numb
 		let target = AuthorityId::decode(input)?;
 
 		let misbehavior = match i8::decode(input).and_then(MisbehaviorCode::from_i8)? {
-			MisbehaviorCode::BftDoublePrepare => {
-				MisbehaviorKind::BftDoublePrepare(
-					u32::decode(input)?,
-					(Hash::decode(input)?, Signature::decode(input)?),
-					(Hash::decode(input)?, Signature::decode(input)?),
-				)
-			}
-			MisbehaviorCode::BftDoubleCommit => {
-				MisbehaviorKind::BftDoubleCommit(
-					u32::decode(input)?,
-					(Hash::decode(input)?, Signature::decode(input)?),
-					(Hash::decode(input)?, Signature::decode(input)?),
-				)
-			}
+			MisbehaviorCode::BftDoublePrepare => MisbehaviorKind::BftDoublePrepare(
+				u32::decode(input)?,
+				(Hash::decode(input)?, Signature::decode(input)?),
+				(Hash::decode(input)?, Signature::decode(input)?),
+			),
+			MisbehaviorCode::BftDoubleCommit => MisbehaviorKind::BftDoubleCommit(
+				u32::decode(input)?,
+				(Hash::decode(input)?, Signature::decode(input)?),
+				(Hash::decode(input)?, Signature::decode(input)?),
+			),
 		};
 
 		Some(MisbehaviorReport {
@@ -292,7 +291,10 @@ mod test {
 		};
 
 		let encoded = report.encode();
-		assert_eq!(MisbehaviorReport::<H256, u64>::decode(&mut &encoded[..]).unwrap(), report);
+		assert_eq!(
+			MisbehaviorReport::<H256, u64>::decode(&mut &encoded[..]).unwrap(),
+			report
+		);
 
 		let report = MisbehaviorReport::<H256, u64> {
 			parent_hash: [0; 32].into(),
@@ -306,6 +308,9 @@ mod test {
 		};
 
 		let encoded = report.encode();
-		assert_eq!(MisbehaviorReport::<H256, u64>::decode(&mut &encoded[..]).unwrap(), report);
+		assert_eq!(
+			MisbehaviorReport::<H256, u64>::decode(&mut &encoded[..]).unwrap(),
+			report
+		);
 	}
 }

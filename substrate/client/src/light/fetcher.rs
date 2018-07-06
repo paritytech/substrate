@@ -16,8 +16,8 @@
 
 //! Light client data fetcher. Fetches requested data from remote full nodes.
 
-use std::sync::Arc;
 use futures::IntoFuture;
+use std::sync::Arc;
 
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
 use state_machine::CodeExecutor;
@@ -42,7 +42,7 @@ pub struct RemoteCallRequest<Hash: ::std::fmt::Display> {
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote call result future.
-	type RemoteCallResult: IntoFuture<Item=CallResult, Error=ClientError>;
+	type RemoteCallResult: IntoFuture<Item = CallResult, Error = ClientError>;
 
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest<Block::Hash>) -> Self::RemoteCallResult;
@@ -51,7 +51,11 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 /// Light client remote data checker.
 pub trait FetchChecker<Block: BlockT>: Send + Sync {
 	/// Check remote method execution proof.
-	fn check_execution_proof(&self, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult>;
+	fn check_execution_proof(
+		&self,
+		request: &RemoteCallRequest<Block::Hash>,
+		remote_proof: Vec<Vec<u8>>,
+	) -> ClientResult<CallResult>;
 }
 
 /// Remote data checker.
@@ -76,15 +80,20 @@ impl<S, E, F> LightDataChecker<S, E, F> {
 }
 
 impl<S, E, F, Block> FetchChecker<Block> for LightDataChecker<S, E, F>
-	where
-		Block: BlockT,
-		<Block as BlockT>::Hash: From<[u8; 32]> + Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
-		S: BlockchainStorage<Block>,
-		E: CodeExecutor,
-		F: Fetcher<Block>,
+where
+	Block: BlockT,
+	<Block as BlockT>::Hash: From<[u8; 32]> + Into<[u8; 32]>, /* TODO: remove when
+	                                                           * patricia_trie generic. */
+	<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+	S: BlockchainStorage<Block>,
+	E: CodeExecutor,
+	F: Fetcher<Block>,
 {
-	fn check_execution_proof(&self, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult> {
+	fn check_execution_proof(
+		&self,
+		request: &RemoteCallRequest<Block::Hash>,
+		remote_proof: Vec<Vec<u8>>,
+	) -> ClientResult<CallResult> {
 		check_execution_proof(&*self.blockchain, &self.executor, request, remote_proof)
 	}
 }

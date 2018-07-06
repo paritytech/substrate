@@ -16,21 +16,19 @@
 
 //! Rust implementation of Substrate contracts.
 
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use wasmi::{
-	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder,
-};
-use wasmi::RuntimeValue::{I32, I64};
-use wasmi::memory_units::{Pages, Bytes};
-use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
-use wasm_utils::{DummyUserError};
-use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use triehash::ordered_trie_root;
+use primitives::{blake2_256, twox_128, twox_256};
 use sandbox;
+use state_machine::{CodeExecutor, Externalities};
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use triehash::ordered_trie_root;
+use wasm_utils::DummyUserError;
+use wasmi::memory_units::{Bytes, Pages};
+use wasmi::RuntimeValue::{I32, I64};
+use wasmi::{ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, TableRef};
 
 struct Heap {
 	end: u32,
@@ -59,8 +57,7 @@ impl Heap {
 		self.end += size;
 		r
 	}
-	fn deallocate(&mut self, _offset: u32) {
-	}
+	fn deallocate(&mut self, _offset: u32) {}
 }
 
 struct FunctionExecutor<'e, E: Externalities + 'e> {
@@ -102,7 +99,9 @@ impl<'e, E: Externalities> sandbox::SandboxCapabilities for FunctionExecutor<'e,
 		self.memory.set(ptr, data).map_err(|_| DummyUserError)
 	}
 	fn read_memory(&self, ptr: u32, len: u32) -> ::std::result::Result<Vec<u8>, DummyUserError> {
-		self.memory.get(ptr, len as usize).map_err(|_| DummyUserError)
+		self.memory
+			.get(ptr, len as usize)
+			.map_err(|_| DummyUserError)
 	}
 }
 
@@ -112,7 +111,7 @@ trait WritePrimitive<T: Sized> {
 
 impl WritePrimitive<u32> for MemoryInstance {
 	fn write_primitive(&self, offset: u32, t: u32) -> ::std::result::Result<(), DummyUserError> {
-		use byteorder::{LittleEndian, ByteOrder};
+		use byteorder::{ByteOrder, LittleEndian};
 		let mut r = [0u8; 4];
 		LittleEndian::write_u32(&mut r, t);
 		self.set(offset, &r).map_err(|_| DummyUserError)
@@ -125,8 +124,10 @@ trait ReadPrimitive<T: Sized> {
 
 impl ReadPrimitive<u32> for MemoryInstance {
 	fn read_primitive(&self, offset: u32) -> ::std::result::Result<u32, DummyUserError> {
-		use byteorder::{LittleEndian, ByteOrder};
-		Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(|_| DummyUserError)?))
+		use byteorder::{ByteOrder, LittleEndian};
+		Ok(LittleEndian::read_u32(
+			&self.get(offset, 4).map_err(|_| DummyUserError)?,
+		))
 	}
 }
 
@@ -142,7 +143,7 @@ fn ascii_format(asciish: &[u8]) -> String {
 					latch = true;
 				}
 				r.push_str(&format!("{:02x}", *c));
-			}
+			},
 		}
 	}
 	r
@@ -469,7 +470,6 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 pub struct WasmExecutor;
 
 impl WasmExecutor {
-
 	/// Call a given method in the given wasm-module runtime.
 	pub fn call_in_wasm_module<E: Externalities>(
 		&self,
@@ -481,8 +481,7 @@ impl WasmExecutor {
 		// start module instantiation. Don't run 'start' function yet.
 		let intermediate_instance = ModuleInstance::new(
 			module,
-			&ImportsBuilder::new()
-				.with_resolver("env", FunctionExecutor::<E>::resolver())
+			&ImportsBuilder::new().with_resolver("env", FunctionExecutor::<E>::resolver()),
 		)?;
 
 		// extract a reference to a linear memory, optional reference to a table
@@ -507,21 +506,18 @@ impl WasmExecutor {
 
 		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
-		memory.set(offset, &data).expect("heap always gives a sensible offset to write");
+		memory
+			.set(offset, &data)
+			.expect("heap always gives a sensible offset to write");
 
-		let returned = instance.invoke_export(
-			method,
-			&[
-				I32(offset as i32),
-				I32(size as i32)
-			],
-			&mut fec
-		)?;
+		let returned =
+			instance.invoke_export(method, &[I32(offset as i32), I32(size as i32)], &mut fec)?;
 
 		if let Some(I64(r)) = returned {
 			let offset = r as u32;
 			let length = (r >> 32) as u32 as usize;
-			memory.get(offset, length)
+			memory
+				.get(offset, length)
 				.map_err(|_| ErrorKind::Runtime.into())
 		} else {
 			Err(ErrorKind::InvalidReturn.into())
@@ -547,8 +543,8 @@ impl CodeExecutor for WasmExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use rustc_hex::FromHex;
 	use codec::Slicable;
+	use rustc_hex::FromHex;
 	use state_machine::TestExternalities;
 
 	// TODO: move into own crate.
@@ -561,16 +557,22 @@ mod tests {
 	#[test]
 	fn returning_should_work() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_empty_return", &[]).unwrap();
+		let output = WasmExecutor
+			.call(&mut ext, &test_code[..], "test_empty_return", &[])
+			.unwrap();
 		assert_eq!(output, vec![0u8; 0]);
 	}
 
 	#[test]
 	fn panicking_should_work() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 
 		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_panic", &[]);
 		assert!(output.is_err());
@@ -583,9 +585,13 @@ mod tests {
 	fn storage_should_work() {
 		let mut ext = TestExternalities::default();
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_data_in", b"Hello world").unwrap();
+		let output = WasmExecutor
+			.call(&mut ext, &test_code[..], "test_data_in", b"Hello world")
+			.unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -605,10 +611,14 @@ mod tests {
 		ext.set_storage(b"aba".to_vec(), b"3".to_vec());
 		ext.set_storage(b"abb".to_vec(), b"4".to_vec());
 		ext.set_storage(b"bbb".to_vec(), b"5".to_vec());
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 
 		// This will clear all entries which prefix is "ab".
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_clear_prefix", b"ab").unwrap();
+		let output = WasmExecutor
+			.call(&mut ext, &test_code[..], "test_clear_prefix", b"ab")
+			.unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -623,13 +633,19 @@ mod tests {
 	#[test]
 	fn blake2_256_should_work() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &[]).unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_blake2_256", &[])
+				.unwrap(),
 			blake2_256(&b""[..]).encode()
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!")
+				.unwrap(),
 			blake2_256(&b"Hello world!"[..]).encode()
 		);
 	}
@@ -637,27 +653,41 @@ mod tests {
 	#[test]
 	fn twox_256_should_work() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", &[]).unwrap(),
-			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a").unwrap()
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
-			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74").unwrap()
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_twox_256", &[])
+				.unwrap(),
+			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a")
+				.unwrap()
+		);
+		assert_eq!(
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!")
+				.unwrap(),
+			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74")
+				.unwrap()
 		);
 	}
 
 	#[test]
 	fn twox_128_should_work() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", &[]).unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_twox_128", &[])
+				.unwrap(),
 			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd5").unwrap()
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!")
+				.unwrap(),
 			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af").unwrap()
 		);
 	}
@@ -665,7 +695,9 @@ mod tests {
 	#[test]
 	fn ed25519_verify_should_work() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 		let key = ::ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
@@ -673,7 +705,9 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata)
+				.unwrap(),
 			vec![1]
 		);
 
@@ -683,7 +717,9 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata)
+				.unwrap(),
 			vec![0]
 		);
 	}
@@ -691,12 +727,17 @@ mod tests {
 	#[test]
 	fn enumerated_trie_root_should_work() {
 		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = include_bytes!(
+			"../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
-			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
+			WasmExecutor
+				.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[])
+				.unwrap(),
+			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()])
+				.0
+				.encode()
 		);
 	}
-
 
 }

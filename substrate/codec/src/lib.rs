@@ -38,6 +38,6 @@ mod slicable;
 mod joiner;
 mod keyedvec;
 
-pub use self::slicable::{Input, Slicable, encode_slice};
 pub use self::joiner::Joiner;
 pub use self::keyedvec::KeyedVec;
+pub use self::slicable::{encode_slice, Input, Slicable};

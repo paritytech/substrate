@@ -16,16 +16,18 @@
 
 //! Primitives for the runtime modules.
 
+use codec::Slicable;
+pub use integer_sqrt::IntegerSquareRoot;
+pub use num_traits::{Bounded, One, Zero};
+use rstd::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign};
 use rstd::prelude::*;
 use rstd::{self, result};
 use runtime_io;
-#[cfg(feature = "std")] use std::fmt::{Debug, Display};
-#[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
+#[cfg(feature = "std")]
+use serde::{de::DeserializeOwned, Serialize};
+#[cfg(feature = "std")]
+use std::fmt::{Debug, Display};
 use substrate_primitives;
-use codec::Slicable;
-pub use integer_sqrt::IntegerSquareRoot;
-pub use num_traits::{Zero, One, Bounded};
-use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -58,7 +60,9 @@ pub trait MakePayment<AccountId> {
 }
 
 impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
+	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> {
+		Ok(())
+	}
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
@@ -96,7 +100,9 @@ impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {
-	fn convert(a: T) -> T { a }
+	fn convert(a: T) -> T {
+		a
+	}
 }
 
 pub trait MaybeEmpty {
@@ -117,27 +123,49 @@ pub trait RefInto<T> {
 	fn ref_into(&self) -> &T;
 }
 impl<T> RefInto<T> for T {
-	fn ref_into(&self) -> &T { &self }
+	fn ref_into(&self) -> &T {
+		&self
+	}
 }
 
 pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot + As<u64> +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	PartialOrd<Self> + Ord
+	Zero
+	+ One
+	+ IntegerSquareRoot
+	+ As<u64>
+	+ Add<Self, Output = Self>
+	+ AddAssign<Self>
+	+ Sub<Self, Output = Self>
+	+ SubAssign<Self>
+	+ Mul<Self, Output = Self>
+	+ MulAssign<Self>
+	+ Div<Self, Output = Self>
+	+ DivAssign<Self>
+	+ Rem<Self, Output = Self>
+	+ RemAssign<Self>
+	+ PartialOrd<Self>
+	+ Ord
+{
+}
+impl<
+		T: Zero
+			+ One
+			+ IntegerSquareRoot
+			+ As<u64>
+			+ Add<Self, Output = Self>
+			+ AddAssign<Self>
+			+ Sub<Self, Output = Self>
+			+ SubAssign<Self>
+			+ Mul<Self, Output = Self>
+			+ MulAssign<Self>
+			+ Div<Self, Output = Self>
+			+ DivAssign<Self>
+			+ Rem<Self, Output = Self>
+			+ RemAssign<Self>
+			+ PartialOrd<Self>
+			+ Ord,
+	> SimpleArithmetic for T
 {}
-impl<T:
-	Zero + One + IntegerSquareRoot + As<u64> +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	PartialOrd<Self> + Ord
-> SimpleArithmetic for T {}
 
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
 /// as `Zero`.
@@ -150,20 +178,25 @@ pub trait Clear {
 }
 
 impl<T: Default + Eq + PartialEq> Clear for T {
-	fn is_clear(&self) -> bool { *self == Self::clear() }
-	fn clear() -> Self { Default::default() }
+	fn is_clear(&self) -> bool {
+		*self == Self::clear()
+	}
+	fn clear() -> Self {
+		Default::default()
+	}
 }
 
 pub trait SimpleBitOps:
-	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
+	Sized + Clear + rstd::ops::BitOr<Self, Output = Self> + rstd::ops::BitAnd<Self, Output = Self>
+{
+}
+impl<
+		T: Sized
+			+ Clear
+			+ rstd::ops::BitOr<Self, Output = Self>
+			+ rstd::ops::BitAnd<Self, Output = Self>,
+	> SimpleBitOps for T
 {}
-impl<T:
-	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
-> SimpleBitOps for T {}
 
 /// Something that can be executed.
 pub trait Executable {
@@ -181,8 +214,9 @@ impl<A: Executable, B: Executable> Executable for (A, B) {
 }
 
 /// Abstraction around hashing
-pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
-																	// traits must be fulfilled by all type parameters.
+pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {
+	// Stupid bug in the Rust compiler believes derived
+	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
 	type Output: Member + AsRef<[u8]>;
 
@@ -198,17 +232,12 @@ pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// S
 	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output;
 
 	/// Iterator-based version of `enumerated_trie_root`.
-	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
-		A: AsRef<[u8]>
-	>(input: I) -> Self::Output;
+	fn ordered_trie_root<I: IntoIterator<Item = A>, A: AsRef<[u8]>>(input: I) -> Self::Output;
 
 	/// The Patricia tree root of the given mapping as an iterator.
-	fn trie_root<
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>
-	>(input: I) -> Self::Output;
+	fn trie_root<I: IntoIterator<Item = (A, B)>, A: AsRef<[u8]> + Ord, B: AsRef<[u8]>>(
+		input: I,
+	) -> Self::Output;
 
 	/// Acquire the global storage root.
 	fn storage_root() -> Self::Output;
@@ -227,17 +256,12 @@ impl Hashing for BlakeTwo256 {
 	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output {
 		runtime_io::enumerated_trie_root(items).into()
 	}
-	fn trie_root<
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>
-	>(input: I) -> Self::Output {
+	fn trie_root<I: IntoIterator<Item = (A, B)>, A: AsRef<[u8]> + Ord, B: AsRef<[u8]>>(
+		input: I,
+	) -> Self::Output {
 		runtime_io::trie_root(input).into()
 	}
-	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
-		A: AsRef<[u8]>
-	>(input: I) -> Self::Output {
+	fn ordered_trie_root<I: IntoIterator<Item = A>, A: AsRef<[u8]>>(input: I) -> Self::Output {
 		runtime_io::ordered_trie_root(input).into()
 	}
 	fn storage_root() -> Self::Output {
@@ -255,7 +279,11 @@ impl CheckEqual for substrate_primitives::H256 {
 	fn check_equal(&self, other: &Self) {
 		use substrate_primitives::hexdisplay::HexDisplay;
 		if &self.0 != &other.0 {
-			println!("Hash: given={}, expected={}", HexDisplay::from(&self.0), HexDisplay::from(&other.0));
+			println!(
+				"Hash: given={}, expected={}",
+				HexDisplay::from(&self.0),
+				HexDisplay::from(&other.0)
+			);
 		}
 	}
 
@@ -299,7 +327,10 @@ pub trait MaybeDisplay {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDisplay for T {}
 
-pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
+pub trait Member:
+	Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static
+{
+}
 impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
@@ -316,7 +347,14 @@ pub trait Digest {
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'static {
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Slicable;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
+	type Hash: Member
+		+ ::rstd::hash::Hash
+		+ Copy
+		+ MaybeDisplay
+		+ Default
+		+ SimpleBitOps
+		+ Slicable
+		+ AsRef<[u8]>;
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Member + Default;
 
@@ -325,7 +363,7 @@ pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 's
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest
+		digest: Self::Digest,
 	) -> Self;
 
 	fn number(&self) -> &Self::Number;
@@ -354,8 +392,15 @@ pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 's
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'static {
 	type Extrinsic: Member + Slicable;
-	type Header: Header<Hash=Self::Hash>;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
+	type Header: Header<Hash = Self::Hash>;
+	type Hash: Member
+		+ ::rstd::hash::Hash
+		+ Copy
+		+ MaybeDisplay
+		+ Default
+		+ SimpleBitOps
+		+ Slicable
+		+ AsRef<[u8]>;
 
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
@@ -376,7 +421,10 @@ pub trait Checkable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Checked: Member;
 	fn sender(&self) -> &Self::Address;
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(
+		self,
+		lookup: ThisLookup,
+	) -> Result<Self::Checked, &'static str>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -394,8 +442,15 @@ impl<T: BlindCheckable> Checkable for T {
 	type Address = <Self as BlindCheckable>::Address;
 	type AccountId = <Self as BlindCheckable>::Address;
 	type Checked = <Self as BlindCheckable>::Checked;
-	fn sender(&self) -> &Self::Address { BlindCheckable::sender(self) }
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, _: ThisLookup) -> Result<Self::Checked, &'static str> { BlindCheckable::check(self) }
+	fn sender(&self) -> &Self::Address {
+		BlindCheckable::sender(self)
+	}
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(
+		self,
+		_: ThisLookup,
+	) -> Result<Self::Checked, &'static str> {
+		BlindCheckable::check(self)
+	}
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to

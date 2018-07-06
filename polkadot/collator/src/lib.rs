@@ -45,25 +45,31 @@
 //! to be performed, as the collation logic itself.
 
 extern crate futures;
+extern crate polkadot_primitives;
+extern crate polkadot_runtime;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
-extern crate polkadot_runtime;
-extern crate polkadot_primitives;
 
-use std::collections::{BTreeSet, BTreeMap};
+use std::collections::{BTreeMap, BTreeSet};
 
-use futures::{stream, Stream, Future, IntoFuture};
-use polkadot_primitives::parachain::{self, CandidateSignature, ConsolidatedIngress, Message, Id as ParaId};
+use futures::{stream, Future, IntoFuture, Stream};
+use polkadot_primitives::parachain::{
+	self, CandidateSignature, ConsolidatedIngress, Id as ParaId, Message,
+};
 
 /// Parachain context needed for collation.
 ///
 /// This can be implemented through an externally attached service or a stub.
 pub trait ParachainContext {
 	/// Produce a candidate, given the latest ingress queue information.
-	fn produce_candidate<I: IntoIterator<Item=(ParaId, Message)>>(
+	fn produce_candidate<I: IntoIterator<Item = (ParaId, Message)>>(
 		&self,
 		ingress: I,
-	) -> (parachain::BlockData, polkadot_primitives::AccountId, CandidateSignature);
+	) -> (
+		parachain::BlockData,
+		polkadot_primitives::AccountId,
+		CandidateSignature,
+	);
 }
 
 /// Relay chain context needed to collate.
@@ -74,7 +80,7 @@ pub trait RelayChainContext {
 
 	/// Future that resolves to the un-routed egress queues of a parachain.
 	/// The first item is the oldest.
-	type FutureEgress: IntoFuture<Item=Vec<Vec<Message>>, Error=Self::Error>;
+	type FutureEgress: IntoFuture<Item = Vec<Vec<Message>>, Error = Self::Error>;
 
 	/// Provide a set of all parachains meant to be routed to at a block.
 	fn routing_parachains(&self) -> BTreeSet<ParaId>;
@@ -84,12 +90,13 @@ pub trait RelayChainContext {
 }
 
 /// Collate the necessary ingress queue using the given context.
-pub fn collate_ingress<'a, R>(relay_context: R)
-	-> Box<Future<Item=ConsolidatedIngress, Error=R::Error> + 'a>
-	where
-		R: RelayChainContext,
-		R::Error: 'a,
-		R::FutureEgress: 'a,
+pub fn collate_ingress<'a, R>(
+	relay_context: R,
+) -> Box<Future<Item = ConsolidatedIngress, Error = R::Error> + 'a>
+where
+	R: RelayChainContext,
+	R::Error: 'a,
+	R::FutureEgress: 'a,
 {
 	let mut egress_fetch = Vec::new();
 
@@ -106,32 +113,40 @@ pub fn collate_ingress<'a, R>(relay_context: R)
 	// and then by the parachain ID.
 	//
 	// then transform that into the consolidated egress queue.
-	Box::new(stream::futures_unordered(egress_fetch)
-		.fold(BTreeMap::new(), |mut map, (routing_id, egresses)| {
-			for (depth, egress) in egresses.into_iter().rev().enumerate() {
-				let depth = -(depth as i64);
-				map.insert((depth, routing_id), egress);
-			}
+	Box::new(
+		stream::futures_unordered(egress_fetch)
+			.fold(BTreeMap::new(), |mut map, (routing_id, egresses)| {
+				for (depth, egress) in egresses.into_iter().rev().enumerate() {
+					let depth = -(depth as i64);
+					map.insert((depth, routing_id), egress);
+				}
 
-			Ok(map)
-		})
-		.map(|ordered| ordered.into_iter().map(|((_, id), egress)| (id, egress)))
-		.map(|i| i.collect::<Vec<_>>())
-		.map(ConsolidatedIngress))
+				Ok(map)
+			})
+			.map(|ordered| ordered.into_iter().map(|((_, id), egress)| (id, egress)))
+			.map(|i| i.collect::<Vec<_>>())
+			.map(ConsolidatedIngress),
+	)
 }
 
 /// Produce a candidate for the parachain.
-pub fn collate<'a, R, P>(local_id: ParaId, relay_context: R, para_context: P)
-	-> Box<Future<Item=parachain::Candidate, Error=R::Error> + 'a>
-	where
-		R: RelayChainContext,
-	    R::Error: 'a,
-		R::FutureEgress: 'a,
-		P: ParachainContext + 'a,
+pub fn collate<'a, R, P>(
+	local_id: ParaId,
+	relay_context: R,
+	para_context: P,
+) -> Box<Future<Item = parachain::Candidate, Error = R::Error> + 'a>
+where
+	R: RelayChainContext,
+	R::Error: 'a,
+	R::FutureEgress: 'a,
+	P: ParachainContext + 'a,
 {
 	Box::new(collate_ingress(relay_context).map(move |ingress| {
 		let (block_data, _, signature) = para_context.produce_candidate(
-			ingress.0.iter().flat_map(|&(id, ref msgs)| msgs.iter().cloned().map(move |msg| (id, msg)))
+			ingress
+				.0
+				.iter()
+				.flat_map(|&(id, ref msgs)| msgs.iter().cloned().map(move |msg| (id, msg))),
 		);
 
 		parachain::Candidate {
@@ -147,10 +162,10 @@ pub fn collate<'a, R, P>(local_id: ParaId, relay_context: R, para_context: P)
 mod tests {
 	use super::*;
 
-	use std::collections::{HashMap, BTreeSet};
+	use std::collections::{BTreeSet, HashMap};
 
 	use futures::Future;
-	use polkadot_primitives::parachain::{Message, Id as ParaId};
+	use polkadot_primitives::parachain::{Id as ParaId, Message};
 
 	pub struct DummyRelayChainCtx {
 		egresses: HashMap<ParaId, Vec<Vec<Message>>>,
@@ -170,12 +185,12 @@ mod tests {
 		}
 	}
 
-    #[test]
+	#[test]
 	fn collates_ingress() {
 		let route_from = |x: &[ParaId]| {
-			 let mut set = BTreeSet::new();
-			 set.extend(x.iter().cloned());
-			 set
+			let mut set = BTreeSet::new();
+			set.extend(x.iter().cloned());
+			set
 		};
 
 		let message = |x: Vec<u8>| vec![Message(x)];
@@ -184,21 +199,23 @@ mod tests {
 			currently_routing: route_from(&[2.into(), 3.into()]),
 			egresses: vec![
 				// egresses for `2`: last routed successfully 5 blocks ago.
-				(2.into(), vec![
-					message(vec![1, 2, 3]),
-					message(vec![4, 5, 6]),
-					message(vec![7, 8]),
-					message(vec![10]),
-					message(vec![12]),
-				]),
-
+				(
+					2.into(),
+					vec![
+						message(vec![1, 2, 3]),
+						message(vec![4, 5, 6]),
+						message(vec![7, 8]),
+						message(vec![10]),
+						message(vec![12]),
+					],
+				),
 				// egresses for `3`: last routed successfully 3 blocks ago.
-				(3.into(), vec![
-					message(vec![9]),
-					message(vec![11]),
-					message(vec![13]),
-				]),
-			].into_iter().collect(),
+				(
+					3.into(),
+					vec![message(vec![9]), message(vec![11]), message(vec![13])],
+				),
+			].into_iter()
+				.collect(),
 		};
 
 		assert_eq!(
@@ -212,7 +229,7 @@ mod tests {
 				(3.into(), message(vec![11])),
 				(2.into(), message(vec![12])),
 				(3.into(), message(vec![13])),
-			]
-		))
+			])
+		)
 	}
 }

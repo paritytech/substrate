@@ -17,9 +17,9 @@
 //! Finalization window.
 //! Maintains trees of block overlays and allows discarding trees/roots
 
-use std::collections::{HashMap, VecDeque};
-use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
+use super::{to_meta_key, ChangeSet, CommitSet, DBValue, Error, Hash, MetaDb};
 use codec::{self, Slicable};
+use std::collections::{HashMap, VecDeque};
 
 const UNFINALIZED_JOURNAL: &[u8] = b"unfinalized_journal";
 const LAST_FINALIZED: &[u8] = b"last_finalized";
@@ -73,10 +73,12 @@ struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 	/// Creates a new instance. Does not expect any metadata to be present in the DB.
 	pub fn new<D: MetaDb>(db: &D) -> Result<UnfinalizedOverlay<BlockHash, Key>, Error<D::Error>> {
-		let last_finalized = db.get_meta(&to_meta_key(LAST_FINALIZED, &()))
+		let last_finalized = db
+			.get_meta(&to_meta_key(LAST_FINALIZED, &()))
 			.map_err(|e| Error::Db(e))?;
 		let last_finalized = match last_finalized {
-			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)?),
+			Some(buffer) =>
+				Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)?),
 			None => None,
 		};
 		let mut levels = VecDeque::new();
@@ -93,7 +95,8 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 					let journal_key = to_journal_key(block, index);
 					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 						Some(record) => {
-							let record: JournalRecord<BlockHash, Key> = Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
+							let record: JournalRecord<BlockHash, Key> =
+								Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
 							let overlay = BlockOverlay {
 								hash: record.hash.clone(),
 								journal_key,
@@ -110,7 +113,7 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 					}
 				}
 				if level.is_empty() {
-					break;
+					break
 				}
 				levels.push_back(level);
 				block += 1;
@@ -118,36 +121,58 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 			trace!(target: "state-db", "Finished reading unfinalized journal, {} entries", total);
 		}
 		Ok(UnfinalizedOverlay {
-			last_finalized: last_finalized,
+			last_finalized,
 			levels,
 			parents,
 		})
 	}
 
-	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent to be present in the window.
-	pub fn insert(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
+	/// Insert a new block into the overlay. If inserted on the second level or lover expects
+	/// parent to be present in the window.
+	pub fn insert(
+		&mut self,
+		hash: &BlockHash,
+		number: u64,
+		parent_hash: &BlockHash,
+		changeset: ChangeSet<Key>,
+	) -> CommitSet<Key> {
 		let mut commit = CommitSet::default();
 		if self.levels.is_empty() && self.last_finalized.is_none() {
 			//  assume that parent was finalized
 			let last_finalized = (parent_hash.clone(), number - 1);
-			commit.meta.inserted.push((to_meta_key(LAST_FINALIZED, &()), last_finalized.encode()));
+			commit
+				.meta
+				.inserted
+				.push((to_meta_key(LAST_FINALIZED, &()), last_finalized.encode()));
 			self.last_finalized = Some(last_finalized);
 		} else if self.last_finalized.is_some() {
-			assert!(number >= self.front_block_number() && number < (self.front_block_number() + self.levels.len() as u64 + 1));
+			assert!(
+				number >= self.front_block_number()
+					&& number < (self.front_block_number() + self.levels.len() as u64 + 1)
+			);
 			// check for valid parent if inserting on second level or higher
 			if number == self.front_block_number() {
-				assert!(self.last_finalized.as_ref().map_or(false, |&(ref h, n)| h == parent_hash && n == number - 1));
+				assert!(
+					self.last_finalized
+						.as_ref()
+						.map_or(false, |&(ref h, n)| h == parent_hash && n == number - 1)
+				);
 			} else {
 				assert!(self.parents.contains_key(&parent_hash));
 			}
 		}
-		let level = if self.levels.is_empty() || number == self.front_block_number() + self.levels.len() as u64 {
+		let level = if self.levels.is_empty()
+			|| number == self.front_block_number() + self.levels.len() as u64
+		{
 			self.levels.push_back(Vec::new());
-			self.levels.back_mut().expect("can't be empty after insertion; qed")
+			self.levels
+				.back_mut()
+				.expect("can't be empty after insertion; qed")
 		} else {
 			let front_block_number = self.front_block_number();
-			self.levels.get_mut((number - front_block_number) as usize)
-				.expect("number is [front_block_number .. front_block_number + levels.len()) is asserted in precondition; qed")
+			self.levels.get_mut((number - front_block_number) as usize).expect(
+				"number is [front_block_number .. front_block_number + levels.len()) is asserted in precondition; qed",
+			)
 		};
 
 		let index = level.len() as u64;
@@ -182,11 +207,20 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 	) {
 		if let Some((level, sublevels)) = levels.split_first_mut() {
 			level.retain(|ref overlay| {
-				let parent = parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").clone();
+				let parent = parents
+					.get(&overlay.hash)
+					.expect("there is a parent entry for each entry in levels; qed")
+					.clone();
 				if parent == *hash {
 					parents.remove(&overlay.hash);
 					discarded_journals.push(overlay.journal_key.clone());
-					Self::discard(sublevels, parents, discarded_journals, number + 1, &overlay.hash);
+					Self::discard(
+						sublevels,
+						parents,
+						discarded_journals,
+						number + 1,
+						&overlay.hash,
+					);
 					false
 				} else {
 					true
@@ -196,7 +230,10 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 	}
 
 	fn front_block_number(&self) -> u64 {
-		self.last_finalized.as_ref().map(|&(_, n)| n + 1).unwrap_or(0)
+		self.last_finalized
+			.as_ref()
+			.map(|&(_, n)| n + 1)
+			.unwrap_or(0)
 	}
 
 	/// Select a top-level root and finalized it. Discards all sibling subtrees and the root.
@@ -204,7 +241,9 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 	pub fn finalize(&mut self, hash: &BlockHash) -> CommitSet<Key> {
 		trace!(target: "state-db", "Finalizing {:?}", hash);
 		let level = self.levels.pop_front().expect("no blocks to finalize");
-		let index = level.iter().position(|overlay| overlay.hash == *hash)
+		let index = level
+			.iter()
+			.position(|overlay| overlay.hash == *hash)
 			.expect("attempting to finalize unknown block");
 
 		let mut commit = CommitSet::default();
@@ -220,7 +259,13 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 				// required for recursive processing. A more efficient implementaion
 				// that does not require converting to vector is possible
 				let mut vec: Vec<_> = self.levels.drain(..).collect();
-				Self::discard(&mut vec, &mut self.parents, &mut discarded_journals, 0, &overlay.hash);
+				Self::discard(
+					&mut vec,
+					&mut self.parents,
+					&mut discarded_journals,
+					0,
+					&overlay.hash,
+				);
 				self.levels.extend(vec.into_iter());
 			}
 			// cleanup journal entry
@@ -228,7 +273,10 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 		}
 		commit.meta.deleted.append(&mut discarded_journals);
 		let last_finalized = (hash.clone(), self.front_block_number());
-		commit.meta.inserted.push((to_meta_key(LAST_FINALIZED, &()), last_finalized.encode()));
+		commit
+			.meta
+			.inserted
+			.push((to_meta_key(LAST_FINALIZED, &()), last_finalized.encode()));
 		self.last_finalized = Some(last_finalized);
 		trace!(target: "state-db", "Discarded {} records", commit.meta.deleted.len());
 		commit
@@ -239,7 +287,7 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 		for level in self.levels.iter() {
 			for overlay in level.iter() {
 				if let Some(value) = overlay.values.get(&key) {
-					return Some(value.clone());
+					return Some(value.clone())
 				}
 			}
 		}
@@ -250,9 +298,9 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use super::UnfinalizedOverlay;
-	use {ChangeSet};
 	use primitives::H256;
-	use test::{make_db, make_changeset};
+	use test::{make_changeset, make_db};
+	use ChangeSet;
 
 	fn contains(overlay: &UnfinalizedOverlay<H256, H256>, key: u64) -> bool {
 		overlay.get(&H256::from(key)) == Some(H256::from(key).to_vec())
@@ -261,7 +309,7 @@ mod tests {
 	#[test]
 	fn created_from_empty_db() {
 		let db = make_db(&[]);
-		let overlay: UnfinalizedOverlay<H256, H256>  = UnfinalizedOverlay::new(&db).unwrap();
+		let overlay: UnfinalizedOverlay<H256, H256> = UnfinalizedOverlay::new(&db).unwrap();
 		assert_eq!(overlay.last_finalized, None);
 		assert!(overlay.levels.is_empty());
 		assert!(overlay.parents.is_empty());
@@ -381,7 +429,6 @@ mod tests {
 		assert_eq!(overlay.parents.len(), 0);
 		assert!(db.data_eq(&make_db(&[1, 4, 6, 7, 8])));
 	}
-
 
 	#[test]
 	fn complex_tree() {

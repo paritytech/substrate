@@ -23,8 +23,8 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
-use runtime_primitives::BuildStorage;
 use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::BuildStorage;
 use state_machine::CodeExecutor;
 
 use client::Client;
@@ -35,12 +35,17 @@ use light::call_executor::RemoteCallExecutor;
 use light::fetcher::{Fetcher, LightDataChecker};
 
 /// Create an instance of light client blockchain backend.
-pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>, F>(storage: S) -> Arc<Blockchain<S, F>> {
+pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>, F>(
+	storage: S,
+) -> Arc<Blockchain<S, F>> {
 	Arc::new(Blockchain::new(storage))
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B: BlockT, S: BlockchainStorage<B>, F: Fetcher<B>>(blockchain: Arc<Blockchain<S, F>>, fetcher: Arc<F>) -> Arc<Backend<S, F>> {
+pub fn new_light_backend<B: BlockT, S: BlockchainStorage<B>, F: Fetcher<B>>(
+	blockchain: Arc<Blockchain<S, F>>,
+	fetcher: Arc<F>,
+) -> Arc<Backend<S, F>> {
 	blockchain.set_fetcher(Arc::downgrade(&fetcher));
 	Arc::new(Backend::new(blockchain))
 }
@@ -51,11 +56,11 @@ pub fn new_light<B, S, F, GS>(
 	fetcher: Arc<F>,
 	genesis_storage: GS,
 ) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F>, B>>
-	where
-		B: BlockT,
-		S: BlockchainStorage<B>,
-		F: Fetcher<B>,
-		GS: BuildStorage,
+where
+	B: BlockT,
+	S: BlockchainStorage<B>,
+	F: Fetcher<B>,
+	GS: BuildStorage,
 {
 	let executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
 	Client::new(backend, executor, genesis_storage)
@@ -66,10 +71,10 @@ pub fn new_fetch_checker<B, S, E, F>(
 	blockchain: Arc<Blockchain<S, F>>,
 	executor: E,
 ) -> LightDataChecker<S, E, F>
-	where
-		B: BlockT,
-		S: BlockchainStorage<B>,
-		E: CodeExecutor,
+where
+	B: BlockT,
+	S: BlockchainStorage<B>,
+	E: CodeExecutor,
 {
 	LightDataChecker::new(blockchain, executor)
 }

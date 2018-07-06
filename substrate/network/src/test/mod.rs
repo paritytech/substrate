@@ -17,23 +17,23 @@
 mod consensus;
 mod sync;
 
-use std::collections::{VecDeque, HashSet, HashMap};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use client;
 use client::block_builder::BlockBuilder;
-use runtime_primitives::traits::Block as BlockT;
-use runtime_primitives::generic::BlockId;
-use io::SyncIo;
-use protocol::Protocol;
-use config::ProtocolConfig;
-use service::TransactionPool;
-use network::{PeerId, SessionInfo, Error as NetworkError};
-use keyring::Keyring;
 use codec::Slicable;
+use config::ProtocolConfig;
+use io::SyncIo;
+use keyring::Keyring;
+use network::{Error as NetworkError, PeerId, SessionInfo};
+use parking_lot::RwLock;
+use protocol::Protocol;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::Block as BlockT;
+use service::TransactionPool;
+use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 use test_client::{self, TestClient};
-use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 
 pub struct TestIo<'p> {
 	pub queue: &'p RwLock<VecDeque<TestPacket>>,
@@ -43,11 +43,12 @@ pub struct TestIo<'p> {
 	pub peers_info: HashMap<PeerId, String>,
 }
 
-impl<'p> TestIo<'p> where {
+impl<'p> TestIo<'p> // where
+{
 	pub fn new(queue: &'p RwLock<VecDeque<TestPacket>>, sender: Option<PeerId>) -> TestIo<'p> {
 		TestIo {
-			queue: queue,
-			sender: sender,
+			queue,
+			sender,
 			to_disconnect: HashSet::new(),
 			packets: Vec::new(),
 			peers_info: HashMap::new(),
@@ -76,14 +77,15 @@ impl<'p> SyncIo for TestIo<'p> {
 
 	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) -> Result<(), NetworkError> {
 		self.packets.push(TestPacket {
-			data: data,
+			data,
 			recipient: peer_id,
 		});
 		Ok(())
 	}
 
 	fn peer_info(&self, peer_id: PeerId) -> String {
-		self.peers_info.get(&peer_id)
+		self.peers_info
+			.get(&peer_id)
 			.cloned()
 			.unwrap_or_else(|| peer_id.to_string())
 	}
@@ -110,13 +112,22 @@ impl Peer {
 	fn start(&self) {
 		// Update the sync state to the latest chain state.
 		let info = self.client.info().expect("In-mem client does not fail");
-		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
-		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
+		let header = self
+			.client
+			.header(&BlockId::Hash(info.chain.best_hash))
+			.unwrap()
+			.unwrap();
+		self.sync.on_block_imported(
+			&mut TestIo::new(&self.queue, None),
+			info.chain.best_hash,
+			&header,
+		);
 	}
 
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: PeerId) {
-		self.sync.on_peer_connected(&mut TestIo::new(&self.queue, Some(other)), other);
+		self.sync
+			.on_peer_connected(&mut TestIo::new(&self.queue, Some(other)), other);
 	}
 
 	/// Called on disconnect from other indicated peer.
@@ -155,16 +166,20 @@ impl Peer {
 		self.sync.abort();
 	}
 
-	fn flush(&self) {
-	}
+	fn flush(&self) {}
 
-	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block>) {
-		for _ in 0 .. count {
+	fn generate_blocks<F>(&self, count: usize, mut edit_block: F)
+	where
+		F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block>),
+	{
+		for _ in 0..count {
 			let mut builder = self.client.new_block().unwrap();
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
 			trace!("Generating {}, (#{})", block.hash(), block.header.number);
-			self.client.justify_and_import(client::BlockOrigin::File, block).unwrap();
+			self.client
+				.justify_and_import(client::BlockOrigin::File, block)
+				.unwrap();
 		}
 	}
 
@@ -178,8 +193,16 @@ impl Peer {
 					amount: 1,
 					nonce,
 				};
-				let signature = Keyring::from_raw_public(transfer.from.0).unwrap().sign(&transfer.encode()).into();
-				builder.push(Extrinsic { transfer, signature }).unwrap();
+				let signature = Keyring::from_raw_public(transfer.from.0)
+					.unwrap()
+					.sign(&transfer.encode())
+					.into();
+				builder
+					.push(Extrinsic {
+						transfer,
+						signature,
+					})
+					.unwrap();
 				nonce = nonce + 1;
 			});
 		} else {
@@ -210,7 +233,7 @@ impl TransactionPool<Block> for EmptyTransactionPool {
 pub struct TestNet {
 	pub peers: Vec<Arc<Peer>>,
 	pub started: bool,
-	pub disconnect_events: Vec<(PeerId, PeerId)>, //disconnected (initiated by, to)
+	pub disconnect_events: Vec<(PeerId, PeerId)>, // disconnected (initiated by, to)
 }
 
 impl TestNet {
@@ -236,8 +259,8 @@ impl TestNet {
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let sync = Protocol::new(config.clone(), client.clone(), None, tx_pool).unwrap();
 		self.peers.push(Arc::new(Peer {
-			sync: sync,
-			client: client,
+			sync,
+			client,
 			queue: RwLock::new(VecDeque::new()),
 		}));
 	}
@@ -248,7 +271,7 @@ impl TestNet {
 
 	pub fn start(&mut self) {
 		if self.started {
-			return;
+			return
 		}
 		for peer in 0..self.peers.len() {
 			self.peers[peer].start();
@@ -268,7 +291,8 @@ impl TestNet {
 				let disconnecting = {
 					let recipient = packet.recipient;
 					trace!("--- {} -> {} ---", peer, recipient);
-					let to_disconnect = self.peers[recipient].receive_message(peer as PeerId, packet);
+					let to_disconnect =
+						self.peers[recipient].receive_message(peer as PeerId, packet);
 					for d in &to_disconnect {
 						// notify this that disconnecting peers are disconnecting
 						self.peers[recipient].on_disconnect(*d as PeerId);

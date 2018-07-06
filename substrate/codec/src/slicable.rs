@@ -16,11 +16,11 @@
 
 //! Serialisation.
 
-use alloc::vec::Vec;
-use alloc::boxed::Box;
-use core::{mem, slice};
 use super::joiner::Joiner;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use arrayvec::ArrayVec;
+use core::{mem, slice};
 
 /// Trait that allows reading of data into a slice.
 pub trait Input {
@@ -74,7 +74,10 @@ pub trait Slicable: Sized {
 /// Encode a bytes slice as `Slicable` that can be decoded into a vector.
 pub fn encode_slice(bytes: &[u8]) -> Vec<u8> {
 	let len = bytes.len();
-	assert!(len <= u32::max_value() as usize, "Attempted to serialize a collection with too many elements.");
+	assert!(
+		len <= u32::max_value() as usize,
+		"Attempted to serialize a collection with too many elements."
+	);
 
 	let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 	r.extend_from_slice(bytes);
@@ -96,11 +99,11 @@ impl<T: Slicable, E: Slicable> Slicable for Result<T, E> {
 			Ok(ref t) => {
 				v.push(0);
 				t.using_encoded(|s| v.extend(s));
-			}
+			},
 			Err(ref e) => {
 				v.push(1);
 				e.using_encoded(|s| v.extend(s));
-			}
+			},
 		}
 		v
 	}
@@ -143,7 +146,7 @@ impl<T: Slicable> Slicable for Option<T> {
 			Some(ref t) => {
 				v.push(1);
 				t.using_encoded(|s| v.extend(s));
-			}
+			},
 			None => v.push(0),
 		}
 		v
@@ -219,7 +222,10 @@ impl<T: Slicable> Slicable for Vec<T> {
 		use core::iter::Extend;
 
 		let len = self.len();
-		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
+		assert!(
+			len <= u32::max_value() as usize,
+			"Attempted to serialize vec with too many elements."
+		);
 
 		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
 		for item in self {
@@ -311,12 +317,24 @@ mod inner_tuple_impl {
 // note: the copy bound and static lifetimes are necessary for safety of `Slicable` blanket
 // implementation.
 trait EndianSensitive: Copy + 'static {
-	fn to_le(self) -> Self { self }
-	fn to_be(self) -> Self { self }
-	fn from_le(self) -> Self { self }
-	fn from_be(self) -> Self { self }
-	fn as_be_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T { f(&self) }
-	fn as_le_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T { f(&self) }
+	fn to_le(self) -> Self {
+		self
+	}
+	fn to_be(self) -> Self {
+		self
+	}
+	fn from_le(self) -> Self {
+		self
+	}
+	fn from_be(self) -> Self {
+		self
+	}
+	fn as_be_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T {
+		f(&self)
+	}
+	fn as_le_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T {
+		f(&self)
+	}
 }
 
 macro_rules! impl_endians {
@@ -404,10 +422,11 @@ macro_rules! impl_non_endians {
 }
 
 impl_endians!(u16, u32, u64, u128, usize, i16, i32, i64, i128, isize);
-impl_non_endians!(i8, [u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7], [u8; 8],
-	[u8; 10], [u8; 12], [u8; 14], [u8; 16], [u8; 20], [u8; 24], [u8; 28], [u8; 32], [u8; 40],
-	[u8; 48], [u8; 56], [u8; 64], [u8; 80], [u8; 96], [u8; 112], [u8; 128], bool);
-
+impl_non_endians!(
+	i8, [u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7], [u8; 8], [u8; 10], [u8; 12],
+	[u8; 14], [u8; 16], [u8; 20], [u8; 24], [u8; 28], [u8; 32], [u8; 40], [u8; 48], [u8; 56],
+	[u8; 64], [u8; 80], [u8; 96], [u8; 112], [u8; 128], bool
+);
 
 #[cfg(test)]
 mod tests {
@@ -416,8 +435,6 @@ mod tests {
 	#[test]
 	fn vec_is_slicable() {
 		let v = b"Hello world".to_vec();
-		v.using_encoded(|ref slice|
-			assert_eq!(slice, &b"\x0b\0\0\0Hello world")
-		);
+		v.using_encoded(|ref slice| assert_eq!(slice, &b"\x0b\0\0\0Hello world"));
 	}
 }

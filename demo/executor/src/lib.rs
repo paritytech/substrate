@@ -18,44 +18,58 @@
 //! executed is equivalent to the natively compiled code.
 
 extern crate demo_runtime;
-#[macro_use] extern crate substrate_executor;
-extern crate substrate_codec as codec;
-extern crate substrate_state_machine as state_machine;
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_primitives as primitives;
+#[macro_use]
+extern crate substrate_executor;
 extern crate demo_primitives;
 extern crate ed25519;
+extern crate substrate_codec as codec;
+extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_state_machine as state_machine;
 extern crate triehash;
 
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate substrate_runtime_primitives as runtime_primitives;
-#[cfg(test)] extern crate substrate_runtime_support as runtime_support;
-#[cfg(test)] extern crate substrate_runtime_staking as staking;
-#[cfg(test)] extern crate substrate_runtime_system as system;
-#[cfg(test)] #[macro_use] extern crate hex_literal;
+#[cfg(test)]
+extern crate substrate_keyring as keyring;
+#[cfg(test)]
+extern crate substrate_runtime_primitives as runtime_primitives;
+#[cfg(test)]
+extern crate substrate_runtime_staking as staking;
+#[cfg(test)]
+extern crate substrate_runtime_support as runtime_support;
+#[cfg(test)]
+extern crate substrate_runtime_system as system;
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
 
 native_executor_instance!(pub Executor, demo_runtime::api::dispatch, demo_runtime::VERSION, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm"));
 
 #[cfg(test)]
 mod tests {
-	use runtime_io;
 	use super::Executor;
-	use substrate_executor::WasmExecutor;
-	use codec::{Slicable, Joiner};
+	use codec::{Joiner, Slicable};
+	use demo_primitives::{AccountId, BlockNumber, Hash};
+	use demo_runtime::{
+		BareExtrinsic, Block, BuildStorage, Call, Concrete, Extrinsic, GenesisConfig, Header,
+		SessionConfig, Staking, StakingConfig, UncheckedExtrinsic,
+	};
+	use ed25519::{Pair, Public};
 	use keyring::Keyring;
-	use runtime_support::{Hashable, StorageValue, StorageMap};
-	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
-	use demo_primitives::{Hash, BlockNumber, AccountId};
+	use runtime_io;
 	use runtime_primitives::traits::Header as HeaderT;
-	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
+	use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, MaybeUnsigned};
+	use runtime_support::{Hashable, StorageMap, StorageValue};
+	use state_machine::{CodeExecutor, TestExternalities};
+	use substrate_executor::WasmExecutor;
 	use {staking, system};
-	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
-		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic};
-	use ed25519::{Public, Pair};
 
-	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
-	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm");
+	const BLOATY_CODE: &[u8] = include_bytes!(
+		"../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm"
+	);
+	const COMPACT_CODE: &[u8] = include_bytes!(
+		"../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm"
+	);
 
 	// TODO: move into own crate.
 	macro_rules! map {
@@ -78,8 +92,12 @@ mod tests {
 			index: 0,
 			function: Call::Staking(staking::Call::transfer::<Concrete>(bob().into(), 69)),
 		};
-		let signature = MaybeUnsigned(Keyring::from_raw_public(extrinsic.signed.0.clone()).unwrap()
-			.sign(&extrinsic.encode()).into());
+		let signature = MaybeUnsigned(
+			Keyring::from_raw_public(extrinsic.signed.0.clone())
+				.unwrap()
+				.sign(&extrinsic.encode())
+				.into(),
+		);
 		let extrinsic = Extrinsic {
 			signed: extrinsic.signed.into(),
 			index: extrinsic.index,
@@ -89,7 +107,13 @@ mod tests {
 	}
 
 	fn from_block_number(n: u64) -> Header {
-		Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
+		Header::new(
+			n,
+			Default::default(),
+			Default::default(),
+			[69; 32].into(),
+			Default::default(),
+		)
 	}
 
 	#[test]
@@ -104,9 +128,16 @@ mod tests {
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let r = Executor::new().call(&mut t, BLOATY_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)));
+		let r = Executor::new().call(
+			&mut t,
+			BLOATY_CODE,
+			"initialise_block",
+			&vec![].and(&from_block_number(1u64)),
+		);
 		assert!(r.is_ok());
-		let v = Executor::new().call(&mut t, BLOATY_CODE, "apply_extrinsic", &vec![].and(&xt())).unwrap();
+		let v = Executor::new()
+			.call(&mut t, BLOATY_CODE, "apply_extrinsic", &vec![].and(&xt()))
+			.unwrap();
 		let r = ApplyResult::decode(&mut &v[..]).unwrap();
 		assert_eq!(r, Err(ApplyError::CantPay));
 	}
@@ -123,9 +154,16 @@ mod tests {
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let r = Executor::new().call(&mut t, COMPACT_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)));
+		let r = Executor::new().call(
+			&mut t,
+			COMPACT_CODE,
+			"initialise_block",
+			&vec![].and(&from_block_number(1u64)),
+		);
 		assert!(r.is_ok());
-		let v = Executor::new().call(&mut t, COMPACT_CODE, "apply_extrinsic", &vec![].and(&xt())).unwrap();
+		let v = Executor::new()
+			.call(&mut t, COMPACT_CODE, "apply_extrinsic", &vec![].and(&xt()))
+			.unwrap();
 		let r = ApplyResult::decode(&mut &v[..]).unwrap();
 		assert_eq!(r, Err(ApplyError::CantPay));
 	}
@@ -142,7 +180,12 @@ mod tests {
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let r = Executor::new().call(&mut t, COMPACT_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)));
+		let r = Executor::new().call(
+			&mut t,
+			COMPACT_CODE,
+			"initialise_block",
+			&vec![].and(&from_block_number(1u64)),
+		);
 		assert!(r.is_ok());
 		let r = Executor::new().call(&mut t, COMPACT_CODE, "apply_extrinsic", &vec![].and(&xt()));
 		assert!(r.is_ok());
@@ -165,7 +208,12 @@ mod tests {
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let r = Executor::new().call(&mut t, BLOATY_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)));
+		let r = Executor::new().call(
+			&mut t,
+			BLOATY_CODE,
+			"initialise_block",
+			&vec![].and(&from_block_number(1u64)),
+		);
 		assert!(r.is_ok());
 		let r = Executor::new().call(&mut t, BLOATY_CODE, "apply_extrinsic", &vec![].and(&xt()));
 		assert!(r.is_ok());
@@ -184,7 +232,11 @@ mod tests {
 			system: Some(Default::default()),
 			session: Some(SessionConfig {
 				session_length: 2,
-				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
+				validators: vec![
+					One.to_raw_public().into(),
+					Two.to_raw_public().into(),
+					three,
+				],
 				broken_percent_late: 100,
 			}),
 			staking: Some(StakingConfig {
@@ -207,24 +259,39 @@ mod tests {
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
 			timestamp: Some(Default::default()),
-		}.build_storage().unwrap()
+		}.build_storage()
+			.unwrap()
 	}
 
-	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<BareExtrinsic>) -> (Vec<u8>, Hash) {
+	fn construct_block(
+		number: BlockNumber,
+		parent_hash: Hash,
+		state_root: Hash,
+		extrinsics: Vec<BareExtrinsic>,
+	) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
-		let extrinsics = extrinsics.into_iter().map(|extrinsic| {
-			let signature = MaybeUnsigned(Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed.0.clone())).unwrap())
-				.sign(&extrinsic.encode()).into());
-			let extrinsic = Extrinsic {
-				signed: extrinsic.signed.into(),
-				index: extrinsic.index,
-				function: extrinsic.function,
-			};
-			UncheckedExtrinsic::new(extrinsic, signature)
-		}).collect::<Vec<_>>();
+		let extrinsics = extrinsics
+			.into_iter()
+			.map(|extrinsic| {
+				let signature = MaybeUnsigned(
+					Pair::from(
+						Keyring::from_public(Public::from_raw(extrinsic.signed.0.clone())).unwrap(),
+					).sign(&extrinsic.encode())
+						.into(),
+				);
+				let extrinsic = Extrinsic {
+					signed: extrinsic.signed.into(),
+					index: extrinsic.index,
+					function: extrinsic.function,
+				};
+				UncheckedExtrinsic::new(extrinsic, signature)
+			})
+			.collect::<Vec<_>>();
 
-		let extrinsics_root = ordered_trie_root(extrinsics.iter().map(Slicable::encode)).0.into();
+		let extrinsics_root = ordered_trie_root(extrinsics.iter().map(Slicable::encode))
+			.0
+			.into();
 
 		let header = Header {
 			parent_hash,
@@ -247,7 +314,7 @@ mod tests {
 				signed: alice(),
 				index: 0,
 				function: Call::Staking(staking::Call::transfer(bob().into(), 69)),
-			}]
+			}],
 		)
 	}
 
@@ -266,8 +333,8 @@ mod tests {
 					signed: alice(),
 					index: 1,
 					function: Call::Staking(staking::Call::transfer(bob().into(), 15)),
-				}
-			]
+				},
+			],
 		)
 	}
 
@@ -275,14 +342,18 @@ mod tests {
 	fn full_native_block_import_works() {
 		let mut t = new_test_ext();
 
-		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
+		Executor::new()
+			.call(&mut t, COMPACT_CODE, "execute_block", &block1().0)
+			.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
 			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
 
-		Executor::new().call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
+		Executor::new()
+			.call(&mut t, COMPACT_CODE, "execute_block", &block2().0)
+			.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 30);
@@ -294,14 +365,18 @@ mod tests {
 	fn full_wasm_block_import_works() {
 		let mut t = new_test_ext();
 
-		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
+		WasmExecutor
+			.call(&mut t, COMPACT_CODE, "execute_block", &block1().0)
+			.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
 			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
 
-		WasmExecutor.call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
+		WasmExecutor
+			.call(&mut t, COMPACT_CODE, "execute_block", &block2().0)
+			.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 30);
@@ -321,10 +396,24 @@ mod tests {
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)));
+		let foreign_code = include_bytes!(
+			"../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm"
+		);
+		let r = WasmExecutor.call(
+			&mut t,
+			&foreign_code[..],
+			"initialise_block",
+			&vec![].and(&from_block_number(1u64)),
+		);
 		assert!(r.is_ok());
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "apply_extrinsic", &vec![].and(&xt())).unwrap();
+		let r = WasmExecutor
+			.call(
+				&mut t,
+				&foreign_code[..],
+				"apply_extrinsic",
+				&vec![].and(&xt()),
+			)
+			.unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Err(ApplyError::CantPay));
 	}
@@ -341,10 +430,24 @@ mod tests {
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
-		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm");
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)));
+		let foreign_code = include_bytes!(
+			"../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm"
+		);
+		let r = WasmExecutor.call(
+			&mut t,
+			&foreign_code[..],
+			"initialise_block",
+			&vec![].and(&from_block_number(1u64)),
+		);
 		assert!(r.is_ok());
-		let r = WasmExecutor.call(&mut t, &foreign_code[..], "apply_extrinsic", &vec![].and(&xt())).unwrap();
+		let r = WasmExecutor
+			.call(
+				&mut t,
+				&foreign_code[..],
+				"apply_extrinsic",
+				&vec![].and(&xt()),
+			)
+			.unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 

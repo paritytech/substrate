@@ -17,16 +17,18 @@
 //! BFT Agreement based on a rotating proposer in different rounds.
 //! Very general implementation.
 
-use std::collections::{HashMap, BTreeMap, VecDeque};
 use std::collections::hash_map;
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use futures::{future, Future, Stream, Sink, Poll, Async, AsyncSink};
+use futures::{future, Async, AsyncSink, Future, Poll, Sink, Stream};
 
 use self::accumulator::State;
 
-pub use self::accumulator::{Accumulator, Justification, PrepareJustification, UncheckedJustification, Misbehavior};
+pub use self::accumulator::{
+	Accumulator, Justification, Misbehavior, PrepareJustification, UncheckedJustification,
+};
 
 mod accumulator;
 
@@ -148,11 +150,11 @@ pub trait Context {
 	/// Signature.
 	type Signature: Debug + Eq + Clone;
 	/// A future that resolves when a round timeout is concluded.
-	type RoundTimeout: Future<Item=(), Error=Self::Error>;
+	type RoundTimeout: Future<Item = (), Error = Self::Error>;
 	/// A future that resolves when a proposal is ready.
-	type CreateProposal: Future<Item=Self::Candidate, Error=Self::Error>;
+	type CreateProposal: Future<Item = Self::Candidate, Error = Self::Error>;
 	/// A future that resolves when a proposal has been evaluated.
-	type EvaluateProposal: Future<Item=bool, Error=Self::Error>;
+	type EvaluateProposal: Future<Item = bool, Error = Self::Error>;
 
 	/// Get the local authority ID.
 	fn local_id(&self) -> Self::AuthorityId;
@@ -166,8 +168,10 @@ pub trait Context {
 	/// Sign a message using the local authority ID.
 	/// In the case of a proposal message, it should sign on the hash and
 	/// the bytes of the proposal.
-	fn sign_local(&self, message: Message<Self::Candidate, Self::Digest>)
-		-> LocalizedMessage<Self::Candidate, Self::Digest, Self::AuthorityId, Self::Signature>;
+	fn sign_local(
+		&self,
+		message: Message<Self::Candidate, Self::Digest>,
+	) -> LocalizedMessage<Self::Candidate, Self::Digest, Self::AuthorityId, Self::Signature>;
 
 	/// Get the proposer for a given round of consensus.
 	fn round_proposer(&self, round: usize) -> Self::AuthorityId;
@@ -220,15 +224,17 @@ impl<T> Sending<T> {
 	}
 
 	// process all the sends into the sink.
-	fn process_all<S: Sink<SinkItem=T>>(&mut self, sink: &mut S) -> Poll<(), S::SinkError> {
+	fn process_all<S: Sink<SinkItem = T>>(&mut self, sink: &mut S) -> Poll<(), S::SinkError> {
 		while let Some(item) = self.items.pop_front() {
 			match sink.start_send(item) {
 				Err(e) => return Err(e),
 				Ok(AsyncSink::NotReady(item)) => {
 					self.items.push_front(item);
-					return Ok(Async::NotReady);
-				}
-				Ok(AsyncSink::Ready) => { self.flushing = true; }
+					return Ok(Async::NotReady)
+				},
+				Ok(AsyncSink::Ready) => {
+					self.flushing = true;
+				},
 			}
 		}
 
@@ -236,7 +242,9 @@ impl<T> Sending<T> {
 			match sink.poll_complete() {
 				Err(e) => return Err(e),
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
-				Ok(Async::Ready(())) => { self.flushing = false; }
+				Ok(Async::Ready(())) => {
+					self.flushing = false;
+				},
 			}
 		}
 
@@ -321,7 +329,8 @@ struct Strategy<C: Context> {
 	locked: Option<Locked<C::Digest, C::Signature>>,
 	notable_candidates: HashMap<C::Digest, C::Candidate>,
 	current_accumulator: Accumulator<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
-	future_accumulators: BTreeMap<usize, Accumulator<C::Candidate, C::Digest, C::AuthorityId, C::Signature>>,
+	future_accumulators:
+		BTreeMap<usize, Accumulator<C::Candidate, C::Digest, C::AuthorityId, C::Signature>>,
 	local_id: C::AuthorityId,
 	misbehavior: HashMap<C::AuthorityId, Misbehavior<C::Digest, C::Signature>>,
 }
@@ -331,11 +340,7 @@ impl<C: Context> Strategy<C> {
 		let timeout = context.begin_round_timeout(0);
 		let threshold = bft_threshold(nodes, max_faulty);
 
-		let current_accumulator = Accumulator::new(
-			0,
-			threshold,
-			context.round_proposer(0),
-		);
+		let current_accumulator = Accumulator::new(0, threshold, context.round_proposer(0));
 
 		Strategy {
 			nodes,
@@ -360,7 +365,7 @@ impl<C: Context> Strategy<C> {
 	fn import_message(
 		&mut self,
 		context: &C,
-		msg: LocalizedMessage<C::Candidate, C::Digest, C::AuthorityId, C::Signature>
+		msg: LocalizedMessage<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
 	) {
 		let round_number = msg.round_number();
 
@@ -371,13 +376,15 @@ impl<C: Context> Strategy<C> {
 		} else if round_number > current_round {
 			let threshold = bft_threshold(self.nodes, self.max_faulty);
 
-			let mut future_acc = self.future_accumulators.entry(round_number).or_insert_with(|| {
-				Accumulator::new(
-					round_number,
-					threshold,
-					context.round_proposer(round_number),
-				)
-			});
+			let mut future_acc = self.future_accumulators.entry(round_number).or_insert_with(
+				|| {
+					Accumulator::new(
+						round_number,
+						threshold,
+						context.round_proposer(round_number),
+					)
+				},
+			);
 
 			future_acc.import_message(msg)
 		} else {
@@ -402,8 +409,9 @@ impl<C: Context> Strategy<C> {
 			self.advance_to_round(context, justification.round_number);
 		}
 
-		let lock_to_new = self.locked.as_ref()
-			.map_or(true, |l| l.justification.round_number < justification.round_number);
+		let lock_to_new = self.locked.as_ref().map_or(true, |l| {
+			l.justification.round_number < justification.round_number
+		});
 
 		if lock_to_new {
 			self.locked = Some(Locked { justification })
@@ -417,10 +425,8 @@ impl<C: Context> Strategy<C> {
 	fn poll(
 		&mut self,
 		context: &C,
-		sending: &mut Sending<<C as TypeResolve>::Communication>
-	)
-		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, C::Error>
-	{
+		sending: &mut Sending<<C as TypeResolve>::Communication>,
+	) -> Poll<Committed<C::Candidate, C::Digest, C::Signature>, C::Error> {
 		let mut last_watermark = (self.current_round(), self.local_state);
 
 		// poll until either completion or state doesn't change.
@@ -436,7 +442,7 @@ impl<C: Context> Strategy<C> {
 					} else {
 						last_watermark = new_watermark;
 					}
-				}
+				},
 			}
 		}
 	}
@@ -446,10 +452,8 @@ impl<C: Context> Strategy<C> {
 	fn poll_once(
 		&mut self,
 		context: &C,
-		sending: &mut Sending<<C as TypeResolve>::Communication>
-	)
-		-> Poll<Committed<C::Candidate, C::Digest, C::Signature>, C::Error>
-	{
+		sending: &mut Sending<<C as TypeResolve>::Communication>,
+	) -> Poll<Committed<C::Candidate, C::Digest, C::Signature>, C::Error> {
 		self.propose(context, sending)?;
 		self.prepare(context, sending)?;
 		self.commit(context, sending);
@@ -459,34 +463,39 @@ impl<C: Context> Strategy<C> {
 			&State::Advanced(ref p_just) => {
 				// lock to any witnessed prepare justification.
 				if let Some(p_just) = p_just.as_ref() {
-					self.locked = Some(Locked { justification: p_just.clone() });
+					self.locked = Some(Locked {
+						justification: p_just.clone(),
+					});
 				}
 
 				let round_number = self.current_round();
 				Some(round_number + 1)
-			}
+			},
 			&State::Committed(ref just) => {
 				// fetch the agreed-upon candidate:
 				//   - we may not have received the proposal in the first place
 				//   - there is no guarantee that the proposal we got was agreed upon
 				//     (can happen if faulty primary)
 				//   - look in the candidates of prior rounds just in case.
-				let candidate = self.current_accumulator
+				let candidate = self
+					.current_accumulator
 					.proposal()
-					.and_then(|c| if context.candidate_digest(c) == just.digest {
-						Some(c.clone())
-					} else {
-						None
+					.and_then(|c| {
+						if context.candidate_digest(c) == just.digest {
+							Some(c.clone())
+						} else {
+							None
+						}
 					})
 					.or_else(|| self.notable_candidates.get(&just.digest).cloned());
 
 				let committed = Committed {
 					candidate,
-					justification: just.clone()
+					justification: just.clone(),
 				};
 
 				return Ok(Async::Ready(committed))
-			}
+			},
 			_ => None,
 		};
 
@@ -500,10 +509,8 @@ impl<C: Context> Strategy<C> {
 	fn propose(
 		&mut self,
 		context: &C,
-		sending: &mut Sending<<C as TypeResolve>::Communication>
-	)
-		-> Result<(), C::Error>
-	{
+		sending: &mut Sending<<C as TypeResolve>::Communication>,
+	) -> Result<(), C::Error> {
 		if let LocalState::Start = self.local_state {
 			let mut propose = false;
 			if let &State::Begin = self.current_accumulator.state() {
@@ -512,7 +519,9 @@ impl<C: Context> Strategy<C> {
 				propose = self.local_id == primary;
 			};
 
-			if !propose { return Ok(()) }
+			if !propose {
+				return Ok(())
+			}
 
 			// obtain the proposal to broadcast.
 			let proposal = match self.locked {
@@ -524,9 +533,10 @@ impl<C: Context> Strategy<C> {
 					// to eat the round timeout for now, but it can be optimized by
 					// broadcasting an advance vote.
 					self.notable_candidates.get(locked.digest()).cloned()
-				}
+				},
 				None => {
-					let res = self.fetching_proposal
+					let res = self
+						.fetching_proposal
 						.get_or_insert_with(|| context.proposal())
 						.poll()?;
 
@@ -534,24 +544,19 @@ impl<C: Context> Strategy<C> {
 						Async::Ready(p) => Some(p),
 						Async::NotReady => None,
 					}
-				}
+				},
 			};
 
 			if let Some(proposal) = proposal {
 				self.fetching_proposal = None;
 
-				let message = Message::Propose(
-					self.current_round(),
-					proposal
-				);
+				let message = Message::Propose(self.current_round(), proposal);
 
 				self.import_and_send_message(message, context, sending);
 
 				// broadcast the justification along with the proposal if we are locked.
 				if let Some(ref locked) = self.locked {
-					sending.push(
-						Communication::Auxiliary(locked.justification.clone())
-					);
+					sending.push(Communication::Auxiliary(locked.justification.clone()));
 				}
 
 				self.local_state = LocalState::Proposed;
@@ -564,14 +569,12 @@ impl<C: Context> Strategy<C> {
 	fn prepare(
 		&mut self,
 		context: &C,
-		sending: &mut Sending<<C as TypeResolve>::Communication>
-	)
-		-> Result<(), C::Error>
-	{
+		sending: &mut Sending<<C as TypeResolve>::Communication>,
+	) -> Result<(), C::Error> {
 		// prepare only upon start or having proposed.
 		match self.local_state {
 			LocalState::Start | LocalState::Proposed => {},
-			_ => return Ok(())
+			_ => return Ok(()),
 		};
 
 		let mut prepare_for = None;
@@ -583,15 +586,16 @@ impl<C: Context> Strategy<C> {
 			// vote to prepare only if we believe the candidate to be valid and
 			// we are not locked on some other candidate.
 			match self.locked {
-				Some(ref locked) if locked.digest() != &digest => {}
+				Some(ref locked) if locked.digest() != &digest => {},
 				Some(_) => {
 					// don't check validity if we are locked.
 					// this is necessary to preserve the liveness property.
 					self.local_state = LocalState::Prepared(true);
 					prepare_for = Some(digest);
-				}
+				},
 				None => {
-					let res = self.evaluating_proposal
+					let res = self
+						.evaluating_proposal
 						.get_or_insert_with(|| context.proposal_valid(candidate))
 						.poll()?;
 
@@ -603,15 +607,12 @@ impl<C: Context> Strategy<C> {
 							prepare_for = Some(digest);
 						}
 					}
-				}
+				},
 			}
 		}
 
 		if let Some(digest) = prepare_for {
-			let message = Vote::Prepare(
-				self.current_round(),
-				digest
-			).into();
+			let message = Vote::Prepare(self.current_round(), digest).into();
 
 			self.import_and_send_message(message, context, sending);
 		}
@@ -619,15 +620,11 @@ impl<C: Context> Strategy<C> {
 		Ok(())
 	}
 
-	fn commit(
-		&mut self,
-		context: &C,
-		sending: &mut Sending<<C as TypeResolve>::Communication>
-	) {
+	fn commit(&mut self, context: &C, sending: &mut Sending<<C as TypeResolve>::Communication>) {
 		// commit only if we haven't voted to advance or committed already
 		match self.local_state {
 			LocalState::Committed | LocalState::VoteAdvance => return,
-			_ => {}
+			_ => {},
 		}
 
 		let mut commit_for = None;
@@ -635,15 +632,14 @@ impl<C: Context> Strategy<C> {
 		if let &State::Prepared(ref p_just) = self.current_accumulator.state() {
 			// we are now locked to this prepare justification.
 			let digest = p_just.digest.clone();
-			self.locked = Some(Locked { justification: p_just.clone() });
+			self.locked = Some(Locked {
+				justification: p_just.clone(),
+			});
 			commit_for = Some(digest);
 		}
 
 		if let Some(digest) = commit_for {
-			let message = Vote::Commit(
-				self.current_round(),
-				digest
-			).into();
+			let message = Vote::Commit(self.current_round(), digest).into();
 
 			self.import_and_send_message(message, context, sending);
 			self.local_state = LocalState::Committed;
@@ -653,12 +649,12 @@ impl<C: Context> Strategy<C> {
 	fn vote_advance(
 		&mut self,
 		context: &C,
-		sending: &mut Sending<<C as TypeResolve>::Communication>
-	)
-		-> Result<(), C::Error>
-	{
+		sending: &mut Sending<<C as TypeResolve>::Communication>,
+	) -> Result<(), C::Error> {
 		// we can vote for advancement under all circumstances unless we have already.
-		if let LocalState::VoteAdvance = self.local_state { return Ok(()) }
+		if let LocalState::VoteAdvance = self.local_state {
+			return Ok(())
+		}
 
 		// if we got f + 1 advance votes, or the timeout has fired, and we haven't
 		// sent an AdvanceRound message yet, do so.
@@ -675,9 +671,7 @@ impl<C: Context> Strategy<C> {
 		}
 
 		if attempt_advance {
-			let message = Vote::AdvanceRound(
-				self.current_round(),
-			).into();
+			let message = Vote::AdvanceRound(self.current_round()).into();
 
 			self.import_and_send_message(message, context, sending);
 			self.local_state = LocalState::VoteAdvance;
@@ -701,7 +695,9 @@ impl<C: Context> Strategy<C> {
 		// we will have it.
 		if let Some(proposal) = self.current_accumulator.proposal() {
 			let digest = context.candidate_digest(proposal);
-			self.notable_candidates.entry(digest).or_insert_with(|| proposal.clone());
+			self.notable_candidates
+				.entry(digest)
+				.or_insert_with(|| proposal.clone());
 		}
 
 		// if we jump ahead more than one round, get rid of the ones in between.
@@ -724,7 +720,7 @@ impl<C: Context> Strategy<C> {
 		&mut self,
 		message: Message<C::Candidate, C::Digest>,
 		context: &C,
-		sending: &mut Sending<<C as TypeResolve>::Communication>
+		sending: &mut Sending<<C as TypeResolve>::Communication>,
 	) {
 		let signed_message = context.sign_local(message);
 		self.import_message(context, signed_message.clone());
@@ -744,10 +740,10 @@ pub struct Agreement<C: Context, I, O> {
 }
 
 impl<C, I, O> Future for Agreement<C, I, O>
-	where
-		C: Context,
-		I: Stream<Item=<C as TypeResolve>::Communication,Error=C::Error>,
-		O: Sink<SinkItem=<C as TypeResolve>::Communication,SinkError=C::Error>,
+where
+	C: Context,
+	I: Stream<Item = <C as TypeResolve>::Communication, Error = C::Error>,
+	O: Sink<SinkItem = <C as TypeResolve>::Communication, SinkError = C::Error>,
 {
 	type Item = Committed<C::Candidate, C::Digest, C::Signature>;
 	type Error = C::Error;
@@ -761,7 +757,7 @@ impl<C, I, O> Future for Agreement<C, I, O>
 				Async::NotReady => {
 					self.concluded = Some(just);
 					Async::NotReady
-				}
+				},
 			})
 		}
 
@@ -771,20 +767,21 @@ impl<C, I, O> Future for Agreement<C, I, O>
 			driving = match self.input.poll()? {
 				Async::Ready(msg) => {
 					match msg.ok_or(InputStreamConcluded)? {
-						Communication::Consensus(message) => self.strategy.import_message(&self.context, message),
-						Communication::Auxiliary(lock_proof)
-							=> self.strategy.import_lock_proof(&self.context, lock_proof),
+						Communication::Consensus(message) =>
+							self.strategy.import_message(&self.context, message),
+						Communication::Auxiliary(lock_proof) =>
+							self.strategy.import_lock_proof(&self.context, lock_proof),
 					}
 
 					true
-				}
+				},
 				Async::NotReady => false,
 			};
 
 			// drive state machine after handling new input.
 			if let Async::Ready(just) = self.strategy.poll(&self.context, &mut self.sending)? {
 				self.concluded = Some(just);
-				return self.poll();
+				return self.poll()
 			}
 		}
 
@@ -801,7 +798,9 @@ impl<C: Context, I, O> Agreement<C, I, O> {
 	}
 
 	/// Drain the misbehavior vector.
-	pub fn drain_misbehavior(&mut self) -> hash_map::Drain<C::AuthorityId, Misbehavior<C::Digest, C::Signature>> {
+	pub fn drain_misbehavior(
+		&mut self,
+	) -> hash_map::Drain<C::AuthorityId, Misbehavior<C::Digest, C::Signature>> {
 		self.strategy.misbehavior.drain()
 	}
 }
@@ -823,12 +822,17 @@ impl<C: Context, I, O> Agreement<C, I, O> {
 /// conclude without having witnessed the conclusion.
 /// In general, this future should be pre-empted by the import of a justification
 /// set for this block height.
-pub fn agree<C: Context, I, O>(context: C, nodes: usize, max_faulty: usize, input: I, output: O)
-	-> Agreement<C, I, O>
-	where
-		C: Context,
-		I: Stream<Item=<C as TypeResolve>::Communication,Error=C::Error>,
-		O: Sink<SinkItem=<C as TypeResolve>::Communication,SinkError=C::Error>,
+pub fn agree<C: Context, I, O>(
+	context: C,
+	nodes: usize,
+	max_faulty: usize,
+	input: I,
+	output: O,
+) -> Agreement<C, I, O>
+where
+	C: Context,
+	I: Stream<Item = <C as TypeResolve>::Communication, Error = C::Error>,
+	O: Sink<SinkItem = <C as TypeResolve>::Communication, SinkError = C::Error>,
 {
 	let strategy = Strategy::create(&context, nodes, max_faulty);
 	Agreement {
@@ -837,6 +841,6 @@ pub fn agree<C: Context, I, O>(context: C, nodes: usize, max_faulty: usize, inpu
 		output,
 		concluded: None,
 		sending: Sending::with_capacity(4),
-		strategy: strategy,
+		strategy,
 	}
 }

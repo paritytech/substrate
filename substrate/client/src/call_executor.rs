@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use executor::{RuntimeInfo, RuntimeVersion};
+use runtime_io::Externalities;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::{self, OverlayedChanges, Ext, Backend as StateBackend, CodeExecutor};
-use runtime_io::Externalities;
-use executor::{RuntimeVersion, RuntimeInfo};
+use state_machine::{self, Backend as StateBackend, CodeExecutor, Ext, OverlayedChanges};
+use std::sync::Arc;
 
 use backend;
 use error;
@@ -41,7 +41,12 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	fn call(&self, id: &BlockId<B>, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error>;
+	fn call(
+		&self,
+		id: &BlockId<B>,
+		method: &str,
+		call_data: &[u8],
+	) -> Result<CallResult, error::Error>;
 
 	/// Extract RuntimeVersion of given block
 	///
@@ -51,12 +56,24 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given state.
 	///
 	/// No changes are made.
-	fn call_at_state<S: state_machine::Backend>(&self, state: &S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, S::Transaction), error::Error>;
+	fn call_at_state<S: state_machine::Backend>(
+		&self,
+		state: &S,
+		overlay: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8],
+	) -> Result<(Vec<u8>, S::Transaction), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: state_machine::Backend>(&self, state: S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
+	fn prove_at_state<S: state_machine::Backend>(
+		&self,
+		state: S,
+		overlay: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8],
+	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<RuntimeVersion>;
@@ -76,7 +93,10 @@ impl<B, E> LocalCallExecutor<B, E> {
 	}
 }
 
-impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
+impl<B, E> Clone for LocalCallExecutor<B, E>
+where
+	E: Clone,
+{
 	fn clone(&self) -> Self {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
@@ -86,51 +106,68 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 }
 
 impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
-	where
-		B: backend::LocalBackend<Block>,
-		E: CodeExecutor + RuntimeInfo,
-		Block: BlockT,
-		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
+where
+	B: backend::LocalBackend<Block>,
+	E: CodeExecutor + RuntimeInfo,
+	Block: BlockT,
+	error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	type Error = E::Error;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
+	fn call(
+		&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8],
+	) -> error::Result<CallResult> {
 		let mut changes = OverlayedChanges::default();
-		let (return_data, _) = self.call_at_state(&self.backend.state_at(*id)?, &mut changes, method, call_data)?;
-		Ok(CallResult{ return_data, changes })
+		let (return_data, _) = self.call_at_state(
+			&self.backend.state_at(*id)?,
+			&mut changes,
+			method,
+			call_data,
+		)?;
+		Ok(CallResult {
+			return_data,
+			changes,
+		})
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let mut externalities = Ext::new(&mut overlay, &state);
-		let code = externalities.storage(b":code").ok_or(error::ErrorKind::VersionInvalid)?
+		let code = externalities
+			.storage(b":code")
+			.ok_or(error::ErrorKind::VersionInvalid)?
 			.to_vec();
 
-		self.executor.runtime_version(&mut externalities, &code)
+		self.executor
+			.runtime_version(&mut externalities, &code)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
-	fn call_at_state<S: state_machine::Backend>(&self, state: &S, changes: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, S::Transaction)> {
-		state_machine::execute(
-			state,
-			changes,
-			&self.executor,
-			method,
-			call_data,
-		).map_err(Into::into)
+	fn call_at_state<S: state_machine::Backend>(
+		&self,
+		state: &S,
+		changes: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8],
+	) -> error::Result<(Vec<u8>, S::Transaction)> {
+		state_machine::execute(state, changes, &self.executor, method, call_data)
+			.map_err(Into::into)
 	}
 
-	fn prove_at_state<S: state_machine::Backend>(&self, state: S, changes: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
-		state_machine::prove_execution(
-			state,
-			changes,
-			&self.executor,
-			method,
-			call_data,
-		)
-		.map(|(result, proof, _)| (result, proof))
-		.map_err(Into::into)
+	fn prove_at_state<S: state_machine::Backend>(
+		&self,
+		state: S,
+		changes: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8],
+	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+		state_machine::prove_execution(state, changes, &self.executor, method, call_data)
+			.map(|(result, proof, _)| (result, proof))
+			.map_err(Into::into)
 	}
 
 	fn native_runtime_version(&self) -> Option<RuntimeVersion> {

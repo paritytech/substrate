@@ -14,12 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-//! Network packet message types. These get serialized and put into the lower level protocol payload.
+//! Network packet message types. These get serialized and put into the lower level protocol
+//! payload.
 
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use service::Role as RoleFlags;
 
-pub use self::generic::{BlockAnnounce, RemoteCallRequest, ConsensusVote, SignedConsensusVote, FromBlock, Body};
+pub use self::generic::{
+	BlockAnnounce, Body, ConsensusVote, FromBlock, RemoteCallRequest, SignedConsensusVote,
+};
 
 pub type RequestId = u64;
 
@@ -33,54 +36,32 @@ pub type Message<B> = generic::Message<
 >;
 
 /// Type alias for using the status type using block type parameters.
-pub type Status<B> = generic::Status<
-	<B as BlockT>::Hash,
-	<<B as BlockT>::Header as HeaderT>::Number,
->;
+pub type Status<B> =
+	generic::Status<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>;
 
 /// Type alias for using the block request type using block type parameters.
-pub type BlockRequest<B> = generic::BlockRequest<
-	<B as BlockT>::Hash,
-	<<B as BlockT>::Header as HeaderT>::Number,
->;
+pub type BlockRequest<B> =
+	generic::BlockRequest<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>;
 
 /// Type alias for using the localized bft message type using block type parameters.
-pub type LocalizedBftMessage<B> = generic::LocalizedBftMessage<
-	B,
-	<B as BlockT>::Hash,
->;
+pub type LocalizedBftMessage<B> = generic::LocalizedBftMessage<B, <B as BlockT>::Hash>;
 
 /// Type alias for using the BlockData type using block type parameters.
-pub type BlockData<B> = generic::BlockData<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<B as BlockT>::Extrinsic,
->;
+pub type BlockData<B> =
+	generic::BlockData<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
 
 /// Type alias for using the BlockResponse type using block type parameters.
-pub type BlockResponse<B> = generic::BlockResponse<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<B as BlockT>::Extrinsic,
->;
+pub type BlockResponse<B> =
+	generic::BlockResponse<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
 
 /// Type alias for using the BftMessage type using block type parameters.
-pub type BftMessage<B> = generic::BftMessage<
-	B,
-	<B as BlockT>::Hash,
->;
+pub type BftMessage<B> = generic::BftMessage<B, <B as BlockT>::Hash>;
 
 /// Type alias for using the SignedConsensusProposal type using block type parameters.
-pub type SignedConsensusProposal<B> = generic::SignedConsensusProposal<
-	B,
-	<B as BlockT>::Hash,
->;
+pub type SignedConsensusProposal<B> = generic::SignedConsensusProposal<B, <B as BlockT>::Hash>;
 
 /// Type alias for using the SignedConsensusProposal type using block type parameters.
-pub type SignedConsensusMessage<B> = generic::SignedConsensusProposal<
-	B,
-	<B as BlockT>::Hash,
->;
+pub type SignedConsensusMessage<B> = generic::SignedConsensusProposal<B, <B as BlockT>::Hash>;
 
 /// A set of transactions.
 pub type Transactions<E> = Vec<E>;
@@ -114,7 +95,8 @@ impl Role {
 	}
 }
 
-impl From<RoleFlags> for Vec<Role> where {
+impl From<RoleFlags> for Vec<Role> // where
+{
 	fn from(flags: RoleFlags) -> Vec<Role> {
 		let mut roles = Vec::new();
 		if !(flags & RoleFlags::FULL).is_empty() {
@@ -168,19 +150,19 @@ pub struct RemoteCallResponse {
 
 /// Generic types.
 pub mod generic {
-	use primitives::AuthorityId;
 	use codec::Slicable;
-	use runtime_primitives::bft::Justification;
 	use ed25519;
+	use primitives::AuthorityId;
 	use primitives::Signature;
+	use runtime_primitives::bft::Justification;
 
-	use super::{Role, BlockAttribute, RemoteCallResponse, RequestId, Transactions, Direction};
+	use super::{BlockAttribute, Direction, RemoteCallResponse, RequestId, Role, Transactions};
 
 	use primitives::bytes;
 
 	/// Emulates Poc-1 extrinsic primitive.
 	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-	pub struct V1Extrinsic(#[serde(with="bytes")] pub Vec<u8>);
+	pub struct V1Extrinsic(#[serde(with = "bytes")] pub Vec<u8>);
 	// Alternative block format for poc-1 compatibility.
 	// TODO: remove this after poc-2
 	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -193,17 +175,21 @@ pub mod generic {
 		Extrinsics(Vec<Extrinsic>),
 	}
 
-	impl<Extrinsic> Body<Extrinsic> where Extrinsic: Slicable {
+	impl<Extrinsic> Body<Extrinsic>
+	where
+		Extrinsic: Slicable,
+	{
 		/// Extracts extrinsic from the body.
 		pub fn to_extrinsics(self) -> Vec<Extrinsic> {
 			match self {
 				Body::Extrinsics(e) => e,
-				Body::V1(e) => {
-					e.into_iter().filter_map(|bytes| {
+				Body::V1(e) => e
+					.into_iter()
+					.filter_map(|bytes| {
 						let bytes = bytes.0.encode();
 						Slicable::decode(&mut bytes.as_slice())
-					}).collect()
-				}
+					})
+					.collect(),
 			}
 		}
 	}
@@ -216,7 +202,7 @@ pub mod generic {
 		/// The hash of the header justified.
 		pub hash: H,
 		/// The signatures and signers of the hash.
-		pub signatures: Vec<([u8; 32], Signature)>
+		pub signatures: Vec<([u8; 32], Signature)>,
 	}
 
 	// TODO: remove this after poc-2
@@ -235,13 +221,15 @@ pub mod generic {
 		pub fn to_justification(self) -> Justification<H> {
 			match self {
 				BlockJustification::V2(j) => j,
-				BlockJustification::V1(j) => {
-					Justification {
-						round_number: j.round_number,
-						hash: j.hash,
-						signatures: j.signatures.into_iter().map(|(a, s)| (a.into(), s)).collect(),
-					}
-				}
+				BlockJustification::V1(j) => Justification {
+					round_number: j.round_number,
+					hash: j.hash,
+					signatures: j
+						.signatures
+						.into_iter()
+						.map(|(a, s)| (a.into(), s))
+						.collect(),
+				},
 			}
 		}
 	}
@@ -394,7 +382,8 @@ pub mod generic {
 		pub to: Option<Hash>,
 		/// Sequence direction.
 		pub direction: Direction,
-		/// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
+		/// Maximum number of blocks to return. An implementation defined maximum is used when
+		/// unspecified.
 		pub max: Option<u32>,
 	}
 

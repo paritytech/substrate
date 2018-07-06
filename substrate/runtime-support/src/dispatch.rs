@@ -16,13 +16,13 @@
 
 //! Dispatch system. Just dispatches calls.
 
-pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
-#[cfg(feature = "std")]
-pub use std::fmt;
+pub use codec::{Input, Slicable};
+pub use rstd::prelude::{Clone, Eq, PartialEq, Vec};
 pub use rstd::result;
 #[cfg(feature = "std")]
 use serde;
-pub use codec::{Slicable, Input};
+#[cfg(feature = "std")]
+pub use std::fmt;
 
 pub type Result = result::Result<(), &'static str>;
 

@@ -16,10 +16,10 @@
 
 use super::*;
 
-use std::{fmt, sync::Arc};
 use extrinsic_pool::api;
-use test_client;
 use parking_lot::Mutex;
+use std::{fmt, sync::Arc};
+use test_client;
 
 type Extrinsic = u64;
 type Hash = u64;
@@ -33,7 +33,9 @@ struct DummyTxPool {
 struct Error;
 impl api::Error for Error {}
 impl ::std::error::Error for Error {
-	fn description(&self) -> &str { "Error" }
+	fn description(&self) -> &str {
+		"Error"
+	}
 }
 impl fmt::Display for Error {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -45,7 +47,11 @@ impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 	type Error = Error;
 
 	/// Submit extrinsic for inclusion in block.
-	fn submit(&self, _block: BlockHash, xt: Vec<Extrinsic>) -> ::std::result::Result<Vec<Hash>, Self::Error> {
+	fn submit(
+		&self,
+		_block: BlockHash,
+		xt: Vec<Extrinsic>,
+	) -> ::std::result::Result<Vec<Hash>, Self::Error> {
 		let mut submitted = self.submitted.lock();
 		if submitted.len() < 1 {
 			let hashes = xt.iter().map(|_xt| 1).collect();
@@ -68,9 +74,7 @@ fn submit_transaction_should_not_cause_error() {
 		AuthorApi::submit_extrinsic(&p, u64::encode(&5).into()),
 		Ok(1)
 	);
-	assert!(
-		AuthorApi::submit_extrinsic(&p, u64::encode(&5).into()).is_err()
-	);
+	assert!(AuthorApi::submit_extrinsic(&p, u64::encode(&5).into()).is_err());
 }
 
 #[test]
@@ -80,11 +84,6 @@ fn submit_rich_transaction_should_not_cause_error() {
 		pool: Arc::new(DummyTxPool::default()),
 	};
 
-	assert_matches!(
-		AuthorApi::submit_rich_extrinsic(&p, 5),
-		Ok(1)
-	);
-	assert!(
-		AuthorApi::submit_rich_extrinsic(&p, 5).is_err()
-	);
+	assert_matches!(AuthorApi::submit_rich_extrinsic(&p, 5), Ok(1));
+	assert!(AuthorApi::submit_rich_extrinsic(&p, 5).is_err());
 }

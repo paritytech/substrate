@@ -32,21 +32,23 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_codec as codec;
-extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
+extern crate substrate_codec as codec;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_primitives as primitives;
 
+use primitives::traits::{
+	self, Bounded, CheckEqual, Hashing, MaybeDisplay, Member, One, SimpleArithmetic, SimpleBitOps,
+	Zero,
+};
 use rstd::prelude::*;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hashing, Member, MaybeDisplay};
-use runtime_support::{StorageValue, StorageMap, Parameter};
+use runtime_support::{Parameter, StorageMap, StorageValue};
 use safe_mix::TripletMix;
 
 #[cfg(any(feature = "std", test))]
-use rstd::marker::PhantomData;
-#[cfg(any(feature = "std", test))]
 use codec::Slicable;
+#[cfg(any(feature = "std", test))]
+use rstd::marker::PhantomData;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities};
@@ -64,17 +66,33 @@ pub fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
 
 pub trait Trait: Eq + Clone {
 	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
-	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
-	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
+	type BlockNumber: Parameter
+		+ Member
+		+ MaybeDisplay
+		+ SimpleArithmetic
+		+ Default
+		+ Bounded
+		+ Copy
+		+ rstd::hash::Hash;
+	type Hash: Parameter
+		+ Member
+		+ MaybeDisplay
+		+ SimpleBitOps
+		+ Default
+		+ Copy
+		+ CheckEqual
+		+ rstd::hash::Hash
+		+ AsRef<[u8]>;
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Parameter + Member + Default + traits::Digest;
 	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
-	type Header: Parameter + traits::Header<
-		Number = Self::BlockNumber,
-		Hashing = Self::Hashing,
-		Hash = Self::Hash,
-		Digest = Self::Digest
-	>;
+	type Header: Parameter
+		+ traits::Header<
+			Number = Self::BlockNumber,
+			Hashing = Self::Hashing,
+			Hash = Self::Hash,
+			Digest = Self::Digest,
+		>;
 }
 
 decl_module! {
@@ -119,7 +137,13 @@ impl<T: Trait> Module<T> {
 		let digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
-		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
+		<T::Header as traits::Header>::new(
+			number,
+			extrinsics_root,
+			storage_root,
+			parent_hash,
+			digest,
+		)
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
@@ -131,11 +155,16 @@ impl<T: Trait> Module<T> {
 
 	/// Calculate the current block's random seed.
 	fn calculate_random() -> T::Hash {
-		assert!(Self::block_number() > Zero::zero(), "Block number may never be zero");
+		assert!(
+			Self::block_number() > Zero::zero(),
+			"Block number may never be zero"
+		);
 		(0..81)
-			.scan(
-				Self::block_number() - One::one(),
-				|c, _| { if *c > Zero::zero() { *c -= One::one() }; Some(*c)
+			.scan(Self::block_number() - One::one(), |c, _| {
+				if *c > Zero::zero() {
+					*c -= One::one()
+				};
+				Some(*c)
 			})
 			.map(Self::block_hash)
 			.triplet_mix()
@@ -186,7 +215,9 @@ impl<T: Trait> Module<T> {
 
 	/// Remove all extrinsics data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..Self::extrinsic_index()).map(<ExtrinsicData<T>>::take).collect();
+		let extrinsics = (0..Self::extrinsic_index())
+			.map(<ExtrinsicData<T>>::take)
+			.collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
@@ -206,11 +237,10 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
-{
+impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
-		use runtime_io::twox_128;
 		use codec::Slicable;
+		use runtime_io::twox_128;
 
 		Ok(map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),

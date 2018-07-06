@@ -17,16 +17,16 @@
 //! Low-level types used throughout the Substrate Demo code.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg(feature = "std")] extern crate serde;
+#[cfg(feature = "std")]
+extern crate serde;
 
-extern crate substrate_runtime_std as rstd;
-extern crate substrate_runtime_primitives as runtime_primitives;
-extern crate substrate_primitives as primitives;
 extern crate substrate_codec as codec;
+extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_runtime_std as rstd;
 
 /// An index to a block.
 pub type BlockNumber = u64;

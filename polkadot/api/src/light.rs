@@ -16,15 +16,17 @@
 
 //! Strongly typed API for light Polkadot client.
 
-use std::sync::Arc;
 use client::backend::{Backend, RemoteBackend};
-use client::{Client, CallExecutor};
+use client::{CallExecutor, Client};
 use codec::Slicable;
-use state_machine;
-use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
-use runtime::Address;
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
-use {PolkadotApi, BlockBuilder, RemotePolkadotApi, Result, ErrorKind};
+use primitives::{
+	AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic,
+};
+use runtime::Address;
+use state_machine;
+use std::sync::Arc;
+use {BlockBuilder, ErrorKind, PolkadotApi, RemotePolkadotApi, Result};
 
 /// Light block builder. TODO: make this work (efficiently)
 #[derive(Clone, Copy)]
@@ -41,17 +43,25 @@ impl BlockBuilder for LightBlockBuilder {
 }
 
 /// Remote polkadot API implementation.
-pub struct RemotePolkadotApiWrapper<B: Backend<Block>, E: CallExecutor<Block>>(pub Arc<Client<B, E, Block>>);
+pub struct RemotePolkadotApiWrapper<B: Backend<Block>, E: CallExecutor<Block>>(
+	pub Arc<Client<B, E, Block>>,
+);
 
 impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotApiWrapper<B, E>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
+where
+	::client::error::Error:
+		From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	type BlockBuilder = LightBlockBuilder;
 
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
-		self.0.executor().call(at, "authorities", &[])
-			.and_then(|r| Vec::<SessionKey>::decode(&mut &r.return_data[..])
-				.ok_or("error decoding session keys".into()))
+		self.0
+			.executor()
+			.call(at, "authorities", &[])
+			.and_then(|r| {
+				Vec::<SessionKey>::decode(&mut &r.return_data[..])
+					.ok_or("error decoding session keys".into())
+			})
 			.map_err(Into::into)
 	}
 
@@ -95,15 +105,28 @@ impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotAp
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn build_block(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
+	fn build_block(
+		&self,
+		_at: &BlockId,
+		_timestamp: Timestamp,
+		_new_heads: Vec<CandidateReceipt>,
+	) -> Result<Self::BlockBuilder> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn inherent_extrinsics(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> {
+	fn inherent_extrinsics(
+		&self,
+		_at: &BlockId,
+		_timestamp: Timestamp,
+		_new_heads: Vec<CandidateReceipt>,
+	) -> Result<Vec<Vec<u8>>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 }
 
-impl<B: RemoteBackend<Block>, E: CallExecutor<Block>> RemotePolkadotApi for RemotePolkadotApiWrapper<B, E>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
+impl<B: RemoteBackend<Block>, E: CallExecutor<Block>> RemotePolkadotApi
+	for RemotePolkadotApiWrapper<B, E>
+where
+	::client::error::Error:
+		From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {}

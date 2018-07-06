@@ -17,13 +17,12 @@
 //! Shareable Polkadot types.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate substrate_runtime_std as rstd;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_runtime_std as rstd;
 #[cfg(test)]
 extern crate substrate_serializer;
 
@@ -39,10 +38,10 @@ extern crate serde;
 #[cfg(feature = "std")]
 use primitives::bytes;
 
-use rstd::prelude::*;
-use runtime_primitives::traits::BlakeTwo256;
-use runtime_primitives::generic;
 use codec::{Input, Slicable};
+use rstd::prelude::*;
+use runtime_primitives::generic;
+use runtime_primitives::traits::BlakeTwo256;
 
 pub mod parachain;
 
@@ -107,7 +106,7 @@ pub type BlockId = generic::BlockId<Block>;
 /// A log entry in the block.
 #[derive(PartialEq, Eq, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Log(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 impl Slicable for Log {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {

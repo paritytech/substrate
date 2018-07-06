@@ -16,15 +16,15 @@
 
 //! Simple Ed25519 API.
 
-extern crate ring;
 extern crate base58;
+extern crate blake2_rfc;
+extern crate ring;
 extern crate substrate_primitives as primitives;
 extern crate untrusted;
-extern crate blake2_rfc;
 
-use ring::{rand, signature};
+use base58::{FromBase58, ToBase58};
 use primitives::{hash::H512, AuthorityId};
-use base58::{ToBase58, FromBase58};
+use ring::{rand, signature};
 
 #[cfg(test)]
 #[macro_use]
@@ -93,18 +93,18 @@ impl Public {
 
 	/// Some if the string is a properly encoded SS58Check address.
 	pub fn from_ss58check(s: &str) -> Result<Self, PublicError> {
-		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?;	// failure here would be invalid encoding.
+		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
 		if d.len() != 35 {
 			// Invalid length.
-			return Err(PublicError::BadLength);
+			return Err(PublicError::BadLength)
 		}
 		if d[0] != 42 {
 			// Invalid version.
-			return Err(PublicError::UnknownVersion);
+			return Err(PublicError::UnknownVersion)
 		}
 		if d[33..35] != blake2_rfc::blake2b::blake2b(64, &[], &d[0..33]).as_bytes()[0..2] {
 			// Invalid checksum.
-			return Err(PublicError::InvalidChecksum);
+			return Err(PublicError::InvalidChecksum)
 		}
 		Ok(Self::from_slice(&d[1..33]))
 	}
@@ -187,7 +187,12 @@ impl ::std::fmt::Display for Public {
 impl ::std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", ::primitives::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+		write!(
+			f,
+			"{} ({}...)",
+			::primitives::hexdisplay::HexDisplay::from(&self.0),
+			&s[0..8]
+		)
 	}
 }
 
@@ -195,8 +200,10 @@ impl Pair {
 	/// Generate new secure (random) key pair, yielding it and the corresponding pkcs#8 bytes.
 	pub fn generate_with_pkcs8() -> (Self, [u8; PKCS_LEN]) {
 		let rng = rand::SystemRandom::new();
-		let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).expect("system randomness is available; qed");
-		let pair = Self::from_pkcs8(&pkcs8_bytes).expect("just-generated pkcs#8 data is valid; qed");
+		let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)
+			.expect("system randomness is available; qed");
+		let pair =
+			Self::from_pkcs8(&pkcs8_bytes).expect("just-generated pkcs#8 data is valid; qed");
 
 		(pair, pkcs8_bytes)
 	}
@@ -282,15 +289,22 @@ mod test {
 	use super::*;
 
 	fn _test_primitives_signature_and_local_the_same() {
-		fn takes_two<T>(_: T, _: T) { }
+		fn takes_two<T>(_: T, _: T) {}
 		takes_two(Signature::default(), primitives::Signature::default())
 	}
 
 	#[test]
 	fn test_vector_should_work() {
-		let pair: Pair = Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"));
+		let pair: Pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
 		let public = pair.public();
-		assert_eq!(public, Public::from_raw(hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")));
+		assert_eq!(
+			public,
+			Public::from_raw(hex!(
+				"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+			))
+		);
 		let message = b"";
 		let signature: Signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b").into();
 		assert!(&pair.sign(&message[..]) == &signature);
@@ -312,7 +326,12 @@ mod test {
 
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		assert_eq!(public, Public::from_raw(hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")));
+		assert_eq!(
+			public,
+			Public::from_raw(hex!(
+				"2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee"
+			))
+		);
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);
 		println!("Correct signature: {}", HexDisplay::from(&signature.0));

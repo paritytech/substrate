@@ -57,7 +57,7 @@ pub fn blake2_128(data: &[u8]) -> [u8; 16] {
 
 /// Do a XX 128-bit hash and place result in `dest`.
 pub fn twox_128_into(data: &[u8], dest: &mut [u8; 16]) {
-	use ::core::hash::Hasher;
+	use core::hash::Hasher;
 	let mut h0 = twox_hash::XxHash::with_seed(0);
 	let mut h1 = twox_hash::XxHash::with_seed(1);
 	h0.write(data);
@@ -78,8 +78,8 @@ pub fn twox_128(data: &[u8]) -> [u8; 16] {
 
 /// Do a XX 256-bit hash and place result in `dest`.
 pub fn twox_256_into(data: &[u8], dest: &mut [u8; 32]) {
-	use ::core::hash::Hasher;
 	use byteorder::{ByteOrder, LittleEndian};
+	use core::hash::Hasher;
 	let mut h0 = twox_hash::XxHash::with_seed(0);
 	let mut h1 = twox_hash::XxHash::with_seed(1);
 	let mut h2 = twox_hash::XxHash::with_seed(2);

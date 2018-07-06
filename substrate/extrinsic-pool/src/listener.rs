@@ -14,11 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{
-	sync::Arc,
-	fmt,
-	collections::HashMap,
-};
+use std::{collections::HashMap, fmt, sync::Arc};
 use txpool;
 
 use watcher;
@@ -26,15 +22,21 @@ use watcher;
 /// Extrinsic pool default listener.
 #[derive(Default)]
 pub struct Listener<H: ::std::hash::Hash + Eq> {
-	watchers: HashMap<H, watcher::Sender<H>>
+	watchers: HashMap<H, watcher::Sender<H>>,
 }
 
 impl<H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default> Listener<H> {
 	/// Creates a new watcher for given verified extrinsic.
 	///
 	/// The watcher can be used to subscribe to lifecycle events of that extrinsic.
-	pub fn create_watcher<T: txpool::VerifiedTransaction<Hash=H>>(&mut self, xt: Arc<T>) -> watcher::Watcher<H> {
-		let sender = self.watchers.entry(*xt.hash()).or_insert_with(watcher::Sender::default);
+	pub fn create_watcher<T: txpool::VerifiedTransaction<Hash = H>>(
+		&mut self,
+		xt: Arc<T>,
+	) -> watcher::Watcher<H> {
+		let sender = self
+			.watchers
+			.entry(*xt.hash())
+			.or_insert_with(watcher::Sender::default);
 		sender.new_watcher()
 	}
 
@@ -43,7 +45,10 @@ impl<H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default> Li
 		self.fire(hash, |watcher| watcher.broadcast(peers));
 	}
 
-	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H>) {
+	fn fire<F>(&mut self, hash: &H, fun: F)
+	where
+		F: FnOnce(&mut watcher::Sender<H>),
+	{
 		let clean = if let Some(h) = self.watchers.get_mut(hash) {
 			fun(h);
 			h.is_done()
@@ -57,9 +62,10 @@ impl<H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default> Li
 	}
 }
 
-impl<H, T> txpool::Listener<T> for Listener<H> where
+impl<H, T> txpool::Listener<T> for Listener<H>
+where
 	H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default,
-	T: txpool::VerifiedTransaction<Hash=H>,
+	T: txpool::VerifiedTransaction<Hash = H>,
 {
 	fn added(&mut self, tx: &Arc<T>, old: Option<&Arc<T>>) {
 		if let Some(old) = old {

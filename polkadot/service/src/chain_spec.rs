@@ -17,14 +17,19 @@
 //! Polkadot chain configurations.
 
 use ed25519;
+use polkadot_runtime::{
+	ConsensusConfig, CouncilConfig, DemocracyConfig, GenesisConfig, SessionConfig, StakingConfig,
+	TimestampConfig,
+};
+use primitives::{
+	storage::{StorageData, StorageKey},
+	AuthorityId,
+};
+use runtime_primitives::{BuildStorage, StorageMap};
+use serde_json as json;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
-use primitives::{AuthorityId, storage::{StorageKey, StorageData}};
-use runtime_primitives::{BuildStorage, StorageMap};
-use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, TimestampConfig};
-use serde_json as json;
 
 enum GenesisSource {
 	File(PathBuf),
@@ -42,11 +47,13 @@ impl GenesisSource {
 		match *self {
 			GenesisSource::File(ref path) => {
 				let file = File::open(path).map_err(|e| format!("Error opening spec file: {}", e))?;
-				let genesis: GenesisContainer = json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
+				let genesis: GenesisContainer =
+					json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
 			},
 			GenesisSource::Embedded(buf) => {
-				let genesis: GenesisContainer = json::from_reader(buf).map_err(|e| format!("Error parsing embedded file: {}", e))?;
+				let genesis: GenesisContainer = json::from_reader(buf)
+					.map_err(|e| format!("Error parsing embedded file: {}", e))?;
 				Ok(genesis.genesis)
 			},
 			GenesisSource::Factory(f) => Ok(f()),
@@ -116,7 +123,9 @@ impl ChainSpec {
 	pub fn to_json(self, raw: bool) -> Result<String, String> {
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
-				let storage = g.build_storage()?.into_iter()
+				let storage = g
+					.build_storage()?
+					.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
 
@@ -124,10 +133,15 @@ impl ChainSpec {
 			},
 			(_, genesis) => genesis,
 		};
-		let mut spec = json::to_value(self.spec).map_err(|e| format!("Error generating spec json: {}", e))?;
+		let mut spec =
+			json::to_value(self.spec).map_err(|e| format!("Error generating spec json: {}", e))?;
 		{
 			let map = spec.as_object_mut().expect("spec is an object");
-			map.insert("genesis".to_owned(), json::to_value(genesis).map_err(|e| format!("Error generating genesis json: {}", e))?);
+			map.insert(
+				"genesis".to_owned(),
+				json::to_value(genesis)
+					.map_err(|e| format!("Error generating genesis json: {}", e))?,
+			);
 		}
 		json::to_string_pretty(&spec).map_err(|e| format!("Error generating spec json: {}", e))
 	}
@@ -143,23 +157,30 @@ impl ChainSpec {
 			hex!["063d7787ebca768b7445dfebe7d62cbb1625ff4dba288ea34488da266dd6dca5"].into(),
 			hex!["8101764f45778d4980dadaceee6e8af2517d3ab91ac9bec9cd1714fa5994081c"].into(),
 		];
-		let endowed_accounts = vec![
-			hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),
-		];
+		let endowed_accounts =
+			vec![hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into()];
 		Genesis::Runtime(GenesisConfig {
 			consensus: Some(ConsensusConfig {
-				code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),	// TODO change
+				code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(), // TODO change
 				authorities: initial_authorities.clone(),
 			}),
 			system: None,
 			session: Some(SessionConfig {
-				validators: initial_authorities.iter().cloned().map(Into::into).collect(),
-				session_length: 60,	// that's 5 minutes per session.
+				validators: initial_authorities
+					.iter()
+					.cloned()
+					.map(Into::into)
+					.collect(),
+				session_length: 60, // that's 5 minutes per session.
 				broken_percent_late: 50,
 			}),
 			staking: Some(StakingConfig {
 				current_era: 0,
-				intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
+				intentions: initial_authorities
+					.iter()
+					.cloned()
+					.map(Into::into)
+					.collect(),
 				transaction_base_fee: 100,
 				transaction_byte_fee: 1,
 				existential_deposit: 500,
@@ -169,34 +190,39 @@ impl ChainSpec {
 				reclaim_rebate: 0,
 				early_era_slash: 10000,
 				session_reward: 100,
-				balances: endowed_accounts.iter().map(|&k|(k, 1u128 << 60)).collect(),
+				balances: endowed_accounts.iter().map(|&k| (k, 1u128 << 60)).collect(),
 				validator_count: 12,
-				sessions_per_era: 12,	// 1 hour per era
-				bonding_duration: 24,	// 1 day per bond.
+				sessions_per_era: 12, // 1 hour per era
+				bonding_duration: 24, // 1 day per bond.
 			}),
 			democracy: Some(DemocracyConfig {
-				launch_period: 12 * 60 * 24,	// 1 day per public referendum
-				voting_period: 12 * 60 * 24 * 3,	// 3 days to discuss & vote on an active referendum
-				minimum_deposit: 5000,	// 12000 as the minimum deposit for a referendum
+				launch_period: 12 * 60 * 24,     // 1 day per public referendum
+				voting_period: 12 * 60 * 24 * 3, // 3 days to discuss & vote on an active referendum
+				minimum_deposit: 5000,           // 12000 as the minimum deposit for a referendum
 			}),
 			council: Some(CouncilConfig {
 				active_council: vec![],
-				candidacy_bond: 5000,	// 5000 to become a council candidate
-				voter_bond: 1000,		// 1000 down to vote for a candidate
-				present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
-				carry_count: 6,		// carry over the 6 runners-up to the next council election
-				presentation_duration: 12 * 60 * 24,	// one day for presenting winners.
-				approval_voting_period: 12 * 60 * 24 * 2,	// two days period between possible council elections.
-				term_duration: 12 * 60 * 24 * 24,	// 24 day term duration for the council.
-				desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
-				inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
+				candidacy_bond: 5000, // 5000 to become a council candidate
+				voter_bond: 1000,     // 1000 down to vote for a candidate
+				present_slash_per_voter: 1, /* slash by 1 per voter for an invalid
+				                       * presentation. */
+				carry_count: 6, // carry over the 6 runners-up to the next council election
+				presentation_duration: 12 * 60 * 24, // one day for presenting winners.
+				approval_voting_period: 12 * 60 * 24 * 2, // two days period between possible council elections.
+				term_duration: 12 * 60 * 24 * 24, // 24 day term duration for the council.
+				desired_seats: 0, /* start with no council: we'll raise this once the stake
+				                 * has
+				                 * been dispersed a bit. */
+				inactive_grace_period: 1, /* one addition vote should go by before an inactive
+				                           * voter can be reaped. */
 
-				cooloff_period: 12 * 60 * 24 * 4, // 4 day cooling off period if council member vetoes a proposal.
+				cooloff_period: 12 * 60 * 24 * 4, /* 4 day cooling off period if council member
+				                                   * vetoes a proposal. */
 				voting_period: 12 * 60 * 24, // 1 day voting period for council members.
 			}),
 			parachains: Some(Default::default()),
 			timestamp: Some(TimestampConfig {
-				period: 5,					// 5 second block time.
+				period: 5, // 5 second block time.
 			}),
 		})
 	}
@@ -208,34 +234,65 @@ impl ChainSpec {
 			"enode://c831ec9011d2c02d2c4620fc88db6d897a40d2f88fd75f47b9e4cf3b243999acb6f01b7b7343474650b34eeb1363041a422a91f1fc3850e43482983ee15aa582@104.211.48.247:30333".into(),
 		];
 		ChainSpec {
-			spec: ChainSpecFile { name: "PoC-2 Testnet".to_owned(), boot_nodes },
+			spec: ChainSpecFile {
+				name: "PoC-2 Testnet".to_owned(),
+				boot_nodes,
+			},
 			genesis: GenesisSource::Factory(Self::poc_2_testnet_config_genesis),
 		}
 	}
 
 	fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> Genesis {
 		let endowed_accounts = vec![
-			ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
-			ed25519::Pair::from_seed(b"Bob                             ").public().0.into(),
-			ed25519::Pair::from_seed(b"Charlie                         ").public().0.into(),
-			ed25519::Pair::from_seed(b"Dave                            ").public().0.into(),
-			ed25519::Pair::from_seed(b"Eve                             ").public().0.into(),
-			ed25519::Pair::from_seed(b"Ferdie                          ").public().0.into(),
+			ed25519::Pair::from_seed(b"Alice                           ")
+				.public()
+				.0
+				.into(),
+			ed25519::Pair::from_seed(b"Bob                             ")
+				.public()
+				.0
+				.into(),
+			ed25519::Pair::from_seed(b"Charlie                         ")
+				.public()
+				.0
+				.into(),
+			ed25519::Pair::from_seed(b"Dave                            ")
+				.public()
+				.0
+				.into(),
+			ed25519::Pair::from_seed(b"Eve                             ")
+				.public()
+				.0
+				.into(),
+			ed25519::Pair::from_seed(b"Ferdie                          ")
+				.public()
+				.0
+				.into(),
 		];
 		Genesis::Runtime(GenesisConfig {
 			consensus: Some(ConsensusConfig {
-				code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm").to_vec(),
+				code: include_bytes!(
+					"../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm"
+				).to_vec(),
 				authorities: initial_authorities.clone(),
 			}),
 			system: None,
 			session: Some(SessionConfig {
-				validators: initial_authorities.iter().cloned().map(Into::into).collect(),
+				validators: initial_authorities
+					.iter()
+					.cloned()
+					.map(Into::into)
+					.collect(),
 				session_length: 10,
 				broken_percent_late: 30,
 			}),
 			staking: Some(StakingConfig {
 				current_era: 0,
-				intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
+				intentions: initial_authorities
+					.iter()
+					.cloned()
+					.map(Into::into)
+					.collect(),
 				transaction_base_fee: 1,
 				transaction_byte_fee: 0,
 				existential_deposit: 500,
@@ -243,7 +300,10 @@ impl ChainSpec {
 				creation_fee: 0,
 				contract_fee: 0,
 				reclaim_rebate: 0,
-				balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60))).collect(),
+				balances: endowed_accounts
+					.iter()
+					.map(|&k| (k, (1u128 << 60)))
+					.collect(),
 				validator_count: 2,
 				sessions_per_era: 5,
 				bonding_duration: 2,
@@ -256,7 +316,11 @@ impl ChainSpec {
 				minimum_deposit: 10,
 			}),
 			council: Some(CouncilConfig {
-				active_council: endowed_accounts.iter().filter(|a| initial_authorities.iter().find(|&b| a.0 == b.0).is_none()).map(|a| (a.clone(), 1000000)).collect(),
+				active_council: endowed_accounts
+					.iter()
+					.filter(|a| initial_authorities.iter().find(|&b| a.0 == b.0).is_none())
+					.map(|a| (a.clone(), 1000000))
+					.collect(),
 				candidacy_bond: 10,
 				voter_bond: 2,
 				present_slash_per_voter: 1,
@@ -272,36 +336,48 @@ impl ChainSpec {
 			}),
 			parachains: Some(Default::default()),
 			timestamp: Some(TimestampConfig {
-				period: 5,					// 5 second block time.
+				period: 5, // 5 second block time.
 			}),
 		})
 	}
 
 	fn development_config_genesis() -> Genesis {
 		Self::testnet_genesis(vec![
-			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+			ed25519::Pair::from_seed(b"Alice                           ")
+				.public()
+				.into(),
 		])
 	}
 
 	/// Development config (single validator Alice)
 	pub fn development_config() -> Self {
 		ChainSpec {
-			spec: ChainSpecFile { name: "Development".to_owned(), boot_nodes: vec![] },
+			spec: ChainSpecFile {
+				name: "Development".to_owned(),
+				boot_nodes: vec![],
+			},
 			genesis: GenesisSource::Factory(Self::development_config_genesis),
 		}
 	}
 
 	fn local_testnet_genesis() -> Genesis {
 		Self::testnet_genesis(vec![
-			ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-			ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+			ed25519::Pair::from_seed(b"Alice                           ")
+				.public()
+				.into(),
+			ed25519::Pair::from_seed(b"Bob                             ")
+				.public()
+				.into(),
 		])
 	}
 
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn local_testnet_config() -> Self {
 		ChainSpec {
-			spec: ChainSpecFile { name: "Local Testnet".to_owned(), boot_nodes: vec![] },
+			spec: ChainSpecFile {
+				name: "Local Testnet".to_owned(),
+				boot_nodes: vec![],
+			},
 			genesis: GenesisSource::Factory(Self::local_testnet_genesis),
 		}
 	}

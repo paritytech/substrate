@@ -17,7 +17,6 @@
 //! Substrate RPC servers.
 
 #[warn(missing_docs)]
-
 pub extern crate substrate_rpc as apis;
 
 extern crate jsonrpc_core as rpc;
@@ -41,10 +40,11 @@ pub fn rpc_handler<Block: BlockT, S, C, A, Y>(
 	chain: C,
 	author: A,
 	system: Y,
-) -> RpcHandler where
+) -> RpcHandler
+where
 	Block: 'static,
 	S: apis::state::StateApi<Block::Hash>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, Metadata=Metadata>,
+	C: apis::chain::ChainApi<Block::Hash, Block::Header, Metadata = Metadata>,
 	A: apis::author::AuthorApi<Block::Hash, Block::Extrinsic>,
 	Y: apis::system::SystemApi,
 {
@@ -57,10 +57,7 @@ pub fn rpc_handler<Block: BlockT, S, C, A, Y>(
 }
 
 /// Start HTTP server listening on given address.
-pub fn start_http(
-	addr: &std::net::SocketAddr,
-	io: RpcHandler,
-) -> io::Result<http::Server> {
+pub fn start_http(addr: &std::net::SocketAddr, io: RpcHandler) -> io::Result<http::Server> {
 	http::ServerBuilder::new(io)
 		.threads(4)
 		.rest_api(http::RestApi::Unsecure)
@@ -69,18 +66,16 @@ pub fn start_http(
 }
 
 /// Start WS server listening on given address.
-pub fn start_ws(
-	addr: &std::net::SocketAddr,
-	io: RpcHandler,
-) -> io::Result<ws::Server> {
-	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
-		.start(addr)
+pub fn start_ws(addr: &std::net::SocketAddr, io: RpcHandler) -> io::Result<ws::Server> {
+	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| {
+		Metadata::new(context.sender())
+	}).start(addr)
 		.map_err(|err| match err {
 			ws::Error(ws::ErrorKind::Io(io), _) => io,
 			ws::Error(ws::ErrorKind::ConnectionClosed, _) => io::ErrorKind::BrokenPipe.into(),
 			ws::Error(e, _) => {
 				error!("{}", e);
 				io::ErrorKind::Other.into()
-			}
+			},
 		})
 }

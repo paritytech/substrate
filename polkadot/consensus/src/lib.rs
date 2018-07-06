@@ -33,22 +33,22 @@ extern crate ed25519;
 extern crate parking_lot;
 extern crate polkadot_api;
 extern crate polkadot_collator as collator;
-extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
-extern crate polkadot_transaction_pool as transaction_pool;
-extern crate polkadot_runtime;
 extern crate polkadot_primitives;
+extern crate polkadot_runtime;
+extern crate polkadot_statement_table as table;
+extern crate polkadot_transaction_pool as transaction_pool;
 
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
-extern crate substrate_primitives as primitives;
-extern crate substrate_runtime_support as runtime_support;
-extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_network;
+extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_runtime_support as runtime_support;
 
 extern crate exit_future;
-extern crate tokio_core;
 extern crate substrate_client as client;
+extern crate tokio_core;
 
 #[macro_use]
 extern crate error_chain;
@@ -67,24 +67,26 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use codec::Slicable;
-use table::generic::Statement as GenericStatement;
-use runtime_support::Hashable;
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt};
+use polkadot_primitives::parachain::{
+	BlockData, CandidateReceipt, Chain, DutyRoster, Extrinsic as ParachainExtrinsic, Id as ParaId,
+};
+use polkadot_primitives::{Block, BlockId, BlockNumber, Hash, Header, Timestamp};
 use polkadot_runtime::BareExtrinsic;
 use primitives::AuthorityId;
-use transaction_pool::{TransactionPool};
-use tokio_core::reactor::{Handle, Timeout, Interval};
+use runtime_support::Hashable;
+use table::generic::Statement as GenericStatement;
+use tokio_core::reactor::{Handle, Interval, Timeout};
+use transaction_pool::TransactionPool;
 
-use futures::prelude::*;
-use futures::future::{self, Shared};
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
+use futures::future::{self, Shared};
+use futures::prelude::*;
 
-pub use self::collation::{Collators, Collation};
-pub use self::error::{ErrorKind, Error};
-pub use self::shared_table::{SharedTable, StatementSource, StatementProducer, ProducedStatements};
+pub use self::collation::{Collation, Collators};
+pub use self::error::{Error, ErrorKind};
+pub use self::shared_table::{ProducedStatements, SharedTable, StatementProducer, StatementSource};
 pub use service::Service;
 
 mod collation;
@@ -104,12 +106,17 @@ pub trait TableRouter: Clone {
 	/// Errors when fetching data from the network.
 	type Error;
 	/// Future that resolves when candidate data is fetched.
-	type FetchCandidate: IntoFuture<Item=BlockData,Error=Self::Error>;
+	type FetchCandidate: IntoFuture<Item = BlockData, Error = Self::Error>;
 	/// Future that resolves when extrinsic candidate data is fetched.
-	type FetchExtrinsic: IntoFuture<Item=ParachainExtrinsic,Error=Self::Error>;
+	type FetchExtrinsic: IntoFuture<Item = ParachainExtrinsic, Error = Self::Error>;
 
 	/// Note local candidate data, making it available on the network to other validators.
-	fn local_candidate_data(&self, hash: Hash, block_data: BlockData, extrinsic: ParachainExtrinsic);
+	fn local_candidate_data(
+		&self,
+		hash: Hash,
+		block_data: BlockData,
+		extrinsic: ParachainExtrinsic,
+	);
 
 	/// Fetch block data for a specific candidate.
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> Self::FetchCandidate;
@@ -144,7 +151,11 @@ pub struct GroupInfo {
 /// Sign a table statement against a parent hash.
 /// The actual message signed is the encoded statement concatenated with the
 /// parent hash.
-pub fn sign_table_statement(statement: &table::Statement, key: &ed25519::Pair, parent_hash: &Hash) -> ed25519::Signature {
+pub fn sign_table_statement(
+	statement: &table::Statement,
+	key: &ed25519::Pair,
+	parent_hash: &Hash,
+) -> ed25519::Signature {
 	use polkadot_primitives::parachain::Statement as RawStatement;
 
 	let raw = match *statement {
@@ -160,19 +171,32 @@ pub fn sign_table_statement(statement: &table::Statement, key: &ed25519::Pair, p
 	key.sign(&encoded)
 }
 
-fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: AuthorityId) -> Result<(HashMap<ParaId, GroupInfo>, LocalDuty), Error> {
+fn make_group_info(
+	roster: DutyRoster,
+	authorities: &[AuthorityId],
+	local_id: AuthorityId,
+) -> Result<(HashMap<ParaId, GroupInfo>, LocalDuty), Error> {
 	if roster.validator_duty.len() != authorities.len() {
-		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), roster.validator_duty.len()))
+		bail!(ErrorKind::InvalidDutyRosterLength(
+			authorities.len(),
+			roster.validator_duty.len()
+		))
 	}
 
 	if roster.guarantor_duty.len() != authorities.len() {
-		bail!(ErrorKind::InvalidDutyRosterLength(authorities.len(), roster.guarantor_duty.len()))
+		bail!(ErrorKind::InvalidDutyRosterLength(
+			authorities.len(),
+			roster.guarantor_duty.len()
+		))
 	}
 
 	let mut local_validation = None;
 	let mut map = HashMap::new();
 
-	let duty_iter = authorities.iter().zip(&roster.validator_duty).zip(&roster.guarantor_duty);
+	let duty_iter = authorities
+		.iter()
+		.zip(&roster.validator_duty)
+		.zip(&roster.guarantor_duty);
 	for ((authority, v_duty), a_duty) in duty_iter {
 		if authority == &local_id {
 			local_validation = Some(v_duty.clone());
@@ -181,19 +205,21 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: Au
 		match *v_duty {
 			Chain::Relay => {}, // does nothing for now.
 			Chain::Parachain(ref id) => {
-				map.entry(id.clone()).or_insert_with(GroupInfo::default)
+				map.entry(id.clone())
+					.or_insert_with(GroupInfo::default)
 					.validity_guarantors
 					.insert(authority.clone());
-			}
+			},
 		}
 
 		match *a_duty {
 			Chain::Relay => {}, // does nothing for now.
 			Chain::Parachain(ref id) => {
-				map.entry(id.clone()).or_insert_with(GroupInfo::default)
+				map.entry(id.clone())
+					.or_insert_with(GroupInfo::default)
 					.availability_guarantors
 					.insert(authority.clone());
-			}
+			},
 		}
 	}
 
@@ -212,7 +238,7 @@ fn make_group_info(roster: DutyRoster, authorities: &[AuthorityId], local_id: Au
 			};
 
 			Ok((map, local_duty))
-		}
+		},
 		None => bail!(ErrorKind::NotValidator(local_id)),
 	}
 }
@@ -238,15 +264,20 @@ pub struct ProposerFactory<C, N, P> {
 }
 
 impl<C, N, P> bft::ProposerFactory<Block> for ProposerFactory<C, N, P>
-	where
-		C: PolkadotApi + Send + Sync,
-		N: Network,
-		P: Collators,
+where
+	C: PolkadotApi + Send + Sync,
+	N: Network,
+	P: Collators,
 {
 	type Proposer = Proposer<C, N::TableRouter, P>;
 	type Error = Error;
 
-	fn init(&self, parent_header: &Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>) -> Result<Self::Proposer, Error> {
+	fn init(
+		&self,
+		parent_header: &Header,
+		authorities: &[AuthorityId],
+		sign_with: Arc<ed25519::Pair>,
+	) -> Result<Self::Proposer, Error> {
 		use std::time::Duration;
 
 		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
@@ -257,11 +288,8 @@ impl<C, N, P> bft::ProposerFactory<Block> for ProposerFactory<C, N, P>
 		let duty_roster = self.client.duty_roster(&id)?;
 		let random_seed = self.client.random_seed(&id)?;
 
-		let (group_info, local_duty) = make_group_info(
-			duty_roster,
-			authorities,
-			sign_with.public().into(),
-		)?;
+		let (group_info, local_duty) =
+			make_group_info(duty_roster, authorities, sign_with.public().into())?;
 
 		let active_parachains = self.client.active_parachains(&id)?;
 
@@ -274,8 +302,7 @@ impl<C, N, P> bft::ProposerFactory<Block> for ProposerFactory<C, N, P>
 			self.parachain_empty_duration.clone(),
 		);
 
-		let timeout = Timeout::new(DELAY_UNTIL, &self.handle)
-			.map_err(|e| timer_error(&e))?;
+		let timeout = Timeout::new(DELAY_UNTIL, &self.handle).map_err(|e| timer_error(&e))?;
 
 		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
 			DELAY_UNTIL);
@@ -323,26 +350,23 @@ pub struct Proposer<C: PolkadotApi, R, P> {
 }
 
 impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
-	where
-		C: PolkadotApi + Send + Sync,
-		R: TableRouter,
-		P: Collators,
+where
+	C: PolkadotApi + Send + Sync,
+	R: TableRouter,
+	P: Collators,
 {
 	type Error = Error;
-	type Create = future::Either<
-		CreateProposal<C, R, P>,
-		future::FutureResult<Block, Error>,
-	>;
-	type Evaluate = Box<Future<Item=bool, Error=Error>>;
+	type Create = future::Either<CreateProposal<C, R, P>, future::FutureResult<Block, Error>>;
+	type Evaluate = Box<Future<Item = bool, Error = Error>>;
 
 	fn propose(&self) -> Self::Create {
 		const ATTEMPT_PROPOSE_EVERY: Duration = Duration::from_millis(100);
 
 		let initial_included = self.table.includable_count();
-		let enough_candidates = self.dynamic_inclusion.acceptable_in(
-			Instant::now(),
-			initial_included,
-		).unwrap_or_default();
+		let enough_candidates = self
+			.dynamic_inclusion
+			.acceptable_in(Instant::now(), initial_included)
+			.unwrap_or_default();
 
 		let timing = {
 			let delay = self.delay.clone();
@@ -361,9 +385,7 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 
 			match make_timing(&self.handle) {
 				Ok(timing) => timing,
-				Err(e) => {
-					return future::Either::B(future::err(timer_error(&e)));
-				}
+				Err(e) => return future::Either::B(future::err(timer_error(&e))),
 			}
 		};
 
@@ -378,7 +400,7 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 				self.parent_id.clone(),
 				self.parent_hash.clone(),
 				self.collators.clone(),
-				self.client.clone()
+				self.client.clone(),
 			),
 			table: self.table.clone(),
 			router: self.router.clone(),
@@ -410,14 +432,13 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 			Err(e) => {
 				// TODO: these errors are easily re-checked in runtime.
 				debug!(target: "bft", "Invalid proposal: {:?}", e);
-				return Box::new(future::ok(false));
-			}
+				return Box::new(future::ok(false))
+			},
 		};
 
 		let vote_delays = {
 			// delay casting vote until able (according to minimum block time)
-			let minimum_delay = self.delay.clone()
-				.map_err(|e| timer_error(&*e));
+			let minimum_delay = self.delay.clone().map_err(|e| timer_error(&*e));
 
 			let included_candidate_hashes = proposal
 				.parachain_heads()
@@ -426,14 +447,15 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 
 			// delay casting vote until we have proof that all candidates are
 			// includable.
-			let includability_tracker = self.table.track_includability(included_candidate_hashes)
+			let includability_tracker = self
+				.table
+				.track_includability(included_candidate_hashes)
 				.map_err(|_| ErrorKind::PrematureDestruction.into());
 
 			// the duration at which the given number of parachains is acceptable.
-			let count_delay = self.dynamic_inclusion.acceptable_in(
-				Instant::now(),
-				proposal.parachain_heads().len(),
-			);
+			let count_delay = self
+				.dynamic_inclusion
+				.acceptable_in(Instant::now(), proposal.parachain_heads().len());
 
 			// the duration until the given timestamp is current
 			let proposed_timestamp = proposal.timestamp();
@@ -453,7 +475,7 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 						.map_err(|e| timer_error(&e));
 
 					future::Either::A(f)
-				}
+				},
 				None => future::Either::B(future::ok(())),
 			};
 
@@ -462,7 +484,8 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 
 		// evaluate whether the block is actually valid.
 		// TODO: is it better to delay this until the delays are finished?
-		let evaluated = self.client
+		let evaluated = self
+			.client
 			.evaluate_block(&self.parent_id, unchecked_proposal.clone())
 			.map_err(Into::into);
 
@@ -495,29 +518,33 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<Hash>)>) {
 		use bft::generic::Misbehavior as GenericMisbehavior;
+		use polkadot_runtime::{Call, ConsensusCall, Extrinsic, UncheckedExtrinsic};
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use runtime_primitives::MaybeUnsigned;
-		use polkadot_runtime::{Call, Extrinsic, UncheckedExtrinsic, ConsensusCall};
 
 		let local_id = self.local_key.public().0.into();
 		let mut next_index = {
-			let cur_index = self.transaction_pool.cull_and_get_pending(BlockId::hash(self.parent_hash), |pending| pending
-				.filter(|tx| tx.sender().map(|s| s == local_id).unwrap_or(false))
-				.last()
-				.map(|tx| Ok(tx.index()))
-				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id))
+			let cur_index = self.transaction_pool.cull_and_get_pending(
+				BlockId::hash(self.parent_hash),
+				|pending| {
+					pending
+						.filter(|tx| tx.sender().map(|s| s == local_id).unwrap_or(false))
+						.last()
+						.map(|tx| Ok(tx.index()))
+						.unwrap_or_else(|| self.client.index(&self.parent_id, local_id))
+				},
 			);
 
 			match cur_index {
 				Ok(Ok(cur_index)) => cur_index + 1,
 				Ok(Err(e)) => {
 					warn!(target: "consensus", "Error computing next transaction index: {}", e);
-					return;
-				}
+					return
+				},
 				Err(e) => {
 					warn!(target: "consensus", "Error computing next transaction index: {}", e);
-					return;
-				}
+					return
+				},
 			}
 		};
 
@@ -529,11 +556,19 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 				misbehavior: match misbehavior {
 					GenericMisbehavior::ProposeOutOfTurn(_, _, _) => continue,
 					GenericMisbehavior::DoublePropose(_, _, _) => continue,
-					GenericMisbehavior::DoublePrepare(round, (h1, s1), (h2, s2))
-						=> MisbehaviorKind::BftDoublePrepare(round as u32, (h1, s1.signature), (h2, s2.signature)),
-					GenericMisbehavior::DoubleCommit(round, (h1, s1), (h2, s2))
-						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1, s1.signature), (h2, s2.signature)),
-				}
+					GenericMisbehavior::DoublePrepare(round, (h1, s1), (h2, s2)) =>
+						MisbehaviorKind::BftDoublePrepare(
+							round as u32,
+							(h1, s1.signature),
+							(h2, s2.signature),
+						),
+					GenericMisbehavior::DoubleCommit(round, (h1, s1), (h2, s2)) =>
+						MisbehaviorKind::BftDoubleCommit(
+							round as u32,
+							(h1, s1.signature),
+							(h2, s2.signature),
+						),
+				},
 			};
 			let extrinsic = BareExtrinsic {
 				signed: local_id,
@@ -552,7 +587,8 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 			};
 			let uxt = UncheckedExtrinsic::new(extrinsic, signature);
 
-			self.transaction_pool.import_unchecked_extrinsic(BlockId::hash(self.parent_hash), uxt)
+			self.transaction_pool
+				.import_unchecked_extrinsic(BlockId::hash(self.parent_hash), uxt)
 				.expect("locally signed extrinsic is valid; qed");
 		}
 	}
@@ -561,7 +597,8 @@ impl<C, R, P> bft::Proposer<Block> for Proposer<C, R, P>
 fn current_timestamp() -> Timestamp {
 	use std::time;
 
-	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
+	time::SystemTime::now()
+		.duration_since(time::UNIX_EPOCH)
 		.expect("now always later than unix epoch; qed")
 		.as_secs()
 }
@@ -583,9 +620,7 @@ impl ProposalTiming {
 		//
 		// this interval is just meant to produce periodic task wakeups
 		// that lead to the `dynamic_inclusion` getting updated as necessary.
-		if let Async::Ready(x) = self.attempt_propose.poll()
-			.map_err(|e| timer_error(&e))?
-		{
+		if let Async::Ready(x) = self.attempt_propose.poll().map_err(|e| timer_error(&e))? {
 			x.expect("timer still alive; intervals never end; qed");
 		}
 
@@ -596,7 +631,7 @@ impl ProposalTiming {
 		self.minimum_delay = None; // after this point, the future must have completed.
 
 		if included == self.last_included {
-			return self.enough_candidates.poll().map_err(|e| timer_error(&e));
+			return self.enough_candidates.poll().map_err(|e| timer_error(&e))
 		}
 
 		// the amount of includable candidates has changed. schedule a wakeup
@@ -607,16 +642,14 @@ impl ProposalTiming {
 				self.last_included = included;
 				self.enough_candidates.reset(now + duration);
 				self.enough_candidates.poll().map_err(|e| timer_error(&e))
-			}
-			None => {
-				Ok(Async::Ready(()))
-			}
+			},
+			None => Ok(Async::Ready(())),
 		}
 	}
 }
 
 /// Future which resolves upon the creation of a proposal.
-pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
+pub struct CreateProposal<C: PolkadotApi, R, P: Collators> {
 	parent_hash: Hash,
 	parent_number: BlockNumber,
 	parent_id: BlockId,
@@ -629,43 +662,50 @@ pub struct CreateProposal<C: PolkadotApi, R, P: Collators>  {
 }
 
 impl<C, R, P> CreateProposal<C, R, P>
-	where
-		C: PolkadotApi,
-		R: TableRouter,
-		P: Collators,
+where
+	C: PolkadotApi,
+	R: TableRouter,
+	P: Collators,
 {
 	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<Block, Error> {
 		use polkadot_api::BlockBuilder;
-		use runtime_primitives::traits::{Hashing, BlakeTwo256};
+		use runtime_primitives::traits::{BlakeTwo256, Hashing};
 
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();
-		let mut block_builder = self.client.build_block(&self.parent_id, timestamp, candidates)?;
+		let mut block_builder = self
+			.client
+			.build_block(&self.parent_id, timestamp, candidates)?;
 
 		{
 			let mut unqueue_invalid = Vec::new();
-			let result = self.transaction_pool.cull_and_get_pending(BlockId::hash(self.parent_hash), |pending_iterator| {
-				let mut pending_size = 0;
-				for pending in pending_iterator {
-					// skip and cull transactions which are too large.
-					if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
-						unqueue_invalid.push(pending.hash().clone());
-						continue
-					}
-
-					if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
-
-					match block_builder.push_extrinsic(pending.primitive_extrinsic()) {
-						Ok(()) => {
-							pending_size += pending.encoded_size();
-						}
-						Err(e) => {
-							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+			let result = self.transaction_pool.cull_and_get_pending(
+				BlockId::hash(self.parent_hash),
+				|pending_iterator| {
+					let mut pending_size = 0;
+					for pending in pending_iterator {
+						// skip and cull transactions which are too large.
+						if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
 							unqueue_invalid.push(pending.hash().clone());
+							continue
+						}
+
+						if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE {
+							break
+						}
+
+						match block_builder.push_extrinsic(pending.primitive_extrinsic()) {
+							Ok(()) => {
+								pending_size += pending.encoded_size();
+							},
+							Err(e) => {
+								trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+								unqueue_invalid.push(pending.hash().clone());
+							},
 						}
 					}
-				}
-			});
+				},
+			);
 			if let Err(e) = result {
 				warn!("Unable to get the pending set: {:?}", e);
 			}
@@ -675,11 +715,14 @@ impl<C, R, P> CreateProposal<C, R, P>
 
 		let polkadot_block = block_builder.bake()?;
 
-		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
+		info!(
+			"Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
 			polkadot_block.header.number,
 			Hash::from(polkadot_block.header.hash()),
 			polkadot_block.header.parent_hash,
-			polkadot_block.extrinsics.iter()
+			polkadot_block
+				.extrinsics
+				.iter()
 				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
 				.collect::<Vec<_>>()
 				.join(", ")
@@ -690,23 +733,25 @@ impl<C, R, P> CreateProposal<C, R, P>
 
 		// TODO: full re-evaluation
 		let active_parachains = self.client.active_parachains(&self.parent_id)?;
-		assert!(evaluation::evaluate_initial(
-			&substrate_block,
-			timestamp,
-			&self.parent_hash,
-			self.parent_number,
-			&active_parachains,
-		).is_ok());
+		assert!(
+			evaluation::evaluate_initial(
+				&substrate_block,
+				timestamp,
+				&self.parent_hash,
+				self.parent_number,
+				&active_parachains,
+			).is_ok()
+		);
 
 		Ok(substrate_block)
 	}
 }
 
 impl<C, R, P> Future for CreateProposal<C, R, P>
-	where
-		C: PolkadotApi,
-		R: TableRouter,
-		P: Collators,
+where
+	C: PolkadotApi,
+	R: TableRouter,
+	P: Collators,
 {
 	type Item = Block;
 	type Error = Error;
@@ -716,11 +761,14 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 		match self.collation.poll() {
 			Ok(Async::Ready((collation, extrinsic))) => {
 				let hash = collation.receipt.hash();
-				self.router.local_candidate_data(hash, collation.block_data, extrinsic);
+				self.router
+					.local_candidate_data(hash, collation.block_data, extrinsic);
 
-				// TODO: if we are an availability guarantor also, we should produce an availability statement.
-				self.table.sign_and_import(&self.router, GenericStatement::Candidate(collation.receipt));
-			}
+				// TODO: if we are an availability guarantor also, we should produce an
+				// availability statement.
+				self.table
+					.sign_and_import(&self.router, GenericStatement::Candidate(collation.receipt));
+			},
 			Ok(Async::NotReady) => {},
 			Err(_) => {}, // TODO: handle this failure to collate.
 		}
@@ -731,9 +779,9 @@ impl<C, R, P> Future for CreateProposal<C, R, P>
 		try_ready!(self.timing.poll(included));
 
 		// 3. propose
-		let proposed_candidates = self.table.with_proposal(|proposed_set| {
-			proposed_set.into_iter().cloned().collect()
-		});
+		let proposed_candidates = self
+			.table
+			.with_proposal(|proposed_set| proposed_set.into_iter().cloned().collect());
 
 		self.propose_with(proposed_candidates).map(Async::Ready)
 	}

@@ -27,10 +27,10 @@
 //! propose and attest to validity of candidates, and those who can only attest
 //! to availability.
 
+use std::collections::hash_map::{Entry, HashMap};
 use std::collections::HashSet;
-use std::collections::hash_map::{HashMap, Entry};
-use std::hash::Hash;
 use std::fmt::Debug;
+use std::hash::Hash;
 
 /// A batch of statements to send out.
 pub trait StatementBatch<V, T> {
@@ -290,8 +290,8 @@ impl<C: Context> Table<C> {
 	///
 	/// The vector is sorted in ascending order by group id.
 	pub fn proposed_candidates<'a>(&'a self, context: &C) -> Vec<&'a C::Candidate> {
-		use std::collections::BTreeMap;
 		use std::collections::btree_map::Entry as BTreeEntry;
+		use std::collections::BTreeMap;
 
 		let mut best_candidates = BTreeMap::new();
 		for candidate_data in self.candidate_votes.values() {
@@ -303,7 +303,9 @@ impl<C: Context> Table<C> {
 
 			let (validity_t, availability_t) = context.requisite_votes(group_id);
 
-			if !candidate_data.can_be_included(validity_t, availability_t) { continue }
+			if !candidate_data.can_be_included(validity_t, availability_t) {
+				continue
+			}
 			let candidate = &candidate_data.candidate;
 			match best_candidates.entry(group_id.clone()) {
 				BTreeEntry::Occupied(mut occ) => {
@@ -311,8 +313,10 @@ impl<C: Context> Table<C> {
 					if *candidate_ref > candidate {
 						*candidate_ref = candidate;
 					}
-				}
-				BTreeEntry::Vacant(vacant) => { vacant.insert(candidate); },
+				},
+				BTreeEntry::Vacant(vacant) => {
+					vacant.insert(candidate);
+				},
 			}
 		}
 
@@ -336,9 +340,13 @@ impl<C: Context> Table<C> {
 		&mut self,
 		context: &C,
 		statement: SignedStatement<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
-		from: Option<C::AuthorityId>
+		from: Option<C::AuthorityId>,
 	) -> Option<Summary<C::Digest, C::GroupId>> {
-		let SignedStatement { statement, signature, sender: signer } = statement;
+		let SignedStatement {
+			statement,
+			signature,
+			sender: signer,
+		} = statement;
 
 		let trace = match statement {
 			Statement::Candidate(_) => StatementTrace::Candidate(signer.clone()),
@@ -348,12 +356,8 @@ impl<C: Context> Table<C> {
 		};
 
 		let (maybe_misbehavior, maybe_summary) = match statement {
-			Statement::Candidate(candidate) => self.import_candidate(
-				context,
-				signer.clone(),
-				candidate,
-				signature
-			),
+			Statement::Candidate(candidate) =>
+				self.import_candidate(context, signer.clone(), candidate, signature),
 			Statement::Valid(digest) => self.validity_vote(
 				context,
 				signer.clone(),
@@ -366,12 +370,8 @@ impl<C: Context> Table<C> {
 				digest,
 				ValidityVote::Invalid(signature),
 			),
-			Statement::Available(digest) => self.availability_vote(
-				context,
-				signer.clone(),
-				digest,
-				signature,
-			),
+			Statement::Available(digest) =>
+				self.availability_vote(context, signer.clone(), digest, signature),
 		};
 
 		if let Some(misbehavior) = maybe_misbehavior {
@@ -395,9 +395,9 @@ impl<C: Context> Table<C> {
 	}
 
 	/// Access all witnessed misbehavior.
-	pub fn get_misbehavior(&self)
-		-> &HashMap<C::AuthorityId, <C as ResolveMisbehavior>::Misbehavior>
-	{
+	pub fn get_misbehavior(
+		&self,
+	) -> &HashMap<C::AuthorityId, <C as ResolveMisbehavior>::Misbehavior> {
 		&self.detected_misbehavior
 	}
 
@@ -408,10 +408,11 @@ impl<C: Context> Table<C> {
 
 	/// Fill a statement batch and note messages as seen by the targets.
 	pub fn fill_batch<B>(&mut self, batch: &mut B)
-		where B: StatementBatch<
+	where
+		B: StatementBatch<
 			C::AuthorityId,
 			SignedStatement<C::Candidate, C::Digest, C::AuthorityId, C::Signature>,
-		>
+		>,
 	{
 		// naively iterate all statements so far, taking any that
 		// at least one of the targets has not seen.
@@ -447,16 +448,17 @@ impl<C: Context> Table<C> {
 
 			SwappedTargetData {
 				authority_data,
-				target_data
+				target_data,
 			}
 		};
 
 		let target_data = &mut target_data.target_data;
 
 		macro_rules! attempt_send {
-			($trace:expr, sender=$sender:expr, sig=$sig:expr, statement=$statement:expr) => {{
+			($trace:expr,sender = $sender:expr,sig = $sig:expr,statement = $statement:expr) => {{
 				let trace = $trace;
-				let can_send = target_data.iter()
+				let can_send = target_data
+					.iter()
 					.any(|t| !t.1.known_statements.contains(&trace));
 
 				if can_send {
@@ -471,50 +473,53 @@ impl<C: Context> Table<C> {
 							target.1.known_statements.insert(trace.clone());
 						}
 					} else {
-						return;
+						return
+						}
 					}
-				}
-			}}
+				}};
 		}
 
 		// reconstruct statements for anything whose trace passes the filter.
 		for (digest, candidate) in self.candidate_votes.iter() {
-			let issuance_iter = candidate.validity_votes.iter()
-				.filter(|&(_, x)| if let ValidityVote::Issued(_) = *x { true } else { false });
+			let issuance_iter = candidate.validity_votes.iter().filter(|&(_, x)| {
+				if let ValidityVote::Issued(_) = *x {
+					true
+				} else {
+					false
+				}
+			});
 
-			let validity_iter = candidate.validity_votes.iter()
-				.filter(|&(_, x)| if let ValidityVote::Issued(_) = *x { false } else { true });
+			let validity_iter = candidate.validity_votes.iter().filter(|&(_, x)| {
+				if let ValidityVote::Issued(_) = *x {
+					false
+				} else {
+					true
+				}
+			});
 
 			// send issuance statements before votes.
 			for (sender, vote) in issuance_iter.chain(validity_iter) {
 				match *vote {
-					ValidityVote::Issued(ref sig) => {
-						attempt_send!(
-							StatementTrace::Candidate(sender.clone()),
-							sender = sender.clone(),
-							sig = sig.clone(),
-							statement = Statement::Candidate(candidate.candidate.clone())
-						)
-					}
-					ValidityVote::Valid(ref sig) => {
-						attempt_send!(
-							StatementTrace::Valid(sender.clone(), digest.clone()),
-							sender = sender.clone(),
-							sig = sig.clone(),
-							statement = Statement::Valid(digest.clone())
-						)
-					}
-					ValidityVote::Invalid(ref sig) => {
-						attempt_send!(
-							StatementTrace::Invalid(sender.clone(), digest.clone()),
-							sender = sender.clone(),
-							sig = sig.clone(),
-							statement = Statement::Invalid(digest.clone())
-						)
-					}
+					ValidityVote::Issued(ref sig) => attempt_send!(
+						StatementTrace::Candidate(sender.clone()),
+						sender = sender.clone(),
+						sig = sig.clone(),
+						statement = Statement::Candidate(candidate.candidate.clone())
+					),
+					ValidityVote::Valid(ref sig) => attempt_send!(
+						StatementTrace::Valid(sender.clone(), digest.clone()),
+						sender = sender.clone(),
+						sig = sig.clone(),
+						statement = Statement::Valid(digest.clone())
+					),
+					ValidityVote::Invalid(ref sig) => attempt_send!(
+						StatementTrace::Invalid(sender.clone(), digest.clone()),
+						sender = sender.clone(),
+						sig = sig.clone(),
+						statement = Statement::Invalid(digest.clone())
+					),
 				}
-			};
-
+			}
 
 			// and lastly send availability.
 			for (sender, sig) in candidate.availability_votes.iter() {
@@ -526,14 +531,21 @@ impl<C: Context> Table<C> {
 				)
 			}
 		}
-
 	}
 
-	fn note_trace_seen(&mut self, trace: StatementTrace<C::AuthorityId, C::Digest>, known_by: C::AuthorityId) {
-		self.authority_data.entry(known_by).or_insert_with(|| AuthorityData {
-			proposal: None,
-			known_statements: HashSet::default(),
-		}).known_statements.insert(trace);
+	fn note_trace_seen(
+		&mut self,
+		trace: StatementTrace<C::AuthorityId, C::Digest>,
+		known_by: C::AuthorityId,
+	) {
+		self.authority_data
+			.entry(known_by)
+			.or_insert_with(|| AuthorityData {
+				proposal: None,
+				known_statements: HashSet::default(),
+			})
+			.known_statements
+			.insert(trace);
 	}
 
 	fn import_candidate(
@@ -542,7 +554,10 @@ impl<C: Context> Table<C> {
 		from: C::AuthorityId,
 		candidate: C::Candidate,
 		signature: C::Signature,
-	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
+	) -> (
+		Option<<C as ResolveMisbehavior>::Misbehavior>,
+		Option<Summary<C::Digest, C::GroupId>>,
+	) {
 		let group = C::candidate_group(&candidate);
 		if !context.is_member_of(&from, &group) {
 			return (
@@ -554,7 +569,7 @@ impl<C: Context> Table<C> {
 					},
 				})),
 				None,
-			);
+			)
 		}
 
 		// check that authority hasn't already specified another candidate.
@@ -570,10 +585,12 @@ impl<C: Context> Table<C> {
 					if old_digest != &digest {
 						const EXISTENCE_PROOF: &str =
 							"when proposal first received from authority, candidate \
-							votes entry is created. proposal here is `Some`, therefore \
-							candidate votes entry exists; qed";
+							 votes entry is created. proposal here is `Some`, therefore \
+							 candidate votes entry exists; qed";
 
-						let old_candidate = self.candidate_votes.get(old_digest)
+						let old_candidate = self
+							.candidate_votes
+							.get(old_digest)
 							.expect(EXISTENCE_PROOF)
 							.candidate
 							.clone();
@@ -584,7 +601,7 @@ impl<C: Context> Table<C> {
 								second: (candidate, signature.clone()),
 							})),
 							None,
-						);
+						)
 					}
 
 					false
@@ -592,34 +609,31 @@ impl<C: Context> Table<C> {
 					existing.proposal = Some((digest.clone(), signature.clone()));
 					true
 				}
-			}
+			},
 			Entry::Vacant(vacant) => {
 				vacant.insert(AuthorityData {
 					proposal: Some((digest.clone(), signature.clone())),
 					known_statements: HashSet::new(),
 				});
 				true
-			}
+			},
 		};
 
 		// NOTE: altering this code may affect the existence proof above. ensure it remains
 		// valid.
 		if new_proposal {
-			self.candidate_votes.entry(digest.clone()).or_insert_with(move || CandidateData {
-				group_id: group,
-				candidate: candidate,
-				validity_votes: HashMap::new(),
-				availability_votes: HashMap::new(),
-				indicated_bad_by: Vec::new(),
-			});
+			self.candidate_votes
+				.entry(digest.clone())
+				.or_insert_with(move || CandidateData {
+					group_id: group,
+					candidate,
+					validity_votes: HashMap::new(),
+					availability_votes: HashMap::new(),
+					indicated_bad_by: Vec::new(),
+				});
 		}
 
-		self.validity_vote(
-			context,
-			from,
-			digest,
-			ValidityVote::Issued(signature),
-		)
+		self.validity_vote(context, from, digest, ValidityVote::Issued(signature))
 	}
 
 	fn validity_vote(
@@ -628,7 +642,10 @@ impl<C: Context> Table<C> {
 		from: C::AuthorityId,
 		digest: C::Digest,
 		vote: ValidityVote<C::Signature>,
-	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
+	) -> (
+		Option<<C as ResolveMisbehavior>::Misbehavior>,
+		Option<Summary<C::Digest, C::GroupId>>,
+	) {
 		let votes = match self.candidate_votes.get_mut(&digest) {
 			None => return (None, None), // TODO: queue up but don't get DoS'ed
 			Some(votes) => votes,
@@ -642,9 +659,10 @@ impl<C: Context> Table<C> {
 			let (sig, valid) = match vote {
 				ValidityVote::Valid(s) => (s, true),
 				ValidityVote::Invalid(s) => (s, false),
-				ValidityVote::Issued(_) =>
-					panic!("implicit issuance vote only cast from `import_candidate` after \
-							checking group membership of issuer; qed"),
+				ValidityVote::Issued(_) => panic!(
+					"implicit issuance vote only cast from `import_candidate` after \
+					 checking group membership of issuer; qed"
+				),
 			};
 
 			return (
@@ -656,11 +674,11 @@ impl<C: Context> Table<C> {
 							Statement::Valid(digest)
 						} else {
 							Statement::Invalid(digest)
-						}
-					}
+						},
+					},
 				})),
 				None,
-			);
+			)
 		}
 
 		// check for double votes.
@@ -668,20 +686,26 @@ impl<C: Context> Table<C> {
 			Entry::Occupied(occ) => {
 				if occ.get() != &vote {
 					let double_vote_proof = match (occ.get().clone(), vote) {
-						(ValidityVote::Issued(iss), ValidityVote::Valid(good)) |
-						(ValidityVote::Valid(good), ValidityVote::Issued(iss)) =>
-							ValidityDoubleVote::IssuedAndValidity((votes.candidate.clone(), iss), (digest, good)),
-						(ValidityVote::Issued(iss), ValidityVote::Invalid(bad)) |
-						(ValidityVote::Invalid(bad), ValidityVote::Issued(iss)) =>
-							ValidityDoubleVote::IssuedAndInvalidity((votes.candidate.clone(), iss), (digest, bad)),
-						(ValidityVote::Valid(good), ValidityVote::Invalid(bad)) |
-						(ValidityVote::Invalid(bad), ValidityVote::Valid(good)) =>
+						(ValidityVote::Issued(iss), ValidityVote::Valid(good))
+						| (ValidityVote::Valid(good), ValidityVote::Issued(iss)) =>
+							ValidityDoubleVote::IssuedAndValidity(
+								(votes.candidate.clone(), iss),
+								(digest, good),
+							),
+						(ValidityVote::Issued(iss), ValidityVote::Invalid(bad))
+						| (ValidityVote::Invalid(bad), ValidityVote::Issued(iss)) =>
+							ValidityDoubleVote::IssuedAndInvalidity(
+								(votes.candidate.clone(), iss),
+								(digest, bad),
+							),
+						(ValidityVote::Valid(good), ValidityVote::Invalid(bad))
+						| (ValidityVote::Invalid(bad), ValidityVote::Valid(good)) =>
 							ValidityDoubleVote::ValidityAndInvalidity(digest, good, bad),
 						_ => {
 							// this would occur if two different but valid signatures
 							// on the same kind of vote occurred.
-							return (None, None);
-						}
+							return (None, None)
+						},
 					};
 
 					return (
@@ -690,19 +714,24 @@ impl<C: Context> Table<C> {
 					)
 				}
 
-				return (None, None);
-			}
+				return (None, None)
+			},
 			Entry::Vacant(vacant) => {
 				if let ValidityVote::Invalid(_) = vote {
 					votes.indicated_bad_by.push(from);
 				}
 
 				vacant.insert(vote);
-			}
+			},
 		}
 
 		let is_includable = votes.can_be_included(v_threshold, a_threshold);
-		update_includable_count(&mut self.includable_count, &votes.group_id, was_includable, is_includable);
+		update_includable_count(
+			&mut self.includable_count,
+			&votes.group_id,
+			was_includable,
+			is_includable,
+		);
 
 		(None, Some(votes.summary(digest)))
 	}
@@ -713,7 +742,10 @@ impl<C: Context> Table<C> {
 		from: C::AuthorityId,
 		digest: C::Digest,
 		signature: C::Signature,
-	) -> (Option<<C as ResolveMisbehavior>::Misbehavior>, Option<Summary<C::Digest, C::GroupId>>) {
+	) -> (
+		Option<<C as ResolveMisbehavior>::Misbehavior>,
+		Option<Summary<C::Digest, C::GroupId>>,
+	) {
 		let votes = match self.candidate_votes.get_mut(&digest) {
 			None => return (None, None), // TODO: queue up but don't get DoS'ed
 			Some(votes) => votes,
@@ -730,22 +762,32 @@ impl<C: Context> Table<C> {
 						signature: signature.clone(),
 						statement: Statement::Available(digest),
 						sender: from,
-					}
+					},
 				})),
-				None
-			);
+				None,
+			)
 		}
 
 		votes.availability_votes.insert(from, signature);
 
 		let is_includable = votes.can_be_included(v_threshold, a_threshold);
-		update_includable_count(&mut self.includable_count, &votes.group_id, was_includable, is_includable);
+		update_includable_count(
+			&mut self.includable_count,
+			&votes.group_id,
+			was_includable,
+			is_includable,
+		);
 
 		(None, Some(votes.summary(digest)))
 	}
 }
 
-fn update_includable_count<G: Hash + Eq + Clone>(map: &mut HashMap<G, usize>, group_id: &G, was_includable: bool, is_includable: bool) {
+fn update_includable_count<G: Hash + Eq + Clone>(
+	map: &mut HashMap<G, usize>,
+	group_id: &G,
+	was_includable: bool,
+	is_includable: bool,
+) {
 	if was_includable && !is_includable {
 		if let Entry::Occupied(mut entry) = map.entry(group_id.clone()) {
 			*entry.get_mut() -= 1;
@@ -773,8 +815,12 @@ mod tests {
 	}
 
 	impl<V, T> ::generic::StatementBatch<V, T> for VecBatch<V, T> {
-		fn targets(&self) -> &[V] { &self.targets }
-		fn is_empty(&self) -> bool { self.items.is_empty() }
+		fn targets(&self) -> &[V] {
+			&self.targets
+		}
+		fn is_empty(&self) -> bool {
+			self.items.is_empty()
+		}
 		fn push(&mut self, item: T) -> bool {
 			if self.items.len() == self.max_len {
 				false
@@ -808,7 +854,7 @@ mod tests {
 	#[derive(Debug, PartialEq, Eq)]
 	struct TestContext {
 		// v -> (validity, availability)
-		authorities: HashMap<AuthorityId, (GroupId, GroupId)>
+		authorities: HashMap<AuthorityId, (GroupId, GroupId)>,
 	}
 
 	impl Context for TestContext {
@@ -826,20 +872,18 @@ mod tests {
 			GroupId(candidate.0)
 		}
 
-		fn is_member_of(
-			&self,
-			authority: &AuthorityId,
-			group: &GroupId
-		) -> bool {
-			self.authorities.get(authority).map(|v| &v.0 == group).unwrap_or(false)
+		fn is_member_of(&self, authority: &AuthorityId, group: &GroupId) -> bool {
+			self.authorities
+				.get(authority)
+				.map(|v| &v.0 == group)
+				.unwrap_or(false)
 		}
 
-		fn is_availability_guarantor_of(
-			&self,
-			authority: &AuthorityId,
-			group: &GroupId
-		) -> bool {
-			self.authorities.get(authority).map(|v| &v.1 == group).unwrap_or(false)
+		fn is_availability_guarantor_of(&self, authority: &AuthorityId, group: &GroupId) -> bool {
+			self.authorities
+				.get(authority)
+				.map(|v| &v.1 == group)
+				.unwrap_or(false)
 		}
 
 		fn requisite_votes(&self, id: &GroupId) -> (usize, usize) {
@@ -847,8 +891,12 @@ mod tests {
 			let mut total_availability = 0;
 
 			for &(ref validity, ref availability) in self.authorities.values() {
-				if validity == id { total_validity += 1 }
-				if availability == id { total_availability += 1 }
+				if validity == id {
+					total_validity += 1
+				}
+				if availability == id {
+					total_availability += 1
+				}
 			}
 
 			(total_validity / 2 + 1, total_availability / 2 + 1)
@@ -862,7 +910,7 @@ mod tests {
 				let mut map = HashMap::new();
 				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map
-			}
+			},
 		};
 
 		let mut table = create();
@@ -898,7 +946,7 @@ mod tests {
 				let mut map = HashMap::new();
 				map.insert(AuthorityId(1), (GroupId(3), GroupId(455)));
 				map
-			}
+			},
 		};
 
 		let mut table = create();
@@ -930,7 +978,7 @@ mod tests {
 				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map.insert(AuthorityId(2), (GroupId(3), GroupId(222)));
 				map
-			}
+			},
 		};
 
 		let mut table = create();
@@ -1001,7 +1049,7 @@ mod tests {
 				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map.insert(AuthorityId(2), (GroupId(2), GroupId(246)));
 				map
-			}
+			},
 		};
 
 		let mut table = create();
@@ -1049,7 +1097,7 @@ mod tests {
 				let mut map = HashMap::new();
 				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map
-			}
+			},
 		};
 
 		let mut table = create();
@@ -1095,13 +1143,18 @@ mod tests {
 		assert!(!candidate.can_be_included(validity_threshold, availability_threshold));
 
 		for i in 0..validity_threshold {
-			candidate.validity_votes.insert(AuthorityId(i + 100), ValidityVote::Valid(Signature(i + 100)));
+			candidate.validity_votes.insert(
+				AuthorityId(i + 100),
+				ValidityVote::Valid(Signature(i + 100)),
+			);
 		}
 
 		assert!(!candidate.can_be_included(validity_threshold, availability_threshold));
 
 		for i in 0..availability_threshold {
-			candidate.availability_votes.insert(AuthorityId(i + 255), Signature(i + 255));
+			candidate
+				.availability_votes
+				.insert(AuthorityId(i + 255), Signature(i + 255));
 		}
 
 		assert!(candidate.can_be_included(validity_threshold, availability_threshold));
@@ -1121,7 +1174,7 @@ mod tests {
 				map.insert(AuthorityId(3), (GroupId(2), GroupId(455)));
 				map.insert(AuthorityId(4), (GroupId(455), GroupId(2)));
 				map
-			}
+			},
 		};
 
 		// have 2/3 validity guarantors note validity.
@@ -1181,7 +1234,7 @@ mod tests {
 				let mut map = HashMap::new();
 				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map
-			}
+			},
 		};
 
 		let mut table = create();
@@ -1191,7 +1244,8 @@ mod tests {
 			sender: AuthorityId(1),
 		};
 
-		let summary = table.import_statement(&context, statement, None)
+		let summary = table
+			.import_statement(&context, statement, None)
 			.expect("candidate import to give summary");
 
 		assert_eq!(summary.candidate, Digest(100));
@@ -1208,7 +1262,7 @@ mod tests {
 				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map.insert(AuthorityId(2), (GroupId(2), GroupId(455)));
 				map
-			}
+			},
 		};
 
 		let mut table = create();
@@ -1228,7 +1282,8 @@ mod tests {
 			sender: AuthorityId(2),
 		};
 
-		let summary = table.import_statement(&context, vote, None)
+		let summary = table
+			.import_statement(&context, vote, None)
 			.expect("candidate vote to give summary");
 
 		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(2)));
@@ -1247,7 +1302,7 @@ mod tests {
 				map.insert(AuthorityId(1), (GroupId(2), GroupId(455)));
 				map.insert(AuthorityId(2), (GroupId(5), GroupId(2)));
 				map
-			}
+			},
 		};
 
 		let mut table = create();
@@ -1267,7 +1322,8 @@ mod tests {
 			sender: AuthorityId(2),
 		};
 
-		let summary = table.import_statement(&context, vote, None)
+		let summary = table
+			.import_statement(&context, vote, None)
 			.expect("candidate vote to give summary");
 
 		assert!(!table.detected_misbehavior.contains_key(&AuthorityId(2)));
@@ -1287,7 +1343,7 @@ mod tests {
 					map.insert(AuthorityId(i), (GroupId(2), GroupId(400 + i)));
 				}
 				map
-			}
+			},
 		};
 
 		let mut table = create();

@@ -16,13 +16,13 @@
 
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
-extern crate ethcore_crypto as crypto;
-extern crate subtle;
 extern crate ed25519;
-extern crate rand;
-extern crate serde_json;
-extern crate serde;
+extern crate ethcore_crypto as crypto;
 extern crate hex;
+extern crate rand;
+extern crate serde;
+extern crate serde_json;
+extern crate subtle;
 
 #[macro_use]
 extern crate serde_derive;
@@ -34,9 +34,9 @@ extern crate error_chain;
 extern crate tempdir;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 use crypto::Keccak256;
 use ed25519::{Pair, Public, PKCS_LEN};
@@ -75,16 +75,18 @@ struct EncryptedKey {
 
 impl EncryptedKey {
 	fn encrypt(plain: &[u8; PKCS_LEN], password: &str, iterations: u32) -> Self {
-		use rand::{Rng, OsRng};
+		use rand::{OsRng, Rng};
 
-		let mut rng = OsRng::new().expect("OS Randomness available on all supported platforms; qed");
+		let mut rng =
+			OsRng::new().expect("OS Randomness available on all supported platforms; qed");
 
 		let salt: [u8; 32] = rng.gen();
 		let iv: [u8; 16] = rng.gen();
 
 		// two parts of derived key
 		// DK = [ DK[0..15] DK[16..31] ] = [derived_left_bits, derived_right_bits]
-		let (derived_left_bits, derived_right_bits) = crypto::derive_key_iterations(password.as_bytes(), &salt, iterations);
+		let (derived_left_bits, derived_right_bits) =
+			crypto::derive_key_iterations(password.as_bytes(), &salt, iterations);
 
 		// preallocated (on-stack in case of `Secret`) buffer to hold cipher
 		// length = length(plain) as we are using CTR-approach
@@ -113,12 +115,16 @@ impl EncryptedKey {
 		let mac = crypto::derive_mac(&derived_right_bits, &self.ciphertext).keccak256();
 
 		if subtle::slices_equal(&mac[..], &self.mac[..]) != 1 {
-			return Err(ErrorKind::InvalidPassword.into());
+			return Err(ErrorKind::InvalidPassword.into())
 		}
 
 		let mut plain = [0; PKCS_LEN];
-		crypto::aes::decrypt_128_ctr(&derived_left_bits, &self.iv, &self.ciphertext, &mut plain[..])
-			.expect("input lengths of key and iv are both 16; qed");
+		crypto::aes::decrypt_128_ctr(
+			&derived_left_bits,
+			&self.iv,
+			&self.ciphertext,
+			&mut plain[..],
+		).expect("input lengths of key and iv are both 16; qed");
 		Ok(plain)
 	}
 }
@@ -135,7 +141,10 @@ impl Store {
 	/// Create a new store at the given path.
 	pub fn open(path: PathBuf) -> Result<Self> {
 		fs::create_dir_all(&path)?;
-		Ok(Store { path, additional: HashMap::new() })
+		Ok(Store {
+			path,
+			additional: HashMap::new(),
+		})
 	}
 
 	/// Generate a new key, placing it into the store.
@@ -167,7 +176,7 @@ impl Store {
 	pub fn load(&self, public: &Public, password: &str) -> Result<Pair> {
 		if let Some(ref seed) = self.additional.get(public) {
 			let pair = Pair::from_seed(seed);
-			return Ok(pair);
+			return Ok(pair)
 		}
 		let path = self.key_file_path(public);
 		let file = File::open(path)?;
@@ -187,7 +196,9 @@ impl Store {
 
 			// skip directories and non-unicode file names (hex is unicode)
 			if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-				if name.len() != 64 { continue }
+				if name.len() != 64 {
+					continue
+				}
 
 				match hex::decode(name) {
 					Ok(ref hex) if hex.len() == 32 => {
@@ -195,7 +206,7 @@ impl Store {
 						buf.copy_from_slice(&hex[..]);
 
 						public_keys.push(Public(buf));
-					}
+					},
 					_ => continue,
 				}
 			}

@@ -15,15 +15,15 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate ed25519;
+extern crate parking_lot;
+extern crate polkadot_api;
+extern crate polkadot_primitives as primitives;
+extern crate polkadot_runtime as runtime;
 extern crate substrate_client as client;
 extern crate substrate_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_primitives as substrate_primitives;
 extern crate substrate_runtime_primitives;
-extern crate polkadot_runtime as runtime;
-extern crate polkadot_primitives as primitives;
-extern crate polkadot_api;
-extern crate parking_lot;
 
 #[cfg(test)]
 extern crate substrate_keyring;
@@ -36,23 +36,29 @@ extern crate log;
 
 mod error;
 
-use std::{
-	cmp::Ordering,
-	collections::HashMap,
-	ops::Deref,
-	sync::Arc,
-};
+use std::{cmp::Ordering, collections::HashMap, ops::Deref, sync::Arc};
 
 use codec::Slicable;
-use extrinsic_pool::{Pool, Listener, txpool::{self, Readiness, scoring::{Change, Choice}}};
 use extrinsic_pool::api::ExtrinsicPool;
+use extrinsic_pool::{
+	txpool::{
+		self,
+		scoring::{Change, Choice},
+		Readiness,
+	},
+	Listener, Pool,
+};
 use polkadot_api::PolkadotApi;
-use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
+use primitives::{
+	AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic,
+};
 use runtime::{Address, UncheckedExtrinsic};
-use substrate_runtime_primitives::traits::{Bounded, Checkable, Hashing, BlakeTwo256};
+use substrate_runtime_primitives::traits::{BlakeTwo256, Bounded, Checkable, Hashing};
 
-pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
+pub use extrinsic_pool::txpool::{
+	LightStatus, Options, Status, VerifiedTransaction as VerifiedTransactionOps,
+};
 
 /// Type alias for convenience.
 pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable>::Checked;
@@ -141,10 +147,13 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 
 	fn choose(&self, old: &VerifiedTransaction, new: &VerifiedTransaction) -> Choice {
 		if old.is_fully_verified() {
-			assert!(new.is_fully_verified(), "Scoring::choose called with transactions from different senders");
+			assert!(
+				new.is_fully_verified(),
+				"Scoring::choose called with transactions from different senders"
+			);
 			if old.index() == new.index() {
 				// TODO [ToDr] Do we allow replacement? If yes then it should be Choice::ReplaceOld
-				return Choice::RejectNew;
+				return Choice::RejectNew
 			}
 		}
 
@@ -159,7 +168,7 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 		&self,
 		xts: &[txpool::Transaction<VerifiedTransaction>],
 		scores: &mut [Self::Score],
-		_change: Change<()>
+		_change: Change<()>,
 	) {
 		for i in 0..xts.len() {
 			if !xts[i].is_fully_verified() {
@@ -207,12 +216,11 @@ impl<'a, T: 'a + PolkadotApi> Clone for Ready<'a, T> {
 	}
 }
 
-impl<'a, A: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, A>
-{
+impl<'a, A: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, A> {
 	fn is_ready(&mut self, xt: &VerifiedTransaction) -> Readiness {
 		let sender = match xt.sender() {
 			Some(sender) => sender,
-			None => return Readiness::Future
+			None => return Readiness::Future,
 		};
 
 		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.hash, Hash::from(sender));
@@ -220,20 +228,24 @@ impl<'a, A: 'a + PolkadotApi> txpool::Ready<VerifiedTransaction> for Ready<'a, A
 		// TODO: find a way to handle index error properly -- will need changes to
 		// transaction-pool trait.
 		let (api, at_block) = (&self.api, &self.at_block);
-		let next_index = self.known_nonces.entry(sender)
-			.or_insert_with(|| api.index(at_block, sender).ok().unwrap_or_else(Bounded::max_value));
+		let next_index = self.known_nonces.entry(sender).or_insert_with(|| {
+			api.index(at_block, sender)
+				.ok()
+				.unwrap_or_else(Bounded::max_value)
+		});
 
 		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.original.extrinsic.index);
 
 		let result = match xt.original.extrinsic.index.cmp(&next_index) {
 			// TODO: this won't work perfectly since accounts can now be killed, returning the nonce
 			// to zero.
-			// We should detect if the index was reset and mark all transactions as `Stale` for cull to work correctly.
-			// Otherwise those transactions will keep occupying the queue.
-			// Perhaps we could mark as stale if `index - state_index` > X?
+			// We should detect if the index was reset and mark all transactions as `Stale` for
+			// cull to work correctly. Otherwise those transactions will keep occupying the
+			// queue. Perhaps we could mark as stale if `index - state_index` > X?
 			Ordering::Greater => Readiness::Future,
 			Ordering::Equal => Readiness::Ready,
-			// TODO [ToDr] Should mark transactions referrencing too old blockhash as `Stale` as well.
+			// TODO [ToDr] Should mark transactions referrencing too old blockhash as `Stale` as
+			// well.
 			Ordering::Less => Readiness::Stale,
 		};
 
@@ -249,7 +261,8 @@ pub struct Verifier<'a, A: 'a> {
 	at_block: BlockId,
 }
 
-impl<'a, A> Verifier<'a, A> where
+impl<'a, A> Verifier<'a, A>
+where
 	A: 'a + PolkadotApi,
 {
 	const NO_ACCOUNT: &'static str = "Account not found.";
@@ -267,7 +280,8 @@ impl<'a, A> Verifier<'a, A> where
 	}
 }
 
-impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
+impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A>
+where
 	A: 'a + PolkadotApi,
 {
 	type VerifiedTransaction = VerifiedTransaction;
@@ -294,7 +308,7 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 			inner,
 			sender,
 			hash,
-			encoded_size
+			encoded_size,
 		})
 	}
 }
@@ -307,7 +321,8 @@ pub struct TransactionPool<A> {
 	api: Arc<A>,
 }
 
-impl<A> TransactionPool<A> where
+impl<A> TransactionPool<A>
+where
 	A: PolkadotApi,
 {
 	/// Create a new transaction pool.
@@ -319,12 +334,18 @@ impl<A> TransactionPool<A> where
 	}
 
 	/// Attempt to directly import `UncheckedExtrinsic` without going through serialization.
-	pub fn import_unchecked_extrinsic(&self, block: BlockId, uxt: UncheckedExtrinsic) -> Result<Arc<VerifiedTransaction>> {
+	pub fn import_unchecked_extrinsic(
+		&self,
+		block: BlockId,
+		uxt: UncheckedExtrinsic,
+	) -> Result<Arc<VerifiedTransaction>> {
 		let verifier = Verifier {
 			api: &*self.api,
 			at_block: block,
 		};
-		self.inner.submit(verifier, vec![uxt]).map(|mut v| v.swap_remove(0))
+		self.inner
+			.submit(verifier, vec![uxt])
+			.map(|mut v| v.swap_remove(0))
 	}
 
 	/// Retry to import all semi-verified transactions (unknown account indices)
@@ -335,22 +356,34 @@ impl<A> TransactionPool<A> where
 			at_block: block,
 		};
 
-		self.inner.submit(verifier, to_reverify.into_iter().map(|tx| tx.original.clone()))?;
+		self.inner.submit(
+			verifier,
+			to_reverify.into_iter().map(|tx| tx.original.clone()),
+		)?;
 		Ok(())
 	}
 
 	/// Reverify transaction that has been reported incorrect.
 	///
-	/// Returns `Ok(None)` in case the hash is missing, `Err(e)` in case of verification error and new transaction
-	/// reference otherwise.
+	/// Returns `Ok(None)` in case the hash is missing, `Err(e)` in case of verification error and
+	/// new transaction reference otherwise.
 	///
 	/// TODO [ToDr] That method is currently unused, should be used together with BlockBuilder
 	/// when we detect that particular transaction has failed.
 	/// In such case we will attempt to remove or re-verify it.
-	pub fn reverify_transaction(&self, block: BlockId, hash: Hash) -> Result<Option<Arc<VerifiedTransaction>>> {
-		let result = self.inner.remove(&[hash], false).pop().expect("One hash passed; one result received; qed");
+	pub fn reverify_transaction(
+		&self,
+		block: BlockId,
+		hash: Hash,
+	) -> Result<Option<Arc<VerifiedTransaction>>> {
+		let result = self
+			.inner
+			.remove(&[hash], false)
+			.pop()
+			.expect("One hash passed; one result received; qed");
 		if let Some(tx) = result {
-			self.import_unchecked_extrinsic(block, tx.original.clone()).map(Some)
+			self.import_unchecked_extrinsic(block, tx.original.clone())
+				.map(Some)
 		} else {
 			Ok(None)
 		}
@@ -363,8 +396,10 @@ impl<A> TransactionPool<A> where
 	}
 
 	/// Cull transactions from the queue and then compute the pending set.
-	pub fn cull_and_get_pending<F, T>(&self, block: BlockId, f: F) -> Result<T> where
-		F: FnOnce(txpool::PendingIterator<VerifiedTransaction, Ready<A>, Scoring, Listener<Hash>>) -> T,
+	pub fn cull_and_get_pending<F, T>(&self, block: BlockId, f: F) -> Result<T>
+	where
+		F: FnOnce(txpool::PendingIterator<VerifiedTransaction, Ready<A>, Scoring, Listener<Hash>>)
+			-> T,
 	{
 		let ready = Ready::create(block, &*self.api);
 		self.inner.cull(None, ready.clone());
@@ -385,19 +420,21 @@ impl<A> Deref for TransactionPool<A> {
 	}
 }
 
-impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for TransactionPool<A> where
+impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for TransactionPool<A>
+where
 	A: Send + Sync + 'static,
 	A: PolkadotApi,
 {
 	type Error = Error;
 
 	fn submit(&self, block: BlockId, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
-		// TODO: more general transaction pool, which can handle more kinds of vec-encoded transactions,
-		// even when runtime is out of date.
+		// TODO: more general transaction pool, which can handle more kinds of vec-encoded
+		// transactions, even when runtime is out of date.
 		xts.into_iter()
 			.map(|xt| xt.encode())
 			.map(|encoded| {
-				let decoded = UncheckedExtrinsic::decode(&mut &encoded[..]).ok_or(ErrorKind::InvalidExtrinsicFormat)?;
+				let decoded = UncheckedExtrinsic::decode(&mut &encoded[..])
+					.ok_or(ErrorKind::InvalidExtrinsicFormat)?;
 				let tx = self.import_unchecked_extrinsic(block, decoded)?;
 				Ok(*tx.hash())
 			})
@@ -407,21 +444,30 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 
 #[cfg(test)]
 mod tests {
-	use std::sync::{atomic::{self, AtomicBool}, Arc};
 	use super::TransactionPool;
-	use substrate_keyring::Keyring::{self, *};
 	use codec::Slicable;
-	use polkadot_api::{PolkadotApi, BlockBuilder, Result};
-	use primitives::{AccountId, AccountIndex, Block, BlockId, Hash, Index, SessionKey, Timestamp,
-		UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
-	use runtime::{RawAddress, Call, TimestampCall, BareExtrinsic, Extrinsic, UncheckedExtrinsic};
+	use polkadot_api::{BlockBuilder, PolkadotApi, Result};
 	use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
-	use substrate_runtime_primitives::{MaybeUnsigned, generic};
+	use primitives::{
+		AccountId, AccountIndex, Block, BlockId, Hash, Index, SessionKey, Timestamp,
+		UncheckedExtrinsic as FutureProofUncheckedExtrinsic,
+	};
+	use runtime::{BareExtrinsic, Call, Extrinsic, RawAddress, TimestampCall, UncheckedExtrinsic};
+	use std::sync::{
+		atomic::{self, AtomicBool},
+		Arc,
+	};
+	use substrate_keyring::Keyring::{self, *};
+	use substrate_runtime_primitives::{generic, MaybeUnsigned};
 
 	struct TestBlockBuilder;
 	impl BlockBuilder for TestBlockBuilder {
-		fn push_extrinsic(&mut self, _extrinsic: FutureProofUncheckedExtrinsic) -> Result<()> { unimplemented!() }
-		fn bake(self) -> Result<Block> { unimplemented!() }
+		fn push_extrinsic(&mut self, _extrinsic: FutureProofUncheckedExtrinsic) -> Result<()> {
+			unimplemented!()
+		}
+		fn bake(self) -> Result<Block> {
+			unimplemented!()
+		}
 	}
 
 	fn number_of(at: &BlockId) -> u32 {
@@ -451,22 +497,58 @@ mod tests {
 	impl PolkadotApi for TestPolkadotApi {
 		type BlockBuilder = TestBlockBuilder;
 
-		fn session_keys(&self, _at: &BlockId) -> Result<Vec<SessionKey>> { unimplemented!() }
-		fn validators(&self, _at: &BlockId) -> Result<Vec<AccountId>> { unimplemented!() }
-		fn random_seed(&self, _at: &BlockId) -> Result<Hash> { unimplemented!() }
-		fn duty_roster(&self, _at: &BlockId) -> Result<DutyRoster> { unimplemented!() }
-		fn timestamp(&self, _at: &BlockId) -> Result<u64> { unimplemented!() }
-		fn evaluate_block(&self, _at: &BlockId, _block: Block) -> Result<bool> { unimplemented!() }
-		fn active_parachains(&self, _at: &BlockId) -> Result<Vec<ParaId>> { unimplemented!() }
-		fn parachain_code(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
-		fn parachain_head(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
-		fn build_block(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> { unimplemented!() }
-		fn inherent_extrinsics(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> { unimplemented!() }
+		fn session_keys(&self, _at: &BlockId) -> Result<Vec<SessionKey>> {
+			unimplemented!()
+		}
+		fn validators(&self, _at: &BlockId) -> Result<Vec<AccountId>> {
+			unimplemented!()
+		}
+		fn random_seed(&self, _at: &BlockId) -> Result<Hash> {
+			unimplemented!()
+		}
+		fn duty_roster(&self, _at: &BlockId) -> Result<DutyRoster> {
+			unimplemented!()
+		}
+		fn timestamp(&self, _at: &BlockId) -> Result<u64> {
+			unimplemented!()
+		}
+		fn evaluate_block(&self, _at: &BlockId, _block: Block) -> Result<bool> {
+			unimplemented!()
+		}
+		fn active_parachains(&self, _at: &BlockId) -> Result<Vec<ParaId>> {
+			unimplemented!()
+		}
+		fn parachain_code(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
+			unimplemented!()
+		}
+		fn parachain_head(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> {
+			unimplemented!()
+		}
+		fn build_block(
+			&self,
+			_at: &BlockId,
+			_timestamp: Timestamp,
+			_new_heads: Vec<CandidateReceipt>,
+		) -> Result<Self::BlockBuilder> {
+			unimplemented!()
+		}
+		fn inherent_extrinsics(
+			&self,
+			_at: &BlockId,
+			_timestamp: Timestamp,
+			_new_heads: Vec<CandidateReceipt>,
+		) -> Result<Vec<Vec<u8>>> {
+			unimplemented!()
+		}
 
 		fn index(&self, _at: &BlockId, _account: AccountId) -> Result<Index> {
 			Ok((_account[0] as u32) + number_of(_at))
 		}
-		fn lookup(&self, _at: &BlockId, _address: RawAddress<AccountId, AccountIndex>) -> Result<Option<AccountId>> {
+		fn lookup(
+			&self,
+			_at: &BlockId,
+			_address: RawAddress<AccountId, AccountIndex>,
+		) -> Result<Option<AccountId>> {
 			match _address {
 				RawAddress::Id(i) => Ok(Some(i)),
 				RawAddress::Index(_) if self.no_lookup.load(atomic::Ordering::SeqCst) => Ok(None),
@@ -493,22 +575,28 @@ mod tests {
 			function: Call::Timestamp(TimestampCall::set(0)),
 		};
 		let sig = sxt.using_encoded(|e| who.sign(e));
-		UncheckedExtrinsic::new(Extrinsic {
-			signed: if use_id { RawAddress::Id(sxt.signed) } else { RawAddress::Index(
-				match who {
-					Alice => 0,
-					Bob => 1,
-					Charlie => 2,
-					Dave => 3,
-					Eve => 4,
-					Ferdie => 5,
-					One => 6,
-					Two => 7,
-				}
-			)},
-			index: sxt.index,
-			function: sxt.function,
-		}, MaybeUnsigned(sig.into())).using_encoded(|e| UncheckedExtrinsic::decode(&mut &e[..])).unwrap()
+		UncheckedExtrinsic::new(
+			Extrinsic {
+				signed: if use_id {
+					RawAddress::Id(sxt.signed)
+				} else {
+					RawAddress::Index(match who {
+						Alice => 0,
+						Bob => 1,
+						Charlie => 2,
+						Dave => 3,
+						Eve => 4,
+						Ferdie => 5,
+						One => 6,
+						Two => 7,
+					})
+				},
+				index: sxt.index,
+				function: sxt.function,
+			},
+			MaybeUnsigned(sig.into()),
+		).using_encoded(|e| UncheckedExtrinsic::decode(&mut &e[..]))
+			.unwrap()
 	}
 
 	fn pool(api: &TestPolkadotApi) -> TransactionPool<TestPolkadotApi> {
@@ -519,9 +607,13 @@ mod tests {
 	fn id_submission_should_work() {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true))
+			.unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
 	}
 
@@ -529,9 +621,13 @@ mod tests {
 	fn index_submission_should_work() {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false))
+			.unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
 	}
 
@@ -539,31 +635,57 @@ mod tests {
 	fn multiple_id_submission_should_work() {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true))
+			.unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true))
+			.unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
-		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
+		assert_eq!(
+			pending,
+			vec![
+				(Some(Alice.to_raw_public().into()), 209),
+				(Some(Alice.to_raw_public().into()), 210),
+			]
+		);
 	}
 
 	#[test]
 	fn multiple_index_submission_should_work() {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false))
+			.unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false))
+			.unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
-		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
+		assert_eq!(
+			pending,
+			vec![
+				(Some(Alice.to_raw_public().into()), 209),
+				(Some(Alice.to_raw_public().into()), 210),
+			]
+		);
 	}
 
 	#[test]
 	fn id_based_early_nonce_should_be_culled() {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, true)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, true))
+			.unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![]);
 	}
 
@@ -571,9 +693,13 @@ mod tests {
 	fn index_based_early_nonce_should_be_culled() {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, false)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 208, false))
+			.unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![]);
 	}
 
@@ -582,13 +708,27 @@ mod tests {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
 
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true))
+			.unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![]);
 
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
-		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true))
+			.unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
+		assert_eq!(
+			pending,
+			vec![
+				(Some(Alice.to_raw_public().into()), 209),
+				(Some(Alice.to_raw_public().into()), 210),
+			]
+		);
 	}
 
 	#[test]
@@ -596,48 +736,81 @@ mod tests {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
 
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false))
+			.unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![]);
 
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
-		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209), (Some(Alice.to_raw_public().into()), 210)]);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false))
+			.unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
+		assert_eq!(
+			pending,
+			vec![
+				(Some(Alice.to_raw_public().into()), 209),
+				(Some(Alice.to_raw_public().into()), 210),
+			]
+		);
 	}
 
 	#[test]
 	fn index_then_id_submission_should_make_progress() {
 		let api = TestPolkadotApi::without_lookup();
 		let pool = pool(&api);
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false))
+			.unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true))
+			.unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![]);
 
 		api.enable_lookup();
 		pool.retry_verification(BlockId::number(0)).unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
-		assert_eq!(pending, vec![
-			(Some(Alice.to_raw_public().into()), 209),
-			(Some(Alice.to_raw_public().into()), 210)
-		]);
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
+		assert_eq!(
+			pending,
+			vec![
+				(Some(Alice.to_raw_public().into()), 209),
+				(Some(Alice.to_raw_public().into()), 210),
+			]
+		);
 	}
 
 	#[test]
 	fn retrying_verification_might_not_change_anything() {
 		let api = TestPolkadotApi::without_lookup();
 		let pool = pool(&api);
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false)).unwrap();
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, false))
+			.unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, true))
+			.unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![]);
 
 		pool.retry_verification(BlockId::number(1)).unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![]);
 	}
 
@@ -645,23 +818,32 @@ mod tests {
 	fn id_then_index_submission_should_make_progress() {
 		let api = TestPolkadotApi::without_lookup();
 		let pool = pool(&api);
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true)).unwrap();
-		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false)).unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 209, true))
+			.unwrap();
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt(Alice, 210, false))
+			.unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
-		assert_eq!(pending, vec![
-			(Some(Alice.to_raw_public().into()), 209)
-		]);
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
+		assert_eq!(pending, vec![(Some(Alice.to_raw_public().into()), 209)]);
 
 		// when
 		api.enable_lookup();
 		pool.retry_verification(BlockId::number(0)).unwrap();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
-		assert_eq!(pending, vec![
-			(Some(Alice.to_raw_public().into()), 209),
-			(Some(Alice.to_raw_public().into()), 210)
-		]);
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(0), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
+		assert_eq!(
+			pending,
+			vec![
+				(Some(Alice.to_raw_public().into()), 209),
+				(Some(Alice.to_raw_public().into()), 210),
+			]
+		);
 	}
 
 	#[test]
@@ -669,14 +851,23 @@ mod tests {
 		let api = TestPolkadotApi::default();
 		let pool = pool(&api);
 		let block = BlockId::number(0);
-		pool.import_unchecked_extrinsic(block, uxt(Alice, 209, false)).unwrap();
-		let hash = *pool.import_unchecked_extrinsic(block, uxt(Alice, 210, false)).unwrap().hash();
+		pool.import_unchecked_extrinsic(block, uxt(Alice, 209, false))
+			.unwrap();
+		let hash = *pool
+			.import_unchecked_extrinsic(block, uxt(Alice, 210, false))
+			.unwrap()
+			.hash();
 
-		let pending: Vec<_> = pool.cull_and_get_pending(block, |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
-		assert_eq!(pending, vec![
-			(Some(Alice.to_raw_public().into()), 209),
-			(Some(Alice.to_raw_public().into()), 210)
-		]);
+		let pending: Vec<_> = pool
+			.cull_and_get_pending(block, |p| p.map(|a| (a.sender(), a.index())).collect())
+			.unwrap();
+		assert_eq!(
+			pending,
+			vec![
+				(Some(Alice.to_raw_public().into()), 209),
+				(Some(Alice.to_raw_public().into()), 210),
+			]
+		);
 
 		// first xt is mined, but that has a side-effect of switching index 0 from Alice to Bob.
 		// second xt now invalid signature, so it fails.
@@ -686,14 +877,22 @@ mod tests {
 
 		// after this, a re-evaluation of the second's readiness should result in it being thrown
 		// out (or maybe placed in future queue).
-		let err = pool.reverify_transaction(BlockId::number(1), hash).unwrap_err();
+		let err = pool
+			.reverify_transaction(BlockId::number(1), hash)
+			.unwrap_err();
 		match *err.kind() {
 			::error::ErrorKind::Msg(ref m) if m == "bad signature in extrinsic" => {},
-			ref e => assert!(false, "The transaction should be rejected with BadSignature error, got: {:?}", e),
+			ref e => assert!(
+				false,
+				"The transaction should be rejected with BadSignature error, got: {:?}",
+				e
+			),
 		}
 
-		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(1), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		let pending: Vec<_> =
+			pool.cull_and_get_pending(BlockId::number(1), |p| {
+				p.map(|a| (a.sender(), a.index())).collect()
+			}).unwrap();
 		assert_eq!(pending, vec![]);
-
 	}
 }

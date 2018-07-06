@@ -26,13 +26,13 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate num_traits;
 extern crate integer_sqrt;
-extern crate substrate_runtime_std as rstd;
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_runtime_support as runtime_support;
+extern crate num_traits;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_std as rstd;
+extern crate substrate_runtime_support as runtime_support;
 
 #[cfg(test)]
 extern crate serde_json;
@@ -50,7 +50,7 @@ pub mod traits;
 pub mod generic;
 pub mod bft;
 
-use traits::{Verify, Lazy};
+use traits::{Lazy, Verify};
 
 /// A set of key value pairs for storage.
 #[cfg(feature = "std")]
@@ -82,8 +82,12 @@ impl Verify for Ed25519Signature {
 }
 
 impl codec::Slicable for Ed25519Signature {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> { Some(Ed25519Signature(codec::Slicable::decode(input)?,)) }
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R { self.0.using_encoded(f) }
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+		Some(Ed25519Signature(codec::Slicable::decode(input)?))
+	}
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
+	}
 }
 
 impl From<H512> for Ed25519Signature {
@@ -152,7 +156,8 @@ pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct MaybeUnsigned<T>(pub T);
 
-impl<T: Verify> MaybeUnsigned<T> where
+impl<T: Verify> MaybeUnsigned<T>
+where
 	T: Default + Eq,
 	<T as Verify>::Signer: Default + Eq,
 {
@@ -165,7 +170,8 @@ impl<T: Verify> MaybeUnsigned<T> where
 	}
 }
 
-impl<T: Verify> Verify for MaybeUnsigned<T> where
+impl<T: Verify> Verify for MaybeUnsigned<T>
+where
 	T: Default + Eq,
 	<T as Verify>::Signer: Default + Eq,
 {
@@ -180,8 +186,12 @@ impl<T: Verify> Verify for MaybeUnsigned<T> where
 }
 
 impl<T: codec::Slicable> codec::Slicable for MaybeUnsigned<T> {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> { Some(MaybeUnsigned(codec::Slicable::decode(input)?)) }
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R { self.0.using_encoded(f) }
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+		Some(MaybeUnsigned(codec::Slicable::decode(input)?))
+	}
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
+	}
 }
 
 impl<T> From<T> for MaybeUnsigned<T> {
@@ -192,7 +202,11 @@ impl<T> From<T> for MaybeUnsigned<T> {
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
-pub fn verify_encoded_lazy<V: Verify, T: codec::Slicable>(sig: &V, item: &T, signer: &V::Signer) -> bool {
+pub fn verify_encoded_lazy<V: Verify, T: codec::Slicable>(
+	sig: &V,
+	item: &T,
+	signer: &V::Signer,
+) -> bool {
 	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
 	// unfortunately this is a lifetime relationship that can't
 	// be expressed without generic associated types, better unification of HRTBs in type position,
@@ -209,7 +223,10 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Slicable>(sig: &V, item: &T, sig
 	}
 
 	sig.verify(
-		LazyEncode { inner: || item.encode(), encoded: None },
+		LazyEncode {
+			inner: || item.encode(),
+			encoded: None,
+		},
 		signer,
 	)
 }

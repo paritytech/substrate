@@ -16,7 +16,7 @@
 
 //! Definition of a sandbox environment.
 
-use codec::{Slicable, Input};
+use codec::{Input, Slicable};
 use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.
@@ -77,7 +77,7 @@ impl TypedValue {
 #[cfg(feature = "std")]
 impl From<::wasmi::RuntimeValue> for TypedValue {
 	fn from(val: ::wasmi::RuntimeValue) -> TypedValue {
-		use ::wasmi::RuntimeValue;
+		use wasmi::RuntimeValue;
 		match val {
 			RuntimeValue::I32(v) => TypedValue::I32(v),
 			RuntimeValue::I64(v) => TypedValue::I64(v),
@@ -90,8 +90,8 @@ impl From<::wasmi::RuntimeValue> for TypedValue {
 #[cfg(feature = "std")]
 impl From<TypedValue> for ::wasmi::RuntimeValue {
 	fn from(val: TypedValue) -> ::wasmi::RuntimeValue {
-		use ::wasmi::RuntimeValue;
-		use ::wasmi::nan_preserving_float::{F32, F64};
+		use wasmi::nan_preserving_float::{F32, F64};
+		use wasmi::RuntimeValue;
 		match val {
 			TypedValue::I32(v) => RuntimeValue::I32(v),
 			TypedValue::I64(v) => RuntimeValue::I64(v),
@@ -108,19 +108,19 @@ impl Slicable for TypedValue {
 			TypedValue::I32(i) => {
 				v.push(ValueType::I32 as u8);
 				i.using_encoded(|s| v.extend(s));
-			}
+			},
 			TypedValue::I64(i) => {
 				v.push(ValueType::I64 as u8);
 				i.using_encoded(|s| v.extend(s));
-			}
+			},
 			TypedValue::F32(f_bits) => {
 				v.push(ValueType::F32 as u8);
 				f_bits.using_encoded(|s| v.extend(s));
-			}
+			},
 			TypedValue::F64(f_bits) => {
 				v.push(ValueType::F64 as u8);
 				f_bits.using_encoded(|s| v.extend(s));
-			}
+			},
 		}
 
 		v
@@ -163,11 +163,11 @@ impl Slicable for ReturnValue {
 		match *self {
 			ReturnValue::Unit => {
 				v.push(0);
-			}
+			},
 			ReturnValue::Value(ref val) => {
 				v.push(1);
 				val.using_encoded(|s| v.extend(s));
-			}
+			},
 		}
 		v
 	}
@@ -226,11 +226,11 @@ impl Slicable for ExternEntity {
 			ExternEntity::Function(ref index) => {
 				v.push(ExternEntityKind::Function as u8);
 				index.using_encoded(|s| v.extend(s));
-			}
+			},
 			ExternEntity::Memory(ref mem_id) => {
 				v.push(ExternEntityKind::Memory as u8);
 				mem_id.using_encoded(|s| v.extend(s));
-			}
+			},
 		}
 
 		v
@@ -241,11 +241,11 @@ impl Slicable for ExternEntity {
 			Some(x) if x == ExternEntityKind::Function as i8 => {
 				let idx = u32::decode(value)?;
 				Some(ExternEntity::Function(idx))
-			}
+			},
 			Some(x) if x == ExternEntityKind::Memory as i8 => {
 				let mem_id = u32::decode(value)?;
 				Some(ExternEntity::Memory(mem_id))
-			}
+			},
 			_ => None,
 		}
 	}
@@ -305,9 +305,7 @@ impl Slicable for EnvironmentDefinition {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		let entries = Vec::decode(value)?;
 
-		Some(EnvironmentDefinition {
-			entries,
-		})
+		Some(EnvironmentDefinition { entries })
 	}
 }
 
@@ -348,28 +346,22 @@ mod tests {
 
 	#[test]
 	fn env_def_roundtrip() {
+		roundtrip(EnvironmentDefinition { entries: vec![] });
+
 		roundtrip(EnvironmentDefinition {
-			entries: vec![],
+			entries: vec![Entry {
+				module_name: b"kernel"[..].into(),
+				field_name: b"memory"[..].into(),
+				entity: ExternEntity::Memory(1337),
+			}],
 		});
 
 		roundtrip(EnvironmentDefinition {
-			entries: vec![
-				Entry {
-					module_name: b"kernel"[..].into(),
-					field_name: b"memory"[..].into(),
-					entity: ExternEntity::Memory(1337),
-				},
-			],
-		});
-
-		roundtrip(EnvironmentDefinition {
-			entries: vec![
-				Entry {
-					module_name: b"env"[..].into(),
-					field_name: b"abort"[..].into(),
-					entity: ExternEntity::Function(228),
-				},
-			],
+			entries: vec![Entry {
+				module_name: b"env"[..].into(),
+				field_name: b"abort"[..].into(),
+				entity: ExternEntity::Function(228),
+			}],
 		});
 	}
 }

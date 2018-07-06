@@ -16,8 +16,8 @@
 
 //! Trait
 
-use core::iter::Extend;
 use super::slicable::Slicable;
+use core::iter::Extend;
 
 /// Trait to allow itself to be serialised into a value which can be extended
 /// by bytes.
@@ -25,7 +25,10 @@ pub trait Joiner {
 	fn and<V: Slicable + Sized>(self, value: &V) -> Self;
 }
 
-impl<T> Joiner for T where T: for<'a> Extend<&'a u8> {
+impl<T> Joiner for T
+where
+	T: for<'a> Extend<&'a u8>,
+{
 	fn and<V: Slicable + Sized>(mut self, value: &V) -> Self {
 		value.using_encoded(|s| self.extend(s));
 		self

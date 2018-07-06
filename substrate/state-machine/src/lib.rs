@@ -27,14 +27,14 @@ extern crate log;
 extern crate ethereum_types;
 extern crate hashdb;
 extern crate memorydb;
-extern crate triehash;
 extern crate patricia_trie;
+extern crate triehash;
 
 extern crate byteorder;
 extern crate parking_lot;
 
-use std::collections::HashMap;
 use std::collections::hash_map::Drain;
+use std::collections::HashMap;
 use std::fmt;
 
 pub mod backend;
@@ -43,10 +43,10 @@ mod testing;
 mod proving_backend;
 mod trie_backend;
 
-pub use testing::TestExternalities;
-pub use ext::Ext;
 pub use backend::Backend;
-pub use trie_backend::{TryIntoTrieBackend, TrieBackend, TrieH256, Storage, DBValue};
+pub use ext::Ext;
+pub use testing::TestExternalities;
+pub use trie_backend::{DBValue, Storage, TrieBackend, TrieH256, TryIntoTrieBackend};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -63,7 +63,8 @@ impl OverlayedChanges {
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
-		self.prospective.get(key)
+		self.prospective
+			.get(key)
 			.or_else(|| self.committed.get(key))
 			.map(|x| x.as_ref().map(AsRef::as_ref))
 	}
@@ -114,7 +115,9 @@ pub enum ExecutionError {
 }
 
 impl fmt::Display for ExecutionError {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "Externalities Error") }
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "Externalities Error")
+	}
 }
 
 /// Externalities: pinned to specific active address.
@@ -135,7 +138,8 @@ pub trait Externalities {
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
 
-	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
+	/// Set or clear a storage entry (`key`) of current contract being called (effective
+	/// immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Get the identity of the chain.
@@ -174,32 +178,28 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
-{
+) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
 	let result = {
 		let mut externalities = ext::Ext::new(overlay, backend);
 		// make a copy.
-		let code = externalities.storage(b":code")
+		let code = externalities
+			.storage(b":code")
 			.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 			.to_vec();
 
-		exec.call(
-			&mut externalities,
-			&code,
-			method,
-			call_data,
-		).map(move |out| (out, externalities.transaction()))
+		exec.call(&mut externalities, &code, method, call_data)
+			.map(move |out| (out, externalities.transaction()))
 	};
 
 	match result {
 		Ok(x) => {
 			overlay.commit_prospective();
 			Ok(x)
-		}
+		},
 		Err(e) => {
 			overlay.discard_prospective();
 			Err(Box::new(e))
-		}
+		},
 	}
 }
 
@@ -218,9 +218,9 @@ pub fn prove_execution<B: TryIntoTrieBackend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend as Backend>::Transaction), Box<Error>>
-{
-	let trie_backend = backend.try_into_trie_backend()
+) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend as Backend>::Transaction), Box<Error>> {
+	let trie_backend = backend
+		.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let (result, transaction) = execute(&proving_backend, overlay, exec, method, call_data)?;
@@ -236,17 +236,16 @@ pub fn execution_proof_check<Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>>
-{
+) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>> {
 	let backend = proving_backend::create_proof_check_backend(root.into(), proof)?;
 	execute(&backend, overlay, exec, method, call_data)
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
+	use super::*;
 
 	struct DummyCodeExecutor;
 
@@ -260,7 +259,9 @@ mod tests {
 			_method: &str,
 			_data: &[u8],
 		) -> Result<Vec<u8>, Self::Error> {
-			Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]])
+			Ok(vec![
+				ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0],
+			])
 		}
 	}
 
@@ -319,14 +320,24 @@ mod tests {
 			],
 		};
 		let mut ext = Ext::new(&mut overlay, &backend);
-		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+		const ROOT: [u8; 32] =
+			hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
 		assert_eq!(ext.storage_root(), ROOT);
 	}
 
 	#[test]
 	fn execute_works() {
-		assert_eq!(execute(&trie_backend::tests::test_trie(),
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap().0, vec![66]);
+		assert_eq!(
+			execute(
+				&trie_backend::tests::test_trie(),
+				&mut Default::default(),
+				&DummyCodeExecutor,
+				"test",
+				&[]
+			).unwrap()
+				.0,
+			vec![66]
+		);
 	}
 
 	#[test]
@@ -334,12 +345,23 @@ mod tests {
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-		let (remote_result, remote_proof, _) = prove_execution(remote_backend,
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
+		let (remote_result, remote_proof, _) = prove_execution(
+			remote_backend,
+			&mut Default::default(),
+			&DummyCodeExecutor,
+			"test",
+			&[],
+		).unwrap();
 
 		// check proof locally
-		let (local_result, _) = execution_proof_check(remote_root, remote_proof,
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
+		let (local_result, _) = execution_proof_check(
+			remote_root,
+			remote_proof,
+			&mut Default::default(),
+			&DummyCodeExecutor,
+			"test",
+			&[],
+		).unwrap();
 
 		// check that both results are correct
 		assert_eq!(remote_result, vec![66]);

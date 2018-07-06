@@ -18,24 +18,25 @@
 
 use core::fmt;
 
-use serde::{de, Serializer, Deserializer};
+use serde::{de, Deserializer, Serializer};
 
 #[cfg(not(feature = "std"))]
 mod alloc_types {
-	pub use ::alloc::string::String;
-	pub use ::alloc::vec::Vec;
+	pub use alloc::string::String;
+	pub use alloc::vec::Vec;
 }
 
 #[cfg(feature = "std")]
 mod alloc_types {
-	pub use ::std::vec::Vec;
-	pub use ::std::string::String;
+	pub use std::string::String;
+	pub use std::vec::Vec;
 }
 
 pub use self::alloc_types::*;
 
 /// Serializes a slice of bytes.
-pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> where
+pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
 	S: Serializer,
 {
 	let hex: String = ::rustc_hex::ToHex::to_hex(bytes);
@@ -45,20 +46,22 @@ pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> wher
 /// Serialize a slice of bytes as uint.
 ///
 /// The representation will have all leading zeros trimmed.
-pub fn serialize_uint<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> where
+pub fn serialize_uint<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
 	S: Serializer,
 {
 	let non_zero = bytes.iter().take_while(|b| **b == 0).count();
 	let bytes = &bytes[non_zero..];
 	if bytes.is_empty() {
-		return serializer.serialize_str("0x0");
+		return serializer.serialize_str("0x0")
 	}
 
 	let hex: String = ::rustc_hex::ToHex::to_hex(bytes);
 	let has_leading_zero = !hex.is_empty() && &hex[0..1] == "0";
-	serializer.serialize_str(
-		&format!("0x{}", if has_leading_zero { &hex[1..] } else { &hex })
-	)
+	serializer.serialize_str(&format!(
+		"0x{}",
+		if has_leading_zero { &hex[1..] } else { &hex }
+	))
 }
 
 /// Expected length of bytes vector.
@@ -79,21 +82,24 @@ impl fmt::Display for ExpectedLen {
 		match *self {
 			ExpectedLen::Any => write!(fmt, "even length"),
 			ExpectedLen::Exact(v) => write!(fmt, "length of {}", v * 2),
-			ExpectedLen::Between(min, max) => write!(fmt, "length between ({}; {}]", min * 2, max * 2),
+			ExpectedLen::Between(min, max) =>
+				write!(fmt, "length between ({}; {}]", min * 2, max * 2),
 		}
 	}
 }
 
 /// Deserialize into vector of bytes.
 #[cfg(feature = "std")]
-pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error> where
+pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
 	D: Deserializer<'de>,
 {
 	deserialize_check_len(deserializer, ExpectedLen::Any)
 }
 
 /// Deserialize into vector of bytes with additional size check.
-pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Result<Vec<u8>, D::Error> where
+pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Result<Vec<u8>, D::Error>
+where
 	D: Deserializer<'de>,
 {
 	struct Visitor {
@@ -108,7 +114,7 @@ pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Resul
 		}
 
 		fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-			if v.len() < 2  || &v[0..2] != "0x" {
+			if v.len() < 2 || &v[0..2] != "0x" {
 				return Err(E::custom("prefix is missing"))
 			}
 
@@ -124,10 +130,9 @@ pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Resul
 			}
 
 			let bytes = match self.len {
-				ExpectedLen::Between(..) if v.len() % 2 != 0 => {
-					::rustc_hex::FromHex::from_hex(&*format!("0{}", &v[2..]))
-				},
-				_ => ::rustc_hex::FromHex::from_hex(&v[2..])
+				ExpectedLen::Between(..) if v.len() % 2 != 0 =>
+					::rustc_hex::FromHex::from_hex(&*format!("0{}", &v[2..])),
+				_ => ::rustc_hex::FromHex::from_hex(&v[2..]),
 			};
 
 			#[cfg(feature = "std")]
@@ -139,8 +144,10 @@ pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Resul
 			fn format_err(e: ::rustc_hex::FromHexError) -> String {
 				match e {
 					::rustc_hex::InvalidHexLength => format!("invalid hex value: invalid length"),
-					::rustc_hex::InvalidHexCharacter(c, p) =>
-						format!("invalid hex value: invalid character {} at position {}", c, p),
+					::rustc_hex::InvalidHexCharacter(c, p) => format!(
+						"invalid hex value: invalid character {} at position {}",
+						c, p
+					),
 				}
 			}
 

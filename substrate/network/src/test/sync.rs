@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+use super::*;
 use client::backend::Backend;
 use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use sync::SyncState;
-use {Role};
-use super::*;
+use Role;
 
 #[test]
 #[ignore]
@@ -28,7 +28,13 @@ fn sync_from_two_peers_works() {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(
+		net.peer(0)
+			.client
+			.backend()
+			.blockchain()
+			.equals_to(net.peer(1).client.backend().blockchain())
+	);
 	let status = net.peer(0).sync.status();
 	assert_eq!(status.sync.state, SyncState::Idle);
 }
@@ -43,7 +49,13 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 	net.peer(2).push_blocks(100, false);
 	net.restart_peer(0);
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().canon_equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(
+		net.peer(0)
+			.client
+			.backend()
+			.blockchain()
+			.canon_equals_to(net.peer(1).client.backend().blockchain())
+	);
 }
 
 #[test]
@@ -54,7 +66,13 @@ fn sync_long_chain_works() {
 	net.sync_steps(3);
 	assert_eq!(net.peer(0).sync.status().sync.state, SyncState::Downloading);
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(
+		net.peer(0)
+			.client
+			.backend()
+			.blockchain()
+			.equals_to(net.peer(1).client.backend().blockchain())
+	);
 }
 
 #[test]
@@ -64,7 +82,13 @@ fn sync_no_common_longer_chain_fails() {
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
 	net.sync();
-	assert!(!net.peer(0).client.backend().blockchain().canon_equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(
+		!net.peer(0)
+			.client
+			.backend()
+			.blockchain()
+			.canon_equals_to(net.peer(1).client.backend().blockchain())
+	);
 }
 
 #[test]
@@ -86,9 +110,27 @@ fn sync_after_fork_works() {
 	// peer 1 has the best chain
 	let peer1_chain = net.peer(1).client.backend().blockchain().clone();
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().canon_equals_to(&peer1_chain));
-	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer1_chain));
-	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer1_chain));
+	assert!(
+		net.peer(0)
+			.client
+			.backend()
+			.blockchain()
+			.canon_equals_to(&peer1_chain)
+	);
+	assert!(
+		net.peer(1)
+			.client
+			.backend()
+			.blockchain()
+			.canon_equals_to(&peer1_chain)
+	);
+	assert!(
+		net.peer(2)
+			.client
+			.backend()
+			.blockchain()
+			.canon_equals_to(&peer1_chain)
+	);
 }
 
 #[test]
@@ -119,7 +161,34 @@ fn blocks_are_not_announced_by_light_nodes() {
 	// peer 0 has the best chain
 	// peer 1 has the best chain
 	// peer 2 has genesis-chain only
-	assert_eq!(net.peer(0).client.backend().blockchain().info().unwrap().best_number, 1);
-	assert_eq!(net.peer(1).client.backend().blockchain().info().unwrap().best_number, 1);
-	assert_eq!(net.peer(2).client.backend().blockchain().info().unwrap().best_number, 0);
+	assert_eq!(
+		net.peer(0)
+			.client
+			.backend()
+			.blockchain()
+			.info()
+			.unwrap()
+			.best_number,
+		1
+	);
+	assert_eq!(
+		net.peer(1)
+			.client
+			.backend()
+			.blockchain()
+			.info()
+			.unwrap()
+			.best_number,
+		1
+	);
+	assert_eq!(
+		net.peer(2)
+			.client
+			.backend()
+			.blockchain()
+			.info()
+			.unwrap()
+			.best_number,
+		0
+	);
 }

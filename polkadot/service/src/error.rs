@@ -17,8 +17,8 @@
 //! Errors that can occur during the service operation.
 
 use client;
-use network;
 use keystore;
+use network;
 
 error_chain! {
 	links {

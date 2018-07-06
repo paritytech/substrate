@@ -32,18 +32,18 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate substrate_codec as codec;
+extern crate substrate_primitives;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
-extern crate substrate_codec as codec;
 extern crate substrate_runtime_system as system;
-extern crate substrate_primitives;
 
+use primitives::bft::MisbehaviorReport;
+use primitives::traits::{MaybeEmpty, MaybeSerializeDebug, RefInto};
 use rstd::prelude::*;
-use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{RefInto, MaybeSerializeDebug, MaybeEmpty};
-use primitives::bft::MisbehaviorReport;
+use runtime_support::{storage, Parameter};
 
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
@@ -59,7 +59,7 @@ pub const CODE: &'static [u8] = b":code";
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 pub trait Trait: system::Trait {
-	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;		// MaybeEmpty is for Timestamp's usage.
+	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty; // MaybeEmpty is for Timestamp's usage.
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 }
 
@@ -99,7 +99,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
+	fn report_misbehavior(
+		_aux: &T::PublicAux,
+		_report: MisbehaviorReport<T::Hash, T::BlockNumber>,
+	) -> Result {
 		// TODO.
 		Ok(())
 	}
@@ -138,14 +141,16 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
-{
+impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use codec::{Slicable, KeyedVec};
+		use codec::{KeyedVec, Slicable};
 		let auth_count = self.authorities.len() as u32;
-		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|
-			((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode())
-		).collect();
+		let mut r: runtime_io::TestExternalities = self
+			.authorities
+			.into_iter()
+			.enumerate()
+			.map(|(i, v)| ((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode()))
+			.collect();
 		r.insert(AUTHORITY_COUNT.to_vec(), auth_count.encode());
 		r.insert(CODE.to_vec(), self.code);
 		Ok(r)

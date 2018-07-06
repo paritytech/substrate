@@ -39,17 +39,17 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate substrate_codec as codec;
+extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_io as runtime_io;
 #[cfg_attr(not(feature = "std"), macro_use)]
 extern crate substrate_runtime_std as rstd;
-extern crate substrate_primitives as primitives;
 
 #[cfg(test)]
 extern crate wabt;
 
 use rstd::prelude::*;
 
-pub use primitives::sandbox::{TypedValue, ReturnValue, HostError};
+pub use primitives::sandbox::{HostError, ReturnValue, TypedValue};
 
 mod imp {
 	#[cfg(feature = "std")]
@@ -172,14 +172,17 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 /// This instance can be used for invoking exported functions.
 pub struct Instance<T> {
 	inner: imp::Instance<T>,
-
 }
 
 impl<T> Instance<T> {
 	/// Instantiate a module with the given [`EnvironmentDefinitionBuilder`].
 	///
 	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
-	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T) -> Result<Instance<T>, Error> {
+	pub fn new(
+		code: &[u8],
+		env_def_builder: &EnvironmentDefinitionBuilder<T>,
+		state: &mut T,
+	) -> Result<Instance<T>, Error> {
 		Ok(Instance {
 			inner: imp::Instance::new(code, &env_def_builder.inner, state)?,
 		})

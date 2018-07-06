@@ -16,10 +16,10 @@
 
 //! Polkadot parachain types.
 
-use codec::{Slicable, Input};
-use rstd::prelude::*;
-use rstd::cmp::Ordering;
 use super::Hash;
+use codec::{Input, Slicable};
+use rstd::cmp::Ordering;
+use rstd::prelude::*;
 
 #[cfg(feature = "std")]
 use primitives::bytes;
@@ -33,11 +33,15 @@ pub type CandidateSignature = ::runtime_primitives::Ed25519Signature;
 pub struct Id(u32);
 
 impl From<Id> for u32 {
-	fn from(x: Id) -> Self { x.0 }
+	fn from(x: Id) -> Self {
+		x.0
+	}
 }
 
 impl From<u32> for Id {
-	fn from(x: u32) -> Self { Id(x) }
+	fn from(x: u32) -> Self {
+		Id(x)
+	}
 }
 
 impl Id {
@@ -80,11 +84,13 @@ impl Slicable for Chain {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		match *self {
-			Chain::Relay => { v.push(0); }
+			Chain::Relay => {
+				v.push(0);
+			},
 			Chain::Parachain(id) => {
 				v.push(1u8);
 				id.using_encoded(|s| v.extend(s));
-			}
+			},
 		}
 		v
 	}
@@ -218,7 +224,8 @@ impl PartialOrd for CandidateReceipt {
 impl Ord for CandidateReceipt {
 	fn cmp(&self, other: &Self) -> Ordering {
 		// TODO: compare signatures or something more sane
-		self.parachain_index.cmp(&other.parachain_index)
+		self.parachain_index
+			.cmp(&other.parachain_index)
 			.then_with(|| self.head_data.cmp(&other.head_data))
 	}
 }
@@ -226,7 +233,7 @@ impl Ord for CandidateReceipt {
 /// Parachain ingress queue message.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Message(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Message(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 /// Consolidated ingress queue data.
 ///
@@ -241,27 +248,27 @@ pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 /// contains everything required to validate para-block, may contain block and witness data
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct BlockData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct BlockData(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 /// Parachain header raw bytes wrapper type.
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Header(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Header(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 /// Parachain head data included in the chain.
 #[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct HeadData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct HeadData(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 /// Parachain validation code.
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 /// Activitiy bit field
 #[derive(PartialEq, Eq, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Activity(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Activity(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 impl Slicable for Activity {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
@@ -304,19 +311,19 @@ impl Slicable for Statement {
 			Statement::Candidate(ref candidate) => {
 				v.push(StatementKind::Candidate as u8);
 				candidate.using_encoded(|s| v.extend(s));
-			}
+			},
 			Statement::Valid(ref hash) => {
 				v.push(StatementKind::Valid as u8);
 				hash.using_encoded(|s| v.extend(s));
-			}
+			},
 			Statement::Invalid(ref hash) => {
 				v.push(StatementKind::Invalid as u8);
 				hash.using_encoded(|s| v.extend(s));
-			}
+			},
 			Statement::Available(ref hash) => {
 				v.push(StatementKind::Available as u8);
 				hash.using_encoded(|s| v.extend(s));
-			}
+			},
 		}
 
 		v
@@ -324,18 +331,14 @@ impl Slicable for Statement {
 
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match value.read_byte() {
-			Some(x) if x == StatementKind::Candidate as u8 => {
-				Slicable::decode(value).map(Statement::Candidate)
-			}
-			Some(x) if x == StatementKind::Valid as u8 => {
-				Slicable::decode(value).map(Statement::Valid)
-			}
-			Some(x) if x == StatementKind::Invalid as u8 => {
-				Slicable::decode(value).map(Statement::Invalid)
-			}
-			Some(x) if x == StatementKind::Available as u8 => {
-				Slicable::decode(value).map(Statement::Available)
-			}
+			Some(x) if x == StatementKind::Candidate as u8 =>
+				Slicable::decode(value).map(Statement::Candidate),
+			Some(x) if x == StatementKind::Valid as u8 =>
+				Slicable::decode(value).map(Statement::Valid),
+			Some(x) if x == StatementKind::Invalid as u8 =>
+				Slicable::decode(value).map(Statement::Invalid),
+			Some(x) if x == StatementKind::Available as u8 =>
+				Slicable::decode(value).map(Statement::Available),
 			_ => None,
 		}
 	}

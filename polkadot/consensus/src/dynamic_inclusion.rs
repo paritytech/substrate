@@ -50,11 +50,7 @@ impl DynamicInclusion {
 			(0, 0)
 		};
 
-		DynamicInclusion {
-			start,
-			y,
-			m,
-		}
+		DynamicInclusion { start, y, m }
 	}
 
 	/// Returns the duration from `now` after which the amount of included parachain candidates
@@ -83,42 +79,49 @@ mod tests {
 	fn full_immediately_allowed() {
 		let now = Instant::now();
 
-		let dynamic = DynamicInclusion::new(
-			10,
-			now,
-			Duration::from_millis(4000),
-		);
+		let dynamic = DynamicInclusion::new(10, now, Duration::from_millis(4000));
 
 		assert!(dynamic.acceptable_in(now, 10).is_none());
 		assert!(dynamic.acceptable_in(now, 11).is_none());
-		assert!(dynamic.acceptable_in(now + Duration::from_millis(2000), 10).is_none());
+		assert!(
+			dynamic
+				.acceptable_in(now + Duration::from_millis(2000), 10)
+				.is_none()
+		);
 	}
 
 	#[test]
 	fn half_allowed_halfway() {
 		let now = Instant::now();
 
-		let dynamic = DynamicInclusion::new(
-			10,
-			now,
-			Duration::from_millis(4000),
-		);
+		let dynamic = DynamicInclusion::new(10, now, Duration::from_millis(4000));
 
-		assert_eq!(dynamic.acceptable_in(now, 5), Some(Duration::from_millis(2000)));
-		assert!(dynamic.acceptable_in(now + Duration::from_millis(2000), 5).is_none());
-		assert!(dynamic.acceptable_in(now + Duration::from_millis(3000), 5).is_none());
-		assert!(dynamic.acceptable_in(now + Duration::from_millis(4000), 5).is_none());
+		assert_eq!(
+			dynamic.acceptable_in(now, 5),
+			Some(Duration::from_millis(2000))
+		);
+		assert!(
+			dynamic
+				.acceptable_in(now + Duration::from_millis(2000), 5)
+				.is_none()
+		);
+		assert!(
+			dynamic
+				.acceptable_in(now + Duration::from_millis(3000), 5)
+				.is_none()
+		);
+		assert!(
+			dynamic
+				.acceptable_in(now + Duration::from_millis(4000), 5)
+				.is_none()
+		);
 	}
 
 	#[test]
 	fn zero_initial_is_flat() {
 		let now = Instant::now();
 
-		let dynamic = DynamicInclusion::new(
-			0,
-			now,
-			Duration::from_secs(10_000),
-		);
+		let dynamic = DynamicInclusion::new(0, now, Duration::from_secs(10_000));
 
 		for i in 0..10_001 {
 			let now = now + Duration::from_secs(i);

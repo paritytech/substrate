@@ -18,35 +18,35 @@
 
 #![warn(missing_docs)]
 
-extern crate app_dirs;
-extern crate env_logger;
-extern crate atty;
 extern crate ansi_term;
-extern crate regex;
-extern crate time;
-extern crate futures;
-extern crate tokio_core;
+extern crate app_dirs;
+extern crate atty;
 extern crate ctrlc;
-extern crate fdlimit;
 extern crate ed25519;
-extern crate triehash;
+extern crate env_logger;
+extern crate fdlimit;
+extern crate futures;
 extern crate parking_lot;
+extern crate regex;
 extern crate serde;
 extern crate serde_json;
+extern crate time;
+extern crate tokio_core;
+extern crate triehash;
 
+extern crate polkadot_primitives;
+extern crate polkadot_runtime;
+extern crate polkadot_service as service;
 extern crate substrate_client as client;
-extern crate substrate_network as network;
 extern crate substrate_codec as codec;
+extern crate substrate_network as network;
 extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
-extern crate polkadot_primitives;
-extern crate polkadot_runtime;
-extern crate polkadot_service as service;
 #[macro_use]
-extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
+extern crate slog; // needed until we can reexport `slog_info` from `substrate_telemetry`
 #[macro_use]
 extern crate substrate_telemetry;
 extern crate polkadot_transaction_pool as txpool;
@@ -66,20 +66,20 @@ mod chain_spec;
 
 pub use chain_spec::ChainSpec;
 
-use std::io::{self, Write, Read, stdin, stdout};
+use client::BlockOrigin;
+use codec::Slicable;
+use polkadot_primitives::{Block, BlockId};
+use runtime_primitives::generic::SignedBlock;
 use std::fs::File;
+use std::io::{self, stdin, stdout, Read, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use polkadot_primitives::{Block, BlockId};
-use codec::Slicable;
-use client::BlockOrigin;
-use runtime_primitives::generic::SignedBlock;
 
 use futures::sync::mpsc;
-use futures::{Sink, Future, Stream};
-use tokio_core::reactor;
+use futures::{Future, Sink, Stream};
 use service::PruningMode;
+use tokio_core::reactor;
 
 const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
 
@@ -103,16 +103,24 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 }
 
 fn load_spec(matches: &clap::ArgMatches) -> Result<service::ChainSpec, String> {
-	let chain_spec = matches.value_of("chain")
+	let chain_spec = matches
+		.value_of("chain")
 		.map(ChainSpec::from)
-		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
+		.unwrap_or_else(|| {
+			if matches.is_present("dev") {
+				ChainSpec::Development
+			} else {
+				ChainSpec::PoC2Testnet
+			}
+		});
 	let spec = chain_spec.load()?;
 	info!("Chain specification: {}", spec.name());
 	Ok(spec)
 }
 
 fn base_path(matches: &clap::ArgMatches) -> PathBuf {
-	matches.value_of("base-path")
+	matches
+		.value_of("base-path")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(default_base_path)
 }
@@ -125,18 +133,22 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T>(args: I) -> error::Result<()> where
+pub fn run<I, T>(args: I) -> error::Result<()>
+where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
 	let yaml = load_yaml!("./cli.yml");
-	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
+	let matches = match clap::App::from_yaml(yaml)
+		.version(&(crate_version!().to_owned() + "\n")[..])
+		.get_matches_from_safe(args)
+	{
 		Ok(m) => m,
 		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
 		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed => {
 			print!("{}", e);
 			return Ok(())
-		}
+		},
 		Err(e) => e.exit(),
 	};
 
@@ -150,15 +162,15 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	info!("  by Parity Technologies, 2017, 2018");
 
 	if let Some(matches) = matches.subcommand_matches("build-spec") {
-		return build_spec(matches);
+		return build_spec(matches)
 	}
 
 	if let Some(matches) = matches.subcommand_matches("export-blocks") {
-		return export_blocks(matches);
+		return export_blocks(matches)
 	}
 
 	if let Some(matches) = matches.subcommand_matches("import-blocks") {
-		return import_blocks(matches);
+		return import_blocks(matches)
 	}
 
 	let spec = load_spec(&matches)?;
@@ -170,7 +182,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}
 
 	let base_path = base_path(&matches);
-	config.keystore_path = matches.value_of("keystore")
+	config.keystore_path = matches
+		.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(|| keystore_path(&base_path))
 		.to_string_lossy()
@@ -181,30 +194,35 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	config.pruning = match matches.value_of("pruning") {
 		Some("archive") => PruningMode::ArchiveAll,
 		None => PruningMode::keep_blocks(256),
-		Some(s) => PruningMode::keep_blocks(s.parse()
-			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
+		Some(s) => PruningMode::keep_blocks(
+			s.parse()
+				.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?,
+		),
 	};
 
-	let role =
-		if matches.is_present("collator") {
-			info!("Starting collator");
-			service::Role::COLLATOR
-		} else if matches.is_present("light") {
-			info!("Starting (light)");
-			service::Role::LIGHT
-		} else if matches.is_present("validator") || matches.is_present("dev") {
-			info!("Starting validator");
-			service::Role::VALIDATOR
-		} else {
-			info!("Starting (heavy)");
-			service::Role::FULL
-		};
+	let role = if matches.is_present("collator") {
+		info!("Starting collator");
+		service::Role::COLLATOR
+	} else if matches.is_present("light") {
+		info!("Starting (light)");
+		service::Role::LIGHT
+	} else if matches.is_present("validator") || matches.is_present("dev") {
+		info!("Starting validator");
+		service::Role::VALIDATOR
+	} else {
+		info!("Starting (heavy)");
+		service::Role::FULL
+	};
 
 	config.roles = role;
 	{
-		config.network.boot_nodes.extend(matches
-			.values_of("bootnodes")
-			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
+		config.network.boot_nodes.extend(
+			matches
+				.values_of("bootnodes")
+				.map_or(Default::default(), |v| {
+					v.map(|n| n.to_owned()).collect::<Vec<_>>()
+				}),
+		);
 		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 
@@ -222,7 +240,11 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		};
 	}
 
-	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
+	config.keys = matches
+		.values_of("key")
+		.unwrap_or_default()
+		.map(str::to_owned)
+		.collect();
 	if matches.is_present("dev") {
 		config.keys.push("Alice".into());
 	}
@@ -235,7 +257,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		let name = config.name.clone();
 		let chain_name = config.chain_spec.name().to_owned();
 		Some(init_telemetry(TelemetryConfig {
-			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
+			url: matches
+				.value_of("telemetry-url")
+				.unwrap_or(DEFAULT_TELEMETRY_URL)
+				.into(),
 			on_connect: Box::new(move || {
 				telemetry!("system.connected";
 					"name" => name.clone(),
@@ -274,7 +299,10 @@ fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 	let client = service::new_client(config)?;
 	let (exit_send, exit) = std::sync::mpsc::channel();
 	ctrlc::CtrlC::set_handler(move || {
-		exit_send.clone().send(()).expect("Error sending exit notification");
+		exit_send
+			.clone()
+			.send(())
+			.expect("Error sending exit notification");
 	});
 	info!("Exporting blocks");
 	let mut block: u32 = match matches.value_of("from") {
@@ -288,7 +316,7 @@ fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 	};
 
 	if last < block {
-		return Err("Invalid block range specified".into());
+		return Err("Invalid block range specified".into())
 	}
 
 	let json = matches.is_present("json");
@@ -304,15 +332,14 @@ fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 
 	loop {
 		if exit.try_recv().is_ok() {
-			break;
+			break
 		}
 		match client.block(&BlockId::number(block as u64))? {
-			Some(block) => {
-				if json {
-					serde_json::to_writer(&mut *file, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
-				} else {
-					file.write(&block.encode())?;
-				}
+			Some(block) => if json {
+				serde_json::to_writer(&mut *file, &block)
+					.map_err(|e| format!("Eror writing JSON: {}", e))?;
+			} else {
+				file.write(&block.encode())?;
 			},
 			None => break,
 		}
@@ -320,7 +347,7 @@ fn export_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 			info!("#{}", block);
 		}
 		if block == last {
-			break;
+			break
 		}
 		block += 1;
 	}
@@ -335,7 +362,10 @@ fn import_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 	let client = service::new_client(config)?;
 	let (exit_send, exit) = std::sync::mpsc::channel();
 	ctrlc::CtrlC::set_handler(move || {
-		exit_send.clone().send(()).expect("Error sending exit notification");
+		exit_send
+			.clone()
+			.send(())
+			.expect("Error sending exit notification");
 	});
 
 	let mut file: Box<Read> = match matches.value_of("INPUT") {
@@ -346,26 +376,31 @@ fn import_blocks(matches: &clap::ArgMatches) -> error::Result<()> {
 	info!("Importing blocks");
 	let count: u32 = Slicable::decode(&mut file).ok_or("Error reading file")?;
 	let mut block = 0;
-	for _ in 0 .. count {
+	for _ in 0..count {
 		if exit.try_recv().is_ok() {
-			break;
+			break
 		}
 		match SignedBlock::decode(&mut file) {
 			Some(block) => {
-				let header = client.check_justification(block.block.header, block.justification.into())?;
+				let header =
+					client.check_justification(block.block.header, block.justification.into())?;
 				client.import_block(BlockOrigin::File, header, Some(block.block.extrinsics))?;
 			},
 			None => {
 				warn!("Error reading block data.");
-				break;
-			}
+				break
+			},
 		}
 		block += 1;
 		if block % 10000 == 0 {
 			info!("#{}", block);
 		}
 	}
-	info!("Imported {} blocks. Best: #{}", block, client.info()?.chain.best_number);
+	info!(
+		"Imported {} blocks. Best: #{}",
+		block,
+		client.info()?.chain.best_number
+	);
 
 	Ok(())
 }
@@ -379,7 +414,11 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 		// can't use signal directly here because CtrlC takes only `Fn`.
 		let (exit_send, exit) = mpsc::channel(1);
 		ctrlc::CtrlC::set_handler(move || {
-			exit_send.clone().send(()).wait().expect("Error sending exit notification");
+			exit_send
+				.clone()
+				.send(())
+				.wait()
+				.expect("Error sending exit notification");
 		});
 
 		exit
@@ -393,13 +432,9 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
-			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
-			rpc::rpc_handler::<Block, _, _, _, _>(
-				service.client(),
-				chain,
-				author,
-				sys_conf.clone(),
-			)
+			let author =
+				rpc::apis::author::Author::new(service.client(), service.transaction_pool());
+			rpc::rpc_handler::<Block, _, _, _, _>(service.client(), chain, author, sys_conf.clone())
 		};
 		(
 			start_server(http_address, |address| rpc::start_http(address, handler())),
@@ -407,29 +442,39 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 		)
 	};
 
-	core.run(exit.into_future()).expect("Error running informant event loop");
+	core.run(exit.into_future())
+		.expect("Error running informant event loop");
 	Ok(())
 }
 
-fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error> where
+fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error>
+where
 	F: Fn(&SocketAddr) -> Result<T, io::Error>,
 {
-	start(&address)
-		.or_else(|e| match e.kind() {
-			io::ErrorKind::AddrInUse |
-			io::ErrorKind::PermissionDenied => {
-				warn!("Unable to bind server to {}. Trying random port.", address);
-				address.set_port(0);
-				start(&address)
-			},
-			_ => Err(e),
-		})
+	start(&address).or_else(|e| match e.kind() {
+		io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied => {
+			warn!("Unable to bind server to {}. Trying random port.", address);
+			address.set_port(0);
+			start(&address)
+		},
+		_ => Err(e),
+	})
 }
 
-fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = default.parse().ok().ok_or(format!("Invalid address specified for --{}.", port_param))?;
+fn parse_address(
+	default: &str,
+	port_param: &str,
+	matches: &clap::ArgMatches,
+) -> Result<SocketAddr, String> {
+	let mut address: SocketAddr = default
+		.parse()
+		.ok()
+		.ok_or(format!("Invalid address specified for --{}.", port_param))?;
 	if let Some(port) = matches.value_of(port_param) {
-		let port: u16 = port.parse().ok().ok_or(format!("Invalid port for --{} specified.", port_param))?;
+		let port: u16 = port
+			.parse()
+			.ok()
+			.ok_or(format!("Invalid port for --{} specified.", port_param))?;
 		address.set_port(port);
 	}
 
@@ -455,17 +500,15 @@ fn network_path(base_path: &Path) -> PathBuf {
 }
 
 fn default_base_path() -> PathBuf {
-	use app_dirs::{AppInfo, AppDataType};
+	use app_dirs::{AppDataType, AppInfo};
 
 	let app_info = AppInfo {
 		name: "Polkadot",
 		author: "Parity Technologies",
 	};
 
-	app_dirs::get_app_root(
-		AppDataType::UserData,
-		&app_info,
-	).expect("app directories exist on all supported platforms; qed")
+	app_dirs::get_app_root(AppDataType::UserData, &app_info)
+		.expect("app directories exist on all supported platforms; qed")
 }
 
 fn init_logger(pattern: &str) {
@@ -487,13 +530,29 @@ fn init_logger(pattern: &str) {
 	let enable_color = isatty;
 
 	let format = move |record: &log::LogRecord| {
-		let timestamp = time::strftime("%Y-%m-%d %H:%M:%S", &time::now()).expect("Error formatting log timestamp");
+		let timestamp = time::strftime("%Y-%m-%d %H:%M:%S", &time::now())
+			.expect("Error formatting log timestamp");
 
 		let mut output = if log::max_log_level() <= log::LogLevelFilter::Info {
-			format!("{} {}", Colour::Black.bold().paint(timestamp), record.args())
+			format!(
+				"{} {}",
+				Colour::Black.bold().paint(timestamp),
+				record.args()
+			)
 		} else {
-			let name = ::std::thread::current().name().map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
-			format!("{} {} {} {}  {}", Colour::Black.bold().paint(timestamp), name, record.level(), record.target(), record.args())
+			let name = ::std::thread::current()
+				.name()
+				.map_or_else(Default::default, |x| {
+					format!("{}", Colour::Blue.bold().paint(x))
+				});
+			format!(
+				"{} {} {} {}  {}",
+				Colour::Black.bold().paint(timestamp),
+				name,
+				record.level(),
+				record.target(),
+				record.args()
+			)
 		};
 
 		if !enable_color {
@@ -513,7 +572,8 @@ fn init_logger(pattern: &str) {
 
 fn kill_color(s: &str) -> String {
 	lazy_static! {
-		static ref RE: regex::Regex = regex::Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
+		static ref RE: regex::Regex =
+			regex::Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
 	}
 	RE.replace_all(s, "").to_string()
 }

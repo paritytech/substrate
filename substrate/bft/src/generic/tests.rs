@@ -19,13 +19,13 @@
 use super::*;
 
 use std::collections::BTreeSet;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use futures::prelude::*;
-use futures::sync::{oneshot, mpsc};
 use futures::future::FutureResult;
+use futures::prelude::*;
+use futures::sync::{mpsc, oneshot};
 
 use tokio_timer::{self, Timer};
 
@@ -37,9 +37,13 @@ struct Network<T> {
 }
 
 impl<T: Clone + Send + 'static> Network<T> {
-	fn new(nodes: usize)
-		-> (Self, Vec<mpsc::UnboundedSender<(usize, T)>>, Vec<mpsc::UnboundedReceiver<T>>)
-	{
+	fn new(
+		nodes: usize,
+	) -> (
+		Self,
+		Vec<mpsc::UnboundedSender<(usize, T)>>,
+		Vec<mpsc::UnboundedReceiver<T>>,
+	) {
 		let mut inputs = Vec::with_capacity(nodes);
 		let mut outputs = Vec::with_capacity(nodes);
 		let mut endpoints = Vec::with_capacity(nodes);
@@ -61,7 +65,9 @@ impl<T: Clone + Send + 'static> Network<T> {
 	}
 
 	fn route_on_thread(self) {
-		::std::thread::spawn(move || { let _ = self.wait(); });
+		::std::thread::spawn(move || {
+			let _ = self.wait();
+		});
 	}
 }
 
@@ -74,7 +80,8 @@ impl<T: Clone> Future for Network<T> {
 			None => Ok(Async::Ready(())),
 			Some((sender, item)) => {
 				{
-					let receiving_endpoints = self.endpoints
+					let receiving_endpoints = self
+						.endpoints
 						.iter()
 						.enumerate()
 						.filter(|&(i, _)| i != sender)
@@ -86,7 +93,7 @@ impl<T: Clone> Future for Network<T> {
 				}
 
 				self.poll()
-			}
+			},
 		}
 	}
 }
@@ -127,7 +134,7 @@ impl Context for TestContext {
 	type Digest = Digest;
 	type AuthorityId = AuthorityId;
 	type Signature = Signature;
-	type RoundTimeout = Box<Future<Item=(), Error=Error>>;
+	type RoundTimeout = Box<Future<Item = (), Error = Error>>;
 	type CreateProposal = FutureResult<Candidate, Error>;
 	type EvaluateProposal = FutureResult<bool, Error>;
 
@@ -150,9 +157,10 @@ impl Context for TestContext {
 		Digest(candidate.0)
 	}
 
-	fn sign_local(&self, message: Message<Candidate, Digest>)
-		-> LocalizedMessage<Candidate, Digest, AuthorityId, Signature>
-	{
+	fn sign_local(
+		&self,
+		message: Message<Candidate, Digest>,
+	) -> LocalizedMessage<Candidate, Digest, AuthorityId, Signature> {
 		let signature = Signature(message.clone(), self.local_id.clone());
 
 		match message {
@@ -194,7 +202,9 @@ impl Context for TestContext {
 			}
 
 			let current_round = self.current_round.clone();
-			let timeout = self.timer.sleep(round_duration)
+			let timeout = self
+				.timer
+				.sleep(round_duration)
 				.map(move |_| {
 					current_round.compare_and_swap(round, round + 1, Ordering::SeqCst);
 				})
@@ -261,7 +271,10 @@ fn consensus_completes_with_minimum_good() {
 		.expect("to not time out");
 
 	for result in &results {
-		assert_eq!(&result.justification.digest, &results[0].justification.digest);
+		assert_eq!(
+			&result.justification.digest,
+			&results[0].justification.digest
+		);
 	}
 }
 
@@ -318,7 +331,10 @@ fn consensus_completes_with_minimum_good_all_initial_proposals_bad() {
 		.expect("to not time out");
 
 	for result in &results {
-		assert_eq!(&result.justification.digest, &results[0].justification.digest);
+		assert_eq!(
+			&result.justification.digest,
+			&results[0].justification.digest
+		);
 	}
 }
 
@@ -381,9 +397,15 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 		round_number: locked_round,
 		digest: locked_digest.clone(),
 		signatures: (0..7)
-			.map(|i| Signature(Message::Vote(Vote::Prepare(locked_round, locked_digest.clone())), AuthorityId(i)))
-			.collect()
-	}.check(7, |_, _, s| Some(s.1.clone())).unwrap();
+			.map(|i| {
+				Signature(
+					Message::Vote(Vote::Prepare(locked_round, locked_digest.clone())),
+					AuthorityId(i),
+				)
+			})
+			.collect(),
+	}.check(7, |_, _, s| Some(s.1.clone()))
+		.unwrap();
 
 	let timer = tokio_timer::wheel().tick_duration(ROUND_DURATION).build();
 
@@ -411,10 +433,9 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 				tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
 			);
 
-			agreement.strategy.advance_to_round(
-				&agreement.context,
-				locked_round + 1
-			);
+			agreement
+				.strategy
+				.advance_to_round(&agreement.context, locked_round + 1);
 
 			if i <= max_faulty {
 				agreement.strategy.locked = Some(Locked {
@@ -423,10 +444,10 @@ fn threshold_plus_one_locked_on_proposal_only_one_with_candidate() {
 			}
 
 			if i == max_faulty {
-				agreement.strategy.notable_candidates.insert(
-					locked_digest.clone(),
-					locked_proposal.clone(),
-				);
+				agreement
+					.strategy
+					.notable_candidates
+					.insert(locked_digest.clone(), locked_proposal.clone());
 			}
 
 			agreement
@@ -476,15 +497,18 @@ fn consensus_completes_even_when_nodes_start_with_a_delay() {
 
 			let sleep_duration = base_sleep * i as u32;
 
-			timer.sleep(sleep_duration).map_err(|_| Error).and_then(move |_| {
-				agree(
-					ctx,
-					node_count,
-					max_faulty,
-					rx.map_err(|_| Error),
-					tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
-				)
-			})
+			timer
+				.sleep(sleep_duration)
+				.map_err(|_| Error)
+				.and_then(move |_| {
+					agree(
+						ctx,
+						node_count,
+						max_faulty,
+						rx.map_err(|_| Error),
+						tx.sink_map_err(|_| Error).with(move |t| Ok((i, t))),
+					)
+				})
 		})
 		.collect::<Vec<_>>();
 
@@ -499,6 +523,9 @@ fn consensus_completes_even_when_nodes_start_with_a_delay() {
 		.expect("to not time out");
 
 	for result in &results {
-		assert_eq!(&result.justification.digest, &results[0].justification.digest);
+		assert_eq!(
+			&result.justification.digest,
+			&results[0].justification.digest
+		);
 	}
 }

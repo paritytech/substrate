@@ -16,49 +16,55 @@
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
-use std::time::{Duration, Instant};
-use futures::stream::Stream;
-use service::{Service, Components};
-use tokio_core::reactor;
-use network::{SyncState, SyncProvider};
-use polkadot_primitives::Block;
-use state_machine;
 use client::{self, BlockchainEvents};
+use futures::stream::Stream;
+use network::{SyncProvider, SyncState};
+use polkadot_primitives::Block;
+use service::{Components, Service};
+use state_machine;
+use std::time::{Duration, Instant};
+use tokio_core::reactor;
 
 const TIMER_INTERVAL_MS: u64 = 5000;
 
 /// Spawn informant on the event loop
 pub fn start<C>(service: &Service<C>, handle: reactor::Handle)
-	where
-		C: Components,
-		client::error::Error: From<<<<C as Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
+where
+	C: Components,
+	client::error::Error:
+		From<<<<C as Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
-	let interval = reactor::Interval::new_at(Instant::now(), Duration::from_millis(TIMER_INTERVAL_MS), &handle)
-		.expect("Error creating informant timer");
+	let interval = reactor::Interval::new_at(
+		Instant::now(),
+		Duration::from_millis(TIMER_INTERVAL_MS),
+		&handle,
+	).expect("Error creating informant timer");
 
 	let network = service.network();
 	let client = service.client();
 	let txpool = service.transaction_pool();
 
-	let display_notifications = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
-		let sync_status = network.status();
+	let display_notifications = interval
+		.map_err(|e| debug!("Timer error: {:?}", e))
+		.for_each(move |_| {
+			let sync_status = network.status();
 
-		if let Ok(best_block) = client.best_block_header() {
-			let hash = best_block.hash();
-			let num_peers = sync_status.num_peers;
-			let status = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
-				(SyncState::Idle, _) => "Idle".into(),
-				(SyncState::Downloading, None) => "Syncing".into(),
-				(SyncState::Downloading, Some(n)) => format!("Syncing, target=#{}", n),
-			};
-			let txpool_status = txpool.light_status();
-			info!(target: "polkadot", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_block.number, hash);
-			telemetry!("system.interval"; "status" => status, "peers" => num_peers, "height" => best_block.number, "best" => ?hash, "txcount" => txpool_status.transaction_count);
-		} else {
-			warn!("Error getting best block information");
-		}
-		Ok(())
-	});
+			if let Ok(best_block) = client.best_block_header() {
+				let hash = best_block.hash();
+				let num_peers = sync_status.num_peers;
+				let status = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
+					(SyncState::Idle, _) => "Idle".into(),
+					(SyncState::Downloading, None) => "Syncing".into(),
+					(SyncState::Downloading, Some(n)) => format!("Syncing, target=#{}", n),
+				};
+				let txpool_status = txpool.light_status();
+				info!(target: "polkadot", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_block.number, hash);
+				telemetry!("system.interval"; "status" => status, "peers" => num_peers, "height" => best_block.number, "best" => ?hash, "txcount" => txpool_status.transaction_count);
+			} else {
+				warn!("Error getting best block information");
+			}
+			Ok(())
+		});
 
 	let client = service.client();
 	let display_block_import = client.import_notification_stream().for_each(|n| {
@@ -77,4 +83,3 @@ pub fn start<C>(service: &Service<C>, handle: reactor::Handle)
 	handle.spawn(display_block_import);
 	handle.spawn(display_txpool_import);
 }
-

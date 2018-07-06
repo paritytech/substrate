@@ -16,16 +16,16 @@
 
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
+use codec::{Joiner, Slicable};
 use primitives;
 use rstd::prelude::*;
-use codec::{Slicable, Joiner};
 
-use runtime_primitives::traits::{Executable, RefInto, MaybeEmpty};
-use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
-use {system, session};
+use primitives::parachain::{CandidateReceipt, Chain, DutyRoster, Id};
+use runtime_primitives::traits::{Executable, MaybeEmpty, RefInto};
+use {session, system};
 
-use substrate_runtime_support::{Hashable, StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
+use substrate_runtime_support::{Hashable, StorageMap, StorageValue};
 
 #[cfg(any(feature = "std", test))]
 use rstd::marker::PhantomData;
@@ -71,20 +71,29 @@ impl<T: Trait> Module<T> {
 		let parachains = Self::active_parachains();
 		let parachain_count = parachains.len();
 		let validator_count = <session::Module<T>>::validator_count() as usize;
-		let validators_per_parachain = if parachain_count != 0 { (validator_count - 1) / parachain_count } else { 0 };
+		let validators_per_parachain = if parachain_count != 0 {
+			(validator_count - 1) / parachain_count
+		} else {
+			0
+		};
 
-		let mut roles_val = (0..validator_count).map(|i| match i {
-			i if i < parachain_count * validators_per_parachain => {
-				let idx = i / validators_per_parachain;
-				Chain::Parachain(parachains[idx].clone())
-			}
-			_ => Chain::Relay,
-		}).collect::<Vec<_>>();
+		let mut roles_val = (0..validator_count)
+			.map(|i| match i {
+				i if i < parachain_count * validators_per_parachain => {
+					let idx = i / validators_per_parachain;
+					Chain::Parachain(parachains[idx].clone())
+				},
+				_ => Chain::Relay,
+			})
+			.collect::<Vec<_>>();
 
 		let mut roles_gua = roles_val.clone();
 
 		let random_seed = system::Module::<T>::random_seed();
-		let mut seed = random_seed.to_vec().and(b"validator_role_pairs").blake2_256();
+		let mut seed = random_seed
+			.to_vec()
+			.and(b"validator_role_pairs")
+			.blake2_256();
 
 		// shuffle
 		for i in 0..(validator_count - 1) {
@@ -95,8 +104,10 @@ impl<T: Trait> Module<T> {
 			let remaining = (validator_count - i) as usize;
 
 			// 4 * 2 32-bit ints per 256-bit seed.
-			let val_index = u32::decode(&mut &seed[offset..offset + 4]).expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
-			let gua_index = u32::decode(&mut &seed[offset + 4..offset + 8]).expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
+			let val_index = u32::decode(&mut &seed[offset..offset + 4])
+				.expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
+			let gua_index = u32::decode(&mut &seed[offset + 4..offset + 8])
+				.expect("using 4 bytes for a 32-bit quantity") as usize % remaining;
 
 			if offset == 24 {
 				// into the last 8 bytes - rehash to gather new entropy
@@ -132,8 +143,10 @@ impl<T: Trait> Module<T> {
 	pub fn deregister_parachain(id: Id) {
 		let mut parachains = Self::active_parachains();
 		match parachains.binary_search(&id) {
-			Ok(idx) => { parachains.remove(idx); }
-			Err(_) => {}
+			Ok(idx) => {
+				parachains.remove(idx);
+			},
+			Err(_) => {},
 		}
 
 		<Code<T>>::remove(id);
@@ -143,11 +156,13 @@ impl<T: Trait> Module<T> {
 
 	fn set_heads(aux: &<T as Trait>::PublicAux, heads: Vec<CandidateReceipt>) -> Result {
 		ensure!(aux.is_empty(), "set_heads must not be signed");
-		ensure!(!<DidUpdate<T>>::exists(), "Parachain heads must be updated only once in the block");
+		ensure!(
+			!<DidUpdate<T>>::exists(),
+			"Parachain heads must be updated only once in the block"
+		);
 		ensure!(
 			<system::Module<T>>::extrinsic_index() == T::SET_POSITION,
-			"Parachain heads update extrinsic must be at position {} in the block"
-//			, T::SET_POSITION
+			"Parachain heads update extrinsic must be at position {} in the block" /* , T::SET_POSITION */
 		);
 
 		let active_parachains = Self::active_parachains();
@@ -157,8 +172,9 @@ impl<T: Trait> Module<T> {
 		for head in &heads {
 			ensure!(
 				iter.find(|&p| p == &head.parachain_index).is_some(),
-				"Submitted candidate for unregistered or out-of-order parachain {}"
-//				, head.parachain_index.into_inner()
+				"Submitted candidate for unregistered or out-of-order parachain {}" /* , head.
+				                                                                     * parachain_index.
+				                                                                     * into_inner() */
 			);
 		}
 
@@ -175,7 +191,10 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> Executable for Module<T> {
 	fn execute() {
-		assert!(<Self as Store>::DidUpdate::take(), "Parachain heads must be updated once in the block");
+		assert!(
+			<Self as Store>::DidUpdate::take(),
+			"Parachain heads must be updated once in the block"
+		);
 	}
 }
 
@@ -203,17 +222,22 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(any(feature = "std", test))]
-impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
-{
+impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(mut self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use std::collections::HashMap;
-		use runtime_io::twox_128;
 		use codec::Slicable;
+		use runtime_io::twox_128;
+		use std::collections::HashMap;
 
-		self.parachains.sort_unstable_by_key(|&(ref id, _)| id.clone());
+		self.parachains
+			.sort_unstable_by_key(|&(ref id, _)| id.clone());
 		self.parachains.dedup_by_key(|&mut (ref id, _)| id.clone());
 
-		let only_ids: Vec<_> = self.parachains.iter().map(|&(ref id, _)| id).cloned().collect();
+		let only_ids: Vec<_> = self
+			.parachains
+			.iter()
+			.map(|&(ref id, _)| id)
+			.cloned()
+			.collect();
 
 		let mut map: HashMap<_, _> = map![
 			twox_128(<Parachains<T>>::key()).to_vec() => only_ids.encode()
@@ -232,10 +256,10 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
-	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
+	use runtime_primitives::traits::{BlakeTwo256, HasPublicAux, Identity};
+	use runtime_primitives::BuildStorage;
+	use substrate_primitives::H256;
 	use {consensus, timestamp};
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -273,79 +297,136 @@ mod tests {
 	type Parachains = Module<Test>;
 
 	fn new_test_ext(parachains: Vec<(Id, Vec<u8>)>) -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(consensus::GenesisConfig::<Test>{
-			code: vec![],
-			authorities: vec![1, 2, 3],
-		}.build_storage().unwrap());
-		t.extend(session::GenesisConfig::<Test>{
-			session_length: 1000,
-			validators: vec![1, 2, 3, 4, 5, 6, 7, 8],
-			broken_percent_late: 100,
-		}.build_storage().unwrap());
-		t.extend(GenesisConfig::<Test>{
-			parachains: parachains,
-			phantom: PhantomData,
-		}.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default()
+			.build_storage()
+			.unwrap();
+		t.extend(
+			consensus::GenesisConfig::<Test> {
+				code: vec![],
+				authorities: vec![1, 2, 3],
+			}.build_storage()
+				.unwrap(),
+		);
+		t.extend(
+			session::GenesisConfig::<Test> {
+				session_length: 1000,
+				validators: vec![1, 2, 3, 4, 5, 6, 7, 8],
+				broken_percent_late: 100,
+			}.build_storage()
+				.unwrap(),
+		);
+		t.extend(
+			GenesisConfig::<Test> {
+				parachains,
+				phantom: PhantomData,
+			}.build_storage()
+				.unwrap(),
+		);
 		t
 	}
 
 	#[test]
 	fn active_parachains_should_work() {
-		let parachains = vec![
-			(5u32.into(), vec![1,2,3]),
-			(100u32.into(), vec![4,5,6]),
-		];
+		let parachains = vec![(5u32.into(), vec![1, 2, 3]), (100u32.into(), vec![4, 5, 6])];
 
 		with_externalities(&mut new_test_ext(parachains), || {
-			assert_eq!(Parachains::active_parachains(), vec![5u32.into(), 100u32.into()]);
-			assert_eq!(Parachains::parachain_code(&5u32.into()), Some(vec![1,2,3]));
-			assert_eq!(Parachains::parachain_code(&100u32.into()), Some(vec![4,5,6]));
+			assert_eq!(
+				Parachains::active_parachains(),
+				vec![5u32.into(), 100u32.into()]
+			);
+			assert_eq!(
+				Parachains::parachain_code(&5u32.into()),
+				Some(vec![1, 2, 3])
+			);
+			assert_eq!(
+				Parachains::parachain_code(&100u32.into()),
+				Some(vec![4, 5, 6])
+			);
 		});
 	}
 
 	#[test]
 	fn register_deregister() {
-		let parachains = vec![
-			(5u32.into(), vec![1,2,3]),
-			(100u32.into(), vec![4,5,6]),
-		];
+		let parachains = vec![(5u32.into(), vec![1, 2, 3]), (100u32.into(), vec![4, 5, 6])];
 
 		with_externalities(&mut new_test_ext(parachains), || {
-			assert_eq!(Parachains::active_parachains(), vec![5u32.into(), 100u32.into()]);
+			assert_eq!(
+				Parachains::active_parachains(),
+				vec![5u32.into(), 100u32.into()]
+			);
 
-			assert_eq!(Parachains::parachain_code(&5u32.into()), Some(vec![1,2,3]));
-			assert_eq!(Parachains::parachain_code(&100u32.into()), Some(vec![4,5,6]));
+			assert_eq!(
+				Parachains::parachain_code(&5u32.into()),
+				Some(vec![1, 2, 3])
+			);
+			assert_eq!(
+				Parachains::parachain_code(&100u32.into()),
+				Some(vec![4, 5, 6])
+			);
 
-			Parachains::register_parachain(99u32.into(), vec![7,8,9], vec![1, 1, 1]);
+			Parachains::register_parachain(99u32.into(), vec![7, 8, 9], vec![1, 1, 1]);
 
-			assert_eq!(Parachains::active_parachains(), vec![5u32.into(), 99u32.into(), 100u32.into()]);
-			assert_eq!(Parachains::parachain_code(&99u32.into()), Some(vec![7,8,9]));
+			assert_eq!(
+				Parachains::active_parachains(),
+				vec![5u32.into(), 99u32.into(), 100u32.into()]
+			);
+			assert_eq!(
+				Parachains::parachain_code(&99u32.into()),
+				Some(vec![7, 8, 9])
+			);
 
 			Parachains::deregister_parachain(5u32.into());
 
-			assert_eq!(Parachains::active_parachains(), vec![99u32.into(), 100u32.into()]);
+			assert_eq!(
+				Parachains::active_parachains(),
+				vec![99u32.into(), 100u32.into()]
+			);
 			assert_eq!(Parachains::parachain_code(&5u32.into()), None);
 		});
 	}
 
 	#[test]
 	fn duty_roster_works() {
-		let parachains = vec![
-			(0u32.into(), vec![]),
-			(1u32.into(), vec![]),
-		];
+		let parachains = vec![(0u32.into(), vec![]), (1u32.into(), vec![])];
 
 		with_externalities(&mut new_test_ext(parachains), || {
 			let check_roster = |duty_roster: &DutyRoster| {
 				assert_eq!(duty_roster.validator_duty.len(), 8);
 				assert_eq!(duty_roster.guarantor_duty.len(), 8);
 				for i in (0..2).map(Id::from) {
-					assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
-					assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Parachain(i)).count(), 3);
+					assert_eq!(
+						duty_roster
+							.validator_duty
+							.iter()
+							.filter(|&&j| j == Chain::Parachain(i))
+							.count(),
+						3
+					);
+					assert_eq!(
+						duty_roster
+							.guarantor_duty
+							.iter()
+							.filter(|&&j| j == Chain::Parachain(i))
+							.count(),
+						3
+					);
 				}
-				assert_eq!(duty_roster.validator_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
-				assert_eq!(duty_roster.guarantor_duty.iter().filter(|&&j| j == Chain::Relay).count(), 2);
+				assert_eq!(
+					duty_roster
+						.validator_duty
+						.iter()
+						.filter(|&&j| j == Chain::Relay)
+						.count(),
+					2
+				);
+				assert_eq!(
+					duty_roster
+						.guarantor_duty
+						.iter()
+						.filter(|&&j| j == Chain::Relay)
+						.count(),
+					2
+				);
 			};
 
 			system::Module::<Test>::set_random_seed([0u8; 32].into());
@@ -356,7 +437,6 @@ mod tests {
 			let duty_roster_1 = Parachains::calculate_duty_roster();
 			check_roster(&duty_roster_1);
 			assert!(duty_roster_0 != duty_roster_1);
-
 
 			system::Module::<Test>::set_random_seed([2u8; 32].into());
 			let duty_roster_2 = Parachains::calculate_duty_roster();

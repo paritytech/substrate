@@ -16,9 +16,9 @@
 
 //! Polkadot client possible errors.
 
-use std;
-use state_machine;
 use primitives::hexdisplay::HexDisplay;
+use state_machine;
+use std;
 
 error_chain! {
 	errors {

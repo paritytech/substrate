@@ -34,8 +34,8 @@ extern crate substrate_runtime_support as runtime_support;
 
 extern crate substrate_codec as codec;
 
-use rstd::prelude::*;
 use codec::Slicable;
+use rstd::prelude::*;
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 
@@ -47,20 +47,25 @@ pub type VersionString = &'static str;
 #[cfg(feature = "std")]
 #[macro_export]
 macro_rules! ver_str {
-	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
+	($y:expr) => {{
+		::std::borrow::Cow::Borrowed($y)
+		}};
 }
 
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! ver_str {
-	( $y:expr ) => {{ $y }}
+	($y:expr) => {{
+			$y
+		}};
 }
 
 /// Runtime version.
 /// This should not be thought of as classic Semver (major/minor/tiny).
 /// This triplet have different semantics and mis-interpretation could cause problems.
-/// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
-/// absolutely not `impl_version` since they change the semantics of the runtime.
+/// In particular: bug fixes should result in an increment of `spec_version` and possibly
+/// `authoring_version`, absolutely not `impl_version` since they change the semantics of the
+/// runtime.
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct RuntimeVersion {
@@ -68,18 +73,18 @@ pub struct RuntimeVersion {
 	/// A different on-chain spec_name to that of the native runtime would normally result
 	/// in node not attempting to sync or author blocks.
 	pub spec_name: VersionString,
-	
+
 	/// Name of the implementation of the spec. This is of little consequence for the node
 	/// and serves only to differentiate code of different implementation teams. For this
 	/// codebase, it will be parity-polkadot. If there were a non-Rust implementation of the
 	/// Polkadot runtime (e.g. C++), then it would identify itself with an accordingly different
 	/// `impl_name`.
 	pub impl_name: VersionString,
-	
+
 	/// `authoring_version` is the version of the authorship interface. An authoring node
 	/// will not attempt to author blocks unless this is equal to its native runtime.
 	pub authoring_version: u32,
-	
+
 	/// Version of the runtime specification. A full-node will not attempt to use its native
 	/// runtime in substitute for the on-chain Wasm runtime unless all of `spec_name`,
 	/// `spec_version` and `authoring_version` are the same between Wasm and native.
@@ -112,15 +117,14 @@ impl Default for RuntimeVersion {
 impl RuntimeVersion {
 	/// Check if this version matches other version for calling into runtime.
 	pub fn can_call_with(&self, other: &RuntimeVersion) -> bool {
-		self.spec_version == other.spec_version &&
-		self.spec_name == other.spec_name &&
-		self.authoring_version == other.authoring_version
+		self.spec_version == other.spec_version
+			&& self.spec_name == other.spec_name
+			&& self.authoring_version == other.authoring_version
 	}
 
 	/// Check if this version matches other version for authoring blocks.
 	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
-		self.authoring_version == other.authoring_version &&
-		self.spec_name == other.spec_name
+		self.authoring_version == other.authoring_version && self.spec_name == other.spec_name
 	}
 }
 

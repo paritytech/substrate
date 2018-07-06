@@ -24,7 +24,9 @@ use futures::sync::oneshot;
 use polkadot_primitives::Hash;
 
 /// Track includability of a set of candidates,
-pub(super) fn track<I: IntoIterator<Item=(Hash, bool)>>(candidates: I) -> (IncludabilitySender, Includable) {
+pub(super) fn track<I: IntoIterator<Item = (Hash, bool)>>(
+	candidates: I,
+) -> (IncludabilitySender, Includable) {
 	let (tx, rx) = oneshot::channel();
 	let tracking: HashMap<_, _> = candidates.into_iter().collect();
 	let includable_count = tracking.values().filter(|x| **x).count();
@@ -37,10 +39,7 @@ pub(super) fn track<I: IntoIterator<Item=(Hash, bool)>>(candidates: I) -> (Inclu
 
 	sender.try_complete();
 
-	(
-		sender,
-		Includable(rx),
-	)
+	(sender, Includable(rx))
 }
 
 /// The sending end of the includability sender.
@@ -59,7 +58,7 @@ impl IncludabilitySender {
 		use std::collections::hash_map::Entry;
 
 		match self.tracking.entry(candidate) {
-			Entry::Vacant(_) => {}
+			Entry::Vacant(_) => {},
 			Entry::Occupied(mut entry) => {
 				let old = entry.insert(includable);
 				if !old && includable {
@@ -67,7 +66,7 @@ impl IncludabilitySender {
 				} else if old && !includable {
 					self.includable_count -= 1;
 				}
-			}
+			},
 		}
 
 		self.try_complete()
@@ -113,12 +112,15 @@ mod tests {
 		let hash2 = [2; 32].into();
 		let hash3 = [3; 32].into();
 
-		let (mut sender, recv) = track([
-			(hash1, true),
-			(hash2, true),
-			(hash2, false), // overwrite should favor latter.
-			(hash3, true),
-		].iter().cloned());
+		let (mut sender, recv) = track(
+			[
+				(hash1, true),
+				(hash2, true),
+				(hash2, false), // overwrite should favor latter.
+				(hash3, true),
+			].iter()
+				.cloned(),
+		);
 
 		assert!(!sender.is_complete());
 

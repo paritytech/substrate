@@ -36,28 +36,31 @@ extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
+extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_contract as contract;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
-extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
-#[cfg(test)] use std::fmt::Debug;
 use account_db::State;
+use address::Address as RawAddress;
+use codec::{Input, Slicable};
+use double_map::StorageDoubleMap;
+use primitives::traits::{
+	As, AuxLookup, Bounded, Executable, Hashing as HashingT, MakePayment, Member, One, RefInto,
+	SimpleArithmetic, Zero,
+};
+use rstd::collections::btree_map::BTreeMap;
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use rstd::collections::btree_map::BTreeMap;
-use codec::{Input, Slicable};
-use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
+use runtime_support::{Parameter, StorageMap, StorageValue};
 use session::OnSessionChange;
-use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, AuxLookup, Hashing as HashingT, Member};
-use address::Address as RawAddress;
-use double_map::StorageDoubleMap;
+#[cfg(test)]
+use std::fmt::Debug;
 
 pub mod address;
 mod mock;
@@ -108,10 +111,11 @@ impl ContractAddressFor<u64> for DummyContractAddressFor {
 	}
 }
 
-impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
+impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing
+where
 	Hashing: HashingT,
 	AccountId: Sized + Slicable + From<Hashing::Output>,
-	Hashing::Output: Slicable
+	Hashing::Output: Slicable,
 {
 	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId {
 		let mut dest_pre = Hashing::hash(code).encode();
@@ -122,12 +126,28 @@ impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
+	type Balance: Parameter
+		+ SimpleArithmetic
+		+ Slicable
+		+ Default
+		+ Copy
+		+ As<Self::AccountIndex>
+		+ As<usize>
+		+ As<u64>;
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	type AccountIndex: Parameter
+		+ Member
+		+ Slicable
+		+ SimpleArithmetic
+		+ As<u8>
+		+ As<u16>
+		+ As<u32>
+		+ As<u64>
+		+ As<usize>
+		+ Copy;
 }
 
 decl_module! {
@@ -254,7 +274,6 @@ enum NewAccountOutcome {
 }
 
 impl<T: Trait> Module<T> {
-
 	// PUBLIC IMMUTABLES
 
 	/// The length of a staking era in blocks.
@@ -308,7 +327,8 @@ impl<T: Trait> Module<T> {
 	fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
 		let dest = Self::lookup(dest)?;
 		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
+		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)?
+		{
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
 		}
 		Ok(())
@@ -319,10 +339,16 @@ impl<T: Trait> Module<T> {
 	/// Effects will be felt at the beginning of the next era.
 	fn stake(aux: &T::PublicAux) -> Result {
 		let aux = aux.ref_into();
-		ensure!(Self::nominating(aux).is_none(), "Cannot stake if already nominating.");
+		ensure!(
+			Self::nominating(aux).is_none(),
+			"Cannot stake if already nominating."
+		);
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
-		ensure!(intentions.iter().find(|&t| t == aux).is_none(), "Cannot stake if already staked.");
+		ensure!(
+			intentions.iter().find(|&t| t == aux).is_none(),
+			"Cannot stake if already staked."
+		);
 		intentions.push(aux.clone());
 		<Intentions<T>>::put(intentions);
 		<Bondage<T>>::insert(aux, T::BlockNumber::max_value());
@@ -336,13 +362,17 @@ impl<T: Trait> Module<T> {
 		let aux = aux.ref_into();
 		let position = position as usize;
 		let mut intentions = <Intentions<T>>::get();
-//		let position = intentions.iter().position(|t| t == aux.ref_into()).ok_or("Cannot unstake if not already staked.")?;
+		// let position = intentions.iter().position(|t| t == aux.ref_into()).ok_or("Cannot
+		// unstake if not already staked.")?;
 		if intentions.get(position) != Some(aux) {
 			return Err("Invalid index")
 		}
 		intentions.swap_remove(position);
 		<Intentions<T>>::put(intentions);
-		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
+		<Bondage<T>>::insert(
+			aux.ref_into(),
+			Self::current_era() + Self::bonding_duration(),
+		);
 		Ok(())
 	}
 
@@ -350,8 +380,17 @@ impl<T: Trait> Module<T> {
 		let target = Self::lookup(target)?;
 		let aux = aux.ref_into();
 
-		ensure!(Self::nominating(aux).is_none(), "Cannot nominate if already nominating.");
-		ensure!(Self::intentions().iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot nominate if already staked.");
+		ensure!(
+			Self::nominating(aux).is_none(),
+			"Cannot nominate if already nominating."
+		);
+		ensure!(
+			Self::intentions()
+				.iter()
+				.find(|&t| t == aux.ref_into())
+				.is_none(),
+			"Cannot nominate if already staked."
+		);
 
 		// update nominators_for
 		let mut t = Self::nominators_for(&target);
@@ -390,7 +429,10 @@ impl<T: Trait> Module<T> {
 		<Nominating<T>>::remove(source);
 
 		// update bondage
-		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
+		<Bondage<T>>::insert(
+			aux.ref_into(),
+			Self::current_era() + Self::bonding_duration(),
+		);
 		Ok(())
 	}
 
@@ -441,7 +483,7 @@ impl<T: Trait> Module<T> {
 	/// is known that the account already exists.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> bool {
 		// Commented out for no - but consider it instructive.
-//		assert!(!Self::voting_balance(who).is_zero());
+		// 		assert!(!Self::voting_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
 			Self::on_free_too_low(who);
 			false
@@ -472,7 +514,7 @@ impl<T: Trait> Module<T> {
 	/// If `who` doesn't exist, nothing is done and an Err returned.
 	pub fn reward(who: &T::AccountId, value: T::Balance) -> Result {
 		if Self::voting_balance(who).is_zero() {
-			return Err("beneficiary account must pre-exist");
+			return Err("beneficiary account must pre-exist")
 		}
 		Self::set_free_balance(who, Self::free_balance(who) + value);
 		Ok(())
@@ -536,10 +578,10 @@ impl<T: Trait> Module<T> {
 	pub fn transfer_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
-		value: T::Balance
+		value: T::Balance,
 	) -> result::Result<Option<T::Balance>, &'static str> {
 		if Self::voting_balance(beneficiary).is_zero() {
-			return Err("beneficiary account must pre-exist");
+			return Err("beneficiary account must pre-exist")
 		}
 		let b = Self::reserved_balance(slashed);
 		let slash = cmp::min(b, value);
@@ -560,14 +602,20 @@ impl<T: Trait> Module<T> {
 		if normal_rotation {
 			// reward
 			let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
-			let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
-			let reward = Self::session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64);
+			let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone()
+				/ actual_elapsed.max(ideal_elapsed))
+				.as_();
+			let reward =
+				Self::session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64);
 			// apply good session reward
 			for v in <session::Module<T>>::validators().iter() {
 				let noms = Self::current_nominators_for(v);
-				let total = noms.iter().map(Self::voting_balance).fold(Self::voting_balance(v), |acc, x| acc + x);
+				let total = noms
+					.iter()
+					.map(Self::voting_balance)
+					.fold(Self::voting_balance(v), |acc, x| acc + x);
 				if !total.is_zero() {
-					let safe_mul_rational = |b| b * reward / total;// TODO: avoid overflow
+					let safe_mul_rational = |b| b * reward / total; // TODO: avoid overflow
 					for n in noms.iter() {
 						let _ = Self::reward(n, safe_mul_rational(Self::voting_balance(n)));
 					}
@@ -580,24 +628,32 @@ impl<T: Trait> Module<T> {
 			for v in <session::Module<T>>::validators().iter() {
 				if let Some(rem) = Self::slash(v, early_era_slash) {
 					let noms = Self::current_nominators_for(v);
-					let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
+					let total = noms
+						.iter()
+						.map(Self::voting_balance)
+						.fold(T::Balance::zero(), |acc, x| acc + x);
 					if !total.is_zero() {
-						let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
+						let safe_mul_rational = |b| b * rem / total; // TODO: avoid overflow
 						for n in noms.iter() {
-							let _ = Self::slash(n, safe_mul_rational(Self::voting_balance(n)));	// best effort - not much that can be done on fail.
+							let _ = Self::slash(n, safe_mul_rational(Self::voting_balance(n))); // best effort - not much that can be done on fail.
 						}
 					}
 				}
 			}
 		}
-		if ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero() || !normal_rotation {
+		if ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero()
+			|| !normal_rotation
+		{
 			Self::new_era();
 		}
 	}
 
 	/// Balance of a (potential) validator that includes all nominators.
 	fn nomination_balance(who: &T::AccountId) -> T::Balance {
-		Self::nominators_for(who).iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x)
+		Self::nominators_for(who)
+			.iter()
+			.map(Self::voting_balance)
+			.fold(Zero::zero(), |acc, x| acc + x)
 	}
 
 	/// The era has changed - enact new staking set.
@@ -627,16 +683,17 @@ impl<T: Trait> Module<T> {
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
-		<StakeThreshold<T>>::put(
-			if intentions.len() > 0 {
-				let i = (<ValidatorCount<T>>::get() as usize).min(intentions.len() - 1);
-				intentions[i].0.clone()
-			} else { Zero::zero() }
-		);
-		let vals = &intentions.into_iter()
-				.map(|(_, v)| v)
-				.take(<ValidatorCount<T>>::get() as usize)
-				.collect::<Vec<_>>();
+		<StakeThreshold<T>>::put(if intentions.len() > 0 {
+			let i = (<ValidatorCount<T>>::get() as usize).min(intentions.len() - 1);
+			intentions[i].0.clone()
+		} else {
+			Zero::zero()
+		});
+		let vals = &intentions
+			.into_iter()
+			.map(|(_, v)| v)
+			.take(<ValidatorCount<T>>::get() as usize)
+			.collect::<Vec<_>>();
 		for v in <session::Module<T>>::validators().iter() {
 			<CurrentNominatorsFor<T>>::remove(v);
 		}
@@ -678,10 +735,14 @@ impl<T: Trait> Module<T> {
 		let ret = {
 			// we quantise the number of accounts so it stays constant over a reasonable
 			// period of time.
-			let quantized_account_count: T::AccountIndex = (next_set_index * enum_set_size / quantization + One::one()) * quantization;
+			let quantized_account_count: T::AccountIndex =
+				(next_set_index * enum_set_size / quantization + One::one()) * quantization;
 			// then modify the starting balance to be modulo this to allow it to potentially
 			// identify an account index for reuse.
-			let maybe_try_index = balance % <T::Balance as As<T::AccountIndex>>::sa(quantized_account_count * reclaim_index_modulus);
+			let maybe_try_index = balance
+				% <T::Balance as As<T::AccountIndex>>::sa(
+					quantized_account_count * reclaim_index_modulus,
+				);
 			let maybe_try_index = As::<T::AccountIndex>::as_(maybe_try_index);
 
 			// this identifier must end with magic byte 0x69 to trigger this check (a minor
@@ -700,7 +761,7 @@ impl<T: Trait> Module<T> {
 						try_set[item_index] = who.clone();
 						<EnumSet<T>>::insert(set_index, try_set);
 
-						return NewAccountOutcome::GoodHint;
+						return NewAccountOutcome::GoodHint
 					}
 				}
 				NewAccountOutcome::BadHint
@@ -711,11 +772,12 @@ impl<T: Trait> Module<T> {
 
 		// insert normally as a back up
 		let mut set_index = next_set_index;
-		// defensive only: this loop should never iterate since we keep NextEnumSet up to date later.
+		// defensive only: this loop should never iterate since we keep NextEnumSet up to date
+		// later.
 		let mut set = loop {
 			let set = Self::enum_set(set_index);
 			if set.len() < ENUM_SET_SIZE {
-				break set;
+				break set
 			}
 			set_index += One::one();
 		};
@@ -765,27 +827,30 @@ impl<T: Trait> Module<T> {
 		let liability = value + Self::contract_fee();
 
 		if from_balance < liability {
-			return Err("balance too low to send value");
+			return Err("balance too low to send value")
 		}
 		if value < Self::existential_deposit() {
-			return Err("value too low to create account");
+			return Err("value too low to create account")
 		}
 		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
-			return Err("bondage too high to send value");
+			return Err("bondage too high to send value")
 		}
 
 		let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
 
 		// early-out if degenerate.
 		if &dest == transactor {
-			return Ok(None);
+			return Ok(None)
 		}
 
 		let mut local = BTreeMap::new();
 		// two inserts are safe
 		// note that we now know that `&dest != transactor` due to early-out before.
 		local.insert(dest, ChangeEntry::contract_created(value, code.to_vec()));
-		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - liability));
+		local.insert(
+			transactor.clone(),
+			ChangeEntry::balance_changed(from_balance - liability),
+		);
 		Ok(Some(local))
 	}
 
@@ -796,23 +861,27 @@ impl<T: Trait> Module<T> {
 		account_db: &DB,
 	) -> result::Result<Option<State<T>>, &'static str> {
 		let would_create = account_db.get_balance(transactor).is_zero();
-		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
+		let fee = if would_create {
+			Self::creation_fee()
+		} else {
+			Self::transfer_fee()
+		};
 		let liability = value + fee;
 
 		let from_balance = account_db.get_balance(transactor);
 		if from_balance < liability {
-			return Err("balance too low to send value");
+			return Err("balance too low to send value")
 		}
 		if would_create && value < Self::existential_deposit() {
-			return Err("value too low to create account");
+			return Err("value too low to create account")
 		}
 		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
-			return Err("bondage too high to send value");
+			return Err("bondage too high to send value")
 		}
 
 		let to_balance = account_db.get_balance(dest);
 		if to_balance + value <= to_balance {
-			return Err("destination balance too high to receive value");
+			return Err("destination balance too high to receive value")
 		}
 
 		// TODO: an additional fee, based upon gaslimit/gasprice.
@@ -851,8 +920,7 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> Executable for Module<T> {
-	fn execute() {
-	}
+	fn execute() {}
 }
 
 impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
@@ -867,7 +935,8 @@ impl<T: Trait> AuxLookup for Module<T> {
 	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
 		match a {
 			address::Address::Id(i) => Ok(i),
-			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
+			address::Address::Index(i) =>
+				<Module<T>>::lookup_index(i).ok_or("invalid account index"),
 		}
 	}
 }
@@ -875,9 +944,10 @@ impl<T: Trait> AuxLookup for Module<T> {
 impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let b = Self::free_balance(transactor);
-		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
+		let transaction_fee = Self::transaction_base_fee()
+			+ Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
 		if b < transaction_fee {
-			return Err("not enough funds for transaction fee");
+			return Err("not enough funds for transaction fee")
 		}
 		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
 		Ok(())

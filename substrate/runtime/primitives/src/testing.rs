@@ -16,11 +16,11 @@
 
 //! Testing utilities.
 
-use serde::{Serialize, de::DeserializeOwned};
-use std::fmt::Debug;
-use codec::{Slicable, Input};
+use codec::{Input, Slicable};
 use runtime_support::AuxDispatchable;
-use traits::{self, Checkable, Applyable, BlakeTwo256};
+use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Debug;
+use traits::{self, Applyable, BlakeTwo256, Checkable};
 
 pub use substrate_primitives::H256;
 
@@ -80,30 +80,54 @@ impl traits::Header for Header {
 	type Hash = H256;
 	type Digest = Digest;
 
-	fn number(&self) -> &Self::Number { &self.number }
-	fn set_number(&mut self, num: Self::Number) { self.number = num }
+	fn number(&self) -> &Self::Number {
+		&self.number
+	}
+	fn set_number(&mut self, num: Self::Number) {
+		self.number = num
+	}
 
-	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
-	fn set_extrinsics_root(&mut self, root: Self::Hash) { self.extrinsics_root = root }
+	fn extrinsics_root(&self) -> &Self::Hash {
+		&self.extrinsics_root
+	}
+	fn set_extrinsics_root(&mut self, root: Self::Hash) {
+		self.extrinsics_root = root
+	}
 
-	fn state_root(&self) -> &Self::Hash { &self.state_root }
-	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
+	fn state_root(&self) -> &Self::Hash {
+		&self.state_root
+	}
+	fn set_state_root(&mut self, root: Self::Hash) {
+		self.state_root = root
+	}
 
-	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
-	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
+	fn parent_hash(&self) -> &Self::Hash {
+		&self.parent_hash
+	}
+	fn set_parent_hash(&mut self, hash: Self::Hash) {
+		self.parent_hash = hash
+	}
 
-	fn digest(&self) -> &Self::Digest { &self.digest }
-	fn set_digest(&mut self, digest: Self::Digest) { self.digest = digest }
+	fn digest(&self) -> &Self::Digest {
+		&self.digest
+	}
+	fn set_digest(&mut self, digest: Self::Digest) {
+		self.digest = digest
+	}
 
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest
+		digest: Self::Digest,
 	) -> Self {
 		Header {
-			number, extrinsics_root: extrinsics_root, state_root, parent_hash, digest
+			number,
+			extrinsics_root,
+			state_root,
+			parent_hash,
+			digest,
 		}
 	}
 }
@@ -113,7 +137,9 @@ pub struct Block<Xt: Slicable + Sized + Send + Sync + Serialize + Clone + Eq + D
 	pub header: Header,
 	pub extrinsics: Vec<Xt>,
 }
-impl<Xt: Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Slicable for Block<Xt> {
+impl<Xt: Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug>
+	Slicable for Block<Xt>
+{
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
 			header: Slicable::decode(input)?,
@@ -127,7 +153,19 @@ impl<Xt: Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone +
 		v
 	}
 }
-impl<Xt: 'static + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
+impl<
+		Xt: 'static
+			+ Slicable
+			+ Sized
+			+ Send
+			+ Sync
+			+ Serialize
+			+ DeserializeOwned
+			+ Clone
+			+ Eq
+			+ Debug,
+	> traits::Block for Block<Xt>
+{
 	type Extrinsic = Xt;
 	type Header = Header;
 	type Hash = <Header as traits::Header>::Hash;
@@ -147,9 +185,23 @@ impl<Xt: 'static + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
-pub struct TestXt<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize>(pub (u64, u64, Call));
+pub struct TestXt<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize>(
+	pub (u64, u64, Call),
+);
 
-impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Slicable for TestXt<Call> {
+impl<
+		Call: AuxDispatchable
+			+ Slicable
+			+ Sized
+			+ Send
+			+ Sync
+			+ Serialize
+			+ DeserializeOwned
+			+ Clone
+			+ Eq
+			+ Debug,
+	> Slicable for TestXt<Call>
+{
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(TestXt(Slicable::decode(input)?))
 	}
@@ -157,17 +209,55 @@ impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + Deseri
 		self.0.encode()
 	}
 }
-impl<Call: 'static + AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Checkable for TestXt<Call> {
+impl<
+		Call: 'static
+			+ AuxDispatchable
+			+ Slicable
+			+ Sized
+			+ Send
+			+ Sync
+			+ Serialize
+			+ DeserializeOwned
+			+ Clone
+			+ Eq
+			+ Debug,
+	> Checkable for TestXt<Call>
+{
 	type Checked = Self;
 	type Address = u64;
 	type AccountId = u64;
-	fn sender(&self) -> &u64 { &(self.0).0 }
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, _lookup: ThisLookup) -> Result<Self::Checked, &'static str> { Ok(self) }
+	fn sender(&self) -> &u64 {
+		&(self.0).0
+	}
+	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(
+		self,
+		_lookup: ThisLookup,
+	) -> Result<Self::Checked, &'static str> {
+		Ok(self)
+	}
 }
-impl<Call: AuxDispatchable<Aux = u64> + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
+impl<
+		Call: AuxDispatchable<Aux = u64>
+			+ Slicable
+			+ Sized
+			+ Send
+			+ Sync
+			+ Serialize
+			+ DeserializeOwned
+			+ Clone
+			+ Eq
+			+ Debug,
+	> Applyable for TestXt<Call>
+{
 	type AccountId = u64;
 	type Index = u64;
-	fn sender(&self) -> &u64 { &(self.0).0 }
-	fn index(&self) -> &u64 { &(self.0).1 }
-	fn apply(self) -> Result<(), &'static str> { (self.0).2.dispatch(&(self.0).0) }
+	fn sender(&self) -> &u64 {
+		&(self.0).0
+	}
+	fn index(&self) -> &u64 {
+		&(self.0).1
+	}
+	fn apply(self) -> Result<(), &'static str> {
+		(self.0).2.dispatch(&(self.0).0)
+	}
 }

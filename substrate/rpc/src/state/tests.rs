@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::*;
 use self::error::{Error, ErrorKind};
+use super::*;
 use test_client::{self, TestClient};
 
 #[test]
@@ -35,7 +35,7 @@ fn should_call_contract() {
 	let genesis_hash = client.genesis_hash();
 
 	assert_matches!(
-		StateApi::call_at(&client, "balanceOf".into(), vec![1,2,3], genesis_hash),
+		StateApi::call_at(&client, "balanceOf".into(), vec![1, 2, 3], genesis_hash),
 		Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
 	)
 }

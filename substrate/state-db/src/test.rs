@@ -16,9 +16,9 @@
 
 //! Test utils
 
-use std::collections::HashMap;
 use primitives::H256;
-use {DBValue, ChangeSet, CommitSet, MetaDb, HashDb};
+use std::collections::HashMap;
+use {ChangeSet, CommitSet, DBValue, HashDb, MetaDb};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
@@ -62,7 +62,10 @@ impl TestDb {
 
 pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	ChangeSet {
-		inserted: inserted.iter().map(|v| (H256::from(*v), H256::from(*v).to_vec())).collect(),
+		inserted: inserted
+			.iter()
+			.map(|v| (H256::from(*v), H256::from(*v).to_vec()))
+			.collect(),
 		deleted: deleted.iter().map(|v| H256::from(*v)).collect(),
 	}
 }
@@ -76,8 +79,10 @@ pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 
 pub fn make_db(inserted: &[u64]) -> TestDb {
 	TestDb {
-		data: inserted.iter().map(|v| (H256::from(*v), H256::from(*v).to_vec())).collect(),
+		data: inserted
+			.iter()
+			.map(|v| (H256::from(*v), H256::from(*v).to_vec()))
+			.collect(),
 		meta: Default::default(),
 	}
 }
-

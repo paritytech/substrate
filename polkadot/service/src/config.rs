@@ -16,11 +16,11 @@
 
 //! Service configuration.
 
-use transaction_pool;
 use chain_spec::ChainSpec;
-pub use network::Role;
-pub use network::NetworkConfiguration;
 pub use client_db::PruningMode;
+pub use network::NetworkConfiguration;
+pub use network::Role;
+use transaction_pool;
 
 /// Service configuration.
 pub struct Configuration {

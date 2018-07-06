@@ -26,32 +26,60 @@
 //! their subtrees.
 //!
 //! # Pruning.
-//! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each finalization until pruning
-//! constraints are satisfied.
+//! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each finalization until
+//! pruning constraints are satisfied.
 //!
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate parking_lot;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 
 mod unfinalized;
 mod pruning;
-#[cfg(test)] mod test;
+#[cfg(test)]
+mod test;
 
-use std::fmt;
-use parking_lot::RwLock;
 use codec::Slicable;
-use std::collections::HashSet;
-use unfinalized::UnfinalizedOverlay;
+use parking_lot::RwLock;
 use pruning::RefWindow;
+use std::collections::HashSet;
+use std::fmt;
+use unfinalized::UnfinalizedOverlay;
 
 /// Database value type.
 pub type DBValue = Vec<u8>;
 
 /// Basic set of requirements for the Block hash and node key types.
-pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Slicable + std::hash::Hash + 'static {}
-impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Slicable + std::hash::Hash + 'static> Hash for T {}
+pub trait Hash:
+	Send
+	+ Sync
+	+ Sized
+	+ Eq
+	+ PartialEq
+	+ Clone
+	+ Default
+	+ fmt::Debug
+	+ Slicable
+	+ std::hash::Hash
+	+ 'static
+{
+}
+impl<
+		T: Send
+			+ Sync
+			+ Sized
+			+ Eq
+			+ PartialEq
+			+ Clone
+			+ Default
+			+ fmt::Debug
+			+ Slicable
+			+ std::hash::Hash
+			+ 'static,
+	> Hash for T
+{}
 
 /// Backend database trait. Read-only.
 pub trait MetaDb {
@@ -60,7 +88,6 @@ pub trait MetaDb {
 	/// Get meta value, such as the journal.
 	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
 }
-
 
 /// Backend database trait. Read-only.
 pub trait HashDb {
@@ -98,7 +125,6 @@ pub struct ChangeSet<H: Hash> {
 	pub deleted: Vec<H>,
 }
 
-
 /// A set of changes to the backing database.
 #[derive(Default, Debug, Clone)]
 pub struct CommitSet<H: Hash> {
@@ -111,7 +137,8 @@ pub struct CommitSet<H: Hash> {
 /// Pruning contraints. If none are specified pruning is
 #[derive(Default, Debug, Clone)]
 pub struct Constraints {
-	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only unfinalized states.
+	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only unfinalized
+	/// states.
 	pub max_blocks: Option<u32>,
 	/// Maximum memory in the pruning overlay.
 	pub max_mem: Option<usize>,
@@ -152,13 +179,15 @@ struct StateDbSync<BlockHash: Hash, Key: Hash> {
 }
 
 impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
-	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
+	pub fn new<D: MetaDb>(
+		mode: PruningMode,
+		db: &D,
+	) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
 		trace!("StateDb settings: {:?}", mode);
 		let unfinalized: UnfinalizedOverlay<BlockHash, Key> = UnfinalizedOverlay::new(db)?;
 		let pruning: Option<RefWindow<BlockHash, Key>> = match mode {
 			PruningMode::Constrained(Constraints {
-				max_mem: Some(_),
-				..
+				max_mem: Some(_), ..
 			}) => unimplemented!(),
 			PruningMode::Constrained(_) => Some(RefWindow::new(db)?),
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical => None,
@@ -166,12 +195,18 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		Ok(StateDbSync {
 			mode,
 			unfinalized,
-			pruning: pruning,
+			pruning,
 			pinned: Default::default(),
 		})
 	}
 
-	pub fn insert_block(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> CommitSet<Key> {
+	pub fn insert_block(
+		&mut self,
+		hash: &BlockHash,
+		number: u64,
+		parent_hash: &BlockHash,
+		mut changeset: ChangeSet<Key>,
+	) -> CommitSet<Key> {
 		if number == 0 {
 			return CommitSet {
 				data: changeset,
@@ -187,25 +222,21 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 					meta: Default::default(),
 				}
 			},
-			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				self.unfinalized.insert(hash, number, parent_hash, changeset)
-			}
+			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical =>
+				self.unfinalized
+					.insert(hash, number, parent_hash, changeset),
 		}
 	}
 
 	pub fn finalize_block(&mut self, hash: &BlockHash) -> CommitSet<Key> {
 		let mut commit = match self.mode {
-			PruningMode::ArchiveAll => {
-				CommitSet::default()
-			},
+			PruningMode::ArchiveAll => CommitSet::default(),
 			PruningMode::ArchiveCanonical => {
 				let mut commit = self.unfinalized.finalize(hash);
 				commit.data.deleted.clear();
 				commit
 			},
-			PruningMode::Constrained(_) => {
-				self.unfinalized.finalize(hash)
-			},
+			PruningMode::Constrained(_) => self.unfinalized.finalize(hash),
 		};
 		if let Some(ref mut pruning) = self.pruning {
 			pruning.note_finalized(hash, &mut commit);
@@ -215,19 +246,24 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	fn prune(&mut self, commit: &mut CommitSet<Key>) {
-		if let (&mut Some(ref mut pruning), &PruningMode::Constrained(ref constraints)) = (&mut self.pruning, &self.mode) {
+		if let (&mut Some(ref mut pruning), &PruningMode::Constrained(ref constraints)) =
+			(&mut self.pruning, &self.mode)
+		{
 			loop {
 				if pruning.window_size() <= constraints.max_blocks.unwrap_or(0) as u64 {
-					break;
+					break
 				}
 
-				if constraints.max_mem.map_or(false, |m| pruning.mem_used() > m) {
-					break;
+				if constraints
+					.max_mem
+					.map_or(false, |m| pruning.mem_used() > m)
+				{
+					break
 				}
 
 				let pinned = &self.pinned;
 				if pruning.next_hash().map_or(false, |h| pinned.contains(&h)) {
-					break;
+					break
 				}
 
 				pruning.prune_one(commit);
@@ -243,9 +279,13 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		self.pinned.remove(hash);
 	}
 
-	pub fn get<D: HashDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>> {
+	pub fn get<D: HashDb<Hash = Key>>(
+		&self,
+		key: &Key,
+		db: &D,
+	) -> Result<Option<DBValue>, Error<D::Error>> {
 		if let Some(value) = self.unfinalized.get(key) {
-			return Ok(Some(value));
+			return Ok(Some(value))
 		}
 		db.get(key).map_err(|e| Error::Db(e))
 	}
@@ -259,15 +299,26 @@ pub struct StateDb<BlockHash: Hash, Key: Hash> {
 
 impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	/// Creates a new instance. Does not expect any metadata in the database.
-	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
+	pub fn new<D: MetaDb>(
+		mode: PruningMode,
+		db: &D,
+	) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
 		Ok(StateDb {
-			db: RwLock::new(StateDbSync::new(mode, db)?)
+			db: RwLock::new(StateDbSync::new(mode, db)?),
 		})
 	}
 
 	/// Add a new unfinalized block.
-	pub fn insert_block(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
-		self.db.write().insert_block(hash, number, parent_hash, changeset)
+	pub fn insert_block(
+		&self,
+		hash: &BlockHash,
+		number: u64,
+		parent_hash: &BlockHash,
+		changeset: ChangeSet<Key>,
+	) -> CommitSet<Key> {
+		self.db
+			.write()
+			.insert_block(hash, number, parent_hash, changeset)
 	}
 
 	/// Finalize a previously inserted block.
@@ -286,7 +337,11 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from unfinalized/pruning overlay or the backing DB.
-	pub fn get<D: HashDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>> {
+	pub fn get<D: HashDb<Hash = Key>>(
+		&self,
+		key: &Key,
+		db: &D,
+	) -> Result<Option<DBValue>, Error<D::Error>> {
 		self.db.read().get(key, db)
 	}
 }
@@ -294,19 +349,44 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use primitives::H256;
-	use {StateDb, PruningMode, Constraints};
-	use test::{make_db, make_changeset, TestDb};
+	use test::{make_changeset, make_db, TestDb};
+	use {Constraints, PruningMode, StateDb};
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
 		let state_db = StateDb::new(settings, &db).unwrap();
 
-		db.commit(&state_db.insert_block(&H256::from(1), 1, &H256::from(0), make_changeset(&[1], &[91])));
-		db.commit(&state_db.insert_block(&H256::from(21), 2, &H256::from(1), make_changeset(&[21], &[921, 1])));
-		db.commit(&state_db.insert_block(&H256::from(22), 2, &H256::from(1), make_changeset(&[22], &[922])));
-		db.commit(&state_db.insert_block(&H256::from(3), 3, &H256::from(21), make_changeset(&[3], &[93])));
+		db.commit(&state_db.insert_block(
+			&H256::from(1),
+			1,
+			&H256::from(0),
+			make_changeset(&[1], &[91]),
+		));
+		db.commit(&state_db.insert_block(
+			&H256::from(21),
+			2,
+			&H256::from(1),
+			make_changeset(&[21], &[921, 1]),
+		));
+		db.commit(&state_db.insert_block(
+			&H256::from(22),
+			2,
+			&H256::from(1),
+			make_changeset(&[22], &[922]),
+		));
+		db.commit(&state_db.insert_block(
+			&H256::from(3),
+			3,
+			&H256::from(21),
+			make_changeset(&[3], &[93]),
+		));
 		db.commit(&state_db.finalize_block(&H256::from(1)));
-		db.commit(&state_db.insert_block(&H256::from(4), 4, &H256::from(3), make_changeset(&[4], &[94])));
+		db.commit(&state_db.insert_block(
+			&H256::from(4),
+			4,
+			&H256::from(3),
+			make_changeset(&[4], &[94]),
+		));
 		db.commit(&state_db.finalize_block(&H256::from(21)));
 		db.commit(&state_db.finalize_block(&H256::from(3)));
 

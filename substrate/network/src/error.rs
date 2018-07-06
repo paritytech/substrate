@@ -16,8 +16,8 @@
 
 //! Polkadot service possible errors.
 
-use network::Error as NetworkError;
 use client;
+use network::Error as NetworkError;
 
 error_chain! {
 	foreign_links {

@@ -16,9 +16,9 @@
 
 //! Voting thresholds.
 
-use primitives::traits::{Zero, IntegerSquareRoot};
 use codec::{Input, Slicable};
-use rstd::ops::{Add, Mul, Div, Rem};
+use primitives::traits::{IntegerSquareRoot, Zero};
+use rstd::ops::{Add, Div, Mul, Rem};
 
 /// A means of determining if a vote is past pass threshold.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -59,25 +59,32 @@ pub trait Approved<Balance> {
 }
 
 /// Return `true` iff `n1 / d1 < n2 / d2`. `d1` and `d2` may not be zero.
-fn compare_rationals<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Ord + Copy>(mut n1: T, mut d1: T, mut n2: T, mut d2: T) -> bool {
+fn compare_rationals<
+	T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Ord + Copy,
+>(
+	mut n1: T,
+	mut d1: T,
+	mut n2: T,
+	mut d2: T,
+) -> bool {
 	// Uses a continued fractional representation for a non-overflowing compare.
 	// Detailed at https://janmr.com/blog/2014/05/comparing-rational-numbers-without-overflow/.
 	loop {
 		let q1 = n1 / d1;
 		let q2 = n2 / d2;
 		if q1 < q2 {
-			return true;
+			return true
 		}
 		if q2 < q1 {
-			return false;
+			return false
 		}
 		let r1 = n1 % d1;
 		let r2 = n2 % d2;
 		if r2.is_zero() {
-			return false;
+			return false
 		}
 		if r1.is_zero() {
-			return true;
+			return true
 		}
 		n1 = d2;
 		n2 = d1;
@@ -86,7 +93,17 @@ fn compare_rationals<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, 
 	}
 }
 
-impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + Mul<Balance, Output = Balance> + Div<Balance, Output = Balance> + Rem<Balance, Output = Balance> + Copy> Approved<Balance> for VoteThreshold {
+impl<
+		Balance: IntegerSquareRoot
+			+ Zero
+			+ Ord
+			+ Add<Balance, Output = Balance>
+			+ Mul<Balance, Output = Balance>
+			+ Div<Balance, Output = Balance>
+			+ Rem<Balance, Output = Balance>
+			+ Copy,
+	> Approved<Balance> for VoteThreshold
+{
 	/// Given `approve` votes for and `against` votes against from a total electorate size of
 	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
 	/// overall outcome is in favour of approval.
@@ -94,7 +111,9 @@ impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + 
 		let voters = approve + against;
 		let sqrt_voters = voters.integer_sqrt();
 		let sqrt_electorate = electorate.integer_sqrt();
-		if sqrt_voters.is_zero() { return false; }
+		if sqrt_voters.is_zero() {
+			return false
+		}
 		match *self {
 			VoteThreshold::SuperMajorityApprove =>
 				compare_rationals(against, sqrt_voters, approve, sqrt_electorate),
@@ -111,7 +130,13 @@ mod tests {
 
 	#[test]
 	fn should_work() {
-		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(60, 50, 210), false);
-		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(100, 50, 210), true);
+		assert_eq!(
+			VoteThreshold::SuperMajorityApprove.approved(60, 50, 210),
+			false
+		);
+		assert_eq!(
+			VoteThreshold::SuperMajorityApprove.approved(100, 50, 210),
+			true
+		);
 	}
 }

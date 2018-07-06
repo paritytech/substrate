@@ -16,15 +16,18 @@
 
 //! Utils for block interaction.
 
-use rstd::prelude::*;
-use super::{Call, UncheckedExtrinsic, Extrinsic, Staking};
-use runtime_primitives::traits::{Checkable, AuxLookup};
-use primitives::parachain::CandidateReceipt;
-use timestamp::Call as TimestampCall;
+use super::{Call, Extrinsic, Staking, UncheckedExtrinsic};
 use parachains::Call as ParachainsCall;
+use primitives::parachain::CandidateReceipt;
+use rstd::prelude::*;
+use runtime_primitives::traits::{AuxLookup, Checkable};
+use timestamp::Call as TimestampCall;
 
 /// Produces the list of inherent extrinsics.
-pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: Vec<CandidateReceipt>) -> Vec<UncheckedExtrinsic> {
+pub fn inherent_extrinsics(
+	timestamp: ::primitives::Timestamp,
+	parachain_heads: Vec<CandidateReceipt>,
+) -> Vec<UncheckedExtrinsic> {
 	vec![
 		UncheckedExtrinsic::new(
 			Extrinsic {
@@ -32,7 +35,7 @@ pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: 
 				function: Call::Timestamp(TimestampCall::set(timestamp)),
 				index: 0,
 			},
-			Default::default()
+			Default::default(),
 		),
 		UncheckedExtrinsic::new(
 			Extrinsic {
@@ -40,8 +43,8 @@ pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: 
 				function: Call::Parachains(ParachainsCall::set_heads(parachain_heads)),
 				index: 0,
 			},
-			Default::default()
-		)
+			Default::default(),
+		),
 	]
 }
 

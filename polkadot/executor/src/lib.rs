@@ -18,6 +18,7 @@
 //! executed is equivalent to the natively compiled code.
 
 extern crate polkadot_runtime;
-#[macro_use] extern crate substrate_executor;
+#[macro_use]
+extern crate substrate_executor;
 
 native_executor_instance!(pub Executor, polkadot_runtime::api::dispatch, polkadot_runtime::VERSION, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm"));

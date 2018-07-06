@@ -22,9 +22,11 @@
 
 use codec::Slicable;
 
-use wasmi::{self, Module, ModuleInstance,  MemoryInstance, MemoryDescriptor, MemoryRef, ModuleImportResolver};
-use wasmi::{memory_units, RuntimeValue};
 use wasmi::Error as WasmError;
+use wasmi::{
+	self, MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleImportResolver, ModuleInstance,
+};
+use wasmi::{memory_units, RuntimeValue};
 
 use super::{ValidationParams, ValidationResult};
 
@@ -63,17 +65,23 @@ impl ModuleImportResolver for Resolver {
 		if field_name == "memory" {
 			let effective_max = descriptor.maximum().unwrap_or(self.max_memory);
 			if descriptor.initial() > self.max_memory || effective_max > self.max_memory {
-				Err(WasmError::Instantiation("Module requested too much memory".to_owned()))
+				Err(WasmError::Instantiation(
+					"Module requested too much memory".to_owned(),
+				))
 			} else {
 				let mem = MemoryInstance::alloc(
 					memory_units::Pages(descriptor.initial() as usize),
-					descriptor.maximum().map(|x| memory_units::Pages(x as usize)),
+					descriptor
+						.maximum()
+						.map(|x| memory_units::Pages(x as usize)),
 				)?;
 				*self.memory.borrow_mut() = Some(mem.clone());
 				Ok(mem)
 			}
 		} else {
-			Err(WasmError::Instantiation("Memory imported under unknown name".to_owned()))
+			Err(WasmError::Instantiation(
+				"Memory imported under unknown name".to_owned(),
+			))
 		}
 	}
 }
@@ -81,7 +89,10 @@ impl ModuleImportResolver for Resolver {
 /// Validate a candidate under the given validation code.
 ///
 /// This will fail if the validation code is not a proper parachain validation module.
-pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> Result<ValidationResult, Error> {
+pub fn validate_candidate(
+	validation_code: &[u8],
+	params: ValidationParams,
+) -> Result<ValidationResult, Error> {
 	use wasmi::LINEAR_MEMORY_PAGE_SIZE;
 
 	// maximum memory in bytes
@@ -99,9 +110,12 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 		let module = ModuleInstance::new(
 			&module,
 			&wasmi::ImportsBuilder::new().with_resolver("env", &module_resolver),
-		)?.run_start(&mut wasmi::NopExternals).map_err(WasmError::Trap)?;
+		)?.run_start(&mut wasmi::NopExternals)
+			.map_err(WasmError::Trap)?;
 
-		let memory = module_resolver.memory.borrow_mut()
+		let memory = module_resolver
+			.memory
+			.borrow_mut()
 			.as_ref()
 			.ok_or_else(|| WasmError::Instantiation("No imported memory instance".to_owned()))?
 			.clone();
@@ -118,8 +132,8 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 			bail!(ErrorKind::ParamsTooLarge(encoded_call_data.len()));
 		}
 
-		let call_data_pages = (encoded_call_data.len() / LINEAR_MEMORY_PAGE_SIZE.0) +
-			(encoded_call_data.len() % LINEAR_MEMORY_PAGE_SIZE.0);
+		let call_data_pages = (encoded_call_data.len() / LINEAR_MEMORY_PAGE_SIZE.0)
+			+ (encoded_call_data.len() % LINEAR_MEMORY_PAGE_SIZE.0);
 
 		let call_data_pages = wasmi::memory_units::Pages(call_data_pages);
 
@@ -127,8 +141,10 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 			memory.grow(call_data_pages - memory.current_size())?;
 		}
 
-		memory.set(0, &encoded_call_data).expect("enough memory allocated just before this; \
-			copying never fails if memory is large enough; qed");
+		memory.set(0, &encoded_call_data).expect(
+			"enough memory allocated just before this; \
+			 copying never fails if memory is large enough; qed",
+		);
 
 		(0, encoded_call_data.len() as i32)
 	};
@@ -146,8 +162,7 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 			let mut len_bytes = [0u8; 4];
 			memory.get_into(len_offset, &mut len_bytes)?;
 
-			let len = u32::decode(&mut &len_bytes[..])
-				.ok_or_else(|| ErrorKind::BadReturn)?;
+			let len = u32::decode(&mut &len_bytes[..]).ok_or_else(|| ErrorKind::BadReturn)?;
 
 			let return_offset = if len > len_offset {
 				bail!(ErrorKind::BadReturn);
@@ -160,7 +175,7 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 			ValidationResult::decode(&mut &raw_return[..])
 				.ok_or_else(|| ErrorKind::BadReturn)
 				.map_err(Into::into)
-		}
+		},
 		_ => bail!(ErrorKind::BadReturn),
 	}
 }

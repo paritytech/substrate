@@ -19,8 +19,8 @@
 extern crate polkadot_parachain as parachain;
 extern crate tiny_keccak;
 
+use parachain::codec::{Input, Slicable};
 use parachain::ValidationParams;
-use parachain::codec::{Slicable, Input};
 
 // Head data for this parachain.
 #[derive(Default, Clone)]
@@ -98,15 +98,15 @@ fn execute_good_on_parent() {
 		post_state: hash_state(0),
 	};
 
-	let block_data = BlockData {
-		state: 0,
-		add: 512,
-	};
+	let block_data = BlockData { state: 0, add: 512 };
 
-	let ret = parachain::wasm::validate_candidate(TEST_CODE, ValidationParams {
-		parent_head: parent_head.encode(),
-		block_data: block_data.encode(),
-	}).unwrap();
+	let ret = parachain::wasm::validate_candidate(
+		TEST_CODE,
+		ValidationParams {
+			parent_head: parent_head.encode(),
+			block_data: block_data.encode(),
+		},
+	).unwrap();
 
 	let new_head = HeadData::decode(&mut &ret.head_data[..]).unwrap();
 
@@ -133,10 +133,13 @@ fn execute_good_chain_on_parent() {
 			add,
 		};
 
-		let ret = parachain::wasm::validate_candidate(TEST_CODE, ValidationParams {
-			parent_head: parent_head.encode(),
-			block_data: block_data.encode(),
-		}).unwrap();
+		let ret = parachain::wasm::validate_candidate(
+			TEST_CODE,
+			ValidationParams {
+				parent_head: parent_head.encode(),
+				block_data: block_data.encode(),
+			},
+		).unwrap();
 
 		let new_head = HeadData::decode(&mut &ret.head_data[..]).unwrap();
 
@@ -152,7 +155,7 @@ fn execute_good_chain_on_parent() {
 
 #[test]
 fn execute_bad_on_parent() {
-		let parent_head = HeadData {
+	let parent_head = HeadData {
 		number: 0,
 		parent_hash: [0; 32],
 		post_state: hash_state(0),
@@ -163,8 +166,11 @@ fn execute_bad_on_parent() {
 		add: 256,
 	};
 
-	let _ret = parachain::wasm::validate_candidate(TEST_CODE, ValidationParams {
-		parent_head: parent_head.encode(),
-		block_data: block_data.encode(),
-	}).unwrap_err();
+	let _ret = parachain::wasm::validate_candidate(
+		TEST_CODE,
+		ValidationParams {
+			parent_head: parent_head.encode(),
+			block_data: block_data.encode(),
+		},
+	).unwrap_err();
 }

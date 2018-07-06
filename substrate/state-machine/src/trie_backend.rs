@@ -16,14 +16,14 @@
 
 //! Trie-based state machine backend.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use hashdb::HashDB;
-use memorydb::MemoryDB;
-use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut};
-use {Backend};
 pub use ethereum_types::H256 as TrieH256;
 pub use hashdb::DBValue;
+use hashdb::HashDB;
+use memorydb::MemoryDB;
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieError, TrieMut};
+use std::collections::HashMap;
+use std::sync::Arc;
+use Backend;
 
 /// Backend trie storage trait.
 pub trait Storage: Send + Sync {
@@ -95,8 +95,11 @@ impl Backend for TrieBackend {
 
 		let map_e = |e: Box<TrieError>| format!("Trie lookup error: {}", e);
 
-		TrieDB::new(&eph, &self.root).map_err(map_e)?
-			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
+		TrieDB::new(&eph, &self.root)
+			.map_err(map_e)?
+			.get(key)
+			.map(|x| x.map(|val| val.to_vec()))
+			.map_err(map_e)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
@@ -116,7 +119,7 @@ impl Backend for TrieBackend {
 				let (key, _) = x?;
 
 				if !key.starts_with(prefix) {
-					break;
+					break
 				}
 
 				f(&key);
@@ -153,12 +156,13 @@ impl Backend for TrieBackend {
 			Err(e) => {
 				debug!(target: "trie", "Error extracting trie values: {}", e);
 				Vec::new()
-			}
+			},
 		}
 	}
 
 	fn storage_root<I>(&self, delta: I) -> ([u8; 32], MemoryDB)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	where
+		I: IntoIterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 	{
 		let mut write_overlay = MemoryDB::default();
 		let mut root = self.root;
@@ -168,7 +172,8 @@ impl Backend for TrieBackend {
 				overlay: &mut write_overlay,
 			};
 
-			let mut trie = TrieDBMut::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
+			let mut trie =
+				TrieDBMut::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
 			for (key, change) in delta {
 				let result = match change {
 					Some(val) => trie.insert(&key, &val),
@@ -198,10 +203,7 @@ pub struct Ephemeral<'a> {
 
 impl<'a> Ephemeral<'a> {
 	pub fn new(storage: &'a TrieBackendStorage, overlay: &'a mut MemoryDB) -> Self {
-		Ephemeral {
-			storage,
-			overlay,
-		}
+		Ephemeral { storage, overlay }
 	}
 }
 
@@ -212,13 +214,11 @@ impl<'a> HashDB for Ephemeral<'a> {
 
 	fn get(&self, key: &TrieH256) -> Option<DBValue> {
 		match self.overlay.raw(key) {
-			Some((val, i)) => {
-				if i <= 0 {
-					None
-				} else {
-					Some(val)
-				}
-			}
+			Some((val, i)) => if i <= 0 {
+				None
+			} else {
+				Some(val)
+			},
 			None => match self.storage.get(&key) {
 				Ok(x) => x,
 				Err(e) => {
@@ -258,10 +258,8 @@ impl TrieBackendStorage {
 	pub fn get(&self, key: &TrieH256) -> Result<Option<DBValue>, String> {
 		match *self {
 			TrieBackendStorage::Storage(ref db) =>
-				db.get(key)
-					.map_err(|e| format!("Trie lookup error: {}", e)),
-			TrieBackendStorage::MemoryDb(ref db) =>
-				Ok(db.get(key)),
+				db.get(key).map_err(|e| format!("Trie lookup error: {}", e)),
+			TrieBackendStorage::MemoryDb(ref db) => Ok(db.get(key)),
 		}
 	}
 }
@@ -291,7 +289,10 @@ pub mod tests {
 
 	#[test]
 	fn read_from_storage_returns_some() {
-		assert_eq!(test_trie().storage(b"key").unwrap(), Some(b"value".to_vec()));
+		assert_eq!(
+			test_trie().storage(b"key").unwrap(),
+			Some(b"value".to_vec())
+		);
 	}
 
 	#[test]
@@ -306,7 +307,11 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::with_memorydb(MemoryDB::new(), Default::default()).pairs().is_empty());
+		assert!(
+			TrieBackend::with_memorydb(MemoryDB::new(), Default::default())
+				.pairs()
+				.is_empty()
+		);
 	}
 
 	#[test]
@@ -316,12 +321,19 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_transaction_is_empty() {
-		assert!(test_trie().storage_root(::std::iter::empty()).1.drain().is_empty());
+		assert!(
+			test_trie()
+				.storage_root(::std::iter::empty())
+				.1
+				.drain()
+				.is_empty()
+		);
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
-		let (new_root, mut tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
+		let (new_root, mut tx) =
+			test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
 		assert!(!tx.drain().is_empty());
 		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
 	}

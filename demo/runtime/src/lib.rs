@@ -34,23 +34,25 @@ extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate serde;
 
-extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
 extern crate substrate_runtime_democracy as democracy;
 extern crate substrate_runtime_executive as executive;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
+extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 #[macro_use]
 extern crate substrate_runtime_version as version;
 extern crate demo_primitives;
 
+use demo_primitives::{
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature,
+};
 use rstd::prelude::*;
-use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
+use runtime_primitives::traits::{BlakeTwo256, Convert, HasPublicAux};
 use version::RuntimeVersion;
 
 #[cfg(any(feature = "std", test))]
@@ -191,8 +193,13 @@ pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
 /// Extrinsic type that is signed.
 pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Concrete, Block, Staking, Staking,
-	(((((), Council), Democracy), Staking), Session)>;
+pub type Executive = executive::Executive<
+	Concrete,
+	Block,
+	Staking,
+	Staking,
+	(((((), Council), Democracy), Staking), Session),
+>;
 
 impl_outer_config! {
 	pub struct GenesisConfig for Concrete {

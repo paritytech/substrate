@@ -16,8 +16,8 @@
 
 //! Conrete externalities implementation.
 
-use std::{error, fmt};
 use backend::Backend;
+use std::{error, fmt};
 use {Externalities, OverlayedChanges};
 
 /// Errors that can occur when interacting with the externalities.
@@ -72,7 +72,9 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 	/// Get the transaction necessary to update the backend.
 	pub fn transaction(mut self) -> B::Transaction {
 		let _ = self.storage_root();
-		self.transaction.expect("transaction always set after calling storage root; qed").0
+		self.transaction
+			.expect("transaction always set after calling storage root; qed")
+			.0
 	}
 
 	/// Invalidates the currently cached storage root and the db transaction.
@@ -88,7 +90,9 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		use std::collections::HashMap;
 
-		self.backend.pairs().iter()
+		self.backend
+			.pairs()
+			.iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
 			.chain(self.overlay.committed.clone().into_iter())
 			.chain(self.overlay.prospective.clone().into_iter())
@@ -100,11 +104,18 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 }
 
 impl<'a, B: 'a> Externalities for Ext<'a, B>
-	where B: Backend
+where
+	B: Backend,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key).expect("Externalities not allowed to fail within runtime"))
+		self.overlay
+			.storage(key)
+			.map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(|| {
+				self.backend
+					.storage(key)
+					.expect("Externalities not allowed to fail within runtime")
+			})
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
@@ -124,12 +135,15 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 	}
 
 	fn storage_root(&mut self) -> [u8; 32] {
-		if let Some((_, ref root)) =  self.transaction {
-			return root.clone();
+		if let Some((_, ref root)) = self.transaction {
+			return root.clone()
 		}
 
 		// compute and memoize
-		let delta = self.overlay.committed.iter()
+		let delta = self
+			.overlay
+			.committed
+			.iter()
 			.chain(self.overlay.prospective.iter())
 			.map(|(k, v)| (k.clone(), v.clone()));
 
