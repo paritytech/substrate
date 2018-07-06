@@ -355,13 +355,15 @@ impl NetworkContext for NetworkContextImpl {
 //
 // - `timeouts_register_rx` should receive newly-registered timeouts.
 // - `close_rx` should be triggered when we want to close the network.
-fn init_thread(core: Handle, shared: Arc<Shared>,
-			timeouts_register_rx: mpsc::UnboundedReceiver<(Instant, (Arc<NetworkProtocolHandler + Send + Sync + 'static>, ProtocolId, TimerToken))>,
-			close_rx: oneshot::Receiver<()>) -> Result<impl Future<Item = (), Error = IoError>, Error>
-{
+fn init_thread(
+	core: Handle,
+	shared: Arc<Shared>,
+	timeouts_register_rx: mpsc::UnboundedReceiver<(Instant, (Arc<NetworkProtocolHandler + Send + Sync + 'static>, ProtocolId, TimerToken))>,
+	close_rx: oneshot::Receiver<()>
+) -> Result<impl Future<Item = (), Error = IoError>, Error> {
 	// Build the transport layer.
 	let transport = {
-		let base = transport::build_transport(core.clone(), transport::UnecryptedAllowed::Denied,
+		let base = transport::build_transport(core.clone(), transport::UnencryptedAllowed::Denied,
 											shared.network_state.local_private_key().clone());
 
 		let addr_resolver = {

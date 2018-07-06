@@ -19,10 +19,11 @@ use tokio_core::reactor::Handle;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Builds the transport that serves as a common ground for all connections.
-pub fn build_transport(core: Handle, unencrypted_allowed: UnecryptedAllowed,
-	local_private_key: secio::SecioKeyPair)
-	-> impl MuxedTransport<Output = impl AsyncRead + AsyncWrite> + Clone
-{
+pub fn build_transport(
+	core: Handle,
+	unencrypted_allowed: UnencryptedAllowed,
+	local_private_key: secio::SecioKeyPair
+) -> impl MuxedTransport<Output = impl AsyncRead + AsyncWrite> + Clone {
 	libp2p::CommonTransport::new(core)
 		.with_upgrade({
 			let secio = secio::SecioConfig {
@@ -31,8 +32,8 @@ pub fn build_transport(core: Handle, unencrypted_allowed: UnecryptedAllowed,
 
 			let mut plaintext = upgrade::toggleable(upgrade::PlainTextConfig);
 			match unencrypted_allowed {
-				UnecryptedAllowed::Allowed => plaintext.disable(),
-				UnecryptedAllowed::Denied => (),
+				UnencryptedAllowed::Allowed => plaintext.disable(),
+				UnencryptedAllowed::Denied => (),
 			};
 
 			// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
@@ -51,9 +52,9 @@ pub fn build_transport(core: Handle, unencrypted_allowed: UnecryptedAllowed,
 		.into_connection_reuse()
 }
 
-/// Specifies whether unencrypted communications are allowed or deny.
+/// Specifies whether unencrypted communications are allowed or denied.
 #[derive(Debug, Copy, Clone)]
-pub enum UnecryptedAllowed {
+pub enum UnencryptedAllowed {
 	Allowed,
 	Denied,
 }
