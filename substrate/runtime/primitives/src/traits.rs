@@ -378,6 +378,7 @@ pub trait Checkable<Ctx>: Sized {
 	/// returned in case the check fails
 	type Error;
 
+	/// gives back unchanged `self` in case of an error.
 	fn check_with(self, ctx: Ctx) -> Result<Self::Checked, (Self, Self::Error)>;
 }
 
@@ -390,7 +391,7 @@ pub trait BlindCheckable: Sized {
 	/// returned in case the check fails
 	type Error;
 
-	/// gives back in case of an error.
+	/// gives back unchanged `self` in case of an error.
 	fn check(self) -> Result<Self::Checked, (Self, Self::Error)>;
 }
 
