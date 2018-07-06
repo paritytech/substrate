@@ -216,13 +216,10 @@ impl<B, E, Block> Client<B, E, Block> where
 				.ok_or(error::ErrorKind::AuthLenInvalid.into()))
 	}
 
-	/// Get the set of authorities at a given block.
+	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		// TODO: Post Poc-2 return an error if version is missing
-		Ok(self.executor.call(id, "version", &[])
-			.and_then(|r| RuntimeVersion::decode(&mut &r.return_data[..])
-				.ok_or(error::ErrorKind::VersionInvalid.into()))
-			.unwrap_or_default())
+		self.executor.runtime_version(id)
 	}
 
 	/// Get call executor reference.

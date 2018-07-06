@@ -27,7 +27,7 @@ use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use rpc::Result as RpcResult;
 use rpc::futures::{Future, Sink, Stream};
-use tokio_core::reactor::Remote;
+use tokio::runtime::TaskExecutor;
 
 use subscriptions::Subscriptions;
 
@@ -72,10 +72,10 @@ pub struct Chain<B, E, Block: BlockT> {
 
 impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client<B, E, Block>>, remote: Remote) -> Self {
+	pub fn new(client: Arc<Client<B, E, Block>>, executor: TaskExecutor) -> Self {
 		Chain {
 			client,
-			subscriptions: Subscriptions::new(remote),
+			subscriptions: Subscriptions::new(executor),
 		}
 	}
 }

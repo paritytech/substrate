@@ -16,8 +16,8 @@
 
 #![warn(missing_docs)]
 
-//! Implements polkadot protocol version as specified here:
-//! https://github.com/paritytech/polkadot/wiki/Network-protocol
+//! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
+//! Allows attachment of an optional subprotocol for chain-specific requests.
 
 extern crate ethcore_network_devp2p as network_devp2p;
 extern crate ethcore_network as network;
@@ -50,22 +50,24 @@ mod service;
 mod sync;
 mod protocol;
 mod io;
-mod message;
 mod config;
 mod chain;
 mod blocks;
-mod consensus;
 mod on_demand;
+pub mod consensus_gossip;
 pub mod error;
+pub mod message;
+pub mod specialization;
 
 #[cfg(test)] mod test;
 
+pub use chain::Client as ClientHandle;
 pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 	TransactionPool, Params, ManageNetwork, SyncProvider};
-pub use protocol::{ProtocolStatus};
+pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
-pub use network::{NonReservedPeerMode, NetworkConfiguration, ConnectionFilter, ConnectionDirection};
-pub use message::{generic as generic_message, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
+pub use network::{NonReservedPeerMode, NetworkConfiguration, PeerId, ProtocolId, ConnectionFilter, ConnectionDirection};
+pub use message::{generic as generic_message, RequestId, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal, Status as StatusMessage};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
 pub use on_demand::{OnDemand, OnDemandService, RemoteCallResponse};

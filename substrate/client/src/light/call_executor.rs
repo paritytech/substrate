@@ -29,6 +29,7 @@ use call_executor::{CallExecutor, CallResult};
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
+use codec::Slicable;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -64,6 +65,12 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 			method: method.into(),
 			call_data: call_data.to_vec(),
 		}).into_future().wait()
+	}
+
+	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
+		let call_result = self.call(id, "version", &[])?;
+		RuntimeVersion::decode(&mut call_result.return_data.as_slice())
+			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<S: StateBackend>(&self, _state: &S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, S::Transaction)> {
