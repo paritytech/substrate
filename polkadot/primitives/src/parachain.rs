@@ -172,6 +172,8 @@ pub struct CandidateReceipt {
 	pub egress_queue_roots: Vec<(Id, Hash)>,
 	/// Fees paid from the chain to the relay chain validators
 	pub fees: u64,
+	/// blake2-256 Hash of block data.
+	pub block_data_hash: Hash,
 }
 
 impl Slicable for CandidateReceipt {
@@ -184,6 +186,7 @@ impl Slicable for CandidateReceipt {
 		self.balance_uploads.using_encoded(|s| v.extend(s));
 		self.egress_queue_roots.using_encoded(|s| v.extend(s));
 		self.fees.using_encoded(|s| v.extend(s));
+		self.block_data_hash.using_encoded(|s| v.extend(s));
 
 		v
 	}
@@ -196,6 +199,7 @@ impl Slicable for CandidateReceipt {
 			balance_uploads: Slicable::decode(input)?,
 			egress_queue_roots: Slicable::decode(input)?,
 			fees: Slicable::decode(input)?,
+			block_data_hash: Slicable::decode(input)?,
 		})
 	}
 }
@@ -243,6 +247,15 @@ pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct BlockData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
+impl BlockData {
+	/// Compute hash of block data.
+	#[cfg(feature = "std")]
+	pub fn hash(&self) -> Hash {
+		use runtime_primitives::traits::{BlakeTwo256, Hashing};
+		BlakeTwo256::hash(&self.0[..])
+	}
+}
+
 /// Parachain header raw bytes wrapper type.
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -273,19 +286,9 @@ impl Slicable for Activity {
 	}
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(u8)]
-enum StatementKind {
-	Candidate = 1,
-	Valid = 2,
-	Invalid = 3,
-	Available = 4,
-}
-
 /// Statements which can be made about parachain candidates.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum Statement {
 	/// Proposal of a parachain candidate.
 	Candidate(CandidateReceipt),
@@ -295,48 +298,4 @@ pub enum Statement {
 	Invalid(Hash),
 	/// Vote to advance round after inactive primary.
 	Available(Hash),
-}
-
-impl Slicable for Statement {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		match *self {
-			Statement::Candidate(ref candidate) => {
-				v.push(StatementKind::Candidate as u8);
-				candidate.using_encoded(|s| v.extend(s));
-			}
-			Statement::Valid(ref hash) => {
-				v.push(StatementKind::Valid as u8);
-				hash.using_encoded(|s| v.extend(s));
-			}
-			Statement::Invalid(ref hash) => {
-				v.push(StatementKind::Invalid as u8);
-				hash.using_encoded(|s| v.extend(s));
-			}
-			Statement::Available(ref hash) => {
-				v.push(StatementKind::Available as u8);
-				hash.using_encoded(|s| v.extend(s));
-			}
-		}
-
-		v
-	}
-
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		match value.read_byte() {
-			Some(x) if x == StatementKind::Candidate as u8 => {
-				Slicable::decode(value).map(Statement::Candidate)
-			}
-			Some(x) if x == StatementKind::Valid as u8 => {
-				Slicable::decode(value).map(Statement::Valid)
-			}
-			Some(x) if x == StatementKind::Invalid as u8 => {
-				Slicable::decode(value).map(Statement::Invalid)
-			}
-			Some(x) if x == StatementKind::Available as u8 => {
-				Slicable::decode(value).map(Statement::Available)
-			}
-			_ => None,
-		}
-	}
 }

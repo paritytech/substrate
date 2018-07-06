@@ -19,6 +19,9 @@ byteorder = "1.1"
 rustc-hex = "1.0.0"
 triehash = "0.1.0"
 hex-literal = "0.1.0"
+twox-hash = "1.1.0"
+lazy_static = "1.0"
+parking_lot = "*"
 log = "0.3"
 
 [dev-dependencies]

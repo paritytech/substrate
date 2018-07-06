@@ -169,7 +169,7 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 	B::Header: HeaderT<Number=u64>,
 {
 	fn on_connect(&self, peer: PeerId, role: service::Role) {
-		if !role.intersects(service::Role::FULL | service::Role::COLLATOR | service::Role::VALIDATOR) { // TODO: correct?
+		if !role.intersects(service::Role::FULL | service::Role::AUTHORITY) { // TODO: correct?
 			return;
 		}
 
@@ -296,9 +296,7 @@ impl<B, E> OnDemandCore<B, E> where
 			request.timestamp = Instant::now();
 			trace!(target: "sync", "Dispatching remote request {} to peer {}", request.id, peer);
 
-			service.execute_in_context(|ctx, protocol| {
-				protocol.send_message(ctx, peer, request.message())
-			});
+			service.execute_in_context(|ctx| ctx.send_message(peer, request.message()));
 			self.active_peers.insert(peer, request);
 		}
 	}
@@ -326,10 +324,8 @@ mod tests {
 	use parking_lot::RwLock;
 	use client;
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
-	use io::NetSyncIo;
 	use message;
 	use network::PeerId;
-	use protocol::Protocol;
 	use service::{Role, ExecuteInContext};
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
@@ -339,7 +335,7 @@ mod tests {
 	struct DummyFetchChecker { ok: bool }
 
 	impl ExecuteInContext<Block> for DummyExecutor {
-		fn execute_in_context<F: Fn(&mut NetSyncIo, &Protocol<Block>)>(&self, _closure: F) {}
+		fn execute_in_context<F: Fn(&mut ::protocol::Context<Block>)>(&self, _closure: F) {}
 	}
 
 	impl FetchChecker<Block> for DummyFetchChecker {
@@ -378,9 +374,8 @@ mod tests {
 		let (_, on_demand) = dummy(true);
 		on_demand.on_connect(0, Role::LIGHT);
 		on_demand.on_connect(1, Role::FULL);
-		on_demand.on_connect(2, Role::COLLATOR);
-		on_demand.on_connect(3, Role::VALIDATOR);
-		assert_eq!(vec![1, 2, 3], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
+		on_demand.on_connect(2, Role::AUTHORITY);
+		assert_eq!(vec![1, 2], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
 	}
 
 	#[test]

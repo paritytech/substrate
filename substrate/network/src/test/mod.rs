@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-mod consensus;
 mod sync;
 
 use std::collections::{VecDeque, HashSet, HashMap};
@@ -26,7 +25,7 @@ use client::block_builder::BlockBuilder;
 use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
-use protocol::Protocol;
+use protocol::{Context, Protocol};
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network::{PeerId, SessionInfo, Error as NetworkError};
@@ -34,20 +33,39 @@ use keyring::Keyring;
 use codec::Slicable;
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
+use specialization::Specialization;
+
+pub struct DummySpecialization;
+
+impl Specialization<Block> for DummySpecialization {
+	fn status(&self) -> Vec<u8> { vec![] }
+
+	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _status: ::message::Status<Block>) {
+
+	}
+
+	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId) {
+
+	}
+
+	fn on_message(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _message: ::message::Message<Block>) {
+
+	}
+}
 
 pub struct TestIo<'p> {
-	pub queue: &'p RwLock<VecDeque<TestPacket>>,
-	pub sender: Option<PeerId>,
+	queue: &'p RwLock<VecDeque<TestPacket>>,
 	pub to_disconnect: HashSet<PeerId>,
-	pub packets: Vec<TestPacket>,
-	pub peers_info: HashMap<PeerId, String>,
+	packets: Vec<TestPacket>,
+	peers_info: HashMap<PeerId, String>,
+	_sender: Option<PeerId>,
 }
 
 impl<'p> TestIo<'p> where {
 	pub fn new(queue: &'p RwLock<VecDeque<TestPacket>>, sender: Option<PeerId>) -> TestIo<'p> {
 		TestIo {
 			queue: queue,
-			sender: sender,
+			_sender: sender,
 			to_disconnect: HashSet::new(),
 			packets: Vec::new(),
 			peers_info: HashMap::new(),
@@ -95,13 +113,13 @@ impl<'p> SyncIo for TestIo<'p> {
 
 /// Mocked subprotocol packet
 pub struct TestPacket {
-	pub data: Vec<u8>,
-	pub recipient: PeerId,
+	data: Vec<u8>,
+	recipient: PeerId,
 }
 
 pub struct Peer {
 	client: Arc<client::Client<test_client::Backend, test_client::Executor, Block>>,
-	pub sync: Protocol<Block>,
+	pub sync: Protocol<Block, DummySpecialization>,
 	pub queue: RwLock<VecDeque<TestPacket>>,
 }
 
@@ -186,14 +204,9 @@ impl Peer {
 			self.generate_blocks(count, |_| ());
 		}
 	}
-
-	pub fn genesis_hash(&self) -> Hash {
-		let info = self.client.info().expect("In-mem client does not fail");
-		info.chain.genesis_hash
-	}
 }
 
-struct EmptyTransactionPool;
+pub struct EmptyTransactionPool;
 
 impl TransactionPool<Block> for EmptyTransactionPool {
 	fn transactions(&self) -> Vec<(Hash, Extrinsic)> {
@@ -208,17 +221,17 @@ impl TransactionPool<Block> for EmptyTransactionPool {
 }
 
 pub struct TestNet {
-	pub peers: Vec<Arc<Peer>>,
-	pub started: bool,
-	pub disconnect_events: Vec<(PeerId, PeerId)>, //disconnected (initiated by, to)
+	peers: Vec<Arc<Peer>>,
+	started: bool,
+	disconnect_events: Vec<(PeerId, PeerId)>, //disconnected (initiated by, to)
 }
 
 impl TestNet {
-	pub fn new(n: usize) -> Self {
+	fn new(n: usize) -> Self {
 		Self::new_with_config(n, ProtocolConfig::default())
 	}
 
-	pub fn new_with_config(n: usize, config: ProtocolConfig) -> Self {
+	fn new_with_config(n: usize, config: ProtocolConfig) -> Self {
 		let mut net = TestNet {
 			peers: Vec::new(),
 			started: false,
@@ -234,7 +247,7 @@ impl TestNet {
 	pub fn add_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
-		let sync = Protocol::new(config.clone(), client.clone(), None, tx_pool).unwrap();
+		let sync = Protocol::new(config.clone(), client.clone(), None, tx_pool, DummySpecialization).unwrap();
 		self.peers.push(Arc::new(Peer {
 			sync: sync,
 			client: client,
@@ -246,7 +259,7 @@ impl TestNet {
 		&self.peers[i]
 	}
 
-	pub fn start(&mut self) {
+	fn start(&mut self) {
 		if self.started {
 			return;
 		}
@@ -261,7 +274,7 @@ impl TestNet {
 		self.started = true;
 	}
 
-	pub fn sync_step(&mut self) {
+	fn sync_step(&mut self) {
 		for peer in 0..self.peers.len() {
 			let packet = self.peers[peer].pending_message();
 			if let Some(packet) = packet {
@@ -286,15 +299,15 @@ impl TestNet {
 		}
 	}
 
-	pub fn sync_step_peer(&mut self, peer_num: usize) {
+	fn sync_step_peer(&mut self, peer_num: usize) {
 		self.peers[peer_num].sync_step();
 	}
 
-	pub fn restart_peer(&mut self, i: usize) {
+	fn restart_peer(&mut self, i: usize) {
 		self.peers[i].restart_sync();
 	}
 
-	pub fn sync(&mut self) -> u32 {
+	fn sync(&mut self) -> u32 {
 		self.start();
 		let mut total_steps = 0;
 		while !self.done() {
@@ -304,14 +317,14 @@ impl TestNet {
 		total_steps
 	}
 
-	pub fn sync_steps(&mut self, count: usize) {
+	fn sync_steps(&mut self, count: usize) {
 		self.start();
 		for _ in 0..count {
 			self.sync_step();
 		}
 	}
 
-	pub fn done(&self) -> bool {
+	fn done(&self) -> bool {
 		self.peers.iter().all(|p| p.is_done())
 	}
 }
