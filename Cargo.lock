@@ -272,6 +272,7 @@ dependencies = [
 name = "blitz-state"
 version = "0.1.0"
 dependencies = [
+ "blitz-network 0.1.0",
  "blitz-primitives 0.1.0",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",

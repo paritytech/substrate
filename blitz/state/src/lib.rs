@@ -19,8 +19,10 @@
 #![allow(dead_code)]
 
 extern crate blitz_primitives;
+extern crate blitz_network;
 
 use blitz_primitives::{PublicKey, Hash, Balance, RoundId};
+use blitz_network::transaction::SignedTransaction;
 use std::collections::{HashMap, HashSet};
 
 pub struct Account {
@@ -75,3 +77,10 @@ impl NodeStore {
 struct TransactionStore {
 }
 
+pub struct BlitzRound {
+	transactions: Vec<SignedTransaction>,
+}
+
+pub struct BlitzBlock {
+	rounds: Vec<Round>,
+}

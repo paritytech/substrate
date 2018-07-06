@@ -11,6 +11,7 @@ description = "Blitz-specific objects and structs"
 # substrate-network = { path = "../../substrate/network" }
 substrate-primitives = { path = "../../substrate/primitives" }
 blitz-primitives = { path = "../primitives" }
+blitz-network = { path = "../network" }
 # ed25519 = { path = "../../substrate/ed25519" }
 futures = "0.1"
 serde = "1.0"

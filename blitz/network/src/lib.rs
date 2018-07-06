@@ -32,7 +32,9 @@ extern crate serde_json;
 extern crate log;
 
 mod message;
-mod transaction;
+
+// TODO [dk] move it to state probably
+pub mod transaction;
 
 use message::BlitzMessage;
 use codec::Slicable;
