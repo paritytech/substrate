@@ -64,16 +64,16 @@ pub fn build_timeouts_stream<T>(core: Handle, timeouts_rx: impl Stream<Item = (I
 	}).filter_map(|item| item)
 }
 
-// Local enum representing the output of the selection.
+/// Local enum representing the output of the selection.
 enum Out<A, B> {
 	NewTimeout(A),
 	Timeout(B),
 }
 
-// Convenience function that calls `.into_future()` on the timeouts stream, and applies some
-// modifiers.
-// This function is necessary. Otherwise if we copy-paste its content we run into errors because
-// the type of the copy-pasted closures differs.
+/// Convenience function that calls `.into_future()` on the timeouts stream, and applies some
+/// modifiers.
+/// This function is necessary. Otherwise if we copy-paste its content we run into errors because
+/// the type of the copy-pasted closures differs.
 fn next_in_timeouts_stream<S, B>(stream: S)
 	-> impl Future<Item = Out<(Option<S::Item>, S), B>, Error = IoError>
 where S: Stream<Error = ()>

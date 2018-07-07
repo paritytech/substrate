@@ -41,90 +41,90 @@ const SECRET_FILE: &str = "secret";
 
 // Common struct shared throughout all the components of the service.
 pub struct NetworkState {
-	// Contains the information about the network.
+	/// Contains the information about the network.
 	peerstore: PeersStorage,
 
-	// Active connections.
+	/// Active connections.
 	connections: RwLock<Connections>,
 
-	// `min_peers` taken from the configuration.
+	/// `min_peers` taken from the configuration.
 	min_peers: u32,
-	// `max_peers` taken from the configuration.
+	/// `max_peers` taken from the configuration.
 	max_peers: u32,
 
-	// If true, only reserved peers can connect.
+	/// If true, only reserved peers can connect.
 	reserved_only: atomic::AtomicBool,
-	// List of the IDs of the reserved peers.
+	/// List of the IDs of the reserved peers.
 	reserved_peers: RwLock<FnvHashSet<PeerstorePeerId>>,
 
-	// Each peer gets assigned a new unique ID. This ID increases linearly.
+	/// Each peer gets assigned a new unique ID. This ID increases linearly.
 	next_peer_id: atomic::AtomicUsize,
 
-	// List of the IDs of the disabled peers. These peers will see their connections refused.
+	/// List of the IDs of the disabled peers. These peers will see their connections refused.
 	disabled_peers: RwLock<FnvHashSet<PeerstorePeerId>>,
 
-	// Local private key.
+	/// Local private key.
 	local_private_key: secio::SecioKeyPair,
-	// Local public key.
+	/// Local public key.
 	local_public_key: PublicKey,
 }
 
 enum PeersStorage {
-	// Peers are stored in memory. Nothing is stored on disk.
+	/// Peers are stored in memory. Nothing is stored on disk.
 	Memory(MemoryPeerstore),
-	// Peers are stored in a JSON file on the disk.
+	/// Peers are stored in a JSON file on the disk.
 	Json(JsonPeerstore),
 }
 
 struct Connections {
-	// For each libp2p peer ID, the ID of the peer in the API we expose.
-	// Also corresponds to the index in `info_by_peer`.
+	/// For each libp2p peer ID, the ID of the peer in the API we expose.
+	/// Also corresponds to the index in `info_by_peer`.
 	peer_by_nodeid: FnvHashMap<PeerstorePeerId, usize>,
 
-	// For each peer ID, information about our connection to this peer.
+	/// For each peer ID, information about our connection to this peer.
 	info_by_peer: FnvHashMap<PeerId, PeerConnectionInfo>,
 }
 
 struct PeerConnectionInfo {
-	// A list of message senders per protocol, and the protocol version.
-	// The sender can be used to transmit data for the remote. Note that the packet_id has to be
-	// inside the `Bytes`.
-	// Closing the sender will drop the substream of this protocol.
+	/// A list of message senders per protocol, and the protocol version.
+	/// The sender can be used to transmit data for the remote. Note that the packet_id has to be
+	/// inside the `Bytes`.
+	/// Closing the sender will drop the substream of this protocol.
 	senders: Vec<(ProtocolId, mpsc::UnboundedSender<Bytes>, u8)>,
 
-	// True if we dialed a Kad connection towards this peer.
-	// This indicates that `kad_connec` should eventually resolve, even without doing anything.
+	/// True if we dialed a Kad connection towards this peer.
+	/// This indicates that `kad_connec` should eventually resolve, even without doing anything.
 	opened_kad: bool,
 
-	// When a Kad connection is received, we send it on this channel so that it will be received
-	// by `kad_connec`.
+	/// When a Kad connection is received, we send it on this channel so that it will be received
+	/// by `kad_connec`.
 	incoming_kad_channel: mpsc::UnboundedSender<KadConnecController>,
 
-	// The Kademlia connection to this node.
-	// Contains the receiving end of `incoming_kad_channel`. If `opened_kad` is true, we are
-	// guaranteed to finish.
-	// TODO: proper error handling if a kad connection is closed
+	/// The Kademlia connection to this node.
+	/// Contains the receiving end of `incoming_kad_channel`. If `opened_kad` is true, we are
+	/// guaranteed to finish.
+	/// TODO: proper error handling if a kad connection is closed
 	kad_connec: future::Shared<Box<Future<Item = KadConnecController, Error = IoError>>>,
 
-	// Id of the peer.
+	/// Id of the peer.
 	id: PeerstorePeerId,
 
-	// True if this connection was initiated by us.
-	// Note that it is theoretically possible that we dial the remote at the same time they dial
-	// us, in which case the protocols may be dispatched between both connections, and in which
-	// case the value here will be racy.
+	/// True if this connection was initiated by us.
+	/// Note that it is theoretically possible that we dial the remote at the same time they dial
+	/// us, in which case the protocols may be dispatched between both connections, and in which
+	/// case the value here will be racy.
 	originated: bool,
 
-	// Latest known ping duration.
+	/// Latest known ping duration.
 	ping: Mutex<Option<Duration>>,
 
-	// The client version of the remote, or `None` if not known.
+	/// The client version of the remote, or `None` if not known.
 	client_version: Option<String>,
 
-	// The multiaddress of the remote, or `None` if not known.
+	/// The multiaddress of the remote, or `None` if not known.
 	remote_address: Option<Multiaddr>,
 
-	// The local multiaddress used to communicate with the remote, or `None` if not known.
+	/// The local multiaddress used to communicate with the remote, or `None` if not known.
 	local_address: Option<Multiaddr>,
 }
 
@@ -614,9 +614,9 @@ impl Drop for NetworkState {
 	}
 }
 
-// Assigns a `PeerId` to a node, or returns an existing ID if any exists.
-//
-// The function only accepts already-locked structs, so that we don't risk any deadlock.
+/// Assigns a `PeerId` to a node, or returns an existing ID if any exists.
+///
+/// The function only accepts already-locked structs, so that we don't risk any deadlock.
 fn accept_connection(
 	connections: &mut Connections,
 	next_peer_id: &atomic::AtomicUsize,
@@ -654,8 +654,8 @@ fn accept_connection(
 	Ok(peer_id)
 }
 
-// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it to the given
-// peerstore. Returns the corresponding peer ID.
+/// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it to the given
+/// peerstore. Returns the corresponding peer ID.
 fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 	-> Result<PeerstorePeerId, Error>
 {
@@ -682,7 +682,7 @@ fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 	Ok(peer_id)
 }
 
-// Obtains or generates the local private key using the configuration.
+/// Obtains or generates the local private key using the configuration.
 fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPair, IoError> {
 	if let Some(ref secret) = config.use_secret {
 		// Key was specified in the configuration.
@@ -715,7 +715,7 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 	}
 }
 
-// Tries to load a private key from a file located at the given path.
+/// Tries to load a private key from a file located at the given path.
 fn load_private_key_from_file(path: impl AsRef<Path>) -> Result<secio::SecioKeyPair, IoError> {
 	fs::File::open(path)
 		.and_then(|mut file| {
@@ -730,8 +730,8 @@ fn load_private_key_from_file(path: impl AsRef<Path>) -> Result<secio::SecioKeyP
 		)
 }
 
-// Generates a new secret key and tries to write it to the given file.
-// Doesn't error if we couldn't open or write to the file.
+/// Generates a new secret key and tries to write it to the given file.
+/// Doesn't error if we couldn't open or write to the file.
 fn gen_key_and_try_write_to_file(path: impl AsRef<Path>) -> secio::SecioKeyPair {
 	let raw_key: [u8; 32] = rand::rngs::EntropyRng::new().gen();
 	let secio_key = secio::SecioKeyPair::secp256k1_raw_key(&raw_key)
@@ -754,7 +754,7 @@ fn gen_key_and_try_write_to_file(path: impl AsRef<Path>) -> secio::SecioKeyPair 
 	secio_key
 }
 
-// Opens a file containing a private key in write mode.
+/// Opens a file containing a private key in write mode.
 #[cfg(unix)]
 fn open_priv_key_file(path: impl AsRef<Path>) -> Result<fs::File, IoError> {
 	use std::os::unix::fs::OpenOptionsExt;
@@ -764,6 +764,7 @@ fn open_priv_key_file(path: impl AsRef<Path>) -> Result<fs::File, IoError> {
 		.mode(256 | 128)		// 0o600 in decimal
 		.open(path)
 }
+/// Opens a file containing a private key in write mode.
 #[cfg(not(unix))]
 fn open_priv_key_file(path: impl AsRef<Path>) -> Result<fs::File, IoError> {
 	fs::OpenOptions::new()

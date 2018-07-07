@@ -48,42 +48,42 @@ use transport;
 pub struct NetworkService {
 	shared: Arc<Shared>,
 
-	// Holds the networking-running background thread alive. The `Option` is `None` if the service
-	// is stopped.
-	// Sending a message on the channel will trigger the end of the background thread. We can
-	// then wait on the join handle.
+	/// Holds the networking-running background thread alive. The `Option` is `None` if the service
+	/// is stopped.
+	/// Sending a message on the channel will trigger the end of the background thread. We can
+	/// then wait on the join handle.
 	bg_thread: Mutex<Option<(oneshot::Sender<()>, thread::JoinHandle<()>)>>,
 }
 
-// Common struct shared throughout all the components of the service.
+/// Common struct shared throughout all the components of the service.
 struct Shared {
-	// Original configuration of the service.
+	/// Original configuration of the service.
 	config: NetworkConfiguration,
 
-	// Contains the state of the network.
+	/// Contains the state of the network.
 	network_state: NetworkState,
 
-	// Kademlia system. Contains the DHT.
+	/// Kademlia system. Contains the DHT.
 	kad_system: KadSystem,
 
-	// Configuration for the Kademlia upgrade.
+	/// Configuration for the Kademlia upgrade.
 	kad_upgrade: KadConnecConfig,
 
-	// List of protocols available on the network. It is a logic error to remote protocols from
-	// this list, and the code may assume that protocols stay at the same index forever.
+	/// List of protocols available on the network. It is a logic error to remote protocols from
+	/// this list, and the code may assume that protocols stay at the same index forever.
 	protocols: RwLock<RegisteredProtocols<Arc<NetworkProtocolHandler + Send + Sync>>>,
 
-	// Use this channel to send a timeout request to the background thread's events loop.
-	// After the timeout, elapsed, it will call `timeout` on the `NetworkProtocolHandler`.
-	// This can be closed if the background thread is not running. The sender will be overwritten
-	// every time we start the service.
+	/// Use this channel to send a timeout request to the background thread's events loop.
+	/// After the timeout, elapsed, it will call `timeout` on the `NetworkProtocolHandler`.
+	/// This can be closed if the background thread is not running. The sender will be overwritten
+	/// every time we start the service.
 	timeouts_register_tx: RwLock<mpsc::UnboundedSender<(Instant, (Arc<NetworkProtocolHandler + Send + Sync>, ProtocolId, TimerToken))>>,
 
-	// Original address from the configuration, after being adjusted by the `Transport`.
-	// Contains `None` if the network hasn't started yet.
+	/// Original address from the configuration, after being adjusted by the `Transport`.
+	/// Contains `None` if the network hasn't started yet.
 	original_listened_addr: RwLock<Option<Multiaddr>>,
 
-	// Contains the addresses we known about ourselves.
+	/// Contains the addresses we known about ourselves.
 	listened_addrs: RwLock<Vec<Multiaddr>>,
 }
 
@@ -351,10 +351,10 @@ impl NetworkContext for NetworkContextImpl {
 	}
 }
 
-// Builds the main `Future` for the network service.
-//
-// - `timeouts_register_rx` should receive newly-registered timeouts.
-// - `close_rx` should be triggered when we want to close the network.
+/// Builds the main `Future` for the network service.
+///
+/// - `timeouts_register_rx` should receive newly-registered timeouts.
+/// - `close_rx` should be triggered when we want to close the network.
 fn init_thread(
 	core: Handle,
 	shared: Arc<Shared>,
@@ -471,25 +471,25 @@ fn init_thread(
 		}))
 }
 
-// Output of the common transport layer.
+/// Output of the common transport layer.
 struct TransportOutput<S> {
 	socket: S,
 	info: Box<Future<Item = IdentifyTransportOutcome, Error = IoError>>,
 	original_addr: Multiaddr,
 }
 
-// Enum of all the possible protocols our service handles.
+/// Enum of all the possible protocols our service handles.
 enum FinalUpgrade<C> {
 	Kad((KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>)),
-	// The remote identification system, and the multiaddress we see the remote as.
+	/// The remote identification system, and the multiaddress we see the remote as.
 	Identify(IdentifyOutput<C>, Multiaddr),
 	Ping(ping::Pinger, Box<Future<Item = (), Error = IoError>>),
-	// `Custom` means anything not in the core libp2p and is handled
-	// by `CustomProtoConnectionUpgrade`.
+	/// `Custom` means anything not in the core libp2p and is handled
+	/// by `CustomProtoConnectionUpgrade`.
 	Custom(RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>),
 }
 
-// Called whenever we successfully open a multistream with a remote.
+/// Called whenever we successfully open a multistream with a remote.
 fn listener_handle<'a, C>(
 	shared: Arc<Shared>,
 	upgrade: FinalUpgrade<C>,
@@ -544,7 +544,7 @@ fn listener_handle<'a, C>(
 	}
 }
 
-// Handles a newly-opened Kademlia connection.
+/// Handles a newly-opened Kademlia connection.
 fn handle_kademlia_connection(
 	shared: Arc<Shared>,
 	client_addr: Multiaddr,
@@ -583,8 +583,8 @@ fn handle_kademlia_connection(
 	Ok(future)
 }
 
-// When a remote performs a `FIND_NODE` Kademlia request for `searched`, this function builds the
-// response to send back.
+/// When a remote performs a `FIND_NODE` Kademlia request for `searched`, this function builds the
+/// response to send back.
 fn build_kademlia_response(shared: &Arc<Shared>, searched: &PeerstorePeerId) -> Vec<KadPeer> {
 	shared.kad_system
 		// TODO the iter of `known_closest_peers` should be infinite
@@ -608,8 +608,8 @@ fn build_kademlia_response(shared: &Arc<Shared>, searched: &PeerstorePeerId) -> 
 		.collect::<Vec<_>>()
 }
 
-// Handles a newly-opened connection to a remote with a custom protocol (eg. `/substrate/dot/0`).
-// Returns a future that corresponds to when the handling is finished.
+/// Handles a newly-opened connection to a remote with a custom protocol (eg. `/substrate/dot/0`).
+/// Returns a future that corresponds to when the handling is finished.
 fn handle_custom_connection(
 	shared: Arc<Shared>,
 	client_addr: Multiaddr,
@@ -679,8 +679,8 @@ fn handle_custom_connection(
 		}))
 }
 
-// Builds the multiaddress corresponding to the address we need to listen to according to the
-// config.
+/// Builds the multiaddress corresponding to the address we need to listen to according to the
+/// config.
 // TODO: put the `Multiaddr` directly in the `NetworkConfiguration`
 fn config_to_listen_addr(config: &NetworkConfiguration) -> Multiaddr {
 	if let Some(addr) = config.listen_address {
@@ -696,10 +696,10 @@ fn config_to_listen_addr(config: &NetworkConfiguration) -> Multiaddr {
 	}
 }
 
-// Randomly discovers peers to connect to.
-// This works by running a round at a regular interval, and skipping if we reached `min_peers`.
-// When we are over `min_peers`, we stop trying to dial nodes and only accept incoming
-// connections.
+/// Randomly discovers peers to connect to.
+/// This works by running a round at a regular interval, and skipping if we reached `min_peers`.
+/// When we are over `min_peers`, we stop trying to dial nodes and only accept incoming
+/// connections.
 fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 	swarm_controller: SwarmController<St>
 ) -> impl Future<Item = (), Error = IoError>
@@ -766,7 +766,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 	Box::new(final_future) as Box<Future<Item = _, Error = _>>
 }
 
-// Performs a kademlia request to a random node, and returns the results.
+/// Performs a kademlia request to a random node, and returns the results.
 fn perform_kademlia_query<T, To, St, C>(shared: Arc<Shared>, transport: T,
 	swarm_controller: SwarmController<St>) -> impl Future<Item = Vec<PeerstorePeerId>, Error = IoError>
 where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
@@ -813,7 +813,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		.map(|(out, _)| out.unwrap())
 }
 
-// Processes the results of a Kademlia discovery.
+/// Processes the results of a Kademlia discovery.
 fn process_kad_results<T, To, St, C>(shared: Arc<Shared>, transport: T,
 	swarm_controller: SwarmController<St>, results: Vec<PeerstorePeerId>,
 	local_peer_id: &PeerstorePeerId)
@@ -856,8 +856,8 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 	}
 }
 
-// Dials the given address for the given protocol and using the given `swarm_controller`.
-// Checks that the peer ID matches `expected_peer_id`.
+/// Dials the given address for the given protocol and using the given `swarm_controller`.
+/// Checks that the peer ID matches `expected_peer_id`.
 fn dial_peer_custom_proto<T, To, St, C>(
 	shared: Arc<Shared>,
 	base_transport: T,
@@ -905,7 +905,7 @@ fn dial_peer_custom_proto<T, To, St, C>(
 		.map_err(|_| IoError::new(IoErrorKind::Other, "multiaddr not supported"))
 }
 
-// Obtain a Kademlia connection to the given peer.
+/// Obtain a Kademlia connection to the given peer.
 fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>, peer_id: PeerstorePeerId, transport: T,
 	swarm_controller: SwarmController<St>)
 	-> impl Future<Item = KadConnecController, Error = IoError>
@@ -944,13 +944,13 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 	Box::new(final_future) as Box<Future<Item = _, Error = _>>
 }
 
-// Processes the information about a node.
-//
-// - `original_addr` is the address used to originally dial this node.
-// - `endpoint` is whether we dialed or listened to this node.
-// - `transport` is used for the `nat_traversal` method.
-//
-// Returns an error if the node has been refused access.
+/// Processes the information about a node.
+///
+/// - `original_addr` is the address used to originally dial this node.
+/// - `endpoint` is whether we dialed or listened to this node.
+/// - `transport` is used for the `nat_traversal` method.
+///
+/// Returns an error if the node has been refused access.
 fn process_identify_info(
 	shared: Arc<Shared>,
 	info: &IdentifyTransportOutcome,
@@ -984,8 +984,8 @@ fn process_identify_info(
 	Ok(())
 }
 
-// Expects a multiaddr of the format `/p2p/<node_id>` and returns the node ID.
-// Panics if the format is not correct.
+/// Expects a multiaddr of the format `/p2p/<node_id>` and returns the node ID.
+/// Panics if the format is not correct.
 fn p2p_multiaddr_to_node_id(client_addr: Multiaddr) -> PeerstorePeerId {
 	let (first, second);
 	{
@@ -1003,8 +1003,8 @@ fn p2p_multiaddr_to_node_id(client_addr: Multiaddr) -> PeerstorePeerId {
 	}
 }
 
-// Since new protocols are added after the networking starts, we have to load the protocols list
-// in a lazy way. This is what this wrapper does.
+/// Since new protocols are added after the networking starts, we have to load the protocols list
+/// in a lazy way. This is what this wrapper does.
 #[derive(Clone)]
 struct DelayedProtosList(Arc<Shared>);
 impl<C, Maf> ConnectionUpgrade<C, Maf> for DelayedProtosList

@@ -31,16 +31,16 @@ use varint::VarintCodec;
 /// have multiple different versions for networking purposes.
 #[derive(Clone)]
 pub struct RegisteredProtocol<T> {
-	// Id of the protocol for API purposes.
+	/// Id of the protocol for API purposes.
 	id: ProtocolId,
-	// Base name of the protocol as advertised on the network.
-	// Ends with `/` so that we can append a version number behind.
+	/// Base name of the protocol as advertised on the network.
+	/// Ends with `/` so that we can append a version number behind.
 	base_name: Bytes,
-	// List of protocol versions that we support, plus their packet count. Ordered in descending
-	// order so that the best comes first.
-	// The packet count is used to filter out invalid messages.
+	/// List of protocol versions that we support, plus their packet count. Ordered in descending
+	/// order so that the best comes first.
+	/// The packet count is used to filter out invalid messages.
 	supported_versions: Vec<(u8, u8)>,
-	// Custom data.
+	/// Custom data.
 	custom_data: T,
 }
 
@@ -136,12 +136,12 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 		// Build the sink for outgoing network bytes, and the stream for incoming instructions.
 		// `stream` implements `Stream<Item = Message>`.
 		enum Message {
-			// Received data from the network.
+			/// Received data from the network.
 			RecvSocket(BytesMut),
-			// Data to send to the network.
-			// The packet_id must already be inside the `Bytes`.
+			/// Data to send to the network.
+			/// The packet_id must already be inside the `Bytes`.
 			SendReq(Bytes),
-			// The socket has been closed.
+			/// The socket has been closed.
 			Finished,
 		}
 
