@@ -371,31 +371,33 @@ pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-/// for things that can be checked by providing additional context `Ctx`
+/// Implement for pieces of information that require some additional context `Ctx` in order to be
+/// checked.
 pub trait Checkable<Ctx>: Sized {
-	/// returned in case the check succeeds
+	/// Returned if `check_with` succeeds.
 	type Checked;
-	/// returned in case the check fails
+	/// Returned if `check_with` fails.
 	type Error;
 
-	/// gives back unchanged `self` in case of an error.
+	/// Gives back ownership of unchanged `self` in case of an error.
 	fn check_with(self, ctx: Ctx) -> Result<Self::Checked, (Self, Self::Error)>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-/// for things that can be checked without additional context.
+/// Implement for pieces of information that don't require additional context in order to be
+/// checked.
 pub trait BlindCheckable: Sized {
-	/// returned in case the check succeeds
+	/// Returned if `check` succeeds.
 	type Checked;
-	/// returned in case the check fails
+	/// Returned if `check` fails.
 	type Error;
 
-	/// gives back unchanged `self` in case of an error.
+	/// Gives back ownership of unchanged `self` in case of an error.
 	fn check(self) -> Result<Self::Checked, (Self, Self::Error)>;
 }
 
-// every BlindCheckable is also a Checkable for arbitrary context `Ctx`
+// Every `BlindCheckable` is also a `Checkable` for arbitrary context `Ctx`.
 impl<T: BlindCheckable, Ctx> Checkable<Ctx> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
 	type Error = T::Error;
