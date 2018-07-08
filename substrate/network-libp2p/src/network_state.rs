@@ -314,14 +314,12 @@ impl NetworkState {
 	pub fn addrs_of_peer(&self, node_id: &PeerstorePeerId) -> Vec<Multiaddr> {
 		match self.peerstore {
 			PeersStorage::Memory(ref mem) =>
-				mem
-					.peer(node_id)
+				mem.peer(node_id)
 					.into_iter()
 					.flat_map(|p| p.addrs())
 					.collect::<Vec<_>>(),
 			PeersStorage::Json(ref json) =>
-				json
-					.peer(node_id)
+				json.peer(node_id)
 					.into_iter()
 					.flat_map(|p| p.addrs())
 					.collect::<Vec<_>>(),
@@ -465,8 +463,7 @@ impl NetworkState {
 		if let Some(peer) = connections.info_by_peer.get_mut(&peer_id) {
 			// TODO: that's code duplication
 			let (tx, rx) = mpsc::unbounded();
-			let rx = rx
-				.into_future()
+			let rx = rx.into_future()
 				.map_err(|_| -> IoError { unreachable!() })
 				.and_then(|i| i.0.ok_or(IoError::new(IoErrorKind::ConnectionAborted, "kad aborted")));
 			let kad_connec = Box::new(rx) as Box<Future<Item = _, Error = _>>;
@@ -591,7 +588,7 @@ impl NetworkState {
 	pub fn flush_caches_to_disk(&self) -> Result<(), IoError> {
 		match self.peerstore {
 			PeersStorage::Memory(_) => Ok(()),
-			PeersStorage::Json(ref json) => {
+			PeersStorage::Json(ref json) =>
 				match json.flush() {
 					Ok(()) => {
 						debug!(target: "sub-libp2p", "Flushed JSON peer store to disk");
@@ -603,7 +600,6 @@ impl NetworkState {
 						Err(err)
 					}
 				}
-			}
 		}
 	}
 }

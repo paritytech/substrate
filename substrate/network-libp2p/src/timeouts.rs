@@ -42,7 +42,7 @@ pub fn build_timeouts_stream<T>(core: Handle, timeouts_rx: impl Stream<Item = (I
 		}
 
 		Some(future::select_ok(timeouts.into_iter())
-			.and_then(move |(item, mut timeouts)| {
+			.and_then(move |(item, mut timeouts)|
 				match item {
 					Out::NewTimeout((Some((at, item)), next_timeouts)) => {
 						// Received a new timeout request on the channel.
@@ -60,7 +60,7 @@ pub fn build_timeouts_stream<T>(core: Handle, timeouts_rx: impl Stream<Item = (I
 						// A timeout has happened.
 						Ok((Some(item), timeouts)),
 				}
-			}))
+			))
 	}).filter_map(|item| item)
 }
 

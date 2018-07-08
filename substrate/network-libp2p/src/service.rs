@@ -150,14 +150,14 @@ impl NetworkService {
 		// TODO: in the context of libp2p, it is hard to define what an external URL is, as
 		//		 different nodes can have multiple different ways to reach us
 		self.shared.original_listened_addr.read().as_ref()
-			.map(|addr| {
+			.map(|addr|
 				format!("{}/p2p/{}", addr, self.shared.kad_system.local_peer_id().to_base58())
-			})
+			)
 	}
 
 	/// Start network IO
 	// TODO (design): the notion of having a `NetworkService` alive should mean that it is 
-	//				  running ; the `start` and `stop` functions are bad design
+	// running ; the `start` and `stop` functions are bad design
 	pub fn start(&self) -> Result<(), (Error, Option<SocketAddr>)> {
 		// TODO: check that service is started already?
 
@@ -208,7 +208,7 @@ impl NetworkService {
 			let _ = close_tx.send(());
 			if let Err(e) = join.join() {
 				warn!(target: "sub-libp2p", "error while waiting on libp2p background \
-											 thread: {:?}", e);
+					thread: {:?}", e);
 			}
 		}
 
@@ -277,7 +277,7 @@ impl NetworkContext for NetworkContextImpl {
 
 	fn send_protocol(&self, protocol: ProtocolId, peer: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error> {
 		debug_assert!(self.inner.protocols.read().has_protocol(protocol),
-					  "invalid protocol id requested in the API of the libp2p networking");
+			"invalid protocol id requested in the API of the libp2p networking");
 		// TODO: restore
 		//debug_assert!(packet_id < self.inner.protocols.read().iter().find(|p| p.id == protocol).unwrap().packet_count,
 		//			  "invalid packet id requested in the API of the libp2p networking");
@@ -364,7 +364,7 @@ fn init_thread(
 	// Build the transport layer.
 	let transport = {
 		let base = transport::build_transport(core.clone(), transport::UnencryptedAllowed::Denied,
-											shared.network_state.local_private_key().clone());
+			shared.network_state.local_private_key().clone());
 
 		let addr_resolver = {
 			let shared = shared.clone();
@@ -504,9 +504,9 @@ fn listener_handle<'a, C>(
 			trace!(target: "sub-libp2p", "Opened kademlia substream with remote as {:?}", endpoint);
 
 			let shared = shared.clone();
-			Box::new(client_addr.and_then(move |client_addr| {
+			Box::new(client_addr.and_then(move |client_addr|
 				handle_kademlia_connection(shared, client_addr, controller, kademlia_stream)
-			}).flatten())
+			).flatten())
 		},
 
 		FinalUpgrade::Identify(IdentifyOutput::Sender { sender }, original_addr) => {
@@ -526,13 +526,10 @@ fn listener_handle<'a, C>(
 			)
 		},
 
-		FinalUpgrade::Identify(IdentifyOutput::RemoteInfo { .. }, _) => {
-			unreachable!("We are never dialing with the identify protocol")
-		},
+		FinalUpgrade::Identify(IdentifyOutput::RemoteInfo { .. }, _) =>
+			unreachable!("We are never dialing with the identify protocol"),
 
-		FinalUpgrade::Ping(_pinger, future) => {
-			future
-		},
+		FinalUpgrade::Ping(_pinger, future) => future,
 
 		FinalUpgrade::Custom(custom_proto_out) => {
 			// A "custom" protocol is one that is part of substrate and not part of libp2p.
@@ -715,14 +712,13 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		let shared = shared.clone();
 		let transport = transport.clone();
 		let swarm_controller = swarm_controller.clone();
-		move |peer_id| {
+		move |peer_id|
 			obtain_kad_connection(
 				shared.clone(),
 				peer_id.clone(),
 				transport.clone(),
 				swarm_controller.clone()
 			)
-		}
 	});
 
 	let discovery = tokio_timer::Interval::new(Instant::now(), Duration::from_secs(30))
@@ -793,7 +789,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 					transport.clone(), swarm_controller.clone())
 			}
 		})
-		.filter_map(move |event| {
+		.filter_map(move |event|
 			match event {
 				KadQueryEvent::NewKnownMultiaddrs(peers) => {
 					for (peer, addrs) in peers {
@@ -807,7 +803,7 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 				},
 				KadQueryEvent::Finished(out) => Some(out),
 			}
-		})
+		)
 		.into_future()
 		.map_err(|(err, _)| err)
 		.map(|(out, _)| out.unwrap())
@@ -881,7 +877,7 @@ fn dial_peer_custom_proto<T, To, St, C>(
 			let socket = out.socket;
 			let original_addr = out.original_addr;
 			out.info
-				.and_then(move |info| {
+				.and_then(move |info|
 					if info.info.public_key.into_peer_id() == expected_peer_id {
 						Ok(socket)
 					} else {
@@ -892,14 +888,14 @@ fn dial_peer_custom_proto<T, To, St, C>(
 						shared.network_state.set_invalid_kad_address(&expected_peer_id, &original_addr);
 						Err(IoErrorKind::InvalidData.into())		// TODO: correct err
 					}
-				})
-				.and_then(move |socket| {
+				)
+				.and_then(move |socket|
 					upgrade::apply(socket, proto, endpoint, client_addr)
-				})
+				)
 		})
-		.and_then(move |out, endpoint, client_addr| {
+		.and_then(move |out, endpoint, client_addr|
 			future::ok(((FinalUpgrade::Custom(out), endpoint), client_addr))
-		});
+		);
 
 	swarm_controller.dial(addr, with_proto)
 		.map_err(|_| IoError::new(IoErrorKind::Other, "multiaddr not supported"))
@@ -924,9 +920,9 @@ where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 			let tx = Arc::new(Mutex::new(Some(tx)));
 			swarm_controller.dial(addr, 
 				transport
-					.and_then(move |out, endpoint, client_addr| {
+					.and_then(move |out, endpoint, client_addr|
 						upgrade::apply(out.socket, kad_upgrade.clone(), endpoint, client_addr)
-					})
+					)
 					.map(move |(kad_ctrl, stream), _| {
 						if let Some(tx) = tx.lock().take() {
 							let _ = tx.send(kad_ctrl.clone());
@@ -994,12 +990,9 @@ fn p2p_multiaddr_to_node_id(client_addr: Multiaddr) -> PeerstorePeerId {
 		second = iter.next();
 	}
 	match (first, second) {
-		(Some(AddrComponent::P2P(node_id)), None) => {
-			PeerstorePeerId::from_bytes(node_id)
-				.expect("libp2p always reports a valid node id")
-		},
-		_ => panic!("Reported multiaddress is in the wrong format ; \
-					programmer error")
+		(Some(AddrComponent::P2P(node_id)), None) =>
+			PeerstorePeerId::from_bytes(node_id).expect("libp2p always reports a valid node id"),
+		_ => panic!("Reported multiaddress is in the wrong format ; programmer error")
 	}
 }
 
@@ -1024,7 +1017,7 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 
 	#[inline]
 	fn upgrade(self, socket: C, id: Self::UpgradeIdentifier, endpoint: Endpoint,
-				remote_addr: Maf) -> Self::Future
+		remote_addr: Maf) -> Self::Future
 	{
 		self.0.protocols.read()
 			.clone()

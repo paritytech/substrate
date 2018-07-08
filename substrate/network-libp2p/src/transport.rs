@@ -38,12 +38,10 @@ pub fn build_transport(
 
 			// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
 			upgrade::or(
-				upgrade::map(plaintext, |out| {
-					(either::EitherOutput::First(out), None)
-				}),
-				upgrade::map(secio, |out: secio::SecioOutput<_>| {
+				upgrade::map(plaintext, |out| (either::EitherOutput::First(out), None)),
+				upgrade::map(secio, |out: secio::SecioOutput<_>|
 					(either::EitherOutput::Second(out.stream), Some(out.remote_key))
-				}),
+				),
 			)
 		})
 		// TODO: check that the public key matches what is reported by identify
