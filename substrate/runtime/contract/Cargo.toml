@@ -7,8 +7,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 substrate-codec = { path = "../../codec", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-sandbox = { path = "../../runtime-sandbox", default_features = false }
-parity-wasm = { version = "0.30", default_features = false }
-pwasm-utils = { version = "0.2", default_features = false }
+parity-wasm = { version = "0.31", default_features = false }
+pwasm-utils = { version = "0.3", default_features = false }
 
 [dev-dependencies]
 wabt = "0.4"
