@@ -157,7 +157,7 @@ impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + Deseri
 		self.0.encode()
 	}
 }
-impl<Call: 'static + AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug, Context> Checkable<Context> for TestXt<Call> {
+impl<Call: Slicable + Sync + Send + Serialize + AuxDispatchable, Context> Checkable<Context> for TestXt<Call> {
 	type Error = ();
 	type Checked = Self;
 	fn check_with(self, _: Context) -> Result<Self::Checked, (Self, ())> { Ok(self) }
