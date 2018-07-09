@@ -47,6 +47,7 @@ extern crate substrate_client as client;
 
 extern crate exit_future;
 extern crate tokio;
+extern crate rhododendron;
 
 #[macro_use]
 extern crate error_chain;
@@ -530,7 +531,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 	}
 
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<Hash>)>) {
-		use bft::generic::Misbehavior as GenericMisbehavior;
+		use rhododendron::Misbehavior as GenericMisbehavior;
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use runtime_primitives::MaybeUnsigned;
 		use polkadot_runtime::{Call, Extrinsic, BareExtrinsic, UncheckedExtrinsic, ConsensusCall};

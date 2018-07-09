@@ -11,6 +11,7 @@ ed25519 = { path = "../../substrate/ed25519" }
 error-chain = "0.12"
 log = "0.3"
 exit-future = "0.1"
+rhododendron = "0.2"
 polkadot-api = { path = "../api" }
 polkadot-parachain = { path = "../parachain" }
 polkadot-primitives = { path = "../primitives" }

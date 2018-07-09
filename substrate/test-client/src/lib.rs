@@ -18,6 +18,7 @@
 
 #![warn(missing_docs)]
 
+extern crate rhododendron;
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
 extern crate substrate_keyring as keyring;

@@ -335,7 +335,8 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
-		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
+		let unchecked: bft::UncheckedJustification<_> = justification.uncheck().into();
+		transaction.set_block_data(header.clone(), body, Some(unchecked.into()), is_new_best)?;
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}
