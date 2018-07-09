@@ -43,6 +43,7 @@ extern crate rhododendron;
 #[macro_use]
 extern crate log;
 
+mod collators;
 mod router;
 pub mod consensus;
 
@@ -57,9 +58,11 @@ use substrate_network::consensus_gossip::ConsensusGossip;
 use substrate_network::{message, generic_message};
 use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
+use self::collators::Collators;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
 
 #[cfg(test)]
 mod tests;
@@ -75,16 +78,16 @@ pub type NetworkService = ::substrate_network::Service<Block, PolkadotProtocol>;
 /// Status of a Polkadot node.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Status {
-	collating_for: Option<ParaId>,
+	collating_for: Option<(AccountId, ParaId)>,
 }
 
 impl Slicable for Status {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 		match self.collating_for {
-			Some(ref id) => {
+			Some(ref details) => {
 				v.push(1);
-				id.using_encoded(|s| v.extend(s));
+				details.using_encoded(|s| v.extend(s));
 			}
 			None => {
 				v.push(0);
@@ -96,7 +99,7 @@ impl Slicable for Status {
 	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
 		let collating_for = match input.read_byte()? {
 			0 => None,
-			1 => Some(ParaId::decode(input)?),
+			1 => Some(Slicable::decode(input)?),
 			_ => return None,
 		};
 		Some(Status { collating_for })
@@ -207,8 +210,7 @@ fn send_polkadot_message(ctx: &mut Context<Block>, to: PeerId, message: Message)
 pub struct PolkadotProtocol {
 	peers: HashMap<PeerId, PeerInfo>,
 	consensus_gossip: ConsensusGossip<Block>,
-	collators: HashMap<ParaId, Vec<PeerId>>,
-	collating_for: Option<ParaId>,
+	collators: Collators,
 	live_consensus: Option<CurrentConsensus>,
 	in_flight: HashMap<(RequestId, PeerId), BlockDataRequest>,
 	pending: Vec<BlockDataRequest>,
@@ -221,8 +223,7 @@ impl PolkadotProtocol {
 		PolkadotProtocol {
 			peers: HashMap::new(),
 			consensus_gossip: ConsensusGossip::new(),
-			collators: HashMap::new(),
-			collating_for: None,
+			collators: Collators::new(),
 			live_consensus: None,
 			in_flight: HashMap::new(),
 			pending: Vec::new(),
@@ -398,10 +399,8 @@ impl Specialization<Block> for PolkadotProtocol {
 			}
 		};
 
-		if let Some(ref para_id) = local_status.collating_for {
-			self.collators.entry(para_id.clone())
-				.or_insert_with(Vec::new)
-				.push(peer_id);
+		if let Some((ref acc_id, ref para_id)) = local_status.collating_for {
+			let collator_role = self.collators.on_new_collator(acc_id.clone(), para_id.clone());
 		}
 
 		let validator = status.roles.iter().any(|r| *r == message::Role::Authority);
@@ -426,9 +425,10 @@ impl Specialization<Block> for PolkadotProtocol {
 
 	fn on_disconnect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId) {
 		if let Some(info) = self.peers.remove(&peer_id) {
-			if let Some(collators) = info.status.collating_for.and_then(|id| self.collators.get_mut(&id)) {
-				if let Some(pos) = collators.iter().position(|x| x == &peer_id) {
-					collators.swap_remove(pos);
+			if let Some((acc_id, _)) = info.status.collating_for {
+				if let Some((new_primary, _)) = self.collators.on_disconnect(acc_id) {
+					// TODO: send new primary a role-change message.
+					unimplemented!()
 				}
 			}
 
