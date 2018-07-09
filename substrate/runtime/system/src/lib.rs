@@ -39,7 +39,7 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hashing, Member, MaybeDisplay};
+	Hash, Member, MaybeDisplay};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -52,12 +52,12 @@ use codec::Slicable;
 use runtime_io::{twox_128, TestExternalities};
 
 /// Compute the extrinsics root of a list of extrinsics.
-pub fn extrinsics_root<H: Hashing, E: codec::Slicable>(extrinsics: &[E]) -> H::Output {
+pub fn extrinsics_root<H: Hash, E: codec::Slicable>(extrinsics: &[E]) -> H::Output {
 	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Slicable::encode).collect())
 }
 
 /// Compute the extrinsics root of a list of extrinsics.
-pub fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
+pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	H::enumerated_trie_root(&xts)
 }
@@ -66,12 +66,12 @@ pub trait Trait: Eq + Clone {
 	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
 	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
-	type Hashing: Hashing<Output = Self::Hash>;
+	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Parameter + Member + Default + traits::Digest;
 	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
-		Hashing = Self::Hashing,
+		Hash = Self::Hash,
 		Hash = Self::Hash,
 		Digest = Self::Digest
 	>;

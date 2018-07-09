@@ -26,7 +26,7 @@ use client;
 use codec::Slicable;
 use hashdb::DBValue;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hashing, HashingFor, Zero};
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hash, HashFor, Zero};
 use DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
@@ -155,7 +155,7 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<Meta
 
 	let genesis_hash = db.get(col_header, &number_to_db_key(genesis_number))
 		.map_err(db_err)?
-		.map(|raw| HashingFor::<Block>::hash(&raw[..]))
+		.map(|raw| HashFor::<Block>::hash(&raw[..]))
 		.unwrap_or_default()
 		.into();
 

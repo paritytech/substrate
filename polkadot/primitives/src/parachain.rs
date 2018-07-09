@@ -192,7 +192,7 @@ impl CandidateReceipt {
 	/// Get the blake2_256 hash
 	#[cfg(feature = "std")]
 	pub fn hash(&self) -> Hash {
-		use runtime_primitives::traits::{BlakeTwo256, Hashing};
+		use runtime_primitives::traits::{BlakeTwo256, Hash};
 		BlakeTwo256::hash_of(self)
 	}
 }
@@ -247,7 +247,7 @@ impl BlockData {
 	/// Compute hash of block data.
 	#[cfg(feature = "std")]
 	pub fn hash(&self) -> Hash {
-		use runtime_primitives::traits::{BlakeTwo256, Hashing};
+		use runtime_primitives::traits::{BlakeTwo256, Hash};
 		BlakeTwo256::hash(&self.0[..])
 	}
 }
