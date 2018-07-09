@@ -371,16 +371,16 @@ pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-/// Implement for pieces of information that require some additional context `Ctx` in order to be
+/// Implement for pieces of information that require some additional context `Context` in order to be
 /// checked.
-pub trait Checkable<Ctx>: Sized {
+pub trait Checkable<Context>: Sized {
 	/// Returned if `check_with` succeeds.
 	type Checked;
 	/// Returned if `check_with` fails.
 	type Error;
 
 	/// Gives back ownership of unchanged `self` in case of an error.
-	fn check_with(self, ctx: Ctx) -> Result<Self::Checked, (Self, Self::Error)>;
+	fn check_with(self, context: Context) -> Result<Self::Checked, (Self, Self::Error)>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -397,11 +397,11 @@ pub trait BlindCheckable: Sized {
 	fn check(self) -> Result<Self::Checked, (Self, Self::Error)>;
 }
 
-// Every `BlindCheckable` is also a `Checkable` for arbitrary context `Ctx`.
-impl<T: BlindCheckable, Ctx> Checkable<Ctx> for T {
+// Every `BlindCheckable` is also a `Checkable` for arbitrary `Context`.
+impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
 	type Error = T::Error;
-	fn check_with(self, _: Ctx) -> Result<Self::Checked, (Self, Self::Error)> {
+	fn check_with(self, _: Context) -> Result<Self::Checked, (Self, Self::Error)> {
 		BlindCheckable::check(self)
 	}
 }
