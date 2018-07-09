@@ -69,7 +69,6 @@ pub trait Trait: Eq + Clone {
 	type Hashing: Hashing<Output = Self::Hash>;
 	type Digest: Parameter + Member + Default + traits::Digest;
 	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
-	type Address: Parameter + Member + MaybeDisplay;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hashing = Self::Hashing,

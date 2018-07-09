@@ -283,7 +283,6 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
-		type Address = u64;
 		type Header = Header;
 	}
 	impl timestamp::Trait for Test {
