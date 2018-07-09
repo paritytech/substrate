@@ -38,6 +38,7 @@ extern crate ed25519;
 extern crate futures;
 extern crate parking_lot;
 extern crate tokio;
+extern crate rhododendron;
 
 #[macro_use]
 extern crate log;
