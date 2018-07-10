@@ -429,7 +429,7 @@ impl Specialization<Block> for PolkadotProtocol {
 	fn on_disconnect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId) {
 		if let Some(info) = self.peers.remove(&peer_id) {
 			if let Some((acc_id, _)) = info.status.collating_for {
-				if let Some((new_primary, _)) = self.collators.on_disconnect(acc_id) {
+				if let Some(new_primary) = self.collators.on_disconnect(acc_id) {
 					// TODO: send new primary a role-change message.
 					unimplemented!()
 				}
@@ -508,7 +508,21 @@ impl PolkadotProtocol {
 		}
 	}
 
-	fn await_collation(&mut self, relay_parent: Hash, para_id: ParaId, sender: oneshot::Sender<Collation>) {
-		self.collators.await_collation(relay_parent, para_id, sender);
+	fn await_collation(&mut self, relay_parent: Hash, para_id: ParaId) -> oneshot::Receiver<Collation> {
+		let (tx, rx) = oneshot::channel();
+		self.collators.await_collation(relay_parent, para_id, tx);
+		rx
+	}
+
+	// disconnect a collator by account-id.
+	fn disconnect_collator(&mut self, ctx: &mut Context<Block>, account_id: AccountId) {
+		let bad_peers = self.peers
+			.iter()
+			.filter(|&(_, info)| info.status.collating_for.as_ref().map_or(false, |&(ref acc_id, _)| acc_id == &account_id))
+			.map(|(peer_id, _)| *peer_id);
+
+		for peer in bad_peers {
+			ctx.disable_peer(peer);
+		}
 	}
 }
