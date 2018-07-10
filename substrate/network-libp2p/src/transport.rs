@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use libp2p::{self, Transport, secio, core::either, core::MuxedTransport, core::upgrade};
+use libp2p::{self, Transport, secio};
+use libp2p::core::{MuxedTransport, either, upgrade};
 use tokio_core::reactor::Handle;
 use tokio_io::{AsyncRead, AsyncWrite};
 
@@ -38,9 +39,12 @@ pub fn build_transport(
 
 			// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
 			upgrade::or(
-				upgrade::map(plaintext, |out| (either::EitherOutput::First(out), None)),
+				upgrade::map(plaintext, |out|
+					(either::EitherOutput::First(out), None)
+				),
 				upgrade::map(secio, |out: secio::SecioOutput<_>|
-					(either::EitherOutput::Second(out.stream), Some(out.remote_key))
+					(either::EitherOutput::Second(out.stream),
+						Some(out.remote_key))
 				),
 			)
 		})

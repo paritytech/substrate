@@ -21,16 +21,19 @@ use tokio_core::reactor::{Handle, Timeout};
 
 /// Builds the timeouts system.
 ///
-/// The `timeouts_rx` should be a stream receiving newly-created timeout requests.
-/// Returns a stream that produces items as their timeout elapses.
-/// `T` can be anything you want, as it is transparently passed from the input to the output.
-pub fn build_timeouts_stream<T>(core: Handle, timeouts_rx: impl Stream<Item = (Instant, T), Error = ()>)
-	-> impl Stream<Item = T, Error = IoError>
-{
+/// The `timeouts_rx` should be a stream receiving newly-created timeout
+/// requests. Returns a stream that produces items as their timeout elapses.
+/// `T` can be anything you want, as it is transparently passed from the input
+/// to the output.
+pub fn build_timeouts_stream<T>(
+	core: Handle,
+	timeouts_rx: impl Stream<Item = (Instant, T), Error = ()>
+) -> impl Stream<Item = T, Error = IoError> {
 	let next_timeout = next_in_timeouts_stream(timeouts_rx);
 
-	// The `unfold` function is essentially a loop turned into a stream. The first parameter is
-	// the initial state, and the closure returns the new state and an item.
+	// The `unfold` function is essentially a loop turned into a stream. The
+	// first parameter is the initial state, and the closure returns the new
+	// state and an item.
 	stream::unfold(vec![future::Either::A(next_timeout)], move |timeouts| {
 		// `timeouts` is a `Vec` of futures that produce an `Out`.
 
@@ -38,7 +41,7 @@ pub fn build_timeouts_stream<T>(core: Handle, timeouts_rx: impl Stream<Item = (I
 
 		// `select_ok` panics if `timeouts` is empty anyway.
 		if timeouts.is_empty() {
-			return None;
+			return None
 		}
 
 		Some(future::select_ok(timeouts.into_iter())
@@ -60,7 +63,8 @@ pub fn build_timeouts_stream<T>(core: Handle, timeouts_rx: impl Stream<Item = (I
 						// A timeout has happened.
 						Ok((Some(item), timeouts)),
 				}
-			))
+			)
+		)
 	}).filter_map(|item| item)
 }
 
@@ -70,14 +74,13 @@ enum Out<A, B> {
 	Timeout(B),
 }
 
-/// Convenience function that calls `.into_future()` on the timeouts stream, and applies some
-/// modifiers.
-/// This function is necessary. Otherwise if we copy-paste its content we run into errors because
-/// the type of the copy-pasted closures differs.
+/// Convenience function that calls `.into_future()` on the timeouts stream,
+/// and applies some modifiers.
+/// This function is necessary. Otherwise if we copy-paste its content we run
+/// into errors because the type of the copy-pasted closures differs.
 fn next_in_timeouts_stream<S, B>(stream: S)
 	-> impl Future<Item = Out<(Option<S::Item>, S), B>, Error = IoError>
-where S: Stream<Error = ()>
-{
+	where S: Stream<Error = ()> {
 	stream
 		.into_future()
 		.map(Out::NewTimeout)

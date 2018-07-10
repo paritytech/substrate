@@ -17,7 +17,8 @@
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::{future, Future, Stream, sync::mpsc};
-use libp2p::core::{Multiaddr, AddrComponent, Endpoint, PeerId as PeerstorePeerId, PublicKey};
+use libp2p::core::{Multiaddr, AddrComponent, Endpoint};
+use libp2p::core::{PeerId as PeerstorePeerId, PublicKey};
 use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
 use libp2p::peerstore::json_peerstore::JsonPeerstore;
@@ -60,7 +61,8 @@ pub struct NetworkState {
 	/// Each peer gets assigned a new unique ID. This ID increases linearly.
 	next_peer_id: atomic::AtomicUsize,
 
-	/// List of the IDs of the disabled peers. These peers will see their connections refused.
+	/// List of the IDs of the disabled peers. These peers will see their
+	/// connections refused.
 	disabled_peers: RwLock<FnvHashSet<PeerstorePeerId>>,
 
 	/// Local private key.
@@ -87,22 +89,23 @@ struct Connections {
 
 struct PeerConnectionInfo {
 	/// A list of message senders per protocol, and the protocol version.
-	/// The sender can be used to transmit data for the remote. Note that the packet_id has to be
-	/// inside the `Bytes`.
+	/// The sender can be used to transmit data for the remote. Note that the
+	/// packet_id has to be inside the `Bytes`.
 	/// Closing the sender will drop the substream of this protocol.
 	senders: Vec<(ProtocolId, mpsc::UnboundedSender<Bytes>, u8)>,
 
 	/// True if we dialed a Kad connection towards this peer.
-	/// This indicates that `kad_connec` should eventually resolve, even without doing anything.
+	/// This indicates that `kad_connec` should eventually resolve, even
+	/// without doing anything.
 	opened_kad: bool,
 
-	/// When a Kad connection is received, we send it on this channel so that it will be received
-	/// by `kad_connec`.
+	/// When a Kad connection is received, we send it on this channel so that
+	/// it will be received by `kad_connec`.
 	incoming_kad_channel: mpsc::UnboundedSender<KadConnecController>,
 
 	/// The Kademlia connection to this node.
-	/// Contains the receiving end of `incoming_kad_channel`. If `opened_kad` is true, we are
-	/// guaranteed to finish.
+	/// Contains the receiving end of `incoming_kad_channel`. If `opened_kad`
+	/// is true, we are guaranteed to finish.
 	/// TODO: proper error handling if a kad connection is closed
 	kad_connec: future::Shared<Box<Future<Item = KadConnecController, Error = IoError>>>,
 
@@ -110,9 +113,9 @@ struct PeerConnectionInfo {
 	id: PeerstorePeerId,
 
 	/// True if this connection was initiated by us.
-	/// Note that it is theoretically possible that we dial the remote at the same time they dial
-	/// us, in which case the protocols may be dispatched between both connections, and in which
-	/// case the value here will be racy.
+	/// Note that it is theoretically possible that we dial the remote at the
+	/// same time they dial us, in which case the protocols may be dispatched
+	/// between both connections, and in which case the value here will be racy.
 	originated: bool,
 
 	/// Latest known ping duration.
@@ -124,7 +127,8 @@ struct PeerConnectionInfo {
 	/// The multiaddress of the remote, or `None` if not known.
 	remote_address: Option<Multiaddr>,
 
-	/// The local multiaddress used to communicate with the remote, or `None` if not known.
+	/// The local multiaddress used to communicate with the remote, or `None`
+	/// if not known.
 	local_address: Option<Multiaddr>,
 }
 
@@ -138,15 +142,17 @@ impl NetworkState {
 		let peerstore = if let Some(ref path) = config.net_config_path {
 			let path = Path::new(path).join(NODES_FILE);
 			if let Ok(peerstore) = JsonPeerstore::new(path.clone()) {
-				debug!(target: "sub-libp2p", "Initialized peer store for JSON file {:?}", path);
+				debug!(target: "sub-libp2p", "Initialized peer store for JSON \
+					file {:?}", path);
 				PeersStorage::Json(peerstore)
 			} else {
-				warn!(target: "sub-libp2p", "Failed to open peer storage {:?} ; peers won't \
-					be saved", path);
+				warn!(target: "sub-libp2p", "Failed to open peer storage {:?} \
+					; peers won't be saved", path);
 				PeersStorage::Memory(MemoryPeerstore::empty())
 			}
 		} else {
-			debug!(target: "sub-libp2p", "No peers file configured ; peers won't be saved");
+			debug!(target: "sub-libp2p", "No peers file configured ; peers \
+				won't be saved");
 			PeersStorage::Memory(MemoryPeerstore::empty())
 		};
 
@@ -155,7 +161,10 @@ impl NetworkState {
 		}
 
 		let reserved_peers = {
-			let mut reserved_peers = FnvHashSet::with_capacity_and_hasher(config.reserved_nodes.len(), Default::default());
+			let mut reserved_peers = FnvHashSet::with_capacity_and_hasher(
+				config.reserved_nodes.len(),
+				Default::default()
+			);
 			for peer in config.reserved_nodes.iter() {
 				let id = parse_and_add_to_peerstore(peer, &peerstore)?;
 				reserved_peers.insert(id);
@@ -163,7 +172,8 @@ impl NetworkState {
 			RwLock::new(reserved_peers)
 		};
 
-		let expected_max_peers = cmp::max(config.max_peers as usize, config.reserved_nodes.len());
+		let expected_max_peers = cmp::max(config.max_peers as usize,
+			config.reserved_nodes.len());
 
 		Ok(NetworkState {
 			peerstore,
@@ -197,8 +207,10 @@ impl NetworkState {
 	/// This includes peers we are not connected to.
 	pub fn known_peers(&self) -> impl Iterator<Item = PeerstorePeerId> {
 		match self.peerstore {
-			PeersStorage::Memory(ref mem) => mem.peers().collect::<Vec<_>>().into_iter(),
-			PeersStorage::Json(ref json) => json.peers().collect::<Vec<_>>().into_iter(),
+			PeersStorage::Memory(ref mem) =>
+				mem.peers().collect::<Vec<_>>().into_iter(),
+			PeersStorage::Json(ref json) =>
+				json.peers().collect::<Vec<_>>().into_iter(),
 		}
 	}
 
@@ -214,8 +226,8 @@ impl NetworkState {
 
 	/// Returns true if the given `PeerId` is valid.
 	///
-	/// `PeerId`s are never reused, so once this function returns `false` it will never return
-	/// `true` again for the same `PeerId`.
+	/// `PeerId`s are never reused, so once this function returns `false` it
+	/// will never return `true` again for the same `PeerId`.
 	pub fn is_peer_connected(&self, peer: PeerId) -> bool {
 		self.connections.read().info_by_peer.contains_key(&peer)
 	}
@@ -232,9 +244,10 @@ impl NetworkState {
 		*info.ping.lock() = Some(ping);
 	}
 
-	/// If we're connected to a peer with the given protocol, returns information about the
-	/// connection. Otherwise, returns `None`.
-	pub fn session_info(&self, peer: PeerId, protocol: ProtocolId) -> Option<SessionInfo> {
+	/// If we're connected to a peer with the given protocol, returns
+	/// information about the connection. Otherwise, returns `None`.
+	pub fn session_info(&self, peer: PeerId, protocol: ProtocolId)
+		-> Option<SessionInfo> {
 		let connections = self.connections.read();
 		let info = match connections.info_by_peer.get(&peer) {
 			Some(info) => info,
@@ -256,14 +269,17 @@ impl NetworkState {
 			peer_capabilities: Vec::new(),	// TODO: difference with `peer_capabilities`?
 			ping,
 			originated: info.originated,
-			remote_address: info.remote_address.as_ref().map(|a| a.to_string()).unwrap_or(String::new()),
-			local_address: info.local_address.as_ref().map(|a| a.to_string()).unwrap_or(String::new()),
+			remote_address: info.remote_address.as_ref().map(|a| a.to_string())
+				.unwrap_or(String::new()),
+			local_address: info.local_address.as_ref().map(|a| a.to_string())
+				.unwrap_or(String::new()),
 		})
 	}
 
-	/// If we're connected to a peer with the given protocol, returns the protocol version.
-	/// Otherwise, returns `None`.
-	pub fn protocol_version(&self, peer: PeerId, protocol: ProtocolId) -> Option<u8> {
+	/// If we're connected to a peer with the given protocol, returns the
+	/// protocol version. Otherwise, returns `None`.
+	pub fn protocol_version(&self, peer: PeerId, protocol: ProtocolId)
+		-> Option<u8> {
 		let connections = self.connections.read();
 		let peer = match connections.info_by_peer.get(&peer) {
 			Some(peer) => peer,
@@ -274,14 +290,15 @@ impl NetworkState {
 	}
 
 	/// Equivalent to `session_info(peer).map(|info| info.client_version)`.
-	pub fn peer_client_version(&self, peer: PeerId, protocol: ProtocolId) -> Option<String> {
+	pub fn peer_client_version(&self, peer: PeerId, protocol: ProtocolId)
+		-> Option<String> {
 		// TODO: implement more directly, without going through `session_info`
 		self.session_info(peer, protocol)
 			.map(|info| info.client_version)
 	}
 
 	/// Adds an address discovered by Kademlia.
-	/// Note that we don't have to be connected to a peer to add an address to it.
+	/// Note that we don't have to be connected to a peer to add an address.
 	pub fn add_kad_discovered_addr(&self, node_id: &PeerstorePeerId, addr: Multiaddr) {
 		match self.peerstore {
 			PeersStorage::Memory(ref mem) =>
@@ -294,9 +311,10 @@ impl NetworkState {
 	}
 
 	/// Signals that an address doesn't match the corresponding node ID.
-	/// This removes the address from the peer store, so that it is not returned by `addrs_of_peer`
-	/// again in the future.
-	pub fn set_invalid_kad_address(&self, node_id: &PeerstorePeerId, addr: &Multiaddr) {
+	/// This removes the address from the peer store, so that it is not
+	/// returned by `addrs_of_peer` again in the future.
+	pub fn set_invalid_kad_address(&self, node_id: &PeerstorePeerId,
+		addr: &Multiaddr) {
 		// TODO: blacklist the address?
 		match self.peerstore {
 			PeersStorage::Memory(ref mem) =>
@@ -336,7 +354,8 @@ impl NetworkState {
 		remote_addr: Multiaddr
 	) -> Result<PeerId, IoError> {
 		let mut connections = self.connections.write();
-		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id.clone(), endpoint)?;
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
+			node_id.clone(), endpoint)?;
 		let infos = connections.info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
 
@@ -398,7 +417,8 @@ impl NetworkState {
 	}
 
 	/// Returns true if we are connected to the given node with the given protocol.
-	pub fn has_protocol_connection(&self, node_id: &PeerstorePeerId, protocol_id: ProtocolId) -> bool {
+	pub fn has_protocol_connection(&self, node_id: &PeerstorePeerId,
+		protocol_id: ProtocolId) -> bool {
 		let connections = self.connections.read();
 		if let Some(peer) = connections.peer_by_nodeid.get(node_id) {
 			let info = match connections.info_by_peer.get(&peer) {
@@ -412,11 +432,13 @@ impl NetworkState {
 	}
 
 	/// Call this when a Kademlia connection has been opened from a remote.
-	pub fn incoming_kad_connection(&self, node_id: PeerstorePeerId, ctrl: KadConnecController) -> Result<PeerId, IoError> {
+	pub fn incoming_kad_connection(&self, node_id: PeerstorePeerId,
+		ctrl: KadConnecController) -> Result<PeerId, IoError> {
 		// TODO: check that the peer is disabled? should disabling a peer also prevent
 		//		 kad from working?
 		let mut connections = self.connections.write();
-		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id, Endpoint::Listener)?;
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
+			node_id, Endpoint::Listener)?;
 		let infos = connections.info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
 		let _ = infos.incoming_kad_channel.unbounded_send(ctrl);
@@ -429,7 +451,8 @@ impl NetworkState {
 		where F: FnOnce() -> Fut, Fut: Future<Item = KadConnecController, Error = IoError>
 	{
 		let mut connections = self.connections.write();
-		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id, Endpoint::Dialer)?;
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
+			node_id, Endpoint::Dialer)?;
 		let infos = connections.info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
 
@@ -464,8 +487,10 @@ impl NetworkState {
 			// TODO: that's code duplication
 			let (tx, rx) = mpsc::unbounded();
 			let rx = rx.into_future()
+				// An unbounded receiver can never error.
 				.map_err(|_| -> IoError { unreachable!() })
-				.and_then(|i| i.0.ok_or(IoError::new(IoErrorKind::ConnectionAborted, "kad aborted")));
+				.and_then(|i| i.0.ok_or(IoError::new(
+					IoErrorKind::ConnectionAborted, "kad aborted")));
 			let kad_connec = Box::new(rx) as Box<Future<Item = _, Error = _>>;
 
 			peer.incoming_kad_channel = tx;
@@ -476,25 +501,35 @@ impl NetworkState {
 
 	/// Try to add a new connection to a node in the list.
 	///
-	/// Returns a `PeerId` to allow further interfacing with this connection. Note that all
-	/// `PeerId`s are unique and never reused.
+	/// Returns a `PeerId` to allow further interfacing with this connection.
+	/// Note that all `PeerId`s are unique and never reused.
 	///
 	/// Can return an error if we are refusing the connection to the remote.
 	///
-	/// You must pass an `UnboundedSender` which will be used by the `send` method. Actually
-	/// sending the data is not covered by this code.
+	/// You must pass an `UnboundedSender` which will be used by the `send`
+	/// method. Actually sending the data is not covered by this code.
 	///
-	/// The various methods of the `NetworkState` that close a connection do so by dropping this
-	/// sender.
-	pub fn accept_custom_proto(&self, node_id: PeerstorePeerId, protocol_id: ProtocolId, protocol_version: u8, endpoint: Endpoint, msg_tx: mpsc::UnboundedSender<Bytes>) -> Result<PeerId, IoError> {
+	/// The various methods of the `NetworkState` that close a connection do 
+	/// so by dropping this sender.
+	pub fn accept_custom_proto(
+		&self,
+		node_id: PeerstorePeerId,
+		protocol_id: ProtocolId,
+		protocol_version: u8,
+		endpoint: Endpoint,
+		msg_tx: mpsc::UnboundedSender<Bytes>
+	) -> Result<PeerId, IoError> {
 		let mut connections = self.connections.write();
 
 		if self.disabled_peers.read().contains(&node_id) {
-			debug!(target: "sub-libp2p", "Refusing node {:?} because it was disabled", node_id);
-			return Err(IoError::new(IoErrorKind::PermissionDenied, "disabled peer"));
+			debug!(target: "sub-libp2p", "Refusing node {:?} because it was \
+				disabled", node_id);
+			return Err(IoError::new(IoErrorKind::PermissionDenied,
+				"disabled peer"))
 		}
 
-		let peer_id = accept_connection(&mut connections, &self.next_peer_id, node_id.clone(), endpoint)?;
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
+			node_id.clone(), endpoint)?;
 
 		let connections = &mut *connections;
 		let info_by_peer = &mut connections.info_by_peer;
@@ -507,9 +542,10 @@ impl NetworkState {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
 				peer_by_nodeid.len() >= self.max_peers as usize
 			{
-				debug!(target: "sub-libp2p", "Refusing node {:?} because we reached the max \
-					number of peers", node_id);
-				return Err(IoError::new(IoErrorKind::PermissionDenied, "maximum number of peers reached"));
+				debug!(target: "sub-libp2p", "Refusing node {:?} because we \
+					reached the max number of peers", node_id);
+				return Err(IoError::new(IoErrorKind::PermissionDenied,
+					"maximum number of peers reached"))
 			}
 		}
 
@@ -520,27 +556,34 @@ impl NetworkState {
 		Ok(peer_id)
 	}
 
-	/// Sends some data to the given peer, using the sender that was passed to `accept_custom_proto`.
-	pub fn send(&self, protocol: ProtocolId, peer_id: PeerId, message: Bytes) -> Result<(), Error> {
+	/// Sends some data to the given peer, using the sender that was passed
+	/// to `accept_custom_proto`.
+	pub fn send(&self, protocol: ProtocolId, peer_id: PeerId, message: Bytes)
+		-> Result<(), Error> {
 		if let Some(peer) = self.connections.read().info_by_peer.get(&peer_id) {
-			if let Some(sender) = peer.senders.iter().find(|elem| elem.0 == protocol).map(|e| &e.1) {
+			let sender = peer.senders.iter().find(|elem| elem.0 == protocol)
+				.map(|e| &e.1);
+			if let Some(sender) = sender {
 				sender.unbounded_send(message)
 					.map_err(|err| ErrorKind::Io(IoError::new(IoErrorKind::Other, err)))?;
 				Ok(())
 			} else {
-				// We are connected to this peer, but not with the current protocol.
-				debug!(target: "sub-libp2p", "Tried to send message to peer {} for which we aren't \
-					connected with the requested protocol", peer_id);
-				return Err(ErrorKind::PeerNotFound.into());
+				// We are connected to this peer, but not with the current
+				// protocol.
+				debug!(target: "sub-libp2p", "Tried to send message to peer {} \
+					for which we aren't connected with the requested protocol",
+					peer_id);
+				return Err(ErrorKind::PeerNotFound.into())
 			}
 		} else {
-			debug!(target: "sub-libp2p", "Tried to send message to invalid peer ID {}", peer_id);
-			return Err(ErrorKind::PeerNotFound.into());
+			debug!(target: "sub-libp2p", "Tried to send message to invalid \
+				peer ID {}", peer_id);
+			return Err(ErrorKind::PeerNotFound.into())
 		}
 	}
 
-	/// Disconnects a peer, if a connection exists (ie. drops the Kademlia controller, and the
-	/// senders that were passed to `accept_custom_proto`).
+	/// Disconnects a peer, if a connection exists (ie. drops the Kademlia
+	/// controller, and the senders that were passed to `accept_custom_proto`).
 	pub fn disconnect_peer(&self, peer_id: PeerId) {
 		let mut connections = self.connections.write();
 		if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
@@ -550,18 +593,21 @@ impl NetworkState {
 	}
 
 	/// Disconnects all the peers.
-	/// This destroys all the Kademlia controllers and the senders that were passed to
-	/// `accept_custom_proto`.
+	/// This destroys all the Kademlia controllers and the senders that were
+	/// passed to `accept_custom_proto`.
 	pub fn disconnect_all(&self) {
 		let mut connec = self.connections.write();
 		*connec = Connections {
-			info_by_peer: FnvHashMap::with_capacity_and_hasher(connec.peer_by_nodeid.capacity(), Default::default()),
-			peer_by_nodeid: FnvHashMap::with_capacity_and_hasher(connec.peer_by_nodeid.capacity(), Default::default()),
+			info_by_peer: FnvHashMap::with_capacity_and_hasher(
+				connec.peer_by_nodeid.capacity(), Default::default()),
+			peer_by_nodeid: FnvHashMap::with_capacity_and_hasher(
+				connec.peer_by_nodeid.capacity(), Default::default()),
 		};
 	}
 
-	/// Disables a peer. This adds the peer to the list of disabled peers, and drops any existing
-	/// connections if necessary (ie. drops the sender that was passed to `accept_custom_proto`).
+	/// Disables a peer. This adds the peer to the list of disabled peers, and 
+	/// drops any existing connections if necessary (ie. drops the sender that
+	/// was passed to `accept_custom_proto`).
 	pub fn disable_peer(&self, peer_id: PeerId) {
 		// TODO: what do we do if the peer is reserved?
 		let mut connections = self.connections.write();
@@ -584,19 +630,21 @@ impl NetworkState {
 
 	/// Flushes the caches to the disk.
 	///
-	/// This is done in an atomical way, so that an error doesn't corrupt anything.
+	/// This is done in an atomical way, so that an error doesn't corrupt
+	/// anything.
 	pub fn flush_caches_to_disk(&self) -> Result<(), IoError> {
 		match self.peerstore {
 			PeersStorage::Memory(_) => Ok(()),
 			PeersStorage::Json(ref json) =>
 				match json.flush() {
 					Ok(()) => {
-						debug!(target: "sub-libp2p", "Flushed JSON peer store to disk");
+						debug!(target: "sub-libp2p", "Flushed JSON peer store \
+							to disk");
 						Ok(())
 					}
 					Err(err) => {
-						warn!(target: "sub-libp2p", "Failed to flush changes to JSON \
-							peer store: {}", err);
+						warn!(target: "sub-libp2p", "Failed to flush changes \
+							to JSON peer store: {}", err);
 						Err(err)
 					}
 				}
@@ -612,7 +660,8 @@ impl Drop for NetworkState {
 
 /// Assigns a `PeerId` to a node, or returns an existing ID if any exists.
 ///
-/// The function only accepts already-locked structs, so that we don't risk any deadlock.
+/// The function only accepts already-locked structs, so that we don't risk
+/// any deadlock.
 fn accept_connection(
 	connections: &mut Connections,
 	next_peer_id: &atomic::AtomicUsize,
@@ -628,6 +677,7 @@ fn accept_connection(
 		let (tx, rx) = mpsc::unbounded();
 		let rx = rx
 			.into_future()
+			// An `UnboundedReceiver` can never produce an error.
 			.map_err(|_| -> IoError { unreachable!() })
 			.and_then(|i| i.0.ok_or(IoError::new(IoErrorKind::ConnectionAborted, "kad aborted")));
 		let kad_connec = Box::new(rx) as Box<Future<Item = _, Error = _>>;
@@ -650,12 +700,12 @@ fn accept_connection(
 	Ok(peer_id)
 }
 
-/// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it to the given
-/// peerstore. Returns the corresponding peer ID.
+/// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
+/// to the given peerstore. Returns the corresponding peer ID.
 fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
-	-> Result<PeerstorePeerId, Error>
-{
-	let mut addr: Multiaddr = addr_str.parse().map_err(|_| ErrorKind::AddressParse)?;
+	-> Result<PeerstorePeerId, Error> {
+	let mut addr: Multiaddr = addr_str.parse()
+		.map_err(|_| ErrorKind::AddressParse)?;
 	let p2p_component = addr.pop().ok_or(ErrorKind::AddressParse)?;
 	let peer_id = match p2p_component {
 		AddrComponent::P2P(key) | AddrComponent::IPFS(key) =>
@@ -679,7 +729,8 @@ fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 }
 
 /// Obtains or generates the local private key using the configuration.
-fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPair, IoError> {
+fn obtain_private_key(config: &NetworkConfiguration)
+	-> Result<secio::SecioKeyPair, IoError> {
 	if let Some(ref secret) = config.use_secret {
 		// Key was specified in the configuration.
 		secio::SecioKeyPair::secp256k1_raw_key(&secret[..])
@@ -695,28 +746,32 @@ fn obtain_private_key(config: &NetworkConfiguration) -> Result<secio::SecioKeyPa
 				Ok(s) => Ok(s),
 				Err(err) => {
 					// Failed to fetch existing file ; generate a new key
-					trace!(target: "sub-libp2p", "Failed to load existing secret key file {:?}, \
-						generating new key ; err = {:?}", secret_path, err);
+					trace!(target: "sub-libp2p", "Failed to load existing \
+						secret key file {:?},  generating new key ; err = {:?}",
+						secret_path, err);
 					Ok(gen_key_and_try_write_to_file(&secret_path))
 				}
 			}
 
 		} else {
-			// No path in the configuration, nothing we can do except generate a new key.
+			// No path in the configuration, nothing we can do except generate
+			// a new key.
 			let mut key: [u8; 32] = [0; 32];
 			rand::rngs::EntropyRng::new().fill(&mut key);
 			Ok(secio::SecioKeyPair::secp256k1_raw_key(&key)
-				.expect("randomly-generated key with correct len should always be valid"))
+				.expect("randomly-generated key with correct len should \
+					always be valid"))
 		}
 	}
 }
 
 /// Tries to load a private key from a file located at the given path.
-fn load_private_key_from_file(path: impl AsRef<Path>) -> Result<secio::SecioKeyPair, IoError> {
+fn load_private_key_from_file(path: impl AsRef<Path>)
+	-> Result<secio::SecioKeyPair, IoError> {
 	fs::File::open(path)
 		.and_then(|mut file| {
-			// We are in 2018 and there is still no method on `std::io::Read` that
-			// directly returns a `Vec`.
+			// We are in 2018 and there is still no method on `std::io::Read`
+			// that directly returns a `Vec`.
 			let mut buf = Vec::new();
 			file.read_to_end(&mut buf).map(|_| buf)
 		})
@@ -739,12 +794,12 @@ fn gen_key_and_try_write_to_file(path: impl AsRef<Path>) -> secio::SecioKeyPair 
 		Ok(mut file) =>
 			match file.write_all(&raw_key) {
 				Ok(()) => (),
-				Err(err) => warn!(target: "sub-libp2p", "Failed to write secret key in \
-					file {:?} ; err = {:?}", path.as_ref(), err),
+				Err(err) => warn!(target: "sub-libp2p", "Failed to write \
+					secret key in file {:?} ; err = {:?}", path.as_ref(), err),
 			},
 		Err(err) =>
-			warn!(target: "sub-libp2p", "Failed to store secret key in file {:?} ; err = {:?}",
-				path.as_ref(), err),
+			warn!(target: "sub-libp2p", "Failed to store secret key in file \
+				{:?} ; err = {:?}", path.as_ref(), err),
 	}
 
 	secio_key
@@ -780,9 +835,22 @@ mod tests {
 		let state = NetworkState::new(&Default::default()).unwrap();
 		let example_peer = PublicKey::Rsa(vec![1, 2, 3, 4]).into_peer_id();
 
-		let peer_id = state.accept_custom_proto(example_peer.clone(), [1, 2, 3], 1, Endpoint::Dialer, mpsc::unbounded().0).unwrap();
+		let peer_id = state.accept_custom_proto(
+			example_peer.clone(),
+			[1, 2, 3],
+			1,
+			Endpoint::Dialer,
+			mpsc::unbounded().0
+		).unwrap();
+
 		state.disable_peer(peer_id);
 
-		assert!(state.accept_custom_proto(example_peer.clone(), [1, 2, 3], 1, Endpoint::Dialer, mpsc::unbounded().0).is_err());
+		assert!(state.accept_custom_proto(
+			example_peer.clone(),
+			[1, 2, 3],
+			1,
+			Endpoint::Dialer,
+			mpsc::unbounded().0
+		).is_err());
 	}
 }

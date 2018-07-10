@@ -27,8 +27,8 @@ use varint::VarintCodec;
 
 /// Connection upgrade for a single protocol.
 ///
-/// Note that "a single protocol" here refers to `par` for example. However each protocol can
-/// have multiple different versions for networking purposes.
+/// Note that "a single protocol" here refers to `par` for example. However
+/// each protocol can have multiple different versions for networking purposes.
 #[derive(Clone)]
 pub struct RegisteredProtocol<T> {
 	/// Id of the protocol for API purposes.
@@ -36,8 +36,8 @@ pub struct RegisteredProtocol<T> {
 	/// Base name of the protocol as advertised on the network.
 	/// Ends with `/` so that we can append a version number behind.
 	base_name: Bytes,
-	/// List of protocol versions that we support, plus their packet count. Ordered in descending
-	/// order so that the best comes first.
+	/// List of protocol versions that we support, plus their packet count.
+	/// Ordered in descending order so that the best comes first.
 	/// The packet count is used to filter out invalid messages.
 	supported_versions: Vec<(u8, u8)>,
 	/// Custom data.
@@ -55,19 +55,21 @@ pub struct RegisteredProtocolOutput<T> {
 	/// Version of the protocol that was negotiated.
 	pub protocol_version: u8,
 
-	/// Channel to sender outgoing messages to. Closing this channel closes the connection.
+	/// Channel to sender outgoing messages to. Closing this channel closes the
+	/// connection.
 	// TODO: consider assembling packet_id here
 	pub outgoing: mpsc::UnboundedSender<Bytes>,
 
-	/// Stream where incoming messages are received. The stream ends whenever either side is
-	/// closed.
+	/// Stream where incoming messages are received. The stream ends whenever
+	/// either side is closed.
 	pub incoming: Box<Stream<Item = (PacketId, Bytes), Error = IoError>>,
 }
 
 impl<T> RegisteredProtocol<T> {
-	/// Creates a new `RegisteredProtocol`. The `custom_data` parameter will be passed inside the
-	/// `RegisteredProtocolOutput`.
-	pub fn new(custom_data: T, protocol: ProtocolId, versions: &[(u8, u8)]) -> Self {
+	/// Creates a new `RegisteredProtocol`. The `custom_data` parameter will be
+	/// passed inside the `RegisteredProtocolOutput`.
+	pub fn new(custom_data: T, protocol: ProtocolId, versions: &[(u8, u8)])
+		-> Self {
 		let mut proto_name = Bytes::from_static(b"/substrate/");
 		proto_name.extend_from_slice(&protocol);
 		proto_name.extend_from_slice(b"/");
@@ -117,24 +119,24 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 	type MultiaddrFuture = Maf;
 	type Future = future::FutureResult<(Self::Output, Self::MultiaddrFuture), IoError>;
 
-	fn upgrade(self, socket: C, protocol_version: Self::UpgradeIdentifier, _: Endpoint,
-		remote_addr: Maf) -> Self::Future
-	{
+	fn upgrade(self, socket: C, protocol_version: Self::UpgradeIdentifier,
+		_: Endpoint, remote_addr: Maf) -> Self::Future {
 		let packet_count = self.supported_versions
 			.iter()
 			.find(|&(v, _)| *v == protocol_version)
-			.expect("negotiated protocol version that wasn't advertised ; programmer error")
+			.expect("negotiated protocol version that wasn't advertised ; \
+				programmer error")
 			.1;
 
-		// This function is called whenever we successfully negotiated a protocol with a
-		// remote (both if initiated by us or by the remote)
+		// This function is called whenever we successfully negotiated a
+		// protocol with a remote (both if initiated by us or by the remote)
 
-		// This channel is used to send outgoing packets to the custom_data for this open
-		// substream.
+		// This channel is used to send outgoing packets to the custom_data
+		// for this open substream.
 		let (msg_tx, msg_rx) = mpsc::unbounded();
 
-		// Build the sink for outgoing network bytes, and the stream for incoming instructions.
-		// `stream` implements `Stream<Item = Message>`.
+		// Build the sink for outgoing network bytes, and the stream for
+		// incoming instructions. `stream` implements `Stream<Item = Message>`.
 		enum Message {
 			/// Received data from the network.
 			RecvSocket(BytesMut),
@@ -158,22 +160,22 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 
 		let incoming = stream::unfold((sink, stream, false), move |(sink, stream, finished)| {
 			if finished {
-				return None;
+				return None
 			}
 
 			Some(stream
 				.into_future()
 				.map_err(|(err, _)| err)
-				.and_then(move |(message, stream)| {
+				.and_then(move |(message, stream)|
 					match message {
 						Some(Message::RecvSocket(mut data)) => {
-							// The `data` should be prefixed by the packet ID, therefore an
-							// empty packet is invalid.
+							// The `data` should be prefixed by the packet ID,
+							// therefore an empty packet is invalid.
 							if data.is_empty() {
-								debug!(target: "sub-libp2p", "ignoring incoming packet \
-									because it was empty");
+								debug!(target: "sub-libp2p", "ignoring incoming \
+									packet because it was empty");
 								let f = future::ok((None, (sink, stream, false)));
-								return future::Either::A(f);
+								return future::Either::A(f)
 							}
 
 							let packet_id = data[0];
@@ -202,7 +204,7 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 							future::Either::A(f)
 						},
 					}
-				}))
+				))
 		}).filter_map(|v| v);
 
 		let out = RegisteredProtocolOutput {
@@ -223,7 +225,8 @@ pub struct RegisteredProtocols<T>(pub Vec<RegisteredProtocol<T>>);
 
 impl<T> RegisteredProtocols<T> {
 	/// Finds a protocol in the list by its id.
-	pub fn find_protocol(&self, protocol: ProtocolId) -> Option<&RegisteredProtocol<T>> {
+	pub fn find_protocol(&self, protocol: ProtocolId)
+		-> Option<&RegisteredProtocol<T>> {
 		self.0.iter().find(|p| p.id == protocol)
 	}
 
@@ -244,10 +247,12 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 	Maf: Future<Item = Multiaddr, Error = IoError> + 'static,		// TODO: 'static :(
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
-	type UpgradeIdentifier = (usize, <RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::UpgradeIdentifier);
+	type UpgradeIdentifier = (usize,
+		<RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::UpgradeIdentifier);
 
 	fn protocol_names(&self) -> Self::NamesIter {
-		// We concat the lists of `RegisteredProtocol::protocol_names` for each protocol.
+		// We concat the lists of `RegisteredProtocol::protocol_names` for
+		// each protocol.
 		self.0.iter().enumerate().flat_map(|(n, proto)|
 			ConnectionUpgrade::<C, Maf>::protocol_names(proto)
 				.map(move |(name, id)| (name, (n, id)))
@@ -255,13 +260,14 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 	}
 
 	type Output = <RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::Output;
-	type MultiaddrFuture = <RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::MultiaddrFuture;
+	type MultiaddrFuture = <RegisteredProtocol<T> as
+		ConnectionUpgrade<C, Maf>>::MultiaddrFuture;
 	type Future = <RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::Future;
 
 	#[inline]
-	fn upgrade(self, socket: C, (protocol_index, inner_proto_id): Self::UpgradeIdentifier,
-		endpoint: Endpoint, remote_addr: Maf) -> Self::Future
-	{
+	fn upgrade(self, socket: C, upgrade_identifier: Self::UpgradeIdentifier,
+		endpoint: Endpoint, remote_addr: Maf) -> Self::Future {
+		let (protocol_index, inner_proto_id) = upgrade_identifier;
 		self.0.into_iter()
 			.nth(protocol_index)
 			.expect("invalid protocol index ; programmer logic error")
