@@ -24,6 +24,7 @@ use futures::sync::oneshot;
 use std::collections::hash_map::{HashMap, Entry};
 
 /// The role of the collator. Whether they're the primary or backup for this parachain.
+#[derive(PartialEq, Debug)]
 pub enum Role {
 	/// Primary collators should send collations whenever it's time.
 	Primary,
@@ -32,6 +33,7 @@ pub enum Role {
 }
 
 /// A maintenance action for the collator set.
+#[derive(PartialEq, Debug)]
 pub enum Action {
 	/// Disconnect the given collator.
 	Disconnect(AccountId),
@@ -114,7 +116,7 @@ impl CollatorPool {
 	pub fn on_new_collator(&mut self, account_id: AccountId, para_id: ParaId) -> Role {
 		self.collators.insert(account_id.clone(), para_id);
 		match self.parachain_collators.entry(para_id) {
-			Entry::Vacant(mut vacant) => {
+			Entry::Vacant(vacant) => {
 				vacant.insert(ParachainCollators {
 					primary: account_id,
 					backup: Vec::new(),
@@ -159,6 +161,8 @@ impl CollatorPool {
 		if let Some(para_id) = self.collators.get(&account_id) {
 			debug_assert_eq!(para_id, &collation.receipt.parachain_index);
 
+			// TODO: punish if not primary?
+
 			self.collations.entry((relay_parent, para_id.clone()))
 				.or_insert_with(|| CollationSlot::Blank)
 				.received_collation(collation);
@@ -189,9 +193,62 @@ impl CollatorPool {
 
 		actions
 	}
+
+	/// Note a bad collator.
+	pub fn note_bad(&mut self, collator: AccountId) {
+		self.bad_collators.push(collator);
+	}
 }
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use polkadot_primitives::parachain::{CandidateReceipt, BlockData, HeadData};
+	use substrate_primitives::H512;
+	use futures::Future;
 
+	#[test]
+	fn note_bad_primary_gives_new_primary() {
+		let mut pool = CollatorPool::new();
+		let para_id: ParaId = 5.into();
+		let bad_primary = [0; 32].into();
+		let good_backup = [1; 32].into();
+
+		assert_eq!(pool.on_new_collator(bad_primary, para_id.clone()), Role::Primary);
+		assert_eq!(pool.on_new_collator(good_backup, para_id.clone()), Role::Backup);
+
+		pool.note_bad(bad_primary);
+
+		assert_eq!(pool.maintain_peers(), vec![
+			Action::Disconnect(bad_primary),
+			Action::NewRole(good_backup, Role::Primary),
+		]);
+	}
+
+	#[test]
+	fn await_before_collation() {
+		let mut pool = CollatorPool::new();
+		let para_id: ParaId = 5.into();
+		let primary = [0; 32].into();
+		let relay_parent = [1; 32].into();
+
+		assert_eq!(pool.on_new_collator(primary, para_id.clone()), Role::Primary);
+		let (tx, rx) = oneshot::channel();
+		pool.await_collation(relay_parent, para_id, tx);
+		pool.on_collation(primary, relay_parent, Collation {
+			receipt: CandidateReceipt {
+				parachain_index: para_id,
+				collator: primary.into(),
+				signature: H512::from([2; 64]).into(),
+				head_data: HeadData(vec![1, 2, 3]),
+				balance_uploads: vec![],
+				egress_queue_roots: vec![],
+				fees: 0,
+				block_data_hash: [3; 32].into(),
+			},
+			block_data: BlockData(vec![4, 5, 6]),
+		});
+
+		rx.wait().unwrap();
+	}
 }
