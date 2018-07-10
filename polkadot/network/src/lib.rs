@@ -58,7 +58,7 @@ use substrate_network::consensus_gossip::ConsensusGossip;
 use substrate_network::{message, generic_message};
 use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
-use self::collator_pool::CollatorPool;
+use self::collator_pool::{CollatorPool, Role, Action};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -199,6 +199,8 @@ pub enum Message {
 	RequestBlockData(RequestId, Hash),
 	/// Provide block data by candidate hash or nothing if unknown.
 	BlockData(RequestId, Option<BlockData>),
+	/// Tell a collator their role.
+	CollatorRole(Role),
 	/// A collation provided by a peer. Relay parent and collation.
 	Collation(Hash, Collation),
 }
@@ -263,7 +265,10 @@ impl PolkadotProtocol {
 		let parent_hash = consensus.parent_hash;
 		let old_parent = self.live_consensus.as_ref().map(|c| c.parent_hash);
 
-		for (id, info) in self.peers.iter_mut().filter(|&(_, ref info)| info.validator) {
+		// TODO: optimize for when session key changes and only send to collators who are relevant in next few blocks.
+		for (id, info) in self.peers.iter_mut()
+			.filter(|&(_, ref info)| info.validator || info.status.collating_for.is_some())
+		{
 			send_polkadot_message(
 				ctx,
 				*id,
@@ -367,6 +372,7 @@ impl PolkadotProtocol {
 			}
 			Message::BlockData(req_id, data) => self.on_block_data(ctx, peer_id, req_id, data),
 			Message::Collation(relay_parent, collation) => self.on_collation(ctx, peer_id, relay_parent, collation),
+			Message::CollatorRole(_) => unimplemented!(),
 		}
 	}
 
@@ -398,12 +404,22 @@ impl Specialization<Block> for PolkadotProtocol {
 			Some(status) => status,
 			None => {
 				ctx.disable_peer(peer_id);
-				return;
+				return
 			}
 		};
 
 		if let Some((ref acc_id, ref para_id)) = local_status.collating_for {
+			if self.collator_peer_id(acc_id.clone()).is_some() {
+				ctx.disable_peer(peer_id);
+				return
+			}
+
 			let collator_role = self.collators.on_new_collator(acc_id.clone(), para_id.clone());
+			send_polkadot_message(
+				ctx,
+				peer_id,
+				Message::CollatorRole(collator_role),
+			);
 		}
 
 		let validator = status.roles.iter().any(|r| *r == message::Role::Authority);
@@ -429,9 +445,15 @@ impl Specialization<Block> for PolkadotProtocol {
 	fn on_disconnect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId) {
 		if let Some(info) = self.peers.remove(&peer_id) {
 			if let Some((acc_id, _)) = info.status.collating_for {
-				if let Some(new_primary) = self.collators.on_disconnect(acc_id) {
-					// TODO: send new primary a role-change message.
-					unimplemented!()
+				let new_primary = self.collators.on_disconnect(acc_id)
+					.and_then(|new_primary| self.collator_peer_id(new_primary));
+
+				if let Some(new_primary) = new_primary {
+					send_polkadot_message(
+						ctx,
+						new_primary,
+						Message::CollatorRole(Role::Primary),
+					)
 				}
 			}
 
@@ -488,6 +510,19 @@ impl Specialization<Block> for PolkadotProtocol {
 	fn maintain_peers(&mut self, ctx: &mut Context<Block>) {
 		self.consensus_gossip.collect_garbage(None);
 		self.dispatch_pending_requests(ctx);
+
+		for collator_action in self.collators.maintain_peers() {
+			match collator_action {
+				Action::Disconnect(collator) => self.disconnect_bad_collator(ctx, collator),
+				Action::NewRole(account_id, role) => if let Some(collator) = self.collator_peer_id(account_id) {
+					send_polkadot_message(
+						ctx,
+						collator,
+						Message::CollatorRole(role),
+					)
+				},
+			}
+		}
 	}
 }
 
@@ -514,15 +549,19 @@ impl PolkadotProtocol {
 		rx
 	}
 
-	// disconnect a collator by account-id.
-	fn disconnect_collator(&mut self, ctx: &mut Context<Block>, account_id: AccountId) {
-		let bad_peers = self.peers
+	// get connected peer with given account ID for collation.
+	fn collator_peer_id(&self, account_id: AccountId) -> Option<PeerId> {
+		self.peers
 			.iter()
 			.filter(|&(_, info)| info.status.collating_for.as_ref().map_or(false, |&(ref acc_id, _)| acc_id == &account_id))
-			.map(|(peer_id, _)| *peer_id);
+			.map(|(peer_id, _)| *peer_id)
+			.next()
+	}
 
-		for peer in bad_peers {
-			ctx.disable_peer(peer);
+	// disconnect a collator by account-id.
+	fn disconnect_bad_collator(&self, ctx: &mut Context<Block>, account_id: AccountId) {
+		if let Some(peer_id) = self.collator_peer_id(account_id) {
+			ctx.disable_peer(peer_id)
 		}
 	}
 }

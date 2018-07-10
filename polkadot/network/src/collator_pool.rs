@@ -24,7 +24,7 @@ use futures::sync::oneshot;
 use std::collections::hash_map::{HashMap, Entry};
 
 /// The role of the collator. Whether they're the primary or backup for this parachain.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Serialize, Deserialize)]
 pub enum Role {
 	/// Primary collators should send collations whenever it's time.
 	Primary,
@@ -34,6 +34,7 @@ pub enum Role {
 
 /// A maintenance action for the collator set.
 #[derive(PartialEq, Debug)]
+#[allow(dead_code)]
 pub enum Action {
 	/// Disconnect the given collator.
 	Disconnect(AccountId),
@@ -96,7 +97,6 @@ struct ParachainCollators {
 /// Manages connected collators and role assignments from the perspective of a validator.
 pub struct CollatorPool {
 	collators: HashMap<AccountId, ParaId>,
-	bad_collators: Vec<AccountId>,
 	parachain_collators: HashMap<ParaId, ParachainCollators>,
 	collations: HashMap<(Hash, ParaId), CollationSlot>,
 }
@@ -106,7 +106,6 @@ impl CollatorPool {
 	pub fn new() -> Self {
 		CollatorPool {
 			collators: HashMap::new(),
-			bad_collators: Vec::new(),
 			parachain_collators: HashMap::new(),
 			collations: HashMap::new(),
 		}

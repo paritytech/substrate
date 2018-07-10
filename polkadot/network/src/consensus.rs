@@ -336,6 +336,6 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Collators for ConsensusNetwork
 	}
 
 	fn note_bad_collator(&self, collator: AccountId) {
-		self.network.with_spec(|spec, ctx| spec.disconnect_collator(ctx, collator));
+		self.network.with_spec(|spec, ctx| spec.disconnect_bad_collator(ctx, collator));
 	}
 }
