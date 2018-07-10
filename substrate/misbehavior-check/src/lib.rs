@@ -27,6 +27,8 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_bft;
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
+#[cfg(test)]
+extern crate rhododendron;
 
 use codec::Slicable;
 use primitives::{AuthorityId, Signature};
@@ -85,7 +87,6 @@ pub fn evaluate_misbehavior<B: Slicable, H: Slicable + Copy>(
 mod tests {
 	use super::*;
 
-	use substrate_bft::generic;
 	use keyring::ed25519;
 	use keyring::Keyring;
 
@@ -95,26 +96,26 @@ mod tests {
 
 	fn sign_prepare(key: &ed25519::Pair, round: u32, hash: H256, parent_hash: H256) -> (H256, Signature) {
 		let msg = substrate_bft::sign_message::<Block>(
-			generic::Message::Vote(generic::Vote::Prepare(round as _, hash)),
+			rhododendron::Message::Vote(rhododendron::Vote::Prepare(round as _, hash)),
 			key,
 			parent_hash
 		);
 
 		match msg {
-			generic::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
+			rhododendron::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
 			_ => panic!("signing vote leads to signed vote"),
 		}
 	}
 
 	fn sign_commit(key: &ed25519::Pair, round: u32, hash: H256, parent_hash: H256) -> (H256, Signature) {
 		let msg = substrate_bft::sign_message::<Block>(
-			generic::Message::Vote(generic::Vote::Commit(round as _, hash)),
+			rhododendron::Message::Vote(rhododendron::Vote::Commit(round as _, hash)),
 			key,
 			parent_hash
 		);
 
 		match msg {
-			generic::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
+			rhododendron::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
 			_ => panic!("signing vote leads to signed vote"),
 		}
 	}

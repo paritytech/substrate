@@ -38,6 +38,7 @@ extern crate ed25519;
 extern crate futures;
 extern crate parking_lot;
 extern crate tokio;
+extern crate rhododendron;
 
 #[macro_use]
 extern crate log;
@@ -392,8 +393,7 @@ impl Specialization<Block> for PolkadotProtocol {
 		let local_status = match Status::decode(&mut &status.chain_status[..]) {
 			Some(status) => status,
 			None => {
-				ctx.disable_peer(peer_id);
-				return;
+				Status { collating_for: None }
 			}
 		};
 

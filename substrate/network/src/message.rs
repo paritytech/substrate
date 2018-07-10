@@ -95,6 +95,8 @@ pub enum Role {
 	Light,
 	/// Parachain validator.
 	Authority,
+	/// Same as `Authority`
+	Validator,
 }
 
 impl Role {
@@ -105,7 +107,7 @@ impl Role {
 			match *r {
 				Role::Full => flags = flags | RoleFlags::FULL,
 				Role::Light => flags = flags | RoleFlags::LIGHT,
-				Role::Authority => flags = flags | RoleFlags::AUTHORITY,
+				Role::Authority | Role::Validator => flags = flags | RoleFlags::AUTHORITY,
 			}
 		}
 		flags
@@ -122,7 +124,7 @@ impl From<RoleFlags> for Vec<Role> where {
 			roles.push(Role::Light);
 		}
 		if !(flags & RoleFlags::AUTHORITY).is_empty() {
-			roles.push(Role::Authority);
+			roles.push(Role::Validator);
 		}
 		roles
 	}
@@ -371,7 +373,14 @@ pub mod generic {
 		/// Genesis block hash.
 		pub genesis_hash: Hash,
 		/// Chain-specific status.
+		#[serde(skip)]
 		pub chain_status: Vec<u8>,
+		/// Signatue of `best_hash` made with validator address. Required for the validator role.
+		pub validator_signature: Option<ed25519::Signature>,
+		/// Validator address. Required for the validator role.
+		pub validator_id: Option<AuthorityId>,
+		/// Parachain id. Required for the collator role.
+		pub parachain_id: Option<u64>,
 	}
 
 	/// Request block data from a peer.

@@ -2,12 +2,16 @@
 name = "polkadot-collator"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Abstract collation logic"
+description = "Collator node implementation"
 
 [dependencies]
 futures = "0.1.17"
+substrate-client = { path = "../../substrate/client" }
 substrate-codec = { path = "../../substrate/codec", version = "0.1" }
 substrate-primitives = { path = "../../substrate/primitives", version = "0.1" }
+polkadot-api = { path = "../api" }
 polkadot-runtime = { path = "../runtime", version = "0.1" }
 polkadot-primitives = { path = "../primitives", version = "0.1" }
-polkadot-parachain = { path = "../parachain", version = "0.1" }
+polkadot-cli = { path = "../cli" }
+log = "0.4"
+ed25519 = { path = "../../substrate/ed25519" }

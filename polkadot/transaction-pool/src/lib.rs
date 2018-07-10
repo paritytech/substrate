@@ -49,7 +49,7 @@ use extrinsic_pool::api::ExtrinsicPool;
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use runtime::{Address, UncheckedExtrinsic};
-use substrate_runtime_primitives::traits::{Bounded, Checkable, Hashing, BlakeTwo256};
+use substrate_runtime_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256};
 
 pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
