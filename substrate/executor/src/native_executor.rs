@@ -94,7 +94,7 @@ pub fn with_native_environment<F, U>(ext: &mut Externalities, f: F) -> Result<U>
 }
 
 /// Delegate for dispatching a CodeExecutor call to native code.
-pub trait NativeExecutionDispatch {
+pub trait NativeExecutionDispatch: Send + Sync {
 	/// Get the wasm code that the native dispatch will be equivalent to.
 	fn native_equivalent() -> &'static [u8];
 
@@ -109,12 +109,12 @@ pub trait NativeExecutionDispatch {
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
 #[derive(Debug)]
-pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
+pub struct NativeExecutor<D: NativeExecutionDispatch> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: ::std::marker::PhantomData<D>,
 }
 
-impl<D: NativeExecutionDispatch + Sync + Send> NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// Create new instance.
 	pub fn new() -> Self {
 		// FIXME: set this entry at compile time
@@ -128,7 +128,13 @@ impl<D: NativeExecutionDispatch + Sync + Send> NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch + Sync + Send> Clone for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> Default for NativeExecutor<D> {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	fn clone(&self) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
@@ -136,7 +142,7 @@ impl<D: NativeExecutionDispatch + Sync + Send> Clone for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch + Sync + Send> RuntimeInfo for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	const NATIVE_VERSION: Option<RuntimeVersion> = Some(D::VERSION);
 
 	fn runtime_version<E: Externalities>(
@@ -152,7 +158,7 @@ impl<D: NativeExecutionDispatch + Sync + Send> RuntimeInfo for NativeExecutor<D>
 	}
 }
 
-impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 	type Error = Error;
 
 	fn call<E: Externalities>(
