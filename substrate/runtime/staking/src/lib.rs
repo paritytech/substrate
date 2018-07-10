@@ -55,7 +55,7 @@ use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, AuxLookup, Hashing as HashingT, Member};
+	As, AuxLookup, Hash as HashT, Member};
 use address::Address as RawAddress;
 use double_map::StorageDoubleMap;
 
@@ -108,15 +108,15 @@ impl ContractAddressFor<u64> for DummyContractAddressFor {
 	}
 }
 
-impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
-	Hashing: HashingT,
-	AccountId: Sized + Slicable + From<Hashing::Output>,
-	Hashing::Output: Slicable
+impl<Hash, AccountId> ContractAddressFor<AccountId> for Hash where
+	Hash: HashT,
+	AccountId: Sized + Slicable + From<Hash::Output>,
+	Hash::Output: Slicable
 {
 	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId {
-		let mut dest_pre = Hashing::hash(code).encode();
+		let mut dest_pre = Hash::hash(code).encode();
 		origin.using_encoded(|s| dest_pre.extend(s));
-		AccountId::from(Hashing::hash(&dest_pre))
+		AccountId::from(Hash::hash(&dest_pre))
 	}
 }
 

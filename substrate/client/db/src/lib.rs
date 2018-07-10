@@ -50,7 +50,7 @@ use parking_lot::RwLock;
 use primitives::H256;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing, HashingFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, Zero};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
@@ -180,7 +180,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 
 	fn hash(&self, number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, client::error::Error> {
 		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
-			x.map(|raw| HashingFor::<Block>::hash(&raw[..])).map(Into::into)
+			x.map(|raw| HashFor::<Block>::hash(&raw[..])).map(Into::into)
 		)
 	}
 }
