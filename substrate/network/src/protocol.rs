@@ -38,7 +38,7 @@ use error;
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 
 /// Current protocol version.
-pub (crate) const CURRENT_VERSION: u32 = 1;
+pub (crate) const CURRENT_VERSION: u32 = 0;
 /// Current packet count.
 pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 
@@ -526,6 +526,10 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 				best_number: info.chain.best_number,
 				best_hash: info.chain.best_hash,
 				chain_status: self.specialization.read().status(),
+
+				parachain_id: None,
+				validator_id: None,
+				validator_signature: None,
 			};
 			self.send_message(io, peer_id, GenericMessage::Status(status))
 		}

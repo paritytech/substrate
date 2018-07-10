@@ -393,8 +393,7 @@ impl Specialization<Block> for PolkadotProtocol {
 		let local_status = match Status::decode(&mut &status.chain_status[..]) {
 			Some(status) => status,
 			None => {
-				ctx.disable_peer(peer_id);
-				return;
+				Status { collating_for: None }
 			}
 		};
 

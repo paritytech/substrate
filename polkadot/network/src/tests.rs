@@ -78,6 +78,9 @@ fn make_status(status: &Status, roles: Vec<Role>) -> FullStatus {
 		best_hash: Default::default(),
 		genesis_hash: Default::default(),
 		chain_status: status.encode(),
+		parachain_id: None,
+		validator_id: None,
+		validator_signature: None,
 	}
 }
 
