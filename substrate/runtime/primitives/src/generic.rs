@@ -109,9 +109,8 @@ where
 	ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
-	type Error = &'static str;
 
-	fn check_with(self, lookup: ThisLookup) -> Result<Self::Checked, (Self, Self::Error)> {
+	fn check_with(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str> {
 		if !self.is_signed() {
 			Ok(CheckedExtrinsic(Extrinsic {
 				signed: Default::default(),
@@ -121,17 +120,14 @@ where
 		} else {
 			let extrinsic: Extrinsic<AccountId, Index, Call>
 				= Extrinsic {
-					signed: match lookup(self.extrinsic.signed.clone()) {
-						Ok(success) => success,
-						Err(error) => return Err((self, error)),
-					},
-					index: self.extrinsic.index.clone(),
-					function: self.extrinsic.function.clone(),
+					signed: lookup(self.extrinsic.signed)?,
+					index: self.extrinsic.index,
+					function: self.extrinsic.function,
 				};
 			if ::verify_encoded_lazy(&self.signature, &extrinsic, &extrinsic.signed) {
 				Ok(CheckedExtrinsic(extrinsic))
 			} else {
-				Err((self, "bad signature in extrinsic"))
+				Err("bad signature in extrinsic")
 			}
 		}
 	}

@@ -376,11 +376,8 @@ pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 pub trait Checkable<Context>: Sized {
 	/// Returned if `check_with` succeeds.
 	type Checked;
-	/// Returned if `check_with` fails.
-	type Error;
 
-	/// Gives back ownership of unchanged `self` in case of an error.
-	fn check_with(self, context: Context) -> Result<Self::Checked, (Self, Self::Error)>;
+	fn check_with(self, context: Context) -> Result<Self::Checked, &'static str>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -390,18 +387,14 @@ pub trait Checkable<Context>: Sized {
 pub trait BlindCheckable: Sized {
 	/// Returned if `check` succeeds.
 	type Checked;
-	/// Returned if `check` fails.
-	type Error;
 
-	/// Gives back ownership of unchanged `self` in case of an error.
-	fn check(self) -> Result<Self::Checked, (Self, Self::Error)>;
+	fn check(self) -> Result<Self::Checked, &'static str>;
 }
 
 // Every `BlindCheckable` is also a `Checkable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
-	type Error = T::Error;
-	fn check_with(self, _: Context) -> Result<Self::Checked, (Self, Self::Error)> {
+	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> {
 		BlindCheckable::check(self)
 	}
 }

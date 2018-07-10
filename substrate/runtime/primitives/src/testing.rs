@@ -158,9 +158,8 @@ impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + Deseri
 	}
 }
 impl<Call: Slicable + Sync + Send + Serialize + AuxDispatchable, Context> Checkable<Context> for TestXt<Call> {
-	type Error = ();
 	type Checked = Self;
-	fn check_with(self, _: Context) -> Result<Self::Checked, (Self, ())> { Ok(self) }
+	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
 impl<Call: AuxDispatchable<Aux = u64> + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
 	type AccountId = u64;
