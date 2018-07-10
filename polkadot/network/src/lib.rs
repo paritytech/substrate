@@ -43,7 +43,7 @@ extern crate rhododendron;
 #[macro_use]
 extern crate log;
 
-mod collators;
+mod collator_pool;
 mod router;
 pub mod consensus;
 
@@ -51,14 +51,14 @@ use codec::Slicable;
 use futures::sync::oneshot;
 use parking_lot::Mutex;
 use polkadot_consensus::{Statement, SignedStatement, GenericStatement};
-use polkadot_primitives::{Block, SessionKey, Hash};
-use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::{AccountId, Block, SessionKey, Hash};
+use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt, Collation};
 use substrate_network::{PeerId, RequestId, Context};
 use substrate_network::consensus_gossip::ConsensusGossip;
 use substrate_network::{message, generic_message};
 use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
-use self::collators::Collators;
+use self::collator_pool::CollatorPool;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -199,6 +199,8 @@ pub enum Message {
 	RequestBlockData(RequestId, Hash),
 	/// Provide block data by candidate hash or nothing if unknown.
 	BlockData(RequestId, Option<BlockData>),
+	/// A collation provided by a peer. Relay parent and collation.
+	Collation(Hash, Collation),
 }
 
 fn send_polkadot_message(ctx: &mut Context<Block>, to: PeerId, message: Message) {
@@ -210,7 +212,7 @@ fn send_polkadot_message(ctx: &mut Context<Block>, to: PeerId, message: Message)
 pub struct PolkadotProtocol {
 	peers: HashMap<PeerId, PeerInfo>,
 	consensus_gossip: ConsensusGossip<Block>,
-	collators: Collators,
+	collators: CollatorPool,
 	live_consensus: Option<CurrentConsensus>,
 	in_flight: HashMap<(RequestId, PeerId), BlockDataRequest>,
 	pending: Vec<BlockDataRequest>,
@@ -223,7 +225,7 @@ impl PolkadotProtocol {
 		PolkadotProtocol {
 			peers: HashMap::new(),
 			consensus_gossip: ConsensusGossip::new(),
-			collators: Collators::new(),
+			collators: CollatorPool::new(),
 			live_consensus: None,
 			in_flight: HashMap::new(),
 			pending: Vec::new(),
@@ -364,6 +366,7 @@ impl PolkadotProtocol {
 				send_polkadot_message(ctx, peer_id, Message::BlockData(req_id, block_data));
 			}
 			Message::BlockData(req_id, data) => self.on_block_data(ctx, peer_id, req_id, data),
+			Message::Collation(relay_parent, collation) => self.on_collation(ctx, peer_id, relay_parent, collation),
 		}
 	}
 
@@ -387,7 +390,7 @@ impl PolkadotProtocol {
 
 impl Specialization<Block> for PolkadotProtocol {
 	fn status(&self) -> Vec<u8> {
-		Status { collating_for: self.collating_for.clone() }.encode()
+		Status { collating_for: None }.encode()
 	}
 
 	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, status: FullStatus) {
@@ -485,5 +488,27 @@ impl Specialization<Block> for PolkadotProtocol {
 	fn maintain_peers(&mut self, ctx: &mut Context<Block>) {
 		self.consensus_gossip.collect_garbage(None);
 		self.dispatch_pending_requests(ctx);
+	}
+}
+
+impl PolkadotProtocol {
+	// we received a collation from a peer
+	fn on_collation(&mut self, ctx: &mut Context<Block>, from: PeerId, relay_parent: Hash, collation: Collation) {
+		let collation_para = collation.receipt.parachain_index;
+		let collated_acc = collation.receipt.collator;
+
+		match self.peers.get(&from) {
+			None => ctx.disconnect_peer(from),
+			Some(peer_info) => match peer_info.status.collating_for {
+				None => ctx.disable_peer(from),
+				Some((ref acc_id, ref para_id))
+					if para_id != &collation_para || acc_id != &collated_acc || collation.receipt.check_signature().is_err() => ctx.disable_peer(from),
+				Some((ref acc_id, _)) => self.collators.on_collation(acc_id.clone(), relay_parent, collation),
+			},
+		}
+	}
+
+	fn await_collation(&mut self, relay_parent: Hash, para_id: ParaId, sender: oneshot::Sender<Collation>) {
+		self.collators.await_collation(relay_parent, para_id, sender);
 	}
 }
