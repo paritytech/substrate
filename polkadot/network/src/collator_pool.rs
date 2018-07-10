@@ -134,7 +134,7 @@ impl CollatorPool {
 
 	/// Called when a collator disconnects. If it was the primary, returns a new primary for that
 	/// parachain.
-	pub fn on_disconnect(&mut self, account_id: AccountId) -> Option<(AccountId, ParaId)> {
+	pub fn on_disconnect(&mut self, account_id: AccountId) -> Option<AccountId> {
 		self.collators.remove(&account_id).and_then(|para_id| match self.parachain_collators.entry(para_id) {
 			Entry::Vacant(_) => None,
 			Entry::Occupied(mut occ) => {
@@ -145,7 +145,7 @@ impl CollatorPool {
 					} else {
 						let mut collators = occ.get_mut();
 						collators.primary = collators.backup.pop().expect("backup non-empty; qed");
-						Some((collators.primary, para_id))
+						Some(collators.primary)
 					}
 				} else {
 					None
@@ -179,24 +179,8 @@ impl CollatorPool {
 	/// Call periodically to perform collator set maintenance.
 	/// Returns a set of actions to perform on the network level.
 	pub fn maintain_peers(&mut self) -> Vec<Action> {
-		// get rid of all bad peers.
-		let mut actions = Vec::new();
-		let bad = ::std::mem::replace(&mut self.bad_collators, Vec::new());
-		for account in bad {
-			actions.push(Action::Disconnect(account));
-			if let Some((new_primary, _)) = self.on_disconnect(account) {
-				actions.push(Action::NewRole(new_primary, Role::Primary));
-			}
-		}
-
-		// TODO: put underperforming collators on the back-burner.
-
-		actions
-	}
-
-	/// Note a bad collator.
-	pub fn note_bad(&mut self, collator: AccountId) {
-		self.bad_collators.push(collator);
+		// TODO: rearrange periodically to new primary, evaluate based on latency etc.
+		Vec::new()
 	}
 }
 
@@ -208,7 +192,7 @@ mod tests {
 	use futures::Future;
 
 	#[test]
-	fn note_bad_primary_gives_new_primary() {
+	fn disconnect_primary_gives_new_primary() {
 		let mut pool = CollatorPool::new();
 		let para_id: ParaId = 5.into();
 		let bad_primary = [0; 32].into();
@@ -216,13 +200,8 @@ mod tests {
 
 		assert_eq!(pool.on_new_collator(bad_primary, para_id.clone()), Role::Primary);
 		assert_eq!(pool.on_new_collator(good_backup, para_id.clone()), Role::Backup);
-
-		pool.note_bad(bad_primary);
-
-		assert_eq!(pool.maintain_peers(), vec![
-			Action::Disconnect(bad_primary),
-			Action::NewRole(good_backup, Role::Primary),
-		]);
+		assert_eq!(pool.on_disconnect(bad_primary), Some(good_backup));
+		assert_eq!(pool.on_disconnect(good_backup), None);
 	}
 
 	#[test]
