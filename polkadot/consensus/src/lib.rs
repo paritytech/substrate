@@ -661,7 +661,7 @@ pub struct CreateProposal<C: PolkadotApi>  {
 impl<C> CreateProposal<C> where C: PolkadotApi {
 	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<Block, Error> {
 		use polkadot_api::BlockBuilder;
-		use runtime_primitives::traits::{Hashing, BlakeTwo256};
+		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();

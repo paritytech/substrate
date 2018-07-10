@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use serde_json;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing, HashingFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor};
 use runtime_primitives::generic::BlockId;
 use network::PeerId;
 
@@ -631,5 +631,5 @@ fn send_message<B: BlockT>(peers: &RwLock<HashMap<PeerId, Peer<B>>>, io: &mut Sy
 /// Hash a message.
 pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
 	let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
-	HashingFor::<B>::hash(&data)
+	HashFor::<B>::hash(&data)
 }

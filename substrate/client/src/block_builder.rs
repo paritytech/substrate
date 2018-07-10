@@ -19,7 +19,7 @@
 use std::vec::Vec;
 use codec::Slicable;
 use state_machine;
-use runtime_primitives::traits::{Header as HeaderT, Hashing as HashingT, Block as BlockT, One, HashingFor};
+use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
 use runtime_primitives::generic::BlockId;
 use {backend, error, Client, CallExecutor};
 
@@ -109,7 +109,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),
-			HashingFor::<Block>::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode)),
+			HashFor::<Block>::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode)),
 		);
 
 		Ok(<Block as BlockT>::new(self.header, self.extrinsics))

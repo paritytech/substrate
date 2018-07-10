@@ -86,7 +86,7 @@ impl<B, E, Block> StateApi<Block::Hash> for Arc<Client<B, E, Block>> where
 	}
 
 	fn storage_hash_at(&self, key: StorageKey, block: Block::Hash) -> Result<Block::Hash> {
-		use runtime_primitives::traits::{Hashing, Header as HeaderT};
+		use runtime_primitives::traits::{Hash, Header as HeaderT};
 		self.storage_at(key, block).map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0))
 	}
 
