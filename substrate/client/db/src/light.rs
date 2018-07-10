@@ -28,7 +28,7 @@ use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::Slicable;
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing, HashingFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, Zero};
 use utils::{meta_keys, Meta, db_err, number_to_db_key, open_database, read_db, read_id, read_meta};
 use DatabaseSettings;
 
@@ -132,7 +132,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
 		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
-			x.map(|raw| HashingFor::<Block>::hash(&raw[..])).map(Into::into)
+			x.map(|raw| HashFor::<Block>::hash(&raw[..])).map(Into::into)
 		)
 	}
 }

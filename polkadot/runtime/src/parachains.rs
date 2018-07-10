@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use codec::Slicable;
 
-use runtime_primitives::traits::{Hashing, BlakeTwo256, Executable, RefInto, MaybeEmpty};
+use runtime_primitives::traits::{Hash, BlakeTwo256, Executable, RefInto, MaybeEmpty};
 use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
 use {system, session};
 

@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::traits::{Executable, RefInto, Hashing};
+use primitives::traits::{Executable, RefInto, Hash};
 use runtime_io::print;
 use substrate_runtime_support::dispatch::Result;
 use substrate_runtime_support::{StorageValue, StorageMap, IsSubType};
