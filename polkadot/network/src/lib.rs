@@ -51,7 +51,7 @@ use codec::Slicable;
 use futures::sync::oneshot;
 use parking_lot::Mutex;
 use polkadot_consensus::{Statement, SignedStatement, GenericStatement};
-use polkadot_primitives::{AccountId, Block, SessionKey, Hash};
+use polkadot_primitives::{AccountId, Block, SessionKey, Hash, Header};
 use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic, CandidateReceipt, Collation};
 use substrate_network::{PeerId, RequestId, Context};
 use substrate_network::consensus_gossip::ConsensusGossip;
@@ -509,6 +509,7 @@ impl Specialization<Block> for PolkadotProtocol {
 
 	fn maintain_peers(&mut self, ctx: &mut Context<Block>) {
 		self.consensus_gossip.collect_garbage(None);
+		self.collators.collect_garbage(None);
 		self.dispatch_pending_requests(ctx);
 
 		for collator_action in self.collators.maintain_peers() {
@@ -523,6 +524,10 @@ impl Specialization<Block> for PolkadotProtocol {
 				},
 			}
 		}
+	}
+
+	fn on_block_imported(&mut self, _ctx: &mut Context<Block>, hash: Hash, _header: &Header) {
+		self.collators.collect_garbage(Some(&hash));
 	}
 }
 

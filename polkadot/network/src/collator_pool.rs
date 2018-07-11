@@ -22,6 +22,9 @@ use polkadot_primitives::parachain::{Id as ParaId, Collation};
 use futures::sync::oneshot;
 
 use std::collections::hash_map::{HashMap, Entry};
+use std::time::{Duration, Instant};
+
+const COLLATION_LIFETIME: Duration = Duration::from_secs(60 * 5);
 
 /// The role of the collator. Whether they're the primary or backup for this parachain.
 #[derive(PartialEq, Debug, Serialize, Deserialize)]
@@ -42,7 +45,25 @@ pub enum Action {
 	NewRole(AccountId, Role),
 }
 
-enum CollationSlot {
+struct CollationSlot {
+	live_at: Instant,
+	entries: SlotEntries,
+}
+
+impl CollationSlot {
+	fn blank_now() -> Self {
+		CollationSlot {
+			live_at: Instant::now(),
+			entries: SlotEntries::Blank,
+		}
+	}
+
+	fn stay_alive(&self, now: Instant) -> bool {
+		self.live_at + COLLATION_LIFETIME > now
+	}
+}
+
+enum SlotEntries {
 	Blank,
 	// not queried yet
 	Pending(Vec<Collation>),
@@ -50,39 +71,39 @@ enum CollationSlot {
 	Awaiting(Vec<oneshot::Sender<Collation>>),
 }
 
-impl CollationSlot {
+impl SlotEntries {
 	fn received_collation(&mut self, collation: Collation) {
-		*self = match ::std::mem::replace(self, CollationSlot::Blank) {
-			CollationSlot::Blank => CollationSlot::Pending(vec![collation]),
-			CollationSlot::Pending(mut cs) => {
+		*self = match ::std::mem::replace(self, SlotEntries::Blank) {
+			SlotEntries::Blank => SlotEntries::Pending(vec![collation]),
+			SlotEntries::Pending(mut cs) => {
 				cs.push(collation);
-				CollationSlot::Pending(cs)
+				SlotEntries::Pending(cs)
 			}
-			CollationSlot::Awaiting(senders) => {
+			SlotEntries::Awaiting(senders) => {
 				for sender in senders {
 					let _ = sender.send(collation.clone());
 				}
 
-				CollationSlot::Blank
+				SlotEntries::Blank
 			}
 		};
 	}
 
 	fn await_with(&mut self, sender: oneshot::Sender<Collation>) {
-		*self = match ::std::mem::replace(self, CollationSlot::Blank) {
-			CollationSlot::Blank => CollationSlot::Awaiting(vec![sender]),
-			CollationSlot::Awaiting(mut senders) => {
+		*self = match ::std::mem::replace(self, SlotEntries::Blank) {
+			SlotEntries::Blank => SlotEntries::Awaiting(vec![sender]),
+			SlotEntries::Awaiting(mut senders) => {
 				senders.push(sender);
-				CollationSlot::Awaiting(senders)
+				SlotEntries::Awaiting(senders)
 			}
-			CollationSlot::Pending(mut cs) => {
+			SlotEntries::Pending(mut cs) => {
 				let next_collation = cs.pop().expect("empty variant is always `Blank`; qed");
 				let _ = sender.send(next_collation);
 
 				if cs.is_empty() {
-					CollationSlot::Blank
+					SlotEntries::Blank
 				} else {
-					CollationSlot::Pending(cs)
+					SlotEntries::Pending(cs)
 				}
 			}
 		};
@@ -163,7 +184,8 @@ impl CollatorPool {
 			// TODO: punish if not primary?
 
 			self.collations.entry((relay_parent, para_id.clone()))
-				.or_insert_with(|| CollationSlot::Blank)
+				.or_insert_with(CollationSlot::blank_now)
+				.entries
 				.received_collation(collation);
 		}
 	}
@@ -171,7 +193,8 @@ impl CollatorPool {
 	/// Wait for a collation from a parachain.
 	pub fn await_collation(&mut self, relay_parent: Hash, para_id: ParaId, sender: oneshot::Sender<Collation>) {
 		self.collations.entry((relay_parent, para_id))
-			.or_insert_with(|| CollationSlot::Blank)
+			.or_insert_with(CollationSlot::blank_now)
+			.entries
 			.await_with(sender);
 	}
 
@@ -180,6 +203,12 @@ impl CollatorPool {
 	pub fn maintain_peers(&mut self) -> Vec<Action> {
 		// TODO: rearrange periodically to new primary, evaluate based on latency etc.
 		Vec::new()
+	}
+
+	/// called when a block with given hash has been imported.
+	pub fn collect_garbage(&mut self, chain_head: Option<&Hash>) {
+		let now = Instant::now();
+		self.collations.retain(|&(ref h, _), slot| chain_head != Some(h) && slot.stay_alive(now));
 	}
 }
 
@@ -259,5 +288,16 @@ mod tests {
 		let (tx, rx) = oneshot::channel();
 		pool.await_collation(relay_parent, para_id, tx);
 		rx.wait().unwrap();
+	}
+
+	#[test]
+	fn slot_stay_alive() {
+		let slot = CollationSlot::blank_now();
+		let now = slot.live_at;
+
+		assert!(slot.stay_alive(now));
+		assert!(slot.stay_alive(now + Duration::from_secs(10)));
+		assert!(!slot.stay_alive(now + COLLATION_LIFETIME));
+		assert!(!slot.stay_alive(now + COLLATION_LIFETIME + Duration::from_secs(10)));
 	}
 }
