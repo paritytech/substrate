@@ -55,13 +55,16 @@ extern crate wabt;
 
 mod double_map;
 mod vm;
+mod account_db;
 
 // TODO: Remove this
 pub use vm::execute;
 pub use vm::Ext;
 
 use double_map::StorageDoubleMap;
+use account_db::{AccountDb, OverlayAccountDb};
 
+use runtime_support::StorageMap;
 use runtime_primitives::traits::{MaybeEmpty, RefInto};
 use runtime_support::dispatch::Result;
 
@@ -105,46 +108,67 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 	type Value = Vec<u8>;
 }
 
-struct ExecutionContext<T: Trait> {
-	_marker: ::rstd::marker::PhantomData<T>,
-	gas_price: u64,
+struct TransactionData {
+	// tx_origin
+	// tx_gas_price
+	// block_number
+	// timestamp
+	// etc
 }
 
-impl<T: Trait> ExecutionContext<T> {
+struct ExecutionContext<'a, T: Trait + 'a> {
+	// aux for the first transaction.
+	_caller: T::AccountId,
+	// typically should be dest
+	self_account: T::AccountId,
+	account_db: &'a mut OverlayAccountDb<'a, T>,
+	gas_price: u64,
+	depth: usize,
+}
+
+impl<'a, T: Trait> ExecutionContext<'a, T> {
 	/// Make a call to the specified address.
 	fn call(
 		&mut self,
 		dest: T::AccountId,
 		value: T::Balance,
-		gas_price: u64,
 		gas_limit: u64,
 		data: Vec<u8>,
-	) {
+	) -> Result {
+		let dest_code = <CodeOf<T>>::get(&dest);
 
+		let mut overlay = OverlayAccountDb::new(self.account_db);
+
+		// TODO: transfer value using `overlay`. Return an error if failed.
+
+		if !dest_code.is_empty() {
+			let mut nested = ExecutionContext {
+				account_db: &mut overlay,
+				_caller: self.self_account.clone(),
+				self_account: dest.clone(),
+				gas_price: self.gas_price,
+				depth: self.depth + 1,
+			};
+
+			vm::execute(&dest_code, &mut nested, gas_limit).unwrap();
+		}
+
+		Ok(())
 	}
+
+	// TODO: fn create
 }
 
-/// Call externalities provide an interface for the VM
-/// to interact with and query the state.
-///
-/// Should be able to create `ExecutionContext` since it can be used for nested
-/// calls.
-struct CallExternalities<T: Trait> {
-	self_account_id: T::AccountId,
-	_marker: ::rstd::marker::PhantomData<T>,
-}
-
-impl<T: Trait> Ext for CallExternalities<T> {
+impl<'a, T: Trait + 'a> vm::Ext for ExecutionContext<'a, T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		panic!()
+		self.account_db.get_storage(&self.self_account, key)
 	}
 
-	/// Sets the storage entry by the given key to the specified value.
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
-		panic!()
+		self.account_db.set_storage(&self.self_account, key.to_vec(), value)
 	}
 
 	fn create(&mut self, code: &[u8], value: Self::Balance) {
@@ -152,107 +176,16 @@ impl<T: Trait> Ext for CallExternalities<T> {
 	}
 
 	fn call(&mut self, to: &Self::AccountId, value: Self::Balance) {
-		// TODO: check call depth.
-		// TODO: calculate how much gas is available
-		panic!()
-	}
-}
+		// TODO: Pass these thru parameters
+		let mut gas_limit = 100_000;
+		let data = Vec::new();
 
-struct Account<T: Trait> {
-	code: Option<Vec<u8>>,
-	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
-	balance: Option<staking::ChangeEntry<T>>,
-}
-
-impl<T: Trait> Default for Account<T> {
-	fn default() -> Account<T> {
-		Account {
-			code: None,
-			storage: BTreeMap::new(),
-			balance: None,
-		}
-	}
-}
-
-struct AccountDb<T: Trait> {
-	/// Current world state view.
-	///
-	/// If the account db is flushed, then all entries will be
-	/// written into the db.
-	world_state: BTreeMap<T::AccountId, Account<T>>,
-	backups: Vec<BTreeMap<T::AccountId, Account<T>>>,
-}
-
-impl<T: Trait> AccountDb<T> {
-	fn new() -> AccountDb<T> {
-		AccountDb {
-			world_state: BTreeMap::new(),
-			backups: Vec::new(),
-		}
-	}
-
-	fn set_storage(&mut self, account_id: &T::AccountId, key: Vec<u8>, value: Option<Vec<u8>>) {
-		let account = self.world_state
-			.entry(account_id.clone())
-			.or_insert_with(Default::default);
-		let prev_value = account.storage.insert(key.clone(), value);
-
-		// Preserve the old value in the current active backup. If we need
-		// to revert the storage to the checkpoint, we will take all saved `prev_value`s
-		// and copy them into the cache.
-		let backup_account = self.backups
-			.last_mut()
-			.expect("backups is always non-empty; qed")
-			.entry(account_id.clone())
-			.or_insert_with(Default::default);
-
-		// 1. предыдущего значения не было в кеше! Тем не менее это не означает что значения не было
-		// в базе данных.
-		// 2. что если оно установлено в None. Это значит значит что предыдущая запись удаляла заданный ключ.
-		// Значит при восстановлении бекапа нужно вернуть все как было данного бекапа.
-		match backup_account.storage.entry(key.clone()) {
-			Entry::Occupied(_) => {
-				// We already backed up the original key. Do nothing.
-			}
-			Entry::Vacant(ref mut v) => {
-				
-			}
-		}
-	}
-
-	fn get_storage(&mut self, account_id: T::AccountId, key: Vec<u8>) -> Option<Vec<u8>> {
-		let account = self.world_state
-			.entry(account_id.clone())
-			.or_insert_with(Default::default);
-
-		account
-			.storage
-			.entry(key.clone())
-			.or_insert_with(|| <StorageOf<T>>::get(account_id, key))
-			.clone()
-	}
-
-	/// Mark a checkpoint. The next call to [`revert`] will return
-	/// the storage to the state at this checkpoint.
-	///
-	/// [`revert`]: #method.revert
-	fn checkpoint(&mut self) {}
-
-	/// Fix the changes made since the latest checkpoint.
-	///
-	/// This will pop checkpoint.
-	///
-	/// # Panics
-	///
-	/// Panics if there is no checkpoints left.
-	fn commit(&mut self) {}
-
-	/// Reset the state to
-	fn revert(&mut self) {}
-
-	/// Flush the current state of the account db into the persistent storage.
-	fn flush(self) {
-		for (account_id, account) in self.world_state {}
+		let result = self.call(
+			to.clone(),
+			value,
+			gas_limit,
+			data,
+		);
 	}
 }
 
@@ -266,14 +199,34 @@ impl<T: Trait> Module<T> {
 		data: Vec<u8>,
 	) -> Result {
 		// TODO: an additional fee, based upon gaslimit/gasprice.
+		// This fee should be taken in any way and not reverted.
 
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
 
-		// TODO: Get code and runtime::execute it.
-		let account_db = AccountDb::<T>::new();
+		let aux = aux.ref_into();
 
-		account_db.flush();
+		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
+
+		let mut ctx = ExecutionContext {
+			// TODO: fuck
+			_caller: aux.clone(),
+			self_account: aux.clone(),
+			gas_price,
+			depth: 0,
+			account_db: &mut overlay,
+		};
+
+		ctx.call(
+			dest,
+			value,
+			gas_limit,
+			data,
+		);
+
+		// TODO: commit changes from `overlay` to DirectAccountDb.
+		// TODO: finalization: refund `gas_left`.
+
 		Ok(())
 	}
 }

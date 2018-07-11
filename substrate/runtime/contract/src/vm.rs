@@ -475,7 +475,7 @@ mod tests {
 				}
 			);
 		}
-		fn transfer(&mut self, to: &Self::AccountId, value: Self::Balance) {
+		fn call(&mut self, to: &Self::AccountId, value: Self::Balance) {
 			self.transfers.push(
 				TransferEntry {
 					to: *to,
