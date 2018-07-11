@@ -45,7 +45,7 @@ impl Heap {
 	/// This could mean that wasm binary specifies memory
 	/// limit and we are trying to allocate beyond that limit.
 	fn new(memory: &MemoryRef) -> Result<Self> {
-		const HEAP_SIZE_IN_PAGES: usize = 8;
+		const HEAP_SIZE_IN_PAGES: usize = 32;
 
 		let prev_page_count = memory
 			.grow(Pages(HEAP_SIZE_IN_PAGES))
