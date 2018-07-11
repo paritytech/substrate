@@ -14,8 +14,13 @@ parking_lot = "0.4"
 substrate-primitives = { path = "../primitives", version = "0.1.0" }
 
 hashdb = { git = "https://github.com/paritytech/parity-common" }
-keccak-hasher = { git = "https://github.com/paritytech/parity-common" }
 memorydb = { git = "https://github.com/paritytech/parity-common" }
 patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 triehash = { git = "https://github.com/paritytech/parity-common" }
 rlp = { git = "https://github.com/paritytech/parity-common" }
+
+[dev-dependencies]
+# We need `KeccakHasher` from here
+keccak-hasher = { git = "https://github.com/paritytech/parity" }
+# We need `RlpCodec` from here
+patricia-trie-ethereum = { git = "https://github.com/paritytech/parity" }

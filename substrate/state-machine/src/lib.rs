@@ -32,6 +32,8 @@ extern crate patricia_trie;
 extern crate byteorder;
 extern crate parking_lot;
 extern crate rlp;
+#[cfg(test)] extern crate keccak_hasher;
+#[cfg(test)] extern crate patricia_trie_ethereum as ethtrie;
 
 use std::collections::HashMap;
 use std::collections::hash_map::Drain;
@@ -267,13 +269,16 @@ mod tests {
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
+	use keccak_hasher::KeccakHasher;
+	use ethtrie::RlpCodec;
+	use ethereum_types::H256;
 
 	struct DummyCodeExecutor;
 
-	impl CodeExecutor for DummyCodeExecutor {
+	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<E: Externalities>(
+		fn call<E: Externalities<H>>(
 			&self,
 			ext: &mut E,
 			_code: &[u8],
@@ -326,7 +331,7 @@ mod tests {
 			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
 			b"doug".to_vec() => b"notadog".to_vec()
 		];
-		let backend = InMemory::from(initial);
+		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"dog".to_vec() => Some(b"puppy".to_vec()),
@@ -340,7 +345,7 @@ mod tests {
 		};
 		let mut ext = Ext::new(&mut overlay, &backend);
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
-		assert_eq!(ext.storage_root(), ROOT);
+		assert_eq!(ext.storage_root(), H256(ROOT));
 	}
 
 	#[test]
@@ -358,7 +363,7 @@ mod tests {
 			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
 
 		// check proof locally
-		let (local_result, _) = execution_proof_check(remote_root, remote_proof,
+		let (local_result, _) = execution_proof_check::<KeccakHasher, RlpCodec,_,>(remote_root, remote_proof,
 			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
 
 		// check that both results are correct

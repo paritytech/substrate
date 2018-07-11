@@ -93,7 +93,7 @@ where
 }
 
 #[cfg(test)]
-impl<'a, B: 'a + Backend> Ext<'a, B> {
+impl<'a, H: Hasher, C: NodeCodec<H>, B: 'a + Backend<H, C>> Ext<'a, H, C, B> {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		use std::collections::HashMap;
 

@@ -22,24 +22,35 @@ use super::Externalities;
 use triehash::trie_root;
 use hashdb::Hasher;
 use rlp::Encodable;
+use std::marker::PhantomData;
 
-/// Simple HashMap based Externalities impl.
-pub type TestExternalities = HashMap<Vec<u8>, Vec<u8>>;
+/// Simple HashMap-based Externalities impl.
+pub struct TestExternalities<H> {
+	inner: HashMap<Vec<u8>, Vec<u8>>,
+	hasher: PhantomData<H>,
+}
 
-impl<H: Hasher> Externalities<H> for TestExternalities where H::Out: Ord + Encodable {
+impl<H: Hasher> TestExternalities<H> {
+	#[cfg(test)]
+	fn new() -> Self {
+		TestExternalities {inner: HashMap::new(), hasher: PhantomData}
+	}
+}
+
+impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + Encodable {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.get(key).map(|x| x.to_vec())
+		self.inner.get(key).map(|x| x.to_vec())
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		match maybe_value {
-			Some(value) => { self.insert(key, value); }
-			None => { self.remove(&key); }
+			Some(value) => { self.inner.insert(key, value); }
+			None => { self.inner.remove(&key); }
 		}
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.retain(|key, _|
+		self.inner.retain(|key, _|
 			!key.starts_with(prefix)
 		)
 	}
@@ -47,21 +58,23 @@ impl<H: Hasher> Externalities<H> for TestExternalities where H::Out: Ord + Encod
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
-		trie_root::<H, _, _, _>(self.clone())
+		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use keccak_hasher::KeccakHasher;
+	use ethereum_types::H256;
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext = TestExternalities::new();
+		let mut ext = TestExternalities::<KeccakHasher>::new();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
-		assert_eq!(ext.storage_root(), ROOT);
+		assert_eq!(ext.storage_root(), H256(ROOT));
 	}
 }
