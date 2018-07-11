@@ -60,7 +60,7 @@ impl<H: Hasher, C: NodeCodec<H>> TrieBackend<H, C> {
 	pub fn with_storage_for_genesis(db: Arc<Storage<H>>) -> Self {
 		let mut root = <H as Hasher>::Out::default();
 		let mut mdb = MemoryDB::<H>::new();
-		TrieDBMut::new(&mut mdb, &mut root);
+		TrieDBMut::<H, C>::new(&mut mdb, &mut root);
 
 		Self::with_storage(db, root)
 	}
@@ -98,9 +98,10 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
 		};
 
 		// TODO: this is probably wrong too
-		let map_e = |e: Box<TrieError<H::Out, Self::Error>>| format!("Trie lookup error: {}", e);
+		// let map_e = |e: Box<TrieError<H::Out, Self::Error>>| format!("Trie lookup error: {}", e);
+		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		TrieDB::new(&eph, &self.root).map_err(map_e)?
+		TrieDB::<H, C>::new(&eph, &self.root).map_err(map_e)?
 			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
 
@@ -112,11 +113,16 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
 		};
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out, Self::Error>>> {
-			let trie = TrieDB::new(&eph, &self.root)?;
-			let mut iter = trie.iter()?;
-			iter.seek(prefix)?;
+			// TODO: zomg errors
+			// let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
+			let trie = TrieDB::<H, C>::new(&eph, &self.root).unwrap();
+			// let mut iter = trie.iter()?;
+			let mut iter = trie.iter().unwrap();
+			// iter.seek(prefix)?;
+			iter.seek(prefix).unwrap();
 			for x in iter {
-				let (key, _) = x?;
+				// let (key, _) = x?;
+				let (key, _) = x.unwrap();
 				if !key.starts_with(prefix) {
 					break;
 				}
@@ -139,10 +145,14 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
 		};
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out, Self::Error>>> {
-			let trie = TrieDB::new(&eph, &self.root)?;
+			// TODO: zomg errors
+			// let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
+			let trie = TrieDB::<H, C>::new(&eph, &self.root).unwrap();
 			let mut v = Vec::new();
-			for x in trie.iter()? {
-				let (key, value) = x?;
+			// for x in trie.iter()? {
+			for x in trie.iter().unwrap() {
+				// let (key, value) = x?;
+				let (key, value) = x.unwrap();
 				v.push((key.to_vec(), value.to_vec()));
 			}
 
@@ -169,7 +179,7 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
 				overlay: &mut write_overlay,
 			};
 
-			let mut trie = TrieDBMut::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
+			let mut trie = TrieDBMut::<H, C>::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
 			for (key, change) in delta {
 				let result = match change {
 					Some(val) => trie.insert(&key, &val),
