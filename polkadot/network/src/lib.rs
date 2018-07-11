@@ -422,6 +422,8 @@ impl Specialization<Block> for PolkadotProtocol {
 		}
 
 		let validator = status.roles.iter().any(|r| *r == message::Role::Authority);
+		let send_key = validator || local_status.collating_for.is_some();
+
 		self.peers.insert(peer_id, PeerInfo {
 			status: local_status,
 			session_keys: Default::default(),
@@ -429,8 +431,7 @@ impl Specialization<Block> for PolkadotProtocol {
 		});
 
 		self.consensus_gossip.new_peer(ctx, peer_id, &status.roles);
-
-		if let (true, &Some(ref consensus)) = (validator, &self.live_consensus) {
+		if let (true, &Some(ref consensus)) = (send_key, &self.live_consensus) {
 			send_polkadot_message(
 				ctx,
 				peer_id,

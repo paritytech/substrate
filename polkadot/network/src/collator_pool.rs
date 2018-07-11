@@ -211,8 +211,10 @@ mod tests {
 		let relay_parent = [1; 32].into();
 
 		assert_eq!(pool.on_new_collator(primary, para_id.clone()), Role::Primary);
-		let (tx, rx) = oneshot::channel();
-		pool.await_collation(relay_parent, para_id, tx);
+		let (tx1, rx1) = oneshot::channel();
+		let (tx2, rx2) = oneshot::channel();
+		pool.await_collation(relay_parent, para_id, tx1);
+		pool.await_collation(relay_parent, para_id, tx2);
 		pool.on_collation(primary, relay_parent, Collation {
 			receipt: CandidateReceipt {
 				parachain_index: para_id,
@@ -227,6 +229,35 @@ mod tests {
 			block_data: BlockData(vec![4, 5, 6]),
 		});
 
+		rx1.wait().unwrap();
+		rx2.wait().unwrap();
+	}
+
+	#[test]
+	fn collate_before_await() {
+		let mut pool = CollatorPool::new();
+		let para_id: ParaId = 5.into();
+		let primary = [0; 32].into();
+		let relay_parent = [1; 32].into();
+
+		assert_eq!(pool.on_new_collator(primary, para_id.clone()), Role::Primary);
+
+		pool.on_collation(primary, relay_parent, Collation {
+			receipt: CandidateReceipt {
+				parachain_index: para_id,
+				collator: primary.into(),
+				signature: H512::from([2; 64]).into(),
+				head_data: HeadData(vec![1, 2, 3]),
+				balance_uploads: vec![],
+				egress_queue_roots: vec![],
+				fees: 0,
+				block_data_hash: [3; 32].into(),
+			},
+			block_data: BlockData(vec![4, 5, 6]),
+		});
+
+		let (tx, rx) = oneshot::channel();
+		pool.await_collation(relay_parent, para_id, tx);
 		rx.wait().unwrap();
 	}
 }
