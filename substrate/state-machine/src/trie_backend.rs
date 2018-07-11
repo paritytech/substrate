@@ -97,10 +97,7 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
 			overlay: &mut read_overlay,
 		};
 
-		// TODO: this is probably wrong too
-		// let map_e = |e: Box<TrieError<H::Out, Self::Error>>| format!("Trie lookup error: {}", e);
 		let map_e = |e| format!("Trie lookup error: {}", e);
-
 		TrieDB::<H, C>::new(&eph, &self.root).map_err(map_e)?
 			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
@@ -112,17 +109,12 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
 			overlay: &mut read_overlay,
 		};
 
-		let mut iter = move || -> Result<(), Box<TrieError<H::Out, Self::Error>>> {
-			// TODO: zomg errors
-			// let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
-			let trie = TrieDB::<H, C>::new(&eph, &self.root).unwrap();
-			// let mut iter = trie.iter()?;
-			let mut iter = trie.iter().unwrap();
-			// iter.seek(prefix)?;
-			iter.seek(prefix).unwrap();
+		let mut iter = move || -> Result<(), Box<TrieError<H::Out, C::Error>>> {
+			let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
+			let mut iter = trie.iter()?;
+			iter.seek(prefix)?;
 			for x in iter {
-				// let (key, _) = x?;
-				let (key, _) = x.unwrap();
+				let (key, _) = x?;
 				if !key.starts_with(prefix) {
 					break;
 				}
@@ -144,15 +136,11 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
 			overlay: &mut read_overlay,
 		};
 
-		let collect_all = || -> Result<_, Box<TrieError<H::Out, Self::Error>>> {
-			// TODO: zomg errors
-			// let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
-			let trie = TrieDB::<H, C>::new(&eph, &self.root).unwrap();
+		let collect_all = || -> Result<_, Box<TrieError<H::Out, C::Error>>> {
+			let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
 			let mut v = Vec::new();
-			// for x in trie.iter()? {
-			for x in trie.iter().unwrap() {
-				// let (key, value) = x?;
-				let (key, value) = x.unwrap();
+			for x in trie.iter()? {
+				let (key, value) = x?;
 				v.push((key.to_vec(), value.to_vec()));
 			}
 
