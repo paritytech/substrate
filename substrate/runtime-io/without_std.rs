@@ -40,8 +40,8 @@ pub fn panic(info: &::core::panic::PanicInfo) -> ! {
 	}
 }
 
-#[lang = "oom"]
-pub extern fn oom() -> ! {
+#[alloc_error_handler]
+pub extern fn oom(_: ::core::alloc::Layout) -> ! {
     static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
 
 	unsafe {
