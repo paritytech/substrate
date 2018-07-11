@@ -19,7 +19,7 @@
 use Backend;
 use hashdb::{Hasher, HashDB, AsHashDB};
 use memorydb::MemoryDB;
-use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut};
+use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, NodeCodec};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -32,7 +32,7 @@ pub trait Storage<H: Hasher>: Send + Sync {
 }
 
 /// Try convert into trie-based backend.
-pub trait TryIntoTrieBackend<H: Hasher> {
+pub trait TryIntoTrieBackend<H: Hasher, C: NodeCodec<H>> {
 	/// Try to convert self into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<H>>;
 }
@@ -82,7 +82,7 @@ impl<H: Hasher> TrieBackend<H> {
 	}
 }
 
-impl<H: Hasher> Backend<H> for TrieBackend<H> {
+impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H> {
 	type Error = String;
 	type Transaction = MemoryDB<H>;
 
@@ -93,6 +93,7 @@ impl<H: Hasher> Backend<H> for TrieBackend<H> {
 			overlay: &mut read_overlay,
 		};
 
+		// TODO: this is probably wrong too
 		let map_e = |e: Box<TrieError<H::Out, Self::Error>>| format!("Trie lookup error: {}", e);
 
 		TrieDB::new(&eph, &self.root).map_err(map_e)?
@@ -181,7 +182,7 @@ impl<H: Hasher> Backend<H> for TrieBackend<H> {
 	}
 }
 
-impl<H: Hasher> TryIntoTrieBackend<H> for TrieBackend<H> {
+impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for TrieBackend<H> {
 	fn try_into_trie_backend(self) -> Option<TrieBackend<H>> {
 		Some(self)
 	}

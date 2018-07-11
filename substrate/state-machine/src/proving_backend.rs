@@ -17,26 +17,28 @@
 //! Proving state machine backend.
 
 use std::cell::RefCell;
+use std::marker::PhantomData;
 use hashdb::{Hasher, HashDB};
 use memorydb::MemoryDB;
-use patricia_trie::{TrieDB, TrieError, Trie, Recorder};
+use patricia_trie::{TrieDB, Trie, Recorder, NodeCodec};
 use trie_backend::{TrieBackend, Ephemeral};
 use {Error, ExecutionError, Backend, TryIntoTrieBackend};
 use rlp::Encodable;
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<H: Hasher> {
+pub struct ProvingBackend<H: Hasher, C: NodeCodec<H>> {
 	backend: TrieBackend<H>,
 	proof_recorder: RefCell<Recorder<H::Out>>,
+	marker: PhantomData<C> // TODO: try to remove this if possible
 }
 
-impl<H: Hasher> ProvingBackend<H> {
+impl<H: Hasher, C: NodeCodec<H>> ProvingBackend<H, C> {
 	/// Create new proving backend.
 	pub fn new(backend: TrieBackend<H>) -> Self {
 		ProvingBackend {
 			backend,
-			proof_recorder: RefCell::new(Recorder::new()),
+			proof_recorder: RefCell::new(Recorder::new()), marker: PhantomData
 		}
 	}
 
@@ -50,9 +52,10 @@ impl<H: Hasher> ProvingBackend<H> {
 	}
 }
 
-impl<H> Backend<H> for ProvingBackend<H>
+impl<H, C> Backend<H, C> for ProvingBackend<H, C>
 where
 	H: Hasher,
+	C: NodeCodec<H>,
 	H::Out: Ord + Encodable
 {
 	type Error = String;
@@ -64,14 +67,16 @@ where
 			self.backend.backend_storage(),
 			&mut read_overlay,
 		);
-		let map_e = |e: Box<TrieError<H::Out, Self::Error>>| format!("Trie lookup error: {}", e);
+		// let map_e = |e: Box<TrieError<H::Out, Self::Error>>| format!("Trie lookup error: {}", e);
+		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		let mut proof_recorder = self.proof_recorder.try_borrow_mut()
 			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
-		TrieDB::new(&eph, &self.backend.root()).map_err(map_e)?
+		TrieDB::<H, C>::new(&eph, &self.backend.root()).map_err(map_e)?
 			.get_with(key, &mut *proof_recorder).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
 
+	// TODO: "error[E0283]: type annotations required: cannot resolve `_: patricia_trie::NodeCodec<H>`"/"note: required because of the requirements on the impl of `backend::Backend<H, _>` for `trie_backend::TrieBackend<H>`")
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.backend.for_keys_with_prefix(prefix, f)
 	}
@@ -87,14 +92,21 @@ where
 	}
 }
 
-impl<H: Hasher> TryIntoTrieBackend<H> for ProvingBackend<H> {
+impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for ProvingBackend<H, C> {
 	fn try_into_trie_backend(self) -> Option<TrieBackend<H>> {
 		None
 	}
 }
 
 /// Create proof check backend.
-pub fn create_proof_check_backend<H: Hasher>(root: H::Out, proof: Vec<Vec<u8>>) -> Result<TrieBackend<H>, Box<Error>> {
+pub fn create_proof_check_backend<H, C>(
+	root: H::Out,
+	proof: Vec<Vec<u8>>
+) -> Result<TrieBackend<H>, Box<Error>>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+{
 	let mut db = MemoryDB::new();
 	for item in proof {
 		db.insert(&item);

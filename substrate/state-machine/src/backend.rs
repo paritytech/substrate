@@ -25,12 +25,13 @@ use std::sync::Arc;
 use hashdb::Hasher;
 use rlp::Encodable;
 use trie_backend::{TryIntoTrieBackend, TrieBackend};
+use patricia_trie::{TrieDBMut, TrieMut, NodeCodec};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///
 /// The clone operation (if implemented) should be cheap.
-pub trait Backend<H: Hasher>: TryIntoTrieBackend<H> {
+pub trait Backend<H: Hasher, C: NodeCodec<H>>: TryIntoTrieBackend<H, C> {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
@@ -73,23 +74,25 @@ impl error::Error for Void {
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
 #[derive(Clone, PartialEq, Eq)]
-pub struct InMemory<H> {
+pub struct InMemory<H, C> {
 	inner: Arc<HashMap<Vec<u8>, Vec<u8>>>,
-	_marker: PhantomData<H>,
+	_hasher: PhantomData<H>,
+	_codec: PhantomData<C>,
 }
 
-impl<H> Default for InMemory<H> {
+impl<H, C> Default for InMemory<H, C> {
 	fn default() -> Self {
 		InMemory {
 			inner: Arc::new(Default::default()),
-			_marker: PhantomData,
+			_hasher: PhantomData,
+			_codec: PhantomData,
 		}
 	}
 }
 
-impl<H: Hasher> InMemory<H> {
+impl<H: Hasher, C: NodeCodec<H>> InMemory<H, C> {
 	/// Copy the state, with applied updates
-	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
+	pub fn update(&self, changes: <Self as Backend<H, C>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = (&*self.inner).clone();
 		for (key, val) in changes {
 			match val {
@@ -102,15 +105,15 @@ impl<H: Hasher> InMemory<H> {
 	}
 }
 
-impl<H> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
+impl<H, C> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H, C> {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		InMemory {
-			inner: Arc::new(inner), _marker: PhantomData
+			inner: Arc::new(inner), _hasher: PhantomData, _codec: PhantomData
 		}
 	}
 }
 
-impl<H: Hasher> Backend<H> for InMemory<H> {
+impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> {
 	type Error = Void;
 	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
@@ -144,15 +147,13 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 }
 
-impl<H: Hasher> TryIntoTrieBackend<H> for InMemory<H> {
+impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for InMemory<H, C> {
 	fn try_into_trie_backend(self) -> Option<TrieBackend<H>> {
 		use memorydb::MemoryDB;
-		use patricia_trie::{TrieDBMut, TrieMut};
-
 		let mut root = <H as Hasher>::Out::default();
 		let mut mdb = MemoryDB::new();
 		{
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
+			let mut trie = TrieDBMut::<H, C>::new(&mut mdb, &mut root);
 			for (key, value) in self.inner.iter() {
 				if let Err(e) = trie.insert(&key, &value) {
 					warn!(target: "trie", "Failed to write to trie: {}", e);

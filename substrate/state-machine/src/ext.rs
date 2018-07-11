@@ -21,6 +21,7 @@ use backend::Backend;
 use {Externalities, OverlayedChanges};
 use hashdb::Hasher;
 use rlp::Encodable;
+use patricia_trie::NodeCodec;
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -52,7 +53,7 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, H: Hasher, B: 'a + Backend<H>> {
+pub struct Ext<'a, H: Hasher, C: NodeCodec<H>, B: 'a + Backend<H, C>> { //TODO: can I get rid of the trait bounds here?
 	// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
 	// The storage backend to read from.
@@ -61,10 +62,11 @@ pub struct Ext<'a, H: Hasher, B: 'a + Backend<H>> {
 	transaction: Option<(B::Transaction, H::Out)>,
 }
 
-impl<'a, H, B> Ext<'a, H, B>
+impl<'a, H, C, B> Ext<'a, H, C, B>
 where
 	H: Hasher,
-	B: 'a + Backend<H>,
+	C: NodeCodec<H>,
+	B: 'a + Backend<H, C>,
 	H::Out: Ord + Encodable
 {
 	/// Create a new `Ext` from overlayed changes and read-only backend
@@ -106,10 +108,11 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 	}
 }
 
-impl<'a, B: 'a, H> Externalities<H> for Ext<'a, H, B>
+impl<'a, B: 'a, H, C> Externalities<H> for Ext<'a, H, C, B>
 where
 	H: Hasher,
-	B: 'a + Backend<H>,
+	C: NodeCodec<H>,
+	B: 'a + Backend<H, C>,
 	H::Out: Ord + Encodable
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
