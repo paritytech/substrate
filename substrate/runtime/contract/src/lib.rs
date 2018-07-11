@@ -32,14 +32,14 @@ extern crate serde;
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_runtime_std as rstd;
-extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_codec as codec;
+extern crate substrate_runtime_io as runtime_io;
+extern crate substrate_runtime_sandbox as sandbox;
+extern crate substrate_runtime_std as rstd;
 
-extern crate substrate_runtime_system as system;
-extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_staking as staking;
+extern crate substrate_runtime_system as system;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
@@ -53,20 +53,21 @@ extern crate assert_matches;
 #[cfg(test)]
 extern crate wabt;
 
-mod vm;
 mod double_map;
+mod vm;
 
 // TODO: Remove this
-pub use vm::Ext;
 pub use vm::execute;
+pub use vm::Ext;
 
+use double_map::StorageDoubleMap;
+
+use runtime_primitives::traits::{MaybeEmpty, RefInto};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{RefInto, MaybeEmpty};
 
 use rstd::collections::btree_map::{BTreeMap, Entry};
 
-pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
-}
+pub trait Trait: system::Trait + staking::Trait + consensus::Trait {}
 
 decl_module! {
 	/// Contracts module.
@@ -157,10 +158,20 @@ impl<T: Trait> Ext for CallExternalities<T> {
 	}
 }
 
-struct Account {
+struct Account<T: Trait> {
 	code: Option<Vec<u8>>,
-	storage: BTreeMap<Vec<u8>, Vec<u8>>,
-	
+	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+	balance: Option<staking::ChangeEntry<T>>,
+}
+
+impl<T: Trait> Default for Account<T> {
+	fn default() -> Account<T> {
+		Account {
+			code: None,
+			storage: BTreeMap::new(),
+			balance: None,
+		}
+	}
 }
 
 struct AccountDb<T: Trait> {
@@ -168,10 +179,8 @@ struct AccountDb<T: Trait> {
 	///
 	/// If the account db is flushed, then all entries will be
 	/// written into the db.
-	world_state: BTreeMap<T::AccountId, Account>,
-
-	///
-	backups: Vec<BTreeMap<T::AccountId, Account>>,
+	world_state: BTreeMap<T::AccountId, Account<T>>,
+	backups: Vec<BTreeMap<T::AccountId, Account<T>>>,
 }
 
 impl<T: Trait> AccountDb<T> {
@@ -182,8 +191,68 @@ impl<T: Trait> AccountDb<T> {
 		}
 	}
 
-	fn flush(self) {
+	fn set_storage(&mut self, account_id: &T::AccountId, key: Vec<u8>, value: Option<Vec<u8>>) {
+		let account = self.world_state
+			.entry(account_id.clone())
+			.or_insert_with(Default::default);
+		let prev_value = account.storage.insert(key.clone(), value);
 
+		// Preserve the old value in the current active backup. If we need
+		// to revert the storage to the checkpoint, we will take all saved `prev_value`s
+		// and copy them into the cache.
+		let backup_account = self.backups
+			.last_mut()
+			.expect("backups is always non-empty; qed")
+			.entry(account_id.clone())
+			.or_insert_with(Default::default);
+
+		// 1. предыдущего значения не было в кеше! Тем не менее это не означает что значения не было
+		// в базе данных.
+		// 2. что если оно установлено в None. Это значит значит что предыдущая запись удаляла заданный ключ.
+		// Значит при восстановлении бекапа нужно вернуть все как было данного бекапа.
+		match backup_account.storage.entry(key.clone()) {
+			Entry::Occupied(_) => {
+				// We already backed up the original key. Do nothing.
+			}
+			Entry::Vacant(ref mut v) => {
+				
+			}
+		}
+	}
+
+	fn get_storage(&mut self, account_id: T::AccountId, key: Vec<u8>) -> Option<Vec<u8>> {
+		let account = self.world_state
+			.entry(account_id.clone())
+			.or_insert_with(Default::default);
+
+		account
+			.storage
+			.entry(key.clone())
+			.or_insert_with(|| <StorageOf<T>>::get(account_id, key))
+			.clone()
+	}
+
+	/// Mark a checkpoint. The next call to [`revert`] will return
+	/// the storage to the state at this checkpoint.
+	///
+	/// [`revert`]: #method.revert
+	fn checkpoint(&mut self) {}
+
+	/// Fix the changes made since the latest checkpoint.
+	///
+	/// This will pop checkpoint.
+	///
+	/// # Panics
+	///
+	/// Panics if there is no checkpoints left.
+	fn commit(&mut self) {}
+
+	/// Reset the state to
+	fn revert(&mut self) {}
+
+	/// Flush the current state of the account db into the persistent storage.
+	fn flush(self) {
+		for (account_id, account) in self.world_state {}
 	}
 }
 
@@ -202,10 +271,9 @@ impl<T: Trait> Module<T> {
 		// code in contract itself and use that.
 
 		// TODO: Get code and runtime::execute it.
+		let account_db = AccountDb::<T>::new();
 
-		let account_db = AccountDb::new();
-
-
+		account_db.flush();
 		Ok(())
 	}
 }
