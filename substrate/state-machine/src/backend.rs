@@ -17,15 +17,20 @@
 //! State machine backends. These manage the code and storage of contracts.
 
 use std::{error, fmt};
+use std::cmp::Ord;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::sync::Arc;
+
+use hashdb::Hasher;
+use rlp::Encodable;
 use trie_backend::{TryIntoTrieBackend, TrieBackend};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///
 /// The clone operation (if implemented) should be cheap.
-pub trait Backend: TryIntoTrieBackend {
+pub trait Backend<H: Hasher>: TryIntoTrieBackend<H> {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
@@ -41,8 +46,10 @@ pub trait Backend: TryIntoTrieBackend {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
-	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord + Encodable;
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
@@ -66,21 +73,23 @@ impl error::Error for Void {
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
 #[derive(Clone, PartialEq, Eq)]
-pub struct InMemory {
+pub struct InMemory<H> {
 	inner: Arc<HashMap<Vec<u8>, Vec<u8>>>,
+	_marker: PhantomData<H>,
 }
 
-impl Default for InMemory {
+impl<H> Default for InMemory<H> {
 	fn default() -> Self {
 		InMemory {
 			inner: Arc::new(Default::default()),
+			_marker: PhantomData,
 		}
 	}
 }
 
-impl InMemory {
+impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
-	pub fn update(&self, changes: <Self as Backend>::Transaction) -> Self {
+	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = (&*self.inner).clone();
 		for (key, val) in changes {
 			match val {
@@ -93,15 +102,15 @@ impl InMemory {
 	}
 }
 
-impl From<HashMap<Vec<u8>, Vec<u8>>> for InMemory {
+impl<H> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		InMemory {
-			inner: Arc::new(inner),
+			inner: Arc::new(inner), _marker: PhantomData
 		}
 	}
 }
 
-impl Backend for InMemory {
+impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
 	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
@@ -113,17 +122,19 @@ impl Backend for InMemory {
 		self.inner.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
 	}
 
-	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		<H as Hasher>::Out: Ord + Encodable,
 	{
 		let existing_pairs = self.inner.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = ::triehash::trie_root(existing_pairs.chain(transaction.iter().cloned())
+		let root = ::triehash::trie_root::<H, _, _, _>(existing_pairs.chain(transaction.iter().cloned())
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
-		).0;
+		);
 
 		(root, transaction)
 	}
@@ -133,14 +144,13 @@ impl Backend for InMemory {
 	}
 }
 
-impl TryIntoTrieBackend for InMemory {
-	fn try_into_trie_backend(self) -> Option<TrieBackend> {
-		use ethereum_types::H256 as TrieH256;
+impl<H: Hasher> TryIntoTrieBackend<H> for InMemory<H> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<H>> {
 		use memorydb::MemoryDB;
 		use patricia_trie::{TrieDBMut, TrieMut};
 
-		let mut root = TrieH256::default();
-		let mut mdb = MemoryDB::default();
+		let mut root = <H as Hasher>::Out::default();
+		let mut mdb = MemoryDB::new();
 		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			for (key, value) in self.inner.iter() {

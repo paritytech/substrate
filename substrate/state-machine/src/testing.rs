@@ -17,13 +17,16 @@
 //! Test implementation for Externalities.
 
 use std::collections::HashMap;
+use std::cmp::Ord;
 use super::Externalities;
 use triehash::trie_root;
+use hashdb::Hasher;
+use rlp::Encodable;
 
 /// Simple HashMap based Externalities impl.
 pub type TestExternalities = HashMap<Vec<u8>, Vec<u8>>;
 
-impl Externalities for TestExternalities {
+impl<H: Hasher> Externalities<H> for TestExternalities where H::Out: Ord + Encodable {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.get(key).map(|x| x.to_vec())
 	}
@@ -43,8 +46,8 @@ impl Externalities for TestExternalities {
 
 	fn chain_id(&self) -> u64 { 42 }
 
-	fn storage_root(&mut self) -> [u8; 32] {
-		trie_root(self.clone()).0
+	fn storage_root(&mut self) -> H::Out {
+		trie_root::<H, _, _, _>(self.clone())
 	}
 }
 

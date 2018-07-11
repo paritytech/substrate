@@ -17,23 +17,23 @@
 //! Proving state machine backend.
 
 use std::cell::RefCell;
-use ethereum_types::H256 as TrieH256;
-use hashdb::HashDB;
+use hashdb::{Hasher, HashDB};
 use memorydb::MemoryDB;
 use patricia_trie::{TrieDB, TrieError, Trie, Recorder};
 use trie_backend::{TrieBackend, Ephemeral};
 use {Error, ExecutionError, Backend, TryIntoTrieBackend};
+use rlp::Encodable;
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend {
-	backend: TrieBackend,
-	proof_recorder: RefCell<Recorder>,
+pub struct ProvingBackend<H: Hasher> {
+	backend: TrieBackend<H>,
+	proof_recorder: RefCell<Recorder<H::Out>>,
 }
 
-impl ProvingBackend {
+impl<H: Hasher> ProvingBackend<H> {
 	/// Create new proving backend.
-	pub fn new(backend: TrieBackend) -> Self {
+	pub fn new(backend: TrieBackend<H>) -> Self {
 		ProvingBackend {
 			backend,
 			proof_recorder: RefCell::new(Recorder::new()),
@@ -50,18 +50,21 @@ impl ProvingBackend {
 	}
 }
 
-impl Backend for ProvingBackend {
+impl<H> Backend<H> for ProvingBackend<H>
+where
+	H: Hasher,
+	H::Out: Ord + Encodable
+{
 	type Error = String;
-	type Transaction = MemoryDB;
+	type Transaction = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = MemoryDB::new();
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
 			&mut read_overlay,
 		);
-
-		let map_e = |e: Box<TrieError>| format!("Trie lookup error: {}", e);
+		let map_e = |e: Box<TrieError<H::Out, Self::Error>>| format!("Trie lookup error: {}", e);
 
 		let mut proof_recorder = self.proof_recorder.try_borrow_mut()
 			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
@@ -77,21 +80,21 @@ impl Backend for ProvingBackend {
 		self.backend.pairs()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> ([u8; 32], MemoryDB)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.backend.storage_root(delta)
 	}
 }
 
-impl TryIntoTrieBackend for ProvingBackend {
-	fn try_into_trie_backend(self) -> Option<TrieBackend> {
+impl<H: Hasher> TryIntoTrieBackend<H> for ProvingBackend<H> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<H>> {
 		None
 	}
 }
 
 /// Create proof check backend.
-pub fn create_proof_check_backend(root: TrieH256, proof: Vec<Vec<u8>>) -> Result<TrieBackend, Box<Error>> {
+pub fn create_proof_check_backend<H: Hasher>(root: H::Out, proof: Vec<Vec<u8>>) -> Result<TrieBackend<H>, Box<Error>> {
 	let mut db = MemoryDB::new();
 	for item in proof {
 		db.insert(&item);

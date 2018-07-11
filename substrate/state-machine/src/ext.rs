@@ -16,9 +16,11 @@
 
 //! Conrete externalities implementation.
 
-use std::{error, fmt};
+use std::{error, fmt, cmp::Ord};
 use backend::Backend;
 use {Externalities, OverlayedChanges};
+use hashdb::Hasher;
+use rlp::Encodable;
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -50,16 +52,21 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, B: 'a + Backend> {
+pub struct Ext<'a, H: Hasher, B: 'a + Backend<H>> {
 	// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
 	// The storage backend to read from.
 	backend: &'a B,
 	// The transaction necessary to commit to the backend.
-	transaction: Option<(B::Transaction, [u8; 32])>,
+	transaction: Option<(B::Transaction, H::Out)>,
 }
 
-impl<'a, B: 'a + Backend> Ext<'a, B> {
+impl<'a, H, B> Ext<'a, H, B>
+where
+	H: Hasher,
+	B: 'a + Backend<H>,
+	H::Out: Ord + Encodable
+{
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(overlay: &'a mut OverlayedChanges, backend: &'a B) -> Self {
 		Ext {
@@ -99,8 +106,11 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 	}
 }
 
-impl<'a, B: 'a> Externalities for Ext<'a, B>
-	where B: Backend
+impl<'a, B: 'a, H> Externalities<H> for Ext<'a, H, B>
+where
+	H: Hasher,
+	B: 'a + Backend<H>,
+	H::Out: Ord + Encodable
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
@@ -123,7 +133,7 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		42
 	}
 
-	fn storage_root(&mut self) -> [u8; 32] {
+	fn storage_root(&mut self) -> H::Out where H::Out: Ord + Encodable {
 		if let Some((_, ref root)) =  self.transaction {
 			return root.clone();
 		}
