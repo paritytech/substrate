@@ -119,11 +119,7 @@ impl Slicable for Extrinsic {
 
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
-	type Address = AccountId;
 
-	fn sender(&self) -> &Self::Address {
-		&self.transfer.from
-	}
 	fn check(self) -> Result<Self, &'static str> {
 		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
 			Ok(self)

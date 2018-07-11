@@ -82,14 +82,15 @@ pub struct Executive<
 >(PhantomData<(System, Block, Lookup, Payment, Finalisation)>);
 
 impl<
+	Address,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Lookup: AuxLookup<Source=<Block::Extrinsic as Checkable>::Address, Target=System::AccountId>,
+	Lookup: AuxLookup<Source=Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
-	Block::Extrinsic: Checkable<AccountId=System::AccountId> + Slicable,
-	<Block::Extrinsic as Checkable>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
+	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Slicable,
+	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
 {
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
@@ -172,7 +173,7 @@ impl<
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
-		let xt = uxt.check(Lookup::lookup).map_err(internal::ApplyError::BadSignature)?;
+		let xt = uxt.check_with(Lookup::lookup).map_err(internal::ApplyError::BadSignature)?;
 
 		if xt.sender() != &Default::default() {
 			// check index
