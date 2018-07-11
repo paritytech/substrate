@@ -200,7 +200,7 @@ impl CandidateReceipt {
 	pub fn check_signature(&self) -> Result<(), ()> {
 		use runtime_primitives::traits::Verify;
 
-		if self.signature.verify(&self.signature.0[..], &self.collator) {
+		if self.signature.verify(&self.block_data_hash.0[..], &self.collator) {
 			Ok(())
 		} else {
 			Err(())

@@ -541,9 +541,14 @@ impl PolkadotProtocol {
 			None => ctx.disconnect_peer(from),
 			Some(peer_info) => match peer_info.status.collating_for {
 				None => ctx.disable_peer(from),
-				Some((ref acc_id, ref para_id))
-					if para_id != &collation_para || acc_id != &collated_acc || collation.receipt.check_signature().is_err() => ctx.disable_peer(from),
-				Some((ref acc_id, _)) => self.collators.on_collation(acc_id.clone(), relay_parent, collation),
+				Some((ref acc_id, ref para_id)) => {
+					let structurally_valid = para_id == &collation_para && acc_id == &collated_acc;
+					if structurally_valid && collation.receipt.check_signature().is_ok() {
+						self.collators.on_collation(acc_id.clone(), relay_parent, collation)
+					} else {
+						ctx.disable_peer(from)
+					};
+				}
 			},
 		}
 	}
@@ -556,9 +561,15 @@ impl PolkadotProtocol {
 
 	// get connected peer with given account ID for collation.
 	fn collator_peer_id(&self, account_id: AccountId) -> Option<PeerId> {
+		let check_info = |info: &PeerInfo| info
+			.status
+			.collating_for
+			.as_ref()
+			.map_or(false, |&(ref acc_id, _)| acc_id == &account_id);
+
 		self.peers
 			.iter()
-			.filter(|&(_, info)| info.status.collating_for.as_ref().map_or(false, |&(ref acc_id, _)| acc_id == &account_id))
+			.filter(|&(_, info)| check_info(info))
 			.map(|(peer_id, _)| *peer_id)
 			.next()
 	}
