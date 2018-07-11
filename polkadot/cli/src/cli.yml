@@ -69,7 +69,7 @@ args:
   - chain:
       long: chain
       value_name: CHAIN_SPEC
-      help: Specify the chain specification (one of dev, local or poc-2)
+      help: Specify the chain specification (one of poc-1, dev, local or staging)
       takes_value: true
   - pruning:
       long: pruning
@@ -84,7 +84,11 @@ args:
   - telemetry:
       short: t
       long: telemetry
-      help: Should connect to the Polkadot telemetry server (off by default)
+      help: Should connect to the Polkadot telemetry server (telemetry is off by default on local chains)
+      takes_value: false
+  - no-telemetry:
+      long: no-telemetry
+      help: Should not connect to the Polkadot telemetry server (telemetry is on by default on global chains)
       takes_value: false
   - telemetry-url:
       long: telemetry-url
@@ -102,7 +106,7 @@ subcommands:
         - chain:
             long: chain
             value_name: CHAIN_SPEC
-            help: Specify the chain specification (one of dev, local or poc-2)
+            help: Specify the chain specification (one of poc-1, dev, local or staging)
             takes_value: true
   - export-blocks:
       about: Export blocks to a file
