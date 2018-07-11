@@ -28,17 +28,17 @@ use rlp::Encodable;
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
 pub struct ProvingBackend<H: Hasher, C: NodeCodec<H>> {
-	backend: TrieBackend<H>,
+	backend: TrieBackend<H, C>,
 	proof_recorder: RefCell<Recorder<H::Out>>,
-	marker: PhantomData<C> // TODO: try to remove this if possible
+	// marker: PhantomData<C> // TODO: try to remove this if possible
 }
 
 impl<H: Hasher, C: NodeCodec<H>> ProvingBackend<H, C> {
 	/// Create new proving backend.
-	pub fn new(backend: TrieBackend<H>) -> Self {
+	pub fn new(backend: TrieBackend<H, C>) -> Self {
 		ProvingBackend {
 			backend,
-			proof_recorder: RefCell::new(Recorder::new()), marker: PhantomData
+			proof_recorder: RefCell::new(Recorder::new()) //, marker: PhantomData
 		}
 	}
 
@@ -67,7 +67,6 @@ where
 			self.backend.backend_storage(),
 			&mut read_overlay,
 		);
-		// let map_e = |e: Box<TrieError<H::Out, Self::Error>>| format!("Trie lookup error: {}", e);
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		let mut proof_recorder = self.proof_recorder.try_borrow_mut()
@@ -93,7 +92,7 @@ where
 }
 
 impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for ProvingBackend<H, C> {
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H>> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
 		None
 	}
 }
@@ -102,7 +101,7 @@ impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for ProvingBackend<H, 
 pub fn create_proof_check_backend<H, C>(
 	root: H::Out,
 	proof: Vec<Vec<u8>>
-) -> Result<TrieBackend<H>, Box<Error>>
+) -> Result<TrieBackend<H, C>, Box<Error>>
 where
 	H: Hasher,
 	C: NodeCodec<H>,

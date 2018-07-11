@@ -22,6 +22,7 @@ use memorydb::MemoryDB;
 use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, NodeCodec};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::marker::PhantomData;
 
 pub use hashdb::DBValue;
 
@@ -34,22 +35,24 @@ pub trait Storage<H: Hasher>: Send + Sync {
 /// Try convert into trie-based backend.
 pub trait TryIntoTrieBackend<H: Hasher, C: NodeCodec<H>> {
 	/// Try to convert self into trie backend.
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H>>;
+	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>>;
 }
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 #[derive(Clone)]
-pub struct TrieBackend<H: Hasher> {
+pub struct TrieBackend<H: Hasher, C: NodeCodec<H>> {
 	storage: TrieBackendStorage<H>,
 	root: H::Out,
+	_codec: PhantomData<C>
 }
 
-impl<H: Hasher> TrieBackend<H> {
+impl<H: Hasher, C: NodeCodec<H>> TrieBackend<H, C> {
 	/// Create new trie-based backend.
 	pub fn with_storage(db: Arc<Storage<H>>, root: H::Out) -> Self {
 		TrieBackend {
 			storage: TrieBackendStorage::Storage(db),
 			root,
+			_codec: PhantomData,
 		}
 	}
 
@@ -68,6 +71,7 @@ impl<H: Hasher> TrieBackend<H> {
 		TrieBackend {
 			storage: TrieBackendStorage::MemoryDb(db),
 			root,
+			_codec: PhantomData,
 		}
 	}
 
@@ -82,7 +86,7 @@ impl<H: Hasher> TrieBackend<H> {
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H> {
+impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
 	type Error = String;
 	type Transaction = MemoryDB<H>;
 
@@ -182,8 +186,8 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H> {
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for TrieBackend<H> {
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H>> {
+impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for TrieBackend<H, C> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
 		Some(self)
 	}
 }

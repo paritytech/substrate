@@ -148,7 +148,7 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> {
 }
 
 impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for InMemory<H, C> {
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H>> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
 		use memorydb::MemoryDB;
 		let mut root = <H as Hasher>::Out::default();
 		let mut mdb = MemoryDB::new();

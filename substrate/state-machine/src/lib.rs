@@ -227,7 +227,7 @@ pub fn prove_execution<H, C, B, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend<H> as Backend<H, C>>::Transaction), Box<Error>>
+) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend<H, C> as Backend<H, C>>::Transaction), Box<Error>>
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
