@@ -281,13 +281,13 @@ pub mod tests {
 
 	fn test_db() -> (MemoryDB<KeccakHasher>, TrieH256) {
 		let mut root = TrieH256::default();
-		let mut mdb = MemoryDB::<KeccakHasher>::default();
+		let mut mdb = MemoryDB::<KeccakHasher>::new();
 		{
-			let mut trie = TrieDBMut::<KeccakHasher, RlpCodec>::new(&mut mdb, &mut root);
-			trie.insert(b"key", b"value").unwrap();
-			trie.insert(b"value1", &[42]).unwrap();
-			trie.insert(b"value2", &[24]).unwrap();
-			trie.insert(b":code", b"return 42").unwrap();
+			let mut trie = TrieDBMut::<_, RlpCodec>::new(&mut mdb, &mut root);
+			trie.insert(b"key", b"value").expect("insert failed");
+			trie.insert(b"value1", &[42]).expect("insert failed");
+			trie.insert(b"value2", &[24]).expect("insert failed");
+			trie.insert(b":code", b"return 42").expect("insert failed");
 		}
 		(mdb, root)
 	}
