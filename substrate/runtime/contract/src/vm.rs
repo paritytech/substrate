@@ -73,11 +73,21 @@ pub enum Error {
 	Memory,
 }
 
+/// Enumerates all possible *special* trap conditions.
+///
+/// In this runtime traps used not only for signaling about errors but also
+/// to just terminate quickly in some cases.
+enum SpecialTrap {
+	/// Signals that trap was generated in response to call `ext_return` host function.
+	Return(Vec<u8>),
+}
+
 struct Runtime<'a, T: Ext + 'a> {
 	ext: &'a mut T,
+	config: Config,
 	memory: sandbox::Memory,
-	gas_used: u64,
-	gas_limit: u64,
+	gas_meter: GasMeter,
+	special_trap: Option<SpecialTrap>,
 }
 impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	fn memory(&self) -> &sandbox::Memory {
@@ -89,13 +99,42 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	fn ext_mut(&mut self) -> &mut T {
 		self.ext
 	}
+	/// Save a data buffer as a result of the execution.
+	///
+	/// This function also charges gas for the returning.
+	///
+	/// Returns `Err` if there is not enough gas.
+	fn store_return_data(&mut self, data: Vec<u8>) -> Result<(), ()> {
+		let price = (self.config.return_data_per_byte_cost as u64)
+			.checked_mul(data.len() as u64)
+			.ok_or_else(|| ())?;
+		if self.gas_meter.charge(price) {
+			self.special_trap = Some(SpecialTrap::Return(data));
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+struct GasMeter {
+	gas_used: u64,
+	gas_limit: u64,
+}
+impl GasMeter {
+	fn new(gas_limit: u64) -> GasMeter {
+		GasMeter {
+			gas_limit,
+			gas_used: 0,
+		}
+	}
 	/// Account for used gas.
 	///
 	/// Returns `false` if there is not enough gas or addition of the specified
 	/// amount of gas has lead to overflow. On success returns `true`.
 	///
 	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
-	fn charge_gas(&mut self, amount: u64) -> bool {
+	fn charge(&mut self, amount: u64) -> bool {
 		match self.gas_used.checked_add(amount) {
 			None => false,
 			Some(val) if val > self.gas_limit => false,
@@ -105,6 +144,75 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 			}
 		}
 	}
+	/// Returns how much gas left from the initial budget.
+	fn gas_left(&self) -> u64 {
+		self.gas_limit
+			.checked_sub(self.gas_used)
+			.expect(
+				"gas_used is always incremented via Self::charge;
+				Self::charge ensures that gas_used is always less than or equal to gas_limit;
+				this substraction can never underflow;
+				qed;
+				"
+			)
+	}
+}
+
+fn to_execution_result<T: Ext>(
+	runtime: Runtime<T>,
+	run_err: Option<sandbox::Error>,
+) -> Result<ExecutionResult, Error> {
+	let mut return_data = Vec::new();
+
+	// Check the exact type of the error. It could be plain trap or
+	// special runtime trap the we must recognize.
+	match (run_err, runtime.special_trap) {
+		// No traps were generated. Proceed normally.
+		(None, None) => {},
+		// Special case. The trap was the result of the execution `return` host function.
+		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(rd))) => {
+			return_data = rd
+		}
+		// Any other kind of a trap should result in a failure.
+		(Some(_), _) => {
+			return Err(Error::Invoke);
+}
+		_ => {
+			// All possible cases should have been handled.
+			// If the control flow reached here, then it is a logic error.
+			unreachable!();
+		}
+	}
+
+	Ok(ExecutionResult {
+		gas_left: runtime.gas_meter.gas_left(),
+		return_data,
+	})
+}
+
+/// The result of execution of a smart-contract.
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct ExecutionResult {
+	return_data: Vec<u8>,
+	gas_left: u64,
+}
+
+impl ExecutionResult {
+	/// The result produced by the execution of the contract.
+	///
+	/// The contract can designate some buffer at the execution time via a special function.
+	/// If contract called this function with non-empty buffer it will be copied here.
+	///
+	/// Note that gas is already charged for returning the data.
+	pub fn return_data(&self) -> &[u8] {
+		&self.return_data
+	}
+
+	/// How much gas left after the execution of the contract.
+	pub fn gas_left(&self) -> u64 {
+		self.gas_left
+	}
 }
 
 /// Execute the given code as a contract.
@@ -112,15 +220,18 @@ pub fn execute<'a, T: Ext>(
 	code: &[u8],
 	ext: &'a mut T,
 	gas_limit: u64,
-) -> Result<(), Error> {
+) -> Result<ExecutionResult, Error> {
 	// ext_gas(amount: u32)
 	//
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
 	// - amount: How much gas is used.
-	fn ext_gas<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_gas<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let amount = args[0].as_i32().unwrap() as u32;
-		if e.charge_gas(amount as u64) {
+		if e.gas_meter.charge(amount as u64) {
 			Ok(sandbox::ReturnValue::Unit)
 		} else {
 			Err(sandbox::HostError)
@@ -156,10 +267,7 @@ pub fn execute<'a, T: Ext>(
 		} else {
 			None
 		};
-		e.ext_mut().set_storage(
-			&location,
-			value,
-		);
+		e.ext_mut().set_storage(&location, value);
 
 		Ok(sandbox::ReturnValue::Unit)
 	}
@@ -174,7 +282,10 @@ pub fn execute<'a, T: Ext>(
 	//   memory where the location of the requested value is placed.
 	// - dest_ptr: pointer where contents of the specified storage location
 	//   should be placed.
-	fn ext_get_storage<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_get_storage<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let location_ptr = args[0].as_i32().unwrap() as u32;
 		let dest_ptr = args[1].as_i32().unwrap() as u32;
 
@@ -191,7 +302,10 @@ pub fn execute<'a, T: Ext>(
 	}
 
 	// ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_transfer<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_transfer<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let transfer_to_ptr = args[0].as_i32().unwrap() as u32;
 		let transfer_to_len = args[1].as_i32().unwrap() as u32;
 		let value_ptr = args[2].as_i32().unwrap() as u32;
@@ -213,7 +327,10 @@ pub fn execute<'a, T: Ext>(
 	}
 
 	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_create<T: Ext>(e: &mut Runtime<T>, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn ext_create<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let code_ptr = args[0].as_i32().unwrap() as u32;
 		let code_len = args[1].as_i32().unwrap() as u32;
 		let value_ptr = args[2].as_i32().unwrap() as u32;
@@ -233,10 +350,33 @@ pub fn execute<'a, T: Ext>(
 		Ok(sandbox::ReturnValue::Unit)
 	}
 
+	// ext_return(data_ptr: u32, data_len: u32) -> !
+	fn ext_return<T: Ext>(
+		e: &mut Runtime<T>,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+		let data_ptr = args[0].as_i32().unwrap() as u32;
+		let data_len = args[1].as_i32().unwrap() as u32;
+
+		let mut data_buf = Vec::new();
+		data_buf.resize(data_len as usize, 0);
+		e.memory().get(data_ptr, &mut data_buf)?;
+
+		e.store_return_data(data_buf)
+			.map_err(|_| sandbox::HostError)?;
+
+		// The trap mechanism is used to immediately terminate the execution.
+		// This trap should be handled appropriate before returning the result
+		// to the user of this crate.
+		Err(sandbox::HostError)
+	}
+
+	let config = Config::default();
+
 	let PreparedContract {
 		instrumented_code,
 		memory,
-	} = prepare_contract(code)?;
+	} = prepare_contract(code, &config)?;
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
 	imports.add_host_func("env", "gas", ext_gas::<T>);
@@ -245,23 +385,24 @@ pub fn execute<'a, T: Ext>(
 	// TODO: Rename it to ext_call.
 	imports.add_host_func("env", "ext_transfer", ext_transfer::<T>);
 	imports.add_host_func("env", "ext_create", ext_create::<T>);
+	imports.add_host_func("env", "ext_return", ext_return::<T>);
 	// TODO: ext_balance, ext_address, ext_callvalue, etc.
 	imports.add_memory("env", "memory", memory.clone());
 
 	let mut runtime = Runtime {
 		ext,
+		config,
 		memory,
-		gas_limit,
-		gas_used: 0,
+		gas_meter: GasMeter::new(gas_limit),
+		special_trap: None,
 	};
 
-	let mut instance =
-		sandbox::Instance::new(&instrumented_code, &imports, &mut runtime)
-			.map_err(|_| Error::Instantiate)?;
-	instance
-		.invoke(b"call", &[], &mut runtime)
-		.map(|_| ())
-		.map_err(|_| Error::Invoke)
+	let mut instance = sandbox::Instance::new(&instrumented_code, &imports, &mut runtime)
+		.map_err(|_| Error::Instantiate)?;
+
+	let run_result = instance.invoke(b"call", &[], &mut runtime);
+
+	to_execution_result(runtime, run_result.err())
 }
 
 #[derive(Clone)]
@@ -271,6 +412,9 @@ struct Config {
 
 	/// Gas cost of a regular operation.
 	regular_op_cost: u32,
+
+	/// Gas cost per one byte returned.
+	return_data_per_byte_cost: u32,
 
 	/// How tall the stack is allowed to grow?
 	///
@@ -288,6 +432,7 @@ impl Default for Config {
 		Config {
 			grow_mem_cost: 1,
 			regular_op_cost: 1,
+			return_data_per_byte_cost: 1,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
 		}
@@ -389,9 +534,7 @@ struct PreparedContract {
 	memory: sandbox::Memory,
 }
 
-fn prepare_contract(original_code: &[u8]) -> Result<PreparedContract, Error> {
-	let config = Config::default();
-
+fn prepare_contract(original_code: &[u8], config: &Config) -> Result<PreparedContract, Error> {
 	let mut contract_module = ContractModule::new(original_code, config.clone())?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.inject_gas_metering()?;
@@ -414,14 +557,11 @@ fn prepare_contract(original_code: &[u8]) -> Result<PreparedContract, Error> {
 					// Maximum number of pages should be always declared.
 					// This isn't a hard requirement and can be treated as a maxiumum set
 					// to configured maximum.
-					return Err(Error::Memory)
+					return Err(Error::Memory);
 				}
-				(initial, maximum) => sandbox::Memory::new(
-					initial,
-					maximum,
-				)
+				(initial, maximum) => sandbox::Memory::new(initial, maximum),
 			}
-		},
+		}
 
 		// If none memory imported then just crate an empty placeholder.
 		// Any access to it will lead to out of bounds trap.
@@ -496,7 +636,8 @@ mod tests {
 			.validate(false)
 			.convert(wat)
 			.unwrap();
-		prepare_contract(wasm.as_ref())
+		let config = Config::default();
+		prepare_contract(wasm.as_ref(), &config)
 	}
 
 	#[test]
