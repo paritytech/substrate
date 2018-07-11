@@ -372,7 +372,7 @@ impl PolkadotProtocol {
 			}
 			Message::BlockData(req_id, data) => self.on_block_data(ctx, peer_id, req_id, data),
 			Message::Collation(relay_parent, collation) => self.on_collation(ctx, peer_id, relay_parent, collation),
-			Message::CollatorRole(_) => unimplemented!(),
+			Message::CollatorRole(_) => {},
 		}
 	}
 
