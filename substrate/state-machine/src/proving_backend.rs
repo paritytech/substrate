@@ -17,7 +17,6 @@
 //! Proving state machine backend.
 
 use std::cell::RefCell;
-use std::marker::PhantomData;
 use hashdb::{Hasher, HashDB};
 use memorydb::MemoryDB;
 use patricia_trie::{TrieDB, Trie, Recorder, NodeCodec};
@@ -30,7 +29,6 @@ use rlp::Encodable;
 pub struct ProvingBackend<H: Hasher, C: NodeCodec<H>> {
 	backend: TrieBackend<H, C>,
 	proof_recorder: RefCell<Recorder<H::Out>>,
-	// marker: PhantomData<C> // TODO: try to remove this if possible
 }
 
 impl<H: Hasher, C: NodeCodec<H>> ProvingBackend<H, C> {
@@ -38,7 +36,7 @@ impl<H: Hasher, C: NodeCodec<H>> ProvingBackend<H, C> {
 	pub fn new(backend: TrieBackend<H, C>) -> Self {
 		ProvingBackend {
 			backend,
-			proof_recorder: RefCell::new(Recorder::new()) //, marker: PhantomData
+			proof_recorder: RefCell::new(Recorder::new()),
 		}
 	}
 
