@@ -29,8 +29,8 @@ pub enum ChainSpec {
 	LocalTestnet,
 	/// The PoC-1 testnet.
 	PoC1Testnet,
-	/// The PoC-2 testnet.
-	PoC2Testnet,
+	/// Whatever the current runtime is with the "global testnet" defaults.
+	StagingTestnet,
 	/// Custom Genesis file.
 	Custom(String),
 }
@@ -42,7 +42,7 @@ impl ChainSpec {
 			ChainSpec::PoC1Testnet => service::ChainSpec::poc_1_testnet_config()?,
 			ChainSpec::Development => service::ChainSpec::development_config(),
 			ChainSpec::LocalTestnet => service::ChainSpec::local_testnet_config(),
-			ChainSpec::PoC2Testnet => service::ChainSpec::poc_2_testnet_config(),
+			ChainSpec::StagingTestnet => service::ChainSpec::staging_testnet_config(),
 			ChainSpec::Custom(f) => service::ChainSpec::from_json_file(PathBuf::from(f))?,
 		})
 	}
@@ -54,7 +54,7 @@ impl<'a> From<&'a str> for ChainSpec {
 			"dev" => ChainSpec::Development,
 			"local" => ChainSpec::LocalTestnet,
 			"poc-1" => ChainSpec::PoC1Testnet,
-			"poc-2" => ChainSpec::PoC2Testnet,
+			"staging" => ChainSpec::StagingTestnet,
 			s => ChainSpec::Custom(s.into()),
 		}
 	}
@@ -66,7 +66,7 @@ impl From<ChainSpec> for String {
 			ChainSpec::Development => "dev".into(),
 			ChainSpec::LocalTestnet => "local".into(),
 			ChainSpec::PoC1Testnet => "poc-1".into(),
-			ChainSpec::PoC2Testnet => "poc-2".into(),
+			ChainSpec::StagingTestnet => "staging".into(),
 			ChainSpec::Custom(f) => format!("custom ({})", f),
 		}
 	}
