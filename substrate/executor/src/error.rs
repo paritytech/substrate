@@ -74,5 +74,11 @@ error_chain! {
 			description("invalid memory reference"),
 			display("Invalid memory reference"),
 		}
+
+		/// Consensus failure.
+		ConsensusFailure(wasm_result: Box<Result<Vec<u8>>>, native_result: Box<Result<Vec<u8>>>) {
+			description("consensus failure"),
+			display("Differing results from Wasm execution and native dispatch"),
+		}
 	}
 }
