@@ -41,7 +41,12 @@ extern crate wasmi;
 extern crate byteorder;
 extern crate rustc_hex;
 extern crate triehash;
+extern crate parking_lot;
+extern crate twox_hash;
 #[macro_use] extern crate log;
+
+#[macro_use]
+extern crate lazy_static;
 
 #[macro_use]
 extern crate error_chain;
@@ -70,4 +75,11 @@ pub use codec::Slicable;
 pub trait RuntimeInfo {
 	/// Native runtime information if any.
 	const NATIVE_VERSION: Option<RuntimeVersion>;
+
+	/// Extract RuntimeVersion of given :code block
+	fn runtime_version<E: Externalities> (
+		&self,
+		ext: &mut E,
+		code: &[u8]
+	) -> Option<RuntimeVersion>;
 }

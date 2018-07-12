@@ -20,7 +20,7 @@
 use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root};
 use runtime_support::storage::{self, StorageValue, StorageMap};
-use runtime_primitives::traits::{Hashing, BlakeTwo256};
+use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 use codec::{KeyedVec, Slicable};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
 

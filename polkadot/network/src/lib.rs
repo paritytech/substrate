@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Polkadot-specific network implementation.
+//!
+//! This manages gossip of consensus messages for BFT and for parachain statements,
+//! parachain block and extrinsic data fetching, communication between collators and validators,
+//! and more.
+
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -32,6 +38,7 @@ extern crate ed25519;
 extern crate futures;
 extern crate parking_lot;
 extern crate tokio;
+extern crate rhododendron;
 
 #[macro_use]
 extern crate log;
@@ -322,6 +329,43 @@ impl PolkadotProtocol {
 		self.pending = new_pending;
 	}
 
+	fn on_polkadot_message(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, raw: Vec<u8>, msg: Message) {
+		match msg {
+			Message::Statement(parent_hash, _statement) =>
+				self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash),
+			Message::SessionKey(parent_hash, key) => {
+				{
+					let info = match self.peers.get_mut(&peer_id) {
+						Some(peer) => peer,
+						None => return,
+					};
+
+					if !info.validator {
+						ctx.disable_peer(peer_id);
+						return;
+					}
+
+					match self.live_consensus {
+						Some(ref mut consensus) if consensus.parent_hash == parent_hash => {
+							consensus.session_keys.insert(key, peer_id);
+						}
+						_ => {}
+					}
+
+					info.session_keys.insert(parent_hash, key);
+				}
+				self.dispatch_pending_requests(ctx);
+			}
+			Message::RequestBlockData(req_id, hash) => {
+				let block_data = self.live_consensus.as_ref()
+					.and_then(|c| c.block_data(&hash));
+
+				send_polkadot_message(ctx, peer_id, Message::BlockData(req_id, block_data));
+			}
+			Message::BlockData(req_id, data) => self.on_block_data(ctx, peer_id, req_id, data),
+		}
+	}
+
 	fn on_block_data(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, req_id: RequestId, data: Option<BlockData>) {
 		match self.in_flight.remove(&(req_id, peer_id)) {
 			Some(req) => {
@@ -349,8 +393,7 @@ impl Specialization<Block> for PolkadotProtocol {
 		let local_status = match Status::decode(&mut &status.chain_status[..]) {
 			Some(status) => status,
 			None => {
-				ctx.disable_peer(peer_id);
-				return;
+				Status { collating_for: None }
 			}
 		};
 
@@ -422,48 +465,12 @@ impl Specialization<Block> for PolkadotProtocol {
 				self.consensus_gossip.on_bft_message(ctx, peer_id, msg)
 			}
 			generic_message::Message::ChainSpecific(raw) => {
-				let msg = match serde_json::from_slice(&raw) {
-					Ok(msg) => msg,
+				match serde_json::from_slice(&raw) {
+					Ok(msg) => self.on_polkadot_message(ctx, peer_id, raw, msg),
 					Err(e) => {
 						trace!(target: "p_net", "Bad message from {}: {}", peer_id, e);
 						ctx.disable_peer(peer_id);
-						return;
 					}
-				};
-
-				match msg {
-					Message::Statement(parent_hash, _statement) =>
-						self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash),
-					Message::SessionKey(parent_hash, key) => {
-						{
-							let info = match self.peers.get_mut(&peer_id) {
-								Some(peer) => peer,
-								None => return,
-							};
-
-							if !info.validator {
-								ctx.disable_peer(peer_id);
-								return;
-							}
-
-							match self.live_consensus {
-								Some(ref mut consensus) if consensus.parent_hash == parent_hash => {
-									consensus.session_keys.insert(key, peer_id);
-								}
-								_ => {}
-							}
-
-							info.session_keys.insert(parent_hash, key);
-						}
-						self.dispatch_pending_requests(ctx);
-					}
-					Message::RequestBlockData(req_id, hash) => {
-						let block_data = self.live_consensus.as_ref()
-							.and_then(|c| c.block_data(&hash));
-
-						send_polkadot_message(ctx, peer_id, Message::BlockData(req_id, block_data));
-					}
-					Message::BlockData(req_id, data) => self.on_block_data(ctx, peer_id, req_id, data),
 				}
 			}
 			_ => {}

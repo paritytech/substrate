@@ -15,6 +15,12 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Statement routing and consensus table router implementation.
+//!
+//! During the consensus process, validators exchange statements on validity and availability
+//! of parachain candidates.
+//! The `Router` in this file hooks into the underlying network to fulfill
+//! the `TableRouter` trait from `polkadot-consensus`, which is expected to call into a shared statement table
+//! and dispatch evaluation work as necessary when new statements come in.
 
 use polkadot_api::{PolkadotApi, LocalPolkadotApi};
 use polkadot_consensus::{SharedTable, TableRouter, SignedStatement, GenericStatement, StatementProducer};

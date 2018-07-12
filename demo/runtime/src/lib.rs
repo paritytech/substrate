@@ -66,8 +66,8 @@ pub struct Concrete;
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("demo"),
 	impl_name: ver_str!("parity-demo"),
-	authoring_version: 0,
-	spec_version: 0,
+	authoring_version: 1,
+	spec_version: 1,
 	impl_version: 0,
 };
 

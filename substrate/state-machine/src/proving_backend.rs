@@ -69,6 +69,10 @@ impl Backend for ProvingBackend {
 			.get_with(key, &mut *proof_recorder).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
 
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		self.backend.for_keys_with_prefix(prefix, f)
+	}
+
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.backend.pairs()
 	}
@@ -134,7 +138,7 @@ mod tests {
 		let proving_backend = test_proving();
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
-		
+
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
 		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
 		assert_eq!(trie_root, proving_root);

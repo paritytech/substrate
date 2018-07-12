@@ -47,5 +47,5 @@ pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: 
 
 /// Checks an unchecked extrinsic for validity.
 pub fn check_extrinsic(xt: UncheckedExtrinsic) -> bool {
-	xt.check(Staking::lookup).is_ok()
+	xt.check_with(Staking::lookup).is_ok()
 }

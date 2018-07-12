@@ -32,7 +32,6 @@
 extern crate ed25519;
 extern crate parking_lot;
 extern crate polkadot_api;
-extern crate polkadot_collator as collator;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
 extern crate polkadot_transaction_pool as transaction_pool;
@@ -48,6 +47,7 @@ extern crate substrate_client as client;
 
 extern crate exit_future;
 extern crate tokio;
+extern crate rhododendron;
 
 #[macro_use]
 extern crate error_chain;
@@ -79,7 +79,7 @@ use futures::future;
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
 
-pub use self::collation::{validate_collation, Collators, Collation};
+pub use self::collation::{validate_collation, Collators};
 pub use self::error::{ErrorKind, Error};
 pub use self::shared_table::{SharedTable, StatementProducer, ProducedStatements, Statement, SignedStatement, GenericStatement};
 pub use service::Service;
@@ -531,7 +531,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 	}
 
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<Hash>)>) {
-		use bft::generic::Misbehavior as GenericMisbehavior;
+		use rhododendron::Misbehavior as GenericMisbehavior;
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use runtime_primitives::MaybeUnsigned;
 		use polkadot_runtime::{Call, Extrinsic, BareExtrinsic, UncheckedExtrinsic, ConsensusCall};
@@ -661,7 +661,7 @@ pub struct CreateProposal<C: PolkadotApi>  {
 impl<C> CreateProposal<C> where C: PolkadotApi {
 	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<Block, Error> {
 		use polkadot_api::BlockBuilder;
-		use runtime_primitives::traits::{Hashing, BlakeTwo256};
+		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();

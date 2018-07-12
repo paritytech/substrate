@@ -39,6 +39,12 @@ error_chain! {
 			display("Invalid Code: {:?}", c),
 		}
 
+		/// Cound not get runtime version.
+		VersionInvalid {
+			description("Runtime version error"),
+			display("On-chain runtime does not specify version"),
+		}
+
 		/// Externalities have failed.
 		Externalities {
 			description("externalities failure"),

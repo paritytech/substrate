@@ -17,9 +17,66 @@
 use error::{Error, ErrorKind, Result};
 use state_machine::{CodeExecutor, Externalities};
 use wasm_executor::WasmExecutor;
+use wasmi::Module as WasmModule;
 use runtime_version::RuntimeVersion;
+use std::collections::HashMap;
 use codec::Slicable;
+use twox_hash::XxHash;
+use std::hash::Hasher;
+use parking_lot::{Mutex, MutexGuard};
 use RuntimeInfo;
+
+// For the internal Runtime Cache:
+// Do we run this natively or use the given WasmModule
+enum RunWith {
+	InvalidVersion(WasmModule),
+	NativeRuntime(RuntimeVersion),
+	WasmRuntime(RuntimeVersion, WasmModule)
+}
+
+type CacheType = HashMap<u64, RunWith>;
+
+lazy_static! {
+	static ref RUNTIMES_CACHE: Mutex<CacheType> = Mutex::new(HashMap::new());
+}
+
+// helper function to generate low-over-head caching_keys
+// it is asserted that part of the audit process that any potential on-chain code change
+// will have done is to ensure that the two-x hash is different to that of any other
+// :code value from the same chain
+fn gen_cache_key(code: &[u8]) -> u64 {
+	let mut h = XxHash::with_seed(0);
+	h.write(code);
+	h.finish()
+}
+
+/// fetch a runtime version from the cache or if there is no cached version yet, create
+/// the runtime version entry for `code`, determines whether `RunWith::NativeRuntime`
+/// can be used by by comparing returned RuntimeVersion to `ref_version`
+fn fetch_cached_runtime_version<'a, E: Externalities>(
+	cache: &'a mut MutexGuard<CacheType>,
+	ext: &mut E,
+	code: &[u8],
+	ref_version: RuntimeVersion
+) -> &'a RunWith {
+	cache.entry(gen_cache_key(code))
+		.or_insert_with(|| {
+			let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
+			let version = WasmExecutor.call_in_wasm_module(ext, &module, "version", &[]).ok()
+				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
+
+
+			if let Some(v) = version {
+				if ref_version.can_call_with(&v) {
+					RunWith::NativeRuntime(v)
+				} else {
+					RunWith::WasmRuntime(v, module)
+				}
+			} else {
+				RunWith::InvalidVersion(module)
+			}
+	})
+}
 
 fn safe_call<F, U>(f: F) -> Result<U>
 	where F: ::std::panic::UnwindSafe + FnOnce() -> U
@@ -60,6 +117,11 @@ pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
 impl<D: NativeExecutionDispatch + Sync + Send> NativeExecutor<D> {
 	/// Create new instance.
 	pub fn new() -> Self {
+		// FIXME: set this entry at compile time
+		RUNTIMES_CACHE.lock().insert(
+			gen_cache_key(D::native_equivalent()),
+			RunWith::NativeRuntime(D::VERSION));
+
 		NativeExecutor {
 			_dummy: Default::default(),
 		}
@@ -76,6 +138,18 @@ impl<D: NativeExecutionDispatch + Sync + Send> Clone for NativeExecutor<D> {
 
 impl<D: NativeExecutionDispatch + Sync + Send> RuntimeInfo for NativeExecutor<D> {
 	const NATIVE_VERSION: Option<RuntimeVersion> = Some(D::VERSION);
+
+	fn runtime_version<E: Externalities>(
+		&self,
+		ext: &mut E,
+		code: &[u8],
+	) -> Option<RuntimeVersion> {
+		let mut c = RUNTIMES_CACHE.lock();
+		match fetch_cached_runtime_version(&mut c, ext, code, D::VERSION) {
+			RunWith::NativeRuntime(v) | RunWith::WasmRuntime(v, _) => Some(v.clone()),
+			RunWith::InvalidVersion(_m) => None
+		}
+	}
 }
 
 impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D> {
@@ -88,17 +162,10 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		if code == D::native_equivalent() {
-			// call native
-			D::dispatch(ext, method, data)
-		} else {
-			let version = WasmExecutor.call(ext, code, "version", &[])?;
-			let version = RuntimeVersion::decode(&mut version.as_slice());
-			if version.map_or(false, |v| D::VERSION.can_call_with(&v)) {
-				return D::dispatch(ext, method, data)
-			}
-			// call into wasm.
-			WasmExecutor.call(ext, code, method, data)
+		let mut c = RUNTIMES_CACHE.lock();
+		match fetch_cached_runtime_version(&mut c, ext, code, D::VERSION) {
+			RunWith::NativeRuntime(_v) => D::dispatch(ext, method, data),
+			RunWith::WasmRuntime(_, m) | RunWith::InvalidVersion(m) => WasmExecutor.call_in_wasm_module(ext, m, method, data)
 		}
 	}
 }

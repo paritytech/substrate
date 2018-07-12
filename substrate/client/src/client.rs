@@ -20,7 +20,7 @@ use std::sync::Arc;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::BlockId};
+use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
@@ -216,13 +216,10 @@ impl<B, E, Block> Client<B, E, Block> where
 				.ok_or(error::ErrorKind::AuthLenInvalid.into()))
 	}
 
-	/// Get the set of authorities at a given block.
+	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		// TODO: Post Poc-2 return an error if version is missing
-		Ok(self.executor.call(id, "version", &[])
-			.and_then(|r| RuntimeVersion::decode(&mut &r.return_data[..])
-				.ok_or(error::ErrorKind::VersionInvalid.into()))
-			.unwrap_or_default())
+		self.executor.runtime_version(id)
 	}
 
 	/// Get call executor reference.
@@ -338,7 +335,8 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
-		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
+		let unchecked: bft::UncheckedJustification<_> = justification.uncheck().into();
+		transaction.set_block_data(header.clone(), body, Some(unchecked.into()), is_new_best)?;
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}
@@ -414,6 +412,15 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// Get block justification set by id.
 	pub fn justification(&self, id: &BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
 		self.backend.blockchain().justification(*id)
+	}
+
+	/// Get full block by id.
+	pub fn block(&self, id: &BlockId<Block>) -> error::Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
+			(Some(header), Some(extrinsics), Some(justification)) =>
+				Some(SignedBlock { block: RuntimeBlock { header, extrinsics }, justification }),
+			_ => None,
+		})
 	}
 
 	/// Get best block header.

@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use serde_json;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing, HashingFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor};
 use runtime_primitives::generic::BlockId;
 use network::PeerId;
 
@@ -38,7 +38,7 @@ use error;
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 
 /// Current protocol version.
-pub (crate) const CURRENT_VERSION: u32 = 1;
+pub (crate) const CURRENT_VERSION: u32 = 0;
 /// Current packet count.
 pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 
@@ -237,7 +237,8 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 		let message: Message<B> = match serde_json::from_slice(data) {
 			Ok(m) => m,
 			Err(e) => {
-				debug!("Invalid packet from {}: {}", peer_id, e);
+				debug!(target: "sync", "Invalid packet from {}: {}", peer_id, e);
+				trace!(target: "sync", "Invalid packet: {}", String::from_utf8_lossy(data));
 				io.disable_peer(peer_id);
 				return;
 			}
@@ -254,13 +255,13 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 						match mem::replace(&mut peer.block_request, None) {
 							Some(r) => r,
 							None => {
-								debug!("Unexpected response packet from {}", peer_id);
+								debug!(target: "sync", "Unexpected response packet from {}", peer_id);
 								io.disable_peer(peer_id);
 								return;
 							}
 						}
 					} else {
-						debug!("Unexpected packet from {}", peer_id);
+						debug!(target: "sync", "Unexpected packet from {}", peer_id);
 						io.disable_peer(peer_id);
 						return;
 					}
@@ -337,13 +338,14 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 			}
 			let number = header.number().clone();
 			let hash = header.hash();
+			let justification = if get_justification { self.context_data.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None };
 			let block_data = message::generic::BlockData {
 				hash: hash,
 				header: if get_header { Some(header) } else { None },
 				body: (if get_body { self.context_data.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None }).map(|body| message::Body::Extrinsics(body)),
 				receipt: None,
 				message_queue: None,
-				justification: if get_justification { self.context_data.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
+				justification: justification.map(|j| message::generic::BlockJustification::V2(j)),
 			};
 			blocks.push(block_data);
 			match request.direction {
@@ -524,6 +526,10 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 				best_number: info.chain.best_number,
 				best_hash: info.chain.best_hash,
 				chain_status: self.specialization.read().status(),
+
+				parachain_id: None,
+				validator_id: None,
+				validator_signature: None,
 			};
 			self.send_message(io, peer_id, GenericMessage::Status(status))
 		}
@@ -625,5 +631,5 @@ fn send_message<B: BlockT>(peers: &RwLock<HashMap<PeerId, Peer<B>>>, io: &mut Sy
 /// Hash a message.
 pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
 	let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
-	HashingFor::<B>::hash(&data)
+	HashFor::<B>::hash(&data)
 }

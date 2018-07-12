@@ -19,7 +19,6 @@ extern crate wasmi;
 use rstd::collections::btree_map::BTreeMap;
 use rstd::fmt;
 
-
 use self::wasmi::{
 	Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalRef, ImportResolver,
 	MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
@@ -104,11 +103,12 @@ fn from_runtime_value(v: RuntimeValue) -> TypedValue {
 }
 
 fn to_runtime_value(v: TypedValue) -> RuntimeValue {
+	use self::wasmi::nan_preserving_float::{F32, F64};
 	match v {
 		TypedValue::I32(v) => RuntimeValue::I32(v as i32),
 		TypedValue::I64(v) => RuntimeValue::I64(v as i64),
-		TypedValue::F32(v_bits) => RuntimeValue::F32(f32::from_bits(v_bits as u32)),
-		TypedValue::F64(v_bits) => RuntimeValue::F64(f64::from_bits(v_bits as u64)),
+		TypedValue::F32(v_bits) => RuntimeValue::F32(F32::from_bits(v_bits as u32)),
+		TypedValue::F64(v_bits) => RuntimeValue::F64(F64::from_bits(v_bits as u64)),
 	}
 }
 

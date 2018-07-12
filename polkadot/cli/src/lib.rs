@@ -24,10 +24,9 @@ extern crate atty;
 extern crate ansi_term;
 extern crate regex;
 extern crate time;
+extern crate fdlimit;
 extern crate futures;
 extern crate tokio;
-extern crate ctrlc;
-extern crate fdlimit;
 extern crate ed25519;
 extern crate triehash;
 extern crate parking_lot;
@@ -36,6 +35,7 @@ extern crate serde_json;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
@@ -65,12 +65,21 @@ mod informant;
 mod chain_spec;
 
 pub use chain_spec::ChainSpec;
+pub use client::error::Error as ClientError;
+pub use client::backend::Backend as ClientBackend;
+pub use state_machine::Backend as StateMachineBackend;
+pub use polkadot_primitives::Block as PolkadotBlock;
+pub use service::{Components as ServiceComponents, Service};
 
-use std::io;
+use std::io::{self, Write, Read, stdin, stdout};
+use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use polkadot_primitives::Block;
+use polkadot_primitives::{Block, BlockId};
+use codec::Slicable;
+use client::BlockOrigin;
+use runtime_primitives::generic::SignedBlock;
 
 use futures::Future;
 use tokio::runtime::Runtime;
@@ -97,13 +106,43 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 	}
 }
 
-fn load_spec(matches: &clap::ArgMatches) -> Result<service::ChainSpec, String> {
+fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), String> {
 	let chain_spec = matches.value_of("chain")
 		.map(ChainSpec::from)
-		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::StagingTestnet });
+	let is_global = match chain_spec {
+		ChainSpec::PoC1Testnet | ChainSpec::StagingTestnet => true,
+		_ => false,
+	};
 	let spec = chain_spec.load()?;
 	info!("Chain specification: {}", spec.name());
-	Ok(spec)
+	Ok((spec, is_global))
+}
+
+fn base_path(matches: &clap::ArgMatches) -> PathBuf {
+	matches.value_of("base-path")
+		.map(|x| Path::new(x).to_owned())
+		.unwrap_or_else(default_base_path)
+}
+
+/// Additional worker making use of the node, to run asynchronously before shutdown.
+///
+/// This will be invoked with the service and spawn a future that resolves
+/// when complete.
+pub trait Worker {
+	/// A future that resolves when the work is done or the node should exit.
+	/// This will be run on a tokio runtime.
+	type Work: Future<Item=(),Error=()>;
+
+	/// An exit scheduled for the future.
+	type Exit: Future<Item=(),Error=()> + Send + 'static;
+
+	/// Don't work, but schedule an exit.
+	fn exit_only(self) -> Self::Exit;
+
+	/// Do work and schedule exit.
+	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
+		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>;
 }
 
 /// Parse command line arguments and start the node.
@@ -114,19 +153,20 @@ fn load_spec(matches: &clap::ArgMatches) -> Result<service::ChainSpec, String> {
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T>(args: I) -> error::Result<()> where
+pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
+	W: Worker,
 {
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
 		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
 		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed => {
-			let _ = clap::App::from_yaml(yaml).print_long_help();
+			print!("{}", e);
 			return Ok(())
 		}
-		Err(e) => return Err(e.into()),
+		Err(e) => e.exit(),
 	};
 
 	// TODO [ToDr] Split parameters parsing from actual execution.
@@ -139,14 +179,18 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	info!("  by Parity Technologies, 2017, 2018");
 
 	if let Some(matches) = matches.subcommand_matches("build-spec") {
-		let spec = load_spec(&matches)?;
-		info!("Building chain spec");
-		let json = spec.to_json(matches.is_present("raw"))?;
-		print!("{}", json);
-		return Ok(())
+		return build_spec(matches);
 	}
 
-	let spec = load_spec(&matches)?;
+	if let Some(matches) = matches.subcommand_matches("export-blocks") {
+		return export_blocks(matches, worker.exit_only());
+	}
+
+	if let Some(matches) = matches.subcommand_matches("import-blocks") {
+		return import_blocks(matches, worker.exit_only());
+	}
+
+	let (spec, is_global) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 
 	if let Some(name) = matches.value_of("name") {
@@ -154,10 +198,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		info!("Node name: {}", config.name);
 	}
 
-	let base_path = matches.value_of("base-path")
-		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(default_base_path);
-
+	let base_path = base_path(&matches);
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(|| keystore_path(&base_path))
@@ -223,7 +264,11 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let mut runtime = Runtime::new()?;
 	let executor = runtime.executor();
 
-	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+	let telemetry_enabled =
+		matches.is_present("telemetry")
+		|| matches.value_of("telemetry-url").is_some()
+		|| (is_global && !matches.is_present("no-telemetry"));
+	let _guard = if telemetry_enabled {
 		let name = config.name.clone();
 		let chain_name = config.chain_spec.name().to_owned();
 		Some(init_telemetry(TelemetryConfig {
@@ -243,8 +288,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	};
 
 	match role == service::Role::LIGHT {
-		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, &matches, sys_conf)?,
-		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, &matches, sys_conf)?,
+		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, &matches, sys_conf, worker)?,
+		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, &matches, sys_conf, worker)?,
 	}
 
 	// TODO: hard exit if this stalls?
@@ -252,27 +297,139 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	Ok(())
 }
 
-fn run_until_exit<C>(runtime: &mut Runtime, service: service::Service<C>, matches: &clap::ArgMatches, sys_conf: SystemConfiguration) -> error::Result<()>
+fn build_spec(matches: &clap::ArgMatches) -> error::Result<()> {
+	let (spec, _) = load_spec(&matches)?;
+	info!("Building chain spec");
+	let json = spec.to_json(matches.is_present("raw"))?;
+	print!("{}", json);
+	Ok(())
+}
+
+fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
+	where E: Future<Item=(),Error=()> + Send + 'static
+{
+	let base_path = base_path(matches);
+	let (spec, _) = load_spec(&matches)?;
+	let mut config = service::Configuration::default_with_spec(spec);
+	config.database_path = db_path(&base_path).to_string_lossy().into();
+	info!("DB path: {}", config.database_path);
+	let client = service::new_client(config)?;
+	let (exit_send, exit_recv) = std::sync::mpsc::channel();
+	::std::thread::spawn(move || {
+		let _ = exit.wait();
+		let _ = exit_send.send(());
+	});
+	info!("Exporting blocks");
+	let mut block: u32 = match matches.value_of("from") {
+		Some(v) => v.parse().map_err(|_| "Invalid --from argument")?,
+		None => 1,
+	};
+
+	let last = match matches.value_of("to") {
+		Some(v) => v.parse().map_err(|_| "Invalid --to argument")?,
+		None => client.info()?.chain.best_number as u32,
+	};
+
+	if last < block {
+		return Err("Invalid block range specified".into());
+	}
+
+	let json = matches.is_present("json");
+
+	let mut file: Box<Write> = match matches.value_of("OUTPUT") {
+		Some(filename) => Box::new(File::open(filename)?),
+		None => Box::new(stdout()),
+	};
+
+	if !json {
+		file.write(&(last - block + 1).encode())?;
+	}
+
+	loop {
+		if exit_recv.try_recv().is_ok() {
+			break;
+		}
+		match client.block(&BlockId::number(block as u64))? {
+			Some(block) => {
+				if json {
+					serde_json::to_writer(&mut *file, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
+				} else {
+					file.write(&block.encode())?;
+				}
+			},
+			None => break,
+		}
+		if block % 10000 == 0 {
+			info!("#{}", block);
+		}
+		if block == last {
+			break;
+		}
+		block += 1;
+	}
+	Ok(())
+}
+
+fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
+	where E: Future<Item=(),Error=()> + Send + 'static
+{
+	let (spec, _) = load_spec(&matches)?;
+	let base_path = base_path(matches);
+	let mut config = service::Configuration::default_with_spec(spec);
+	config.database_path = db_path(&base_path).to_string_lossy().into();
+	let client = service::new_client(config)?;
+	let (exit_send, exit_recv) = std::sync::mpsc::channel();
+
+	::std::thread::spawn(move || {
+		let _ = exit.wait();
+		let _ = exit_send.send(());
+	});
+
+	let mut file: Box<Read> = match matches.value_of("INPUT") {
+		Some(filename) => Box::new(File::open(filename)?),
+		None => Box::new(stdin()),
+	};
+
+	info!("Importing blocks");
+	let count: u32 = Slicable::decode(&mut file).ok_or("Error reading file")?;
+	let mut block = 0;
+	for _ in 0 .. count {
+		if exit_recv.try_recv().is_ok() {
+			break;
+		}
+		match SignedBlock::decode(&mut file) {
+			Some(block) => {
+				let header = client.check_justification(block.block.header, block.justification.into())?;
+				client.import_block(BlockOrigin::File, header, Some(block.block.extrinsics))?;
+			},
+			None => {
+				warn!("Error reading block data.");
+				break;
+			}
+		}
+		block += 1;
+		if block % 10000 == 0 {
+			info!("#{}", block);
+		}
+	}
+	info!("Imported {} blocks. Best: #{}", block, client.info()?.chain.best_number);
+
+	Ok(())
+}
+
+fn run_until_exit<C, W>(
+	runtime: &mut Runtime,
+	service: service::Service<C>,
+	matches: &clap::ArgMatches,
+	sys_conf: SystemConfiguration,
+	worker: W,
+) -> error::Result<()>
 	where
 		C: service::Components,
+		W: Worker,
 		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
-	let exit = {
-		let (exit_send, exit) = exit_future::signal();
-		let exit_send = ::std::cell::RefCell::new(Some(exit_send));
-		ctrlc::CtrlC::set_handler(move || {
-			let exit_send = exit_send
-				.try_borrow_mut()
-				.expect("only borrowed in non-reetrant signal handler; qed")
-				.take();
-
-			if let Some(signal) = exit_send {
-				signal.fire();
-			}
-		});
-
-		exit
-	};
+	let (exit_send, exit) = exit_future::signal();
 
 	let executor = runtime.executor();
 	informant::start(&service, exit.clone(), executor.clone());
@@ -297,7 +454,8 @@ fn run_until_exit<C>(runtime: &mut Runtime, service: service::Service<C>, matche
 		)
 	};
 
-	let _ = exit.wait();
+	let _ = worker.work(&service).wait();
+	exit_send.fire();
 	Ok(())
 }
 

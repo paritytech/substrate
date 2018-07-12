@@ -91,11 +91,12 @@ impl From<::wasmi::RuntimeValue> for TypedValue {
 impl From<TypedValue> for ::wasmi::RuntimeValue {
 	fn from(val: TypedValue) -> ::wasmi::RuntimeValue {
 		use ::wasmi::RuntimeValue;
+		use ::wasmi::nan_preserving_float::{F32, F64};
 		match val {
 			TypedValue::I32(v) => RuntimeValue::I32(v),
 			TypedValue::I64(v) => RuntimeValue::I64(v),
-			TypedValue::F32(v_bits) => RuntimeValue::F32(f32::from_bits(v_bits as u32)),
-			TypedValue::F64(v_bits) => RuntimeValue::F64(f64::from_bits(v_bits as u64)),
+			TypedValue::F32(v_bits) => RuntimeValue::F32(F32::from_bits(v_bits as u32)),
+			TypedValue::F64(v_bits) => RuntimeValue::F64(F64::from_bits(v_bits as u64)),
 		}
 	}
 }

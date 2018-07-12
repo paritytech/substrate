@@ -185,7 +185,7 @@ impl<A: Executable, B: Executable> Executable for (A, B) {
 }
 
 /// Abstraction around hashing
-pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
+pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
 	type Output: Member + AsRef<[u8]>;
@@ -218,12 +218,12 @@ pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// S
 	fn storage_root() -> Self::Output;
 }
 
-/// Blake2-256 Hashing implementation.
+/// Blake2-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
-impl Hashing for BlakeTwo256 {
+impl Hash for BlakeTwo256 {
 	type Output = substrate_primitives::H256;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
@@ -321,7 +321,7 @@ pub trait Digest {
 pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'static {
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Slicable;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
-	type Hashing: Hashing<Output = Self::Hash>;
+	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Member + Default;
 
 	fn new(
@@ -348,7 +348,7 @@ pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 's
 	fn set_digest(&mut self, Self::Digest);
 
 	fn hash(&self) -> Self::Hash {
-		<Self::Hashing as Hashing>::hash_of(self)
+		<Self::Hashing as Hash>::hash_of(self)
 	}
 }
 
@@ -366,40 +366,41 @@ pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'st
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
 	fn hash(&self) -> Self::Hash {
-		<<Self::Header as Header>::Hashing as Hashing>::hash_of(self.header())
+		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
 }
 
 /// Extract the hashing type for a block.
-pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
+pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-pub trait Checkable: Sized + Send + Sync {
-	type Address: Member + MaybeDisplay;
-	type AccountId: Member + MaybeDisplay;
-	type Checked: Member;
-	fn sender(&self) -> &Self::Address;
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
+/// Implement for pieces of information that require some additional context `Context` in order to be
+/// checked.
+pub trait Checkable<Context>: Sized {
+	/// Returned if `check_with` succeeds.
+	type Checked;
+
+	fn check_with(self, context: Context) -> Result<Self::Checked, &'static str>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-///
-/// This does that checking without requiring a lookup argument.
-pub trait BlindCheckable: Sized + Send + Sync {
-	type Address: Member + MaybeDisplay;
-	type Checked: Member;
-	fn sender(&self) -> &Self::Address;
+/// Implement for pieces of information that don't require additional context in order to be
+/// checked.
+pub trait BlindCheckable: Sized {
+	/// Returned if `check` succeeds.
+	type Checked;
+
 	fn check(self) -> Result<Self::Checked, &'static str>;
 }
 
-impl<T: BlindCheckable> Checkable for T {
-	type Address = <Self as BlindCheckable>::Address;
-	type AccountId = <Self as BlindCheckable>::Address;
+// Every `BlindCheckable` is also a `Checkable` for arbitrary `Context`.
+impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
-	fn sender(&self) -> &Self::Address { BlindCheckable::sender(self) }
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, _: ThisLookup) -> Result<Self::Checked, &'static str> { BlindCheckable::check(self) }
+	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> {
+		BlindCheckable::check(self)
+	}
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
