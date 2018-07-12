@@ -16,7 +16,7 @@
 
 //! Defines WASM module logic.
 
-use core::{intrinsics, panic};
+use core::{intrinsics, panic, alloc};
 use parachain::{self, ValidationResult};
 use parachain::codec::Slicable;
 use super::{HeadData, BlockData};
@@ -29,9 +29,9 @@ pub fn panic(_info: &panic::PanicInfo) -> ! {
 	}
 }
 
-#[lang = "oom"]
+#[alloc_error_handler]
 #[no_mangle]
-pub fn oom() -> ! {
+pub fn oom(_: alloc::Layout) -> ! {
 	unsafe {
 		intrinsics::abort();
 	}

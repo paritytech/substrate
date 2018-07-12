@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use codec::Slicable;
 use primitives::sandbox as sandbox_primitives;
-use wasm_utils::DummyUserError;
+use wasm_utils::UserError;
 use wasmi;
 use wasmi::memory_units::Pages;
 use wasmi::{
@@ -161,14 +161,14 @@ pub trait SandboxCapabilities {
 	/// # Errors
 	///
 	/// Returns `Err` if `ptr + data.len()` is out of bounds.
-	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> Result<(), DummyUserError>;
+	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> Result<(), UserError>;
 
 	/// Read `len` bytes from the supervisor memory.
 	///
 	/// # Errors
 	///
 	/// Returns `Err` if `ptr + len` is out of bounds.
-	fn read_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>, DummyUserError>;
+	fn read_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>, UserError>;
 }
 
 /// Implementation of [`Externals`] that allows execution of guest module with
@@ -182,7 +182,7 @@ pub struct GuestExternals<'a, FE: SandboxCapabilities + Externals + 'a> {
 }
 
 fn trap() -> Trap {
-	TrapKind::Host(Box::new(DummyUserError)).into()
+	TrapKind::Host(Box::new(UserError("Sandbox error"))).into()
 }
 
 fn deserialize_result(serialized_result: &[u8]) -> Result<Option<RuntimeValue>, Trap> {
@@ -338,8 +338,8 @@ impl SandboxInstance {
 fn decode_environment_definition(
 	raw_env_def: &[u8],
 	memories: &[Option<MemoryRef>],
-) -> Result<(Imports, GuestToSupervisorFunctionMapping), DummyUserError> {
-	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..]).ok_or_else(|| DummyUserError)?;
+) -> Result<(Imports, GuestToSupervisorFunctionMapping), UserError> {
+	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..]).ok_or_else(|| UserError("Sandbox error"))?;
 
 	let mut func_map = HashMap::new();
 	let mut memories_map = HashMap::new();
@@ -359,8 +359,8 @@ fn decode_environment_definition(
 				let memory_ref = memories
 					.get(memory_idx as usize)
 					.cloned()
-					.ok_or_else(|| DummyUserError)?
-					.ok_or_else(|| DummyUserError)?;
+					.ok_or_else(|| UserError("Sandbox error"))?
+					.ok_or_else(|| UserError("Sandbox error"))?;
 				memories_map.insert((module, field), memory_ref);
 			}
 		}
@@ -395,12 +395,12 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 	wasm: &[u8],
 	raw_env_def: &[u8],
 	state: u32,
-) -> Result<u32, DummyUserError> {
+) -> Result<u32, UserError> {
 	let (imports, guest_to_supervisor_mapping) =
 		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
 
-	let module = Module::from_buffer(wasm).map_err(|_| DummyUserError)?;
-	let instance = ModuleInstance::new(&module, &imports).map_err(|_| DummyUserError)?;
+	let module = Module::from_buffer(wasm).map_err(|_| UserError("Sandbox error"))?;
+	let instance = ModuleInstance::new(&module, &imports).map_err(|_| UserError("Sandbox error"))?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
@@ -418,7 +418,7 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 		|guest_externals| {
 			instance
 				.run_start(guest_externals)
-				.map_err(|_| DummyUserError)
+				.map_err(|_| UserError("Sandbox error"))
 		},
 	)?;
 
@@ -451,14 +451,14 @@ impl Store {
 	///
 	/// Returns `Err` if the memory couldn't be created.
 	/// Typically happens if `initial` is more than `maximum`.
-	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32, DummyUserError> {
+	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32, UserError> {
 		let maximum = match maximum {
 			sandbox_primitives::MEM_UNLIMITED => None,
 			specified_limit => Some(Pages(specified_limit as usize)),
 		};
 
 		let mem =
-			MemoryInstance::alloc(Pages(initial as usize), maximum).map_err(|_| DummyUserError)?;
+			MemoryInstance::alloc(Pages(initial as usize), maximum).map_err(|_| UserError("Sandbox error"))?;
 		let mem_idx = self.memories.len();
 		self.memories.push(Some(mem));
 		Ok(mem_idx as u32)
@@ -470,12 +470,12 @@ impl Store {
 	///
 	/// Returns `Err` If `instance_idx` isn't a valid index of an instance or
 	/// instance is already torndown.
-	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance>, DummyUserError> {
+	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance>, UserError> {
 		self.instances
 			.get(instance_idx as usize)
 			.cloned()
-			.ok_or_else(|| DummyUserError)?
-			.ok_or_else(|| DummyUserError)
+			.ok_or_else(|| UserError("Sandbox error"))?
+			.ok_or_else(|| UserError("Sandbox error"))
 	}
 
 	/// Returns reference to a memory instance by `memory_idx`.
@@ -484,12 +484,12 @@ impl Store {
 	///
 	/// Returns `Err` If `memory_idx` isn't a valid index of an memory or
 	/// memory is already torndown.
-	pub fn memory(&self, memory_idx: u32) -> Result<MemoryRef, DummyUserError> {
+	pub fn memory(&self, memory_idx: u32) -> Result<MemoryRef, UserError> {
 		self.memories
 			.get(memory_idx as usize)
 			.cloned()
-			.ok_or_else(|| DummyUserError)?
-			.ok_or_else(|| DummyUserError)
+			.ok_or_else(|| UserError("Sandbox error"))?
+			.ok_or_else(|| UserError("Sandbox error"))
 	}
 
 	/// Teardown the memory at the specified index.
@@ -497,18 +497,18 @@ impl Store {
 	/// # Errors
 	///
 	/// Returns `Err` if `memory_idx` isn't a valid index of an memory.
-	pub fn memory_teardown(&mut self, memory_idx: u32) -> Result<(), DummyUserError> {
+	pub fn memory_teardown(&mut self, memory_idx: u32) -> Result<(), UserError> {
 		if memory_idx as usize >= self.memories.len() {
-			return Err(DummyUserError);
+			return Err(UserError("Sandbox error"));
 		}
 		self.memories[memory_idx as usize] = None;
 		Ok(())
 	}
 
 	/// Teardown the instance at the specified index.
-	pub fn instance_teardown(&mut self, instance_idx: u32) -> Result<(), DummyUserError> {
+	pub fn instance_teardown(&mut self, instance_idx: u32) -> Result<(), UserError> {
 		if instance_idx as usize >= self.instances.len() {
-			return Err(DummyUserError);
+			return Err(UserError("Sandbox error"));
 		}
 		self.instances[instance_idx as usize] = None;
 		Ok(())

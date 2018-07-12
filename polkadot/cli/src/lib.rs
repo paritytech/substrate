@@ -106,13 +106,17 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 	}
 }
 
-fn load_spec(matches: &clap::ArgMatches) -> Result<service::ChainSpec, String> {
+fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), String> {
 	let chain_spec = matches.value_of("chain")
 		.map(ChainSpec::from)
-		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::StagingTestnet });
+	let is_global = match chain_spec {
+		ChainSpec::PoC1Testnet | ChainSpec::StagingTestnet => true,
+		_ => false,
+	};
 	let spec = chain_spec.load()?;
 	info!("Chain specification: {}", spec.name());
-	Ok(spec)
+	Ok((spec, is_global))
 }
 
 fn base_path(matches: &clap::ArgMatches) -> PathBuf {
@@ -186,7 +190,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		return import_blocks(matches, worker.exit_only());
 	}
 
-	let spec = load_spec(&matches)?;
+	let (spec, is_global) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 
 	if let Some(name) = matches.value_of("name") {
@@ -260,7 +264,11 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	let mut runtime = Runtime::new()?;
 	let executor = runtime.executor();
 
-	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+	let telemetry_enabled =
+		matches.is_present("telemetry")
+		|| matches.value_of("telemetry-url").is_some()
+		|| (is_global && !matches.is_present("no-telemetry"));
+	let _guard = if telemetry_enabled {
 		let name = config.name.clone();
 		let chain_name = config.chain_spec.name().to_owned();
 		Some(init_telemetry(TelemetryConfig {
@@ -290,7 +298,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 }
 
 fn build_spec(matches: &clap::ArgMatches) -> error::Result<()> {
-	let spec = load_spec(&matches)?;
+	let (spec, _) = load_spec(&matches)?;
 	info!("Building chain spec");
 	let json = spec.to_json(matches.is_present("raw"))?;
 	print!("{}", json);
@@ -301,7 +309,7 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	where E: Future<Item=(),Error=()> + Send + 'static
 {
 	let base_path = base_path(matches);
-	let spec = load_spec(&matches)?;
+	let (spec, _) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path).to_string_lossy().into();
 	info!("DB path: {}", config.database_path);
@@ -365,7 +373,7 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	where E: Future<Item=(),Error=()> + Send + 'static
 {
-	let spec = load_spec(&matches)?;
+	let (spec, _) = load_spec(&matches)?;
 	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path).to_string_lossy().into();

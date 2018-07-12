@@ -72,7 +72,6 @@ pub trait Trait: Eq + Clone {
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
-		Hash = Self::Hash,
 		Digest = Self::Digest
 	>;
 }

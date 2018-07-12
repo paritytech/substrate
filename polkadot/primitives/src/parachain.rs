@@ -144,7 +144,7 @@ pub struct CandidateReceipt {
 	pub parachain_index: Id,
 	/// The collator's relay-chain account ID
 	pub collator: super::AccountId,
-	/// Signature on block data by collator.
+	/// Signature on blake2-256 of the block data by collator.
 	pub signature: CandidateSignature,
 	/// The head-data
 	pub head_data: HeadData,
@@ -194,6 +194,17 @@ impl CandidateReceipt {
 	pub fn hash(&self) -> Hash {
 		use runtime_primitives::traits::{BlakeTwo256, Hash};
 		BlakeTwo256::hash_of(self)
+	}
+
+	/// Check integrity vs. provided block data.
+	pub fn check_signature(&self) -> Result<(), ()> {
+		use runtime_primitives::traits::Verify;
+
+		if self.signature.verify(&self.block_data_hash.0[..], &self.collator) {
+			Ok(())
+		} else {
+			Err(())
+		}
 	}
 }
 
