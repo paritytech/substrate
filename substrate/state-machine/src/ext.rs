@@ -53,7 +53,12 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, H: Hasher, C: NodeCodec<H>, B: 'a + Backend<H, C>> { //TODO: can I get rid of the trait bounds here?
+pub struct Ext<'a, H, C, B>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	B: 'a + Backend<H,C>,
+{
 	// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
 	// The storage backend to read from.
@@ -93,7 +98,12 @@ where
 }
 
 #[cfg(test)]
-impl<'a, H: Hasher, C: NodeCodec<H>, B: 'a + Backend<H, C>> Ext<'a, H, C, B> {
+impl<'a, H, C, B> Ext<'a, H, C, B>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	B: 'a + Backend<H,C>,
+{
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		use std::collections::HashMap;
 
@@ -136,7 +146,10 @@ where
 		42
 	}
 
-	fn storage_root(&mut self) -> H::Out where H::Out: Ord + Encodable {
+	fn storage_root(&mut self) -> H::Out
+	where
+		H::Out: Ord + Encodable
+	{
 		if let Some((_, ref root)) =  self.transaction {
 			return root.clone();
 		}

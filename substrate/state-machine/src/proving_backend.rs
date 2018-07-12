@@ -73,7 +73,6 @@ where
 			.get_with(key, &mut *proof_recorder).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
 
-	// TODO: "error[E0283]: type annotations required: cannot resolve `_: patricia_trie::NodeCodec<H>`"/"note: required because of the requirements on the impl of `backend::Backend<H, _>` for `trie_backend::TrieBackend<H>`")
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.backend.for_keys_with_prefix(prefix, f)
 	}

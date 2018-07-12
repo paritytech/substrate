@@ -20,7 +20,5 @@ triehash = { git = "https://github.com/paritytech/parity-common" }
 rlp = { git = "https://github.com/paritytech/parity-common" }
 
 [dev-dependencies]
-# We need `KeccakHasher` from here
-keccak-hasher = { git = "https://github.com/paritytech/parity" }
-# We need `RlpCodec` from here
-patricia-trie-ethereum = { git = "https://github.com/paritytech/parity" }
+keccak-hasher = { git = "https://github.com/paritytech/parity" } # REVIEW: We need `KeccakHasher` from here – better way?
+patricia-trie-ethereum = { git = "https://github.com/paritytech/parity" } # REVIEW: We need `RlpCodec` from here – better way?

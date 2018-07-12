@@ -16,7 +16,7 @@
 
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
-extern crate ethcore_crypto as crypto;
+extern crate parity_crypto as crypto;
 extern crate subtle;
 extern crate ed25519;
 extern crate rand;

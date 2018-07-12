@@ -31,8 +31,8 @@ pub struct TestExternalities<H> {
 }
 
 impl<H: Hasher> TestExternalities<H> {
-	#[cfg(test)]
-	fn new() -> Self {
+	/// Create a new instance of `TestExternalities`
+	pub fn new() -> Self {
 		TestExternalities {inner: HashMap::new(), hasher: PhantomData}
 	}
 }
