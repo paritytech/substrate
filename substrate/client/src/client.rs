@@ -326,6 +326,7 @@ impl<B, E, Block> Client<B, E, Block> where
 					&mut overlay,
 					"execute_block",
 					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode()
+				// TODO: intercept Err::ConsensusFailure, report failure wrt block and then accept wasm result.
 				)?;
 
 				Some(storage_update)

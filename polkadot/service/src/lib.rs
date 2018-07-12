@@ -109,7 +109,7 @@ pub fn new_client(config: Configuration) -> Result<Arc<Client<
 		path: config.database_path.into(),
 		pruning: config.pruning,
 	};
-	let executor = polkadot_executor::Executor::new();
+	let executor = polkadot_executor::Executor::with_default_strategy(config.execution_strategy);
 	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
 	let components = components::FullComponents { is_validator };
 	let (client, _) = components.build_client(db_settings, executor, &config.chain_spec)?;

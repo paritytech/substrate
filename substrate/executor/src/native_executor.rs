@@ -242,6 +242,9 @@ macro_rules! native_executor_instance {
 			pub fn new() -> $crate::NativeExecutor<$name> {
 				$crate::NativeExecutor::new($crate::ExecutionStrategy::NativeWhenPossible)
 			}
+			pub fn with_default_strategy(strategy: $crate::ExecutionStrategy) -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor::new(strategy)
+			}
 		}
 	}
 }
