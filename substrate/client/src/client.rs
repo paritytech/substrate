@@ -300,6 +300,12 @@ impl<B, E, Block> Client<B, E, Block> where
 		*self.importing_block.write() = Some(hash);
 		let result = self.execute_and_import_block(origin, hash, header, justification, body);
 		*self.importing_block.write() = None;
+		telemetry!("block.import";
+			"height" => { let n: u64 = header.number().as_(); n },
+			"best" => ?hash,
+			"is_new_best" => is_new_best,
+			"origin" => ?origin
+		);
 		result
 	}
 
@@ -335,7 +341,6 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
-		telemetry!("block.import"; "height" => { let n: u64 = header.number().as_(); n }, "best" => ?hash, "is_new_best" => is_new_best, "origin" => ?origin);
 		let unchecked: bft::UncheckedJustification<_> = justification.uncheck().into();
 		transaction.set_block_data(header.clone(), body, Some(unchecked.into()), is_new_best)?;
 		if let Some(storage_update) = storage_update {
