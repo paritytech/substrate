@@ -30,7 +30,7 @@ pub trait Ext {
 	fn create(&mut self, code: &[u8], value: Self::Balance);
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
-	fn call(&mut self, to: &Self::AccountId, value: Self::Balance);
+	fn call(&mut self, to: &Self::AccountId, value: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<ExecutionResult, ()>;
 }
 
 /// Error that can occur while preparing or executing wasm smart-contract.
@@ -118,14 +118,12 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 }
 
 struct GasMeter {
-	gas_used: u64,
-	gas_limit: u64,
+	gas_left: u64,
 }
 impl GasMeter {
 	fn new(gas_limit: u64) -> GasMeter {
 		GasMeter {
-			gas_limit,
-			gas_used: 0,
+			gas_left: gas_limit,
 		}
 	}
 	/// Account for used gas.
@@ -134,27 +132,32 @@ impl GasMeter {
 	/// amount of gas has lead to overflow. On success returns `true`.
 	///
 	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
+	#[must_use]
 	fn charge(&mut self, amount: u64) -> bool {
-		match self.gas_used.checked_add(amount) {
+		match self.gas_left.checked_sub(amount) {
 			None => false,
-			Some(val) if val > self.gas_limit => false,
+			Some(val) if val == 0 => false,
 			Some(val) => {
-				self.gas_used = val;
+				self.gas_left = val;
 				true
 			}
 		}
 	}
+
+	/// Override current gas left value.
+	///
+	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
+	#[must_use]
+	fn set_gas_left(&mut self, gas_left: u64) -> bool {
+		self.gas_left = gas_left;
+
+		// Continue only if there is gas left.
+		gas_left > 0
+	}
+
 	/// Returns how much gas left from the initial budget.
 	fn gas_left(&self) -> u64 {
-		self.gas_limit
-			.checked_sub(self.gas_used)
-			.expect(
-				"gas_used is always incremented via Self::charge;
-				Self::charge ensures that gas_used is always less than or equal to gas_limit;
-				this substraction can never underflow;
-				qed;
-				"
-			)
+		self.gas_left
 	}
 }
 
@@ -176,7 +179,7 @@ fn to_execution_result<T: Ext>(
 		// Any other kind of a trap should result in a failure.
 		(Some(_), _) => {
 			return Err(Error::Invoke);
-}
+		}
 		_ => {
 			// All possible cases should have been handled.
 			// If the control flow reached here, then it is a logic error.
@@ -194,8 +197,8 @@ fn to_execution_result<T: Ext>(
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ExecutionResult {
-	return_data: Vec<u8>,
-	gas_left: u64,
+	pub return_data: Vec<u8>,
+	pub gas_left: u64,
 }
 
 impl ExecutionResult {
@@ -321,9 +324,27 @@ pub fn execute<'a, T: Ext>(
 		e.memory().get(value_ptr, &mut value_buf)?;
 		let value = T::Balance::decode(&mut &value_buf[..]).unwrap();
 
-		e.ext_mut().call(&transfer_to, value);
+		// TODO: Read input data from memory.
+		// TODO: Let user to choose how much gas to devote for the execution.
+		let input_data = Vec::new();
+		let gas_limit = e.gas_meter.gas_left();
 
-		Ok(sandbox::ReturnValue::Unit)
+		match e.ext_mut().call(&transfer_to, value, gas_limit, input_data) {
+			Ok(ExecutionResult { gas_left, .. }) => {
+				// TODO: Find a way how to pass return_data back to the this sandbox.
+				if e.gas_meter.set_gas_left(gas_left) {
+					Ok(sandbox::ReturnValue::Unit)
+				} else {
+					// This is rather defensive, since out-of-gas should be detected earlier and
+					// reported as Err(_).
+					Err(sandbox::HostError)
+				}
+			}
+			Err(_) => {
+				// TODO: Return a status code value that can be handled by the caller.
+				Err(sandbox::HostError)
+			}
+		}
 	}
 
 	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
@@ -615,13 +636,19 @@ mod tests {
 				}
 			);
 		}
-		fn call(&mut self, to: &Self::AccountId, value: Self::Balance) {
+		fn call(&mut self, to: &Self::AccountId, value: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<ExecutionResult, ()> {
 			self.transfers.push(
 				TransferEntry {
 					to: *to,
 					value,
 				}
 			);
+			// Assume for now that it was just a plain transfer.
+			// TODO: Add tests for different call outcomes.
+			Ok(ExecutionResult {
+				gas_left: gas_limit,
+				return_data: Vec::new(),
+			})
 		}
 	}
 

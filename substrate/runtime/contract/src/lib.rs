@@ -53,20 +53,23 @@ extern crate assert_matches;
 #[cfg(test)]
 extern crate wabt;
 
+mod account_db;
 mod double_map;
 mod vm;
-mod account_db;
+mod exec;
 
 // TODO: Remove this
 pub use vm::execute;
 pub use vm::Ext;
 
-use double_map::StorageDoubleMap;
-use account_db::{AccountDb, OverlayAccountDb};
+use exec::ExecutionContext;
 
-use runtime_support::StorageMap;
+use account_db::{AccountDb, OverlayAccountDb};
+use double_map::StorageDoubleMap;
+
 use runtime_primitives::traits::{MaybeEmpty, RefInto};
 use runtime_support::dispatch::Result;
+use runtime_support::StorageMap;
 
 use rstd::collections::btree_map::{BTreeMap, Entry};
 
@@ -108,86 +111,6 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 	type Value = Vec<u8>;
 }
 
-struct TransactionData {
-	// tx_origin
-	// tx_gas_price
-	// block_number
-	// timestamp
-	// etc
-}
-
-struct ExecutionContext<'a, T: Trait + 'a> {
-	// aux for the first transaction.
-	_caller: T::AccountId,
-	// typically should be dest
-	self_account: T::AccountId,
-	account_db: &'a mut OverlayAccountDb<'a, T>,
-	gas_price: u64,
-	depth: usize,
-}
-
-impl<'a, T: Trait> ExecutionContext<'a, T> {
-	/// Make a call to the specified address.
-	fn call(
-		&mut self,
-		dest: T::AccountId,
-		value: T::Balance,
-		gas_limit: u64,
-		data: Vec<u8>,
-	) -> Result {
-		let dest_code = <CodeOf<T>>::get(&dest);
-
-		let mut overlay = OverlayAccountDb::new(self.account_db);
-
-		// TODO: transfer value using `overlay`. Return an error if failed.
-
-		if !dest_code.is_empty() {
-			let mut nested = ExecutionContext {
-				account_db: &mut overlay,
-				_caller: self.self_account.clone(),
-				self_account: dest.clone(),
-				gas_price: self.gas_price,
-				depth: self.depth + 1,
-			};
-
-			vm::execute(&dest_code, &mut nested, gas_limit).unwrap();
-		}
-
-		Ok(())
-	}
-
-	// TODO: fn create
-}
-
-impl<'a, T: Trait + 'a> vm::Ext for ExecutionContext<'a, T> {
-	type AccountId = T::AccountId;
-	type Balance = T::Balance;
-
-	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.account_db.get_storage(&self.self_account, key)
-	}
-
-	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
-		self.account_db.set_storage(&self.self_account, key.to_vec(), value)
-	}
-
-	fn create(&mut self, code: &[u8], value: Self::Balance) {
-		panic!()
-	}
-
-	fn call(&mut self, to: &Self::AccountId, value: Self::Balance) {
-		// TODO: Pass these thru parameters
-		let mut gas_limit = 100_000;
-		let data = Vec::new();
-
-		let result = self.call(
-			to.clone(),
-			value,
-			gas_limit,
-			data,
-		);
-	}
-}
 
 impl<T: Trait> Module<T> {
 	fn transact(
@@ -217,12 +140,7 @@ impl<T: Trait> Module<T> {
 			account_db: &mut overlay,
 		};
 
-		ctx.call(
-			dest,
-			value,
-			gas_limit,
-			data,
-		);
+		ctx.call(dest, value, gas_limit, data);
 
 		// TODO: commit changes from `overlay` to DirectAccountDb.
 		// TODO: finalization: refund `gas_left`.
