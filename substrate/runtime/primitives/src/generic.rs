@@ -96,7 +96,7 @@ impl<Address, AccountId, Index, Call, Signature> UncheckedExtrinsic<Address, Ind
 	}
 }
 
-impl<Address, AccountId, Index, Call, Signature> traits::Checkable
+impl<Address, AccountId, Index, Call, Signature, ThisLookup> traits::Checkable<ThisLookup>
 	for UncheckedExtrinsic<Address, Index, Call, ::MaybeUnsigned<Signature>>
 where
 	Address: Member + Default + MaybeDisplay,
@@ -106,18 +106,11 @@ where
 	AccountId: Member + Default + MaybeDisplay,
 	::MaybeUnsigned<Signature>: Member,
 	Extrinsic<AccountId, Index, Call>: Slicable,
+	ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str>,
 {
-	type Address = Address;
-	type AccountId = AccountId;
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 
-	fn sender(&self) -> &Address {
-		&self.extrinsic.signed
-	}
-
-	fn check<ThisLookup>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str> where
-		ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str>,
-	{
+	fn check_with(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str> {
 		if !self.is_signed() {
 			Ok(CheckedExtrinsic(Extrinsic {
 				signed: Default::default(),
