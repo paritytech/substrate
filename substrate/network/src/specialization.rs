@@ -42,4 +42,7 @@ pub trait Specialization<B: BlockT>: Send + Sync + 'static {
 
 	/// Called periodically to maintain peers and handle timeouts.
 	fn maintain_peers(&mut self, _ctx: &mut Context<B>) { }
+
+	/// Called when a block is _imported_ at the head of the chain (not during major sync).
+	fn on_block_imported(&mut self, _ctx: &mut Context<B>, _hash: B::Hash, _header: &B::Header) { }
 }

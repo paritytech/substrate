@@ -560,6 +560,11 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 
 	pub fn on_block_imported(&self, io: &mut SyncIo, hash: B::Hash, header: &B::Header) {
 		self.sync.write().update_chain_info(&header);
+		self.specialization.write().on_block_imported(
+			&mut ProtocolContext::new(&self.context_data, io),
+			hash.clone(),
+			header
+		);
 
 		// blocks are not announced by light clients
 		if self.config.roles & Role::LIGHT == Role::LIGHT {
