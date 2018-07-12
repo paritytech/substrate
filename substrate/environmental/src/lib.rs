@@ -190,15 +190,15 @@ macro_rules! environmental {
 			}
 		}
 	};
-    ($name:ident : trait @$t:ident [$($args:ty,)*]) => {
-        #[allow(non_camel_case_types, dead_code)]
-        struct $name { __private_field: () }
+	($name:ident : trait @$t:ident [$($args:ty,)*]) => {
+		#[allow(non_camel_case_types, dead_code)]
+		struct $name { __private_field: () }
 
 		thread_local_impl!(static GLOBAL: $crate::imp::RefCell<Option<*mut ($t<$($args),*> + 'static)>>
 			= $crate::imp::RefCell::new(None));
 
-        impl $name {
-            #[allow(unused_imports)]
+		impl $name {
+		#[allow(unused_imports)]
 
 			pub fn using<R, F: FnOnce() -> R>(
 				protected: &mut $t<$($args),*>,
@@ -208,18 +208,18 @@ macro_rules! environmental {
 					$crate::imp::transmute::<&mut $t<$($args),*>, &mut ($t<$($args),*> + 'static)>(protected)
 				};
 				$crate::using(&GLOBAL, lifetime_extended, f)
-            }
+			}
 
 			pub fn with<R, F: for<'a> FnOnce(&'a mut ($t<$($args),*> + 'a)) -> R>(
 				f: F
 			) -> Option<R> {
 				$crate::with(&GLOBAL, |x| f(x))
 			}
-        }
-    };
-    ($name:ident : trait $t:ident <>) => { environmental! { $name : trait @$t [] } };
-    ($name:ident : trait $t:ident < $($args:ty),* $(,)* >) => { environmental! { $name : trait @$t [$($args,)*] } };
-    ($name:ident : trait $t:ident) => { environmental! { $name : trait @$t [] } };
+		}
+	};
+	($name:ident : trait $t:ident <>) => { environmental! { $name : trait @$t [] } };
+	($name:ident : trait $t:ident < $($args:ty),* $(,)* >) => { environmental! { $name : trait @$t [$($args,)*] } };
+	($name:ident : trait $t:ident) => { environmental! { $name : trait @$t [] } };
 }
 
 #[cfg(test)]
