@@ -237,6 +237,7 @@ dependencies = [
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
  "substrate-runtime-timestamp 0.1.0",
+ "substrate-runtime-version 0.1.0",
  "substrate-serializer 0.1.0",
 ]
 

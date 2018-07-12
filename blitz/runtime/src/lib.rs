@@ -44,10 +44,13 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 extern crate blitz_primitives as primitives;
+#[macro_use]
+extern crate substrate_runtime_version as version;
 
 use rstd::prelude::*;
 use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
+use version::RuntimeVersion;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -57,6 +60,15 @@ pub use runtime_primitives::BuildStorage;
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 /// Concrete runtime type used to parameterize the various modules.
 pub struct Concrete;
+
+/// Polkadot runtime version.
+pub const VERSION: RuntimeVersion = RuntimeVersion {
+	spec_name: ver_str!("blitz"),
+	impl_name: ver_str!("parity-blitz"),
+	authoring_version: 1,
+	spec_version: 1,
+	impl_version: 0,
+};
 
 impl HasPublicAux for Concrete {
 	type PublicAux = AccountId;
@@ -84,9 +96,8 @@ impl consensus::Trait for Concrete {
 pub type Consensus = consensus::Module<Concrete>;
 
 impl timestamp::Trait for Concrete {
-	const SET_POSITION: u32 = 0;
-
-	type Value = u64;
+	const TIMESTAMP_SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
+	type Moment = u64;
 }
 
 /// Timestamp module for this concrete runtime.
@@ -96,12 +107,13 @@ pub type Timestamp = timestamp::Module<Concrete>;
 pub struct SessionKeyConversion;
 impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 	fn convert(a: AccountId) -> SessionKey {
-		a.0
+		a.0.into()
 	}
 }
 
 impl session::Trait for Concrete {
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
+	type OnSessionChange = Staking;
 }
 
 /// Session module for this concrete runtime.
@@ -154,6 +166,9 @@ impl_outer_dispatch! {
 		CouncilVoting = 7,
 	}
 }
+
+/// The position of the timestamp set extrinsic.
+pub const TIMESTAMP_SET_POSITION: u32 = 0;
 
 /// The address format for describing accounts.
 pub type Address = staking::Address<Concrete>;
