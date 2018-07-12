@@ -58,7 +58,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 					first_time: true,	// ensures that on_connect will be called.
 				}
 			).fuse()
-		).build().fuse(), o!()
+		).chan_size(262144).overflow_strategy(slog_async::OverflowStrategy::DropAndReport).build().fuse(), o!()
 	);
 	slog_scope::set_global_logger(log)
 }

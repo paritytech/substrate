@@ -21,7 +21,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As};
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Slicable;
@@ -335,6 +335,7 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
+		telemetry!("block.import"; "height" => { let n: u64 = header.number().as_(); n }, "best" => ?hash, "is_new_best" => is_new_best, "origin" => ?origin);
 		let unchecked: bft::UncheckedJustification<_> = justification.uncheck().into();
 		transaction.set_block_data(header.clone(), body, Some(unchecked.into()), is_new_best)?;
 		if let Some(storage_update) = storage_update {
