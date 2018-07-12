@@ -49,9 +49,9 @@ pub mod error;
 
 use std::sync::Arc;
 use blitz_primitives::Hash;
-use blitz_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, BuildStorage};
-use blitz_runtime::{Block, BlockId, UncheckedExtrinsic};
+use blitz_runtime::{Block, BlockId, UncheckedExtrinsic, GenesisConfig,
+	ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
+	TimestampConfig};
 use futures::{Future, Sink, Stream};
 use tokio::runtime::Runtime;
 
@@ -102,16 +102,17 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let executor = blitz_executor::Executor::new();
 
 	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
-	let genesis_storage = GenesisConfig {
+	let genesis_config = GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: vec![],	// TODO
-			authorities: vec![god_key.clone()],
+			authorities: vec![god_key.clone().into()],
 		}),
 		system: None,
 		// block_time: 5,			// 5 second block time.
 		session: Some(SessionConfig {
 			validators: vec![god_key.clone().into()],
 			session_length: 720,	// that's 1 hour per session.
+			broken_percent_late: 30,
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -127,6 +128,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			validator_count: 12,
 			sessions_per_era: 24,	// 24 hours per era.
 			bonding_duration: 90,	// 90 days per bond.
+			early_era_slash: 10000,
+			session_reward: 100,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
@@ -148,9 +151,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
 			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
 		}),
-	}.build_storage();
+		timestamp: Some(TimestampConfig {
+			period: 5,					// 5 second block time.
+		}),
+	};
 
-	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_storage)?);
+	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_config)?);
 	let mut runtime = Runtime::new()?;
 	let _rpc_servers = {
 		let handler = || {

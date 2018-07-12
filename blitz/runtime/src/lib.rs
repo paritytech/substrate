@@ -196,6 +196,7 @@ impl_outer_config! {
 		StakingConfig => staking,
 		DemocracyConfig => democracy,
 		CouncilConfig => council,
+		TimestampConfig => timestamp,
 	}
 }
 
