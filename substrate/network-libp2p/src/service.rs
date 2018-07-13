@@ -526,13 +526,14 @@ enum FinalUpgrade<C> {
 }
 
 /// Called whenever we successfully open a multistream with a remote.
-fn listener_handle<'a, C>(
+fn listener_handle<'a, C, F>(
 	shared: Arc<Shared>,
 	upgrade: FinalUpgrade<C>,
 	endpoint: Endpoint,
-	client_addr: impl Future<Item = Multiaddr, Error = IoError> + 'a,
+	client_addr: F,
 ) -> Box<Future<Item = (), Error = IoError> + 'a>
-	where C: AsyncRead + AsyncWrite + 'a {
+	where C: AsyncRead + AsyncWrite + 'a,
+		F: Future<Item = Multiaddr, Error = IoError> + 'a {
 	match upgrade {
 		FinalUpgrade::Kad((controller, kademlia_stream)) => {
 			trace!(target: "sub-libp2p", "Opened kademlia substream with \
@@ -1061,6 +1062,7 @@ fn p2p_multiaddr_to_node_id(client_addr: Multiaddr) -> PeerstorePeerId {
 /// in a lazy way. This is what this wrapper does.
 #[derive(Clone)]
 struct DelayedProtosList(Arc<Shared>);
+// `Maf` is short for `MultiaddressFuture`
 impl<C, Maf> ConnectionUpgrade<C, Maf> for DelayedProtosList
 where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 	Maf: Future<Item = Multiaddr, Error = IoError> + 'static,		// TODO: 'static :(

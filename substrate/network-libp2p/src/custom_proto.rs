@@ -97,9 +97,10 @@ impl<T> RegisteredProtocol<T> {
 	}
 }
 
+// `Maf` is short for `MultiaddressFuture`
 impl<T, C, Maf> ConnectionUpgrade<C, Maf> for RegisteredProtocol<T>
 where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
-	  Maf: Future<Item = Multiaddr, Error = IoError> + 'static,		// TODO: 'static :(
+	Maf: Future<Item = Multiaddr, Error = IoError> + 'static,		// TODO: 'static :(
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
 	type UpgradeIdentifier = u8;		// Protocol version

@@ -764,8 +764,10 @@ fn obtain_private_key(config: &NetworkConfiguration)
 }
 
 /// Tries to load a private key from a file located at the given path.
-fn load_private_key_from_file(path: impl AsRef<Path>)
-	-> Result<secio::SecioKeyPair, IoError> {
+fn load_private_key_from_file<P>(path: P)
+	-> Result<secio::SecioKeyPair, IoError>
+	where P: AsRef<Path>
+	{
 	fs::File::open(path)
 		.and_then(|mut file| {
 			// We are in 2018 and there is still no method on `std::io::Read`
@@ -781,7 +783,8 @@ fn load_private_key_from_file(path: impl AsRef<Path>)
 
 /// Generates a new secret key and tries to write it to the given file.
 /// Doesn't error if we couldn't open or write to the file.
-fn gen_key_and_try_write_to_file(path: impl AsRef<Path>) -> secio::SecioKeyPair {
+fn gen_key_and_try_write_to_file<P>(path: P) -> secio::SecioKeyPair
+	where P: AsRef<Path> {
 	let raw_key: [u8; 32] = rand::rngs::EntropyRng::new().gen();
 	let secio_key = secio::SecioKeyPair::secp256k1_raw_key(&raw_key)
 		.expect("randomly-generated key with correct len should always be valid");
@@ -805,7 +808,9 @@ fn gen_key_and_try_write_to_file(path: impl AsRef<Path>) -> secio::SecioKeyPair 
 
 /// Opens a file containing a private key in write mode.
 #[cfg(unix)]
-fn open_priv_key_file(path: impl AsRef<Path>) -> Result<fs::File, IoError> {
+fn open_priv_key_file<P>(path: P) -> Result<fs::File, IoError>
+	where P: AsRef<Path>
+{
 	use std::os::unix::fs::OpenOptionsExt;
 	fs::OpenOptions::new()
 		.write(true)
@@ -815,7 +820,9 @@ fn open_priv_key_file(path: impl AsRef<Path>) -> Result<fs::File, IoError> {
 }
 /// Opens a file containing a private key in write mode.
 #[cfg(not(unix))]
-fn open_priv_key_file(path: impl AsRef<Path>) -> Result<fs::File, IoError> {
+fn open_priv_key_file<P>(path: P) -> Result<fs::File, IoError>
+	where P: AsRef<Path>
+{
 	fs::OpenOptions::new()
 		.write(true)
 		.create_new(true)
