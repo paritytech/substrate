@@ -89,7 +89,6 @@ fn make_consensus(parent_hash: Hash, local_key: SessionKey) -> (CurrentConsensus
 	let c = CurrentConsensus {
 		knowledge: knowledge.clone(),
 		parent_hash,
-		session_keys: Default::default(),
 		local_session_key: local_key,
 	};
 
@@ -123,14 +122,13 @@ fn sends_session_key() {
 		let mut ctx = TestContext::default();
 		let (consensus, _knowledge) = make_consensus(parent_hash, local_key);
 		protocol.new_consensus(&mut ctx, consensus);
-
-		assert!(ctx.has_message(peer_a, Message::SessionKey(parent_hash, local_key)));
+		assert!(ctx.has_message(peer_a, Message::SessionKey(local_key)));
 	}
 
 	{
 		let mut ctx = TestContext::default();
 		protocol.on_connect(&mut ctx, peer_b, make_status(&collator_status, vec![]));
-		assert!(ctx.has_message(peer_b, Message::SessionKey(parent_hash, local_key)));
+		assert!(ctx.has_message(peer_b, Message::SessionKey(local_key)));
 	}
 }
 
@@ -172,13 +170,14 @@ fn fetches_from_those_with_knowledge() {
 	{
 		let mut ctx = TestContext::default();
 		protocol.on_connect(&mut ctx, peer_a, make_status(&status, vec![Role::Authority]));
-		assert!(ctx.has_message(peer_a, Message::SessionKey(parent_hash, local_key)));
+		assert!(ctx.has_message(peer_a, Message::SessionKey(local_key)));
 	}
 
 	// peer A gives session key and gets asked for data.
 	{
 		let mut ctx = TestContext::default();
-		on_message(&mut protocol, &mut ctx, peer_a, Message::SessionKey(parent_hash, a_key));
+		on_message(&mut protocol, &mut ctx, peer_a, Message::SessionKey(a_key));
+		assert!(protocol.validators.contains_key(&a_key));
 		assert!(ctx.has_message(peer_a, Message::RequestBlockData(1, candidate_hash)));
 	}
 
@@ -188,7 +187,7 @@ fn fetches_from_those_with_knowledge() {
 	{
 		let mut ctx = TestContext::default();
 		protocol.on_connect(&mut ctx, peer_b, make_status(&status, vec![Role::Authority]));
-		on_message(&mut protocol, &mut ctx, peer_b, Message::SessionKey(parent_hash, b_key));
+		on_message(&mut protocol, &mut ctx, peer_b, Message::SessionKey(b_key));
 		assert!(!ctx.has_message(peer_b, Message::RequestBlockData(2, candidate_hash)));
 
 	}
@@ -197,6 +196,7 @@ fn fetches_from_those_with_knowledge() {
 	{
 		let mut ctx = TestContext::default();
 		protocol.on_disconnect(&mut ctx, peer_a);
+		assert!(!protocol.validators.contains_key(&a_key));
 		assert!(ctx.has_message(peer_b, Message::RequestBlockData(2, candidate_hash)));
 	}
 

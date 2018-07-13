@@ -284,7 +284,6 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 				knowledge,
 				parent_hash,
 				local_session_key,
-				session_keys: Default::default(),
 			});
 
 			MessageProcessTask {
