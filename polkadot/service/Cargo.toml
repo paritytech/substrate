@@ -25,6 +25,7 @@ substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
 substrate-client = { path = "../../substrate/client" }
+substrate-client-db = { path = "../../substrate/client/db" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-service = { path = "../../substrate/service" }
 substrate-telemetry = { path = "../../substrate/telemetry" }

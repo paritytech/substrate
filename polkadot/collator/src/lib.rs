@@ -66,7 +66,7 @@ use client::BlockchainEvents;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::BlockId;
 use polkadot_primitives::parachain::{self, BlockData, HeadData, ConsolidatedIngress, Collation, Message, Id as ParaId};
-use polkadot_cli::{ClientError, ServiceComponents, ClientBackend, PolkadotBlock, StateMachineBackend, Service};
+use polkadot_cli::{ClientError, ServiceComponents, ClientBackend, PolkadotBlock, StateMachineBackend, Service, ServiceFactory};
 use polkadot_cli::Worker;
 
 /// Parachain context needed for collation.
@@ -212,7 +212,8 @@ impl<P, E> Worker for CollationNode<P, E> where
 		self.exit
 	}
 
-	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work {
+	fn work<C: ServiceComponents<Factory=ServiceFactory>>(self, service: &Service<C>) -> Self::Work
+	{
 		let CollationNode { parachain_context, exit, para_id, key } = self;
 		let client = service.client();
 		let api = service.api();

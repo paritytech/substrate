@@ -68,7 +68,9 @@ pub use extrinsic_pool::api::{ExtrinsicPool as ExtrinsicPoolApi};
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, ExtrinsicPool, Components, PoolApi, ComponentClient,
-	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents};
+	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
+	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock
+};
 
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
@@ -79,24 +81,6 @@ pub struct Service<Components: components::Components> {
 	network: Arc<components::NetworkService<Components::Factory>>,
 	extrinsic_pool: Arc<Components::ExtrinsicPool>,
 	signal: Option<Signal>,
-}
-
-/// Creates light client and register protocol with the network service
-pub fn new_light<Factory: components::ServiceFactory>(
-	config: Configuration<Factory::Genesis>,
-	executor: TaskExecutor
-	) -> Result<Service<components::LightComponents<Factory>>, error::Error>
-{
-	Service::<components::LightComponents<Factory>>::new(config, executor)
-}
-
-/// Creates full client and register protocol with the network service
-pub fn new_full<Factory: components::ServiceFactory>(
-	config: Configuration<Factory::Genesis>,
-	executor: TaskExecutor
-	) -> Result<Service<components::FullComponents<Factory>>, error::Error>
-{
-	Service::<components::FullComponents<Factory>>::new(config, executor)
 }
 
 /// Creates bare client without any networking.
@@ -118,7 +102,7 @@ impl<Components> Service<Components>
 		Components: components::Components,
 {
 	/// Creates a new service.
-	fn new(config: Configuration<<Components::Factory as ServiceFactory>::Genesis>, task_executor: TaskExecutor) -> Result<Self, error::Error> {
+	pub fn new(config: Configuration<<Components::Factory as ServiceFactory>::Genesis>, task_executor: TaskExecutor) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client

@@ -70,7 +70,7 @@ pub use client::error::Error as ClientError;
 pub use client::backend::Backend as ClientBackend;
 pub use state_machine::Backend as StateMachineBackend;
 pub use polkadot_primitives::Block as PolkadotBlock;
-pub use service::{Components as ServiceComponents, Service};
+pub use service::{Components as ServiceComponents, Service, Factory as ServiceFactory};
 
 use std::io::{self, Write, Read, stdin, stdout};
 use std::fs::File;

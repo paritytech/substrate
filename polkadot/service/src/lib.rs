@@ -28,9 +28,11 @@ extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_network;
 extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
+extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
 extern crate substrate_client as client;
+extern crate substrate_client_db as client_db;
 extern crate substrate_service as service;
 extern crate tokio;
 
@@ -49,10 +51,12 @@ use transaction_pool::TransactionPool;
 use keystore::Store as Keystore;
 use polkadot_api::light::RemotePolkadotApiWrapper;
 use polkadot_primitives::{Block, BlockId, Hash};
+use runtime_primitives::traits::Block as BlockT;
 use polkadot_runtime::GenesisConfig;
 use client::Client;
 use polkadot_network::PolkadotProtocol;
 use tokio::runtime::TaskExecutor;
+use network::OnDemand;
 
 pub use service::{Configuration, Role, PruningMode, ExtrinsicPoolOptions,
 	ErrorKind, Error, ComponentBlock};
@@ -62,48 +66,134 @@ pub type ChainSpec = service::ChainSpec<GenesisConfig>;
 struct FullComponents;
 struct LightComponents;
 
-trait Components {
-	type Inner: service::Components;
+/*
+pub trait PolkadotComponents: service::Components<Factory=Factory>
+where
+	<Self as service::Components>::Executor: client::CallExecutor<Block>,
+	<Self as service::Components>::Backend: client::backend::Backend<Block>,
+	<Self as service::Components>::ExtrinsicPool: service::ExtrinsicPool<Block>,
+	<<Self as service::Components>::ExtrinsicPool as service::ExtrinsicPool<Block>>::Api:
+		service::ExtrinsicPoolApi<<Block as BlockT>::Extrinsic, BlockId, <Block as BlockT>::Hash>
+{
+
+}
+
+impl PolkadotComponents for service::FullComponents<Factory>
+where
+	<Self as service::Components>::Executor: client::CallExecutor<Block>,
+	<Self as service::Components>::Backend: client::backend::Backend<Block>,
+	<Self as service::Components>::ExtrinsicPool: service::ExtrinsicPool<Block>,
+	<<Self as service::Components>::ExtrinsicPool as service::ExtrinsicPool<Block>>::Api:
+		service::ExtrinsicPoolApi<<Block as BlockT>::Extrinsic, BlockId, <Block as BlockT>::Hash>
+{
+
+}
+
+impl PolkadotComponents for service::LightComponents<Factory>
+where
+	<Self as service::Components>::Executor: client::CallExecutor<Block>,
+	<Self as service::Components>::Backend: client::backend::Backend<Block>,
+	<Self as service::Components>::ExtrinsicPool: service::ExtrinsicPool<Block>,
+	<<Self as service::Components>::ExtrinsicPool as service::ExtrinsicPool<Block>>::Api:
+		service::ExtrinsicPoolApi<<Block as BlockT>::Extrinsic, BlockId, <Block as BlockT>::Hash>
+{
+
+}
+*/
+/*
+impl PolkadotComponents for service::Components<Factory=Factory> {
+}
+*/
+
+
+pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, Block>;
+
+pub trait Components: service::Components {
+	type Backend: 'static + client::backend::Backend<Block>;
+	type Executor: 'static + client::CallExecutor<Block> + Send + Sync;
+	type ExtrinsicPool: service::ExtrinsicPool<Block>;
+
+	/// Create client.
+	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
+		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error>;
+
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<<Self as Components>::ExtrinsicPool, Error>;
 }
 
 impl Components for FullComponents {
-	type Inner = service::FullComponents<Factory>;
+	type Executor = <service::FullComponents<Factory> as service::Components>::Executor;
+	type Backend = <service::FullComponents<Factory> as service::Components>::Backend;
+	type ExtrinsicPool = <service::FullComponents<Factory> as service::Components>::ExtrinsicPool;
+
+	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
+		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error> {
+			service::FullComponents::<Factory>::build_client()
+		}
+
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<<Self as Components>::ExtrinsicPool, Error> {
+		service::FullComponents::<Factory>::build_extrinsic_pool(config, client)
+	}
 }
 
 impl Components for LightComponents {
-	type Inner = service::LightComponents<Factory>;
-}
+	type Executor = <service::LightComponents<Factory> as service::Components>::Executor;
+	type Backend = <service::LightComponents<Factory> as service::Components>::Backend;
+	type ExtrinsicPool = <service::LightComponents<Factory> as service::Components>::ExtrinsicPool;
 
-/*
-impl service::Components for FullComponents {
-	type Factory = Factory;
-	type Executor = service::FullComponents<Factory>::Executor;
-	type Backend = service::FullComponents<Factory>::Backedn;
-	type ExtrinsicPool = service::FullComponents<Factory>::ExtrinsicPool;
-
-	fn build_client(db_settings: client_db::DatabaseSettings, executor: CodeExecutor<Factory>, chain_spec: &FactoryChainSpec<Factory>)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Factory>>>>), error::Error> {
-			service::FullComponents<Factory>::build_client()
+	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
+		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error> {
+			service::LightComponents::<Factory>::build_client()
 		}
 
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error> {
-		service::FullComponents<Factory>::build_extrinsic_pool(config, client)
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<<Self as Components>::ExtrinsicPool, Error> {
+		service::LightComponents::<Factory>::build_extrinsic_pool(config, client)
 	}
 }
 
 impl service::Components for LightComponents {
-	type Factory = Factory;
-	type Executor = service::LightComponents<Factory>::Executor;
-	type Backend = service::LightComponents<Factory>::Backedn;
-	type ExtrinsicPool = service::LightComponents<Factory>::ExtrinsicPool;
+	type Executor = <service::LightComponents<Factory> as service::Components>::Executor;
+	type Backend = <service::LightComponents<Factory> as service::Components>::Backend;
+	type ExtrinsicPool = <service::LightComponents<Factory> as service::Components>::ExtrinsicPool;
 
-	fn build_client(db_settings: client_db::DatabaseSettings, executor: CodeExecutor<Factory>, chain_spec: &FactoryChainSpec<Factory>)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Factory>>>>), error::Error> {
-			service::LightComponents<Factory>::build_client()
+	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
+		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error> {
+			service::LightComponents::<Factory>::build_client()
 		}
 
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error> {
-		service::LightComponents<Factory>::build_extrinsic_pool(config, client)
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, Error> {
+		service::LightComponents::<Factory>::build_extrinsic_pool(config, client)
+	}
+}
+
+impl service::Components for FullComponents {
+	type Executor = <service::FullComponents<Factory> as service::Components>::Executor;
+	type Backend = <service::FullComponents<Factory> as service::Components>::Backend;
+	type ExtrinsicPool = <service::FullComponents<Factory> as service::Components>::ExtrinsicPool;
+
+	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
+		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error> {
+			service::FullComponents::<Factory>::build_client()
+		}
+
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, Error> {
+		service::FullComponents::<Factory>::build_extrinsic_pool(config, client)
+	}
+}
+
+/*
+impl<T:Components> service::Components for T {
+	type Factory = Factory;
+	type Executor = T::Executor;
+	type Backend = T::Backend;
+	type ExtrinsicPool = T::ExtrinsicPool;
+
+	fn build_client(db_settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
+		-> Result<(Arc<service::ComponentClient<Self>>, Option<Arc<OnDemand<service::FactoryBlock<Self::Factory>, service::NetworkService<Factory>>>>), Error> {
+			<Self as Components>::build_client(db_settings, executor, chain_spec)
+		}
+
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, Error> {
+		<Self as Components>::build_extrinsic_pool(config, client)
 	}
 }
 */
@@ -142,13 +232,13 @@ impl service::ServiceFactory for Factory {
 
 /// Polkadot service.
 pub struct Service<C: Components> {
-	inner: service::Service<C::Inner>,
+	inner: service::Service<C>,
 	_consensus: Option<consensus::Service>,
 }
 
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<service::LightComponents<Factory>>, Error> {
-	let service = service::new_light::<Factory>(config, executor)?;
+pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<LightComponents>, Error> {
+	let service = service::Service::<LightComponents>::new(config, executor)?;
 	Ok(Service {
 		inner: service,
 		_consensus: None,
@@ -156,10 +246,10 @@ pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor) -
 }
 
 /// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<service::FullComponents<Factory>>, Error> {
+pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<FullComponents>, Error> {
 	let keystore_path = config.keystore_path.clone();
 	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
-	let service = service::new_full::<Factory>(config, executor.clone())?;
+	let service = service::Service::<FullComponents>::new(config, executor.clone())?;
 	let consensus = if is_validator {
 		// Spin consensus service if configured
 		let keystore = Keystore::open(keystore_path.into())?;
@@ -191,7 +281,7 @@ pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor) ->
 
 /// Creates bare client without any networking.
 pub fn new_client(config: Configuration<GenesisConfig>)
--> Result<Arc<service::ComponentClient<service::FullComponents<Factory>>>, Error>
+-> Result<Arc<ComponentClient<FullComponents>>, Error>
 {
 	service::new_client::<Factory>(config)
 }
