@@ -73,7 +73,7 @@ use tokio::runtime::TaskExecutor;
 
 pub use self::error::{ErrorKind, Error};
 pub use self::components::{Components, FullComponents, LightComponents};
-pub use config::{Configuration, Role, PruningMode};
+pub use config::{Configuration, Role, PruningMode, ExecutionStrategy};
 pub use chain_spec::ChainSpec;
 
 /// Polkadot service.
