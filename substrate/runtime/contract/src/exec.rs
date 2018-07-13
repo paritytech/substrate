@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeOf, Trait};
-use account_db::{AccountDb, OverlayAccountDb};
+use account_db::{AccountDb, ChangeSet, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 use rstd::prelude::*;
 use runtime_support::StorageMap;
@@ -23,23 +23,23 @@ use vm;
 
 pub struct TransactionData {
 	// tx_origin
-	// tx_gas_price
-	// block_number
-	// timestamp
-	// etc
+// tx_gas_price
+// block_number
+// timestamp
+// etc
 }
 
-pub struct ExecutionContext<'a, T: Trait + 'a> {
+pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
 	// aux for the first transaction.
 	pub _caller: T::AccountId,
 	// typically should be dest
 	pub self_account: T::AccountId,
-	pub account_db: &'a mut OverlayAccountDb<'a, T>,
+	pub account_db: &'a mut OverlayAccountDb<'b, T>,
 	pub gas_price: u64,
 	pub depth: usize,
 }
 
-impl<'a, T: Trait> ExecutionContext<'a, T> {
+impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 	/// Make a call to the specified address.
 	pub fn call(
 		&mut self,
@@ -50,38 +50,45 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 	) -> Result<vm::ExecutionResult, ()> {
 		let dest_code = <CodeOf<T>>::get(&dest);
 
-		let mut overlay = OverlayAccountDb::new(self.account_db);
-
 		// TODO: transfer `_value` using `overlay`. Return an error if failed.
 
-		if !dest_code.is_empty() {
-			let mut nested = ExecutionContext {
-				account_db: &mut overlay,
-				_caller: self.self_account.clone(),
-				self_account: dest.clone(),
-				gas_price: self.gas_price,
-				depth: self.depth + 1,
+		let (exec_result, change_set) = if !dest_code.is_empty() {
+			let mut overlay = OverlayAccountDb::new(self.account_db);
+			let exec_result = {
+				let mut nested = ExecutionContext {
+					account_db: &mut overlay,
+					_caller: self.self_account.clone(),
+					self_account: dest.clone(),
+					gas_price: self.gas_price,
+					depth: self.depth + 1,
+				};
+				vm::execute(&dest_code, &mut nested, gas_limit).map_err(|_| ())?
 			};
-
-			let exec_result = vm::execute(&dest_code, &mut nested, gas_limit).map_err(|_| ())?;
 
 			// TODO: Need to propagate gas_left.
 			// TODO: Need to return result buffer.
 
-			Ok(exec_result)
+			(exec_result, overlay.into_state())
 		} else {
 			// that was a plain transfer
-			Ok(vm::ExecutionResult {
-				gas_left: gas_limit,
-				return_data: Vec::new(),
-			})
-		}
+			(
+				vm::ExecutionResult {
+					gas_left: gas_limit,
+					return_data: Vec::new(),
+				},
+				ChangeSet::new(),
+			)
+		};
+
+		self.account_db.merge(change_set);
+
+		Ok(exec_result)
 	}
 
 	// TODO: fn create
 }
 
-impl<'a, T: Trait + 'a> vm::Ext for ExecutionContext<'a, T> {
+impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 
