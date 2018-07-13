@@ -133,7 +133,7 @@ impl Error {
 		ErrorKind::Blockchain(e).into()
 	}
 
-	/// Chain a blockchain error.
+	/// Chain a state error.
 	pub fn from_state(e: Box<state_machine::Error + Send>) -> Self {
 		ErrorKind::Execution(e).into()
 	}
