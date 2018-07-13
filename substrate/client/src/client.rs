@@ -321,13 +321,22 @@ impl<B, E, Block> Client<B, E, Block> where
 		let storage_update = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-				let (_, storage_update) = self.executor.call_at_state(
+				let mut r = self.executor.call_at_state(
 					transaction_state,
 					&mut overlay,
 					"execute_block",
 					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode()
-				// TODO: intercept Err::ConsensusFailure, report failure wrt block and then accept wasm result.
-				)?;
+				);
+				if let Err(e) = r {
+					r = match e.is_consensus_failure() {
+						Err(e) => Err(e),
+						Ok(w, n) => {
+							warn!("CONSENSUS FAILURE BETWEEN WASM AND NATIVE ON BLOCK {:?}", header);
+							w
+						}
+					};
+				}
+				let (_, storage_update) = r?;
 
 				Some(storage_update)
 			},

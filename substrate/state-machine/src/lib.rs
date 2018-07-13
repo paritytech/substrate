@@ -95,7 +95,10 @@ impl OverlayedChanges {
 /// State Machine Error bound.
 ///
 /// This should reflect WASM error type bound for future compatibility.
-pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
+pub trait Error: 'static + fmt::Debug + fmt::Display + Send + Sized {
+	/// Unwrap any possible consensus error.
+	fn unpack_consensus_failure(self) -> Result<(Result<Self, Vec<u8>>, Result<Self, Vec<u8>>), Self> { Err(self) }
+}
 impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
 /// Externalities Error.
