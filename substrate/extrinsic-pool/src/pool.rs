@@ -18,7 +18,7 @@ use std::{
 	collections::HashMap,
 	fmt,
 	marker::PhantomData,
-	sync::{Arc, Weak},
+	sync::Arc,
 };
 
 use futures::sync::mpsc;
@@ -40,7 +40,7 @@ pub struct Pool<Hash, VEx, S, E> where
 		S,
 		Listener<Hash>,
 	>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<Weak<VEx>>>>,
+	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
 }
 
 impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
@@ -62,15 +62,14 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 	pub fn import(&self, xt: VEx) -> Result<Arc<VEx>, E> {
 		let result = self.pool.write().import(xt)?;
 
-		let weak = Arc::downgrade(&result);
 		self.import_notification_sinks.lock()
-			.retain(|sink| sink.unbounded_send(weak.clone()).is_ok());
+			.retain(|sink| sink.unbounded_send(()).is_ok());
 
 		Ok(result)
 	}
 
 	/// Return an event stream of transactions imported to the pool.
-	pub fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<Weak<VEx>> {
+	pub fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<()> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream

@@ -1426,6 +1426,7 @@ dependencies = [
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
+ "substrate-extrinsic-pool 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-rpc 0.1.0",
@@ -1567,11 +1568,8 @@ dependencies = [
 name = "polkadot-service"
 version = "0.2.0"
 dependencies = [
- "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ed25519 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1583,20 +1581,15 @@ dependencies = [
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "polkadot-transaction-pool 0.1.0",
- "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
- "substrate-client-db 0.1.0",
  "substrate-codec 0.1.0",
- "substrate-executor 0.1.0",
  "substrate-keystore 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
- "substrate-state-machine 0.1.0",
+ "substrate-service 0.2.0",
  "substrate-telemetry 0.2.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2285,7 +2278,6 @@ dependencies = [
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-serializer 0.1.0",
- "substrate-state-machine 0.1.0",
  "substrate-test-client 0.1.0",
 ]
 
@@ -2604,12 +2596,9 @@ dependencies = [
 name = "substrate-service"
 version = "0.2.0"
 dependencies = [
- "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ed25519 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2619,7 +2608,6 @@ dependencies = [
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
  "substrate-client-db 0.1.0",
- "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-extrinsic-pool 0.1.0",
  "substrate-keystore 0.1.0",
@@ -2627,7 +2615,6 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
- "substrate-state-machine 0.1.0",
  "substrate-telemetry 0.2.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

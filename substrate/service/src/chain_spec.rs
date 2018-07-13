@@ -110,7 +110,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		})
 	}
 
-	/// Parse json file into a `ChainSpec`
+	/// Create hardcoded spec.
 	pub fn from_genesis(name: &str, constructor: fn() -> G, boot_nodes: Vec<String>) -> Self {
 		let spec = ChainSpecFile {
 			name: name.to_owned(),

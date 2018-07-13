@@ -36,6 +36,7 @@ extern crate serde_json;
 extern crate substrate_client as client;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
+extern crate substrate_extrinsic_pool;
 extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
@@ -76,7 +77,7 @@ use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use polkadot_primitives::{Block, BlockId};
+use polkadot_primitives::BlockId;
 use codec::Slicable;
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
@@ -137,8 +138,7 @@ pub trait Worker {
 	fn exit_only(self) -> Self::Exit;
 
 	/// Do work and schedule exit.
-	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
-		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>;
+	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work;
 }
 
 /// Parse command line arguments and start the node.
@@ -419,7 +419,6 @@ fn run_until_exit<C, W>(
 	where
 		C: service::Components,
 		W: Worker,
-		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
 	let (exit_send, exit) = exit_future::signal();
 
@@ -432,8 +431,8 @@ fn run_until_exit<C, W>(
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), executor.clone());
-			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
-			rpc::rpc_handler::<Block, _, _, _, _>(
+			let author = rpc::apis::author::Author::new(service.client(), service.extrinsic_pool());
+			rpc::rpc_handler::<service::ComponentBlock<C>, _, _, _, _>(
 				service.client(),
 				chain,
 				author,

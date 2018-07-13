@@ -10,14 +10,11 @@ error-chain = "0.12"
 lazy_static = "1.0"
 log = "0.3"
 slog = "^2"
-clap = "2.27"
 tokio = "0.1.7"
 exit-future = "0.1"
 serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
-hex-literal = "0.1"
-ed25519 = { path = "../../substrate/ed25519" }
 substrate-keystore = { path = "../../substrate/keystore" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
@@ -25,8 +22,6 @@ substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
 substrate-client = { path = "../../substrate/client" }
 substrate-client-db = { path = "../../substrate/client/db" }
-substrate-codec = { path = "../../substrate/codec" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
-substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-telemetry = { path = "../../substrate/telemetry" }

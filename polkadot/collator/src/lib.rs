@@ -212,9 +212,7 @@ impl<P, E> Worker for CollationNode<P, E> where
 		self.exit
 	}
 
-	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
-		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>,
-	{
+	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work {
 		let CollationNode { parachain_context, exit, para_id, key } = self;
 		let client = service.client();
 		let api = service.api();

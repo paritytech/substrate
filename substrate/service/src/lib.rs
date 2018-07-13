@@ -17,9 +17,9 @@
 //! Substrate service. Starts a thread that spins the network, the client and the extrinsic pool.
 //! Manages communication between them.
 
+#![warn(unused_extern_crates)]
+
 extern crate futures;
-extern crate ed25519;
-extern crate clap;
 extern crate exit_future;
 extern crate serde;
 extern crate serde_json;
@@ -27,9 +27,7 @@ extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_network as network;
-extern crate substrate_codec as codec;
 extern crate substrate_executor;
-extern crate substrate_state_machine as state_machine;
 extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
@@ -65,8 +63,12 @@ use serde::{Serialize, de::DeserializeOwned};
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Role, PruningMode};
 pub use chain_spec::ChainSpec;
+pub use extrinsic_pool::txpool::{Options as ExtrinsicPoolOptions};
+pub use extrinsic_pool::api::{ExtrinsicPool as ExtrinsicPoolApi};
 
-use self::components::{Components, ServiceFactory, SharedPool, ComponentClient, ComponentBlock, ExtrinsicPool};
+pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
+	LightExecutor, ExtrinsicPool, Components, PoolApi, ComponentClient,
+	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents};
 
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
@@ -75,7 +77,7 @@ impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	network: Arc<components::NetworkService<Components::Factory>>,
-	extrinsic_pool: <Components::Factory as ServiceFactory>::ExtrinsicPool,
+	extrinsic_pool: Arc<Components::ExtrinsicPool>,
 	signal: Option<Signal>,
 }
 
@@ -114,9 +116,8 @@ pub fn new_client<Factory: components::ServiceFactory>(config: Configuration<Fac
 impl<Components> Service<Components>
 	where
 		Components: components::Components,
-		client::error::Error: From<<<<Components as components::Components>::Backend as client::backend::Backend<<<Components as components::Components>::Factory as components::ServiceFactory>::Block>>::State as state_machine::Backend>::Error>
 {
-	/// Creates and register protocol with the network service
+	/// Creates a new service.
 	fn new(config: Configuration<<Components::Factory as ServiceFactory>::Genesis>, task_executor: TaskExecutor) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
 
@@ -145,8 +146,8 @@ impl<Components> Service<Components>
 		info!("Best block: #{}", best_header.number());
 		telemetry!("node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
-		let extrinsic_pool = Components::build_extrinsic_pool(&config.extrinsic_pool, client.clone())?;
-		let extrinsic_pool_adapter = extrinsic_pool.as_network_pool();
+		let extrinsic_pool = Arc::new(Components::build_extrinsic_pool(config.extrinsic_pool, client.clone())?);
+		let extrinsic_pool_adapter = extrinsic_pool.clone();
 		let network_params = network::Params {
 			config: network::ProtocolConfig {
 				roles: config.roles,
@@ -182,7 +183,7 @@ impl<Components> Service<Components>
 		{
 			// extrinsic notifications
 			let network = network.clone();
-			let events = extrinsic_pool.import_notification_stream()
+			let events = extrinsic_pool.api().import_notification_stream()
 				// TODO [ToDr] Consider throttling?
 				.for_each(move |_| {
 					network.trigger_repropagate();
@@ -213,8 +214,8 @@ impl<Components> Service<Components>
 	}
 
 	/// Get shared extrinsic pool instance.
-	pub fn extrinsic_pool(&self) -> Arc<SharedPool<Components::Factory>> {
-		self.extrinsic_pool.as_pool()
+	pub fn extrinsic_pool(&self) -> Arc<PoolApi<Components>> {
+		self.extrinsic_pool.api()
 	}
 }
 

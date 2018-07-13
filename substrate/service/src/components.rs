@@ -24,20 +24,30 @@ use client::{self, Client};
 use error;
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use extrinsic_pool::txpool::{Options as ExtrinsicPoolOptions};
+use extrinsic_pool::{txpool::Options as ExtrinsicPoolOptions, api::ExtrinsicPool as ExtrinsicPoolApi};
 use runtime_primitives::traits::Block as BlockT;
-use futures::sync::mpsc;
+use runtime_primitives::generic::BlockId;
 use RuntimeGenesis;
 
-/// Code executor.
+pub trait ServiceFactory {
+	type Block: BlockT;
+	type NetworkProtocol: network::specialization::Specialization<Self::Block> + Default;
+	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
+	type FullExtrinsicPool: ExtrinsicPool<Self::Block>;
+	type LightExtrinsicPool: ExtrinsicPool<Self::Block>;
+	type Genesis: RuntimeGenesis;
 
-pub trait ExtrinsicPool<Block: BlockT>: Send + Sync + Clone + 'static {
-	type Pool;
+	const NETWORK_PROTOCOL_ID: network::ProtocolId;
+
+	fn build_full_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<FullClient<Self>>) -> Result<Self::FullExtrinsicPool, error::Error>;
+	fn build_light_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<LightClient<Self>>) -> Result<Self::LightExtrinsicPool, error::Error>;
+}
+
+pub trait ExtrinsicPool<Block: BlockT>: network::TransactionPool<Block> + Send + Sync + 'static {
+	type Api: ExtrinsicPoolApi<Block::Extrinsic, BlockId<Block>, Block::Hash>;
 
 	fn prune_imported(&self, hash: &Block::Hash);
-	fn as_network_pool(&self) -> Arc<network::TransactionPool<Block>>;
-	fn as_pool(&self) -> Arc<Self::Pool>;
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<()>;
+	fn api(&self) -> Arc<Self::Api>;
 }
 
 // Type aliases
@@ -52,35 +62,22 @@ pub type LightExecutor<F> = client::light::call_executor::RemoteCallExecutor<
 pub type FullClient<F> = Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block>;
 pub type LightClient<F> = Client<LightBackend<F>, LightExecutor<F>, <F as ServiceFactory>::Block>;
 pub type FactoryChainSpec<F> = ChainSpec<<F as ServiceFactory>::Genesis>;
-pub type FactoryExtrinsicPool<F> = <F as ServiceFactory>::ExtrinsicPool;
 pub type FactoryBlock<F> = <F as ServiceFactory>::Block;
-pub type SharedPool<F> = <<F as ServiceFactory>::ExtrinsicPool as ExtrinsicPool<<F as ServiceFactory>::Block>>::Pool;
 pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, FactoryBlock<<C as Components>::Factory>>;
 pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
-
-pub trait ServiceFactory {
-	type Block: BlockT;
-	type NetworkProtocol: network::specialization::Specialization<Self::Block> + Default;
-	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
-	type ExtrinsicPool: ExtrinsicPool<Self::Block>;
-	type Genesis: RuntimeGenesis;
-
-	const NETWORK_PROTOCOL_ID: network::ProtocolId;
-
-	fn build_full_extrinsic_pool(config: &ExtrinsicPoolOptions, client: Arc<FullClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error>;
-	fn build_light_extrinsic_pool(config: &ExtrinsicPoolOptions, client: Arc<LightClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error>;
-}
+pub type PoolApi<C> = <<C as Components>::ExtrinsicPool as ExtrinsicPool<ComponentBlock<C>>>::Api;
 
 pub trait Components {
 	type Factory: ServiceFactory;
 	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>>;
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>> + Send + Sync;
+	type ExtrinsicPool: ExtrinsicPool<FactoryBlock<Self::Factory>>;
 
 	/// Create client.
 	fn build_client(settings: client_db::DatabaseSettings, executor: CodeExecutor<Self::Factory>, chain_spec: &FactoryChainSpec<Self::Factory>)
 		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>), error::Error>;
 
-	fn build_extrinsic_pool(config: &ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<FactoryExtrinsicPool<Self::Factory>, error::Error>;
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error>;
 }
 
 pub struct FullComponents<Factory: ServiceFactory> {
@@ -91,13 +88,14 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type Factory = Factory;
 	type Executor = FullExecutor<Factory>;
 	type Backend = FullBackend<Factory>;
+	type ExtrinsicPool = <Factory as ServiceFactory>::FullExtrinsicPool;
 
 	fn build_client(db_settings: client_db::DatabaseSettings, executor: CodeExecutor<Self::Factory>, chain_spec: &FactoryChainSpec<Self::Factory>)
 		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>), error::Error> {
 		Ok((Arc::new(client_db::new_client(db_settings, executor, chain_spec)?), None))
 	}
 
-	fn build_extrinsic_pool(config: &ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<FactoryExtrinsicPool<Self::Factory>, error::Error> {
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error> {
 		Factory::build_full_extrinsic_pool(config, client)
 	}
 }
@@ -110,6 +108,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type Factory = Factory;
 	type Executor = LightExecutor<Factory>;
 	type Backend = LightBackend<Factory>;
+	type ExtrinsicPool = <Factory as ServiceFactory>::LightExtrinsicPool;
 
 	fn build_client(db_settings: client_db::DatabaseSettings, executor: CodeExecutor<Self::Factory>, spec: &FactoryChainSpec<Self::Factory>)
 		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>), error::Error> {
@@ -122,7 +121,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 
-	fn build_extrinsic_pool(config: &ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<FactoryExtrinsicPool<Self::Factory>, error::Error> {
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error> {
 		Factory::build_light_extrinsic_pool(config, client)
 	}
 }
