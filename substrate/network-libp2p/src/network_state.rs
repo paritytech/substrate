@@ -487,8 +487,7 @@ impl NetworkState {
 			// TODO: that's code duplication
 			let (tx, rx) = mpsc::unbounded();
 			let rx = rx.into_future()
-				// An unbounded receiver can never error.
-				.map_err(|_| -> IoError { unreachable!() })
+				.map_err(|_| -> IoError { unreachable!("an `UnboundedReceiver` can never produce an error") })
 				.and_then(|i| i.0.ok_or(IoError::new(
 					IoErrorKind::ConnectionAborted, "kad aborted")));
 			let kad_connec = Box::new(rx) as Box<Future<Item = _, Error = _>>;
@@ -677,8 +676,7 @@ fn accept_connection(
 		let (tx, rx) = mpsc::unbounded();
 		let rx = rx
 			.into_future()
-			// An `UnboundedReceiver` can never produce an error.
-			.map_err(|_| -> IoError { unreachable!() })
+			.map_err(|_| -> IoError { unreachable!("an `UnboundedReceiver` can never produce an error") })
 			.and_then(|i| i.0.ok_or(IoError::new(IoErrorKind::ConnectionAborted, "kad aborted")));
 		let kad_connec = Box::new(rx) as Box<Future<Item = _, Error = _>>;
 

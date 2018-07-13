@@ -151,7 +151,7 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 			let framed = AsyncRead::framed(socket, VarintCodec::default());
 			let msg_rx = msg_rx.map(Message::SendReq)
 				.chain(stream::once(Ok(Message::Finished)))
-				.map_err(|()| unreachable!());
+				.map_err(|()| unreachable!("mpsc::UnboundedReceiver never errors"));
 			let (sink, stream) = framed.split();
 			let stream = stream.map(Message::RecvSocket)
 				.chain(stream::once(Ok(Message::Finished)));

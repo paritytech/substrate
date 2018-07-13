@@ -784,7 +784,7 @@ fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 
 	let discovery = tokio_timer::Interval::new(Instant::now(), Duration::from_secs(30))
 		// TODO: add a timeout to the lookups
-		.map_err(|_| -> IoError { unreachable!() })
+		.map_err(|err| IoError::new(IoErrorKind::Other, err))
 		.and_then({
 			let shared = shared.clone();
 			let transport = transport.clone();

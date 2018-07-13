@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use futures::{future, Future, stream, Stream};
+use futures::{future, Future, stream, Stream, sync::mpsc};
 use std::io::Error as IoError;
 use std::time::Instant;
 use tokio_core::reactor::{Handle, Timeout};
@@ -27,7 +27,7 @@ use tokio_core::reactor::{Handle, Timeout};
 /// to the output.
 pub fn build_timeouts_stream<T>(
 	core: Handle,
-	timeouts_rx: impl Stream<Item = (Instant, T), Error = ()>
+	timeouts_rx: mpsc::UnboundedReceiver<(Instant, T)>
 ) -> impl Stream<Item = T, Error = IoError> {
 	let next_timeout = next_in_timeouts_stream(timeouts_rx);
 
@@ -78,11 +78,10 @@ enum Out<A, B> {
 /// and applies some modifiers.
 /// This function is necessary. Otherwise if we copy-paste its content we run
 /// into errors because the type of the copy-pasted closures differs.
-fn next_in_timeouts_stream<S, B>(stream: S)
-	-> impl Future<Item = Out<(Option<S::Item>, S), B>, Error = IoError>
-	where S: Stream<Error = ()> {
+fn next_in_timeouts_stream<T, B>(stream: mpsc::UnboundedReceiver<T>)
+	-> impl Future<Item = Out<(Option<T>, mpsc::UnboundedReceiver<T>), B>, Error = IoError> {
 	stream
 		.into_future()
 		.map(Out::NewTimeout)
-		.map_err(|_| unreachable!())
+		.map_err(|_| unreachable!("an UnboundedReceiver can never error"))
 }
