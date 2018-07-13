@@ -196,16 +196,34 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 			.to_vec();
 
-		exec.call(
+		let (result, was_native) = exec.call(
 			&mut externalities,
 			&code,
 			method,
 			call_data,
-			match strategy {
-				ExecutionStrategy::AlwaysWasm => false,
-				_ => true,
-			},
-		).0.map(move |out| (out, externalities.transaction()))
+			strategy != ExecutionStrategy::AlwaysWasm,
+		);
+		let result = if was_native && strategy == ExecutionStrategy::Both {
+			let (wasm_result, _) = exec.call(
+				&mut externalities,
+				&code,
+				method,
+				call_data,
+				strategy != ExecutionStrategy::AlwaysWasm,
+			);
+			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap())
+				|| (result.is_err() && wasm_result.is_err() && format!("{}", result.as_ref().unwrap_err()) == format!("{}", wasm_result.as_ref().unwrap_err()))
+			{
+				result
+			} else {
+				// Consensus error.
+				warn!("Consensus error between wasm {:?} and native {:?}. Using wasm.", wasm_result, result);
+				wasm_result
+			}
+		} else {
+			result
+		};
+		result.map(move |out| (out, externalities.transaction()))
 	};
 
 	match result {
