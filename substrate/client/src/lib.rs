@@ -28,6 +28,8 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_test_client as test_client;
+#[macro_use] extern crate substrate_telemetry;
+#[macro_use] extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 
 extern crate ed25519;
 extern crate futures;
