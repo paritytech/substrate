@@ -312,9 +312,6 @@ impl NetworkContext for NetworkContextImpl {
 	) -> Result<(), Error> {
 		debug_assert!(self.inner.protocols.read().has_protocol(protocol),
 			"invalid protocol id requested in the API of the libp2p networking");
-		// TODO: restore
-		//debug_assert!(packet_id < self.inner.protocols.read().iter().find(|p| p.id == protocol).unwrap().packet_count,
-		//			  "invalid packet id requested in the API of the libp2p networking");
 		// TODO: could be "optimized" by building `message` only after checking the validity of
 		// 		the peer, but that's probably not worth the effort
 		let mut message = Bytes::with_capacity(1 + data.len());
@@ -534,7 +531,6 @@ fn listener_handle<'a, C>(
 	upgrade: FinalUpgrade<C>,
 	endpoint: Endpoint,
 	client_addr: impl Future<Item = Multiaddr, Error = IoError> + 'a,
-	/*listener_upgrade: impl ConnectionUpgrade<C, Box<Future<Item = Multiaddr, Error = IoError>>>*/
 ) -> Box<Future<Item = (), Error = IoError> + 'a>
 	where C: AsyncRead + AsyncWrite + 'a {
 	match upgrade {
@@ -550,9 +546,6 @@ fn listener_handle<'a, C>(
 
 		FinalUpgrade::Identify(IdentifyOutput::Sender { sender }, original_addr) => {
 			trace!(target: "sub-libp2p", "Sending back identification info");
-			/*let protocols_to_report = ConnectionUpgrade::<_, Box<Future<Item = Multiaddr, Error = IoError>>>::protocol_names(&listener_upgrade)
-				.filter_map(|(name, _)| String::from_utf8(name.to_vec()).ok())
-				.collect();*/
 			sender.send(
 				IdentifyInfo {
 					public_key: shared.network_state.local_public_key().clone(),
