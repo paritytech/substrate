@@ -119,8 +119,13 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 	type MultiaddrFuture = Maf;
 	type Future = future::FutureResult<(Self::Output, Self::MultiaddrFuture), IoError>;
 
-	fn upgrade(self, socket: C, protocol_version: Self::UpgradeIdentifier,
-		_: Endpoint, remote_addr: Maf) -> Self::Future {
+	fn upgrade(
+		self,
+		socket: C,
+		protocol_version: Self::UpgradeIdentifier,
+		endpoint: Endpoint,
+		remote_addr: Maf
+	) -> Self::Future {
 		let packet_count = self.supported_versions
 			.iter()
 			.find(|&(v, _)| *v == protocol_version)
@@ -265,8 +270,13 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 	type Future = <RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::Future;
 
 	#[inline]
-	fn upgrade(self, socket: C, upgrade_identifier: Self::UpgradeIdentifier,
-		endpoint: Endpoint, remote_addr: Maf) -> Self::Future {
+	fn upgrade(
+		self,
+		socket: C,
+		upgrade_identifier: Self::UpgradeIdentifier,
+		endpoint: Endpoint,
+		remote_addr: Maf
+	) -> Self::Future {
 		let (protocol_index, inner_proto_id) = upgrade_identifier;
 		self.0.into_iter()
 			.nth(protocol_index)
