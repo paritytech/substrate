@@ -404,7 +404,6 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 			.collect()
 	}
 
-
 	fn light_status(&self) -> LightStatus {
 		self.inner.light_status()
 	}
