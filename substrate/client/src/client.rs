@@ -303,7 +303,6 @@ impl<B, E, Block> Client<B, E, Block> where
 		telemetry!("block.import";
 			"height" => { let n: u64 = header.number().as_(); n },
 			"best" => ?hash,
-			"is_new_best" => is_new_best,
 			"origin" => ?origin
 		);
 		result
