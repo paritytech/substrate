@@ -68,7 +68,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			// TODO: Need to propagate gas_left.
 			// TODO: Need to return result buffer.
 
-			(exec_result, overlay.into_state())
+			(exec_result, overlay.into_change_set())
 		} else {
 			// that was a plain transfer
 			(
@@ -80,7 +80,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			)
 		};
 
-		self.account_db.merge(change_set);
+		self.account_db.commit(change_set);
 
 		Ok(exec_result)
 	}

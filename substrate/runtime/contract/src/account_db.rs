@@ -53,7 +53,7 @@ pub trait AccountDb<T: Trait> {
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 
-	fn merge(&mut self, change_set: ChangeSet<T>);
+	fn commit(&mut self, change_set: ChangeSet<T>);
 }
 
 pub struct DirectAccountDb;
@@ -68,7 +68,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		// TODO:
 		panic!()
 	}
-	fn merge(&mut self, s: ChangeSet<T>) {
+	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
 				// TODO:
@@ -100,7 +100,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		}
 	}
 
-	pub fn into_state(self) -> ChangeSet<T> {
+	pub fn into_change_set(self) -> ChangeSet<T> {
 		self.local.into_inner()
 	}
 
@@ -144,7 +144,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.and_then(|a| a.balance)
 			.unwrap_or_else(|| self.underlying.get_balance(account))
 	}
-	fn merge(&mut self, s: ChangeSet<T>) {
+	fn commit(&mut self, s: ChangeSet<T>) {
 		let mut local = self.local.borrow_mut();
 
 		for (address, changed) in s.into_iter() {
