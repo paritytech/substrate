@@ -98,7 +98,7 @@ pub enum BlockStatus {
 }
 
 /// Block data origin.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BlockOrigin {
 	/// Genesis block built into the client.
 	Genesis,
@@ -297,11 +297,12 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 		let hash = header.hash();
 		let _import_lock = self.import_lock.lock();
+		let height: u64 = header.number().as_();
 		*self.importing_block.write() = Some(hash);
 		let result = self.execute_and_import_block(origin, hash, header, justification, body);
 		*self.importing_block.write() = None;
 		telemetry!("block.import";
-			"height" => { let n: u64 = header.number().as_(); n },
+			"height" => height,
 			"best" => ?hash,
 			"origin" => ?origin
 		);
