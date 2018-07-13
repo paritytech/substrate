@@ -43,6 +43,7 @@ pub struct Client<B, E, Block> where Block: BlockT {
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
+	execution_strategy: ExecutionStrategy,
 }
 
 /// A source of blockchain evenets.
@@ -144,7 +145,7 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 /// Create an instance of in-memory client.
 pub fn new_in_mem<E, Block, S>(
 	executor: E,
-	genesis_storage: S
+	genesis_storage: S,
 ) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
 	where
 		E: CodeExecutor + RuntimeInfo,
@@ -153,7 +154,7 @@ pub fn new_in_mem<E, Block, S>(
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, executor, genesis_storage)
+	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
 }
 
 impl<B, E, Block> Client<B, E, Block> where
@@ -167,6 +168,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: S,
+		execution_strategy: ExecutionStrategy,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;
@@ -183,6 +185,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			import_notification_sinks: Mutex::new(Vec::new()),
 			import_lock: Mutex::new(()),
 			importing_block: RwLock::new(None),
+			execution_strategy,
 		})
 	}
 
@@ -332,7 +335,10 @@ impl<B, E, Block> Client<B, E, Block> where
 					&mut overlay,
 					"execute_block",
 					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode(),
-					ExecutionStrategy::NativeWhenPossible,
+					match origin {
+						BlockOrigin::NetworkInitialSync => ExecutionStrategy::NativeWhenPossible,
+						_ => self.execution_strategy,
+					},
 				);
 				let (_, storage_update) = r?;
 

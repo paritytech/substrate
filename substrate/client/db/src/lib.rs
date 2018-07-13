@@ -54,7 +54,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, H
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
-use state_machine::{CodeExecutor, TrieH256, DBValue};
+use state_machine::{CodeExecutor, TrieH256, DBValue, ExecutionStrategy};
 use utils::{Meta, db_err, meta_keys, number_to_db_key, open_database, read_db, read_id, read_meta};
 use state_db::StateDb;
 pub use state_db::PruningMode;
@@ -79,6 +79,7 @@ pub fn new_client<E, S, Block>(
 	settings: DatabaseSettings,
 	executor: E,
 	genesis_storage: S,
+	execution_strategy: ExecutionStrategy,
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
@@ -89,7 +90,7 @@ pub fn new_client<E, S, Block>(
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
-	Ok(client::Client::new(backend, executor, genesis_storage)?)
+	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategy)?)
 }
 
 mod columns {
