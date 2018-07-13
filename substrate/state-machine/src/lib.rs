@@ -95,10 +95,7 @@ impl OverlayedChanges {
 /// State Machine Error bound.
 ///
 /// This should reflect WASM error type bound for future compatibility.
-pub trait Error: 'static + fmt::Debug + fmt::Display + Send + Sized {
-	/// Unwrap any possible consensus error.
-	fn unpack_consensus_failure(self) -> Result<(Result<Self, Vec<u8>>, Result<Self, Vec<u8>>), Self> { Err(self) }
-}
+pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
 
 /// Externalities Error.
@@ -160,7 +157,19 @@ pub trait CodeExecutor: Sized + Send + Sync {
 		code: &[u8],
 		method: &str,
 		data: &[u8],
-	) -> Result<Vec<u8>, Self::Error>;
+		use_native: bool
+	) -> (Result<Vec<u8>, Self::Error>, bool);
+}
+
+/// Strategy for executing a call into the runtime.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ExecutionStrategy {
+	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
+	NativeWhenPossible,
+	/// Use the given wasm module.
+	AlwaysWasm,
+	/// Run with both the wasm and the native variant (if compatible). Report any discrepency as an error.
+	Both,
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -177,6 +186,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
+	strategy: ExecutionStrategy
 ) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
 {
 	let result = {
@@ -191,7 +201,11 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			&code,
 			method,
 			call_data,
-		).map(move |out| (out, externalities.transaction()))
+			match strategy {
+				ExecutionStrategy::AlwaysWasm => false,
+				_ => true,
+			},
+		).0.map(move |out| (out, externalities.transaction()))
 	};
 
 	match result {
@@ -226,7 +240,7 @@ pub fn prove_execution<B: TryIntoTrieBackend, Exec: CodeExecutor>(
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let (result, transaction) = execute(&proving_backend, overlay, exec, method, call_data)?;
+	let (result, transaction) = execute(&proving_backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)?;
 	let proof = proving_backend.extract_proof();
 	Ok((result, proof, transaction))
 }
@@ -242,7 +256,7 @@ pub fn execution_proof_check<Exec: CodeExecutor>(
 ) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>>
 {
 	let backend = proving_backend::create_proof_check_backend(root.into(), proof)?;
-	execute(&backend, overlay, exec, method, call_data)
+	execute(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
 }
 
 #[cfg(test)]
@@ -262,8 +276,9 @@ mod tests {
 			_code: &[u8],
 			_method: &str,
 			_data: &[u8],
-		) -> Result<Vec<u8>, Self::Error> {
-			Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]])
+			_use_native: bool
+		) -> (Result<Vec<u8>, Self::Error>, bool) {
+			(Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]]), false)
 		}
 	}
 
@@ -328,8 +343,14 @@ mod tests {
 
 	#[test]
 	fn execute_works() {
-		assert_eq!(execute(&trie_backend::tests::test_trie(),
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap().0, vec![66]);
+		assert_eq!(execute(
+			&trie_backend::tests::test_trie(),
+			&mut Default::default(),
+			&DummyCodeExecutor,
+			"test",
+			&[],
+			ExecutionStrategy::NativeWhenPossible
+		).unwrap().0, vec![66]);
 	}
 
 	#[test]

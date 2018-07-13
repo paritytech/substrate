@@ -105,70 +105,24 @@ pub trait NativeExecutionDispatch {
 	const VERSION: RuntimeVersion;
 }
 
-/// Strategy for executing a call into the runtime.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum ExecutionStrategy {
-	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
-	NativeWhenPossible,
-	/// Use the given wasm module.
-	AlwaysWasm,
-	/// Run with both the wasm and the native variant (if compatible). Report any discrepency as an error.
-	Both,
-}
-
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
 #[derive(Debug)]
 pub struct NativeExecutor<D: NativeExecutionDispatch + Sync + Send> {
-	/// The strategy for execution.
-	strategy: ExecutionStrategy,
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: ::std::marker::PhantomData<D>,
 }
 
 impl<D: NativeExecutionDispatch + Sync + Send> NativeExecutor<D> {
 	/// Create new instance.
-	pub fn new(strategy: ExecutionStrategy) -> Self {
+	pub fn new() -> Self {
 		// FIXME: set this entry at compile time
 		RUNTIMES_CACHE.lock().insert(
 			gen_cache_key(D::native_equivalent()),
 			Compatibility::IsCompatible(D::VERSION));
 
 		NativeExecutor {
-			strategy,
 			_dummy: Default::default(),
-		}
-	}
-
-	fn call_with_strategy<E: Externalities>(
-		&self,
-		ext: &mut E,
-		code: &[u8],
-		method: &str,
-		data: &[u8],
-		strategy: ExecutionStrategy,
-	) -> Result<Vec<u8>> {
-		let mut c = RUNTIMES_CACHE.lock();
-		match (strategy, fetch_cached_runtime_version(&mut c, ext, code, D::VERSION)) {
-			(_, Compatibility::NotCompatible(_, m)) => WasmExecutor.call_in_wasm_module(ext, m, method, data),
-			(_, Compatibility::InvalidVersion(m)) => WasmExecutor.call_in_wasm_module(ext, m, method, data),
-			(ExecutionStrategy::AlwaysWasm, _) => WasmExecutor.call(ext, code, method, data),
-			(ExecutionStrategy::NativeWhenPossible, _) => D::dispatch(ext, method, data),
-			_ => {
-				// both
-				let w = WasmExecutor.call(ext, code, method, data);
-				let n = D::dispatch(ext, method, data);
-				let same_ok = if let (&Ok(ref w), &Ok(ref n)) = (&w, &n) {
-					w == n
-				} else { false };
-				if same_ok {
-					return w
-				}
-				if w.is_err() && n.is_err() && format!("{:?}", w) == format!("{:?}", n) {
-					return w
-				}
-				Err(ErrorKind::ConsensusFailure(Box::new(w), Box::new(n)).into())
-			}
 		}
 	}
 }
@@ -176,7 +130,6 @@ impl<D: NativeExecutionDispatch + Sync + Send> NativeExecutor<D> {
 impl<D: NativeExecutionDispatch + Sync + Send> Clone for NativeExecutor<D> {
 	fn clone(&self) -> Self {
 		NativeExecutor {
-			strategy: self.strategy,
 			_dummy: Default::default(),
 		}
 	}
@@ -207,8 +160,14 @@ impl<D: NativeExecutionDispatch + Sync + Send> CodeExecutor for NativeExecutor<D
 		code: &[u8],
 		method: &str,
 		data: &[u8],
-	) -> Result<Vec<u8>> {
-		self.call_with_strategy(ext, code, method, data, self.strategy)
+		use_native: bool,
+	) -> (Result<Vec<u8>>, bool) {
+		let mut c = RUNTIMES_CACHE.lock();
+		match (use_native, fetch_cached_runtime_version(&mut c, ext, code, D::VERSION)) {
+			(_, Compatibility::NotCompatible(_, m)) | (_, Compatibility::InvalidVersion(m)) => (WasmExecutor.call_in_wasm_module(ext, m, method, data), false),
+			(false, _) => (WasmExecutor.call(ext, code, method, data, false).0, false),
+			_ => (D::dispatch(ext, method, data), true),
+		}
 	}
 }
 
@@ -240,10 +199,7 @@ macro_rules! native_executor_instance {
 
 		impl $name {
 			pub fn new() -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::new($crate::ExecutionStrategy::NativeWhenPossible)
-			}
-			pub fn with_default_strategy(strategy: $crate::ExecutionStrategy) -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::new(strategy)
+				$crate::NativeExecutor::new()
 			}
 		}
 	}

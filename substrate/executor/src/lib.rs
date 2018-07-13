@@ -66,7 +66,7 @@ mod sandbox;
 
 pub mod error;
 pub use wasm_executor::WasmExecutor;
-pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch, ExecutionStrategy};
+pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
 pub use state_machine::Externalities;
 pub use runtime_version::RuntimeVersion;
 pub use codec::Slicable;

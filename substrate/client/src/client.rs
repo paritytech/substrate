@@ -25,7 +25,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, 
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Slicable;
-use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
+use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor, ExecutionStrategy};
 
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
@@ -331,17 +331,9 @@ impl<B, E, Block> Client<B, E, Block> where
 					transaction_state,
 					&mut overlay,
 					"execute_block",
-					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode()
+					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode(),
+					ExecutionStrategy::NativeWhenPossible,
 				);
-				if let Err(e) = r {
-					r = match e.is_consensus_failure() {
-						Err(e) => Err(e),
-						Ok(w, n) => {
-							warn!("CONSENSUS FAILURE BETWEEN WASM AND NATIVE ON BLOCK {:?}", header);
-							w
-						}
-					};
-				}
 				let (_, storage_update) = r?;
 
 				Some(storage_update)

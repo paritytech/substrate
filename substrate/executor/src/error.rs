@@ -16,7 +16,6 @@
 
 //! Rust executor possible errors.
 
-use std::result;
 use serializer;
 use wasmi;
 
@@ -74,21 +73,6 @@ error_chain! {
 		InvalidMemoryReference {
 			description("invalid memory reference"),
 			display("Invalid memory reference"),
-		}
-
-		/// Consensus failure.
-		ConsensusFailure(wasm_result: Box<Result<Vec<u8>>>, native_result: Box<Result<Vec<u8>>>) {
-			description("consensus failure"),
-			display("Differing results from Wasm execution and native dispatch"),
-		}
-	}
-}
-
-impl state_machine::Error for Error {
-	fn unpack_consensus_failure(self) -> result::Result<(result::Result<Vec<u8>, Self>, result::Result<Vec<u8>, Self>), Self> {
-		match self {
-			(ErrorKind::ConsensusFailure(w, n), _) => Ok(*w, *n)
-			e => Err(e),
 		}
 	}
 }

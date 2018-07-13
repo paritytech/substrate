@@ -540,9 +540,11 @@ impl CodeExecutor for WasmExecutor {
 		code: &[u8],
 		method: &str,
 		data: &[u8],
-	) -> Result<Vec<u8>> {
-		let module = Module::from_buffer(code)?;
-		self.call_in_wasm_module(ext, &module, method, data)
+		_use_native: bool
+	) -> (Result<Vec<u8>>, bool) {
+		(Module::from_buffer(code).map_err(Into::into).and_then(|module| 
+			self.call_in_wasm_module(ext, &module, method, data)
+		), false)
 	}
 }
 

@@ -18,7 +18,7 @@
 
 use transaction_pool;
 use chain_spec::ChainSpec;
-pub use substrate_executor::ExecutionStrategy;
+pub use state_machine::ExecutionStrategy;
 pub use network::Role;
 pub use network::NetworkConfiguration;
 pub use client_db::PruningMode;
