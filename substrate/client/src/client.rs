@@ -21,7 +21,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As};
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Slicable;
@@ -98,7 +98,7 @@ pub enum BlockStatus {
 }
 
 /// Block data origin.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BlockOrigin {
 	/// Genesis block built into the client.
 	Genesis,
@@ -297,9 +297,15 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 		let hash = header.hash();
 		let _import_lock = self.import_lock.lock();
+		let height: u64 = header.number().as_();
 		*self.importing_block.write() = Some(hash);
 		let result = self.execute_and_import_block(origin, hash, header, justification, body);
 		*self.importing_block.write() = None;
+		telemetry!("block.import";
+			"height" => height,
+			"best" => ?hash,
+			"origin" => ?origin
+		);
 		result
 	}
 
