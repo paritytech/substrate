@@ -78,7 +78,7 @@ use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use polkadot_primitives::{Block, BlockId};
+use polkadot_primitives::BlockId;
 use codec::Slicable;
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;

@@ -28,11 +28,9 @@ extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_network;
 extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
-extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
 extern crate substrate_client as client;
-extern crate substrate_client_db as client_db;
 extern crate substrate_service as service;
 extern crate tokio;
 
@@ -49,26 +47,28 @@ use std::collections::HashMap;
 use codec::Slicable;
 use transaction_pool::TransactionPool;
 use keystore::Store as Keystore;
-use polkadot_api::PolkadotApi;
-use polkadot_api::light::RemotePolkadotApiWrapper;
+use polkadot_api::{PolkadotApi, light::RemotePolkadotApiWrapper};
 use polkadot_primitives::{Block, BlockId, Hash};
-use runtime_primitives::traits::Block as BlockT;
 use polkadot_runtime::GenesisConfig;
 use client::Client;
-use polkadot_network::PolkadotProtocol;
+use polkadot_network::{PolkadotProtocol, consensus::ConsensusNetwork};
 use tokio::runtime::TaskExecutor;
-use network::OnDemand;
-use service::Components as ServiceComponent;
 
 pub use service::{Configuration, Role, PruningMode, ExtrinsicPoolOptions,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 
+/// Specialised polkadot `ChainSpec`.
 pub type ChainSpec = service::ChainSpec<GenesisConfig>;
+/// Polkadot client type for specialised `Components`.
 pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, Block>;
 
+/// A collection of type to generalise Polkadot specific components over full / light client.
 pub trait Components: service::Components {
+	/// Polkadot API.
 	type Api: 'static + PolkadotApi + Send + Sync;
+	/// Client backend.
 	type Backend: 'static + client::backend::Backend<Block>;
+	/// Client executor.
 	type Executor: 'static + client::CallExecutor<Block> + Send + Sync;
 }
 
@@ -87,20 +87,30 @@ impl Components for service::FullComponents<Factory> {
 	type Backend = service::FullBackend<Factory>;
 }
 
-/// Polkadot config for substrate service.
+/// Polkadot config for the substrate service.
 pub struct Factory;
 
 impl service::ServiceFactory for Factory {
 	type Block = Block;
 	type NetworkProtocol = PolkadotProtocol;
 	type RuntimeDispatch = polkadot_executor::Executor;
-	type FullExtrinsicPool = TransactionPoolAdapter<service::FullBackend<Self>, service::FullExecutor<Self>, service::FullClient<Self>>;
-	type LightExtrinsicPool = TransactionPoolAdapter<service::LightBackend<Self>, service::LightExecutor<Self>, RemotePolkadotApiWrapper<service::LightBackend<Self>, service::LightExecutor<Self>>>;
+	type FullExtrinsicPool = TransactionPoolAdapter<
+		service::FullBackend<Self>,
+		service::FullExecutor<Self>,
+		service::FullClient<Self>
+	>;
+	type LightExtrinsicPool = TransactionPoolAdapter<
+		service::LightBackend<Self>,
+		service::LightExecutor<Self>,
+		RemotePolkadotApiWrapper<service::LightBackend<Self>, service::LightExecutor<Self>>
+	>;
 	type Genesis = GenesisConfig;
 
 	const NETWORK_PROTOCOL_ID: network::ProtocolId = ::polkadot_network::DOT_PROTOCOL_ID;
 
-	fn build_full_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::FullClient<Self>>) -> Result<Self::FullExtrinsicPool, Error> {
+	fn build_full_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::FullClient<Self>>)
+		-> Result<Self::FullExtrinsicPool, Error>
+	{
 		let api = client.clone();
 		Ok(TransactionPoolAdapter {
 			pool: Arc::new(TransactionPool::new(config, api)),
@@ -109,7 +119,9 @@ impl service::ServiceFactory for Factory {
 		})
 	}
 
-	fn build_light_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::LightClient<Self>>) -> Result<Self::LightExtrinsicPool, Error> {
+	fn build_light_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::LightClient<Self>>)
+		-> Result<Self::LightExtrinsicPool, Error>
+	{
 		let api = Arc::new(RemotePolkadotApiWrapper(client.clone()));
 		Ok(TransactionPoolAdapter {
 			pool: Arc::new(TransactionPool::new(config, api)),
@@ -138,7 +150,9 @@ impl <C: Components> Service<C> {
 }
 
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<LightComponents<Factory>>, Error> {
+pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor)
+	-> Result<Service<LightComponents<Factory>>, Error>
+{
 	let service = service::Service::<LightComponents<Factory>>::new(config, executor)?;
 	let api = Arc::new(RemotePolkadotApiWrapper(service.client()));
 	Ok(Service {
@@ -150,7 +164,9 @@ pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor) -
 }
 
 /// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<FullComponents<Factory>>, Error> {
+pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor)
+	-> Result<Service<FullComponents<Factory>>, Error>
+{
 	let keystore_path = config.keystore_path.clone();
 	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
 	let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
@@ -163,7 +179,7 @@ pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor) ->
 
 		let client = service.client();
 
-		let consensus_net = ::polkadot_network::consensus::ConsensusNetwork::new(service.network(), client.clone());
+		let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
 		Some(consensus::Service::new(
 			client.clone(),
 			client.clone(),

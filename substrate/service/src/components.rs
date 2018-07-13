@@ -18,6 +18,7 @@
 
 use std::sync::Arc;
 use std::marker::PhantomData;
+use serde::{Serialize, de::DeserializeOwned};
 use chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client};
@@ -25,61 +26,138 @@ use error;
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use extrinsic_pool::{txpool::Options as ExtrinsicPoolOptions, api::ExtrinsicPool as ExtrinsicPoolApi};
-use runtime_primitives::traits::Block as BlockT;
-use runtime_primitives::generic::BlockId;
-use RuntimeGenesis;
+use runtime_primitives::{traits::Block as BlockT, generic::BlockId, BuildStorage};
 
+// Type aliases.
+// These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
+/// Network service type for a factory.
+pub type NetworkService<F> = network::Service<
+	<F as ServiceFactory>::Block,
+	<F as ServiceFactory>::NetworkProtocol
+>;
+
+/// Code executor type for a factory.
+pub type CodeExecutor<F> =  NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
+
+/// Full client backend type for a factory.
+pub type FullBackend<F> = client_db::Backend<<F as ServiceFactory>::Block>;
+
+/// Full client executor type for a factory.
+pub type FullExecutor<F> = client::LocalCallExecutor<
+	client_db::Backend<<F as ServiceFactory>::Block>,
+	CodeExecutor<F>
+>;
+
+/// Light client backend type for a factory.
+pub type LightBackend<F> = client::light::backend::Backend<
+	client_db::light::LightStorage<<F as ServiceFactory>::Block>,
+	network::OnDemand<<F as ServiceFactory>::Block,
+	NetworkService<F>>
+>;
+
+/// Light client executor type for a factory.
+pub type LightExecutor<F> = client::light::call_executor::RemoteCallExecutor<
+	client::light::blockchain::Blockchain<
+		client_db::light::LightStorage<<F as ServiceFactory>::Block>,
+		network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>
+	>,
+	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>
+>;
+
+/// Full client type for a factory.
+pub type FullClient<F> = Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block>;
+
+/// Light client type for a factory.
+pub type LightClient<F> = Client<LightBackend<F>, LightExecutor<F>, <F as ServiceFactory>::Block>;
+
+/// `ChainSpec` specialization for a factory.
+pub type FactoryChainSpec<F> = ChainSpec<<F as ServiceFactory>::Genesis>;
+
+/// `Block` type for a factory.
+pub type FactoryBlock<F> = <F as ServiceFactory>::Block;
+
+/// Client type for `Components`.
+pub type ComponentClient<C> = Client<
+	<C as Components>::Backend,
+	<C as Components>::Executor,
+	FactoryBlock<<C as Components>::Factory>
+>;
+
+/// Block type for `Components`
+pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
+
+/// Extrinsic pool API type for `Components`.
+pub type PoolApi<C> = <<C as Components>::ExtrinsicPool as ExtrinsicPool<ComponentBlock<C>>>::Api;
+
+/// A set of traits for the runtime genesis config.
+pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
+impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
+
+/// A collection of types and methods to build a service on top of the substrate service.
 pub trait ServiceFactory {
+	/// Block type.
 	type Block: BlockT;
+	/// Network protocol extensions.
 	type NetworkProtocol: network::specialization::Specialization<Self::Block> + Default;
+	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
+	/// Extrinsic pool type for the full client.
 	type FullExtrinsicPool: ExtrinsicPool<Self::Block>;
+	/// Extrinsic pool type for the light client.
 	type LightExtrinsicPool: ExtrinsicPool<Self::Block>;
+	/// Genesis configuration for the runtime.
 	type Genesis: RuntimeGenesis;
-
+	/// Network protocol id.
 	const NETWORK_PROTOCOL_ID: network::ProtocolId;
 
-	fn build_full_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<FullClient<Self>>) -> Result<Self::FullExtrinsicPool, error::Error>;
-	fn build_light_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<LightClient<Self>>) -> Result<Self::LightExtrinsicPool, error::Error>;
+	//TODO: replace these with a constructor trait. that ExtrinsicPool implements.
+	/// Extrinsic pool constructor for the full client.
+	fn build_full_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<FullClient<Self>>)
+		-> Result<Self::FullExtrinsicPool, error::Error>;
+	/// Extrinsic pool constructor for the light client.
+	fn build_light_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<LightClient<Self>>)
+		-> Result<Self::LightExtrinsicPool, error::Error>;
 }
 
+// TODO: move this to substrate-extrinsic-pool
+/// Extrinsic pool bridge.
 pub trait ExtrinsicPool<Block: BlockT>: network::TransactionPool<Block> + Send + Sync + 'static {
 	type Api: ExtrinsicPoolApi<Block::Extrinsic, BlockId<Block>, Block::Hash>;
 
+	/// Update the pool after a new block has been imported.
 	fn prune_imported(&self, hash: &Block::Hash);
+	/// Returns underlying API.
 	fn api(&self) -> Arc<Self::Api>;
 }
 
-// Type aliases
-pub type NetworkService<F> = network::Service<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
-pub type CodeExecutor<F> =  NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
-pub type FullBackend<F> = client_db::Backend<<F as ServiceFactory>::Block>;
-pub type FullExecutor<F> = client::LocalCallExecutor<client_db::Backend<<F as ServiceFactory>::Block>, CodeExecutor<F>>;
-pub type LightBackend<F> = client::light::backend::Backend<client_db::light::LightStorage<<F as ServiceFactory>::Block>, network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>>;
-pub type LightExecutor<F> = client::light::call_executor::RemoteCallExecutor<
-	client::light::blockchain::Blockchain<client_db::light::LightStorage<<F as ServiceFactory>::Block>, network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>>,
-	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>>;
-pub type FullClient<F> = Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block>;
-pub type LightClient<F> = Client<LightBackend<F>, LightExecutor<F>, <F as ServiceFactory>::Block>;
-pub type FactoryChainSpec<F> = ChainSpec<<F as ServiceFactory>::Genesis>;
-pub type FactoryBlock<F> = <F as ServiceFactory>::Block;
-pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, FactoryBlock<<C as Components>::Factory>>;
-pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
-pub type PoolApi<C> = <<C as Components>::ExtrinsicPool as ExtrinsicPool<ComponentBlock<C>>>::Api;
-
+/// A collection of types and function to generalise over full / light client type.
 pub trait Components {
+	/// Associated service factory.
 	type Factory: ServiceFactory;
+	/// Client backend.
 	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>>;
+	/// Client executor.
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>> + Send + Sync;
+	/// Extrinsic pool type.
 	type ExtrinsicPool: ExtrinsicPool<FactoryBlock<Self::Factory>>;
 
 	/// Create client.
-	fn build_client(settings: client_db::DatabaseSettings, executor: CodeExecutor<Self::Factory>, chain_spec: &FactoryChainSpec<Self::Factory>)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>), error::Error>;
+	fn build_client(
+		settings: client_db::DatabaseSettings,
+		executor: CodeExecutor<Self::Factory>,
+		chain_spec: &FactoryChainSpec<Self::Factory>
+	)
+		-> Result<(
+			Arc<ComponentClient<Self>>,
+			Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
+		), error::Error>;
 
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error>;
+	/// Create extrinsic pool.
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>)
+		-> Result<Self::ExtrinsicPool, error::Error>;
 }
 
+/// A struct that implement `Components` for the full client.
 pub struct FullComponents<Factory: ServiceFactory> {
 	_factory: PhantomData<Factory>,
 }
@@ -90,16 +168,27 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type Backend = FullBackend<Factory>;
 	type ExtrinsicPool = <Factory as ServiceFactory>::FullExtrinsicPool;
 
-	fn build_client(db_settings: client_db::DatabaseSettings, executor: CodeExecutor<Self::Factory>, chain_spec: &FactoryChainSpec<Self::Factory>)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>), error::Error> {
+	fn build_client(
+		db_settings: client_db::DatabaseSettings,
+		executor: CodeExecutor<Self::Factory>,
+		chain_spec: &FactoryChainSpec<Self::Factory>
+	)
+		-> Result<(
+			Arc<ComponentClient<Self>>,
+			Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
+		), error::Error>
+	{
 		Ok((Arc::new(client_db::new_client(db_settings, executor, chain_spec)?), None))
 	}
 
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error> {
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>)
+		-> Result<Self::ExtrinsicPool, error::Error>
+	{
 		Factory::build_full_extrinsic_pool(config, client)
 	}
 }
 
+/// A struct that implement `Components` for the light client.
 pub struct LightComponents<Factory: ServiceFactory> {
 	_factory: PhantomData<Factory>,
 }
@@ -110,8 +199,17 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type Backend = LightBackend<Factory>;
 	type ExtrinsicPool = <Factory as ServiceFactory>::LightExtrinsicPool;
 
-	fn build_client(db_settings: client_db::DatabaseSettings, executor: CodeExecutor<Self::Factory>, spec: &FactoryChainSpec<Self::Factory>)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>), error::Error> {
+	fn build_client(
+		db_settings: client_db::DatabaseSettings,
+		executor: CodeExecutor<Self::Factory>,
+		spec: &FactoryChainSpec<Self::Factory>
+	)
+		-> Result<(
+			Arc<ComponentClient<Self>>,
+			Option<Arc<OnDemand<FactoryBlock<Self::Factory>,
+			NetworkService<Self::Factory>>>>
+		), error::Error>
+	{
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor));
@@ -121,8 +219,9 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, error::Error> {
+	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>)
+		-> Result<Self::ExtrinsicPool, error::Error>
+	{
 		Factory::build_light_extrinsic_pool(config, client)
 	}
 }
-

@@ -28,7 +28,7 @@ use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::Slicable;
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, Zero};
 use utils::{meta_keys, Meta, db_err, number_to_db_key, open_database, read_db, read_id, read_meta};
 use DatabaseSettings;
 

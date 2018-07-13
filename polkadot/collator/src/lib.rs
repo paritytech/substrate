@@ -66,7 +66,7 @@ use client::BlockchainEvents;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::BlockId;
 use polkadot_primitives::parachain::{self, BlockData, HeadData, ConsolidatedIngress, Collation, Message, Id as ParaId};
-use polkadot_cli::{ClientError, ServiceComponents, ClientBackend, PolkadotBlock, StateMachineBackend, Service};
+use polkadot_cli::{ServiceComponents, Service};
 use polkadot_cli::Worker;
 
 /// Parachain context needed for collation.

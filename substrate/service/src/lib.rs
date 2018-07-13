@@ -54,11 +54,9 @@ use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use network::ManageNetwork;
-use runtime_primitives::BuildStorage;
 use runtime_primitives::traits::{Header, As};
 use exit_future::Signal;
 use tokio::runtime::TaskExecutor;
-use serde::{Serialize, de::DeserializeOwned};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Role, PruningMode};
@@ -69,11 +67,8 @@ pub use extrinsic_pool::api::{ExtrinsicPool as ExtrinsicPoolApi};
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, ExtrinsicPool, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
-	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock
+	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock, RuntimeGenesis,
 };
-
-pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
-impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Substrate service.
 pub struct Service<Components: components::Components> {
@@ -93,7 +88,11 @@ pub fn new_client<Factory: components::ServiceFactory>(config: Configuration<Fac
 		pruning: config.pruning,
 	};
 	let executor = components::CodeExecutor::<Factory>::default();
-	let (client, _) = components::FullComponents::<Factory>::build_client(db_settings, executor, &config.chain_spec)?;
+	let (client, _) = components::FullComponents::<Factory>::build_client(
+		db_settings,
+		executor,
+		&config.chain_spec
+	)?;
 	Ok(client)
 }
 
@@ -102,7 +101,12 @@ impl<Components> Service<Components>
 		Components: components::Components,
 {
 	/// Creates a new service.
-	pub fn new(config: Configuration<<Components::Factory as ServiceFactory>::Genesis>, task_executor: TaskExecutor) -> Result<Self, error::Error> {
+	pub fn new(
+		config: Configuration<<Components::Factory as ServiceFactory>::Genesis>,
+		task_executor: TaskExecutor
+	)
+		-> Result<Self, error::Error>
+	{
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
@@ -130,7 +134,9 @@ impl<Components> Service<Components>
 		info!("Best block: #{}", best_header.number());
 		telemetry!("node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
-		let extrinsic_pool = Arc::new(Components::build_extrinsic_pool(config.extrinsic_pool, client.clone())?);
+		let extrinsic_pool = Arc::new(
+			Components::build_extrinsic_pool(config.extrinsic_pool, client.clone())?
+		);
 		let extrinsic_pool_adapter = extrinsic_pool.clone();
 		let network_params = network::Params {
 			config: network::ProtocolConfig {
@@ -138,7 +144,8 @@ impl<Components> Service<Components>
 			},
 			network_config: config.network,
 			chain: client.clone(),
-			on_demand: on_demand.clone().map(|d| d as Arc<network::OnDemandService<ComponentBlock<Components>>>),
+			on_demand: on_demand.clone()
+				.map(|d| d as Arc<network::OnDemandService<ComponentBlock<Components>>>),
 			transaction_pool: extrinsic_pool_adapter,
 			specialization: <Components::Factory as ServiceFactory>::NetworkProtocol::default(),
 		};
