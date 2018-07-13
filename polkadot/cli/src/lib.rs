@@ -36,12 +36,13 @@ extern crate serde_json;
 extern crate substrate_client as client;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
-extern crate substrate_extrinsic_pool;
 extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_extrinsic_pool;
+extern crate substrate_service;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
@@ -70,14 +71,14 @@ pub use client::error::Error as ClientError;
 pub use client::backend::Backend as ClientBackend;
 pub use state_machine::Backend as StateMachineBackend;
 pub use polkadot_primitives::Block as PolkadotBlock;
-pub use service::{Components as ServiceComponents, Service, Factory as ServiceFactory};
+pub use service::{Components as ServiceComponents, Service};
 
 use std::io::{self, Write, Read, stdin, stdout};
 use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use polkadot_primitives::BlockId;
+use polkadot_primitives::{Block, BlockId};
 use codec::Slicable;
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
@@ -430,10 +431,11 @@ fn run_until_exit<C, W>(
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", matches)?;
 
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(service.client(), executor.clone());
-			let author = rpc::apis::author::Author::new(service.client(), service.extrinsic_pool());
+			let client = (&service as &substrate_service::Service<C>).client();
+			let chain = rpc::apis::chain::Chain::new(client.clone(), executor.clone());
+			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool());
 			rpc::rpc_handler::<service::ComponentBlock<C>, _, _, _, _>(
-				service.client(),
+				client,
 				chain,
 				author,
 				sys_conf.clone(),

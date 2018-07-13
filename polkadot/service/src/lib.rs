@@ -49,6 +49,7 @@ use std::collections::HashMap;
 use codec::Slicable;
 use transaction_pool::TransactionPool;
 use keystore::Store as Keystore;
+use polkadot_api::PolkadotApi;
 use polkadot_api::light::RemotePolkadotApiWrapper;
 use polkadot_primitives::{Block, BlockId, Hash};
 use runtime_primitives::traits::Block as BlockT;
@@ -57,146 +58,34 @@ use client::Client;
 use polkadot_network::PolkadotProtocol;
 use tokio::runtime::TaskExecutor;
 use network::OnDemand;
+use service::Components as ServiceComponent;
 
 pub use service::{Configuration, Role, PruningMode, ExtrinsicPoolOptions,
-	ErrorKind, Error, ComponentBlock};
+	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 
 pub type ChainSpec = service::ChainSpec<GenesisConfig>;
-
-struct FullComponents;
-struct LightComponents;
-
-/*
-pub trait PolkadotComponents: service::Components<Factory=Factory>
-where
-	<Self as service::Components>::Executor: client::CallExecutor<Block>,
-	<Self as service::Components>::Backend: client::backend::Backend<Block>,
-	<Self as service::Components>::ExtrinsicPool: service::ExtrinsicPool<Block>,
-	<<Self as service::Components>::ExtrinsicPool as service::ExtrinsicPool<Block>>::Api:
-		service::ExtrinsicPoolApi<<Block as BlockT>::Extrinsic, BlockId, <Block as BlockT>::Hash>
-{
-
-}
-
-impl PolkadotComponents for service::FullComponents<Factory>
-where
-	<Self as service::Components>::Executor: client::CallExecutor<Block>,
-	<Self as service::Components>::Backend: client::backend::Backend<Block>,
-	<Self as service::Components>::ExtrinsicPool: service::ExtrinsicPool<Block>,
-	<<Self as service::Components>::ExtrinsicPool as service::ExtrinsicPool<Block>>::Api:
-		service::ExtrinsicPoolApi<<Block as BlockT>::Extrinsic, BlockId, <Block as BlockT>::Hash>
-{
-
-}
-
-impl PolkadotComponents for service::LightComponents<Factory>
-where
-	<Self as service::Components>::Executor: client::CallExecutor<Block>,
-	<Self as service::Components>::Backend: client::backend::Backend<Block>,
-	<Self as service::Components>::ExtrinsicPool: service::ExtrinsicPool<Block>,
-	<<Self as service::Components>::ExtrinsicPool as service::ExtrinsicPool<Block>>::Api:
-		service::ExtrinsicPoolApi<<Block as BlockT>::Extrinsic, BlockId, <Block as BlockT>::Hash>
-{
-
-}
-*/
-/*
-impl PolkadotComponents for service::Components<Factory=Factory> {
-}
-*/
-
-
 pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, Block>;
 
 pub trait Components: service::Components {
+	type Api: 'static + PolkadotApi + Send + Sync;
 	type Backend: 'static + client::backend::Backend<Block>;
 	type Executor: 'static + client::CallExecutor<Block> + Send + Sync;
-	type ExtrinsicPool: service::ExtrinsicPool<Block>;
-
-	/// Create client.
-	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error>;
-
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<<Self as Components>::ExtrinsicPool, Error>;
 }
 
-impl Components for FullComponents {
-	type Executor = <service::FullComponents<Factory> as service::Components>::Executor;
-	type Backend = <service::FullComponents<Factory> as service::Components>::Backend;
-	type ExtrinsicPool = <service::FullComponents<Factory> as service::Components>::ExtrinsicPool;
-
-	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error> {
-			service::FullComponents::<Factory>::build_client()
-		}
-
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<<Self as Components>::ExtrinsicPool, Error> {
-		service::FullComponents::<Factory>::build_extrinsic_pool(config, client)
-	}
+impl Components for service::LightComponents<Factory> {
+	type Api = RemotePolkadotApiWrapper<
+		<service::LightComponents<Factory> as service::Components>::Backend,
+		<service::LightComponents<Factory> as service::Components>::Executor,
+	>;
+	type Executor = service::LightExecutor<Factory>;
+	type Backend = service::LightBackend<Factory>;
 }
 
-impl Components for LightComponents {
-	type Executor = <service::LightComponents<Factory> as service::Components>::Executor;
-	type Backend = <service::LightComponents<Factory> as service::Components>::Backend;
-	type ExtrinsicPool = <service::LightComponents<Factory> as service::Components>::ExtrinsicPool;
-
-	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error> {
-			service::LightComponents::<Factory>::build_client()
-		}
-
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<<Self as Components>::ExtrinsicPool, Error> {
-		service::LightComponents::<Factory>::build_extrinsic_pool(config, client)
-	}
+impl Components for service::FullComponents<Factory> {
+	type Api = service::FullClient<Factory>;
+	type Executor = service::FullExecutor<Factory>;
+	type Backend = service::FullBackend<Factory>;
 }
-
-impl service::Components for LightComponents {
-	type Executor = <service::LightComponents<Factory> as service::Components>::Executor;
-	type Backend = <service::LightComponents<Factory> as service::Components>::Backend;
-	type ExtrinsicPool = <service::LightComponents<Factory> as service::Components>::ExtrinsicPool;
-
-	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error> {
-			service::LightComponents::<Factory>::build_client()
-		}
-
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, Error> {
-		service::LightComponents::<Factory>::build_extrinsic_pool(config, client)
-	}
-}
-
-impl service::Components for FullComponents {
-	type Executor = <service::FullComponents<Factory> as service::Components>::Executor;
-	type Backend = <service::FullComponents<Factory> as service::Components>::Backend;
-	type ExtrinsicPool = <service::FullComponents<Factory> as service::Components>::ExtrinsicPool;
-
-	fn build_client(settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
-		-> Result<(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<Block, service::NetworkService<Factory>>>>), Error> {
-			service::FullComponents::<Factory>::build_client()
-		}
-
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, Error> {
-		service::FullComponents::<Factory>::build_extrinsic_pool(config, client)
-	}
-}
-
-/*
-impl<T:Components> service::Components for T {
-	type Factory = Factory;
-	type Executor = T::Executor;
-	type Backend = T::Backend;
-	type ExtrinsicPool = T::ExtrinsicPool;
-
-	fn build_client(db_settings: client_db::DatabaseSettings, executor: service::CodeExecutor<Factory>, chain_spec: &ChainSpec)
-		-> Result<(Arc<service::ComponentClient<Self>>, Option<Arc<OnDemand<service::FactoryBlock<Self::Factory>, service::NetworkService<Factory>>>>), Error> {
-			<Self as Components>::build_client(db_settings, executor, chain_spec)
-		}
-
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::ComponentClient<Self>>) -> Result<Self::ExtrinsicPool, Error> {
-		<Self as Components>::build_extrinsic_pool(config, client)
-	}
-}
-*/
 
 /// Polkadot config for substrate service.
 pub struct Factory;
@@ -233,23 +122,38 @@ impl service::ServiceFactory for Factory {
 /// Polkadot service.
 pub struct Service<C: Components> {
 	inner: service::Service<C>,
+	client: Arc<ComponentClient<C>>,
+	api: Arc<<C as Components>::Api>,
 	_consensus: Option<consensus::Service>,
 }
 
+impl <C: Components> Service<C> {
+	pub fn client(&self) -> Arc<ComponentClient<C>> {
+		self.client.clone()
+	}
+
+	pub fn api(&self) -> Arc<<C as Components>::Api> {
+		self.api.clone()
+	}
+}
+
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<LightComponents>, Error> {
-	let service = service::Service::<LightComponents>::new(config, executor)?;
+pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<LightComponents<Factory>>, Error> {
+	let service = service::Service::<LightComponents<Factory>>::new(config, executor)?;
+	let api = Arc::new(RemotePolkadotApiWrapper(service.client()));
 	Ok(Service {
+		client: service.client(),
+		api: api,
 		inner: service,
 		_consensus: None,
 	})
 }
 
 /// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<FullComponents>, Error> {
+pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor) -> Result<Service<FullComponents<Factory>>, Error> {
 	let keystore_path = config.keystore_path.clone();
 	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
-	let service = service::Service::<FullComponents>::new(config, executor.clone())?;
+	let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
 	let consensus = if is_validator {
 		// Spin consensus service if configured
 		let keystore = Keystore::open(keystore_path.into())?;
@@ -274,6 +178,8 @@ pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor) ->
 	};
 
 	Ok(Service {
+		client: service.client(),
+		api: service.client(),
 		inner: service,
 		_consensus: consensus,
 	})
@@ -281,7 +187,7 @@ pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor) ->
 
 /// Creates bare client without any networking.
 pub fn new_client(config: Configuration<GenesisConfig>)
--> Result<Arc<ComponentClient<FullComponents>>, Error>
+-> Result<Arc<service::ComponentClient<FullComponents<Factory>>>, Error>
 {
 	service::new_client::<Factory>(config)
 }

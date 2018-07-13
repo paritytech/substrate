@@ -51,7 +51,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				(SyncState::Downloading, Some(n)) => format!("Syncing, target=#{}", n),
 			};
 			let txpool_status = txpool.light_status();
-			let best_number = best_block.number().as_();
+			let best_number: u64 = best_block.number().as_();
 			info!(target: "polkadot", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_number, hash);
 			telemetry!("system.interval"; "status" => status, "peers" => num_peers, "height" => best_number, "best" => ?hash, "txcount" => txpool_status.transaction_count);
 		} else {
@@ -62,8 +62,8 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 
 	let client = service.client();
 	let display_block_import = client.import_notification_stream().for_each(|n| {
-		info!(target: "polkadot", "Imported #{} ({})", n.header.number().as_(), n.hash);
-		telemetry!("block.import"; "height" => n.header.number().as_(), "best" => ?n.hash);
+		info!(target: "polkadot", "Imported #{} ({})", n.header.number(), n.hash);
+		telemetry!("block.import"; "height" => n.header.number(), "best" => ?n.hash);
 		Ok(())
 	});
 

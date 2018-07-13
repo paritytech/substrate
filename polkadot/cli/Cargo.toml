@@ -33,6 +33,7 @@ substrate-primitives = { path = "../../substrate/primitives" }
 substrate-rpc = { path = "../../substrate/rpc" }
 substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
+substrate-service = { path = "../../substrate/service" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-telemetry = { path = "../../substrate/telemetry" }
 polkadot-primitives = { path = "../primitives" }
