@@ -31,7 +31,6 @@
 //! set for this block height.
 
 pub mod error;
-pub mod generic;
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
@@ -40,6 +39,7 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate ed25519;
 extern crate tokio;
 extern crate parking_lot;
+extern crate rhododendron;
 
 #[macro_use]
 extern crate log;
@@ -66,15 +66,15 @@ use futures::sync::oneshot;
 use tokio::timer::Delay;
 use parking_lot::Mutex;
 
-pub use generic::InputStreamConcluded;
+pub use rhododendron::InputStreamConcluded;
 pub use error::{Error, ErrorKind};
 
 /// Messages over the proposal.
 /// Each message carries an associated round number.
-pub type Message<B> = generic::Message<B, <B as Block>::Hash>;
+pub type Message<B> = rhododendron::Message<B, <B as Block>::Hash>;
 
 /// Localized message type.
-pub type LocalizedMessage<B> = generic::LocalizedMessage<
+pub type LocalizedMessage<B> = rhododendron::LocalizedMessage<
 	B,
 	<B as Block>::Hash,
 	AuthorityId,
@@ -82,45 +82,62 @@ pub type LocalizedMessage<B> = generic::LocalizedMessage<
 >;
 
 /// Justification of some hash.
-pub type Justification<H> = generic::Justification<H, LocalizedSignature>;
+pub type Justification<H> = rhododendron::Justification<H, LocalizedSignature>;
 
 /// Justification of a prepare message.
-pub type PrepareJustification<H> = generic::PrepareJustification<H, LocalizedSignature>;
+pub type PrepareJustification<H> = rhododendron::PrepareJustification<H, LocalizedSignature>;
 
 /// Unchecked justification.
-pub type UncheckedJustification<H> = generic::UncheckedJustification<H, LocalizedSignature>;
+pub struct UncheckedJustification<H>(rhododendron::UncheckedJustification<H, LocalizedSignature>);
+
+impl<H> UncheckedJustification<H> {
+	/// Create a new, unchecked justification.
+	pub fn new(digest: H, signatures: Vec<LocalizedSignature>, round_number: usize) -> Self {
+		UncheckedJustification(rhododendron::UncheckedJustification {
+			digest,
+			signatures,
+			round_number,
+		})
+	}
+}
+
+impl<H> From<rhododendron::UncheckedJustification<H, LocalizedSignature>> for UncheckedJustification<H> {
+	fn from(inner: rhododendron::UncheckedJustification<H, LocalizedSignature>) -> Self {
+		UncheckedJustification(inner)
+	}
+}
 
 impl<H> From<PrimitiveJustification<H>> for UncheckedJustification<H> {
 	fn from(just: PrimitiveJustification<H>) -> Self {
-		UncheckedJustification {
+		UncheckedJustification(rhododendron::UncheckedJustification {
 			round_number: just.round_number as usize,
 			digest: just.hash,
 			signatures: just.signatures.into_iter().map(|(from, sig)| LocalizedSignature {
 				signer: from.into(),
 				signature: sig,
 			}).collect(),
-		}
+		})
 	}
 }
 
 impl<H> Into<PrimitiveJustification<H>> for UncheckedJustification<H> {
 	fn into(self) -> PrimitiveJustification<H> {
 		PrimitiveJustification {
-			round_number: self.round_number as u32,
-			hash: self.digest,
-			signatures: self.signatures.into_iter().map(|s| (s.signer.into(), s.signature)).collect(),
+			round_number: self.0.round_number as u32,
+			hash: self.0.digest,
+			signatures: self.0.signatures.into_iter().map(|s| (s.signer.into(), s.signature)).collect(),
 		}
 	}
 }
 
 /// Result of a committed round of BFT
-pub type Committed<B> = generic::Committed<B, <B as Block>::Hash, LocalizedSignature>;
+pub type Committed<B> = rhododendron::Committed<B, <B as Block>::Hash, LocalizedSignature>;
 
 /// Communication between BFT participants.
-pub type Communication<B> = generic::Communication<B, <B as Block>::Hash, AuthorityId, LocalizedSignature>;
+pub type Communication<B> = rhododendron::Communication<B, <B as Block>::Hash, AuthorityId, LocalizedSignature>;
 
 /// Misbehavior observed from BFT participants.
-pub type Misbehavior<H> = generic::Misbehavior<H, LocalizedSignature>;
+pub type Misbehavior<H> = rhododendron::Misbehavior<H, LocalizedSignature>;
 
 /// Environment producer for a BFT instance. Creates proposer instance and communication streams.
 pub trait Environment<B: Block> {
@@ -187,7 +204,7 @@ struct BftInstance<B: Block, P> {
 	proposer: P,
 }
 
-impl<B: Block, P: Proposer<B>> generic::Context for BftInstance<B, P>
+impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 	where
 		B: Clone + Eq,
 		B::Hash: ::std::hash::Hash,
@@ -250,7 +267,7 @@ pub struct BftFuture<B, P, I, InStream, OutSink> where
 	InStream: Stream<Item=Communication<B>, Error=P::Error>,
 	OutSink: Sink<SinkItem=Communication<B>, SinkError=P::Error>,
 {
-	inner: generic::Agreement<BftInstance<B, P>, InStream, OutSink>,
+	inner: rhododendron::Agreement<BftInstance<B, P>, InStream, OutSink>,
 	cancel: Arc<AtomicBool>,
 	send_task: Option<oneshot::Sender<task::Task>>,
 	import: Arc<I>,
@@ -411,7 +428,7 @@ impl<B, P, I> BftService<B, P, I>
 			authorities: authorities,
 		};
 
-		let agreement = generic::agree(
+		let agreement = rhododendron::agree(
 			bft_instance,
 			n,
 			max_faulty,
@@ -467,7 +484,7 @@ fn check_justification_signed_message<H>(authorities: &[AuthorityId], message: &
 	-> Result<Justification<H>, UncheckedJustification<H>>
 {
 	// TODO: return additional error information.
-	just.check(authorities.len() - max_faulty_of(authorities.len()), |_, _, sig| {
+	just.0.check(authorities.len() - max_faulty_of(authorities.len()), |_, _, sig| {
 		let auth_id = sig.signer.clone().into();
 		if !authorities.contains(&auth_id) { return None }
 
@@ -476,7 +493,7 @@ fn check_justification_signed_message<H>(authorities: &[AuthorityId], message: &
 		} else {
 			None
 		}
-	})
+	}).map_err(UncheckedJustification)
 }
 
 /// Check a full justification for a header hash.
@@ -488,7 +505,7 @@ pub fn check_justification<B: Block>(authorities: &[AuthorityId], parent: B::Has
 {
 	let message = Slicable::encode(&PrimitiveMessage::<B, _> {
 		parent,
-		action: PrimitiveAction::Commit(just.round_number as u32, just.digest.clone()),
+		action: PrimitiveAction::Commit(just.0.round_number as u32, just.0.digest.clone()),
 	});
 
 	check_justification_signed_message(authorities, &message[..], just)
@@ -503,7 +520,7 @@ pub fn check_prepare_justification<B: Block>(authorities: &[AuthorityId], parent
 {
 	let message = Slicable::encode(&PrimitiveMessage::<B, _> {
 		parent,
-		action: PrimitiveAction::Prepare(just.round_number as u32, just.digest.clone()),
+		action: PrimitiveAction::Prepare(just.0.round_number as u32, just.0.digest.clone()),
 	});
 
 	check_justification_signed_message(authorities, &message[..], just)
@@ -514,7 +531,7 @@ pub fn check_prepare_justification<B: Block>(authorities: &[AuthorityId], parent
 pub fn check_proposal<B: Block + Clone>(
 	authorities: &[AuthorityId],
 	parent_hash: &B::Hash,
-	propose: &::generic::LocalizedProposal<B, B::Hash, AuthorityId, LocalizedSignature>)
+	propose: &::rhododendron::LocalizedProposal<B, B::Hash, AuthorityId, LocalizedSignature>)
 	-> Result<(), Error>
 {
 	if !authorities.contains(&propose.sender) {
@@ -532,7 +549,7 @@ pub fn check_proposal<B: Block + Clone>(
 pub fn check_vote<B: Block>(
 	authorities: &[AuthorityId],
 	parent_hash: &B::Hash,
-	vote: &::generic::LocalizedVote<B::Hash, AuthorityId, LocalizedSignature>)
+	vote: &::rhododendron::LocalizedVote<B::Hash, AuthorityId, LocalizedSignature>)
 	-> Result<(), Error>
 {
 	if !authorities.contains(&vote.sender) {
@@ -540,9 +557,9 @@ pub fn check_vote<B: Block>(
 	}
 
 	let action = match vote.vote {
-		::generic::Vote::Prepare(r, ref h) => PrimitiveAction::Prepare(r as u32, h.clone()),
-		::generic::Vote::Commit(r, ref h) => PrimitiveAction::Commit(r as u32, h.clone()),
-		::generic::Vote::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
+		::rhododendron::Vote::Prepare(r, ref h) => PrimitiveAction::Prepare(r as u32, h.clone()),
+		::rhododendron::Vote::Commit(r, ref h) => PrimitiveAction::Commit(r as u32, h.clone()),
+		::rhododendron::Vote::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
 	};
 	check_action::<B>(action, parent_hash, &vote.signature)
 }
@@ -579,12 +596,12 @@ pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, 
 	};
 
 	match message {
-		::generic::Message::Propose(r, proposal) => {
+		::rhododendron::Message::Propose(r, proposal) => {
 			let header_hash = proposal.hash();
 			let action_header = PrimitiveAction::ProposeHeader(r as u32, header_hash.clone());
 			let action_propose = PrimitiveAction::Propose(r as u32, proposal.clone());
 
-			::generic::LocalizedMessage::Propose(::generic::LocalizedProposal {
+			::rhododendron::LocalizedMessage::Propose(::rhododendron::LocalizedProposal {
 				round_number: r,
 				proposal,
 				digest: header_hash,
@@ -593,14 +610,14 @@ pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, 
 				full_signature: sign_action(action_propose),
 			})
 		}
-		::generic::Message::Vote(vote) => {
+		::rhododendron::Message::Vote(vote) => {
 			let action = match vote {
-				::generic::Vote::Prepare(r, ref h) => PrimitiveAction::Prepare(r as u32, h.clone()),
-				::generic::Vote::Commit(r, ref h) => PrimitiveAction::Commit(r as u32, h.clone()),
-				::generic::Vote::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
+				::rhododendron::Vote::Prepare(r, ref h) => PrimitiveAction::Prepare(r as u32, h.clone()),
+				::rhododendron::Vote::Commit(r, ref h) => PrimitiveAction::Commit(r as u32, h.clone()),
+				::rhododendron::Vote::AdvanceRound(r) => PrimitiveAction::AdvanceRound(r as u32),
 			};
 
-			::generic::LocalizedMessage::Vote(::generic::LocalizedVote {
+			::rhododendron::LocalizedMessage::Vote(::rhododendron::LocalizedVote {
 				vote: vote,
 				sender: signer.clone().into(),
 				signature: sign_action(action),
@@ -708,9 +725,9 @@ mod tests {
 		}
 	}
 
-	fn sign_vote(vote: ::generic::Vote<H256>, key: &ed25519::Pair, parent_hash: H256) -> LocalizedSignature {
+	fn sign_vote(vote: ::rhododendron::Vote<H256>, key: &ed25519::Pair, parent_hash: H256) -> LocalizedSignature {
 		match sign_message::<TestBlock>(vote.into(), key, parent_hash) {
-			::generic::LocalizedMessage::Vote(vote) => vote.signature,
+			::rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
 			_ => panic!("signing vote leads to signed vote"),
 		}
 	}
@@ -792,45 +809,45 @@ mod tests {
 			Keyring::Eve.into(),
 		];
 
-		let unchecked = UncheckedJustification {
+		let unchecked = UncheckedJustification(rhododendron::UncheckedJustification {
 			digest: hash,
 			round_number: 1,
 			signatures: authorities_keys.iter().take(3).map(|key| {
-				sign_vote(generic::Vote::Commit(1, hash).into(), key, parent_hash)
+				sign_vote(rhododendron::Vote::Commit(1, hash).into(), key, parent_hash)
 			}).collect(),
-		};
+		});
 
 		assert!(check_justification::<TestBlock>(&authorities, parent_hash, unchecked).is_ok());
 
-		let unchecked = UncheckedJustification {
+		let unchecked = UncheckedJustification(rhododendron::UncheckedJustification {
 			digest: hash,
 			round_number: 0, // wrong round number (vs. the signatures)
 			signatures: authorities_keys.iter().take(3).map(|key| {
-				sign_vote(generic::Vote::Commit(1, hash).into(), key, parent_hash)
+				sign_vote(rhododendron::Vote::Commit(1, hash).into(), key, parent_hash)
 			}).collect(),
-		};
+		});
 
 		assert!(check_justification::<TestBlock>(&authorities, parent_hash, unchecked).is_err());
 
 		// not enough signatures.
-		let unchecked = UncheckedJustification {
+		let unchecked = UncheckedJustification(rhododendron::UncheckedJustification {
 			digest: hash,
 			round_number: 1,
 			signatures: authorities_keys.iter().take(2).map(|key| {
-				sign_vote(generic::Vote::Commit(1, hash).into(), key, parent_hash)
+				sign_vote(rhododendron::Vote::Commit(1, hash).into(), key, parent_hash)
 			}).collect(),
-		};
+		});
 
 		assert!(check_justification::<TestBlock>(&authorities, parent_hash, unchecked).is_err());
 
 		// wrong hash.
-		let unchecked = UncheckedJustification {
+		let unchecked = UncheckedJustification(rhododendron::UncheckedJustification {
 			digest: [0xfe; 32].into(),
 			round_number: 1,
 			signatures: authorities_keys.iter().take(3).map(|key| {
-				sign_vote(generic::Vote::Commit(1, hash).into(), key, parent_hash)
+				sign_vote(rhododendron::Vote::Commit(1, hash).into(), key, parent_hash)
 			}).collect(),
-		};
+		});
 
 		assert!(check_justification::<TestBlock>(&authorities, parent_hash, unchecked).is_err());
 	}
@@ -849,8 +866,8 @@ mod tests {
 			extrinsics: Default::default()
 		};
 
-		let proposal = sign_message(::generic::Message::Propose(1, block.clone()), &Keyring::Alice.pair(), parent_hash);;
-		if let ::generic::LocalizedMessage::Propose(proposal) = proposal {
+		let proposal = sign_message(::rhododendron::Message::Propose(1, block.clone()), &Keyring::Alice.pair(), parent_hash);;
+		if let ::rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
 			let mut invalid_round = proposal.clone();
 			invalid_round.round_number = 0;
@@ -863,8 +880,8 @@ mod tests {
 		}
 
 		// Not an authority
-		let proposal = sign_message::<TestBlock>(::generic::Message::Propose(1, block), &Keyring::Bob.pair(), parent_hash);;
-		if let ::generic::LocalizedMessage::Propose(proposal) = proposal {
+		let proposal = sign_message::<TestBlock>(::rhododendron::Message::Propose(1, block), &Keyring::Bob.pair(), parent_hash);;
+		if let ::rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
 		} else {
 			assert!(false);
@@ -881,8 +898,8 @@ mod tests {
 			Keyring::Eve.to_raw_public().into(),
 		];
 
-		let vote = sign_message::<TestBlock>(::generic::Message::Vote(::generic::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
-		if let ::generic::LocalizedMessage::Vote(vote) = vote {
+		let vote = sign_message::<TestBlock>(::rhododendron::Message::Vote(::rhododendron::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
+		if let ::rhododendron::LocalizedMessage::Vote(vote) = vote {
 			assert!(check_vote::<TestBlock>(&authorities, &parent_hash, &vote).is_ok());
 			let mut invalid_sender = vote.clone();
 			invalid_sender.signature.signer = Keyring::Eve.into();
@@ -892,8 +909,8 @@ mod tests {
 		}
 
 		// Not an authority
-		let vote = sign_message::<TestBlock>(::generic::Message::Vote(::generic::Vote::Prepare(1, hash)), &Keyring::Bob.pair(), parent_hash);;
-		if let ::generic::LocalizedMessage::Vote(vote) = vote {
+		let vote = sign_message::<TestBlock>(::rhododendron::Message::Vote(::rhododendron::Vote::Prepare(1, hash)), &Keyring::Bob.pair(), parent_hash);;
+		if let ::rhododendron::LocalizedMessage::Vote(vote) = vote {
 			assert!(check_vote::<TestBlock>(&authorities, &parent_hash, &vote).is_err());
 		} else {
 			assert!(false);

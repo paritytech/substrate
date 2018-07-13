@@ -62,8 +62,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 
 	let client = service.client();
 	let display_block_import = client.import_notification_stream().for_each(|n| {
-		info!(target: "polkadot", "Imported #{} ({})", n.header.number(), n.hash);
-		telemetry!("block.import"; "height" => n.header.number(), "best" => ?n.hash);
+		info!(target: "polkadot", "Imported #{} ({})", n.header.number, n.hash);
 		Ok(())
 	});
 

@@ -11,6 +11,7 @@ substrate-runtime-io = { path = "../runtime-io", default-features = false }
 
 [dev-dependencies]
 substrate-bft = { path = "../bft" }
+rhododendron = "0.2"
 substrate-keyring = { path = "../keyring" }
 
 [features]

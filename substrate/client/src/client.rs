@@ -21,7 +21,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As};
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Slicable;
@@ -98,7 +98,7 @@ pub enum BlockStatus {
 }
 
 /// Block data origin.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BlockOrigin {
 	/// Genesis block built into the client.
 	Genesis,
@@ -296,9 +296,15 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 		let hash = header.hash();
 		let _import_lock = self.import_lock.lock();
+		let height: u64 = header.number().as_();
 		*self.importing_block.write() = Some(hash);
 		let result = self.execute_and_import_block(origin, hash, header, justification, body);
 		*self.importing_block.write() = None;
+		telemetry!("block.import";
+			"height" => height,
+			"best" => ?hash,
+			"origin" => ?origin
+		);
 		result
 	}
 
@@ -334,7 +340,8 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
-		transaction.set_block_data(header.clone(), body, Some(justification.uncheck().into()), is_new_best)?;
+		let unchecked: bft::UncheckedJustification<_> = justification.uncheck().into();
+		transaction.set_block_data(header.clone(), body, Some(unchecked.into()), is_new_best)?;
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}

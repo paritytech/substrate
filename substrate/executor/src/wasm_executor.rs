@@ -25,7 +25,7 @@ use wasmi::RuntimeValue::{I32, I64};
 use wasmi::memory_units::{Pages, Bytes};
 use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
-use wasm_utils::{DummyUserError};
+use wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
@@ -45,7 +45,7 @@ impl Heap {
 	/// This could mean that wasm binary specifies memory
 	/// limit and we are trying to allocate beyond that limit.
 	fn new(memory: &MemoryRef) -> Result<Self> {
-		const HEAP_SIZE_IN_PAGES: usize = 8;
+		const HEAP_SIZE_IN_PAGES: usize = 1024;
 
 		let prev_page_count = memory
 			.grow(Pages(HEAP_SIZE_IN_PAGES))
@@ -98,35 +98,35 @@ impl<'e, E: Externalities> sandbox::SandboxCapabilities for FunctionExecutor<'e,
 	fn deallocate(&mut self, ptr: u32) {
 		self.heap.deallocate(ptr)
 	}
-	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> ::std::result::Result<(), DummyUserError> {
-		self.memory.set(ptr, data).map_err(|_| DummyUserError)
+	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> ::std::result::Result<(), UserError> {
+		self.memory.set(ptr, data).map_err(|_| UserError("Invalid attempt to write_memory"))
 	}
-	fn read_memory(&self, ptr: u32, len: u32) -> ::std::result::Result<Vec<u8>, DummyUserError> {
-		self.memory.get(ptr, len as usize).map_err(|_| DummyUserError)
+	fn read_memory(&self, ptr: u32, len: u32) -> ::std::result::Result<Vec<u8>, UserError> {
+		self.memory.get(ptr, len as usize).map_err(|_| UserError("Invalid attempt to write_memory"))
 	}
 }
 
 trait WritePrimitive<T: Sized> {
-	fn write_primitive(&self, offset: u32, t: T) -> ::std::result::Result<(), DummyUserError>;
+	fn write_primitive(&self, offset: u32, t: T) -> ::std::result::Result<(), UserError>;
 }
 
 impl WritePrimitive<u32> for MemoryInstance {
-	fn write_primitive(&self, offset: u32, t: u32) -> ::std::result::Result<(), DummyUserError> {
+	fn write_primitive(&self, offset: u32, t: u32) -> ::std::result::Result<(), UserError> {
 		use byteorder::{LittleEndian, ByteOrder};
 		let mut r = [0u8; 4];
 		LittleEndian::write_u32(&mut r, t);
-		self.set(offset, &r).map_err(|_| DummyUserError)
+		self.set(offset, &r).map_err(|_| UserError("Invalid attempt to write_primitive"))
 	}
 }
 
 trait ReadPrimitive<T: Sized> {
-	fn read_primitive(&self, offset: u32) -> ::std::result::Result<T, DummyUserError>;
+	fn read_primitive(&self, offset: u32) -> ::std::result::Result<T, UserError>;
 }
 
 impl ReadPrimitive<u32> for MemoryInstance {
-	fn read_primitive(&self, offset: u32) -> ::std::result::Result<u32, DummyUserError> {
+	fn read_primitive(&self, offset: u32) -> ::std::result::Result<u32, UserError> {
 		use byteorder::{LittleEndian, ByteOrder};
-		Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(|_| DummyUserError)?))
+		Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(|_| UserError("Invalid attempt to read_primitive"))?))
 	}
 }
 
@@ -168,8 +168,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
-		let sl1 = this.memory.get(s1, n as usize).map_err(|_| DummyUserError)?;
-		let sl2 = this.memory.get(s2, n as usize).map_err(|_| DummyUserError)?;
+		let sl1 = this.memory.get(s1, n as usize).map_err(|_| UserError("Invalid attempt to read from memory in first arg of ext_memcmp"))?;
+		let sl2 = this.memory.get(s2, n as usize).map_err(|_| UserError("Invalid attempt to read from memory in second arg of ext_memcmp"))?;
 		Ok(match sl1.cmp(&sl2) {
 			Ordering::Greater => 1,
 			Ordering::Less => -1,
@@ -178,20 +178,20 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize)
-			.map_err(|_| DummyUserError)?;
+			.map_err(|_| UserError("Invalid attempt to copy_nonoverlapping in ext_memcpy"))?;
 		trace!(target: "runtime-io", "memcpy {} from {}, {} bytes", dest, src, count);
 		Ok(dest)
 	},
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy(src as usize, dest as usize, count as usize)
-			.map_err(|_| DummyUserError)?;
+			.map_err(|_| UserError("Invalid attempt to copy in ext_memmove"))?;
 		trace!(target: "runtime-io", "memmove {} from {}, {} bytes", dest, src, count);
 		Ok(dest)
 	},
 	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
-		this.memory.clear(dest as usize, val as u8, count as usize)
-			.map_err(|_| DummyUserError)?;
 		trace!(target: "runtime-io", "memset {} with {}, {} bytes", dest, val, count);
+		this.memory.clear(dest as usize, val as u8, count as usize)
+			.map_err(|_| UserError("Invalid attempt to clear in ext_memset"))?;
 		Ok(dest)
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
@@ -205,8 +205,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
-		let value = this.memory.get(value_data, value_len as usize).map_err(|_| DummyUserError)?;
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
+		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_storage"))?;
 		if let Some(preimage) = this.hash_lookup.get(&key) {
 			trace!(target: "wasm-trace", "*** Setting storage: %{} -> {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
 		} else {
@@ -216,7 +216,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
 		if let Some(preimage) = this.hash_lookup.get(&key) {
 			trace!(target: "wasm-trace", "*** Clearing storage: %{}   [k={}]", ascii_format(&preimage), HexDisplay::from(&key));
 		} else {
@@ -226,13 +226,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
-		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| DummyUserError)?;
+		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_storage"))?;
 		let maybe_value = this.ext.storage(&key);
 
 		if let Some(preimage) = this.hash_lookup.get(&key) {
@@ -243,17 +243,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		if let Some(value) = maybe_value {
 			let offset = this.heap.allocate(value.len() as u32) as u32;
-			this.memory.set(offset, &value).map_err(|_| DummyUserError)?;
-			this.memory.write_primitive(written_out, value.len() as u32)?;
+			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_storage"))?;
+			this.memory.write_primitive(written_out, value.len() as u32)
+				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_storage"))?;
 			Ok(offset)
 		} else {
-			this.memory.write_primitive(written_out, u32::max_value())?;
+			this.memory.write_primitive(written_out, u32::max_value())
+				.map_err(|_| UserError("Invalid attempt to write failed written_out in ext_get_allocated_storage"))?;
 			Ok(0)
 		}
 	},
 	// return u32::max_value() if no value exists for the key.
 	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| DummyUserError)?;
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_get_storage_into"))?;
 		let maybe_value = this.ext.storage(&key);
 		if let Some(preimage) = this.hash_lookup.get(&key) {
 			trace!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
@@ -263,7 +265,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		if let Some(value) = maybe_value {
 			let value = &value[value_offset as usize..];
 			let written = ::std::cmp::min(value_len as usize, value.len());
-			this.memory.set(value_data, &value[..written]).map_err(|_| DummyUserError)?;
+			this.memory.set(value_data, &value[..written]).map_err(|_| UserError("Invalid attempt to set value in ext_get_storage_into"))?;
 			Ok(written as u32)
 		} else {
 			Ok(u32::max_value())
@@ -271,22 +273,22 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_storage_root(result: *mut u8) => {
 		let r = this.ext.storage_root();
-		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
+		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
 		Ok(())
 	},
 	ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
 		let values = (0..lens_len)
 			.map(|i| this.memory.read_primitive(lens_data + i * 4))
-			.collect::<::std::result::Result<Vec<u32>, DummyUserError>>()?
+			.collect::<::std::result::Result<Vec<u32>, UserError>>()?
 			.into_iter()
 			.scan(0u32, |acc, v| { let o = *acc; *acc += v; Some((o, v)) })
 			.map(|(offset, len)|
 				this.memory.get(values_data + offset, len as usize)
-					.map_err(|_| DummyUserError)
+					.map_err(|_| UserError("Invalid attempt to get memory in ext_enumerated_trie_root"))
 			)
-			.collect::<::std::result::Result<Vec<_>, DummyUserError>>()?;
+			.collect::<::std::result::Result<Vec<_>, UserError>>()?;
 		let r = ordered_trie_root(values.into_iter());
-		this.memory.set(result, &r[..]).map_err(|_| DummyUserError)?;
+		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_enumerated_trie_root"))?;
 		Ok(())
 	},
 	ext_chain_id() -> u64 => {
@@ -299,7 +301,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
 			hashed
 		} else {
-			let key = this.memory.get(data, len as usize).map_err(|_| DummyUserError)?;
+			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_128"))?;
 			let hashed_key = twox_128(&key);
 			if let Ok(skey) = ::std::str::from_utf8(&key) {
 				trace!(target: "xxhash", "XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
@@ -310,33 +312,33 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			hashed_key
 		};
 
-		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_twox_128"))?;
 		Ok(())
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
 			twox_256(&[0u8; 0])
 		} else {
-			twox_256(&this.memory.get(data, len as usize).map_err(|_| DummyUserError)?)
+			twox_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_twox_256"))?)
 		};
-		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_twox_256"))?;
 		Ok(())
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
 			blake2_256(&[0u8; 0])
 		} else {
-			blake2_256(&this.memory.get(data, len as usize).map_err(|_| DummyUserError)?)
+			blake2_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
 		};
-		this.memory.set(out, &result).map_err(|_| DummyUserError)?;
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
 		Ok(())
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
 		let mut sig = [0u8; 64];
-		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| DummyUserError)?;
+		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_ed25519_verify"))?;
 		let mut pubkey = [0u8; 32];
-		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| DummyUserError)?;
-		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| DummyUserError)?;
+		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| UserError("Invalid attempt to get pubkey in ext_ed25519_verify"))?;
+		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_ed25519_verify"))?;
 
 		Ok(if ::ed25519::verify(&sig, &msg, &pubkey) {
 			0
@@ -345,15 +347,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		})
 	},
 	ext_sandbox_instantiate(dispatch_thunk_idx: usize, wasm_ptr: *const u8, wasm_len: usize, imports_ptr: *const u8, imports_len: usize, state: usize) -> u32 => {
-		let wasm = this.memory.get(wasm_ptr, wasm_len as usize).map_err(|_| DummyUserError)?;
-		let raw_env_def = this.memory.get(imports_ptr, imports_len as usize).map_err(|_| DummyUserError)?;
+		let wasm = this.memory.get(wasm_ptr, wasm_len as usize).map_err(|_| UserError("Sandbox error"))?;
+		let raw_env_def = this.memory.get(imports_ptr, imports_len as usize).map_err(|_| UserError("Sandbox error"))?;
 
 		// Extract a dispatch thunk from instance's table by the specified index.
 		let dispatch_thunk = {
-			let table = this.table.as_ref().ok_or_else(|| DummyUserError)?;
+			let table = this.table.as_ref().ok_or_else(|| UserError("Sandbox error"))?;
 			table.get(dispatch_thunk_idx)
-				.map_err(|_| DummyUserError)?
-				.ok_or_else(|| DummyUserError)?
+				.map_err(|_| UserError("Sandbox error"))?
+				.ok_or_else(|| UserError("Sandbox error"))?
 				.clone()
 		};
 
@@ -368,10 +370,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, state: usize) -> u32 => {
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
-			.map_err(|_| DummyUserError)
+			.map_err(|_| UserError("Sandbox error"))
 			.and_then(|b|
 				String::from_utf8(b)
-					.map_err(|_| DummyUserError)
+					.map_err(|_| UserError("Sandbox error"))
 			)?;
 
 		let instance = this.sandbox_store.instance(instance_idx)?;
@@ -388,17 +390,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
-			.map_err(|_| DummyUserError)
+			.map_err(|_| UserError("Sandbox error"))
 			.and_then(|b|
 				String::from_utf8(b)
-					.map_err(|_| DummyUserError)
+					.map_err(|_| UserError("Sandbox error"))
 			)?;
 
 		// Deserialize arguments and convert them into wasmi types.
 		let serialized_args = this.memory.get(args_ptr, args_len as usize)
-			.map_err(|_| DummyUserError)?;
+			.map_err(|_| UserError("Sandbox error"))?;
 		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &serialized_args[..])
-			.ok_or_else(|| DummyUserError)?
+			.ok_or_else(|| UserError("Sandbox error"))?
 			.into_iter()
 			.map(Into::into)
 			.collect::<Vec<_>>();
@@ -412,11 +414,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				// Serialize return value and write it back into the memory.
 				sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
-						Err(DummyUserError)?;
+						Err(UserError("Sandbox error"))?;
 					}
 					this.memory
 						.set(return_val_ptr, val)
-						.map_err(|_| DummyUserError)?;
+						.map_err(|_| UserError("Sandbox error"))?;
 					Ok(sandbox_primitives::ERR_OK)
 				})
 			}

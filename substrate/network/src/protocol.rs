@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use serde_json;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hashing, HashingFor, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, As};
 use runtime_primitives::generic::BlockId;
 use network::PeerId;
 
@@ -38,7 +38,7 @@ use error;
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 
 /// Current protocol version.
-pub (crate) const CURRENT_VERSION: u32 = 1;
+pub (crate) const CURRENT_VERSION: u32 = 0;
 /// Current packet count.
 pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 
@@ -526,6 +526,10 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 				best_number: info.chain.best_number,
 				best_hash: info.chain.best_hash,
 				chain_status: self.specialization.read().status(),
+
+				parachain_id: None,
+				validator_id: None,
+				validator_signature: None,
 			};
 			self.send_message(io, peer_id, GenericMessage::Status(status))
 		}
@@ -556,6 +560,11 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 
 	pub fn on_block_imported(&self, io: &mut SyncIo, hash: B::Hash, header: &B::Header) {
 		self.sync.write().update_chain_info(&header);
+		self.specialization.write().on_block_imported(
+			&mut ProtocolContext::new(&self.context_data, io),
+			hash.clone(),
+			header
+		);
 
 		// blocks are not announced by light clients
 		if self.config.roles & Role::LIGHT == Role::LIGHT {
@@ -627,5 +636,5 @@ fn send_message<B: BlockT>(peers: &RwLock<HashMap<PeerId, Peer<B>>>, io: &mut Sy
 /// Hash a message.
 pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
 	let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
-	HashingFor::<B>::hash(&data)
+	HashFor::<B>::hash(&data)
 }

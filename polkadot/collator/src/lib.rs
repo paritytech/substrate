@@ -157,7 +157,8 @@ pub fn collate<'a, R, P>(
 			ingress.0.iter().flat_map(|&(id, ref msgs)| msgs.iter().cloned().map(move |msg| (id, msg)))
 		);
 
-		let signature = key.sign(&block_data.0[..]).into();
+		let block_data_hash = block_data.hash();
+		let signature = key.sign(&block_data_hash.0[..]).into();
 		let pubkey_bytes: [u8; 32] = key.public().into();
 
 		let receipt = parachain::CandidateReceipt {
@@ -168,7 +169,7 @@ pub fn collate<'a, R, P>(
 			balance_uploads: Vec::new(),
 			egress_queue_roots: Vec::new(),
 			fees: 0,
-			block_data_hash: block_data.hash(),
+			block_data_hash,
 		};
 
 		parachain::Collation {

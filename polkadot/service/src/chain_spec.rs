@@ -26,7 +26,7 @@ pub fn poc_1_testnet_config() -> Result<ChainSpec<GenesisConfig>, String> {
 	ChainSpec::from_embedded(include_bytes!("../res/poc-1.json"))
 }
 
-fn poc_2_testnet_config_genesis() -> GenesisConfig {
+fn staging_testnet_config_genesis() -> GenesisConfig {
 	let initial_authorities = vec![
 		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
 		hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
@@ -91,14 +91,14 @@ fn poc_2_testnet_config_genesis() -> GenesisConfig {
 	}
 }
 
-/// PoC-2 testnet config.
-pub fn poc_2_testnet_config() -> ChainSpec<GenesisConfig> {
+/// Staging testnet config.
+pub fn staging_testnet_config() -> ChainSpec<GenesisConfig> {
 	let boot_nodes = vec![
 		"enode://a93a29fa68d965452bf0ff8c1910f5992fe2273a72a1ee8d3a3482f68512a61974211ba32bb33f051ceb1530b8ba3527fc36224ba6b9910329025e6d9153cf50@104.211.54.233:30333".into(),
 		"enode://051b18f63a316c4c5fef4631f8c550ae0adba179153588406fac3e5bbbbf534ebeda1bf475dceda27a531f6cdef3846ab6a010a269aa643a1fec7bff51af66bd@104.211.48.51:30333".into(),
 		"enode://c831ec9011d2c02d2c4620fc88db6d897a40d2f88fd75f47b9e4cf3b243999acb6f01b7b7343474650b34eeb1363041a422a91f1fc3850e43482983ee15aa582@104.211.48.247:30333".into(),
 	];
-	ChainSpec::from_genesis("PoC-2 Testnet", poc_2_testnet_config_genesis, boot_nodes)
+	ChainSpec::from_genesis("Staging Testnet", staging_testnet_config_genesis, boot_nodes)
 }
 
 fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
