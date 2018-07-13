@@ -235,7 +235,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			service::Role::FULL
 		};
 
-	if let Some(s) = matches.value_of("pruning") {
+	if let Some(s) = matches.value_of("execution") {
 		config.execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
 			"native" => service::ExecutionStrategy::NativeWhenPossible,
