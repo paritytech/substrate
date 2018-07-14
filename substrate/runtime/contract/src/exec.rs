@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeOf, ContractAddressFor, Trait};
-use account_db::{AccountDb, ChangeSet, OverlayAccountDb};
+use account_db::{AccountDb, OverlayAccountDb};
 use rstd::prelude::*;
 use runtime_primitives::traits::Zero;
 use runtime_support::StorageMap;
@@ -75,9 +75,6 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 					depth: self.depth + 1,
 				};
 				vm::execute(&dest_code, &mut nested, gas_limit).map_err(|_| ())?
-
-			// TODO: Need to propagate gas_left.
-			// TODO: Need to return result buffer.
 			} else {
 				// that was a plain transfer
 				vm::ExecutionResult {
@@ -96,7 +93,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 	pub fn create(
 		&mut self,
-		_endownment: T::Balance,
+		endownment: T::Balance,
 		gas_limit: u64,
 		ctor: &[u8],
 		_data: &[u8],
@@ -111,6 +108,9 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
+
+			transfer(&self.self_account, &dest, endownment, &mut overlay).map_err(|_| ())?;
+
 			let exec_result = {
 				let mut nested = ExecutionContext {
 					account_db: &mut overlay,
@@ -122,11 +122,11 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 				vm::execute(ctor, &mut nested, gas_limit).map_err(|_| ())?
 			};
 
+			overlay.set_code(&dest, exec_result.return_data().to_vec());
+
 			(exec_result, overlay.into_change_set())
 		};
 
-		self.account_db
-			.set_code(&dest, exec_result.return_data().to_vec());
 		self.account_db.commit(change_set);
 
 		Ok(CreateReceipt {

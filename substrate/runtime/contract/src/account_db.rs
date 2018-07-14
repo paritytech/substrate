@@ -50,6 +50,8 @@ pub trait AccountDb<T: Trait> {
 	fn commit(&mut self, change_set: ChangeSet<T>);
 }
 
+// TODO: Remove suffix `AccountDb` from `DirectAccountDb` and `OverlayAccountDb`.
+
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
