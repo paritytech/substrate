@@ -112,6 +112,13 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.storage
 			.insert(location, value);
 	}
+	pub fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>) {
+		self.local
+			.borrow_mut()
+			.entry(account.clone())
+			.or_insert(Default::default())
+			.code = Some(code);
+	}
 	pub fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
 		self.local
 			.borrow_mut()

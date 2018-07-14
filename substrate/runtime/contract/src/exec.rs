@@ -97,9 +97,12 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		ctor: &[u8],
 		_data: &[u8],
 	) -> Result<CreateReceipt<T>, ()> {
-		// TODO: staking::effect_create with endownment
-
 		let dest = T::DetermineContractAddress2::contract_address_for(ctor, &self.self_account);
+
+		// TODO: staking::effect_create with endownment at the specified address with the specified
+		// endownment.
+
+		// TODO: What if the address already exists?
 
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
@@ -117,6 +120,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			(exec_result, overlay.into_change_set())
 		};
 
+		self.account_db.set_code(&dest, exec_result.return_data().to_vec());
 		self.account_db.commit(change_set);
 
 		Ok(CreateReceipt {
