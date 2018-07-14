@@ -73,7 +73,16 @@ use runtime_support::StorageMap;
 
 use rstd::collections::btree_map::{BTreeMap, Entry};
 
-pub trait Trait: system::Trait + staking::Trait + consensus::Trait {}
+pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
+	// TODO: Rename it from DetermineContractAddress2 to DetermineContractAddress, and clean up
+	// the staking module.
+	/// Function type to get the contract address given the creator.
+	type DetermineContractAddress2: ContractAddressFor<Self::AccountId>;
+}
+
+pub trait ContractAddressFor<AccountId: Sized> {
+	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
+}
 
 decl_module! {
 	/// Contracts module.
@@ -97,7 +106,7 @@ decl_module! {
 			gas_price: u64,
 			gas_limit: u64,
 			ctor: Vec<u8>,
-			data: Vec<u8>,
+			data: Vec<u8>
 		) -> Result = 0;
 	}
 }
@@ -148,7 +157,6 @@ impl<T: Trait> Module<T> {
 			depth: 0,
 			account_db: &mut overlay,
 		};
-
 		ctx.call(dest, value, gas_limit, data);
 
 		// TODO: commit changes from `overlay` to DirectAccountDb.
@@ -158,17 +166,32 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn create(
-		aux: &<T as consensus::Trait>::PublixAux,
-		value: T::Balance,
+		aux: &<T as consensus::Trait>::PublicAux,
+		endownment: T::Balance,
 		gas_price: u64,
 		gas_limit: u64,
-		ctor: Vec<u8>,
+		ctor_code: Vec<u8>,
 		data: Vec<u8>,
 	) -> Result {
 		// TODO: an additional fee, based upon gaslimit/gasprice.
 		// This fee should be taken in any way and not reverted.
 
-		
+		let aux = aux.ref_into();
+
+		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
+
+		let mut ctx = ExecutionContext {
+			// TODO: fuck
+			_caller: aux.clone(),
+			self_account: aux.clone(),
+			gas_price,
+			depth: 0,
+			account_db: &mut overlay,
+		};
+		ctx.create(endownment, gas_limit, &ctor_code, &data);
+
+		// TODO: commit changes from `overlay` to DirectAccountDb.
+		// TODO: finalization: refund `gas_left`.
 
 		Ok(())
 	}

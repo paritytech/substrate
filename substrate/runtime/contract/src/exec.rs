@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeOf, Trait};
+use super::{CodeOf, Trait, ContractAddressFor};
 use account_db::{AccountDb, ChangeSet, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 use rstd::prelude::*;
@@ -27,6 +27,11 @@ pub struct TransactionData {
 // block_number
 // timestamp
 // etc
+}
+
+pub struct CreateReceipt<T: Trait> {
+	address: T::AccountId,
+	gas_left: u64,
 }
 
 pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
@@ -85,12 +90,39 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		Ok(exec_result)
 	}
 
-	fn create(
+	pub fn create(
 		&mut self,
 		_endownment: T::Balance,
 		gas_limit: u64,
-	) -> Result<(), ()> {
-		panic!()
+		ctor: &[u8],
+		_data: &[u8],
+	) -> Result<CreateReceipt<T>, ()> {
+		// TODO: staking::effect_create with endownment
+
+		let dest = T::DetermineContractAddress2::contract_address_for(ctor, &self.self_account);
+
+		let (exec_result, change_set) = {
+			let mut overlay = OverlayAccountDb::new(self.account_db);
+			let exec_result = {
+				let mut nested = ExecutionContext {
+					account_db: &mut overlay,
+					_caller: self.self_account.clone(),
+					self_account: dest.clone(),
+					gas_price: self.gas_price,
+					depth: self.depth + 1,
+				};
+				vm::execute(ctor, &mut nested, gas_limit).map_err(|_| ())?
+			};
+
+			(exec_result, overlay.into_change_set())
+		};
+
+		self.account_db.commit(change_set);
+
+		Ok(CreateReceipt {
+			address: dest,
+			gas_left: exec_result.gas_left,
+		})
 	}
 }
 
@@ -107,8 +139,16 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 			.set_storage(&self.self_account, key.to_vec(), value)
 	}
 
-	fn create(&mut self, code: &[u8], value: Self::Balance) {
-		panic!()
+	fn create(&mut self, code: &[u8], endownment: Self::Balance) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
+		// TODO: Pass it
+		let gas_limit: u64 = 100_000;
+		let input_data: Vec<u8> = Vec::new();
+
+		let receipt = self.create(endownment, gas_limit, code, &input_data)?;
+		Ok(vm::CreateReceipt {
+			address: receipt.address,
+			gas_left: receipt.gas_left,
+		})
 	}
 
 	fn call(

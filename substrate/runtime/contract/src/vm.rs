@@ -5,6 +5,11 @@ use pwasm_utils::rules;
 use rstd::prelude::*;
 use parity_wasm::elements::{self, External, MemoryType};
 
+pub struct CreateReceipt<Address> {
+	pub address: Address,
+	pub gas_left: u64,
+}
+
 /// An interface that provides an access to the external environment in which the
 /// smart-contract is executed.
 ///
@@ -27,7 +32,7 @@ pub trait Ext {
 	///
 	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
 	/// transfered from this to the newly created account.
-	fn create(&mut self, code: &[u8], value: Self::Balance);
+	fn create(&mut self, code: &[u8], value: Self::Balance) -> Result<CreateReceipt<Self::AccountId>, ()>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
 	fn call(&mut self, to: &Self::AccountId, value: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<ExecutionResult, ()>;
@@ -224,6 +229,8 @@ pub fn execute<'a, T: Ext>(
 	ext: &'a mut T,
 	gas_limit: u64,
 ) -> Result<ExecutionResult, Error> {
+	// TODO: Receive data as an argument
+
 	// ext_gas(amount: u32)
 	//
 	// Account for used gas. Traps if gas used is greater than gas limit.
@@ -325,7 +332,7 @@ pub fn execute<'a, T: Ext>(
 		let value = T::Balance::decode(&mut &value_buf[..]).unwrap();
 
 		// TODO: Read input data from memory.
-		// TODO: Let user to choose how much gas to devote for the execution.
+		// TODO: Let user to choose how much gas to allocate for the execution.
 		let input_data = Vec::new();
 		let gas_limit = e.gas_meter.gas_left();
 
@@ -366,12 +373,23 @@ pub fn execute<'a, T: Ext>(
 		code.resize(code_len as usize, 0u8);
 		e.memory().get(code_ptr, &mut code)?;
 
-		e.ext_mut().create(&code, value);
+		// TODO: Read input data from the sandbox.
+		// TODO: Let user to choose how much gas to allocate for the execution.
 
-		// TODO: account for the spent gas
-		// TODO: return the created contract address
-
-		Ok(sandbox::ReturnValue::Unit)
+		match e.ext_mut().create(&code, value) {
+			Ok(CreateReceipt { gas_left, .. }) => {
+				if e.gas_meter.set_gas_left(gas_left) {
+					// TODO: Copy an address of the created contract in the sandbox.
+					Ok(sandbox::ReturnValue::Unit)
+				} else {
+					Err(sandbox::HostError)
+				}
+			}
+			Err(_) => {
+				// TODO: Return a status code value that can be handled by the caller
+				Err(sandbox::HostError)
+			}
+		}
 	}
 
 	// ext_return(data_ptr: u32, data_len: u32) -> !
@@ -620,6 +638,7 @@ mod tests {
 		storage: HashMap<Vec<u8>, Vec<u8>>,
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
+		next_account_id: u64,
 	}
 	impl Ext for MockExt {
 		type AccountId = u64;
@@ -631,13 +650,22 @@ mod tests {
 		fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
 			*self.storage.entry(key.to_vec()).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
 		}
-		fn create(&mut self, code: &[u8], value: Self::Balance) {
+		fn create(&mut self, code: &[u8], value: Self::Balance) -> Result<CreateReceipt<u64>, ()> {
 			self.creates.push(
 				CreateEntry {
 					code: code.to_vec(),
 					endownment: value,
 				}
 			);
+			let address = self.next_account_id;
+			self.next_account_id += 1;
+
+			// TODO: gas_limit
+			let gas_limit = 100_000;
+			Ok(CreateReceipt {
+				address,
+				gas_left: gas_limit,
+			})
 		}
 		fn call(&mut self, to: &Self::AccountId, value: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<ExecutionResult, ()> {
 			self.transfers.push(
