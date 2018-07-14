@@ -26,7 +26,6 @@ extern crate linked_hash_map;
 extern crate rand;
 extern crate parking_lot;
 extern crate substrate_primitives as primitives;
-extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_client as client;
 extern crate substrate_runtime_support as runtime_support;

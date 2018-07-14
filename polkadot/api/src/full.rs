@@ -16,7 +16,7 @@
 
 //! Strongly typed API for full Polkadot client.
 
-use client::backend::{Backend, LocalBackend};
+use client::backend::LocalBackend;
 use client::block_builder::BlockBuilder as ClientBlockBuilder;
 use client::{Client, LocalCallExecutor};
 use polkadot_executor::Executor as LocalDispatch;
@@ -57,9 +57,7 @@ macro_rules! with_runtime {
 	}}
 }
 
-impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
-{
+impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block> {
 	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
 		self.push(extrinsic).map_err(Into::into)
 	}
@@ -70,9 +68,7 @@ impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExe
 	}
 }
 
-impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
-{
+impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block> {
 	type BlockBuilder = ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>;
 
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
@@ -160,7 +156,6 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 }
 
 impl<B: LocalBackend<Block>> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {}
 
 #[cfg(test)]

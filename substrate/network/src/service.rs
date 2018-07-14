@@ -31,7 +31,7 @@ use chain::Client;
 use message::LocalizedBftMessage;
 use specialization::Specialization;
 use on_demand::OnDemandService;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT};
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
@@ -135,7 +135,7 @@ pub struct Params<B: BlockT, S> {
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static, S: Specialization<B>> where B::Header: HeaderT<Number=u64> {
+pub struct Service<B: BlockT + 'static, S: Specialization<B>> {
 	/// Network service
 	network: NetworkService,
 	/// Devp2p protocol handler
@@ -144,7 +144,7 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>> where B::Header: H
 	protocol_id: ProtocolId,
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params<B, S>, protocol_id: ProtocolId) -> Result<Arc<Service<B, S>>, Error> {
 		let service = NetworkService::new(params.network_config.clone(), None)?;
@@ -209,13 +209,13 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> where B::Header: H
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> Drop for Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> Drop for Service<B, S> {
 	fn drop(&mut self) {
 		self.stop();
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> ExecuteInContext<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> ExecuteInContext<B> for Service<B, S> {
 	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F) {
 		self.network.with_context(self.protocol_id, |context| {
 			closure(&mut ProtocolContext::new(self.handler.protocol.context_data(), &mut NetSyncIo::new(context)))
@@ -223,7 +223,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> ExecuteInContext<B> for Service<
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.protocol.status()
@@ -257,7 +257,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> NetworkProtocolHandler for ProtocolHandler<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> NetworkProtocolHandler for ProtocolHandler<B, S> {
 	fn initialize(&self, io: &NetworkContext) {
 		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
 			.expect("Error registering sync timer");
@@ -304,7 +304,7 @@ pub trait ManageNetwork: Send + Sync {
 }
 
 
-impl<B: BlockT + 'static, S: Specialization<B>> ManageNetwork for Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> ManageNetwork for Service<B, S> {
 	fn accept_unreserved_peers(&self) {
 		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}

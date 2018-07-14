@@ -19,7 +19,7 @@
 use std::sync::Arc;
 use futures::IntoFuture;
 
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT};
 use state_machine::CodeExecutor;
 
 use call_executor::CallResult;
@@ -78,8 +78,6 @@ impl<S, E, F> LightDataChecker<S, E, F> {
 impl<S, E, F, Block> FetchChecker<Block> for LightDataChecker<S, E, F>
 	where
 		Block: BlockT,
-		<Block as BlockT>::Hash: From<[u8; 32]> + Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 		S: BlockchainStorage<Block>,
 		E: CodeExecutor,
 		F: Fetcher<Block>,

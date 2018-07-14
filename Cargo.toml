@@ -57,6 +57,7 @@ members = [
 	"substrate/runtime/timestamp",
 	"substrate/runtime/version",
 	"substrate/serializer",
+	"substrate/service",
 	"substrate/state-db",
 	"substrate/state-machine",
 	"substrate/test-runtime",

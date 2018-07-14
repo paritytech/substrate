@@ -20,7 +20,7 @@ use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use network::PeerId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, As};
 use message;
 
 const MAX_PARALLEL_DOWNLOADS: u32 = 1;
@@ -35,17 +35,17 @@ pub struct BlockData<B: BlockT> {
 #[derive(Debug)]
 enum BlockRangeState<B: BlockT> {
 	Downloading {
-		len: u64,
+		len: NumberFor<B>,
 		downloading: u32,
 	},
 	Complete(Vec<BlockData<B>>),
 }
 
-impl<B: BlockT> BlockRangeState<B> where B::Header: HeaderT<Number=u64> {
-	pub fn len(&self) -> u64 {
+impl<B: BlockT> BlockRangeState<B> {
+	pub fn len(&self) -> NumberFor<B> {
 		match *self {
 			BlockRangeState::Downloading { len, .. } => len,
-			BlockRangeState::Complete(ref blocks) => blocks.len() as u64,
+			BlockRangeState::Complete(ref blocks) => As::sa(blocks.len() as u64),
 		}
 	}
 }
@@ -54,11 +54,11 @@ impl<B: BlockT> BlockRangeState<B> where B::Header: HeaderT<Number=u64> {
 #[derive(Default)]
 pub struct BlockCollection<B: BlockT> {
 	/// Downloaded blocks.
-	blocks: BTreeMap<u64, BlockRangeState<B>>,
-	peer_requests: HashMap<PeerId, u64>,
+	blocks: BTreeMap<NumberFor<B>, BlockRangeState<B>>,
+	peer_requests: HashMap<PeerId, NumberFor<B>>,
 }
 
-impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT> BlockCollection<B> {
 	/// Create a new instance.
 	pub fn new() -> Self {
 		BlockCollection {
@@ -74,7 +74,7 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Insert a set of blocks into collection.
-	pub fn insert(&mut self, start: u64, blocks: Vec<message::BlockData<B>>, peer_id: PeerId) {
+	pub fn insert(&mut self, start: NumberFor<B>, blocks: Vec<message::BlockData<B>>, peer_id: PeerId) {
 		if blocks.is_empty() {
 			return;
 		}
@@ -96,22 +96,22 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
-	pub fn needed_blocks(&mut self, peer_id: PeerId, count: usize, peer_best: u64, common: u64) -> Option<Range<u64>> {
+	pub fn needed_blocks(&mut self, peer_id: PeerId, count: usize, peer_best: NumberFor<B>, common: NumberFor<B>) -> Option<Range<NumberFor<B>>> {
 		// First block number that we need to download
-		let first_different = common + 1;
-		let count = count as u64;
+		let first_different = common + As::sa(1);
+		let count = As::sa(count as u64);
 		let (mut range, downloading) = {
 			let mut downloading_iter = self.blocks.iter().peekable();
-			let mut prev: Option<(&u64, &BlockRangeState<B>)> = None;
+			let mut prev: Option<(&NumberFor<B>, &BlockRangeState<B>)> = None;
 			loop {
 				let next = downloading_iter.next();
 				break match &(prev, next) {
 					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _) if downloading < MAX_PARALLEL_DOWNLOADS  =>
 						(*start .. *start + *len, downloading),
-					&(Some((start, r)), Some((next_start, _))) if start + r.len() < *next_start =>
+					&(Some((start, r)), Some((next_start, _))) if *start + r.len() < *next_start =>
 						(*start + r.len() .. cmp::min(*next_start, *start + r.len() + count), 0), // gap
 					&(Some((start, r)), None) =>
-						(start + r.len() .. start + r.len() + count, 0), // last range
+						(*start + r.len() .. *start + r.len() + count, 0), // last range
 					&(None, None) =>
 						(first_different .. first_different + count, 0), // empty
 					&(None, Some((start, _))) if *start > first_different =>
@@ -128,7 +128,7 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 			trace!(target: "sync", "Out of range for peer {} ({} vs {})", peer_id, range.start, peer_best);
 			return None;
 		}
-		range.end = cmp::min(peer_best + 1, range.end);
+		range.end = cmp::min(peer_best + As::sa(1), range.end);
 		self.peer_requests.insert(peer_id, range.start);
 		self.blocks.insert(range.start, BlockRangeState::Downloading{ len: range.end - range.start, downloading: downloading + 1 });
 		if range.end <= range.start {
@@ -138,7 +138,7 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Get a valid chain of blocks ordered in descending order and ready for importing into blockchain.
-	pub fn drain(&mut self, from: u64) -> Vec<BlockData<B>> {
+	pub fn drain(&mut self, from: NumberFor<B>) -> Vec<BlockData<B>> {
 		let mut drained = Vec::new();
 		let mut ranges = Vec::new();
 		{
@@ -146,7 +146,7 @@ impl<B: BlockT> BlockCollection<B> where B::Header: HeaderT<Number=u64> {
 			for (start, range_data) in &mut self.blocks {
 				match range_data {
 					&mut BlockRangeState::Complete(ref mut blocks) if *start <= prev => {
-							prev = *start + blocks.len() as u64;
+							prev = *start + As::sa(blocks.len() as u64);
 							let mut blocks = mem::replace(blocks, Vec::new());
 							drained.append(&mut blocks);
 							ranges.push(*start);
