@@ -69,6 +69,7 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result = 0;
+		fn remark(aux, remark: Vec<u8>) -> Result = 1;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -101,6 +102,11 @@ impl<T: Trait> Module<T> {
 	/// Report some misbehaviour.
 	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
 		// TODO.
+		Ok(())
+	}
+
+	/// Make some on-chain remark.
+	fn remark(_aux: &T::PublicAux, _remark: Vec<u8>) -> Result {
 		Ok(())
 	}
 

@@ -126,7 +126,7 @@ impl<Components> Service<Components>
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
-		let executor = polkadot_executor::Executor::new();
+		let executor = polkadot_executor::Executor::with_heap_pages(128);
 
 		let mut keystore = Keystore::open(config.keystore_path.into())?;
 		for seed in &config.keys {
