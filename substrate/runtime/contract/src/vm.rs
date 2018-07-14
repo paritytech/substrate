@@ -32,7 +32,7 @@ pub trait Ext {
 	///
 	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
 	/// transfered from this to the newly created account.
-	fn create(&mut self, code: &[u8], value: Self::Balance) -> Result<CreateReceipt<Self::AccountId>, ()>;
+	fn create(&mut self, code: &[u8], value: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<CreateReceipt<Self::AccountId>, ()>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
 	fn call(&mut self, to: &Self::AccountId, value: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<ExecutionResult, ()>;
@@ -375,8 +375,10 @@ pub fn execute<'a, T: Ext>(
 
 		// TODO: Read input data from the sandbox.
 		// TODO: Let user to choose how much gas to allocate for the execution.
+		let input_data = Vec::new();
+		let gas_limit = e.gas_meter.gas_left();
 
-		match e.ext_mut().create(&code, value) {
+		match e.ext_mut().create(&code, value, gas_limit, input_data) {
 			Ok(CreateReceipt { gas_left, .. }) => {
 				if e.gas_meter.set_gas_left(gas_left) {
 					// TODO: Copy an address of the created contract in the sandbox.
@@ -628,6 +630,8 @@ mod tests {
 	struct CreateEntry {
 		code: Vec<u8>,
 		endownment: u64,
+		gas_limit: u64,
+		data: Vec<u8>,
 	}
 	#[derive(Debug, PartialEq, Eq)]
 	struct TransferEntry {
@@ -651,18 +655,18 @@ mod tests {
 		fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
 			*self.storage.entry(key.to_vec()).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
 		}
-		fn create(&mut self, code: &[u8], value: Self::Balance) -> Result<CreateReceipt<u64>, ()> {
+		fn create(&mut self, code: &[u8], endownment: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<CreateReceipt<u64>, ()> {
 			self.creates.push(
 				CreateEntry {
 					code: code.to_vec(),
-					endownment: value,
+					endownment,
+					gas_limit,
+					data,
 				}
 			);
 			let address = self.next_account_id;
 			self.next_account_id += 1;
-
-			// TODO: gas_limit
-			let gas_limit = 100_000;
+			
 			Ok(CreateReceipt {
 				address,
 				gas_left: gas_limit,

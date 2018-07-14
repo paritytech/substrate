@@ -191,12 +191,10 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 		&mut self,
 		code: &[u8],
 		endownment: Self::Balance,
+		gas_limit: u64,
+		data: Vec<u8>,
 	) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
-		// TODO: Pass it
-		let gas_limit: u64 = 100_000;
-		let input_data: Vec<u8> = Vec::new();
-
-		let receipt = self.create(endownment, gas_limit, code, &input_data)?;
+		let receipt = self.create(endownment, gas_limit, code, &data)?;
 		Ok(vm::CreateReceipt {
 			address: receipt.address,
 			gas_left: receipt.gas_left,
@@ -208,8 +206,8 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 		to: &Self::AccountId,
 		value: Self::Balance,
 		gas_limit: u64,
-		input_data: Vec<u8>,
+		data: Vec<u8>,
 	) -> Result<vm::ExecutionResult, ()> {
-		self.call(to.clone(), value, gas_limit, input_data)
+		self.call(to.clone(), value, gas_limit, data)
 	}
 }
