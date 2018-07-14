@@ -25,7 +25,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, 
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Slicable;
-use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor, ExecutionStrategy};
+use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor, ExecutionStrategy, ExecutionManager};
 
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
@@ -335,13 +335,25 @@ impl<B, E, Block> Client<B, E, Block> where
 					&mut overlay,
 					"execute_block",
 					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode(),
-					match origin {
-						BlockOrigin::NetworkInitialSync => ExecutionStrategy::NativeWhenPossible,
-						_ => self.execution_strategy,
+					match (origin, self.execution_strategy) {
+						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
+							ExecutionManager::NativeWhenPossible,
+						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
+						_ => ExecutionManager::Both(|wasm_result, native_result| {
+							warn!("Consensus error between wasm and native block execution at block {}", hash);
+							warn!("   Header {:?}", header);
+							warn!("   Native result {:?}", native_result);
+							warn!("   Wasm result {:?}", wasm_result);
+							telemetry!("block.execute.consensus_failure";
+								"hash" => ?hash,
+								"origin" => ?origin,
+								"header" => ?header
+							);
+							wasm_result
+						}),
 					},
 				);
 				let (_, storage_update) = r?;
-
 				Some(storage_update)
 			},
 			None => None,

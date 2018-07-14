@@ -37,18 +37,6 @@ struct Heap {
 }
 
 impl Heap {
-	/// Construct new `Heap` struct.
-	///
-	/// Returns `Err` if the heap couldn't allocate required
-	/// number of pages.
-	///
-	/// This could mean that wasm binary specifies memory
-	/// limit and we are trying to allocate beyond that limit.
-	fn new(memory: &MemoryRef) -> Result<Self> {
-		const HEAP_SIZE_IN_PAGES: usize = 1024;
-		Self::with_pages(memory, HEAP_SIZE_IN_PAGES)
-	}
-
 	/// Construct new `Heap` struct with a given number of pages.
 	///
 	/// Returns `Err` if the heap couldn't allocate required
@@ -56,7 +44,7 @@ impl Heap {
 	///
 	/// This could mean that wasm binary specifies memory
 	/// limit and we are trying to allocate beyond that limit.
-	fn with_pages(memory: &MemoryRef, pages: usize) -> Result<Self> {
+	fn new(memory: &MemoryRef, pages: usize) -> Result<Self> {
 		let prev_page_count = memory
 			.grow(Pages(pages))
 			.map_err(|_| Error::from(ErrorKind::Runtime))?;
@@ -88,7 +76,7 @@ impl<'e, E: Externalities> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, heap_pages: usize, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: Heap::with_pages(&m, heap_pages)?,
+			heap: Heap::new(&m, heap_pages)?,
 			memory: m,
 			table: t,
 			ext: e,
