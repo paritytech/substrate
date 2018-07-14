@@ -190,6 +190,8 @@ decl_storage! {
 	pub TransferFee get(transfer_fee): b"sta:transfer_fee" => required T::Balance;
 	// The fee required to create an account. At least as big as ReclaimRebate.
 	pub CreationFee get(creation_fee): b"sta:creation_fee" => required T::Balance;
+	// TODO: Move it to contract module.
+	// TODO: Take in gas?
 	// The fee required to create a contract. At least as big as ReclaimRebate.
 	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
 	// Maximum reward, per validator, that is provided per acceptable session.
@@ -305,9 +307,9 @@ impl<T: Trait> Module<T> {
 	// PUBLIC DISPATCH
 
 	/// Transfer some unlocked staking balance to another staker.
-	/// TODO: probably want to state gas-limit and gas-price.
 	fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
 		let dest = Self::lookup(dest)?;
+		// TODO: Inline this.
 		// commit anything that made it this far to storage
 		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
 			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
@@ -786,6 +788,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	// TODO: Remove
 	fn effect_create<DB: AccountDb<T>>(
 		transactor: &T::AccountId,
 		code: &[u8], // TODO: remove
