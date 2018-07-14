@@ -22,7 +22,7 @@ use futures::{IntoFuture, Future};
 
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges, execution_proof_check};
+use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges, execution_proof_check, ExecutionManager};
 
 use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
@@ -73,7 +73,16 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
 	}
 
-	fn call_at_state<S: StateBackend>(&self, _state: &S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, S::Transaction)> {
+	fn call_at_state<
+		S: StateBackend,
+		H: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
+	>(&self,
+		_state: &S,
+		_changes: &mut OverlayedChanges,
+		_method: &str,
+		_call_data: &[u8],
+		_m: ExecutionManager<H>
+	) -> ClientResult<(Vec<u8>, S::Transaction)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 

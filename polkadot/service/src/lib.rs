@@ -73,7 +73,7 @@ use tokio::runtime::TaskExecutor;
 
 pub use self::error::{ErrorKind, Error};
 pub use self::components::{Components, FullComponents, LightComponents};
-pub use config::{Configuration, Role, PruningMode};
+pub use config::{Configuration, Role, PruningMode, ExecutionStrategy};
 pub use chain_spec::ChainSpec;
 
 /// Polkadot service.
@@ -112,7 +112,7 @@ pub fn new_client(config: Configuration) -> Result<Arc<Client<
 	let executor = polkadot_executor::Executor::new();
 	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
 	let components = components::FullComponents { is_validator };
-	let (client, _) = components.build_client(db_settings, executor, &config.chain_spec)?;
+	let (client, _) = components.build_client(db_settings, executor, &config.chain_spec, config.execution_strategy)?;
 	Ok(client)
 }
 
@@ -126,7 +126,7 @@ impl<Components> Service<Components>
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
-		let executor = polkadot_executor::Executor::new();
+		let executor = polkadot_executor::Executor::with_heap_pages(128);
 
 		let mut keystore = Keystore::open(config.keystore_path.into())?;
 		for seed in &config.keys {
@@ -144,7 +144,7 @@ impl<Components> Service<Components>
 			pruning: config.pruning,
 		};
 
-		let (client, on_demand) = components.build_client(db_settings, executor, &config.chain_spec)?;
+		let (client, on_demand) = components.build_client(db_settings, executor, &config.chain_spec, config.execution_strategy)?;
 		let api = components.build_api(client.clone());
 		let best_header = client.best_block_header()?;
 

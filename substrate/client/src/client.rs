@@ -25,7 +25,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, 
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Slicable;
-use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor};
+use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor, ExecutionStrategy, ExecutionManager};
 
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
@@ -43,6 +43,7 @@ pub struct Client<B, E, Block> where Block: BlockT {
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
+	execution_strategy: ExecutionStrategy,
 }
 
 /// A source of blockchain evenets.
@@ -144,7 +145,7 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 /// Create an instance of in-memory client.
 pub fn new_in_mem<E, Block, S>(
 	executor: E,
-	genesis_storage: S
+	genesis_storage: S,
 ) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
 	where
 		E: CodeExecutor + RuntimeInfo,
@@ -153,7 +154,7 @@ pub fn new_in_mem<E, Block, S>(
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, executor, genesis_storage)
+	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
 }
 
 impl<B, E, Block> Client<B, E, Block> where
@@ -167,6 +168,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: S,
+		execution_strategy: ExecutionStrategy,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;
@@ -183,6 +185,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			import_notification_sinks: Mutex::new(Vec::new()),
 			import_lock: Mutex::new(()),
 			importing_block: RwLock::new(None),
+			execution_strategy,
 		})
 	}
 
@@ -327,13 +330,30 @@ impl<B, E, Block> Client<B, E, Block> where
 		let storage_update = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-				let (_, storage_update) = self.executor.call_at_state(
+				let mut r = self.executor.call_at_state(
 					transaction_state,
 					&mut overlay,
 					"execute_block",
-					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode()
-				)?;
-
+					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode(),
+					match (origin, self.execution_strategy) {
+						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
+							ExecutionManager::NativeWhenPossible,
+						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
+						_ => ExecutionManager::Both(|wasm_result, native_result| {
+							warn!("Consensus error between wasm and native block execution at block {}", hash);
+							warn!("   Header {:?}", header);
+							warn!("   Native result {:?}", native_result);
+							warn!("   Wasm result {:?}", wasm_result);
+							telemetry!("block.execute.consensus_failure";
+								"hash" => ?hash,
+								"origin" => ?origin,
+								"header" => ?header
+							);
+							wasm_result
+						}),
+					},
+				);
+				let (_, storage_update) = r?;
 				Some(storage_update)
 			},
 			None => None,

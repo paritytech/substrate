@@ -18,7 +18,7 @@
 
 use std::vec::Vec;
 use codec::Slicable;
-use state_machine;
+use state_machine::{self, native_when_possible};
 use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
 use runtime_primitives::generic::BlockId;
 use {backend, error, Client, CallExecutor};
@@ -69,7 +69,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 			Default::default()
 		);
 
-		executor.call_at_state(&state, &mut changes, "initialise_block", &header.encode())?;
+		executor.call_at_state(&state, &mut changes, "initialise_block", &header.encode(), native_when_possible())?;
 
 		Ok(BlockBuilder {
 			header,
@@ -84,7 +84,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		match self.executor.call_at_state(&self.state, &mut self.changes, "apply_extrinsic", &xt.encode()) {
+		match self.executor.call_at_state(&self.state, &mut self.changes, "apply_extrinsic", &xt.encode(), native_when_possible()) {
 			Ok(_) => {
 				self.extrinsics.push(xt);
 				Ok(())
@@ -103,6 +103,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 			&mut self.changes,
 			"finalise_block",
 			&[],
+			native_when_possible(),
 		)?;
 		self.header = <<Block as BlockT>::Header as Slicable>::decode(&mut &output[..])
 			.expect("Header came straight out of runtime so must be valid");

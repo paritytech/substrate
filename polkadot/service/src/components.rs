@@ -30,7 +30,7 @@ use polkadot_api;
 use polkadot_executor::Executor as LocalDispatch;
 use polkadot_network::NetworkService;
 use polkadot_primitives::{Block, BlockId, Hash};
-use state_machine;
+use state_machine::{self, ExecutionStrategy};
 use substrate_executor::NativeExecutor;
 use transaction_pool::{self, TransactionPool};
 use tokio::runtime::TaskExecutor;
@@ -50,7 +50,7 @@ pub trait Components {
 	type Executor: 'static + client::CallExecutor<Block> + Send + Sync;
 
 	/// Create client.
-	fn build_client(&self, settings: client_db::DatabaseSettings, executor: CodeExecutor, chain_spec: &ChainSpec)
+	fn build_client(&self, settings: client_db::DatabaseSettings, executor: CodeExecutor, chain_spec: &ChainSpec, execution_strategy: ExecutionStrategy)
 		-> Result<(Arc<Client<Self::Backend, Self::Executor, Block>>, Option<Arc<OnDemand<Block, NetworkService>>>), error::Error>;
 
 	/// Create api.
@@ -83,9 +83,9 @@ impl Components for FullComponents {
 	type Api = Client<Self::Backend, Self::Executor, Block>;
 	type Executor = client::LocalCallExecutor<client_db::Backend<Block>, NativeExecutor<LocalDispatch>>;
 
-	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, chain_spec: &ChainSpec)
+	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, chain_spec: &ChainSpec, execution_strategy: ExecutionStrategy)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor, Block>>, Option<Arc<OnDemand<Block, NetworkService>>>), error::Error> {
-		Ok((Arc::new(client_db::new_client(db_settings, executor, chain_spec)?), None))
+		Ok((Arc::new(client_db::new_client(db_settings, executor, chain_spec, execution_strategy)?), None))
 	}
 
 	fn build_api(&self, client: Arc<client::Client<Self::Backend, Self::Executor, Block>>) -> Arc<Self::Api> {
@@ -142,7 +142,7 @@ impl Components for LightComponents {
 		client::light::blockchain::Blockchain<client_db::light::LightStorage<Block>, network::OnDemand<Block, NetworkService>>,
 		network::OnDemand<Block, NetworkService>>;
 
-	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, spec: &ChainSpec)
+	fn build_client(&self, db_settings: client_db::DatabaseSettings, executor: CodeExecutor, spec: &ChainSpec, _execution_strategy: ExecutionStrategy)
 		-> Result<(Arc<client::Client<Self::Backend, Self::Executor, Block>>, Option<Arc<OnDemand<Block, NetworkService>>>), error::Error> {
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
