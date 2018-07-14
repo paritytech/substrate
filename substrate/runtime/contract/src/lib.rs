@@ -57,8 +57,8 @@ extern crate wabt;
 
 mod account_db;
 mod double_map;
-mod vm;
 mod exec;
+mod vm;
 
 // TODO: Remove this
 pub use vm::execute;
@@ -128,7 +128,6 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 	type Value = Vec<u8>;
 }
 
-
 impl<T: Trait> Module<T> {
 	fn send(
 		aux: &<T as consensus::Trait>::PublicAux,
@@ -157,7 +156,8 @@ impl<T: Trait> Module<T> {
 				depth: 0,
 				account_db: &mut overlay,
 			};
-			ctx.call(dest, value, gas_limit, data).map_err(|_| "execution failed")
+			ctx.call(dest, value, gas_limit, data)
+				.map_err(|_| "call failed")
 		};
 
 		// TODO: Can we return early or we always need to do some finalization steps?
@@ -194,7 +194,12 @@ impl<T: Trait> Module<T> {
 			depth: 0,
 			account_db: &mut overlay,
 		};
-		ctx.create(endownment, gas_limit, &ctor_code, &data);
+		let result = ctx
+			.create(endownment, gas_limit, &ctor_code, &data)
+			.map_err(|_| "create failed");
+
+		// TODO: Can we return early or we always need to do some finalization steps?
+		result?;
 
 		// TODO: commit changes from `overlay` to DirectAccountDb.
 		// TODO: finalization: refund `gas_left`.
@@ -211,11 +216,11 @@ impl<T: Trait> Module<T> {
 #[cfg(test)]
 mod tests {
 	// TODO: Remove `new_test_ext`
-	use staking::mock::{Test, new_test_ext};
 	use runtime_io::with_externalities;
 	use runtime_support::StorageMap;
-	use {Trait, Module, ContractAddressFor, CodeOf};
+	use staking::mock::{new_test_ext, Test};
 	use wabt;
+	use {CodeOf, ContractAddressFor, Module, Trait};
 
 	pub struct DummyContractAddressFor;
 	impl ContractAddressFor<u64> for DummyContractAddressFor {
@@ -287,7 +292,7 @@ mod tests {
 	/// specified in `child_bytecode`.
 	fn code_ctor(child_bytecode: &[u8]) -> String {
 		format!(
-r#"
+			r#"
 (module
 	;; ext_return(data_ptr: u32, data_len: u32) -> !
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
@@ -313,7 +318,7 @@ r#"
 	/// Takes bytecode of the contract that needs to be deployed.
 	fn code_create(constructor: &[u8]) -> String {
 		format!(
-r#"
+			r#"
 (module
 	;; ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
 	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32)))
@@ -354,15 +359,24 @@ r#"
 			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
 			assert_ok!(Contract::send(&0, 1, 11, 1, 100_000, Vec::new()));
 
-			let derived_address =
-				<Test as Trait>::DetermineContractAddress2::contract_address_for(&code_transfer, &1);
+			let derived_address = <Test as Trait>::DetermineContractAddress2::contract_address_for(
+				&code_transfer,
+				&1,
+			);
 
 			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11);
 			assert_eq!(Staking::free_balance(&1), 8);
 			assert_eq!(Staking::free_balance(&derived_address), 3);
 
 			// Initiate transfer to the newly created contract.
-			assert_ok!(Contract::send(&0, derived_address, 11, 1, 100_000, Vec::new()));
+			assert_ok!(Contract::send(
+				&0,
+				derived_address,
+				11,
+				1,
+				100_000,
+				Vec::new()
+			));
 
 			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 11);
 			assert_eq!(Staking::free_balance(&derived_address), 8);
