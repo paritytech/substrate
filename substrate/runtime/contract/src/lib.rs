@@ -20,7 +20,9 @@
 //! Contracts are able to create other contracts, transfer funds to each other and operate on a simple key-value storage.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![warn(missing_docs)]
+
+// TODO: Disable for now
+// #![warn(missing_docs)]
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -64,12 +66,10 @@ pub use vm::Ext;
 
 use exec::ExecutionContext;
 
-use account_db::{AccountDb, OverlayAccountDb};
-use double_map::StorageDoubleMap;
+use account_db::OverlayAccountDb;
 
 use runtime_primitives::traits::RefInto;
 use runtime_support::dispatch::Result;
-use runtime_support::StorageMap;
 
 pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
 	// TODO: Rename it from DetermineContractAddress2 to DetermineContractAddress, and clean up

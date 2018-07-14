@@ -16,18 +16,17 @@
 
 use super::{CodeOf, Trait, ContractAddressFor};
 use account_db::{AccountDb, ChangeSet, OverlayAccountDb};
-use double_map::StorageDoubleMap;
 use rstd::prelude::*;
 use runtime_support::StorageMap;
 use vm;
 
-pub struct TransactionData {
-	// tx_origin
+//pub struct TransactionData {
+// tx_origin
 // tx_gas_price
 // block_number
 // timestamp
 // etc
-}
+//}
 
 pub struct CreateReceipt<T: Trait> {
 	address: T::AccountId,

@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
+use super::{Trait, StorageOf, CodeOf};
+use system;
+use double_map::StorageDoubleMap;
+use runtime_support::StorageMap;
 use rstd::prelude::*;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
-use runtime_support::StorageMap;
-use super::*;
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -34,15 +36,6 @@ impl<T: Trait> Default for ChangeEntry<T> {
 			code: Default::default(),
 			storage: Default::default(),
 		}
-	}
-}
-
-impl<T: Trait> ChangeEntry<T> {
-	pub fn contract_created(b: T::Balance, c: Vec<u8>) -> Self {
-		ChangeEntry { balance: Some(b), code: Some(c), storage: Default::default() }
-	}
-	pub fn balance_changed(b: T::Balance) -> Self {
-		ChangeEntry { balance: Some(b), code: None, storage: Default::default() }
 	}
 }
 
@@ -64,13 +57,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
 		<CodeOf<T>>::get(account)
 	}
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
+	fn get_balance(&self, _account: &T::AccountId) -> T::Balance {
 		// TODO:
 		panic!()
 	}
 	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
-			if let Some(balance) = changed.balance {
+			if let Some(_balance) = changed.balance {
 				// TODO:
 				panic!()
 			}

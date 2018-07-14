@@ -667,7 +667,7 @@ mod tests {
 				gas_left: gas_limit,
 			})
 		}
-		fn call(&mut self, to: &Self::AccountId, value: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<ExecutionResult, ()> {
+		fn call(&mut self, to: &Self::AccountId, value: Self::Balance, gas_limit: u64, _data: Vec<u8>) -> Result<ExecutionResult, ()> {
 			self.transfers.push(
 				TransferEntry {
 					to: *to,
