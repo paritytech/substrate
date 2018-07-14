@@ -58,8 +58,8 @@ pub type BlockKey = [u8; 4];
 
 /// Convert block number into key (LE representation).
 pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u64> {
-	// TODO: check top 32 bits are empty
 	let n: u64 = n.as_();
+	assert!(n & 0xffffffff00000000 == 0);
 
 	[
 		(n >> 24) as u8,
