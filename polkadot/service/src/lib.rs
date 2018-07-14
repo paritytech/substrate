@@ -26,7 +26,6 @@ extern crate polkadot_api;
 extern crate polkadot_consensus as consensus;
 extern crate polkadot_transaction_pool as transaction_pool;
 extern crate polkadot_network;
-extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
@@ -46,7 +45,6 @@ use std::collections::HashMap;
 
 use codec::Slicable;
 use transaction_pool::TransactionPool;
-use keystore::Store as Keystore;
 use polkadot_api::{PolkadotApi, light::RemotePolkadotApiWrapper};
 use polkadot_primitives::{Block, BlockId, Hash};
 use polkadot_runtime::GenesisConfig;
@@ -168,14 +166,12 @@ pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 	-> Result<Service<FullComponents<Factory>>, Error>
 {
-	let keystore_path = config.keystore_path.clone();
 	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
 	let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
+	// Spin consensus service if configured
 	let consensus = if is_validator {
-		// Spin consensus service if configured
-		let keystore = Keystore::open(keystore_path.into())?;
 		// Load the first available key
-		let key = keystore.load(&keystore.contents()?[0], "")?;
+		let key = service.keystore().load(&service.keystore().contents()?[0], "")?;
 		info!("Using authority key {}", key.public());
 
 		let client = service.client();
