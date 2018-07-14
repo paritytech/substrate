@@ -1,29 +1,27 @@
 [package]
-name = "polkadot-service"
+name = "substrate-service"
 version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
+futures = "0.1.17"
 parking_lot = "0.4"
 error-chain = "0.12"
 lazy_static = "1.0"
 log = "0.3"
 slog = "^2"
 tokio = "0.1.7"
-hex-literal = "0.1"
-ed25519 = { path = "../../substrate/ed25519" }
-polkadot-primitives = { path = "../primitives" }
-polkadot-runtime = { path = "../runtime" }
-polkadot-consensus = { path = "../consensus" }
-polkadot-executor = { path = "../executor" }
-polkadot-api = { path = "../api" }
-polkadot-transaction-pool = { path = "../transaction-pool" }
-polkadot-network = { path = "../network" }
+exit-future = "0.1"
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"
 substrate-keystore = { path = "../../substrate/keystore" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
 substrate-client = { path = "../../substrate/client" }
-substrate-codec = { path = "../../substrate/codec" }
-substrate-service = { path = "../../substrate/service" }
+substrate-client-db = { path = "../../substrate/client/db" }
+substrate-executor = { path = "../../substrate/executor" }
+substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-telemetry = { path = "../../substrate/telemetry" }

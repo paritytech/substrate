@@ -24,7 +24,6 @@ ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ed25519 = { path = "../../substrate/ed25519" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-client = { path = "../../substrate/client" }
-substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-serializer = { path = "../../substrate/serializer" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }

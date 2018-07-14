@@ -64,6 +64,14 @@ impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for D
 	{
 		Err("unimplemented".into())
 	}
+
+	fn light_status(&self) -> extrinsic_pool::txpool::LightStatus {
+		unreachable!()
+	}
+
+	fn import_notification_stream(&self) -> extrinsic_pool::api::EventStream {
+		unreachable!()
+	}
 }
 
 struct DummySystem;

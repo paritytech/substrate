@@ -372,6 +372,8 @@ pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'st
 
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
+/// Extract the number type for a block.
+pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.

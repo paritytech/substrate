@@ -221,6 +221,12 @@ pub struct PolkadotProtocol {
 	next_req_id: u64,
 }
 
+impl Default for PolkadotProtocol {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl PolkadotProtocol {
 	/// Instantiate a polkadot protocol handler.
 	pub fn new() -> Self {

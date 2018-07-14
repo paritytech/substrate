@@ -1,34 +1,36 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
 
 //! Service configuration.
 
-use transaction_pool;
+use extrinsic_pool;
 use chain_spec::ChainSpec;
-pub use state_machine::ExecutionStrategy;
+pub use client::ExecutionStrategy;
 pub use network::Role;
 pub use network::NetworkConfiguration;
 pub use client_db::PruningMode;
+use runtime_primitives::BuildStorage;
+use serde::{Serialize, de::DeserializeOwned};
 
 /// Service configuration.
-pub struct Configuration {
+pub struct Configuration<G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Node roles.
 	pub roles: Role,
-	/// Transaction pool configuration.
-	pub transaction_pool: transaction_pool::Options,
+	/// Extrinsic pool configuration.
+	pub extrinsic_pool: extrinsic_pool::txpool::Options,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to key files.
@@ -40,7 +42,7 @@ pub struct Configuration {
 	/// Additional key seeds.
 	pub keys: Vec<String>,
 	/// Chain configuration.
-	pub chain_spec: ChainSpec,
+	pub chain_spec: ChainSpec<G>,
 	/// Telemetry server URL, optional - only `Some` if telemetry reporting is enabled
 	pub telemetry: Option<String>,
 	/// Node name.
@@ -49,14 +51,14 @@ pub struct Configuration {
 	pub execution_strategy: ExecutionStrategy,
 }
 
-impl Configuration {
+impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
 	/// Create default config for given chain spec.
-	pub fn default_with_spec(chain_spec: ChainSpec) -> Configuration {
+	pub fn default_with_spec(chain_spec: ChainSpec<G>) -> Configuration<G> {
 		let mut configuration = Configuration {
 			chain_spec,
 			name: Default::default(),
 			roles: Role::FULL,
-			transaction_pool: Default::default(),
+			extrinsic_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
 			database_path: Default::default(),

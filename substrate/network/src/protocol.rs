@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use serde_json;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, As};
 use runtime_primitives::generic::BlockId;
 use network::PeerId;
 
@@ -191,7 +191,7 @@ pub(crate) struct ContextData<B: BlockT> {
 	chain: Arc<Client<B>>,
 }
 
-impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
@@ -349,12 +349,12 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> where B::Header: HeaderT<Nu
 			};
 			blocks.push(block_data);
 			match request.direction {
-				message::Direction::Ascending => id = BlockId::Number(number + 1),
+				message::Direction::Ascending => id = BlockId::Number(number + As::sa(1)),
 				message::Direction::Descending => {
-					if number == 0 {
+					if number == As::sa(0) {
 						break;
 					}
-					id = BlockId::Number(number - 1)
+					id = BlockId::Number(number - As::sa(1))
 				}
 			}
 		}

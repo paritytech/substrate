@@ -45,7 +45,7 @@ use std::{
 
 use codec::Slicable;
 use extrinsic_pool::{Pool, Listener, txpool::{self, Readiness, scoring::{Change, Choice}}};
-use extrinsic_pool::api::ExtrinsicPool;
+use extrinsic_pool::api::{ExtrinsicPool, EventStream};
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use runtime::{Address, UncheckedExtrinsic};
@@ -402,6 +402,14 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 				Ok(*tx.hash())
 			})
 			.collect()
+	}
+
+	fn light_status(&self) -> LightStatus {
+		self.inner.light_status()
+	}
+
+	fn import_notification_stream(&self) -> EventStream {
+		self.inner.import_notification_stream()
 	}
 }
 

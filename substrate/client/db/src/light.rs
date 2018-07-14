@@ -28,7 +28,7 @@ use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::Slicable;
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, Zero};
 use utils::{meta_keys, Meta, db_err, number_to_db_key, open_database, read_db, read_id, read_meta};
 use DatabaseSettings;
 
@@ -55,7 +55,6 @@ struct BestAuthorities<N> {
 impl<Block> LightStorage<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
@@ -98,7 +97,6 @@ impl<Block> LightStorage<Block>
 impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, id)? {
@@ -140,8 +138,6 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
-		<Block as BlockT>::Hash: From<[u8; 32]> + Into<[u8; 32]>,
 {
 	fn import_header(&self, is_new_best: bool, header: Block::Header) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();

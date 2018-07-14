@@ -17,7 +17,7 @@
 use std::sync::Arc;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::{self, OverlayedChanges, Ext, Backend as StateBackend,
+use state_machine::{self, OverlayedChanges, Ext, 
 	CodeExecutor, ExecutionManager, native_when_possible};
 use runtime_io::Externalities;
 use executor::{RuntimeVersion, RuntimeInfo};
@@ -109,7 +109,6 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 		B: backend::LocalBackend<Block>,
 		E: CodeExecutor + RuntimeInfo,
 		Block: BlockT,
-		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	type Error = E::Error;
 

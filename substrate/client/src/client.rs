@@ -25,7 +25,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, 
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Slicable;
-use state_machine::{self, Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor, ExecutionStrategy, ExecutionManager};
+use state_machine::{Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor, ExecutionStrategy, ExecutionManager};
 
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
@@ -161,7 +161,6 @@ impl<B, E, Block> Client<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
-	error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new<S: BuildStorage>(
@@ -202,7 +201,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// Return single storage entry of contract under given address in state in a block of given hash.
 	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<StorageData> {
 		Ok(StorageData(self.state_at(id)?
-			.storage(&key.0)?
+			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
 			.ok_or_else(|| error::ErrorKind::NoValueForKey(key.0.clone()))?
 			.to_vec()))
 	}
@@ -461,7 +460,6 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	fn import_block(&self, block: Block, justification: ::bft::Justification<Block::Hash>) {
 		let (header, extrinsics) = block.deconstruct();
@@ -479,7 +477,6 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
 		let version: Result<_, bft::Error> = self.runtime_version_at(at).map_err(|_| bft::ErrorKind::InvalidRuntime.into());
@@ -499,7 +496,6 @@ impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>> {
@@ -514,7 +510,6 @@ impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
-		error::Error: From<<B::State as state_machine::backend::Backend>::Error>
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
