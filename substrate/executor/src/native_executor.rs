@@ -215,9 +215,6 @@ macro_rules! native_executor_instance {
 		}
 
 		impl $name {
-			pub fn new() -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::new()
-			}
 			pub fn with_heap_pages(heap_pages: usize) -> $crate::NativeExecutor<$name> {
 				$crate::NativeExecutor::with_heap_pages(heap_pages)
 			}
