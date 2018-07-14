@@ -66,7 +66,7 @@ pub use vm::Ext;
 
 use exec::ExecutionContext;
 
-use account_db::OverlayAccountDb;
+use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 
 use runtime_primitives::traits::RefInto;
 use runtime_support::dispatch::Result;
@@ -147,17 +147,22 @@ impl<T: Trait> Module<T> {
 
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
-		let mut ctx = ExecutionContext {
-			// TODO: fuck
-			_caller: aux.clone(),
-			self_account: aux.clone(),
-			gas_price,
-			depth: 0,
-			account_db: &mut overlay,
+		let result = {
+			let mut ctx = ExecutionContext {
+				// TODO: fuck
+				_caller: aux.clone(),
+				self_account: aux.clone(),
+				gas_price,
+				depth: 0,
+				account_db: &mut overlay,
+			};
+			ctx.call(dest, value, gas_limit, data).map_err(|_| "execution failed")
 		};
-		let result = ctx.call(dest, value, gas_limit, data).map_err(|_| "execution failed");
 
+		// TODO: Can we return early or we always need to do some finalization steps?
 		result?;
+
+		account_db::DirectAccountDb.commit(overlay.into_change_set());
 
 		// TODO: commit changes from `overlay` to DirectAccountDb.
 		// TODO: finalization: refund `gas_left`.

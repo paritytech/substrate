@@ -17,7 +17,10 @@
 use super::{CodeOf, ContractAddressFor, Trait};
 use account_db::{AccountDb, ChangeSet, OverlayAccountDb};
 use rstd::prelude::*;
+use runtime_primitives::traits::Zero;
 use runtime_support::StorageMap;
+use staking;
+use system;
 use vm;
 
 //pub struct TransactionData {
@@ -48,7 +51,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 	pub fn call(
 		&mut self,
 		dest: T::AccountId,
-		_value: T::Balance,
+		value: T::Balance,
 		gas_limit: u64,
 		_data: Vec<u8>,
 	) -> Result<vm::ExecutionResult, ()> {
@@ -57,9 +60,13 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		// TODO: transfer `_value` using `overlay`. Return an error if failed.
 		// TODO: check the new depth
 
-		let (exec_result, change_set) = if !dest_code.is_empty() {
+		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
-			let exec_result = {
+
+			// TODO: It would be nice to propogate the error.
+			transfer(&self.self_account, &dest, value, &mut overlay).map_err(|_| ())?;
+
+			let exec_result = if !dest_code.is_empty() {
 				let mut nested = ExecutionContext {
 					account_db: &mut overlay,
 					_caller: self.self_account.clone(),
@@ -68,21 +75,18 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 					depth: self.depth + 1,
 				};
 				vm::execute(&dest_code, &mut nested, gas_limit).map_err(|_| ())?
-			};
 
 			// TODO: Need to propagate gas_left.
 			// TODO: Need to return result buffer.
-
-			(exec_result, overlay.into_change_set())
-		} else {
-			// that was a plain transfer
-			(
+			} else {
+				// that was a plain transfer
 				vm::ExecutionResult {
 					gas_left: gas_limit,
 					return_data: Vec::new(),
-				},
-				ChangeSet::new(),
-			)
+				}
+			};
+
+			(exec_result, overlay.into_change_set())
 		};
 
 		self.account_db.commit(change_set);
@@ -130,6 +134,44 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			gas_left: exec_result.gas_left,
 		})
 	}
+}
+
+fn transfer<T: Trait>(
+	transactor: &T::AccountId,
+	dest: &T::AccountId,
+	value: T::Balance,
+	overlay: &mut OverlayAccountDb<T>,
+) -> Result<(), &'static str> {
+	let would_create = overlay.get_balance(transactor).is_zero();
+	let fee = if would_create {
+		<staking::Module<T>>::creation_fee()
+	} else {
+		<staking::Module<T>>::transfer_fee()
+	};
+	let liability = value + fee;
+
+	let from_balance = overlay.get_balance(transactor);
+	if from_balance < liability {
+		return Err("balance too low to send value");
+	}
+	if would_create && value < <staking::Module<T>>::existential_deposit() {
+		return Err("value too low to create account");
+	}
+	if <staking::Module<T>>::bondage(transactor) > <system::Module<T>>::block_number() {
+		return Err("bondage too high to send value");
+	}
+
+	let to_balance = overlay.get_balance(dest);
+	if to_balance + value <= to_balance {
+		return Err("destination balance too high to receive value");
+	}
+
+	if transactor != dest {
+		overlay.set_balance(transactor, from_balance - liability);
+		overlay.set_balance(dest, to_balance + value);
+	}
+
+	Ok(())
 }
 
 impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {

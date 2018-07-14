@@ -438,6 +438,38 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// TODO: Document
+	pub fn commit_free_balance(who: &T::AccountId, balance: T::Balance) -> bool {
+		let ed = <Module<T>>::existential_deposit();
+		// If the balance is too low, then the account is reaped.
+		// NOTE: There are two balances for every account: `reserved_balance` and
+		// `free_balance`. This contract subsystem only cares about the latter: whenever
+		// the term "balance" is used *here* it should be assumed to mean "free balance"
+		// in the rest of the module.
+		// Free balance can never be less than ED. If that happens, it gets reduced to zero
+		// and the account information relevant to this subsystem is deleted (i.e. the
+		// account is reaped).
+		// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
+		// value of which makes even the `free_balance` unspendable.
+		// TODO: enforce this for the other balance-altering functions.
+		if balance < ed {
+			Self::on_free_too_low(who);
+			false
+		} else {
+			if !<FreeBalance<T>>::exists(who) {
+				let outcome = Self::new_account(&who, balance);
+				let credit = match outcome {
+					NewAccountOutcome::GoodHint => balance + <Module<T>>::reclaim_rebate(),
+					_ => balance,
+				};
+				<FreeBalance<T>>::insert(who, credit);
+			} else {
+				<FreeBalance<T>>::insert(who, balance);
+			}
+			true
+		}
+	}
+
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
 	///

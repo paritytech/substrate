@@ -15,6 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{Trait, StorageOf, CodeOf};
+use staking;
 use system;
 use double_map::StorageDoubleMap;
 use runtime_support::StorageMap;
@@ -57,15 +58,16 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
 		<CodeOf<T>>::get(account)
 	}
-	fn get_balance(&self, _account: &T::AccountId) -> T::Balance {
-		// TODO:
-		panic!()
+	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
+		staking::Module::<T>::free_balance(account)
 	}
 	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
-			if let Some(_balance) = changed.balance {
-				// TODO:
-				panic!()
+			if let Some(balance) = changed.balance {
+				let still_alive = staking::Module::<T>::commit_free_balance(&address, balance);
+				if !still_alive {
+					continue
+				}
 			}
 			if let Some(code) = changed.code {
 				<CodeOf<T>>::insert(&address, &code);
@@ -152,9 +154,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 				Entry::Occupied(e) => {
 					let mut value = e.into_mut();
 					if changed.balance.is_some() {
-						// TODO:
-						panic!();
-						// value.balance = changed.balance;
+						value.balance = changed.balance;
 					}
 					if changed.code.is_some() {
 						value.code = changed.code;
