@@ -31,6 +31,7 @@ use polkadot_executor::Executor as LocalDispatch;
 use polkadot_network::NetworkService;
 use polkadot_primitives::{Block, BlockId, Hash};
 use state_machine::{self, ExecutionStrategy};
+use primitives::hexdisplay;
 use substrate_executor::NativeExecutor;
 use transaction_pool::{self, TransactionPool};
 use tokio::runtime::TaskExecutor;
@@ -117,7 +118,7 @@ impl Components for FullComponents {
 
 		// Load the first available key
 		let key = keystore.load(&keystore.contents()?[0], "")?;
-		info!("Using authority key {}", key.public());
+		info!("Using authority key {} ({})", key.public(), hexdisplay::HexDisplay::from(&key.public().0));
 
 		let consensus_net = ::polkadot_network::consensus::ConsensusNetwork::new(network, client.clone());
 		Ok(Some(consensus::Service::new(

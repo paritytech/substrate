@@ -155,7 +155,7 @@ impl ChainSpec {
 		];
 		Genesis::Runtime(GenesisConfig {
 			consensus: Some(ConsensusConfig {
-				code: include_bytes!("../../runtime/wasm/genesis.wasm").to_vec(),	// TODO change
+				code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/polkadot_runtime.compact.wasm").to_vec(),
 				authorities: initial_authorities.clone(),
 			}),
 			system: None,
