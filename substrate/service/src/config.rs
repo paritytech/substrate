@@ -18,6 +18,7 @@
 
 use extrinsic_pool;
 use chain_spec::ChainSpec;
+pub use client::ExecutionStrategy;
 pub use network::Role;
 pub use network::NetworkConfiguration;
 pub use client_db::PruningMode;
@@ -46,6 +47,8 @@ pub struct Configuration<G: Serialize + DeserializeOwned + BuildStorage> {
 	pub telemetry: Option<String>,
 	/// Node name.
 	pub name: String,
+	/// Execution strategy.
+	pub execution_strategy: ExecutionStrategy,
 }
 
 impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
@@ -62,6 +65,7 @@ impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
 			keys: Default::default(),
 			telemetry: Default::default(),
 			pruning: PruningMode::ArchiveAll,
+			execution_strategy: ExecutionStrategy::Both,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 		configuration

@@ -82,16 +82,10 @@ pub struct Service<Components: components::Components> {
 pub fn new_client<Factory: components::ServiceFactory>(config: Configuration<Factory::Genesis>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
-	let db_settings = client_db::DatabaseSettings {
-		cache_size: None,
-		path: config.database_path.into(),
-		pruning: config.pruning,
-	};
 	let executor = components::CodeExecutor::<Factory>::default();
 	let (client, _) = components::FullComponents::<Factory>::build_client(
-		db_settings,
+		&config,
 		executor,
-		&config.chain_spec
 	)?;
 	Ok(client)
 }
@@ -112,7 +106,7 @@ impl<Components> Service<Components>
 		// Create client
 		let executor = components::CodeExecutor::<Components::Factory>::default();
 
-		let mut keystore = Keystore::open(config.keystore_path.into())?;
+		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
@@ -122,13 +116,7 @@ impl<Components> Service<Components>
 			info!("Generated a new keypair: {:?}", key.public());
 		}
 
-		let db_settings = client_db::DatabaseSettings {
-			cache_size: None,
-			path: config.database_path.into(),
-			pruning: config.pruning,
-		};
-
-		let (client, on_demand) = Components::build_client(db_settings, executor, &config.chain_spec)?;
+		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let best_header = client.best_block_header()?;
 
 		info!("Best block: #{}", best_header.number());

@@ -27,6 +27,7 @@ use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use extrinsic_pool::{txpool::Options as ExtrinsicPoolOptions, api::ExtrinsicPool as ExtrinsicPoolApi};
 use runtime_primitives::{traits::Block as BlockT, generic::BlockId, BuildStorage};
+use config::Configuration;
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -72,6 +73,9 @@ pub type LightClient<F> = Client<LightBackend<F>, LightExecutor<F>, <F as Servic
 
 /// `ChainSpec` specialization for a factory.
 pub type FactoryChainSpec<F> = ChainSpec<<F as ServiceFactory>::Genesis>;
+
+/// `Genesis` specialization for a factory.
+pub type FactoryGenesis<F> = <F as ServiceFactory>::Genesis;
 
 /// `Block` type for a factory.
 pub type FactoryBlock<F> = <F as ServiceFactory>::Block;
@@ -143,9 +147,8 @@ pub trait Components {
 
 	/// Create client.
 	fn build_client(
-		settings: client_db::DatabaseSettings,
+		config: &Configuration<FactoryGenesis<Self::Factory>>,
 		executor: CodeExecutor<Self::Factory>,
-		chain_spec: &FactoryChainSpec<Self::Factory>
 	)
 		-> Result<(
 			Arc<ComponentClient<Self>>,
@@ -169,16 +172,20 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type ExtrinsicPool = <Factory as ServiceFactory>::FullExtrinsicPool;
 
 	fn build_client(
-		db_settings: client_db::DatabaseSettings,
+		config: &Configuration<FactoryGenesis<Self::Factory>>,
 		executor: CodeExecutor<Self::Factory>,
-		chain_spec: &FactoryChainSpec<Self::Factory>
 	)
 		-> Result<(
 			Arc<ComponentClient<Self>>,
 			Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
 		), error::Error>
 	{
-		Ok((Arc::new(client_db::new_client(db_settings, executor, chain_spec)?), None))
+		let db_settings = client_db::DatabaseSettings {
+			cache_size: None,
+			path: config.database_path.as_str().into(),
+			pruning: config.pruning.clone(),
+		};
+		Ok((Arc::new(client_db::new_client(db_settings, executor, &config.chain_spec, config.execution_strategy)?), None))
 	}
 
 	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>)
@@ -200,9 +207,8 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type ExtrinsicPool = <Factory as ServiceFactory>::LightExtrinsicPool;
 
 	fn build_client(
-		db_settings: client_db::DatabaseSettings,
+		config: &Configuration<FactoryGenesis<Self::Factory>>,
 		executor: CodeExecutor<Self::Factory>,
-		spec: &FactoryChainSpec<Self::Factory>
 	)
 		-> Result<(
 			Arc<ComponentClient<Self>>,
@@ -210,12 +216,17 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 			NetworkService<Self::Factory>>>>
 		), error::Error>
 	{
+		let db_settings = client_db::DatabaseSettings {
+			cache_size: None,
+			path: config.database_path.as_str().into(),
+			pruning: config.pruning.clone(),
+		};
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
-		let client = client::light::new_light(client_backend, fetcher.clone(), spec)?;
+		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 

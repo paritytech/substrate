@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use primitives::storage::{StorageKey, StorageData};
 use runtime_primitives::{BuildStorage, StorageMap};
 use serde_json as json;
-use RuntimeGenesis;
+use components::RuntimeGenesis;
 
 enum GenesisSource<G> {
 	File(PathBuf),

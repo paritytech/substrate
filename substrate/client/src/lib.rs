@@ -59,3 +59,4 @@ pub use client::{
 };
 pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
+pub use state_machine::ExecutionStrategy;

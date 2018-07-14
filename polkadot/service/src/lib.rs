@@ -56,6 +56,7 @@ use tokio::runtime::TaskExecutor;
 
 pub use service::{Configuration, Role, PruningMode, ExtrinsicPoolOptions,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
+pub use client::ExecutionStrategy;
 
 /// Specialised polkadot `ChainSpec`.
 pub type ChainSpec = service::ChainSpec<GenesisConfig>;

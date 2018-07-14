@@ -150,14 +150,57 @@ pub trait CodeExecutor: Sized + Send + Sync {
 	/// Externalities error type.
 	type Error: Error;
 
-	/// Call a given method in the runtime.
+	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
+	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<E: Externalities>(
 		&self,
 		ext: &mut E,
 		code: &[u8],
 		method: &str,
 		data: &[u8],
-	) -> Result<Vec<u8>, Self::Error>;
+		use_native: bool
+	) -> (Result<Vec<u8>, Self::Error>, bool);
+}
+
+/// Strategy for executing a call into the runtime.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ExecutionStrategy {
+	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
+	NativeWhenPossible,
+	/// Use the given wasm module.
+	AlwaysWasm,
+	/// Run with both the wasm and the native variant (if compatible). Report any discrepency as an error.
+	Both,
+}
+
+/// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
+pub enum ExecutionManager<F> {
+	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
+	NativeWhenPossible,
+	/// Use the given wasm module.
+	AlwaysWasm,
+	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepency.
+	Both(F),
+}
+
+impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
+	fn from(s: &'a ExecutionManager<F>) -> Self {
+		match *s {
+			ExecutionManager::NativeWhenPossible => ExecutionStrategy::NativeWhenPossible,
+			ExecutionManager::AlwaysWasm => ExecutionStrategy::AlwaysWasm,
+			ExecutionManager::Both(_) => ExecutionStrategy::Both,
+		}
+	}
+}
+
+/// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
+pub fn native_when_possible<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+	ExecutionManager::NativeWhenPossible
+}
+
+/// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
+pub fn always_wasm<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+	ExecutionManager::AlwaysWasm
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -174,8 +217,46 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
-{
+	strategy: ExecutionStrategy,
+) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
+	execute_using_consensus_failure_handler(
+		backend,
+		overlay,
+		exec,
+		method,
+		call_data,
+		match strategy {
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+				warn!("Consensus error between wasm {:?} and native {:?}. Using wasm.", wasm_result, native_result);
+				wasm_result
+			}),
+		},
+	)
+}
+
+/// Execute a call using the given state backend, overlayed changes, and call executor.
+/// Produces a state-backend-specific "transaction" which can be used to apply the changes
+/// to the backing store, such as the disk.
+///
+/// On an error, no prospective changes are written to the overlay.
+///
+/// Note: changes to code will be in place if this call is made again. For running partial
+/// blocks (e.g. a transaction at a time), ensure a different method is used.
+pub fn execute_using_consensus_failure_handler<
+	B: backend::Backend,
+	Exec: CodeExecutor,
+	Handler: FnOnce(Result<Vec<u8>, Exec::Error>, Result<Vec<u8>, Exec::Error>) -> Result<Vec<u8>, Exec::Error>
+>(
+	backend: &B,
+	overlay: &mut OverlayedChanges,
+	exec: &Exec,
+	method: &str,
+	call_data: &[u8],
+	manager: ExecutionManager<Handler>,
+) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
+	let strategy: ExecutionStrategy = (&manager).into();
 	let result = {
 		let mut externalities = ext::Ext::new(overlay, backend);
 		// make a copy.
@@ -183,12 +264,35 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 			.to_vec();
 
-		exec.call(
+		let (result, was_native) = exec.call(
 			&mut externalities,
 			&code,
 			method,
 			call_data,
-		).map(move |out| (out, externalities.transaction()))
+			// attempt to run native first, if we're not directed to run wasm only
+			strategy != ExecutionStrategy::AlwaysWasm,
+		);
+		// run wasm separately if we did run native the first time and we're meant to run both
+		let result = if let (true, ExecutionManager::Both(on_consensus_failure)) = (was_native, manager) {
+			let (wasm_result, _) = exec.call(
+				&mut externalities,
+				&code,
+				method,
+				call_data,
+				false
+			);
+			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap())
+				|| (result.is_err() && wasm_result.is_err() && format!("{}", result.as_ref().unwrap_err()) == format!("{}", wasm_result.as_ref().unwrap_err()))
+			{
+				result
+			} else {
+				// Consensus error.
+				on_consensus_failure(wasm_result, result)
+			}
+		} else {
+			result
+		};
+		result.map(move |out| (out, externalities.transaction()))
 	};
 
 	match result {
@@ -218,12 +322,11 @@ pub fn prove_execution<B: TryIntoTrieBackend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend as Backend>::Transaction), Box<Error>>
-{
+) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend as Backend>::Transaction), Box<Error>> {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let (result, transaction) = execute(&proving_backend, overlay, exec, method, call_data)?;
+	let (result, transaction) = execute(&proving_backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)?;
 	let proof = proving_backend.extract_proof();
 	Ok((result, proof, transaction))
 }
@@ -236,10 +339,9 @@ pub fn execution_proof_check<Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>>
-{
+) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>> {
 	let backend = proving_backend::create_proof_check_backend(root.into(), proof)?;
-	execute(&backend, overlay, exec, method, call_data)
+	execute(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
 }
 
 #[cfg(test)]
@@ -248,7 +350,11 @@ mod tests {
 	use super::backend::InMemory;
 	use super::ext::Ext;
 
-	struct DummyCodeExecutor;
+	struct DummyCodeExecutor {
+		native_available: bool,
+		native_succeeds: bool,
+		fallback_succeeds: bool,
+	}
 
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
@@ -259,8 +365,14 @@ mod tests {
 			_code: &[u8],
 			_method: &str,
 			_data: &[u8],
-		) -> Result<Vec<u8>, Self::Error> {
-			Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]])
+			use_native: bool
+		) -> (Result<Vec<u8>, Self::Error>, bool) {
+			let using_native = use_native && self.native_available;
+			match (using_native, self.native_succeeds, self.fallback_succeeds) {
+				(true, true, _) | (false, _, true) =>
+					(Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]]), using_native),
+				_ => (Err(0), using_native),
+			}
 		}
 	}
 
@@ -325,21 +437,59 @@ mod tests {
 
 	#[test]
 	fn execute_works() {
-		assert_eq!(execute(&trie_backend::tests::test_trie(),
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap().0, vec![66]);
+		assert_eq!(execute(
+			&trie_backend::tests::test_trie(),
+			&mut Default::default(),
+			&DummyCodeExecutor {
+				native_available: true,
+				native_succeeds: true,
+				fallback_succeeds: true,
+			},
+			"test",
+			&[],
+			ExecutionStrategy::NativeWhenPossible
+		).unwrap().0, vec![66]);
+	}
+
+	#[test]
+	fn dual_execution_strategy_detects_consensus_failure() {
+		let mut consensus_failed = false;
+		assert!(execute_using_consensus_failure_handler(
+			&trie_backend::tests::test_trie(),
+			&mut Default::default(),
+			&DummyCodeExecutor {
+				native_available: true,
+				native_succeeds: true,
+				fallback_succeeds: false,
+			},
+			"test",
+			&[],
+			ExecutionManager::Both(|we, _ne| { 
+				consensus_failed = true;
+				println!("HELLO!");
+				we
+			}),
+		).is_err());
+		assert!(consensus_failed);
 	}
 
 	#[test]
 	fn prove_execution_and_proof_check_works() {
+		let executor = DummyCodeExecutor {
+			native_available: true,
+			native_succeeds: true,
+			fallback_succeeds: true,
+		};
+
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let (remote_result, remote_proof, _) = prove_execution(remote_backend,
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
+			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check proof locally
 		let (local_result, _) = execution_proof_check(remote_root, remote_proof,
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
+			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check that both results are correct
 		assert_eq!(remote_result, vec![66]);

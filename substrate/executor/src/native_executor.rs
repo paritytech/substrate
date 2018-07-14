@@ -27,14 +27,14 @@ use parking_lot::{Mutex, MutexGuard};
 use RuntimeInfo;
 
 // For the internal Runtime Cache:
-// Do we run this natively or use the given WasmModule
-enum RunWith {
+// Is it compatible enough to run this natively or do we need to fall back on the WasmModule
+enum Compatibility {
 	InvalidVersion(WasmModule),
-	NativeRuntime(RuntimeVersion),
-	WasmRuntime(RuntimeVersion, WasmModule)
+	IsCompatible(RuntimeVersion),
+	NotCompatible(RuntimeVersion, WasmModule)
 }
 
-type CacheType = HashMap<u64, RunWith>;
+type CacheType = HashMap<u64, Compatibility>;
 
 lazy_static! {
 	static ref RUNTIMES_CACHE: Mutex<CacheType> = Mutex::new(HashMap::new());
@@ -51,29 +51,28 @@ fn gen_cache_key(code: &[u8]) -> u64 {
 }
 
 /// fetch a runtime version from the cache or if there is no cached version yet, create
-/// the runtime version entry for `code`, determines whether `RunWith::NativeRuntime`
+/// the runtime version entry for `code`, determines whether `Compatibility::IsCompatible`
 /// can be used by by comparing returned RuntimeVersion to `ref_version`
 fn fetch_cached_runtime_version<'a, E: Externalities>(
 	cache: &'a mut MutexGuard<CacheType>,
 	ext: &mut E,
 	code: &[u8],
 	ref_version: RuntimeVersion
-) -> &'a RunWith {
+) -> &'a Compatibility {
 	cache.entry(gen_cache_key(code))
 		.or_insert_with(|| {
 			let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-			let version = WasmExecutor.call_in_wasm_module(ext, &module, "version", &[]).ok()
+			let version = WasmExecutor{heap_pages: 8}.call_in_wasm_module(ext, &module, "version", &[]).ok()
 				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
-
 
 			if let Some(v) = version {
 				if ref_version.can_call_with(&v) {
-					RunWith::NativeRuntime(v)
+					Compatibility::IsCompatible(v)
 				} else {
-					RunWith::WasmRuntime(v, module)
+					Compatibility::NotCompatible(v, module)
 				}
 			} else {
-				RunWith::InvalidVersion(module)
+				Compatibility::InvalidVersion(module)
 			}
 	})
 }
@@ -112,18 +111,26 @@ pub trait NativeExecutionDispatch: Send + Sync {
 pub struct NativeExecutor<D: NativeExecutionDispatch> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: ::std::marker::PhantomData<D>,
+	/// The fallback executor in case native isn't available.
+	fallback: WasmExecutor,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
-	/// Create new instance.
+	/// Create new instance with 128 pages for the wasm fallback's heap.
 	pub fn new() -> Self {
+		Self::with_heap_pages(128)
+	}
+
+	/// Create new instance with specific number of pages for wasm fallback's heap.
+	pub fn with_heap_pages(heap_pages: usize) -> Self {
 		// FIXME: set this entry at compile time
 		RUNTIMES_CACHE.lock().insert(
 			gen_cache_key(D::native_equivalent()),
-			RunWith::NativeRuntime(D::VERSION));
+			Compatibility::IsCompatible(D::VERSION));
 
 		NativeExecutor {
 			_dummy: Default::default(),
+			fallback: WasmExecutor{heap_pages},
 		}
 	}
 }
@@ -138,6 +145,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	fn clone(&self) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
+			fallback: self.fallback.clone(),
 		}
 	}
 }
@@ -152,8 +160,8 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	) -> Option<RuntimeVersion> {
 		let mut c = RUNTIMES_CACHE.lock();
 		match fetch_cached_runtime_version(&mut c, ext, code, D::VERSION) {
-			RunWith::NativeRuntime(v) | RunWith::WasmRuntime(v, _) => Some(v.clone()),
-			RunWith::InvalidVersion(_m) => None
+			Compatibility::IsCompatible(v) | Compatibility::NotCompatible(v, _) => Some(v.clone()),
+			Compatibility::InvalidVersion(_m) => None
 		}
 	}
 }
@@ -167,11 +175,15 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 		code: &[u8],
 		method: &str,
 		data: &[u8],
-	) -> Result<Vec<u8>> {
+		use_native: bool,
+	) -> (Result<Vec<u8>>, bool) {
 		let mut c = RUNTIMES_CACHE.lock();
-		match fetch_cached_runtime_version(&mut c, ext, code, D::VERSION) {
-			RunWith::NativeRuntime(_v) => D::dispatch(ext, method, data),
-			RunWith::WasmRuntime(_, m) | RunWith::InvalidVersion(m) => WasmExecutor.call_in_wasm_module(ext, m, method, data)
+		match (use_native, fetch_cached_runtime_version(&mut c, ext, code, D::VERSION)) {
+			(_, Compatibility::NotCompatible(_, m)) | (_, Compatibility::InvalidVersion(m)) =>
+				(self.fallback.call_in_wasm_module(ext, m, method, data), false),
+			(false, _) =>
+				(self.fallback.call(ext, code, method, data, false).0, false),
+			_ => (D::dispatch(ext, method, data), true),
 		}
 	}
 }
@@ -205,6 +217,9 @@ macro_rules! native_executor_instance {
 		impl $name {
 			pub fn new() -> $crate::NativeExecutor<$name> {
 				$crate::NativeExecutor::new()
+			}
+			pub fn with_heap_pages(heap_pages: usize) -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor::with_heap_pages(heap_pages)
 			}
 		}
 	}
