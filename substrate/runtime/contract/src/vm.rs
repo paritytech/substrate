@@ -447,6 +447,7 @@ pub fn execute<'a, T: Ext>(
 	to_execution_result(runtime, run_result.err())
 }
 
+// TODO: Extract it to the root of the crate
 #[derive(Clone)]
 struct Config {
 	/// Gas cost of a growing memory by single page.

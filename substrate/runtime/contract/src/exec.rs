@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeOf, Trait, ContractAddressFor};
+use super::{CodeOf, ContractAddressFor, Trait};
 use account_db::{AccountDb, ChangeSet, OverlayAccountDb};
 use rstd::prelude::*;
 use runtime_support::StorageMap;
@@ -55,6 +55,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		let dest_code = <CodeOf<T>>::get(&dest);
 
 		// TODO: transfer `_value` using `overlay`. Return an error if failed.
+		// TODO: check the new depth
 
 		let (exec_result, change_set) = if !dest_code.is_empty() {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
@@ -102,6 +103,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		// endownment.
 
 		// TODO: What if the address already exists?
+		// TODO: check the new depth
 
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
@@ -119,7 +121,8 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			(exec_result, overlay.into_change_set())
 		};
 
-		self.account_db.set_code(&dest, exec_result.return_data().to_vec());
+		self.account_db
+			.set_code(&dest, exec_result.return_data().to_vec());
 		self.account_db.commit(change_set);
 
 		Ok(CreateReceipt {
@@ -142,7 +145,11 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 			.set_storage(&self.self_account, key.to_vec(), value)
 	}
 
-	fn create(&mut self, code: &[u8], endownment: Self::Balance) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
+	fn create(
+		&mut self,
+		code: &[u8],
+		endownment: Self::Balance,
+	) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
 		// TODO: Pass it
 		let gas_limit: u64 = 100_000;
 		let input_data: Vec<u8> = Vec::new();

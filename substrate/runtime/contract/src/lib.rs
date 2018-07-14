@@ -155,7 +155,9 @@ impl<T: Trait> Module<T> {
 			depth: 0,
 			account_db: &mut overlay,
 		};
-		ctx.call(dest, value, gas_limit, data);
+		let result = ctx.call(dest, value, gas_limit, data).map_err(|_| "execution failed");
+
+		result?;
 
 		// TODO: commit changes from `overlay` to DirectAccountDb.
 		// TODO: finalization: refund `gas_left`.
@@ -199,3 +201,64 @@ impl<T: Trait> Module<T> {
 //
 // - <CodeOf<T>>::remove(who);
 // - <StorageOf<T>>::remove_prefix(who.clone());
+
+#[cfg(test)]
+mod tests {
+	use staking::mock::{Test, new_test_ext};
+	use runtime_io::with_externalities;
+	use runtime_support::StorageMap;
+	use {Trait, Module, ContractAddressFor, CodeOf};
+	use wabt;
+
+	pub struct DummyContractAddressFor;
+	impl ContractAddressFor<u64> for DummyContractAddressFor {
+		fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
+			origin + 1
+		}
+	}
+
+	impl Trait for Test {
+		type DetermineContractAddress2 = DummyContractAddressFor;
+	}
+
+	type Contract = Module<Test>;
+	type Staking = ::staking::Module<Test>;
+
+	const CODE_TRANSFER: &str = r#"
+(module
+	;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(call $ext_transfer
+			(i32.const 4)  ;; Pointer to "Transfer to" address.
+			(i32.const 8)  ;; Length of "Transfer to" address.
+			(i32.const 12)  ;; Pointer to the buffer with value to transfer
+			(i32.const 8)   ;; Length of the buffer with value to transfer.
+		)
+	)
+	;; Destination AccountId to transfer the funds.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+	;; Amount of value to transfer.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
+)
+"#;
+
+	#[test]
+	fn contract_transfer() {
+		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+			<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+			Staking::set_free_balance(&0, 100_000_000);
+			Staking::set_free_balance(&1, 11);
+
+			assert_ok!(Contract::send(&0, 1, 1, 1, 100_000, Vec::new()));
+
+			assert_eq!(Staking::free_balance(&9), 6);
+		});
+	}
+}

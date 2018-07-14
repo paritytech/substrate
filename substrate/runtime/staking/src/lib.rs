@@ -57,11 +57,14 @@ use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executab
 	As, AuxLookup, Hash as HashT, Member};
 use address::Address as RawAddress;
 
+// TODO: Extract it to mock crate?
+pub mod mock;
+
 pub mod address;
-mod mock;
 mod tests;
 mod genesis_config;
 mod account_db;
+
 
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;

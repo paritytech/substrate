@@ -16,8 +16,6 @@
 
 //! Test utilities
 
-#![cfg(test)]
-
 use primitives::BuildStorage;
 use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
