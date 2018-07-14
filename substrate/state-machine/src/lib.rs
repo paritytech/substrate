@@ -150,7 +150,8 @@ pub trait CodeExecutor: Sized + Send + Sync {
 	/// Externalities error type.
 	type Error: Error;
 
-	/// Call a given method in the runtime.
+	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
+	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<E: Externalities>(
 		&self,
 		ext: &mut E,
@@ -187,8 +188,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	method: &str,
 	call_data: &[u8],
 	strategy: ExecutionStrategy
-) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
-{
+) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
 	let result = {
 		let mut externalities = ext::Ext::new(overlay, backend);
 		// make a copy.
@@ -201,8 +201,10 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 			&code,
 			method,
 			call_data,
+			// attempt to run native first, if we're not directed to run wasm only
 			strategy != ExecutionStrategy::AlwaysWasm,
 		);
+		// run wasm separately if we did run native the first time and we're meant to run both
 		let result = if was_native && strategy == ExecutionStrategy::Both {
 			let (wasm_result, _) = exec.call(
 				&mut externalities,
@@ -253,8 +255,7 @@ pub fn prove_execution<B: TryIntoTrieBackend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend as Backend>::Transaction), Box<Error>>
-{
+) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend as Backend>::Transaction), Box<Error>> {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
@@ -271,8 +272,7 @@ pub fn execution_proof_check<Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>>
-{
+) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>> {
 	let backend = proving_backend::create_proof_check_backend(root.into(), proof)?;
 	execute(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
 }
