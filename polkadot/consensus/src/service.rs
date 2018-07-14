@@ -56,6 +56,7 @@ fn start_bft<F, C>(
 	C: bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
 	F::Error: ::std::fmt::Debug,
 	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
+	<F as bft::Environment<Block>>::Error: ::std::fmt::Display
 {
 	let mut handle = LocalThreadHandle::current();
 	match bft_service.build_upon(&header) {
@@ -63,7 +64,7 @@ fn start_bft<F, C>(
 			debug!(target: "bft", "Couldn't initialize BFT agreement: {:?}", e);
 		},
 		Ok(None) => {},
-		Err(e) => debug!(target: "bft", "BFT agreement error: {:?}", e),
+		Err(e) => warn!(target: "bft", "BFT agreement error: {}", e),
 	}
 }
 
