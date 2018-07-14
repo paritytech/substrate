@@ -124,6 +124,14 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 
 	/// Dump to json string.
 	pub fn to_json(self, raw: bool) -> Result<String, String> {
+		#[derive(Serialize, Deserialize)]
+		struct Container<G> {
+			#[serde(flatten)]
+			spec: ChainSpecFile,
+			#[serde(flatten)]
+			genesis: Genesis<G>,
+
+		};
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
 				let storage = g.build_storage()?.into_iter()
@@ -134,11 +142,10 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			},
 			(_, genesis) => genesis,
 		};
-		let mut spec = json::to_value(self.spec).map_err(|e| format!("Error generating spec json: {}", e))?;
-		{
-			let map = spec.as_object_mut().expect("spec is an object");
-			map.insert("genesis".to_owned(), json::to_value(genesis).map_err(|e| format!("Error generating genesis json: {}", e))?);
-		}
+		let spec = Container {
+			spec: self.spec,
+			genesis,
+		};
 		json::to_string_pretty(&spec).map_err(|e| format!("Error generating spec json: {}", e))
 	}
 }
