@@ -183,31 +183,26 @@ impl<T: Trait> Module<T> {
 
 		let aux = aux.ref_into();
 
+		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
-		let change_set = {
-			let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
-
-			let exec_result = {
-				let mut ctx = ExecutionContext {
-					// TODO: fuck
-					_caller: aux.clone(),
-					self_account: aux.clone(),
-					gas_price,
-					depth: 0,
-					account_db: &mut overlay,
-				};
-				ctx
-					.create(endownment, gas_limit, &ctor_code, &data)
-					.map_err(|_| "create failed")
+		let exec_result = {
+			let mut ctx = ExecutionContext {
+				// TODO: fuck
+				_caller: aux.clone(),
+				self_account: aux.clone(),
+				gas_price,
+				depth: 0,
+				account_db: &mut overlay,
 			};
-
-			// TODO: Can we return early or do we always need to do some finalization steps?
-			exec_result?;
-
-			overlay.into_change_set()
+			ctx
+				.create(endownment, gas_limit, &ctor_code, &data)
+				.map_err(|_| "create failed")
 		};
 
-		account_db::DirectAccountDb.commit(change_set);
+		// TODO: Can we return early or do we always need to do some finalization steps?
+		exec_result?;
+
+		account_db::DirectAccountDb.commit(overlay.into_change_set());
 
 		// TODO: finalization: refund `gas_left`.
 
