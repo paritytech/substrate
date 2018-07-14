@@ -28,7 +28,6 @@ pub struct BlockBuilder<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Clone,
 	Block: BlockT,
-	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	header: <Block as BlockT>::Header,
 	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
@@ -41,7 +40,6 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Clone,
 	Block: BlockT,
-	error::Error: From<<<B as backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {

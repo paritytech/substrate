@@ -18,7 +18,6 @@
 
 use client::{self, Client as SubstrateClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin, CallExecutor};
 use client::error::Error;
-use state_machine;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
@@ -54,8 +53,7 @@ impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	Block: BlockT,
-	Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>, {
-
+{
 	fn import(&self, is_best: bool, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error> {
 		// TODO: defer justification check.
 		let justified_header = self.check_justification(header, justification.into())?;

@@ -22,7 +22,8 @@ use futures::{IntoFuture, Future};
 
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges, execution_proof_check, ExecutionManager};
+use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
+	execution_proof_check, TrieH256, ExecutionManager};
 
 use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
@@ -104,7 +105,6 @@ pub fn check_execution_proof<Block, B, E>(
 ) -> ClientResult<CallResult>
 	where
 		Block: BlockT,
-		<Block as BlockT>::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
 		B: ChainBackend<Block>,
 		E: CodeExecutor,
 {
@@ -116,18 +116,18 @@ pub fn check_execution_proof<Block, B, E>(
 
 /// Check remote execution proof using given state root.
 fn do_check_execution_proof<Hash, E>(
-	local_state_root: [u8; 32],
+	local_state_root: Hash,
 	executor: &E,
 	request: &RemoteCallRequest<Hash>,
 	remote_proof: Vec<Vec<u8>>,
 ) -> ClientResult<CallResult>
 	where
-		Hash: ::std::fmt::Display,
+		Hash: ::std::fmt::Display + ::std::convert::AsRef<[u8]>,
 		E: CodeExecutor,
 {
 	let mut changes = OverlayedChanges::default();
 	let (local_result, _) = execution_proof_check(
-		local_state_root,
+		TrieH256::from_slice(local_state_root.as_ref()).into(),
 		remote_proof,
 		&mut changes,
 		executor,
