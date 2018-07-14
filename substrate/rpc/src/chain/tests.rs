@@ -20,6 +20,7 @@ use client::BlockOrigin;
 use test_client::{self, TestClient};
 use test_client::runtime::Header;
 
+#[ignore]
 #[test]
 fn should_return_header() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
@@ -46,6 +47,7 @@ fn should_return_header() {
 	);
 }
 
+#[ignore]
 #[test]
 fn should_notify_about_latest_block() {
 	let mut core = ::tokio::runtime::Runtime::new().unwrap();

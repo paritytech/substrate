@@ -1580,7 +1580,6 @@ dependencies = [
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
- "substrate-keystore 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
