@@ -55,6 +55,7 @@ impl Trait for Test {
 	type Balance = u64;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type AccountIndex = u64;
+	type OnAccountKill = ();
 }
 
 pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool, reward: u64) -> runtime_io::TestExternalities {

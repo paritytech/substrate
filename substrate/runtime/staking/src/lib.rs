@@ -121,6 +121,16 @@ impl<Hash, AccountId> ContractAddressFor<AccountId> for Hash where
 	}
 }
 
+/// The given account was killed.
+pub trait OnAccountKill<Address> {
+	/// The given account was killed.
+	fn on_account_kill(address: Address);
+}
+
+impl<Address> OnAccountKill<Address> for () {
+	fn on_account_kill(_address: Address) {}
+}
+
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
@@ -129,6 +139,10 @@ pub trait Trait: system::Trait + session::Trait {
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
 	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	/// A function which invoked when the given account is dead.
+	///
+	/// Gives a chance to clean up resources associated with the given account.
+	type OnAccountKill: OnAccountKill<Self::AccountId>;
 }
 
 decl_module! {

@@ -132,6 +132,7 @@ impl staking::Trait for Concrete {
 	type Balance = Balance;
 	type DetermineContractAddress = BlakeTwo256;
 	type AccountIndex = AccountIndex;
+	type OnAccountKill = ();
 }
 
 /// Staking module for this concrete runtime.
