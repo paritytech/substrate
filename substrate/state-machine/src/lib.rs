@@ -211,7 +211,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 				&code,
 				method,
 				call_data,
-				strategy != ExecutionStrategy::AlwaysWasm,
+				false
 			);
 			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap())
 				|| (result.is_err() && wasm_result.is_err() && format!("{}", result.as_ref().unwrap_err()) == format!("{}", wasm_result.as_ref().unwrap_err()))
