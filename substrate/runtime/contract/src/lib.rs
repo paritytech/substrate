@@ -66,7 +66,7 @@ pub use vm::Ext;
 
 use exec::ExecutionContext;
 
-use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
+use account_db::{AccountDb, OverlayAccountDb};
 
 use runtime_primitives::traits::RefInto;
 use runtime_support::dispatch::Result;
@@ -165,7 +165,6 @@ impl<T: Trait> Module<T> {
 
 		account_db::DirectAccountDb.commit(overlay.into_change_set());
 
-		// TODO: commit changes from `overlay` to DirectAccountDb.
 		// TODO: finalization: refund `gas_left`.
 
 		Ok(())
@@ -184,24 +183,32 @@ impl<T: Trait> Module<T> {
 
 		let aux = aux.ref_into();
 
-		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
-		let mut ctx = ExecutionContext {
-			// TODO: fuck
-			_caller: aux.clone(),
-			self_account: aux.clone(),
-			gas_price,
-			depth: 0,
-			account_db: &mut overlay,
+		let change_set = {
+			let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
+
+			let exec_result = {
+				let mut ctx = ExecutionContext {
+					// TODO: fuck
+					_caller: aux.clone(),
+					self_account: aux.clone(),
+					gas_price,
+					depth: 0,
+					account_db: &mut overlay,
+				};
+				ctx
+					.create(endownment, gas_limit, &ctor_code, &data)
+					.map_err(|_| "create failed")
+			};
+
+			// TODO: Can we return early or do we always need to do some finalization steps?
+			exec_result?;
+
+			overlay.into_change_set()
 		};
-		let result = ctx
-			.create(endownment, gas_limit, &ctor_code, &data)
-			.map_err(|_| "create failed");
 
-		// TODO: Can we return early or we always need to do some finalization steps?
-		result?;
+		account_db::DirectAccountDb.commit(change_set);
 
-		// TODO: commit changes from `overlay` to DirectAccountDb.
 		// TODO: finalization: refund `gas_left`.
 
 		Ok(())
@@ -343,6 +350,8 @@ mod tests {
 		)
 	}
 
+	// TODO: Rename somehow to emphasize this test exercises `ext_create` rather
+	// than top level create.
 	#[test]
 	fn contract_create() {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
@@ -360,7 +369,7 @@ mod tests {
 			assert_ok!(Contract::send(&0, 1, 11, 1, 100_000, Vec::new()));
 
 			let derived_address = <Test as Trait>::DetermineContractAddress2::contract_address_for(
-				&code_transfer,
+				&code_ctor_transfer,
 				&1,
 			);
 
@@ -381,6 +390,30 @@ mod tests {
 			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 11);
 			assert_eq!(Staking::free_balance(&derived_address), 8);
 			assert_eq!(Staking::free_balance(&9), 36);
+		});
+	}
+
+	#[test]
+	fn top_level_create() {
+		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+		let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
+
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+			let derived_address = <Test as Trait>::DetermineContractAddress2::contract_address_for(
+				&code_ctor_transfer,
+				&0,
+			);
+
+			Staking::set_free_balance(&0, 100_000_000);
+			Staking::set_free_balance(&derived_address, 30);
+
+			// When invoked, the contract at address `1` must create a contract with 'transfer' code.`
+			assert_ok!(Contract::create(&0, 11, 1, 100_000, code_ctor_transfer.clone(), Vec::new()));
+
+			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11);
+			assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
+
+			assert_eq!(<CodeOf<Test>>::get(&derived_address), code_transfer);
 		});
 	}
 }
