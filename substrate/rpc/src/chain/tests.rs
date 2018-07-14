@@ -34,7 +34,7 @@ fn should_return_header() {
 		Ok(Some(ref x)) if x == &Header {
 			parent_hash: 0.into(),
 			number: 0,
-			state_root: "f8e419c265702a3eb72114255a7d9bcd2e8c1de4c66aadafd67b85ce3493c309,".into(),
+			state_root: "f8e419c265702a3eb72114255a7d9bcd2e8c1de4c66aadafd67b85ce3493c309".into(),
 			extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
 			digest: Default::default(),
 		}
