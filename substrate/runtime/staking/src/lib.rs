@@ -124,11 +124,11 @@ impl<Hash, AccountId> ContractAddressFor<AccountId> for Hash where
 /// The given account was killed.
 pub trait OnAccountKill<Address> {
 	/// The given account was killed.
-	fn on_account_kill(address: Address);
+	fn on_account_kill(address: &Address);
 }
 
 impl<Address> OnAccountKill<Address> for () {
-	fn on_account_kill(_address: Address) {}
+	fn on_account_kill(_address: &Address) {}
 }
 
 pub trait Trait: system::Trait + session::Trait {
@@ -771,6 +771,7 @@ impl<T: Trait> Module<T> {
 	fn on_free_too_low(who: &T::AccountId) {
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
+		T::OnAccountKill::on_account_kill(who);
 
 		if Self::reserved_balance(who).is_zero() {
 			<system::AccountNonce<T>>::remove(who);

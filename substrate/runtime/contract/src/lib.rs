@@ -70,6 +70,8 @@ use account_db::{AccountDb, OverlayAccountDb};
 
 use runtime_primitives::traits::RefInto;
 use runtime_support::dispatch::Result;
+use runtime_support::StorageMap;
+use double_map::StorageDoubleMap;
 
 pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
 	// TODO: Rename it from DetermineContractAddress2 to DetermineContractAddress, and clean up
@@ -210,10 +212,12 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-// TODO: on removal of an account call:
-//
-// - <CodeOf<T>>::remove(who);
-// - <StorageOf<T>>::remove_prefix(who.clone());
+impl<T: Trait> staking::OnAccountKill<T::AccountId> for Module<T> {
+	fn on_account_kill(address: &T::AccountId) {
+		<CodeOf<T>>::remove(address);
+		<StorageOf<T>>::remove_prefix(address.clone());
+	}
+}
 
 #[cfg(test)]
 mod tests {
@@ -230,6 +234,8 @@ mod tests {
 			origin + 1
 		}
 	}
+
+	// TODO: Define own `Test`.
 
 	impl Trait for Test {
 		type DetermineContractAddress2 = DummyContractAddressFor;
