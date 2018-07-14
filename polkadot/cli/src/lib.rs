@@ -218,17 +218,31 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		if matches.is_present("collator") {
 			info!("Starting collator");
 			// TODO [rob]: collation node implementation
-			service::Role::FULL
+			// This isn't a thing. Different parachains will have their own collator executables and
+			// maybe link to libpolkadot to get a light-client. 
+			service::Role::LIGHT
 		} else if matches.is_present("light") {
 			info!("Starting (light)");
+			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Role::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
 			info!("Starting validator");
+			config.execution_strategy = service::ExecutionStrategy::Both;
 			service::Role::AUTHORITY
 		} else {
 			info!("Starting (heavy)");
+			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Role::FULL
 		};
+
+	if let Some(s) = matches.value_of("execution") {
+		config.execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+		};
+	}
 
 	config.roles = role;
 	{

@@ -45,7 +45,7 @@ mod tests {
 	use codec::{Slicable, Joiner};
 	use keyring::Keyring;
 	use executor::WasmExecutor;
-	use state_machine::{execute, OverlayedChanges};
+	use state_machine::{execute, OverlayedChanges, ExecutionStrategy};
 	use state_machine::backend::InMemory;
 	use test_client;
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
@@ -83,6 +83,7 @@ mod tests {
 			&Executor::new(),
 			"initialise_block",
 			&header.encode(),
+			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
 
 		for tx in transactions.iter() {
@@ -92,6 +93,7 @@ mod tests {
 				&Executor::new(),
 				"apply_extrinsic",
 				&tx.encode(),
+				ExecutionStrategy::NativeWhenPossible,
 			).unwrap();
 		}
 
@@ -100,7 +102,8 @@ mod tests {
 			&mut overlay,
 			&Executor::new(),
 			"finalise_block",
-			&[]
+			&[],
+			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
 		header = Header::decode(&mut &ret_data[..]).unwrap();
 		println!("root after: {:?}", header.extrinsics_root);
@@ -141,7 +144,8 @@ mod tests {
 			&mut overlay,
 			&Executor::new(),
 			"execute_block",
-			&b1data
+			&b1data,
+			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
 	}
 
@@ -161,9 +165,10 @@ mod tests {
 		let _ = execute(
 			&backend,
 			&mut overlay,
-			&WasmExecutor,
+			&WasmExecutor { heap_pages: 8 },
 			"execute_block",
-			&b1data
+			&b1data,
+			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
 	}
 
@@ -184,9 +189,10 @@ mod tests {
 		let _ = execute(
 			&backend,
 			&mut overlay,
-			&Executor::new(),
+			&Executor::with_heap_pages(8),
 			"execute_block",
-			&b1data
+			&b1data,
+			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
 	}
 }

@@ -17,7 +17,8 @@
 use std::sync::Arc;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::{self, OverlayedChanges, Ext, Backend as StateBackend, CodeExecutor};
+use state_machine::{self, OverlayedChanges, Ext, Backend as StateBackend,
+	CodeExecutor, ExecutionManager, native_when_possible};
 use runtime_io::Externalities;
 use executor::{RuntimeVersion, RuntimeInfo};
 
@@ -41,7 +42,11 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	fn call(&self, id: &BlockId<B>, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error>;
+	fn call(&self,
+		id: &BlockId<B>,
+		method: &str,
+		call_data: &[u8],
+	) -> Result<CallResult, error::Error>;
 
 	/// Extract RuntimeVersion of given block
 	///
@@ -51,12 +56,26 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given state.
 	///
 	/// No changes are made.
-	fn call_at_state<S: state_machine::Backend>(&self, state: &S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, S::Transaction), error::Error>;
+	fn call_at_state<
+		S: state_machine::Backend,
+		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+	>(&self,
+		state: &S,
+		overlay: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8],
+		manager: ExecutionManager<F>
+	) -> Result<(Vec<u8>, S::Transaction), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: state_machine::Backend>(&self, state: S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
+	fn prove_at_state<S: state_machine::Backend>(&self,
+		state: S,
+		overlay: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8]
+	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<RuntimeVersion>;
@@ -94,9 +113,19 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 {
 	type Error = E::Error;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
+	fn call(&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8],
+	) -> error::Result<CallResult> {
 		let mut changes = OverlayedChanges::default();
-		let (return_data, _) = self.call_at_state(&self.backend.state_at(*id)?, &mut changes, method, call_data)?;
+		let (return_data, _) = self.call_at_state(
+			&self.backend.state_at(*id)?,
+			&mut changes,
+			method,
+			call_data,
+			native_when_possible(),
+		)?;
 		Ok(CallResult{ return_data, changes })
 	}
 
@@ -111,17 +140,32 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
-	fn call_at_state<S: state_machine::Backend>(&self, state: &S, changes: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, S::Transaction)> {
-		state_machine::execute(
+	fn call_at_state<
+		S: state_machine::Backend,
+		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+	>(&self,
+		state: &S,
+		changes: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8],
+		manager: ExecutionManager<F>,
+	) -> error::Result<(Vec<u8>, S::Transaction)> {
+		state_machine::execute_using_consensus_failure_handler(
 			state,
 			changes,
 			&self.executor,
 			method,
 			call_data,
+			manager,
 		).map_err(Into::into)
 	}
 
-	fn prove_at_state<S: state_machine::Backend>(&self, state: S, changes: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+	fn prove_at_state<S: state_machine::Backend>(&self,
+		state: S,
+		changes: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8]
+	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
 		state_machine::prove_execution(
 			state,
 			changes,

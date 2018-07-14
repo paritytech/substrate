@@ -18,6 +18,7 @@
 
 use transaction_pool;
 use chain_spec::ChainSpec;
+pub use state_machine::ExecutionStrategy;
 pub use network::Role;
 pub use network::NetworkConfiguration;
 pub use client_db::PruningMode;
@@ -44,6 +45,8 @@ pub struct Configuration {
 	pub telemetry: Option<String>,
 	/// Node name.
 	pub name: String,
+	/// Execution strategy.
+	pub execution_strategy: ExecutionStrategy,
 }
 
 impl Configuration {
@@ -60,6 +63,7 @@ impl Configuration {
 			keys: Default::default(),
 			telemetry: Default::default(),
 			pruning: PruningMode::ArchiveAll,
+			execution_strategy: ExecutionStrategy::Both,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 		configuration

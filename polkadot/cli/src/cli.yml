@@ -74,7 +74,7 @@ args:
   - pruning:
       long: pruning
       value_name: PRUNING_MODE
-      help: Specify the pruning mode. (a number of blocks to keep or "archive"). Default is 256.
+      help: Specify the pruning mode, a number of blocks to keep or "archive". Default is 256.
       takes_value: true
   - name:
       long: name
@@ -95,6 +95,10 @@ args:
       value_name: TELEMETRY_URL
       help: The URL of the telemetry server. Implies --telemetry
       takes_value: true
+  - execution:
+      long: execution
+      value_name: STRATEGY
+      help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
 subcommands:
   - build-spec:
       about: Build a spec.json file, outputing to stdout
