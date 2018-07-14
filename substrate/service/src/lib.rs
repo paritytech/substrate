@@ -75,6 +75,7 @@ pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	network: Arc<components::NetworkService<Components::Factory>>,
 	extrinsic_pool: Arc<Components::ExtrinsicPool>,
+	keystore: Keystore,
 	signal: Option<Signal>,
 }
 
@@ -179,6 +180,7 @@ impl<Components> Service<Components>
 			network: network,
 			extrinsic_pool: extrinsic_pool,
 			signal: Some(signal),
+			keystore: keystore,
 		})
 	}
 
@@ -195,6 +197,11 @@ impl<Components> Service<Components>
 	/// Get shared extrinsic pool instance.
 	pub fn extrinsic_pool(&self) -> Arc<PoolApi<Components>> {
 		self.extrinsic_pool.api()
+	}
+
+	/// Get shared keystore.
+	pub fn keystore(&self) -> &Keystore {
+		&self.keystore
 	}
 }
 
