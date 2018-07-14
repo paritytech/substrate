@@ -67,11 +67,9 @@ use exec::ExecutionContext;
 use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
-use runtime_primitives::traits::{MaybeEmpty, RefInto};
+use runtime_primitives::traits::RefInto;
 use runtime_support::dispatch::Result;
 use runtime_support::StorageMap;
-
-use rstd::collections::btree_map::{BTreeMap, Entry};
 
 pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
 	// TODO: Rename it from DetermineContractAddress2 to DetermineContractAddress, and clean up
@@ -107,7 +105,7 @@ decl_module! {
 			gas_limit: u64,
 			ctor: Vec<u8>,
 			data: Vec<u8>
-		) -> Result = 0;
+		) -> Result = 1;
 	}
 }
 
