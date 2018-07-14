@@ -85,7 +85,13 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		Ok(exec_result)
 	}
 
-	// TODO: fn create
+	fn create(
+		&mut self,
+		_endownment: T::Balance,
+		gas_limit: u64,
+	) -> Result<(), ()> {
+		panic!()
+	}
 }
 
 impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {

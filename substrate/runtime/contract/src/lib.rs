@@ -82,13 +82,22 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		// TODO: Change AccountId to staking::Address
-		fn transact(
+		fn send(
 			aux,
 			dest: T::AccountId,
 			value: T::Balance,
 			gas_price: u64,
 			gas_limit: u64,
 			data: Vec<u8>
+		) -> Result = 0;
+
+		fn create(
+			aux,
+			value: T::Balance,
+			gas_price: u64,
+			gas_limit: u64,
+			ctor: Vec<u8>,
+			data: Vec<u8>,
 		) -> Result = 0;
 	}
 }
@@ -113,7 +122,7 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 
 
 impl<T: Trait> Module<T> {
-	fn transact(
+	fn send(
 		aux: &<T as consensus::Trait>::PublicAux,
 		dest: T::AccountId,
 		value: T::Balance,
@@ -144,6 +153,22 @@ impl<T: Trait> Module<T> {
 
 		// TODO: commit changes from `overlay` to DirectAccountDb.
 		// TODO: finalization: refund `gas_left`.
+
+		Ok(())
+	}
+
+	fn create(
+		aux: &<T as consensus::Trait>::PublixAux,
+		value: T::Balance,
+		gas_price: u64,
+		gas_limit: u64,
+		ctor: Vec<u8>,
+		data: Vec<u8>,
+	) -> Result {
+		// TODO: an additional fee, based upon gaslimit/gasprice.
+		// This fee should be taken in any way and not reverted.
+
+		
 
 		Ok(())
 	}

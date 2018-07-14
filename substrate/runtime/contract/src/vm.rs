@@ -368,6 +368,9 @@ pub fn execute<'a, T: Ext>(
 
 		e.ext_mut().create(&code, value);
 
+		// TODO: account for the spent gas
+		// TODO: return the created contract address
+
 		Ok(sandbox::ReturnValue::Unit)
 	}
 
