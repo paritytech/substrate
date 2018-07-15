@@ -234,6 +234,7 @@ impl NetworkState {
 
 	/// Reports the ping of the peer. Returned later by `session_info()`.
 	/// No-op if the `peer_id` is not valid/expired.
+	#[allow(dead_code)]
 	pub fn report_ping(&self, peer_id: PeerId, ping: Duration) {
 		let connections = self.connections.read();
 		let info = match connections.info_by_peer.get(&peer_id) {

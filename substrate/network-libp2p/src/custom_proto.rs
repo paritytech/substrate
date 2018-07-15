@@ -124,7 +124,7 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 		self,
 		socket: C,
 		protocol_version: Self::UpgradeIdentifier,
-		endpoint: Endpoint,
+		_endpoint: Endpoint,
 		remote_addr: Maf
 	) -> Self::Future {
 		let packet_count = self.supported_versions
