@@ -154,7 +154,7 @@ fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_left: u64, gas_pri
 	let b = <staking::Module<T>>::free_balance(transactor);
 	let refund = gas_left * gas_price;
 	let refund = <T::Balance as As<u64>>::sa(refund);
-	<staking::Module<T>>::set_free_balance(transactor, b +  refund);
+	<staking::Module<T>>::set_free_balance(transactor, b + refund);
 }
 
 impl<T: Trait> Module<T> {
@@ -189,11 +189,15 @@ impl<T: Trait> Module<T> {
 		// TODO: Can we return early or we always need to do some finalization steps?
 		}?;
 
-		// Refund cost of the unused gas.
-		refund_unused_gas::<T>(aux, result.gas_left, gas_price);
 
 		// Commit all changes that made it thus far into the persistant storage.
 		account_db::DirectAccountDb.commit(overlay.into_change_set());
+
+		// Refund cost of the unused gas.
+		//
+		// NOTE: this should go after the commit to the storage, since the storage changes
+		// can alter the balance of the sender.
+		refund_unused_gas::<T>(aux, result.gas_left, gas_price);
 
 		Ok(())
 	}
@@ -233,10 +237,14 @@ impl<T: Trait> Module<T> {
 		// TODO: Can we return early or do we always need to do some finalization steps?
 		}?;
 
-		// Refund cost of the unused gas.
-		refund_unused_gas::<T>(aux, result.gas_left, gas_price);
-
+		// Commit all changes that made it thus far into the persistant storage.
 		account_db::DirectAccountDb.commit(overlay.into_change_set());
+
+		// Refund cost of the unused gas.
+		//
+		// NOTE: this should go after the commit to the storage, since the storage changes
+		// can alter the balance of the sender.
+		refund_unused_gas::<T>(aux, result.gas_left, gas_price);
 
 		Ok(())
 	}
@@ -318,10 +326,9 @@ mod tests {
 				Vec::new()
 			));
 
-			// TODO: refund
 			assert_eq!(
 				Staking::free_balance(&0),
-				100_000_000 - 200_000 - 3,
+				100_000_000 - 3 - 12,
 			);
 			assert_eq!(
 				Staking::free_balance(&1),
@@ -426,8 +433,7 @@ mod tests {
 				&1,
 			);
 
-			// TODO: refund
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 100_000 - 11);
+			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 128);
 			assert_eq!(Staking::free_balance(&1), 8);
 			assert_eq!(Staking::free_balance(&derived_address), 3);
 
@@ -435,14 +441,13 @@ mod tests {
 			assert_ok!(Contract::send(
 				&0,
 				derived_address,
-				11,
+				22,
 				1,
 				100_000,
 				Vec::new()
 			));
 
-			// TODO: refund
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 100_000 - 100_000 - 11 - 11);
+			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 128 - 22 - 6);
 			assert_eq!(Staking::free_balance(&derived_address), 8);
 			assert_eq!(Staking::free_balance(&9), 36);
 		});
@@ -462,18 +467,16 @@ mod tests {
 			Staking::set_free_balance(&0, 100_000_000);
 			Staking::set_free_balance(&derived_address, 30);
 
-			// When invoked, the contract at address `1` must create a contract with 'transfer' code.`
 			assert_ok!(Contract::create(
 				&0,
 				11,
 				2,
 				100_000,
 				code_ctor_transfer.clone(),
-				Vec::new()
+				Vec::new(),
 			));
 
-			// TODO: refund
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 200_000 - 11);
+			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 244);
 			assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
 
 			assert_eq!(<CodeOf<Test>>::get(&derived_address), code_transfer);

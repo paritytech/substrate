@@ -60,6 +60,8 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		// TODO: transfer `_value` using `overlay`. Return an error if failed.
 		// TODO: check the new depth
 
+		// TODO: Charge here the base price for call
+
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
 
@@ -107,6 +109,8 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 		// TODO: What if the address already exists?
 		// TODO: check the new depth
+
+		// TODO: Charge here the base price for create
 
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
