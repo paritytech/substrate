@@ -19,7 +19,6 @@
 //! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
 //! Allows attachment of an optional subprotocol for chain-specific requests.
 
-extern crate ethcore_network_devp2p as network_devp2p;
 extern crate ethcore_network as network;
 extern crate ethcore_io as core_io;
 extern crate linked_hash_map;
@@ -30,6 +29,7 @@ extern crate substrate_serializer as ser;
 extern crate substrate_client as client;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_network_libp2p as network_libp2p;
 extern crate substrate_bft;
 extern crate substrate_codec as codec;
 extern crate serde;
