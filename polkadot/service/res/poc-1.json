@@ -1,5 +1,6 @@
 {
 "name": "PoC-1 Testnet",
+"id": "poc-1-testnet",
 "genesis": {"raw": {
 	"0x9768f3cbdd14c1a63474dfbdbe052f42": "0x80f4030000000000",
 	"0x3b700687fecdff5ec1c4a5b714521eb6": "0x0000000000000000",
