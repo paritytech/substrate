@@ -448,7 +448,7 @@ mod tests {
 			));
 
 			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 128 - 22 - 6);
-			assert_eq!(Staking::free_balance(&derived_address), 8);
+			assert_eq!(Staking::free_balance(&derived_address), 22 - 3);
 			assert_eq!(Staking::free_balance(&9), 36);
 		});
 	}
