@@ -28,7 +28,7 @@ use client;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 use io::SyncIo;
 use message;
-use network::PeerId;
+use network_libp2p::PeerId;
 use service;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
