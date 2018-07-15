@@ -42,6 +42,9 @@ use codec::{FromSlicable, Input};
 use std::borrow::Cow;
 
 #[cfg(feature = "std")]
+use std::fmt;
+
+#[cfg(feature = "std")]
 pub type VersionString = ::std::borrow::Cow<'static, str>;
 #[cfg(not(feature = "std"))]
 pub type VersionString = &'static str;
@@ -107,6 +110,13 @@ impl Default for RuntimeVersion {
 			spec_version: 0,
 			impl_version: 0,
 		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl fmt::Display for RuntimeVersion {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}-{}:{}({}-{})", self.spec_name, self.spec_version, self.authoring_version, self.impl_name, self.impl_version)
 	}
 }
 

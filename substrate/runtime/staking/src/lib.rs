@@ -876,7 +876,7 @@ impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let b = Self::free_balance(transactor);
 		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
-		if b < transaction_fee {
+		if b < transaction_fee + Self::existential_deposit() {
 			return Err("not enough funds for transaction fee");
 		}
 		<FreeBalance<T>>::insert(transactor, b - transaction_fee);

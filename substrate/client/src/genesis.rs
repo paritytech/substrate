@@ -54,6 +54,10 @@ mod tests {
 
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
+	fn executor() -> ::executor::NativeExecutor<Executor> {
+		Executor::with_heap_pages(8)
+	}
+
 	fn construct_block(backend: &InMemory, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transfer>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
@@ -80,7 +84,7 @@ mod tests {
 		execute(
 			backend,
 			&mut overlay,
-			&Executor::new(),
+			&executor(),
 			"initialise_block",
 			&header.encode(),
 			ExecutionStrategy::NativeWhenPossible,
@@ -90,7 +94,7 @@ mod tests {
 			execute(
 				backend,
 				&mut overlay,
-				&Executor::new(),
+				&executor(),
 				"apply_extrinsic",
 				&tx.encode(),
 				ExecutionStrategy::NativeWhenPossible,
@@ -100,7 +104,7 @@ mod tests {
 		let (ret_data, _) = execute(
 			backend,
 			&mut overlay,
-			&Executor::new(),
+			&executor(),
 			"finalise_block",
 			&[],
 			ExecutionStrategy::NativeWhenPossible,
@@ -142,7 +146,7 @@ mod tests {
 		let _ = execute(
 			&backend,
 			&mut overlay,
-			&Executor::new(),
+			&executor(),
 			"execute_block",
 			&b1data,
 			ExecutionStrategy::NativeWhenPossible,

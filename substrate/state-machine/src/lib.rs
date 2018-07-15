@@ -258,22 +258,37 @@ pub fn execute_using_consensus_failure_handler<
 ) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
 	let strategy: ExecutionStrategy = (&manager).into();
 	let result = {
-		let mut externalities = ext::Ext::new(overlay, backend);
-		// make a copy.
-		let code = externalities.storage(b":code")
-			.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
-			.to_vec();
+		let maybe_orig_prospective =
+			if let &ExecutionManager::Both(_) = &manager { Some(overlay.prospective.clone()) } else { None };
 
-		let (result, was_native) = exec.call(
-			&mut externalities,
-			&code,
-			method,
-			call_data,
-			// attempt to run native first, if we're not directed to run wasm only
-			strategy != ExecutionStrategy::AlwaysWasm,
-		);
+		let ((result, was_native), code, delta) = {
+			let mut externalities = ext::Ext::new(overlay, backend);
+			// make a copy.
+			let code = externalities.storage(b":code")
+				.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
+				.to_vec();
+
+			(
+				exec.call(
+					&mut externalities,
+					&code,
+					method,
+					call_data,
+					// attempt to run native first, if we're not directed to run wasm only
+					strategy != ExecutionStrategy::AlwaysWasm,
+				),
+				code,
+				externalities.transaction()
+			)
+		};
+		
 		// run wasm separately if we did run native the first time and we're meant to run both
-		let result = if let (true, ExecutionManager::Both(on_consensus_failure)) = (was_native, manager) {
+		let (result, delta) = if let (true, ExecutionManager::Both(on_consensus_failure), Some(mut orig_prospective)) =
+			(was_native, manager, maybe_orig_prospective)
+		{
+			::std::mem::swap(&mut orig_prospective, &mut overlay.prospective);
+			let mut externalities = ext::Ext::new(overlay, backend);
+
 			let (wasm_result, _) = exec.call(
 				&mut externalities,
 				&code,
@@ -281,18 +296,20 @@ pub fn execute_using_consensus_failure_handler<
 				call_data,
 				false
 			);
-			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap())
+			let wasm_delta = externalities.transaction();
+
+			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
 				|| (result.is_err() && wasm_result.is_err() && format!("{}", result.as_ref().unwrap_err()) == format!("{}", wasm_result.as_ref().unwrap_err()))
 			{
-				result
+				(result, delta)
 			} else {
 				// Consensus error.
-				on_consensus_failure(wasm_result, result)
+				(on_consensus_failure(wasm_result, result), wasm_delta)
 			}
 		} else {
-			result
+			(result, delta)
 		};
-		result.map(move |out| (out, externalities.transaction()))
+		result.map(move |out| (out, delta))
 	};
 
 	match result {

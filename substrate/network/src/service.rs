@@ -21,7 +21,7 @@ use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
 use network::{NetworkProtocolHandler, NetworkContext, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
-use network_devp2p::{NetworkService};
+use network_libp2p::{NetworkService};
 use core_io::{TimerToken};
 use io::NetSyncIo;
 use protocol::{Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
@@ -199,8 +199,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), self.protocol_id, &[(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)])
-			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
+		self.network.register_protocol(self.handler.clone(), self.protocol_id, &[(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)]);
 	}
 
 	fn stop(&self) {

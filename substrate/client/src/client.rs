@@ -479,10 +479,14 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 		Block: BlockT,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
-		let version: Result<_, bft::Error> = self.runtime_version_at(at).map_err(|_| bft::ErrorKind::InvalidRuntime.into());
-		let version = version?;
-		if !self.executor.native_runtime_version().map_or(true, |v| v.can_author_with(&version)) {
-			return Err(bft::ErrorKind::InvalidRuntime.into())
+		let on_chain_version: Result<_, bft::Error> = self.runtime_version_at(at)
+			.map_err(|e| { trace!("Error getting runtime version {:?}", e); bft::ErrorKind::RuntimeVersionMissing.into() });
+		let on_chain_version = on_chain_version?;
+		let native_version: Result<_, bft::Error> = self.executor.native_runtime_version()
+			.ok_or_else(|| bft::ErrorKind::NativeRuntimeMissing.into());
+		let native_version = native_version?;
+		if !on_chain_version.can_author_with(&native_version) {
+			return Err(bft::ErrorKind::IncompatibleAuthoringRuntime(on_chain_version, native_version).into())
 		}
 		self.authorities_at(at).map_err(|_| {
 			let descriptor = format!("{:?}", at);

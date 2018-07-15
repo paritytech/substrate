@@ -154,7 +154,7 @@ mod tests {
 		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
 
 		// check remote execution proof locally
-		let local_executor = test_client::NativeExecutor::new();
+		let local_executor = test_client::NativeExecutor::with_heap_pages(8);
 		do_check_execution_proof(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
 			method: "authorities".into(),
