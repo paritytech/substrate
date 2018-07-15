@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
+// TODO: rewrite docs.
+
 //! Crate for executing smart-contracts.
 //!
 //! It provides an means for executing contracts represented in WebAssembly (Wasm for short).
@@ -555,6 +557,4 @@ r#"
 			);
 		});
 	}
-
-	// TODO: create with zero value
 }
