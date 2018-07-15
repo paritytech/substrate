@@ -505,4 +505,56 @@ r#"
 			);
 		});
 	}
+
+	#[test]
+	fn call_with_zero_value() {
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+			<CodeOf<Test>>::insert(1, vec![]);
+
+			Staking::set_free_balance(&0, 100_000_000);
+
+			assert_ok!(Contract::send(
+				&0,
+				1,
+				0,
+				2,
+				100_000,
+				Vec::new(),
+			));
+
+			// TODO: balance is unchanged after call without value. But is this correct? This means
+			// that this transfer is basically free (apart from base transaction fee).
+			assert_eq!(
+				Staking::free_balance(&0),
+				100_000_000,
+			);
+		});
+	}
+
+	#[test]
+	fn create_with_zero_endownment() {
+		let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
+
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+			Staking::set_free_balance(&0, 100_000_000);
+
+			assert_ok!(Contract::create(
+				&0,
+				0,
+				2,
+				100_000,
+				code_nop,
+				Vec::new(),
+			));
+
+			// TODO: balance is unchanged after create without endownment. But is this correct? This means
+			// that this transfer is basically free (apart from base transaction fee).
+			assert_eq!(
+				Staking::free_balance(&0),
+				100_000_000,
+			);
+		});
+	}
+
+	// TODO: create with zero value
 }

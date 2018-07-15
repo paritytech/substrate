@@ -63,8 +63,9 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
 
-			// TODO: It would be nice to propogate the error.
-			transfer(&self.self_account, &dest, value, &mut overlay)?;
+			if value > T::Balance::zero() {
+				transfer(&self.self_account, &dest, value, &mut overlay)?;
+			}
 
 			let exec_result = if !dest_code.is_empty() {
 				let mut nested = ExecutionContext {
@@ -110,7 +111,9 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
 
-			transfer(&self.self_account, &dest, endownment, &mut overlay).map_err(|_| ())?;
+			if endownment > T::Balance::zero() {
+				transfer(&self.self_account, &dest, endownment, &mut overlay).map_err(|_| ())?;
+			}
 
 			let exec_result = {
 				let mut nested = ExecutionContext {
