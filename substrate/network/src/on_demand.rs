@@ -28,7 +28,7 @@ use client;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 use io::SyncIo;
 use message;
-use network::PeerId;
+use network_libp2p::PeerId;
 use service;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
@@ -325,7 +325,7 @@ mod tests {
 	use client;
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 	use message;
-	use network::PeerId;
+	use network_libp2p::PeerId;
 	use service::{Role, ExecuteInContext};
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};

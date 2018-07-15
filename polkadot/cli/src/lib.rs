@@ -200,13 +200,14 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	}
 
 	let base_path = base_path(&matches);
+
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(|| keystore_path(&base_path))
+		.unwrap_or_else(|| keystore_path(&base_path, config.chain_spec.id()))
 		.to_string_lossy()
 		.into();
 
-	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 
 	config.pruning = match matches.value_of("pruning") {
 		Some("archive") => PruningMode::ArchiveAll,
@@ -250,7 +251,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		config.network.boot_nodes.extend(matches
 			.values_of("bootnodes")
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
-		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
+		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 
 		let port = match matches.value_of("port") {
@@ -326,7 +327,7 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let base_path = base_path(matches);
 	let (spec, _) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 	info!("DB path: {}", config.database_path);
 	let client = service::new_client(config)?;
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
@@ -391,7 +392,7 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let (spec, _) = load_spec(&matches)?;
 	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 	let client = service::new_client(config)?;
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 
@@ -499,20 +500,26 @@ fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) ->
 	Ok(address)
 }
 
-fn keystore_path(base_path: &Path) -> PathBuf {
+fn keystore_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(chain_id);
 	path.push("keystore");
 	path
 }
 
-fn db_path(base_path: &Path) -> PathBuf {
+fn db_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(chain_id);
 	path.push("db");
 	path
 }
 
-fn network_path(base_path: &Path) -> PathBuf {
+fn network_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(chain_id);
 	path.push("network");
 	path
 }

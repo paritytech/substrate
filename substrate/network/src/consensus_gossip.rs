@@ -20,7 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use std::time::{Instant, Duration};
-use network::PeerId;
+use network_libp2p::PeerId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
