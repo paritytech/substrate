@@ -118,12 +118,10 @@ impl<B: BlockT> ChainSync<B> {
 					protocol.disconnect_peer(peer_id);
 				},
 				(Ok(BlockStatus::KnownBad), _) => {
-					debug!(target:"sync", "New peer with known bad best block {} ({}).", info.best_hash, info.best_number);
-					protocol.disable_peer(peer_id);
+					protocol.disable_peer(peer_id, &format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number));
 				},
 				(Ok(BlockStatus::Unknown), b) if b == As::sa(0) => {
-					debug!(target:"sync", "New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
-					protocol.disable_peer(peer_id);
+					protocol.disable_peer(peer_id, &format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number));
 				},
 				(Ok(BlockStatus::Unknown), _) => {
 					let our_best = self.best_queued_number;
@@ -206,7 +204,7 @@ impl<B: BlockT> ChainSync<B> {
 								},
 								Ok(_) => { // genesis mismatch
 									trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", peer_id);
-									protocol.disable_peer(peer_id);
+									protocol.disable_peer(peer_id, "Ancestry search: genesis mismatch for peer");
 									return;
 								},
 								Err(e) => {
@@ -278,8 +276,7 @@ impl<B: BlockT> ChainSync<B> {
 							return;
 						},
 						Ok(ImportResult::KnownBad) => {
-							debug!(target: "sync", "Bad block {}: {:?}", number, hash);
-							protocol.disable_peer(origin); //TODO: use persistent ID
+							protocol.disable_peer(origin, &format!("Peer gave us a bad block {}: {:?}", number, hash)); //TODO: use persistent ID
 							self.restart(protocol);
 							return;
 						}
@@ -291,13 +288,11 @@ impl<B: BlockT> ChainSync<B> {
 					}
 				},
 				(None, _) => {
-					debug!(target: "sync", "Header {} was not provided by {} ", block.hash, origin);
-					protocol.disable_peer(origin); //TODO: use persistent ID
+					protocol.disable_peer(origin, &format!("Header {} was not provided by peer ", block.hash)); //TODO: use persistent ID
 					return;
 				},
 				(_, None) => {
-					debug!(target: "sync", "Justification set for block {} was not provided by {} ", block.hash, origin);
-					protocol.disable_peer(origin); //TODO: use persistent ID
+					protocol.disable_peer(origin, &format!("Justification set for block {} was not provided by peer", block.hash)); //TODO: use persistent ID
 					return;
 				}
 			}

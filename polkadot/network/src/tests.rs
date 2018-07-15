@@ -41,7 +41,7 @@ impl Context<Block> for TestContext {
 		unimplemented!()
 	}
 
-	fn disable_peer(&mut self, peer: PeerId) {
+	fn disable_peer(&mut self, peer: PeerId, _reason: &str) {
 		self.disabled.push(peer);
 	}
 

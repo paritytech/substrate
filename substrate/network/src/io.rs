@@ -20,7 +20,7 @@ use network_libp2p::{NetworkContext, PeerId, Error as NetworkError, SessionInfo}
 /// Provides peer connection management and an interface to the blockchain client.
 pub trait SyncIo {
 	/// Disable a peer
-	fn disable_peer(&mut self, peer_id: PeerId);
+	fn disable_peer(&mut self, peer_id: PeerId, reason: &str);
 	/// Disconnect peer
 	fn disconnect_peer(&mut self, peer_id: PeerId);
 	/// Send a packet to a peer.
@@ -50,8 +50,8 @@ impl<'s> NetSyncIo<'s> {
 }
 
 impl<'s> SyncIo for NetSyncIo<'s> {
-	fn disable_peer(&mut self, peer_id: PeerId) {
-		self.network.disable_peer(peer_id);
+	fn disable_peer(&mut self, peer_id: PeerId, reason: &str) {
+		self.network.disable_peer(peer_id, reason);
 	}
 
 	fn disconnect_peer(&mut self, peer_id: PeerId) {

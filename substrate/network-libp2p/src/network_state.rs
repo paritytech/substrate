@@ -236,6 +236,7 @@ impl NetworkState {
 
 	/// Reports the ping of the peer. Returned later by `session_info()`.
 	/// No-op if the `peer_id` is not valid/expired.
+	#[allow(dead_code)]
 	pub fn report_ping(&self, peer_id: PeerId, ping: Duration) {
 		let connections = self.connections.read();
 		let info = match connections.info_by_peer.get(&peer_id) {
@@ -610,10 +611,15 @@ impl NetworkState {
 	/// list of disabled peers, and  drops any existing connections if
 	/// necessary (ie. drops the sender that was passed to
 	/// `accept_custom_proto`).
-	pub fn disable_peer(&self, peer_id: PeerId) {
+	pub fn disable_peer(&self, peer_id: PeerId, reason: &str) {
 		// TODO: what do we do if the peer is reserved?
 		let mut connections = self.connections.write();
 		let peer_info = if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
+			if let (&Some(ref client_version), &Some(ref remote_address)) = (&peer_info.client_version, &peer_info.remote_address) {
+				info!(target: "network", "Peer {} (version: {}, address: {}) disabled. {}", peer_id, client_version, remote_address, reason);
+			} else {
+				info!(target: "network", "Peer {} disabled. {}", peer_id, reason);
+			}
 			let old = connections.peer_by_nodeid.remove(&peer_info.id);
 			debug_assert_eq!(old, Some(peer_id));
 			peer_info
@@ -870,7 +876,7 @@ mod tests {
 			mpsc::unbounded().0
 		).unwrap();
 
-		state.disable_peer(peer_id);
+		state.disable_peer(peer_id, "Just a test");
 
 		assert!(state.accept_custom_proto(
 			example_peer.clone(),

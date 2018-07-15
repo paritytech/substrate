@@ -592,23 +592,22 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use codec::Encode;
-		use runtime_io::twox_128;
 
 		Ok(map![
-			twox_128(<CandidacyBond<T>>::key()).to_vec() => self.candidacy_bond.encode(),
-			twox_128(<VotingBond<T>>::key()).to_vec() => self.voter_bond.encode(),
-			twox_128(<PresentSlashPerVoter<T>>::key()).to_vec() => self.present_slash_per_voter.encode(),
-			twox_128(<CarryCount<T>>::key()).to_vec() => self.carry_count.encode(),
-			twox_128(<PresentationDuration<T>>::key()).to_vec() => self.presentation_duration.encode(),
-			twox_128(<VotingPeriod<T>>::key()).to_vec() => self.approval_voting_period.encode(),
-			twox_128(<TermDuration<T>>::key()).to_vec() => self.term_duration.encode(),
-			twox_128(<DesiredSeats<T>>::key()).to_vec() => self.desired_seats.encode(),
-			twox_128(<InactiveGracePeriod<T>>::key()).to_vec() => self.inactive_grace_period.encode(),
-			twox_128(<ActiveCouncil<T>>::key()).to_vec() => self.active_council.encode(),
+			Self::hash(<CandidacyBond<T>>::key()).to_vec() => self.candidacy_bond.encode(),
+			Self::hash(<VotingBond<T>>::key()).to_vec() => self.voter_bond.encode(),
+			Self::hash(<PresentSlashPerVoter<T>>::key()).to_vec() => self.present_slash_per_voter.encode(),
+			Self::hash(<CarryCount<T>>::key()).to_vec() => self.carry_count.encode(),
+			Self::hash(<PresentationDuration<T>>::key()).to_vec() => self.presentation_duration.encode(),
+			Self::hash(<VotingPeriod<T>>::key()).to_vec() => self.approval_voting_period.encode(),
+			Self::hash(<TermDuration<T>>::key()).to_vec() => self.term_duration.encode(),
+			Self::hash(<DesiredSeats<T>>::key()).to_vec() => self.desired_seats.encode(),
+			Self::hash(<InactiveGracePeriod<T>>::key()).to_vec() => self.inactive_grace_period.encode(),
+			Self::hash(<ActiveCouncil<T>>::key()).to_vec() => self.active_council.encode(),
 
-			twox_128(<voting::CooloffPeriod<T>>::key()).to_vec() => self.cooloff_period.encode(),
-			twox_128(<voting::VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
-			twox_128(<voting::Proposals<T>>::key()).to_vec() => vec![0u8; 0].encode()
+			Self::hash(<voting::CooloffPeriod<T>>::key()).to_vec() => self.cooloff_period.encode(),
+			Self::hash(<voting::VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
+			Self::hash(<voting::Proposals<T>>::key()).to_vec() => vec![0u8; 0].encode()
 		])
 	}
 }
