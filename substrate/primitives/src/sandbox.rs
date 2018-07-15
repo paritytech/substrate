@@ -184,7 +184,7 @@ impl Decode for ReturnValue {
 
 impl ReturnValue {
 	/// Maximum number of bytes `ReturnValue` might occupy when serialized with
-	/// `Slicable`.
+	/// `Codec`.
 	///
 	/// Breakdown:
 	///  1 byte for encoding unit/value variant
@@ -341,9 +341,9 @@ pub const ERR_EXECUTION: u32 = -3i32 as u32;
 mod tests {
 	use super::*;
 	use std::fmt;
-	use codec::Slicable;
+	use codec::Codec;
 
-	fn roundtrip<S: Slicable + PartialEq + fmt::Debug>(s: S) {
+	fn roundtrip<S: Codec + PartialEq + fmt::Debug>(s: S) {
 		let encoded = s.encode();
 		assert_eq!(S::decode(&mut &encoded[..]).unwrap(), s);
 	}

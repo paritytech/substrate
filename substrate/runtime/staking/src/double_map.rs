@@ -19,7 +19,7 @@
 //! This implementation is somewhat specialized to the tracking of the storage of accounts.
 
 use rstd::prelude::*;
-use codec::{Slicable, Encode};
+use codec::{Codec, Encode};
 use runtime_support::storage::unhashed;
 use runtime_io::{blake2_256, twox_128};
 
@@ -60,9 +60,9 @@ fn full_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1, k2: M::Key2) -> Vec<u8> {
 /// Blake2 is used for `Key2` is because it will be used as a for a key for contract's storage and
 /// thus will be susceptible for a untrusted input.
 pub trait StorageDoubleMap {
-	type Key1: Slicable;
-	type Key2: Slicable;
-	type Value: Slicable + Default;
+	type Key1: Codec;
+	type Key2: Codec;
+	type Value: Codec + Default;
 
 	const PREFIX: &'static [u8];
 

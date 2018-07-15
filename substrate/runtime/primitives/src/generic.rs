@@ -23,7 +23,7 @@ use std::fmt;
 use serde::{Deserialize, Deserializer};
 
 use rstd::prelude::*;
-use codec::{Decode, Encode, Slicable, Input, Output};
+use codec::{Decode, Encode, Codec, Input, Output};
 use runtime_support::AuxDispatchable;
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Block as BlockT,
 	Header as HeaderT, Hash as HashT};
@@ -107,7 +107,7 @@ where
 	Signature: traits::Verify<Signer=AccountId> + Eq + Default,
 	AccountId: Member + Default + MaybeDisplay,
 	::MaybeUnsigned<Signature>: Member,
-	Extrinsic<AccountId, Index, Call>: Slicable,
+	Extrinsic<AccountId, Index, Call>: Codec,
 	ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
@@ -253,7 +253,7 @@ impl<Item: Encode> Encode for Digest<Item> {
 }
 
 impl<Item> traits::Digest for Digest<Item> where
-	Item: Member + Default + Slicable
+	Item: Member + Default + Codec
 {
 	type Item = Item;
 	fn push(&mut self, item: Self::Item) {
@@ -352,10 +352,10 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
-	Number: Member + ::rstd::hash::Hash + Copy + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
+	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
-	DigestItem: Member + Default + Slicable,
-	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Slicable,
+	DigestItem: Member + Default + Codec,
+	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;
@@ -391,10 +391,10 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 }
 
 impl<Number, Hash, DigestItem> Header<Number, Hash, DigestItem> where
-	Number: Member + ::rstd::hash::Hash + Copy + Slicable + MaybeDisplay + SimpleArithmetic + Slicable,
+	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
-	DigestItem: Member + Default + Slicable,
-	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Slicable,
+	DigestItem: Member + Default + Codec,
+	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	/// Convenience helper for computing the hash of the header without having
 	/// to import the trait.
@@ -467,7 +467,7 @@ impl<Header: Encode, Extrinsic: Encode> Encode for Block<Header, Extrinsic> {
 impl<Header, Extrinsic> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
-	Extrinsic: Member + Slicable,
+	Extrinsic: Member + Codec,
 {
 	type Extrinsic = Extrinsic;
 	type Header = Header;

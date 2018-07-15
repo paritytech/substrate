@@ -62,7 +62,7 @@ pub trait Output: Sized {
 		self.write(&[byte]);
 	}
 
-	fn push<V: Encode>(&mut self, value: &V) {
+	fn push<V: Encode + ?Sized>(&mut self, value: &V) {
 		value.encode_to(self);
 	}
 }
@@ -77,7 +77,7 @@ impl Output for Vec<u8> {
 #[cfg(feature = "std")]
 impl<W: ::std::io::Write> Output for W {
 	fn write(&mut self, bytes: &[u8]) {
-		(self as &mut ::std::io::Write).write(bytes).expect("Slicable outputs are infallible");
+		(self as &mut ::std::io::Write).write(bytes).expect("Codec outputs are infallible");
 	}
 }
 
@@ -109,8 +109,8 @@ pub trait Decode: Sized {
 }
 
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
-pub trait Slicable: Decode + Encode {}
-impl<S: Decode + Encode> Slicable for S {}
+pub trait Codec: Decode + Encode {}
+impl<S: Decode + Encode> Codec for S {}
 
 impl<T: Encode, E: Encode> Encode for Result<T, E> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -358,7 +358,7 @@ mod inner_tuple_impl {
 
 /// Trait to allow conversion to a know endian representation when sensitive.
 /// Types implementing this trait must have a size > 0.
-// note: the copy bound and static lifetimes are necessary for safety of `Slicable` blanket
+// note: the copy bound and static lifetimes are necessary for safety of `Codec` blanket
 // implementation.
 trait EndianSensitive: Copy + 'static {
 	fn to_le(self) -> Self { self }

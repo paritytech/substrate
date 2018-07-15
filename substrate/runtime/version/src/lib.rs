@@ -138,8 +138,8 @@ impl RuntimeVersion {
 
 impl Encode for RuntimeVersion {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
-		self.spec_name.as_bytes().encode_to(dest);
-		self.impl_name.as_bytes().encode_to(dest);
+		dest.push(self.spec_name.as_bytes());
+		dest.push(self.impl_name.as_bytes());
 		dest.push(&self.authoring_version);
 		dest.push(&self.spec_version);
 		dest.push(&self.impl_version);

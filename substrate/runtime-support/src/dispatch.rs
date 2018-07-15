@@ -22,7 +22,7 @@ pub use std::fmt;
 pub use rstd::result;
 #[cfg(feature = "std")]
 use serde;
-pub use codec::{Slicable, Decode, Encode, Input, Output};
+pub use codec::{Codec, Decode, Encode, Input, Output};
 
 pub type Result = result::Result<(), &'static str>;
 
@@ -39,11 +39,11 @@ pub trait AuxDispatchable {
 
 #[cfg(feature = "std")]
 pub trait AuxCallable {
-	type Call: AuxDispatchable + Slicable + ::serde::Serialize + Clone + PartialEq + Eq;
+	type Call: AuxDispatchable + Codec + ::serde::Serialize + Clone + PartialEq + Eq;
 }
 #[cfg(not(feature = "std"))]
 pub trait AuxCallable {
-	type Call: AuxDispatchable + Slicable + Clone + PartialEq + Eq;
+	type Call: AuxDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -52,11 +52,11 @@ pub type AuxCallableCallFor<A> = <A as AuxCallable>::Call;
 
 #[cfg(feature = "std")]
 pub trait Callable {
-	type Call: Dispatchable + Slicable + ::serde::Serialize + Clone + PartialEq + Eq;
+	type Call: Dispatchable + Codec + ::serde::Serialize + Clone + PartialEq + Eq;
 }
 #[cfg(not(feature = "std"))]
 pub trait Callable {
-	type Call: Dispatchable + Slicable + Clone + PartialEq + Eq;
+	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue.
@@ -64,16 +64,16 @@ pub trait Callable {
 pub type CallableCallFor<C> = <C as Callable>::Call;
 
 #[cfg(feature = "std")]
-pub trait Parameter: Slicable + serde::Serialize + Clone + Eq + fmt::Debug {}
+pub trait Parameter: Codec + serde::Serialize + Clone + Eq + fmt::Debug {}
 
 #[cfg(feature = "std")]
-impl<T> Parameter for T where T: Slicable + serde::Serialize + Clone + Eq + fmt::Debug {}
+impl<T> Parameter for T where T: Codec + serde::Serialize + Clone + Eq + fmt::Debug {}
 
 #[cfg(not(feature = "std"))]
-pub trait Parameter: Slicable + Clone + Eq {}
+pub trait Parameter: Codec + Clone + Eq {}
 
 #[cfg(not(feature = "std"))]
-impl<T> Parameter for T where T: Slicable + Clone + Eq {}
+impl<T> Parameter for T where T: Codec + Clone + Eq {}
 
 /// Declare a struct for this module, then implement dispatch logic to create a pairing of several
 /// dispatch traits and enums.

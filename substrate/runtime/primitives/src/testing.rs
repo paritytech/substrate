@@ -18,7 +18,7 @@
 
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
-use codec::{Decode, Encode, Slicable, Input, Output};
+use codec::{Decode, Encode, Codec, Input, Output};
 use runtime_support::AuxDispatchable;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 
@@ -134,7 +134,7 @@ impl<Xt: Encode> Encode for Block<Xt> {
 		dest.push(&self.extrinsics);
 	}
 }
-impl<Xt: 'static + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
+impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
 	type Extrinsic = Xt;
 	type Header = Header;
 	type Hash = <Header as traits::Header>::Hash;
@@ -168,11 +168,11 @@ impl<Call: Encode> Encode for TestXt<Call> {
 	}
 }
 
-impl<Call: Slicable + Sync + Send + Serialize + AuxDispatchable, Context> Checkable<Context> for TestXt<Call> {
+impl<Call: Codec + Sync + Send + Serialize + AuxDispatchable, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
 	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
-impl<Call: AuxDispatchable<Aux = u64> + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
+impl<Call: AuxDispatchable<Aux = u64> + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
 	type AccountId = u64;
 	type Index = u64;
 	fn sender(&self) -> &u64 { &(self.0).0 }
