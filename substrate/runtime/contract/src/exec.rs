@@ -23,14 +23,6 @@ use staking;
 use system;
 use vm;
 
-//pub struct TransactionData {
-// tx_origin
-// tx_gas_price
-// block_number
-// timestamp
-// etc
-//}
-
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
 	pub gas_left: u64,
@@ -59,6 +51,9 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 		// TODO: check the new depth
 		// TODO: Charge here the base price for call
+
+		// TODO: We settled on charging with DOTs.
+		// fee / gas_price = some amount of gas. Substract from the gas meter.
 
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
@@ -107,6 +102,9 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 		// TODO: Charge here the base price for create
 
+		// TODO: We settled on charging with DOTs.
+		// fee / gas_price = some amount of gas. Substract from the gas meter.
+
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
 
@@ -146,15 +144,9 @@ fn transfer<T: Trait>(
 	overlay: &mut OverlayAccountDb<T>,
 ) -> Result<(), &'static str> {
 	let would_create = overlay.get_balance(transactor).is_zero();
-	let fee = if would_create {
-		<staking::Module<T>>::creation_fee()
-	} else {
-		<staking::Module<T>>::transfer_fee()
-	};
-	let liability = value + fee;
 
 	let from_balance = overlay.get_balance(transactor);
-	if from_balance < liability {
+	if from_balance < value {
 		return Err("balance too low to send value");
 	}
 	if would_create && value < <staking::Module<T>>::existential_deposit() {
@@ -170,7 +162,7 @@ fn transfer<T: Trait>(
 	}
 
 	if transactor != dest {
-		overlay.set_balance(transactor, from_balance - liability);
+		overlay.set_balance(transactor, from_balance - value);
 		overlay.set_balance(dest, to_balance + value);
 	}
 
