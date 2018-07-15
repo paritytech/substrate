@@ -85,7 +85,6 @@ impl<W: ::std::io::Write> Output for W {
 /// Implementations should override `using_encoded` for value types and `encode_to` for allocating types.
 pub trait IntoSlicable {
 	/// Convert self to a slice and append it to the destination.
-	#[cfg(feature = "std")]
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		self.using_encoded(|buf| dest.write(buf));
 	}

@@ -35,7 +35,9 @@ extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 
 use rstd::prelude::*;
-use codec::{FromSlicable, IntoSlicable, Input, Output};
+use codec::{IntoSlicable, Output};
+#[cfg(feature = "std")]
+use codec::{FromSlicable, Input};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 
