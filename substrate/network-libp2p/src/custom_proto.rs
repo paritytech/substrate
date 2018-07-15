@@ -15,9 +15,9 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
 use bytes::{Bytes, BytesMut};
-use network::ProtocolId;
+use ProtocolId;
 use libp2p::core::{Multiaddr, ConnectionUpgrade, Endpoint};
-use network::PacketId;
+use PacketId;
 use std::io::Error as IoError;
 use std::vec::IntoIter as VecIntoIter;
 use futures::{future, Future, stream, Stream, Sink};

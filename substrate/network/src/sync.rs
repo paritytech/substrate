@@ -16,7 +16,7 @@
 
 use std::collections::HashMap;
 use protocol::Context;
-use network::PeerId;
+use network_libp2p::PeerId;
 use client::{ImportResult, BlockStatus, ClientInfo};
 use blocks::{self, BlockCollection};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};

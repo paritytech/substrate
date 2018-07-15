@@ -18,7 +18,6 @@ extern crate parking_lot;
 extern crate ethcore_bytes;
 extern crate ethcore_io as io;
 extern crate ethcore_logger;
-extern crate ethcore_network;
 extern crate substrate_network_libp2p;
 extern crate ethkey;
 
@@ -28,8 +27,7 @@ use std::thread;
 use std::time::*;
 use parking_lot::Mutex;
 use ethcore_bytes::Bytes;
-use ethcore_network::*;
-use substrate_network_libp2p::NetworkService;
+use substrate_network_libp2p::*;
 use ethkey::{Random, Generator};
 use io::TimerToken;
 

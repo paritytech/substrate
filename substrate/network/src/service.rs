@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::io;
 use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
-use network::{NetworkProtocolHandler, NetworkContext, PeerId, ProtocolId,
+use network_libp2p::{NetworkProtocolHandler, NetworkContext, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_libp2p::{NetworkService};
 use core_io::{TimerToken};

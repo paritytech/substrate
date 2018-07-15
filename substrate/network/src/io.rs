@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use network::{NetworkContext, PeerId, Error as NetworkError, SessionInfo};
+use network_libp2p::{NetworkContext, PeerId, Error as NetworkError, SessionInfo};
 
 /// IO interface for the syncing handler.
 /// Provides peer connection management and an interface to the blockchain client.
