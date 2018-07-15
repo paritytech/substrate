@@ -213,9 +213,6 @@ impl<T: Trait> Module<T> {
 		ctor_code: Vec<u8>,
 		data: Vec<u8>,
 	) -> Result {
-		// TODO: an additional fee, based upon gaslimit/gasprice.
-		// This fee should be taken in any way and not reverted.
-
 		let aux = aux.ref_into();
 
 		// Pay for the gas upfront.
