@@ -261,14 +261,13 @@ impl<T: Trait> staking::OnAccountKill<T::AccountId> for Module<T> {
 mod tests {
 	use {
 		StorageOf, CodeOf, ContractAddressFor, Module, Trait, staking,
-		system, session, consensus, timestamp
+		system, session, consensus, timestamp, runtime_io,
 	};
 	use runtime_io::with_externalities;
 	use runtime_support::StorageMap;
 	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header, H256};
-	// TODO: Remove `new_test_ext`
-	use staking::mock::{new_test_ext};
+	use runtime_primitives::BuildStorage;
 	use wabt;
 	use double_map::StorageDoubleMap;
 
@@ -317,6 +316,38 @@ mod tests {
 		}
 	}
 
+	fn new_test_ext(existential_deposit: u64) -> runtime_io::TestExternalities {
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		t.extend(consensus::GenesisConfig::<Test>{
+			code: vec![],
+			authorities: vec![],
+		}.build_storage().unwrap());
+		t.extend(session::GenesisConfig::<Test>{
+			session_length: 1,
+			validators: vec![10, 20],
+			broken_percent_late: 100,
+		}.build_storage().unwrap());
+		t.extend(staking::GenesisConfig::<Test>{
+			sessions_per_era: 1,
+			current_era: 0,
+			balances: vec![],
+			intentions: vec![],
+			validator_count: 2,
+			bonding_duration: 0,
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
+			existential_deposit: existential_deposit,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 0,
+			reclaim_rebate: 0,
+			early_era_slash: 0,
+			session_reward: 0,
+		}.build_storage().unwrap());
+		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
+		t
+	}
+
 
 	const CODE_TRANSFER: &str = r#"
 (module
@@ -347,7 +378,7 @@ mod tests {
 
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
-		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+		with_externalities(&mut new_test_ext(0), || {
 			<CodeOf<Test>>::insert(1, code_transfer.to_vec());
 
 			Staking::set_free_balance(&0, 100_000_000);
@@ -454,7 +485,7 @@ mod tests {
 		let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
 		let code_create = wabt::wat2wasm(&code_create(&code_ctor_transfer)).unwrap();
 
-		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+		with_externalities(&mut new_test_ext(0), || {
 			Staking::set_free_balance(&0, 100_000_000);
 			Staking::set_free_balance(&1, 0);
 			Staking::set_free_balance(&9, 30);
@@ -494,7 +525,7 @@ mod tests {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
 
-		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+		with_externalities(&mut new_test_ext(0), || {
 			let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 				&code_ctor_transfer,
 				&0,
@@ -533,7 +564,7 @@ r#"
 	fn refunds_unused_gas() {
 		let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
 
-		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+		with_externalities(&mut new_test_ext(0), || {
 			<CodeOf<Test>>::insert(1, code_nop.to_vec());
 
 			Staking::set_free_balance(&0, 100_000_000);
@@ -556,7 +587,7 @@ r#"
 
 	#[test]
 	fn call_with_zero_value() {
-		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+		with_externalities(&mut new_test_ext(0), || {
 			<CodeOf<Test>>::insert(1, vec![]);
 
 			Staking::set_free_balance(&0, 100_000_000);
@@ -583,7 +614,7 @@ r#"
 	fn create_with_zero_endownment() {
 		let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
 
-		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+		with_externalities(&mut new_test_ext(0), || {
 			Staking::set_free_balance(&0, 100_000_000);
 
 			assert_ok!(Contract::create(
@@ -606,7 +637,7 @@ r#"
 
 	#[test]
 	fn account_removal_removes_storage() {
-		with_externalities(&mut new_test_ext(100, 1, 3, 1, false, 0), || {
+		with_externalities(&mut new_test_ext(100), || {
 			// Setup two accounts with free balance above than exsistential threshold.
 			{
 				Staking::set_free_balance(&1, 110);

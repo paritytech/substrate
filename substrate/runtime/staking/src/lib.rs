@@ -55,8 +55,7 @@ use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executab
 	As, AuxLookup, Member};
 use address::Address as RawAddress;
 
-// TODO: Extract it to mock crate?
-pub mod mock;
+mod mock;
 
 pub mod address;
 mod tests;
