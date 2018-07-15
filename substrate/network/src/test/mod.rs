@@ -80,7 +80,7 @@ impl<'p> Drop for TestIo<'p> {
 }
 
 impl<'p> SyncIo for TestIo<'p> {
-	fn disable_peer(&mut self, peer_id: PeerId) {
+	fn disable_peer(&mut self, peer_id: PeerId, _reason: &str) {
 		self.disconnect_peer(peer_id);
 	}
 

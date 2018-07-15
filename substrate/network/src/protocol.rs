@@ -110,7 +110,7 @@ pub trait Context<B: BlockT> {
 	fn client(&self) -> &::chain::Client<B>;
 
 	/// Disable a peer
-	fn disable_peer(&mut self, peer_id: PeerId);
+	fn disable_peer(&mut self, peer_id: PeerId, reason: &str);
 
 	/// Disconnect peer
 	fn disconnect_peer(&mut self, peer_id: PeerId);
@@ -141,8 +141,8 @@ impl<'a, B: BlockT + 'a> ProtocolContext<'a, B> {
 		send_message(&self.context_data.peers, self.io, peer_id, message)
 	}
 
-	pub fn disable_peer(&mut self, peer_id: PeerId) {
-		self.io.disable_peer(peer_id);
+	pub fn disable_peer(&mut self, peer_id: PeerId, reason: &str) {
+		self.io.disable_peer(peer_id, reason);
 	}
 
 	pub fn disconnect_peer(&mut self, peer_id: PeerId) {
@@ -167,8 +167,8 @@ impl<'a, B: BlockT + 'a> Context<B> for ProtocolContext<'a, B> {
 		ProtocolContext::send_message(self, peer_id, message);
 	}
 
-	fn disable_peer(&mut self, peer_id: PeerId) {
-		ProtocolContext::disable_peer(self, peer_id);
+	fn disable_peer(&mut self, peer_id: PeerId, reason: &str) {
+		ProtocolContext::disable_peer(self, peer_id, reason);
 	}
 
 	fn disconnect_peer(&mut self, peer_id: PeerId) {
@@ -237,9 +237,8 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 		let message: Message<B> = match serde_json::from_slice(data) {
 			Ok(m) => m,
 			Err(e) => {
-				debug!(target: "sync", "Invalid packet from {}: {}", peer_id, e);
 				trace!(target: "sync", "Invalid packet: {}", String::from_utf8_lossy(data));
-				io.disable_peer(peer_id);
+				io.disable_peer(peer_id, &format!("Peer sent us a packet with invalid format ({})", e));
 				return;
 			}
 		};
@@ -255,14 +254,12 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 						match mem::replace(&mut peer.block_request, None) {
 							Some(r) => r,
 							None => {
-								debug!(target: "sync", "Unexpected response packet from {}", peer_id);
-								io.disable_peer(peer_id);
+								io.disable_peer(peer_id, "Unexpected response packet received from peer");
 								return;
 							}
 						}
 					} else {
-						debug!(target: "sync", "Unexpected packet from {}", peer_id);
-						io.disable_peer(peer_id);
+						io.disable_peer(peer_id, "Unexpected packet received from peer");
 						return;
 					}
 				};
@@ -428,13 +425,11 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 				return;
 			}
 			if status.genesis_hash != self.genesis_hash {
-				io.disable_peer(peer_id);
-				trace!(target: "sync", "Peer {} genesis hash mismatch (ours: {}, theirs: {})", peer_id, self.genesis_hash, status.genesis_hash);
+				io.disable_peer(peer_id, &format!("Peer is on different chain (our genesis: {} theirs: {})", self.genesis_hash, status.genesis_hash));
 				return;
 			}
 			if status.version != CURRENT_VERSION {
-				io.disable_peer(peer_id);
-				trace!(target: "sync", "Peer {} unsupported eth protocol ({})", peer_id, status.version);
+				io.disable_peer(peer_id, &format!("Peer using unsupported protocol version {}", status.version));
 				return;
 			}
 

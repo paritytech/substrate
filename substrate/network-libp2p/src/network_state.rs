@@ -608,10 +608,11 @@ impl NetworkState {
 	/// Disables a peer. This adds the peer to the list of disabled peers, and 
 	/// drops any existing connections if necessary (ie. drops the sender that
 	/// was passed to `accept_custom_proto`).
-	pub fn disable_peer(&self, peer_id: PeerId) {
+	pub fn disable_peer(&self, peer_id: PeerId, reason: &str) {
 		// TODO: what do we do if the peer is reserved?
 		let mut connections = self.connections.write();
 		let peer_info = if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
+			info!(target: "network", "Peer {} disabled. {}", peer_id, reason);
 			let old = connections.peer_by_nodeid.remove(&peer_info.id);
 			debug_assert_eq!(old, Some(peer_id));
 			peer_info
@@ -849,7 +850,7 @@ mod tests {
 			mpsc::unbounded().0
 		).unwrap();
 
-		state.disable_peer(peer_id);
+		state.disable_peer(peer_id, "Just a test");
 
 		assert!(state.accept_custom_proto(
 			example_peer.clone(),

@@ -57,6 +57,7 @@ pub fn build_transport(
 /// Specifies whether unencrypted communications are allowed or denied.
 #[derive(Debug, Copy, Clone)]
 pub enum UnencryptedAllowed {
+	#[allow(dead_code)]
 	Allowed,
 	Denied,
 }

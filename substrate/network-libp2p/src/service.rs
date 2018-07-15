@@ -328,9 +328,9 @@ impl NetworkContext for NetworkContextImpl {
 		}
 	}
 
-	fn disable_peer(&self, peer: PeerId) {
+	fn disable_peer(&self, peer: PeerId, reason: &str) {
 		debug!(target: "sub-libp2p", "Request to disable peer {}", peer);
-		self.inner.network_state.disable_peer(peer);
+		self.inner.network_state.disable_peer(peer, reason);
 	}
 
 	fn disconnect_peer(&self, peer: PeerId) {
