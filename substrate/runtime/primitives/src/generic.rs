@@ -135,7 +135,9 @@ where
 	}
 }
 
-impl<Address, Index, Call, Signature> Decode for UncheckedExtrinsic<Address, Index, Call, Signature> where
+impl<Address, Index, Call, Signature> Decode
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
+where
 	Signature: Decode,
 	Extrinsic<Address, Index, Call>: Decode,
 {
@@ -153,7 +155,9 @@ impl<Address, Index, Call, Signature> Decode for UncheckedExtrinsic<Address, Ind
 	}
 }
 
-impl<Address, Index, Call, Signature> Encode for UncheckedExtrinsic<Address, Index, Call, Signature> where
+impl<Address, Index, Call, Signature> Encode
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
+where
 	Signature: Encode,
 	Extrinsic<Address, Index, Call>: Encode,
 {
@@ -495,7 +499,9 @@ pub struct SignedBlock<Header, Extrinsic, Hash> {
 	pub justification: Justification<Hash>,
 }
 
-impl<Header: Decode, Extrinsic: Decode, Hash: Decode> Decode for SignedBlock<Header, Extrinsic, Hash> {
+impl<Header: Decode, Extrinsic: Decode, Hash: Decode> Decode
+	for SignedBlock<Header, Extrinsic, Hash>
+{
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(SignedBlock {
 			block: Decode::decode(input)?,
@@ -504,7 +510,9 @@ impl<Header: Decode, Extrinsic: Decode, Hash: Decode> Decode for SignedBlock<Hea
 	}
 }
 
-impl<Header: Encode, Extrinsic: Encode, Hash: Encode> Encode for SignedBlock<Header, Extrinsic, Hash> {
+impl<Header: Encode, Extrinsic: Encode, Hash: Encode> Encode
+	for SignedBlock<Header, Extrinsic, Hash>
+{
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.block);
 		dest.push(&self.justification);

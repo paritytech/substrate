@@ -395,7 +395,7 @@ pub mod unhashed {
 				key,
 				pos: 0,
 			};
-			Decode::decode(&mut input).expect("stroage is not null, therefore must be a valid type")
+			Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
 		})
 	}
 
