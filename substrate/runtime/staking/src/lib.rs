@@ -45,16 +45,14 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(test)] use std::fmt::Debug;
-use account_db::State;
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use rstd::collections::btree_map::BTreeMap;
 use codec::{Input, Slicable};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, AuxLookup, Hash as HashT, Member};
+	As, AuxLookup, Member};
 use address::Address as RawAddress;
 
 // TODO: Extract it to mock crate?
@@ -63,13 +61,9 @@ pub mod mock;
 pub mod address;
 mod tests;
 mod genesis_config;
-mod account_db;
-
 
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
-
-pub use account_db::*;
 
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: usize = 64;
@@ -267,25 +261,38 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Create a smart-contract account.
-	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) -> Result {
-		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb)? {
-			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
-		}
-		Ok(())
-	}
-
 	// PUBLIC DISPATCH
 
 	/// Transfer some unlocked staking balance to another staker.
 	pub fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
 		let dest = Self::lookup(dest)?;
-		// TODO: Inline this.
-		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
-			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
+
+		let transactor = aux.ref_into();
+		let from_balance = Self::free_balance(transactor);
+		let would_create = from_balance.is_zero();
+		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
+		let liability = value + fee;
+
+		if from_balance < liability {
+			return Err("balance too low to send value");
 		}
+		if would_create && value < Self::existential_deposit() {
+			return Err("value too low to create account");
+		}
+		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
+			return Err("bondage too high to send value");
+		}
+
+		let to_balance = Self::free_balance(&dest);
+		if to_balance + value <= to_balance {
+			return Err("destination balance too high to receive value");
+		}
+
+		if transactor != &dest {
+			Self::commit_free_balance(transactor, from_balance - liability);
+			Self::commit_free_balance(&dest, to_balance + value);
+		}
+
 		Ok(())
 	}
 
@@ -758,80 +765,6 @@ impl<T: Trait> Module<T> {
 		if Self::free_balance(who).is_zero() {
 			<system::AccountNonce<T>>::remove(who);
 		}
-	}
-
-	// TODO: Remove
-	fn effect_create<DB: AccountDb<T>>(
-		transactor: &T::AccountId,
-		code: &[u8], // TODO: remove
-		value: T::Balance,
-		account_db: &DB,
-	) -> result::Result<Option<State<T>>, &'static str> {
-		let from_balance = account_db.get_balance(transactor);
-
-		let liability = value + Self::contract_fee();
-
-		if from_balance < liability {
-			return Err("balance too low to send value");
-		}
-		if value < Self::existential_deposit() {
-			return Err("value too low to create account");
-		}
-		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
-			return Err("bondage too high to send value");
-		}
-
-		// let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
-		// TODO: just make it compile
-		let dest = transactor;
-
-		// early-out if degenerate.
-		if dest == transactor {
-			return Ok(None);
-		}
-
-		let mut local = BTreeMap::new();
-		// two inserts are safe
-		// note that we now know that `&dest != transactor` due to early-out before.
-		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - liability));
-		Ok(Some(local))
-	}
-
-	fn effect_transfer<DB: AccountDb<T>>(
-		transactor: &T::AccountId,
-		dest: &T::AccountId,
-		value: T::Balance,
-		account_db: &DB,
-	) -> result::Result<Option<State<T>>, &'static str> {
-		let would_create = account_db.get_balance(transactor).is_zero();
-		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
-		let liability = value + fee;
-
-		let from_balance = account_db.get_balance(transactor);
-		if from_balance < liability {
-			return Err("balance too low to send value");
-		}
-		if would_create && value < Self::existential_deposit() {
-			return Err("value too low to create account");
-		}
-		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
-			return Err("bondage too high to send value");
-		}
-
-		let to_balance = account_db.get_balance(dest);
-		if to_balance + value <= to_balance {
-			return Err("destination balance too high to receive value");
-		}
-
-		// Our local overlay: Should be used for any transfers and creates that happen internally.
-		let mut overlay = OverlayAccountDb::new(account_db);
-
-		if transactor != dest {
-			overlay.set_balance(transactor, from_balance - liability);
-			overlay.set_balance(dest, to_balance + value);
-		}
-
-		Ok(Some(overlay.into_state()))
 	}
 }
 
