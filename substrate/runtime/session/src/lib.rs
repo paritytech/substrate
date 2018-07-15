@@ -245,15 +245,14 @@ impl<T: Trait> Default for GenesisConfig<T> {
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use runtime_io::twox_128;
 		use codec::Encode;
 		use primitives::traits::As;
 		Ok(map![
-			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
-			twox_128(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
-			twox_128(<CurrentStart<T>>::key()).to_vec() => T::Moment::zero().encode(),
-			twox_128(<Validators<T>>::key()).to_vec() => self.validators.encode(),
-			twox_128(<BrokenPercentLate<T>>::key()).to_vec() => self.broken_percent_late.encode()
+			Self::hash(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
+			Self::hash(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
+			Self::hash(<CurrentStart<T>>::key()).to_vec() => T::Moment::zero().encode(),
+			Self::hash(<Validators<T>>::key()).to_vec() => self.validators.encode(),
+			Self::hash(<BrokenPercentLate<T>>::key()).to_vec() => self.broken_percent_late.encode()
 		])
 	}
 }

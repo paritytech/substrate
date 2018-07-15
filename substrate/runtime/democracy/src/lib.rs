@@ -340,15 +340,14 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use codec::Encode;
-		use runtime_io::twox_128;
 
 		Ok(map![
-			twox_128(<LaunchPeriod<T>>::key()).to_vec() => self.launch_period.encode(),
-			twox_128(<VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
-			twox_128(<MinimumDeposit<T>>::key()).to_vec() => self.minimum_deposit.encode(),
-			twox_128(<ReferendumCount<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
-			twox_128(<NextTally<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
-			twox_128(<PublicPropCount<T>>::key()).to_vec() => (0 as PropIndex).encode()
+			Self::hash(<LaunchPeriod<T>>::key()).to_vec() => self.launch_period.encode(),
+			Self::hash(<VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
+			Self::hash(<MinimumDeposit<T>>::key()).to_vec() => self.minimum_deposit.encode(),
+			Self::hash(<ReferendumCount<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
+			Self::hash(<NextTally<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
+			Self::hash(<PublicPropCount<T>>::key()).to_vec() => (0 as PropIndex).encode()
 		])
 	}
 }

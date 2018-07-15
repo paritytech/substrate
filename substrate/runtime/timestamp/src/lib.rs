@@ -127,11 +127,10 @@ impl<T: Trait> Default for GenesisConfig<T> {
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
-		use runtime_io::twox_128;
 		use codec::Encode;
 		Ok(map![
-			twox_128(<BlockPeriod<T>>::key()).to_vec() => self.period.encode(),
-			twox_128(<Now<T>>::key()).to_vec() => T::Moment::sa(0).encode()
+			Self::hash(<BlockPeriod<T>>::key()).to_vec() => self.period.encode(),
+			Self::hash(<Now<T>>::key()).to_vec() => T::Moment::sa(0).encode()
 		])
 	}
 }

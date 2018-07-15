@@ -216,7 +216,6 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(mut self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use std::collections::HashMap;
-		use runtime_io::twox_128;
 		use codec::Encode;
 
 		self.parachains.sort_unstable_by_key(|&(ref id, _)| id.clone());
@@ -225,11 +224,11 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 		let only_ids: Vec<_> = self.parachains.iter().map(|&(ref id, _)| id).cloned().collect();
 
 		let mut map: HashMap<_, _> = map![
-			twox_128(<Parachains<T>>::key()).to_vec() => only_ids.encode()
+			Self::hash(<Parachains<T>>::key()).to_vec() => only_ids.encode()
 		];
 
 		for (id, code) in self.parachains {
-			let key = twox_128(&<Code<T>>::key_for(&id)).to_vec();
+			let key = Self::hash(&<Code<T>>::key_for(&id)).to_vec();
 			map.insert(key, code.encode());
 		}
 

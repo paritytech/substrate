@@ -225,7 +225,7 @@ pub trait NetworkContext {
 	fn respond(&self, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error>;
 
 	/// Disconnect a peer and prevent it from connecting again.
-	fn disable_peer(&self, peer: PeerId);
+	fn disable_peer(&self, peer: PeerId, reason: &str);
 
 	/// Disconnect peer. Reconnect can be attempted later.
 	fn disconnect_peer(&self, peer: PeerId);
@@ -262,8 +262,8 @@ impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
 		(**self).respond(packet_id, data)
 	}
 
-	fn disable_peer(&self, peer: PeerId) {
-		(**self).disable_peer(peer)
+	fn disable_peer(&self, peer: PeerId, reason: &str) {
+		(**self).disable_peer(peer, reason)
 	}
 
 	fn disconnect_peer(&self, peer: PeerId) {

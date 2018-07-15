@@ -19,7 +19,6 @@
 #![cfg(feature = "std")]
 
 use rstd::prelude::*;
-use runtime_io::twox_128;
 use codec::Encode;
 use runtime_support::{StorageValue, StorageMap};
 use primitives::traits::{Zero, As};
@@ -127,31 +126,31 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
 		let mut r: runtime_io::TestExternalities = map![
-			twox_128(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
-			twox_128(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
-			twox_128(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
-			twox_128(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
-			twox_128(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
-			twox_128(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
-			twox_128(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
-			twox_128(<TransferFee<T>>::key()).to_vec() => self.transfer_fee.encode(),
-			twox_128(<CreationFee<T>>::key()).to_vec() => self.creation_fee.encode(),
-			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
-			twox_128(<ExistentialDeposit<T>>::key()).to_vec() => self.existential_deposit.encode(),
-			twox_128(<ReclaimRebate<T>>::key()).to_vec() => self.reclaim_rebate.encode(),
-			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
-			twox_128(<SessionReward<T>>::key()).to_vec() => self.session_reward.encode(),
-			twox_128(<EarlyEraSlash<T>>::key()).to_vec() => self.early_era_slash.encode(),
-			twox_128(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
+			Self::hash(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
+			Self::hash(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
+			Self::hash(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
+			Self::hash(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
+			Self::hash(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
+			Self::hash(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
+			Self::hash(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
+			Self::hash(<TransferFee<T>>::key()).to_vec() => self.transfer_fee.encode(),
+			Self::hash(<CreationFee<T>>::key()).to_vec() => self.creation_fee.encode(),
+			Self::hash(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
+			Self::hash(<ExistentialDeposit<T>>::key()).to_vec() => self.existential_deposit.encode(),
+			Self::hash(<ReclaimRebate<T>>::key()).to_vec() => self.reclaim_rebate.encode(),
+			Self::hash(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
+			Self::hash(<SessionReward<T>>::key()).to_vec() => self.session_reward.encode(),
+			Self::hash(<EarlyEraSlash<T>>::key()).to_vec() => self.early_era_slash.encode(),
+			Self::hash(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
 		];
 
 		let ids: Vec<_> = self.balances.iter().map(|x| x.0.clone()).collect();
 		for i in 0..(ids.len() + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE {
-			r.insert(twox_128(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
+			r.insert(Self::hash(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
 				ids[i * ENUM_SET_SIZE..ids.len().min((i + 1) * ENUM_SET_SIZE)].to_owned().encode());
 		}
 		for (who, value) in self.balances.into_iter() {
-			r.insert(twox_128(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
+			r.insert(Self::hash(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
 		}
 		Ok(r)
 	}
