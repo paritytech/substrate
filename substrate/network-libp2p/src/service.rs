@@ -15,8 +15,8 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
 use bytes::Bytes;
-use network::{Error, ErrorKind, NetworkConfiguration, NetworkProtocolHandler};
-use network::{NonReservedPeerMode, NetworkContext, PeerId, ProtocolId};
+use {Error, ErrorKind, NetworkConfiguration, NetworkProtocolHandler};
+use {NonReservedPeerMode, NetworkContext, PeerId, ProtocolId};
 use parking_lot::{Mutex, RwLock};
 use libp2p;
 use libp2p::multiaddr::{AddrComponent, Multiaddr};
@@ -29,7 +29,7 @@ use libp2p::core::{upgrade, Transport, MuxedTransport, ConnectionUpgrade};
 use libp2p::core::{Endpoint, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::core::SwarmController;
 use libp2p::ping;
-use network::{PacketId, SessionInfo, ConnectionFilter, TimerToken};
+use {PacketId, SessionInfo, ConnectionFilter, TimerToken};
 use rand;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::iter;

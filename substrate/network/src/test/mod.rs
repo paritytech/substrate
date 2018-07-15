@@ -28,7 +28,7 @@ use io::SyncIo;
 use protocol::{Context, Protocol};
 use config::ProtocolConfig;
 use service::TransactionPool;
-use network::{PeerId, SessionInfo, Error as NetworkError};
+use network_libp2p::{PeerId, SessionInfo, Error as NetworkError};
 use keyring::Keyring;
 use codec::Slicable;
 use test_client::{self, TestClient};
