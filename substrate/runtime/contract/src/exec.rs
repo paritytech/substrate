@@ -57,9 +57,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 	) -> Result<vm::ExecutionResult, &'static str> {
 		let dest_code = <CodeOf<T>>::get(&dest);
 
-		// TODO: transfer `_value` using `overlay`. Return an error if failed.
 		// TODO: check the new depth
-
 		// TODO: Charge here the base price for call
 
 		let (exec_result, change_set) = {
@@ -103,9 +101,6 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		_data: &[u8],
 	) -> Result<CreateReceipt<T>, ()> {
 		let dest = T::DetermineContractAddress2::contract_address_for(ctor, &self.self_account);
-
-		// TODO: staking::effect_create with endownment at the specified address with the specified
-		// endownment.
 
 		// TODO: What if the address already exists?
 		// TODO: check the new depth
