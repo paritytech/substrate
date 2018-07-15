@@ -94,7 +94,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 /// Staging testnet config.
 pub fn staging_testnet_config() -> ChainSpec<GenesisConfig> {
 	let boot_nodes = vec![];
-	ChainSpec::from_genesis("Staging Testnet", staging_testnet_config_genesis, boot_nodes)
+	ChainSpec::from_genesis("Staging Testnet", "staging_testnet", staging_testnet_config_genesis, boot_nodes)
 }
 
 fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
@@ -169,7 +169,7 @@ fn development_config_genesis() -> GenesisConfig {
 
 /// Development config (single validator Alice)
 pub fn development_config() -> ChainSpec<GenesisConfig> {
-	ChainSpec::from_genesis("Development", development_config_genesis, vec![])
+	ChainSpec::from_genesis("Development", "development", development_config_genesis, vec![])
 }
 
 fn local_testnet_genesis() -> GenesisConfig {
@@ -181,5 +181,5 @@ fn local_testnet_genesis() -> GenesisConfig {
 
 /// Local testnet config (multivalidator Alice + Bob)
 pub fn local_testnet_config() -> ChainSpec<GenesisConfig> {
-	ChainSpec::from_genesis("Local Testnet", local_testnet_genesis, vec![])
+	ChainSpec::from_genesis("Local Testnet", "local_testnet", local_testnet_genesis, vec![])
 }
