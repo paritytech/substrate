@@ -39,14 +39,14 @@ macro_rules! impl_rest {
 			}
 		}
 
-		impl ::codec::IntoSlicable for $name {
+		impl ::codec::Encode for $name {
 			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 				self.0.using_encoded(f)
 			}
 		}
-		impl ::codec::FromSlicable for $name {
+		impl ::codec::Decode for $name {
 			fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-				<[u8; $len] as ::codec::FromSlicable>::decode(input).map($name)
+				<[u8; $len] as ::codec::Decode>::decode(input).map($name)
 			}
 		}
 	}

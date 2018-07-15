@@ -42,7 +42,7 @@ use primitives::bytes;
 use rstd::prelude::*;
 use runtime_primitives::traits::BlakeTwo256;
 use runtime_primitives::generic;
-use codec::{IntoSlicable, FromSlicable, Input, Output};
+use codec::{Encode, Decode, Input, Output};
 
 pub mod parachain;
 
@@ -109,13 +109,13 @@ pub type BlockId = generic::BlockId<Block>;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-impl FromSlicable for Log {
+impl Decode for Log {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Vec::<u8>::decode(input).map(Log)
 	}
 }
 
-impl IntoSlicable for Log {
+impl Encode for Log {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		self.0.encode_to(dest)
 	}

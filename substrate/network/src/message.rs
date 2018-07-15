@@ -166,7 +166,7 @@ pub struct RemoteCallResponse {
 /// Generic types.
 pub mod generic {
 	use primitives::AuthorityId;
-	use codec::{Slicable, FromSlicable, IntoSlicable};
+	use codec::{Slicable, Decode, Encode};
 	use runtime_primitives::bft::Justification;
 	use ed25519;
 	use primitives::Signature;
@@ -198,7 +198,7 @@ pub mod generic {
 				Body::V1(e) => {
 					e.into_iter().filter_map(|bytes| {
 						let bytes = bytes.0.encode();
-						FromSlicable::decode(&mut bytes.as_slice())
+						Decode::decode(&mut bytes.as_slice())
 					}).collect()
 				}
 			}

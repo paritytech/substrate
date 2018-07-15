@@ -17,7 +17,7 @@
 //! Voting thresholds.
 
 use primitives::traits::{Zero, IntegerSquareRoot};
-use codec::{FromSlicable, IntoSlicable, Input};
+use codec::{Decode, Encode, Input};
 use rstd::ops::{Add, Mul, Div, Rem};
 
 /// A means of determining if a vote is past pass threshold.
@@ -32,7 +32,7 @@ pub enum VoteThreshold {
 	SimpleMajority,
 }
 
-impl FromSlicable for VoteThreshold {
+impl Decode for VoteThreshold {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		input.read_byte().and_then(|v| match v {
 			0 => Some(VoteThreshold::SuperMajorityApprove),
@@ -43,7 +43,7 @@ impl FromSlicable for VoteThreshold {
 	}
 }
 
-impl IntoSlicable for VoteThreshold {
+impl Encode for VoteThreshold {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[match *self {
 			VoteThreshold::SuperMajorityApprove => 0u8,

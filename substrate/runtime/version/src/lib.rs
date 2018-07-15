@@ -35,9 +35,9 @@ extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 
 use rstd::prelude::*;
-use codec::{IntoSlicable, Output};
+use codec::{Encode, Output};
 #[cfg(feature = "std")]
-use codec::{FromSlicable, Input};
+use codec::{Decode, Input};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 
@@ -136,7 +136,7 @@ impl RuntimeVersion {
 	}
 }
 
-impl IntoSlicable for RuntimeVersion {
+impl Encode for RuntimeVersion {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		self.spec_name.as_bytes().encode_to(dest);
 		self.impl_name.as_bytes().encode_to(dest);
@@ -147,14 +147,14 @@ impl IntoSlicable for RuntimeVersion {
 }
 
 #[cfg(feature = "std")]
-impl FromSlicable for RuntimeVersion {
+impl Decode for RuntimeVersion {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		Some(RuntimeVersion {
 			spec_name: Cow::Owned(String::from_utf8_lossy(&Vec::decode(value)?).into()),
 			impl_name: Cow::Owned(String::from_utf8_lossy(&Vec::decode(value)?).into()),
-			authoring_version: FromSlicable::decode(value)?,
-			spec_version: FromSlicable::decode(value)?,
-			impl_version: FromSlicable::decode(value)?,
+			authoring_version: Decode::decode(value)?,
+			spec_version: Decode::decode(value)?,
+			impl_version: Decode::decode(value)?,
 		})
 	}
 }

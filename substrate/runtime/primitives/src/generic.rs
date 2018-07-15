@@ -23,7 +23,7 @@ use std::fmt;
 use serde::{Deserialize, Deserializer};
 
 use rstd::prelude::*;
-use codec::{FromSlicable, IntoSlicable, Slicable, Input, Output};
+use codec::{Decode, Encode, Slicable, Input, Output};
 use runtime_support::AuxDispatchable;
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Block as BlockT,
 	Header as HeaderT, Hash as HashT};
@@ -42,24 +42,24 @@ pub struct Extrinsic<Address, Index, Call> {
 	pub function: Call,
 }
 
-impl<Address, Index, Call> FromSlicable for Extrinsic<Address, Index, Call> where
-	Address: FromSlicable,
-	Index: FromSlicable,
-	Call: FromSlicable,
+impl<Address, Index, Call> Decode for Extrinsic<Address, Index, Call> where
+	Address: Decode,
+	Index: Decode,
+	Call: Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Extrinsic {
-			signed: FromSlicable::decode(input)?,
-			index: FromSlicable::decode(input)?,
-			function: FromSlicable::decode(input)?,
+			signed: Decode::decode(input)?,
+			index: Decode::decode(input)?,
+			function: Decode::decode(input)?,
 		})
 	}
 }
 
-impl<Address, Index, Call> IntoSlicable for Extrinsic<Address, Index, Call> where
-	Address: IntoSlicable,
-	Index: IntoSlicable,
-	Call: IntoSlicable,
+impl<Address, Index, Call> Encode for Extrinsic<Address, Index, Call> where
+	Address: Encode,
+	Index: Encode,
+	Call: Encode,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.signed);
@@ -135,27 +135,27 @@ where
 	}
 }
 
-impl<Address, Index, Call, Signature> FromSlicable for UncheckedExtrinsic<Address, Index, Call, Signature> where
-	Signature: FromSlicable,
-	Extrinsic<Address, Index, Call>: FromSlicable,
+impl<Address, Index, Call, Signature> Decode for UncheckedExtrinsic<Address, Index, Call, Signature> where
+	Signature: Decode,
+	Extrinsic<Address, Index, Call>: Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
 		// will be a prefix of u32, which has the total number of bytes following (we don't need
 		// to use this).
-		let _length_do_not_remove_me_see_above: u32 = FromSlicable::decode(input)?;
+		let _length_do_not_remove_me_see_above: u32 = Decode::decode(input)?;
 
 		Some(UncheckedExtrinsic::new(
-			FromSlicable::decode(input)?,
-			FromSlicable::decode(input)?
+			Decode::decode(input)?,
+			Decode::decode(input)?
 		))
 	}
 }
 
-impl<Address, Index, Call, Signature> IntoSlicable for UncheckedExtrinsic<Address, Index, Call, Signature> where
-	Signature: IntoSlicable,
-	Extrinsic<Address, Index, Call>: IntoSlicable,
+impl<Address, Index, Call, Signature> Encode for UncheckedExtrinsic<Address, Index, Call, Signature> where
+	Signature: Encode,
+	Extrinsic<Address, Index, Call>: Encode,
 {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
@@ -236,13 +236,13 @@ pub struct Digest<Item> {
 	pub logs: Vec<Item>,
 }
 
-impl<Item: FromSlicable> FromSlicable for Digest<Item> {
+impl<Item: Decode> Decode for Digest<Item> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Digest { logs: FromSlicable::decode(input)? })
+		Some(Digest { logs: Decode::decode(input)? })
 	}
 }
 
-impl<Item: IntoSlicable> IntoSlicable for Digest<Item> {
+impl<Item: Encode> Encode for Digest<Item> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		self.logs.encode_to(dest)
 	}
@@ -315,28 +315,28 @@ impl<'a, Number: 'a, Hash: 'a + HashT, DigestItem: 'a> Deserialize<'a> for Heade
 	}
 }
 
-impl<Number, Hash, DigestItem> FromSlicable for Header<Number, Hash, DigestItem> where
-	Number: FromSlicable,
+impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
+	Number: Decode,
 	Hash: HashT,
-	Hash::Output: FromSlicable,
-	DigestItem: FromSlicable,
+	Hash::Output: Decode,
+	DigestItem: Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
-			parent_hash: FromSlicable::decode(input)?,
-			number: FromSlicable::decode(input)?,
-			state_root: FromSlicable::decode(input)?,
-			extrinsics_root: FromSlicable::decode(input)?,
-			digest: FromSlicable::decode(input)?,
+			parent_hash: Decode::decode(input)?,
+			number: Decode::decode(input)?,
+			state_root: Decode::decode(input)?,
+			extrinsics_root: Decode::decode(input)?,
+			digest: Decode::decode(input)?,
 		})
 	}
 }
 
-impl<Number, Hash, DigestItem> IntoSlicable for Header<Number, Hash, DigestItem> where
-	Number: IntoSlicable,
+impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
+	Number: Encode,
 	Hash: HashT,
-	Hash::Output: IntoSlicable,
-	DigestItem: IntoSlicable,
+	Hash::Output: Encode,
+	DigestItem: Encode,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent_hash);
@@ -444,16 +444,16 @@ pub struct Block<Header, Extrinsic> {
 	pub extrinsics: Vec<Extrinsic>,
 }
 
-impl<Header: FromSlicable, Extrinsic: FromSlicable> FromSlicable for Block<Header, Extrinsic> {
+impl<Header: Decode, Extrinsic: Decode> Decode for Block<Header, Extrinsic> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
-			header: FromSlicable::decode(input)?,
-			extrinsics: FromSlicable::decode(input)?,
+			header: Decode::decode(input)?,
+			extrinsics: Decode::decode(input)?,
 		})
 	}
 }
 
-impl<Header: IntoSlicable, Extrinsic: IntoSlicable> IntoSlicable for Block<Header, Extrinsic> {
+impl<Header: Encode, Extrinsic: Encode> Encode for Block<Header, Extrinsic> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.header);
 		dest.push(&self.extrinsics);
@@ -495,16 +495,16 @@ pub struct SignedBlock<Header, Extrinsic, Hash> {
 	pub justification: Justification<Hash>,
 }
 
-impl<Header: FromSlicable, Extrinsic: FromSlicable, Hash: FromSlicable> FromSlicable for SignedBlock<Header, Extrinsic, Hash> {
+impl<Header: Decode, Extrinsic: Decode, Hash: Decode> Decode for SignedBlock<Header, Extrinsic, Hash> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(SignedBlock {
-			block: FromSlicable::decode(input)?,
-			justification: FromSlicable::decode(input)?,
+			block: Decode::decode(input)?,
+			justification: Decode::decode(input)?,
 		})
 	}
 }
 
-impl<Header: IntoSlicable, Extrinsic: IntoSlicable, Hash: IntoSlicable> IntoSlicable for SignedBlock<Header, Extrinsic, Hash> {
+impl<Header: Encode, Extrinsic: Encode, Hash: Encode> Encode for SignedBlock<Header, Extrinsic, Hash> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.block);
 		dest.push(&self.justification);
@@ -513,7 +513,7 @@ impl<Header: IntoSlicable, Extrinsic: IntoSlicable, Hash: IntoSlicable> IntoSlic
 
 #[cfg(test)]
 mod tests {
-	use codec::{FromSlicable, IntoSlicable};
+	use codec::{Decode, Encode};
 	use substrate_primitives::{H256, H512};
 	use super::{Digest, Header, UncheckedExtrinsic, Extrinsic};
 

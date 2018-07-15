@@ -47,7 +47,7 @@ mod collator_pool;
 mod router;
 pub mod consensus;
 
-use codec::{FromSlicable, IntoSlicable};
+use codec::{Decode, Encode};
 use futures::sync::oneshot;
 use parking_lot::Mutex;
 use polkadot_consensus::{Statement, SignedStatement, GenericStatement};
@@ -81,7 +81,7 @@ pub struct Status {
 	collating_for: Option<(AccountId, ParaId)>,
 }
 
-impl IntoSlicable for Status {
+impl Encode for Status {
 	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
 		match self.collating_for {
 			Some(ref details) => {
@@ -95,11 +95,11 @@ impl IntoSlicable for Status {
 	}
 }
 
-impl FromSlicable for Status {
+impl Decode for Status {
 	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
 		let collating_for = match input.read_byte()? {
 			0 => None,
-			1 => Some(FromSlicable::decode(input)?),
+			1 => Some(Decode::decode(input)?),
 			_ => return None,
 		};
 		Some(Status { collating_for })

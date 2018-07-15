@@ -31,7 +31,7 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::hash::Hash;
 use std::fmt::Debug;
 
-use codec::{FromSlicable, IntoSlicable, Input, Output};
+use codec::{Decode, Encode, Input, Output};
 
 /// Context for the statement table.
 pub trait Context {
@@ -97,7 +97,7 @@ enum StatementKind {
 	Available = 4,
 }
 
-impl<C: IntoSlicable, D: IntoSlicable> IntoSlicable for Statement<C, D> {
+impl<C: Encode, D: Encode> Encode for Statement<C, D> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			Statement::Candidate(ref candidate) => {
@@ -120,20 +120,20 @@ impl<C: IntoSlicable, D: IntoSlicable> IntoSlicable for Statement<C, D> {
 	}
 }
 
-impl<C: FromSlicable, D: FromSlicable> FromSlicable for Statement<C, D> {
+impl<C: Decode, D: Decode> Decode for Statement<C, D> {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match value.read_byte() {
 			Some(x) if x == StatementKind::Candidate as u8 => {
-				FromSlicable::decode(value).map(Statement::Candidate)
+				Decode::decode(value).map(Statement::Candidate)
 			}
 			Some(x) if x == StatementKind::Valid as u8 => {
-				FromSlicable::decode(value).map(Statement::Valid)
+				Decode::decode(value).map(Statement::Valid)
 			}
 			Some(x) if x == StatementKind::Invalid as u8 => {
-				FromSlicable::decode(value).map(Statement::Invalid)
+				Decode::decode(value).map(Statement::Invalid)
 			}
 			Some(x) if x == StatementKind::Available as u8 => {
-				FromSlicable::decode(value).map(Statement::Available)
+				Decode::decode(value).map(Statement::Available)
 			}
 			_ => None,
 		}

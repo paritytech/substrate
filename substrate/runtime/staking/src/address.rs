@@ -18,7 +18,7 @@
 
 #[cfg(feature = "std")]
 use std::fmt;
-use super::{Member, FromSlicable, IntoSlicable, As, Input, Output};
+use super::{Member, Decode, Encode, As, Input, Output};
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
@@ -58,25 +58,25 @@ fn need_more_than<T: PartialOrd>(a: T, b: T) -> Option<T> {
 	if a < b { Some(a) } else { None }
 }
 
-impl<AccountId, AccountIndex> FromSlicable for Address<AccountId, AccountIndex> where
-	AccountId: Member + FromSlicable,
-	AccountIndex: Member + FromSlicable + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
+	AccountId: Member + Decode,
+	AccountIndex: Member + Decode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(match input.read_byte()? {
 			x @ 0x00...0xef => Address::Index(As::sa(x)),
 			0xfc => Address::Index(As::sa(need_more_than(0xef, u16::decode(input)?)?)),
 			0xfd => Address::Index(As::sa(need_more_than(0xffff, u32::decode(input)?)?)),
-			0xfe => Address::Index(need_more_than(As::sa(0xffffffffu32), FromSlicable::decode(input)?)?),
-			0xff => Address::Id(FromSlicable::decode(input)?),
+			0xfe => Address::Index(need_more_than(As::sa(0xffffffffu32), Decode::decode(input)?)?),
+			0xff => Address::Id(Decode::decode(input)?),
 			_ => return None,
 		})
 	}
 }
 
-impl<AccountId, AccountIndex> IntoSlicable for Address<AccountId, AccountIndex> where
-	AccountId: Member + IntoSlicable,
-	AccountIndex: Member + IntoSlicable + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
+	AccountId: Member + Encode,
+	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {

@@ -51,7 +51,7 @@ extern crate substrate_runtime_version as runtime_version;
 pub mod system;
 
 use rstd::prelude::*;
-use codec::{IntoSlicable, FromSlicable};
+use codec::{Encode, Decode};
 
 use runtime_primitives::traits::{BlindCheckable, BlakeTwo256};
 use runtime_primitives::Ed25519Signature;
@@ -81,7 +81,7 @@ pub struct Transfer {
 	pub nonce: u64,
 }
 
-impl IntoSlicable for Transfer {
+impl Encode for Transfer {
 	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
 		self.from.encode_to(dest);
 		self.to.encode_to(dest);
@@ -90,9 +90,9 @@ impl IntoSlicable for Transfer {
 	}
 }
 
-impl FromSlicable for Transfer {
+impl Decode for Transfer {
 	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		FromSlicable::decode(input).map(|(from, to, amount, nonce)| Transfer { from, to, amount, nonce })
+		Decode::decode(input).map(|(from, to, amount, nonce)| Transfer { from, to, amount, nonce })
 	}
 }
 
@@ -104,16 +104,16 @@ pub struct Extrinsic {
 	pub signature: Ed25519Signature,
 }
 
-impl IntoSlicable for Extrinsic {
+impl Encode for Extrinsic {
 	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
 		self.transfer.encode_to(dest);
 		self.signature.encode_to(dest);
 	}
 }
 
-impl FromSlicable for Extrinsic {
+impl Decode for Extrinsic {
 	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		FromSlicable::decode(input).map(|(transfer, signature)| Extrinsic { transfer, signature })
+		Decode::decode(input).map(|(transfer, signature)| Extrinsic { transfer, signature })
 	}
 }
 
@@ -151,7 +151,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
 	print("deserialised block.");
-	let stxs = block.extrinsics.iter().map(IntoSlicable::encode).collect::<Vec<_>>();
+	let stxs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	print("reserialised transactions.");
 	[stxs.len() as u8].encode()
 }

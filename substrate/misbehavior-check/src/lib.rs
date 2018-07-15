@@ -30,7 +30,7 @@ extern crate substrate_keyring as keyring;
 #[cfg(test)]
 extern crate rhododendron;
 
-use codec::{Slicable, IntoSlicable};
+use codec::{Slicable, Encode};
 use primitives::{AuthorityId, Signature};
 
 use runtime_primitives::bft::{Action, Message, MisbehaviorKind};

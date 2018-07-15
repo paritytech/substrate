@@ -20,7 +20,7 @@ extern crate polkadot_parachain as parachain;
 extern crate tiny_keccak;
 
 use parachain::ValidationParams;
-use parachain::codec::{FromSlicable, IntoSlicable, Input, Output};
+use parachain::codec::{Decode, Encode, Input, Output};
 
 // Head data for this parachain.
 #[derive(Default, Clone)]
@@ -33,7 +33,7 @@ struct HeadData {
 	post_state: [u8; 32],
 }
 
-impl IntoSlicable for HeadData {
+impl Encode for HeadData {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.number);
 		dest.push(&self.parent_hash);
@@ -41,12 +41,12 @@ impl IntoSlicable for HeadData {
 	}
 }
 
-impl FromSlicable for HeadData {
+impl Decode for HeadData {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(HeadData {
-			number: FromSlicable::decode(input)?,
-			parent_hash: FromSlicable::decode(input)?,
-			post_state: FromSlicable::decode(input)?,
+			number: Decode::decode(input)?,
+			parent_hash: Decode::decode(input)?,
+			post_state: Decode::decode(input)?,
 		})
 	}
 }
@@ -60,18 +60,18 @@ struct BlockData {
 	add: u64,
 }
 
-impl IntoSlicable for BlockData {
+impl Encode for BlockData {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.state);
 		dest.push(&self.add);
 	}
 }
 
-impl FromSlicable for BlockData {
+impl Decode for BlockData {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(BlockData {
-			state: FromSlicable::decode(input)?,
-			add: FromSlicable::decode(input)?,
+			state: Decode::decode(input)?,
+			add: Decode::decode(input)?,
 		})
 	}
 }

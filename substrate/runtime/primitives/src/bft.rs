@@ -17,7 +17,7 @@
 //! Message formats for the BFT consensus layer.
 
 use rstd::prelude::*;
-use codec::{FromSlicable, IntoSlicable, Input, Output};
+use codec::{Decode, Encode, Input, Output};
 use substrate_primitives::{AuthorityId, Signature};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -51,7 +51,7 @@ pub enum Action<Block, H> {
 	AdvanceRound(u32),
 }
 
-impl<Block: IntoSlicable, Hash: IntoSlicable> IntoSlicable for Action<Block, Hash> {
+impl<Block: Encode, Hash: Encode> Encode for Action<Block, Hash> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			Action::Propose(ref round, ref block) => {
@@ -82,27 +82,27 @@ impl<Block: IntoSlicable, Hash: IntoSlicable> IntoSlicable for Action<Block, Has
 	}
 }
 
-impl<Block: FromSlicable, Hash: FromSlicable> FromSlicable for Action<Block, Hash> {
+impl<Block: Decode, Hash: Decode> Decode for Action<Block, Hash> {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match i8::decode(value) {
 			Some(x) if x == ActionKind::Propose as i8 => {
-				let (round, block) = FromSlicable::decode(value)?;
+				let (round, block) = Decode::decode(value)?;
 				Some(Action::Propose(round, block))
 			}
 			Some(x) if x == ActionKind::ProposeHeader as i8 => {
-				let (round, hash) = FromSlicable::decode(value)?;
+				let (round, hash) = Decode::decode(value)?;
 				Some(Action::ProposeHeader(round, hash))
 			}
 			Some(x) if x == ActionKind::Prepare as i8 => {
-				let (round, hash) = FromSlicable::decode(value)?;
+				let (round, hash) = Decode::decode(value)?;
 				Some(Action::Prepare(round, hash))
 			}
 			Some(x) if x == ActionKind::Commit as i8 => {
-				let (round, hash) = FromSlicable::decode(value)?;
+				let (round, hash) = Decode::decode(value)?;
 				Some(Action::Commit(round, hash))
 			}
 			Some(x) if x == ActionKind::AdvanceRound as i8 => {
-				FromSlicable::decode(value).map(Action::AdvanceRound)
+				Decode::decode(value).map(Action::AdvanceRound)
 			}
 			_ => None,
 		}
@@ -122,18 +122,18 @@ pub struct Message<Block, Hash> {
 	pub action: Action<Block, Hash>,
 }
 
-impl<Block: IntoSlicable, Hash: IntoSlicable> IntoSlicable for Message<Block, Hash> {
+impl<Block: Encode, Hash: Encode> Encode for Message<Block, Hash> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent);
 		dest.push(&self.action);
 	}
 }
 
-impl<Block: FromSlicable, Hash: FromSlicable> FromSlicable for Message<Block, Hash> {
+impl<Block: Decode, Hash: Decode> Decode for Message<Block, Hash> {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		Some(Message {
-			parent: FromSlicable::decode(value)?,
-			action: FromSlicable::decode(value)?,
+			parent: Decode::decode(value)?,
+			action: Decode::decode(value)?,
 		})
 	}
 }
@@ -150,7 +150,7 @@ pub struct Justification<H> {
 	pub signatures: Vec<(AuthorityId, Signature)>
 }
 
-impl<H: IntoSlicable> IntoSlicable for Justification<H> {
+impl<H: Encode> Encode for Justification<H> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.round_number);
 		dest.push(&self.hash);
@@ -158,12 +158,12 @@ impl<H: IntoSlicable> IntoSlicable for Justification<H> {
 	}
 }
 
-impl<H: FromSlicable> FromSlicable for Justification<H> {
+impl<H: Decode> Decode for Justification<H> {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		Some(Justification {
-			round_number: FromSlicable::decode(value)?,
-			hash: FromSlicable::decode(value)?,
-			signatures: FromSlicable::decode(value)?,
+			round_number: Decode::decode(value)?,
+			hash: Decode::decode(value)?,
+			signatures: Decode::decode(value)?,
 		})
 	}
 }
@@ -211,7 +211,7 @@ pub struct MisbehaviorReport<Hash, Number> {
 	pub misbehavior: MisbehaviorKind<Hash>,
 }
 
-impl<Hash: IntoSlicable, Number: IntoSlicable> IntoSlicable for MisbehaviorReport<Hash, Number> {
+impl<Hash: Encode, Number: Encode> Encode for MisbehaviorReport<Hash, Number> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent_hash);
 		dest.push(&self.parent_number);
@@ -238,7 +238,7 @@ impl<Hash: IntoSlicable, Number: IntoSlicable> IntoSlicable for MisbehaviorRepor
 	}
 }
 
-impl<Hash: FromSlicable, Number: FromSlicable> FromSlicable for MisbehaviorReport<Hash, Number> {
+impl<Hash: Decode, Number: Decode> Decode for MisbehaviorReport<Hash, Number> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let parent_hash = Hash::decode(input)?;
 		let parent_number = Number::decode(input)?;

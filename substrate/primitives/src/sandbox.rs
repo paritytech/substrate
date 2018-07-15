@@ -16,14 +16,14 @@
 
 //! Definition of a sandbox environment.
 
-use codec::{IntoSlicable, FromSlicable, Input, Output};
+use codec::{Encode, Decode, Input, Output};
 use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct HostError;
 
-impl IntoSlicable for HostError {
+impl Encode for HostError {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[])
 	}
@@ -33,7 +33,7 @@ impl IntoSlicable for HostError {
 	}
 }
 
-impl FromSlicable for HostError {
+impl Decode for HostError {
 	fn decode<I: Input>(_: &mut I) -> Option<Self> {
 		Some(HostError)
 	}
@@ -103,7 +103,7 @@ impl From<TypedValue> for ::wasmi::RuntimeValue {
 	}
 }
 
-impl IntoSlicable for TypedValue {
+impl Encode for TypedValue {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			TypedValue::I32(i) => {
@@ -126,7 +126,7 @@ impl IntoSlicable for TypedValue {
 	}
 }
 
-impl FromSlicable for TypedValue {
+impl Decode for TypedValue {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		let typed_value = match i8::decode(value) {
 			Some(x) if x == ValueType::I32 as i8 => TypedValue::I32(i32::decode(value)?),
@@ -158,7 +158,7 @@ impl From<TypedValue> for ReturnValue {
 	}
 }
 
-impl IntoSlicable for ReturnValue {
+impl Encode for ReturnValue {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			ReturnValue::Unit => {
@@ -172,7 +172,7 @@ impl IntoSlicable for ReturnValue {
 	}
 }
 
-impl FromSlicable for ReturnValue {
+impl Decode for ReturnValue {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match i8::decode(value) {
 			Some(0) => Some(ReturnValue::Unit),
@@ -220,7 +220,7 @@ pub enum ExternEntity {
 	Memory(u32),
 }
 
-impl IntoSlicable for ExternEntity {
+impl Encode for ExternEntity {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			ExternEntity::Function(ref index) => {
@@ -235,7 +235,7 @@ impl IntoSlicable for ExternEntity {
 	}
 }
 
-impl FromSlicable for ExternEntity {
+impl Decode for ExternEntity {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match i8::decode(value) {
 			Some(x) if x == ExternEntityKind::Function as i8 => {
@@ -266,7 +266,7 @@ pub struct Entry {
 	pub entity: ExternEntity,
 }
 
-impl IntoSlicable for Entry {
+impl Encode for Entry {
 	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
 		dest.push(&self.module_name);
 		dest.push(&self.field_name);
@@ -274,7 +274,7 @@ impl IntoSlicable for Entry {
 	}
 }
 
-impl FromSlicable for Entry {
+impl Decode for Entry {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		let module_name = Vec::decode(value)?;
 		let field_name = Vec::decode(value)?;
@@ -296,13 +296,13 @@ pub struct EnvironmentDefinition {
 	pub entries: Vec<Entry>,
 }
 
-impl IntoSlicable for EnvironmentDefinition {
+impl Encode for EnvironmentDefinition {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		self.entries.encode_to(dest)
 	}
 }
 
-impl FromSlicable for EnvironmentDefinition {
+impl Decode for EnvironmentDefinition {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		let entries = Vec::decode(value)?;
 

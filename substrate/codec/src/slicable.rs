@@ -62,7 +62,7 @@ pub trait Output: Sized {
 		self.write(&[byte]);
 	}
 
-	fn push<V: IntoSlicable>(&mut self, value: &V) {
+	fn push<V: Encode>(&mut self, value: &V) {
 		value.encode_to(self);
 	}
 }
@@ -83,7 +83,7 @@ impl<W: ::std::io::Write> Output for W {
 
 /// Trait that allows zero-copy write of value-references to slices in LE format.
 /// Implementations should override `using_encoded` for value types and `encode_to` for allocating types.
-pub trait IntoSlicable {
+pub trait Encode {
 	/// Convert self to a slice and append it to the destination.
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		self.using_encoded(|buf| dest.write(buf));
@@ -103,16 +103,16 @@ pub trait IntoSlicable {
 }
 
 /// Trait that allows zero-copy read of value-references from slices in LE format.
-pub trait FromSlicable: Sized {
+pub trait Decode: Sized {
 	/// Attempt to deserialise the value from input.
 	fn decode<I: Input>(value: &mut I) -> Option<Self>;
 }
 
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
-pub trait Slicable: FromSlicable + IntoSlicable {}
-impl<S: FromSlicable + IntoSlicable> Slicable for S {}
+pub trait Slicable: Decode + Encode {}
+impl<S: Decode + Encode> Slicable for S {}
 
-impl<T: IntoSlicable, E: IntoSlicable> IntoSlicable for Result<T, E> {
+impl<T: Encode, E: Encode> Encode for Result<T, E> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		match *self {
 			Ok(ref t) => {
@@ -127,7 +127,7 @@ impl<T: IntoSlicable, E: IntoSlicable> IntoSlicable for Result<T, E> {
 	}
 }
 
-impl<T: FromSlicable, E: FromSlicable> FromSlicable for Result<T, E> {
+impl<T: Decode, E: Decode> Decode for Result<T, E> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			0 => Some(Ok(T::decode(input)?)),
@@ -140,7 +140,7 @@ impl<T: FromSlicable, E: FromSlicable> FromSlicable for Result<T, E> {
 /// Shim type because we can't do a specialised implementation for `Option<bool>` directly.
 pub struct OptionBool(pub Option<bool>);
 
-impl IntoSlicable for OptionBool {
+impl Encode for OptionBool {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[match *self {
 			OptionBool(None) => 0u8,
@@ -150,7 +150,7 @@ impl IntoSlicable for OptionBool {
 	}
 }
 
-impl FromSlicable for OptionBool {
+impl Decode for OptionBool {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			0 => Some(OptionBool(None)),
@@ -161,7 +161,7 @@ impl FromSlicable for OptionBool {
 	}
 }
 
-impl<T: IntoSlicable> IntoSlicable for Option<T> {
+impl<T: Encode> Encode for Option<T> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		match *self {
 			Some(ref t) => {
@@ -173,7 +173,7 @@ impl<T: IntoSlicable> IntoSlicable for Option<T> {
 	}
 }
 
-impl<T: FromSlicable> FromSlicable for Option<T> {
+impl<T: Decode> Decode for Option<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			0 => Some(None),
@@ -185,7 +185,7 @@ impl<T: FromSlicable> FromSlicable for Option<T> {
 
 macro_rules! impl_array {
 	( $( $n:expr )* ) => { $(
-		impl<T: IntoSlicable> IntoSlicable for [T; $n] {
+		impl<T: Encode> Encode for [T; $n] {
 			fn encode_to<W: Output>(&self, dest: &mut W) {
 				for item in self.iter() {
 					item.encode_to(dest);
@@ -193,7 +193,7 @@ macro_rules! impl_array {
 			}
 		}
 
-		impl<T: FromSlicable> FromSlicable for [T; $n] {
+		impl<T: Decode> Decode for [T; $n] {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
 				let mut r = ArrayVec::new();
 				for _ in 0..$n {
@@ -208,19 +208,19 @@ macro_rules! impl_array {
 impl_array!(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
 	40 48 56 64 72 96 128 160 192 224 256);
 
-impl<T: IntoSlicable> IntoSlicable for Box<T> {
+impl<T: Encode> Encode for Box<T> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		self.as_ref().encode_to(dest)
 	}
 }
 
-impl<T: FromSlicable> FromSlicable for Box<T> {
+impl<T: Decode> Decode for Box<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Box::new(T::decode(input)?))
 	}
 }
 
-impl IntoSlicable for [u8] {
+impl Encode for [u8] {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize a collection with too many elements.");
@@ -229,13 +229,13 @@ impl IntoSlicable for [u8] {
 	}
 }
 
-impl IntoSlicable for Vec<u8> {
+impl Encode for Vec<u8> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		self.as_slice().encode_to(dest)
 	}
 }
 
-impl FromSlicable for Vec<u8> {
+impl Decode for Vec<u8> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).and_then(move |len| {
 			let len = len as usize;
@@ -249,7 +249,7 @@ impl FromSlicable for Vec<u8> {
 	}
 }
 
-impl<T: IntoSlicable> IntoSlicable for [T] {
+impl<T: Encode> Encode for [T] {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		let len = self.len();
 		assert!(len <= u32::max_value() as usize, "Attempted to serialize a collection with too many elements.");
@@ -260,13 +260,13 @@ impl<T: IntoSlicable> IntoSlicable for [T] {
 	}
 }
 
-impl<T: IntoSlicable> IntoSlicable for Vec<T> {
+impl<T: Encode> Encode for Vec<T> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		self.as_slice().encode_to(dest)
 	}
 }
 
-impl<T: FromSlicable> FromSlicable for Vec<T> {
+impl<T: Decode> Decode for Vec<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).and_then(move |len| {
 			let mut r = Vec::with_capacity(len as usize);
@@ -278,7 +278,7 @@ impl<T: FromSlicable> FromSlicable for Vec<T> {
 	}
 }
 
-impl IntoSlicable for () {
+impl Encode for () {
 	fn encode_to<T: Output>(&self, _dest: &mut T) {
 	}
 
@@ -291,7 +291,7 @@ impl IntoSlicable for () {
 	}
 }
 
-impl FromSlicable for () {
+impl Decode for () {
 	fn decode<I: Input>(_: &mut I) -> Option<()> {
 		Some(())
 	}
@@ -299,13 +299,13 @@ impl FromSlicable for () {
 
 macro_rules! tuple_impl {
 	($one:ident,) => {
-		impl<$one: IntoSlicable> IntoSlicable for ($one,) {
+		impl<$one: Encode> Encode for ($one,) {
 			fn encode_to<T: Output>(&self, dest: &mut T) {
 				self.0.encode_to(dest);
 			}
 		}
 
-		impl<$one: FromSlicable> FromSlicable for ($one,) {
+		impl<$one: Decode> Decode for ($one,) {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
 				match $one::decode(input) {
 					None => None,
@@ -315,8 +315,8 @@ macro_rules! tuple_impl {
 		}
 	};
 	($first:ident, $($rest:ident,)+) => {
-		impl<$first: IntoSlicable, $($rest: IntoSlicable),+>
-		IntoSlicable for
+		impl<$first: Encode, $($rest: Encode),+>
+		Encode for
 		($first, $($rest),+) {
 			fn encode_to<T: Output>(&self, dest: &mut T) {
 				let (
@@ -329,8 +329,8 @@ macro_rules! tuple_impl {
 			}
 		}
 
-		impl<$first: FromSlicable, $($rest: FromSlicable),+>
-		FromSlicable for
+		impl<$first: Decode, $($rest: Decode),+>
+		Decode for
 		($first, $($rest),+) {
 			fn decode<INPUT: Input>(input: &mut INPUT) -> Option<Self> {
 				Some((
@@ -352,7 +352,7 @@ macro_rules! tuple_impl {
 
 #[allow(non_snake_case)]
 mod inner_tuple_impl {
-	use super::{Input, Output, FromSlicable, IntoSlicable};
+	use super::{Input, Output, Decode, Encode};
 	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 }
 
@@ -380,7 +380,7 @@ macro_rules! impl_endians {
 			fn as_le_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T { let d = self.to_le(); f(&d) }
 		}
 
-		impl IntoSlicable for $t {
+		impl Encode for $t {
 			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 				self.as_le_then(|le| {
 					let size = mem::size_of::<$t>();
@@ -398,7 +398,7 @@ macro_rules! impl_endians {
 			}
 		}
 
-		impl FromSlicable for $t {
+		impl Decode for $t {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
 				let size = mem::size_of::<$t>();
 				assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
@@ -420,7 +420,7 @@ macro_rules! impl_non_endians {
 	( $( $t:ty ),* ) => { $(
 		impl EndianSensitive for $t {}
 
-		impl IntoSlicable for $t {
+		impl Encode for $t {
 			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 				self.as_le_then(|le| {
 					let size = mem::size_of::<$t>();
@@ -438,7 +438,7 @@ macro_rules! impl_non_endians {
 			}
 		}
 
-		impl FromSlicable for $t {
+		impl Decode for $t {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
 				let size = mem::size_of::<$t>();
 				assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");

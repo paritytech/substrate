@@ -106,15 +106,15 @@ impl<'de> Deserialize<'de> for AuthorityId {
 	}
 }
 
-impl codec::IntoSlicable for AuthorityId {
+impl codec::Encode for AuthorityId {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.0.using_encoded(f)
 	}
 }
 
-impl codec::FromSlicable for AuthorityId {
+impl codec::Decode for AuthorityId {
 	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		<[u8; 32] as codec::FromSlicable>::decode(input).map(AuthorityId)
+		<[u8; 32] as codec::Decode>::decode(input).map(AuthorityId)
 	}
 }
 

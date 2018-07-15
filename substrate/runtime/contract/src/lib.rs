@@ -37,7 +37,7 @@ extern crate assert_matches;
 extern crate wabt;
 
 use rstd::prelude::*;
-use codec::{Slicable, FromSlicable};
+use codec::{Slicable, Decode};
 
 use parity_wasm::elements::{self, External, MemoryType};
 use pwasm_utils::rules;

@@ -30,7 +30,7 @@ use config::ProtocolConfig;
 use service::TransactionPool;
 use network::{PeerId, SessionInfo, Error as NetworkError};
 use keyring::Keyring;
-use codec::IntoSlicable;
+use codec::Encode;
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 use specialization::Specialization;

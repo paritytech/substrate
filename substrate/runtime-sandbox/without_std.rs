@@ -16,7 +16,7 @@
 
 use rstd::prelude::*;
 use rstd::{slice, marker, mem};
-use codec::{FromSlicable, IntoSlicable};
+use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
 use super::{Error, TypedValue, ReturnValue, HostFuncType};
 

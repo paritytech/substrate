@@ -18,7 +18,7 @@
 
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
-use codec::{FromSlicable, IntoSlicable, Slicable, Input, Output};
+use codec::{Decode, Encode, Slicable, Input, Output};
 use runtime_support::AuxDispatchable;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 
@@ -29,13 +29,13 @@ pub struct Digest {
 	pub logs: Vec<u64>,
 }
 
-impl FromSlicable for Digest {
+impl Decode for Digest {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Vec::<u64>::decode(input).map(|logs| Digest { logs })
 	}
 }
 
-impl IntoSlicable for Digest {
+impl Encode for Digest {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.logs.using_encoded(f)
 	}
@@ -59,19 +59,19 @@ pub struct Header {
 	pub digest: Digest,
 }
 
-impl FromSlicable for Header {
+impl Decode for Header {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
-			parent_hash: FromSlicable::decode(input)?,
-			number: FromSlicable::decode(input)?,
-			state_root: FromSlicable::decode(input)?,
-			extrinsics_root: FromSlicable::decode(input)?,
-			digest: FromSlicable::decode(input)?,
+			parent_hash: Decode::decode(input)?,
+			number: Decode::decode(input)?,
+			state_root: Decode::decode(input)?,
+			extrinsics_root: Decode::decode(input)?,
+			digest: Decode::decode(input)?,
 		})
 	}
 }
 
-impl IntoSlicable for Header {
+impl Encode for Header {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent_hash);
 		dest.push(&self.number);
@@ -120,15 +120,15 @@ pub struct Block<Xt> {
 	pub header: Header,
 	pub extrinsics: Vec<Xt>,
 }
-impl<Xt: FromSlicable> FromSlicable for Block<Xt> {
+impl<Xt: Decode> Decode for Block<Xt> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
-			header: FromSlicable::decode(input)?,
-			extrinsics: FromSlicable::decode(input)?,
+			header: Decode::decode(input)?,
+			extrinsics: Decode::decode(input)?,
 		})
 	}
 }
-impl<Xt: IntoSlicable> IntoSlicable for Block<Xt> {
+impl<Xt: Encode> Encode for Block<Xt> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.header);
 		dest.push(&self.extrinsics);
@@ -156,13 +156,13 @@ impl<Xt: 'static + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
 pub struct TestXt<Call>(pub (u64, u64, Call));
 
-impl<Call: FromSlicable> FromSlicable for TestXt<Call> {
+impl<Call: Decode> Decode for TestXt<Call> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(TestXt(FromSlicable::decode(input)?))
+		Some(TestXt(Decode::decode(input)?))
 	}
 }
 
-impl<Call: IntoSlicable> IntoSlicable for TestXt<Call> {
+impl<Call: Encode> Encode for TestXt<Call> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		self.0.encode_to(dest)
 	}

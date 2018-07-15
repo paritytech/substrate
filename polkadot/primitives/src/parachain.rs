@@ -16,7 +16,7 @@
 
 //! Polkadot parachain types.
 
-use codec::{IntoSlicable, FromSlicable, Input, Output};
+use codec::{Encode, Decode, Input, Output};
 use rstd::prelude::*;
 use rstd::cmp::Ordering;
 use super::Hash;
@@ -47,13 +47,13 @@ impl Id {
 	}
 }
 
-impl FromSlicable for Id {
+impl Decode for Id {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).map(Id)
 	}
 }
 
-impl IntoSlicable for Id {
+impl Encode for Id {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.0.using_encoded(f)
 	}
@@ -69,18 +69,18 @@ pub enum Chain {
 	Parachain(Id),
 }
 
-impl FromSlicable for Chain {
+impl Decode for Chain {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let disc = input.read_byte()?;
 		match disc {
 			0 => Some(Chain::Relay),
-			1 => Some(Chain::Parachain(FromSlicable::decode(input)?)),
+			1 => Some(Chain::Parachain(Decode::decode(input)?)),
 			_ => None,
 		}
 	}
 }
 
-impl IntoSlicable for Chain {
+impl Encode for Chain {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			Chain::Relay => { dest.push_byte(0); }
@@ -103,16 +103,16 @@ pub struct DutyRoster {
 	pub guarantor_duty: Vec<Chain>,
 }
 
-impl FromSlicable for DutyRoster {
+impl Decode for DutyRoster {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(DutyRoster {
-			validator_duty: FromSlicable::decode(input)?,
-			guarantor_duty: FromSlicable::decode(input)?,
+			validator_duty: Decode::decode(input)?,
+			guarantor_duty: Decode::decode(input)?,
 		})
 	}
 }
 
-impl IntoSlicable for DutyRoster {
+impl Encode for DutyRoster {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.validator_duty);
 		dest.push(&self.guarantor_duty);
@@ -150,7 +150,7 @@ pub struct CandidateReceipt {
 	pub block_data_hash: Hash,
 }
 
-impl IntoSlicable for CandidateReceipt {
+impl Encode for CandidateReceipt {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parachain_index);
 		dest.push(&self.collator);
@@ -163,17 +163,17 @@ impl IntoSlicable for CandidateReceipt {
 	}
 }
 
-impl FromSlicable for CandidateReceipt {
+impl Decode for CandidateReceipt {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(CandidateReceipt {
-			parachain_index: FromSlicable::decode(input)?,
-			collator: FromSlicable::decode(input)?,
-			signature: FromSlicable::decode(input)?,
-			head_data: FromSlicable::decode(input).map(HeadData)?,
-			balance_uploads: FromSlicable::decode(input)?,
-			egress_queue_roots: FromSlicable::decode(input)?,
-			fees: FromSlicable::decode(input)?,
-			block_data_hash: FromSlicable::decode(input)?,
+			parachain_index: Decode::decode(input)?,
+			collator: Decode::decode(input)?,
+			signature: Decode::decode(input)?,
+			head_data: Decode::decode(input).map(HeadData)?,
+			balance_uploads: Decode::decode(input)?,
+			egress_queue_roots: Decode::decode(input)?,
+			fees: Decode::decode(input)?,
+			block_data_hash: Decode::decode(input)?,
 		})
 	}
 }
@@ -273,13 +273,13 @@ pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with="bytes"))] pub 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Activity(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-impl FromSlicable for Activity {
+impl Decode for Activity {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Vec::<u8>::decode(input).map(Activity)
 	}
 }
 
-impl IntoSlicable for Activity {
+impl Encode for Activity {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		self.0.encode_to(dest)
 	}

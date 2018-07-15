@@ -22,7 +22,7 @@ use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 use substrate_primitives;
-use codec::{Slicable, IntoSlicable};
+use codec::{Slicable, Encode};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
@@ -195,7 +195,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 
 	/// Produce the hash of some codec-encodable value.
 	fn hash_of<S: Slicable>(s: &S) -> Self::Output {
-		IntoSlicable::using_encoded(s, Self::hash)
+		Encode::using_encoded(s, Self::hash)
 	}
 
 	/// Produce the patricia-trie root of a mapping from indices to byte slices.
