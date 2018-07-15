@@ -503,7 +503,7 @@ impl WasmExecutor {
 			.clone();
 		let table: Option<TableRef> = intermediate_instance
 			.not_started_instance()
-			.export_by_name("table")
+			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
 		let mut fec = FunctionExecutor::new(memory.clone(), self.heap_pages, table, ext)?;
 
