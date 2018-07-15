@@ -81,7 +81,8 @@ impl<W: ::std::io::Write> Output for W {
 	}
 }
 
-/// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
+/// Trait that allows zero-copy write of value-references to slices in LE format.
+/// Implementations should override `using_encoded` for value types and `encode_to` for allocating types.
 pub trait IntoSlicable {
 	/// Convert self to a slice and append it to the destination.
 	#[cfg(feature = "std")]
@@ -102,7 +103,7 @@ pub trait IntoSlicable {
 	}
 }
 
-/// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
+/// Trait that allows zero-copy read of value-references from slices in LE format.
 pub trait FromSlicable: Sized {
 	/// Attempt to deserialise the value from input.
 	fn decode<I: Input>(value: &mut I) -> Option<Self>;
