@@ -203,7 +203,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(|| keystore_path(&base_path))
+		.unwrap_or_else(|| keystore_path(&base_path, config.chain_spec.id()))
 		.to_string_lossy()
 		.into();
 
@@ -500,8 +500,10 @@ fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) ->
 	Ok(address)
 }
 
-fn keystore_path(base_path: &Path) -> PathBuf {
+fn keystore_path(base_path: &Path, spec_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(spec_id);
 	path.push("keystore");
 	path
 }
