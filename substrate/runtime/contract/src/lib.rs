@@ -124,6 +124,8 @@ decl_storage! {
 // TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 // code in contract itself and use that.
 
+// TODO: gas price should be stored in the runtime, and not passed with the transaction.
+
 /// The storage items associated with an account/key.
 ///
 /// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
@@ -209,9 +211,15 @@ impl<T: Trait> Module<T> {
 
 		let aux = aux.ref_into();
 
+		// Pay for the gas upfront.
+		//
+		// NOTE: it is very important to avoid any state changes before
+		// paying for the gas.
+		pay_for_gas::<T>(aux, gas_limit, gas_price)?;
+
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
-		let exec_result = {
+		let result = {
 			let mut ctx = ExecutionContext {
 				// TODO: avoid this
 				_caller: aux.clone(),
@@ -222,14 +230,13 @@ impl<T: Trait> Module<T> {
 			};
 			ctx.create(endownment, gas_limit, &ctor_code, &data)
 				.map_err(|_| "create failed")
-		};
-
 		// TODO: Can we return early or do we always need to do some finalization steps?
-		exec_result?;
+		}?;
+
+		// Refund cost of the unused gas.
+		refund_unused_gas::<T>(aux, result.gas_left, gas_price);
 
 		account_db::DirectAccountDb.commit(overlay.into_change_set());
-
-		// TODO: finalization: refund `gas_left`.
 
 		Ok(())
 	}
@@ -459,14 +466,14 @@ mod tests {
 			assert_ok!(Contract::create(
 				&0,
 				11,
-				1,
+				2,
 				100_000,
 				code_ctor_transfer.clone(),
 				Vec::new()
 			));
 
 			// TODO: refund
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11);
+			assert_eq!(Staking::free_balance(&0), 100_000_000 - 200_000 - 11);
 			assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
 
 			assert_eq!(<CodeOf<Test>>::get(&derived_address), code_transfer);
@@ -553,7 +560,7 @@ r#"
 			// that this transfer is basically free (apart from base transaction fee).
 			assert_eq!(
 				Staking::free_balance(&0),
-				100_000_000,
+				100_000_000 - 4, // -4 for the gas spent by the constructor
 			);
 		});
 	}

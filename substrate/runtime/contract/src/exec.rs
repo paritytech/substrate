@@ -32,8 +32,8 @@ use vm;
 //}
 
 pub struct CreateReceipt<T: Trait> {
-	address: T::AccountId,
-	gas_left: u64,
+	pub address: T::AccountId,
+	pub gas_left: u64,
 }
 
 pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
