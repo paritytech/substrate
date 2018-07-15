@@ -329,7 +329,6 @@ impl NetworkContext for NetworkContextImpl {
 	}
 
 	fn disable_peer(&self, peer: PeerId, reason: &str) {
-//		let reason = "Unknown";
 		debug!(target: "sub-libp2p", "Request to disable peer {} for reason {}", peer, reason);
 		self.inner.network_state.disable_peer(peer, reason);
 	}
