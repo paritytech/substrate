@@ -20,7 +20,7 @@
 
 use rstd::prelude::*;
 use runtime_io::twox_128;
-use codec::Slicable;
+use codec::Encode;
 use runtime_support::{StorageValue, StorageMap};
 use primitives::traits::{Zero, As};
 use {runtime_io, primitives};

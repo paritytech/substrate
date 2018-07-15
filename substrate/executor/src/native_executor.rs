@@ -20,7 +20,7 @@ use wasm_executor::WasmExecutor;
 use wasmi::Module as WasmModule;
 use runtime_version::RuntimeVersion;
 use std::collections::HashMap;
-use codec::Slicable;
+use codec::Decode;
 use twox_hash::XxHash;
 use std::hash::Hasher;
 use parking_lot::{Mutex, MutexGuard};

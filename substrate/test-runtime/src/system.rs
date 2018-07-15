@@ -21,7 +21,7 @@ use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
-use codec::{KeyedVec, Slicable};
+use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
 
 const NONCE_OF: &[u8] = b"nonce:";
@@ -65,7 +65,7 @@ pub fn execute_block(block: Block) {
 	let ref header = block.header;
 
 	// check transaction trie root represents the transactions.
-	let txs = block.extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
+	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
 	info_expect_equal_hash(&header.extrinsics_root, &txs_root);

@@ -246,7 +246,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use runtime_io::twox_128;
-		use codec::Slicable;
+		use codec::Encode;
 		use primitives::traits::As;
 		Ok(map![
 			twox_128(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),

@@ -93,7 +93,7 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool> {
 		use substrate_executor::error::ErrorKind as ExecErrorKind;
-		use codec::Slicable;
+		use codec::{Decode, Encode};
 		use runtime::Block as RuntimeBlock;
 
 		let encoded = block.encode();
@@ -142,13 +142,13 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn inherent_extrinsics(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>> {
-		use codec::Slicable;
+		use codec::{Encode, Decode};
 
 		with_runtime!(self, at, || {
 			let extrinsics = ::runtime::inherent_extrinsics(timestamp, new_heads);
 			extrinsics.into_iter()
 				.map(|x| x.encode()) // get encoded representation
-				.map(|x| Slicable::decode(&mut &x[..])) // get byte-vec equivalent to extrinsic
+				.map(|x| Decode::decode(&mut &x[..])) // get byte-vec equivalent to extrinsic
 				.map(|x| x.expect("UncheckedExtrinsic has encoded representation equivalent to Vec<u8>; qed"))
 				.collect()
 		})

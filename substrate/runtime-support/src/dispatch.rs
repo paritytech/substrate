@@ -22,7 +22,7 @@ pub use std::fmt;
 pub use rstd::result;
 #[cfg(feature = "std")]
 use serde;
-pub use codec::{Slicable, Input};
+pub use codec::{Codec, Decode, Encode, Input, Output};
 
 pub type Result = result::Result<(), &'static str>;
 
@@ -39,11 +39,11 @@ pub trait AuxDispatchable {
 
 #[cfg(feature = "std")]
 pub trait AuxCallable {
-	type Call: AuxDispatchable + Slicable + ::serde::Serialize + Clone + PartialEq + Eq;
+	type Call: AuxDispatchable + Codec + ::serde::Serialize + Clone + PartialEq + Eq;
 }
 #[cfg(not(feature = "std"))]
 pub trait AuxCallable {
-	type Call: AuxDispatchable + Slicable + Clone + PartialEq + Eq;
+	type Call: AuxDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -52,11 +52,11 @@ pub type AuxCallableCallFor<A> = <A as AuxCallable>::Call;
 
 #[cfg(feature = "std")]
 pub trait Callable {
-	type Call: Dispatchable + Slicable + ::serde::Serialize + Clone + PartialEq + Eq;
+	type Call: Dispatchable + Codec + ::serde::Serialize + Clone + PartialEq + Eq;
 }
 #[cfg(not(feature = "std"))]
 pub trait Callable {
-	type Call: Dispatchable + Slicable + Clone + PartialEq + Eq;
+	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue.
@@ -64,16 +64,16 @@ pub trait Callable {
 pub type CallableCallFor<C> = <C as Callable>::Call;
 
 #[cfg(feature = "std")]
-pub trait Parameter: Slicable + serde::Serialize + Clone + Eq + fmt::Debug {}
+pub trait Parameter: Codec + serde::Serialize + Clone + Eq + fmt::Debug {}
 
 #[cfg(feature = "std")]
-impl<T> Parameter for T where T: Slicable + serde::Serialize + Clone + Eq + fmt::Debug {}
+impl<T> Parameter for T where T: Codec + serde::Serialize + Clone + Eq + fmt::Debug {}
 
 #[cfg(not(feature = "std"))]
-pub trait Parameter: Slicable + Clone + Eq {}
+pub trait Parameter: Codec + Clone + Eq {}
 
 #[cfg(not(feature = "std"))]
-impl<T> Parameter for T where T: Slicable + Clone + Eq {}
+impl<T> Parameter for T where T: Codec + Clone + Eq {}
 
 /// Declare a struct for this module, then implement dispatch logic to create a pairing of several
 /// dispatch traits and enums.
@@ -395,13 +395,13 @@ macro_rules! __decl_dispatch_module_common {
 			}
 		}
 
-		impl<$trait_instance: $trait_name> $crate::dispatch::Slicable for $call_type<$trait_instance> {
+		impl<$trait_instance: $trait_name> $crate::dispatch::Decode for $call_type<$trait_instance> {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
 				match input.read_byte()? {
 					$(
 						$id => {
 							$(
-								let $param_name = $crate::dispatch::Slicable::decode(input)?;
+								let $param_name = $crate::dispatch::Decode::decode(input)?;
 							)*
 							Some($call_type:: $fn_name( $( $param_name ),* ))
 						}
@@ -409,9 +409,10 @@ macro_rules! __decl_dispatch_module_common {
 					_ => None,
 				}
 			}
+		}
 
-			fn encode(&self) -> $crate::dispatch::Vec<u8> {
-				let mut v = $crate::dispatch::Vec::new();
+		impl<$trait_instance: $trait_name> $crate::dispatch::Encode for $call_type<$trait_instance> {
+			fn encode_to<W: $crate::dispatch::Output>(&self, dest: &mut W) {
 				match *self {
 					$(
 						$call_type::$fn_name(
@@ -419,19 +420,14 @@ macro_rules! __decl_dispatch_module_common {
 								ref $param_name
 							),*
 						) => {
-							v.push($id as u8);
+							dest.push_byte($id as u8);
 							$(
-								$param_name.using_encoded(|s| v.extend(s));
+								$param_name.encode_to(dest);
 							)*
 						}
 					)*
 					$call_type::__PhantomItem(_) => unreachable!(),
 				}
-				v
-			}
-
-			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-				f(self.encode().as_slice())
 			}
 		}
 
@@ -536,32 +532,28 @@ macro_rules! impl_outer_dispatch_common {
 	(
 		$call_type:ident, $( $camelcase:ident = $id:expr, )*
 	) => {
-		impl $crate::dispatch::Slicable for $call_type {
+		impl $crate::dispatch::Decode for $call_type {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
 				match input.read_byte()? {
 					$(
 						$id =>
-							Some($call_type::$camelcase( $crate::dispatch::Slicable::decode(input)? )),
+							Some($call_type::$camelcase( $crate::dispatch::Decode::decode(input)? )),
 					)*
 					_ => None,
 				}
 			}
+		}
 
-			fn encode(&self) -> $crate::dispatch::Vec<u8> {
-				let mut v = $crate::dispatch::Vec::new();
+		impl $crate::dispatch::Encode for $call_type {
+			fn encode_to<W: $crate::dispatch::Output>(&self, dest: &mut W) {
 				match *self {
 					$(
 						$call_type::$camelcase( ref sub ) => {
-							v.push($id as u8);
-							sub.using_encoded(|s| v.extend(s));
+							dest.push_byte($id as u8);
+							sub.encode_to(dest);
 						}
 					)*
 				}
-				v
-			}
-
-			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-				f(self.encode().as_slice())
 			}
 		}
 
