@@ -26,6 +26,10 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate log;
+
 extern crate num_traits;
 extern crate integer_sqrt;
 extern crate substrate_runtime_std as rstd;
@@ -44,6 +48,9 @@ use rstd::prelude::*;
 use substrate_primitives::hash::{H256, H512};
 
 #[cfg(feature = "std")]
+use substrate_primitives::hexdisplay::ascii_format;
+
+#[cfg(feature = "std")]
 pub mod testing;
 
 pub mod traits;
@@ -59,6 +66,11 @@ pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage {
+	fn hash(data: &[u8]) -> [u8; 16] {
+		let r = runtime_io::twox_128(data);
+		trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
+		r
+	}
 	fn build_storage(self) -> Result<StorageMap, String>;
 }
 

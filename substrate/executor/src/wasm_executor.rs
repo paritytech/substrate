@@ -27,7 +27,7 @@ use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256};
-use primitives::hexdisplay::HexDisplay;
+use primitives::hexdisplay::{HexDisplay, ascii_format};
 use primitives::sandbox as sandbox_primitives;
 use triehash::ordered_trie_root;
 use sandbox;
@@ -128,24 +128,6 @@ impl ReadPrimitive<u32> for MemoryInstance {
 		use byteorder::{LittleEndian, ByteOrder};
 		Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(|_| UserError("Invalid attempt to read_primitive"))?))
 	}
-}
-
-fn ascii_format(asciish: &[u8]) -> String {
-	let mut r = String::new();
-	let mut latch = false;
-	for c in asciish {
-		match (latch, *c) {
-			(false, 32...127) => r.push(*c as char),
-			_ => {
-				if !latch {
-					r.push('#');
-					latch = true;
-				}
-				r.push_str(&format!("{:02x}", *c));
-			}
-		}
-	}
-	r
 }
 
 impl_function_executor!(this: FunctionExecutor<'e, E>,
