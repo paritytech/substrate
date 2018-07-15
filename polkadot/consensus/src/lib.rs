@@ -65,7 +65,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use codec::Slicable;
+use codec::{Decode, Encode};
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt, CandidateSignature};
@@ -710,7 +710,7 @@ impl<C> CreateProposal<C> where C: PolkadotApi {
 				.join(", ")
 		);
 
-		let substrate_block = Slicable::decode(&mut polkadot_block.encode().as_slice())
+		let substrate_block = Decode::decode(&mut polkadot_block.encode().as_slice())
 			.expect("polkadot blocks defined to serialize to substrate blocks correctly; qed");
 
 		// TODO: full re-evaluation

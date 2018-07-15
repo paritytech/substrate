@@ -16,7 +16,7 @@
 
 //! Polkadot parachain types.
 
-use codec::{Slicable, Input};
+use codec::{Encode, Decode, Input, Output};
 use rstd::prelude::*;
 use rstd::cmp::Ordering;
 use super::Hash;
@@ -47,11 +47,13 @@ impl Id {
 	}
 }
 
-impl Slicable for Id {
+impl Decode for Id {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).map(Id)
 	}
+}
 
+impl Encode for Id {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.0.using_encoded(f)
 	}
@@ -67,30 +69,26 @@ pub enum Chain {
 	Parachain(Id),
 }
 
-impl Slicable for Chain {
+impl Decode for Chain {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let disc = input.read_byte()?;
 		match disc {
 			0 => Some(Chain::Relay),
-			1 => Some(Chain::Parachain(Slicable::decode(input)?)),
+			1 => Some(Chain::Parachain(Decode::decode(input)?)),
 			_ => None,
 		}
 	}
+}
 
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
+impl Encode for Chain {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
-			Chain::Relay => { v.push(0); }
+			Chain::Relay => { dest.push_byte(0); }
 			Chain::Parachain(id) => {
-				v.push(1u8);
-				id.using_encoded(|s| v.extend(s));
+				dest.push_byte(1u8);
+				dest.push(&id);
 			}
 		}
-		v
-	}
-
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.encode().as_slice())
 	}
 }
 
@@ -105,25 +103,19 @@ pub struct DutyRoster {
 	pub guarantor_duty: Vec<Chain>,
 }
 
-impl Slicable for DutyRoster {
+impl Decode for DutyRoster {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(DutyRoster {
-			validator_duty: Slicable::decode(input)?,
-			guarantor_duty: Slicable::decode(input)?,
+			validator_duty: Decode::decode(input)?,
+			guarantor_duty: Decode::decode(input)?,
 		})
 	}
+}
 
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		v.extend(self.validator_duty.encode());
-		v.extend(self.guarantor_duty.encode());
-
-		v
-	}
-
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.encode().as_slice())
+impl Encode for DutyRoster {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.validator_duty);
+		dest.push(&self.guarantor_duty);
 	}
 }
 
@@ -158,32 +150,30 @@ pub struct CandidateReceipt {
 	pub block_data_hash: Hash,
 }
 
-impl Slicable for CandidateReceipt {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.parachain_index.using_encoded(|s| v.extend(s));
-		self.collator.using_encoded(|s| v.extend(s));
-		self.signature.using_encoded(|s| v.extend(s));
-		self.head_data.0.using_encoded(|s| v.extend(s));
-		self.balance_uploads.using_encoded(|s| v.extend(s));
-		self.egress_queue_roots.using_encoded(|s| v.extend(s));
-		self.fees.using_encoded(|s| v.extend(s));
-		self.block_data_hash.using_encoded(|s| v.extend(s));
-
-		v
+impl Encode for CandidateReceipt {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.parachain_index);
+		dest.push(&self.collator);
+		dest.push(&self.signature);
+		dest.push(&self.head_data.0);
+		dest.push(&self.balance_uploads);
+		dest.push(&self.egress_queue_roots);
+		dest.push(&self.fees);
+		dest.push(&self.block_data_hash);
 	}
+}
 
+impl Decode for CandidateReceipt {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(CandidateReceipt {
-			parachain_index: Slicable::decode(input)?,
-			collator: Slicable::decode(input)?,
-			signature: Slicable::decode(input)?,
-			head_data: Slicable::decode(input).map(HeadData)?,
-			balance_uploads: Slicable::decode(input)?,
-			egress_queue_roots: Slicable::decode(input)?,
-			fees: Slicable::decode(input)?,
-			block_data_hash: Slicable::decode(input)?,
+			parachain_index: Decode::decode(input)?,
+			collator: Decode::decode(input)?,
+			signature: Decode::decode(input)?,
+			head_data: Decode::decode(input).map(HeadData)?,
+			balance_uploads: Decode::decode(input)?,
+			egress_queue_roots: Decode::decode(input)?,
+			fees: Decode::decode(input)?,
+			block_data_hash: Decode::decode(input)?,
 		})
 	}
 }
@@ -283,13 +273,15 @@ pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with="bytes"))] pub 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Activity(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-impl Slicable for Activity {
+impl Decode for Activity {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Vec::<u8>::decode(input).map(Activity)
 	}
+}
 
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.using_encoded(f)
+impl Encode for Activity {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		self.0.encode_to(dest)
 	}
 }
 

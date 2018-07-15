@@ -282,13 +282,13 @@ macro_rules! impl_stubs {
 				}
 			};
 
-			let input = match $crate::codec::Slicable::decode(&mut input) {
+			let input = match $crate::codec::Decode::decode(&mut input) {
 				Some(input) => input,
 				None => panic!("Bad input data provided to {}", stringify!($name)),
 			};
 
 			let output = ($invoke)(input);
-			let output = $crate::codec::Slicable::encode(&output);
+			let output = $crate::codec::Encode::encode(&output);
 			let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
 
 			// Leak the output vector to avoid it being freed.

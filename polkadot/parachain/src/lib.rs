@@ -61,7 +61,7 @@ extern crate error_chain;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use codec::Slicable;
+use codec::{Encode, Decode, Input, Output};
 
 #[cfg(feature = "std")]
 pub mod wasm;
@@ -77,20 +77,18 @@ pub struct ValidationParams {
 	pub parent_head: Vec<u8>,
 }
 
-impl Slicable for ValidationParams {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.block_data.using_encoded(|s| v.extend(s));
-		self.parent_head.using_encoded(|s| v.extend(s));
-
-		v
+impl Encode for ValidationParams {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.block_data);
+		dest.push(&self.parent_head);
 	}
+}
 
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+impl Decode for ValidationParams {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(ValidationParams {
-			block_data: Slicable::decode(input)?,
-			parent_head: Slicable::decode(input)?,
+			block_data: Decode::decode(input)?,
+			parent_head: Decode::decode(input)?,
 		})
 	}
 }
@@ -104,14 +102,16 @@ pub struct ValidationResult {
 	pub head_data: Vec<u8>
 }
 
-impl Slicable for ValidationResult {
-	fn encode(&self) -> Vec<u8> {
-		self.head_data.encode()
+impl Encode for ValidationResult {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.head_data);
 	}
+}
 
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+impl Decode for ValidationResult {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(ValidationResult {
-			head_data: Slicable::decode(input)?,
+			head_data: Decode::decode(input)?,
 		})
 	}
 }

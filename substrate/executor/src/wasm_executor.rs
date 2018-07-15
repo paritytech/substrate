@@ -386,7 +386,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	// TODO: Remove the old 'ext_sandbox_invoke' and rename this to it.
 	ext_sandbox_invoke_poc2(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
-		use codec::Slicable;
+		use codec::{Decode, Encode};
 
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
@@ -555,7 +555,7 @@ impl CodeExecutor for WasmExecutor {
 mod tests {
 	use super::*;
 	use rustc_hex::FromHex;
-	use codec::Slicable;
+	use codec::Encode;
 	use state_machine::TestExternalities;
 
 	// TODO: move into own crate.

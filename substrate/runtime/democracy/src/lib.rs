@@ -339,7 +339,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use codec::Slicable;
+		use codec::Encode;
 		use runtime_io::twox_128;
 
 		Ok(map![

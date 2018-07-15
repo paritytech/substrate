@@ -17,7 +17,7 @@
 //! Main parachains logic. For now this is just the determination of which validators do what.
 
 use rstd::prelude::*;
-use codec::Slicable;
+use codec::Decode;
 
 use runtime_primitives::traits::{Hash, BlakeTwo256, Executable, RefInto, MaybeEmpty};
 use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
@@ -217,7 +217,7 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 	fn build_storage(mut self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use std::collections::HashMap;
 		use runtime_io::twox_128;
-		use codec::Slicable;
+		use codec::Encode;
 
 		self.parachains.sort_unstable_by_key(|&(ref id, _)| id.clone());
 		self.parachains.dedup_by_key(|&mut (ref id, _)| id.clone());

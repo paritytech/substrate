@@ -166,7 +166,7 @@ pub struct RemoteCallResponse {
 /// Generic types.
 pub mod generic {
 	use primitives::AuthorityId;
-	use codec::Slicable;
+	use codec::{Codec, Decode, Encode};
 	use runtime_primitives::bft::Justification;
 	use ed25519;
 	use primitives::Signature;
@@ -190,7 +190,7 @@ pub mod generic {
 		Extrinsics(Vec<Extrinsic>),
 	}
 
-	impl<Extrinsic> Body<Extrinsic> where Extrinsic: Slicable {
+	impl<Extrinsic> Body<Extrinsic> where Extrinsic: Codec {
 		/// Extracts extrinsic from the body.
 		pub fn to_extrinsics(self) -> Vec<Extrinsic> {
 			match self {
@@ -198,7 +198,7 @@ pub mod generic {
 				Body::V1(e) => {
 					e.into_iter().filter_map(|bytes| {
 						let bytes = bytes.0.encode();
-						Slicable::decode(&mut bytes.as_slice())
+						Decode::decode(&mut bytes.as_slice())
 					}).collect()
 				}
 			}

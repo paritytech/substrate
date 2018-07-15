@@ -35,7 +35,9 @@ extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 
 use rstd::prelude::*;
-use codec::Slicable;
+use codec::{Encode, Output};
+#[cfg(feature = "std")]
+use codec::{Decode, Input};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 
@@ -134,30 +136,25 @@ impl RuntimeVersion {
 	}
 }
 
-impl Slicable for RuntimeVersion {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		v.extend(codec::encode_slice(self.spec_name.as_bytes()));
-		v.extend(codec::encode_slice(self.impl_name.as_bytes()));
-		self.authoring_version.using_encoded(|s| v.extend(s));
-		self.spec_version.using_encoded(|s| v.extend(s));
-		self.impl_version.using_encoded(|s| v.extend(s));
-		v
+impl Encode for RuntimeVersion {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(self.spec_name.as_bytes());
+		dest.push(self.impl_name.as_bytes());
+		dest.push(&self.authoring_version);
+		dest.push(&self.spec_version);
+		dest.push(&self.impl_version);
 	}
+}
 
-	#[cfg(not(feature = "std"))]
-	fn decode<I: codec::Input>(_value: &mut I) -> Option<Self> {
-		unreachable!()
-	}
-
-	#[cfg(feature = "std")]
-	fn decode<I: codec::Input>(value: &mut I) -> Option<Self> {
+#[cfg(feature = "std")]
+impl Decode for RuntimeVersion {
+	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		Some(RuntimeVersion {
 			spec_name: Cow::Owned(String::from_utf8_lossy(&Vec::decode(value)?).into()),
 			impl_name: Cow::Owned(String::from_utf8_lossy(&Vec::decode(value)?).into()),
-			authoring_version: Slicable::decode(value)?,
-			spec_version: Slicable::decode(value)?,
-			impl_version: Slicable::decode(value)?,
+			authoring_version: Decode::decode(value)?,
+			spec_version: Decode::decode(value)?,
+			impl_version: Decode::decode(value)?,
 		})
 	}
 }

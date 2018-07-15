@@ -20,7 +20,7 @@
 //! Assuming the parameters are correct, this module provides a wrapper around
 //! a WASM VM for re-execution of a parachain candidate.
 
-use codec::Slicable;
+use codec::{Decode, Encode};
 
 use wasmi::{self, Module, ModuleInstance,  MemoryInstance, MemoryDescriptor, MemoryRef, ModuleImportResolver};
 use wasmi::{memory_units, RuntimeValue};

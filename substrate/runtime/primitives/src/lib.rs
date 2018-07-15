@@ -81,9 +81,16 @@ impl Verify for Ed25519Signature {
 	}
 }
 
-impl codec::Slicable for Ed25519Signature {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> { Some(Ed25519Signature(codec::Slicable::decode(input)?,)) }
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R { self.0.using_encoded(f) }
+impl codec::Decode for Ed25519Signature {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+		Some(Ed25519Signature(codec::Decode::decode(input)?,))
+	}
+}
+
+impl codec::Encode for Ed25519Signature {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(f)
+	}
 }
 
 impl From<H512> for Ed25519Signature {
@@ -102,7 +109,7 @@ pub enum ApplyOutcome {
 	/// Failed application (extrinsic was probably a no-op other than fees).
 	Fail = 1,
 }
-impl codec::Slicable for ApplyOutcome {
+impl codec::Decode for ApplyOutcome {
 	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			x if x == ApplyOutcome::Success as u8 => Some(ApplyOutcome::Success),
@@ -110,6 +117,8 @@ impl codec::Slicable for ApplyOutcome {
 			_ => None,
 		}
 	}
+}
+impl codec::Encode for ApplyOutcome {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[*self as u8])
 	}
@@ -129,7 +138,8 @@ pub enum ApplyError {
 	/// Sending account had too low a balance.
 	CantPay = 3,
 }
-impl codec::Slicable for ApplyError {
+
+impl codec::Decode for ApplyError {
 	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			x if x == ApplyError::BadSignature as u8 => Some(ApplyError::BadSignature),
@@ -139,6 +149,9 @@ impl codec::Slicable for ApplyError {
 			_ => None,
 		}
 	}
+}
+
+impl codec::Encode for ApplyError {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[*self as u8])
 	}
@@ -179,9 +192,16 @@ impl<T: Verify> Verify for MaybeUnsigned<T> where
 	}
 }
 
-impl<T: codec::Slicable> codec::Slicable for MaybeUnsigned<T> {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> { Some(MaybeUnsigned(codec::Slicable::decode(input)?)) }
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R { self.0.using_encoded(f) }
+impl<T: codec::Decode> codec::Decode for MaybeUnsigned<T> {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+		Some(MaybeUnsigned(codec::Decode::decode(input)?))
+	}
+}
+
+impl<T: codec::Encode> codec::Encode for MaybeUnsigned<T> {
+	fn encode_to<W: codec::Output>(&self, dest: &mut W) {
+		self.0.encode_to(dest)
+	}
 }
 
 impl<T> From<T> for MaybeUnsigned<T> {
@@ -192,7 +212,7 @@ impl<T> From<T> for MaybeUnsigned<T> {
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
-pub fn verify_encoded_lazy<V: Verify, T: codec::Slicable>(sig: &V, item: &T, signer: &V::Signer) -> bool {
+pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signer: &V::Signer) -> bool {
 	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
 	// unfortunately this is a lifetime relationship that can't
 	// be expressed without generic associated types, better unification of HRTBs in type position,

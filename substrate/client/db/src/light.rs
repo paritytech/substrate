@@ -25,7 +25,7 @@ use client::blockchain::{BlockStatus, HeaderBackend as BlockchainHeaderBackend,
 	Info as BlockchainInfo};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
-use codec::Slicable;
+use codec::{Decode, Encode};
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, Zero};
