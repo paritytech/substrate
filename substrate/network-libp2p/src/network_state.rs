@@ -703,8 +703,10 @@ fn accept_connection(
 }
 
 /// Returns true if a peer is disabled.
-fn is_peer_disabled(list: &Mutex<FnvHashMap<PeerstorePeerId, Instant>>,
-	peer: &PeerstorePeerId) -> bool {
+fn is_peer_disabled(
+	list: &Mutex<FnvHashMap<PeerstorePeerId, Instant>>,
+	peer: &PeerstorePeerId
+) -> bool {
 	let mut list = list.lock();
 	if let Some(timeout) = list.get(peer).cloned() {
 		if timeout > Instant::now() {
