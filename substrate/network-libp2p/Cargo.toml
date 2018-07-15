@@ -26,6 +26,7 @@ tokio-timer = "0.2"
 varint = { git = "https://github.com/libp2p/rust-libp2p" }
 
 [dev-dependencies]
+assert_matches = "1.2"
 ethcore-bytes = { git = "https://github.com/paritytech/parity.git" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ethcore-logger = { git = "https://github.com/paritytech/parity.git" }

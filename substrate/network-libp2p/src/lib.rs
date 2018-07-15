@@ -38,6 +38,8 @@ extern crate ipnetwork;
 extern crate error_chain;
 #[macro_use]
 extern crate log;
+#[cfg(test)] #[macro_use]
+extern crate assert_matches;
 
 pub use connection_filter::{ConnectionFilter, ConnectionDirection};
 pub use io::TimerToken;

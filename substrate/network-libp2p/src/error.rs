@@ -195,16 +195,6 @@ fn test_errors() {
 		r = DisconnectReason::from_u8(i);
 	}
 	assert_eq!(DisconnectReason::Unknown, r);
-
-	match *<Error as From<rlp::DecoderError>>::from(rlp::DecoderError::RlpIsTooBig).kind() {
-		ErrorKind::Auth => {},
-		_ => panic!("Unexpected error"),
-	}
-
-	match *<Error as From<ethkey::crypto::Error>>::from(ethkey::crypto::Error::InvalidMessage).kind() {
-		ErrorKind::Auth => {},
-		_ => panic!("Unexpected error"),
-	}
 }
 
 #[test]

@@ -2785,6 +2785,7 @@ dependencies = [
 name = "substrate-network-libp2p"
 version = "0.1.0"
 dependencies = [
+ "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethcore-bytes 0.1.0 (git+https://github.com/paritytech/parity.git)",
