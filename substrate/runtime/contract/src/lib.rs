@@ -119,6 +119,9 @@ decl_storage! {
 	pub CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
 }
 
+// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
+// code in contract itself and use that.
+
 /// The storage items associated with an account/key.
 ///
 /// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
@@ -143,6 +146,13 @@ fn pay_for_gas<T: Trait>(transactor: &T::AccountId, gas_limit: u64, gas_price: u
 	Ok(())
 }
 
+fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_left: u64, gas_price: u64) {
+	let b = <staking::Module<T>>::free_balance(transactor);
+	let refund = gas_left * gas_price;
+	let refund = <T::Balance as As<u64>>::sa(refund);
+	<staking::Module<T>>::set_free_balance(transactor, b +  refund);
+}
+
 impl<T: Trait> Module<T> {
 	fn send(
 		aux: &<T as consensus::Trait>::PublicAux,
@@ -152,9 +162,6 @@ impl<T: Trait> Module<T> {
 		gas_limit: u64,
 		data: Vec<u8>,
 	) -> Result {
-		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
-		// code in contract itself and use that.
-
 		let aux = aux.ref_into();
 
 		// Pay for the gas upfront.
@@ -175,14 +182,14 @@ impl<T: Trait> Module<T> {
 				account_db: &mut overlay,
 			};
 			ctx.call(dest, value, gas_limit, data)
-		};
-
 		// TODO: Can we return early or we always need to do some finalization steps?
-		result?;
+		}?;
 
+		// Refund cost of the unused gas.
+		refund_unused_gas::<T>(aux, result.gas_left, gas_price);
+
+		// Commit all changes that made it thus far into the persistant storage.
 		account_db::DirectAccountDb.commit(overlay.into_change_set());
-
-		// TODO: finalization: refund `gas_left`.
 
 		Ok(())
 	}
@@ -461,6 +468,41 @@ mod tests {
 			assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
 
 			assert_eq!(<CodeOf<Test>>::get(&derived_address), code_transfer);
+		});
+	}
+
+
+	const CODE_NOP: &'static str =
+r#"
+(module
+	(func (export "call")
+		nop
+	)
+)
+"#;
+
+	#[test]
+	fn refunds_unused_gas() {
+		let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
+
+		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
+			<CodeOf<Test>>::insert(1, code_nop.to_vec());
+
+			Staking::set_free_balance(&0, 100_000_000);
+
+			assert_ok!(Contract::send(
+				&0,
+				1,
+				0,
+				2,
+				100_000,
+				Vec::new(),
+			));
+
+			assert_eq!(
+				Staking::free_balance(&0),
+				100_000_000 - 4,
+			);
 		});
 	}
 }
