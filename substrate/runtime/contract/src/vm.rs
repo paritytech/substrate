@@ -666,7 +666,7 @@ mod tests {
 			);
 			let address = self.next_account_id;
 			self.next_account_id += 1;
-			
+
 			Ok(CreateReceipt {
 				address,
 				gas_left: gas_limit,

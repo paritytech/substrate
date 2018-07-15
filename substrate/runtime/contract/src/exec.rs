@@ -54,7 +54,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		value: T::Balance,
 		gas_limit: u64,
 		_data: Vec<u8>,
-	) -> Result<vm::ExecutionResult, ()> {
+	) -> Result<vm::ExecutionResult, &'static str> {
 		let dest_code = <CodeOf<T>>::get(&dest);
 
 		// TODO: transfer `_value` using `overlay`. Return an error if failed.
@@ -64,7 +64,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
 
 			// TODO: It would be nice to propogate the error.
-			transfer(&self.self_account, &dest, value, &mut overlay).map_err(|_| ())?;
+			transfer(&self.self_account, &dest, value, &mut overlay)?;
 
 			let exec_result = if !dest_code.is_empty() {
 				let mut nested = ExecutionContext {
@@ -74,7 +74,8 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 					gas_price: self.gas_price,
 					depth: self.depth + 1,
 				};
-				vm::execute(&dest_code, &mut nested, gas_limit).map_err(|_| ())?
+				vm::execute(&dest_code, &mut nested, gas_limit)
+					.map_err(|_| "vm execute returned error")?
 			} else {
 				// that was a plain transfer
 				vm::ExecutionResult {
@@ -208,6 +209,6 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 		gas_limit: u64,
 		data: Vec<u8>,
 	) -> Result<vm::ExecutionResult, ()> {
-		self.call(to.clone(), value, gas_limit, data)
+		self.call(to.clone(), value, gas_limit, data).map_err(|_| ())
 	}
 }

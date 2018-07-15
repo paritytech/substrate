@@ -68,10 +68,10 @@ use exec::ExecutionContext;
 
 use account_db::{AccountDb, OverlayAccountDb};
 
-use runtime_primitives::traits::RefInto;
+use double_map::StorageDoubleMap;
+use runtime_primitives::traits::{As, RefInto};
 use runtime_support::dispatch::Result;
 use runtime_support::StorageMap;
-use double_map::StorageDoubleMap;
 
 pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
 	// TODO: Rename it from DetermineContractAddress2 to DetermineContractAddress, and clean up
@@ -130,6 +130,19 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 	type Value = Vec<u8>;
 }
 
+fn pay_for_gas<T: Trait>(transactor: &T::AccountId, gas_limit: u64, gas_price: u64) -> Result {
+	let b = <staking::Module<T>>::free_balance(transactor);
+	let cost = gas_limit
+		.checked_mul(gas_price)
+		.ok_or("overflow multiplying gas limit by price")?;
+	let cost = <T::Balance as As<u64>>::sa(cost);
+	if b < cost + <staking::Module<T>>::existential_deposit() {
+		return Err("not enough funds for transaction fee");
+	}
+	<staking::Module<T>>::set_free_balance(transactor, b - cost);
+	Ok(())
+}
+
 impl<T: Trait> Module<T> {
 	fn send(
 		aux: &<T as consensus::Trait>::PublicAux,
@@ -139,19 +152,22 @@ impl<T: Trait> Module<T> {
 		gas_limit: u64,
 		data: Vec<u8>,
 	) -> Result {
-		// TODO: an additional fee, based upon gaslimit/gasprice.
-		// This fee should be taken in any way and not reverted.
-
 		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 		// code in contract itself and use that.
 
 		let aux = aux.ref_into();
 
+		// Pay for the gas upfront.
+		//
+		// NOTE: it is very important to avoid any state changes before
+		// paying for the gas.
+		pay_for_gas::<T>(aux, gas_limit, gas_price)?;
+
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
 		let result = {
 			let mut ctx = ExecutionContext {
-				// TODO: fuck
+				// TODO: avoid this
 				_caller: aux.clone(),
 				self_account: aux.clone(),
 				gas_price,
@@ -159,7 +175,6 @@ impl<T: Trait> Module<T> {
 				account_db: &mut overlay,
 			};
 			ctx.call(dest, value, gas_limit, data)
-				.map_err(|_| "call failed")
 		};
 
 		// TODO: Can we return early or we always need to do some finalization steps?
@@ -189,15 +204,14 @@ impl<T: Trait> Module<T> {
 
 		let exec_result = {
 			let mut ctx = ExecutionContext {
-				// TODO: fuck
+				// TODO: avoid this
 				_caller: aux.clone(),
 				self_account: aux.clone(),
 				gas_price,
 				depth: 0,
 				account_db: &mut overlay,
 			};
-			ctx
-				.create(endownment, gas_limit, &ctor_code, &data)
+			ctx.create(endownment, gas_limit, &ctor_code, &data)
 				.map_err(|_| "create failed")
 		};
 
@@ -268,6 +282,9 @@ mod tests {
 
 	#[test]
 	fn contract_transfer() {
+		const CONTRACT_SHOULD_TRANSFER_VALUE: u64 = 6;
+		const CONTRACT_SHOULD_TRANSFER_TO: u64 = 9;
+
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
 		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
@@ -276,9 +293,28 @@ mod tests {
 			Staking::set_free_balance(&0, 100_000_000);
 			Staking::set_free_balance(&1, 11);
 
-			assert_ok!(Contract::send(&0, 1, 1, 1, 100_000, Vec::new()));
+			assert_ok!(Contract::send(
+				&0,
+				1,
+				3,
+				2,
+				100_000,
+				Vec::new()
+			));
 
-			assert_eq!(Staking::free_balance(&9), 6);
+			// TODO: refund
+			assert_eq!(
+				Staking::free_balance(&0),
+				100_000_000 - 200_000 - 3,
+			);
+			assert_eq!(
+				Staking::free_balance(&1),
+				11 + 3 - CONTRACT_SHOULD_TRANSFER_VALUE,
+			);
+			assert_eq!(
+				Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
+				CONTRACT_SHOULD_TRANSFER_VALUE,
+			);
 		});
 	}
 
@@ -374,7 +410,8 @@ mod tests {
 				&1,
 			);
 
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11);
+			// TODO: refund
+			assert_eq!(Staking::free_balance(&0), 100_000_000 - 100_000 - 11);
 			assert_eq!(Staking::free_balance(&1), 8);
 			assert_eq!(Staking::free_balance(&derived_address), 3);
 
@@ -388,7 +425,8 @@ mod tests {
 				Vec::new()
 			));
 
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 11);
+			// TODO: refund
+			assert_eq!(Staking::free_balance(&0), 100_000_000 - 100_000 - 100_000 - 11 - 11);
 			assert_eq!(Staking::free_balance(&derived_address), 8);
 			assert_eq!(Staking::free_balance(&9), 36);
 		});
@@ -409,8 +447,16 @@ mod tests {
 			Staking::set_free_balance(&derived_address, 30);
 
 			// When invoked, the contract at address `1` must create a contract with 'transfer' code.`
-			assert_ok!(Contract::create(&0, 11, 1, 100_000, code_ctor_transfer.clone(), Vec::new()));
+			assert_ok!(Contract::create(
+				&0,
+				11,
+				1,
+				100_000,
+				code_ctor_transfer.clone(),
+				Vec::new()
+			));
 
+			// TODO: refund
 			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11);
 			assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
 
