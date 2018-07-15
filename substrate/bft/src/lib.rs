@@ -54,7 +54,7 @@ use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use codec::Slicable;
+use codec::IntoSlicable;
 use ed25519::LocalizedSignature;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block, Header};
@@ -503,7 +503,7 @@ fn check_justification_signed_message<H>(authorities: &[AuthorityId], message: &
 pub fn check_justification<B: Block>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
 	-> Result<Justification<B::Hash>, UncheckedJustification<B::Hash>>
 {
-	let message = Slicable::encode(&PrimitiveMessage::<B, _> {
+	let message = IntoSlicable::encode(&PrimitiveMessage::<B, _> {
 		parent,
 		action: PrimitiveAction::Commit(just.0.round_number as u32, just.0.digest.clone()),
 	});
@@ -518,7 +518,7 @@ pub fn check_justification<B: Block>(authorities: &[AuthorityId], parent: B::Has
 pub fn check_prepare_justification<B: Block>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
 	-> Result<PrepareJustification<B::Hash>, UncheckedJustification<B::Hash>>
 {
-	let message = Slicable::encode(&PrimitiveMessage::<B, _> {
+	let message = IntoSlicable::encode(&PrimitiveMessage::<B, _> {
 		parent,
 		action: PrimitiveAction::Prepare(just.0.round_number as u32, just.0.digest.clone()),
 	});
@@ -570,7 +570,7 @@ fn check_action<B: Block>(action: PrimitiveAction<B, B::Hash>, parent_hash: &B::
 		action,
 	};
 
-	let message = Slicable::encode(&primitive);
+	let message = IntoSlicable::encode(&primitive);
 	if ed25519::verify_strong(&sig.signature, &message, &sig.signer) {
 		Ok(())
 	} else {
@@ -588,7 +588,7 @@ pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, 
 			action,
 		};
 
-		let to_sign = Slicable::encode(&primitive);
+		let to_sign = IntoSlicable::encode(&primitive);
 		LocalizedSignature {
 			signer: signer.clone(),
 			signature: key.sign(&to_sign),

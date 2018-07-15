@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
-use codec::{Slicable, KeyedVec, Input};
+use codec::{Slicable, FromSlicable, KeyedVec, Input};
 
 pub mod generator;
 
@@ -47,7 +47,7 @@ pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 			key: &key[..],
 			pos: 0,
 		};
-		Slicable::decode(&mut input).expect("storage is not null, therefore must be a valid type")
+		FromSlicable::decode(&mut input).expect("storage is not null, therefore must be a valid type")
 	})
 }
 
@@ -386,7 +386,7 @@ pub trait StorageVec {
 
 pub mod unhashed {
 	use rstd::borrow::Borrow;
-	use super::{runtime_io, Slicable, KeyedVec, Vec, IncrementalInput};
+	use super::{runtime_io, Slicable, FromSlicable, KeyedVec, Vec, IncrementalInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
@@ -395,7 +395,7 @@ pub mod unhashed {
 				key,
 				pos: 0,
 			};
-			Slicable::decode(&mut input).expect("stroage is not null, therefore must be a valid type")
+			FromSlicable::decode(&mut input).expect("stroage is not null, therefore must be a valid type")
 		})
 	}
 

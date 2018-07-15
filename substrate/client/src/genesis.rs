@@ -42,7 +42,7 @@ pub fn construct_genesis_block<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Slicable, Joiner};
+	use codec::{IntoSlicable, FromSlicable, Joiner};
 	use keyring::Keyring;
 	use executor::WasmExecutor;
 	use state_machine::{execute, OverlayedChanges, ExecutionStrategy};
@@ -64,7 +64,7 @@ mod tests {
 			Extrinsic { transfer: tx, signature }
 		}).collect::<Vec<_>>();
 
-		let extrinsics_root = ordered_trie_root(transactions.iter().map(Slicable::encode)).0.into();
+		let extrinsics_root = ordered_trie_root(transactions.iter().map(IntoSlicable::encode)).0.into();
 
 		println!("root before: {:?}", extrinsics_root);
 		let mut header = Header {

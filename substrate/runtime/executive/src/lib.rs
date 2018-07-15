@@ -55,7 +55,7 @@ use rstd::result;
 use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
 	MakePayment, Hash, AuxLookup};
-use codec::Slicable;
+use codec::{Slicable, IntoSlicable};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
 

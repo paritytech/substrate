@@ -20,7 +20,7 @@
 
 use std::collections::HashMap;
 use std::rc::Rc;
-use codec::Slicable;
+use codec::{FromSlicable, IntoSlicable};
 use primitives::sandbox as sandbox_primitives;
 use wasm_utils::UserError;
 use wasmi;

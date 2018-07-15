@@ -22,7 +22,7 @@ pub use std::fmt;
 pub use rstd::result;
 #[cfg(feature = "std")]
 use serde;
-pub use codec::{Slicable, Input};
+pub use codec::{Slicable, FromSlicable, IntoSlicable, Input, Output};
 
 pub type Result = result::Result<(), &'static str>;
 
@@ -395,13 +395,13 @@ macro_rules! __decl_dispatch_module_common {
 			}
 		}
 
-		impl<$trait_instance: $trait_name> $crate::dispatch::Slicable for $call_type<$trait_instance> {
+		impl<$trait_instance: $trait_name> $crate::dispatch::FromSlicable for $call_type<$trait_instance> {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
 				match input.read_byte()? {
 					$(
 						$id => {
 							$(
-								let $param_name = $crate::dispatch::Slicable::decode(input)?;
+								let $param_name = $crate::dispatch::FromSlicable::decode(input)?;
 							)*
 							Some($call_type:: $fn_name( $( $param_name ),* ))
 						}
@@ -409,9 +409,10 @@ macro_rules! __decl_dispatch_module_common {
 					_ => None,
 				}
 			}
+		}
 
-			fn encode(&self) -> $crate::dispatch::Vec<u8> {
-				let mut v = $crate::dispatch::Vec::new();
+		impl<$trait_instance: $trait_name> $crate::dispatch::IntoSlicable for $call_type<$trait_instance> {
+			fn encode_to<W: $crate::dispatch::Output>(&self, dest: &mut W) {
 				match *self {
 					$(
 						$call_type::$fn_name(
@@ -419,19 +420,14 @@ macro_rules! __decl_dispatch_module_common {
 								ref $param_name
 							),*
 						) => {
-							v.push($id as u8);
+							dest.push_byte($id as u8);
 							$(
-								$param_name.using_encoded(|s| v.extend(s));
+								$param_name.encode_to(dest);
 							)*
 						}
 					)*
 					$call_type::__PhantomItem(_) => unreachable!(),
 				}
-				v
-			}
-
-			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-				f(self.encode().as_slice())
 			}
 		}
 
@@ -536,32 +532,28 @@ macro_rules! impl_outer_dispatch_common {
 	(
 		$call_type:ident, $( $camelcase:ident = $id:expr, )*
 	) => {
-		impl $crate::dispatch::Slicable for $call_type {
+		impl $crate::dispatch::FromSlicable for $call_type {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
 				match input.read_byte()? {
 					$(
 						$id =>
-							Some($call_type::$camelcase( $crate::dispatch::Slicable::decode(input)? )),
+							Some($call_type::$camelcase( $crate::dispatch::FromSlicable::decode(input)? )),
 					)*
 					_ => None,
 				}
 			}
+		}
 
-			fn encode(&self) -> $crate::dispatch::Vec<u8> {
-				let mut v = $crate::dispatch::Vec::new();
+		impl $crate::dispatch::IntoSlicable for $call_type {
+			fn encode_to<W: $crate::dispatch::Output>(&self, dest: &mut W) {
 				match *self {
 					$(
 						$call_type::$camelcase( ref sub ) => {
-							v.push($id as u8);
-							sub.using_encoded(|s| v.extend(s));
+							dest.push_byte($id as u8);
+							sub.encode_to(dest);
 						}
 					)*
 				}
-				v
-			}
-
-			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-				f(self.encode().as_slice())
 			}
 		}
 

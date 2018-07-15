@@ -233,7 +233,7 @@ macro_rules! __storage_items_internal {
 			/// Get the storage key used to fetch a value corresponding to a specific key.
 			fn key_for(x: &$kty) -> Vec<u8> {
 				let mut key = $prefix.to_vec();
-				key.extend($crate::codec::Slicable::encode(x));
+				$crate::codec::IntoSlicable::encode_to(x, &mut key);
 				key
 			}
 
@@ -284,7 +284,7 @@ macro_rules! __storage_items_internal {
 			/// Get the storage key used to fetch a value at a given index.
 			fn key_for(index: u32) -> Vec<u8> {
 				let mut key = $prefix.to_vec();
-				key.extend($crate::codec::Slicable::encode(&index));
+				$crate::codec::IntoSlicable::encode_to(&index, &mut key);
 				key
 			}
 
@@ -496,7 +496,7 @@ macro_rules! __decl_storage_item {
 			/// Get the storage key used to fetch a value corresponding to a specific key.
 			fn key_for(x: &$kty) -> Vec<u8> {
 				let mut key = $prefix.to_vec();
-				key.extend($crate::codec::Slicable::encode(x));
+				$crate::codec::IntoSlicable::encode_to(x, &mut key);
 				key
 			}
 

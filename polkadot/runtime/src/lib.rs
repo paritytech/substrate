@@ -257,7 +257,7 @@ pub mod api {
 mod tests {
 	use super::*;
 	use substrate_primitives as primitives;
-	use ::codec::Slicable;
+	use codec::{IntoSlicable, FromSlicable};
 	use substrate_primitives::hexdisplay::HexDisplay;
 	use substrate_serializer as ser;
 	use runtime_primitives::traits::{Digest as DigestT, Header as HeaderT};
@@ -376,7 +376,7 @@ mod tests {
 		// df0f0200
 		// 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
-		let v = Slicable::encode(&tx);
+		let v = IntoSlicable::encode(&tx);
 		assert_eq!(&v[..], &hex!["6f000000ff0101010101010101010101010101010101010101010101010101010101010101e70300000300df0f02000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"][..]);
 		println!("{}", HexDisplay::from(&v));
 		assert_eq!(UncheckedExtrinsic::decode(&mut &v[..]).unwrap(), tx);
@@ -393,7 +393,7 @@ mod tests {
 				))
 			))),
 		};
-		let v = Slicable::encode(&xt);
+		let v = IntoSlicable::encode(&xt);
 		assert_eq!(Extrinsic::decode(&mut &v[..]).unwrap(), xt);
 	}
 

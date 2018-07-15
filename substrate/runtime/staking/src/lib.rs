@@ -50,7 +50,7 @@ use account_db::State;
 use rstd::prelude::*;
 use rstd::{cmp, result};
 use rstd::collections::btree_map::BTreeMap;
-use codec::{Input, Slicable};
+use codec::{IntoSlicable, FromSlicable, Slicable, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
