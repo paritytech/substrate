@@ -50,7 +50,7 @@ use account_db::State;
 use rstd::prelude::*;
 use rstd::{cmp, result};
 use rstd::collections::btree_map::BTreeMap;
-use codec::{Input, Slicable};
+use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
@@ -110,8 +110,8 @@ impl ContractAddressFor<u64> for DummyContractAddressFor {
 
 impl<Hash, AccountId> ContractAddressFor<AccountId> for Hash where
 	Hash: HashT,
-	AccountId: Sized + Slicable + From<Hash::Output>,
-	Hash::Output: Slicable
+	AccountId: Sized + Codec + From<Hash::Output>,
+	Hash::Output: Codec
 {
 	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId {
 		let mut dest_pre = Hash::hash(code).encode();
@@ -122,12 +122,12 @@ impl<Hash, AccountId> ContractAddressFor<AccountId> for Hash where
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
+	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
 }
 
 decl_module! {

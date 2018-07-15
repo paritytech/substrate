@@ -20,7 +20,7 @@ extern crate polkadot_parachain as parachain;
 extern crate tiny_keccak;
 
 use parachain::ValidationParams;
-use parachain::codec::{Slicable, Input};
+use parachain::codec::{Decode, Encode, Input, Output};
 
 // Head data for this parachain.
 #[derive(Default, Clone)]
@@ -33,22 +33,20 @@ struct HeadData {
 	post_state: [u8; 32],
 }
 
-impl Slicable for HeadData {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.number.using_encoded(|s| v.extend(s));
-		self.parent_hash.using_encoded(|s| v.extend(s));
-		self.post_state.using_encoded(|s| v.extend(s));
-
-		v
+impl Encode for HeadData {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.number);
+		dest.push(&self.parent_hash);
+		dest.push(&self.post_state);
 	}
+}
 
+impl Decode for HeadData {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(HeadData {
-			number: Slicable::decode(input)?,
-			parent_hash: Slicable::decode(input)?,
-			post_state: Slicable::decode(input)?,
+			number: Decode::decode(input)?,
+			parent_hash: Decode::decode(input)?,
+			post_state: Decode::decode(input)?,
 		})
 	}
 }
@@ -62,20 +60,18 @@ struct BlockData {
 	add: u64,
 }
 
-impl Slicable for BlockData {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.state.using_encoded(|s| v.extend(s));
-		self.add.using_encoded(|s| v.extend(s));
-
-		v
+impl Encode for BlockData {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.state);
+		dest.push(&self.add);
 	}
+}
 
+impl Decode for BlockData {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(BlockData {
-			state: Slicable::decode(input)?,
-			add: Slicable::decode(input)?,
+			state: Decode::decode(input)?,
+			add: Decode::decode(input)?,
 		})
 	}
 }

@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use client::{self, Client};
 use extrinsic_pool::api::{Error, ExtrinsicPool};
-use codec::Slicable;
+use codec::Codec;
 
 use primitives::Bytes;
 use runtime_primitives::{generic, traits::Block as BlockT};
@@ -65,7 +65,7 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 	Block: BlockT + 'static,
 	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash>,
 	P::Error: 'static,
-	Ex: Slicable,
+	Ex: Codec,
 {
 	fn submit_extrinsic(&self, xt: Bytes) -> Result<Hash> {
 		self.submit_rich_extrinsic(Ex::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?)

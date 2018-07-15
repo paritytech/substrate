@@ -42,7 +42,7 @@ mod tests {
 	use runtime_io;
 	use super::Executor;
 	use substrate_executor::WasmExecutor;
-	use codec::{Slicable, Joiner};
+	use codec::{Encode, Decode, Joiner};
 	use keyring::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap};
 	use state_machine::{CodeExecutor, TestExternalities};
@@ -229,7 +229,7 @@ mod tests {
 			UncheckedExtrinsic::new(extrinsic, signature)
 		}).collect::<Vec<_>>();
 
-		let extrinsics_root = ordered_trie_root(extrinsics.iter().map(Slicable::encode)).0.into();
+		let extrinsics_root = ordered_trie_root(extrinsics.iter().map(Encode::encode)).0.into();
 
 		let header = Header {
 			parent_hash,

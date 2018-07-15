@@ -127,7 +127,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
-		use codec::Slicable;
+		use codec::Encode;
 		Ok(map![
 			Self::hash(<BlockPeriod<T>>::key()).to_vec() => self.period.encode(),
 			Self::hash(<Now<T>>::key()).to_vec() => T::Moment::sa(0).encode()

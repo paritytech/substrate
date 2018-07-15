@@ -245,7 +245,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use codec::Slicable;
+		use codec::Encode;
 		use primitives::traits::As;
 		Ok(map![
 			Self::hash(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),

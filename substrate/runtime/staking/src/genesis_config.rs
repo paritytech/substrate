@@ -19,7 +19,7 @@
 #![cfg(feature = "std")]
 
 use rstd::prelude::*;
-use codec::Slicable;
+use codec::Encode;
 use runtime_support::{StorageValue, StorageMap};
 use primitives::traits::{Zero, As};
 use {runtime_io, primitives};

@@ -79,7 +79,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
 use polkadot_primitives::BlockId;
-use codec::Slicable;
+use codec::{Decode, Encode};
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
 
@@ -407,7 +407,7 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	};
 
 	info!("Importing blocks");
-	let count: u32 = Slicable::decode(&mut file).ok_or("Error reading file")?;
+	let count: u32 = Decode::decode(&mut file).ok_or("Error reading file")?;
 	let mut block = 0;
 	for _ in 0 .. count {
 		if exit_recv.try_recv().is_ok() {

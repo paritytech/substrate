@@ -30,7 +30,7 @@ use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{PeerId, SessionInfo, Error as NetworkError};
 use keyring::Keyring;
-use codec::Slicable;
+use codec::Encode;
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 use specialization::Specialization;

@@ -23,7 +23,7 @@ use polkadot_consensus::GenericStatement;
 use polkadot_primitives::{Block, Hash, SessionKey};
 use polkadot_primitives::parachain::{CandidateReceipt, HeadData, BlockData};
 use substrate_primitives::H512;
-use codec::Slicable;
+use codec::Encode;
 use substrate_network::{PeerId, PeerInfo, ClientHandle, Context, message::Message as SubstrateMessage, message::Role, specialization::Specialization, generic_message::Message as GenericMessage};
 
 use std::sync::Arc;
