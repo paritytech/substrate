@@ -33,12 +33,14 @@ use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
 use std::path::Path;
 use std::sync::atomic;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 // File where the peers are stored.
 const NODES_FILE: &str = "nodes.json";
 // File where the private key is stored.
 const SECRET_FILE: &str = "secret";
+// Duration during which a peer is disabled.
+const PEER_DISABLE_DURATION: Duration = Duration::from_secs(5 * 60);
 
 // Common struct shared throughout all the components of the service.
 pub struct NetworkState {
@@ -62,8 +64,8 @@ pub struct NetworkState {
 	next_peer_id: atomic::AtomicUsize,
 
 	/// List of the IDs of the disabled peers. These peers will see their
-	/// connections refused.
-	disabled_peers: RwLock<FnvHashSet<PeerstorePeerId>>,
+	/// connections refused. Includes the time when the disabling expires.
+	disabled_peers: Mutex<FnvHashMap<PeerstorePeerId, Instant>>,
 
 	/// Local private key.
 	local_private_key: secio::SecioKeyPair,
@@ -186,7 +188,7 @@ impl NetworkState {
 			reserved_only: atomic::AtomicBool::new(false),
 			reserved_peers,
 			next_peer_id: atomic::AtomicUsize::new(0),
-			disabled_peers: RwLock::new(Default::default()),
+			disabled_peers: Mutex::new(Default::default()),
 			local_private_key,
 			local_public_key,
 		})
@@ -520,7 +522,7 @@ impl NetworkState {
 	) -> Result<PeerId, IoError> {
 		let mut connections = self.connections.write();
 
-		if self.disabled_peers.read().contains(&node_id) {
+		if is_peer_disabled(&self.disabled_peers, &node_id) {
 			debug!(target: "sub-libp2p", "Refusing node {:?} because it was \
 				disabled", node_id);
 			return Err(IoError::new(IoErrorKind::PermissionDenied,
@@ -604,9 +606,10 @@ impl NetworkState {
 		};
 	}
 
-	/// Disables a peer. This adds the peer to the list of disabled peers, and 
-	/// drops any existing connections if necessary (ie. drops the sender that
-	/// was passed to `accept_custom_proto`).
+	/// Disables a peer for `PEER_DISABLE_DURATION`. This adds the peer to the
+	/// list of disabled peers, and  drops any existing connections if
+	/// necessary (ie. drops the sender that was passed to
+	/// `accept_custom_proto`).
 	pub fn disable_peer(&self, peer_id: PeerId) {
 		// TODO: what do we do if the peer is reserved?
 		let mut connections = self.connections.write();
@@ -619,12 +622,13 @@ impl NetworkState {
 		};
 
 		drop(connections);
-		self.disabled_peers.write().insert(peer_info.id.clone());
+		let timeout = Instant::now() + PEER_DISABLE_DURATION;
+		self.disabled_peers.lock().insert(peer_info.id.clone(), timeout);
 	}
 
 	/// Returns true if a peer is disabled.
 	pub fn is_peer_disabled(&self, node_id: &PeerstorePeerId) -> bool {
-		self.disabled_peers.read().contains(&node_id)
+		is_peer_disabled(&self.disabled_peers, node_id)
 	}
 
 	/// Flushes the caches to the disk.
@@ -696,6 +700,24 @@ fn accept_connection(
 	});
 
 	Ok(peer_id)
+}
+
+/// Returns true if a peer is disabled.
+fn is_peer_disabled(
+	list: &Mutex<FnvHashMap<PeerstorePeerId, Instant>>,
+	peer: &PeerstorePeerId
+) -> bool {
+	let mut list = list.lock();
+	if let Some(timeout) = list.get(peer).cloned() {
+		if timeout > Instant::now() {
+			true
+		} else {
+			list.remove(peer);
+			false
+		}
+	} else {
+		false
+	}
 }
 
 /// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
