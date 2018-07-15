@@ -101,11 +101,11 @@ mod tests {
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t: TestExternalities = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			Self::hash(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
-			Self::hash(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -120,11 +120,11 @@ mod tests {
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t: TestExternalities = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			Self::hash(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
-			Self::hash(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -139,11 +139,11 @@ mod tests {
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t: TestExternalities = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			Self::hash(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -162,11 +162,11 @@ mod tests {
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t: TestExternalities = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			Self::hash(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -355,11 +355,11 @@ mod tests {
 	fn panic_execution_gives_error() {
 		let mut t: TestExternalities = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			Self::hash(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
-			Self::hash(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
@@ -375,11 +375,11 @@ mod tests {
 	fn successful_execution_gives_ok() {
 		let mut t: TestExternalities = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			Self::hash(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			Self::hash(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
 		];
 
