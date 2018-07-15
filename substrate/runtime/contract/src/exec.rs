@@ -100,7 +100,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		ctor: &[u8],
 		_data: &[u8],
 	) -> Result<CreateReceipt<T>, ()> {
-		let dest = T::DetermineContractAddress2::contract_address_for(ctor, &self.self_account);
+		let dest = T::DetermineContractAddress::contract_address_for(ctor, &self.self_account);
 
 		// TODO: What if the address already exists?
 		// TODO: check the new depth

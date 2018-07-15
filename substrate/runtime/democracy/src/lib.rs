@@ -397,8 +397,8 @@ mod tests {
 	}
 	impl staking::Trait for Test {
 		type Balance = u64;
-		type DetermineContractAddress = staking::DummyContractAddressFor;
 		type AccountIndex = u64;
+		type OnAccountKill = ();
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;

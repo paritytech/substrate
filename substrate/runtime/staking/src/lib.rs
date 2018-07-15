@@ -95,32 +95,6 @@ pub enum LockStatus<BlockNumber: PartialEq + Clone> {
 	Staked,
 }
 
-// TODO: Move to contract?
-pub trait ContractAddressFor<AccountId: Sized> {
-	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
-}
-
-#[cfg(feature = "std")]
-pub struct DummyContractAddressFor;
-#[cfg(feature = "std")]
-impl ContractAddressFor<u64> for DummyContractAddressFor {
-	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
-		origin + 1
-	}
-}
-
-impl<Hash, AccountId> ContractAddressFor<AccountId> for Hash where
-	Hash: HashT,
-	AccountId: Sized + Slicable + From<Hash::Output>,
-	Hash::Output: Slicable
-{
-	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId {
-		let mut dest_pre = Hash::hash(code).encode();
-		origin.using_encoded(|s| dest_pre.extend(s));
-		AccountId::from(Hash::hash(&dest_pre))
-	}
-}
-
 /// The given account was killed.
 pub trait OnAccountKill<Address> {
 	/// The given account was killed.
@@ -134,8 +108,6 @@ impl<Address> OnAccountKill<Address> for () {
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
-	/// Function type to get the contract address given the creator.
-	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
 	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
@@ -307,7 +279,7 @@ impl<T: Trait> Module<T> {
 	// PUBLIC DISPATCH
 
 	/// Transfer some unlocked staking balance to another staker.
-	fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
+	pub fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
 		let dest = Self::lookup(dest)?;
 		// TODO: Inline this.
 		// commit anything that made it this far to storage
@@ -809,10 +781,12 @@ impl<T: Trait> Module<T> {
 			return Err("bondage too high to send value");
 		}
 
-		let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
+		// let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
+		// TODO: just make it compile
+		let dest = transactor;
 
 		// early-out if degenerate.
-		if &dest == transactor {
+		if dest == transactor {
 			return Ok(None);
 		}
 

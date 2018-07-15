@@ -168,7 +168,6 @@ pub type Session = session::Module<Concrete>;
 
 impl staking::Trait for Concrete {
 	type Balance = Balance;
-	type DetermineContractAddress = BlakeTwo256;
 	type AccountIndex = AccountIndex;
 	type OnAccountKill = ();
 }

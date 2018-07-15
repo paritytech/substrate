@@ -655,8 +655,8 @@ mod tests {
 	}
 	impl staking::Trait for Test {
 		type Balance = u64;
-		type DetermineContractAddress = staking::DummyContractAddressFor;
 		type AccountIndex = u64;
+		type OnAccountKill = ();
 	}
 	impl democracy::Trait for Test {
 		type Proposal = Proposal;

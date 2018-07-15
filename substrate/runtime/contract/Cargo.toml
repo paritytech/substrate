@@ -15,6 +15,8 @@ substrate-runtime-sandbox = { path = "../../runtime-sandbox", default_features =
 substrate-runtime-staking = { path = "../../runtime/staking", default_features = false }
 substrate-runtime-support = { path = "../../runtime-support", default_features = false }
 substrate-runtime-system = { path = "../../runtime/system", default_features = false }
+substrate-runtime-session = { path = "../session", default_features = false }
+substrate-runtime-timestamp = { path = "../timestamp", default_features = false }
 parity-wasm = { version = "0.31", default_features = false }
 pwasm-utils = { version = "0.3", default_features = false }
 
@@ -36,6 +38,8 @@ std = [
 	"substrate-runtime-staking/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-system/std",
+	"substrate-runtime-timestamp/std",
+	"substrate-runtime-session/std",
 	"parity-wasm/std",
 	"pwasm-utils/std",
 ]

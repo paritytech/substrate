@@ -45,8 +45,14 @@ extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 
+#[cfg(test)]
+extern crate substrate_runtime_timestamp as timestamp;
+#[cfg(test)]
+extern crate substrate_runtime_session as session;
+
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
+
 
 extern crate substrate_runtime_primitives as runtime_primitives;
 
@@ -76,10 +82,8 @@ use runtime_support::dispatch::Result;
 use runtime_support::StorageMap;
 
 pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
-	// TODO: Rename it from DetermineContractAddress2 to DetermineContractAddress, and clean up
-	// the staking module.
 	/// Function type to get the contract address given the creator.
-	type DetermineContractAddress2: ContractAddressFor<Self::AccountId>;
+	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 }
 
 pub trait ContractAddressFor<AccountId: Sized> {
@@ -258,12 +262,56 @@ impl<T: Trait> staking::OnAccountKill<T::AccountId> for Module<T> {
 
 #[cfg(test)]
 mod tests {
-	// TODO: Remove `new_test_ext`
+	use {
+		StorageOf, CodeOf, ContractAddressFor, Module, Trait, staking,
+		system, session, consensus, timestamp
+	};
 	use runtime_io::with_externalities;
 	use runtime_support::StorageMap;
-	use staking::mock::{new_test_ext, Test};
+	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
+	use runtime_primitives::testing::{Digest, Header, H256};
+	// TODO: Remove `new_test_ext`
+	use staking::mock::{new_test_ext};
 	use wabt;
-	use {CodeOf, ContractAddressFor, Module, Trait};
+	use double_map::StorageDoubleMap;
+
+	#[derive(Clone, Eq, PartialEq)]
+	pub struct Test;
+	impl HasPublicAux for Test {
+		type PublicAux = u64;
+	}
+	impl consensus::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		type SessionKey = u64;
+	}
+	impl system::Trait for Test {
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type Digest = Digest;
+		type AccountId = u64;
+		type Header = Header;
+	}
+	impl timestamp::Trait for Test {
+		const TIMESTAMP_SET_POSITION: u32 = 0;
+		type Moment = u64;
+	}
+	impl staking::Trait for Test {
+		type Balance = u64;
+		type AccountIndex = u64;
+		type OnAccountKill = Contract;
+	}
+	impl session::Trait for Test {
+		type ConvertAccountIdToSessionKey = Identity;
+		type OnSessionChange = Staking;
+	}
+	impl Trait for Test {
+		type DetermineContractAddress = DummyContractAddressFor;
+	}
+
+	type Staking = staking::Module<Test>;
+	type Contract = Module<Test>;
 
 	pub struct DummyContractAddressFor;
 	impl ContractAddressFor<u64> for DummyContractAddressFor {
@@ -272,14 +320,6 @@ mod tests {
 		}
 	}
 
-	// TODO: Define own `Test`.
-
-	impl Trait for Test {
-		type DetermineContractAddress2 = DummyContractAddressFor;
-	}
-
-	type Contract = Module<Test>;
-	type Staking = ::staking::Module<Test>;
 
 	const CODE_TRANSFER: &str = r#"
 (module
@@ -427,7 +467,7 @@ mod tests {
 			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
 			assert_ok!(Contract::send(&0, 1, 11, 1, 100_000, Vec::new()));
 
-			let derived_address = <Test as Trait>::DetermineContractAddress2::contract_address_for(
+			let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 				&code_ctor_transfer,
 				&1,
 			);
@@ -458,7 +498,7 @@ mod tests {
 		let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
 
 		with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 1), || {
-			let derived_address = <Test as Trait>::DetermineContractAddress2::contract_address_for(
+			let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 				&code_ctor_transfer,
 				&0,
 			);
@@ -564,6 +604,38 @@ r#"
 				Staking::free_balance(&0),
 				100_000_000 - 4, // -4 for the gas spent by the constructor
 			);
+		});
+	}
+
+	#[test]
+	fn account_removal_removes_storage() {
+		with_externalities(&mut new_test_ext(100, 1, 3, 1, false, 0), || {
+			// Setup two accounts with free balance above than exsistential threshold.
+			{
+				Staking::set_free_balance(&1, 110);
+				<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
+				<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
+
+				Staking::set_free_balance(&2, 110);
+				<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
+				<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
+			}
+
+			// Transfer funds from account 1 of such amount that after this transfer
+			// the balance of account 1 is will be below than exsistential threshold.
+			//
+			// This should lead to the removal of all storage associated with this account.
+			assert_ok!(Staking::transfer(&1, 2.into(), 20));
+
+			// Verify that all entries from account 1 is removed, while
+			// entries from account 2 is in place.
+			{
+				assert_eq!(<StorageOf<Test>>::get(1, b"foo".to_vec()), None);
+				assert_eq!(<StorageOf<Test>>::get(1, b"bar".to_vec()), None);
+
+				assert_eq!(<StorageOf<Test>>::get(2, b"hello".to_vec()), Some(b"3".to_vec()));
+				assert_eq!(<StorageOf<Test>>::get(2, b"world".to_vec()), Some(b"4".to_vec()));
+			}
 		});
 	}
 }
