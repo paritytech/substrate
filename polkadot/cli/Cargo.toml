@@ -27,11 +27,13 @@ serde = "1.0"
 exit-future = "0.1"
 substrate-client = { path = "../../substrate/client" }
 substrate-codec = { path = "../../substrate/codec" }
+substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-network = { path = "../../substrate/network" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-rpc = { path = "../../substrate/rpc" }
 substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
+substrate-service = { path = "../../substrate/service" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-telemetry = { path = "../../substrate/telemetry" }
 polkadot-primitives = { path = "../primitives" }

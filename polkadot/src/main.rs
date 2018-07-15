@@ -25,7 +25,7 @@ extern crate futures;
 #[macro_use]
 extern crate error_chain;
 
-use cli::{ClientError, ServiceComponents, ClientBackend, PolkadotBlock, StateMachineBackend, Service};
+use cli::{ServiceComponents, Service};
 use futures::sync::oneshot;
 use futures::{future, Future};
 
@@ -51,9 +51,7 @@ impl cli::Worker for Worker {
 		exit.map_err(drop)
 	}
 
-	fn work<C: ServiceComponents>(self, _service: &Service<C>) -> Self::Exit
-		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>,
-	{
+	fn work<C: ServiceComponents>(self, _service: &Service<C>) -> Self::Exit {
 		self.exit_only()
 	}
 }

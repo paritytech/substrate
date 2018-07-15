@@ -110,11 +110,12 @@ fn sends_session_key() {
 	let parent_hash = [0; 32].into();
 	let local_key = [1; 32].into();
 
-	let status = Status { collating_for: None };
+	let validator_status = Status { collating_for: None };
+	let collator_status = Status { collating_for: Some(([2; 32].into(), 5.into())) };
 
 	{
 		let mut ctx = TestContext::default();
-		protocol.on_connect(&mut ctx, peer_a, make_status(&status, vec![Role::Authority]));
+		protocol.on_connect(&mut ctx, peer_a, make_status(&validator_status, vec![Role::Authority]));
 		assert!(ctx.messages.is_empty());
 	}
 
@@ -128,7 +129,7 @@ fn sends_session_key() {
 
 	{
 		let mut ctx = TestContext::default();
-		protocol.on_connect(&mut ctx, peer_b, make_status(&status, vec![Role::Authority]));
+		protocol.on_connect(&mut ctx, peer_b, make_status(&collator_status, vec![]));
 		assert!(ctx.has_message(peer_b, Message::SessionKey(parent_hash, local_key)));
 	}
 }
@@ -205,5 +206,26 @@ fn fetches_from_those_with_knowledge() {
 		on_message(&mut protocol, &mut ctx, peer_b, Message::BlockData(2, Some(block_data.clone())));
 		drop(protocol);
 		assert_eq!(recv.wait().unwrap(), block_data);
+	}
+}
+
+#[test]
+fn remove_bad_collator() {
+	let mut protocol = PolkadotProtocol::new();
+
+	let peer_id = 1;
+	let account_id = [2; 32].into();
+
+	let status = Status { collating_for: Some((account_id, 5.into())) };
+
+	{
+		let mut ctx = TestContext::default();
+		protocol.on_connect(&mut ctx, peer_id, make_status(&status, vec![]));
+	}
+
+	{
+		let mut ctx = TestContext::default();
+		protocol.disconnect_bad_collator(&mut ctx, account_id);
+		assert!(ctx.disabled.contains(&peer_id));
 	}
 }

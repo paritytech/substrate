@@ -20,7 +20,6 @@ use std::sync::Arc;
 use client::backend::{Backend, RemoteBackend};
 use client::{Client, CallExecutor};
 use codec::Slicable;
-use state_machine;
 use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
 use runtime::Address;
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
@@ -43,9 +42,7 @@ impl BlockBuilder for LightBlockBuilder {
 /// Remote polkadot API implementation.
 pub struct RemotePolkadotApiWrapper<B: Backend<Block>, E: CallExecutor<Block>>(pub Arc<Client<B, E, Block>>);
 
-impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotApiWrapper<B, E>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
-{
+impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotApiWrapper<B, E> {
 	type BlockBuilder = LightBlockBuilder;
 
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
@@ -104,6 +101,4 @@ impl<B: Backend<Block>, E: CallExecutor<Block>> PolkadotApi for RemotePolkadotAp
 	}
 }
 
-impl<B: RemoteBackend<Block>, E: CallExecutor<Block>> RemotePolkadotApi for RemotePolkadotApiWrapper<B, E>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
-{}
+impl<B: RemoteBackend<Block>, E: CallExecutor<Block>> RemotePolkadotApi for RemotePolkadotApiWrapper<B, E> {}

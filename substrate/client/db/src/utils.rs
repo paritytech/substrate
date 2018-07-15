@@ -57,8 +57,9 @@ pub struct Meta<N, H> {
 pub type BlockKey = [u8; 4];
 
 /// Convert block number into key (LE representation).
-pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u32> {
-	let n: u32 = n.as_();
+pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u64> {
+	let n: u64 = n.as_();
+	assert!(n & 0xffffffff00000000 == 0);
 
 	[
 		(n >> 24) as u8,
@@ -108,7 +109,6 @@ pub fn open_database(config: &DatabaseSettings, db_type: &str) -> client::error:
 pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block>) -> Result<Option<BlockKey>, client::error::Error>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	match id {
 		BlockId::Hash(h) => db.get(col_index, h.as_ref())
@@ -125,7 +125,6 @@ pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block
 pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>, id: BlockId<Block>) -> client::error::Result<Option<DBValue>>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	read_id(db, col_index, id).and_then(|key| match key {
 		Some(key) => db.get(col, &key).map_err(db_err),
@@ -137,7 +136,6 @@ pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>,
 pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>, client::error::Error>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	let genesis_number = <<Block as BlockT>::Header as HeaderT>::Number::zero();
 	let (best_hash, best_number) = if let Some(Some(header)) = db.get(COLUMN_META, meta_keys::BEST_BLOCK).and_then(|id|

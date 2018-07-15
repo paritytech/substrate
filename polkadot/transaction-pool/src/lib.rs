@@ -45,7 +45,7 @@ use std::{
 
 use codec::Slicable;
 use extrinsic_pool::{Pool, Listener, txpool::{self, Readiness, scoring::{Change, Choice}}};
-use extrinsic_pool::api::ExtrinsicPool;
+use extrinsic_pool::api::{ExtrinsicPool, EventStream};
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use runtime::{Address, UncheckedExtrinsic};
@@ -55,7 +55,7 @@ pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransacti
 pub use error::{Error, ErrorKind, Result};
 
 /// Type alias for convenience.
-pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable>::Checked;
+pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable<fn(Address) -> std::result::Result<AccountId, &'static str>>>::Checked;
 
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Clone, Debug)]
@@ -281,7 +281,7 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 		}
 
 		let (encoded_size, hash) = uxt.using_encoded(|e| (e.len(), BlakeTwo256::hash(e)));
-		let inner = match uxt.clone().check(|a| self.lookup(a)) {
+		let inner = match uxt.clone().check_with(|a| self.lookup(a)) {
 			Ok(xt) => Some(xt),
 			// keep the transaction around in the future pool and attempt to promote it later.
 			Err(Self::NO_ACCOUNT) => None,
@@ -402,6 +402,14 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 				Ok(*tx.hash())
 			})
 			.collect()
+	}
+
+	fn light_status(&self) -> LightStatus {
+		self.inner.light_status()
+	}
+
+	fn import_notification_stream(&self) -> EventStream {
+		self.inner.import_notification_stream()
 	}
 }
 

@@ -24,7 +24,6 @@ use codec::Slicable;
 
 use primitives::Bytes;
 use runtime_primitives::{generic, traits::Block as BlockT};
-use state_machine;
 
 pub mod error;
 
@@ -64,7 +63,6 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
 	E: client::CallExecutor<Block> + Send + Sync + 'static,
 	Block: BlockT + 'static,
-	client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash>,
 	P::Error: 'static,
 	Ex: Slicable,

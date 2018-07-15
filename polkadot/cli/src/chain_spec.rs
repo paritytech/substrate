@@ -39,10 +39,10 @@ pub enum ChainSpec {
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<service::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::PoC1Testnet => service::ChainSpec::poc_1_testnet_config()?,
-			ChainSpec::Development => service::ChainSpec::development_config(),
-			ChainSpec::LocalTestnet => service::ChainSpec::local_testnet_config(),
-			ChainSpec::StagingTestnet => service::ChainSpec::staging_testnet_config(),
+			ChainSpec::PoC1Testnet => service::chain_spec::poc_1_testnet_config()?,
+			ChainSpec::Development => service::chain_spec::development_config(),
+			ChainSpec::LocalTestnet => service::chain_spec::local_testnet_config(),
+			ChainSpec::StagingTestnet => service::chain_spec::staging_testnet_config(),
 			ChainSpec::Custom(f) => service::ChainSpec::from_json_file(PathBuf::from(f))?,
 		})
 	}

@@ -41,6 +41,8 @@ extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_extrinsic_pool;
+extern crate substrate_service;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
@@ -76,7 +78,7 @@ use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use polkadot_primitives::{Block, BlockId};
+use polkadot_primitives::BlockId;
 use codec::Slicable;
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
@@ -141,8 +143,7 @@ pub trait Worker {
 	fn exit_only(self) -> Self::Exit;
 
 	/// Do work and schedule exit.
-	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
-		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>;
+	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work;
 }
 
 /// Parse command line arguments and start the node.
@@ -218,17 +219,31 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		if matches.is_present("collator") {
 			info!("Starting collator");
 			// TODO [rob]: collation node implementation
-			service::Role::FULL
+			// This isn't a thing. Different parachains will have their own collator executables and
+			// maybe link to libpolkadot to get a light-client. 
+			service::Role::LIGHT
 		} else if matches.is_present("light") {
 			info!("Starting (light)");
+			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Role::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
 			info!("Starting validator");
+			config.execution_strategy = service::ExecutionStrategy::Both;
 			service::Role::AUTHORITY
 		} else {
 			info!("Starting (heavy)");
+			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Role::FULL
 		};
+
+	if let Some(s) = matches.value_of("execution") {
+		config.execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+		};
+	}
 
 	config.roles = role;
 	{
@@ -427,7 +442,6 @@ fn run_until_exit<C, W>(
 	where
 		C: service::Components,
 		W: Worker,
-		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
 	let (exit_send, exit) = exit_future::signal();
 
@@ -439,10 +453,11 @@ fn run_until_exit<C, W>(
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", matches)?;
 
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(service.client(), executor.clone());
-			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
-			rpc::rpc_handler::<Block, _, _, _, _>(
-				service.client(),
+			let client = (&service as &substrate_service::Service<C>).client();
+			let chain = rpc::apis::chain::Chain::new(client.clone(), executor.clone());
+			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool());
+			rpc::rpc_handler::<service::ComponentBlock<C>, _, _, _, _>(
+				client,
 				chain,
 				author,
 				sys_conf.clone(),

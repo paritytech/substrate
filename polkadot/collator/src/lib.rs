@@ -66,7 +66,7 @@ use client::BlockchainEvents;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::BlockId;
 use polkadot_primitives::parachain::{self, BlockData, HeadData, ConsolidatedIngress, Collation, Message, Id as ParaId};
-use polkadot_cli::{ClientError, ServiceComponents, ClientBackend, PolkadotBlock, StateMachineBackend, Service};
+use polkadot_cli::{ServiceComponents, Service};
 use polkadot_cli::Worker;
 
 /// Parachain context needed for collation.
@@ -157,7 +157,8 @@ pub fn collate<'a, R, P>(
 			ingress.0.iter().flat_map(|&(id, ref msgs)| msgs.iter().cloned().map(move |msg| (id, msg)))
 		);
 
-		let signature = key.sign(&block_data.0[..]).into();
+		let block_data_hash = block_data.hash();
+		let signature = key.sign(&block_data_hash.0[..]).into();
 		let pubkey_bytes: [u8; 32] = key.public().into();
 
 		let receipt = parachain::CandidateReceipt {
@@ -168,7 +169,7 @@ pub fn collate<'a, R, P>(
 			balance_uploads: Vec::new(),
 			egress_queue_roots: Vec::new(),
 			fees: 0,
-			block_data_hash: block_data.hash(),
+			block_data_hash,
 		};
 
 		parachain::Collation {
@@ -212,9 +213,7 @@ impl<P, E> Worker for CollationNode<P, E> where
 		self.exit
 	}
 
-	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
-		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>,
-	{
+	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work {
 		let CollationNode { parachain_context, exit, para_id, key } = self;
 		let client = service.client();
 		let api = service.api();
