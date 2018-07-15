@@ -251,7 +251,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		config.network.boot_nodes.extend(matches
 			.values_of("bootnodes")
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
-		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
+		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 
 		let port = match matches.value_of("port") {
@@ -516,8 +516,10 @@ fn db_path(base_path: &Path, spec_id: &str) -> PathBuf {
 	path
 }
 
-fn network_path(base_path: &Path) -> PathBuf {
+fn network_path(base_path: &Path, spec_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(spec_id);
 	path.push("network");
 	path
 }
