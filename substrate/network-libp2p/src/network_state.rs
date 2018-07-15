@@ -612,7 +612,11 @@ impl NetworkState {
 		// TODO: what do we do if the peer is reserved?
 		let mut connections = self.connections.write();
 		let peer_info = if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
-			info!(target: "network", "Peer {} disabled. {}", peer_id, reason);
+			if let (Some(client_version), Some(remote_address)) = (peer_info.client_version.as_ref(), peer_info.remote_address.as_ref()) {
+				info!(target: "network", "Peer {} (version: {}, address: {}) disabled. {}", peer_id, client_version, remote_address, reason);
+			} else {
+				info!(target: "network", "Peer {} disabled. {}", peer_id, reason);
+			}
 			let old = connections.peer_by_nodeid.remove(&peer_info.id);
 			debug_assert_eq!(old, Some(peer_id));
 			peer_info
