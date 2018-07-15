@@ -189,7 +189,6 @@ impl<T: Trait> Module<T> {
 		// TODO: Can we return early or we always need to do some finalization steps?
 		}?;
 
-
 		// Commit all changes that made it thus far into the persistant storage.
 		account_db::DirectAccountDb.commit(overlay.into_change_set());
 
