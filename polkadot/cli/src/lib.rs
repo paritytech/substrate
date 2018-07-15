@@ -500,26 +500,26 @@ fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) ->
 	Ok(address)
 }
 
-fn keystore_path(base_path: &Path, spec_id: &str) -> PathBuf {
+fn keystore_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
 	path.push("chains");
-	path.push(spec_id);
+	path.push(chain_id);
 	path.push("keystore");
 	path
 }
 
-fn db_path(base_path: &Path, spec_id: &str) -> PathBuf {
+fn db_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
 	path.push("chains");
-	path.push(spec_id);
+	path.push(chain_id);
 	path.push("db");
 	path
 }
 
-fn network_path(base_path: &Path, spec_id: &str) -> PathBuf {
+fn network_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
 	path.push("chains");
-	path.push(spec_id);
+	path.push(chain_id);
 	path.push("network");
 	path
 }
