@@ -17,7 +17,7 @@
 use std::{io, net, fmt};
 use libc::{ENFILE, EMFILE};
 use io::IoError;
-use {rlp, ethkey};
+use ethkey;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DisconnectReason
@@ -168,12 +168,6 @@ impl From<io::Error> for Error {
 			Some(EMFILE) => ErrorKind::SystemTooManyFiles.into(),
 			_ => Error::from_kind(ErrorKind::Io(err))
 		}
-	}
-}
-
-impl From<rlp::DecoderError> for Error {
-	fn from(_err: rlp::DecoderError) -> Self {
-		ErrorKind::Auth.into()
 	}
 }
 

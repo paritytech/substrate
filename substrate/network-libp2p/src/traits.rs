@@ -25,7 +25,6 @@ use ipnetwork::{IpNetwork, IpNetworkError};
 use error::Error;
 use ethkey::Secret;
 use ethereum_types::H512;
-use rlp::{Decodable, DecoderError, Rlp};
 
 /// Protocol handler level packet id
 pub type PacketId = u8;
@@ -96,21 +95,6 @@ pub struct SessionInfo {
 pub struct PeerCapabilityInfo {
 	pub protocol: ProtocolId,
 	pub version: u8,
-}
-
-impl Decodable for PeerCapabilityInfo {
-	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		let p: Vec<u8> = rlp.val_at(0)?;
-		if p.len() != 3 {
-			return Err(DecoderError::Custom("Invalid subprotocol string length. Should be 3"));
-		}
-		let mut p2: ProtocolId = [0u8; 3];
-		p2.clone_from_slice(&p);
-		Ok(PeerCapabilityInfo {
-			protocol: p2,
-			version: rlp.val_at(1)?
-		})
-	}
 }
 
 impl ToString for PeerCapabilityInfo {
