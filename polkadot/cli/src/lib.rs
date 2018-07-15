@@ -200,6 +200,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	}
 
 	let base_path = base_path(&matches);
+
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(|| keystore_path(&base_path))
