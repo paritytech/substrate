@@ -57,6 +57,7 @@ use network::ManageNetwork;
 use runtime_primitives::traits::{Header, As};
 use exit_future::Signal;
 use tokio::runtime::TaskExecutor;
+use substrate_executor::NativeExecutor;
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
@@ -83,7 +84,7 @@ pub struct Service<Components: components::Components> {
 pub fn new_client<Factory: components::ServiceFactory>(config: Configuration<Factory::Genesis>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
-	let executor = components::CodeExecutor::<Factory>::default();
+	let executor = NativeExecutor::with_heap_pages(config.min_heap_pages, config.max_heap_pages);
 	let (client, _) = components::FullComponents::<Factory>::build_client(
 		&config,
 		executor,
@@ -105,7 +106,7 @@ impl<Components> Service<Components>
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
-		let executor = components::CodeExecutor::<Components::Factory>::default();
+		let executor = NativeExecutor::with_heap_pages(config.min_heap_pages, config.max_heap_pages);
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 		for seed in &config.keys {
