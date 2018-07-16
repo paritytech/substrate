@@ -97,9 +97,8 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		// TODO: Gav says it better to be called `call`
 		// TODO: Change AccountId to staking::Address
-		fn send(
+		fn call(
 			aux,
 			dest: T::AccountId,
 			value: T::Balance,
@@ -146,7 +145,7 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 }
 
 impl<T: Trait> Module<T> {
-	fn send(
+	fn call(
 		aux: &<T as consensus::Trait>::PublicAux,
 		dest: T::AccountId,
 		value: T::Balance,
@@ -183,7 +182,7 @@ impl<T: Trait> Module<T> {
 		// Refund cost of the unused gas.
 		//
 		// NOTE: this should go after the commit to the storage, since the storage changes
-		// can alter the balance of the sender.
+		// can alter the balance of the caller.
 		gas::refund_unused_gas::<T>(aux, gas_meter, gas_price);
 
 		Ok(())
@@ -227,7 +226,7 @@ impl<T: Trait> Module<T> {
 		// Refund cost of the unused gas.
 		//
 		// NOTE: this should go after the commit to the storage, since the storage changes
-		// can alter the balance of the sender.
+		// can alter the balance of the caller.
 		gas::refund_unused_gas::<T>(aux, gas_meter, gas_price);
 
 		Ok(())
@@ -367,7 +366,7 @@ mod tests {
 			Staking::set_free_balance(&0, 100_000_000);
 			Staking::set_free_balance(&1, 11);
 
-			assert_ok!(Contract::send(
+			assert_ok!(Contract::call(
 				&0,
 				1,
 				3,
@@ -480,7 +479,7 @@ mod tests {
 			<CodeOf<Test>>::insert(1, code_create.to_vec());
 
 			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
-			assert_ok!(Contract::send(&0, 1, 11, 2, 100_000, Vec::new()));
+			assert_ok!(Contract::call(&0, 1, 11, 2, 100_000, Vec::new()));
 
 			let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 				&code_ctor_transfer,
@@ -497,7 +496,7 @@ mod tests {
 			assert_eq!(Staking::free_balance(&derived_address), 3);
 
 			// Initiate transfer to the newly created contract.
-			assert_ok!(Contract::send(
+			assert_ok!(Contract::call(
 				&0,
 				derived_address,
 				22,
@@ -571,7 +570,7 @@ r#"
 
 			Staking::set_free_balance(&0, 100_000_000);
 
-			assert_ok!(Contract::send(
+			assert_ok!(Contract::call(
 				&0,
 				1,
 				0,
@@ -594,7 +593,7 @@ r#"
 
 			Staking::set_free_balance(&0, 100_000_000);
 
-			assert_ok!(Contract::send(
+			assert_ok!(Contract::call(
 				&0,
 				1,
 				0,
