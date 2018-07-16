@@ -17,7 +17,7 @@
 use super::{CodeOf, ContractAddressFor, Trait};
 use account_db::{AccountDb, OverlayAccountDb};
 use vm;
-use gas::GasMeter;
+use gas::{GasMeter, GasMeterResult};
 
 use rstd::prelude::*;
 use runtime_primitives::traits::Zero;
@@ -52,10 +52,17 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		let dest_code = <CodeOf<T>>::get(&dest);
 
 		// TODO: check the new depth
-		// TODO: Charge here the base price for call
+
 
 		// TODO: We settled on charging with DOTs.
 		// fee / gas_price = some amount of gas. Substract from the gas meter.
+
+
+		// TODO: Get the base call fee from the storage
+		let call_fee = 135;
+		if gas_meter.charge(call_fee) != GasMeterResult::Proceed {
+			return Err("not enough gas to pay base call fee");
+		}
 
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
@@ -99,7 +106,6 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		ctor: &[u8],
 		_data: &[u8],
 	) -> Result<CreateReceipt<T>, ()> {
-		// TODO: What if the address already exists?
 		// TODO: check the new depth
 
 		// TODO: Charge here the base price for create
@@ -107,6 +113,8 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		// TODO: We settled on charging with DOTs.
 		// fee / gas_price = some amount of gas. Substract from the gas meter.
 
+
+		// TODO: What if the address already exists?
 		let dest = T::DetermineContractAddress::contract_address_for(ctor, &self.self_account);
 
 		let (exec_result, change_set) = {

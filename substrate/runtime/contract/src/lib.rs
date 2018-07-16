@@ -380,7 +380,11 @@ mod tests {
 
 			assert_eq!(
 				Staking::free_balance(&0),
-				100_000_000 - 3 - 12,
+				// 3 - value sent with the transaction
+				// 2 * 6 - gas used by the contract (6) multiplied by gas price (2)
+				// 2 * 135 - base gas fee for call (by transaction)
+				// 2 * 135 - base gas fee for call (by the contract)
+				100_000_000 - 3 - (2 * 6) - (2 * 135) - (2 * 135),
 			);
 			assert_eq!(
 				Staking::free_balance(&1),
@@ -478,14 +482,18 @@ mod tests {
 			<CodeOf<Test>>::insert(1, code_create.to_vec());
 
 			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
-			assert_ok!(Contract::send(&0, 1, 11, 1, 100_000, Vec::new()));
+			assert_ok!(Contract::send(&0, 1, 11, 2, 100_000, Vec::new()));
 
 			let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 				&code_ctor_transfer,
 				&1,
 			);
 
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 128);
+			// 11 - value sent with the transaction
+			// 2 * 128 - gas spent by the deployer contract (128) multiplied by gas price (2)
+			// 2 * 135 - base gas fee for call
+			let expected_gas_after_create = 100_000_000 - 11 - (2 * 128) - (2 * 135);
+			assert_eq!(Staking::free_balance(&0), expected_gas_after_create);
 			assert_eq!(Staking::free_balance(&1), 8);
 			assert_eq!(Staking::free_balance(&derived_address), 3);
 
@@ -499,7 +507,14 @@ mod tests {
 				Vec::new()
 			));
 
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 128 - 22 - 6);
+			assert_eq!(
+				Staking::free_balance(&0),
+				// 22 - value sent with the transaction
+				// 6 - value transfered by the deployed contract
+				// 135 - base gas fee call (by the transaction)
+				// 135 - base gas fee for
+				expected_gas_after_create - 22 - 6 - 135 - 135,
+			);
 			assert_eq!(Staking::free_balance(&derived_address), 22 - 3);
 			assert_eq!(Staking::free_balance(&9), 36);
 		});
@@ -565,7 +580,7 @@ r#"
 
 			assert_eq!(
 				Staking::free_balance(&0),
-				100_000_000 - 4,
+				100_000_000 - 4 - (2 * 135),
 			);
 		});
 	}
@@ -586,11 +601,9 @@ r#"
 				Vec::new(),
 			));
 
-			// TODO: balance is unchanged after call without value. But is this correct? This means
-			// that this transfer is basically free (apart from base transaction fee).
 			assert_eq!(
 				Staking::free_balance(&0),
-				100_000_000,
+				100_000_000 - (2 * 135),
 			);
 		});
 	}
