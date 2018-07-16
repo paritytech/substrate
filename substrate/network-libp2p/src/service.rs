@@ -623,19 +623,27 @@ fn build_kademlia_response(shared: &Arc<Shared>, searched: &PeerstorePeerId)
 		// TODO the iter of `known_closest_peers` should be infinite
 		.known_closest_peers(searched)
 		.map(move |peer_id| {
-			let addrs = shared.network_state.addrs_of_peer(&peer_id);
-			let connec_ty = if shared.network_state.has_connection(&peer_id) {
-				// TODO: this only checks connections with substrate ; but what
-				//       if we're connected through Kademlia only?
-				KadConnectionType::Connected
+			if peer_id == *shared.kad_system.local_peer_id() {
+				KadPeer {
+					node_id: peer_id.clone(),
+					multiaddrs: shared.listened_addrs.read().clone(),
+					connection_ty: KadConnectionType::Connected,
+				}
 			} else {
-				KadConnectionType::NotConnected
-			};
+				let addrs = shared.network_state.addrs_of_peer(&peer_id);
+				let connec_ty = if shared.network_state.has_connection(&peer_id) {
+					// TODO: this only checks connections with substrate ; but what
+					//       if we're connected through Kademlia only?
+					KadConnectionType::Connected
+				} else {
+					KadConnectionType::NotConnected
+				};
 
-			KadPeer {
-				node_id: peer_id.clone(),
-				multiaddrs: addrs,
-				connection_ty: connec_ty,
+				KadPeer {
+					node_id: peer_id.clone(),
+					multiaddrs: addrs,
+					connection_ty: connec_ty,
+				}
 			}
 		})
 		.collect::<Vec<_>>()
