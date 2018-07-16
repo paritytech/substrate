@@ -156,7 +156,6 @@ fn to_execution_result<T: Ext>(
 	}
 
 	Ok(ExecutionResult {
-		gas_left: runtime.gas_meter.gas_left(),
 		return_data,
 	})
 }
@@ -166,7 +165,6 @@ fn to_execution_result<T: Ext>(
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ExecutionResult {
 	pub return_data: Vec<u8>,
-	pub gas_left: u64,
 }
 
 impl ExecutionResult {
@@ -178,11 +176,6 @@ impl ExecutionResult {
 	/// Note that gas is already charged for returning the data.
 	pub fn return_data(&self) -> &[u8] {
 		&self.return_data
-	}
-
-	/// How much gas left after the execution of the contract.
-	pub fn gas_left(&self) -> u64 {
-		self.gas_left
 	}
 }
 
@@ -658,14 +651,13 @@ mod tests {
 			&mut self,
 			to: &Self::AccountId,
 			value: Self::Balance,
-			gas_meter: &mut GasMeter,
+			_gas_meter: &mut GasMeter,
 			_data: Vec<u8>,
 		) -> Result<ExecutionResult, ()> {
 			self.transfers.push(TransferEntry { to: *to, value });
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
 			Ok(ExecutionResult {
-				gas_left: gas_meter.gas_left(),
 				return_data: Vec::new(),
 			})
 		}

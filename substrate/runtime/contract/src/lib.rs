@@ -69,10 +69,6 @@ mod exec;
 mod vm;
 mod gas;
 
-// TODO: Remove this
-pub use vm::execute;
-pub use vm::Ext;
-
 use exec::ExecutionContext;
 
 use account_db::{AccountDb, OverlayAccountDb};

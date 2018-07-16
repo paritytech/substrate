@@ -85,8 +85,6 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			} else {
 				// that was a plain transfer
 				vm::ExecutionResult {
-					// TODO: Check this
-					gas_left: gas_meter.gas_left(),
 					return_data: Vec::new(),
 				}
 			};
@@ -121,7 +119,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		// TODO: What if the address already exists?
 		let dest = T::DetermineContractAddress::contract_address_for(ctor, &self.self_account);
 
-		let (exec_result, change_set) = {
+		let change_set = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
 
 			if endownment > T::Balance::zero() {
@@ -142,14 +140,14 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 			overlay.set_code(&dest, exec_result.return_data().to_vec());
 
-			(exec_result, overlay.into_change_set())
+			overlay.into_change_set()
 		};
 
 		self.account_db.commit(change_set);
 
 		Ok(CreateReceipt {
 			address: dest,
-			gas_left: exec_result.gas_left,
+			gas_left: gas_meter.gas_left(),
 		})
 	}
 }
