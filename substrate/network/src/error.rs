@@ -16,12 +16,14 @@
 
 //! Polkadot service possible errors.
 
+use std::io::Error as IoError;
 use network_libp2p::Error as NetworkError;
 use client;
 
 error_chain! {
 	foreign_links {
 		Network(NetworkError) #[doc = "Devp2p error."];
+		Io(IoError) #[doc = "IO error."];
 	}
 
 	links {

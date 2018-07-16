@@ -31,6 +31,7 @@ use chain::Client;
 use message::LocalizedBftMessage;
 use specialization::Specialization;
 use on_demand::OnDemandService;
+use import_queue::AsyncImportQueue;
 use runtime_primitives::traits::{Block as BlockT};
 
 /// Type that represents fetch completion future.
@@ -147,20 +148,29 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>> {
 impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params<B, S>, protocol_id: ProtocolId) -> Result<Arc<Service<B, S>>, Error> {
+		let chain = params.chain.clone();
 		let service = NetworkService::new(params.network_config.clone(), None)?;
+		let import_queue = Arc::new(AsyncImportQueue::new());
 		let sync = Arc::new(Service {
 			network: service,
 			protocol_id,
 			handler: Arc::new(ProtocolHandler {
 				protocol: Protocol::new(
 					params.config,
-					params.chain.clone(),
+					params.chain,
+					import_queue.clone(),
 					params.on_demand,
 					params.transaction_pool,
-					params.specialization
+					params.specialization,
 				)?,
 			}),
 		});
+
+		import_queue.start(
+			Arc::downgrade(sync.handler.protocol.sync()),
+			Arc::downgrade(&sync),
+			Arc::downgrade(&chain)
+		)?;
 
 		Ok(sync)
 	}
