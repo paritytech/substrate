@@ -104,7 +104,6 @@ decl_module! {
 			aux,
 			dest: T::AccountId,
 			value: T::Balance,
-			gas_price: T::Balance,
 			gas_limit: T::Gas,
 			data: Vec<u8>
 		) -> Result = 0;
@@ -112,7 +111,6 @@ decl_module! {
 		fn create(
 			aux,
 			value: T::Balance,
-			gas_price: T::Balance,
 			gas_limit: T::Gas,
 			ctor: Vec<u8>,
 			data: Vec<u8>
@@ -128,6 +126,7 @@ decl_storage! {
 	CallBaseFee get(call_base_fee): b"con:base_call_fee" => required T::Gas;
 	CreateBaseFee get(create_base_fee): b"con:base_create_fee" => required T::Gas;
 
+	GasPrice get(gas_price): b"con:gas_price" => required T::Balance;
 
 	// The code associated with an account.
 	pub CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
@@ -135,8 +134,6 @@ decl_storage! {
 
 // TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
 // code in contract itself and use that.
-
-// TODO: gas price should be stored in the runtime, and not passed with the transaction.
 
 /// The storage items associated with an account/key.
 ///
@@ -154,7 +151,6 @@ impl<T: Trait> Module<T> {
 		aux: &<T as consensus::Trait>::PublicAux,
 		dest: T::AccountId,
 		value: T::Balance,
-		gas_price: T::Balance,
 		gas_limit: T::Gas,
 		data: Vec<u8>,
 	) -> Result {
@@ -164,8 +160,7 @@ impl<T: Trait> Module<T> {
 		//
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
-		// TODO: Get gas price from the storage
-		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit, gas_price)?;
+		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit)?;
 
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
@@ -174,7 +169,6 @@ impl<T: Trait> Module<T> {
 				// TODO: avoid this
 				_caller: aux.clone(),
 				self_account: aux.clone(),
-				gas_price,
 				depth: 0,
 				account_db: &mut overlay,
 			};
@@ -188,7 +182,7 @@ impl<T: Trait> Module<T> {
 		//
 		// NOTE: this should go after the commit to the storage, since the storage changes
 		// can alter the balance of the caller.
-		gas::refund_unused_gas::<T>(aux, gas_meter, gas_price);
+		gas::refund_unused_gas::<T>(aux, gas_meter);
 
 		Ok(())
 	}
@@ -196,7 +190,6 @@ impl<T: Trait> Module<T> {
 	fn create(
 		aux: &<T as consensus::Trait>::PublicAux,
 		endownment: T::Balance,
-		gas_price: T::Balance,
 		gas_limit: T::Gas,
 		ctor_code: Vec<u8>,
 		data: Vec<u8>,
@@ -207,8 +200,7 @@ impl<T: Trait> Module<T> {
 		//
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
-		// TODO: Get gas price from the storage
-		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit, gas_price)?;
+		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit)?;
 
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
@@ -217,7 +209,6 @@ impl<T: Trait> Module<T> {
 				// TODO: avoid this
 				_caller: aux.clone(),
 				self_account: aux.clone(),
-				gas_price,
 				depth: 0,
 				account_db: &mut overlay,
 			};
@@ -232,7 +223,7 @@ impl<T: Trait> Module<T> {
 		//
 		// NOTE: this should go after the commit to the storage, since the storage changes
 		// can alter the balance of the caller.
-		gas::refund_unused_gas::<T>(aux, gas_meter, gas_price);
+		gas::refund_unused_gas::<T>(aux, gas_meter);
 
 		Ok(())
 	}
@@ -305,7 +296,7 @@ mod tests {
 		}
 	}
 
-	fn new_test_ext(existential_deposit: u64) -> runtime_io::TestExternalities {
+	fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -337,6 +328,7 @@ mod tests {
 			contract_fee: 21,
 			call_base_fee: 135,
 			create_base_fee: 175,
+			gas_price,
 		}.build_storage().unwrap());
 		t
 	}
@@ -371,7 +363,7 @@ mod tests {
 
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
-		with_externalities(&mut new_test_ext(0), || {
+		with_externalities(&mut new_test_ext(0, 2), || {
 			<CodeOf<Test>>::insert(1, code_transfer.to_vec());
 
 			Staking::set_free_balance(&0, 100_000_000);
@@ -381,7 +373,6 @@ mod tests {
 				&0,
 				1,
 				3,
-				2,
 				100_000,
 				Vec::new()
 			));
@@ -482,7 +473,7 @@ mod tests {
 		let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
 		let code_create = wabt::wat2wasm(&code_create(&code_ctor_transfer)).unwrap();
 
-		with_externalities(&mut new_test_ext(0), || {
+		with_externalities(&mut new_test_ext(0, 2), || {
 			Staking::set_free_balance(&0, 100_000_000);
 			Staking::set_free_balance(&1, 0);
 			Staking::set_free_balance(&9, 30);
@@ -490,7 +481,7 @@ mod tests {
 			<CodeOf<Test>>::insert(1, code_create.to_vec());
 
 			// When invoked, the contract at address `1` must create a contract with 'transfer' code.
-			assert_ok!(Contract::call(&0, 1, 11, 2, 100_000, Vec::new()));
+			assert_ok!(Contract::call(&0, 1, 11, 100_000, Vec::new()));
 
 			let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 				&code_ctor_transfer,
@@ -512,7 +503,6 @@ mod tests {
 				&0,
 				derived_address,
 				22,
-				1,
 				100_000,
 				Vec::new()
 			));
@@ -520,10 +510,10 @@ mod tests {
 			assert_eq!(
 				Staking::free_balance(&0),
 				// 22 - value sent with the transaction
-				// 6 - value transfered by the deployed contract
-				// 135 - base gas fee for call (top level)
-				// 135 - base gas fee for call (by transfer contract)
-				expected_gas_after_create - 22 - 6 - 135 - 135,
+				// (2 * 6) - gas used by the contract
+				// (2 * 135) - base gas fee for call (top level)
+				// (2 * 135) - base gas fee for call (by transfer contract)
+				expected_gas_after_create - 22 - (2 * 6) - (2 * 135) - (2 * 135),
 			);
 			assert_eq!(Staking::free_balance(&derived_address), 22 - 3);
 			assert_eq!(Staking::free_balance(&9), 36);
@@ -535,7 +525,7 @@ mod tests {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
 
-		with_externalities(&mut new_test_ext(0), || {
+		with_externalities(&mut new_test_ext(0, 3), || {
 			let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 				&code_ctor_transfer,
 				&0,
@@ -547,7 +537,6 @@ mod tests {
 			assert_ok!(Contract::create(
 				&0,
 				11,
-				3,
 				100_000,
 				code_ctor_transfer.clone(),
 				Vec::new(),
@@ -578,7 +567,7 @@ r#"
 	fn refunds_unused_gas() {
 		let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
 
-		with_externalities(&mut new_test_ext(0), || {
+		with_externalities(&mut new_test_ext(0, 2), || {
 			<CodeOf<Test>>::insert(1, code_nop.to_vec());
 
 			Staking::set_free_balance(&0, 100_000_000);
@@ -587,7 +576,6 @@ r#"
 				&0,
 				1,
 				0,
-				2,
 				100_000,
 				Vec::new(),
 			));
@@ -601,7 +589,7 @@ r#"
 
 	#[test]
 	fn call_with_zero_value() {
-		with_externalities(&mut new_test_ext(0), || {
+		with_externalities(&mut new_test_ext(0, 2), || {
 			<CodeOf<Test>>::insert(1, vec![]);
 
 			Staking::set_free_balance(&0, 100_000_000);
@@ -610,7 +598,6 @@ r#"
 				&0,
 				1,
 				0,
-				2,
 				100_000,
 				Vec::new(),
 			));
@@ -626,13 +613,12 @@ r#"
 	fn create_with_zero_endownment() {
 		let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
 
-		with_externalities(&mut new_test_ext(0), || {
+		with_externalities(&mut new_test_ext(0, 2), || {
 			Staking::set_free_balance(&0, 100_000_000);
 
 			assert_ok!(Contract::create(
 				&0,
 				0,
-				2,
 				100_000,
 				code_nop,
 				Vec::new(),
@@ -651,7 +637,7 @@ r#"
 
 	#[test]
 	fn account_removal_removes_storage() {
-		with_externalities(&mut new_test_ext(100), || {
+		with_externalities(&mut new_test_ext(100, 2), || {
 			// Setup two accounts with free balance above than exsistential threshold.
 			{
 				Staking::set_free_balance(&1, 110);

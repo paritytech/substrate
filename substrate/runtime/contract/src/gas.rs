@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use runtime_primitives::traits::{As, CheckedMul, SimpleArithmetic};
+use {Trait, Module};
+use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
 use staking;
-use Trait;
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -34,14 +34,16 @@ impl GasMeterResult {
 	}
 }
 
-pub struct GasMeter<U> {
-	gas_left: U,
+pub struct GasMeter<T: Trait> {
+	gas_left: T::Gas,
+	gas_price: T::Balance,
 }
-impl<U: SimpleArithmetic + Copy> GasMeter<U> {
+impl<T: Trait> GasMeter<T> {
 	#[cfg(test)]
-	pub fn with_limit(gas_limit: U) -> GasMeter<U> {
+	pub fn with_limit(gas_limit: T::Gas, gas_price: T::Balance) -> GasMeter<T> {
 		GasMeter {
 			gas_left: gas_limit,
+			gas_price,
 		}
 	}
 
@@ -49,7 +51,7 @@ impl<U: SimpleArithmetic + Copy> GasMeter<U> {
 	///
 	/// Returns `OutOfGas` if there is not enough gas or addition of the specified
 	/// amount of gas has lead to overflow. On success returns `Proceed`.
-	pub fn charge(&mut self, amount: U) -> GasMeterResult {
+	pub fn charge(&mut self, amount: T::Gas) -> GasMeterResult {
 		match self.gas_left.checked_sub(&amount) {
 			None => GasMeterResult::OutOfGas,
 			Some(val) if val.is_zero() => GasMeterResult::OutOfGas,
@@ -60,9 +62,15 @@ impl<U: SimpleArithmetic + Copy> GasMeter<U> {
 		}
 	}
 
-	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter<U>>) -> R>(
+	pub fn charge_by_balance(&mut self, amount: T::Balance) -> GasMeterResult {
+		let amount_in_gas: T::Balance = amount / self.gas_price;
+		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
+		self.charge(amount_in_gas)
+	}
+
+	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter<T>>) -> R>(
 		&mut self,
-		amount: U,
+		amount: T::Gas,
 		f: F,
 	) -> R {
 		// NOTE that it is ok to allocate all available gas since it still ensured
@@ -71,7 +79,10 @@ impl<U: SimpleArithmetic + Copy> GasMeter<U> {
 			f(None)
 		} else {
 			self.gas_left = self.gas_left - amount;
-			let mut nested = GasMeter { gas_left: amount };
+			let mut nested = GasMeter {
+				gas_left: amount,
+				gas_price: self.gas_price,
+			};
 
 			let r = f(Some(&mut nested));
 
@@ -82,7 +93,7 @@ impl<U: SimpleArithmetic + Copy> GasMeter<U> {
 	}
 
 	/// Returns how much gas left from the initial budget.
-	pub fn gas_left(&self) -> U {
+	pub fn gas_left(&self) -> T::Gas {
 		self.gas_left
 	}
 }
@@ -90,8 +101,8 @@ impl<U: SimpleArithmetic + Copy> GasMeter<U> {
 pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
 	gas_limit: T::Gas,
-	gas_price: T::Balance,
-) -> Result<GasMeter<T::Gas>, &'static str> {
+) -> Result<GasMeter<T>, &'static str> {
+	let gas_price = <Module<T>>::gas_price();
 	let b = <staking::Module<T>>::free_balance(transactor);
 	let cost = <T::Gas as As<T::Balance>>::as_(gas_limit.clone())
 		.checked_mul(&gas_price)
@@ -102,15 +113,12 @@ pub fn buy_gas<T: Trait>(
 	<staking::Module<T>>::set_free_balance(transactor, b - cost);
 	Ok(GasMeter {
 		gas_left: gas_limit,
+		gas_price,
 	})
 }
 
-pub fn refund_unused_gas<T: Trait>(
-	transactor: &T::AccountId,
-	gas_meter: GasMeter<T::Gas>,
-	gas_price: T::Balance,
-) {
+pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) {
 	let b = <staking::Module<T>>::free_balance(transactor);
-	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_price;
+	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
 	<staking::Module<T>>::set_free_balance(transactor, b + refund);
 }

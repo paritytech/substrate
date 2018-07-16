@@ -34,7 +34,7 @@ pub trait Ext<T: Trait> {
 		&mut self,
 		code: &[u8],
 		value: T::Balance,
-		gas_meter: &mut GasMeter<T::Gas>,
+		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
 	) -> Result<CreateReceipt<T::AccountId, T::Gas>, ()>;
 
@@ -43,7 +43,7 @@ pub trait Ext<T: Trait> {
 		&mut self,
 		to: &T::AccountId,
 		value: T::Balance,
-		gas_meter: &mut GasMeter<T::Gas>,
+		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
 	) -> Result<ExecutionResult, ()>;
 }
@@ -101,7 +101,7 @@ struct Runtime<'a, T: Trait + 'a, E: Ext<T> + 'a> {
 	ext: &'a mut E,
 	config: &'a Config<T>,
 	memory: sandbox::Memory,
-	gas_meter: &'a mut GasMeter<T::Gas>,
+	gas_meter: &'a mut GasMeter<T>,
 	special_trap: Option<SpecialTrap>,
 }
 impl<'a, T: Trait, E: Ext<T> + 'a> Runtime<'a, T, E> {
@@ -181,7 +181,7 @@ impl ExecutionResult {
 pub fn execute<'a, T: Trait, E: Ext<T>>(
 	code: &[u8],
 	ext: &'a mut E,
-	gas_meter: &mut GasMeter<T::Gas>,
+	gas_meter: &mut GasMeter<T>,
 ) -> Result<ExecutionResult, Error> {
 	// TODO: Receive data as an argument
 
@@ -628,7 +628,7 @@ mod tests {
 			&mut self,
 			code: &[u8],
 			endownment: u64,
-			gas_meter: &mut GasMeter<u64>,
+			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
 		) -> Result<CreateReceipt<u64, u64>, ()> {
 			self.creates.push(CreateEntry {
@@ -648,7 +648,7 @@ mod tests {
 			&mut self,
 			to: &u64,
 			value: u64,
-			_gas_meter: &mut GasMeter<u64>,
+			_gas_meter: &mut GasMeter<Test>,
 			_data: Vec<u8>,
 		) -> Result<ExecutionResult, ()> {
 			self.transfers.push(TransferEntry { to: *to, value });
@@ -739,7 +739,7 @@ mod tests {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
 		let mut mock_ext = MockExt::default();
-		execute(&code_transfer, &mut mock_ext, &mut GasMeter::with_limit(50_000)).unwrap();
+		execute(&code_transfer, &mut mock_ext, &mut GasMeter::with_limit(50_000, 1)).unwrap();
 
 		assert_eq!(&mock_ext.transfers, &[TransferEntry { to: 2, value: 6 }]);
 	}
@@ -762,7 +762,7 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 
 		assert_matches!(
-			execute(&code_mem, &mut mock_ext, &mut GasMeter::with_limit(100_000)),
+			execute(&code_mem, &mut mock_ext, &mut GasMeter::with_limit(100_000, 1)),
 			Err(_)
 		);
 	}
