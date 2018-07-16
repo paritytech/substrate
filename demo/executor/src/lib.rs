@@ -313,14 +313,14 @@ mod tests {
 	fn full_wasm_block_import_works() {
 		let mut t = new_test_ext();
 
-		WasmExecutor{heap_pages: 8}.call(&mut t, COMPACT_CODE, "execute_block", &block1().0, true).0.unwrap();
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1().0, true).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
 			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
 
-		WasmExecutor{heap_pages: 8}.call(&mut t, COMPACT_CODE, "execute_block", &block2().0, true).0.unwrap();
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block2().0, true).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 30);
@@ -332,7 +332,7 @@ mod tests {
 	fn wasm_big_block_import_fails() {
 		let mut t = new_test_ext();
 
-		let r = WasmExecutor{heap_pages: 8}.call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, true).0;
+		let r = WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, true).0;
 		assert!(!r.is_ok());
 	}
 
@@ -365,9 +365,9 @@ mod tests {
 		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
-		let r = WasmExecutor{heap_pages: 8}.call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
+		let r = WasmExecutor::new(8, 8).call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
-		let r = WasmExecutor{heap_pages: 8}.call(&mut t, &foreign_code[..], "apply_extrinsic", &vec![].and(&xt()), true).0.unwrap();
+		let r = WasmExecutor::new(8, 8).call(&mut t, &foreign_code[..], "apply_extrinsic", &vec![].and(&xt()), true).0.unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Err(ApplyError::CantPay));
 	}
@@ -385,9 +385,9 @@ mod tests {
 		];
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm");
-		let r = WasmExecutor{heap_pages: 8}.call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
+		let r = WasmExecutor::new(8, 8).call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
-		let r = WasmExecutor{heap_pages: 8}.call(&mut t, &foreign_code[..], "apply_extrinsic", &vec![].and(&xt()), true).0.unwrap();
+		let r = WasmExecutor::new(8, 8).call(&mut t, &foreign_code[..], "apply_extrinsic", &vec![].and(&xt()), true).0.unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 

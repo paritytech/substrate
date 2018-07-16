@@ -62,7 +62,7 @@ fn fetch_cached_runtime_version<'a, E: Externalities>(
 	cache.entry(gen_cache_key(code))
 		.or_insert_with(|| {
 			let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-			let version = WasmExecutor{heap_pages: 8}.call_in_wasm_module(ext, &module, "version", &[]).ok()
+			let version = WasmExecutor::new(8, 8).call_in_wasm_module(ext, &module, "version", &[]).ok()
 				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
 
 			if let Some(v) = version {
@@ -130,7 +130,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: WasmExecutor{heap_pages},
+			fallback: WasmExecutor::new(1, heap_pages),
 		}
 	}
 }

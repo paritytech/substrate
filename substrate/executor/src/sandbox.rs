@@ -554,7 +554,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor{heap_pages: 8}.call(&mut ext, &test_code[..], "test_sandbox", &code, true).0.unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox", &code, true).0.unwrap(),
 			vec![1],
 		);
 	}
@@ -575,7 +575,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor{heap_pages: 8}.call(&mut ext, &test_code[..], "test_sandbox", &code, true).0.unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox", &code, true).0.unwrap(),
 			vec![0],
 		);
 	}
@@ -613,7 +613,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor{heap_pages: 8}.call(&mut ext, &test_code[..], "test_sandbox", &code, true).0.unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox", &code, true).0.unwrap(),
 			vec![1],
 		);
 	}
@@ -647,7 +647,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor{heap_pages: 8}.call(&mut ext, &test_code[..], "test_sandbox_args", &code, true).0.unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox_args", &code, true).0.unwrap(),
 			vec![1],
 		);
 	}
@@ -669,7 +669,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor{heap_pages: 8}.call(&mut ext, &test_code[..], "test_sandbox_return_val", &code, true).0.unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox_return_val", &code, true).0.unwrap(),
 			vec![1],
 		);
 	}

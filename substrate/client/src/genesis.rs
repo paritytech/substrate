@@ -169,7 +169,7 @@ mod tests {
 		let _ = execute(
 			&backend,
 			&mut overlay,
-			&WasmExecutor { heap_pages: 8 },
+			&WasmExecutor::new(8, 8),
 			"execute_block",
 			&b1data,
 			ExecutionStrategy::NativeWhenPossible,
