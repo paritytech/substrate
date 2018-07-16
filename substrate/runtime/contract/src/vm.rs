@@ -1,10 +1,10 @@
 use codec::Slicable;
-use sandbox;
+use parity_wasm::elements::{self, External, MemoryType};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
-use parity_wasm::elements::{self, External, MemoryType};
-use {GasMeter};
+use sandbox;
+use {GasMeter, GasMeterResult};
 
 pub struct CreateReceipt<Address> {
 	pub address: Address,
@@ -33,10 +33,22 @@ pub trait Ext {
 	///
 	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
 	/// transfered from this to the newly created account.
-	fn create(&mut self, code: &[u8], value: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<CreateReceipt<Self::AccountId>, ()>;
+	fn create(
+		&mut self,
+		code: &[u8],
+		value: Self::Balance,
+		gas_meter: &mut GasMeter,
+		data: Vec<u8>,
+	) -> Result<CreateReceipt<Self::AccountId>, ()>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
-	fn call(&mut self, to: &Self::AccountId, value: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<ExecutionResult, ()>;
+	fn call(
+		&mut self,
+		to: &Self::AccountId,
+		value: Self::Balance,
+		gas_meter: &mut GasMeter,
+		data: Vec<u8>,
+	) -> Result<ExecutionResult, ()>;
 }
 
 /// Error that can occur while preparing or executing wasm smart-contract.
@@ -99,12 +111,6 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	fn memory(&self) -> &sandbox::Memory {
 		&self.memory
 	}
-	fn ext(&self) -> &T {
-		self.ext
-	}
-	fn ext_mut(&mut self) -> &mut T {
-		self.ext
-	}
 	/// Save a data buffer as a result of the execution.
 	///
 	/// This function also charges gas for the returning.
@@ -114,11 +120,13 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 		let price = (self.config.return_data_per_byte_cost as u64)
 			.checked_mul(data.len() as u64)
 			.ok_or_else(|| ())?;
-		if self.gas_meter.charge(price) {
-			self.special_trap = Some(SpecialTrap::Return(data));
-			Ok(())
-		} else {
-			Err(())
+
+		match self.gas_meter.charge(price) {
+			GasMeterResult::Proceed => {
+				self.special_trap = Some(SpecialTrap::Return(data));
+				Ok(())
+			}
+			GasMeterResult::OutOfGas => Err(()),
 		}
 	}
 }
@@ -133,11 +141,9 @@ fn to_execution_result<T: Ext>(
 	// special runtime trap the we must recognize.
 	match (run_err, runtime.special_trap) {
 		// No traps were generated. Proceed normally.
-		(None, None) => {},
+		(None, None) => {}
 		// Special case. The trap was the result of the execution `return` host function.
-		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(rd))) => {
-			return_data = rd
-		}
+		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(rd))) => return_data = rd,
 		// Any other kind of a trap should result in a failure.
 		(Some(_), _) => {
 			return Err(Error::Invoke);
@@ -198,10 +204,10 @@ pub fn execute<'a, T: Ext>(
 		args: &[sandbox::TypedValue],
 	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let amount = args[0].as_i32().unwrap() as u32;
-		if e.gas_meter.charge(amount as u64) {
-			Ok(sandbox::ReturnValue::Unit)
-		} else {
-			Err(sandbox::HostError)
+
+		match e.gas_meter.charge(amount as u64) {
+			GasMeterResult::Proceed => Ok(sandbox::ReturnValue::Unit),
+			GasMeterResult::OutOfGas => Err(sandbox::HostError),
 		}
 	}
 
@@ -234,7 +240,7 @@ pub fn execute<'a, T: Ext>(
 		} else {
 			None
 		};
-		e.ext_mut().set_storage(&location, value);
+		e.ext.set_storage(&location, value);
 
 		Ok(sandbox::ReturnValue::Unit)
 	}
@@ -259,7 +265,7 @@ pub fn execute<'a, T: Ext>(
 		let mut location = [0; 32];
 		e.memory().get(location_ptr, &mut location)?;
 
-		if let Some(value) = e.ext().get_storage(&location) {
+		if let Some(value) = e.ext.get_storage(&location) {
 			e.memory().set(dest_ptr, &value)?;
 		} else {
 			e.memory().set(dest_ptr, &[0u8; 32])?;
@@ -289,20 +295,25 @@ pub fn execute<'a, T: Ext>(
 		let value = T::Balance::decode(&mut &value_buf[..]).unwrap();
 
 		// TODO: Read input data from memory.
-		// TODO: Let user to choose how much gas to allocate for the execution.
 		let input_data = Vec::new();
-		let gas_limit = e.gas_meter.gas_left();
 
-		match e.ext_mut().call(&transfer_to, value, gas_limit, input_data) {
-			Ok(ExecutionResult { gas_left, .. }) => {
-				// TODO: Find a way how to pass return_data back to the this sandbox.
-				if e.gas_meter.set_gas_left(gas_left) {
-					Ok(sandbox::ReturnValue::Unit)
-				} else {
-					// This is rather defensive, since out-of-gas should be detected earlier and
-					// reported as Err(_).
-					Err(sandbox::HostError)
+		// TODO: Let user to choose how much gas to allocate for the execution.
+		let nested_gas_limit = e.gas_meter.gas_left();
+		let ext = &mut e.ext;
+		let call_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
+			match nested_meter {
+				Some(nested_meter) => ext.call(&transfer_to, value, nested_meter, input_data),
+				None => {
+					// there is not enough gas to allocate for the nested call.
+					Err(())
 				}
+			}
+		});
+
+		match call_outcome {
+			Ok(ExecutionResult { .. }) => {
+				// TODO: Find a way how to pass return_data back to the this sandbox.
+				Ok(sandbox::ReturnValue::Unit)
 			}
 			Err(_) => {
 				// TODO: Return a status code value that can be handled by the caller.
@@ -331,18 +342,25 @@ pub fn execute<'a, T: Ext>(
 		e.memory().get(code_ptr, &mut code)?;
 
 		// TODO: Read input data from the sandbox.
-		// TODO: Let user to choose how much gas to allocate for the execution.
 		let input_data = Vec::new();
-		let gas_limit = e.gas_meter.gas_left();
 
-		match e.ext_mut().create(&code, value, gas_limit, input_data) {
-			Ok(CreateReceipt { gas_left, .. }) => {
-				if e.gas_meter.set_gas_left(gas_left) {
-					// TODO: Copy an address of the created contract in the sandbox.
-					Ok(sandbox::ReturnValue::Unit)
-				} else {
-					Err(sandbox::HostError)
+		// TODO: Let user to choose how much gas to allocate for the execution.
+		let nested_gas_limit = e.gas_meter.gas_left();
+		let ext = &mut e.ext;
+		let create_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
+			match nested_meter {
+				Some(nested_meter) => ext.create(&code, value, nested_meter, input_data),
+				None => {
+					// there is not enough gas to allocate for the nested call.
+					Err(())
 				}
+			}
+		});
+
+		match create_outcome {
+			Ok(CreateReceipt { .. }) => {
+				// TODO: Copy an address of the created contract in the sandbox.
+				Ok(sandbox::ReturnValue::Unit)
 			}
 			Err(_) => {
 				// TODO: Return a status code value that can be handled by the caller
@@ -465,7 +483,8 @@ impl ContractModule {
 	/// Memory section contains declarations of internal linear memories, so if we find one
 	/// we reject such a module.
 	fn ensure_no_internal_memory(&self) -> Result<(), Error> {
-		let module = self.module
+		let module = self
+			.module
 			.as_ref()
 			.expect("On entry to the function `module` can't be None; qed");
 		if module
@@ -482,7 +501,8 @@ impl ContractModule {
 			.with_grow_cost(self.config.grow_mem_cost)
 			.with_forbidden_floats();
 
-		let module = self.module
+		let module = self
+			.module
 			.take()
 			.expect("On entry to the function `module` can't be `None`; qed");
 
@@ -494,7 +514,8 @@ impl ContractModule {
 	}
 
 	fn inject_stack_height_metering(&mut self) -> Result<(), Error> {
-		let module = self.module
+		let module = self
+			.module
 			.take()
 			.expect("On entry to the function `module` can't be `None`; qed");
 
@@ -508,7 +529,8 @@ impl ContractModule {
 
 	/// Find the memory import entry and return it's descriptor.
 	fn find_mem_import(&self) -> Option<&MemoryType> {
-		let import_section = self.module
+		let import_section = self
+			.module
 			.as_ref()
 			.expect("On entry to the function `module` can't be `None`; qed")
 			.import_section()?;
@@ -579,16 +601,15 @@ fn prepare_contract(original_code: &[u8], config: &Config) -> Result<PreparedCon
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::collections::HashMap;
 	use std::fmt;
 	use wabt;
-	use std::collections::HashMap;
 	use GasMeter;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
 		code: Vec<u8>,
 		endownment: u64,
-		gas_limit: u64,
 		data: Vec<u8>,
 	}
 	#[derive(Debug, PartialEq, Eq)]
@@ -613,34 +634,38 @@ mod tests {
 		fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
 			*self.storage.entry(key.to_vec()).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
 		}
-		fn create(&mut self, code: &[u8], endownment: Self::Balance, gas_limit: u64, data: Vec<u8>) -> Result<CreateReceipt<u64>, ()> {
-			self.creates.push(
-				CreateEntry {
-					code: code.to_vec(),
-					endownment,
-					gas_limit,
-					data,
-				}
-			);
+		fn create(
+			&mut self,
+			code: &[u8],
+			endownment: Self::Balance,
+			gas_meter: &mut GasMeter,
+			data: Vec<u8>,
+		) -> Result<CreateReceipt<u64>, ()> {
+			self.creates.push(CreateEntry {
+				code: code.to_vec(),
+				endownment,
+				data,
+			});
 			let address = self.next_account_id;
 			self.next_account_id += 1;
 
 			Ok(CreateReceipt {
 				address,
-				gas_left: gas_limit,
+				gas_left: gas_meter.gas_left,
 			})
 		}
-		fn call(&mut self, to: &Self::AccountId, value: Self::Balance, gas_limit: u64, _data: Vec<u8>) -> Result<ExecutionResult, ()> {
-			self.transfers.push(
-				TransferEntry {
-					to: *to,
-					value,
-				}
-			);
+		fn call(
+			&mut self,
+			to: &Self::AccountId,
+			value: Self::Balance,
+			gas_meter: &mut GasMeter,
+			_data: Vec<u8>,
+		) -> Result<ExecutionResult, ()> {
+			self.transfers.push(TransferEntry { to: *to, value });
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
 			Ok(ExecutionResult {
-				gas_left: gas_limit,
+				gas_left: gas_meter.gas_left,
 				return_data: Vec::new(),
 			})
 		}
@@ -653,19 +678,14 @@ mod tests {
 	}
 
 	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
-		let wasm = wabt::Wat2Wasm::new()
-			.validate(false)
-			.convert(wat)
-			.unwrap();
+		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
 		let config = Config::default();
 		prepare_contract(wasm.as_ref(), &config)
 	}
 
 	#[test]
 	fn internal_memory_declaration() {
-		let r = parse_and_prepare_wat(
-			r#"(module (memory 1 1))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (memory 1 1))"#);
 		assert_matches!(r, Err(Error::InternalMemoryDeclared));
 	}
 
@@ -674,40 +694,28 @@ mod tests {
 		// This test assumes that maximum page number is configured to a certain number.
 		assert_eq!(Config::default().max_memory_pages, 16);
 
-		let r = parse_and_prepare_wat(
-			r#"(module (import "env" "memory" (memory 1 1)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 1)))"#);
 		assert_matches!(r, Ok(_));
 
 		// No memory import
-		let r = parse_and_prepare_wat(
-			r#"(module)"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module)"#);
 		assert_matches!(r, Ok(_));
 
 		// incorrect import name. That's kinda ok, since this will fail
 		// at later stage when imports will be resolved.
-		let r = parse_and_prepare_wat(
-			r#"(module (import "vne" "memory" (memory 1 1)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "vne" "memory" (memory 1 1)))"#);
 		assert_matches!(r, Ok(_));
 
 		// initial exceed maximum
-		let r = parse_and_prepare_wat(
-			r#"(module (import "env" "memory" (memory 16 1)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 16 1)))"#);
 		assert_matches!(r, Err(Error::Memory));
 
 		// no maximum
-		let r = parse_and_prepare_wat(
-			r#"(module (import "env" "memory" (memory 1)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1)))"#);
 		assert_matches!(r, Err(Error::Memory));
 
 		// requested maximum exceed configured maximum
-		let r = parse_and_prepare_wat(
-			r#"(module (import "env" "memory" (memory 1 17)))"#,
-		);
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 17)))"#);
 		assert_matches!(r, Err(Error::Memory));
 	}
 
@@ -744,14 +752,10 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 		execute(&code_transfer, &mut mock_ext, &mut GasMeter::new(50_000)).unwrap();
 
-		assert_eq!(&mock_ext.transfers, &[TransferEntry {
-			to: 2,
-			value: 6,
-		}]);
+		assert_eq!(&mock_ext.transfers, &[TransferEntry { to: 2, value: 6 }]);
 	}
 
-	const CODE_MEM: &str =
-r#"
+	const CODE_MEM: &str = r#"
 (module
 	;; Internal memory is not allowed.
 	(memory 1 1)

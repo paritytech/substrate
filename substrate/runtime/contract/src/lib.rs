@@ -181,6 +181,8 @@ impl<T: Trait> Module<T> {
 		// paying for the gas.
 		pay_for_gas::<T>(aux, gas_limit, gas_price)?;
 
+		let mut gas_meter = GasMeter::new(gas_limit);
+
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
 		let result = {
@@ -192,7 +194,7 @@ impl<T: Trait> Module<T> {
 				depth: 0,
 				account_db: &mut overlay,
 			};
-			ctx.call(dest, value, gas_limit, data)
+			ctx.call(dest, value, &mut gas_meter, data)
 		// TODO: Can we return early or we always need to do some finalization steps?
 		}?;
 
@@ -224,6 +226,8 @@ impl<T: Trait> Module<T> {
 		// paying for the gas.
 		pay_for_gas::<T>(aux, gas_limit, gas_price)?;
 
+		let mut gas_meter = GasMeter::new(gas_limit);
+
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
 		let result = {
@@ -235,7 +239,7 @@ impl<T: Trait> Module<T> {
 				depth: 0,
 				account_db: &mut overlay,
 			};
-			ctx.create(endownment, gas_limit, &ctor_code, &data)
+			ctx.create(endownment, &mut gas_meter, &ctor_code, &data)
 				.map_err(|_| "create failed")
 		// TODO: Can we return early or do we always need to do some finalization steps?
 		}?;
@@ -260,42 +264,67 @@ impl<T: Trait> staking::OnAccountKill<T::AccountId> for Module<T> {
 	}
 }
 
+#[must_use]
+#[derive(Debug, PartialEq, Eq)]
+pub enum GasMeterResult {
+	Proceed,
+	OutOfGas,
+}
+
 pub struct GasMeter {
 	gas_left: u64,
 }
 impl GasMeter {
-	pub fn new(gas_limit: u64) -> GasMeter {
+	fn new(gas_limit: u64) -> GasMeter {
 		GasMeter {
 			gas_left: gas_limit,
 		}
 	}
 	/// Account for used gas.
 	///
-	/// Returns `false` if there is not enough gas or addition of the specified
-	/// amount of gas has lead to overflow. On success returns `true`.
-	///
-	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
+	/// Returns `OutOfGas` if there is not enough gas or addition of the specified
+	/// amount of gas has lead to overflow. On success returns `Proceed`.
 	#[must_use]
-	pub fn charge(&mut self, amount: u64) -> bool {
+	pub fn charge(&mut self, amount: u64) -> GasMeterResult {
 		match self.gas_left.checked_sub(amount) {
-			None => false,
-			Some(val) if val == 0 => false,
+			None => GasMeterResult::OutOfGas,
+			Some(val) if val == 0 => GasMeterResult::OutOfGas,
 			Some(val) => {
 				self.gas_left = val;
-				true
+				GasMeterResult::Proceed
 			}
 		}
 	}
 
-	/// Override current gas left value.
-	///
-	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
-	#[must_use]
-	pub fn set_gas_left(&mut self, gas_left: u64) -> bool {
-		self.gas_left = gas_left;
+	pub fn allocate(&mut self, amount: u64) -> Option<GasMeter> {
+		match self.charge(amount) {
+			GasMeterResult::Proceed => Some(GasMeter {
+				gas_left: amount,
+			}),
+			GasMeterResult::OutOfGas => None,
+		}
+	}
 
-		// Continue only if there is gas left.
-		gas_left > 0
+	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter>) -> R>(&mut self, amount: u64, f: F) -> R {
+		// NOTE that it is ok to allocate all available gas.
+		if self.gas_left < amount {
+			f(None)
+		} else {
+			self.gas_left -= amount;
+			let mut nested = GasMeter::new(amount);
+
+			let r = f(Some(&mut nested));
+
+			self.gas_left += nested.gas_left;
+
+			r
+		}
+	}
+
+	/// Take back the gas left from the other gas meter.
+	pub fn take_change(&mut self, gas_meter: GasMeter) {
+		assert!(gas_meter.gas_left > 0, "gas meter never reaches zero; qed");
+		self.gas_left += gas_meter.gas_left;
 	}
 
 	/// Returns how much gas left from the initial budget.

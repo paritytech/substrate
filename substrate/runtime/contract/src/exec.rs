@@ -22,6 +22,7 @@ use runtime_support::StorageMap;
 use staking;
 use system;
 use vm;
+use {GasMeter};
 
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
@@ -44,7 +45,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		&mut self,
 		dest: T::AccountId,
 		value: T::Balance,
-		gas_limit: u64,
+		gas_meter: &mut GasMeter,
 		_data: Vec<u8>,
 	) -> Result<vm::ExecutionResult, &'static str> {
 		let dest_code = <CodeOf<T>>::get(&dest);
@@ -71,13 +72,13 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 					depth: self.depth + 1,
 				};
 
-				let mut gas_meter = ::GasMeter::new(gas_limit);
-				vm::execute(&dest_code, &mut nested, &mut gas_meter)
+				vm::execute(&dest_code, &mut nested, gas_meter)
 					.map_err(|_| "vm execute returned error")?
 			} else {
 				// that was a plain transfer
 				vm::ExecutionResult {
-					gas_left: gas_limit,
+					// TODO: Check this
+					gas_left: gas_meter.gas_left,
 					return_data: Vec::new(),
 				}
 			};
@@ -93,7 +94,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 	pub fn create(
 		&mut self,
 		endownment: T::Balance,
-		gas_limit: u64,
+		gas_meter: &mut GasMeter,
 		ctor: &[u8],
 		_data: &[u8],
 	) -> Result<CreateReceipt<T>, ()> {
@@ -122,9 +123,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 					gas_price: self.gas_price,
 					depth: self.depth + 1,
 				};
-
-				let mut gas_meter = ::GasMeter::new(gas_limit);
-				vm::execute(ctor, &mut nested, &mut gas_meter).map_err(|_| ())?
+				vm::execute(ctor, &mut nested, gas_meter).map_err(|_| ())?
 			};
 
 			overlay.set_code(&dest, exec_result.return_data().to_vec());
@@ -190,10 +189,10 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 		&mut self,
 		code: &[u8],
 		endownment: Self::Balance,
-		gas_limit: u64,
+		gas_meter: &mut GasMeter,
 		data: Vec<u8>,
 	) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
-		let receipt = self.create(endownment, gas_limit, code, &data)?;
+		let receipt = self.create(endownment, gas_meter, code, &data)?;
 		Ok(vm::CreateReceipt {
 			address: receipt.address,
 			gas_left: receipt.gas_left,
@@ -204,9 +203,9 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 		&mut self,
 		to: &Self::AccountId,
 		value: Self::Balance,
-		gas_limit: u64,
+		gas_meter: &mut GasMeter,
 		data: Vec<u8>,
 	) -> Result<vm::ExecutionResult, ()> {
-		self.call(to.clone(), value, gas_limit, data).map_err(|_| ())
+		self.call(to.clone(), value, gas_meter, data).map_err(|_| ())
 	}
 }
