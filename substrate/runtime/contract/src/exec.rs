@@ -110,8 +110,11 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			return Err("not enough gas to pay base create fee");
 		}
 
-		// TODO: What if the address already exists?
 		let dest = T::DetermineContractAddress::contract_address_for(ctor, &self.self_account);
+		if <CodeOf<T>>::exists(&dest) {
+			// TODO: Is it enough?
+			return Err("contract already exists");
+		}
 
 		let change_set = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
