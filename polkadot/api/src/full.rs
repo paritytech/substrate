@@ -200,7 +200,7 @@ mod tests {
 			timestamp: Some(Default::default()),
 		};
 
-		::client::new_in_mem(LocalDispatch::with_heap_pages(8), genesis_config).unwrap()
+		::client::new_in_mem(LocalDispatch::with_heap_pages(8, 8), genesis_config).unwrap()
 	}
 
 	#[test]

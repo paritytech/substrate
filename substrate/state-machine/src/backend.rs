@@ -35,6 +35,11 @@ pub trait Backend: TryIntoTrieBackend {
 	/// Get keyed storage associated with specific address, or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
+	/// true if a key exists in storage.
+	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		Ok(self.storage(key)?.is_some())
+	}
+
 	/// Retrieve all entries keys of which start with the given prefix and
 	/// call `f` for each of those keys.
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F);
@@ -109,6 +114,10 @@ impl Backend for InMemory {
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(key).map(Clone::clone))
+	}
+
+	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		Ok(self.inner.get(key).is_some())
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
