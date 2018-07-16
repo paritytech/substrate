@@ -41,7 +41,7 @@ mod pruning;
 
 use std::fmt;
 use parking_lot::RwLock;
-use codec::Slicable;
+use codec::Codec;
 use std::collections::HashSet;
 use unfinalized::UnfinalizedOverlay;
 use pruning::RefWindow;
@@ -50,8 +50,8 @@ use pruning::RefWindow;
 pub type DBValue = Vec<u8>;
 
 /// Basic set of requirements for the Block hash and node key types.
-pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Slicable + std::hash::Hash + 'static {}
-impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Slicable + std::hash::Hash + 'static> Hash for T {}
+pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + 'static {}
+impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + 'static> Hash for T {}
 
 /// Backend database trait. Read-only.
 pub trait MetaDb {
@@ -76,7 +76,7 @@ pub trait HashDb {
 pub enum Error<E: fmt::Debug> {
 	/// Database backend error.
 	Db(E),
-	/// `Slicable` decoding error.
+	/// `Codec` decoding error.
 	Decoding,
 }
 
@@ -138,7 +138,7 @@ impl PruningMode {
 	}
 }
 
-fn to_meta_key<S: Slicable>(suffix: &[u8], data: &S) -> Vec<u8> {
+fn to_meta_key<S: Codec>(suffix: &[u8], data: &S) -> Vec<u8> {
 	let mut buffer = data.encode();
 	buffer.extend(suffix);
 	buffer

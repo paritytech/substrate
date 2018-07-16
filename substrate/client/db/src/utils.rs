@@ -23,7 +23,7 @@ use kvdb::{self, KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 
 use client;
-use codec::Slicable;
+use codec::Decode;
 use hashdb::DBValue;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hash, HashFor, Zero};

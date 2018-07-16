@@ -19,7 +19,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
-use codec::{self, Slicable};
+use codec::{self, Decode, Encode};
 
 const UNFINALIZED_JOURNAL: &[u8] = b"unfinalized_journal";
 const LAST_FINALIZED: &[u8] = b"last_finalized";
@@ -38,22 +38,22 @@ struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	deleted: Vec<Key>,
 }
 
-impl<BlockHash: Hash, Key: Hash> Slicable for JournalRecord<BlockHash, Key> {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::with_capacity(4096);
-		self.hash.using_encoded(|s| v.extend(s));
-		self.parent_hash.using_encoded(|s| v.extend(s));
-		self.inserted.using_encoded(|s| v.extend(s));
-		self.deleted.using_encoded(|s| v.extend(s));
-		v
+impl<BlockHash: Hash, Key: Hash> Encode for JournalRecord<BlockHash, Key> {
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		dest.push(&self.hash);
+		dest.push(&self.parent_hash);
+		dest.push(&self.inserted);
+		dest.push(&self.deleted);
 	}
+}
 
+impl<BlockHash: Hash, Key: Hash> Decode for JournalRecord<BlockHash, Key> {
 	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
 		Some(JournalRecord {
-			hash: Slicable::decode(input)?,
-			parent_hash: Slicable::decode(input)?,
-			inserted: Slicable::decode(input)?,
-			deleted: Slicable::decode(input)?,
+			hash: Decode::decode(input)?,
+			parent_hash: Decode::decode(input)?,
+			inserted: Decode::decode(input)?,
+			deleted: Decode::decode(input)?,
 		})
 	}
 }
@@ -93,7 +93,7 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 					let journal_key = to_journal_key(block, index);
 					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 						Some(record) => {
-							let record: JournalRecord<BlockHash, Key> = Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
+							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
 							let overlay = BlockOverlay {
 								hash: record.hash.clone(),
 								journal_key,

@@ -17,7 +17,7 @@
 //! Utility struct to build a block.
 
 use std::vec::Vec;
-use codec::Slicable;
+use codec::{Decode, Encode};
 use state_machine::{self, native_when_possible};
 use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
 use runtime_primitives::generic::BlockId;
@@ -103,12 +103,12 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 			&[],
 			native_when_possible(),
 		)?;
-		self.header = <<Block as BlockT>::Header as Slicable>::decode(&mut &output[..])
+		self.header = <<Block as BlockT>::Header as Decode>::decode(&mut &output[..])
 			.expect("Header came straight out of runtime so must be valid");
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),
-			HashFor::<Block>::ordered_trie_root(self.extrinsics.iter().map(Slicable::encode)),
+			HashFor::<Block>::ordered_trie_root(self.extrinsics.iter().map(Encode::encode)),
 		);
 
 		Ok(<Block as BlockT>::new(self.header, self.extrinsics))

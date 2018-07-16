@@ -20,6 +20,7 @@ use std::{fmt, sync::Arc};
 use extrinsic_pool::{api, txpool};
 use test_client;
 use parking_lot::Mutex;
+use codec::Encode;
 
 type Extrinsic = u64;
 type Hash = u64;

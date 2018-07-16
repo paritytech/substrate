@@ -43,7 +43,7 @@ mod utils;
 use std::sync::Arc;
 use std::path::PathBuf;
 
-use codec::Slicable;
+use codec::{Decode, Encode};
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
@@ -187,7 +187,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, client::error::Error> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::BODY, id)? {
-			Some(body) => match Slicable::decode(&mut &body[..]) {
+			Some(body) => match Decode::decode(&mut &body[..]) {
 				Some(body) => Ok(Some(body)),
 				None => return Err(client::error::ErrorKind::Backend("Error decoding body".into()).into()),
 			}
@@ -197,7 +197,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 
 	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, client::error::Error> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::JUSTIFICATION, id)? {
-			Some(justification) => match Slicable::decode(&mut &justification[..]) {
+			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Some(justification) => Ok(Some(justification)),
 				None => return Err(client::error::ErrorKind::Backend("Error decoding justification".into()).into()),
 			}
