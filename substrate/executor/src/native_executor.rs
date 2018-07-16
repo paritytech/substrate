@@ -62,7 +62,7 @@ fn fetch_cached_runtime_version<'a, E: Externalities>(
 	cache.entry(gen_cache_key(code))
 		.or_insert_with(|| {
 			let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-			let version = WasmExecutor{heap_pages: 8}.call_in_wasm_module(ext, &module, "version", &[]).ok()
+			let version = WasmExecutor::new(8, 8).call_in_wasm_module(ext, &module, "version", &[]).ok()
 				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
 
 			if let Some(v) = version {
@@ -103,6 +103,11 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 	/// Get native runtime version.
 	const VERSION: RuntimeVersion;
+
+	/// Construct corresponding `NativeExecutor` with given `heap_pages`.
+	fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> NativeExecutor<Self> where Self: Sized {
+		NativeExecutor::with_heap_pages(min_heap_pages, max_heap_pages)
+	}
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
@@ -116,13 +121,8 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
-	/// Create new instance with 128 pages for the wasm fallback's heap.
-	pub fn new() -> Self {
-		Self::with_heap_pages(128)
-	}
-
 	/// Create new instance with specific number of pages for wasm fallback's heap.
-	pub fn with_heap_pages(heap_pages: usize) -> Self {
+	pub fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> Self {
 		// FIXME: set this entry at compile time
 		RUNTIMES_CACHE.lock().insert(
 			gen_cache_key(D::native_equivalent()),
@@ -130,14 +130,8 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: WasmExecutor{heap_pages},
+			fallback: WasmExecutor::new(min_heap_pages, max_heap_pages),
 		}
-	}
-}
-
-impl<D: NativeExecutionDispatch> Default for NativeExecutor<D> {
-	fn default() -> Self {
-		Self::new()
 	}
 }
 
@@ -212,11 +206,9 @@ macro_rules! native_executor_instance {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
-		}
 
-		impl $name {
-			pub fn with_heap_pages(heap_pages: usize) -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::with_heap_pages(heap_pages)
+			fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor::with_heap_pages(min_heap_pages, max_heap_pages)
 			}
 		}
 	}

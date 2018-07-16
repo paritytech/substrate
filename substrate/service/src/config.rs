@@ -49,6 +49,10 @@ pub struct Configuration<G: Serialize + DeserializeOwned + BuildStorage> {
 	pub name: String,
 	/// Execution strategy.
 	pub execution_strategy: ExecutionStrategy,
+	/// Minimum number of heap pages to allocate for Wasm execution.
+	pub min_heap_pages: usize,
+	/// Maximum number of heap pages to allocate for Wasm execution.
+	pub max_heap_pages: usize,
 }
 
 impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
@@ -66,6 +70,8 @@ impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
 			telemetry: Default::default(),
 			pruning: PruningMode::ArchiveAll,
 			execution_strategy: ExecutionStrategy::Both,
+			min_heap_pages: 8,
+			max_heap_pages: 512,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 		configuration

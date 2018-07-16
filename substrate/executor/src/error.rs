@@ -16,6 +16,7 @@
 
 //! Rust executor possible errors.
 
+use state_machine;
 use serializer;
 use wasmi;
 
@@ -73,6 +74,22 @@ error_chain! {
 		InvalidMemoryReference {
 			description("invalid memory reference"),
 			display("Invalid memory reference"),
+		}
+
+		/// Retry, please.
+		PleaseRetry {
+			description("retry needed"),
+			display("Retry needed"),
+		}
+	}
+}
+
+impl state_machine::Error for Error {
+	fn needs_retry(&self) -> bool {
+		if let ErrorKind::PleaseRetry = self.0 {
+			true
+		} else {
+			false
 		}
 	}
 }

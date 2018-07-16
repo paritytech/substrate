@@ -27,3 +27,7 @@ log = "0.3"
 [dev-dependencies]
 assert_matches = "1.1"
 wabt = "0.4"
+
+[features]
+default = []
+wasm-extern-trace = []
