@@ -128,8 +128,8 @@ decl_storage! {
 	ContractFee get(contract_fee): b"con:contract_fee" => required T::Balance;
 	CallBaseFee get(call_base_fee): b"con:base_call_fee" => required T::Gas;
 	CreateBaseFee get(create_base_fee): b"con:base_create_fee" => required T::Gas;
-
 	GasPrice get(gas_price): b"con:gas_price" => required T::Balance;
+	MaxDepth get(max_depth): b"con:max_depth" => required u32;
 
 	// The code associated with an account.
 	pub CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.

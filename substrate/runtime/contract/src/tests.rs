@@ -105,6 +105,7 @@ fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExt
 			call_base_fee: 135,
 			create_base_fee: 175,
 			gas_price,
+			max_depth: 1024,
 		}.build_storage()
 			.unwrap(),
 	);
