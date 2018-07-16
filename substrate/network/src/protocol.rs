@@ -19,16 +19,16 @@ use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
-use serde_json;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, As};
 use runtime_primitives::generic::BlockId;
 use network_libp2p::PeerId;
+use codec::{Encode, Decode};
 
 use message::{self, Message};
 use message::generic::Message as GenericMessage;
 use specialization::Specialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
-use service::{Role, TransactionPool};
+use service::{Roles, TransactionPool};
 use config::ProtocolConfig;
 use chain::Client;
 use on_demand::OnDemandService;
@@ -38,7 +38,7 @@ use error;
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 
 /// Current protocol version.
-pub (crate) const CURRENT_VERSION: u32 = 0;
+pub (crate) const CURRENT_VERSION: u32 = 1;
 /// Current packet count.
 pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 
@@ -74,7 +74,7 @@ struct Peer<B: BlockT> {
 	/// Protocol version
 	protocol_version: u32,
 	/// Roles
-	roles: Role,
+	roles: Roles,
 	/// Peer best block hash
 	best_hash: B::Hash,
 	/// Peer best block number
@@ -95,7 +95,7 @@ struct Peer<B: BlockT> {
 #[derive(Debug)]
 pub struct PeerInfo<B: BlockT> {
 	/// Roles
-	pub roles: Role,
+	pub roles: Roles,
 	/// Protocol version
 	pub protocol_version: u32,
 	/// Peer best block hash
@@ -233,12 +233,12 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 		}
 	}
 
-	pub fn handle_packet(&self, io: &mut SyncIo, peer_id: PeerId, data: &[u8]) {
-		let message: Message<B> = match serde_json::from_slice(data) {
-			Ok(m) => m,
-			Err(e) => {
-				trace!(target: "sync", "Invalid packet: {}", String::from_utf8_lossy(data));
-				io.disable_peer(peer_id, &format!("Peer sent us a packet with invalid format ({})", e));
+	pub fn handle_packet(&self, io: &mut SyncIo, peer_id: PeerId, mut data: &[u8]) {
+		let message: Message<B> = match Decode::decode(&mut data) {
+			Some(m) => m,
+			None => {
+				trace!(target: "sync", "Invalid packet from {}", peer_id);
+				io.disable_peer(peer_id, "Peer sent us a packet with invalid format");
 				return;
 			}
 		};
@@ -319,16 +319,9 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 		};
 		let max = cmp::min(request.max.unwrap_or(u32::max_value()), MAX_BLOCK_DATA_RESPONSE) as usize;
 		// TODO: receipts, etc.
-		let (mut get_header, mut get_body, mut get_justification) = (false, false, false);
-		for a in request.fields {
-			match a {
-				message::BlockAttribute::Header => get_header = true,
-				message::BlockAttribute::Body => get_body = true,
-				message::BlockAttribute::Receipt => unimplemented!(),
-				message::BlockAttribute::MessageQueue => unimplemented!(),
-				message::BlockAttribute::Justification => get_justification = true,
-			}
-		}
+		let get_header = request.fields.contains(message::BlockAttributes::HEADER);
+		let get_body = request.fields.contains(message::BlockAttributes::BODY);
+		let get_justification = request.fields.contains(message::BlockAttributes::JUSTIFICATION);
 		while let Some(header) = self.context_data.chain.header(&id).unwrap_or(None) {
 			if blocks.len() >= max{
 				break;
@@ -339,10 +332,10 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 			let block_data = message::generic::BlockData {
 				hash: hash,
 				header: if get_header { Some(header) } else { None },
-				body: (if get_body { self.context_data.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None }).map(|body| message::Body::Extrinsics(body)),
+				body: if get_body { self.context_data.chain.body(&BlockId::Hash(hash)).unwrap_or(None) } else { None },
 				receipt: None,
 				message_queue: None,
-				justification: justification.map(|j| message::generic::BlockJustification::V2(j)),
+				justification,
 			};
 			blocks.push(block_data);
 			match request.direction {
@@ -435,7 +428,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 
 			let peer = Peer {
 				protocol_version: status.version,
-				roles: message::Role::as_flags(&status.roles),
+				roles: status.roles,
 				best_hash: status.best_hash,
 				best_number: status.best_number,
 				block_request: None,
@@ -452,7 +445,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 		let mut context = ProtocolContext::new(&self.context_data, io);
 		self.sync.write().new_peer(&mut context, peer_id);
 		self.specialization.write().on_connect(&mut context, peer_id, status.clone());
-		self.on_demand.as_ref().map(|s| s.on_connect(peer_id, message::Role::as_flags(&status.roles)));
+		self.on_demand.as_ref().map(|s| s.on_connect(peer_id, status.roles));
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -521,10 +514,6 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 				best_number: info.chain.best_number,
 				best_hash: info.chain.best_hash,
 				chain_status: self.specialization.read().status(),
-
-				parachain_id: None,
-				validator_id: None,
-				validator_signature: None,
 			};
 			self.send_message(io, peer_id, GenericMessage::Status(status))
 		}
@@ -562,7 +551,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 		);
 
 		// blocks are not announced by light clients
-		if self.config.roles & Role::LIGHT == Role::LIGHT {
+		if self.config.roles & Roles::LIGHT == Roles::LIGHT {
 			return;
 		}
 
@@ -621,7 +610,7 @@ fn send_message<B: BlockT>(peers: &RwLock<HashMap<PeerId, Peer<B>>>, io: &mut Sy
 		},
 		_ => (),
 	}
-	let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
+	let data = message.encode();
 	if let Err(e) = io.send(peer_id, data) {
 		debug!(target:"sync", "Error sending message: {:?}", e);
 		io.disconnect_peer(peer_id);
@@ -630,6 +619,6 @@ fn send_message<B: BlockT>(peers: &RwLock<HashMap<PeerId, Peer<B>>>, io: &mut Sy
 
 /// Hash a message.
 pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
-	let data = serde_json::to_vec(&message).expect("Serializer is infallible; qed");
+	let data = message.encode();
 	HashFor::<B>::hash(&data)
 }

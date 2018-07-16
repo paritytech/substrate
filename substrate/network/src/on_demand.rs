@@ -38,7 +38,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// On-demand service API.
 pub trait OnDemandService<Block: BlockT>: Send + Sync {
 	/// When new node is connected.
-	fn on_connect(&self, peer: PeerId, role: service::Role);
+	fn on_connect(&self, peer: PeerId, role: service::Roles);
 
 	/// When node is disconnected.
 	fn on_disconnect(&self, peer: PeerId);
@@ -168,8 +168,8 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 	E: service::ExecuteInContext<B>,
 	B::Header: HeaderT,
 {
-	fn on_connect(&self, peer: PeerId, role: service::Role) {
-		if !role.intersects(service::Role::FULL | service::Role::AUTHORITY) { // TODO: correct?
+	fn on_connect(&self, peer: PeerId, role: service::Roles) {
+		if !role.intersects(service::Roles::FULL | service::Roles::AUTHORITY) { // TODO: correct?
 			return;
 		}
 
@@ -326,7 +326,7 @@ mod tests {
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 	use message;
 	use network_libp2p::PeerId;
-	use service::{Role, ExecuteInContext};
+	use service::{Roles, ExecuteInContext};
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 	use test_client::runtime::{Block, Hash};
@@ -372,16 +372,16 @@ mod tests {
 	#[test]
 	fn knows_about_peers_roles() {
 		let (_, on_demand) = dummy(true);
-		on_demand.on_connect(0, Role::LIGHT);
-		on_demand.on_connect(1, Role::FULL);
-		on_demand.on_connect(2, Role::AUTHORITY);
+		on_demand.on_connect(0, Roles::LIGHT);
+		on_demand.on_connect(1, Roles::FULL);
+		on_demand.on_connect(2, Roles::AUTHORITY);
 		assert_eq!(vec![1, 2], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
 	}
 
 	#[test]
 	fn disconnects_from_idle_peer() {
 		let (_, on_demand) = dummy(true);
-		on_demand.on_connect(0, Role::FULL);
+		on_demand.on_connect(0, Roles::FULL);
 		assert_eq!(1, total_peers(&*on_demand));
 		on_demand.on_disconnect(0);
 		assert_eq!(0, total_peers(&*on_demand));
@@ -393,8 +393,8 @@ mod tests {
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
 
-		on_demand.on_connect(0, Role::FULL);
-		on_demand.on_connect(1, Role::FULL);
+		on_demand.on_connect(0, Roles::FULL);
+		on_demand.on_connect(1, Roles::FULL);
 		assert_eq!(vec![0, 1], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
 		assert!(on_demand.core.lock().active_peers.is_empty());
 
@@ -414,7 +414,7 @@ mod tests {
 		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
-		on_demand.on_connect(0, Role::FULL);
+		on_demand.on_connect(0, Roles::FULL);
 
 		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
 		receive_call_response(&*on_demand, &mut network, 0, 1);
@@ -429,7 +429,7 @@ mod tests {
 		let mut network = TestIo::new(&queue, None);
 		on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
 
-		on_demand.on_connect(0, Role::FULL);
+		on_demand.on_connect(0, Roles::FULL);
 		receive_call_response(&*on_demand, &mut network, 0, 0);
 		assert!(network.to_disconnect.contains(&0));
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
@@ -440,7 +440,7 @@ mod tests {
 		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
-		on_demand.on_connect(0, Role::FULL);
+		on_demand.on_connect(0, Roles::FULL);
 
 		receive_call_response(&*on_demand, &mut network, 0, 0);
 		assert!(network.to_disconnect.contains(&0));
@@ -451,7 +451,7 @@ mod tests {
 		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
-		on_demand.on_connect(0, Role::FULL);
+		on_demand.on_connect(0, Roles::FULL);
 
 		let response = on_demand.remote_call(RemoteCallRequest { block: Default::default(), method: "test".into(), call_data: vec![] });
 		let thread = ::std::thread::spawn(move || {

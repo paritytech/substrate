@@ -24,7 +24,7 @@ use polkadot_primitives::{Block, Hash, SessionKey};
 use polkadot_primitives::parachain::{CandidateReceipt, HeadData, BlockData};
 use substrate_primitives::H512;
 use codec::Encode;
-use substrate_network::{PeerId, PeerInfo, ClientHandle, Context, message::Message as SubstrateMessage, message::Role, specialization::Specialization, generic_message::Message as GenericMessage};
+use substrate_network::{PeerId, PeerInfo, ClientHandle, Context, Roles, message::Message as SubstrateMessage, specialization::Specialization, generic_message::Message as GenericMessage};
 
 use std::sync::Arc;
 use futures::Future;
@@ -62,7 +62,7 @@ impl TestContext {
 	fn has_message(&self, to: PeerId, message: Message) -> bool {
 		use substrate_network::generic_message::Message as GenericMessage;
 
-		let encoded = ::serde_json::to_vec(&message).unwrap();
+		let encoded = message.encode();
 		self.messages.iter().any(|&(ref peer, ref msg)| match msg {
 			GenericMessage::ChainSpecific(ref data) => peer == &to && data == &encoded,
 			_ => false,
@@ -70,7 +70,7 @@ impl TestContext {
 	}
 }
 
-fn make_status(status: &Status, roles: Vec<Role>) -> FullStatus {
+fn make_status(status: &Status, roles: Roles) -> FullStatus {
 	FullStatus {
 		version: 1,
 		roles,
@@ -78,9 +78,6 @@ fn make_status(status: &Status, roles: Vec<Role>) -> FullStatus {
 		best_hash: Default::default(),
 		genesis_hash: Default::default(),
 		chain_status: status.encode(),
-		parachain_id: None,
-		validator_id: None,
-		validator_signature: None,
 	}
 }
 
@@ -97,7 +94,7 @@ fn make_consensus(parent_hash: Hash, local_key: SessionKey) -> (CurrentConsensus
 }
 
 fn on_message(protocol: &mut PolkadotProtocol, ctx: &mut TestContext, from: PeerId, message: Message) {
-	let encoded = ::serde_json::to_vec(&message).unwrap();
+	let encoded = message.encode();
 	protocol.on_message(ctx, from, GenericMessage::ChainSpecific(encoded));
 }
 
@@ -115,7 +112,7 @@ fn sends_session_key() {
 
 	{
 		let mut ctx = TestContext::default();
-		protocol.on_connect(&mut ctx, peer_a, make_status(&validator_status, vec![Role::Authority]));
+		protocol.on_connect(&mut ctx, peer_a, make_status(&validator_status, Roles::AUTHORITY));
 		assert!(ctx.messages.is_empty());
 	}
 
@@ -129,7 +126,7 @@ fn sends_session_key() {
 
 	{
 		let mut ctx = TestContext::default();
-		protocol.on_connect(&mut ctx, peer_b, make_status(&collator_status, vec![]));
+		protocol.on_connect(&mut ctx, peer_b, make_status(&collator_status, Roles::NONE));
 		assert!(ctx.has_message(peer_b, Message::SessionKey(parent_hash, local_key)));
 	}
 }
@@ -171,7 +168,7 @@ fn fetches_from_those_with_knowledge() {
 	// connect peer A
 	{
 		let mut ctx = TestContext::default();
-		protocol.on_connect(&mut ctx, peer_a, make_status(&status, vec![Role::Authority]));
+		protocol.on_connect(&mut ctx, peer_a, make_status(&status, Roles::AUTHORITY));
 		assert!(ctx.has_message(peer_a, Message::SessionKey(parent_hash, local_key)));
 	}
 
@@ -187,7 +184,7 @@ fn fetches_from_those_with_knowledge() {
 	// peer B connects and sends session key. request already assigned to A
 	{
 		let mut ctx = TestContext::default();
-		protocol.on_connect(&mut ctx, peer_b, make_status(&status, vec![Role::Authority]));
+		protocol.on_connect(&mut ctx, peer_b, make_status(&status, Roles::AUTHORITY));
 		on_message(&mut protocol, &mut ctx, peer_b, Message::SessionKey(parent_hash, b_key));
 		assert!(!ctx.has_message(peer_b, Message::RequestBlockData(2, candidate_hash)));
 
@@ -220,7 +217,7 @@ fn remove_bad_collator() {
 
 	{
 		let mut ctx = TestContext::default();
-		protocol.on_connect(&mut ctx, peer_id, make_status(&status, vec![]));
+		protocol.on_connect(&mut ctx, peer_id, make_status(&status, Roles::NONE));
 	}
 
 	{
