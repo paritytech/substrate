@@ -165,7 +165,7 @@ impl<T: Trait> Module<T> {
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
 		// TODO: Get gas price from the storage
-		let mut gas_meter = gas::pay_for_gas::<T>(aux, gas_limit, gas_price)?;
+		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit, gas_price)?;
 
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
@@ -208,7 +208,7 @@ impl<T: Trait> Module<T> {
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
 		// TODO: Get gas price from the storage
-		let mut gas_meter = gas::pay_for_gas::<T>(aux, gas_limit, gas_price)?;
+		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit, gas_price)?;
 
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 

@@ -87,7 +87,7 @@ impl<U: SimpleArithmetic + Copy> GasMeter<U> {
 	}
 }
 
-pub fn pay_for_gas<T: Trait>(
+pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
 	gas_limit: T::Gas,
 	gas_price: T::Balance,
