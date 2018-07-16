@@ -164,7 +164,7 @@ impl<T: Trait> Module<T> {
 
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
-		let result = {
+		{
 			let mut ctx = ExecutionContext {
 				// TODO: avoid this
 				_caller: aux.clone(),
@@ -173,9 +173,10 @@ impl<T: Trait> Module<T> {
 				depth: 0,
 				account_db: &mut overlay,
 			};
-			ctx.call(dest, value, &mut gas_meter, data)
-		// TODO: Can we return early or we always need to do some finalization steps?
-		}?;
+
+			// TODO: Can we return early or we always need to do some finalization steps?
+			ctx.call(dest, value, &mut gas_meter, data)?;
+		}
 
 		// Commit all changes that made it thus far into the persistant storage.
 		account_db::DirectAccountDb.commit(overlay.into_change_set());
@@ -207,7 +208,7 @@ impl<T: Trait> Module<T> {
 
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
-		let result = {
+		{
 			let mut ctx = ExecutionContext {
 				// TODO: avoid this
 				_caller: aux.clone(),
@@ -216,10 +217,11 @@ impl<T: Trait> Module<T> {
 				depth: 0,
 				account_db: &mut overlay,
 			};
+
+			// TODO: Can we return early or do we always need to do some finalization steps?
 			ctx.create(endownment, &mut gas_meter, &ctor_code, &data)
-				.map_err(|_| "create failed")
-		// TODO: Can we return early or do we always need to do some finalization steps?
-		}?;
+				.map_err(|_| "create failed")?;
+		}
 
 		// Commit all changes that made it thus far into the persistant storage.
 		account_db::DirectAccountDb.commit(overlay.into_change_set());
