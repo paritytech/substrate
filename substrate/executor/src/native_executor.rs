@@ -103,6 +103,11 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 	/// Get native runtime version.
 	const VERSION: RuntimeVersion;
+
+	/// Construct corresponding `NativeExecutor` with given `heap_pages`.
+	fn with_heap_pages(heap_pages: usize) -> NativeExecutor<Self> where Self: Sized {
+		NativeExecutor::with_heap_pages(heap_pages)
+	}
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
@@ -116,11 +121,6 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
-	/// Create new instance with 128 pages for the wasm fallback's heap.
-	pub fn new() -> Self {
-		Self::with_heap_pages(128)
-	}
-
 	/// Create new instance with specific number of pages for wasm fallback's heap.
 	pub fn with_heap_pages(heap_pages: usize) -> Self {
 		// FIXME: set this entry at compile time
@@ -132,12 +132,6 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			_dummy: Default::default(),
 			fallback: WasmExecutor{heap_pages},
 		}
-	}
-}
-
-impl<D: NativeExecutionDispatch> Default for NativeExecutor<D> {
-	fn default() -> Self {
-		Self::new()
 	}
 }
 
@@ -212,10 +206,8 @@ macro_rules! native_executor_instance {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
-		}
 
-		impl $name {
-			pub fn with_heap_pages(heap_pages: usize) -> $crate::NativeExecutor<$name> {
+			fn with_heap_pages(heap_pages: usize) -> $crate::NativeExecutor<$name> {
 				$crate::NativeExecutor::with_heap_pages(heap_pages)
 			}
 		}

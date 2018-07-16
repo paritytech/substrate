@@ -236,6 +236,10 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			service::Role::FULL
 		};
 
+	if let Some(v) = matches.value_of("heap-pages") {
+		config.heap_pages = v.parse().map_err(|_| "Invalid --heap-pages argument")?;
+	}
+
 	if let Some(s) = matches.value_of("execution") {
 		config.execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
@@ -392,6 +396,20 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path).to_string_lossy().into();
+
+	if let Some(v) = matches.value_of("heap-pages") {
+		config.heap_pages = v.parse().map_err(|_| "Invalid --heap-pages argument")?;
+	}
+
+	if let Some(s) = matches.value_of("execution") {
+		config.execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+		};
+	}
+
 	let client = service::new_client(config)?;
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 
