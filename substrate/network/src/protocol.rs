@@ -29,6 +29,7 @@ use message::generic::Message as GenericMessage;
 use specialization::Specialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use service::{Roles, TransactionPool};
+use import_queue::ImportQueue;
 use config::ProtocolConfig;
 use chain::Client;
 use on_demand::OnDemandService;
@@ -51,7 +52,7 @@ pub struct Protocol<B: BlockT, S: Specialization<B>> {
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
-	sync: RwLock<ChainSync<B>>,
+	sync: Arc<RwLock<ChainSync<B>>>,
 	specialization: RwLock<S>,
 	context_data: ContextData<B>,
 	// Connected peers pending Status message.
@@ -196,12 +197,13 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 	pub fn new(
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
+		import_queue: Arc<ImportQueue<B>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<B>>,
 		specialization: S,
 	) -> error::Result<Self>  {
 		let info = chain.info()?;
-		let sync = ChainSync::new(config.roles, &info);
+		let sync = ChainSync::new(config.roles, &info, import_queue);
 		let protocol = Protocol {
 			config: config,
 			context_data: ContextData {
@@ -210,7 +212,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 			},
 			on_demand,
 			genesis_hash: info.chain.genesis_hash,
-			sync: RwLock::new(sync),
+			sync: Arc::new(RwLock::new(sync)),
 			specialization: RwLock::new(specialization),
 			handshaking_peers: RwLock::new(HashMap::new()),
 			transaction_pool: transaction_pool,
@@ -220,6 +222,10 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 
 	pub(crate) fn context_data(&self) -> &ContextData<B> {
 		&self.context_data
+	}
+
+	pub(crate) fn sync(&self) -> &Arc<RwLock<ChainSync<B>>> {
+		&self.sync
 	}
 
 	/// Returns protocol status

@@ -46,6 +46,7 @@ mod config;
 mod chain;
 mod blocks;
 mod on_demand;
+mod import_queue;
 pub mod consensus_gossip;
 pub mod error;
 pub mod message;
