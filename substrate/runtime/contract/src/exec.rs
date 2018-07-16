@@ -29,14 +29,18 @@ pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
 }
 
-pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
+pub struct CallReceipt {
+	pub return_data: Vec<u8>,
+}
+
+pub struct ExecutionContext<'a, T: Trait + 'a> {
 	// typically should be dest
 	pub self_account: T::AccountId,
-	pub account_db: &'a mut OverlayAccountDb<'b, T>,
+	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 }
 
-impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
+impl<'a, T: Trait> ExecutionContext<'a, T> {
 	/// Make a call to the specified address.
 	pub fn call(
 		&mut self,
@@ -45,7 +49,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		_data: Vec<u8>,
-	) -> Result<vm::ExecutionResult, &'static str> {
+	) -> Result<CallReceipt, &'static str> {
 		let dest_code = <CodeOf<T>>::get(&dest);
 
 		// TODO: check the new depth
@@ -56,7 +60,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		}
 
 		let (exec_result, change_set) = {
-			let mut overlay = OverlayAccountDb::new(self.account_db);
+			let mut overlay = OverlayAccountDb::new(&self.overlay);
 
 			if value > T::Balance::zero() {
 				transfer(
@@ -69,13 +73,12 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 				)?;
 			}
 
+			let mut nested = ExecutionContext {
+				overlay: overlay,
+				self_account: dest.clone(),
+				depth: self.depth + 1,
+			};
 			let exec_result = if !dest_code.is_empty() {
-				let mut nested = ExecutionContext {
-					account_db: &mut overlay,
-					self_account: dest.clone(),
-					depth: self.depth + 1,
-				};
-
 				vm::execute(
 					&dest_code,
 					&mut CallContext {
@@ -91,12 +94,14 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 				}
 			};
 
-			(exec_result, overlay.into_change_set())
+			(exec_result, nested.overlay.into_change_set())
 		};
 
-		self.account_db.commit(change_set);
+		self.overlay.commit(change_set);
 
-		Ok(exec_result)
+		Ok(CallReceipt {
+			return_data: exec_result.return_data,
+		})
 	}
 
 	pub fn create(
@@ -107,8 +112,6 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		ctor: &[u8],
 		_data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
-		// TODO: check the new depth
-
 		let create_base_fee = <Module<T>>::create_base_fee();
 		if gas_meter.charge(create_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base create fee");
@@ -121,7 +124,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		}
 
 		let change_set = {
-			let mut overlay = OverlayAccountDb::new(self.account_db);
+			let mut overlay = OverlayAccountDb::new(&self.overlay);
 
 			if endownment > T::Balance::zero() {
 				transfer(
@@ -134,12 +137,12 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 				)?;
 			}
 
+			let mut nested = ExecutionContext {
+				overlay: overlay,
+				self_account: dest.clone(),
+				depth: self.depth + 1,
+			};
 			let exec_result = {
-				let mut nested = ExecutionContext {
-					account_db: &mut overlay,
-					self_account: dest.clone(),
-					depth: self.depth + 1,
-				};
 				vm::execute(
 					ctor,
 					&mut CallContext {
@@ -150,12 +153,11 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 				).map_err(|_| "vm execute returned error while create")?
 			};
 
-			overlay.set_code(&dest, exec_result.return_data().to_vec());
-
-			overlay.into_change_set()
+			nested.overlay.set_code(&dest, exec_result.return_data().to_vec());
+			nested.overlay.into_change_set()
 		};
 
-		self.account_db.commit(change_set);
+		self.overlay.commit(change_set);
 
 		Ok(CreateReceipt {
 			address: dest,
@@ -212,18 +214,18 @@ fn transfer<T: Trait>(
 }
 
 struct CallContext<'a, 'b: 'a, T: Trait + 'b> {
-	ctx: &'a mut ExecutionContext<'a, 'b, T>,
+	ctx: &'a mut ExecutionContext<'b, T>,
 	_caller: T::AccountId,
 }
 
 impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.ctx.account_db.get_storage(&self.ctx.self_account, key)
+		self.ctx.overlay.get_storage(&self.ctx.self_account, key)
 	}
 
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
 		self.ctx
-			.account_db
+			.overlay
 			.set_storage(&self.ctx.self_account, key.to_vec(), value)
 	}
 
@@ -233,15 +235,11 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
 		endownment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
-	) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
+	) -> Result<CreateReceipt<T>, ()> {
 		let caller = self.ctx.self_account.clone();
-		let receipt = self
-			.ctx
+		self.ctx
 			.create(caller, endownment, gas_meter, code, &data)
-			.map_err(|_| ())?;
-		Ok(vm::CreateReceipt {
-			address: receipt.address,
-		})
+			.map_err(|_| ())
 	}
 
 	fn call(
@@ -250,7 +248,7 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
-	) -> Result<vm::ExecutionResult, ()> {
+	) -> Result<CallReceipt, ()> {
 		let caller = self.ctx.self_account.clone();
 		self.ctx
 			.call(caller, to.clone(), value, gas_meter, data)

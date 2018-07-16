@@ -7,10 +7,7 @@ use sandbox;
 use gas::{GasMeter, GasMeterResult};
 use runtime_primitives::traits::{As, CheckedMul};
 use {Trait};
-
-pub struct CreateReceipt<Address> {
-	pub address: Address,
-}
+use exec::{CallReceipt, CreateReceipt};
 
 /// An interface that provides an access to the external environment in which the
 /// smart-contract is executed.
@@ -35,7 +32,7 @@ pub trait Ext<T: Trait> {
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
-	) -> Result<CreateReceipt<T::AccountId>, ()>;
+	) -> Result<CreateReceipt<T>, ()>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
 	fn call(
@@ -44,7 +41,7 @@ pub trait Ext<T: Trait> {
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
-	) -> Result<ExecutionResult, ()>;
+	) -> Result<CallReceipt, ()>;
 }
 
 /// Error that can occur while preparing or executing wasm smart-contract.
@@ -302,7 +299,7 @@ pub fn execute<'a, T: Trait, E: Ext<T>>(
 		});
 
 		match call_outcome {
-			Ok(ExecutionResult { .. }) => {
+			Ok(CallReceipt { .. }) => {
 				// TODO: Find a way how to pass return_data back to the this sandbox.
 				Ok(sandbox::ReturnValue::Unit)
 			}
@@ -629,7 +626,7 @@ mod tests {
 			endownment: u64,
 			_gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<CreateReceipt<u64>, ()> {
+		) -> Result<CreateReceipt<Test>, ()> {
 			self.creates.push(CreateEntry {
 				code: code.to_vec(),
 				endownment,
@@ -648,11 +645,11 @@ mod tests {
 			value: u64,
 			_gas_meter: &mut GasMeter<Test>,
 			_data: Vec<u8>,
-		) -> Result<ExecutionResult, ()> {
+		) -> Result<CallReceipt, ()> {
 			self.transfers.push(TransferEntry { to: *to, value });
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(ExecutionResult {
+			Ok(CallReceipt {
 				return_data: Vec::new(),
 			})
 		}

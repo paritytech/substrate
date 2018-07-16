@@ -165,20 +165,16 @@ impl<T: Trait> Module<T> {
 		// paying for the gas.
 		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit)?;
 
-		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
-
-		let result = {
-			let mut ctx = ExecutionContext {
-				self_account: aux.clone(),
-				depth: 0,
-				account_db: &mut overlay,
-			};
-			ctx.call(aux.clone(), dest, value, &mut gas_meter, data)
+		let mut ctx = ExecutionContext {
+			self_account: aux.clone(),
+			depth: 0,
+			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
+		let result = ctx.call(aux.clone(), dest, value, &mut gas_meter, data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
-			account_db::DirectAccountDb.commit(overlay.into_change_set());
+			account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
 		}
 
 		// Refund cost of the unused gas.
@@ -205,21 +201,16 @@ impl<T: Trait> Module<T> {
 		// paying for the gas.
 		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit)?;
 
-		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
-
-		let result = {
-			let mut ctx = ExecutionContext {
-				self_account: aux.clone(),
-				depth: 0,
-				account_db: &mut overlay,
-			};
-
-			ctx.create(aux.clone(), endownment, &mut gas_meter, &ctor_code, &data)
+		let mut ctx = ExecutionContext {
+			self_account: aux.clone(),
+			depth: 0,
+			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
+		let result = ctx.create(aux.clone(), endownment, &mut gas_meter, &ctor_code, &data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
-			account_db::DirectAccountDb.commit(overlay.into_change_set());
+			account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
 		}
 
 		// Refund cost of the unused gas.
